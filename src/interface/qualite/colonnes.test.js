@@ -479,5 +479,12 @@ describe('colonnesComparaison : les en-têtes des deux colonnes (§ 12.10.6, D58
     assert.equal(c2.b.rang, null);
     assert.equal(k2.placements.b.origine, t('propositions.retenu.ajuste', { proposition: premiere }));
     assert.deepEqual(k2.tete[0].b, { texte: t('format.vide'), bornes: [t('qualite.colonnes.rangRetenu')], pourcentage: null });
+
+    assert.equal(c2.b.retouche, true);
+    // Ajusté aux seuls participants, sans retouche à la main (retouche faux,
+    // retenuRetouche) : la colonne le dit comme le tableau des propositions.
+    const parPresence = { ...c2, b: { ...c2.b, retouche: false } };
+    const k3 = colonnesComparaison(parPresence, evaluer(ajuste), outilsDe(ajuste));
+    assert.equal(k3.placements.b.origine, t('propositions.retenu.presence', { proposition: premiere }));
   });
 });

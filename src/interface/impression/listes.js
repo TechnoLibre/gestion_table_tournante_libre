@@ -54,16 +54,21 @@ function placesDuTour(etat) {
  * identifiant. Chaque ligne porte nom, prénom et appartenance tels que la
  * charge les écrit, et, pour chaque tour, la table où la personne s'assied —
  * son numéro affiché —, le siège sous sièges attribués seulement (§ 11.4),
- * table et siège null pour la réserve.
+ * table et siège null pour la réserve. Un tour où l'état des places la dit
+ * absente (EtatPlaces.absents) porte table et siège null et absente vrai ;
+ * le champ absente n'existe qu'à un tour d'absence, si bien qu'une soirée
+ * sans présence partielle rend les places sans lui.
  *
  * @param {Object} charge
  * @param {Object[]} etatsParTour   etatsDesTours
  * @param {(texte: string) => string} cle   la clé normalisée (cleNormalisee)
  * @returns {Array<{participant: number, nom: string, prenom: string|null, appartenance: string|null,
- *            places: Array<{tour: number, table: number|null, siege: number|null}>}>}
+ *            places: Array<{tour: number, table: number|null, siege: number|null, absente?: true}>}>}
  */
 export function lignesAccueil(charge, etatsParTour, cle) {
-  const parTour = etatsParTour.map((etat) => ({ tour: etat.tour, places: placesDuTour(etat) }));
+  const parTour = etatsParTour.map((etat) => ({ tour: etat.tour, places: placesDuTour(etat), absents: new Set(etat.absents) }));
+  const placeDe = (id, { tour, places, absents }) =>
+    absents.has(id) ? { tour, table: null, siege: null, absente: true } : { tour, table: null, siege: null, ...places.get(id) };
   const lignes = charge.participants
     .filter(({ exclu }) => !exclu)
     .map((personne) => ({
@@ -73,7 +78,7 @@ export function lignesAccueil(charge, etatsParTour, cle) {
         nom: personne.nom,
         prenom: personne.prenom,
         appartenance: personne.appartenance,
-        places: parTour.map(({ tour, places }) => ({ tour, table: null, siege: null, ...places.get(personne.id) })),
+        places: parTour.map((duTour) => placeDe(personne.id, duTour)),
       },
     }));
   const comparer = (a, b) =>
@@ -85,13 +90,15 @@ export function lignesAccueil(charge, etatsParTour, cle) {
 }
 
 /**
- * Le libellé d'une place de la liste d'accueil : la table, la table et le
- * siège, ou la réserve.
+ * Le libellé d'une place de la liste d'accueil : « absente » à un tour
+ * d'absence, avant le cas de la réserve, dont elle partage table et siège
+ * null ; sinon la table, la table et le siège, ou la réserve.
  *
- * @param {{table: number|null, siege: number|null}} place
+ * @param {{table: number|null, siege: number|null, absente?: boolean}} place
  * @returns {{cle: string, details: Object}}
  */
-export function libellePlace({ table, siege }) {
+export function libellePlace({ table, siege, absente = false }) {
+  if (absente) return { cle: 'feuilles.accueil.absente', details: {} };
   if (table === null) return { cle: 'feuilles.accueil.reserve', details: {} };
   if (siege === null) return { cle: 'feuilles.accueil.table', details: { table } };
   return { cle: 'feuilles.accueil.tableSiege', details: { table, siege } };
@@ -177,7 +184,7 @@ const champPose = (texte) => (texte === null || texte.trim() === '' ? '' : texte
  * par morceaux de cette suite (couperLigne, trancher).
  *
  * @param {{nom: string, prenom: string|null, appartenance: string|null,
- *          places: Array<{table: number|null, siege: number|null}>}} ligne   lignesAccueil
+ *          places: Array<{table: number|null, siege: number|null, absente?: boolean}>}} ligne   lignesAccueil
  * @param {(cle: string, details?: Object) => string} t
  * @returns {string[]}
  */

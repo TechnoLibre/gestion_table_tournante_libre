@@ -5,30 +5,35 @@
 // carte, la légende des appartenances et celle des étiquettes. Toutes se
 // lisent sur la liste entière, exclues comprises — la population de
 // l'attribution des teintes (teintesAppartenances, appartenances.js) — : un
-// filtre ne change ni un compte ni une teinte. Aucune fonction ne modifie ce
-// qu'elle reçoit.
+// filtre ne change ni un compte ni une teinte. Seul le compte des présences
+// partielles laisse les exclues : leur présence, suspendue, ne dit rien de
+// la soirée. Aucune fonction ne modifie ce qu'elle reçoit.
 
 import { cleNormalisee } from '../../application/csv.js';
 import { comparerPointsDeCode } from '../../application/planche.js';
+import { presenceSaisie } from '../../application/places.js';
 
 /**
  * La ligne de comptes de la carte des participants.
  *
- * @param {Array<{appartenance: string|null, exclu: boolean}>} participants
+ * @param {Array<{appartenance: string|null, exclu: boolean, presence?: readonly number[]}>} participants
  *   tous ceux de l'événement
- * @returns {{personnes: number, aPlacer: number, exclues: number, appartenances: number}}
+ * @returns {{personnes: number, aPlacer: number, exclues: number, appartenances: number, partielles: number}}
  *   les personnes, celles que le placement assoit — les non exclues —, les
- *   exclues, et les appartenances distinctes par égalité de chaîne, comme
- *   le moteur les distingue
+ *   exclues, les appartenances distinctes par égalité de chaîne, comme le
+ *   moteur les distingue, et les présences partielles : les non exclues
+ *   dont la présence ne couvre pas toute la soirée (presenceSaisie non null)
  */
 export function comptesEntete(participants) {
   const appartenances = new Set();
   let exclues = 0;
-  for (const { appartenance, exclu } of participants) {
-    if (exclu) exclues += 1;
-    if (appartenance !== null) appartenances.add(appartenance);
+  let partielles = 0;
+  for (const personne of participants) {
+    if (personne.exclu) exclues += 1;
+    else if (presenceSaisie(personne) !== null) partielles += 1;
+    if (personne.appartenance !== null) appartenances.add(personne.appartenance);
   }
-  return { personnes: participants.length, aPlacer: participants.length - exclues, exclues, appartenances: appartenances.size };
+  return { personnes: participants.length, aPlacer: participants.length - exclues, exclues, appartenances: appartenances.size, partielles };
 }
 
 /**

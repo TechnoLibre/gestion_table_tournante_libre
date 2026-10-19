@@ -15,10 +15,23 @@
   // texte, qui garde leurs sauts de ligne ; un champ d'une ligne les
   // retirerait de toute note retouchée. Maj+Entrée y insère un saut de
   // ligne, Entrée seule valide (entreeValide). Une validation qui change la valeur
-  // exécute modifierParticipant par la séance, sur ce seul champ ; une
+  // exécute la commande de la cellule (commandeDeCellule) par la séance :
+  // modifierParticipant sur ce seul champ, ou changerPresence ; une
   // saisie qui se lit comme la valeur enregistrée — en NFC, sans blancs de
   // bord — n'exécute rien. Entrée sur la cellule d'exclusion exclut ou
-  // réintègre la personne. Un refus se pose dans la cellule où le geste a eu
+  // réintègre la personne.
+  //
+  // La présence (§ 10.2) s'affiche « tous » en texte secondaire, ou ses
+  // tours nommés en pastille d'information à calendrier (affichagesPresence,
+  // presence.js). Entrée ou F2 l'ouvre en cases, une par tour de 1 à tours
+  // (CasesPresence, compact), le focus sur la case active, celle du tour 1
+  // à l'ouverture : ← → Début Fin passent d'une case à l'autre, l'espace
+  // coche ou décoche sans rien écrire, et la saisie, canonique
+  // (saisieApresBascule), passe par la même machine de champ.js que le
+  // texte. Entrée, Tab ou la sortie du groupe valident une fois, en une
+  // entrée : Tab valide puis mène à la cellule voisine, et la sortie d'une
+  // case vers une autre case du groupe ne valide pas. Échap rend la présence
+  // enregistrée. Cocher puis décocher un tour, puis valider, n'écrit rien. Un refus se pose dans la cellule où le geste a eu
   // lieu, avec son remède : celui de la séance, lu dans etat().refus avant
   // d'ouvrir l'édition, ou celui de la commande, la saisie gardée.
   //
@@ -64,14 +77,28 @@
   // règles. Aucune couleur ne les distingue : la teinte de conflit reste au
   // plan.
   import { getContext, onDestroy, tick } from 'svelte';
+  import { nomAffiche } from '../../application/personnes.js';
   import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
   import { effetDe } from '../raccourcis.js';
+  import CasesPresence from './CasesPresence.svelte';
   import { cleDeRaison } from './conflits.js';
-  import { COLONNES, basculerGroupe, celluleSuivante, cheminDe, cleDeColonne, deplierChemin, entreeValide, lignesVisibles, ligneVoisine } from './grille.js';
+  import {
+    COLONNES,
+    basculerGroupe,
+    celluleSuivante,
+    cheminDe,
+    cleDeColonne,
+    commandeDeCellule,
+    deplierChemin,
+    entreeValide,
+    lignesVisibles,
+    ligneVoisine,
+  } from './grille.js';
+  import { affichagesPresence, casesDeSaisie, lecturePresence, saisieApresBascule, saisieEnregistree } from './presence.js';
 
   let {
     lignes,
@@ -82,6 +109,7 @@
     supprimer,
     conflits = new Map(),
     enConflit = new Map(),
+    tours = 1,
   } = $props();
 
   const t = getContext('t');
@@ -105,6 +133,8 @@
   let machine = null;
   let tableau;
   let entree = $state(null);
+  // Le groupe des cases de la présence en édition (CasesPresence).
+  let editeur = $state(null);
 
   // Les lignes que la grille montre, dans leur ordre, et le rang de chacune
   // parmi elles, par identifiant.
@@ -113,6 +143,9 @@
 
   // Le rang de la ligne active ; la première quand l'active n'est plus affichée.
   const rangActif = $derived(rangs.get(actif.id) ?? 0);
+
+  // L'affichage au repos de la présence de chaque personne, par identifiant.
+  const affichages = $derived(affichagesPresence(lignes));
 
   const idRefus = (id, colonne) => `${uid}-refus-${id}-${colonne}`;
   const enEdition = (id, colonne) => edition !== null && edition.id === id && edition.colonne === colonne;
@@ -123,6 +156,16 @@
   // l'enregistrement en lirait, pour reconnaître une saisie sans changement.
   const texteDe = (valeur) => (valeur === null ? '' : valeur);
   const lire = (texte) => ({ valeur: texte.normalize('NFC').trim() });
+
+  // Le contrôle de la cellule en édition — le groupe des cases de la
+  // présence, le champ de texte sinon —, vrai quand le focus est en lui, et
+  // le focus qui y revient : la case active, ou le champ.
+  const controleEnEdition = () => (edition?.colonne === 'presence' ? editeur : entree);
+  const focusDans = (controle) => controle !== null && controle.contains(document.activeElement);
+  function focaliserEdition() {
+    if (edition?.colonne === 'presence') editeur?.querySelector('[data-presence-tour][tabindex="0"]')?.focus();
+    else entree?.focus();
+  }
 
   function trier(colonne) {
     tri = tri !== null && tri.colonne === colonne && tri.sens === 'croissant' ? { colonne, sens: 'decroissant' } : { colonne, sens: 'croissant' };
@@ -156,19 +199,22 @@
       return;
     }
     refusCellule = null;
-    machine = creerMachineChamp({ stockee: texteDe(personne[colonne]), lire });
+    machine =
+      colonne === 'presence'
+        ? creerMachineChamp({ stockee: saisieEnregistree(personne, tours), lire: lecturePresence(tours) })
+        : creerMachineChamp({ stockee: texteDe(personne[colonne]), lire });
     saisie = machine.saisie;
     edition = { id: personne.id, colonne };
     await tick();
-    entree?.focus();
-    entree?.setSelectionRange(saisie.length, saisie.length);
+    focaliserEdition();
+    if (colonne !== 'presence') entree?.setSelectionRange(saisie.length, saisie.length);
   }
 
   // Ferme l'édition et rend le focus à sa cellule quand il était dans le
-  // champ.
+  // champ, ou dans le groupe des cases.
   async function fermerEdition() {
     const fermee = edition;
-    const avaitLeFocus = entree !== null && document.activeElement === entree;
+    const avaitLeFocus = focusDans(controleEnEdition());
     edition = null;
     machine = null;
     geste.tenir(false);
@@ -193,14 +239,15 @@
     }
     const enCours = machine;
     const rangAvant = rangs.get(id) ?? 0;
+    const { nom, args } = commandeDeCellule(colonne, id, rendu.valeur);
     let promesse;
     try {
-      promesse = seance.executer('modifierParticipant', { id, champs: { [colonne]: rendu.valeur } });
+      promesse = seance.executer(nom, args);
     } catch (erreur) {
       await echouer(enCours, id, colonne, erreur);
       return false;
     }
-    const garderFocus = entree !== null && document.activeElement === entree;
+    const garderFocus = focusDans(controleEnEdition());
     fermerEdition();
     try {
       await promesse;
@@ -243,7 +290,7 @@
     edition = { id, colonne };
     geste.tenir(enCours.enCours);
     await tick();
-    entree?.focus();
+    focaliserEdition();
   }
 
   function abandonner() {
@@ -254,6 +301,14 @@
 
   function surSaisie(evenement) {
     machine.saisir(evenement.currentTarget.value);
+    saisie = machine.saisie;
+    refusCellule = null;
+    geste.tenir(machine.enCours);
+  }
+
+  // La bascule d'une case de la présence : la saisie suit, rien ne s'écrit.
+  function surBascule(tour, coche) {
+    machine.saisir(saisieApresBascule(machine.saisie, tour, coche));
     saisie = machine.saisie;
     refusCellule = null;
     geste.tenir(machine.enCours);
@@ -316,6 +371,13 @@
   // La sortie du champ valide, sauf quand l'édition s'est déjà close.
   function surSortie() {
     if (edition !== null) valider();
+  }
+
+  // La sortie du groupe des cases valide ; le focus passé d'une case à une
+  // autre du groupe ne sort pas.
+  function surSortiePresence(evenement) {
+    if (editeur?.contains(evenement.relatedTarget)) return;
+    surSortie();
   }
 
   function deplacer(rang, colonne, touche) {
@@ -395,6 +457,18 @@
             onkeydown={(evenement) => surToucheEntree(evenement, rang)}
             onblur={surSortie}
           ></textarea>
+        {:else if enEdition(personne.id, colonne) && colonne === 'presence'}
+          <CasesPresence
+            compact
+            cases={casesDeSaisie(saisie, tours)}
+            nom={nomAffiche(personne)}
+            invalide={refus !== null}
+            decrit={refus === null ? undefined : idRefus(personne.id, colonne)}
+            bind:conteneur={editeur}
+            basculer={surBascule}
+            toucher={(evenement) => surToucheEntree(evenement, rang)}
+            sortir={surSortiePresence}
+          />
         {:else if enEdition(personne.id, colonne)}
           <input
             type="text"
@@ -407,6 +481,15 @@
             onkeydown={(evenement) => surToucheEntree(evenement, rang)}
             onblur={surSortie}
           />
+        {:else if colonne === 'presence'}
+          {@const vue = affichages.get(personne.id)}
+          {#if vue.sorte === 'tous'}
+            <span class="presence-tous" data-presence="tous">{t(vue.cle)}</span>
+          {:else}
+            <span class="donnee-pastille" data-presence="partielle">
+              <Pastille sorte="statut" valeur="information" icone="calendrier" libelle={t(vue.cle, vue.details)} />
+            </span>
+          {/if}
         {:else if colonne === 'exclu'}
           {#if personne.exclu}
             <Pastille sorte="statut" valeur="neutre" icone="croix" libelle={t('participants.grille.exclue')} />
@@ -472,7 +555,7 @@
       >
         <span class="etat" data-groupe-etat>{t(replie ? 'participants.groupe.deplier' : 'participants.groupe.replier')}</span>
         {#if groupe.libelle === null}
-          <span class="libelle" data-groupe-libelle>{t(groupe.cleLibelle)}</span>
+          <span class="libelle" data-groupe-libelle>{t(groupe.cleLibelle, groupe.detailsLibelle ?? {})}</span>
         {:else}
           <span class="libelle valeur" data-groupe-libelle>{groupe.libelle}</span>
         {/if}
@@ -523,7 +606,7 @@
     <thead>
       <tr>
         {#each COLONNES as colonne (colonne)}
-          <th scope="col" aria-sort={ariaSort(colonne)}>
+          <th scope="col" class:etroite={colonne === 'exclu' || colonne === 'presence'} aria-sort={ariaSort(colonne)}>
             <button type="button" data-commande="trier" data-cible={colonne} onclick={() => trier(colonne)}>
               <span>{t(cleDeColonne(colonne))}</span>
               {#if tri !== null && tri.colonne === colonne}
@@ -606,6 +689,16 @@
     font-weight: bold;
   }
 
+  /* L'exclusion et la présence, qui disent qui vient, en mots courts ou en
+     pastille : un retrait plus étroit leur suffit, et les huit colonnes
+     tiennent dans la carte pleine largeur d'une fenêtre de 1024 px. */
+  th.etroite,
+  td[data-champ='exclu'],
+  td[data-champ='presence'] {
+    padding-right: var(--espace-2);
+    padding-left: var(--espace-2);
+  }
+
   td[data-champ='notes'] {
     color: var(--couleur-page-texte-secondaire);
   }
@@ -625,7 +718,8 @@
     white-space: pre-wrap;
   }
 
-  .presente {
+  .presente,
+  .presence-tous {
     color: var(--couleur-page-texte-secondaire);
     font-size: var(--taille-texte-petit);
   }

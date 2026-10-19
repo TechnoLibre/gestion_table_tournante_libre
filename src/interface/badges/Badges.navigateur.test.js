@@ -231,8 +231,14 @@ describe('sortir n’est pas modifier (§ 8.4, § 11.6, contrainte 24)', () => {
 
 describe('la dérive, nommée avant toute production (§ 11.8)', () => {
   test('« Produire » sur un retenu en dérive : le refus nomme la personne ajoutée, rien ne s’écrit ; « Produire » reste désactivé et expliqué tant que le refus tient', async () => {
-    const charge = appliquerCommande('ajouterParticipant', chargeRetenue(), { champs: { nom: 'Ombrelle', prenom: 'Iris' } }).charge;
-    const ajoutee = charge.participants.at(-1).id;
+    // Le retenu suit chaque geste sur les personnes : une personne posée dans
+    // la charge sans passer par une commande, comme un fichier écrit ailleurs,
+    // est la dérive qu'il ne porte pas.
+    const charge = structuredClone(chargeRetenue());
+    const ajoutee = charge.prochainsIds.participant;
+    const { id: _id, nom: _nom, prenom: _prenom, ...reste } = charge.participants[0];
+    charge.participants.push({ ...reste, id: ajoutee, nom: 'Ombrelle', prenom: 'Iris' });
+    charge.prochainsIds.participant = ajoutee + 1;
     const m = await ouvrirBadges(charge);
     const depuis = m.trace.length;
     await cliquerProduire(m, 'le refus de dérive', () => dans(m, '[data-annonce-planche] [data-refus="PLANCHE_DERIVE"]'));

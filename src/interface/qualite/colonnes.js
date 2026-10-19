@@ -72,6 +72,13 @@ function celluleDuRang({ rang, ajuste }, { t, format }) {
   };
 }
 
+// La clé qui dit d'où vient un retenu : tel que sa proposition, ajusté aux
+// seuls participants, ou retouché à la main.
+function cleOrigine({ ajuste, retouche }) {
+  if (retouche) return 'propositions.retenu.ajuste';
+  return ajuste ? 'propositions.retenu.presence' : 'propositions.retenu.origine';
+}
+
 // L'en-tête d'une colonne : le nom de son placement, sous les clés qui le
 // nomment dans le tracé et les phrases de la vue, la proposition d'où vient
 // un retenu, et la filiation d'une dérivée.
@@ -80,7 +87,7 @@ function placementDe(cote, table, outils) {
   const retenu = cote.cle === 'retenu';
   return {
     nom: retenu ? t('qualite.comparaison.nom.retenu') : t('qualite.comparaison.nom.proposition', { proposition: cote.cle }),
-    origine: retenu ? t(cote.ajuste ? 'propositions.retenu.ajuste' : 'propositions.retenu.origine', { proposition: table.retenu.id }) : null,
+    origine: retenu ? t(cleOrigine(cote), { proposition: table.retenu.id }) : null,
     filiation: texteFiliation(cote.derivation, outils),
   };
 }

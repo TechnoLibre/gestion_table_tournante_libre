@@ -12,7 +12,7 @@
 // table viennent des détails : une fenêtre à confirmer nomme chaque élément
 // détruit dans son propre libellé.
 import { JOINTURE_ETIQUETTES } from '../../application/csv.js';
-import { cite, compte } from '../../application/libelles/aides.js';
+import { cite, compte, toursNommes } from '../../application/libelles/aides.js';
 
 // Un accord au nombre : le singulier jusqu'à un, comme compte.
 const accord = (n, singulier, pluriel) => (n <= 1 ? singulier : pluriel);
@@ -30,6 +30,9 @@ const exigence = (regle) => (regle === 'et' ? 'toutes' : 'au moins une');
 
 // La portée d'un objectif en mots : la soirée, ou le tour désigné.
 const porteeObjectif = (tour) => (tour === null ? 'de la soirée' : `du tour ${tour}`);
+
+// Des tours nommés après « au lieu » : « du tour 4 », « des tours 1 et 5 ».
+const desToursNommes = (tours) => `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours)}`;
 
 export const TABLE = new Map([
   // --- Le défaut (§ 6.1) ------------------------------------------------------
@@ -49,11 +52,15 @@ export const TABLE = new Map([
       );
     },
   ],
+  // Le total : sous présence partielle (partielle), participants est le plus
+  // grand nombre de personnes présentes à un même tour.
   [
     'tables.defaut.total',
-    ({ totalAvant, totalApres, participants }) =>
+    ({ totalAvant, totalApres, participants, partielle = false }) =>
       `Total : ${totalAvant} \u{2192} ${compte(totalApres, 'siège', 'sièges')} ` +
-      `pour ${compte(participants, 'participant', 'participants')}.`,
+      (partielle
+        ? `pour ${compte(participants, 'personne présente', 'personnes présentes')} au plus à un même tour.`
+        : `pour ${compte(participants, 'participant', 'participants')}.`),
   ],
   [
     'tables.defaut.refusee',
@@ -149,6 +156,19 @@ export const TABLE = new Map([
     'tables.tours.objectif',
     ({ numero, tour, etiquettes }) => `Table ${numero} : objectif du tour ${tour} (${etiquettesCitees(etiquettes)}), détruit`,
   ],
+  // Une présence que la baisse rogne : apres null quand elle couvre
+  // désormais tous les tours.
+  [
+    'tables.tours.presence',
+    ({ nom, avant, apres }) => `Présence de ${nom} : ${toursNommes(apres)} au lieu ${desToursNommes(avant)}`,
+  ],
+
+  // --- Les personnes présentes par tour (§ 6.1) --------------------------------
+  ['tables.presences.titre', 'Personnes présentes par tour'],
+  ['tables.presences.colonne.tour', 'Tour'],
+  ['tables.presences.colonne.presentes', 'Présentes'],
+  ['tables.presences.colonne.places', 'Places'],
+  ['tables.presences.colonne.manque', 'Places manquantes'],
 
   // --- Les objectifs des tables (§ 4.5, § 10.4, D3, D19) ------------------------
   // La règle par défaut de l'événement, réglée avec les places et les tours.

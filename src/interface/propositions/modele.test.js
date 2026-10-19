@@ -12,7 +12,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { appliquerCommande } from '../../application/commandes.js';
-import { detaillerQualite, evaluer, nettoyage, retenuAjuste as retenuAjusteDeLEvaluation } from '../../application/evaluation.js';
+import {
+  detaillerQualite,
+  evaluer,
+  nettoyage,
+  retenuAjuste as retenuAjusteDeLEvaluation,
+  retenuRetouche as retenuRetoucheDeLEvaluation,
+} from '../../application/evaluation.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
@@ -47,10 +53,12 @@ import {
   nomDe,
   nombreDePages,
   lireGardees,
+  notePresences,
   pageApresNettoyage,
   pageDe,
   pagine,
   retenuAjuste,
+  retenuRetouche,
   suivrePage,
   surlignee,
   tableau,
@@ -1060,6 +1068,48 @@ describe('retenuAjuste (§ 2.1, § 5.9)', () => {
   });
 });
 
+describe('retenuRetouche et le libellé du retenu (§ 2.1, § 5.9)', () => {
+  const deTables = () => avecPlans(chargeSix({ places: 4 }), [{ tours: DEUX_COLLEGUES }]);
+  const libelle = (charge) => {
+    const { cle, details } = tableau(evaluation(charge).table, { ajuste: retenuAjuste(charge), retouche: retenuRetouche(charge) }).retenu.libelle;
+    return t(cle, details);
+  };
+
+  test('la définition est celle de l’évaluation', () => {
+    assert.equal(retenuRetouche, retenuRetoucheDeLEvaluation);
+  });
+
+  test('tel que retenu, ajusté aux participants par un changement de présence, retouché à la main ensuite', () => {
+    const retenue = executer(deTables(), 'retenirProposition', { id: 1 });
+    const presence = executer(retenue, 'changerPresence', { id: 1, tours: [1, 2] });
+    const deplacee = executer(presence, 'deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
+    assert.deepEqual(
+      [retenue, presence, deplacee].map((charge) => [retenuAjuste(charge), retenuRetouche(charge)]),
+      [
+        [false, false],
+        [true, false],
+        [true, true],
+      ],
+    );
+    assert.deepEqual(
+      [retenue, presence, deplacee].map(libelle),
+      [
+        'Tel que la proposition n° 1.',
+        'Tel que la proposition n° 1, ajusté aux participants.',
+        'Ajusté à la main depuis la proposition n° 1.',
+      ],
+    );
+  });
+
+  test('sans retouche donnée, le libellé suit ajuste', () => {
+    const presence = executer(executer(deTables(), 'retenirProposition', { id: 1 }), 'changerPresence', { id: 1, tours: [1, 2] });
+    const table = evaluation(presence).table;
+    assert.equal(tableau(table, { ajuste: true }).retenu.libelle.cle, 'propositions.retenu.ajuste');
+    assert.equal(tableau(table, { ajuste: true, retouche: false }).retenu.libelle.cle, 'propositions.retenu.presence');
+    assert.equal(tableau(table).retenu.libelle.cle, 'propositions.retenu.origine');
+  });
+});
+
 describe('demandeConfirmation (§ 2.1)', () => {
   const deTables = () => avecPlans(chargeSix({ places: 4 }), [{ tours: DEUX_COLLEGUES }, { tours: DEUX_COLLEGUES }]);
 
@@ -1087,6 +1137,23 @@ describe('demandeConfirmation (§ 2.1)', () => {
     });
     // Re-retenir l'origine détruit aussi les ajustements.
     assert.equal(demandeConfirmation({ refus: null, charge: deplacee }, 1).id, 1);
+  });
+
+  test('un retenu ajusté par les seuls changements de participants n’ouvre pas de fenêtre : retenir le réajuste de même ; une retouche ensuite en ouvre une', () => {
+    const retenue = executer(deTables(), 'retenirProposition', { id: 1 });
+    for (const [nom, args] of [
+      ['changerPresence', { id: 1, tours: [1, 2] }],
+      ['ajouterParticipant', { champs: { nom: 'Quenouille' }, presence: [3, 4] }],
+      ['exclureParticipant', { id: 2 }],
+    ]) {
+      const ajustee = executer(retenue, nom, args);
+      assert.equal(retenuAjuste(ajustee), true, nom);
+      assert.equal(demandeConfirmation({ refus: null, charge: ajustee }, 2), null, nom);
+      assert.equal(demandeConfirmation({ refus: null, charge: ajustee }, 1), null, nom);
+    }
+    const presence = executer(retenue, 'changerPresence', { id: 1, tours: [1, 2] });
+    const deplacee = executer(presence, 'deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
+    assert.equal(demandeConfirmation({ refus: null, charge: deplacee }, 2).id, 2);
   });
 });
 
@@ -1731,5 +1798,129 @@ describe('lireColonne : la mesure d’une ligne par le nom de sa colonne (§ 12.
       assert.throws(() => lireColonne(source, nom), TypeError, nom);
     }
     assert.equal(Object.hasOwn(MODELE, 'LECTURES'), false);
+  });
+});
+
+// --- Les présences partielles et les lignes qui servent de départ ------------------
+
+describe('tableau : chaque ligne dit si elle sert de départ (§ 5.7, § 9)', () => {
+  const conflit = () => avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
+
+  test('sertDeDepart recopié de la table : comparable, vrai ; en dérive par les seuls participants, vrai ; en dérive par le mobilier ou fautive, faux', () => {
+    const comparables = tableau(evaluer(conflit()));
+    assert.deepEqual(comparables.lignes.map(({ id, sertDeDepart }) => [id, sertDeDepart]), [[3, true], [2, true], [1, true]]);
+
+    const absente = executer(conflit(), 'changerPresence', { id: 1, tours: [1, 2] });
+    const parPresence = tableau(evaluer(absente));
+    assert.deepEqual(parPresence.lignes, []);
+    assert.deepEqual(parPresence.horsClassement.map(({ id, comparable, sertDeDepart }) => [id, comparable, sertDeDepart]), [[1, false, true], [2, false, true], [3, false, true]]);
+    assert.deepEqual(parPresence.horsClassement[0].raisons.map(({ cle }) => cle), ['PRESENCE_RETIREE']);
+
+    const exclue = tableau(evaluer(executer(conflit(), 'exclureParticipant', { id: 4 })));
+    assert.ok(exclue.horsClassement.every(({ sertDeDepart }) => sertDeDepart));
+
+    const table = [...conflit().tables].sort((a, b) => a.id - b.id)[0];
+    const meublee = executer(absente, 'changerPlacesTable', { id: table.id, sieges: '4', origine: 'champ' });
+    const parMobilier = tableau(evaluer(meublee));
+    assert.deepEqual(parMobilier.horsClassement.map(({ sertDeDepart }) => sertDeDepart), [false, false, false]);
+
+    const fautive = structuredClone(conflit());
+    fautive.propositions[0].placement[0].sieges[0] = [2, 2, 10];
+    const lignes = tableau(evaluer(fautive)).horsClassement;
+    assert.deepEqual(lignes.map(({ id, statut, sertDeDepart }) => [id, statut, sertDeDepart]), [[1, 'propositions.statut.fautif', false]]);
+  });
+});
+
+describe('notePresences : la note des présences partielles, au-dessus du tableau (§ 5.7)', () => {
+  const conflit = () => avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
+  const note = (charge) => notePresences(charge, tableau(evaluer(charge)));
+  const textes = (phrases) => phrases.map(({ cle, details }) => t(cle, details));
+
+  test('sans présence partielle, et sans tableau, rien', () => {
+    assert.deepEqual(note(conflit()), []);
+    assert.deepEqual(notePresences(conflit(), null), []);
+  });
+
+  test('une présence partielle, toutes les lignes en dérive par elle : le compte, puis « Aucune proposition n’est classée », qui nomme « Repartir d’elle »', () => {
+    const charge = executer(conflit(), 'changerPresence', { id: 1, tours: [1, 2] });
+    assert.deepEqual(note(charge), [
+      { cle: 'propositions.presences.note', details: { absentes: 1 } },
+      { cle: 'propositions.presences.toutesEnDerive', details: {} },
+    ]);
+    assert.deepEqual(textes(note(charge)), [
+      "1 personne n'est pas présente à chaque tour : chaque chiffre se lit sur ses tours de présence.",
+      "Aucune proposition n'est classée : les participants ont changé depuis leur calcul. « Repartir d'elle », " +
+        "dans le menu d'une ligne, en génère des propositions dérivées qui suivent la soirée telle qu'elle est.",
+    ]);
+  });
+
+  test('deux présences partielles et une proposition classée depuis : le compte seul, au pluriel ; une exclue ne compte pas', () => {
+    let charge = executer(conflit(), 'changerPresence', { id: 1, tours: [1, 2] });
+    charge = executer(charge, 'changerPresence', { id: 2, tours: [3, 4] });
+    charge = executer(executer(charge, 'changerPresence', { id: 3, tours: [4] }), 'exclureParticipant', { id: 3 });
+    charge = generee(charge, { graine: 1, nombre: 1, arret: 200 });
+    assert.deepEqual(note(charge), [{ cle: 'propositions.presences.note', details: { absentes: 2 } }]);
+    assert.deepEqual(textes(note(charge)), [
+      '2 personnes ne sont pas présentes à chaque tour : chaque chiffre se lit sur leurs tours de présence.',
+    ]);
+  });
+
+  test('toutes les lignes en dérive, aucune ne servant de départ — le mobilier a changé — : rien ; une exclusion sans présence partielle : la seconde phrase seule', () => {
+    const table = [...conflit().tables].sort((a, b) => a.id - b.id)[0];
+    assert.deepEqual(note(executer(conflit(), 'changerPlacesTable', { id: table.id, sieges: '4', origine: 'champ' })), []);
+    assert.deepEqual(note(executer(conflit(), 'exclureParticipant', { id: 4 })), [{ cle: 'propositions.presences.toutesEnDerive', details: {} }]);
+  });
+});
+
+describe('les explications des colonnes de l’itinéraire : la présence (§ 5.5)', () => {
+  test('l’écart d’itinéraire et l’écart au plafond a priori se lisent sur les tours de présence', () => {
+    for (const nom of ['ecartItineraireMax', 'ecartAuPlafondAPriori']) {
+      const texte = t(explicationDeColonne(nom));
+      assert.match(texte, /sur ses tours de présence ; un tour d'absence n'y compte pas/, nom);
+    }
+  });
+});
+
+describe('garder les meilleures sans classement (§ 5.7)', () => {
+  const conflit = () => avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
+  const figee = (charge) => Object.freeze(structuredClone(charge));
+  // Le refus de garderMeilleures {n} sur la charge, null quand il aboutit.
+  function refusDuGeste(charge, n) {
+    try {
+      appliquerCommande('garderMeilleures', charge, { n });
+      return null;
+    } catch (erreur) {
+      return erreur.code;
+    }
+  }
+
+  test('toutes les lignes déclassées par la présence : NETTOYAGE_SANS_CLASSEMENT, et le geste part sans fenêtre, son refus posé à côté du bouton', () => {
+    const charge = figee(executer(conflit(), 'changerPresence', { id: 1, tours: [1, 2] }));
+    assert.equal(refusDuGeste(charge, 1), 'NETTOYAGE_SANS_CLASSEMENT');
+    assert.equal(demandeNettoyage({ refus: null, charge }, 1), null);
+  });
+
+  test('la fenêtre s’ouvre exactement quand le geste aboutirait, sur des tables classées, déclassées, mêlées, et sous un retenu', () => {
+    const absente = executer(conflit(), 'changerPresence', { id: 1, tours: [1, 2] });
+    const charges = [
+      conflit(),
+      absente,
+      generee(absente, { graine: 1, nombre: 2, arret: 200 }),
+      executer(executer(conflit(), 'retenirProposition', { id: 1 }), 'changerPresence', { id: 2, tours: [3, 4] }),
+      executer(conflit(), 'exclureParticipant', { id: 4 }),
+    ];
+    let fenetres = 0;
+    let refusSansClassement = 0;
+    for (const [rang, charge] of charges.entries()) {
+      for (let n = 1; n <= 5; n += 1) {
+        const refus = refusDuGeste(charge, n);
+        const demande = demandeNettoyage({ refus: null, charge: figee(charge) }, n);
+        assert.equal(demande === null, refus !== null, `charge ${rang}, n = ${n} : ${refus}`);
+        if (demande !== null) fenetres += 1;
+        if (refus === 'NETTOYAGE_SANS_CLASSEMENT') refusSansClassement += 1;
+      }
+    }
+    assert.ok(fenetres >= 3, `${fenetres} fenêtres`);
+    assert.ok(refusSansClassement >= 3, `${refusSansClassement} refus sans classement`);
   });
 });

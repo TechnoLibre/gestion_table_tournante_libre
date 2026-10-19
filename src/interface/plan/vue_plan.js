@@ -129,6 +129,22 @@ export function nomDeCharge(charge) {
 }
 
 /**
+ * La personne mise en évidence, que la barre de vue nomme : son identifiant,
+ * son nom affiché par nomDe — null pour une personne que la charge n'a
+ * plus —, et absente, vrai quand l'état des places du tour montré la nomme
+ * parmi ses absents (non exclue, absente à ce tour). Une personne que la
+ * charge n'a plus, ou une exclue, n'est jamais dite absente au tour.
+ *
+ * @param {number} id
+ * @param {(id: number) => string|undefined} nomDe   nomDeCharge
+ * @param {{absents: number[]}} etat   EtatPlaces du tour montré
+ * @returns {{id: number, nom: string|null, absente: boolean}}
+ */
+export function evidenceDe(id, nomDe, etat) {
+  return { id, nom: nomDe(id) ?? null, absente: etat.absents.includes(id) };
+}
+
+/**
  * La fonction appartenanceDe de l'infobulle (detailConflits) : l'identifiant
  * d'un participant de la charge vers son appartenance, la chaîne même que la
  * liste porte, ou null — sans appartenance, ou pour un identifiant que la

@@ -8,10 +8,23 @@
 // part (§ 5.4). L'appartenance d'un groupe est une donnée : l'écran la pose
 // dans son propre nœud, avant le texte, qu'aucune entrée de cette table ne
 // lui fait porter.
-import { compte, enumeration } from '../../application/libelles/aides.js';
+import { auxToursNommes, compte, enumeration } from '../../application/libelles/aides.js';
 
 // « sur le tour » ou « sur les R tours ».
 const surLesTours = (tours) => (tours === 1 ? 'sur le tour' : `sur les ${tours} tours`);
+
+// « 1 place manque » ou « n places manquent ».
+const placesQuiManquent = (n) => (n === 1 ? '1 place manque' : `${n} places manquent`);
+
+// Le manque de chaque tour où il est positif, [{tour, manque}] croissants :
+// les tours d'un même manque se nomment ensemble, les manques dans l'ordre
+// de leur premier tour. La Map ne sert qu'à retrouver un manque déjà
+// rencontré.
+function manquesParTour(tours) {
+  const toursDe = new Map();
+  for (const { tour, manque } of tours) toursDe.set(manque, [...(toursDe.get(manque) ?? []), tour]);
+  return enumeration([...toursDe].map(([manque, siens]) => `${placesQuiManquent(manque)} ${auxToursNommes(siens)}`));
+}
 
 export const TABLE = new Map([
   // --- Le cadre de l'écran ---------------------------------------------------
@@ -73,10 +86,21 @@ export const TABLE = new Map([
       `écart d'itinéraire maximal : plancher ${plancher}, au moins ` +
       (mobilesAuMoins === 1 ? '1 mobile finit sous son plafond a priori' : `${mobilesAuMoins} mobiles finissent sous leur plafond a priori`),
   ],
+  // Sans tours, le manque est le même à chaque tour ; tours : celui de
+  // chaque tour où il est positif, quand il varie d'un tour à l'autre.
   [
     'diagnostic.placesManquantes',
-    ({ placesManquantes }) =>
-      placesManquantes === 1 ? '1 place manque à chaque tour' : `${placesManquantes} places manquent à chaque tour`,
+    ({ placesManquantes, tours }) =>
+      tours === undefined ? `${placesQuiManquent(placesManquantes)} à chaque tour` : manquesParTour(tours),
+  ],
+  // Une personne au moins manque un tour : le plancher de l'écart
+  // d'itinéraire ne se prouve plus, et chaque mesure ne compte que les
+  // tours de présence (§ 5.6).
+  [
+    'diagnostic.planchersRetires',
+    ({ absentes }) =>
+      `${absentes === 1 ? "1 personne n'est pas présente" : `${absentes} personnes ne sont pas présentes`} à chaque tour : ` +
+      "l'écart d'itinéraire n'a pas de plancher prouvé, et chaque chiffre se lit sur les tours de présence.",
   ],
 
   // --- Les objectifs hors d'atteinte (§ 5.6, A10) -----------------------------

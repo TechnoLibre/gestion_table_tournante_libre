@@ -22,6 +22,13 @@
 // (§ 5.4). Un plancher ne s'énonce que strictement positif : un plancher nul
 // laisserait croire qu'un plancher a été calculé là où il n'y en a pas.
 //
+// La présence par tour : quand une personne au moins manque un tour,
+// l'énoncé des planchers retirés, sans remède, suit les collisions et
+// ouvre ce qui concerne tout l'événement — une seule carte de l'événement,
+// que cartesDiagnostic garde d'un tenant ; le moteur tait alors le
+// plancher de l'écart d'itinéraire. Le manque de places s'énonce tour par
+// tour quand il varie d'un tour à l'autre, et à chaque tour sinon.
+//
 // Les planchers des objectifs (A10, D16) se calculent toujours ; l'énoncé
 // n'écrit que ceux des valeurs que le mode réglé compare, lues dans l'état
 // du critère des tours hors objectif (les valeurs de valeursQuiClassent,
@@ -129,11 +136,22 @@ function ecartItineraire({ ecartItineraire: ecart }) {
   ];
 }
 
-// Le manque de places, quand il est positif.
-function placesManquantes({ placesManquantes: manquantes }) {
+// Le manque de places, quand il est positif : le plus grand d'un tour, et,
+// quand il varie d'un tour à l'autre, celui de chaque tour où il est
+// positif, sous tours.
+function placesManquantes({ placesManquantes: manquantes, placesManquantesParTour: parTour }) {
   if (manquantes === 0) return [];
-  return [{ cle: 'diagnostic.placesManquantes', details: { placesManquantes: manquantes }, remede: remede('diagnostic.remede.places') }];
+  const details = { placesManquantes: manquantes };
+  if (parTour.some((manque) => manque !== parTour[0])) {
+    details.tours = parTour.flatMap((manque, r) => (manque > 0 ? [{ tour: r + 1, manque }] : []));
+  }
+  return [{ cle: 'diagnostic.placesManquantes', details, remede: remede('diagnostic.remede.places') }];
 }
+
+// Les planchers que la présence retire, quand absentes personnes non
+// exclues manquent un tour au moins.
+const planchersRetires = (absentes) =>
+  absentes > 0 ? [{ cle: 'diagnostic.planchersRetires', details: { absentes }, remede: null }] : [];
 
 // Le nom du critère des objectifs dans l'état des critères, et, pour chaque
 // valeur qu'il peut comparer, le champ de objectifsInevitables qui en donne
@@ -209,18 +227,21 @@ function imposes({ retoursImposes, ancragesImposantRetours }) {
  *
  * @param {Object} diagnostic   celui que rend diagnostiquerCharge
  * @param {{numeroDe: (table: number) => number, tours: number,
- *          criteres?: Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>}} options
+ *          criteres?: Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>,
+ *          absentes?: number}} options
  *        numeroDe : le numéro affiché d'un identifiant de table ; tours : le
  *        nombre de tours de l'événement ; criteres : l'état des critères
  *        (criteresDuDiagnostic), vide par défaut, et aucun plancher des
- *        objectifs ne s'écrit alors
+ *        objectifs ne s'écrit alors ; absentes : le nombre de personnes non
+ *        exclues qui manquent un tour (presencesPartielles), 0 par défaut
  * @returns {Array<{cle: string, details: Object, remede: null|{cle: string, details: Object,
  *           commande?: string, arguments?: Object}, grandeur?: string}>}
  */
-export function enonces(diagnostic, { numeroDe, tours, criteres = [] }) {
+export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes = 0 }) {
   return [
     ...separation(diagnostic),
     ...collisions(diagnostic, tours),
+    ...planchersRetires(absentes),
     ...redondance(diagnostic, tours),
     ...animateurs(diagnostic),
     ...ancrage(diagnostic, numeroDe),

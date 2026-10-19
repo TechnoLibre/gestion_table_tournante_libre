@@ -5,14 +5,16 @@
   // La section du plan (§ 2.1, étapes 7 et 8 ; § 7) : son titre, le plan et
   // sa vue (Plan.svelte), et les panneaux latéraux — le diagnostic compact,
   // dans [data-panneau-diagnostic], visible dès l'ouverture, sans clic ;
-  // les listes de travail, la réserve, le panneau d'une place et celui
-  // d'une table. Les panneaux lisent 'seance' et 'ui' au contexte.
+  // les listes de travail, la réserve, les absentes du tour — une carte
+  // absente du DOM quand le tour n'en a pas —, le panneau d'une place et
+  // celui d'une table. Les panneaux lisent 'seance' et 'ui' au contexte.
   //
   // L'état des places du tour affiché (etatPlaces, A5) se calcule ici, une
   // fois par changement de la charge, du tour affiché ou de la proposition
   // montrée — chacun un $derived, qu'un autre changement de l'état de
-  // navigation ne relance pas —, et se passe au plan, à la réserve et aux
-  // panneaux de la place et de la table (etatTour) : aucun ne le recalcule.
+  // navigation ne relance pas —, et se passe au plan, à la réserve, aux
+  // absentes et aux panneaux de la place et de la table (etatTour) : aucun
+  // ne le recalcule.
   // Le plan se remonte pour chaque événement : un autre événement repart de
   // sa propre vue, mémorisée ou ajustée.
   //
@@ -27,6 +29,7 @@
   import { diagnostiquerCharge } from '../../application/diagnostic.js';
   import { etatPlaces } from '../../application/places.js';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
+  import Absentes from './Absentes.svelte';
   import ListesTravail from './ListesTravail.svelte';
   import PanneauPlace from './PanneauPlace.svelte';
   import PanneauTable from './PanneauTable.svelte';
@@ -67,6 +70,7 @@
         </div>
         <ListesTravail />
         <Reserve {etatTour} />
+        <Absentes {etatTour} />
         <PanneauPlace {etatTour} />
         <PanneauTable {etatTour} />
       </aside>

@@ -1224,3 +1224,109 @@ describe('le focus après un remède qui retire son refus (§ 14.5)', () => {
     }
   });
 });
+
+describe('la présence par tour (§ 6.1, § 2.1 étape 5)', () => {
+  // La charge, chaque présence donnée posée sur sa personne.
+  const avecPresences = (donnees, presences) => {
+    for (const [id, presence] of Object.entries(presences)) donnees.participants[Number(id) - 1].presence = presence;
+    return donnees;
+  };
+  const tableau = (m) => section(m).querySelector('[data-presences-tours]');
+  const ligneTour = (m, tour) => tableau(m).querySelector(`[data-presences-tour="${tour}"]`);
+  const cellules = (rangee) => [...rangee.querySelectorAll('th, td')].map((cellule) => cellule.textContent.trim());
+  const fondDe = (element) => composantes(getComputedStyle(element).backgroundColor);
+  const teinte = (rangee) => [...rangee.querySelectorAll('*')].find((e) => fondDe(e)[3] > 0) ?? null;
+  // La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
+  function jeton(nom) {
+    const sonde = document.createElement('span');
+    sonde.style.color = `var(${nom})`;
+    document.body.append(sonde);
+    const couleur = composantes(getComputedStyle(sonde).color);
+    sonde.remove();
+    return couleur;
+  }
+
+  test('sans absence, aucun tableau des présences, même quand une exclue porte une présence partielle', async () => {
+    const m = await preparer(avecPresences(chargeDe({ tables: [{ id: 1 }], n: 4, tours: 3, exclus: [2] }), { 2: [1] }));
+    expect(section(m).querySelector('[data-champ="tours"]')).not.toBeNull();
+    expect(tableau(m)).toBeNull();
+  });
+
+  test('sous absence : une ligne par tour, ses présentes, ses places et son manque ; un manque positif en pastille d’avis ; la présence rendue à tous les tours, le tableau part', async () => {
+    // Six personnes, quatre places : Théo Pervenche absente au tour 1, Iris
+    // Ombrelle et Ondine Lacasse absentes au tour 3.
+    const donnees = avecPresences(chargeDe({ tables: [{ id: 1, sieges: 2 }, { id: 2, sieges: 2 }], n: 6, tours: 3 }), {
+      1: [1, 2],
+      2: [2, 3],
+      3: [1, 2],
+    });
+    const m = await preparer(donnees);
+    expect(tableau(m)).not.toBeNull();
+    expect(visible(tableau(m))).toBe(true);
+    expect(tableau(m).querySelector('caption').textContent.trim()).toBe(t('tables.presences.titre'));
+    expect(cellules(tableau(m).querySelector('thead tr'))).toEqual(
+      ['tour', 'presentes', 'places', 'manque'].map((colonne) => t(`tables.presences.colonne.${colonne}`)),
+    );
+    expect(tableau(m).querySelectorAll('[data-presences-tour]')).toHaveLength(3);
+    expect([1, 2, 3].map((tour) => cellules(ligneTour(m, tour)))).toEqual([
+      ['1', '5', '4', '1'],
+      ['2', '6', '4', '2'],
+      ['3', '4', '4', '0'],
+    ]);
+    for (const tour of [1, 2]) expect(fondDe(teinte(ligneTour(m, tour))), `tour ${tour}`).toEqual(jeton('--couleur-avis-fond'));
+    expect(teinte(ligneTour(m, 3))).toBeNull();
+
+    // Une table de plus : les places suivent, sans soustraction ailleurs.
+    await cliquer(m, commande(section(m), 'creerTableRonde'));
+    expect(cellules(ligneTour(m, 2))).toEqual(['2', '6', '12', '0']);
+    expect(teinte(ligneTour(m, 2))).toBeNull();
+
+    for (const id of [1, 2, 3]) await m.seance.executer('changerPresence', { id, tours: null });
+    await attendre(m);
+    expect(tableau(m)).toBeNull();
+  });
+
+  test('R = 4, Iris Ombrelle présente aux tours 1 et 4 ; 3 : la fenêtre nomme sa présence rognée, rien d’écrit avant ; Confirmer : une entrée, sa présence au tour 1', async () => {
+    const m = await preparer(avecPresences(chargeDe({ tables: [{ id: 1 }], n: 4, tours: 4 }), { 1: [1, 4] }));
+    const avant = ecritures(m);
+    const r0 = revision(m);
+    await saisir(m, champ(m, 'tours'), '3');
+    expect(fenetre()).not.toBeNull();
+    expect(ecritures(m)).toBe(avant);
+    expect(elementsFenetre()).toEqual(['Présence de Iris Ombrelle : tour 1 au lieu des tours 1 et 4']);
+    await cliquer(m, commande(fenetre(), 'confirmer'));
+    await attendre(m);
+    expect(fenetre()).toBeNull();
+    expect(revision(m)).toBe(r0 + 1);
+    expect(charge(m).evenement.tours).toBe(3);
+    expect(charge(m).participants[0].presence).toEqual([1]);
+  });
+
+  test('sous présence partielle, le total du défaut compte les personnes présentes au plus à un même tour', async () => {
+    // Six personnes : Iris Ombrelle présente au seul tour 1, Théo Pervenche
+    // au seul tour 2 ; cinq personnes à chaque tour.
+    const m = await preparer(avecPresences(chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 6, tours: 2 }), { 1: [1], 2: [2] }));
+    await saisir(m, champ(m, 'siegesParDefaut'), '10');
+    expect(phrases(m)).toBe(
+      '2 tables suivent le défaut et passent de 8 à 10 places. Total : 16 \u{2192} 20 sièges pour 5 personnes présentes au plus à un même tour.',
+    );
+    for (const id of [1, 2]) await m.seance.executer('changerPresence', { id, tours: null });
+    await attendre(m);
+    expect(phrases(m)).toBe('2 tables suivent le défaut et passent de 8 à 10 places. Total : 16 \u{2192} 20 sièges pour 6 participants.');
+  });
+
+  test('une présence qui se viderait : PRESENCE_VIDEE_PAR_TOURS sur le champ des tours, son remède, sans fenêtre, rien d’écrit', async () => {
+    const m = await preparer(avecPresences(chargeDe({ tables: [{ id: 1 }], n: 4, tours: 4 }), { 2: [4] }));
+    const avant = ecritures(m);
+    await saisir(m, champ(m, 'tours'), '3');
+    expect(fenetre()).toBeNull();
+    const refus = champ(m, 'tours').closest('[data-tours]').querySelector('[data-refus="PRESENCE_VIDEE_PAR_TOURS"]');
+    expect(refus).not.toBeNull();
+    expect(refus.querySelector('p').textContent).toBe(
+      t('PRESENCE_VIDEE_PAR_TOURS', { participants: [{ participant: 2, personne: 'Théo Pervenche' }], tours: 3 }),
+    );
+    expect(refus.querySelector('[data-commande]')).not.toBeNull();
+    expect(ecritures(m)).toBe(avant);
+    expect(charge(m).evenement.tours).toBe(4);
+  });
+});

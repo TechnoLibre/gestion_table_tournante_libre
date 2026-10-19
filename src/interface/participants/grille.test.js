@@ -5,12 +5,16 @@
 // lignes de la grille, triées et filtrées, la navigation au clavier,
 // l'orthographe d'appartenance à reprendre, l'itinéraire d'une personne dans
 // le retenu, ses réservations, l'ordre des colonnes, celui de l'export, et
-// les groupes de la liste groupée par une colonne ou plusieurs, imbriqués.
+// les groupes de la liste groupée par une colonne ou plusieurs, imbriqués,
+// la présence par tour comprise — sa cellule exportée, son tri, ses groupes,
+// l'étape « absente » de l'itinéraire — et la commande d'une cellule.
 // Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { cleNormalisee, decoder, exporterParticipants } from '../../application/csv.js';
+import { ecrirePresence } from '../../csv/presence.js';
 import {
+  CHAMP_DE_COLONNE,
   COLONNES,
   GROUPEMENTS,
   basculerGroupe,
@@ -22,6 +26,7 @@ import {
   cleDeStatut,
   clesPremierNiveau,
   colonnesOffertes,
+  commandeDeCellule,
   deplierChemin,
   entreeValide,
   groupesGrille,
@@ -147,6 +152,84 @@ describe('lignesGrille : tri et filtre (§ 10.2)', () => {
   });
 });
 
+describe('la colonne de la présence : filtre, tri, groupes, commande', () => {
+  const liste = [
+    personne(1, 'Ombrelle', { presence: [2] }),
+    personne(2, 'Pervenche'),
+    personne(3, 'Lacasse', { presence: [1, 3] }),
+    personne(4, 'Grisaille', { presence: [1, 2] }),
+    personne(5, 'Lisonnet', { exclu: true }),
+    personne(6, 'Brindelle', { presence: [1, 3] }),
+  ];
+
+  test('le filtre ne lit pas la présence, et ne lève pas sur sa liste', () => {
+    const lus = [];
+    const espion = (texte) => {
+      lus.push(texte);
+      return cleNormalisee(texte);
+    };
+    for (const filtre of ['1', 'tour', 'tous', '3']) {
+      assert.doesNotThrow(() => lignesGrille(liste, { tri: null, filtre }, espion), filtre);
+      assert.deepEqual(ids(lignesGrille(liste, { tri: null, filtre }, cleNormalisee)), [], filtre);
+    }
+    assert.ok(lus.every((texte) => typeof texte === 'string'));
+  });
+
+  test('le tri : « tous » en tête en croissant, puis [1,2] < [1,3] < [2] ; l’inverse en décroissant ; deux présences égales par identifiant croissant', () => {
+    const croissant = lignesGrille(liste, { tri: { colonne: 'presence', sens: 'croissant' }, filtre: '' }, cleNormalisee);
+    assert.deepEqual(ids(croissant), [2, 5, 4, 3, 6, 1]);
+    const decroissant = lignesGrille(liste, { tri: { colonne: 'presence', sens: 'decroissant' }, filtre: '' }, cleNormalisee);
+    assert.deepEqual(ids(decroissant), [1, 3, 6, 4, 2, 5]);
+  });
+
+  test('les groupes : « tous » d’abord, puis chaque présence, nommée par ses tours dans les détails du libellé ; le sens suit le tri de la colonne', () => {
+    const lignes = lignesGrille(liste, { tri: null, filtre: '' }, cleNormalisee);
+    const groupes = groupesGrille(lignes, ['presence'], { tri: null, cleNormalisee, statuts: null });
+    assert.deepEqual(
+      groupes.map(({ cle, libelle, cleLibelle, detailsLibelle, compte, lignes: l }) => ({ cle, libelle, cleLibelle, detailsLibelle, compte, ids: ids(l) })),
+      [
+        { cle: 'presence:tous', libelle: null, cleLibelle: 'participants.presence.tous', detailsLibelle: {}, compte: 2, ids: [2, 5] },
+        { cle: 'presence:001,002', libelle: null, cleLibelle: 'participants.presence.tours', detailsLibelle: { tours: [1, 2] }, compte: 1, ids: [4] },
+        { cle: 'presence:001,003', libelle: null, cleLibelle: 'participants.presence.tours', detailsLibelle: { tours: [1, 3] }, compte: 2, ids: [3, 6] },
+        { cle: 'presence:002', libelle: null, cleLibelle: 'participants.presence.tours', detailsLibelle: { tours: [2] }, compte: 1, ids: [1] },
+      ],
+    );
+    const tri = { colonne: 'presence', sens: 'decroissant' };
+    const inverses = groupesGrille(lignesGrille(liste, { tri, filtre: '' }, cleNormalisee), ['presence'], { tri, cleNormalisee, statuts: null });
+    assert.deepEqual(inverses.map(({ cle }) => cle), ['presence:002', 'presence:001,003', 'presence:001,002', 'presence:tous']);
+  });
+
+  test('le nom d’un groupe de présence est stable : le filtre et l’ordre reçu ne le changent pas ; les autres colonnes n’ont pas de détails', () => {
+    const toutes = lignesGrille(liste, { tri: null, filtre: '' }, cleNormalisee);
+    const filtrees = lignesGrille(liste, { tri: null, filtre: 'brindelle' }, cleNormalisee);
+    const [seul] = groupesGrille(filtrees, ['presence'], { tri: null, cleNormalisee, statuts: null, toutes });
+    assert.deepEqual([seul.cle, seul.cleLibelle, seul.detailsLibelle, ids(seul.lignes)], ['presence:001,003', 'participants.presence.tours', { tours: [1, 3] }, [6]]);
+    const renverses = groupesGrille([...toutes].reverse(), ['presence'], { tri: null, cleNormalisee, statuts: null });
+    assert.deepEqual(renverses.map(({ cle }) => cle), groupesGrille(toutes, ['presence'], { tri: null, cleNormalisee, statuts: null }).map(({ cle }) => cle));
+    for (const colonne of GROUPEMENTS.filter((c) => c !== 'presence')) {
+      for (const groupe of groupesGrille(toutes, [colonne], { tri: null, cleNormalisee, statuts: new Map() })) assert.equal(groupe.detailsLibelle, null, colonne);
+    }
+  });
+
+  test('sous-groupée par la présence, une appartenance garde ses lignes ; GROUPEMENTS offre la présence', () => {
+    assert.ok(GROUPEMENTS.includes('presence'));
+    assert.equal(cleDeGroupement('presence'), 'participants.colonne.presence');
+    const lignes = lignesGrille(liste, { tri: null, filtre: '' }, cleNormalisee);
+    const [groupe] = groupesGrille(lignes, ['exclu', 'presence'], { tri: null, cleNormalisee, statuts: null });
+    assert.deepEqual(groupe.sousGroupes.map(({ cle }) => cle), ['exclu:non/presence:tous', 'exclu:non/presence:001,002', 'exclu:non/presence:001,003', 'exclu:non/presence:002']);
+  });
+
+  test('commandeDeCellule : changerPresence pour la présence, modifierParticipant sur ce seul champ sinon', () => {
+    assert.deepEqual(commandeDeCellule('presence', 4, [1, 3]), { nom: 'changerPresence', args: { id: 4, tours: [1, 3] } });
+    assert.deepEqual(commandeDeCellule('presence', 4, null), { nom: 'changerPresence', args: { id: 4, tours: null } });
+    assert.deepEqual(commandeDeCellule('courriel', 2, 'iris@exemple.test'), {
+      nom: 'modifierParticipant',
+      args: { id: 2, champs: { courriel: 'iris@exemple.test' } },
+    });
+    assert.deepEqual(commandeDeCellule('notes', 9, ''), { nom: 'modifierParticipant', args: { id: 9, champs: { notes: '' } } });
+  });
+});
+
 describe('celluleSuivante : flèches, Tab, Maj+Tab (§ 10.2)', () => {
   const taille = { lignes: 3, colonnes: 4 };
 
@@ -209,7 +292,7 @@ describe('orthographeExistante (§ 10.1, § 10.2)', () => {
 
 describe("itineraire : la personne dans le retenu, tour par tour (§ 7.4)", () => {
   // Un état de places écrit à la main, réduit à ce que lit itineraire.
-  const etat = (source, siegesAttribues, tables, reserve) => ({ source, siegesAttribues, tables, reserve });
+  const etat = (source, siegesAttribues, tables, reserve, absents = []) => ({ source, siegesAttribues, tables, reserve, absents });
   const tableDe = (numero, occupants) => ({
     id: numero * 10,
     numero,
@@ -267,6 +350,27 @@ describe("itineraire : la personne dans le retenu, tour par tour (§ 7.4)", () =
     assert.equal(itineraire(7, 1, (r) => etats.get(r)), null);
   });
 
+  test('une personne absente à un tour : l’étape « absente », et l’itinéraire reste ; avant le test « ni assise ni en réserve »', () => {
+    const etats = new Map([
+      [1, etat('retenu', true, [tableDe(4, [5, null])], [], [7])],
+      [2, etat('retenu', true, [tableDe(4, [5, null])], [], [7])],
+      [3, etat('retenu', true, [tableDe(4, [5, 7])], [], [])],
+      [4, etat('retenu', true, [tableDe(4, [5, null])], [7], [])],
+    ]);
+    assert.deepEqual(itineraire(7, 4, (r) => etats.get(r)), [
+      { tour: 1, absente: true },
+      { tour: 2, absente: true },
+      { tour: 3, numero: 4, siege: 2 },
+      { tour: 4, reserve: true },
+    ]);
+    // Absente à chaque tour : l'itinéraire le dit tour par tour.
+    const partout = new Map([[1, etat('retenu', false, [tableDe(4, [5])], [], [7])]]);
+    assert.deepEqual(itineraire(7, 1, (r) => partout.get(r)), [{ tour: 1, absente: true }]);
+    // L'absence d'une autre ne change rien à la sienne.
+    const autre = new Map([[1, etat('retenu', true, [tableDe(4, [5])], [], [6])]]);
+    assert.equal(itineraire(7, 1, (r) => autre.get(r)), null);
+  });
+
   test('lit chaque tour de 1 à tours, une fois', () => {
     const lus = [];
     itineraire(7, 3, (r) => {
@@ -298,9 +402,17 @@ describe('reservationsDe : les réservations d’une personne, pour la fiche (§
   });
 });
 
-describe("l'ordre de la grille est celui de l'export (§ 10.2)", () => {
-  test('la cellule de rang i de la ligne exportée égale p[COLONNES[i]], exclu écrit « non » ; l’export compte deux colonnes de plus, les étiquettes puis la présence, en dernier', () => {
-    const p = {
+describe("les colonnes de la grille s'associent à l'export par leur champ (§ 10.2)", () => {
+  test('huit colonnes, la présence juste après l’exclusion ; chacune a son champ d’export, sous son en-tête', () => {
+    assert.deepEqual(COLONNES, ['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+    assert.ok(Object.isFrozen(COLONNES));
+    assert.deepEqual([...CHAMP_DE_COLONNE.keys()], COLONNES);
+    assert.equal(CHAMP_DE_COLONNE.get('titrePressenti'), 'titre_pressenti');
+    for (const colonne of COLONNES.filter((c) => c !== 'titrePressenti')) assert.equal(CHAMP_DE_COLONNE.get(colonne), colonne);
+  });
+
+  test('la cellule exportée sous l’en-tête du champ de chaque colonne égale celle de la grille : exclu écrit « non », la présence écrite par ecrirePresence', () => {
+    const base = {
       id: 1,
       nom: 'Ombrelle',
       prenom: 'Iris',
@@ -310,18 +422,44 @@ describe("l'ordre de la grille est celui de l'export (§ 10.2)", () => {
       notes: 'arrive à neuf heures',
       exclu: false,
       etiquettes: ['Montréal', 'finance'],
+    };
+    for (const presence of [[2, 3], [1, 2, 3, 5], undefined]) {
+      const p = presence === undefined ? base : { ...base, presence };
+      const { texte } = decoder(exporterParticipants([p]));
+      const [entete, ligne] = texte.split('\r\n');
+      const colonnesExport = entete.split(';');
+      const cellules = ligne.split(';');
+      for (const colonne of COLONNES) {
+        const rang = colonnesExport.indexOf(CHAMP_DE_COLONNE.get(colonne));
+        assert.ok(rang >= 0, colonne);
+        const attendue = colonne === 'exclu' ? 'non' : colonne === 'presence' ? ecrirePresence(p.presence) : p[colonne];
+        assert.equal(cellules[rang], attendue, `${colonne} ${JSON.stringify(presence)}`);
+      }
+    }
+    assert.equal(ecrirePresence([1, 2, 3, 5]), '1-3, 5');
+    assert.equal(ecrirePresence(undefined), '');
+  });
+
+  test('l’export compte une colonne de plus que la grille, les étiquettes, qu’elle ne montre pas ; la présence l’y suit, en dernier', () => {
+    const p = {
+      id: 1,
+      nom: 'Ombrelle',
+      prenom: 'Iris',
+      appartenance: null,
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: false,
+      etiquettes: ['Montréal', 'finance'],
       presence: [2, 3],
     };
     const { texte } = decoder(exporterParticipants([p]));
     const [entete, ligne] = texte.split('\r\n');
     const cellules = ligne.split(';');
-    assert.equal(COLONNES.length, 7);
-    assert.equal(cellules.length, COLONNES.length + 2);
-    COLONNES.forEach((colonne, i) => {
-      assert.equal(cellules[i], colonne === 'exclu' ? 'non' : p[colonne], colonne);
-    });
+    assert.equal(cellules.length, COLONNES.length + 1);
     assert.deepEqual(entete.split(';').slice(-2), ['etiquettes', 'presence']);
     assert.deepEqual(cellules.slice(-2), ['Montréal, finance', '2, 3']);
+    assert.ok(!COLONNES.includes('etiquettes'));
   });
 
   test('le nom proposé à l’enregistrement : ‹base›-participants.csv', () => {
@@ -445,7 +583,7 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
   });
 
   test('chaque colonne de texte groupe par sa clé normalisée, le vide après toute valeur, dans les deux sens', () => {
-    const textes = COLONNES.filter((colonne) => colonne !== 'exclu' && colonne !== 'nom');
+    const textes = COLONNES.filter((colonne) => !['exclu', 'presence', 'nom'].includes(colonne));
     assert.ok(textes.length > 0);
     for (const colonne of textes) {
       const liste = [

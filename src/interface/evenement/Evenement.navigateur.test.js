@@ -1336,7 +1336,7 @@ describe('le journal (§ 8.6, § 8.2)', () => {
 });
 
 describe('la dérive (§ 9)', () => {
-  test('retenu, puis exclure une personne : l’avertissement nomme le retenu et la raison, et le geste suivant reste permis', async () => {
+  test('retenu, puis exclure une personne : le retenu suit sans dériver, l’avertissement nomme les propositions et la raison, et le geste suivant reste permis', async () => {
     const m = await neuf();
     await garnir(m);
     await generer(m);
@@ -1344,15 +1344,20 @@ describe('la dérive (§ 9)', () => {
     await m.seance.executer('exclureParticipant', { id: exclue });
     flushSync();
     const nouvelle = m.seance.etat().avertissements.find(({ code }) => code === 'DERIVE_NOUVELLE');
-    expect(nouvelle.details.touchees.map(({ id }) => id)).toContain('retenu');
+    const touchees = nouvelle.details.touchees.map(({ id }) => id);
+    expect(touchees).not.toContain('retenu');
+    expect(touchees.length).toBeGreaterThan(0);
     const element = avertissement(m, 'DERIVE_NOUVELLE');
     expect(element.textContent).toContain(t('DERIVE_NOUVELLE', nouvelle.details));
     // La raison telle que la séance la rend, détails compris : son texte
     // est celui que l'avertissement affiche.
-    const { raisons } = nouvelle.details.touchees.find(({ id }) => id === 'retenu');
+    const { raisons } = nouvelle.details.touchees[0];
     const exclusion = raisons.find(({ code }) => code === 'PARTICIPANT_EXCLU');
     expect(exclusion.participant).toBe(exclue);
     expect(element.textContent).toContain(t('PARTICIPANT_EXCLU', exclusion));
+    // Le retenu ne porte plus l'exclue.
+    const retenu = m.seance.etat().charge.retenu;
+    expect(retenu.placement.flatMap(({ sieges, reserve }) => [...sieges.flat(), ...reserve])).not.toContain(exclue);
     await m.seance.executer('ajouterParticipant', { champs: { nom: 'Rouvraie' } });
     expect(m.seance.etat().charge.participants.length).toBe(NOMS.length + 1);
   });

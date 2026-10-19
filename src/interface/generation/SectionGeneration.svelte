@@ -68,13 +68,20 @@
   // calcul rend ensuite se pose à côté de lui. Le départ reste choisi après
   // la génération : une génération ordinaire passe par « Repartir de zéro ».
   // La carte est clé sur l'identifiant du départ : un autre départ en monte
-  // une neuve.
+  // une neuve. Elle dit, avant le lancement, les écarts du départ à la
+  // soirée et la retouche du retenu à un tour coché (carteDuDepart,
+  // depart.js). Un départ en dérive par ses seuls participants reste choisi :
+  // l'état de navigation ne le retire que quand il quitte la liste, et la
+  // génération part de lui ajusté à la présence.
   //
   // L'issue (issueDerivee, depart.js) se relit dans la table d'évaluation de
   // chaque charge : celle d'une génération dérivée nomme la meilleure
-  // dérivée, sa place et celle du départ, et offre « Comparer n° 23 à n° 4 »,
-  // qui montre n° 23 au plan, met n° 4 en second placement et ouvre la vue de
-  // comparaison de la page de qualité, sans rien écrire.
+  // dérivée, sa place et celle du départ — « en dérive, n'est pas classée »
+  // pour un départ en dérive par ses participants —, et offre « Comparer
+  // n° 23 à n° 4 », qui montre n° 23 au plan, met n° 4 en second placement et
+  // ouvre la vue de comparaison de la page de qualité, sans rien écrire. Les
+  // avertissements que la génération rend — DEPART_ECART_AU_RETENU — suivent
+  // l'issue, chacun sous son code.
   //
   // Habillage : la meilleure proposition est une carte à elle, chaque valeur
   // sous son intitulé ; les réglages, « Générer » — l'action principale de
@@ -330,6 +337,9 @@
         {:else if issue !== null}
           <div class="issue">
             <p data-issue role="status">{t(issue.cle, issue.details)}</p>
+            {#each issue.avertissements as avertissement, rang (rang)}
+              <p class="avertissement" role="status" data-avertissement={avertissement.cle}>{t(avertissement.cle, avertissement.details)}</p>
+            {/each}
             {#if issue.comparer !== null}
               <Commande
                 cle="generation.commande.comparerIssue"
@@ -448,6 +458,15 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--espace-2);
+  }
+
+  /* Un avertissement de la génération : filet et marque de l'avis. */
+  .avertissement {
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-avis-filet);
+    border-left: 3px solid var(--couleur-avis-marque);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-avis-fond);
   }
 
   .issues {

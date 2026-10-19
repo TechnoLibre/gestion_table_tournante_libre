@@ -3,7 +3,8 @@
 
 // L'en-tête de la liste des participants : la ligne de comptes de la carte,
 // la légende des appartenances et celle des étiquettes, chacune lue sur la
-// liste entière, exclues comprises, et le texte que les libellés en
+// liste entière, exclues comprises — les présences partielles exceptées, qui
+// ne comptent que les non-exclues —, et le texte que les libellés en
 // composent. Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
@@ -38,12 +39,23 @@ const LISTE = [
 ];
 
 describe('comptesEntete : la ligne de comptes de la carte des participants', () => {
-  test('personnes, à placer, exclues et appartenances distinctes, exclues comprises', () => {
-    assert.deepEqual(comptesEntete(LISTE), { personnes: 6, aPlacer: 4, exclues: 2, appartenances: 3 });
+  test('personnes, à placer, exclues et appartenances distinctes, exclues comprises ; aucune présence partielle', () => {
+    assert.deepEqual(comptesEntete(LISTE), { personnes: 6, aPlacer: 4, exclues: 2, appartenances: 3, partielles: 0 });
   });
 
-  test('une liste vide : quatre zéros', () => {
-    assert.deepEqual(comptesEntete([]), { personnes: 0, aPlacer: 0, exclues: 0, appartenances: 0 });
+  test('une liste vide : cinq zéros', () => {
+    assert.deepEqual(comptesEntete([]), { personnes: 0, aPlacer: 0, exclues: 0, appartenances: 0, partielles: 0 });
+  });
+
+  test('les présences partielles : les non-exclues qui portent une présence ; celle d’une exclue, suspendue, ne compte pas', () => {
+    const liste = [
+      { ...personne(1, null), presence: [1, 2] },
+      personne(2, null),
+      { ...personne(3, null, true), presence: [2] },
+      { ...personne(4, null), presence: [3] },
+    ];
+    assert.equal(comptesEntete(liste).partielles, 2);
+    assert.equal(comptesEntete(liste).exclues, 1);
   });
 
   test('deux orthographes sont deux appartenances, comme pour le moteur et les teintes', () => {
@@ -62,9 +74,22 @@ describe('comptesEntete : la ligne de comptes de la carte des participants', () 
       '1 personne \u{00B7} 0 à placer \u{00B7} 2 exclues \u{00B7} 1 appartenance',
     );
     assert.equal(
-      t('participants.entete.comptes', { personnes: 0, aPlacer: 0, exclues: 0, appartenances: 0 }),
+      t('participants.entete.comptes', { personnes: 0, aPlacer: 0, exclues: 0, appartenances: 0, partielles: 0 }),
       '0 personne \u{00B7} 0 à placer \u{00B7} 0 exclue \u{00B7} 0 appartenance',
     );
+  });
+
+  test('« n présences partielles » s’ajoute en dernier, seulement quand il y en a', () => {
+    const comptes = { personnes: 13, aPlacer: 12, exclues: 1, appartenances: 3 };
+    assert.equal(
+      t('participants.entete.comptes', { ...comptes, partielles: 2 }),
+      '13 personnes \u{00B7} 12 à placer \u{00B7} 1 exclue \u{00B7} 3 appartenances \u{00B7} 2 présences partielles',
+    );
+    assert.equal(
+      t('participants.entete.comptes', { ...comptes, partielles: 1 }),
+      '13 personnes \u{00B7} 12 à placer \u{00B7} 1 exclue \u{00B7} 3 appartenances \u{00B7} 1 présence partielle',
+    );
+    assert.equal(t('participants.entete.comptes', { ...comptes, partielles: 0 }), t('participants.entete.comptes', comptes));
   });
 });
 

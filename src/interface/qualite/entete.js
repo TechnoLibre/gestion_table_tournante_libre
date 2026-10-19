@@ -41,6 +41,16 @@
 // groupesDeTuiles dit quelles tuiles existent, sous quels groupes, et
 // enTeteDeTuile leur libellé : l'en-tête et les colonnes en partagent la
 // règle.
+//
+// La présence par tour (§ 12.6) : un plancher que le diagnostic retire
+// sous absence (detail.planchersRetires) ne s'écrit pas, et la tuile de sa
+// mesure le dit par une phrase, sous son chiffre ; les autres tuiles gardent
+// leur plancher. L'infobulle d'une tuile est l'explication de sa colonne ;
+// celle du minimum brut y ajoute la présence de la personne au rang 1
+// quand elle ne vient pas à chaque tour, lue par presenceDe : cette
+// personne est souvent celle qui rencontre le moins de monde parce qu'elle
+// manque des tours.
+import { presenceSaisie } from '../../application/places.js';
 import { COLONNES, GROUPES_COLONNES, explicationDeColonne, lireColonne, tableau, texteCellule } from '../propositions/modele.js';
 
 /** Les tuiles qui portent un pourcentage (B11, D34), dans l'ordre de
@@ -63,7 +73,48 @@ const EN_TETES = new Map(COLONNES.map(({ nom, cle }) => [nom, cle]));
  * @property {{texte: string|null, compte: string}|null} pourcentage
  *           le pourcentage écrit, null quand son dénominateur est nul, et
  *           le compte du pire ; null hors des trois tuiles
+ * @property {string|null} plancherNonProuve  la phrase qui dit le plancher
+ *           de la mesure retiré par la présence, null quand il ne l'est pas
+ * @property {{cle: string, details: Object}} infobulle  le texte de
+ *           l'infobulle du libellé, sous sa clé et ses détails
  */
+
+// Le plancher du diagnostic que la présence retire, par la tuile de sa
+// mesure (detail.planchersRetires) : la Map ne sert qu'à retrouver le nom
+// d'une tuile.
+const PLANCHER_RETIRE_DE_TUILE = new Map([['ecartItineraireMax', 'ecartItineraire']]);
+
+// La phrase du plancher retiré de la tuile nom, ou null.
+function plancherNonProuveDe(nom, retires, t) {
+  const plancher = PLANCHER_RETIRE_DE_TUILE.get(nom);
+  return plancher !== undefined && retires.includes(plancher) ? t('qualite.entete.plancherNonProuve') : null;
+}
+
+// L'infobulle du libellé de la tuile nom : l'explication de sa colonne ;
+// pour le minimum brut, la présence de la personne au rang 1 s'y ajoute
+// quand presenceDe la rend partielle.
+function infobulleDe(nom, explication, { rang1, nomDe, presenceDe }) {
+  if (nom !== 'rencontresTous' || rang1 === null) return { cle: explication, details: {} };
+  const tours = presenceDe(rang1.id);
+  if (tours === null) return { cle: explication, details: {} };
+  return { cle: 'qualite.entete.explicationRang1', details: { explication, nom: nomDe(rang1.id), tours } };
+}
+
+/**
+ * La présence saisie de chaque personne d'une charge, par identifiant
+ * (presenceSaisie) : null pour une présence à tous les tours, pour une
+ * personne que la charge n'a pas, ou sans charge ; sinon une liste neuve.
+ *
+ * @param {{participants: Array<{id: number, presence?: number[]}>}|null} charge
+ *        la charge de la séance
+ * @returns {(id: number) => number[]|null}
+ */
+export function presenceDeCharge(charge) {
+  return (id) => {
+    const personne = charge?.participants.find((candidate) => candidate.id === id);
+    return personne === undefined ? null : presenceSaisie(personne);
+  };
+}
 
 // La borne que lit chaque tuile qui nomme une personne ou la soirée : le
 // champ de detail.bornes, ou des bornes d'un côté de la comparaison. La Map
@@ -242,7 +293,10 @@ export function enTeteDeTuile(nom, classe, t) {
  * @param {{detail: Object|null, ligne: Object|null, table: Object|null}} vue
  *        le détail du placement (detaillerQualite), sa ligne d'évaluation
  *        et la table d'évaluation de la charge
- * @param {{t: Function, format: {nombre: Function}}} outils
+ * @param {{t: Function, format: {nombre: Function},
+ *          presenceDe?: (id: number) => number[]|null}} outils
+ *        presenceDe : la présence saisie d'une personne (presenceDeCharge),
+ *        null pour tous les tours ; par défaut, chacune vient à chaque tour
  * @returns {null|{population: string, groupes: Array<{cle: string,
  *   libelle: string, tuiles: Tuile[]}>, certificat: string}}
  *   population : la mention de la population mesurée ; groupes : ceux de
@@ -250,17 +304,31 @@ export function enTeteDeTuile(nom, classe, t) {
  *   certificat : « minimum atteint » ou « atteignabilité inconnue », qui
  *   suit les tuiles
  */
-export function enteteDe({ detail, ligne, table }, { t, format }) {
+export function enteteDe({ detail, ligne, table }, { t, format, presenceDe = () => null }) {
   if (detail === null || detail.statut !== 'comparable' || ligne === null || table === null) return null;
   const noms = new Map(detail.personnes.map(({ id, nom }) => [id, nom]));
-  const contexte = { bornes: detail.bornes, ligne, table, t, format, nomDe: (id) => noms.get(id) };
+  const nomDe = (id) => noms.get(id);
+  const contexte = { bornes: detail.bornes, ligne, table, t, format, nomDe };
+  const retires = detail.planchersRetires ?? [];
+  const lecture = { rang1: detail.bornes.rang1, nomDe, presenceDe };
   const groupes = groupesDeTuiles(table, [ligne], t).map(({ cle, libelle, tuiles }) => ({
     cle,
     libelle,
     tuiles: tuiles.map(({ nom, classe }) => {
       const { libelle: libelleDeTuile, explication, neClassePas } = enTeteDeTuile(nom, classe, t);
       const { texte, bornes, pourcentage } = celluleDeTuile(nom, contexte);
-      return { nom, libelle: libelleDeTuile, explication, texte, classe, neClassePas, bornes, pourcentage };
+      return {
+        nom,
+        libelle: libelleDeTuile,
+        explication,
+        texte,
+        classe,
+        neClassePas,
+        bornes,
+        pourcentage,
+        plancherNonProuve: plancherNonProuveDe(nom, retires, t),
+        infobulle: infobulleDe(nom, explication, lecture),
+      };
     }),
   }));
   return {

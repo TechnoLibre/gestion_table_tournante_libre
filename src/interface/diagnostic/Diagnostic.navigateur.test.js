@@ -557,3 +557,55 @@ describe('le bandeau du plan énonce le diagnostic (§ 7.5)', () => {
     expect(m.racine.querySelector('[data-surface]').textContent).not.toContain(t('plan.bandeau.collisionPartout'));
   });
 });
+
+describe('la présence par tour (§ 5.6)', () => {
+  // Douze personnes, cinq de la Grisaille, quatre tables de 3 : la
+  // personne de rang 10 vient aux tours 1 et 2, celle de rang 11 au tour 3 ;
+  // celle de rang 9, exclue, garde une présence suspendue.
+  function chargePresences() {
+    const charge = chargeDouze((p) => (p < 5 ? 'Grisaille' : null));
+    charge.participants[10].presence = [1, 2];
+    charge.participants[11].presence = [3];
+    Object.assign(charge.participants[9], { exclu: true, presence: [4] });
+    return charge;
+  }
+
+  test('deux présences partielles, une exclue à part : l’énoncé ouvre la carte de l’événement, sans remède, dans la section et le panneau du plan', async () => {
+    const m = await ouvrirCharge(chargePresences());
+    const phrase = t('diagnostic.planchersRetires', { absentes: 2 });
+    m.ui.allerA('diagnostic');
+    const li = await attendre(() => {
+      const trouve = section(m).querySelector('[data-enonce="diagnostic.planchersRetires"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(texteDe(li.querySelector('[data-phrase]'))).toBe(phrase);
+    expect(li.querySelector('[data-remede]')).toBeNull();
+    expect(texteDe(intituleDe(li))).toBe(t('diagnostic.carte.ensemble'));
+    expect(li.closest('ul').querySelector('[data-enonce]')).toBe(li);
+    expect(section(m).querySelector('[data-enonce="diagnostic.ecartItineraire"]')).toBeNull();
+    m.ui.allerA('plan');
+    await attendre(() => expect(texteDe(panneau(m).querySelector('[data-enonce="diagnostic.planchersRetires"]'))).toBe(phrase));
+  });
+
+  test('le manque de places qui varie se dit tour par tour ; sans présence partielle, aucun énoncé des planchers retirés', async () => {
+    const charge = chargeDouze((p) => (p < 5 ? 'Grisaille' : null));
+    // Deux personnes de plus, aux tours 3 et 4 seulement : 2 places y
+    // manquent, aucune aux tours 1 et 2.
+    for (const id of [13, 14]) charge.participants.push({ ...charge.participants[11], id, nom: `Pervenche${id}`, presence: [3, 4] });
+    charge.prochainsIds.participant = 15;
+    const m = await ouvrirCharge(charge);
+    m.ui.allerA('diagnostic');
+    const li = await attendre(() => {
+      const trouve = section(m).querySelector('[data-enonce="diagnostic.placesManquantes"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(texteDe(li.querySelector('[data-phrase]'))).toBe('2 places manquent aux tours 3 et 4');
+    expect(section(m).querySelector('[data-enonce="diagnostic.planchersRetires"]')).not.toBeNull();
+    const sans = await ouvrirCharge(chargeDouze((p) => (p < 5 ? 'Grisaille' : null)));
+    sans.ui.allerA('diagnostic');
+    await attendre(() => expect(section(sans).querySelector('[data-enonce]')).not.toBeNull());
+    expect(section(sans).querySelector('[data-enonce="diagnostic.planchersRetires"]')).toBeNull();
+  });
+});

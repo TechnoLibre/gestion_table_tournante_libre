@@ -19,6 +19,8 @@ export const TABLE = new Map([
   ['feuilles.accueil.table', ({ table }) => `Table ${table}`],
   ['feuilles.accueil.tableSiege', ({ table, siege }) => `Table ${table}, siège ${siege}`],
   ['feuilles.accueil.reserve', 'Réserve'],
+  // Un tour où la personne est absente : ni table, ni siège, ni réserve.
+  ['feuilles.accueil.absente', 'absente'],
   // L'en-tête d'un bloc de tours consécutifs, quand les tours ne tiennent
   // pas tous côte à côte : « Tours 1 à 34 », « Tour 7 » pour un seul.
   ['feuilles.accueil.tours', ({ premier, dernier }) => (premier === dernier ? `Tour ${premier}` : `Tours ${premier} à ${dernier}`)],

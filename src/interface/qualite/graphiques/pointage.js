@@ -114,9 +114,10 @@ export const REMPLISSAGES = Object.freeze({
   reste: remplissage('graphiqueReste', 'reste'),
 });
 
-/** Les signes d'un rang marqué (§ 12.3), un par marque du profil : chacun
- *  sa forme, aucune couleur propre. */
-export const SIGNES = Object.freeze(['ancre', 'partiel', 'reserve', 'plafondNul']);
+/** Les signes d'un rang marqué (§ 12.3), un par marque du profil, dans
+ *  l'ordre de priorité des marques : chacun sa forme, aucune couleur
+ *  propre. */
+export const SIGNES = Object.freeze(['ancre', 'partiel', 'reserve', 'absente', 'plafondNul']);
 
 /** Les genres d'une colonne de jumeau. */
 export const GENRES_COLONNE = Object.freeze(['texte', 'nombre', 'pourcentage']);
@@ -311,15 +312,16 @@ function cadreVertical({ largeur, hauteur, traces, mesurer, hauteurTexte, gradue
 
 /** Le tracé d'un signe de forme centré sur (x, y), de SIGNE_PX de
  *  demi-côté : un triangle — plein pour un ancré, creux pour un placement
- *  partiellement fixé —, un carré creux pour une réserve, une croix pour un
- *  plafond réalisé nul. Le graphique et sa légende le tracent l'un et
- *  l'autre. */
+ *  partiellement fixé —, un carré creux pour une réserve, un losange creux
+ *  pour une absente à un tour au moins, une croix pour un plafond réalisé
+ *  nul. Le graphique et sa légende le tracent l'un et l'autre. */
 export function cheminSigne(genre, x, y) {
   const s = SIGNE_PX;
   const n = (v) => String(Math.round(v * 100) / 100 + 0);
   const triangle = `M ${n(x)} ${n(y - s)} L ${n(x + s)} ${n(y + s)} L ${n(x - s)} ${n(y + s)} Z`;
   if (genre === 'ancre' || genre === 'partiel') return triangle;
   if (genre === 'reserve') return `M ${n(x - s)} ${n(y - s)} H ${n(x + s)} V ${n(y + s)} H ${n(x - s)} Z`;
+  if (genre === 'absente') return `M ${n(x)} ${n(y - s)} L ${n(x + s)} ${n(y)} L ${n(x)} ${n(y + s)} L ${n(x - s)} ${n(y)} Z`;
   return `M ${n(x - s)} ${n(y - s)} L ${n(x + s)} ${n(y + s)} M ${n(x + s)} ${n(y - s)} L ${n(x - s)} ${n(y + s)}`;
 }
 

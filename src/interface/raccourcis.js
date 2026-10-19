@@ -16,7 +16,9 @@
 //             l'événement) ;
 //   contexte  là où elle agit — 'plan' (l'élément actif du plan, les listes
 //             de travail et la réserve), 'grille' (une cellule de la grille
-//             des participants), 'champ' (une saisie), 'commande' (un
+//             des participants), 'cases' (les cases d'une saisie de la
+//             présence par tour, dans la grille ou la fiche), 'champ' (une
+//             saisie), 'commande' (un
 //             bouton qui exécute une commande, l'élément d'un menu compris),
 //             'boutonMenu' (le bouton d'un menu d'actions), 'menu' (un menu
 //             d'actions ouvert, le focus sur l'un de ses éléments), 'geste'
@@ -28,10 +30,10 @@
 // Deux touches d'un même effet partagent sa clé : Entrée et l'espace sur le
 // plan, Entrée et F2 dans la grille.
 
-/** @typedef {'plan'|'grille'|'champ'|'commande'|'boutonMenu'|'menu'|'geste'|'evenement'|'fenetre'} ContexteRaccourci */
+/** @typedef {'plan'|'grille'|'cases'|'champ'|'commande'|'boutonMenu'|'menu'|'geste'|'evenement'|'fenetre'} ContexteRaccourci */
 
 /** Les contextes, dans l'ordre du tableau. */
-export const CONTEXTES_RACCOURCIS = Object.freeze(['plan', 'grille', 'champ', 'commande', 'boutonMenu', 'menu', 'geste', 'evenement', 'fenetre']);
+export const CONTEXTES_RACCOURCIS = Object.freeze(['plan', 'grille', 'cases', 'champ', 'commande', 'boutonMenu', 'menu', 'geste', 'evenement', 'fenetre']);
 
 const raccourci = (touche, contexte, effet) => Object.freeze({ touche, contexte, effet, cle: `raccourcis.${contexte}.${effet}` });
 
@@ -43,9 +45,13 @@ const raccourci = (touche, contexte, effet) => Object.freeze({ touche, contexte,
  * listes (plan/clavier.js). Dans la grille des participants, les flèches
  * mènent à la cellule voisine, Tab et Maj+Tab à la suivante et à la
  * précédente — une saisie en cours validée d'abord —, Entrée et F2 ouvrent
- * la saisie de la cellule ou basculent l'exclusion, Échap efface le refus
- * de la cellule. Dans un champ, Entrée valide la saisie et Échap rend la
- * valeur d'avant. Sur une commande, Entrée et l'espace l'exécutent une fois,
+ * la saisie de la cellule — les cases de présence comprises — ou basculent
+ * l'exclusion, Échap efface le refus de la cellule. Dans les cases d'une
+ * présence, les flèches gauche et droite passent à la case du tour
+ * précédent et du suivant, sans boucler, Début et Fin à la première et à la
+ * dernière ; l'espace coche ou décoche la case, de lui-même. Dans un
+ * champ, Entrée valide la saisie et Échap rend la valeur d'avant. Sur une
+ * commande, Entrée et l'espace l'exécutent une fois,
  * maintenues comprises. Sur le bouton d'un menu d'actions, Entrée, l'espace
  * et la flèche bas ouvrent le menu sur son premier élément, la flèche haut
  * sur le dernier ; dans le menu ouvert, les flèches bas et haut passent à
@@ -75,6 +81,10 @@ export const RACCOURCIS = Object.freeze([
   raccourci('Enter', 'grille', 'editer'),
   raccourci('F2', 'grille', 'editer'),
   raccourci('Escape', 'grille', 'effacer'),
+  raccourci('ArrowLeft', 'cases', 'precedente'),
+  raccourci('ArrowRight', 'cases', 'suivante'),
+  raccourci('Home', 'cases', 'premiere'),
+  raccourci('End', 'cases', 'derniere'),
   raccourci('Enter', 'champ', 'valider'),
   raccourci('Escape', 'champ', 'rendre'),
   raccourci('Enter', 'commande', 'activer'),

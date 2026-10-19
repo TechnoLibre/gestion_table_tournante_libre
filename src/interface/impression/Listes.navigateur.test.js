@@ -9,7 +9,8 @@
 // colonnes de tour de la liste d'accueil à la largeur de leur texte, chaque
 // place sur une ligne, des tours trop nombreux pour tenir côte à côte au
 // plancher des noms répartis en blocs de tours consécutifs, chacun sous
-// l'en-tête qui nomme ses tours, les noms répétés ; chaque
+// l'en-tête qui nomme ses tours, les noms répétés ; un tour d'absence s'y
+// dit « absente » ; chaque
 // place d'une table listée, une place vide écrite comme telle, les titres
 // nommés, « non pourvu » quand rien ne les pourvoit ; « Une feuille par
 // tour » donne une feuille par table et par tour, chacune au pied et au
@@ -244,6 +245,22 @@ describe('la liste d’accueil (§ 11.7)', () => {
       for (let tour = 1; tour <= charge.evenement.tours; tour += 1) expect(entete).toContain(t('feuilles.tour', { tour }));
       expect(texte(feuille.querySelector('[data-pied]'))).toContain(t('impression.pied.tousLesTours'));
     }
+  });
+});
+
+describe('la liste d’accueil : une personne absente à un tour (§ 11.7)', () => {
+  test('la case de son tour d\u{2019}absence dit « absente », et non la réserve ; ses autres tours gardent leur table', async () => {
+    const principale = chargePrincipale();
+    const id = principale.participants.find(({ exclu }) => !exclu).id;
+    const charge = appliquerCommande('changerPresence', principale, { id, tours: [1] }).charge;
+    const m = await ouvrirApercu(contexte, charge);
+    await choisirVue(m, 'accueil');
+    const ligne = dans(m, `[data-impression] [data-ligne-imprimee][data-participant="${id}"]`);
+    expect(ligne, 'la ligne de la personne').not.toBeNull();
+    const places = [...ligne.cells].slice(3).map(texte);
+    expect(places).toHaveLength(charge.evenement.tours);
+    expect(places.slice(1)).toEqual(places.slice(1).map(() => t('feuilles.accueil.absente')));
+    expect(places[0]).toMatch(/^Table \d+$/);
   });
 });
 

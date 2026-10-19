@@ -265,6 +265,34 @@ describe('graphiques : l’escalier du profil (§ 12.3, D30)', () => {
     expect(cible.querySelectorAll('svg [data-marque="graphiqueMarque"]')).toHaveLength(2);
   });
 
+  test('le signe d’une absente : un losange creux, de la marque du registre, et sa légende sous son libellé', async () => {
+    const marques = profil(12).marques.map((marque, i) => (i === 5 ? 'absente' : marque));
+    const cible = await monter(Escalier, propsProfil(12, { marques }));
+    const svg = cible.querySelector('svg');
+    const signes = [...svg.querySelectorAll('[data-marque="graphiqueMarque"]')];
+    expect(signes).toHaveLength(3);
+    // Le losange : quatre sommets, au-dessus, à droite, au-dessous et à
+    // gauche d'un même centre, à égale distance.
+    const losanges = signes.filter((signe) => /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+ Z$/.test(signe.getAttribute('d')));
+    expect(losanges).toHaveLength(1);
+    const [haut, droite, bas, gauche] = losanges[0].getAttribute('d').match(/[\d.]+ [\d.]+/g).map((paire) => paire.split(' ').map(Number));
+    expect(haut[0]).toBeCloseTo(bas[0], 2);
+    expect(gauche[1]).toBeCloseTo(droite[1], 2);
+    expect(droite[0] - haut[0]).toBeCloseTo(bas[1] - droite[1], 2);
+    expect(droite[0] - haut[0]).toBeGreaterThan(0);
+    expect(getComputedStyle(losanges[0]).fill).toBe('none');
+    expect(getComputedStyle(losanges[0]).stroke).toBe(couleurDuJeton('--couleur-graphique-marque'));
+    // La légende nomme le signe, après la réserve, et en dessine le losange
+    // creux.
+    const entrees = [...cible.querySelectorAll('ul li')];
+    const libelles = entrees.map((li) => li.textContent.trim());
+    expect(libelles).toContain(t('graphiques.signe.absente'));
+    expect(libelles.indexOf(t('graphiques.signe.absente'))).toBe(libelles.indexOf(t('graphiques.signe.reserve')) + 1);
+    const echantillon = entrees.find((li) => li.textContent.trim() === t('graphiques.signe.absente')).querySelector('path');
+    expect(echantillon.getAttribute('d')).toBe('M 14 2 L 18 6 L 14 10 L 10 6 Z');
+    expect(getComputedStyle(echantillon).fill).toBe('none');
+  });
+
   test('rouge : la surface de pointage est un rect sans remplissage, sœur des marques, jamais leur ancêtre', async () => {
     const cible = await monter(Escalier, propsProfil(12));
     const svg = cible.querySelector('svg');

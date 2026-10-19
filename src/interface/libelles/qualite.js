@@ -20,7 +20,7 @@
 // « points de relevé » de la recherche ; « le moins varié », « le plus
 // varié » et « au minimum » pour la diversité d'un animateur ; « des tours
 // possibles servis » pour la part servie des objectifs.
-import { capitale, compte, enumeration } from '../../application/libelles/aides.js';
+import { auxToursNommes, capitale, compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
   // --- La source et les cas sans source mesurable (§ 12, B9, § 12.6) ---------
@@ -117,6 +117,16 @@ export const TABLE = new Map([
     'qualite.tuile.pireJamaisServies',
     ({ personnes }) => compte(personnes, 'personne jamais servie', 'personnes jamais servies'),
   ],
+  // La présence par tour (§ 12.6) : la phrase d'une tuile dont la présence
+  // retire le plancher, à la place de sa ligne de plancher ; la présence de
+  // la personne au rang 1, que l'infobulle du minimum brut ajoute à
+  // l'explication de sa colonne, explication étant la clé de celle-ci.
+  ['qualite.entete.plancherNonProuve', 'Plancher non prouvé : une personne au moins est absente à un tour.'],
+  ['qualite.entete.rang1Presence', ({ tours }) => `présente ${auxToursNommes(tours)}`],
+  [
+    'qualite.entete.explicationRang1',
+    ({ explication, nom, tours }, texte) => `${texte(explication)} ${nom}, au rang 1, est ${texte('qualite.entete.rang1Presence', { tours })}.`,
+  ],
 
   // --- Les colonnes côte à côte de la comparaison (§ 12.10.6, D67, D84) ------
   // Une colonne par placement, nommée sous les clés qualite.comparaison.nom.*
@@ -124,7 +134,7 @@ export const TABLE = new Map([
   // de la tuile (qualite.tuile.*), et la tête dit seulement qu'un retenu
   // ajusté ne se classe pas.
   ['qualite.colonnes.titre', 'Chiffres des deux placements, côte à côte'],
-  ['qualite.colonnes.rangRetenu', 'ajusté à la main : ne se classe pas'],
+  ['qualite.colonnes.rangRetenu', 'ajusté depuis sa proposition : ne se classe pas'],
   ['qualite.colonnes.tousLesIndicateurs', 'Tous les indicateurs'],
 
   // --- Le profil trié (§ 12.3, B12, D28, D30, D41, D51) ----------------------
@@ -149,6 +159,7 @@ export const TABLE = new Map([
   ['qualite.profil.marque.ancre', 'ancré'],
   ['qualite.profil.marque.partiel', 'partiellement fixé'],
   ['qualite.profil.marque.reserve', 'en réserve à un tour au moins'],
+  ['qualite.profil.marque.absente', 'absente à un tour au moins'],
   ['qualite.profil.marque.plafondNul', 'plafond réalisé nul'],
   ['qualite.profil.colonne.rang', 'Rang'],
   ['qualite.profil.colonne.nom', 'Personne'],
@@ -160,6 +171,10 @@ export const TABLE = new Map([
   ['qualite.profil.colonne.appartenances', 'Appartenances rencontrées'],
   ['qualite.profil.colonne.borneDiversite', 'Borne de diversité'],
   ['qualite.profil.colonne.toursNonAssis', 'Tours non assis'],
+  ['qualite.profil.colonne.absences', 'Absences'],
+  // La cellule des absences d'un rang : les tours où la personne ne vient
+  // pas, qui ne sont pas des tours non assis.
+  ['qualite.profil.absences', ({ n }) => `absente à ${compte(n, 'tour', 'tours')}`],
   ['qualite.profil.colonne.marque', 'Place marquée'],
   // La synthèse du second graphique : la personne au rang 1, que suivent son
   // pourcentage et le compte du pire.

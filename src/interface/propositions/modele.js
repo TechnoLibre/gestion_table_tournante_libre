@@ -32,8 +32,9 @@
 // « inconnu » pour une grandeur que l'a priori inconnu ne permet pas, le
 // certificat en mots.
 import { lireEntier } from '../../application/capacite.js';
-import { evaluer, nettoyage, retenuAjuste } from '../../application/evaluation.js';
+import { evaluer, nettoyage, retenuAjuste, retenuRetouche } from '../../application/evaluation.js';
 import { nomAffiche } from '../../application/personnes.js';
+import { presencesPartielles } from '../../application/places.js';
 
 const VIDE = 'format.vide';
 const INCONNU = 'propositions.valeur.inconnu';
@@ -253,7 +254,8 @@ const raisonDe = (raison) => ({ ...codeDe(raison), participant: raison.participa
 // La ligne d'un placement mesuré, ou celle d'un placement hors classement.
 // portees : les noms des colonnes que porte le tableau ; rang : la place
 // dans le classement, à partir de 1 ; null hors classement et pour le
-// retenu.
+// retenu. sertDeDepart se recopie de la table : vrai pour une comparable et
+// pour une ligne en dérive par ses seuls participants.
 function ligneDe(ligne, table, idRetenu, portees, rang = null) {
   const retenue = ligne.id === idRetenu;
   if (ligne.statut !== 'comparable') {
@@ -262,6 +264,7 @@ function ligneDe(ligne, table, idRetenu, portees, rang = null) {
       rang: null,
       retenue,
       comparable: false,
+      sertDeDepart: ligne.sertDeDepart,
       statut: `propositions.statut.${ligne.statut}`,
       raisons: ligne.raisons.map(raisonDe),
     };
@@ -271,6 +274,7 @@ function ligneDe(ligne, table, idRetenu, portees, rang = null) {
     rang,
     retenue,
     comparable: true,
+    sertDeDepart: ligne.sertDeDepart,
     cellules: cellules(ligne, portees),
     imposes: imposes(ligne, table.imposes),
     violations: ligne.violations.map(codeDe),
@@ -385,8 +389,10 @@ function ordre(classement) {
  * Le tableau d'une table d'évaluation (evaluer, evaluation.js).
  *
  * @param {import('../../application/evaluation.js').TableEvaluation} tableEvaluation
- * @param {{ajuste?: boolean}} [options]  ajuste : le retenu ne porte plus le
- *   placement de sa proposition d'origine (retenuAjuste) ; il choisit le
+ * @param {{ajuste?: boolean, retouche?: boolean}} [options]  ajuste : le
+ *   retenu ne porte plus le placement de sa proposition d'origine
+ *   (retenuAjuste) ; retouche, ajuste par défaut : il porte une retouche que
+ *   retenir sa proposition détruirait (retenuRetouche). Ils choisissent le
  *   libellé de la ligne du retenu
  * @returns {{ordre: Array<Array<{cle: string, details: Object, critere: string|null,
  *   valeur: string|null, colonne: string|null}>>, colonnes: typeof COLONNES,
@@ -401,17 +407,20 @@ function ordre(classement) {
  *   animateurs selon l'état des critères de la table ; groupes : les
  *   segments de la rangée des groupes sur ces colonnes ; lignes : les
  *   comparables dans l'ordre du classement, chacune { id, rang, retenue, comparable: true,
- *   cellules, imposes, violations } ;
+ *   sertDeDepart, cellules, imposes, violations } ;
  *   horsClassement : les autres par identifiant, { id, rang: null, retenue,
- *   comparable: false, statut, raisons } — statut la clé de « non comparable »,
+ *   comparable: false, sertDeDepart, statut, raisons } — sertDeDepart vrai
+ *   pour une ligne en dérive par ses seuls participants, que « Repartir
+ *   d'elle » offre de dériver ; statut la clé de « non comparable »,
  *   raisons leurs codes, chacune { cle, details, participant }, participant
  *   l'identifiant de la personne en cause ou null ; etendueRaisons : le nombre
  *   de colonnes que couvre la cellule des raisons ; retenu : la ligne du
  *   retenu sous l'une ou l'autre forme, plus libelle { cle, details } — « tel
- *   que » ou « ajusté » —, null sans retenu. retenue marque la proposition
+ *   que », « ajusté aux participants » ou « ajusté à la main » —, null sans
+ *   retenu. retenue marque la proposition
  *   d'origine du retenu.
  */
-export function tableau(tableEvaluation, { ajuste = false } = {}) {
+export function tableau(tableEvaluation, { ajuste = false, retouche = ajuste } = {}) {
   const idRetenu = tableEvaluation.retenu?.id ?? null;
   const colonnes = colonnesPortees(tableEvaluation.criteres);
   const portees = new Set(colonnes.map(({ nom }) => nom));
@@ -427,15 +436,49 @@ export function tableau(tableEvaluation, { ajuste = false } = {}) {
     etendueRaisons: [...LECTURES.keys()].filter((nom) => portees.has(nom)).length + 1,
     lignes: toutes.filter(({ comparable }) => comparable),
     horsClassement: toutes.filter(({ comparable }) => !comparable),
-    retenu: tableEvaluation.retenu === null ? null : ligneDuRetenu(tableEvaluation, idRetenu, portees, ajuste),
+    retenu: tableEvaluation.retenu === null ? null : ligneDuRetenu(tableEvaluation, idRetenu, portees, cleDuRetenu(ajuste, retouche)),
   };
 }
 
-// La ligne du retenu, et son libellé : « tel que » la proposition d'origine,
-// ou « ajusté » depuis elle.
-function ligneDuRetenu(tableEvaluation, idRetenu, portees, ajuste) {
-  const cle = ajuste ? 'propositions.retenu.ajuste' : 'propositions.retenu.origine';
+// La clé du libellé du retenu : « tel que » la proposition d'origine,
+// « ajusté aux participants » quand seuls les gestes qui changent les
+// participants l'en écartent, « ajusté à la main » quand il porte une
+// retouche.
+function cleDuRetenu(ajuste, retouche) {
+  if (retouche) return 'propositions.retenu.ajuste';
+  return ajuste ? 'propositions.retenu.presence' : 'propositions.retenu.origine';
+}
+
+// La ligne du retenu, et son libellé, de clé cle (cleDuRetenu).
+function ligneDuRetenu(tableEvaluation, idRetenu, portees, cle) {
   return { ...ligneDe(tableEvaluation.retenu, tableEvaluation, idRetenu, portees), libelle: { cle, details: { proposition: idRetenu } } };
+}
+
+/**
+ * La note des présences, au-dessus du tableau (§ 5.7) : ses phrases, chacune
+ * {cle, details}, dans l'ordre. Quand une personne non exclue n'est pas
+ * présente à chaque tour, le compte de ces personnes
+ * (propositions.presences.note {absentes}) : chaque chiffre du tableau se lit
+ * sur leurs tours de présence. Quand aucune ligne n'est classée et qu'une au
+ * moins sert de départ, la phrase qui nomme « Repartir d'elle »
+ * (propositions.presences.toutesEnDerive) : un changement de participants
+ * déclasse toutes les propositions, et une dérivée les classe de nouveau.
+ * [] sans tableau.
+ *
+ * @param {Object} charge  la charge de l'événement ouvert
+ * @param {null|{lignes: Object[], horsClassement: Object[]}} vue  ce que rend
+ *        tableau(), toutes ses lignes
+ * @returns {Array<{cle: string, details: Object}>}
+ */
+export function notePresences(charge, vue) {
+  if (vue === null) return [];
+  const phrases = [];
+  const absentes = presencesPartielles(charge).length;
+  if (absentes > 0) phrases.push({ cle: 'propositions.presences.note', details: { absentes } });
+  if (vue.lignes.length === 0 && vue.horsClassement.some(({ sertDeDepart }) => sertDeDepart)) {
+    phrases.push({ cle: 'propositions.presences.toutesEnDerive', details: {} });
+  }
+  return phrases;
 }
 
 /**
@@ -466,15 +509,18 @@ export function texteCellule({ valeur, cle, decimales }, { t, format }) {
 
 // Le retenu ajusté se définit une fois, dans l'évaluation, que la page de
 // qualité lit aussi : le tableau et la page s'accordent sur le même retenu.
-export { retenuAjuste };
+// Le retenu retouché aussi, à côté de lui.
+export { retenuAjuste, retenuRetouche };
 
 /**
  * La fenêtre à confirmer avant de retenir la proposition id (§ 2.1) : retenir
- * remplace le retenu, et détruit ses ajustements quand il en porte. Elle
- * s'ouvre quand la séance accepterait le geste — etat.refus null — et que le
- * retenu est ajusté, y compris pour re-retenir sa proposition d'origine ; un
- * geste que la séance refuserait s'exécute sans fenêtre, et son refus
- * s'affiche.
+ * remplace le retenu, et détruit ses retouches à la main quand il en porte.
+ * Elle s'ouvre quand la séance accepterait le geste — etat.refus null — et
+ * que le retenu est retouché (retenuRetouche), y compris pour re-retenir sa
+ * proposition d'origine ; un geste que la séance refuserait s'exécute sans
+ * fenêtre, et son refus s'affiche. Un retenu que seuls les gestes sur les
+ * participants ont ajusté n'en ouvre pas : retenirProposition ajuste de même
+ * la proposition à la présence.
  *
  * @param {{refus: Object|null, charge: Object|null}} etat  l'état observable de la séance
  * @param {number} id  la proposition à retenir
@@ -484,7 +530,7 @@ export { retenuAjuste };
  *   retenu ajusté et la proposition qui le remplace
  */
 export function demandeConfirmation({ refus, charge }, id) {
-  if (refus !== null || charge === null || !retenuAjuste(charge)) return null;
+  if (refus !== null || charge === null || !retenuRetouche(charge)) return null;
   return {
     id,
     titre: { cle: 'propositions.confirmation.titre', details: { proposition: id } },
@@ -742,7 +788,10 @@ export function lireGardees(saisie) {
  * tableau montre (evaluation) : la fenêtre ne range rien elle-même. Sans
  * fenêtre — null —, le geste part tel quel et son refus s'affiche : quand la
  * séance le refuserait (etat.refus), quand rien ne se classe, faute de
- * charge ou de table, et quand rien ne s'effacerait.
+ * charge ou de table, quand rien ne s'effacerait, et quand la commande
+ * refuserait NETTOYAGE_SANS_CLASSEMENT : le classement compte moins de n
+ * lignes, et une ligne à effacer sert de départ sans être classée — la règle
+ * de garderMeilleures, lue sur la même table.
  *
  * @param {{refus: Object|null, charge: Object|null}} etat  l'état observable de la séance
  * @param {number} n  entier ≥ 1, le nombre à garder
@@ -757,7 +806,7 @@ export function demandeNettoyage({ refus, charge }, n) {
   const { table } = evaluation(charge);
   if (table === null) return null;
   const { effacees, origineEnPlus } = nettoyage(table, n);
-  if (effacees.length === 0) return null;
+  if (effacees.length === 0 || sansClassement(table, n, effacees)) return null;
   const nombre = effacees.length;
   return {
     n,
@@ -769,6 +818,15 @@ export function demandeNettoyage({ refus, charge }, n) {
       { cle: 'propositions.nettoyage.defaire', details: { effacees: nombre } },
     ],
   };
+}
+
+// Vrai quand garderMeilleures {n} refuserait NETTOYAGE_SANS_CLASSEMENT sur
+// la table : le classement compte moins de n lignes, et une des effacees
+// sert de départ sans être comparable.
+function sansClassement(table, n, effacees) {
+  if (table.classement.ordre.length >= n) return false;
+  const aEffacer = new Set(effacees);
+  return table.propositions.some(({ id, statut, sertDeDepart }) => aEffacer.has(id) && sertDeDepart && statut !== 'comparable');
 }
 
 /**

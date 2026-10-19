@@ -9,7 +9,7 @@
 // entre ce qui le précède et ce qui le suit. Le nom et le libellé du titre
 // sont des données : aucun texte de cette table ne les porte. La tête finit
 // par une espace quand un nom la suit (avecNom).
-import { compte, enumeration } from '../../application/libelles/aides.js';
+import { auxToursNommes, compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
   // --- Le dessin d'une table (§ 7.5, § 7.6) ----------------------------------
@@ -213,6 +213,8 @@ export const TABLE = new Map([
   // Le nom de la personne mise en évidence est une donnée dans son nœud.
   ['plan.evidence.personne', 'Mise en évidence : '],
   ['plan.evidence.absente', 'une personne qui n\u{2019}est plus dans la liste'],
+  // La personne mise en évidence, absente au tour montré : la suite de son nom.
+  ['plan.evidence.absenteAuTour', ({ tour }) => ` \u{2014} absente au tour ${tour}`],
   ['plan.evidence.oter', 'Ôter la mise en évidence'],
   ['plan.evidence.voir', 'Voir sur le plan'],
 
@@ -232,9 +234,21 @@ export const TABLE = new Map([
   ['plan.listesTravail.pressenti', ' \u{2014} titre pressenti '],
   ['plan.listesTravail.conversion', ({ numero }) => ` : une réservation à chaque tour, table ${numero}`],
   ['plan.listesTravail.convertir', 'Convertir en « tous les tours »'],
+  // Les personnes que le placement retenu laisse en réserve, chacune suivie
+  // des tours où il la réserve.
+  ['plan.listesTravail.reserves', 'En réserve dans le placement retenu'],
+  ['plan.listesTravail.enReserve', ({ tours }) => ` \u{2014} en réserve ${auxToursNommes(tours)}`],
   ['plan.listesTravail.ignorer', 'Ignorer'],
 
   // --- La réserve (§ 7.1, § 5.8) ---------------------------------------------
   ['plan.reserve.tour', ({ tour }) => `Personnes en attente au tour ${tour}`],
   ['plan.reserve.vide', 'Personne en attente à ce tour.'],
+
+  // --- Les absentes (§ 7.1) --------------------------------------------------
+  // Les personnes absentes au tour montré : ni chaise ni place en réserve.
+  // Le nom est une donnée, dans son nœud ; sa présence le suit, vide pour
+  // une présence à tous les tours.
+  ['plan.absentes.titre', 'Absentes'],
+  ['plan.absentes.tour', ({ tour }) => `Personnes absentes au tour ${tour}, sans chaise ni place en réserve`],
+  ['plan.absentes.presente', ({ tours }) => (tours === null ? '' : ` \u{2014} présente ${auxToursNommes(tours)}`)],
 ]);

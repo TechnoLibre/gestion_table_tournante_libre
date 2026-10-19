@@ -12,7 +12,7 @@
 // détails reçus sont des nombres, ou le nom d'un critère du registre, que le
 // texte écrit sous son nom complet, mobilier.critere.<nom>.
 import { creerFormat } from '../../application/format.js';
-import { cite, compte, enumeration } from '../../application/libelles/aides.js';
+import { auxToursNommes, cite, compte, enumeration, toursNommes } from '../../application/libelles/aides.js';
 
 // Le nom complet d'un critère, cité (§ 5.7) : celui que l'application donne
 // à mobilier.critere.<nom>, le même que le journal écrit.
@@ -41,6 +41,12 @@ function ecartees(identiques) {
   if (identiques === 0) return '';
   return ` ; ${compte(identiques, 'placement identique à une proposition présente, écarté', 'placements identiques à des propositions présentes, écartés')}`;
 }
+
+// « du tour 1 », « des tours 1 et 2 » : des tours nommés après « de ».
+const desTours = (tours) => `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours)}`;
+
+// « figé » accordé au nombre de tours.
+const figes = (tours) => (tours.length === 1 ? 'figé' : 'figés');
 
 // Une place au classement, en ordinal abrégé, lettres en exposant : 1re, 2e.
 const place = (rang) => (rang === 1 ? '1\u{02B3}\u{1D49}' : `${rang}\u{1D49}`);
@@ -218,6 +224,29 @@ export const TABLE = new Map([
     'generation.depart.note',
     'Un tour figé est repris tel quel du départ ; la génération ne refait que les autres, et part du plan du départ.',
   ],
+  // Les écarts du départ à la soirée, avant le lancement (§ 5.7) : une ligne
+  // par personne, son nom puis ses morceaux, chacun ouvert par son
+  // séparateur. tours : croissants ; tour, cause : une réserve imposée à un
+  // tour figé, 'table' ou 'siege' ; personne : le nom affiché, null pour une
+  // supprimée, que participant nomme.
+  ['generation.depart.ecarts', ({ depart }) => `Depuis n° ${depart} :`],
+  ['generation.depart.personne', ({ personne, participant }) => personne ?? `La personne n° ${participant}, supprimée`],
+  ['generation.depart.retiree', ({ tours }) => ` — retirée ${desTours(tours)}`],
+  // Une exclue ou une supprimée assise aux tours figés du départ.
+  [
+    'generation.depart.rencontresFigees',
+    ({ tours }) => ` ; ses rencontres ${desTours(tours)}, ${figes(tours)}, ne comptent plus`,
+  ],
+  [
+    'generation.depart.aAsseoirFige',
+    ({ tours }) => ` — assise à la meilleure chaise libre ${desTours(tours)}, ${figes(tours)}`,
+  ],
+  [
+    'generation.depart.enReserveFige',
+    ({ tour, cause }) =>
+      ` — en réserve au tour ${tour}, figé : ${cause === 'siege' ? 'son siège réservé est pris' : "sa table n'a plus de chaise libre"}`,
+  ],
+  ['generation.depart.aAsseoir', ({ tours }) => ` — à asseoir ${auxToursNommes(tours)}`],
 
   // --- Les commandes ----------------------------------------------------------------
   ['generation.commande.generer', 'Générer'],
@@ -253,10 +282,11 @@ export const TABLE = new Map([
   // départ ; meilleure, la dérivée que le classement range la première, et
   // placeMeilleure sa place ; placeDepart, celle du départ ; chacun null
   // quand le classement ne le range pas, et la phrase le tait ; identiques,
-  // comme pour une génération ordinaire.
+  // comme pour une génération ordinaire ; departEnDerive, vrai pour un départ
+  // en dérive par ses participants, que la phrase dit non classé.
   [
     'generation.issue.derivee',
-    ({ ajoutees, premier, dernier, depart, meilleure, placeMeilleure, placeDepart, identiques }) => {
+    ({ ajoutees, premier, dernier, depart, meilleure, placeMeilleure, placeDepart, identiques, departEnDerive = false }) => {
       const etendue = premier === dernier ? `n° ${premier}` : `n° ${premier} à ${dernier}`;
       const tete = `${compte(ajoutees, 'proposition dérivée', 'propositions dérivées')} de n° ${depart} (${etendue})`;
       let rangs = '';
@@ -264,6 +294,7 @@ export const TABLE = new Map([
         rangs = ajoutees === 1 ? ` ; elle est ${place(placeMeilleure)} du classement` : ` ; la meilleure, n° ${meilleure}, est ${place(placeMeilleure)} du classement`;
       }
       if (placeDepart !== null) rangs += ` ; n° ${depart} est ${place(placeDepart)}${meilleure === null ? ' du classement' : ''}`;
+      else if (departEnDerive) rangs += ` ; n° ${depart}, en dérive, n'est pas classée`;
       return `${tete}${rangs}${ecartees(identiques)}.`;
     },
   ],

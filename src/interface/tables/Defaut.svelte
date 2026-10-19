@@ -10,7 +10,9 @@
   // et réaligner », dont la fenêtre à confirmer nomme les surcharges
   // perdues ; refusé, il nomme chaque table qui refuse et n'offre aucune
   // application. Le réalignement a son propre bilan, avec realigner : une
-  // surchargée qui ne peut descendre au nouveau défaut le refuse. Refusé, le
+  // surchargée qui ne peut descendre au nouveau défaut le refuse. Quand une
+  // personne non exclue manque un tour (aDesAbsences), le total compte les
+  // personnes présentes au plus à un même tour. Refusé, le
   // clic n'ouvre aucune fenêtre ; le refus se pose sous les commandes,
   // chaque table nommée par son numéro, et « Appliquer » reste offert. « Garder le défaut actuel » retire la demande et remonte le
   // champ, qui rend la valeur enregistrée. Un refus de l'événement entier —
@@ -27,6 +29,7 @@
   import { bilanChangementDefaut } from '../../application/bilans.js';
   import { lireEntier } from '../../application/capacite.js';
   import { ErreurCommande } from '../../application/erreurs.js';
+  import { aDesAbsences } from '../../application/places.js';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
@@ -50,7 +53,7 @@
 
   const enAttente = $derived(demande !== null && demande !== charge.evenement.siegesParDefaut ? demande : null);
   const bilan = $derived(enAttente === null ? null : bilanChangementDefaut(charge, enAttente));
-  const entrees = $derived(bilan === null ? [] : enonceDefaut(bilan, charge.tables));
+  const entrees = $derived(bilan === null ? [] : enonceDefaut(bilan, charge.tables, { partielle: aDesAbsences(charge) }));
   const refuse = $derived(bilan !== null && bilan.refus.length > 0);
   const bilanRealigne = $derived(
     bilan === null || refuse || bilan.surchargees.length === 0

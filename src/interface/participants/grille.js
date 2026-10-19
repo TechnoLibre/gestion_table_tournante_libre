@@ -4,21 +4,33 @@
 // Les modules purs de la liste des participants (§ 4, § 7.4, § 10.2), que
 // câblent SectionParticipants, Grille, Formulaire et Fiche : les colonnes de
 // la grille, ses lignes triées et filtrées, la cellule qu'atteint une
-// touche, les groupes, imbriqués, de la liste groupée par une colonne ou
-// plusieurs et les lignes que laissent voir les groupes repliés,
-// l'orthographe d'appartenance à reprendre, l'itinéraire d'une personne
-// dans le retenu et ses réservations. Aucune fonction ne modifie ce
-// qu'elle reçoit ; la clé normalisée vient de l'appelant, qui la tient de
-// src/application/csv.js.
+// touche, la commande qu'exécute une cellule validée, les groupes,
+// imbriqués, de la liste groupée par une colonne ou plusieurs et les lignes
+// que laissent voir les groupes repliés, l'orthographe d'appartenance à
+// reprendre, l'itinéraire d'une personne dans le retenu et ses
+// réservations. La présence par tour se lit par presenceSaisie
+// (src/application/places.js) et se range par clePresence (presence.js).
+// Aucune fonction ne modifie ce qu'elle reçoit ; la clé normalisée vient de
+// l'appelant, qui la tient de src/application/csv.js.
 
+import { presenceSaisie } from '../../application/places.js';
 import { effetDe } from '../raccourcis.js';
+import { affichagePresence, clePresence } from './presence.js';
 
-/** Les colonnes de la grille, propriétés d'un participant, dans l'ordre des
- *  colonnes de l'export : « l'ordre de la grille » que relit l'import. */
-export const COLONNES = Object.freeze(['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'exclu', 'notes']);
+/** Les colonnes de la grille, propriétés d'un participant. Elles s'associent
+ *  à l'export par leur champ (CHAMP_DE_COLONNE), non par leur rang : la
+ *  grille ne montre pas les étiquettes, et la présence y suit l'exclusion.
+ *  Le collage en bloc suit l'ordre des champs de l'export, non celui-ci. */
+export const COLONNES = Object.freeze(['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
 
-// Les colonnes de texte : toutes, exclu excepté.
-const TEXTES = COLONNES.filter((colonne) => colonne !== 'exclu');
+/** Le champ de l'export CSV (CHAMPS, src/application/csv.js) de chaque
+ *  colonne, dans l'ordre de COLONNES : l'en-tête sous lequel l'export écrit
+ *  sa cellule. */
+export const CHAMP_DE_COLONNE = new Map(COLONNES.map((colonne) => [colonne, colonne === 'titrePressenti' ? 'titre_pressenti' : colonne]));
+
+// Les colonnes de texte : toutes, hors de l'exclusion et de la présence,
+// qui ne sont pas des textes saisis : le filtre ne les lit pas.
+const TEXTES = COLONNES.filter((colonne) => colonne !== 'exclu' && colonne !== 'presence');
 
 // La clé du libellé de chaque colonne, et celle de chaque statut calculé.
 const CLES_COLONNES = new Map([
@@ -28,6 +40,7 @@ const CLES_COLONNES = new Map([
   ['courriel', 'participants.colonne.courriel'],
   ['titrePressenti', 'participants.colonne.titrePressenti'],
   ['exclu', 'participants.colonne.exclu'],
+  ['presence', 'participants.colonne.presence'],
   ['notes', 'participants.colonne.notes'],
 ]);
 const CLES_STATUTS = new Map([
@@ -74,9 +87,11 @@ const SENS = new Map([
 /**
  * Les lignes affichées : une ligne reste quand la clé normalisée d'un de ses
  * champs texte non null contient celle du filtre — un champ null n'est
- * jamais passé à cleNormalisee, qui lève sur lui —, puis tri par colonne,
- * croissant ou décroissant, sur la clé normalisée (exclu : faux avant vrai),
- * un champ null après toute valeur dans les deux sens, départagé par
+ * jamais passé à cleNormalisee, qui lève sur lui ; l'exclusion et la
+ * présence ne sont pas lues —, puis tri par colonne, croissant ou
+ * décroissant, sur la clé normalisée (exclu : faux avant vrai ; presence :
+ * clePresence, « tous » en tête dans le sens croissant), un champ null
+ * après toute valeur dans les deux sens, départagé par
  * identifiant croissant. Sans tri, l'ordre est celui des identifiants
  * croissants ; un filtre dont la clé est vide garde tout.
  *
@@ -102,6 +117,7 @@ export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
   const valeurDe = (p) => {
     if (colonne === null) return null;
     if (colonne === 'exclu') return p.exclu ? 1 : 0;
+    if (colonne === 'presence') return clePresence(presenceSaisie(p));
     return p[colonne] === null ? null : cleNormalisee(p[colonne]);
   };
   const valeurs = new Map(retenues.map((p) => [p, valeurDe(p)]));
@@ -123,6 +139,21 @@ export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
  *  dans leur ordre, puis le statut calculé (§ 4.2), qui n'est pas une
  *  colonne. */
 export const GROUPEMENTS = Object.freeze([...COLONNES, 'statut']);
+
+/**
+ * La commande qu'exécute la validation d'une cellule de la grille : celle de
+ * la présence, changerPresence de ses tours (null pour tous) ; toute autre,
+ * modifierParticipant sur ce seul champ.
+ *
+ * @param {string} colonne   une colonne de COLONNES, hors exclu, qui se bascule
+ * @param {number} id
+ * @param {unknown} valeur   la valeur lue de la saisie
+ * @returns {{nom: string, args: Object}}
+ */
+export function commandeDeCellule(colonne, id, valeur) {
+  if (colonne === 'presence') return { nom: 'changerPresence', args: { id, tours: valeur } };
+  return { nom: 'modifierParticipant', args: { id, champs: { [colonne]: valeur } } };
+}
 
 /**
  * La clé du libellé d'une colonne de GROUPEMENTS : celle de sa colonne de
@@ -217,7 +248,10 @@ const segment = (texte) => texte.replaceAll('%', '%25').replaceAll('/', '%2F');
  * filtre ne changent : à chaque niveau, les lignes de toutes qui portent les
  * valeurs du chemin du groupe le nomment. Un champ null forme le
  * groupe vide, après toute valeur dans les deux sens. L'exclusion groupe
- * les présentes avant les exclues. Le statut groupe par statuts.get(id),
+ * les présentes avant les exclues. La présence groupe par clePresence,
+ * « tous » d'abord dans le sens croissant ; son groupe se nomme par la clé
+ * de libellé et les détails d'affichagePresence (presence.js). Le statut
+ * groupe par statuts.get(id),
  * dans l'ordre de GROUPES_STATUT : une exclue, absente des statuts
  * calculés, dans son groupe ; une présente qui y manque, dans le groupe non
  * calculé.
@@ -230,12 +264,15 @@ const segment = (texte) => texte.replaceAll('%', '%25').replaceAll('/', '%2F');
  * et stable tant que les valeurs qui le désignent ne changent pas : celle
  * de son parent, « / », puis le segment de sa valeur — 'texte:<clé
  * normalisée>', où « % » et « / » s'échappent en %25 et %2F, 'vide',
- * 'exclu:non', 'exclu:oui', 'statut:<statut>' ; au premier niveau, le seul
- * segment. Il rend aussi son niveau, de 1 au nombre de colonnes, sa
- * colonne, son libellé, qui est soit une donnée (libelle), soit la clé d'un
- * texte de la table de traduction (cleLibelle), l'autre valant null, le
- * nombre de ses lignes, ses lignes, et ses sous-groupes : null au dernier
- * niveau, la liste des groupes de la colonne suivante sinon.
+ * 'exclu:non', 'exclu:oui', 'presence:tous', 'presence:<clePresence>',
+ * 'statut:<statut>' ; au premier niveau, le seul segment. Il rend aussi son
+ * niveau, de 1 au nombre de colonnes, sa colonne, son libellé, qui est soit
+ * une donnée (libelle), soit la clé d'un texte de la table de traduction
+ * (cleLibelle), l'autre valant null, les détails de cette clé
+ * (detailsLibelle : ceux d'une présence partielle, {} pour tous, null pour
+ * toute autre colonne), le nombre de ses lignes, ses lignes, et ses
+ * sous-groupes : null au dernier niveau, la liste des groupes de la colonne
+ * suivante sinon.
  *
  * @param {Array<Object>} lignes   les lignes de la grille, dans leur ordre
  * @param {Array<string>} colonnes  des colonnes de GROUPEMENTS, distinctes,
@@ -246,7 +283,7 @@ const segment = (texte) => texte.replaceAll('%', '%25').replaceAll('/', '%2F');
  *          toutes?: Array<Object>}} options   toutes : les lignes d'avant le
  *        filtre, qui contiennent celles reçues ; elles ne font que nommer
  * @returns {Array<{cle: string, niveau: number, colonne: string, libelle: string|null,
- *          cleLibelle: string|null, compte: number, lignes: Array<Object>, sousGroupes: Array<Object>|null}>}
+ *          cleLibelle: string|null, detailsLibelle: Object|null, compte: number, lignes: Array<Object>, sousGroupes: Array<Object>|null}>}
  * @throws {RangeError} colonnes qui n'est pas une liste, vide, répétée ou
  *         hors de GROUPEMENTS
  */
@@ -272,20 +309,27 @@ function grouperNiveau(lignes, toutes, colonnes, niveau, parent, options) {
   const signe = tri !== null && tri.colonne === colonne ? SENS.get(tri.sens) : 1;
 
   // La valeur d'une ligne : le segment de sa clé, son rang d'ordre — un
-  // nombre, une chaîne, ou null pour le groupe vide — et son libellé.
+  // nombre, une chaîne, ou null pour le groupe vide — et son libellé, avec
+  // les détails de sa clé de libellé.
   const valeurDe = (p) => {
     if (colonne === 'statut') {
       const statut = p.exclu ? 'exclue' : (statuts?.get(p.id) ?? 'inconnu');
-      return { segment: `statut:${statut}`, rang: RANGS_STATUT.get(statut), libelle: null, cleLibelle: GROUPES_STATUT.get(statut) };
+      return { segment: `statut:${statut}`, rang: RANGS_STATUT.get(statut), libelle: null, cleLibelle: GROUPES_STATUT.get(statut), detailsLibelle: null };
     }
     if (colonne === 'exclu') {
       return p.exclu
-        ? { segment: 'exclu:oui', rang: 1, libelle: null, cleLibelle: 'participants.grille.exclue' }
-        : { segment: 'exclu:non', rang: 0, libelle: null, cleLibelle: 'participants.grille.presente' };
+        ? { segment: 'exclu:oui', rang: 1, libelle: null, cleLibelle: 'participants.grille.exclue', detailsLibelle: null }
+        : { segment: 'exclu:non', rang: 0, libelle: null, cleLibelle: 'participants.grille.presente', detailsLibelle: null };
     }
-    if (p[colonne] === null) return { segment: 'vide', rang: null, libelle: null, cleLibelle: 'participants.groupe.vide' };
+    if (colonne === 'presence') {
+      const presence = presenceSaisie(p);
+      const rang = clePresence(presence);
+      const { cle, details } = affichagePresence(presence);
+      return { segment: presence === null ? 'presence:tous' : `presence:${rang}`, rang, libelle: null, cleLibelle: cle, detailsLibelle: details };
+    }
+    if (p[colonne] === null) return { segment: 'vide', rang: null, libelle: null, cleLibelle: 'participants.groupe.vide', detailsLibelle: null };
     const cle = cleNormalisee(p[colonne]);
-    return { segment: `texte:${segment(cle)}`, rang: cle, libelle: p[colonne], cleLibelle: null };
+    return { segment: `texte:${segment(cle)}`, rang: cle, libelle: p[colonne], cleLibelle: null, detailsLibelle: null };
   };
 
   // Les lignes par segment, chaque segment nommé par son plus petit identifiant.
@@ -316,7 +360,7 @@ function grouperNiveau(lignes, toutes, colonnes, niveau, parent, options) {
     const ecart = typeof a.rang === 'number' ? a.rang - b.rang : comparerTextes(a.rang, b.rang);
     return ecart * signe;
   };
-  return [...parSegment.values()].sort(comparer).map(({ segment: propre, libelle, cleLibelle, lignes: membres }) => {
+  return [...parSegment.values()].sort(comparer).map(({ segment: propre, libelle, cleLibelle, detailsLibelle, lignes: membres }) => {
     const cle = parent === null ? propre : `${parent}/${propre}`;
     const nomme = nommes.get(propre);
     const semblables = nomme === undefined ? membres : nomme.lignes;
@@ -326,6 +370,7 @@ function grouperNiveau(lignes, toutes, colonnes, niveau, parent, options) {
       colonne,
       libelle: nomme === undefined ? libelle : nomme.libelle,
       cleLibelle,
+      detailsLibelle,
       compte: membres.length,
       lignes: membres,
       sousGroupes: niveau === colonnes.length ? null : grouperNiveau(membres, semblables, colonnes, niveau + 1, cle, options),
@@ -485,18 +530,22 @@ export function orthographeExistante(saisie, participants, cleNormalisee) {
 /**
  * L'itinéraire d'une personne dans le retenu, pour la fiche : à chaque
  * tour, de 1 à tours, la table (numéro affiché) et le siège — null quand le
- * retenu n'attribue pas les sièges —, ou la réserve. Lu dans etatDuTour(r)
+ * retenu n'attribue pas les sièges —, la réserve, ou l'absence à ce tour,
+ * lue dans etat.absents : une personne absente à un tour garde son
+ * itinéraire, qui le dit à ce tour. Lu dans etatDuTour(r)
  * = etatPlaces(charge, {tour: r}), jamais recalculé. Un tour dont la source
  * n'est pas 'retenu' — le retenu gardé à moins de tours que l'événement
  * n'en compte, après une hausse des tours (§ 9) — se dit hors du retenu,
  * et les tours que le retenu porte restent. null quand le tour 1 n'a pas le
  * retenu pour source, ou que la personne n'est, à un tour du retenu, ni
- * assise ni en réserve — une exclue, absente de tout tour.
+ * assise ni en réserve ni absente — une exclue, qu'aucune liste du tour ne
+ * nomme.
  *
  * @param {number} id
  * @param {number} tours
  * @param {(tour: number) => Object} etatDuTour   l'EtatPlaces du tour
- * @returns {Array<{tour: number, numero: number, siege: number|null}|{tour: number, reserve: true}|{tour: number, horsRetenu: true}>|null}
+ * @returns {Array<{tour: number, numero: number, siege: number|null}|{tour: number, reserve: true}
+ *          |{tour: number, absente: true}|{tour: number, horsRetenu: true}>|null}
  */
 export function itineraire(id, tours, etatDuTour) {
   const etapes = [];
@@ -516,6 +565,7 @@ export function itineraire(id, tours, etatDuTour) {
       }
     }
     if (etape === null && etat.reserve.includes(id)) etape = { tour, reserve: true };
+    if (etape === null && etat.absents.includes(id)) etape = { tour, absente: true };
     if (etape === null) return null;
     etapes.push(etape);
   }

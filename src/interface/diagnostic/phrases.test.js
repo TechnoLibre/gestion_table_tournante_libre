@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { diagnostiquerCharge } from '../../application/diagnostic.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
+import { presencesPartielles } from '../../application/places.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { diagnostiquer } from '../../moteur/diagnostic.js';
@@ -79,7 +80,8 @@ function lire(charge) {
   const { diagnostic, erreur } = diagnostiquerCharge(charge);
   assert.equal(erreur, null);
   const criteres = criteresDuDiagnostic(charge, diagnostic);
-  return { diagnostic, liste: enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours, criteres }) };
+  const absentes = presencesPartielles(charge).length;
+  return { diagnostic, liste: enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours, criteres, absentes }) };
 }
 
 const cles = (liste) => liste.map(({ cle }) => cle);
@@ -664,5 +666,78 @@ describe('cartesDiagnostic : une carte par appartenance (§ 5.6, § 12.7)', () =
     const [premiere] = cartesDiagnostic(liste);
     assert.equal(premiere.genre, 'separation');
     assert.equal(premiere.enonces[0].cle, 'diagnostic.uneSeuleAppartenance');
+  });
+});
+
+describe('enonces : la présence par tour', () => {
+  // Douze personnes, cinq d'une même appartenance, quatre tables de 3,
+  // quatre tours ; presences : [rang, présence] des personnes partielles.
+  function chargePresences(presences, { personnes = 12 } = {}) {
+    const charge = chargeDe({ appartenances: [...fois(5, 'Grisaille'), ...fois(personnes - 5, null)], capacites: fois(4, 3) });
+    for (const [rang, presence] of presences) charge.participants[rang].presence = presence;
+    return charge;
+  }
+
+  test('deux présences partielles : l’énoncé ouvre la carte de l’événement, sans remède ; l’écart d’itinéraire ne s’énonce pas', () => {
+    const { diagnostic, liste } = lire(chargePresences([[10, [1, 2]], [11, [3]]]));
+    assert.deepEqual(diagnostic.planchersRetires, ['ecartItineraire']);
+    const enonce = { cle: 'diagnostic.planchersRetires', details: { absentes: 2 }, remede: null };
+    const rang = liste.findIndex(({ cle }) => cle === 'diagnostic.planchersRetires');
+    assert.deepEqual(liste[rang], enonce);
+    // Il suit les collisions de chaque appartenance et ouvre le reste.
+    assert.ok(liste.slice(0, rang).every(({ details }) => details.groupe !== undefined), cles(liste).join(' | '));
+    assert.ok(rang > 0);
+    const cartes = cartesDiagnostic(liste);
+    assert.equal(cartes.at(-1).genre, 'ensemble');
+    assert.equal(cartes.at(-1).enonces[0], liste[rang]);
+    assert.equal(cartes.filter(({ genre }) => genre === 'ensemble').length, 1);
+    assert.equal(avecCle(liste, 'diagnostic.ecartItineraire').length, 0);
+    assert.equal(
+      texte(enonce),
+      "2 personnes ne sont pas présentes à chaque tour : l'écart d'itinéraire n'a pas de plancher prouvé, et chaque chiffre se lit sur les tours de présence.",
+    );
+    assert.equal(
+      t('diagnostic.planchersRetires', { absentes: 1 }),
+      "1 personne n'est pas présente à chaque tour : l'écart d'itinéraire n'a pas de plancher prouvé, et chaque chiffre se lit sur les tours de présence.",
+    );
+  });
+
+  test('sans présence partielle, ou sans compte reçu, aucun énoncé des planchers retirés', () => {
+    const charge = chargePresences([]);
+    assert.equal(avecCle(lire(charge).liste, 'diagnostic.planchersRetires').length, 0);
+    const { diagnostic } = diagnostiquerCharge(chargePresences([[10, [1, 2]]]));
+    assert.equal(avecCle(enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: 4 }), 'diagnostic.planchersRetires').length, 0);
+  });
+
+  test('le manque de places : égal à chaque tour, le texte d’aujourd’hui ; deux tours égaux sur quatre, nommés ; deux manques, chacun ses tours', () => {
+    // Treize personnes : une aux tours 1 et 2, une aux tours 3 et 4 — treize
+    // présentes à chaque tour, 1 place manque partout.
+    const egal = chargePresences([[11, [1, 2]]], { personnes: 13 });
+    egal.participants.push({ ...egal.participants[12], id: 14, nom: 'Ombrelle14', presence: [3, 4] });
+    egal.prochainsIds.participant = 15;
+    const [partout] = avecCle(lire(egal).liste, 'diagnostic.placesManquantes');
+    assert.deepEqual(partout.details, { placesManquantes: 1 });
+    assert.equal(texte(partout), '1 place manque à chaque tour');
+    // Quatorze personnes, deux aux tours 3 et 4 seulement.
+    const [deux] = avecCle(lire(chargePresences([[12, [3, 4]], [13, [3, 4]]], { personnes: 14 })).liste, 'diagnostic.placesManquantes');
+    assert.deepEqual(deux.details, { placesManquantes: 2, tours: [{ tour: 3, manque: 2 }, { tour: 4, manque: 2 }] });
+    assert.equal(texte(deux), '2 places manquent aux tours 3 et 4');
+    assert.deepEqual(deux.remede, { cle: 'diagnostic.remede.places', details: {} });
+    // Quatorze personnes, une aux tours 3 et 4, une au tour 4.
+    const [varie] = avecCle(lire(chargePresences([[12, [3, 4]], [13, [4]]], { personnes: 14 })).liste, 'diagnostic.placesManquantes');
+    assert.deepEqual(varie.details, { placesManquantes: 2, tours: [{ tour: 3, manque: 1 }, { tour: 4, manque: 2 }] });
+    assert.equal(texte(varie), '1 place manque au tour 3 et 2 places manquent au tour 4');
+    // Quatorze personnes, une aux tours 2 à 4 : le manque varie sans jamais
+    // tomber à zéro, chaque tour est nommé.
+    const [positif] = avecCle(lire(chargePresences([[13, [2, 3, 4]]], { personnes: 14 })).liste, 'diagnostic.placesManquantes');
+    assert.deepEqual(positif.details, {
+      placesManquantes: 2,
+      tours: [{ tour: 1, manque: 1 }, { tour: 2, manque: 2 }, { tour: 3, manque: 2 }, { tour: 4, manque: 2 }],
+    });
+    assert.equal(texte(positif), '1 place manque au tour 1 et 2 places manquent aux tours 2 à 4');
+    assert.equal(
+      t('diagnostic.placesManquantes', { placesManquantes: 2, tours: [{ tour: 1, manque: 2 }, { tour: 2, manque: 1 }, { tour: 4, manque: 2 }] }),
+      '2 places manquent aux tours 1 et 4 et 1 place manque au tour 2',
+    );
   });
 });

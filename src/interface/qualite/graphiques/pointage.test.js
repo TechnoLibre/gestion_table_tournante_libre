@@ -21,12 +21,14 @@ import {
   RETRAIT_CASE_PX,
   REMPLISSAGES,
   SIGNES,
+  SIGNE_PX,
   TRAIT_CONTOUR_PX,
   TRAITS,
   ancrePoint,
   ancreRang,
   cadreGrille,
   celluleDe,
+  cheminSigne,
   ciblePoint,
   cibleCase,
   cibleLigne,
@@ -93,8 +95,18 @@ describe('pointage : les traits (§ 12.7, D30)', () => {
     assert.deepEqual(Object.keys(REMPLISSAGES), ['serie1', 'serie2', 'prouve', 'reste']);
   });
 
-  test('les signes des rangs marqués : ancré, partiel, en réserve, plafond nul', () => {
-    assert.deepEqual(SIGNES, ['ancre', 'partiel', 'reserve', 'plafondNul']);
+  test('les signes des rangs marqués : ancré, partiel, en réserve, absente, plafond nul', () => {
+    assert.deepEqual(SIGNES, ['ancre', 'partiel', 'reserve', 'absente', 'plafondNul']);
+  });
+
+  test('le signe d’une absente : un losange, sommets au-dessus, à droite, au-dessous et à gauche du centre', () => {
+    const s = SIGNE_PX;
+    assert.equal(cheminSigne('absente', 10, 20), `M 10 ${20 - s} L ${10 + s} 20 L 10 ${20 + s} L ${10 - s} 20 Z`);
+    assert.equal(cheminSigne('absente', 10.004, 20.5), `M 10 ${20.5 - s} L ${10 + s} 20.5 L 10 ${20.5 + s} L ${10 - s} 20.5 Z`);
+    // Une forme distincte de chacun des autres signes.
+    const formes = SIGNES.map((genre) => cheminSigne(genre, 10, 20));
+    const autres = SIGNES.filter((genre) => genre !== 'absente');
+    for (const genre of autres) assert.notEqual(cheminSigne(genre, 10, 20), formes[SIGNES.indexOf('absente')], genre);
   });
 });
 
@@ -183,20 +195,26 @@ describe('pointage : la disposition d’un escalier (§ 12.3)', () => {
     assert.equal(d.signes[0].y, d.ey.versPx(5));
     assert.equal(d.signes[0].plein, true);
     assert.equal(d.signes[1].plein, false);
+    // Le losange d'une absente est creux, comme la réserve.
+    const absente = escalier({ series: [serie([3, 5])], marques: ['absente', 'reserve'] });
+    assert.deepEqual(absente.signes.map((s) => [s.genre, s.plein]), [['absente', false], ['reserve', false]]);
+    assert.equal(absente.signes[0].d, cheminSigne('absente', absente.signes[0].x, absente.signes[0].y));
     assert.throws(() => escalier({ series: [serie([3])], marques: ['rouge'] }), RangeError);
     assert.throws(() => escalier({ series: [serie([3])], marques: [null, null] }), RangeError);
   });
 
   test('la légende nomme les séries, les repères et les signes présents, dans cet ordre', () => {
     const d = escalier({
-      series: [serie([3, 5])],
-      reperes: [{ genre: 'borne', libelle: 'borne de diversité', valeurs: [4, 4] }],
-      marques: ['reserve', null],
+      series: [serie([3, 5, 6])],
+      reperes: [{ genre: 'borne', libelle: 'borne de diversité', valeurs: [4, 4, 4] }],
+      marques: ['plafondNul', 'absente', 'reserve'],
     });
     assert.deepEqual(d.legende, [
       { genre: 'serie1', libelle: 'rencontres', signe: null },
       { genre: 'borne', libelle: 'borne de diversité', signe: null },
       { genre: 'signe', libelle: null, signe: 'reserve' },
+      { genre: 'signe', libelle: null, signe: 'absente' },
+      { genre: 'signe', libelle: null, signe: 'plafondNul' },
     ]);
   });
 

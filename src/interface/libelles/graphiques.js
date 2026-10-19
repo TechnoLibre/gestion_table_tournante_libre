@@ -19,6 +19,7 @@ export const TABLE = new Map([
   ['graphiques.signe.ancre', 'ancré'],
   ['graphiques.signe.partiel', 'partiellement fixé'],
   ['graphiques.signe.reserve', 'en réserve à un tour au moins'],
+  ['graphiques.signe.absente', 'absente à un tour au moins'],
   ['graphiques.signe.plafondNul', 'plafond réalisé nul'],
 
   // --- Le jumeau tabulaire (§ 12.7, D44) --------------------------------------

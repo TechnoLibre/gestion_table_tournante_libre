@@ -4,7 +4,8 @@
 // La liste des participants dans un vrai moteur de rendu (§ 4, § 4.2, § 4.4,
 // § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'appartenance
 // collante, la grille au clavier, le tri, le filtre et le compte,
-// l'exclusion, le manque de places à l'ajout et à la réintégration, la fiche
+// l'exclusion, la présence par tour saisie en cases dans la grille, le
+// manque de places à l'ajout et à la réintégration, la fiche
 // et l'itinéraire, les étiquettes de la fiche et leur légende, l'export, le
 // collage, et la liste groupée par une colonne ou plusieurs, ses groupes
 // imbriqués, repliés et dépliés, et les conflits du placement montré sous
@@ -760,6 +761,239 @@ describe('la grille (§ 10.2, § 19.3)', () => {
   });
 });
 
+describe('la présence par tour dans la grille (§ 7.3, § 10.2)', () => {
+  const QUATRE = [{ nom: 'Ombrelle', prenom: 'Iris' }, { nom: 'Pervenche', prenom: 'Théo' }, { nom: 'Lacasse', prenom: 'Ondine' }, { nom: 'Grisaille' }];
+
+  const editeurDe = (m, id) => cellule(m, id, 'presence').querySelector('[data-editeur-presence]');
+  const casesDe = (m, id) => [...cellule(m, id, 'presence').querySelectorAll('[data-presence-tour]')];
+  const coches = (m, id) => casesDe(m, id).map((c) => c.checked);
+  const presenceDe = (m, id) => participants(m).find((p) => p.id === id).presence;
+  const affichee = (m, id) => cellule(m, id, 'presence').querySelector('[data-presence]');
+
+  // Ouvre les cases de la personne par Entrée sur sa cellule.
+  async function ouvrir(m, id) {
+    cellule(m, id, 'presence').focus();
+    await touche('Enter');
+    await rendu();
+    expect(editeurDe(m, id)).not.toBeNull();
+  }
+
+  test('au repos, « tous » en texte secondaire ; au clavier, Entrée ouvre une case par tour, le focus sur la case du tour 1, chacune nommée « Tour r », dans un groupe nommé par la personne', async () => {
+    const m = await evenementOuvert({ tours: 4, personnes: QUATRE });
+    const id = idDe(m, 'Lacasse');
+    expect(COLONNES.indexOf('presence')).toBe(COLONNES.indexOf('exclu') + 1);
+    expect(section(m).querySelector(`[data-commande="trier"][data-cible="presence"]`).textContent).toContain(t('participants.colonne.presence'));
+    expect(affichee(m, id).dataset.presence).toBe('tous');
+    expect(affichee(m, id).textContent.trim()).toBe(t('participants.presence.tous'));
+    expect(composantes(getComputedStyle(affichee(m, id)).color)).toEqual(jeton('--couleur-page-texte-secondaire'));
+
+    await ouvrir(m, id);
+    const editeur = editeurDe(m, id);
+    expect(editeur.getAttribute('role')).toBe('group');
+    expect(editeur.getAttribute('aria-label')).toBe(t('participants.presence.editeur', { nom: 'Ondine Lacasse' }));
+    expect(editeur.getAttribute('aria-label')).toBe('Présence de Ondine Lacasse, une case par tour');
+    const cases = casesDe(m, id);
+    expect(cases.map((c) => c.type)).toEqual(['checkbox', 'checkbox', 'checkbox', 'checkbox']);
+    expect(cases.map((c) => c.getAttribute('aria-label'))).toEqual(['Tour 1', 'Tour 2', 'Tour 3', 'Tour 4']);
+    expect(coches(m, id)).toEqual([true, true, true, true]);
+    expect(document.activeElement).toBe(cases[0]);
+    expect(cases.map((c) => c.tabIndex)).toEqual([0, -1, -1, -1]);
+  });
+
+  test('→ et Fin, ← et Début passent d’une case à l’autre sans boucler ; l’espace coche et décoche sans rien écrire ; Entrée écrit une entrée, et la cellule dit « tours 1 et 2 »', async () => {
+    const m = await evenementOuvert({ tours: 4, personnes: QUATRE });
+    const id = idDe(m, 'Lacasse');
+    const avant = entrees(m).length;
+    const trace = m.trace.length;
+    await ouvrir(m, id);
+    const cases = casesDe(m, id);
+    const parcours = [];
+    for (const cle of ['ArrowRight', 'End', 'ArrowRight', 'ArrowLeft', 'Home', 'ArrowLeft']) {
+      await touche(cle);
+      await rendu();
+      parcours.push(cases.indexOf(document.activeElement) + 1);
+    }
+    expect(parcours).toEqual([2, 4, 4, 3, 1, 1]);
+    // La case active seule est dans l'ordre de tabulation.
+    expect(cases.map((c) => c.tabIndex)).toEqual([0, -1, -1, -1]);
+    // Les cases ouvertes sans bascule ne tiennent aucun geste.
+    expect(m.seance.gesteEnCours).toBe(false);
+    await touche('End');
+    await touche(' ');
+    await rendu();
+    expect(cases.map((c) => c.tabIndex)).toEqual([-1, -1, -1, 0]);
+    // Une bascule non validée est un geste ouvert.
+    expect(m.seance.gesteEnCours).toBe(true);
+    await touche('ArrowLeft');
+    await touche(' ');
+    await rendu();
+    expect(coches(m, id)).toEqual([true, true, false, false]);
+    await attendreSeance(m);
+    expect(m.trace.length).toBe(trace);
+
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(presenceDe(m, id)).toEqual([1, 2]);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(affichee(m, id).dataset.presence).toBe('partielle');
+    expect(affichee(m, id).textContent.trim()).toBe('tours 1 et 2');
+    expect(affichee(m, id).querySelector('svg')).not.toBeNull();
+    expect(document.activeElement).toBe(cellule(m, id, 'presence'));
+  });
+
+  test('Échap rend la présence enregistrée sans rien écrire ; décocher puis recocher, puis Entrée, n’exécute rien', async () => {
+    const m = await evenementOuvert({ tours: 3, personnes: QUATRE });
+    const id = idDe(m, 'Ombrelle');
+    await m.seance.executer('changerPresence', { id, tours: [1, 2] });
+    await attendreSeance(m);
+    const avant = entrees(m).length;
+    const trace = m.trace.length;
+
+    await ouvrir(m, id);
+    expect(coches(m, id)).toEqual([true, true, false]);
+    await touche(' ');
+    await touche('End');
+    await touche(' ');
+    await rendu();
+    expect(coches(m, id)).toEqual([false, true, true]);
+    expect(m.seance.gesteEnCours).toBe(true);
+    await touche('Escape');
+    await attendreSeance(m);
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(affichee(m, id).textContent.trim()).toBe('tours 1 et 2');
+    expect(document.activeElement).toBe(cellule(m, id, 'presence'));
+    expect(presenceDe(m, id)).toEqual([1, 2]);
+
+    const executer = vi.spyOn(m.seance, 'executer');
+    await ouvrir(m, id);
+    expect(coches(m, id)).toEqual([true, true, false]);
+    await touche('ArrowRight');
+    await touche(' ');
+    await touche(' ');
+    await rendu();
+    expect(coches(m, id)).toEqual([true, true, false]);
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(executer).not.toHaveBeenCalled();
+    expect(editeurDe(m, id)).toBeNull();
+    expect(entrees(m)).toHaveLength(avant);
+    expect(m.trace.length).toBe(trace);
+  });
+
+  test('une seule entrée par Tab : Tab valide une fois, puis mène aux notes ; la sortie du groupe qui suit ne valide pas de nouveau', async () => {
+    const m = await evenementOuvert({ tours: 3, personnes: QUATRE });
+    const id = idDe(m, 'Pervenche');
+    const avant = entrees(m).length;
+    await ouvrir(m, id);
+    await touche(' ');
+    await rendu();
+    const executer = vi.spyOn(m.seance, 'executer');
+    await touche('Tab');
+    await attendreSeance(m);
+    await attendreSeance(m);
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('changerPresence', { id, tours: [2, 3] });
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(presenceDe(m, id)).toEqual([2, 3]);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(document.activeElement).toBe(cellule(m, id, 'notes'));
+    expect(affichee(m, id).textContent.trim()).toBe('tours 2 et 3');
+  });
+
+  test('une sortie à la souris valide : un clic sur une autre case du groupe n’écrit rien, un clic hors du groupe écrit une entrée', async () => {
+    const m = await evenementOuvert({ tours: 3, personnes: QUATRE });
+    const id = idDe(m, 'Grisaille');
+    const avant = entrees(m).length;
+    await ouvrir(m, id);
+    const executer = vi.spyOn(m.seance, 'executer');
+    await cliquer(casesDe(m, id)[1]);
+    await attendreSeance(m);
+    expect(coches(m, id)).toEqual([true, false, true]);
+    expect(document.activeElement).toBe(casesDe(m, id)[1]);
+    expect(executer).not.toHaveBeenCalled();
+    await cliquer(section(m).querySelector('[data-champ="filtre"]'));
+    await attendreSeance(m);
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(presenceDe(m, id)).toEqual([1, 3]);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(affichee(m, id).textContent.trim()).toBe('tours 1 et 3');
+  });
+
+  test('tout décoché puis Entrée : PRESENCE_VIDE dans la cellule, sans remède ; les cases restent, décochées, marquées et décrites par le refus ; rien ne s’écrit', async () => {
+    const m = await evenementOuvert({ tours: 2, personnes: QUATRE });
+    const id = idDe(m, 'Lacasse');
+    const avant = entrees(m).length;
+    await ouvrir(m, id);
+    await touche(' ');
+    await touche('ArrowRight');
+    await touche(' ');
+    await rendu();
+    await touche('Enter');
+    await attendreSeance(m);
+    await rendu();
+    const refus = cellule(m, id, 'presence').querySelector('[data-refus="PRESENCE_VIDE"]');
+    expect(refus).not.toBeNull();
+    expect(refus.querySelector('button')).toBeNull();
+    expect(editeurDe(m, id)).not.toBeNull();
+    expect(coches(m, id)).toEqual([false, false]);
+    for (const c of casesDe(m, id)) expect(c.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(editeurDe(m, id).getAttribute('aria-describedby'))).toBe(refus);
+    for (const c of casesDe(m, id)) expect(document.getElementById(c.getAttribute('aria-describedby'))).toBe(refus);
+    // Les cases rouvertes rendent le focus à la case active, la première.
+    expect(document.activeElement).toBe(casesDe(m, id)[0]);
+    expect(entrees(m)).toHaveLength(avant);
+    expect(presenceDe(m, id)).toBeUndefined();
+    // Recocher un tour retire le refus ; Entrée écrit.
+    await touche('End');
+    await touche(' ');
+    await rendu();
+    expect(cellule(m, id, 'presence').querySelector('[data-refus]')).toBeNull();
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(presenceDe(m, id)).toEqual([2]);
+  });
+
+  test('en lecture : Entrée sur la cellule pose le refus de la séance et son remède, sans ouvrir les cases ; rien ne s’écrit', async () => {
+    const m = await evenementOuvert({ tours: 3, personnes: QUATRE });
+    await m.seance.passerEnLecture();
+    await rendu();
+    const id = idDe(m, 'Ombrelle');
+    const trace = m.trace.length;
+    cellule(m, id, 'presence').focus();
+    await touche('Enter');
+    await rendu();
+    expect(editeurDe(m, id)).toBeNull();
+    const refus = cellule(m, id, 'presence').querySelector('[data-refus]');
+    expect(refus).not.toBeNull();
+    expect(refus.dataset.refus).toBe(m.seance.etat().refus.code);
+    expect(refus.querySelector('button')).not.toBeNull();
+    expect(document.activeElement).toBe(cellule(m, id, 'presence'));
+    expect(m.trace.length).toBe(trace);
+  });
+
+  test('le tri sur « Présence » : « tous » en tête en croissant, puis par tours ; l’inverse en décroissant ; rien ne s’écrit', async () => {
+    const m = await evenementOuvert({ tours: 3, personnes: QUATRE });
+    await m.seance.executer('changerPresence', { id: idDe(m, 'Ombrelle'), tours: [2] });
+    await m.seance.executer('changerPresence', { id: idDe(m, 'Lacasse'), tours: [1, 3] });
+    await attendreSeance(m);
+    const trace = m.trace.length;
+    const trier = section(m).querySelector('[data-commande="trier"][data-cible="presence"]');
+    await cliquer(trier);
+    const croissant = ['Pervenche', 'Grisaille', 'Lacasse', 'Ombrelle'].map((nom) => idDe(m, nom));
+    expect(idsAffiches(m)).toEqual(croissant);
+    expect(trier.closest('th').getAttribute('aria-sort')).toBe('ascending');
+    await cliquer(trier);
+    expect(idsAffiches(m)).toEqual(['Ombrelle', 'Lacasse', 'Pervenche', 'Grisaille'].map((nom) => idDe(m, nom)));
+    expect(trier.closest('th').getAttribute('aria-sort')).toBe('descending');
+    expect(m.trace.length).toBe(trace);
+  });
+});
+
 describe('le manque de places (§ 5.9, § 4.4)', () => {
   test('deux tables de 8 et seize personnes : la dix-septième est acceptée, une entrée, et avertit PLACES_MANQUANTES de 1', async () => {
     const m = await evenementOuvert({ tables: 2, personnes: NOMS.slice(0, 16).map((nom) => ({ nom })) });
@@ -842,8 +1076,13 @@ describe('la fiche (§ 4.2, § 7.4)', () => {
       await rendu();
       expect(fiche(m).dataset.fiche).toBe(String(id));
       expect(valeurDeFiche(m, 'participants.fiche.statut').textContent).toBe(t(cleDeStatut(statut)));
-      // Le seul contrôle de saisie de la fiche est le champ des étiquettes.
-      expect([...fiche(m).querySelectorAll('input, select, textarea')].map((champ) => champ.dataset.champ)).toEqual(['etiquettes']);
+      // Les seuls contrôles de saisie de la fiche sont le champ des
+      // étiquettes et les cases de la présence, une par tour.
+      const tours = m.seance.etat().charge.evenement.tours;
+      expect([...fiche(m).querySelectorAll('input, select, textarea')].map((champ) => champ.dataset.champ ?? `tour ${champ.dataset.presenceTour}`)).toEqual([
+        'etiquettes',
+        ...Array.from({ length: tours }, (_, rang) => `tour ${rang + 1}`),
+      ]);
     }
   });
 
@@ -1360,8 +1599,8 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     compte: groupe(m, cle).querySelector('[data-groupe-compte]').textContent,
   });
   // Le libellé et le compte qu'un groupe de groupesGrille doit afficher.
-  const enteteAttendu = ({ libelle, cleLibelle, compte }) => ({
-    libelle: libelle ?? t(cleLibelle),
+  const enteteAttendu = ({ libelle, cleLibelle, detailsLibelle, compte }) => ({
+    libelle: libelle ?? t(cleLibelle, detailsLibelle ?? {}),
     compte: t('participants.groupe.compte', { compte }),
   });
 
@@ -1487,6 +1726,31 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     await grouperPar(m, '');
     expect(groupes(m)).toHaveLength(0);
     expect(lignes(m)).toHaveLength(5);
+    await attendreSeance(m);
+    expect(empreinte(m)).toEqual(avant);
+  });
+
+  test('par présence : « tous » d’abord, puis chaque présence nommée par ses tours, son compte, ses lignes ; triée décroissante, l’ordre s’inverse ; rien ne s’écrit', async () => {
+    const m = await evenementOuvert({ tours: 4, personnes: CINQ });
+    await m.seance.executer('changerPresence', { id: idDe(m, 'Ombrelle'), tours: [1, 2] });
+    await m.seance.executer('changerPresence', { id: idDe(m, 'Lacasse'), tours: [1, 2] });
+    await m.seance.executer('changerPresence', { id: idDe(m, 'Brindelle'), tours: [3] });
+    await attendreSeance(m);
+    const avant = empreinte(m);
+
+    await grouperPar(m, 'presence');
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual(['presence:tous', 'presence:001,002', 'presence:003']);
+    expect(entete(m, 'presence:tous')).toEqual({ libelle: 'tous', compte: t('participants.groupe.compte', { compte: 2 }) });
+    expect(entete(m, 'presence:001,002')).toEqual({ libelle: 'tours 1 et 2', compte: t('participants.groupe.compte', { compte: 2 }) });
+    expect(entete(m, 'presence:003').libelle).toBe('tour 3');
+    expect(idsDuGroupe(m, 'presence:tous')).toEqual([idDe(m, 'Pervenche'), idDe(m, 'Grisaille')]);
+    expect(idsDuGroupe(m, 'presence:001,002')).toEqual([idDe(m, 'Ombrelle'), idDe(m, 'Lacasse')]);
+    expect(idsDuGroupe(m, 'presence:003')).toEqual([idDe(m, 'Brindelle')]);
+
+    const trier = section(m).querySelector('[data-commande="trier"][data-cible="presence"]');
+    await cliquer(trier);
+    await cliquer(trier);
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual(['presence:003', 'presence:001,002', 'presence:tous']);
     await attendreSeance(m);
     expect(empreinte(m)).toEqual(avant);
   });
@@ -2106,12 +2370,20 @@ describe('l’habillage de la liste : carte, bandes, légende, pastilles', () =>
     expect(region).not.toBeNull();
     expect(texteDe(document.getElementById(region.getAttribute('aria-labelledby')))).toBe(t('coquille.section.participants'));
     const ligneDeComptes = () => [...region.querySelectorAll('p')].map((p) => p.textContent);
-    expect(comptesEntete(participants(m))).toEqual({ personnes: 9, aPlacer: 8, exclues: 1, appartenances: 7 });
+    expect(comptesEntete(participants(m))).toEqual({ personnes: 9, aPlacer: 8, exclues: 1, appartenances: 7, partielles: 0 });
     expect(ligneDeComptes()).toContain(t('participants.entete.comptes', comptesEntete(participants(m))));
 
     await m.seance.executer('exclureParticipant', { id: idDe(m, 'Isardin') });
     await attendreSeance(m);
     expect(ligneDeComptes()).toContain(t('participants.entete.comptes', { personnes: 9, aPlacer: 7, exclues: 2, appartenances: 7 }));
+    // Deux présences partielles, dont celle d'une exclue, qui ne compte pas :
+    // « 1 présence partielle » s'ajoute à la ligne.
+    expect(ligneDeComptes().join(' ')).not.toContain('présence');
+    await m.seance.executer('changerPresence', { id: idDe(m, 'Quenouillet'), tours: [2] });
+    await m.seance.executer('changerPresence', { id: idDe(m, 'Isardin'), tours: [1] });
+    await attendreSeance(m);
+    expect(ligneDeComptes()).toContain(t('participants.entete.comptes', { personnes: 9, aPlacer: 7, exclues: 2, appartenances: 7, partielles: 1 }));
+    expect(ligneDeComptes().join(' ')).toContain('1 présence partielle');
 
     expect(region.contains(formulaire(m))).toBe(true);
     expect(fondDe(formulaire(m))).toEqual(jeton('--couleur-carte-fond-sourd'));
@@ -2229,11 +2501,18 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
   }
 
   for (const largeur of [1366, 1024]) {
-    test(`à ${largeur} × 700 : la page ne défile pas en largeur, la carte tient dans la fenêtre, la grille dans la carte`, async () => {
+    test(`à ${largeur} × 700 : la page ne défile pas en largeur, la carte tient dans la fenêtre, la grille dans la carte, la pastille « tours 1 à 3 et 5 » comprise`, async () => {
       await dansLeCadre(largeur, 700, async () => {
-        const m = await evenementOuvert({ personnes: SEPT });
+        const m = await evenementOuvert({ personnes: SEPT, tours: 5 });
+        await m.seance.executer('changerPresence', { id: idDe(m, 'Calvaille'), tours: [1, 2, 3, 5] });
         m.ui.ouvrirFiche(idDe(m, 'Calvaille'));
-        await rendu();
+        await attendreSeance(m);
+        // La pastille de la présence la plus longue tient dans sa cellule.
+        const presence = cellule(m, idDe(m, 'Calvaille'), 'presence');
+        expect(presence.querySelector('[data-presence="partielle"]').textContent.trim()).toBe('tours 1 à 3 et 5');
+        const pastille = presence.querySelector('[data-presence="partielle"] > *').getBoundingClientRect();
+        expect(pastille.right).toBeLessThanOrEqual(presence.getBoundingClientRect().right);
+        expect(pastille.left).toBeGreaterThanOrEqual(presence.getBoundingClientRect().left);
         expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
         const region = carte(m).getBoundingClientRect();
         expect(region.right).toBeLessThanOrEqual(innerWidth);

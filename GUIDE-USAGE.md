@@ -1043,8 +1043,12 @@ l’historique ; les noms des exemples sont inventés.
 | Grille des participants | ↑ | Passe à la cellule du dessus. |
 | Grille des participants | Tab | Valide la saisie en cours et passe à la cellule suivante. |
 | Grille des participants | Maj+Tab | Valide la saisie en cours et revient à la cellule précédente. |
-| Grille des participants | Entrée ou F2 | Ouvre la saisie de la cellule, ou bascule l'exclusion. |
+| Grille des participants | Entrée ou F2 | Ouvre la saisie de la cellule — les cases de présence comprises —, ou bascule l'exclusion. |
 | Grille des participants | Échap | Efface le refus affiché sous la cellule. |
+| Cases de présence, grille ou fiche | ← | Passe à la case du tour précédent. |
+| Cases de présence, grille ou fiche | → | Passe à la case du tour suivant. |
+| Cases de présence, grille ou fiche | Début | Passe à la case du premier tour. |
+| Cases de présence, grille ou fiche | Fin | Passe à la case du dernier tour. |
 | Champ de saisie | Entrée | Valide la saisie. |
 | Champ de saisie | Échap | Rend la valeur d'avant la saisie. |
 | Bouton de commande | Entrée ou Espace | Exécute la commande une fois, même maintenue. |

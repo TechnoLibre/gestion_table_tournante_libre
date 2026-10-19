@@ -401,3 +401,64 @@ describe('comptesTables et tonEtatTable : l’en-tête et la pastille de la list
     assert.equal(tonEtatTable(etatTable({ sieges: 8 }, 8)), 'information');
   });
 });
+
+describe('la présence par tour dans les tables (§ 6.1, § 2.1 étape 5)', () => {
+  // La charge, chaque présence donnée posée sur sa personne.
+  const avecPresences = (charge, presences) => {
+    for (const [id, presence] of Object.entries(presences)) charge.participants[Number(id) - 1].presence = presence;
+    return charge;
+  };
+
+  test('elementsTours : une ligne par présence rognée, exclues comprises, après les objectifs et avant les placements', () => {
+    const charge = avecPresences(
+      chargeDe({ tables: [{ id: 1, numero: 1 }, { id: 2, numero: 5 }], n: 4, tours: 5, exclus: [4], reservations: [resa(3, 2, null, 5)] }),
+      { 1: [1, 2, 5], 2: [1, 2, 3, 5], 4: [4] },
+    );
+    charge.tables[0].objectifs = [objectif(4, ['bénévole'])];
+    charge.propositions = [{ id: 1, tours: 5 }];
+    const bilan = bilanTours(charge, 3);
+    assert.equal(bilan.presencesRognees.length, 3);
+    assert.deepEqual(
+      elementsTours(charge, bilan).map(({ cle, details }) => t(cle, details)),
+      [
+        'Ondine Lacasse : réservation à la table 5 au tour 5, détruite',
+        'Table 1 : objectif du tour 4 (« bénévole »), détruit',
+        'Présence de Iris Ombrelle : tours 1 et 2 au lieu des tours 1, 2 et 5',
+        'Présence de Théo Pervenche : tous les tours au lieu des tours 1 à 3 et 5',
+        'Présence de Grisaille : tous les tours au lieu du tour 4',
+        t('tables.touchee.proposition', { id: 1 }),
+      ],
+    );
+  });
+
+  test('annonceTours : une présence rognée s’annonce seule, sans réservation, objectif ni placement', () => {
+    const charge = avecPresences(chargeDe({ tables: [{ id: 1 }], n: 3, tours: 4 }), { 2: [1, 4] });
+    assert.equal(annonceTours(bilanTours(charge, 3), 4, 3), true);
+    assert.equal(annonceTours(bilanTours(charge, 5), 4, 5), false);
+    delete charge.participants[1].presence;
+    assert.equal(annonceTours(bilanTours(charge, 3), 4, 3), false);
+  });
+
+  test('enonceDefaut : sous présence partielle, le total compte les personnes présentes au plus à un même tour ; sans, le texte d’aujourd’hui', () => {
+    const charge = avecPresences(chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 6, tours: 3, defaut: 8 }), { 1: [1, 2], 2: [2, 3] });
+    const bilan = bilanChangementDefaut(charge, 10);
+    assert.equal(bilan.participants, 6);
+    const [, total] = enonceDefaut(bilan, charge.tables, { partielle: true });
+    assert.equal(t(total.cle, total.details), 'Total : 16 \u{2192} 20 sièges pour 6 personnes présentes au plus à un même tour.');
+    assert.equal(
+      traduire(enonceDefaut(bilan, charge.tables)),
+      '2 tables suivent le défaut et passent de 8 à 10 places. Total : 16 \u{2192} 20 sièges pour 6 participants.',
+    );
+    assert.equal(
+      t('tables.defaut.total', { totalAvant: 2, totalApres: 2, participants: 1, partielle: true }),
+      'Total : 2 \u{2192} 2 sièges pour 1 personne présente au plus à un même tour.',
+    );
+  });
+
+  test('enonceDefaut : un refus n’a pas de total, partielle ou non', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 3, tours: 2, reservations: [1, 2, 3].map((p) => resa(p, 1, null)) });
+    const bilan = bilanChangementDefaut(charge, 2);
+    assert.ok(bilan.refus.length > 0);
+    assert.deepEqual(enonceDefaut(bilan, charge.tables, { partielle: true }), enonceDefaut(bilan, charge.tables));
+  });
+});

@@ -26,9 +26,10 @@
   // bouton se nomme par une phrase qui porte le numéro de sa ligne,
   // « Actions de la proposition n° 4 », ou « Actions du placement
   // retenu ». Le menu d'une proposition porte « Voir sur le plan »,
-  // « Qualité » et « Retenir », puis, sur une ligne comparable, « Repartir
-  // d'elle » et « Comparer » ; celui du retenu, « Voir sur le plan »,
-  // « Qualité » et « Comparer ». Un refus de « Retenir » se pose à côté du
+  // « Qualité » et « Retenir », puis « Repartir d'elle » sur une ligne qui
+  // sert de départ — comparable, ou en dérive par ses seuls participants —
+  // et « Comparer » sur une ligne comparable ; celui du retenu, « Voir sur
+  // le plan », « Qualité » et « Comparer ». Un refus de « Retenir » se pose à côté du
   // bouton du menu, par MenuActions. « Qualité » demande sa proposition au
   // plan — le retenu sur la ligne du retenu — et ouvre la page de qualité,
   // qui mesure la proposition de sa ligne, ou le retenu (§ 12), que le plan
@@ -38,14 +39,17 @@
   // Une proposition dérivée porte sous son numéro, dans sa cellule
   // d'identité, la phrase qui la rattache à son départ (texteFiliation,
   // filiation.js), sans colonne de plus ; la ligne du retenu garde « Tel que
-  // la proposition n° X. ». Le menu d'une ligne comparable porte aussi
-  // « Repartir d'elle », qui choisit sa proposition pour départ et ouvre la section
-  // Génération, et « Comparer », qui ouvre la page de qualité à sa vue de
+  // la proposition n° X. ». « Repartir d'elle » choisit la proposition de sa
+  // ligne pour départ et ouvre la section Génération : il s'offre sur toute
+  // ligne qui sert de départ (sertDeDepart, modele.js), une ligne en dérive
+  // par ses seuls participants comprise, dont la génération part ajustée à
+  // la présence. « Comparer » ouvre la page de qualité à sa vue de
   // comparaison, la ligne y devenant le second placement ou la source
-  // (gesteComparer, comparer.js, jugé sur la source de la page) ; le menu
-  // du retenu porte « Comparer » seul, celui d'une ligne en dérive ou
-  // fautive ni l'une ni l'autre. « Comparer » ne s'offre que quand deux placements
+  // (gesteComparer, comparer.js, jugé sur la source de la page) : il ne
+  // s'offre que sur une ligne comparable, et quand deux placements
   // mesurables et distincts existent (comparaisonOfferte, evaluation.js).
+  // Le menu du retenu porte « Comparer » seul ; celui d'une ligne en dérive
+  // par le mobilier, ou fautive, ni l'une ni l'autre.
   // Chacune se nomme, pour le lecteur d'écran, par une phrase qui porte le
   // numéro de sa ligne : cent lignes par page ne portent pas cent boutons
   // de même nom. Ni l'une ni l'autre n'écrit ni ne refuse : seul l'état de
@@ -137,18 +141,19 @@
     ui.demanderVueQualite('comparaison');
   }
 
-  // Les éléments du menu d'une proposition : voir, qualité et retenir, puis,
-  // sur une ligne comparable, repartir et, quand la comparaison est offerte,
-  // comparer.
+  // Les éléments du menu d'une proposition : voir, qualité et retenir, puis
+  // repartir sur une ligne qui sert de départ, et comparer sur une ligne
+  // comparable quand la comparaison est offerte.
   function actionsDeLigne(ligne) {
     const actions = [
       { cle: 'propositions.commande.voir', nom: 'voir', executer: () => voir(ligne.id) },
       { cle: 'propositions.commande.qualite', nom: 'qualite', executer: () => qualite(ligne.id) },
       { cle: 'propositions.commande.retenir', executer: () => retenir(ligne.id) },
     ];
-    if (!ligne.comparable) return actions;
-    actions.push({ cle: 'propositions.commande.repartir', nomAccessible: t('propositions.nom.repartir', { proposition: ligne.id }), executer: () => repartir(ligne.id) });
-    if (offerte) actions.push({ cle: 'propositions.commande.comparer', nomAccessible: t('propositions.nom.comparer', { proposition: ligne.id }), executer: () => comparer(ligne.id) });
+    if (ligne.sertDeDepart) {
+      actions.push({ cle: 'propositions.commande.repartir', nomAccessible: t('propositions.nom.repartir', { proposition: ligne.id }), executer: () => repartir(ligne.id) });
+    }
+    if (ligne.comparable && offerte) actions.push({ cle: 'propositions.commande.comparer', nomAccessible: t('propositions.nom.comparer', { proposition: ligne.id }), executer: () => comparer(ligne.id) });
     return actions;
   }
 

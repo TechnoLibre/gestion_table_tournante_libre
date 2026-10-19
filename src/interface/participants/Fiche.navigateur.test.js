@@ -6,13 +6,18 @@
 // plan montre, sous la ligne de source, les plus revues d'abord, égale à sa
 // ligne de la matrice de la page de qualité ; une phrase pour une source qui
 // ne se mesure pas et pour une personne exclue ; absente sans placement,
-// sans phrase ; vivante en lecture et sur un plan bloqué. Chaque épreuve
+// sans phrase ; vivante en lecture et sur un plan bloqué. Puis la rubrique
+// « Présence » (§ 10.2) : son résumé et ses cases, un brouillon qui n'écrit
+// rien et tient le geste ouvert, « Appliquer » en une entrée et l'étape
+// « absente » de l'itinéraire, Entrée et Échap dans les cases, le brouillon
+// et le refus vidés au passage à une autre personne, le refus sous les
+// cases, et l'écriture venue d'ailleurs. Chaque épreuve
 // monte App par monterApp, au cadre de 1 366 × 700, ouvre la section des
 // participants et la fiche, et lit le rendu par le texte et les attributs
 // data-…, jamais par une classe ; la dernière monte la fiche seule, sur
 // une séance en lecture simulée, et change la proposition demandée au
 // plan. Les noms d'épreuve sont inventés.
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { writable } from 'svelte/store';
 import { appliquerCommande } from '../../application/commandes.js';
@@ -21,10 +26,11 @@ import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { rechercher } from '../../moteur/recherche.js';
 import { serialiser } from '../../stockage/canonique.js';
+import { lireJournal } from '../../stockage/journal.js';
 import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { dessinerGraphiques, fixerCadre } from '../../../test/navigateur/entrees.js';
+import { dessinerGraphiques, fixerCadre, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -313,5 +319,225 @@ describe('la rubrique suit le placement que le plan montre (§ 12.5, D25)', () =
       unmount(composant);
       cible.remove();
     }
+  });
+});
+
+describe('la rubrique « Présence » de la fiche (§ 10.2)', () => {
+  const presence = (fiche) => fiche.querySelector('[data-presence-fiche]');
+  const cases = (fiche) => [...presence(fiche).querySelectorAll('[data-presence-tour]')];
+  const coches = (fiche) => cases(fiche).map((c) => c.checked);
+  const bouton = (fiche, nom) => presence(fiche).querySelector(`[data-commande="${nom}"]`);
+  const resume = (fiche) => presence(fiche).querySelector('[data-presence]');
+  // Les libellés des entrées du journal de l'événement ; aucun sans journal.
+  const libelles = (m) => {
+    const texte = m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`);
+    return texte === null ? [] : lireJournal(texte).entrees.map(({ libelle }) => libelle);
+  };
+  // Les entrées de présence du journal : une par « Appliquer » qui écrit.
+  const ajouts = (m) => libelles(m).filter((libelle) => libelle.startsWith('Présence de ')).length;
+  const presenceDe = (m, id) => m.seance.etat().charge.participants.find((p) => p.id === id).presence;
+  const ligneItineraire = (fiche, tour) => fiche.querySelector(`[data-itineraire-tour="${tour}"]`);
+
+  // Bascule une case, puis laisse le rendu suivre.
+  async function basculer(fiche, tour) {
+    cases(fiche)[tour - 1].click();
+    flushSync();
+    await tick();
+  }
+
+  test('entre les étiquettes et les réservations : son titre, le résumé, une case par tour nommée « Tour r », cochées selon la présence, dans un groupe nommé par la personne ; « Tous les tours » et « Appliquer »', async () => {
+    const charge = chargeDouze();
+    charge.participants[3].presence = [2, 4];
+    const { fiche } = await ouvrirFiche(charge, 3);
+    const section = presence(fiche);
+    expect(section).not.toBeNull();
+    expect(texteDe(section.querySelector('h4'))).toBe(t('participants.fiche.presence'));
+    expect(fiche.querySelector('[data-etiquettes]').compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const reservations = [...fiche.querySelectorAll('table')].find((tableau) => tableau.caption?.textContent === t('participants.fiche.reservations'));
+    expect(section.compareDocumentPosition(reservations) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(resume(fiche).dataset.presence).toBe('tous');
+    expect(texteDe(resume(fiche))).toBe('tous');
+    expect(cases(fiche).map((c) => texteDe(c.closest('label')))).toEqual(['Tour 1', 'Tour 2', 'Tour 3', 'Tour 4', 'Tour 5', 'Tour 6']);
+    expect(coches(fiche)).toEqual([true, true, true, true, true, true]);
+    const groupe = section.querySelector('fieldset');
+    expect(groupe.getAttribute('aria-label')).toBe(t('participants.presence.editeur', { nom: 'Ondine Lacasse' }));
+    expect(texteDe(groupe.querySelector('legend'))).toBe(t('participants.fiche.presenceLegende'));
+    expect(texteDe(bouton(fiche, 'presenceTous'))).toBe(t('participants.presence.tousLesTours'));
+    expect(texteDe(bouton(fiche, 'changerPresence'))).toBe(t('participants.presence.appliquer'));
+
+    const { fiche: autre } = await ouvrirFiche(charge, 4);
+    expect(resume(autre).dataset.presence).toBe('partielle');
+    expect(texteDe(resume(autre))).toBe('tours 2 et 4');
+    expect(coches(autre)).toEqual([false, true, false, true, false, false]);
+  });
+
+  test('cocher, décocher et « Tous les tours » n’écrivent rien ; « Appliquer » sans changement non plus', async () => {
+    const charge = chargeDouze();
+    charge.participants[4].presence = [1, 2];
+    const { m, fiche } = await ouvrirFiche(charge, 5);
+    const trace = m.trace.length;
+    await basculer(fiche, 3);
+    expect(coches(fiche)).toEqual([true, true, true, false, false, false]);
+    bouton(fiche, 'presenceTous').click();
+    await attendre(() => expect(coches(fiche)).toEqual([true, true, true, true, true, true]));
+    expect(texteDe(resume(fiche))).toBe('tours 1 et 2');
+    expect(m.trace.length).toBe(trace);
+    // Revenue à l'enregistrée, la saisie n'exécute rien.
+    for (const tour of [3, 4, 5, 6]) await basculer(fiche, tour);
+    const executer = vi.spyOn(m.seance, 'executer');
+    bouton(fiche, 'changerPresence').click();
+    await attendre(() => expect(coches(fiche)).toEqual([true, true, false, false, false, false]));
+    expect(executer).not.toHaveBeenCalled();
+    expect(m.trace.length).toBe(trace);
+  });
+
+  test('« Appliquer » donne une entrée ; sur un retenu, l’itinéraire dit « absente » au tour retiré, les autres tours gardent leur table', async () => {
+    const lue = generee(chargeDouze());
+    const retenue = executer(lue, 'retenirProposition', { id: lue.propositions[0].id });
+    const { m, fiche } = await ouvrirFiche(retenue, 5);
+    const avant = ajouts(m);
+    expect(texteDe(ligneItineraire(fiche, 2))).not.toContain(t('participants.fiche.absente'));
+    await basculer(fiche, 2);
+    bouton(fiche, 'changerPresence').click();
+    await attendre(() => expect(presenceDe(m, 5)).toEqual([1, 3, 4, 5, 6]));
+    await attendre(() => expect(ajouts(m)).toBe(avant + 1));
+    expect(libelles(m).at(-1)).toMatch(/^Présence de Maëlle Quenouille : tours 1 et 3 à 6, au lieu de tous les tours/);
+    const apres = m.racine.querySelector('[data-fiche="5"]');
+    await attendre(() => expect(texteDe(resume(apres))).toBe('tours 1 et 3 à 6'));
+    expect(coches(apres)).toEqual([true, false, true, true, true, true]);
+    const lignes = [1, 2, 3, 4, 5, 6].map((tour) => ligneItineraire(apres, tour));
+    expect(lignes.every((ligne) => ligne !== null)).toBe(true);
+    expect([...lignes[1].cells].map(texteDe)).toEqual(['2', t('participants.fiche.absente')]);
+    for (const ligne of [lignes[0], ...lignes.slice(2)]) {
+      expect(ligne.cells).toHaveLength(3);
+      expect(texteDe(ligne.cells[1])).toMatch(/^1[1-4]$/);
+    }
+    // Rien de plus n'est écrit à la relecture.
+    await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    expect(ajouts(m)).toBe(avant + 1);
+  });
+
+  test('passer à une autre personne vide le brouillon et le refus, et rend le geste ; revenir montre la présence enregistrée', async () => {
+    const charge = chargeDouze();
+    charge.participants[2].presence = [6];
+    const { m, fiche } = await ouvrirFiche(charge, 3);
+    expect(m.seance.gesteEnCours).toBe(false);
+    await basculer(fiche, 6);
+    expect(coches(fiche)[5]).toBe(false);
+    // Le brouillon tient le geste ; refusé, il le garde.
+    expect(m.seance.gesteEnCours).toBe(true);
+    bouton(fiche, 'changerPresence').click();
+    await attendre(() => expect(presence(fiche).querySelector('[data-refus="PRESENCE_VIDE"]')).not.toBeNull());
+    expect(m.seance.gesteEnCours).toBe(true);
+    m.ui.ouvrirFiche(4);
+    const quatre = await attendre(() => {
+      const trouvee = m.racine.querySelector('[data-fiche="4"]');
+      expect(trouvee).not.toBeNull();
+      return trouvee;
+    });
+    expect(coches(quatre)).toEqual([true, true, true, true, true, true]);
+    expect(presence(quatre).querySelector('[data-refus]')).toBeNull();
+    for (const c of cases(quatre)) expect(c.hasAttribute('aria-invalid')).toBe(false);
+    expect(presence(quatre).querySelector('fieldset').hasAttribute('aria-describedby')).toBe(false);
+    expect(m.seance.gesteEnCours).toBe(false);
+    m.ui.ouvrirFiche(3);
+    const trois = await attendre(() => {
+      const trouvee = m.racine.querySelector('[data-fiche="3"]');
+      expect(trouvee).not.toBeNull();
+      return trouvee;
+    });
+    expect(coches(trois)).toEqual([false, false, false, false, false, true]);
+    expect(presence(trois).querySelector('[data-refus]')).toBeNull();
+    expect(m.seance.gesteEnCours).toBe(false);
+  });
+
+  test('au clavier dans les cases : Échap rend la présence enregistrée sans rien écrire, Entrée applique en une entrée ; le brouillon tient le geste, que l’envoi ou une saisie revenue à l’enregistrée rendent', async () => {
+    const charge = chargeDouze();
+    charge.participants[4].presence = [1, 2];
+    const { m, fiche } = await ouvrirFiche(charge, 5);
+    const avant = ajouts(m);
+    const trace = m.trace.length;
+    const executer = vi.spyOn(m.seance, 'executer');
+    expect(m.seance.gesteEnCours).toBe(false);
+
+    cases(fiche)[2].focus();
+    await touche(' ');
+    await attendre(() => expect(coches(fiche)).toEqual([true, true, true, false, false, false]));
+    expect(m.seance.gesteEnCours).toBe(true);
+    await touche('Escape');
+    await attendre(() => expect(coches(fiche)).toEqual([true, true, false, false, false, false]));
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(m.racine.querySelector('[data-fiche="5"]')).toBe(fiche);
+    expect(executer).not.toHaveBeenCalled();
+    expect(m.trace.length).toBe(trace);
+
+    cases(fiche)[1].focus();
+    await touche(' ');
+    await attendre(() => expect(coches(fiche)).toEqual([true, false, false, false, false, false]));
+    expect(m.seance.gesteEnCours).toBe(true);
+    await touche('Enter');
+    await attendre(() => expect(presenceDe(m, 5)).toEqual([1]));
+    await attendre(() => expect(ajouts(m)).toBe(avant + 1));
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('changerPresence', { id: 5, tours: [1] });
+    expect(m.seance.gesteEnCours).toBe(false);
+
+    // Cocher puis décocher le même tour : un brouillon, qui tient le geste ;
+    // « Appliquer » le lit comme l'enregistrée, n'exécute rien et le rend.
+    const apres = m.racine.querySelector('[data-fiche="5"]');
+    await basculer(apres, 4);
+    await basculer(apres, 4);
+    expect(coches(apres)).toEqual([true, false, false, false, false, false]);
+    expect(m.seance.gesteEnCours).toBe(true);
+    bouton(apres, 'changerPresence').click();
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(ajouts(m)).toBe(avant + 1);
+  });
+
+  test('un refus se pose sous les cases, qu’il décrit : tout décoché, PRESENCE_VIDE sans remède, le brouillon gardé ; en lecture, le refus de la séance et son remède', async () => {
+    const charge = chargeDouze();
+    charge.participants[2].presence = [6];
+    const { m, fiche } = await ouvrirFiche(charge, 3);
+    const trace = m.trace.length;
+    await basculer(fiche, 6);
+    bouton(fiche, 'changerPresence').click();
+    const refus = await attendre(() => {
+      const trouve = presence(fiche).querySelector('[data-refus="PRESENCE_VIDE"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(refus.querySelector('button')).toBeNull();
+    expect(coches(fiche)).toEqual([false, false, false, false, false, false]);
+    expect(document.getElementById(presence(fiche).querySelector('fieldset').getAttribute('aria-describedby'))).toBe(refus);
+    for (const c of cases(fiche)) expect(c.getAttribute('aria-invalid')).toBe('true');
+    expect(m.trace.length).toBe(trace);
+    // Une bascule retire le refus.
+    await basculer(fiche, 2);
+    expect(presence(fiche).querySelector('[data-refus]')).toBeNull();
+
+    const { m: lecture, fiche: lue } = await ouvrirFiche(chargeDouze(), 3, { mode: 'lecture' });
+    const ecritures = lecture.trace.length;
+    expect(cases(lue)).toHaveLength(6);
+    await basculer(lue, 1);
+    bouton(lue, 'changerPresence').click();
+    const refusLecture = await attendre(() => {
+      const trouve = presence(lue).querySelector('[data-refus]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(refusLecture.querySelector('button')).not.toBeNull();
+    expect(coches(lue)[0]).toBe(false);
+    expect(lecture.trace.length).toBe(ecritures);
+  });
+
+  test('une écriture venue d’ailleurs — la grille, puis Défaire — met le résumé et les cases à jour', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeDouze(), 3);
+    await m.seance.executer('changerPresence', { id: 3, tours: [1, 2] });
+    await attendre(() => expect(texteDe(resume(fiche))).toBe('tours 1 et 2'));
+    expect(coches(fiche)).toEqual([true, true, false, false, false, false]);
+    await m.seance.defaire();
+    await attendre(() => expect(texteDe(resume(fiche))).toBe('tous'));
+    expect(coches(fiche)).toEqual([true, true, true, true, true, true]);
   });
 });

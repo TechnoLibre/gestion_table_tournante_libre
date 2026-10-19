@@ -243,16 +243,17 @@ export const TABLE = new Map([
   [
     'propositions.explication.ecartItineraireMax',
     "L'écart d'itinéraire d'une personne : son plafond a priori moins son plafond réalisé, ce que son itinéraire lui " +
-      'retire avant toute rencontre \u{2014} moins de tables différentes, des tables incomplètes, des tours en réserve. ' +
+      'retire avant toute rencontre \u{2014} moins de tables différentes, des tables incomplètes, des tours en réserve ' +
+      "\u{2014}, sur ses tours de présence ; un tour d'absence n'y compte pas. " +
       "La colonne donne le plus grand, « inconnu » quand le plafond a priori n'a pas pu être calculé. " +
       "Plus il est bas, mieux c'est.",
   ],
   [
     'propositions.explication.ecartAuPlafondAPriori',
-    "Pour chaque personne, son plafond a priori, le plus de rencontres que permettent les " +
-      "capacités des tables sur le meilleur itinéraire, moins ses rencontres, soit son manque plus son écart d'itinéraire. " +
+    "Pour chaque personne, son plafond a priori, le plus de rencontres que permettent les capacités des tables " +
+      "sur le meilleur itinéraire, moins ses rencontres, sur ses tours de présence ; un tour d'absence n'y compte pas. " +
       "La colonne donne le plus grand, critère du classement à sa place dans l'ordre écrit au-dessus du tableau ; " +
-      "sans plafond a priori calculé, il est sauté et la cellule écrit « inconnu ». " +
+      'sans plafond a priori calculé, il est sauté : « inconnu ». ' +
       "Plus il est bas, mieux c'est.",
   ],
   // Les colonnes des objectifs des tables et des animateurs (A9) : une
@@ -343,10 +344,31 @@ export const TABLE = new Map([
   ['propositions.marque.retenue', 'retenue'],
   ['propositions.retenu.titre', 'Placement retenu'],
   ['propositions.retenu.origine', ({ proposition }) => `Tel que la proposition n° ${proposition}.`],
+  [
+    'propositions.retenu.presence',
+    ({ proposition }) => `Tel que la proposition n° ${proposition}, ajusté aux participants.`,
+  ],
   ['propositions.retenu.ajuste', ({ proposition }) => `Ajusté à la main depuis la proposition n° ${proposition}.`],
   ['propositions.horsClassement.titre', 'Hors classement'],
   ['propositions.statut.derive', 'Non comparable : la proposition ne décrit plus la configuration courante.'],
   ['propositions.statut.fautif', 'Non comparable : le placement se contredit.'],
+
+  // --- La note des présences, au-dessus du tableau (§ 5.7) -------------------------
+  // absentes : les personnes non exclues qui ne sont pas présentes à chaque
+  // tour. La seconde phrase vient quand aucune ligne n'est classée et qu'une
+  // au moins sert de départ.
+  [
+    'propositions.presences.note',
+    ({ absentes }) =>
+      absentes <= 1
+        ? `${absentes} personne n'est pas présente à chaque tour : chaque chiffre se lit sur ses tours de présence.`
+        : `${absentes} personnes ne sont pas présentes à chaque tour : chaque chiffre se lit sur leurs tours de présence.`,
+  ],
+  [
+    'propositions.presences.toutesEnDerive',
+    "Aucune proposition n'est classée : les participants ont changé depuis leur calcul. « Repartir d'elle », " +
+      "dans le menu d'une ligne, en génère des propositions dérivées qui suivent la soirée telle qu'elle est.",
+  ],
 
   // --- La filiation d'une dérivée (§ 5.7, D76, C7) ---------------------------------
   // depart : le numéro du départ ; tours : les numéros des tours figés, déjà

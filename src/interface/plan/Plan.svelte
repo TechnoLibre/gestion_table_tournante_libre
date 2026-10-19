@@ -111,6 +111,7 @@
     appartenanceDeCharge,
     cadreDepuisRect,
     englobantDuTour,
+    evidenceDe,
     nomDeCharge,
     sourceMontree,
     vueApresCadre,
@@ -173,9 +174,11 @@
   const pose = $derived($ui.pose);
   // Le placement que le plan montre, que la barre de vue nomme.
   const source = $derived(sourceMontree(etat, $ui.proposition, charge.retenu !== null));
-  // La personne mise en évidence, que la barre de vue nomme : {id, nom}, nom
-  // null pour une personne que la charge n'a plus ; null sans mise en évidence.
-  const evidence = $derived($ui.miseEnEvidence === null ? null : { id: $ui.miseEnEvidence, nom: nomDe($ui.miseEnEvidence) ?? null });
+  // La personne mise en évidence, que la barre de vue nomme (evidenceDe) :
+  // {id, nom, absente}, nom null pour une personne que la charge n'a plus,
+  // absente vrai quand elle est absente au tour montré ; null sans mise en
+  // évidence.
+  const evidence = $derived($ui.miseEnEvidence === null ? null : evidenceDe($ui.miseEnEvidence, nomDe, etat));
   // L'élément actif que le dessin marque : sous un focus venu du clavier.
   const actifMontre = $derived(aLeFocus && auClavier ? actif : null);
   const modele = $derived(

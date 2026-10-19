@@ -112,11 +112,11 @@ afterEach(() => {
 
 // Monte une vue dans un conteneur neuf de 1 000 px, au début du corps, puis
 // laisse ses graphiques mesurer leur largeur et leur texte.
-async function monter(Vue, props) {
+async function monter(Vue, props, context = CONTEXTE) {
   const cible = document.createElement('div');
   cible.style.width = '1000px';
   document.body.prepend(cible);
-  const composant = mount(Vue, { target: cible, props, context: CONTEXTE });
+  const composant = mount(Vue, { target: cible, props, context });
   montes.push({ composant, cible });
   for (let tour = 0; tour < 3; tour += 1) {
     flushSync();
@@ -247,6 +247,101 @@ describe('l’en-tête chiffré (§ 12.2, B11, D48)', () => {
     await attendre(() => expect(bulle.hidden).toBe(false));
     expect(texteDe(bulle)).toBe(t('propositions.explication.manqueMax').replace(/\s+/g, ' ').trim());
     expect(terme.getAttribute('aria-describedby')).toBe(bulle.id);
+  });
+});
+
+// --- La présence par tour ----------------------------------------------------------
+
+// Les contextes que pose App, la séance comprise : un magasin dont l'état
+// porte la charge.
+const contexteDe = (charge) =>
+  new Map([
+    ...CONTEXTE,
+    [
+      'seance',
+      {
+        subscribe(lire) {
+          lire({ charge });
+          return () => {};
+        },
+      },
+    ],
+  ]);
+
+// Cinq membres de la Coopérative Aubier pour deux tables de trois, et la
+// présence de Sidonie Varech, sans appartenance.
+function chargeAbsente(presence) {
+  const charge = chargeSix();
+  for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+  charge.participants[5].presence = presence;
+  return charge;
+}
+
+describe('la présence par tour, dans l’en-tête et le profil (§ 12.2, § 12.3, § 12.6)', () => {
+  test('une absence : la tuile de l’écart d’itinéraire écrit, sous son chiffre, que son plancher n’est pas prouvé ; les autres gardent le leur', async () => {
+    const charge = generee(chargeAbsente([1, 2]));
+    const cible = await monter(VueEntete, vueDe(charge), contexteDe(charge));
+    const phrases = [...cible.querySelectorAll('[data-plancher-non-prouve]')];
+    expect(phrases).toHaveLength(1);
+    const [phrase] = phrases;
+    const tuile = tuileDe(cible, 'ecartItineraireMax');
+    expect(tuile.contains(phrase)).toBe(true);
+    expect(texteDe(phrase)).toBe(t('qualite.entete.plancherNonProuve'));
+    expect(phrase.compareDocumentPosition(tuile.querySelector('.valeur')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(phrase.checkVisibility({ visibilityProperty: true })).toBe(true);
+    const collisions = tuileDe(cible, 'collisionsCumulees');
+    expect(texteDe(collisions)).toContain(t('qualite.tuile.plancherAtteint', { plancher: 12 }));
+  });
+
+  test('sans absence, aucune tuile ne l’écrit', async () => {
+    const charge = generee(chargeSix());
+    const cible = await monter(VueEntete, vueDe(charge), contexteDe(charge));
+    expect(cible.querySelector('[data-tuile]')).not.toBeNull();
+    expect(cible.querySelector('[data-plancher-non-prouve]')).toBeNull();
+  });
+
+  test('la personne au rang 1 présente à un seul tour : l’infobulle de la tuile du minimum brut ajoute sa présence à l’explication', async () => {
+    const charge = generee(chargeAbsente([2]));
+    const vue = vueDe(charge);
+    expect(vue.detail.bornes.rang1.id).toBe(6);
+    const cible = await monter(VueEntete, vue, contexteDe(charge));
+    const terme = tuileDe(cible, 'rencontresTous').querySelector('[data-terme]');
+    terme.focus();
+    flushSync();
+    const bulle = cible.querySelector('[role="tooltip"]');
+    await attendre(() => expect(bulle.hidden).toBe(false));
+    const explication = t('propositions.explication.rencontresTous').replace(/\s+/g, ' ').trim();
+    expect(texteDe(bulle)).toBe(`${explication} Sidonie Varech, au rang 1, est présente au tour 2.`);
+    // Une autre tuile garde l'explication de sa colonne, seule.
+    const autre = tuileDe(cible, 'manqueMax').querySelector('[data-terme]');
+    autre.focus();
+    flushSync();
+    await attendre(() => expect(texteDe(bulle)).toBe(t('propositions.explication.manqueMax').replace(/\s+/g, ' ').trim()));
+  });
+
+  test('le profil : le rang d’une absente porte le losange dans les deux graphiques ; son infobulle dit « absente à n tours »', async () => {
+    const charge = generee(chargeAbsente([2]));
+    const vue = vueDe(charge);
+    expect(vue.detail.profil[0]).toMatchObject({ id: 6, marque: 'absente', toursAbsents: 2 });
+    const cible = await monter(VueProfil, vue, contexteDe(charge));
+    const losange = /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+ Z$/;
+    for (const nom of ['profilComptes', 'profilPourcentages']) {
+      const signes = [...svgDe(cible, nom).querySelectorAll('[data-marque="graphiqueMarque"]')];
+      expect(signes.filter((signe) => losange.test(signe.getAttribute('d'))), nom).toHaveLength(1);
+    }
+    expect(texteDe(cible)).toContain(t('graphiques.signe.absente'));
+    const comptes = svgDe(cible, 'profilComptes');
+    const focalisable = document.createElement('button');
+    cible.append(focalisable);
+    focalisable.focus({ preventScroll: true });
+    const boite = surfaceDe(comptes).getBoundingClientRect();
+    await pointer('bouger', boite.left + 2, boite.top + boite.height / 2);
+    flushSync();
+    const bulles = [...cible.querySelectorAll('[role="tooltip"]')].filter((bulle) => !bulle.hidden);
+    expect(bulles).toHaveLength(1);
+    expect(texteDe(bulles[0])).toContain('Sidonie Varech');
+    expect(texteDe(bulles[0])).toContain(t('qualite.profil.absences', { n: 2 }));
+    expect(texteDe(bulles[0])).toContain(t('qualite.profil.marque.absente'));
   });
 });
 

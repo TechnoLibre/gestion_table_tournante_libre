@@ -4,12 +4,15 @@
 // La vue du plan côté interface (§ 7.2, § 8.5, § 13.3) : le cadre lu d'un
 // DOMRect, la vue d'ouverture — cadrage mémorisé borné au cadre, sinon
 // l'ajustement —, la vue d'après un changement de cadre, les zooms de la
-// molette et des boutons, l'englobant d'un tour, le tour montré et les noms.
+// molette et des boutons, l'englobant d'un tour, le tour montré, les noms
+// et la personne mise en évidence, dite absente au tour où elle l'est.
 // Les valeurs attendues viennent de src/geometrie/vue.js, la seule
 // implémentation des conversions, sollicitée une seconde fois.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
+import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { etatPlaces } from '../../application/places.js';
+import { creerTraduction } from '../../application/traduction.js';
 import { englobant, geometrieTable } from '../../geometrie/tables.js';
 import {
   FACTEUR_K_MIN,
@@ -22,11 +25,13 @@ import {
   zoomerSous,
 } from '../../geometrie/vue.js';
 import { creerCharge } from '../../stockage/document.js';
+import { TABLES_INTERFACE } from '../libelles.js';
 import {
   FACTEUR_BOUTON,
   appartenanceDeCharge,
   cadreDepuisRect,
   englobantDuTour,
+  evidenceDe,
   nomDeCharge,
   placerBulle,
   sourceMontree,
@@ -43,6 +48,8 @@ import {
 const ENGLOBANT = { minX: -79, minY: -79, maxX: 379, maxY: 379 };
 const CADRE = { gauche: 37, haut: 211, largeur: 1366, hauteur: 700 };
 const PETIT = { gauche: 37, haut: 211, largeur: 683, hauteur: 700 };
+
+const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
 const finie = (vue) => [vue.k, vue.tx, vue.ty].every(Number.isFinite) && vue.k > 0;
 
@@ -259,6 +266,36 @@ describe('l’englobant d’un tour, le tour montré, les noms', () => {
     assert.equal(appartenanceDe(1), ' Cercle des Hérons');
     assert.equal(appartenanceDe(2), null);
     assert.equal(appartenanceDe(99), null);
+  });
+});
+
+describe('evidenceDe : la personne mise en évidence, que la barre de vue nomme (§ 7.1, § 8.4)', () => {
+  test('présente au tour : son nom affiché, absente faux ; absente au tour : absente vrai', () => {
+    const charge = chargeDEpreuve();
+    charge.participants[0].presence = [1, 2];
+    const nomDe = nomDeCharge(charge);
+    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 1 })), { id: 1, nom: 'Iris Ombrelle', absente: false });
+    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 3 })), { id: 1, nom: 'Iris Ombrelle', absente: true });
+    assert.deepEqual(evidenceDe(2, nomDe, etatPlaces(charge, { tour: 3 })), { id: 2, nom: 'Grisaille', absente: false });
+  });
+
+  test('une personne que la charge n\u{2019}a plus : nom null, et jamais absente au tour', () => {
+    const charge = chargeDEpreuve();
+    assert.deepEqual(evidenceDe(99, nomDeCharge(charge), etatPlaces(charge, { tour: 2 })), { id: 99, nom: null, absente: false });
+  });
+
+  test('une exclue n\u{2019}est pas dite absente au tour : l\u{2019}état des places ne la nomme pas', () => {
+    const charge = chargeDEpreuve();
+    charge.participants[0].presence = [1];
+    charge.participants[0].exclu = true;
+    assert.equal(evidenceDe(1, nomDeCharge(charge), etatPlaces(charge, { tour: 2 })).absente, false);
+  });
+
+  test('les libellés : la barre dit le tour d\u{2019}absence ; la liste de travail des réserves du retenu', () => {
+    assert.equal(t('plan.evidence.absenteAuTour', { tour: 3 }), ' \u{2014} absente au tour 3');
+    assert.equal(t('plan.listesTravail.reserves'), 'En réserve dans le placement retenu');
+    assert.equal(t('plan.listesTravail.enReserve', { tours: [3, 4] }), ' \u{2014} en réserve aux tours 3 et 4');
+    assert.equal(t('plan.listesTravail.enReserve', { tours: [2] }), ' \u{2014} en réserve au tour 2');
   });
 });
 

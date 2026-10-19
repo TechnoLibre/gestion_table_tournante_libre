@@ -13,6 +13,13 @@
   //    (pressentisNonReserves), [data-liste-travail=pressentis] : un clic en
   //    fait la personne choisie ; « Désigner », dans le panneau de la place,
   //    propose son titre pressenti pour libellé (A5).
+  //  - Les personnes que le placement retenu laisse en réserve
+  //    (enReserveDansLeRetenu), [data-liste-travail=reserves] : « <nom> — en
+  //    réserve aux tours 3 et 4 », le travail qu'un changement de
+  //    participants laisse. Un clic montre le premier de ces tours, puis en
+  //    fait la personne choisie, dans cet ordre : montrer un tour oublie le
+  //    choix (etat_ui.js). Un clic sur la personne déjà choisie l'oublie.
+  //    La liste n'est pas dans le DOM sans retenu.
   //  - Les conversions proposées (conversionsPossibles, § 4.2) : R
   //    réservations « tour » à une table qu'une seule « tous les tours »
   //    remplacerait. « Convertir » l'exécute ; « Ignorer » la retire de la
@@ -24,7 +31,12 @@
   // contrôles, oublie le choix en attente. Le panneau lit 'seance' et 'ui'
   // au contexte, sans propriété.
   import { getContext, tick } from 'svelte';
-  import { conversionsPossibles, pressentisNonReserves, titresNonPourvus } from '../../application/listes_travail.js';
+  import {
+    conversionsPossibles,
+    enReserveDansLeRetenu,
+    pressentisNonReserves,
+    titresNonPourvus,
+  } from '../../application/listes_travail.js';
   import Commande from '../primitives/Commande.svelte';
   import { effetDe } from '../raccourcis.js';
   import { nomDeCharge } from './vue_plan.js';
@@ -38,6 +50,8 @@
   const nomDe = $derived(charge === null ? null : nomDeCharge(charge));
   const titres = $derived(charge === null ? [] : titresNonPourvus(charge));
   const pressentis = $derived(charge === null ? [] : pressentisNonReserves(charge));
+  const avecRetenu = $derived(charge !== null && charge.retenu !== null);
+  const enReserve = $derived(avecRetenu ? enReserveDansLeRetenu(charge) : []);
   // Les conversions que l'opérateur a ignorées, par clé « personne:table ».
   let ignorees = $state([]);
   const conversions = $derived(
@@ -61,6 +75,17 @@
 
   function basculer(id) {
     ui.choisir(choisie(id) ? null : { genre: 'personne', participant: id, depuis: null });
+  }
+
+  // Le premier tour où le retenu la réserve, montré, puis la personne
+  // choisie ; la personne déjà choisie est oubliée.
+  function placerDepuisLaReserve(participant, tours) {
+    if (choisie(participant)) {
+      ui.choisir(null);
+      return;
+    }
+    ui.montrerTour(tours[0]);
+    ui.choisir({ genre: 'personne', participant, depuis: null });
   }
 
   function surTouche(evenement) {
@@ -108,6 +133,26 @@
       </ul>
       {#if pressentis.length === 0}
         <p>{t('plan.listesTravail.aucun')}</p>
+      {/if}
+
+      {#if avecRetenu}
+        <h4 id="{uid}-reserves">{t('plan.listesTravail.reserves')}</h4>
+        <ul data-liste-travail="reserves" aria-labelledby="{uid}-reserves">
+          {#each enReserve as { participant, tours } (participant)}
+            <li>
+              <button
+                type="button"
+                data-participant={participant}
+                aria-pressed={choisie(participant)}
+                onclick={() => placerDepuisLaReserve(participant, tours)}
+                ><span class="donnee">{nomDe(participant)}</span><span>{t('plan.listesTravail.enReserve', { tours })}</span></button
+              >
+            </li>
+          {/each}
+        </ul>
+        {#if enReserve.length === 0}
+          <p>{t('plan.listesTravail.aucun')}</p>
+        {/if}
       {/if}
 
       {#if conversions.length > 0}

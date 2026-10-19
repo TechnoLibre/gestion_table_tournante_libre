@@ -17,10 +17,10 @@
   // « Voir sur le plan » demande la proposition au plan par l'état de
   // navigation, sans écriture, et ouvre la section du plan ; voir(null) y
   // montre le retenu. « Retenir » exécute retenirProposition, puis remet la
-  // demande à null : le plan montre le retenu. Quand le retenu est ajusté et
-  // que la séance accepterait le geste, retenir détruit ces ajustements : la
-  // fenêtre à confirmer le dit d'abord, nommant le retenu ajusté et la
-  // proposition qui le remplace (§ 2.1). Un geste que la séance refuserait
+  // demande à null : le plan montre le retenu. Quand le retenu est retouché à
+  // la main (retenuRetouche) et que la séance accepterait le geste, retenir
+  // détruit ces retouches : la fenêtre à confirmer le dit d'abord, nommant le
+  // retenu ajusté et la proposition qui le remplace (§ 2.1). Un geste que la séance refuserait
   // s'exécute sans fenêtre, et son refus s'affiche. « Effacer » ne détruit
   // aucune saisie — chaque proposition se régénère de sa graine, et le geste
   // se défait — : il s'exécute sans fenêtre.
@@ -82,6 +82,17 @@
   // qu'une ligne tient — la colonne surlignée, la proposition demandée au
   // plan, le retenu — ne dépend de la page.
   //
+  // La note des présences (notePresences, modele.js) suit la phrase de
+  // l'ordre, au-dessus du tableau : le compte des personnes qui ne sont pas
+  // présentes à chaque tour, dont chaque chiffre se lit sur les tours de
+  // présence ; puis, quand aucune ligne n'est classée et qu'une au moins sert
+  // de départ, la phrase qui nomme « Repartir d'elle ». Sans elles, rien.
+  //
+  // « Garder les N meilleures » sur une liste que le classement ne range pas
+  // assez — moins de N lignes classées, une ligne à effacer qui sert de
+  // départ — part sans fenêtre : la séance le refuse,
+  // NETTOYAGE_SANS_CLASSEMENT, et le refus se pose à côté du bouton.
+  //
   // Habillage : le tableau et la phrase de l'ordre vivent dans une carte
   // titrée, le nombre à garder, « Garder les N meilleures » et « Effacer les
   // propositions » à droite de son en-tête ; le message d'une liste vide
@@ -105,9 +116,11 @@
     explicationDeColonne,
     lireGardees,
     nomDe,
+    notePresences,
     pageApresNettoyage,
     pagine,
     retenuAjuste,
+    retenuRetouche,
     suivrePage,
     surlignee as colonneSurlignee,
     tableau,
@@ -122,7 +135,9 @@
   const charge = $derived($seance.charge);
   const evaluee = $derived(charge === null ? { table: null, refus: null } : evaluation(charge));
   const ajuste = $derived(charge !== null && retenuAjuste(charge));
-  const vue = $derived(evaluee.table === null ? null : tableau(evaluee.table, { ajuste }));
+  const retouche = $derived(charge !== null && retenuRetouche(charge));
+  const vue = $derived(evaluee.table === null ? null : tableau(evaluee.table, { ajuste, retouche }));
+  const note = $derived(charge === null ? [] : notePresences(charge, vue));
 
   // Le suivi de la page (SuiviDePage, modele.js), que l'état de navigation
   // retient, recalé avant le rendu à chaque vue ou visée nouvelles ; sans
@@ -377,6 +392,13 @@
           </p>
         {/each}
       </div>
+      {#if note.length > 0}
+        <div class="presences" data-phrase-presences>
+          {#each note as phrase (phrase.cle)}
+            <p>{t(phrase.cle, phrase.details)}</p>
+          {/each}
+        </div>
+      {/if}
       {#if page.paginee}{@render pages('haut')}{/if}
       <TableauPropositions vue={vuePage} {surlignee} {nommer} {voir} {retenir} {expliquer} {taire} {decrit} />
       {#if page.paginee}{@render pages('bas')}{/if}
@@ -432,6 +454,16 @@
     flex-direction: column;
     gap: var(--espace-1);
     padding: var(--espace-3) var(--espace-5);
+  }
+
+  /* La note des présences, sous la phrase de l'ordre, au même retrait, en
+     encre secondaire. */
+  .presences {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-1);
+    padding: 0 var(--espace-5) var(--espace-3);
+    color: var(--couleur-page-texte-secondaire);
   }
 
   /* Un nom qui désigne une colonne se signale par un soulignement pointillé ;

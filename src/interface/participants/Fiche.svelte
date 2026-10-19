@@ -4,9 +4,9 @@
 <script>
   // La fiche d'une personne à l'écran (§ 4, § 4.2, § 4.5, § 7.4, § 10.2) :
   // nom, prénom, appartenance, courriel, titre pressenti, notes, statut
-  // calculé, ses étiquettes, ses réservations, et sa table et son siège à
-  // chaque tour du retenu ; un tour que le retenu ne porte pas se dit hors
-  // du retenu. La fiche replie, ne tronque jamais : un nom de deux cents
+  // calculé, ses étiquettes, sa présence par tour, ses réservations, et sa
+  // table et son siège à chaque tour du retenu, ou son absence à ce tour ;
+  // un tour que le retenu ne porte pas se dit hors du retenu. La fiche replie, ne tronque jamais : un nom de deux cents
   // caractères s'y lit entier, sur autant de lignes qu'il en faut. Chaque
   // donnée occupe son propre nœud de texte, et rien n'y est interprété
   // comme du balisage.
@@ -14,7 +14,8 @@
   // Le statut est celui de statuts (src/application/places.js), lu dans
   // l'instance du moteur ; l'itinéraire, celui d'itineraire (grille.js), lu
   // tour par tour dans etatPlaces : la fiche ne recalcule ni l'un ni
-  // l'autre. Son seul contrôle de saisie est le champ des étiquettes.
+  // l'autre. Ses contrôles de saisie sont le champ des étiquettes et les
+  // cases de la présence.
   //
   // Les étiquettes (etiquettes.js) : une pastille neutre à icône par
   // étiquette, dans l'ordre de la charge — la teinte d'appartenance ne sert
@@ -42,6 +43,22 @@
   // place de la sienne — la suivante, sinon la précédente (ligneVoisine) —,
   // ou au champ quand il n'en reste aucune.
   //
+  // La rubrique « Présence » (data-presence-fiche), entre les étiquettes et
+  // les réservations : la présence enregistrée, « tous » ou ses tours
+  // nommés (affichagePresence, presence.js), puis une case par tour
+  // (CasesPresence), « Tous les tours » et « Appliquer ». Cocher, décocher et
+  // « Tous les tours » n'écrivent rien : le brouillon vit dans une machine
+  // de champ.js, sur la saisie canonique de presence.js, et tient le geste
+  // ouvert. « Appliquer », ou Entrée dans les cases, exécute changerPresence
+  // (commandeDeCellule) : une entrée, et aucune quand le brouillon se lit
+  // comme la présence enregistrée. Échap dans les cases rend la présence
+  // enregistrée. Un refus — présence vide, séance en lecture, plan bloqué —
+  // se pose sous les cases, avec son remède, le brouillon gardé. Une
+  // écriture venue d'ailleurs — la grille, Défaire — arrive par recevoir :
+  // les cases la suivent hors d'un brouillon. Passer à une autre personne
+  // repart de sa présence, sans brouillon ni refus. Les avertissements de
+  // la commande passent par la zone d'annonces de l'événement.
+  //
   // La fiche est une carte : fond et filet de la carte, rayon de 12 px,
   // ombre légère ; ses étiquettes et légendes de tableau en petites
   // capitales d'encre secondaire.
@@ -64,16 +81,20 @@
   // plan bloqué comme en écriture.
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { nomAffiche } from '../../application/personnes.js';
-  import { etatPlaces, statuts } from '../../application/places.js';
+  import { etatPlaces, presenceSaisie, statuts } from '../../application/places.js';
   import { cleDeMode } from '../mode.js';
+  import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import { rubriqueRencontres } from '../qualite/paires.js';
+  import { effetDe } from '../raccourcis.js';
+  import CasesPresence from './CasesPresence.svelte';
   import { ajoutEtiquettes, etiquettesDeLaFiche, retraitEtiquette, saisieApresAjout, signauxOrthographe } from './etiquettes.js';
-  import { cleDeColonne, cleDeStatut, itineraire, ligneVoisine, reservationsDe } from './grille.js';
+  import { cleDeColonne, cleDeStatut, commandeDeCellule, itineraire, ligneVoisine, reservationsDe } from './grille.js';
+  import { affichagePresence, casesDeSaisie, lecturePresence, saisieApresBascule, saisieEnregistree, saisiePleine } from './presence.js';
 
   let { participant, charge } = $props();
 
@@ -132,8 +153,44 @@
     });
   });
 
+  // La présence : l'enregistrée, son affichage, et le brouillon des cases,
+  // tenu par une machine de champ.js propre à la personne et au nombre de
+  // tours ; le refus posé sous les cases, et l'envoi en cours.
+  const tours = $derived(charge.evenement.tours);
+  const presenceEnregistree = $derived(saisieEnregistree(participant, tours));
+  const vuePresence = $derived(affichagePresence(presenceSaisie(participant)));
+  let machinePresence = untrack(() => creerMachineChamp({ stockee: presenceEnregistree, lire: lecturePresence(tours) }));
+  let saisiePresence = $state(untrack(() => machinePresence.saisie));
+  let brouillonPresence = $state(false);
+  let refusPresence = $state.raw(null);
+  let envoiPresence = $state(false);
+  const idRefusPresence = `${uid}-refus-presence`;
+
+  // La saisie et le brouillon, relus de la machine après chacun de ses pas.
+  function suivrePresence() {
+    saisiePresence = machinePresence.saisie;
+    brouillonPresence = machinePresence.enCours;
+  }
+
+  // Une autre personne, un autre nombre de tours : une machine neuve, sans
+  // refus. La même : la présence enregistrée, venue d'ailleurs, est reçue.
+  let presenceDe = untrack(() => `${participant.id}|${tours}`);
+  $effect.pre(() => {
+    const cle = `${participant.id}|${tours}`;
+    const enregistree = presenceEnregistree;
+    untrack(() => {
+      if (cle === presenceDe) machinePresence.recevoir(enregistree);
+      else {
+        presenceDe = cle;
+        machinePresence = creerMachineChamp({ stockee: enregistree, lire: lecturePresence(tours) });
+        refusPresence = null;
+      }
+      suivrePresence();
+    });
+  });
+
   $effect(() => {
-    geste.tenir(texte !== '');
+    geste.tenir(texte !== '' || brouillonPresence);
   });
 
   // Le refus d'un geste, ou une erreur sans code, qui remonte.
@@ -177,6 +234,61 @@
     const voisin = ligneVoisine(rang, pastilles.length);
     const boutons = element.querySelectorAll('[data-etiquettes] [data-commande="retirerEtiquette"]');
     (voisin === null ? champ : (boutons[voisin] ?? champ))?.focus();
+  }
+
+  function basculerPresence(tour, coche) {
+    machinePresence.saisir(saisieApresBascule(machinePresence.saisie, tour, coche));
+    refusPresence = null;
+    suivrePresence();
+  }
+
+  // « Tous les tours » : chaque case cochée, sans rien écrire.
+  function toutCocher() {
+    machinePresence.saisir(saisiePleine(tours));
+    refusPresence = null;
+    suivrePresence();
+  }
+
+  // Exécute la présence saisie, quand elle diffère de l'enregistrée ; un
+  // refus la rend au brouillon et se pose sous les cases, tant que la
+  // machine est la même. L'envoi n'est pas ré-entrant.
+  async function appliquer(evenement) {
+    evenement.preventDefault();
+    if (envoiPresence) return;
+    const enCours = machinePresence;
+    const id = participant.id;
+    refusPresence = null;
+    const rendu = enCours.valider();
+    suivrePresence();
+    if (rendu.action !== 'executer') return;
+    const { nom, args } = commandeDeCellule('presence', id, rendu.valeur);
+    envoiPresence = true;
+    try {
+      await seance.executer(nom, args);
+    } catch (erreur) {
+      const refus = refusDe(erreur);
+      if (machinePresence === enCours) {
+        enCours.echec(refus);
+        suivrePresence();
+        refusPresence = refus;
+      }
+    } finally {
+      envoiPresence = false;
+    }
+  }
+
+  // Dans les cases : Entrée applique, Échap rend la présence enregistrée.
+  // Entrée passe par appliquer et retient l'appui : l'envoi ne dépend pas
+  // de la soumission implicite qu'un moteur offre, ou non, depuis une case.
+  function surTouchePresence(evenement) {
+    const effet = effetDe('champ', evenement.key);
+    if (effet === 'valider') appliquer(evenement);
+    else if (effet === 'rendre') {
+      evenement.preventDefault();
+      machinePresence.abandonner();
+      refusPresence = null;
+      suivrePresence();
+    }
   }
 
   // Fait défiler l'élément monté jusque dans la fenêtre, au plus court.
@@ -263,6 +375,39 @@
     </form>
   </section>
 
+  <section class="presence" data-presence-fiche aria-labelledby={`${uid}-titre-presence`}>
+    <h4 id={`${uid}-titre-presence`}>{t('participants.fiche.presence')}</h4>
+    {#if vuePresence.sorte === 'tous'}
+      <p class="resume" data-presence="tous">{t(vuePresence.cle)}</p>
+    {:else}
+      <p class="resume" data-presence="partielle">{t(vuePresence.cle, vuePresence.details)}</p>
+    {/if}
+    <form novalidate onsubmit={appliquer}>
+      <CasesPresence
+        cases={casesDeSaisie(saisiePresence, tours)}
+        nom={nomAffiche(participant)}
+        invalide={refusPresence !== null}
+        decrit={refusPresence === null ? undefined : idRefusPresence}
+        basculer={basculerPresence}
+        toucher={surTouchePresence}
+      />
+      <div class="boutons">
+        <button type="button" data-commande="presenceTous" onclick={toutCocher}>{t('participants.presence.tousLesTours')}</button>
+        <button
+          type="submit"
+          data-commande="changerPresence"
+          aria-busy={envoiPresence ? 'true' : undefined}
+          aria-disabled={envoiPresence ? 'true' : undefined}>{t('participants.presence.appliquer')}</button
+        >
+      </div>
+      {#if refusPresence !== null}
+        <div class="refus" {@attach montrer}>
+          <Refus id={idRefusPresence} refus={refusPresence} lever={() => (refusPresence = null)} />
+        </div>
+      {/if}
+    </form>
+  </section>
+
   <table>
     <caption>{t('participants.fiche.reservations')}</caption>
     {#if reservations.length > 0}
@@ -312,10 +457,12 @@
       </thead>
       <tbody>
         {#each etapes as etape (etape.tour)}
-          <tr>
+          <tr data-itineraire-tour={etape.tour}>
             <td>{etape.tour}</td>
             {#if etape.reserve}
               <td colspan="2">{t('participants.fiche.enReserve')}</td>
+            {:else if etape.absente}
+              <td colspan="2">{t('participants.fiche.absente')}</td>
             {:else if etape.horsRetenu}
               <td colspan="2">{t('participants.fiche.horsRetenu')}</td>
             {:else}
@@ -465,11 +612,14 @@
     color: var(--couleur-page-texte-secondaire);
   }
 
-  /* Les étiquettes : l'intitulé en petites capitales, les pastilles en
-     rangée qui se replie, chacune suivie, en écriture, de sa croix de
-     retrait ; puis le champ d'ajout et son bouton sur une ligne, le refus
-     ou le signal dessous. */
-  .etiquettes {
+  /* Les étiquettes et la présence : l'intitulé en petites capitales, puis,
+     pour les étiquettes, les pastilles en rangée qui se replie, chacune
+     suivie, en écriture, de sa croix de retrait ; puis le champ d'ajout et
+     son bouton sur une ligne, le refus ou le signal dessous ; pour la
+     présence, son résumé de l'encre de la page, les cases, leurs deux
+     boutons sur une ligne, le refus dessous. */
+  .etiquettes,
+  .presence {
     display: flex;
     flex-direction: column;
     gap: var(--espace-2);
@@ -497,8 +647,19 @@
     min-width: 0;
   }
 
-  .etiquettes p {
+  .etiquettes p,
+  .presence p {
     margin: 0;
+  }
+
+  .presence .resume {
+    color: var(--couleur-page-texte);
+  }
+
+  .boutons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-2);
   }
 
   form {

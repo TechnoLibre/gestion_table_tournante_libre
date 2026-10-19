@@ -1062,6 +1062,30 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'participants.presence',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // La présence par tour dans la grille : la personne 4 présente aux
+      // tours 3 et 4, en pastille ; puis les cases de la personne 1 ouvertes
+      // au clavier, les tours 3 et 4 décochés, la saisie en cours.
+      const charge = executer(chargePrincipale(), 'changerPresence', { id: 4, tours: [3, 4] });
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'participants' });
+      await element(m, '[data-participant="4"] [data-presence="partielle"]');
+      const cellule = await element(m, '[data-section="participants"] [data-participant="1"] [data-champ="presence"]');
+      cellule.focus();
+      await touche('Enter');
+      await element(m, '[data-participant="1"] [data-editeur-presence]');
+      for (const cle of ['End', ' ', 'ArrowLeft', ' ']) {
+        await touche(cle);
+        flushSync();
+      }
+      await attendre('les tours 3 et 4 décochés', () =>
+        [...m.racine.querySelectorAll('[data-participant="1"] [data-presence-tour]')].map((c) => c.checked).join() === 'true,true,false,false',
+      );
+      return m.racine;
+    },
+  },
+  {
     nom: 'participants.groupes',
     mode: 'ecriture',
     async atteindre(contexte) {

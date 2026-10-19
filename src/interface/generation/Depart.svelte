@@ -11,6 +11,15 @@
   // repartirDeZero, et la section les porte à l'état de navigation, vivant
   // en lecture et sur un plan bloqué (§ 8.4, C9).
   //
+  // Sous le titre, avant tout lancement, les écarts du départ à la soirée
+  // (carte.ecarts, [data-ecarts-depart]) : « Depuis n° 4 : », puis une
+  // ligne par personne, son nom puis ce qui la sépare du départ — retirée,
+  // assise à la meilleure chaise libre d'un tour figé, en réserve à un tour
+  // figé, à asseoir. Quand le retenu, retenu de ce départ, en diffère à un
+  // tour coché, la phrase qui le dit ([data-ecart-retenu]) suit les cases :
+  // elle paraît et tombe avec la case qui la fait naître. Le texte est celui
+  // des clés de la carte ; rien ne s'y compose.
+  //
   // refusCases : le refus du lancement qui se pose contre les cases — tous
   // les tours figés —, {code, details}, ou null. Chaque case le désigne par
   // aria-describedby tant qu'il est posé.
@@ -34,6 +43,16 @@
     <h4 id={idTitre}>{t('generation.depart.titre', { depart: carte.depart })}</h4>
     <Commande cle="generation.commande.repartirDeZero" nom="repartirDeZero" executer={repartirDeZero} />
   </div>
+  {#if carte.ecarts.length > 0}
+    <div class="ecarts" data-ecarts-depart>
+      <p>{t('generation.depart.ecarts', { depart: carte.depart })}</p>
+      <ul>
+        {#each carte.ecarts as ecart (ecart.participant)}
+          <li data-participant={ecart.participant}>{t(ecart.nom.cle, ecart.nom.details)}{#each ecart.morceaux as morceau, rang (rang)}{t(morceau.cle, morceau.details)}{/each}</li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
   <fieldset>
     <legend>{t('generation.depart.legende')}</legend>
     <div class="cases">
@@ -56,6 +75,9 @@
       <Refus id={idRefus} refus={refusCases} />
     {/if}
   </fieldset>
+  {#if carte.ecartRetenu !== null}
+    <p class="ecart-retenu" role="status" data-ecart-retenu>{t(carte.ecartRetenu.cle, carte.ecartRetenu.details)}</p>
+  {/if}
   <p class="note">{t('generation.depart.note')}</p>
 </section>
 
@@ -124,6 +146,37 @@
   .case input:focus-visible {
     outline: 2px solid var(--couleur-focus);
     outline-offset: 1px;
+  }
+
+  /* Les écarts : « Depuis n° X : », puis une ligne par personne, sans puce. */
+  .ecarts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-1);
+  }
+
+  .ecarts p,
+  .ecarts ul {
+    margin: 0;
+  }
+
+  .ecarts ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-1);
+    padding: 0 0 0 var(--espace-3);
+    list-style: none;
+  }
+
+  /* La retouche du retenu à un tour figé : un avis, filet et marque de
+     l'avis. */
+  .ecart-retenu {
+    margin: 0;
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-avis-filet);
+    border-left: 3px solid var(--couleur-avis-marque);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-avis-fond);
   }
 
   .note {

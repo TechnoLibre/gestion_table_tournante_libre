@@ -178,6 +178,35 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
     assert.equal(t('feuilles.accueil.reserve'), 'Réserve');
   });
 
+  test('un tour d\u{2019}absence : « absente », sans table ni siège, et non la réserve ; les autres tours inchangés', () => {
+    const charge = accueil();
+    // Iris Ombrelle, assise au tour 1, n'est présente qu'à lui : le retenu
+    // la dit absente au tour 2, où elle attendait.
+    charge.participants[0].presence = [1];
+    charge.retenu.placement[1] = { sieges: [[2, 3, 4, 10], [5, 6, 7, 8]], reserve: [], absents: [1] };
+    const lignes = lignesAccueil(charge, etats(charge), cleNormalisee);
+    assert.deepEqual(ligneDe(lignes, 1).places, [
+      { tour: 1, table: 7, siege: null },
+      { tour: 2, table: null, siege: null, absente: true },
+    ]);
+    assert.deepEqual(textesLigneAccueil(ligneDe(lignes, 1), t).slice(3), ['Table 7', 'absente']);
+    // Anouk Eboulis attend toujours au tour 1 : la réserve garde son libellé.
+    assert.deepEqual(ligneDe(lignes, 10).places[0], { tour: 1, table: null, siege: null });
+    assert.deepEqual(textesLigneAccueil(ligneDe(lignes, 10), t).slice(3), ['Réserve', 'Table 7']);
+  });
+
+  test('sans aucune présence, aucune place ne porte « absente » : les lignes d\u{2019}aujourd\u{2019}hui', () => {
+    const charge = accueil();
+    for (const { places } of lignesAccueil(charge, etats(charge), cleNormalisee)) {
+      for (const place of places) assert.equal(Object.hasOwn(place, 'absente'), false);
+    }
+  });
+
+  test('le libellé d\u{2019}une absente vient avant le cas de la réserve : « absente »', () => {
+    assert.deepEqual(libellePlace({ tour: 2, table: null, siege: null, absente: true }), { cle: 'feuilles.accueil.absente', details: {} });
+    assert.equal(t('feuilles.accueil.absente'), 'absente');
+  });
+
   test('une soirée sans personne donne une liste vide', () => {
     const vide = soiree({ personnes: [], tables: [table(1, 7, 3)], plan: [{ sieges: [[]] }] });
     assert.deepEqual(lignesAccueil(vide, etats(vide), cleNormalisee), []);

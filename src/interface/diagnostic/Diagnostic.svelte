@@ -30,10 +30,14 @@
   // lorsqu'un plancher des objectifs est positif. Chacun porte
   // data-plancher-objectifs, la valeur dont il donne le plancher.
   //
+  // Les personnes non exclues qui manquent un tour (presencesPartielles) :
+  // leur nombre fait énoncer les planchers que la présence retire.
+  //
   // Une configuration que le moteur refuse n'a pas de diagnostic : son
   // code, traduit, se pose à sa place, jamais le message de l'erreur.
   import { getContext } from 'svelte';
   import { diagnostiquerCharge } from '../../application/diagnostic.js';
+  import { presencesPartielles } from '../../application/places.js';
   import { teintesAppartenances } from '../appartenances.js';
   import Carte from '../primitives/Carte.svelte';
   import { actionRemede } from '../primitives/commande.js';
@@ -58,6 +62,7 @@
           numeroDe: numeroDeCharge(charge),
           tours: charge.evenement.tours,
           criteres: criteresDuDiagnostic(charge, resultat.diagnostic),
+          absentes: presencesPartielles(charge).length,
         }),
   );
   const cartes = $derived(cartesDiagnostic(liste));

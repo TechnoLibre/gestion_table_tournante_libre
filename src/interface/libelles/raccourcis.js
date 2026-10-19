@@ -20,8 +20,13 @@ export const TABLE = new Map([
   ['raccourcis.grille.haut', 'Passe à la cellule du dessus.'],
   ['raccourcis.grille.suivante', 'Valide la saisie en cours et passe à la cellule suivante.'],
   ['raccourcis.grille.precedente', 'Valide la saisie en cours et revient à la cellule précédente.'],
-  ['raccourcis.grille.editer', "Ouvre la saisie de la cellule, ou bascule l'exclusion."],
+  ['raccourcis.grille.editer', "Ouvre la saisie de la cellule \u{2014} les cases de présence comprises \u{2014}, ou bascule l'exclusion."],
   ['raccourcis.grille.effacer', 'Efface le refus affiché sous la cellule.'],
+  // --- Les cases d'une saisie de présence, dans la grille ou la fiche ------------
+  ['raccourcis.cases.precedente', 'Passe à la case du tour précédent.'],
+  ['raccourcis.cases.suivante', 'Passe à la case du tour suivant.'],
+  ['raccourcis.cases.premiere', 'Passe à la case du premier tour.'],
+  ['raccourcis.cases.derniere', 'Passe à la case du dernier tour.'],
   // --- Un champ --------------------------------------------------------------------
   ['raccourcis.champ.valider', 'Valide la saisie.'],
   ['raccourcis.champ.rendre', "Rend la valeur d'avant la saisie."],

@@ -18,7 +18,10 @@
 //
 // L'infobulle des deux graphiques et la première table du jumeau portent la
 // même ligne entière par rang, le pourcentage suivi du compte de la ligne
-// (« 24 sur 27 ») ; la seconde table, la répartition des rencontres.
+// (« 24 sur 27 ») ; la seconde table, la répartition des rencontres. Dès
+// qu'une personne mesurée manque un tour, la ligne écrit ses absences,
+// « absente à 2 tours », vide pour qui vient à chaque tour : un tour
+// d'absence n'est pas un tour non assis.
 
 /** Les graduations de l'axe du second graphique : une valeur, écrite par
  *  format.nombre, suivie du signe sous la clé de l'axe (contrainte 44). */
@@ -42,6 +45,7 @@ const COLONNES_LIGNE = [
   ['appartenances', 'nombre'],
   ['borneDiversite', 'nombre'],
   ['toursNonAssis', 'nombre'],
+  ['absences', 'texte'],
   ['marque', 'texte'],
 ];
 const DES_APPARTENANCES = new Set(['appartenances', 'borneDiversite']);
@@ -79,6 +83,8 @@ export function profilDe(detail, { t }) {
   const personnes = new Map(detail.personnes.map((personne) => [personne.id, personne]));
   const avecAppartenances = detail.G > 1;
   const colonnesAppartenances = detail.G > 0;
+  const colonneAbsences = profil.some(({ toursAbsents }) => toursAbsents > 0);
+  const ecrite = (cle) => (colonnesAppartenances || !DES_APPARTENANCES.has(cle)) && (colonneAbsences || cle !== 'absences');
   let phrase = null;
   if (detail.G === 1) phrase = 'uneAppartenance';
   else if (detail.G === 0) phrase = 'aucuneAppartenance';
@@ -86,7 +92,7 @@ export function profilDe(detail, { t }) {
   const valeursDe = (champ) => profil.map((rang) => rang[champ]);
   const rencontres = { libelle: t('qualite.profil.serie.rencontres'), valeurs: valeursDe('rencontres') };
 
-  const colonnes = COLONNES_LIGNE.filter(([cle]) => colonnesAppartenances || !DES_APPARTENANCES.has(cle)).map(([cle, genre]) => ({
+  const colonnes = COLONNES_LIGNE.filter(([cle]) => ecrite(cle)).map(([cle, genre]) => ({
     cle,
     libelle: t(`qualite.profil.colonne.${cle}`),
     genre,
@@ -111,6 +117,7 @@ export function profilDe(detail, { t }) {
       ligne.appartenances = rang.appartenances;
       ligne.borneDiversite = rang.borneDiversite;
     }
+    if (colonneAbsences) ligne.absences = rang.toursAbsents === 0 ? null : t('qualite.profil.absences', { n: rang.toursAbsents });
     return ligne;
   });
   const infobulle = { colonnes, lignes };

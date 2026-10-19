@@ -427,6 +427,7 @@ export function tableauCommandes(commandes = COMMANDES, exemples = EXEMPLES_COMM
 const NOMS_CONTEXTES = new Map([
   ['plan', 'Plan'],
   ['grille', 'Grille des participants'],
+  ['cases', 'Cases de présence, grille ou fiche'],
   ['champ', 'Champ de saisie'],
   ['commande', 'Bouton de commande'],
   ['boutonMenu', 'Bouton de menu'],

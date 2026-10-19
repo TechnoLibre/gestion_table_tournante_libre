@@ -21,7 +21,7 @@ import { rechercher } from '../../moteur/recherche.js';
 import { capacite, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { exigerColonnes, ligneInfobulle } from './graphiques/pointage.js';
+import { SIGNES, exigerColonnes, ligneInfobulle } from './graphiques/pointage.js';
 import { graduerPourcent, profilDe } from './profil.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -317,5 +317,59 @@ describe('profilDe : les cas limites (§ 12.6, B15)', () => {
   test('aucun profil sans détail comparable', () => {
     assert.equal(profilDe(null, outils), null);
     assert.equal(profilDe({ statut: 'fautif' }, outils), null);
+  });
+});
+
+describe('profilDe : une personne absente à un tour (§ 12.3, § 12.6)', () => {
+  test('son rang porte la marque « absente » dans les deux graphiques ; l’infobulle et le jumeau écrivent « absente à n tours »', () => {
+    const charge = chargeSix();
+    charge.participants[5].presence = [1, 2];
+    const detail = detailDe(charge);
+    const rang = detail.profil.findIndex(({ id }) => id === 6);
+    assert.equal(detail.profil[rang].toursAbsents, 1);
+    assert.equal(detail.profil[rang].marque, 'absente');
+    const { comptes, pourcentages, infobulle, tableaux } = profilDe(detail, outils);
+    assert.equal(comptes.marques[rang], 'absente');
+    assert.equal(pourcentages.marques[rang], 'absente');
+    // La colonne des absences suit les tours non assis, avant la marque.
+    assert.deepEqual(cles(infobulle.colonnes).slice(-3), ['toursNonAssis', 'absences', 'marque']);
+    const colonne = infobulle.colonnes.find(({ cle }) => cle === 'absences');
+    assert.deepEqual(colonne, { cle: 'absences', libelle: t('qualite.profil.colonne.absences'), genre: 'texte' });
+    assert.equal(infobulle.lignes[rang].absences, 'absente à 1 tour');
+    assert.equal(infobulle.lignes[rang].marque, 'absente à un tour au moins');
+    detail.profil.forEach((autre, i) => {
+      if (i !== rang) assert.equal(infobulle.lignes[i].absences, null, `rang ${i + 1}`);
+    });
+    assert.deepEqual(tableaux[0].colonnes, infobulle.colonnes);
+    // L'infobulle écrit la ligne entière, absences comprises.
+    const ecrite = ligneInfobulle(infobulle.colonnes, infobulle.lignes[rang], format.nombre);
+    assert.equal(ecrite.find(({ cle }) => cle === 'absences').texte, 'absente à 1 tour');
+  });
+
+  test('chaque signe a son libellé de légende, celui de la marque du profil ; l’absente se lit « absente à un tour au moins »', () => {
+    for (const signe of SIGNES) assert.equal(t(`graphiques.signe.${signe}`), t(`qualite.profil.marque.${signe}`), signe);
+    assert.equal(t('graphiques.signe.absente'), 'absente à un tour au moins');
+  });
+
+  test('les absences ne comptent que les tours d’absence, jamais les tours non assis : un profil forgé les fait suivre', () => {
+    const charge = chargeSix();
+    charge.participants[5].presence = [1, 2];
+    const detail = structuredClone(detailDe(charge));
+    const rang = detail.profil.findIndex(({ id }) => id === 6);
+    Object.assign(detail.profil[rang], { toursNonAssis: 1, toursAbsents: 2, marque: 'reserve' });
+    const { infobulle } = profilDe(detail, outils);
+    assert.equal(infobulle.lignes[rang].absences, 'absente à 2 tours');
+    assert.equal(infobulle.lignes[rang].toursNonAssis, 1);
+    assert.equal(infobulle.lignes[rang].marque, t('qualite.profil.marque.reserve'));
+  });
+
+  test('le texte des absences s’accorde au nombre de tours', () => {
+    assert.equal(t('qualite.profil.absences', { n: 1 }), 'absente à 1 tour');
+    assert.equal(t('qualite.profil.absences', { n: 2 }), 'absente à 2 tours');
+  });
+
+  test('sans absence, la colonne des absences n’est pas écrite', () => {
+    const { infobulle } = profilDe(detailDe(chargeSix()), outils);
+    assert.equal(cles(infobulle.colonnes).includes('absences'), false);
   });
 });

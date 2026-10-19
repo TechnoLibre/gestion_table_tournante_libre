@@ -5,7 +5,8 @@
 // fiche (§ 14.6). Chaque clé commence par « participants. ».
 //
 // participants.entete.comptes compose la ligne de comptes de la carte
-// (comptesEntete, entete.js), ses parties séparées d'un point médian ;
+// (comptesEntete, entete.js), ses parties séparées d'un point médian, les
+// présences partielles en dernier, seulement quand il y en a ;
 // participants.legende.* nomme la légende des appartenances et chacune de
 // ses pastilles, le nom puis le compte ; participants.legendeEtiquettes.titre
 // nomme la légende des étiquettes, dont chaque pastille se compose comme
@@ -21,7 +22,14 @@
 // groupe et ses commandes ; participants.conflit.* les conflits du
 // placement montré dans la liste groupée : la marque d'un groupe et celle
 // d'une personne, puis chaque ligne de conflit — son lieu, la liaison de
-// deux noms, sa raison par règle.
+// deux noms, sa raison par règle. participants.presence.* porte la présence
+// par tour (participants/presence.js) : la cellule et l'en-tête de groupe
+// — « tous », ou les tours nommés par toursNommes —, puis les cases d'une
+// saisie, leur groupe et ses commandes ; participants.fiche.presence* la
+// rubrique de la fiche, et participants.fiche.absente l'étape d'un tour
+// d'absence dans l'itinéraire.
+
+import { toursNommes } from '../../application/libelles/aides.js';
 
 // Un nombre suivi de son nom, au singulier pour 0 et 1.
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
@@ -58,17 +66,19 @@ export const TABLE = new Map([
   ['participants.colonne.courriel', 'Courriel'],
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
   ['participants.colonne.exclu', 'Exclusion'],
+  ['participants.colonne.presence', 'Présence'],
   ['participants.colonne.notes', 'Notes'],
 
   // --- L'en-tête de la carte : la ligne de comptes et la légende -----------
   [
     'participants.entete.comptes',
-    ({ personnes, aPlacer, exclues, appartenances }) =>
+    ({ personnes, aPlacer, exclues, appartenances, partielles }) =>
       [
         compte(personnes, 'personne', 'personnes'),
         `${aPlacer} à placer`,
         compte(exclues, 'exclue', 'exclues'),
         compte(appartenances, 'appartenance', 'appartenances'),
+        ...(partielles > 0 ? [compte(partielles, 'présence partielle', 'présences partielles')] : []),
       ].join(' \u{00B7} '),
   ],
   ['participants.legende.titre', 'Appartenances'],
@@ -96,6 +106,15 @@ export const TABLE = new Map([
   ['participants.grille.presente', 'présente'],
   ['participants.grille.vide', 'Aucun participant. Ajoutez une personne, ou collez une liste dans la grille.'],
   ['participants.grille.aucunResultat', 'Aucune personne ne correspond au filtre.'],
+
+  // --- La présence par tour : cellule, groupe, cases d'une saisie ----------
+  ['participants.presence.tous', 'tous'],
+  ['participants.presence.tours', ({ tours }) => toursNommes(tours)],
+  ['participants.presence.editeur', ({ nom }) => `Présence de ${nom}, une case par tour`],
+  ['participants.presence.case', ({ tour }) => `Tour ${tour}`],
+  ['participants.presence.caseCourte', ({ tour }) => String(tour)],
+  ['participants.presence.tousLesTours', 'Tous les tours'],
+  ['participants.presence.appliquer', 'Appliquer'],
 
   // --- La liste groupée par une colonne ou plusieurs ------------------------
   ['participants.groupe.grouperPar', 'Grouper par'],
@@ -165,6 +184,9 @@ export const TABLE = new Map([
   ['participants.fiche.aucunRetenu', 'Aucun placement retenu ne la nomme.'],
   ['participants.fiche.etiquettes', 'Étiquettes'],
   ['participants.fiche.aucuneEtiquette', 'Aucune étiquette.'],
+  ['participants.fiche.presence', 'Présence'],
+  ['participants.fiche.presenceLegende', 'Présente aux tours'],
+  ['participants.fiche.absente', 'absente'],
 
   // --- La rubrique « Rencontres » de la fiche (§ 12.5, D33) -----------------
   // La ligne de la personne dans le placement que le plan montre, celui que

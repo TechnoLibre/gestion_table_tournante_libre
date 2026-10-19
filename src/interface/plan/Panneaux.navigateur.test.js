@@ -8,7 +8,8 @@
 // la pression longue ; cliquer une chaise la sélectionne et ouvre son
 // panneau ; le choix en attente relie une personne et une place sans
 // glisser ; le menu fait ce que fait le geste ; un refus se pose sur la
-// place ; les listes de travail mènent à la place ou à la personne.
+// place ; les listes de travail mènent à la place ou à la personne ; une
+// absente au tour a sa carte, qui ouvre sa fiche, hors de la réserve.
 //
 // Chaque épreuve monte App par monterApp, sur le système de fichiers simulé
 // où un fichier d'état d'épreuve est posé puis ouvert, au cadre de
@@ -1928,5 +1929,162 @@ describe('la mise en évidence d’une personne : posée et ôtée par un geste,
     await attendre(() => expect(chaiseMarquee(m)).toBe('3:2'));
     expect(m.ui.etat().miseEnEvidence).toBe(personne);
     expect(fichiers(m)).toEqual(avant);
+  });
+});
+
+// --- La présence par tour (§ 7.1, § 5.8) ---------------------------------------
+
+// Trois tables de quatre, neuf personnes, trois tours, la proposition 1
+// retenue ; puis les gestes reçus, chacun par sa commande, le retenu ajusté
+// dans la même entrée.
+function avecPresences(gestes) {
+  let charge = chargeDe({
+    id: 'evt-presence',
+    places: [4, 4, 4],
+    personnes: 9,
+    tours: [
+      [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+      [[1, 4, 7], [2, 5, 8], [3, 6, 9]],
+      [[1, 5, 9], [2, 6, 7], [3, 4, 8]],
+    ],
+  });
+  for (const [nom, args] of gestes) charge = executer(charge, nom, args);
+  return charge;
+}
+
+// Iris Ombrelle présente aux tours 1 et 2 : le retenu la dit absente au tour 3.
+const irisPartie = () => avecPresences([['changerPresence', { id: IRIS, tours: [1, 2] }]]);
+
+// La personne ajoutée, présente aux tours 2 et 3 : le retenu la réserve à
+// ces tours.
+const FIRMIN = 10;
+const firminArrive = () =>
+  avecPresences([['ajouterParticipant', { champs: { nom: 'Galet', prenom: 'Firmin' }, presence: [2, 3] }]]);
+
+async function montrerTour(m, tour) {
+  m.ui.montrerTour(tour);
+  flushSync();
+  await images(2);
+}
+
+describe('la présence par tour sur le plan : les absentes, la réserve du retenu, la mise en évidence (§ 7.1, § 5.8)', () => {
+  test('la carte « Absentes » paraît au tour d\u{2019}absence, sous la réserve, et quitte le DOM au tour de présence ; la réserve ne contient pas l\u{2019}absente', async () => {
+    const m = await ouvrir(irisPartie());
+    await montrerTour(m, 1);
+    expect(dans(m, '[data-absentes]')).toBeNull();
+    expect(dans(m, `[data-reserve] [data-participant="${IRIS}"]`)).toBeNull();
+
+    await montrerTour(m, 3);
+    const carte = await attendre(() => {
+      const element = dans(m, '[data-absentes="3"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    const boutons = [...carte.querySelectorAll('[data-participant]')];
+    expect(boutons.map((bouton) => Number(bouton.dataset.participant))).toEqual([IRIS]);
+    expect(texteDe(boutons[0])).toBe('Iris Ombrelle \u{2014} présente aux tours 1 et 2');
+    expect(boutons[0].hasAttribute('aria-pressed')).toBe(false);
+    expect(texteDe(carte)).toContain(t('plan.absentes.tour', { tour: 3 }));
+    const reserve = dans(m, '[data-reserve="3"]');
+    expect(reserve.querySelector(`[data-participant="${IRIS}"]`)).toBeNull();
+    expect(reserve.compareDocumentPosition(carte) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await montrerTour(m, 2);
+    expect(dans(m, '[data-absentes]')).toBeNull();
+  });
+
+  test('le bouton d\u{2019}une absente ouvre sa fiche, sans la choisir ni rien écrire', async () => {
+    const m = await ouvrir(irisPartie());
+    await montrerTour(m, 3);
+    const avant = fichiers(m);
+    const bouton = await attendre(() => {
+      const element = dans(m, `[data-absentes="3"] [data-participant="${IRIS}"]`);
+      expect(element).not.toBeNull();
+      return element;
+    });
+    await cliquer(bouton);
+    await attendre(() => expect(m.ui.etat().fiche).toBe(IRIS));
+    expect(m.ui.etat().section).toBe('participants');
+    expect(m.ui.etat().choix).toBeNull();
+    await rienEcrit(m, avant);
+  });
+
+  test('« En réserve dans le placement retenu » : un clic montre le premier tour, puis choisit la personne ; placée, elle quitte ce tour de la liste', async () => {
+    const m = await ouvrir(firminArrive());
+    await montrerTour(m, 1);
+    const liste = dans(m, '[data-liste-travail="reserves"]');
+    expect(liste).not.toBeNull();
+    const bouton = liste.querySelector(`[data-participant="${FIRMIN}"]`);
+    expect(texteDe(bouton)).toBe('Firmin Galet \u{2014} en réserve aux tours 2 et 3');
+    expect(texteDe(dans(m, `#${liste.getAttribute('aria-labelledby')}`))).toBe(t('plan.listesTravail.reserves'));
+
+    await cliquer(bouton);
+    await attendre(() => expect(m.ui.etat().tour).toBe(2));
+    expect(m.ui.etat().choix).toEqual({ genre: 'personne', participant: FIRMIN, depuis: null });
+    await attendre(() => expect(bouton.getAttribute('aria-pressed')).toBe('true'));
+
+    await cliquer(bouton);
+    await attendre(() => expect(bouton.getAttribute('aria-pressed')).toBe('false'));
+    expect(m.ui.etat().choix).toBeNull();
+    expect(m.ui.etat().tour).toBe(2);
+
+    await cliquer(bouton);
+    await attendre(() => expect(bouton.getAttribute('aria-pressed')).toBe('true'));
+
+    const r = fichiers(m).revision;
+    await cliquerChaise(m, 1, 4);
+    await cliquer(actionPlace(m, 'assigner'));
+    await uneEntree(m, r);
+    await attendre(() =>
+      expect(texteDe(dans(m, `[data-liste-travail="reserves"] [data-participant="${FIRMIN}"]`))).toBe(
+        'Firmin Galet \u{2014} en réserve au tour 3',
+      ),
+    );
+  });
+
+  test('la liste des réserves du retenu : « Aucun. » quand il n\u{2019}en laisse pas, absente sans retenu', async () => {
+    const m = await ouvrir(irisPartie());
+    const liste = dans(m, '[data-liste-travail="reserves"]');
+    expect(liste).not.toBeNull();
+    expect(liste.querySelectorAll('[data-participant]')).toHaveLength(0);
+    expect(texteDe(liste.nextElementSibling)).toBe(t('plan.listesTravail.aucun'));
+    demonter(m);
+
+    const sans = await ouvrir(sansProposition());
+    expect(dans(sans, '[data-liste-travail="pressentis"]')).not.toBeNull();
+    expect(dans(sans, '[data-liste-travail="reserves"]')).toBeNull();
+  });
+
+  test('la barre de vue dit de la personne mise en évidence « absente au tour 3 », au seul tour de son absence', async () => {
+    const m = await ouvrir(irisPartie(), { mode: 'lecture' });
+    m.ui.mettreEnEvidence(IRIS);
+    await montrerTour(m, 3);
+    const barre = await attendre(() => {
+      const element = dans(m, `[data-evidence="${IRIS}"]`);
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(texteDe(barre)).toContain('Iris Ombrelle \u{2014} absente au tour 3');
+    await montrerTour(m, 2);
+    expect(texteDe(dans(m, `[data-evidence="${IRIS}"]`))).not.toContain('absente');
+  });
+
+  test('assignée à un tour d\u{2019}absence, une pressentie reçoit PERSONNE_ABSENTE_AU_TOUR sur la place, remède « La dire présente aux tours 1 et 3 »', async () => {
+    const charge = avecPresences([
+      ['modifierParticipant', { id: THEO, champs: { titrePressenti: 'hôte' } }],
+      ['changerPresence', { id: THEO, tours: [1] }],
+    ]);
+    const m = await ouvrir(charge);
+    await montrerTour(m, 3);
+    expect(dans(m, `[data-absentes="3"] [data-participant="${THEO}"]`)).not.toBeNull();
+    const avant = fichiers(m);
+    await cliquer(dans(m, `[data-liste-travail="pressentis"] [data-participant="${THEO}"]`));
+    await attendre(() => expect(m.ui.etat().choix?.participant).toBe(THEO));
+    await cliquerChaise(m, 2, 4);
+    await cliquer(actionPlace(m, 'assigner'));
+    const message = await refusSurLaPlace(m, chaiseEl(m, 2, 4), 2, ['PERSONNE_ABSENTE_AU_TOUR'], avant);
+    const remede = message.querySelector('[data-refus="PERSONNE_ABSENTE_AU_TOUR"] [data-commande]');
+    expect(remede.dataset.commande).toBe('changerPresence');
+    expect(texteDe(remede)).toBe('La dire présente aux tours 1 et 3');
   });
 });

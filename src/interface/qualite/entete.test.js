@@ -26,7 +26,7 @@ import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { COLONNES, GROUPES_COLONNES, explicationDeColonne, lireColonne, tableau, texteCellule } from '../propositions/modele.js';
 import { TUILES_A_POURCENTAGE, enteteDe } from './entete.js';
-import { celluleDeTuile } from './entete.js';
+import { celluleDeTuile, presenceDeCharge } from './entete.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
@@ -470,5 +470,76 @@ describe('celluleDeTuile : la tuile et la cellule d’une colonne de la comparai
       assert.equal(cellule.pourcentage, null, nom);
       assert.equal(cellule.texte, texteCellule(lireColonne(vue.ligne, nom), outils), nom);
     }
+  });
+});
+
+describe('enteteDe : la présence par tour (§ 12.2, § 12.6)', () => {
+  // Cinq membres de la Coopérative Aubier pour deux tables de trois : le
+  // plancher des collisions cumulées tient sous absence. presence : celle
+  // de Sidonie Varech, sans appartenance.
+  const chargeAbsente = (presence) => {
+    const charge = chargeSix();
+    for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+    if (presence !== null) charge.participants[5].presence = presence;
+    return charge;
+  };
+  const avecPresence = (charge) => ({ ...outils, presenceDe: presenceDeCharge(charge) });
+
+  test('une absence : seule la tuile de l’écart d’itinéraire dit son plancher non prouvé ; les autres planchers restent écrits', () => {
+    const charge = generee(chargeAbsente([1, 2]));
+    const vue = vueDe(charge);
+    assert.deepEqual(vue.detail.planchersRetires, ['ecartItineraire']);
+    const entete = enteteDe(vue, avecPresence(charge));
+    const ecart = tuile(entete, 'ecartItineraireMax');
+    assert.equal(ecart.plancherNonProuve, t('qualite.entete.plancherNonProuve'));
+    assert.equal(ecart.plancherNonProuve, 'Plancher non prouvé : une personne au moins est absente à un tour.');
+    assert.deepEqual(lignesDePlancher(ecart.bornes), []);
+    for (const autre of tuiles(entete).filter(({ nom }) => nom !== 'ecartItineraireMax')) assert.equal(autre.plancherNonProuve, null, autre.nom);
+    assert.deepEqual(vue.detail.bornes.planchers.collisionsCumulees, { plancher: 12, atteint: true });
+    assert.deepEqual(tuile(entete, 'collisionsCumulees').bornes, [t('qualite.tuile.plancherAtteint', { plancher: 12 })]);
+  });
+
+  test('sans absence, aucune tuile ne dit de plancher non prouvé', () => {
+    const charge = generee(chargeAbsente(null));
+    const vue = vueDe(charge);
+    assert.deepEqual(vue.detail.planchersRetires, []);
+    for (const autre of tuiles(enteteDe(vue, avecPresence(charge)))) assert.equal(autre.plancherNonProuve, null, autre.nom);
+  });
+
+  test('la personne au rang 1 présente à un seul tour : l’infobulle de sa tuile ajoute sa présence à l’explication', () => {
+    const charge = generee(chargeAbsente([2]));
+    const vue = vueDe(charge);
+    // Présente à un tour sur trois, elle rencontre le moins de monde.
+    assert.equal(vue.detail.bornes.rang1.id, 6);
+    const entete = enteteDe(vue, avecPresence(charge));
+    const minimum = tuile(entete, 'rencontresTous');
+    const explication = t(explicationDeColonne('rencontresTous'));
+    assert.equal(t(minimum.infobulle.cle, minimum.infobulle.details), `${explication} Sidonie Varech, au rang 1, est présente au tour 2.`);
+    assert.equal(t('qualite.entete.rang1Presence', { tours: [2] }), 'présente au tour 2');
+    assert.equal(t('qualite.entete.rang1Presence', { tours: [1, 3] }), 'présente aux tours 1 et 3');
+    // Les autres tuiles gardent l'explication de leur colonne, seule.
+    for (const autre of tuiles(entete).filter(({ nom }) => nom !== 'rencontresTous')) {
+      assert.deepEqual(autre.infobulle, { cle: autre.explication, details: {} }, autre.nom);
+    }
+  });
+
+  test('la personne au rang 1 présente à tous les tours : l’infobulle est l’explication seule, avec ou sans lecture de la présence', () => {
+    const charge = generee(chargeSix());
+    const vue = vueDe(charge);
+    for (const lue of [outils, avecPresence(charge)]) {
+      const minimum = tuile(enteteDe(vue, lue), 'rencontresTous');
+      assert.deepEqual(minimum.infobulle, { cle: minimum.explication, details: {} });
+    }
+  });
+
+  test('presenceDeCharge lit la présence saisie : null pour tous les tours, une copie de la liste sinon', () => {
+    const charge = chargeAbsente([1, 3]);
+    const presenceDe = presenceDeCharge(charge);
+    assert.equal(presenceDe(1), null);
+    assert.deepEqual(presenceDe(6), [1, 3]);
+    presenceDe(6).push(2);
+    assert.deepEqual(charge.participants[5].presence, [1, 3]);
+    assert.equal(presenceDe(99), null);
+    assert.equal(presenceDeCharge(null)(1), null);
   });
 });

@@ -31,6 +31,7 @@ import { planDuDepart } from '../../application/depart.js';
 import { creerExecuteurTravailleur } from '../../application/executeur_travailleur.js';
 import { ErreurAnnulee, ErreurGeneration, creerExecuteurDirect } from '../../application/generation.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
+import { nomAffiche } from '../../application/personnes.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { constante } from '../../geometrie/constantes.js';
 import { rechercher } from '../../moteur/recherche.js';
@@ -1134,7 +1135,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
     const plan = planDuDepart(charge(m), 2);
     await cliquer(m, genererDepuis(m));
     await attendre(() => expect(enCours(m)).toBe(false));
-    expect(lancements.map(({ options }) => options.depart)).toEqual([{ plan, toursFiges: [1] }]);
+    expect(lancements.map(({ options }) => options.depart)).toEqual([{ plan, toursFiges: [1], reservesImposees: [] }]);
     const ajoutees = charge(m).propositions.map(({ id }) => id).filter((id) => !avant.includes(id));
     expect(ajoutees.length).toBeGreaterThan(0);
     for (const id of ajoutees) expect(charge(m).propositions.find((p) => p.id === id)).toMatchObject({ depart: 2, toursFiges: [1] });
@@ -1387,5 +1388,111 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
     expect(m.ui.etat().depart).toBeNull();
     expect(carteDepart(m)).toBeNull();
     expect(generer(m)).not.toBeNull();
+  });
+});
+
+// --- Le départ et la soirée telle qu'elle est (§ 5.7) ------------------------------
+
+const ecartsDepart = (m) => carteDepart(m)?.querySelector('[data-ecarts-depart]') ?? null;
+const ecartRetenu = (m) => carteDepart(m)?.querySelector('[data-ecart-retenu]') ?? null;
+const ligneEcart = (m, id) => ecartsDepart(m).querySelector(`li[data-participant="${id}"]`);
+const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
+
+// Ajoute une personne par la séance, présente à tous les tours ; rend son
+// identifiant.
+async function ajouter(m, nom, prenom) {
+  await m.seance.executer('ajouterParticipant', { champs: { nom, prenom } });
+  flushSync();
+  return charge(m).participants.at(-1).id;
+}
+
+describe('le départ en dérive par ses participants (§ 5.7)', () => {
+  test('avant le lancement, la carte dit l’ajoutée à présence « tous » assise à la meilleure chaise libre du tour 1, figé, et la réservée à une table pleine en réserve à ce tour ; puis l’issue « en dérive, n’est pas classée »', async () => {
+    const { executeur, lancements } = executeurTransforme();
+    const m = await demonstration('petite', { executeur });
+    await regler(m, { nombre: 2, arret: 2000 });
+    // Une table de plus avant les propositions : trois chaises libres à
+    // chaque tour du départ.
+    await m.seance.executer('creerTable', { forme: 'ronde' });
+    await avecPropositions(m);
+    const depart = charge(m).propositions[0];
+    const pleine = depart.tables[depart.placement[0].sieges.findIndex((liste, rang) => liste.length === depart.capacites[rang])];
+    const libre = await ajouter(m, 'Quenouillard', 'Aubépine');
+    const reservee = await ajouter(m, 'Fenouillet', 'Gaspard');
+    await m.seance.executer('reserver', { participant: reservee, table: pleine, portee: 'tous' });
+    flushSync();
+
+    const ecritures = m.trace.length;
+    m.ui.choisirDepart(depart.id);
+    flushSync();
+    await cocher(m, 1);
+    const nom = (id) => nomAffiche(charge(m).participants.find((personne) => personne.id === id));
+    expect(texteDe(ecartsDepart(m).querySelector('p'))).toBe(t('generation.depart.ecarts', { depart: depart.id }));
+    expect(texteDe(ligneEcart(m, libre))).toBe(`${nom(libre)} — assise à la meilleure chaise libre du tour 1, figé — à asseoir aux tours 2 à 4`);
+    expect(texteDe(ligneEcart(m, reservee))).toBe(
+      `${nom(reservee)} — en réserve au tour 1, figé : sa table n'a plus de chaise libre — à asseoir aux tours 2 à 4`,
+    );
+    expect(ecartsDepart(m).querySelectorAll('li')).toHaveLength(2);
+    expect(ecartRetenu(m)).toBeNull();
+    // Sous le titre, au-dessus de « Générer depuis » ; rien d'écrit.
+    expect(ecartsDepart(m).getBoundingClientRect().bottom).toBeLessThanOrEqual(genererDepuis(m).getBoundingClientRect().top);
+    expect(m.trace.length).toBe(ecritures);
+
+    await cliquer(m, genererDepuis(m));
+    await attendre(() => expect(enCours(m)).toBe(false));
+    expect(lancements.map(({ options }) => options.depart.reservesImposees)).toEqual([[{ participant: reservee, tour: 1 }]]);
+    expect(issue(m).textContent).toContain(`n° ${depart.id}, en dérive, n'est pas classée`);
+    expect(section(m).querySelector('[data-commande="comparerIssue"]')).toBeNull();
+    // Le départ reste choisi, et la carte dit toujours ses écarts.
+    expect(m.ui.etat().depart).toEqual({ id: depart.id, toursFiges: [1] });
+    expect(ligneEcart(m, libre)).not.toBeNull();
+  });
+
+  test('un départ choisi reste choisi quand une présence change : la carte dit la personne retirée des tours où elle est absente', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
+    await avecPropositions(m);
+    m.ui.choisirDepart(2);
+    flushSync();
+    await cocher(m, 1);
+    expect(ecartsDepart(m)).toBeNull();
+    await m.seance.executer('changerPresence', { id: 1, tours: [1, 2] });
+    flushSync();
+    expect(m.ui.etat().depart).toEqual({ id: 2, toursFiges: [1] });
+    expect(genererDepuis(m).textContent).toBe('Générer depuis n° 2');
+    const nom = nomAffiche(charge(m).participants.find(({ id }) => id === 1));
+    expect(texteDe(ligneEcart(m, 1))).toBe(`${nom} — retirée des tours 3 et 4`);
+  });
+
+  test('un retenu retouché à un tour figé : la phrase de DEPART_ECART_AU_RETENU sous ce tour coché, puis dans les avertissements de l’issue ; rien sous un autre départ', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
+    await regler(m, { nombre: 2, arret: 2000 });
+    await avecPropositions(m);
+    await m.seance.executer('retenirProposition', { id: 1 });
+    const [a] = charge(m).retenu.placement[0].sieges[0];
+    const [b] = charge(m).retenu.placement[0].sieges[1];
+    await m.seance.executer('echangerDansRetenu', { tour: 1, a, b });
+    flushSync();
+    const phrase = t('DEPART_ECART_AU_RETENU', { depart: 1, tours: [1] });
+
+    m.ui.choisirDepart(1);
+    flushSync();
+    expect(ecartRetenu(m)).toBeNull();
+    await cocher(m, 1);
+    expect(texteDe(ecartRetenu(m))).toBe(phrase);
+    expect(phrase).toBe("Le tour figé 1 vient de la proposition n° 1 : les retouches du placement retenu à ce tour n'y sont pas.");
+    await cocher(m, 1);
+    expect(ecartRetenu(m)).toBeNull();
+    m.ui.choisirDepart(2);
+    flushSync();
+    await cocher(m, 1);
+    expect(ecartRetenu(m)).toBeNull();
+
+    m.ui.choisirDepart(1);
+    flushSync();
+    await cocher(m, 1);
+    await cliquer(m, genererDepuis(m));
+    await attendre(() => expect(enCours(m)).toBe(false));
+    const avertissement = section(m).querySelector('[data-issue] ~ [data-avertissement="DEPART_ECART_AU_RETENU"]');
+    expect(texteDe(avertissement)).toBe(phrase);
   });
 });

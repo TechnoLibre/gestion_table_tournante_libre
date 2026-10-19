@@ -525,6 +525,26 @@ describe('retenir sur un retenu ajusté', () => {
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(3));
     expect(fenetreOuverte(m)).toBeNull();
   });
+
+  test('un retenu ajusté par un changement de présence seul : « Tel que la proposition n° 2, ajusté aux participants. » en trois lignes au plus ; retenir la 3 s’exécute sans fenêtre, une entrée', async () => {
+    const m = await ouvrir(chargeSix());
+    actionDe(ligne(m, 2), 'retenir').click();
+    await attendre(() => expect(charge(m).retenu?.proposition).toBe(2));
+    await m.seance.executer('changerPresence', { id: 1, tours: [1, 2] });
+    const libelle = t('propositions.retenu.presence', { proposition: 2 });
+    expect(libelle).toBe('Tel que la proposition n° 2, ajusté aux participants.');
+    const cellule = await attendre(() => {
+      const trouvee = ligneRetenu(m).querySelector('td[data-colonne="proposition"]');
+      expect(texteDe(trouvee)).toBe(`${format.nombre(2)} ${libelle}`);
+      return trouvee;
+    });
+    expect(lignesDuTexte(cellule)).toBeLessThanOrEqual(3);
+    const avant = revision(m);
+    actionDe(ligne(m, 3), 'retenir').click();
+    await attendre(() => expect(charge(m).retenu?.proposition).toBe(3));
+    expect(fenetreOuverte(m)).toBeNull();
+    expect(revision(m)).toBe(avant + 1);
+  });
 });
 
 // --- Effacer (§ 5.7) ----------------------------------------------------------------
@@ -1897,7 +1917,7 @@ async function etatsPendant(m, geste) {
 }
 
 describe('la dérivée au tableau des propositions, et ses commandes de ligne (§ 5.7, § 12, C7, C14, D76, D85)', () => {
-  test('une dérivée porte sa filiation sous son numéro, et une ligne en dérive ou fautive ne porte ni « Repartir d’elle » ni « Comparer »', async () => {
+  test('une dérivée porte sa filiation sous son numéro ; une ligne en dérive par une exclusion porte « Repartir d’elle », jamais « Comparer »', async () => {
     // Les trois premières en dérive, une personne exclue après elles ; deux
     // de plus générées ensuite, comparables ; la 4 retenue, non ajustée.
     let chargeLue = avecFiliations(chargeSix(), [
@@ -1940,9 +1960,12 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     expect(filiationDe(ligneRetenu(m))).toBeNull();
     expect(texteDe(ligneRetenu(m))).toContain(t('propositions.retenu.origine', { proposition: 4 }));
 
+    // En dérive par ses seuls participants, la ligne sert encore de départ :
+    // la génération part d'elle ajustée à la présence.
     for (const id of [1, 2, 3]) {
       const noms = commandesDe(ligne(m, id));
-      expect(noms, String(id)).toEqual(['voir', 'qualite', 'retenir']);
+      expect(noms, String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir']);
+      expect(actionDe(ligne(m, id), 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
     }
     for (const id of [4, 5]) {
       const tr = ligne(m, id);
@@ -2044,9 +2067,13 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
   }
 
   test('un retenu en dérive ne porte pas « Comparer », même quand deux propositions comparables l’offrent', async () => {
-    // La 1 retenue, puis une personne exclue : le retenu passe en dérive ;
-    // deux de plus générées ensuite, comparables.
-    const enDerive = executer(executer(chargeSix(), 'retenirProposition', { id: 1 }), 'exclureParticipant', { id: 6 });
+    // La 1 retenue, puis une personne ajoutée au fichier hors des commandes,
+    // que le retenu n'a donc pas suivie : il passe en dérive ; deux de plus
+    // générées ensuite, comparables. Toute commande qui change les
+    // participants ajuste le retenu, qui ne dérive pas par elle.
+    const enDerive = structuredClone(executer(chargeSix(), 'retenirProposition', { id: 1 }));
+    enDerive.participants.push({ id: 7, nom: 'Quenouillard', prenom: 'Aubépine', appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false });
+    enDerive.prochainsIds.participant = 8;
     const m = await ouvrir(generee(enDerive, { graine: 4, nombre: 2, arret: 40 }));
     expect(ligneRetenu(m).querySelector('td.raisons')).not.toBeNull();
     for (const id of [4, 5]) expect(commandesDe(ligne(m, id)), String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir', 'comparer']);
@@ -2188,5 +2215,67 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     await m.seance.revenir(revisionAvant);
     await attendre(() => expect(ids(m).length).toBe(3));
     expect(texteDe(filiationDe(ligne(m, 3)))).toBe('Dérivée de n° 1, tour 2 figé.');
+  });
+});
+
+// --- La présence par tour (§ 5.7, § 9) --------------------------------------------
+
+describe('les propositions déclassées par la présence', () => {
+  // La présence d'Iris Ombrelle (1) réduite aux tours 1 et 2 : les trois
+  // propositions en dérive par elle.
+  const absente = () => executer(chargeSix(), 'changerPresence', { id: 1, tours: [1, 2] });
+  const note = (m) => section(m).querySelector('[data-phrase-presences]');
+
+  test('la note des présences, au-dessus du tableau : le compte, puis « Aucune proposition n’est classée » ; chaque ligne porte « Repartir d’elle », sans « Comparer »', async () => {
+    const m = await ouvrir(absente());
+    expect(ids(m)).toEqual([1, 2, 3]);
+    expect(section(m).querySelectorAll('[data-classement] tr[data-proposition]')).toHaveLength(0);
+    expect([...note(m).querySelectorAll('p')].map(texteDe)).toEqual([
+      t('propositions.presences.note', { absentes: 1 }),
+      t('propositions.presences.toutesEnDerive'),
+    ]);
+    expect(texteDe(note(m))).toContain("1 personne n'est pas présente à chaque tour");
+    expect(note(m).getBoundingClientRect().bottom).toBeLessThanOrEqual(section(m).querySelector('table').getBoundingClientRect().top);
+    for (const id of [1, 2, 3]) {
+      expect(commandesDe(ligne(m, id)), String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir']);
+      expect(texteDe(ligne(m, id))).toContain(t('PRESENCE_RETIREE', { participant: 1, tours: [3, 4] }));
+    }
+    // « Repartir d'elle » choisit le départ et ouvre la génération, sans
+    // écrire.
+    const ecritures = m.trace.length;
+    actionDe(ligne(m, 2), 'repartir').click();
+    flushSync();
+    expect(m.ui.etat().depart).toEqual({ id: 2, toursFiges: [] });
+    expect(m.ui.etat().section).toBe('generation');
+    expect(m.trace.length).toBe(ecritures);
+  });
+
+  test('sans présence partielle, aucune note ; une ligne en dérive par le mobilier ne porte ni « Repartir d’elle » ni « Comparer »', async () => {
+    const m = await ouvrir(chargeSix());
+    expect(note(m)).toBeNull();
+    expect(m.erreurs()).toEqual([]);
+    m.demonter();
+    montes = montes.filter((monte) => monte !== m);
+    const meublee = executer(chargeSix(), 'changerPlacesTable', { id: 2, sieges: '5', origine: 'champ' });
+    const n = await ouvrir(meublee);
+    expect(ids(n)).toEqual([1, 2, 3]);
+    expect(note(n)).toBeNull();
+    for (const id of [1, 2, 3]) expect(commandesDe(ligne(n, id)), String(id)).toEqual(['voir', 'qualite', 'retenir']);
+  });
+
+  test('« Garder les N meilleures » sur des lignes toutes déclassées : NETTOYAGE_SANS_CLASSEMENT à côté du bouton, sans fenêtre ni écriture', async () => {
+    const m = await ouvrir(absente());
+    await saisirGardees(m, '1');
+    const ecritures = m.trace.length;
+    garder(m).click();
+    const refus = await attendre(() => {
+      const pose = refusPres(garder(m), 'NETTOYAGE_SANS_CLASSEMENT');
+      expect(pose).not.toBeNull();
+      return pose;
+    });
+    expect(texteDe(refus)).toContain(t('NETTOYAGE_SANS_CLASSEMENT', { n: 1, classees: 0, nonClassees: 3 }));
+    expect(fenetreOuverte(m)).toBeNull();
+    expect(m.trace.length).toBe(ecritures);
+    expect(ids(m)).toEqual([1, 2, 3]);
   });
 });

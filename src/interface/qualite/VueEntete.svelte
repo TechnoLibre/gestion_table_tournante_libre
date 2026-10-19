@@ -16,34 +16,40 @@
   // et le compte du pire (Pourcentage) sur trois tuiles seulement, puis les
   // lignes de sa borne, celles d'une personne qu'elle nomme, et en dernier,
   // quand le détail en porte un, son plancher, qui ne nomme personne : il
-  // borne la mesure de la tuile. Le libellé est un terme : le survol et le
-  // focus du clavier ouvrent l'infobulle de son explication, celle de la
-  // colonne au tableau (Infobulle, primitive).
+  // borne la mesure de la tuile. Un plancher que la présence par tour
+  // retire laisse à sa place la phrase qui le dit non prouvé. Le libellé
+  // est un terme : le survol et le focus du clavier ouvrent l'infobulle de
+  // son explication, celle de la colonne au tableau (Infobulle, primitive),
+  // à laquelle la tuile du minimum brut ajoute la présence de la personne
+  // au rang 1 quand elle manque un tour, lue sur la charge de la séance.
   //
   // Désignations : data-vue-qualite sur le <div> qui enveloppe la carte,
   // que la carte ne transmet pas ; data-tuile sur chaque tuile, par le nom
-  // de sa colonne ; data-terme sur son libellé.
+  // de sa colonne ; data-terme sur son libellé ; data-plancher-non-prouve
+  // sur la phrase d'un plancher retiré.
   import { getContext } from 'svelte';
   import Carte from '../primitives/Carte.svelte';
   import Infobulle from '../primitives/Infobulle.svelte';
   import Pourcentage from './graphiques/Pourcentage.svelte';
-  import { enteteDe } from './entete.js';
+  import { enteteDe, presenceDeCharge } from './entete.js';
 
   let { detail = null, ligne = null, table = null } = $props();
 
   const t = getContext('t');
   const format = getContext('format');
+  const seance = getContext('seance');
   const uid = $props.id();
   const idExplication = `${uid}-explication`;
 
-  const entete = $derived(enteteDe({ detail, ligne, table }, { t, format }));
+  const presenceDe = $derived(presenceDeCharge($seance?.charge ?? null));
+  const entete = $derived(enteteDe({ detail, ligne, table }, { t, format, presenceDe }));
 
   // Le terme expliqué : {ancre, terme, cle, details}, null sans infobulle.
   // Ouvrir sur un terme remplace l'explication d'un autre ; quitter un terme
   // ne ferme que la sienne.
   let expliquee = $state(null);
   function expliquer(evenement, tuile) {
-    expliquee = { ancre: evenement.currentTarget, terme: tuile.nom, cle: tuile.explication, details: {} };
+    expliquee = { ancre: evenement.currentTarget, terme: tuile.nom, cle: tuile.infobulle.cle, details: tuile.infobulle.details };
   }
   function taire(tuile) {
     if (expliquee?.terme === tuile.nom) expliquee = null;
@@ -87,6 +93,9 @@
                   {#each tuile.bornes as borne, rang (rang)}
                     <span class="borne">{borne}</span>
                   {/each}
+                  {#if tuile.plancherNonProuve !== null}
+                    <span class="borne" data-plancher-non-prouve>{tuile.plancherNonProuve}</span>
+                  {/if}
                 </li>
               {/each}
             </ul>

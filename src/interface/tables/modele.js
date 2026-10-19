@@ -99,16 +99,19 @@ export function comptesTables(charge) {
  * nommée par son numéro (numero null pour un refus de l'événement entier),
  * et aucune forme d'application. Avec realigner, le bilan est celui de
  * bilanChangementDefaut(…, {realigner: true}) : l'en-tête d'un refus dit
- * que le réalignement est refusé, le changement seul restant possible.
+ * que le réalignement est refusé, le changement seul restant possible. Avec
+ * partielle — une personne au moins manque un tour (aDesAbsences) —, le
+ * total compte bilan.participants comme le plus grand nombre de personnes
+ * présentes à un même tour ; sans, il compte les participants.
  *
  * @param {ReturnType<import('../../application/bilans.js').bilanChangementDefaut>} bilan
  * @param {Array<{id: number, numero: number}>} [tables]   celles de la charge,
  *        qui donnent son numéro à une table qui refuse
- * @param {{realigner?: boolean}} [options]
+ * @param {{realigner?: boolean, partielle?: boolean}} [options]
  * @returns {Array<{cle: string, details: Object}>}
  * @throws {TypeError} une table de bilan.refus absente de tables
  */
-export function enonceDefaut(bilan, tables = [], { realigner = false } = {}) {
+export function enonceDefaut(bilan, tables = [], { realigner = false, partielle = false } = {}) {
   const { avant, apres } = bilan;
   if (bilan.refus.length > 0) {
     return [
@@ -123,7 +126,7 @@ export function enonceDefaut(bilan, tables = [], { realigner = false } = {}) {
     { cle: 'tables.defaut.application', details: { suivent: bilan.suivent, avant, apres, surchargees: bilan.surchargees } },
     {
       cle: 'tables.defaut.total',
-      details: { totalAvant: bilan.totalAvant, totalApres: bilan.totalApres, participants: bilan.participants },
+      details: { totalAvant: bilan.totalAvant, totalApres: bilan.totalApres, participants: bilan.participants, partielle },
     },
   ];
 }
@@ -157,9 +160,10 @@ export function surchargesPerdues(charge) {
 /**
  * Vrai quand le changement de avant à apres tours s'annonce avant d'être
  * appliqué (§ 2.1 étape 5, § 4.3) : il détruit une réservation « tour
- * désigné » ou un objectif de table d'un tour au-delà, ou, pour une baisse,
- * il laisse en dérive un placement engendré, entier mais qui porte des
- * tours que l'événement n'a plus. Une hausse ne détruit rien : les
+ * désigné » ou un objectif de table d'un tour au-delà, il rogne une
+ * présence, exclues comprises, ou, pour une baisse, il laisse en dérive un
+ * placement engendré, entier mais qui porte des tours que l'événement n'a
+ * plus. Une hausse ne détruit ni ne rogne rien : les
  * placements qu'elle laisse en dérive restent entiers, et la séance en
  * avertit (DERIVE_NOUVELLE) sans fenêtre (§ 5.9).
  *
@@ -171,6 +175,7 @@ export function surchargesPerdues(charge) {
 export const annonceTours = (bilan, avant, apres) =>
   bilan.reservationsDetruites.length > 0 ||
   bilan.objectifsDetruits.length > 0 ||
+  bilan.presencesRognees.length > 0 ||
   (apres < avant && (bilan.propositionsTouchees.length > 0 || bilan.retenuTouche));
 
 // Les placements qu'un changement laisse en dérive : chaque proposition,
@@ -193,7 +198,9 @@ function etiquettesDe(charge, id, tour) {
  * Ce que nomme la fenêtre d'un changement de tours (§ 2.1 étape 5, A3) :
  * chaque réservation détruite, sa personne et le numéro de sa table, puis
  * chaque objectif de table détruit, le numéro de sa table, son tour et ses
- * étiquettes, chacun dans l'ordre du bilan ; puis les placements touchés.
+ * étiquettes, puis chaque présence rognée, exclues comprises, sa personne,
+ * ses tours d'avant et ceux d'après — null quand elle couvre désormais tous
+ * les tours —, chacun dans l'ordre du bilan ; puis les placements touchés.
  * Les objectifs de la soirée restent et ne se nomment pas.
  *
  * @param {Object} charge
@@ -210,6 +217,10 @@ export function elementsTours(charge, bilan) {
     ...bilan.objectifsDetruits.map(({ table, tour }) => ({
       cle: 'tables.tours.objectif',
       details: { numero: numeroDe(charge.tables, table), tour, etiquettes: etiquettesDe(charge, table, tour) },
+    })),
+    ...bilan.presencesRognees.map(({ participant, avant, apres }) => ({
+      cle: 'tables.tours.presence',
+      details: { nom: nomDe(charge, participant), avant, apres },
     })),
     ...touches(bilan),
   ];

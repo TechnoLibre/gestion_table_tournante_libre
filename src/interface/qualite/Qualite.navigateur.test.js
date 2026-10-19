@@ -18,11 +18,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { flushSync } from 'svelte';
 import { appliquerCommande } from '../../application/commandes.js';
+import { departDuMoteur } from '../../application/depart.js';
 import { evaluer, premiereDuClassement } from '../../application/evaluation.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
-import { rechercher } from '../../moteur/recherche.js';
+import { rechercher, repartir } from '../../moteur/recherche.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
@@ -622,5 +623,81 @@ describe('une source dérivée : sa filiation, et la course partie de son dépar
     await m.seance.executer('exclureParticipant', { id: 12 });
     await attendre(() => expect(phrases(m)).toEqual(['derive']));
     expect(texteDe(filiation(m))).toBe("Dérivée de n° 1, qui n'est plus dans la liste.");
+  });
+});
+
+describe('la présence par tour : une absence ne retire que le plancher de l’écart d’itinéraire (§ 12.4, § 12.6)', () => {
+  // Cinq membres de la Coopérative Aubier, deux autres sans appartenance,
+  // une table de trois et une de quatre, où Ondine Ressac est réservée pour
+  // la soirée, trois tours : le plancher des collisions tient à chaque tour.
+  function chargeSept() {
+    const charge = chargeSix();
+    charge.evenement.tours = 3;
+    for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+    charge.participants.push({ ...charge.participants[5], id: 7, nom: 'Ressac', prenom: 'Ondine' });
+    charge.tables[1].sieges = 4;
+    charge.reservations = [{ participant: 7, table: 2, siege: null, portee: 'tous', tour: null }];
+    charge.prochainsIds.participant = 8;
+    return charge;
+  }
+
+  // La page de qualité de la proposition id, montrée au plan, ses
+  // graphiques dessinés.
+  async function qualiteDe(lue, id) {
+    const m = await ouvrir(lue, { mode: 'lecture', section: 'plan' });
+    m.ui.montrerProposition(id);
+    m.ui.allerA('qualite');
+    await attendre(() => expect(vuesRendues(m)).toEqual(VUES));
+    await dessinerGraphiques(page(m));
+    flushSync();
+    return m;
+  }
+  const collisions = (m) => page(m).querySelector('[data-vue-qualite="collisions"]');
+
+  test('une absence seule : la tuile de l’écart d’itinéraire dit son plancher non prouvé ; les collisions gardent leur segment prouvé, sans phrase de la réserve', async () => {
+    const absente = chargeSept();
+    absente.participants[5].presence = [1, 2];
+    const lue = generee(absente);
+    const id = lue.propositions[0].id;
+    const m = await qualiteDe(lue, id);
+    expect(page(m).querySelectorAll('[data-plancher-non-prouve]')).toHaveLength(1);
+    expect(page(m).querySelector('[data-tuile="ecartItineraireMax"] [data-plancher-non-prouve]')).not.toBeNull();
+    expect(phrases(m)).not.toContain('collisionsHorsDomaine');
+    expect(phrases(m)).not.toContain('objectifsHorsDomaine');
+    expect(texteDe(page(m))).not.toContain(t('qualite.collisions.horsDomaine'));
+    expect(collisions(m).querySelector('[data-segment="prouve"]')).not.toBeNull();
+  });
+
+  test('une dérivée où l’arrivante d’un tour figé reste en réserve : la phrase de la réserve, comme aujourd’hui, et un seul segment', async () => {
+    const lue = generee(chargeSept(), { graine: 3, nombre: 1, arret: 40 });
+    // Ondine Ressac part au tour 1 et libère une chaise à sa table ; Iris
+    // Pervenche n'y vient qu'au tour 1, réservée à la table 1, pleine.
+    const changee = avec(lue, (c) => {
+      c.participants[6].presence = [2, 3];
+      c.participants.push({ ...c.participants[5], id: 8, nom: 'Pervenche', prenom: 'Iris', presence: [1] });
+      c.reservations.push({ participant: 8, table: 1, siege: null, portee: 'tour', tour: 1 });
+      c.prochainsIds.participant = 9;
+    });
+    const depart = { id: lue.propositions[0].id, toursFiges: [1] };
+    const duMoteur = departDuMoteur(changee, depart);
+    expect(duMoteur.reservesImposees).toEqual([{ participant: 8, tour: 1 }]);
+    const configuration = configurationDepuisCharge(changee);
+    const propositions = repartir(configuration, { graine: 5, nombre: 1, arret: 40 }, duMoteur);
+    const derivee = appliquerCommande('enregistrerGeneration', changee, {
+      propositions,
+      configuration,
+      produitVersion: V1,
+      derivation: { depart: depart.id, toursFiges: depart.toursFiges },
+    }).charge;
+    const id = derivee.propositions.at(-1).id;
+    expect(derivee.propositions.at(-1).placement[0].reserve).toEqual([8]);
+    const m = await qualiteDe(derivee, id);
+    expect(phrases(m)).toContain('collisionsHorsDomaine');
+    expect(texteDe(collisions(m).querySelector('[data-phrase-qualite="collisionsHorsDomaine"]'))).toBe(t('qualite.collisions.horsDomaine'));
+    expect(collisions(m).querySelector('[data-segment="prouve"]')).toBeNull();
+    // Aucune tuile n'écrit de plancher hors du domaine ; l'écart
+    // d'itinéraire dit le sien non prouvé, des absences existant.
+    expect(page(m).querySelector('[data-tuile="collisionsCumulees"]').textContent).not.toContain('plancher');
+    expect(page(m).querySelector('[data-tuile="ecartItineraireMax"] [data-plancher-non-prouve]')).not.toBeNull();
   });
 });

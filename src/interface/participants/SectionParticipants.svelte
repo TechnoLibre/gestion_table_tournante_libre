@@ -10,7 +10,10 @@
   // quand la ligne ne tient pas les deux. Les lignes de la grille sont
   // celles de lignesGrille (grille.js) sur la liste de la séance, le tri et le filtre de la
   // section : regarder, trier et filtrer n'écrivent rien, en écriture comme
-  // en lecture. La fiche ouverte est celle de l'état de navigation, ui.fiche.
+  // en lecture. La grille reçoit le nombre de tours de l'événement, celui
+  // des cases de la présence. La fiche ouverte est celle de l'état de
+  // navigation, ui.fiche. La ligne de comptes dit les présences partielles
+  // quand il y en a.
   //
   // « Grouper par » groupe les lignes par une ou plusieurs colonnes de
   // GROUPEMENTS, la plus large d'abord, en groupes imbriqués de
@@ -207,7 +210,7 @@
           {/if}
         </div>
 
-        <Grille {lignes} {groupes} {teintes} bind:replies bind:tri {supprimer} conflits={conflitsParGroupe} {enConflit} />
+        <Grille {lignes} {groupes} {teintes} bind:replies bind:tri {supprimer} conflits={conflitsParGroupe} {enConflit} tours={charge?.evenement.tours ?? 1} />
         {#if participants.length === 0}
           <p class="vide">{t('participants.grille.vide')}</p>
         {:else if lignes.length === 0}
