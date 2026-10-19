@@ -957,6 +957,51 @@ describe('graphiques : les marques mesurées dans les deux thèmes (§ 14.5)', (
       racine.remove();
     }
   });
+
+  test('rouge : le losange creux posé sur la série, cerné d’un halo du fond de la carte, à 3:1 de ce qui l’entoure', async () => {
+    // Des rangs serrés, comme une soirée réelle : chaque signe se pose sur
+    // le tracé de la première série, que le losange creux laisse passer.
+    const racine = document.createElement('div');
+    racine.style.background = 'var(--couleur-carte-fond)';
+    for (const n of [12, 40]) {
+      const p = profil(n);
+      const marques = p.marques.map((marque, i) => (i % 5 === 2 ? 'absente' : marque));
+      racine.append(await monter(Escalier, propsProfil(n, { marques })));
+    }
+    document.body.prepend(racine);
+    try {
+      for (const theme of ['clair', 'sombre']) {
+        const releve = await sousTheme(theme, () => releverMarques(racine));
+        console.log(`contrastes ${theme} : ${releve.ratios.filter((r) => r.marque === 'graphiqueMarque').map((r) => r.ratio.toFixed(2)).join(', ')}`);
+        expect(releve.fautes, `${theme} :\n${releve.fautes.join('\n')}`).toEqual([]);
+        expect(releve.ratios.filter((r) => r.marque === 'graphiqueMarque').length, theme).toBeGreaterThan(0);
+        await sousTheme(theme, () => {
+          const fond = couleurDuJeton('--couleur-carte-fond');
+          for (const svg of racine.querySelectorAll('svg[data-graphique]')) {
+            const signes = [...svg.querySelectorAll('[data-marque="graphiqueMarque"]')];
+            expect(signes.length).toBeGreaterThan(0);
+            const halos = [...svg.querySelectorAll('path.halo')];
+            expect(halos.map((h) => h.getAttribute('d')), theme).toEqual(signes.map((s) => s.getAttribute('d')));
+            const series = [...svg.querySelectorAll('[data-serie]')];
+            for (const [i, halo] of halos.entries()) {
+              // Le halo : sans marque ni remplissage, du fond de la carte,
+              // plus large que le signe de 2 px de chaque côté, peint
+              // par-dessus les séries et sous chaque signe.
+              expect(halo.hasAttribute('data-marque')).toBe(false);
+              expect(getComputedStyle(halo).fill).toBe('none');
+              expect(getComputedStyle(halo).stroke, theme).toBe(fond);
+              const largeur = (e) => Number.parseFloat(getComputedStyle(e).strokeWidth);
+              expect(largeur(halo)).toBeCloseTo(largeur(signes[i]) + 4, 5);
+              for (const serie of series) expect(serie.compareDocumentPosition(halo) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+              for (const signe of signes) expect(halo.compareDocumentPosition(signe) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+            }
+          }
+        });
+      }
+    } finally {
+      racine.remove();
+    }
+  });
 });
 
 describe('graphiques : le dessin différé et les mesures de la séance (E2s)', () => {

@@ -11,7 +11,8 @@
   // en règle quand il est constant, en escalier sinon ; l'abscisse linéaire
   // des rangs. Un rang sans valeur (null) interrompt le chemin de sa série,
   // sans point ni segment. marques : une entrée par rang, null ou un genre
-  // de SIGNES (pointage.js), dont le signe de forme se pose au rang.
+  // de SIGNES (pointage.js), dont le signe de forme se pose au rang, sur un
+  // halo du fond de la carte qui le détache du tracé qu'il recouvre.
   //
   // forme 'points' : les petits multiples de la performance — des points aux
   // seuls points de relevé, reliés par un trait mince, sur l'abscisse
@@ -229,6 +230,9 @@
       >
     {/each}
     {#each disposition.signes as signe (signe.indice)}
+      <path class="halo" d={signe.d} />
+    {/each}
+    {#each disposition.signes as signe (signe.indice)}
       <path class="signe" class:plein={signe.plein} data-marque="graphiqueMarque" d={signe.d} />
     {/each}
   {/if}
@@ -259,6 +263,18 @@
     fill: none;
     stroke: var(--couleur-graphique-axe);
     stroke-width: 1.5;
+  }
+
+  /* Le halo d'un signe : son chemin, du fond de la carte qui porte le
+     graphique, plus large que lui de 2 px de chaque côté. Les halos se
+     peignent sur les tracés, puis les signes sur les halos : un signe posé
+     sur une série se lit contre le fond, non contre la série, et le halo
+     d'un rang voisin ne recouvre aucun signe. Sans data-marque, il ne
+     porte aucune donnée. */
+  .halo {
+    fill: none;
+    stroke: var(--couleur-carte-fond);
+    stroke-width: 5.5;
   }
 
   .signe {
