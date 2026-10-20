@@ -19,23 +19,25 @@
 // lire ses charges.
 //
 // Le module n'a ni fichier ni horloge. Il rend le texte d'une ligne, sans fin
-// de ligne — l'ajout au fichier appartient au système de fichiers —, lit le
-// texte entier d'un journal, en décode les octets ligne par ligne, restitue
-// la charge d'un instant, suit le fil courant, rend les lignes de
-// l'historique et le texte d'un journal en mémoire, et élague un texte ou un
-// journal en mémoire. Une table par sorte de ligne — OUVERTURE, ENTREE,
-// JALON — donne à la fois l'ordre des clés à l'écriture et la règle de
-// chaque clé à la lecture : l'écriture refuse par TypeError la ligne dont la
-// lecture refuserait la forme. La suite des révisions et la cadence des
-// instantanés, que la lecture contrôle aussi, dépendent des lignes voisines :
-// elles appartiennent à l'appelant.
+// de ligne — l'ajout au fichier appartient au système de fichiers —, et,
+// pour l'entrée d'un geste, la copie canonique de la charge qui en résulte,
+// faite une fois ; il lit le texte entier d'un journal, en décode les octets
+// ligne par ligne, restitue la charge d'un instant, suit le fil courant, rend
+// les lignes de l'historique et le texte d'un journal en mémoire, et élague
+// un texte ou un journal en mémoire. Une table par sorte de ligne —
+// OUVERTURE, ENTREE, JALON — donne à la fois l'ordre des clés à l'écriture
+// et la règle de chaque clé à la lecture : l'écriture refuse par TypeError
+// la ligne dont la lecture refuserait la forme. La suite des révisions et la
+// cadence des instantanés, que la lecture contrôle aussi, dépendent des
+// lignes voisines : elles appartiennent à l'appelant.
 //
 // Une entrée porte soit l'instantané de la charge qui en résulte, soit le
 // correctif qui y mène depuis la charge de l'entrée qui la précède dans
 // l'ordre des lignes (correctifs.js). L'instantané tombe sur la première
 // entrée du journal, puis toutes les INTERVALLE_INSTANTANE révisions comptées
 // depuis elle : restituer un instant part de l'instantané le plus proche, à
-// ou avant lui, et applique au plus INTERVALLE_INSTANTANE − 1 correctifs.
+// ou avant lui, et applique au plus INTERVALLE_INSTANTANE − 1 correctifs,
+// tous sur une seule copie de l'instantané (appliquerSuite).
 //
 // La lecture s'arrête à la première ligne illisible : JSON invalide, forme
 // fausse, révision qui ne suit pas la précédente, cadence des instantanés
@@ -43,9 +45,10 @@
 // ligne, que laisse une écriture interrompue. Cette ligne et toutes celles
 // qui la suivent sont écartées et comptées : reprendre après elle ferait
 // suivre un correctif à un instant qui n'est pas le sien (§ 8.6).
-import { canoniser } from './canonique.js';
-import { appliquer, difference } from './correctifs.js';
+import { canoniserPartagee } from './canonique.js';
+import { appliquerSuite, differenceCanonique } from './correctifs.js';
 import { FORMAT, SCHEMA, clesRangees, estHorodatage, premiereFaute } from './document.js';
+import { estFigee } from './gel.js';
 
 /** Révisions d'un instantané au suivant (§ 8.6). */
 export const INTERVALLE_INSTANTANE = 50;
@@ -91,19 +94,32 @@ const estTexte = (valeur) => typeof valeur === 'string' && valeur !== '';
 // reprennent d'ici.
 export { estHorodatage };
 
+// Propositions figées (gel.js) que premiereFaute a trouvées conformes à leur
+// règle. Rien de ce qu'une proposition figée atteint ne change plus : son
+// contrôle rendrait encore null, et ne se refait pas. Seul ce résultat se
+// garde : le chemin d'une faute porte le rang de la proposition dans sa
+// charge, qui change d'une charge à l'autre, et une proposition fautive se
+// contrôle à chaque fois. Une proposition libre, ou gelée par Object.freeze
+// seul, n'y entre jamais.
+const CONFORMES = new WeakSet();
+
 // Chemin de la première valeur de charge que l'analyse du fichier d'état
 // refuserait, ou null : la forme de la charge, propositions et retenu lus
-// comme conteneurs, puis la forme de chaque proposition, que canoniser
-// exige. Un retenu hors de sa règle reste admis, comme le contrôle des
-// placements le garde (§ 8.9).
+// comme conteneurs, puis la forme de chaque proposition dans l'ordre de la
+// liste, que canoniser exige, celles de CONFORMES sautées. Un retenu hors de
+// sa règle reste admis, comme le contrôle des placements le garde (§ 8.9).
 function fauteDeCharge(charge) {
-  return (
-    premiereFaute(charge, CHARGE, 'charge') ??
-    charge.propositions
-      .map((proposition, rang) => premiereFaute(proposition, PROPOSITION, `charge.propositions[${rang}]`))
-      .find((faute) => faute !== null) ??
-    null
-  );
+  const faute = premiereFaute(charge, CHARGE, 'charge');
+  if (faute !== null) return faute;
+  const { propositions } = charge;
+  for (let rang = 0; rang < propositions.length; rang += 1) {
+    const proposition = propositions[rang];
+    if (CONFORMES.has(proposition)) continue;
+    const fauteDeProposition = premiereFaute(proposition, PROPOSITION, `charge.propositions[${rang}]`);
+    if (fauteDeProposition !== null) return fauteDeProposition;
+    if (estFigee(proposition)) CONFORMES.add(proposition);
+  }
+  return null;
 }
 
 // Une sorte de ligne : ses champs, paires [clé, admet] dans l'ordre des clés
@@ -182,7 +198,8 @@ export function ligneOuverture(evenement) {
  * l'instantané de la copie canonique de apres quand instantane est vrai, ou
  * le correctif de avant à apres sinon (difference). L'instantané et le
  * correctif ne dépendent que des deux charges, non de l'ordre de leurs clés
- * ni de leurs listes. Ni avant ni apres ne sont modifiées.
+ * ni de leurs listes. Ni avant ni apres ne sont modifiées. La ligne est
+ * celle d'entreeCanonique(champs, avant), qui rend aussi la copie canonique.
  *
  * L'appelant passe instantane = estInstantane(revision, première révision
  * du journal), et produitVersion à la première entrée et quand la
@@ -210,24 +227,63 @@ export function ligneOuverture(evenement) {
  * @param {boolean} entree.instantane
  * @returns {string}
  */
-export function ligneEntree({
-  revision,
-  libelle,
-  horodatage,
-  sens = null,
-  retour = null,
-  produitVersion = null,
+export function ligneEntree({ avant, ...champs }) {
+  return entree(champs, avant, false, 'ligneEntree').ligne;
+}
+
+/**
+ * L'entrée d'un geste (§ 8.2) : { ligne, canonique }. ligne est celle que
+ * ligneEntree rend pour les mêmes champs et le même avant ; canonique est la
+ * copie canonique de apres, canoniserPartagee(apres), faite une seule fois :
+ * elle est l'instantané de la ligne, ou le terme d'arrivée de son correctif,
+ * et l'appelant la garde comme charge canonique de l'entrée, pour le texte
+ * de l'état (serialiserCanonique) et comme avant de l'entrée suivante, sans
+ * recanoniser.
+ *
+ * Les contrôles se suivent dans l'ordre de ligneEntree : instantane booléen,
+ * puis la forme de apres telle que reçue — clés inconnues comprises, que la
+ * copie tairait —, l'un et l'autre avant toute copie et toute lecture de
+ * avant ; puis la copie de apres ; pour un correctif seulement, avant pris
+ * tel quel quand avantCanonique est vrai, sa copie canoniserPartagee sinon,
+ * puis differenceCanonique(avant, canonique) ; enfin l'écriture, qui refuse
+ * les autres champs. avantCanonique vrai demande une copie canonique : celle
+ * de canoniser, de canoniserPartagee, ou la canonique d'une entrée rendue
+ * par cette fonction. Un instantané ne lit pas avant.
+ *
+ * canonique ne partage avec apres, avant ou toute autre charge que des
+ * objets figés, les copies canoniques des propositions figées ; le reste est
+ * neuf et se modifie sans toucher apres. Ni avant ni apres ne sont modifiées.
+ * Lève les TypeError de ligneEntree, que leur message attribue à
+ * entreeCanonique.
+ *
+ * @param {Object} champs        ceux de ligneEntree, avant excepté
+ * @param {import('./types.js').Charge} [avant]   requise pour un correctif
+ * @param {{avantCanonique?: boolean}} [options]
+ * @returns {{ligne: string, canonique: import('./types.js').Charge}}
+ */
+export function entreeCanonique(champs, avant, { avantCanonique = false } = {}) {
+  return entree(champs, avant, avantCanonique, 'entreeCanonique');
+}
+
+// L'entrée de entreeCanonique ; fonction nomme l'appelant public dans le
+// message de chaque TypeError.
+function entree(
+  { revision, libelle, horodatage, sens = null, retour = null, produitVersion = null, apres, instantane },
   avant,
-  apres,
-  instantane,
-}) {
+  avantCanonique,
+  fonction,
+) {
   if (typeof instantane !== 'boolean') {
-    throw new TypeError(`ligneEntree : instantane booléen attendu, reçu ${JSON.stringify(instantane)}`);
+    throw new TypeError(`${fonction} : instantane booléen attendu, reçu ${JSON.stringify(instantane)}`);
   }
   // La charge reçue, telle quelle : une clé hors du schéma, que la copie
   // canonique tairait, est refusée comme l'analyse la refuserait.
   const faute = fauteDeCharge(apres);
-  if (faute !== null) throw new TypeError(`ligneEntree : ${faute} hors de sa règle`);
+  if (faute !== null) throw new TypeError(`${fonction} : ${faute} hors de sa règle`);
+  const canonique = canoniserPartagee(apres);
+  // Un instantané ne lit pas avant : sa copie ne se fait que pour un correctif.
+  const depart = instantane || avantCanonique ? avant : canoniserPartagee(avant);
+  const correctif = instantane ? null : differenceCanonique(depart, canonique);
   const ligne = {
     type: 'entree',
     revision,
@@ -236,10 +292,10 @@ export function ligneEntree({
     sens,
     retour,
     produitVersion,
-    instantane: instantane ? canoniser(apres) : null,
-    correctif: instantane ? null : difference(avant, apres),
+    instantane: instantane ? canonique : null,
+    correctif,
   };
-  return ecrire(ENTREE, ligne, 'ligneEntree');
+  return { ligne: ecrire(ENTREE, ligne, fonction), canonique };
 }
 
 /**
@@ -394,12 +450,31 @@ export function decoderJournal(octets) {
   return { texte, ecartees: 0 };
 }
 
+// La charge après l'entrée revision : appliquerSuite de l'instantané le plus
+// proche, à ou avant elle, et des correctifs qui le suivent jusqu'à elle,
+// recanonisée après le dernier quand canonique est vrai. fonction nomme
+// l'appelant public dans le message de la RangeError.
+function restituer({ entrees }, revision, canonique, fonction) {
+  const rang = entrees.findIndex((entree) => entree.revision === revision);
+  if (rang === -1) throw new RangeError(`${fonction} : révision ${String(revision)} absente du journal`);
+  let base = rang;
+  while (entrees[base].instantane === null) base -= 1;
+  const correctifs = [];
+  for (let suivante = base + 1; suivante <= rang; suivante += 1) correctifs.push(entrees[suivante].correctif);
+  return appliquerSuite(entrees[base].instantane, correctifs, { canonique });
+}
+
 /**
  * Charge après l'entrée revision (§ 8.3) : l'instantané le plus proche, à ou
  * avant elle, puis chaque correctif jusqu'à elle, dans l'ordre des lignes —
- * au plus INTERVALLE_INSTANTANE − 1. Rend une charge neuve, dans l'ordre
- * canonique, qui ne partage rien avec le journal. Une entrée de retour rend
- * la charge de sa cible, que son correctif ou son instantané portent.
+ * au plus INTERVALLE_INSTANTANE − 1 —, appliqués sur une seule copie
+ * (appliquerSuite). Rend la charge de la chaîne des appliquer, la copie
+ * canonique de l'instantané puis appliquer de chaque correctif, écrite
+ * pareil en JSON, ordre des clés compris : chaque correctif reçoit la charge
+ * dans l'ordre canonique, et le dernier la laisse telle qu'il l'a écrite —
+ * reconstruireCanonique la range. La charge est neuve, et ne partage rien
+ * avec le journal. Une entrée de retour rend la charge de sa cible, que son
+ * correctif ou son instantané portent.
  *
  * Lève ErreurStockage('CORRECTIF', { rang }) d'appliquer (correctifs.js) sur
  * un correctif qui ne s'applique pas : il gâte les révisions de la sienne à
@@ -410,16 +485,22 @@ export function decoderJournal(octets) {
  * @param {number} revision
  * @returns {import('./types.js').Charge}
  */
-export function reconstruire({ entrees }, revision) {
-  const rang = entrees.findIndex((entree) => entree.revision === revision);
-  if (rang === -1) throw new RangeError(`reconstruire : révision ${String(revision)} absente du journal`);
-  let base = rang;
-  while (entrees[base].instantane === null) base -= 1;
-  let charge = canoniser(entrees[base].instantane);
-  for (let suivante = base + 1; suivante <= rang; suivante += 1) {
-    charge = appliquer(charge, entrees[suivante].correctif);
-  }
-  return charge;
+export function reconstruire(journal, revision) {
+  return restituer(journal, revision, false, 'reconstruire');
+}
+
+/**
+ * canoniser(reconstruire(journal, revision)), sans la copie de plus : la
+ * suite de correctifs recanonise après le dernier, là seulement où il a
+ * écrit. La charge est neuve, dans l'ordre canonique, et ne partage rien
+ * avec le journal. Lève ce que lève reconstruire.
+ *
+ * @param {Journal} journal
+ * @param {number} revision
+ * @returns {import('./types.js').Charge}
+ */
+export function reconstruireCanonique(journal, revision) {
+  return restituer(journal, revision, true, 'reconstruireCanonique');
 }
 
 /**

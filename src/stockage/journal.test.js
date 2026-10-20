@@ -8,8 +8,10 @@
 // ligne illisible et compte ce qu'elle écarte ; le fil courant, défaire et
 // refaire ; les lignes de l'historique ; la construction notée ; l'élagage,
 // par le texte et en mémoire ; le journal d'un format plus ancien, qui se
-// lit ; la restitution de chaque instant de la séance, caractérisée octet
-// pour octet. Les journaux s'écrivent comme les écrit l'enregistreur, une
+// lit ; la restitution sur une seule copie, canonique ou non, et l'entrée
+// qui rend sa ligne avec la copie canonique de la charge, propositions
+// figées comprises ; la restitution de chaque instant de la séance,
+// caractérisée octet pour octet. Les journaux s'écrivent comme les écrit l'enregistreur, une
 // ligne après l'autre, par les fonctions du module ; chaque charge de la
 // séance passe l'analyse du fichier d'état et le contrôle des placements. Les
 // noms des personnes ajoutées sont inventés, hors des réservoirs des
@@ -22,10 +24,11 @@ import { versionVoisine } from '../../test/version_voisine.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { rechercher } from '../moteur/recherche.js';
 import { VERSION } from '../version.genere.js';
-import { canoniser, serialiser, serialiserCharge } from './canonique.js';
-import { appliquer } from './correctifs.js';
+import { canoniser, canoniserPartagee, serialiser, serialiserCharge } from './canonique.js';
+import { appliquer, difference, differenceCanonique } from './correctifs.js';
 import { FORMAT, analyser, configurationDepuisCharge, creerCharge, etatDeduit } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { estFigee, figer } from './gel.js';
 import {
   INTERVALLE_INSTANTANE,
   PLAFOND_ENTREES,
@@ -33,6 +36,7 @@ import {
   decoderJournal,
   elaguer,
   elaguerJournal,
+  entreeCanonique,
   estInstantane,
   fil,
   ligneEntree,
@@ -41,6 +45,7 @@ import {
   lignesHistorique,
   lireJournal,
   reconstruire,
+  reconstruireCanonique,
   texteDuJournal,
   versionDe,
 } from './journal.js';
@@ -80,33 +85,41 @@ function horodatage(r) {
   return `2031-05-17T${deux(Math.floor(minutes / 60) % 24)}:${deux(minutes % 60)}:00-04:00`;
 }
 
+// Champs de l'entrée de l'étape de rang donné, avant excepté, qu'un
+// enregistreur fidèle au contrat passe : la révision qui suit, depuis
+// premiere ; l'instantané quand la révision ouvre un intervalle ; la
+// construction notée à la première entrée et quand elle change. Une étape
+// est { apres, sens, retour, version, libelle, jalons } ; seul apres est
+// requis, et version vaut V1 quand elle manque.
+function champsDe(etapes, rang, premiere = 1) {
+  const etape = etapes[rang];
+  const revision = premiere + rang;
+  const version = etape.version ?? V1;
+  const precedente = rang === 0 ? null : (etapes[rang - 1].version ?? V1);
+  return {
+    revision,
+    libelle: etape.libelle ?? `Geste ${revision}`,
+    horodatage: horodatage(revision),
+    sens: etape.sens ?? null,
+    retour: etape.retour ?? null,
+    produitVersion: version === precedente ? null : version,
+    apres: etape.apres,
+    instantane: estInstantane(revision, premiere),
+  };
+}
+
 // Texte du journal qu'écrit un enregistreur fidèle au contrat : l'ouverture,
-// puis chaque étape à la révision suivante, depuis premiere — en instantané
-// quand la révision ouvre un intervalle, en correctif depuis la charge de
-// l'étape précédente sinon, la construction notée à la première entrée et
-// quand elle change —, et les jalons d'une étape après elle. Une étape est
-// { apres, sens, retour, version, jalons } ; seul apres est requis, et
-// version vaut V1 quand elle manque.
+// puis chaque étape à la révision suivante (champsDe), en correctif depuis
+// la charge de l'étape précédente quand elle ne porte pas d'instantané, et
+// les jalons d'une étape après elle.
 function journalDe(etapes, { premiere = 1, evenement = EVENEMENT } = {}) {
   const lignes = [ligneOuverture(evenement)];
   etapes.forEach((etape, rang) => {
-    const revision = premiere + rang;
-    const version = etape.version ?? V1;
-    const precedente = rang === 0 ? null : (etapes[rang - 1].version ?? V1);
-    lignes.push(
-      ligneEntree({
-        revision,
-        libelle: etape.libelle ?? `Geste ${revision}`,
-        horodatage: horodatage(revision),
-        sens: etape.sens ?? null,
-        retour: etape.retour ?? null,
-        produitVersion: version === precedente ? null : version,
-        avant: etapes[rang - 1]?.apres,
-        apres: etape.apres,
-        instantane: estInstantane(revision, premiere),
-      }),
-    );
-    for (const nom of etape.jalons ?? []) lignes.push(ligneJalon({ revision, nom, horodatage: horodatage(revision) }));
+    const champs = champsDe(etapes, rang, premiere);
+    lignes.push(ligneEntree({ ...champs, avant: etapes[rang - 1]?.apres }));
+    for (const nom of etape.jalons ?? []) {
+      lignes.push(ligneJalon({ revision: champs.revision, nom, horodatage: horodatage(champs.revision) }));
+    }
   });
   return texteDe(lignes);
 }
@@ -1526,6 +1539,394 @@ describe('la présence par tour traverse le journal (§ 8.3, § 8.6, § 8.9)', (
     // tour 1 du retenu.
     const correctif = lignesDe(journalDe(etapes))[2];
     assert.ok(correctif.includes('"presence"') && correctif.includes('"absents"'), correctif);
+  });
+});
+
+// --- Une seule copie -------------------------------------------------------
+
+// Chaque objet et chaque liste que valeur atteint, elle comprise.
+function objetsDe(valeur, vus = new Set()) {
+  if (valeur === null || typeof valeur !== 'object' || vus.has(valeur)) return vus;
+  vus.add(valeur);
+  for (const enfant of Array.isArray(valeur) ? valeur : Object.values(valeur)) objetsDe(enfant, vus);
+  return vus;
+}
+// Les objets et les listes que a et b atteignent l'un et l'autre.
+function partages(a, b) {
+  const deA = objetsDe(a);
+  return [...objetsDe(b)].filter((objet) => deA.has(objet));
+}
+
+// La ligne d'une entrée par la composition directe : la copie canonique de
+// apres par canoniser pour un instantané, difference(avant, apres) pour un
+// correctif, chaque clé dans l'ordre du texte. Elle sert d'oracle, sans
+// passer par le module.
+function ligneDirecte(champs, avant) {
+  const { revision, libelle, sens, retour, produitVersion, apres, instantane } = champs;
+  return JSON.stringify({
+    type: 'entree',
+    revision,
+    libelle,
+    horodatage: champs.horodatage,
+    sens,
+    retour,
+    produitVersion,
+    instantane: instantane ? canoniser(apres) : null,
+    correctif: instantane ? null : difference(avant, apres),
+  });
+}
+
+// La séance aux propositions figées : chaque charge recopiée, chaque
+// proposition figée, et la même que celle de l'étape précédente quand elle
+// s'y écrit pareil, partagée d'une charge à la suivante.
+const seanceFigee = memoire(() => {
+  let precedentes = [];
+  return SEANCE.map((etape) => {
+    const apres = copie(etape.apres);
+    apres.propositions = apres.propositions.map(
+      (proposition) =>
+        precedentes.find((figee) => JSON.stringify(figee) === JSON.stringify(proposition)) ?? figer(proposition),
+    );
+    precedentes = apres.propositions;
+    return { ...etape, apres };
+  });
+});
+
+// Une valeur dont toute lecture lève : rien ne la touche avant le refus
+// attendu.
+const intouchable = () =>
+  new Proxy(
+    {},
+    new Proxy(
+      {},
+      {
+        get: () => () => {
+          throw new Error('valeur lue');
+        },
+      },
+    ),
+  );
+
+// L'erreur que lève appel, ou null.
+function erreurDe(appel) {
+  try {
+    appel();
+  } catch (erreur) {
+    return erreur;
+  }
+  return null;
+}
+
+// Une proposition derrière un compteur de lectures : chaque clé lue sur elle
+// compte, et rien de ce qu'elle atteint.
+function sousCompteur(proposition) {
+  const lus = { n: 0 };
+  const lue = new Proxy(proposition, {
+    get(cible, cle, recepteur) {
+      lus.n += 1;
+      return Reflect.get(cible, cle, recepteur);
+    },
+  });
+  return { lue, lus };
+}
+
+describe('la restitution sur une seule copie, et l’entrée qui rend sa copie canonique (§ 8.2, § 8.6, § 8.8)', () => {
+  test('reconstruireCanonique(journal, r) égale canoniser(reconstruire(journal, r)), ordre des clés compris, pour chacune des 120 révisions ; ses refus sont ceux de reconstruire', () => {
+    const journal = lireJournal(texteSeance());
+    for (let revision = 1; revision <= SEANCE.length; revision += 1) {
+      const rendue = reconstruire(journal, revision);
+      const canonique = reconstruireCanonique(journal, revision);
+      assert.equal(JSON.stringify(canonique), JSON.stringify(canoniser(rendue)), `révision ${revision}`);
+      assert.equal(texteCanonique(canonique), texteCanonique(SEANCE[revision - 1].apres), `révision ${revision}`);
+      assert.deepEqual(partages(canonique, rendue), [], `révision ${revision}`);
+    }
+    for (const revision of [0, 121, '5', null]) {
+      assert.throws(() => reconstruireCanonique(journal, revision), RangeError, String(revision));
+    }
+    const lignes = lignesDe(texteSeance());
+    const rang = lignes.findIndex((ligne) => ligne.startsWith('{"type":"entree","revision":33,'));
+    const retirerAbsent = [{ op: 'retirer', chemin: ['participants', { id: 999 }] }];
+    lignes[rang] = JSON.stringify({ ...JSON.parse(lignes[rang]), correctif: retirerAbsent });
+    const abime = lireJournal(texteDe(lignes));
+    for (const revision of [33, 50]) {
+      assert.throws(
+        () => reconstruireCanonique(abime, revision),
+        (erreur) => erreur instanceof ErreurStockage && erreur.code === 'CORRECTIF' && erreur.details.rang === 0,
+        `révision ${revision}`,
+      );
+    }
+    assert.equal(texteCanonique(reconstruireCanonique(abime, 51)), texteCanonique(SEANCE[50].apres));
+  });
+
+  test('un dernier correctif qui rompt l’ordre canonique laisse reconstruire hors de l’ordre, comme la chaîne des appliquer ; le correctif suivant le range ; reconstruireCanonique le range toujours', () => {
+    const etapes = suite(4);
+    const lignes = lignesDe(journalDe(etapes));
+    // L'entrée 3 change l'identifiant de la personne 1 et insère une
+    // personne, ses clés à rebours : la liste et l'objet sortent de l'ordre
+    // canonique, que l'entrée 4 rétablit en posant une note.
+    const inseree = {
+      exclu: false,
+      notes: null,
+      titrePressenti: null,
+      courriel: null,
+      appartenance: null,
+      prenom: null,
+      nom: 'Cormoran',
+      id: 4,
+    };
+    const rompre = [
+      { op: 'poser', chemin: ['participants', { id: 1 }, 'id'], valeur: 9 },
+      { op: 'poser', chemin: ['participants', { id: 4 }], valeur: inseree },
+      { op: 'poser', chemin: ['prochainsIds', 'participant'], valeur: 10 },
+    ];
+    const noter = [{ op: 'poser', chemin: ['participants', { id: 9 }, 'notes'], valeur: 'au fond' }];
+    lignes[3] = JSON.stringify({ ...JSON.parse(lignes[3]), correctif: rompre });
+    lignes[4] = JSON.stringify({ ...JSON.parse(lignes[4]), correctif: noter });
+    const journal = lireJournal(texteDe(lignes));
+    assert.deepEqual([journal.entrees.length, journal.ecartees], [4, 0]);
+    const chaine = [canoniser(journal.entrees[0].instantane)];
+    for (const { correctif } of journal.entrees.slice(1)) chaine.push(appliquer(chaine.at(-1), correctif));
+    for (let revision = 1; revision <= 4; revision += 1) {
+      const rendue = reconstruire(journal, revision);
+      assert.equal(JSON.stringify(rendue), JSON.stringify(chaine[revision - 1]), `révision ${revision}`);
+      const canonique = reconstruireCanonique(journal, revision);
+      assert.equal(JSON.stringify(canonique), JSON.stringify(canoniser(chaine[revision - 1])), `révision ${revision}`);
+    }
+    const troisieme = reconstruire(journal, 3);
+    assert.notEqual(JSON.stringify(troisieme), JSON.stringify(canoniser(troisieme)));
+    assert.deepEqual(troisieme.participants.map(({ id }) => id), [4, 9]);
+    assert.equal(Object.keys(troisieme.participants[0])[0], 'exclu');
+    const quatrieme = reconstruire(journal, 4);
+    assert.equal(JSON.stringify(quatrieme), JSON.stringify(canoniser(quatrieme)));
+    assert.deepEqual(quatrieme.participants.map(({ id }) => id), [4, 9]);
+    assert.equal(Object.keys(quatrieme.participants[0])[0], 'id');
+  });
+
+  test('un journal figé en profondeur se restitue sans lever ; la charge rendue, canonique ou non, ne partage rien avec lui, et la modifier ne change pas la restitution suivante', () => {
+    const libre = lireJournal(texteSeance());
+    const fige = figer(lireJournal(texteSeance()));
+    assert.ok(estFigee(fige.entrees[0].instantane) && Object.isFrozen(fige.entrees[1].correctif));
+    for (const journal of [libre, fige]) {
+      const duJournal = objetsDe(journal);
+      for (const revision of [1, 2, 50, 51, 77, 101, 120]) {
+        for (const restituer of [reconstruire, reconstruireCanonique]) {
+          const rendue = restituer(journal, revision);
+          assert.ok(
+            [...objetsDe(rendue)].every((objet) => !duJournal.has(objet)),
+            `${restituer.name}, révision ${revision}`,
+          );
+          rendue.participants.length = 0;
+          rendue.evenement.nom = 'autre';
+          for (const proposition of rendue.propositions) proposition.graine += 1;
+          const relue = restituer(journal, revision);
+          assert.equal(texteCanonique(relue), texteCanonique(SEANCE[revision - 1].apres), `révision ${revision}`);
+        }
+      }
+    }
+  });
+
+  test('entreeCanonique, sur les 120 gestes de la séance, propositions libres ou figées et partagées, avant canonique ou non : la ligne de la composition directe, et la copie canonique de apres, qui ne partage que des objets figés', () => {
+    for (const [nom, etapes] of [
+      ['libres', SEANCE],
+      ['figées', seanceFigee()],
+    ]) {
+      let precedente;
+      let reprises = 0;
+      etapes.forEach((etape, rang) => {
+        const champs = champsDe(etapes, rang);
+        const avant = etapes[rang - 1]?.apres;
+        const intactes = [JSON.stringify(etape.apres), JSON.stringify(avant)];
+        const attendue = ligneDirecte(champs, avant);
+        const quoi = `${nom}, révision ${champs.revision}`;
+        const direct = entreeCanonique(champs, avant);
+        const parCanonique = entreeCanonique(champs, precedente, { avantCanonique: true });
+        assert.equal(direct.ligne, attendue, quoi);
+        assert.equal(parCanonique.ligne, attendue, quoi);
+        assert.equal(ligneEntree({ ...champs, avant }), attendue, quoi);
+        for (const { canonique } of [direct, parCanonique]) {
+          assert.equal(JSON.stringify(canonique), JSON.stringify(canoniser(etape.apres)), quoi);
+          for (const autre of [etape.apres, avant, precedente]) {
+            assert.ok(partages(canonique, autre).every(estFigee), quoi);
+          }
+        }
+        assert.deepEqual([JSON.stringify(etape.apres), JSON.stringify(avant)], intactes, quoi);
+        if (precedente?.propositions.some((proposition) => parCanonique.canonique.propositions.includes(proposition))) {
+          reprises += 1;
+        }
+        precedente = parCanonique.canonique;
+      });
+      // Figées, les propositions qu'une charge garde de la précédente
+      // prêtent la même copie canonique d'une entrée à la suivante.
+      if (nom === 'libres') assert.equal(reprises, 0);
+      else assert.ok(reprises >= 40, `reprises : ${reprises}`);
+    }
+  });
+
+  test('entreeCanonique refuse ce que refuse ligneEntree, par la même TypeError ; une charge mal formée ou un instantane qui n’est pas un booléen lèvent avant toute lecture de avant', () => {
+    const avant = chargeVide();
+    const apres = avecIris();
+    const valide = { revision: 2, libelle: 'Ajouté Iris Ombrelle', horodatage: horodatage(2), apres, instantane: false };
+    const nomVide = avecIris();
+    nomVide.participants[0].nom = '';
+    const sansReglages = avecIris();
+    delete sansReglages.reglages;
+    const cleInconnue = avecIris();
+    cleInconnue.participants[0].auteur = 'Théo';
+    const avecProposition = avecIris();
+    avecProposition.prochainsIds.proposition = 2;
+    avecProposition.propositions.push(copie(SEANCE.find((e) => e.apres.propositions.length > 0).apres.propositions[0]));
+    avecProposition.propositions[0].id = 1;
+    const graineNegative = copie(avecProposition);
+    graineNegative.propositions[0].graine = -1;
+    const figeeFautive = copie(avecProposition);
+    figeeFautive.propositions[0] = figer(copie(graineNegative.propositions[0]));
+    const fautesDeApres = [
+      ['charge hors de sa règle, en correctif', { apres: nomVide }],
+      ['charge hors de sa règle, en instantané', { apres: nomVide, instantane: true }],
+      ['charge sans réglages', { apres: sansReglages }],
+      ['charge absente', { apres: undefined }],
+      ['clé inconnue dans la charge', { apres: cleInconnue }],
+      ['proposition hors de sa règle', { apres: graineNegative, instantane: true }],
+      ['proposition figée hors de sa règle', { apres: figeeFautive }],
+      ['instantane absent', { instantane: undefined, apres: intouchable() }],
+      ['instantane qui n’est pas un booléen', { instantane: 1, apres: intouchable() }],
+    ];
+    const autres = [
+      ['révision 0', { revision: 0 }],
+      ['libellé vide', { libelle: '' }],
+      ['horodatage sans fuseau', { horodatage: '2026-10-06T19:03:40' }],
+      ['retour sans sens', { retour: 1 }],
+      ['version vide', { produitVersion: '' }],
+      ['charge précédente absente, en correctif', { avant: undefined }],
+    ];
+    const memeTypeError = (attendue, recue, quoi) => {
+      assert.ok(attendue instanceof TypeError, quoi);
+      assert.ok(recue instanceof TypeError, `${quoi} : ${recue}`);
+      assert.equal(recue.message.replace(/^entreeCanonique :/, 'ligneEntree :'), attendue.message, quoi);
+    };
+    for (const [quoi, { avant: autreAvant, ...changement }] of autres) {
+      const precedente = quoi.startsWith('charge précédente absente') ? autreAvant : avant;
+      const champs = { ...valide, ...changement };
+      const attendue = erreurDe(() => ligneEntree({ ...champs, avant: precedente }));
+      memeTypeError(attendue, erreurDe(() => entreeCanonique(champs, precedente)), quoi);
+    }
+    for (const [quoi, changement] of fautesDeApres) {
+      const champs = { ...valide, ...changement };
+      const attendue = erreurDe(() => ligneEntree({ ...champs, avant }));
+      memeTypeError(attendue, erreurDe(() => ligneEntree({ ...champs, avant: intouchable() })), quoi);
+      memeTypeError(attendue, erreurDe(() => entreeCanonique(champs, intouchable())), quoi);
+      memeTypeError(attendue, erreurDe(() => entreeCanonique(champs, intouchable(), { avantCanonique: true })), quoi);
+    }
+    // Une proposition figée hors de sa règle lève à chaque appel, et le
+    // chemin nomme son rang du moment.
+    const deux = copie(avecProposition);
+    deux.prochainsIds.proposition = 3;
+    deux.propositions = [figer(copie(avecProposition.propositions[0])), figeeFautive.propositions[0]];
+    for (let fois = 0; fois < 2; fois += 1) {
+      assert.throws(() => entreeCanonique({ ...valide, apres: deux }, avant), /charge\.propositions\[1\]\.graine/);
+    }
+    deux.propositions.reverse();
+    assert.throws(() => entreeCanonique({ ...valide, apres: deux }, avant), /charge\.propositions\[0\]\.graine/);
+  });
+
+  test('une proposition figée conforme ne se contrôle et ne se copie qu’une fois ; une proposition libre, ou gelée en surface seulement, se relit à chaque entrée', () => {
+    const avecPropositions = SEANCE.find((e) => e.apres.propositions.length > 0).apres;
+    const proposition = avecPropositions.propositions[0];
+    const chargeAvec = (lue) => ({ ...copie(avecPropositions), propositions: [lue] });
+    const gestes = (charge) => [
+      () => entreeCanonique(champsDe([{ apres: charge }], 0), undefined),
+      () => entreeCanonique({ ...champsDe([{ apres: charge }, { apres: charge }], 1) }, charge),
+      () => ligneEntree({ ...champsDe([{ apres: charge }], 0) }),
+      () => ligneEntree({ ...champsDe([{ apres: charge }, { apres: charge }], 1), avant: charge }),
+    ];
+
+    const figee = sousCompteur(copie(proposition));
+    figer(figee.lue);
+    const chargeFigee = chargeAvec(figee.lue);
+    for (const geste of gestes(chargeFigee)) geste();
+    assert.ok(figee.lus.n > 0);
+    figee.lus.n = 0;
+    for (let fois = 0; fois < 3; fois += 1) for (const geste of gestes(chargeFigee)) geste();
+    assert.equal(figee.lus.n, 0, 'proposition figée relue');
+
+    for (const [quoi, geler] of [
+      ['libre', (lue) => lue],
+      ['gelée en surface', (lue) => Object.freeze(lue)],
+    ]) {
+      const compte = sousCompteur(copie(proposition));
+      geler(compte.lue);
+      const charge = chargeAvec(compte.lue);
+      for (const geste of gestes(charge)) {
+        compte.lus.n = 0;
+        geste();
+        const premiere = compte.lus.n;
+        compte.lus.n = 0;
+        geste();
+        assert.ok(premiere > 0 && compte.lus.n === premiere, `${quoi} : ${premiere} puis ${compte.lus.n}`);
+      }
+      // Modifiée en place, plus bas que sa surface, elle est refusée.
+      compte.lue.placement[0].sieges.push(['x']);
+      for (const geste of gestes(charge)) assert.throws(geste, /charge\.propositions\[0\]\.placement/, quoi);
+    }
+  });
+
+  test('apres ne se copie qu’une fois, et le correctif se calcule sur cette copie ; avant canonique se lit tel quel, sans copie, quand avantCanonique le dit', () => {
+    const avecPropositions = SEANCE.find((e) => e.apres.propositions.length > 0).apres;
+    const chargeAvec = (lue) => ({ ...copie(avecPropositions), propositions: [lue] });
+    const enInstantane = (apres) => champsDe([{ apres }], 0);
+    const enCorrectif = (apres) => champsDe([{ apres: chargeVide() }, { apres }], 1);
+    const lecturesDe = (lus, appel) => {
+      lus.n = 0;
+      appel();
+      return lus.n;
+    };
+
+    // Une proposition libre de apres : le contrôle de forme, puis une seule
+    // copie, que le correctif compare sans relire apres.
+    const deApres = sousCompteur(copie(avecPropositions.propositions[0]));
+    const apres = chargeAvec(deApres.lue);
+    const controle = lecturesDe(deApres.lus, () => entreeCanonique(enInstantane(apres), undefined));
+    const uneCopie = lecturesDe(deApres.lus, () => canoniserPartagee(apres));
+    // Le contrôle de forme seul : une seconde proposition fautive le fait
+    // lever après qu'il a lu la première en entier, avant toute copie.
+    const fautive = { ...copie(avecPropositions.propositions[0]), graine: -1 };
+    const forme = lecturesDe(deApres.lus, () =>
+      assert.throws(() => entreeCanonique(enInstantane({ ...apres, propositions: [deApres.lue, fautive] }), undefined)),
+    );
+    assert.ok(uneCopie > 0 && forme > 0, `${forme}, ${uneCopie}`);
+    assert.equal(controle, forme + uneCopie, `${controle} = ${forme} pour la forme + ${uneCopie} pour la copie`);
+    for (const [quoi, avant, options] of [
+      ['avant brut', copie(avecPropositions), {}],
+      ['avant canonique', canoniser(avecPropositions), { avantCanonique: true }],
+    ]) {
+      const lues = lecturesDe(deApres.lus, () => entreeCanonique(enCorrectif(apres), avant, options));
+      assert.equal(lues, controle, quoi);
+      const parLigne = lecturesDe(deApres.lus, () => ligneEntree({ ...enCorrectif(apres), avant }));
+      assert.equal(parLigne, controle, `ligneEntree, ${quoi}`);
+    }
+
+    // Une proposition libre d'un avant canonique : avec avantCanonique, seul
+    // le correctif la lit ; sans, elle se recopie d'abord, et le correctif lit
+    // la copie.
+    const avant = canoniser(avecPropositions);
+    const deAvant = sousCompteur(avant.propositions[0]);
+    avant.propositions[0] = deAvant.lue;
+    const suivante = copie(avecPropositions);
+    suivante.propositions[0].graine += 1;
+    const parCorrectif = lecturesDe(deAvant.lus, () => differenceCanonique(avant, canoniser(suivante)));
+    const parCopie = lecturesDe(deAvant.lus, () => canoniserPartagee(avant));
+    const telQuel = lecturesDe(deAvant.lus, () =>
+      entreeCanonique(enCorrectif(suivante), avant, { avantCanonique: true }),
+    );
+    const recopie = lecturesDe(deAvant.lus, () => entreeCanonique(enCorrectif(suivante), avant));
+    assert.ok(parCorrectif > 0 && parCopie > 0, `${parCorrectif}, ${parCopie}`);
+    assert.equal(telQuel, parCorrectif, 'avant canonique lu tel quel');
+    assert.equal(recopie, parCopie, 'avant brut recopié, puis la copie comparée');
+    assert.ok(telQuel < recopie, `${telQuel} puis ${recopie}`);
+    assert.equal(
+      entreeCanonique(enCorrectif(suivante), avant, { avantCanonique: true }).ligne,
+      ligneDirecte(enCorrectif(suivante), avant),
+    );
   });
 });
 
