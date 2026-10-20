@@ -30,7 +30,6 @@ export const TABLE = new Map([
 
   // L'annonce de la version de format du fichier ouvert (§ 18.6).
   ['coquille.format.plusRecent', 'Ce fichier s\u{2019}ouvre en lecture seule'],
-  ['coquille.format.plusAncien', 'Ce fichier se convertira à votre première modification'],
 
   // Le réglage de thème (§ 19.2).
   ['coquille.theme.titre', 'Thème'],

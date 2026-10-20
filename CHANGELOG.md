@@ -371,17 +371,16 @@
   `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1` et les deux textes complets, dans
   `LICENSES/`.
 
-**Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
+**Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
 s'enregistrent dans des champs facultatifs, absents à leur défaut ; une
 proposition dérivée y porte aussi son départ et ses tours figés, `depart` et
 `toursFiges`, absents de toute autre proposition. La présence d'une personne,
 `presence`, est absente quand elle vaut tous les tours, et chaque tour d'un
-placement nomme ses absents, `absents`, seulement quand il en a : un événement
-sans absence s'écrit comme avant. Un fichier de développement qui porte la
-présence ne s'ouvre pas dans une construction antérieure. Un fichier
-de format 1, écrit par une version de développement, s'ouvre tel quel et se
-convertit, son historique avec lui, au premier geste en écriture.
+placement nomme ses absents, `absents`, seulement quand il en a. Un fichier
+de format 1 ou 2, écrit par une version de développement, est refusé : il ne
+s'ouvre pas, ne s'importe pas, et l'application dit que son format, trop
+ancien, n'est plus pris en charge, sans rien écrire par-dessus.
 La course de la recherche ne va ni dans le fichier de l'événement ni dans son
 historique : elle a son propre fichier, `<nom>.gtt-courses.json`.
 

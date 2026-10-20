@@ -33,10 +33,11 @@ l’extraire : Windows le place alors dans un dossier temporaire, et vos
 que la nouvelle version change et ce qu’il faut faire en remplaçant. Posez le
 nouvel exécutable dans le même dossier que l’ancien : il retrouve le même
 dossier de travail et les mêmes événements. Gardez l’ancien tant que la
-nouvelle version n’a pas fait ses preuves. Un fichier écrit par une version
-plus ancienne s’ouvre normalement, et le bandeau annonce qu’il se convertira à
-votre première modification ; un fichier écrit par une version plus récente
-s’ouvre en lecture seule.
+nouvelle version n’a pas fait ses preuves. Un fichier d’un format plus ancien
+que celui de la version est refusé, « format trop ancien, non pris en
+charge » : gardez l’ancien exécutable tant que vous avez besoin de ces
+fichiers. Un fichier écrit par une version plus récente s’ouvre en lecture
+seule.
 
 ## Le lancer
 

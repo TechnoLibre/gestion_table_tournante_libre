@@ -23,10 +23,25 @@ import {
   ouEcrire,
   phraseDeRaison,
 } from './aides.js';
+import { SUFFIXES } from '../../stockage/noms.js';
 
-// La raison d'un fichier d'état illisible, en une phrase.
+// La raison d'un fichier d'état illisible, en une phrase. Un refus
+// FORMAT_TROP_ANCIEN au chemin du journal parle de l'historique : sous une
+// base, ouvrir refuse l'état qui manque à côté de lui ; sans base, le secours
+// 'journal' le refuse, l'état présent ou non.
 function raisonIllisible({ raison, ...details }, texte) {
   if (raison === 'ABSENT') return "Le fichier d'état manque, à côté de son historique.";
+  const duJournal = typeof details.chemin === 'string' && details.chemin.endsWith(SUFFIXES.journal);
+  if (raison === 'FORMAT_TROP_ANCIEN' && duJournal) {
+    const quel = Number.isInteger(details.format) ? ` (format ${details.format})` : '';
+    if (typeof details.base === 'string') {
+      return (
+        `Le fichier d'état manque, à côté de son historique, dont le format est trop ancien${quel} : ` +
+        "il n'est plus pris en charge."
+      );
+    }
+    return `L'historique ${cite(details.chemin)} a un format trop ancien${quel} : il n'est plus pris en charge.`;
+  }
   return phraseDeRaison(raison, details, texte);
 }
 
@@ -165,6 +180,13 @@ export const TABLE = new Map([
     },
   ],
   [
+    'FORMAT_TROP_ANCIEN',
+    ({ format }) => {
+      const quel = Number.isInteger(format) ? ` (format ${format})` : '';
+      return `Son format est trop ancien${quel} : il n'est plus pris en charge.`;
+    },
+  ],
+  [
     'ENCODAGE',
     () => "Ses octets ne sont pas de l'UTF-8 : un éditeur l'a sans doute réenregistré dans un autre encodage.",
   ],
@@ -247,8 +269,8 @@ export const TABLE = new Map([
   ],
   [
     'JOURNAL_ILLISIBLE',
-    ({ raison }, texte) =>
-      `L'historique à côté de ce fichier ne se lit pas. ${phraseDeRaison(raison, {}, texte)} ` +
+    ({ raison, ...details }, texte) =>
+      `L'historique à côté de ce fichier ne se lit pas. ${phraseDeRaison(raison, details, texte)} ` +
       "Il est laissé tel quel, et le prochain geste commence l'historique dans un nouveau fichier.",
   ],
   [

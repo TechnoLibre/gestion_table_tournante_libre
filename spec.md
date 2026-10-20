@@ -3027,7 +3027,7 @@ séance suivante.
 | fichier | contenu | écriture |
 |---|---|---|
 | `<nom>.gtt.json` | l'état courant, complet | réécrit en entier à chaque entrée |
-| `<nom>.gtt-journal.jsonl` | les entrées d'historique | **ajout en fin**, une ligne par entrée ; réécrit en entier, de façon atomique, à la conversion de format (§ 8.8) et après des lignes écartées |
+| `<nom>.gtt-journal.jsonl` | les entrées d'historique | **ajout en fin**, une ligne par entrée ; réécrit en entier, de façon atomique, après des lignes écartées |
 | `<nom>.gtt-courses.json` | la course de la recherche de chaque proposition (§ 5.10) : ses mouvements évalués et les placements de ses points de relevé | réécrit en entier, de façon atomique, après l'état, **seulement quand les propositions changent** — une génération, un effacement, un retour qui en rend ou en retire — ; jamais à un autre geste |
 
 Les deux portent **l'identifiant interne de l'événement**, et c'est lui qui les
@@ -3224,29 +3224,24 @@ plateforme**.
   le fichier illisible et propose la version précédente, puis le dernier instant
   du journal. Créer un événement vide est la défaillance qui perd une soirée,
   parce que l'enregistrement automatique la rend définitive en une seconde.
-- **Version de format.** Le format courant est le **2**. Il ajoute au format 1
-  des champs **facultatifs** seulement (§ 8.9) : un fichier de format 1 se lit
-  comme un fichier de format 2 qui n'en porte aucun, sans fonction de
-  conversion, et un fichier qui annonce le format 1 en portant déjà l'un d'eux
-  se lit aussi. Un fichier **plus récent** s'ouvre en lecture seule sans passage
-  possible en écriture ; un fichier **plus ancien** se convertit au premier
-  geste qui l'écrit, jamais à l'ouverture ni au passage en écriture, qui ne
-  réécrit pas le fichier d'état. **Son journal se convertit avec lui** : un
-  journal ouvert sous un format plus ancien se lit, et le premier geste réécrit
-  le journal entier au format courant, historique conservé, et l'état quand il
-  l'écrit. Sinon, des entrées du format 2 s'ajouteraient sous une ouverture du
-  format 1, qu'une construction ancienne lirait comme sienne avant de tronquer
-  l'historique à la première entrée qu'elle ne sait pas lire. Un jalon, qui
-  n'écrit pas l'état, convertit le journal seul : l'état garde son format
-  jusqu'au geste suivant, et une construction du format 1 ouvre alors
-  l'événement en lecture seule, son journal étant plus récent. Quand ce journal
-  vit sous un autre nom que l'état — un renommage interrompu (§ 8.7) —, cette
-  lecture seule n'est plus garantie : une construction du format 1 qui ne
-  l'apparie pas ouvrirait l'état en écriture, sans son historique. Le format
-  monte parce que les étiquettes et les objectifs sont de la saisie : une
-  construction du format 1 refuserait comme illisible un fichier qui les porte
-  et proposerait un secours qui les perd ; devant un fichier du format 2, elle
-  s'ouvre en lecture seule.
+- **Version de format.** Le format courant est le **3**, et c'est le premier
+  que le logiciel accepte. Un fichier **plus ancien**, du format 1 ou 2, écrit
+  par une version de développement, **est refusé** : l'ouverture le dit
+  illisible, de format trop ancien et non pris en charge, en nommant son
+  format, sans rien lire d'autre de lui. Aucune fonction ne le convertit, et
+  **aucun secours ne s'offre** à sa place : ouvrir la version précédente ou le
+  dernier instant du journal mènerait le premier geste à écrire par-dessus
+  lui ; un secours demandé quand même se refuse de la même raison. Le fichier
+  reste tel quel sur le disque. Un **journal** d'un format plus ancien ne se
+  lit pas davantage : à côté d'un état lisible, il est annoncé illisible,
+  laissé tel quel, et le premier geste commence l'historique dans un nouveau
+  fichier ; seul, sans état, il se refuse comme l'état, au nom du journal.
+  Importer un tel fichier ou le charger comme démonstration se refuse aussi,
+  sans rien écrire. Un fichier **plus récent** s'ouvre en lecture seule sans
+  passage possible en écriture : une construction plus ancienne, devant un
+  fichier qui porte une saisie qu'elle ne connaît pas, refuserait sinon comme
+  illisible un fichier qu'elle n'a pas écrit, ou le réécrirait sans cette
+  saisie.
 - **Une seule séance en écriture**, le verrou se prenant **à l'entrée en mode
   écriture** et non à l'ouverture. Le verrou porte l'instant de sa prise, que la
   séance lit à l'horloge unique de l'application (§ 19.4), comme toute date
@@ -3358,22 +3353,22 @@ là, et nulle part ailleurs : le pied des pages, la feuille de contrôle, le bad
 
 #### Les champs facultatifs des étiquettes, des objectifs et des priorités
 
-Chacun est **absent tant qu'il vaut son défaut** et s'écrit après les clés du
-format 1 de son objet, dans l'ordre du tableau qui suit — pour les réglages,
-`regleObjectifs`, `respecterObjectifs`, `modeObjectifs`,
+Chacun est **absent tant qu'il vaut son défaut** et s'écrit après les clés
+toujours présentes de son objet, dans l'ordre du tableau qui suit — pour les
+réglages, `regleObjectifs`, `respecterObjectifs`, `modeObjectifs`,
 `rencontrerAnimateurs`, `priorites` : un événement qui n'emploie ni étiquette,
-ni objectif, ni ordre réglé s'écrit comme un fichier du format 1, au numéro de
-format près. Chacun se pose par une commande — une entrée d'historique, refusée
-en lecture et sur un plan bloqué — qui le retire quand il revient à son défaut :
-deux états de même valeur effective posés par les commandes s'écrivent pareil.
-Un fichier lu garde ce qu'il écrit : une liste `priorites` dont un critère seul
-à son palier porte un poids autre que 1 se lit telle quelle, même de même effet
-que l'ordre par défaut, et ne revient à l'absence que par une commande. Un
-correctif du journal (§ 8.6) le pose quand il apparaît et le retire quand il
-disparaît. Un champ écrit à son défaut, ou sous toute autre forme que celle du
-tableau, est une faute de forme du fichier, nommée par son chemin (§ 8.8).
-L'ordre, lui, ne fait pas faute : des étiquettes, des objectifs ou les critères
-d'un palier rangés autrement se lisent, et s'écrivent rangés.
+ni objectif, ni ordre réglé n'en porte aucun. Chacun se pose par une commande —
+une entrée d'historique, refusée en lecture et sur un plan bloqué — qui le
+retire quand il revient à son défaut : deux états de même valeur effective
+posés par les commandes s'écrivent pareil. Un fichier lu garde ce qu'il écrit :
+une liste `priorites` dont un critère seul à son palier porte un poids autre
+que 1 se lit telle quelle, même de même effet que l'ordre par défaut, et ne
+revient à l'absence que par une commande. Un correctif du journal (§ 8.6) le
+pose quand il apparaît et le retire quand il disparaît. Un champ écrit à son
+défaut, ou sous toute autre forme que celle du tableau, est une faute de forme
+du fichier, nommée par son chemin (§ 8.8). L'ordre, lui, ne fait pas faute :
+des étiquettes, des objectifs ou les critères d'un palier rangés autrement se
+lisent, et s'écrivent rangés.
 
 | champ | où | absent, il vaut | forme |
 |---|---|---|---|
@@ -3420,8 +3415,7 @@ les tours figés à ceux du départ : les propositions tombent chacune seule, et
 cette égalité se vérifie à la génération (§ 5.7). Les tours figés d'une
 dérivée sont ceux du plan ajusté de son départ (§ 5.7) : l'ouverture ne les
 compare toujours pas, et la génération vérifie cette égalité. Les deux champs
-entrent au format 2 avant sa première livraison : aucune version livrée du
-format ne les ignore.
+font partie du format 3 : aucune construction qui lit ce format ne les ignore.
 
 **La référence reste juste à travers le journal.** Un état restitué (§ 8.3)
 a existé avec ses dérivées et leurs départs ; un identifiant que la
@@ -3454,10 +3448,8 @@ un placement relu qui ne les porte pas tels que la présence les dit est en
 dérive (§ 9), avec les raisons `PRESENCE_RETIREE` — le placement assied ou
 réserve la personne à des tours où elle est absente depuis — et
 `PRESENCE_AJOUTEE` — il la dit absente à des tours où elle est présente
-depuis —, chacune avec ses tours. Les deux champs entrent au format 2 avant sa
-première livraison, comme `depart` et `toursFiges` ; un fichier de
-développement qui porte la présence ne s'ouvre pas dans une construction
-antérieure.
+depuis —, chacune avec ses tours. Les deux champs font partie du format 3,
+comme `depart` et `toursFiges`.
 
 #### La forme positionnelle
 
@@ -6442,7 +6434,7 @@ n'égale, octet pour octet, un fichier livré.
 |---|---|---|
 | moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut, détail d'un placement pour la page de qualité, borne de diversité, points de relevé de la recherche |
 | géométrie | `node` + navigateur | conversions, ajustement, bornes de zoom, désignation d'un siège ; l'oracle du moteur de rendu au niveau 2 ; la découpe du plan en pages (§ 11.7) ; les échelles, tracés et pointage des graphiques (§ 12.9) |
-| stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), conversion du format 1 avec son journal, compagnon des courses (§ 8.6), accord de la restitution incrémentale avec la chaîne des correctifs, de l'élagage en mémoire avec le texte relu, de SANS_EFFET par la différence avec le texte, des mémoires par identité avec le recalcul |
+| stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), refus des formats plus anciens, état, journal et secours compris, compagnon des courses (§ 8.6), accord de la restitution incrémentale avec la chaîne des correctifs, de l'élagage en mémoire avec le texte relu, de SANS_EFFET par la différence avec le texte, des mémoires par identité avec le recalcul |
 | analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des appartenances et des étiquettes, lignes refusées, aller-retour, CSV des objectifs de table |
 | générateur de démonstrations | `node` | vecteur du générateur pseudo-aléatoire, empreinte des fichiers livrés, refus, noms forgés |
 | PDF | `node` | couche de texte, pagination, police embarquée et table `ToUnicode`, géométrie de la planche, reproductibilité |
@@ -6762,13 +6754,12 @@ journal et n'écrit pas le fichier d'état : l'ouverture compare les révisions 
 retrouve le geste. Il refuse la reprise fondée sur la date de modification des
 fichiers, que recopier un dossier suffit à fausser.
 
-**Un fichier du format 1 et son journal se convertissent ensemble, au premier
-geste.** Ouvrir et passer en écriture n'écrivent rien ; le premier geste écrit
-l'état et le journal au format 2, chaque instant d'avant se reconstruit encore,
-et défaire revient avant la conversion. Un vrai événement du format 1, avec ses
-jalons, en est la donnée d'épreuve, dans la série `node:long`. Il refuse le
-journal du format 1 rejeté comme illisible, qu'une écriture remplacerait,
-historique perdu.
+**Un fichier d'un format plus ancien se refuse sans rien écrire.** Ouvrir, la
+liste et chaque secours le disent de format trop ancien, son format nommé,
+sans proposer de secours, et aucun octet ne change. Un vrai événement du
+format 1 — état, `.precedent` et journal — en est la donnée d'épreuve, dans la
+série `node:long`. Il refuse le secours qui écrirait par-dessus le fichier
+refusé, et le journal trop ancien qu'un geste remplacerait.
 
 **Une ligne illisible arrête la lecture et annonce le compte.** Journal de cent
 entrées corrompu à la trente-septième : trente-six entrées retenues,
@@ -7806,12 +7797,11 @@ que l'opérateur se pose. Une rubrique absente se lit comme un oubli ; un « rie
 faire » écrit est une réponse.
 
 La ligne de format est obligatoire parce qu'elle seule annonce un échange devenu à
-sens unique. Quand la version de format monte, un événement ouvert en écriture par
-la nouvelle version **se convertit** (§ 8.8) ; l'ancienne version ne le rouvrira
-plus qu'en lecture seule. La ligne dit donc, dans ce cas, de **conserver une copie
-du fichier avant la première modification** — la conversion n'a pas lieu à
-l'ouverture, et c'est exactement le moment où l'opérateur peut encore se ménager
-un retour en arrière.
+sens unique. Quand la version de format monte, la nouvelle version **refuse** un
+fichier d'un format plus ancien (§ 8.8), et l'ancienne version n'ouvre qu'en
+lecture seule un fichier de la nouvelle. La ligne dit donc, dans ce cas, quels
+fichiers ne s'ouvrent plus, pour que l'opérateur garde l'ancienne version tant
+qu'il en a besoin.
 
 **L'épreuve de ce qui entre.** Une ligne du changelog a pour sujet **ce que
 l'opérateur voit, fait ou subit**. Une ligne dont le sujet est un module, un
@@ -7913,12 +7903,12 @@ bande de mode **sous le bandeau** et un libellé de mode à côté de la place f
 coexistent, la bande et le libellé signalant le mode dans l'écran de l'événement, le
 bandeau portant la version jusque sur la liste des événements.
 
-**Le bandeau annonce aussi la version de format du fichier ouvert** dès qu'elle
-diffère de celle que le binaire écrit : plus ancienne, « ce fichier se convertira à
-votre première modification » ; plus récente, « ce fichier s'ouvre en lecture
-seule ». Le changelog annonce l'événement à la livraison ; le bandeau l'annonce au
-moment où l'opérateur peut encore se ménager un retour en arrière, c'est-à-dire
-avant le premier geste.
+**Le bandeau annonce aussi la version de format du fichier ouvert** quand elle
+est plus récente que celle que le binaire écrit : « ce fichier s'ouvre en lecture
+seule ». Un fichier d'un format plus ancien ne s'ouvre pas (§ 8.8) : le refus le
+dit, et le bandeau n'a rien à annoncer. Le changelog annonce le changement de
+format à la livraison ; le bandeau l'annonce au moment où l'opérateur ouvre le
+fichier.
 
 **Le bloc copiable** du panneau « À propos » tient en une ligne — version affichée,
 plateforme, provenance de la construction, version de format des fichiers — et se

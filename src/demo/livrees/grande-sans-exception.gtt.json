@@ -1,5 +1,5 @@
 {
-  "entete": {"format":2,"produitVersion":"2026.10.05.01","revision":1,"comptes":{"participants":260,"tables":33,"reservations":33,"titres":33,"propositions":0,"retenu":0}},
+  "entete": {"format":3,"produitVersion":"2026.10.05.01","revision":1,"comptes":{"participants":260,"tables":33,"reservations":33,"titres":33,"propositions":0,"retenu":0}},
   "charge": {
     "evenement": {"id":"demo:grande-sans-exception","nom":"Grande démonstration sans exception","date":null,"siegesParDefaut":8,"tours":4,"unite":"cm","etat":"brouillon","filiation":null},
     "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},

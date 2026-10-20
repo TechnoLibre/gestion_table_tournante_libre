@@ -114,7 +114,6 @@ import {
   ouvrirSecours as ouvrirSecoursSurDisque,
   verrouiller,
 } from '../stockage/depot.js';
-import { FORMAT, analyser } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { estFigee, figer } from '../stockage/gel.js';
 import { fil, lignesHistorique, reconstruire } from '../stockage/journal.js';
@@ -215,10 +214,6 @@ export function copiePubliee({ charge, examen }) {
   return figer(copie);
 }
 
-// Le format qu'annonce l'en-tête de l'état sur le disque, null sans texte :
-// texteEtat d'un Ouvert est toujours lisible quand il n'est pas null.
-const formatDe = (texteEtat) => (texteEtat === null ? null : analyser(texteEtat).entete.format);
-
 // La révision de la dernière entrée du journal de l'Ouvert, null sans
 // journal.
 const derniereEntree = ({ journal }) => journal?.entrees.at(-1)?.revision ?? null;
@@ -278,9 +273,6 @@ function toucheDuRetour(sens, options) {
  *        arme une minuterie ; rend ce qu'annuler reçoit
  * @param {(minuterie: unknown) => void} parametres.annuler
  * @param {number} [parametres.inactiviteMs]
- * @param {number} [parametres.formatCourant]   le format au-dessous duquel un
- *        fichier ouvert s'annonce plus ancien ; il ne règle que l'annonce : le
- *        stockage n'écrit que FORMAT
  * @param {number} [parametres.delaiReglagesMs]   délai de l'écriture différée
  *        du cadrage
  * @param {(() => Promise<{regulier: Uint8Array, gras: Uint8Array}>)|null} [parametres.polices]
@@ -299,7 +291,6 @@ export function creerSeance({
   planifier,
   annuler,
   inactiviteMs = INACTIVITE_MS,
-  formatCourant = FORMAT,
   delaiReglagesMs = DELAI_REGLAGES_MS,
   polices = null,
   provenance = null,
@@ -319,7 +310,6 @@ export function creerSeance({
   // suspendent le compte d'inactivité ; minuterie : celle qu'il a armée ;
   // ailleurs : la racine documents à proposer quand le support rompu en est
   // une autre ; fautives : les propositions que l'ouverture a écartées ;
-  // formatLu : le format de l'état relu, null dès qu'un geste l'a écrit ;
   // retourAutomatique : le dernier retour en lecture est celui de
   // l'inactivité ; cadrage : celui de l'événement ouvert, lu ou demandé ;
   // papier : sur la racine du choix de la séance (choixSeance), le papier de
@@ -344,7 +334,6 @@ export function creerSeance({
     calculs: 0,
     minuterie: null,
     fautives: [],
-    formatLu: null,
     retourAutomatique: false,
     cadrage: null,
     papier: null,
@@ -388,12 +377,12 @@ export function creerSeance({
   }
 
   // L'événement de l'état observable : sa base, son identifiant, son nom, son
-  // état, sa révision, et l'annonce du format.
+  // état, sa révision, et l'annonce du format, 'plusRecent' pour un fichier
+  // d'un format plus récent, null sinon : un format plus ancien ne s'ouvre
+  // pas.
   function evenementDe(ouvert) {
     const { id: idEvenement, nom, etat: etatDuPlan } = ouvert.charge.evenement;
-    let annonceFormat = null;
-    if (ouvert.formatPlusRecent) annonceFormat = 'plusRecent';
-    else if (etat.formatLu !== null && etat.formatLu < formatCourant) annonceFormat = 'plusAncien';
+    const annonceFormat = ouvert.formatPlusRecent ? 'plusRecent' : null;
     return { base: ouvert.base, id: idEvenement, nom, etat: etatDuPlan, revision: ouvert.revision, annonceFormat };
   }
 
@@ -846,7 +835,6 @@ export function creerSeance({
     const frais = avecCoursesDe(relu.frais, ouvert);
     etat.ouvert = frais;
     etat.source = source;
-    etat.formatLu = formatDe(frais.texteEtat);
     const change =
       frais.revision !== ouvert.revision || serialiserCharge(frais.charge) !== serialiserCharge(ouvert.charge);
     return change ? [avertissement('EVENEMENT_CHANGE', { revision: frais.revision })] : [];
@@ -930,12 +918,9 @@ export function creerSeance({
   // l'Ouvert de la séance. ECRITURE rompt le support en gardant l'Ouvert
   // reçu, que rien n'a changé ; ETAT_NON_ECRIT, en gardant l'Ouvert avancé de
   // ses détails, son geste au journal. Le refus remonte.
-  // Une écriture réussie porte l'état au format FORMAT : l'annonce d'un
-  // format plus ancien tombe.
   async function ecrire(ouvert, ecriture) {
     try {
       etat.ouvert = await ecriture(ouvert);
-      etat.formatLu = null;
       return etat.ouvert;
     } catch (erreur) {
       if (erreur instanceof ErreurStockage && erreur.code === 'ECRITURE') await rompre(erreur, ouvert);
@@ -1196,7 +1181,6 @@ export function creerSeance({
       gestes: 0,
       calculs: 0,
       fautives: [],
-      formatLu: null,
       retourAutomatique: false,
       cadrage: null,
     });
@@ -1205,8 +1189,8 @@ export function creerSeance({
 
   // Ouvre en lecture l'Ouvert que rend lire, sans rien écrire, après avoir
   // fermé le précédent ; source dit d'où il se relit (relireSousVerrou).
-  // L'ouverture garde les propositions qu'elle écarte, le format de l'état
-  // lu et le cadrage mémorisé de l'événement.
+  // L'ouverture garde les propositions qu'elle écarte et le cadrage mémorisé
+  // de l'événement.
   async function ouvrirAvec(lire, source, quitter) {
     exigerSauve(quitter);
     await fermerEvenement();
@@ -1214,7 +1198,6 @@ export function creerSeance({
     etat.ouvert = ouvert;
     etat.source = source;
     etat.fautives = ouvert.examen.fautives;
-    etat.formatLu = formatDe(ouvert.texteEtat);
     etat.cadrage = await cadrageMemorise(ouvert);
     return { base: ouvert.base, avertissements: ouvert.avertissements };
   }
@@ -1392,7 +1375,6 @@ export function creerSeance({
       supportRompu: false,
       refusSupport: null,
       ailleurs: null,
-      formatLu: null,
     });
     await relireReglagesMachine(nouvelle);
     // Le cadrage de l'événement suit la séance : demandé de nouveau pour la

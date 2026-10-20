@@ -10,7 +10,6 @@
 // se remplace par un autre dossier. Les noms d'épreuve sont inventés ; la
 // version vient du module engendré.
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_RETENU, personne as personneBadge, soiree, table as tableBadge } from '../../test/fixtures/badges/cas.js';
@@ -19,7 +18,7 @@ import { lirePolices } from '../../test/polices.js';
 import { apercevoir } from '../csv/apercu.js';
 import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { rechercher } from '../moteur/recherche.js';
-import { serialiser, serialiserCharge } from '../stockage/canonique.js';
+import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot, ouvrir as ouvrirDansLeDepot } from '../stockage/depot.js';
 import { FORMAT, analyser, configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
@@ -110,8 +109,7 @@ function creerPlanificateur() {
 // Une séance sur le système d'épreuve, sa racine créée : documents par
 // défaut.
 // options : les paramètres de creerSeance qu'une épreuve règle en plus —
-// formatCourant, delaiReglagesMs. Une racine null crée la séance sans
-// dossier de travail.
+// delaiReglagesMs. Une racine null crée la séance sans dossier de travail.
 function monter({ fs = creerFichiersSimules(), racine = DOC, prefixe = 'seance', inactiviteMs, ...options } = {}) {
   if (racine !== null) fs.deposerDossier(racine.id);
   const planificateur = creerPlanificateur();
@@ -1702,89 +1700,44 @@ describe("séance : l'historique se lit dans tout mode, sans rien écrire (§ 8.
 });
 
 // Un événement écrit par le code du format 1 (test/fixtures/stockage/format1) :
-// son journal pose la cible de redondance à la révision 3 et la retire à la
-// 5. Ce code oublie ce réglage (§ 8.9) : la révision 3 se restitue comme la
-// 2, la 4 comme la 5. ATTENDUES porte, par révision, l'empreinte de la charge
-// que ce code restitue ; empreintes.json, celle que restituait le format 1.
+// son état, son .precedent et son journal, sous la base qu'empreintes.json
+// nomme.
 const FORMAT1 = new URL('../../test/fixtures/stockage/format1/', import.meta.url);
-const FORMAT1_EMPREINTES = JSON.parse(readFileSync(new URL('empreintes.json', FORMAT1), 'utf8'));
-const FORMAT1_ATTENDUES = {
-  ...FORMAT1_EMPREINTES.revisions,
-  3: FORMAT1_EMPREINTES.revisions[2],
-  4: FORMAT1_EMPREINTES.revisions[5],
-};
-const empreinte = (charge) => createHash('sha256').update(serialiserCharge(charge), 'utf8').digest('hex');
+const FORMAT1_BASE = JSON.parse(readFileSync(new URL('empreintes.json', FORMAT1), 'utf8')).base;
 
-describe('séance : défaire et refaire sur un journal du format 1 qui porte la cible de redondance (§ 8.3, § 8.9)', () => {
-  // Une séance en écriture sur une copie de la fixture déposée dans le
-  // système d'épreuve, et le journal de la fixture, lu tel quel.
-  async function surLaFixture() {
+describe('séance : un événement d’un format plus ancien ne s’ouvre pas (§ 8.8)', () => {
+  test('l’événement du format 1 se refuse ETAT_ILLISIBLE FORMAT_TROP_ANCIEN, sans secours ; la séance reste sans événement, rien ne s’écrit, et le refus dit que ce format n’est plus pris en charge', async () => {
     const fs = creerFichiersSimules();
     fs.deposerDossier('documents');
-    const base = FORMAT1_EMPREINTES.base;
     for (const suffixe of [SUFFIXES.journal, SUFFIXES.etat, SUFFIXES.precedent]) {
-      fs.deposer('documents', `${base}${suffixe}`, readFileSync(new URL(`${base}${suffixe}`, FORMAT1), 'utf8'));
+      const nom = `${FORMAT1_BASE}${suffixe}`;
+      fs.deposer('documents', nom, readFileSync(new URL(nom, FORMAT1), 'utf8'));
     }
-    const montage = monter({ fs });
-    await ouvrirSansEcrire(montage, base);
-    await montage.seance.passerEnEcriture();
-    const origine = lireJournal(readFileSync(new URL(`${base}${SUFFIXES.journal}`, FORMAT1), 'utf8'));
-    return { ...montage, base, origine };
-  }
-
-  // La charge courante a le contenu de l'instant revision : son empreinte, les
-  // compteurs d'identifiants ramenés à ceux de l'instant, est l'attendue — un
-  // retour garde les compteurs courants (§ 8.9).
-  function aLeContenuDe(seance, origine, revision) {
-    const instant = reconstruire(origine, revision);
-    assert.equal(empreinte({ ...seance.charge, prochainsIds: instant.prochainsIds }), FORMAT1_ATTENDUES[revision], `révision ${revision}`);
-  }
-
-  test("défaire remonte chaque instant jusqu'à la création, celui qui ne changeait que la cible compris ; refaire redescend de même jusqu'à la dernière", async () => {
-    const { fs, seance, base, origine } = await surLaFixture();
-    const derniereDe = () => journalDe(fs, 'documents', base).entrees.at(-1);
-    const defaits = [];
-    while (seance.retours.defaire) {
-      const { libelle: texte } = await seance.defaire();
-      const { sens, retour } = derniereDe();
-      assert.equal(sens, 'defaire');
-      aLeContenuDe(seance, origine, retour);
-      defaits.push([retour, texte]);
-    }
-    assert.deepEqual(defaits, [
-      [5, 'Défait : « Note »'],
-      [4, 'Défait : « Cible par défaut »'],
-      [3, 'Défait : « Réservation »'],
-      [2, 'Défait : « Cible de redondance »'],
-      [1, 'Défait : « Inscription de Brunelle »'],
-    ]);
-    await refus(seance.defaire(), 'RIEN_A_DEFAIRE');
-    const refaits = [];
-    while (seance.retours.refaire) {
-      const { libelle: texte } = await seance.refaire();
-      const { sens, retour } = derniereDe();
-      assert.equal(sens, 'refaire');
-      aLeContenuDe(seance, origine, retour);
-      refaits.push([retour, texte]);
-    }
-    assert.deepEqual(refaits, [
-      [2, 'Refait : « Inscription de Brunelle »'],
-      [3, 'Refait : « Cible de redondance »'],
-      [4, 'Refait : « Réservation »'],
-      [5, 'Refait : « Cible par défaut »'],
-      [6, 'Refait : « Note »'],
-    ]);
-    assert.equal(empreinte(seance.charge), FORMAT1_EMPREINTES.revisions[6]);
-    assert.equal(fs.contenu('documents', `${base}${SUFFIXES.etat}`).includes('cibleRedondance'), false);
+    const { seance } = monter({ fs });
+    const avant = fs.compteurs.ecritures;
+    const erreur = await refus(seance.ouvrir(FORMAT1_BASE), 'ETAT_ILLISIBLE');
+    assert.deepEqual(erreur.details, {
+      base: FORMAT1_BASE,
+      raison: 'FORMAT_TROP_ANCIEN',
+      chemin: 'entete.format',
+      format: 1,
+      secours: { precedent: null, journal: null },
+    });
+    assert.equal(seance.etat().evenement, null);
+    assert.equal(fs.compteurs.ecritures, avant);
+    const texte = libelle(erreur.code, erreur.details);
+    assert.match(texte, /format 1/);
+    assert.match(texte, /plus pris en charge/);
+    assert.match(texte, /Aucune version de secours ne se lit\./);
   });
 
-  test("revenir à un instant de même contenu que l'instant courant reste SANS_EFFET, sans écriture", async () => {
-    const { fs, seance } = await surLaFixture();
-    await seance.defaire();
-    const avant = fs.compteurs.ecritures;
-    const erreur = await refus(seance.revenir(4), 'SANS_EFFET', { sens: 'revenir', remede: null });
-    assert.equal(fs.compteurs.ecritures, avant);
-    assert.equal(libelle(erreur.code, erreur.details), "Cet instant a déjà le contenu courant : rien n'est enregistré.");
+  test('un état du format FORMAT − 1 se refuse de même, son format nommé', async () => {
+    const fs = creerFichiersSimules();
+    deposerAuFormat(fs, FORMAT - 1);
+    const { seance } = monter({ fs });
+    const erreur = await refus(seance.ouvrir(BASE), 'ETAT_ILLISIBLE');
+    assert.deepEqual([erreur.details.raison, erreur.details.format], ['FORMAT_TROP_ANCIEN', FORMAT - 1]);
+    assert.equal(seance.etat().evenement, null);
   });
 });
 
@@ -2682,22 +2635,11 @@ describe('séance observable : la version de format (§ 8.8, § 18.6)', () => {
     assert.equal(fs.compteurs.ecritures, avant);
   });
 
-  test("au format courant, aucune annonce ; formatCourant au-delà, 'plusAncien' sans rien écrire, puis le premier geste écrit au format FORMAT et l'annonce tombe", async () => {
-    const courant = await ouvertSur();
-    assert.equal(courant.seance.etat().evenement.annonceFormat, null);
-
-    const fs = creerFichiersSimules();
-    await deposerEssai(fs);
-    const { seance } = monter({ fs, formatCourant: FORMAT + 1 });
-    const avant = fs.compteurs.ecritures;
-    await seance.ouvrir(BASE);
-    assert.equal(seance.etat().evenement.annonceFormat, 'plusAncien');
-    assert.equal(fs.compteurs.ecritures, avant);
+  test('au format courant, aucune annonce, à l’ouverture, en écriture et après un geste écrit au format FORMAT', async () => {
+    const { seance, fs } = await ouvertSur(chargeEssai());
+    assert.equal(seance.etat().evenement.annonceFormat, null);
     await seance.passerEnEcriture();
-    assert.equal(seance.etat().evenement.annonceFormat, 'plusAncien', 'le passage en écriture ne convertit rien');
-    const entrees = journalDe(fs).entrees.length;
     await seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
-    assert.equal(journalDe(fs).entrees.length, entrees + 1);
     assert.equal(etatDe(fs).entete.format, FORMAT);
     assert.equal(seance.etat().evenement.annonceFormat, null);
   });

@@ -16,7 +16,8 @@
 // ErreurStockage('ETAT_ILLISIBLE', { raison, chemin }), en contrôlant dans
 // cet ordre : le texte vide (VIDE) ; le JSON (JSON) ; le format, lu avant
 // tout le reste parce qu'il dit comment lire le reste (FORME s'il manque,
-// FORMAT_INCONNU s'il n'est pas un entier ≥ 1) ; la forme de chaque champ,
+// FORMAT_INCONNU s'il n'est pas un entier ≥ 1, FORMAT_TROP_ANCIEN s'il est
+// plus petit que FORMAT) ; la forme de chaque champ,
 // dans l'ordre du schéma puis des rangs (FORME) ; les identifiants des
 // participants et des tables, le tour des réservations, la portée et le tour
 // des objectifs de table, l'ordre des priorités sous le mode des objectifs,
@@ -39,16 +40,9 @@
 // l'affaire du contrôle des placements, qui écarte une proposition fautive et
 // signale un retenu fautif sans refuser le fichier (§ 8.9, point 3).
 //
-// Un fichier d'un format plus ancien se lit comme un fichier du format
-// courant : chaque format n'ajoute au précédent que des champs facultatifs
-// (§ 8.8, § 8.9). Le format 2 ajoute les étiquettes des personnes, leur
-// présence par tour (presence, absente quand la personne est présente à tous
-// les tours), les objectifs des tables, cinq réglages, chacun absent à son
-// défaut, la dérivation d'une proposition, depart et toursFiges, absente
-// hors dérivation, et les absents de chaque tour d'un placement (absents,
-// absente quand le tour n'en a pas) ; un fichier du format 1 ne les porte
-// pas, et se lit sans conversion. Il ne se réécrit qu'au premier geste, au
-// format courant.
+// Un fichier d'un format plus ancien que FORMAT ne se lit pas : son refus,
+// FORMAT_TROP_ANCIEN au chemin entete.format, porte le format lu dans ses
+// détails et passe avant toute autre règle, et rien ne le convertit (§ 8.8).
 //
 // Une clé que les réglages ont portée et ne portent plus — la cible de la
 // somme de redondance, cibleRedondance — est oubliée (oubliees de la règle
@@ -66,13 +60,11 @@ import { ETIQUETTES_MAX, estEtiquetteBienFormee } from './etiquettes.js';
 import { ErreurStockage } from './erreurs.js';
 
 /**
- * Version de format que ce code écrit (§ 8.8). Le format 2 ajoute au format
- * 1 des champs facultatifs seulement (§ 8.9), la présence par tour d'une
- * personne (presence) et les absents d'un tour de placement (absents)
- * compris : un fichier du format 1 se lit comme un fichier du format 2 qui
- * n'en porte aucun.
+ * Version de format que ce code écrit, et la seule qu'il lit en entier
+ * (§ 8.8) : un format plus ancien se refuse, un format plus récent se lit
+ * réduit, en lecture seule.
  */
-export const FORMAT = 2;
+export const FORMAT = 3;
 
 /**
  * Le plus grand nombre de places d'une table, au défaut comme en surcharge
@@ -625,13 +617,15 @@ const cleInconnue = (valeur, { cles, oubliees }) =>
 // Format du fichier lu, contrôlé avant toute autre règle : il dit comment
 // lire le reste. Une racine qui n'est pas un objet, un en-tête ou un format
 // absents sont des fautes de forme ; un format qui n'est pas un entier ≥ 1
-// est inconnu.
+// est inconnu ; un format plus petit que FORMAT est trop ancien, et son
+// refus porte le format lu.
 function lireFormat(lu) {
   if (!estObjet(lu)) illisible('FORME', '');
   if (!estObjet(lu.entete)) illisible('FORME', 'entete');
   if (lu.entete.format === undefined) illisible('FORME', 'entete.format');
   const { format } = lu.entete;
   if (!Number.isSafeInteger(format) || format < 1) illisible('FORMAT_INCONNU', 'entete.format');
+  if (format < FORMAT) illisible('FORMAT_TROP_ANCIEN', 'entete.format', { format });
   return format;
 }
 
@@ -937,11 +931,11 @@ function oublierDesReglages(reglages) {
  * compris, sans refuser le fichier (§ 8.9, point 3).
  *
  * Lève ErreurStockage('ETAT_ILLISIBLE', { raison, chemin }), et format
- * pour un fichier plus récent, à la première faute, dans l'ordre que donne
- * l'en-tête du module. chemin désigne l'élément fautif : clés séparées par
- * un point, rangs entre crochets, une clé qui ne s'écrit pas comme un
- * identifiant entre crochets en JSON ; '' pour la racine ; null quand le
- * texte n'a rien à désigner (VIDE, JSON). D'un objet, un champ du schéma
+ * pour un fichier plus récent ou trop ancien, à la première faute, dans
+ * l'ordre que donne l'en-tête du module. chemin désigne l'élément fautif :
+ * clés séparées par un point, rangs entre crochets, une clé qui ne s'écrit
+ * pas comme un identifiant entre crochets en JSON ; '' pour la racine ; null
+ * quand le texte n'a rien à désigner (VIDE, JSON). D'un objet, un champ du schéma
  * fautif est nommé avant une clé inconnue, et de plusieurs clés inconnues,
  * la plus petite.
  *
@@ -987,17 +981,16 @@ export function analyser(texte) {
  * facultatives ; les objectifs des tables, chacun { table, tour, regle,
  * etiquettes }, tour null pour la soirée, sa règle résolue : la sienne,
  * sinon la règle par défaut (regleObjectifs) ; le mode des objectifs ;
- * l'ordre des priorités, tel que le rend priorites. Chaque champ nouveau du
- * format 2 est absent à son défaut — étiquettes d'une personne qui n'en
- * porte pas, présence d'une personne présente à tous les tours, objectifs
- * quand aucune table n'en a, modeObjectifs à « places », respecterObjectifs
- * coché, rencontrerAnimateurs décoché, priorites quand les réglages ne le
- * portent pas — : la configuration d'une charge sans eux est celle du
- * format 1. Qui
- * anime à chaque tour ne se lit pas ici : configurationDe
- * (src/application/configuration.js) l'ajoute, sur la règle des titres
- * pourvus, que le stockage n'importe pas. Les tables vont
- * par identifiant croissant, l'ordre du texte canonique : le moteur assoit
+ * l'ordre des priorités, tel que le rend priorites. Chaque champ facultatif
+ * est absent à son défaut — étiquettes d'une personne qui n'en porte pas,
+ * présence d'une personne présente à tous les tours, objectifs quand aucune
+ * table n'en a, modeObjectifs à « places », respecterObjectifs coché,
+ * rencontrerAnimateurs décoché, priorites quand les réglages ne le portent
+ * pas — : la configuration d'une charge sans eux ne porte que les clés
+ * toujours présentes. Qui anime à chaque tour ne se lit pas ici :
+ * configurationDe (src/application/configuration.js) l'ajoute, sur la règle
+ * des titres pourvus, que le stockage n'importe pas. Les tables vont par
+ * identifiant croissant, l'ordre du texte canonique : le moteur assoit
  * table après table, et une charge aux tables dans un autre ordre, relue
  * après un enregistrement, ne régénérerait plus ses propositions (§ 8.9).
  * Les objectifs suivent l'ordre des tables, puis la soirée et les tours
@@ -1068,9 +1061,13 @@ export function etatDeduit({ retenu, propositions }) {
 const REGLE_OBJECTIFS_PAR_DEFAUT = 'ou';
 const MODE_OBJECTIFS_PAR_DEFAUT = 'places';
 
-// Les quatre cases du format 1, toujours portées par les réglages (§ 5.3,
-// § 8.9).
-const CASES_DU_FORMAT_1 = new Set(['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances']);
+// Les quatre cases toujours portées par les réglages (§ 5.3, § 8.9).
+const CASES_TOUJOURS_PRESENTES = new Set([
+  'separerAppartenances',
+  'nouveauxVoisins',
+  'nouvelleTable',
+  'varierAppartenances',
+]);
 
 // Les défauts des cases facultatives, que seul CASES_FACULTATIVES expose.
 const DEFAUTS_DES_CASES = new Map([
@@ -1079,10 +1076,10 @@ const DEFAUTS_DES_CASES = new Map([
 ]);
 
 /**
- * Les deux cases facultatives du format 2 (§ 5.3, § 8.9), chacune avec la
- * valeur qu'elle prend quand les réglages ne la portent pas, dans cet
- * ordre. La seule déclaration de ces cases : le registre des commandes
- * l'importe. La vue est gelée et ne lit qu'une Map privée au module : ni
+ * Les deux cases facultatives (§ 5.3, § 8.9), chacune avec la valeur
+ * qu'elle prend quand les réglages ne la portent pas, dans cet ordre. La
+ * seule déclaration de ces cases : le registre des commandes l'importe. La
+ * vue est gelée et ne lit qu'une Map privée au module : ni
  * set, ni delete, ni clear, et chaque paire [cle, defaut] qu'elle itère est
  * un tableau neuf, qu'un appelant peut changer sans toucher aux défauts que
  * lisent critereCoche et le registre.
@@ -1110,10 +1107,10 @@ export function regleObjectifs(charge) {
 
 /**
  * Vrai quand la case cle des critères est cochée (§ 5.3, § 8.9) : l'une des
- * quatre contraintes du format 1, que les réglages portent toujours, ou
- * l'une des deux cases facultatives — respecterObjectifs, cochée quand les
- * réglages ne la portent pas, rencontrerAnimateurs, décochée alors. C'est la
- * seule lecture des deux cases facultatives.
+ * quatre contraintes que les réglages portent toujours, ou l'une des deux
+ * cases facultatives — respecterObjectifs, cochée quand les réglages ne la
+ * portent pas, rencontrerAnimateurs, décochée alors. C'est la seule lecture
+ * des deux cases facultatives.
  *
  * @param {import('./types.js').Charge} charge
  * @param {'separerAppartenances'|'nouveauxVoisins'|'nouvelleTable'|'varierAppartenances'|'respecterObjectifs'|'rencontrerAnimateurs'} cle
@@ -1121,7 +1118,7 @@ export function regleObjectifs(charge) {
  * @throws {RangeError} pour toute autre clé
  */
 export function critereCoche(charge, cle) {
-  if (CASES_DU_FORMAT_1.has(cle)) return charge.reglages[cle];
+  if (CASES_TOUJOURS_PRESENTES.has(cle)) return charge.reglages[cle];
   if (CASES_FACULTATIVES.has(cle)) return charge.reglages[cle] ?? CASES_FACULTATIVES.get(cle);
   throw new RangeError(`critereCoche : case inconnue ${JSON.stringify(cle)}`);
 }

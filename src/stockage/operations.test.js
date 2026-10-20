@@ -7,8 +7,8 @@
 // l'autre emplacement, supprimer vers une corbeille datée, la lister, charger
 // une démonstration livrée. Une coupure à chaque écriture d'un renommage ou
 // d'une suppression laisse le dossier sans perte. Un fichier d'un format
-// plus récent ne se réécrit sous aucun nom ; un fichier du format 1 venu
-// d'ailleurs s'importe tel quel et se convertit au premier geste. Les noms
+// plus récent ne se réécrit sous aucun nom ; un fichier d'un format plus
+// ancien ne s'importe ni ne se charge. Les noms
 // d'épreuve sont inventés ; les versions viennent du module engendré.
 import assert from 'node:assert/strict';
 import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.js';
@@ -1037,23 +1037,14 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
     assert.equal(sansNom.fs.compteurs.ecritures, 0);
   });
 
-  test("un fichier du format 1 venu d'ailleurs s'importe tel quel et s'ouvre en écriture ; le premier geste l'écrit au format courant et commence son journal", async () => {
-    const { disque, fs } = nouveauDisque();
-    const texte = etatAuFormat1(etatTexte(chargeEssai(), 4));
-    assert.deepEqual(await importer(fs, DOC, UTF8.encode(texte)), { base: BASE });
-    assert.equal(fs.contenu('documents', ETAT), texte);
-    assert.equal(fs.contenu('documents', JOURNAL), null);
-    const ouvert = await rouvrir(disque, BASE);
-    assert.deepEqual([ouvert.formatPlusRecent, ouvert.revision, ouvert.journal], [false, 4, null]);
-    await enregistrer(ouvert, noter(ouvert.charge, 5), geste(5, { libelleReprise: REPRISE }));
-    assert.equal(analyser(fs.contenu('documents', ETAT)).entete.format, FORMAT);
-    assert.equal(fs.contenu('documents', PRECEDENT), texte);
-    const journal = lireJournal(fs.contenu('documents', JOURNAL));
-    assert.deepEqual(
-      [journal.format, journal.entrees.map(({ revision, libelle }) => [revision, libelle])],
-      [FORMAT, [[4, REPRISE], [5, 'Geste 5']]],
-    );
-    assert.equal(serialiserCharge(reconstruire(journal, 4)), serialiserCharge(chargeEssai()));
+  test("un fichier d'un format plus ancien venu d'ailleurs se refuse, FORMAT_TROP_ANCIEN, format nommé, sans rien écrire", async () => {
+    for (const format of [1, FORMAT - 1]) {
+      const { fs } = nouveauDisque();
+      const texte = etatAuFormat(etatTexte(chargeEssai(), 4), format);
+      const erreur = await echec(importer(fs, DOC, UTF8.encode(texte)), 'ETAT_ILLISIBLE');
+      assert.deepEqual(erreur.details, { raison: 'FORMAT_TROP_ANCIEN', chemin: 'entete.format', format }, String(format));
+      assert.equal(fs.compteurs.ecritures, 0, String(format));
+    }
   });
 });
 
@@ -1794,22 +1785,21 @@ describe('opérations : charger une démonstration (§ 15)', () => {
   });
 });
 
-// Le texte d'état au format 1 : ce qu'une construction du format 1 écrit
-// pour la même charge.
-function etatAuFormat1(texte) {
+// Le texte d'état dont l'en-tête déclare le format donné, le reste tel quel.
+function etatAuFormat(texte, format) {
   const avant = `"entete": {"format":${FORMAT},`;
   assert.equal(texte.split(avant).length, 2, 'en-tête au format courant attendu');
-  return texte.replace(avant, '"entete": {"format":1,');
+  return texte.replace(avant, `"entete": {"format":${format},`);
 }
 
-// Le texte de journal au format 1 : son ouverture déclare le format 1.
-function journalAuFormat1(texte) {
+// Le texte de journal dont l'ouverture déclare le format donné.
+function journalAuFormat(texte, format) {
   const fin = texte.indexOf('\n');
-  return JSON.stringify({ ...JSON.parse(texte.slice(0, fin)), format: 1 }) + texte.slice(fin);
+  return JSON.stringify({ ...JSON.parse(texte.slice(0, fin)), format }) + texte.slice(fin);
 }
 
-describe('opérations : un événement du format 1 (§ 8.7, § 8.8)', () => {
-  test("importerDepuis copie l'état et le journal du format 1 tels quels ; là-bas, ils se lisent, et le premier geste les convertit, historique entier", async () => {
+describe('opérations : un événement d’un format plus ancien (§ 8.7, § 8.8)', () => {
+  test("importerDepuis refuse l'événement d'un format plus ancien, ETAT_ILLISIBLE, sans rien copier ; l'original reste tel quel", async () => {
     const disque = new Map();
     const PORTABLE = { executable: 'E:\\soirees' };
     const fs = creerFichiersSimules({ disque, ...PORTABLE });
@@ -1817,52 +1807,26 @@ describe('opérations : un événement du format 1 (§ 8.7, § 8.8)', () => {
     fs.deposerDossier('documents');
     const { portable, documents } = await fs.racines();
     const paire = await paireDe(chargeEssai());
-    const etat = etatAuFormat1(paire.etat);
-    const journal = journalAuFormat1(paire.journal);
+    const etat = etatAuFormat(paire.etat, FORMAT - 1);
+    const journal = journalAuFormat(paire.journal, FORMAT - 1);
     fs.deposer('portable', ETAT, etat);
     fs.deposer('portable', JOURNAL, journal);
+    const ecritures = fs.compteurs.ecritures;
     assert.deepEqual(await importerDepuis(fs, portable, documents, [BASE]), {
-      importes: [{ base: BASE, nouvelle: BASE }],
-      refuses: [],
+      importes: [],
+      refuses: [{ base: BASE, code: 'ETAT_ILLISIBLE' }],
     });
-    assert.deepEqual([fs.contenu('documents', ETAT), fs.contenu('documents', JOURNAL)], [etat, journal]);
-    const ouvert = await rouvrir(disque, BASE);
-    assert.deepEqual([ouvert.journalAReecrire, ouvert.journal.format, ouvert.revision], [true, 1, 2]);
-    await enregistrer(ouvert, noter(ouvert.charge, 3), geste(3));
-    const relu = lireJournal(fs.contenu('documents', JOURNAL));
-    assert.deepEqual([relu.format, relu.entrees.map(({ revision }) => revision)], [FORMAT, [1, 2, 3]]);
-    assert.equal(fs.contenu('documents', JOURNAL).split('\n').slice(1, 3).join('\n'), journal.split('\n').slice(1, 3).join('\n'));
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    assert.deepEqual(await arbre(disque, documents), []);
     assert.deepEqual([fs.contenu('portable', ETAT), fs.contenu('portable', JOURNAL)], [etat, journal]);
   });
 
-  test('copier et renommer un événement du format 1 écrivent au format courant ; l’original copié reste tel quel', async () => {
-    const { fs: source, ouvert: depart } = await deuxRevisions();
-    const fichiers = [
-      [ETAT, etatAuFormat1(source.contenu('documents', ETAT))],
-      [PRECEDENT, etatAuFormat1(source.contenu('documents', PRECEDENT))],
-      [JOURNAL, journalAuFormat1(source.contenu('documents', JOURNAL))],
-    ];
-    const { disque } = disqueAvec(fichiers);
-    const ouvert = await rouvrir(disque, BASE);
-    const copie = await copier(ouvert, optionsCopie('Variante des Lucioles'));
-    const { fs } = ouvert;
-    assert.equal(analyser(fs.contenu('documents', `${copie.base}${SUFFIXES.etat}`)).entete.format, FORMAT);
-    assert.equal(lireJournal(fs.contenu('documents', `${copie.base}${SUFFIXES.journal}`)).format, FORMAT);
-    for (const [nom, texte] of fichiers) assert.equal(fs.contenu('documents', nom), texte, nom);
-    const renomme = await renommer(ouvert, renommage('Gala des Saules', 3));
-    const journal = lireJournal(fs.contenu('documents', `${renomme.base}${SUFFIXES.journal}`));
-    assert.deepEqual([journal.format, journal.entrees.map(({ revision }) => revision)], [FORMAT, [1, 2, 3]]);
-    assert.equal(analyser(fs.contenu('documents', `${renomme.base}${SUFFIXES.etat}`)).entete.format, FORMAT);
-    assert.equal(serialiserCharge(reconstruire(journal, 2)), serialiserCharge(depart.charge));
-  });
-
-  test('une démonstration du format 1 se charge en un événement du format courant', async () => {
+  test("une démonstration d'un format plus ancien ne se charge pas : ETAT_ILLISIBLE FORMAT_TROP_ANCIEN, sans rien écrire", async () => {
     const { fs } = nouveauDisque();
-    const texte = etatAuFormat1(texteLivre('petite'));
-    const ouvert = await chargerDemonstration(fs, DOC, texte, chargement('evt-demo-1', 2));
-    assert.equal(analyser(fs.contenu('documents', `${ouvert.base}${SUFFIXES.etat}`)).entete.format, FORMAT);
-    const livree = analyser(texte).charge;
-    assert.deepEqual([ouvert.charge.participants, ouvert.charge.tables], [livree.participants, livree.tables]);
+    const texte = etatAuFormat(texteLivre('petite'), FORMAT - 1);
+    const erreur = await echec(chargerDemonstration(fs, DOC, texte, chargement('evt-demo-1', 2)), 'ETAT_ILLISIBLE');
+    assert.deepEqual(erreur.details, { raison: 'FORMAT_TROP_ANCIEN', chemin: 'entete.format', format: FORMAT - 1 });
+    assert.equal(fs.compteurs.ecritures, 0);
   });
 });
 

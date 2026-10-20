@@ -7,16 +7,16 @@
 // restitué tel qu'il s'est écrit ; la lecture qui s'arrête à la première
 // ligne illisible et compte ce qu'elle écarte ; le fil courant, défaire et
 // refaire ; les lignes de l'historique ; la construction notée ; l'élagage,
-// par le texte et en mémoire ; le journal d'un format plus ancien, qui se
-// lit ; la restitution sur une seule copie, canonique ou non, et l'entrée
-// qui rend sa ligne avec la copie canonique de la charge, propositions
-// figées comprises ; la restitution de chaque instant de la séance,
-// caractérisée octet pour octet. Les journaux s'écrivent comme les écrit l'enregistreur, une
-// ligne après l'autre, par les fonctions du module ; chaque charge de la
-// séance passe l'analyse du fichier d'état et le contrôle des placements. Les
-// noms des personnes ajoutées sont inventés, hors des réservoirs des
-// démonstrations ; les versions viennent du module engendré, seul à en porter
-// le texte.
+// par le texte et en mémoire ; le journal d'un format plus ancien, que la
+// lecture écarte en entier ; la restitution sur une seule copie, canonique ou
+// non, et l'entrée qui rend sa ligne avec la copie canonique de la charge,
+// propositions figées comprises ; la restitution de chaque instant de la
+// séance, caractérisée octet pour octet. Les journaux s'écrivent comme les
+// écrit l'enregistreur, une ligne après l'autre, par les fonctions du module
+// ; chaque charge de la séance passe l'analyse du fichier d'état et le
+// contrôle des placements. Les noms des personnes ajoutées sont inventés,
+// hors des réservoirs des démonstrations ; les versions viennent du module
+// engendré, seul à en porter le texte.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, test } from '../../test/lanceur.js';
@@ -425,7 +425,7 @@ describe('les lignes du journal : le texte exact, et ce que l’écriture refuse
         instantane: false,
       }),
     ];
-    assert.equal(lignes[0], '{"type":"journal","format":2,"evenement":"evt-essai"}');
+    assert.equal(lignes[0], '{"type":"journal","format":3,"evenement":"evt-essai"}');
     assert.equal(
       lignes[1],
       `{"type":"entree","revision":1,"libelle":"Création de l'événement « Soirée d'essai »",` +
@@ -845,6 +845,8 @@ describe('la lecture s’arrête à la première ligne illisible et compte ce qu
       ['JSON invalide', (ligne) => ligne.slice(1)],
       ['type inconnu', retouche((valeur) => ({ ...valeur, type: 'jornal' }))],
       ['format plus récent', retouche((valeur) => ({ ...valeur, format: FORMAT + 1 }))],
+      ['format 1', retouche((valeur) => ({ ...valeur, format: 1 }))],
+      ['format 2', retouche((valeur) => ({ ...valeur, format: 2 }))],
       ['format en texte', retouche((valeur) => ({ ...valeur, format: '1' }))],
       ['format 0', retouche((valeur) => ({ ...valeur, format: 0 }))],
       ['format négatif', retouche((valeur) => ({ ...valeur, format: -1 }))],
@@ -969,15 +971,13 @@ describe('horodatageFinal : l’horodatage de la dernière entrée, lu depuis la
     return texteDe(lignes);
   }
 
-  test('un journal sain rend la date de la lecture entière : séance, départ à 137, élagué, format 1, jalons, CRLF, marque d’ordre d’octets, horloge qui recule', () => {
+  test('un journal sain rend la date de la lecture entière : séance, départ à 137, élagué, jalons, CRLF, marque d’ordre d’octets, horloge qui recule', () => {
     const avecJalons = journalDe(suite(10).map((etape, rang) => ({ ...etape, jalons: [4, 9].includes(rang) ? ['Jalon'] : [] })));
-    const format1 = texteDe([retouche(lignesCent()[0], (ouverture) => ({ ...ouverture, format: 1 })), ...lignesCent().slice(1)]);
     const sains = [
       ['séance de 120 gestes', texteSeance()],
       ['cent entrées', cent()],
       ['départ à la révision 137', journalDe(suite(64), { premiere: 137 })],
       ['élagué', elaguer(journalDe(suite(650)))],
-      ['format 1', format1],
       ['jalons, dont un après la dernière entrée', avecJalons],
       ['fins de ligne CRLF', cent().replaceAll('\n', '\r\n')],
       ['marque d’ordre d’octets', `\u{FEFF}${cent()}`],
@@ -999,6 +999,7 @@ describe('horodatageFinal : l’horodatage de la dernière entrée, lu depuis la
       ['JSON invalide', lignesCent()[0].slice(1)],
       ['type inconnu', retouche(lignesCent()[0], (valeur) => ({ ...valeur, type: 'jornal' }))],
       ['format plus récent', retouche(lignesCent()[0], (valeur) => ({ ...valeur, format: FORMAT + 1 }))],
+      ['format plus ancien', retouche(lignesCent()[0], (valeur) => ({ ...valeur, format: FORMAT - 1 }))],
       ['format 0', retouche(lignesCent()[0], (valeur) => ({ ...valeur, format: 0 }))],
       ['événement absent', retouche(lignesCent()[0], ({ evenement, ...reste }) => reste)],
       ['clé inconnue', retouche(lignesCent()[0], (valeur) => ({ ...valeur, nom: "Soirée d'essai" }))],
@@ -1474,10 +1475,9 @@ describe('l’élagage : au-delà du plafond, depuis la frontière d’instantan
   });
 });
 
-describe('le journal d’un format plus ancien se lit (§ 8.8, A15)', () => {
+describe('le journal d’un format plus ancien ne se lit pas (§ 8.8)', () => {
   // Le texte d'un journal dont la ligne d'ouverture déclare le format donné,
-  // le reste inchangé : ce qu'une construction de ce format a écrit, le
-  // format n'ajoutant que des champs facultatifs.
+  // le reste inchangé.
   const auFormat = (texte, format) => {
     const lignes = lignesDe(texte);
     lignes[0] = JSON.stringify({ ...JSON.parse(lignes[0]), format });
@@ -1490,54 +1490,36 @@ describe('le journal d’un format plus ancien se lit (§ 8.8, A15)', () => {
     assert.equal(lireJournal(cent()).format, FORMAT);
   });
 
-  test('chaque format de 1 à FORMAT s’ouvre : toutes ses entrées se lisent, se restituent et suivent le même fil, et la lecture rend le format lu', () => {
-    const courant = lireJournal(cent());
-    const formats = Array.from({ length: FORMAT }, (_, rang) => rang + 1);
-    assert.ok(formats.includes(1) && formats.length >= 2);
+  test('chaque format de 1 à FORMAT − 1 rend l’ouverture illisible : toutes les lignes s’écartent, sans événement ni format, et la date finale ne se lit pas', () => {
+    const formats = Array.from({ length: FORMAT - 1 }, (_, rang) => rang + 1);
+    assert.deepEqual(formats, [1, 2]);
     for (const format of formats) {
-      const lu = lireJournal(auFormat(cent(), format));
-      assert.equal(lu.format, format);
-      assert.equal(lu.evenement, EVENEMENT);
-      assert.equal(lu.ecartees, 0);
-      assert.deepEqual(lu.entrees, courant.entrees);
-      assert.deepEqual(lu.jalons, courant.jalons);
-      assert.deepEqual(fil(lu), fil(courant));
-      for (const revision of [1, 2, 49, 50, 51, 99, 100]) {
-        assert.equal(texteCanonique(reconstruire(lu, revision)), texteCanonique(reconstruire(courant, revision)), `${format}, ${revision}`);
-      }
+      const texte = auFormat(cent(), format);
+      const lu = lireJournal(texte);
+      assert.deepEqual([lu.evenement, lu.format, lu.entrees.length, lu.jalons.length, lu.ecartees], [null, null, 0, 0, 101], String(format));
+      assert.equal(horodatageFinal(texte), null, String(format));
     }
   });
+});
 
-  test('une ligne illisible arrête la lecture d’un journal du format 1 comme d’un autre', () => {
-    const lignes = lignesDe(auFormat(cent(), 1));
-    lignes[37] = lignes[37].slice(0, 30);
-    const lu = lireJournal(texteDe(lignes));
-    assert.deepEqual([lu.format, lu.entrees.length, lu.ecartees], [1, 36, 64]);
-  });
+describe('la cible de redondance, un réglage oublié, traverse le journal (§ 8.9)', () => {
+  const cent = memoire(() => journalDe(suite(100)));
 
-  test('la cible de redondance qu’écrivait un code antérieur — dans un instantané, posée puis retirée par un correctif — se lit, et chaque instant se restitue sans elle', () => {
+  test('posée dans un instantané, puis par un correctif, et retirée, elle se lit, et chaque instant se restitue sans elle', () => {
     const courant = lireJournal(cent());
-    const lignes = lignesDe(auFormat(cent(), 1)).map((ligne) => JSON.parse(ligne));
+    const lignes = lignesDe(cent()).map((ligne) => JSON.parse(ligne));
     const entree = (revision) => lignes.find((ligne) => ligne.type === 'entree' && ligne.revision === revision);
     entree(1).instantane.reglages.cibleRedondance = 800;
     entree(2).correctif.unshift({ op: 'poser', chemin: ['reglages', 'cibleRedondance'], valeur: 1200 });
     entree(3).correctif.push({ op: 'retirer', chemin: ['reglages', 'cibleRedondance'] });
     entree(4).correctif.push({ op: 'retirer', chemin: ['reglages', 'cibleRedondance'] });
     const lu = lireJournal(texteDe(lignes.map((ligne) => JSON.stringify(ligne))));
-    assert.deepEqual([lu.format, lu.ecartees, lu.entrees.length], [1, 0, courant.entrees.length]);
+    assert.deepEqual([lu.format, lu.ecartees, lu.entrees.length], [FORMAT, 0, courant.entrees.length]);
     for (const revision of [1, 2, 3, 4, 5, 51, 100]) {
       const charge = reconstruire(lu, revision);
       assert.equal(Object.hasOwn(charge.reglages, 'cibleRedondance'), false, String(revision));
       assert.equal(texteCanonique(charge), texteCanonique(reconstruire(courant, revision)), String(revision));
     }
-  });
-
-  test('élagué, un journal du format 1 se réécrit au format courant : seule son ouverture change', () => {
-    const etapes = suite(650);
-    const texte = journalDe(etapes);
-    const elague = elaguer(auFormat(texte, 1));
-    assert.equal(elague, elaguer(texte));
-    assert.equal(lireJournal(elague).format, FORMAT);
   });
 });
 

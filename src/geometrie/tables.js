@@ -79,7 +79,7 @@ function exigerPlaces(places) {
 }
 
 /**
- * Diamètre d'une table ronde (§ 7.7) : max(70, places × 60 / π). Le format 1
+ * Diamètre d'une table ronde (§ 7.7) : max(70, places × 60 / π). Le fichier
  * ne porte aucun diamètre saisi : la formule dessine toute table, et le pas
  * qu'en tire geometrieTable ne connaît qu'elle.
  *

@@ -10,13 +10,10 @@
 // servent qu'à l'affichage.
 //
 // L'ouverture déclare le format des charges que le journal porte. Le
-// journal s'écrit au format courant, FORMAT, et se lit à tout format de 1 à
-// FORMAT : un format n'ajoute au précédent que des champs facultatifs, et
-// les charges d'un journal plus ancien sont des charges du format courant
-// qui ne les portent pas (§ 8.8). La lecture rend le format lu ; le dépôt
-// réécrit en entier, au premier geste, un journal d'un format plus ancien.
-// Un format plus récent rend l'ouverture illisible : ce code ne sait pas
-// lire ses charges.
+// journal s'écrit et se lit au format courant, FORMAT, seul : une ouverture
+// d'un autre format est illisible (§ 8.8). Un format plus récent porte des
+// charges que ce code ne sait pas lire ; un format plus ancien n'est plus
+// pris en charge, et rien ne le convertit.
 //
 // Le module n'a ni fichier ni horloge. Il rend le texte d'une ligne, sans fin
 // de ligne — l'ajout au fichier appartient au système de fichiers —, et,
@@ -67,7 +64,7 @@ export const PLAFOND_ENTREES = 600;
  *
  * @typedef {Object} Journal
  * @property {string|null} evenement
- * @property {number|null} format     de 1 à FORMAT
+ * @property {number|null} format     FORMAT
  * @property {import('./types.js').LigneEntree[]} entrees
  * @property {import('./types.js').LigneJalon[]} jalons
  * @property {number} ecartees
@@ -128,11 +125,10 @@ function fauteDeCharge(charge) {
 // est admise à sa clé ; il peut lire les clés qui la précèdent, déjà admises.
 const sorte = (champs) => ({ champs, cles: new Set(champs.map(([cle]) => cle)) });
 
-// Le format d'une ouverture : un entier de 1 à FORMAT. L'écriture n'en pose
-// qu'un, FORMAT (ligneOuverture).
+// Le format d'une ouverture : FORMAT, que l'écriture pose (ligneOuverture).
 const OUVERTURE = sorte([
   ['type', (valeur) => valeur === 'journal'],
-  ['format', (valeur) => Number.isSafeInteger(valeur) && valeur >= 1 && valeur <= FORMAT],
+  ['format', (valeur) => valeur === FORMAT],
   ['evenement', estTexte],
 ]);
 
@@ -393,15 +389,14 @@ function lire(texte) {
  * La lecture s'arrête à la première ligne illisible : JSON invalide ; forme
  * fausse, toute clé absente, refusée ou inconnue, et l'instantané d'une forme
  * que l'analyse du fichier d'état refuse ; une ouverture dont le format n'est
- * pas un entier de 1 à FORMAT ; une entrée dont la révision ne suit pas la
- * précédente, ou dont l'instantané manque ou abonde au regard de la cadence
- * (estInstantane) ; une première entrée sans version ; un jalon d'une
- * révision qui n'est pas encore lue ; une ligne finale sans fin de ligne.
+ * pas FORMAT ; une entrée dont la révision ne suit pas la précédente, ou dont
+ * l'instantané manque ou abonde au regard de la cadence (estInstantane) ;
+ * une première entrée sans version ; un jalon d'une révision qui n'est pas
+ * encore lue ; une ligne finale sans fin de ligne.
  * Cette ligne et toutes celles qui la suivent, entrées et jalons confondus —
  * une ligne illisible ne dit pas sa sorte —, sont écartées et comptées dans
  * ecartees. Une ouverture illisible écarte tout, et evenement et format
- * valent null. Un journal d'un format plus ancien se lit entier, son format
- * rendu.
+ * valent null.
  *
  * Un correctif se lit sans s'appliquer : reconstruire lève CORRECTIF sur
  * celui qui ne s'applique pas.
@@ -637,11 +632,10 @@ export function versionDe({ entrees }, revision) {
  * Texte du journal élagué (§ 8.6), ou null quand ses entrées lisibles ne
  * dépassent pas PLAFOND_ENTREES. La coupe tombe sur l'instantané le plus
  * récent qui garde au moins PLANCHER_ENTREES entrées : le plancher l'emporte
- * sur le plafond. Le texte rendu porte l'ouverture au format courant —
- * réécrit, un journal d'un format plus ancien s'y convertit —, puis les
- * lignes lues dont la révision atteint la coupe — les jalons des entrées
- * retirées partent avec elles —, puis les lignes que la lecture écarte,
- * telles quelles. L'entrée de la coupe porte la version de la construction
+ * sur le plafond. Le texte rendu porte l'ouverture au format courant, puis
+ * les lignes lues dont la révision atteint la coupe — les jalons des
+ * entrées retirées partent avec elles —, puis les lignes que la lecture
+ * écarte, telles quelles. L'entrée de la coupe porte la version de la construction
  * qui l'a produite (versionDe), qu'elle hérite sinon d'une entrée retirée ;
  * toute autre ligne gardée se recopie octet pour octet. La marque d'ordre
  * d'octets ne se recopie pas. Les instantanés gardés suivent la cadence

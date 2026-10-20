@@ -3,9 +3,9 @@
 
 // Épreuves du document d'événement (§ 4, § 4.5, § 6.1, § 8.1, § 8.8, § 8.9,
 // § 9) : la charge neuve ; l'analyse d'un texte, ce qu'elle lit et chacun
-// de ses refus, nommé par sa raison et son chemin ; la lecture d'un format
-// plus ancien et d'un format plus récent ; les champs facultatifs du format
-// 2 et leurs lecteurs ; la configuration que reçoit le moteur ; l'état
+// de ses refus, nommé par sa raison et son chemin ; le refus d'un format
+// plus ancien et la lecture d'un format plus récent ; les champs facultatifs
+// et leurs lecteurs ; la configuration que reçoit le moteur ; l'état
 // qu'impose le contenu ; la capacité d'une table ; l'erreur de stockage ; le
 // parcours de forme que partagent l'analyse, le contrôle des placements et
 // les correctifs. Les textes d'épreuve sont du JSON compact : l'analyse ne
@@ -259,8 +259,8 @@ describe('ErreurStockage (erreurs.js)', () => {
 });
 
 describe('creerCharge (§ 4, § 6.1, § 9)', () => {
-  test('une charge neuve est un brouillon sans participant ni table, au format 2, aux réglages par défaut', () => {
-    assert.equal(FORMAT, 2);
+  test('une charge neuve est un brouillon sans participant ni table, au format 3, aux réglages par défaut', () => {
+    assert.equal(FORMAT, 3);
     const charge = creerCharge({ id: 'evt-neuf', nom: 'Atelier du jeudi', date: '2026-11-12', siegesParDefaut: 8, tours: 3 });
     assert.deepEqual(charge, {
       evenement: {
@@ -473,6 +473,8 @@ describe('analyser : texte vide, JSON, racine et format', () => {
       ['format non entier', abime((d) => { d.entete.format = 1.5; }), 'FORMAT_INCONNU', 'entete.format'],
       ['format en texte', abime((d) => { d.entete.format = '1'; }), 'FORMAT_INCONNU', 'entete.format'],
       ['format nul', abime((d) => { d.entete.format = null; }), 'FORMAT_INCONNU', 'entete.format'],
+      ['format 1', abime((d) => { d.entete.format = 1; }), 'FORMAT_TROP_ANCIEN', 'entete.format', { format: 1 }],
+      ['format 2', abime((d) => { d.entete.format = 2; }), 'FORMAT_TROP_ANCIEN', 'entete.format', { format: 2 }],
     ]), []);
   });
 });
@@ -1365,13 +1367,13 @@ describe("la course de la recherche hors du fichier d'état (§ 8.9, B31)", () =
   });
 });
 
-// --- Les champs facultatifs du format 2 (§ 4.5, § 8.9, A16) ---------------
+// --- Les champs facultatifs (§ 4.5, § 8.9, A16) ----------------------------
 
-// Le document valide portant chaque champ facultatif du format 2 hors de son
-// défaut : des étiquettes à deux personnes, deux objectifs à la table 1 — la
-// soirée, qui suit le défaut, et le tour 2, de règle propre —, la règle par
-// défaut « et », les objectifs non respectés, le mode « l'équité d'abord »,
-// la rencontre des animateurs cochée. Une copie neuve à chaque appel.
+// Le document valide portant chaque champ facultatif hors de son défaut : des
+// étiquettes à deux personnes, deux objectifs à la table 1 — la soirée, qui
+// suit le défaut, et le tour 2, de règle propre —, la règle par défaut « et
+// », les objectifs non respectés, le mode « l'équité d'abord », la rencontre
+// des animateurs cochée. Une copie neuve à chaque appel.
 function documentComplet() {
   const d = documentValide();
   d.charge.reglages.regleObjectifs = 'et';
@@ -1394,24 +1396,24 @@ function abimeComplet(modifier) {
   return JSON.stringify(copie);
 }
 
-// Chemins, rangs effacés, des valeurs nouvelles du format 2 que le contrat
-// admet nulles.
-const ADMETTENT_NULL_FORMAT_2 = new Set([...ADMETTENT_NULL, 'charge.tables[].objectifs[].tour', 'charge.tables[].objectifs[].regle']);
+// Chemins, rangs effacés, des valeurs facultatives que le contrat admet
+// nulles.
+const ADMETTENT_NULL_FACULTATIFS = new Set([...ADMETTENT_NULL, 'charge.tables[].objectifs[].tour', 'charge.tables[].objectifs[].regle']);
 
-// Vrai pour les étapes d'une valeur que le format 2 ajoute : sous les
-// étiquettes d'une personne, les objectifs d'une table, ou l'un des quatre
-// réglages nouveaux.
-const REGLAGES_FORMAT_2 = ['regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs'];
-const estDuFormat2 = (etapes) =>
+// Vrai pour les étapes d'une valeur facultative : sous les étiquettes d'une
+// personne, les objectifs d'une table, ou l'un des quatre réglages
+// facultatifs.
+const REGLAGES_FACULTATIFS = ['regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs'];
+const estFacultative = (etapes) =>
   etapes.includes('etiquettes') ||
   etapes.includes('objectifs') ||
-  (etapes[1] === 'reglages' && REGLAGES_FORMAT_2.includes(etapes[2]));
+  (etapes[1] === 'reglages' && REGLAGES_FACULTATIFS.includes(etapes[2]));
 
 const regleDuChamp = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
 const CHARGE_SCHEMA = regleDuChamp(SCHEMA, 'charge');
 
-describe('les champs facultatifs du format 2 : forme et place (§ 8.9, A16)', () => {
-  test('chacun est facultatif, écrit après les clés du format 1 de son objet, les réglages dans l’ordre de A16', () => {
+describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
+  test('chacun est facultatif, écrit après les clés toujours présentes de son objet, les réglages dans l’ordre de A16', () => {
     const REGLAGES = regleDuChamp(CHARGE_SCHEMA, 'reglages');
     const PARTICIPANT = regleDuChamp(CHARGE_SCHEMA, 'participants').element;
     const TABLE = regleDuChamp(CHARGE_SCHEMA, 'tables').element;
@@ -1561,7 +1563,7 @@ describe('les champs facultatifs du format 2 : forme et place (§ 8.9, A16)', ()
   });
 
   test('sur chaque valeur nouvelle : une clé inconnue, une valeur d’une autre sorte, null où le contrat ne l’admet pas, sont nommés par leur chemin', () => {
-    const etapes = etapesDe(documentComplet()).filter(estDuFormat2);
+    const etapes = etapesDe(documentComplet()).filter(estFacultative);
     assert.ok(etapes.length >= 20, `${etapes.length} valeurs seulement`);
     const objets = etapes.filter((e) => {
       const valeur = valeurEn(documentComplet(), e);
@@ -1584,7 +1586,7 @@ describe('les champs facultatifs du format 2 : forme et place (§ 8.9, A16)', ()
         'FORME',
         cheminDe(e),
       ]),
-      ...etapes.filter((e) => !ADMETTENT_NULL_FORMAT_2.has(sansRangs(e))).map((e) => [
+      ...etapes.filter((e) => !ADMETTENT_NULL_FACULTATIFS.has(sansRangs(e))).map((e) => [
         `${cheminDe(e)} nul`,
         abimeComplet((d) => { valeurEn(d, e.slice(0, -1))[e.at(-1)] = null; }),
         'FORME',
@@ -1595,31 +1597,33 @@ describe('les champs facultatifs du format 2 : forme et place (§ 8.9, A16)', ()
   });
 });
 
-describe('un fichier du format 1 se lit comme un fichier du format 2 qui ne porte aucun champ nouveau (§ 8.8, A15)', () => {
-  test('il se lit, formatPlusRecent faux, sa charge telle qu’écrite ; réécrit, seul l’en-tête change, au format courant', () => {
-    const formatUn = documentValide();
-    formatUn.entete.format = 1;
-    const lu = analyser(JSON.stringify(formatUn));
-    assert.equal(lu.formatPlusRecent, false);
-    assert.equal(lu.entete.format, 1);
-    assert.deepEqual(lu.charge, documentValide().charge);
-    const reecrit = serialiser(lu.charge, lu.entete);
-    assert.equal(analyser(reecrit).entete.format, FORMAT);
-    assert.equal(serialiserCharge(analyser(reecrit).charge), serialiserCharge(lu.charge));
-    assert.equal(regleObjectifs(lu.charge), 'ou');
-    assert.equal(modeObjectifs(lu.charge), 'places');
+describe('un fichier d’un format plus ancien que FORMAT est refusé, FORMAT_TROP_ANCIEN (§ 8.8)', () => {
+  test('chaque format de 1 à FORMAT − 1 se refuse au chemin du format, qu’il porte dans les détails ; FORMAT se lit', () => {
+    const anciens = Array.from({ length: FORMAT - 1 }, (_, rang) => rang + 1);
+    assert.deepEqual(anciens, [1, 2]);
+    assert.deepEqual(ecartsDeRefus(anciens.map((format) => [
+      `format ${format}`, abime((d) => { d.entete.format = format; }), 'FORMAT_TROP_ANCIEN', 'entete.format', { format },
+    ])), []);
+    assert.equal(analyser(JSON.stringify(documentValide())).entete.format, FORMAT);
   });
 
-  test('ses refus gardent leur raison, sans format dans les détails : il n’est pas plus récent', () => {
+  test('le refus passe avant la forme, les comptes et les références : le reste d’un tel fichier ne se lit pas', () => {
     assert.deepEqual(ecartsDeRefus([
-      ['nom vide', abime((d) => { d.entete.format = 1; d.charge.participants[0].nom = ''; }), 'FORME', 'charge.participants[0].nom'],
-      ['comptes faux', abime((d) => { d.entete.format = 1; d.entete.comptes.tables = 1; }), 'COMPTES', 'entete.comptes.tables'],
-      ['mode « places » écrit', abime((d) => { d.entete.format = 1; d.charge.reglages.modeObjectifs = 'places'; }), 'FORME', 'charge.reglages.modeObjectifs'],
+      ['nom vide', abime((d) => { d.entete.format = 2; d.charge.participants[0].nom = ''; }),
+        'FORMAT_TROP_ANCIEN', 'entete.format', { format: 2 }],
+      ['clé inconnue', abime((d) => { d.entete.format = 1; d.charge.participants[0].couleur = 'ocre'; }),
+        'FORMAT_TROP_ANCIEN', 'entete.format', { format: 1 }],
+      ['comptes faux', abime((d) => { d.entete.format = 2; d.entete.comptes.tables = 1; }),
+        'FORMAT_TROP_ANCIEN', 'entete.format', { format: 2 }],
+      ['référence absente', abime((d) => { d.entete.format = 1; d.charge.titres[0].table = 7; }),
+        'FORMAT_TROP_ANCIEN', 'entete.format', { format: 1 }],
+      ['charge absente', abime((d) => { d.entete.format = 2; delete d.charge; }),
+        'FORMAT_TROP_ANCIEN', 'entete.format', { format: 2 }],
     ]), []);
   });
 });
 
-describe('un fichier plus récent porte les champs du format 2 (§ 8.8)', () => {
+describe('un fichier plus récent porte les champs facultatifs (§ 8.8)', () => {
   test('ils se lisent, réduits aux clés connues ; une valeur que le format courant refuse lève FORMAT_PLUS_RECENT', () => {
     const lu = analyser(abimeComplet((d) => {
       d.entete.format = FORMAT + 1;
@@ -1661,7 +1665,7 @@ describe('les lecteurs des réglages facultatifs (§ 8.9)', () => {
     assert.equal(modeObjectifs(charge), 'chacun');
   });
 
-  test('critereCoche lit aussi les quatre cases du format 1, et lève RangeError sur une clé qu’il ne connaît pas', () => {
+  test('critereCoche lit aussi les quatre cases toujours présentes, et lève RangeError sur une clé qu’il ne connaît pas', () => {
     const { charge } = documentValide();
     assert.deepEqual(
       ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances'].map((cle) => critereCoche(charge, cle)),
@@ -1980,7 +1984,7 @@ describe('la dérivation : deux champs facultatifs de la proposition, hors de so
     assert.deepEqual(cles(RETENU), [
       'proposition', 'siegesAttribues', 'tables', 'capacites', 'tours', 'participants', 'placement', 'horodatage',
     ]);
-    assert.equal(FORMAT, 2);
+    assert.equal(FORMAT, 3);
   });
 
   test('la règle de toursFiges : une liste d’entiers ≥ 1, strictement croissante, d’au moins un élément ; depart, un identifiant', () => {
@@ -1997,13 +2001,11 @@ describe('la dérivation : deux champs facultatifs de la proposition, hors de so
     assert.equal(premiereFaute(1, regleDeDepart, 'd'), null);
   });
 
-  test('une dérivée se lit telle qu’écrite, avec et sans tours figés, au format courant comme au format 1 ; sa faute de dérivation ne refuse pas le fichier', () => {
-    for (const format of [FORMAT, 1]) {
-      for (const derivation of [{ depart: 1 }, { depart: 1, toursFiges: [2] }, { depart: 2 }, { toursFiges: [1, 2] }]) {
-        const document = avecDerivee(derivation, format);
-        const lu = analyser(JSON.stringify(document));
-        assert.deepEqual(lu.charge, document.charge, JSON.stringify([format, derivation]));
-      }
+  test('une dérivée se lit telle qu’écrite, avec et sans tours figés ; sa faute de dérivation ne refuse pas le fichier', () => {
+    for (const derivation of [{ depart: 1 }, { depart: 1, toursFiges: [2] }, { depart: 2 }, { toursFiges: [1, 2] }]) {
+      const document = avecDerivee(derivation);
+      const lu = analyser(JSON.stringify(document));
+      assert.deepEqual(lu.charge, document.charge, JSON.stringify(derivation));
     }
   });
 
@@ -2088,12 +2090,10 @@ describe('la présence par tour : participant.presence et les absents d’un pla
     assert.equal(ecartDeRefus(JSON.stringify(document), 'FORME', 'charge.participants[1].presence'), null);
   });
 
-  test('un fichier du format 1 et un fichier du format 2 sans presence se lisent tous présents', () => {
-    for (const format of [1, FORMAT]) {
-      const lu = lire(avecPresence(undefined, { format }));
-      for (const p of lu.charge.participants) assert.equal(Object.hasOwn(p, 'presence'), false, `format ${format}`);
-      for (const p of configurationDepuisCharge(lu.charge).participants) assert.equal(Object.hasOwn(p, 'presence'), false);
-    }
+  test('un fichier sans presence se lit tous présents', () => {
+    const lu = lire(avecPresence(undefined));
+    for (const p of lu.charge.participants) assert.equal(Object.hasOwn(p, 'presence'), false);
+    for (const p of configurationDepuisCharge(lu.charge).participants) assert.equal(Object.hasOwn(p, 'presence'), false);
   });
 
   test('configurationDepuisCharge porte presence seulement quand le champ existe, en copie triée, après les étiquettes', () => {

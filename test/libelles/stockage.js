@@ -33,6 +33,7 @@ export const EXEMPLES = [
   ['REFERENCE', { chemin: 'charge.reservations[0].table' }],
   ['FORMAT_INCONNU', { chemin: 'entete.format' }],
   ['FORMAT_PLUS_RECENT', { format: 2 }],
+  ['FORMAT_TROP_ANCIEN', { format: 2 }],
   ['ENCODAGE', {}],
   // Fautes d'un placement
   ['LONGUEUR', { tour: 2, table: 4, declare: 8, ecrit: 9 }],
@@ -83,4 +84,46 @@ export const TEXTES = [
   ['PRESENCE_RETIREE', { participant: 6, tours: [2, 3, 4] }, 'La personne n° 6 est absente aux tours 2 à 4 depuis.'],
   ['PRESENCE_AJOUTEE', { participant: 7, personne: 'Dahlia Bourrache', tours: [1] }, 'Dahlia Bourrache est présente au tour 1 depuis.'],
   ['PRESENCE_AJOUTEE', { participant: 7, tours: [1, 3, 5] }, 'La personne n° 7 est présente aux tours 1, 3 et 5 depuis.'],
+  ['FORMAT_TROP_ANCIEN', { format: 2 }, "Son format est trop ancien (format 2) : il n'est plus pris en charge."],
+  [
+    'ETAT_ILLISIBLE',
+    {
+      base: 'Soirée des Lucioles',
+      raison: 'FORMAT_TROP_ANCIEN',
+      chemin: 'entete.format',
+      format: 1,
+      secours: { precedent: null, journal: null },
+    },
+    "Le fichier d'état de « Soirée des Lucioles » ne s'ouvre pas. Son format est trop ancien (format 1) : " +
+      "il n'est plus pris en charge. Aucune version de secours ne se lit.",
+  ],
+  // L'état manque à côté d'un journal trop ancien : ouvrir le refuse au
+  // chemin du journal, sous la base.
+  [
+    'ETAT_ILLISIBLE',
+    {
+      base: 'Soirée des Lucioles',
+      raison: 'FORMAT_TROP_ANCIEN',
+      chemin: 'Soirée des Lucioles.gtt-journal.jsonl',
+      format: 1,
+      secours: { precedent: null, journal: null },
+    },
+    "Le fichier d'état de « Soirée des Lucioles » ne s'ouvre pas. Le fichier d'état manque, à côté de son " +
+      "historique, dont le format est trop ancien (format 1) : il n'est plus pris en charge. " +
+      'Aucune version de secours ne se lit.',
+  ],
+  // Le secours 'journal' refuse un journal trop ancien, sans base.
+  [
+    'ETAT_ILLISIBLE',
+    { raison: 'FORMAT_TROP_ANCIEN', chemin: 'Soirée des Lucioles.gtt-journal.jsonl', format: 2 },
+    "Le fichier ne s'ouvre pas. L'historique « Soirée des Lucioles.gtt-journal.jsonl » a un format trop " +
+      "ancien (format 2) : il n'est plus pris en charge.",
+  ],
+  [
+    'JOURNAL_ILLISIBLE',
+    { raison: 'FORMAT_TROP_ANCIEN', format: 2 },
+    "L'historique à côté de ce fichier ne se lit pas. Son format est trop ancien (format 2) : " +
+      "il n'est plus pris en charge. Il est laissé tel quel, et le prochain geste commence l'historique " +
+      'dans un nouveau fichier.',
+  ],
 ];

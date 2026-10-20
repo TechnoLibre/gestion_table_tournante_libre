@@ -60,15 +60,14 @@
 // nouvelle base appartient à l'événement dès que son journal existe, et
 // l'ancienne paire ne s'apparie jamais ce journal.
 //
-// Un état ou un journal d'un format plus ancien que FORMAT se lit comme un
-// fichier du format courant qui ne porte aucun champ nouveau (§ 8.8) : ni
-// l'ouverture, ni le passage en écriture ne le réécrivent. Le premier geste
-// qui écrit — un geste, un jalon, l'écriture ailleurs — réécrit le journal
-// en entier, au format courant, chaque entrée lue gardée telle quelle :
-// des entrées du format courant ne s'ajoutent jamais sous une ouverture
-// d'un format plus ancien, qu'une construction ancienne lirait comme
-// sienne. Un geste réécrit aussi l'état, au format courant ; un jalon, qui
-// n'écrit pas l'état, le laisse à son format jusqu'au geste suivant.
+// Un état ou un journal d'un format plus ancien que FORMAT ne se lit pas,
+// et rien ne le remplace (§ 8.8). L'état se refuse, ETAT_ILLISIBLE raison
+// FORMAT_TROP_ANCIEN, sans secours : ouvrir un .precedent ou un journal à
+// sa place mènerait le premier geste à écrire par-dessus lui. Un journal de
+// la base trop ancien ne s'apparie à rien : à côté d'un état lisible,
+// l'Ouvert l'annonce, JOURNAL_ILLISIBLE {raison: 'FORMAT_TROP_ANCIEN',
+// format}, et la première écriture pose l'historique sous une base libre ;
+// seul, il se liste et se refuse comme l'état, au chemin du journal.
 //
 // Un état sur le disque, ou un journal de la base, d'un format plus récent
 // que FORMAT garde en lecture seule tout ce qui ouvre l'événement, secours
@@ -163,9 +162,8 @@ import { examiner } from './placements.js';
  *           valeur que des objets figés, les propositions figées et leurs
  *           copies canoniques ; tout le reste lui appartient
  * @property {boolean} journalAReecrire   le fichier du journal porte des
- *           lignes que la lecture a écartées, ou une ouverture d'un format
- *           plus ancien que FORMAT : la prochaine écriture le réécrit en
- *           entier, sans elles, au format courant
+ *           lignes que la lecture a écartées : la prochaine écriture le
+ *           réécrit en entier, sans elles
  * @property {boolean} formatPlusRecent   lecture seule (§ 8.8) : l'état sur
  *           le disque, le .precedent qu'un secours ouvre ou le journal de la
  *           base est d'un format plus récent que FORMAT
@@ -192,8 +190,10 @@ import { examiner } from './placements.js';
  *           JOURNAL_FORMAT_PLUS_RECENT {format}, le journal de la base, d'un
  *           format plus récent, que rien ne lit ni n'écrit ; JOURNAL_ILLISIBLE
  *           {raison: 'ENCODAGE'}, le journal de la base aux octets hors
- *           UTF-8, que rien ne lit ni n'écrit ; JOURNAL_ETRANGER {evenement},
- *           le journal de la base, d'un autre événement, que rien ne lit ;
+ *           UTF-8, ou {raison: 'FORMAT_TROP_ANCIEN', format}, d'un format
+ *           plus ancien, que rien ne lit ni n'écrit ; JOURNAL_ETRANGER
+ *           {evenement}, le journal de la base, d'un autre événement, que
+ *           rien ne lit ;
  *           PROPOSITIONS_FAUTIVES {ids}, par rang, null pour un identifiant
  *           illisible ; PROPOSITIONS_MANQUANTES {n}, le nombre de
  *           propositions que l'en-tête compte sans que la liste les porte ;
@@ -349,19 +349,34 @@ function relisible(texte, fonction) {
 const evenementDe = (texte) => (texte === null ? null : lireJournal(texte.slice(0, texte.indexOf('\n') + 1)).evenement);
 
 // Format que déclare la première ligne d'un texte de journal quand c'est un
-// entier plus grand que FORMAT, null sinon. lireJournal refuse une telle
-// ouverture comme toute ligne illisible ; son format dit qu'elle vient d'une
-// construction plus récente, dont le journal ne se remplace pas (§ 8.8). Une
-// première ligne sans fin de ligne, qui n'est pas du JSON, ou dont la valeur
-// est null, ne déclare rien.
-function formatPlusRecentDe(texte) {
+// entier ≥ 1 autre que FORMAT, null sinon. lireJournal refuse une telle
+// ouverture comme toute ligne illisible ; son format dit d'où elle vient :
+// d'une construction plus récente, dont le journal ne se remplace pas, ou
+// d'un format plus ancien, qui n'est plus pris en charge et ne se remplace
+// pas davantage (§ 8.8). Une première ligne sans fin de ligne, qui n'est
+// pas du JSON, ou dont la valeur est null, ne déclare rien.
+function formatAutreDe(texte) {
   let format;
   try {
     format = JSON.parse(texte.slice(0, texte.indexOf('\n') + 1).replace(/^\u{FEFF}/u, '')).format;
   } catch {
     return null;
   }
-  return Number.isSafeInteger(format) && format > FORMAT ? format : null;
+  return Number.isSafeInteger(format) && format >= 1 && format !== FORMAT ? format : null;
+}
+
+// Le format plus récent que FORMAT que déclare la première ligne d'un texte
+// de journal (formatAutreDe), null sinon.
+function formatPlusRecentDe(texte) {
+  const format = formatAutreDe(texte);
+  return format !== null && format > FORMAT ? format : null;
+}
+
+// Le format plus ancien que FORMAT que déclare la première ligne d'un texte
+// de journal (formatAutreDe), null sinon, et null quand le texte manque.
+function formatTropAncienDe(texte) {
+  const format = texte === null ? null : formatAutreDe(texte);
+  return format !== null && format < FORMAT ? format : null;
 }
 
 /**
@@ -511,11 +526,12 @@ async function formatDuJournalDeBase(vue, base) {
 
 // Le journal de l'événement id pour base, dans le dossier de la vue (§ 8.6) :
 // lu, sa base, etranger, l'événement que porte le journal de la base quand
-// aucun ne s'apparie et qu'il en nomme un autre, format, et malEncode, vrai
+// aucun ne s'apparie et qu'il en nomme un autre, format, malEncode, vrai
 // quand aucun ne s'apparie et que la ligne d'ouverture du journal de la base
 // n'est pas de l'UTF-8 — une ligne suivante qui ne l'est pas s'écarte
-// seulement : lu et base valent alors null, comme pour un journal étranger,
-// que rien ne lit ni ne remplace. Le journal de la
+// seulement —, et ancien, le format plus ancien que FORMAT que cette ligne
+// déclare quand aucun ne s'apparie : lu et base valent alors null, comme
+// pour un journal étranger, que rien ne lit ni ne remplace. Le journal de la
 // base qui déclare un format plus récent que FORMAT se reconnaît d'abord,
 // avant tout appariement, puisque son identifiant ne se lit pas : lu vaut
 // null et format le nomme, ce qui garde l'Ouvert en lecture seule, même
@@ -527,7 +543,7 @@ async function formatDuJournalDeBase(vue, base) {
 // valent null : rien ne le lit ni ne l'écrit, et l'écriture cherche le
 // journal de l'événement (baseCherchee).
 async function journalDe(vue, base, id) {
-  const aucun = { lu: null, base: null, etranger: null, format: null, malEncode: false };
+  const aucun = { lu: null, base: null, etranger: null, format: null, malEncode: false, ancien: null };
   const format = await formatDuJournalDeBase(vue, base);
   if (format !== null) return { ...aucun, base, format };
   const chemin = base + SUFFIXES.journal;
@@ -535,6 +551,8 @@ async function journalDe(vue, base, id) {
   const apparie = id === null ? null : await apparier(vue, base, id);
   if (apparie !== null) return { ...aucun, lu: lireLisible(apparie), base: apparie.base };
   if (journal.texte === null && (await vue.present(chemin))) return { ...aucun, malEncode: true };
+  const ancien = formatTropAncienDe(journal.texte);
+  if (ancien !== null) return { ...aucun, ancien };
   if (id === null) return aucun;
   const etranger = evenementDe(journal.texte);
   if (etranger !== null) return { ...aucun, etranger };
@@ -598,7 +616,19 @@ const AUCUN_MANQUANT = Object.freeze({ propositions: 0, retenu: false });
 // que la liste les porte s'annoncent par leur seul nombre, que rien ne
 // borne : aucune liste de cette taille ne se construit. Un retenu annoncé
 // absent s'annonce comme un retenu fautif.
-function avertir({ examen, journal, revision, rattrape, ecartees, recree, format, malEncode, etranger, manquants }) {
+function avertir({
+  examen,
+  journal,
+  revision,
+  rattrape,
+  ecartees,
+  recree,
+  format,
+  malEncode,
+  ancien,
+  etranger,
+  manquants,
+}) {
   const avertissements = [];
   const ajouter = (code, details = {}) => avertissements.push({ code, details });
   if (examen.retenu.fautes.length > 0 || manquants.retenu) ajouter('RETENU_FAUTIF');
@@ -610,6 +640,7 @@ function avertir({ examen, journal, revision, rattrape, ecartees, recree, format
   if (recree) ajouter('JOURNAL_RECREE');
   if (format !== null) ajouter('JOURNAL_FORMAT_PLUS_RECENT', { format });
   if (malEncode) ajouter('JOURNAL_ILLISIBLE', { raison: 'ENCODAGE' });
+  if (ancien !== null) ajouter('JOURNAL_ILLISIBLE', { raison: 'FORMAT_TROP_ANCIEN', format: ancien });
   if (etranger !== null) ajouter('JOURNAL_ETRANGER', { evenement: etranger });
   if (examen.fautives.length > 0) ajouter('PROPOSITIONS_FAUTIVES', { ids: examen.fautives.map(({ id }) => id) });
   if (manquants.propositions > 0) ajouter('PROPOSITIONS_MANQUANTES', { n: manquants.propositions });
@@ -650,8 +681,8 @@ export function rattraper(etat, instant) {
 // propositions. chargeJournal est la copie canonique de l'instant
 // (instantDe), distincte de la charge. La source d'un format plus récent, ou
 // un journal d'un format plus récent, gardent l'Ouvert en lecture seule. Un
-// journal dont la lecture a écarté des lignes, ou d'un format plus ancien, se
-// réécrira en entier à la prochaine écriture (journalAReecrire).
+// journal dont la lecture a écarté des lignes se réécrira en entier à la
+// prochaine écriture (journalAReecrire).
 // texteCourses, le texte du compagnon des courses de la base, null quand il
 // ne se lit pas : les courses qu'il confirme pour la charge examinée
 // (lireCourses) sont celles de l'Ouvert, et compagnon leurs clés.
@@ -674,7 +705,7 @@ function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage, 
     journal,
     baseJournal: trouve.base,
     chargeJournal: instant?.charge ?? null,
-    journalAReecrire: journal !== null && (ecartees > 0 || journal.format < FORMAT),
+    journalAReecrire: journal !== null && ecartees > 0,
     formatPlusRecent: source.formatPlusRecent || trouve.format !== null,
     etatMalEncode: source.etatMalEncode,
     courses,
@@ -689,6 +720,7 @@ function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage, 
       recree: false,
       format: trouve.format,
       malEncode: trouve.malEncode,
+      ancien: trouve.ancien,
       etranger: trouve.etranger,
       manquants,
     }),
@@ -702,6 +734,13 @@ function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage, 
 // journal que l'identifiant apparie (journalSansEtat), jamais un journal
 // pris par son seul nom ; ABSENT quand ni l'état, ni le .precedent, ni le
 // journal de la base n'existent — un fichier aux octets hors UTF-8 existe.
+// Un état absent à côté d'un journal de la base trop ancien, qu'aucun autre
+// journal ne remplace, sans .precedent lisible, se refuse par ce journal :
+// raison FORMAT_TROP_ANCIEN, son chemin et son format. Un refus
+// FORMAT_TROP_ANCIEN ne nomme aucun secours : rien n'écrit par-dessus un
+// fichier trop ancien. Un .precedent lisible reste le secours d'un état
+// absent : le journal trop ancien ne se remplace pas pour autant
+// (journalDe).
 async function refuser(vue, base, details) {
   const precedent = await vue.lecture(base + SUFFIXES.precedent);
   const existe = async (suffixe) => vue.present(base + suffixe);
@@ -709,12 +748,17 @@ async function refuser(vue, base, details) {
     return new ErreurStockage('ABSENT', { chemin: base + SUFFIXES.etat });
   }
   const trouve = await journalSansEtat(vue, base);
-  const format = details.format ?? trouve.format;
+  const refus =
+    details.raison === 'ABSENT' && trouve.ancien !== null && precedent.lecture === null
+      ? { raison: 'FORMAT_TROP_ANCIEN', chemin: base + SUFFIXES.journal, format: trouve.ancien }
+      : details;
+  const format = refus.format ?? trouve.format;
+  const sansSecours = refus.raison === 'FORMAT_TROP_ANCIEN';
   const secours = {
-    precedent: precedent.lecture?.entete.revision ?? null,
-    journal: instantDe(trouve.lu)?.revision ?? null,
+    precedent: sansSecours ? null : (precedent.lecture?.entete.revision ?? null),
+    journal: sansSecours ? null : (instantDe(trouve.lu)?.revision ?? null),
   };
-  return new ErreurStockage('ETAT_ILLISIBLE', { base, ...details, ...(format === null ? {} : { format }), secours });
+  return new ErreurStockage('ETAT_ILLISIBLE', { base, ...refus, ...(format === null ? {} : { format }), secours });
 }
 
 /**
@@ -726,8 +770,9 @@ async function refuser(vue, base, details) {
  * porte (identifiantSansEtat). Un journal renommé à la main reste apparié ;
  * le journal d'un original ne s'apparie pas à sa copie faite à la main. Un
  * journal sans état dans sa base se résume quand aucun état ne se l'apparie
- * et qu'aucun état lisible ne porte son identifiant, illisible ABSENT ; il
- * ne se montre pas sinon : une copie d'un journal apparié, ou le journal
+ * et qu'aucun état lisible ne porte son identifiant, illisible ABSENT, quel
+ * que soit son format : ouvrir dit pourquoi il ne s'ouvre pas ; il ne se
+ * montre pas sinon : une copie d'un journal apparié, ou le journal
  * qu'un état illisible s'apparie par son .precedent. Un identifiant que
  * portent deux états lisibles les signale doublon ; le résumé d'un état
  * illisible porte en id celui qui l'apparie, sans le compter en doublon.
@@ -803,10 +848,12 @@ export async function lister(fs, racine) {
  * inscrit une entrée de reprise. Une proposition fautive s'écarte et se
  * nomme ; une périmée se garde et se signale ; un retenu fautif se garde et
  * se signale en premier (§ 8.9). Un format plus récent s'ouvre en lecture
- * seule ; un format plus ancien se lit, et ne se convertit qu'au premier
- * geste. Le journal de la base d'un format plus récent ne se lit pas, et
- * garde l'Ouvert en lecture seule, JOURNAL_FORMAT_PLUS_RECENT, même quand une
- * copie au format courant porte l'identifiant ailleurs dans le dossier.
+ * seule ; un format plus ancien se refuse, sans secours. Le journal de la
+ * base d'un format plus récent ne se lit pas, et garde l'Ouvert en lecture
+ * seule, JOURNAL_FORMAT_PLUS_RECENT, même quand une copie au format courant
+ * porte l'identifiant ailleurs dans le dossier ; celui d'un format plus
+ * ancien ne se lit pas non plus, JOURNAL_ILLISIBLE {raison:
+ * 'FORMAT_TROP_ANCIEN', format}, et n'empêche pas d'écrire.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -814,14 +861,17 @@ export async function lister(fs, racine) {
  * @returns {Promise<Ouvert>}
  * @throws {ErreurStockage} ETAT_ILLISIBLE {base, raison, chemin, [format],
  *         secours} : l'état ne se lit pas — raison ENCODAGE pour des octets
- *         hors UTF-8 —, ou manque à côté de son .precedent ou de son
- *         journal, fût-il aux octets hors UTF-8 (raison ABSENT) ; format est
- *         celui de l'état quand son refus en nomme un, sinon celui du journal de la base
- *         quand il est plus récent ; secours nomme la révision lisible du
- *         .precedent et le dernier instant du journal que l'identifiant du
- *         .precedent apparie — ou, sans .precedent lisible, celui du journal
- *         de la base qu'aucun état lisible ne porte —, null pour ce qui ne se
- *         lit pas ou ne s'apparie pas. ABSENT {chemin} quand aucun fichier de
+ *         hors UTF-8 —, ou manque à côté de son .precedent ou de son journal,
+ *         fût-il aux octets hors UTF-8 (raison ABSENT), ou à côté du journal de
+ *         la base d'un format plus ancien, sans .precedent lisible (raison
+ *         FORMAT_TROP_ANCIEN, chemin du journal) ; format est celui de l'état
+ *         ou de ce journal quand le refus en nomme un, sinon celui du journal
+ *         de la base quand il est plus récent ; secours nomme la révision
+ *         lisible du .precedent et le dernier instant du journal que
+ *         l'identifiant du .precedent apparie — ou, sans .precedent lisible,
+ *         celui du journal de la base qu'aucun état lisible ne porte —, null
+ *         pour ce qui ne se lit pas ou ne s'apparie pas, et toujours null sous
+ *         la raison FORMAT_TROP_ANCIEN. ABSENT {chemin} quand aucun fichier de
  *         l'événement n'existe
  */
 export async function ouvrir(fs, racine, base) {
@@ -851,7 +901,9 @@ export async function ouvrir(fs, racine, base) {
  * construction plus récente a écrits (§ 8.8). Un .precedent d'un format plus
  * récent garde en lecture seule le secours 'precedent', qui le lit, et non le
  * secours 'journal'. Un journal plus récent ne s'ouvre pas en secours, et ne
- * se dit pas absent : il existe, et ce code ne le lit pas.
+ * se dit pas absent : il existe, et ce code ne le lit pas ; un journal plus
+ * ancien non plus. Un état sur le disque d'un format plus ancien refuse
+ * chaque secours : son premier geste écrirait par-dessus lui.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -861,10 +913,12 @@ export async function ouvrir(fs, racine, base) {
  * @throws {ErreurStockage} ABSENT {chemin} : le .precedent manque, ou aucun
  *         journal ne s'apparie, ou il n'a aucune entrée, chemin nommant alors
  *         le journal de la base ; ETAT_ILLISIBLE {raison, chemin, [format]} :
- *         celui de l'analyse d'un .precedent illisible, raison ENCODAGE et
- *         chemin null pour des octets hors UTF-8, ou, source 'journal',
- *         {raison: 'FORMAT_PLUS_RECENT', chemin: le journal de la base,
- *         format} quand ce journal est d'un format plus récent, {raison:
+ *         celui de l'analyse de l'état d'un format plus ancien, raison
+ *         FORMAT_TROP_ANCIEN ; celui de l'analyse d'un .precedent illisible,
+ *         raison ENCODAGE et chemin null pour des octets hors UTF-8, ou,
+ *         source 'journal', {raison: 'FORMAT_PLUS_RECENT' ou
+ *         'FORMAT_TROP_ANCIEN', chemin: le journal de la base, format} quand
+ *         ce journal est d'un format plus récent ou plus ancien, {raison:
  *         'ENCODAGE', chemin: le journal de la base} quand sa ligne
  *         d'ouverture n'est pas de l'UTF-8 et qu'aucun autre ne s'apparie
  * @throws {RangeError} une autre source
@@ -875,6 +929,7 @@ export async function ouvrirSecours(fs, racine, base, source) {
   }
   const vue = vueDe(fs, racine);
   const etat = await vue.lecture(base + SUFFIXES.etat);
+  if (etat.details?.raison === 'FORMAT_TROP_ANCIEN') throw new ErreurStockage('ETAT_ILLISIBLE', etat.details);
   const disque = surDisque(etat.texte, etat);
   if (source === 'precedent') {
     const precedent = await vue.lecture(base + SUFFIXES.precedent);
@@ -892,11 +947,11 @@ export async function ouvrirSecours(fs, racine, base, source) {
   const trouve = await (etat.lecture === null
     ? journalSansEtat(vue, base)
     : journalDe(vue, base, etat.lecture.charge.evenement.id));
-  if (trouve.format !== null) {
+  if (trouve.format !== null || trouve.ancien !== null) {
     throw new ErreurStockage('ETAT_ILLISIBLE', {
-      raison: 'FORMAT_PLUS_RECENT',
+      raison: trouve.format !== null ? 'FORMAT_PLUS_RECENT' : 'FORMAT_TROP_ANCIEN',
       chemin: base + SUFFIXES.journal,
-      format: trouve.format,
+      format: trouve.format ?? trouve.ancien,
     });
   }
   if (trouve.malEncode) {
@@ -938,15 +993,15 @@ function avec(journal, ligne) {
 // ligne de l'entrée de reprise qui le fait finir sur la charge ouverte, ou
 // null ; journal, avant suivi de la reprise ; charge, ce que restitue sa
 // dernière entrée ; entier, vrai quand le fichier se réécrit en entier à sa
-// prochaine écriture : il manque, sa lecture a écarté des lignes ou son
-// ouverture est d'un format plus ancien (journalAReecrire), ou il reçoit la
-// reprise. Sans journal, la reprise le commence, instantané de la charge
-// ouverte à sa révision et à sa version. Un journal qui finit sur une autre
-// révision que la charge ouverte reçoit la reprise à la révision qui suit la
-// sienne, qui restitue la charge ouverte. charge est toujours une copie
-// canonique : chargeJournal, ou la copie partagée de la charge ouverte
-// (canoniserPartagee), qui ne prête que ses propositions figées.
-// libelleReprise manque : ligneEntree lève TypeError, avant toute écriture.
+// prochaine écriture : il manque, sa lecture a écarté des lignes
+// (journalAReecrire), ou il reçoit la reprise. Sans journal, la reprise le
+// commence, instantané de la charge ouverte à sa révision et à sa version. Un
+// journal qui finit sur une autre révision que la charge ouverte reçoit la
+// reprise à la révision qui suit la sienne, qui restitue la charge ouverte.
+// charge est toujours une copie canonique : chargeJournal, ou la copie
+// partagée de la charge ouverte (canoniserPartagee), qui ne prête que ses
+// propositions figées. libelleReprise manque : ligneEntree lève TypeError,
+// avant toute écriture.
 function preparer(ouvert, { libelleReprise, horodatage }) {
   const { journal, revision, charge, produitVersion } = ouvert;
   if (journal === null) {
@@ -1221,6 +1276,7 @@ function apresEcriture(ouvert, { charge, revision, journal, recree = false }) {
     recree,
     format: null,
     malEncode: false,
+    ancien: null,
     etranger: null,
     manquants: AUCUN_MANQUANT,
   });
@@ -1332,12 +1388,9 @@ export async function creer(fs, racine, recue, { libelle, nomJalon, horodatage, 
  * instantané à la cadence du journal ; le journal s'écrit d'un ajout en fin,
  * ou en entier quand (1) a lieu, quand sa lecture a écarté des lignes, et
  * au-delà de PLAFOND_ENTREES, élagué ; (3) le .precedent reçoit texteEtat,
- * s'il est lisible ; (4) l'état, son nouveau texte. Un format plus ancien
- * s'écrit au format courant : la conversion tombe au premier geste, qui
- * réécrit le journal en entier, chaque entrée lue gardée, puis l'état. Avant
- * (1), l'état aux octets hors UTF-8 d'un Ouvert de secours passe dans un
- * dossier daté de la corbeille, à l'horodatage du geste
- * (mettreDeCoteEtatMalEncode).
+ * s'il est lisible ; (4) l'état, son nouveau texte. Avant (1), l'état aux
+ * octets hors UTF-8 d'un Ouvert de secours passe dans un dossier daté de la
+ * corbeille, à l'horodatage du geste (mettreDeCoteEtatMalEncode).
  *
  * Quand l'état lisible sur le disque ne porte pas la révision de la dernière
  * entrée du journal — reprise comprise —, la reprise s'écrit seule, puis le

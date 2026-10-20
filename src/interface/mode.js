@@ -6,11 +6,9 @@
 // bandeau, la bande de mode et la barre de l'événement, et l'annonce de la version de format du
 // fichier (§ 18.6). Les deux se lisent dans l'état observable de la séance.
 
-// La clé de chaque annonce de format de la séance.
-const ANNONCES = new Map([
-  ['plusRecent', 'coquille.format.plusRecent'],
-  ['plusAncien', 'coquille.format.plusAncien'],
-]);
+// La clé de chaque annonce de format de la séance : un fichier plus récent
+// s'ouvre en lecture seule ; un fichier plus ancien ne s'ouvre pas.
+const ANNONCES = new Map([['plusRecent', 'coquille.format.plusRecent']]);
 
 /**
  * La clé du libellé de mode : null sans événement ; 'coquille.mode.bloque'
@@ -29,11 +27,11 @@ export function cleDeMode(etatSeance) {
 
 /**
  * La clé de l'annonce de format du bandeau : null sans événement ou quand le
- * fichier est au format courant ; sinon celle de l'annonce de la séance,
- * plus récent ou plus ancien.
+ * fichier est au format courant ; sinon celle de l'annonce de la séance, un
+ * fichier plus récent.
  *
- * @param {{evenement: null|{annonceFormat: null|'plusRecent'|'plusAncien'}}} etatSeance
- * @returns {null|'coquille.format.plusRecent'|'coquille.format.plusAncien'}
+ * @param {{evenement: null|{annonceFormat: null|'plusRecent'}}} etatSeance
+ * @returns {null|'coquille.format.plusRecent'}
  * @throws {RangeError} une annonce que la séance ne rend pas
  */
 export function cleAnnonceFormat(etatSeance) {

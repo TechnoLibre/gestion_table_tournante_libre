@@ -20,15 +20,16 @@
 // prochainsIds, au plus 2^31 − 1.
 
 /**
- * Le fichier d'état, format 2 (§ 8.8, § 8.9). Deux régions : l'en-tête et la
- * charge. Le format 2 ajoute au format 1 des champs facultatifs seulement,
- * chacun absent à son défaut et écrit après les clés du format 1 de son
- * objet : les étiquettes et la présence par tour d'un participant, les
- * objectifs d'une table, des réglages, la dérivation d'une proposition et
- * les absents d'un tour de placement. Un fichier du format 1 se lit comme
- * un fichier du format 2 qui n'en porte aucun. Les comparaisons qui
+ * Le fichier d'état, au format courant, FORMAT (§ 8.8, § 8.9). Deux régions :
+ * l'en-tête et la charge. Des champs facultatifs, chacun absent à son défaut
+ * et écrit après les clés toujours présentes de son objet : les
+ * étiquettes et la présence par tour d'un participant, les objectifs d'une
+ * table, des réglages, la dérivation d'une proposition et les absents d'un
+ * tour de placement. Aucun format plus ancien que FORMAT ne se lit : un tel
+ * fichier se refuse, raison FORMAT_TROP_ANCIEN. Les comparaisons qui
  * traversent les constructions — empreinte des démonstrations, aller-retour
- * des fichiers livrés — portent sur la charge seule. Toute clé hors de ces formes est une faute de forme.
+ * des fichiers livrés — portent sur la charge seule. Toute clé hors de ces
+ * formes est une faute de forme.
  * Le texte est en UTF-8 sans marque d'ordre d'octets, fin de ligne LF, une
  * seule fin de ligne finale, dans la forme canonique qu'écrit canonique.js.
  *
@@ -38,8 +39,7 @@
  *
  * @typedef {Object} Entete
  * @property {number} format          FORMAT à l'écriture ; un format plus
- *                                    ancien se lit tel quel et se convertit
- *                                    au premier geste, un format plus récent
+ *                                    ancien se refuse, un format plus récent
  *                                    se lit et s'ouvre en lecture seule
  *                                    (§ 8.8)
  * @property {string} produitVersion  non vide : version affichée de la
@@ -347,9 +347,8 @@
  *
  * @typedef {Object} LigneOuverture
  * @property {'journal'} type
- * @property {number} format        FORMAT à l'écriture ; de 1 à FORMAT à la
- *           lecture : le journal d'un format plus ancien se lit, et le
- *           premier geste le réécrit en entier au format courant
+ * @property {number} format        FORMAT, à l'écriture comme à la lecture :
+ *           une ouverture d'un autre format est illisible
  * @property {string} evenement     id de l'événement
  *
  * @typedef {Object} LigneEntree
@@ -483,7 +482,7 @@
  *                                                    l'appelant le lit avant
  *                                                    toute écriture
  *
- * @typedef {'ABSENT'|'ENCODAGE'|'VIDE'|'JSON'|'FORME'|'COMPTES'|'REFERENCE'|'FORMAT_INCONNU'|'FORMAT_PLUS_RECENT'} RaisonIllisible
+ * @typedef {'ABSENT'|'ENCODAGE'|'VIDE'|'JSON'|'FORME'|'COMPTES'|'REFERENCE'|'FORMAT_INCONNU'|'FORMAT_TROP_ANCIEN'|'FORMAT_PLUS_RECENT'} RaisonIllisible
  *   ABSENT          le journal existe sans l'état ; posée par le dépôt, jamais
  *                   par analyser
  *   ENCODAGE        des octets qui ne sont pas de l'UTF-8 : le système de
@@ -507,6 +506,8 @@
  *   REFERENCE       réservation ou titre vers une table ou une personne
  *                   absente, siège au-delà de la capacité
  *   FORMAT_INCONNU  format présent, mais non entier ou < 1
+ *   FORMAT_TROP_ANCIEN  format < FORMAT : rien d'autre ne se lit, et aucun
+ *                   secours ne s'offre ; le refus porte le format lu
  *   FORMAT_PLUS_RECENT  format > FORMAT : ses clés inconnues sont ignorées,
  *                   et une faute qui serait FORME au format courant porte
  *                   cette raison ; COMPTES et REFERENCE gardent la leur, une
@@ -522,16 +523,18 @@
  *           entre crochets en JSON ; '' pour la racine ; null quand rien ne se
  *           désigne (ABSENT, ENCODAGE, VIDE, JSON) ; le chemin du journal
  *           quand ouvrirSecours refuse le journal de la base, d'un format plus
- *           récent ou aux octets hors UTF-8
+ *           récent, plus ancien ou aux octets hors UTF-8, et quand ouvrir
+ *           refuse un état absent à côté d'un journal plus ancien
  * @property {number} [format]         le format lu quand il dépasse FORMAT :
  *           FORMAT_PLUS_RECENT, et COMPTES ou REFERENCE d'un fichier plus
- *           récent
+ *           récent ; quand il est plus petit : FORMAT_TROP_ANCIEN
  * @property {{precedent: number|null, journal: number|null}} secours
  *           révision lisible du .precedent et dernier instant du journal ;
  *           null pour ce qui ne se lit pas
  *
  * analyser ne connaît que le texte : il lève {raison, chemin}, et format
- * pour un fichier plus récent, que le dépôt complète de base et de secours.
+ * pour un fichier plus récent ou trop ancien, que le dépôt complète de base
+ * et de secours.
  */
 
 /**

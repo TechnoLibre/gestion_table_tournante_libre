@@ -49,18 +49,15 @@ describe('cleAnnonceFormat (§ 18.6)', () => {
     assert.equal(cleAnnonceFormat(etat('lecture', 'brouillon')), null);
   });
 
-  test('une clé par annonce, chacune avec son texte', () => {
-    const cas = [
-      ['plusRecent', 'coquille.format.plusRecent'],
-      ['plusAncien', 'coquille.format.plusAncien'],
-    ];
-    for (const [annonce, cle] of cas) {
-      assert.equal(cleAnnonceFormat(etat('lecture', 'brouillon', annonce)), cle, annonce);
-      assert.equal(typeof COQUILLE.get(cle), 'string', cle);
-    }
+  test('le fichier plus récent a sa clé et son texte, la seule annonce : un format plus ancien ne s’ouvre pas', () => {
+    assert.equal(cleAnnonceFormat(etat('lecture', 'brouillon', 'plusRecent')), 'coquille.format.plusRecent');
+    assert.equal(typeof COQUILLE.get('coquille.format.plusRecent'), 'string');
+    assert.deepEqual([...COQUILLE.keys()].filter((cle) => cle.startsWith('coquille.format.')), ['coquille.format.plusRecent']);
   });
 
-  test('une annonce inconnue lève RangeError', () => {
-    assert.throws(() => cleAnnonceFormat(etat('lecture', 'brouillon', 'plusVieux')), RangeError);
+  test('une annonce inconnue lève RangeError, plusAncien compris', () => {
+    for (const annonce of ['plusVieux', 'plusAncien']) {
+      assert.throws(() => cleAnnonceFormat(etat('lecture', 'brouillon', annonce)), RangeError, annonce);
+    }
   });
 });

@@ -5,8 +5,8 @@
 // exact que le contrat de données attend du sérialiseur, la canonicité quel
 // que soit l'ordre dans lequel une charge s'est construite, la charge seule
 // dans la mise en page du fichier, l'aller-retour par l'analyse, le retenu
-// que sa règle refuse, recopié hors du schéma, les champs facultatifs du
-// format 2 et leur rang, un sérialiseur dont la sortie ne dépend que de
+// que sa règle refuse, recopié hors du schéma, les champs facultatifs et
+// leur rang, un sérialiseur dont la sortie ne dépend que de
 // ses arguments, et la copie canonique partagée : les propositions figées y
 // prêtent une copie figée et son texte, que les sorties ne distinguent pas
 // d'une copie neuve, et la copie canonique refaite là seulement où des
@@ -34,7 +34,7 @@ const ENTETE = Object.freeze({ revision: 3, produitVersion: VERSION.affichee });
 // Texte exact que le contrat de données (types.js) attend de serialiser pour
 // chargeContrat() sous ENTETE, fin de ligne finale comprise.
 const TEXTE_CONTRAT = `{
-  "entete": {"format":2,"produitVersion":"${VERSION.affichee}","revision":3,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},
+  "entete": {"format":3,"produitVersion":"${VERSION.affichee}","revision":3,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},
   "charge": {
     "evenement": {"id":"evt-essai","nom":"Soirée d'essai","date":null,"siegesParDefaut":2,"tours":2,"unite":"cm","etat":"propose","filiation":null},
     "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
@@ -200,7 +200,7 @@ function chargeSansListe() {
   };
 }
 const TEXTE_SANS_LISTE = `{
-  "entete": {"format":2,"produitVersion":"${VERSION.affichee}","revision":1,"comptes":{"participants":0,"tables":0,"reservations":0,"titres":0,"propositions":0,"retenu":0}},
+  "entete": {"format":3,"produitVersion":"${VERSION.affichee}","revision":1,"comptes":{"participants":0,"tables":0,"reservations":0,"titres":0,"propositions":0,"retenu":0}},
   "charge": {
     "evenement": {"id":"evt-neuf","nom":"Atelier \\"jeudi\\"","date":"2026-11-12","siegesParDefaut":8,"tours":3,"unite":"cm","etat":"brouillon","filiation":{"source":{"id":"evt-modele","nom":"Atelier modèle"},"instant":{"revision":7,"libelle":"Tables posées"}}},
     "reglages": {"separerAppartenances":false,"nouveauxVoisins":true,"nouvelleTable":false,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":2,"arret":1000,"historique":10}},
@@ -593,7 +593,7 @@ describe('serialiserCharge : la charge seule (§ 8.8)', () => {
     assert.deepEqual(avant.flatMap((ligne, i) => (ligne === apres[i] ? [] : [i])), [1]);
     assert.equal(
       apres[1],
-      `  "entete": {"format":2,"produitVersion":"${autre}","revision":41,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},`,
+      `  "entete": {"format":3,"produitVersion":"${autre}","revision":41,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},`,
     );
   });
 });
@@ -741,8 +741,8 @@ describe('déterminisme (§ 8.8, § 14.7)', () => {
   });
 });
 
-describe('les champs facultatifs du format 2 (§ 8.9, A16)', () => {
-  // La charge du contrat, chaque champ du format 2 posé hors de son défaut,
+describe('les champs facultatifs (§ 8.9, A16)', () => {
+  // La charge du contrat, chaque champ facultatif posé hors de son défaut,
   // ses listes à rebours de l'ordre canonique, et le texte qui l'écrit.
   function chargeFormat2() {
     const charge = chargeContrat();
@@ -772,14 +772,14 @@ describe('les champs facultatifs du format 2 (§ 8.9, A16)', () => {
     '"position":{"x":250,"y":0},"objectifs":[{"portee":"tous","tour":null,"regle":null,"etiquettes":["Montréal"]},{"portee":"tour","tour":1,"regle":null,"etiquettes":["bénévole"]},{"portee":"tour","tour":2,"regle":"ou","etiquettes":["finance","ressources humaines"]}]}',
   );
 
-  test('chacun s’écrit après les clés du format 1 de son objet, les réglages dans l’ordre de A16, les étiquettes par unités de code, les objectifs la soirée puis les tours', () => {
+  test('chacun s’écrit après les clés toujours présentes de son objet, les réglages dans l’ordre de A16, les étiquettes par unités de code, les objectifs la soirée puis les tours', () => {
     assert.equal(serialiser(chargeFormat2(), ENTETE), TEXTE_FORMAT_2);
     assert.equal(serialiser(aRebours(chargeFormat2()), ENTETE), TEXTE_FORMAT_2);
     const lu = analyser(TEXTE_FORMAT_2);
     assert.equal(serialiser(lu.charge, lu.entete), TEXTE_FORMAT_2);
   });
 
-  test('absents, ils ne s’écrivent pas : la charge du format 1 rend le texte du contrat', () => {
+  test('absents, ils ne s’écrivent pas : la charge sans eux rend le texte du contrat', () => {
     const charge = chargeFormat2();
     for (const cle of ['regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs']) {
       delete charge.reglages[cle];

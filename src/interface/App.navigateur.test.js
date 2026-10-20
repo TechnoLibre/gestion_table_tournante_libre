@@ -199,13 +199,16 @@ describe('annonce de format (§ 8.8, § 18.6)', () => {
     expect(annonce(m)).toBeNull();
   });
 
-  test('formatCourant à FORMAT + 1, fichier au format FORMAT : « ce fichier se convertira… », et l’ouverture n’ajoute rien au relevé', async () => {
-    const m = await monter({ formatCourant: FORMAT + 1, fichiers: [fichier('bal', 'Bal des Grisailles')] });
+  test('un fichier au format FORMAT − 1 ne s’ouvre pas : refus FORMAT_TROP_ANCIEN, aucun événement ni annonce, et l’ouverture n’ajoute rien au relevé', async () => {
+    const m = await monter({ fichiers: [fichier('bal', 'Bal des Grisailles', { format: FORMAT - 1 })] });
     const avant = m.trace.length;
-    await m.seance.ouvrir('bal');
+    await expect(m.seance.ouvrir('bal')).rejects.toMatchObject({
+      code: 'ETAT_ILLISIBLE',
+      details: { raison: 'FORMAT_TROP_ANCIEN', format: FORMAT - 1, secours: { precedent: null, journal: null } },
+    });
     flushSync();
-    expect(annonce(m).textContent).toBe(t('coquille.format.plusAncien'));
-    expect(annonce(m).textContent).toMatch(/se convertira à votre première modification/);
+    expect(m.seance.etat().evenement).toBeNull();
+    expect(annonce(m)).toBeNull();
     expect(m.trace.length).toBe(avant);
   });
 });

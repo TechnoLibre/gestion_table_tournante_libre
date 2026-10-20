@@ -315,7 +315,7 @@ const unEvenement = fc.record({
   ),
 });
 
-// Les réglages facultatifs du format 2 manquent une fois sur deux, chacun
+// Les réglages facultatifs manquent une fois sur deux, chacun
 // pour lui-même ; présents, ils portent une valeur hors de leur défaut.
 const desReglages = fc.record(
   {
@@ -591,8 +591,8 @@ const unePaire = fc
     }),
   }));
 
-// Les réglages facultatifs du format 2.
-const REGLAGES_DU_FORMAT_2 = ['regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs'];
+// Les réglages facultatifs.
+const REGLAGES_FACULTATIFS = ['regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs'];
 
 // Vrai quand deux propositions de la charge partagent un identifiant.
 const identifiantsRepetes = (charge) => new Set(charge.propositions.map((p) => p.id)).size < charge.propositions.length;
@@ -662,7 +662,7 @@ describe('difference et appliquer : aller-retour sur des paires tirées (§ 8.6)
         if (correctif.some(({ chemin }) => typeof chemin[chemin.indexOf('objectifs') + 1] === 'number' && chemin.includes('objectifs'))) {
           bilan.objectifsParRang += 1;
         }
-        if (correctif.some(({ chemin }) => chemin[0] === 'reglages' && REGLAGES_DU_FORMAT_2.includes(chemin[1]))) {
+        if (correctif.some(({ chemin }) => chemin[0] === 'reglages' && REGLAGES_FACULTATIFS.includes(chemin[1]))) {
           bilan.reglagesDuFormat2 += 1;
         }
       }),
@@ -1999,8 +1999,8 @@ describe('le journal ne porte aucune course de la recherche (§ 8.6, § 8.9, B31
   });
 });
 
-describe('les étiquettes, les objectifs et les réglages du format 2 dans un correctif (§ 8.6, § 8.9)', () => {
-  // Une charge de deux personnes et deux tables, sans champ du format 2 ;
+describe('les étiquettes, les objectifs et les réglages facultatifs dans un correctif (§ 8.6, § 8.9)', () => {
+  // Une charge de deux personnes et deux tables, sans champ facultatif ;
   // modifier passe sur une copie.
   function base(modifier = () => {}) {
     const charge = creerCharge({ id: 'evt-format2', nom: 'Veillée des Grives', siegesParDefaut: 4, tours: 2 });
@@ -2061,7 +2061,7 @@ describe('les étiquettes, les objectifs et les réglages du format 2 dans un co
     exigerCorrectif(avec(soiree), avec(tour2, soiree), [{ op: 'poser', chemin: T2, valeur: [soiree, tour2] }], 'un de plus');
   });
 
-  test('chaque réglage du format 2 se pose quand il apparaît, se retire quand il revient à son défaut', () => {
+  test('chaque réglage facultatif se pose quand il apparaît, se retire quand il revient à son défaut', () => {
     const valeurs = [['regleObjectifs', 'et'], ['respecterObjectifs', false], ['modeObjectifs', 'minimum'], ['rencontrerAnimateurs', true]];
     for (const [cle, valeur] of valeurs) {
       const avec = base((c) => { c.reglages[cle] = valeur; });

@@ -77,7 +77,7 @@ describe('diametre (§ 7.7)', () => {
     assert.equal(Math.round(diametre(10)), 191);
   });
 
-  test('une seule formule : le format 1 ne porte aucun diamètre saisi, et une option ne change rien', () => {
+  test('une seule formule : le fichier ne porte aucun diamètre saisi, et une option ne change rien', () => {
     assert.equal(diametre(8, { saisi: 180 }), diametre(8));
     assert.equal(diametre(2, { saisi: 50 }), 70);
   });
