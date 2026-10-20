@@ -6,14 +6,27 @@
 // que soit l'ordre dans lequel une charge s'est construite, la charge seule
 // dans la mise en page du fichier, l'aller-retour par l'analyse, le retenu
 // que sa règle refuse, recopié hors du schéma, les champs facultatifs du
-// format 2 et leur rang, et un sérialiseur dont la sortie ne dépend que de
-// ses arguments. Les noms des charges d'épreuve sont inventés.
+// format 2 et leur rang, un sérialiseur dont la sortie ne dépend que de
+// ses arguments, et la copie canonique partagée : les propositions figées y
+// prêtent une copie figée et son texte, que les sorties ne distinguent pas
+// d'une copie neuve, et la copie canonique refaite là seulement où des
+// opérations l'ont modifiée en place (recanoniser), qui rend ce que rend
+// canoniser. Les noms des charges d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
+import { texteLivre } from '../demo/livrees.js';
 import { VERSION } from '../version.genere.js';
-import { canoniser, serialiser, serialiserCharge } from './canonique.js';
+import {
+  canoniser,
+  canoniserPartagee,
+  recanoniser,
+  serialiser,
+  serialiserCanonique,
+  serialiserCharge,
+} from './canonique.js';
 import { analyser } from './document.js';
+import { estFigee, figer, gelerPropositions } from './gel.js';
 
 // En-tête du texte du contrat.
 const ENTETE = Object.freeze({ revision: 3, produitVersion: VERSION.affichee });
@@ -952,5 +965,612 @@ describe('la présence par tour dans le texte canonique (§ 8.9)', () => {
     for (const objet of objetsDe(copie)) assert.ok(!recus.has(objet));
     assert.deepEqual(copie.participants[2].presence, [2]);
     assert.deepEqual(copie.propositions[0].placement[0].absents, [3]);
+  });
+});
+
+describe('la copie canonique partagée : propositions figées et textes en cache (§ 8.8, § 8.9)', () => {
+  // Propositions inventées pour charge, en place : nombre plans répartissant
+  // les participants non exclus sur les tables, d'un pas qui change à chaque
+  // tour ; une table pleine renvoie à la réserve. Les listes de table, la
+  // réserve et les participants s'écrivent à rebours, que la copie canonique
+  // range ; une proposition sur deux a ses sièges attribués, et les
+  // identifiants décroissent, que le tri des propositions renverse.
+  function avecPropositions(charge, nombre) {
+    const tables = charge.tables.map(({ id }) => id);
+    const capacites = charge.tables.map(({ sieges }) => sieges ?? charge.evenement.siegesParDefaut);
+    const presents = charge.participants.filter(({ exclu }) => !exclu).map(({ id }) => id);
+    const { tours } = charge.evenement;
+    charge.propositions = Array.from({ length: nombre }, (_, rang) => ({
+      id: nombre - rang,
+      graine: 7_001 + rang,
+      arret: 200_000,
+      historique: 1_000,
+      produitVersion: VERSION.affichee,
+      siegesAttribues: rang % 2 === 1,
+      tables: [...tables],
+      capacites: [...capacites],
+      tours,
+      participants: [...presents].reverse(),
+      placement: Array.from({ length: tours }, (__, tour) => {
+        const sieges = tables.map(() => []);
+        const reserve = [];
+        presents.forEach((id, place) => {
+          const table = (place * (tour + 1) + rang) % tables.length;
+          if (sieges[table].length < capacites[table]) sieges[table].unshift(id);
+          else reserve.unshift(id);
+        });
+        return { sieges, reserve };
+      }),
+    }));
+    charge.prochainsIds.proposition = nombre + 1;
+    return charge;
+  }
+
+  // La charge du contrat et quatre propositions de plus : une à sièges
+  // attribués avec une chaise vide, une dérivée datée avec un absent, et deux
+  // de même identité que seul leur texte départage (produitVersion).
+  function chargeVariee() {
+    const charge = chargeAvecRetenu();
+    const premiere = charge.propositions[0];
+    charge.propositions.push(
+      {
+        ...structuredClone(premiere),
+        id: 2,
+        siegesAttribues: true,
+        placement: [
+          { sieges: [[null, 3], [4, 2]], reserve: [1] },
+          { sieges: [[4, 1], [3, 2]], reserve: [] },
+        ],
+      },
+      {
+        ...structuredClone(premiere),
+        id: 3,
+        depart: 1,
+        toursFiges: [1],
+        horodatage: '2031-05-17T08:05:00-04:00',
+        placement: [
+          { sieges: [[3, 1], [4]], reserve: [], absents: [2] },
+          { sieges: [[4, 1], [3, 2]], reserve: [] },
+        ],
+      },
+      { ...structuredClone(premiere), id: 4, produitVersion: 'b' },
+      { ...structuredClone(premiere), id: 4, produitVersion: 'C' },
+    );
+    charge.prochainsIds.proposition = 5;
+    return charge;
+  }
+
+  // Les charges que chaque épreuve parcourt, chacune neuve à chaque appel :
+  // le contrat, les variantes du format — ordres renversés, clés à rebours,
+  // retenu hors de sa règle, champs facultatifs —, et deux démonstrations
+  // livrées munies de propositions.
+  const CHARGES = [
+    ['le contrat', chargeContrat],
+    ['le contrat et son retenu', chargeAvecRetenu],
+    ['des propositions variées', chargeVariee],
+    ['des propositions variées, à rebours', () => {
+      const charge = chargeVariee();
+      charge.propositions.reverse();
+      charge.participants.reverse();
+      return aRebours(charge);
+    }],
+    ['un retenu hors de sa règle', () => {
+      const charge = chargeVariee();
+      charge.retenu.note = 'à revoir';
+      return charge;
+    }],
+    ['une démonstration livrée, grande', () => avecPropositions(analyser(texteLivre('grande')).charge, 6)],
+    ['une démonstration livrée, petite', () => avecPropositions(analyser(texteLivre('petite-conflit')).charge, 3)],
+  ];
+
+  // Texte de référence de charge, par la copie neuve de canoniser :
+  // serialiserCanonique ne lit que la copie qu'on lui donne.
+  const reference = (charge) => serialiserCanonique(canoniser(charge), ENTETE);
+
+  // Exécute fonction en comptant les appels à JSON.stringify, puis le
+  // rétablit ; rend le compte.
+  function appelsAStringify(fonction) {
+    const reel = JSON.stringify;
+    let appels = 0;
+    JSON.stringify = (...arguments_) => {
+      appels += 1;
+      return reel(...arguments_);
+    };
+    try {
+      fonction();
+    } finally {
+      JSON.stringify = reel;
+    }
+    return appels;
+  }
+
+  test('E1 — serialiser, serialiserCharge et canoniserPartagee rendent sur une charge figée, cache froid puis chaud, ce qu\'ils rendent sur sa copie libre', () => {
+    const ecarts = CHARGES.flatMap(([libelle, construire]) => {
+      const figee = gelerPropositions(construire());
+      const libre = structuredClone(figee);
+      assert.ok(figee.propositions.every(estFigee) && !libre.propositions.some(estFigee), libelle);
+      const attendu = reference(construire());
+      // La charge seule : les lignes de la clé charge, un niveau plus haut.
+      const lignes = attendu.slice(0, -1).split('\n').slice(2, -1);
+      assert.equal(lignes[0], '  "charge": {', libelle);
+      const attenduCharge = `{\n${lignes.slice(1).map((ligne) => ligne.slice(2)).join('\n')}\n`;
+      return [1, 2].flatMap((passe) => {
+        const ecartsDeLaPasse = [];
+        const comparer = (nom, obtenu, voulu) => {
+          if (obtenu !== voulu) ecartsDeLaPasse.push(`${libelle}, passe ${passe} : ${nom}`);
+        };
+        comparer('serialiser figée', serialiser(figee, ENTETE), attendu);
+        comparer('serialiserCharge figée', serialiserCharge(figee), attenduCharge);
+        comparer('serialiser libre', serialiser(libre, ENTETE), attendu);
+        comparer('serialiserCharge libre', serialiserCharge(libre), attenduCharge);
+        comparer('canoniserPartagee', JSON.stringify(canoniserPartagee(figee)), JSON.stringify(canoniser(libre)));
+        comparer('serialiserCanonique', serialiserCanonique(canoniserPartagee(figee), ENTETE), attendu);
+        return ecartsDeLaPasse;
+      });
+    });
+    assert.deepEqual(ecarts, []);
+  });
+
+  test('E1 — figées, la charge du contrat et celle de son retenu rendent le texte du contrat octet pour octet', () => {
+    for (const passe of [1, 2]) {
+      assert.equal(serialiser(gelerPropositions(chargeContrat()), ENTETE), TEXTE_CONTRAT, `passe ${passe}`);
+      const avecRetenu = gelerPropositions(chargeAvecRetenu());
+      assert.equal(serialiser(avecRetenu, ENTETE), TEXTE_AVEC_RETENU, `passe ${passe}`);
+      assert.equal(serialiser(avecRetenu, ENTETE), TEXTE_AVEC_RETENU, `passe ${passe}, cache chaud`);
+    }
+  });
+
+  test('E1 — une même proposition figée, en tête ou en queue, sous un autre réglage attribuerSieges, prête la même copie et le même texte', () => {
+    const proposition = figer(chargeVariee().propositions[1]);
+    const seule = chargeContrat();
+    seule.propositions = [proposition];
+    const ailleurs = chargeVariee();
+    ailleurs.reglages.attribuerSieges = true;
+    ailleurs.propositions[1] = proposition;
+    const copie = canoniserPartagee(seule).propositions[0];
+    assert.equal(canoniserPartagee(ailleurs).propositions.find(({ id }) => id === 2), copie);
+    for (const charge of [seule, ailleurs]) {
+      assert.equal(serialiser(charge, ENTETE), reference(structuredClone(charge)));
+      assert.equal(serialiserCharge(charge), serialiserCharge(structuredClone(charge)));
+    }
+  });
+
+  test('canoniserPartagee prête, pour chaque proposition figée, une copie canonique figée et inscrite, toujours la même ; tout le reste est neuf et modifiable', () => {
+    const figee = gelerPropositions(chargeVariee());
+    const avant = JSON.stringify(figee);
+    const une = canoniserPartagee(figee);
+    const autre = canoniserPartagee(figee);
+    assert.equal(une.propositions.length, 5);
+    une.propositions.forEach((copie, rang) => {
+      assert.equal(autre.propositions[rang], copie, `rang ${rang}`);
+      assert.ok(estFigee(copie) && Object.isFrozen(copie.placement[0].sieges), `rang ${rang}`);
+      assert.ok(!figee.propositions.includes(copie), `rang ${rang}`);
+    });
+    assert.throws(() => une.propositions[0].placement[0].reserve.push(9), TypeError);
+    assert.notEqual(une.propositions, autre.propositions);
+    const partagees = new Set(une.propositions.flatMap((copie) => [...objetsDe(copie)]));
+    const recus = objetsDe(figee);
+    for (const objet of objetsDe(une)) {
+      if (partagees.has(objet)) continue;
+      assert.ok(!recus.has(objet) && !objetsDe(autre).has(objet) && !Object.isFrozen(objet));
+    }
+    une.participants[0].nom = 'Autre';
+    une.retenu.placement[0].reserve.push(9);
+    une.propositions.pop();
+    assert.equal(JSON.stringify(figee), avant);
+    assert.equal(JSON.stringify(canoniserPartagee(figee)), JSON.stringify(canoniser(figee)));
+  });
+
+  test('une copie canonique partagée est sa propre copie : canoniserPartagee la rend telle quelle', () => {
+    const une = canoniserPartagee(gelerPropositions(chargeVariee()));
+    const encore = canoniserPartagee(une);
+    une.propositions.forEach((copie, rang) => assert.equal(encore.propositions[rang], copie, `rang ${rang}`));
+    assert.equal(serialiserCanonique(encore, ENTETE), reference(chargeVariee()));
+  });
+
+  test('une proposition libre, ou gelée par Object.freeze seul, ne prête rien : sa copie est neuve à chaque appel, ni gelée ni inscrite', () => {
+    const charge = chargeVariee();
+    figer(charge.propositions[0]);
+    Object.freeze(charge.propositions[2]);
+    const une = canoniserPartagee(charge);
+    const autre = canoniserPartagee(charge);
+    const parId = (copie, id, graine = 48_271) => copie.propositions.find((p) => p.id === id && p.graine === graine);
+    assert.equal(parId(une, 1), parId(autre, 1));
+    for (const id of [2, 3]) {
+      assert.notEqual(parId(une, id), parId(autre, id), `proposition ${id}`);
+      assert.ok(!estFigee(parId(une, id)) && !Object.isFrozen(parId(une, id)), `proposition ${id}`);
+    }
+  });
+
+  test('le texte d\'une proposition figée se rend une fois par retrait : cache chaud, serialiser et serialiserCharge ne la relisent plus', () => {
+    const figee = gelerPropositions(avecPropositions(analyser(texteLivre('petite')).charge, 4));
+    const sans = { ...figee, propositions: [] };
+    serialiser(figee, ENTETE);
+    serialiserCharge(figee);
+    assert.equal(appelsAStringify(() => serialiserCharge(figee)), appelsAStringify(() => serialiserCharge(sans)));
+    assert.equal(appelsAStringify(() => serialiser(figee, ENTETE)), appelsAStringify(() => serialiser(sans, ENTETE)));
+    const libre = structuredClone(figee);
+    assert.ok(appelsAStringify(() => serialiserCharge(libre)) > appelsAStringify(() => serialiserCharge(sans)));
+  });
+
+  test('E2 — une proposition remplacée par un objet neuf de même identifiant change le texte', () => {
+    const figee = gelerPropositions(chargeContrat());
+    assert.equal(serialiserCharge(figee), serialiserCharge(chargeContrat()));
+    assert.equal(serialiser(figee, ENTETE), TEXTE_CONTRAT);
+    const neuve = structuredClone(figee.propositions[0]);
+    neuve.placement[0].sieges = [[1, 2], [3, 4]];
+    figee.propositions[0] = figer(neuve);
+    const attendu = remplacer(TEXTE_CONTRAT, '{"sieges":[[1,3],[2,4]]', '{"sieges":[[1,2],[3,4]]');
+    assert.equal(serialiser(figee, ENTETE), attendu);
+    assert.equal(serialiserCharge(figee), serialiserCharge(structuredClone(figee)));
+    assert.notEqual(serialiserCharge(figee), serialiserCharge(chargeContrat()));
+  });
+
+  test('E2 — une charge libre, ou une proposition gelée en surface seulement, modifiée en place entre deux écritures, n\'est jamais servie du cache', () => {
+    const libre = chargeContrat();
+    const surface = chargeContrat();
+    Object.freeze(surface.propositions[0]);
+    const attendu = remplacer(TEXTE_CONTRAT, '{"sieges":[[1,3],[2,4]]', '{"sieges":[[1,2],[3,4]]');
+    for (const charge of [libre, surface]) {
+      for (const passe of [1, 2]) {
+        assert.equal(serialiserCharge(charge), serialiserCharge(chargeContrat()), `passe ${passe}`);
+        assert.equal(serialiser(charge, ENTETE), TEXTE_CONTRAT, `passe ${passe}`);
+        canoniserPartagee(charge);
+      }
+      const sieges = charge.propositions[0].placement[0].sieges;
+      sieges[0][1] = 2;
+      sieges[1][0] = 3;
+      assert.equal(serialiser(charge, ENTETE), attendu);
+      assert.equal(serialiserCharge(charge), serialiserCharge(structuredClone(charge)));
+      assert.equal(JSON.stringify(canoniserPartagee(charge)), JSON.stringify(canoniser(structuredClone(charge))));
+    }
+  });
+
+  test('E2 — serialiserCanonique, rendu deux fois sur le même objet modifié en place entre les deux, ne sert jamais le premier texte : une proposition libre tirée de canoniserPartagee, ou gelée en surface par Object.freeze seul', () => {
+    // Chaque cas rend la même copie deux fois, au retrait où serialiser
+    // écrit une proposition : seule la garde du cache de texte la distingue
+    // d'une copie canonique partagée.
+    const tireeDuPartage = canoniserPartagee(chargeContrat());
+    const enSurface = chargeContrat();
+    Object.freeze(enSurface.propositions[0]);
+    for (const [libelle, copie] of [['tirée de canoniserPartagee', tireeDuPartage], ['gelée en surface', enSurface]]) {
+      const premier = serialiserCanonique(copie, ENTETE);
+      assert.equal(premier, TEXTE_CONTRAT, libelle);
+      const sieges = copie.propositions[0].placement[0].sieges;
+      sieges[0][1] = 2;
+      sieges[1][0] = 3;
+      const second = serialiserCanonique(copie, ENTETE);
+      assert.notEqual(second, premier, libelle);
+      assert.equal(second, reference(structuredClone(copie)), libelle);
+    }
+  });
+
+  test('E2 — canoniser rend toujours des objets neufs et non gelés, même quand la copie partagée est en cache', () => {
+    const figee = gelerPropositions(chargeVariee());
+    const partagee = canoniserPartagee(figee);
+    serialiser(figee, ENTETE);
+    const une = canoniser(figee);
+    const autre = canoniser(figee);
+    const dejaVus = new Set([...objetsDe(figee), ...objetsDe(partagee), ...objetsDe(autre)]);
+    for (const objet of objetsDe(une)) assert.ok(!dejaVus.has(objet) && !Object.isFrozen(objet) && !estFigee(objet));
+    une.propositions[0].placement[0].sieges[0].push(9);
+    assert.equal(serialiser(figee, ENTETE), reference(chargeVariee()));
+  });
+
+  test('une proposition figée hors de sa règle lève à chaque écriture la TypeError de canoniser, qui nomme son rang', () => {
+    const charge = chargeVariee();
+    delete charge.propositions[2].siegesAttribues;
+    gelerPropositions(charge);
+    const attendue = { name: 'TypeError', message: /charge\.propositions\[2\]\.siegesAttribues absente/ };
+    for (const passe of [1, 2]) {
+      assert.throws(() => canoniser(charge), attendue, `passe ${passe}`);
+      assert.throws(() => canoniserPartagee(charge), attendue, `passe ${passe}`);
+      assert.throws(() => serialiser(charge, ENTETE), attendue, `passe ${passe}`);
+      assert.throws(() => serialiserCharge(charge), attendue, `passe ${passe}`);
+    }
+    const ailleurs = chargeContrat();
+    ailleurs.propositions = [charge.propositions[0], charge.propositions[2]];
+    assert.throws(() => serialiser(ailleurs, ENTETE), {
+      name: 'TypeError',
+      message: /charge\.propositions\[1\]\.siegesAttribues/,
+    });
+  });
+
+  test("une liste de propositions mal formée — null, un texte, un objet — rend sous canoniserPartagee ce qu'elle rend sous canoniser, copie ou refus", () => {
+    // Ce que rend fonction : sa valeur écrite en JSON, ou le nom et le
+    // message de ce qu'elle lève.
+    const issue = (fonction) => {
+      try {
+        return { valeur: JSON.stringify(fonction()) };
+      } catch (erreur) {
+        return { erreur: `${erreur.name}: ${erreur.message}` };
+      }
+    };
+    for (const propositions of [null, 'aucune', {}]) {
+      const charge = chargeContrat();
+      charge.propositions = propositions;
+      const libelle = JSON.stringify(propositions);
+      assert.deepEqual(issue(() => canoniserPartagee(charge)), issue(() => canoniser(charge)), libelle);
+      assert.deepEqual(issue(() => serialiser(charge, ENTETE)), issue(() => reference(charge)), libelle);
+    }
+    const nulle = chargeContrat();
+    nulle.propositions = null;
+    assert.equal(canoniserPartagee(nulle).propositions, null);
+  });
+
+  test('serialiser garde ses refus : un en-tête absent lève avant la copie, une révision absente après elle', () => {
+    const charge = gelerPropositions(chargeContrat());
+    assert.throws(() => serialiser(charge), TypeError);
+    delete charge.participants[0].notes;
+    assert.throws(
+      () => serialiser(charge),
+      (erreur) => erreur instanceof TypeError && !/charge\.participants/.test(erreur.message),
+    );
+    assert.throws(() => serialiser(charge, { produitVersion: VERSION.affichee }), {
+      name: 'TypeError',
+      message: /charge\.participants\[0\]\.notes/,
+    });
+    assert.throws(() => serialiserCanonique(canoniser(chargeContrat()), { produitVersion: VERSION.affichee }), {
+      name: 'TypeError',
+      message: /entete\.revision/,
+    });
+  });
+
+  test('la copie partagée et son texte ne lisent ni horloge ni aléa, cache froid comme chaud', () => {
+    const attendu = reference(chargeVariee());
+    const figee = gelerPropositions(chargeVariee());
+    for (const passe of [1, 2]) {
+      assert.equal(sansHorlogeNiAlea(() => serialiser(figee, ENTETE)), attendu, `passe ${passe}`);
+      sansHorlogeNiAlea(() => serialiserCharge(figee));
+    }
+  });
+});
+
+describe('recanoniser : la copie canonique refaite là seulement où des opérations ont touché (§ 8.8)', () => {
+  // La charge du contrat et son retenu, à sièges attribués, ses listes de
+  // table dans l'ordre des sièges, plus une table munie d'objectifs et une
+  // proposition dérivée, datée, à sièges attribués, avec un absent : chaque
+  // forme que recanoniser refait y figure. Neuve à chaque appel.
+  function chargeDeTravail() {
+    const charge = chargeAvecRetenu();
+    charge.retenu.siegesAttribues = true;
+    charge.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['jardin'] }];
+    charge.propositions.push({
+      ...structuredClone(charge.propositions[0]),
+      id: 2,
+      depart: 1,
+      siegesAttribues: true,
+      horodatage: '2031-05-17T08:05:00-04:00',
+      placement: [
+        { sieges: [[3, 1], [4]], reserve: [2] },
+        { sieges: [[4, 1], [3]], reserve: [], absents: [2] },
+      ],
+    });
+    charge.prochainsIds.proposition = 3;
+    return charge;
+  }
+
+  // Traces vides : ni conteneur sali, ni valeur neuve.
+  const tracesVides = () => ({ sales: new Set(), neufs: new Set() });
+
+  // Descend de charge par etapes, clés ou rangs, en inscrivant dans
+  // traces.sales charge et chaque conteneur traversé, le dernier compris,
+  // comme une opération qui écrit sous ce chemin ; rend le dernier.
+  function salir(traces, charge, ...etapes) {
+    traces.sales.add(charge);
+    return etapes.reduce((conteneur, etape) => {
+      traces.sales.add(conteneur[etape]);
+      return conteneur[etape];
+    }, charge);
+  }
+
+  // Inscrit valeur dans traces.neufs, une valeur posée entière ou le
+  // porteur d'un drapeau posé, et la rend.
+  function neuf(traces, valeur) {
+    traces.neufs.add(valeur);
+    return valeur;
+  }
+
+  // recanoniser(charge, traces), après avoir vérifié qu'il rend le JSON et le
+  // texte de canoniser(charge), sans modifier la charge reçue.
+  function refaire(charge, traces) {
+    const attendu = canoniser(charge);
+    const avant = JSON.stringify(charge);
+    const refaite = recanoniser(charge, traces);
+    assert.equal(JSON.stringify(charge), avant, 'la charge reçue reste telle quelle');
+    assert.equal(JSON.stringify(refaite), JSON.stringify(attendu));
+    assert.equal(serialiserCanonique(refaite, ENTETE), serialiserCanonique(attendu, ENTETE));
+    return refaite;
+  }
+
+  test("un identifiant changé se range de nouveau — participant de la charge, participant d'une proposition, occupant d'une table sans sièges attribués — et reste à son siège quand ils sont attribués", () => {
+    const x = canoniser(chargeDeTravail());
+    const t = tracesVides();
+    salir(t, x, 'participants', 0).id = 6;
+    salir(t, x, 'propositions', 0, 'participants')[0] = 6;
+    salir(t, x, 'propositions', 0, 'placement', 0, 'sieges', 0)[0] = 6;
+    salir(t, x, 'propositions', 1, 'placement', 0, 'sieges', 0)[0] = 5;
+    const refaite = refaire(x, t);
+    assert.deepEqual(refaite.participants.map(({ id }) => id), [2, 3, 4, 6]);
+    assert.deepEqual(refaite.propositions[0].participants, [2, 3, 4, 6]);
+    assert.deepEqual(refaite.propositions[0].placement[0].sieges, [[3, 6], [2, 4]]);
+    assert.deepEqual(refaite.propositions[1].placement[0].sieges, [[5, 1], [4]]);
+  });
+
+  test("un drapeau siegesAttribues basculé à faux range chaque liste de table de son porteur, proposition ou retenu ; basculé à vrai, l'ordre posé se garde", () => {
+    const x = canoniser(chargeDeTravail());
+    const t = tracesVides();
+    neuf(t, salir(t, x, 'propositions', 1)).siegesAttribues = false;
+    neuf(t, salir(t, x, 'retenu')).siegesAttribues = false;
+    const refaite = refaire(x, t);
+    assert.deepEqual(refaite.propositions[1].placement.map(({ sieges }) => sieges), [[[1, 3], [4]], [[1, 4], [3]]]);
+    assert.deepEqual(refaite.retenu.placement.map(({ sieges }) => sieges), [[[1, 3], [2, 4]], [[1, 4], [2, 3]]]);
+
+    const y = canoniser(chargeDeTravail());
+    const u = tracesVides();
+    const premiere = neuf(u, salir(u, y, 'propositions', 0));
+    premiere.siegesAttribues = true;
+    premiere.placement[0].sieges[0] = [3, 1];
+    assert.deepEqual(refaire(y, u).propositions[0].placement[0].sieges[0], [3, 1]);
+  });
+
+  test("une liste posée entière, à rebours et ses clés à rebours, se recopie et se range, de même qu'un enregistrement inséré hors de son rang, et une liste de table sous le drapeau de son porteur ; rien de neuf n'est partagé", () => {
+    const x = canoniser(chargeDeTravail());
+    const t = tracesVides();
+    const posee = neuf(
+      t,
+      aRebours([
+        { participant: 3, table: 2, siege: null, portee: 'tour', tour: 2 },
+        { participant: 1, table: 1, siege: 1, portee: 'tous', tour: null },
+        { participant: 2, table: 1, siege: 2, portee: 'tous', tour: null },
+      ]),
+    );
+    salir(t, x).reservations = posee;
+    const insere = neuf(
+      t,
+      aRebours({ id: 5, nom: 'Liseron', prenom: null, appartenance: null, courriel: null,
+        titrePressenti: null, notes: null, exclu: false, presence: [3, 1] }),
+    );
+    salir(t, x, 'participants').splice(1, 0, insere);
+    salir(t, x, 'propositions', 0, 'placement', 1, 'sieges')[0] = neuf(t, [4, 1]);
+    salir(t, x, 'retenu', 'placement', 0, 'sieges')[1] = neuf(t, [4, 2]);
+    const refaite = refaire(x, t);
+    assert.deepEqual(refaite.propositions[0].placement[1].sieges[0], [1, 4]);
+    assert.deepEqual(refaite.retenu.placement[0].sieges[1], [4, 2]);
+    assert.deepEqual(refaite.reservations.map(({ participant }) => participant), [1, 2, 3]);
+    assert.deepEqual(refaite.participants.map(({ id }) => id), [1, 2, 3, 4, 5]);
+    assert.deepEqual(refaite.participants[4].presence, [1, 3]);
+    const deNeuf = new Set([...objetsDe(posee), ...objetsDe(insere)]);
+    assert.deepEqual([...objetsDe(refaite)].filter((objet) => deNeuf.has(objet)), []);
+  });
+
+  test("un champ facultatif posé prend son rang dans l'ordre du schéma et sa liste se range ; retiré, il manque à la copie", () => {
+    const x = canoniser(chargeDeTravail());
+    const t = tracesVides();
+    const participant = salir(t, x, 'participants', 1);
+    participant.presence = neuf(t, [2, 1]);
+    participant.etiquettes = neuf(t, ['jardin', 'atelier']);
+    const reglages = salir(t, x, 'reglages');
+    reglages.rencontrerAnimateurs = true;
+    reglages.regleObjectifs = 'et';
+    delete salir(t, x, 'tables', 1).objectifs;
+    delete salir(t, x, 'propositions', 1).horodatage;
+    delete salir(t, x, 'propositions', 1, 'placement', 1).absents;
+    const refaite = refaire(x, t);
+    assert.deepEqual(Object.keys(refaite.participants[1]).slice(-2), ['etiquettes', 'presence']);
+    assert.deepEqual(refaite.participants[1].presence, [1, 2]);
+    assert.deepEqual(refaite.participants[1].etiquettes, ['atelier', 'jardin']);
+    assert.deepEqual(Object.keys(refaite.reglages).slice(-2), ['regleObjectifs', 'rencontrerAnimateurs']);
+    assert.equal(Object.hasOwn(refaite.tables[1], 'objectifs'), false);
+    assert.equal(Object.hasOwn(refaite.propositions[1], 'horodatage'), false);
+    assert.equal(Object.hasOwn(refaite.propositions[1].placement[1], 'absents'), false);
+  });
+
+  test("un objet sali se refait par les champs du schéma : une clé inconnue ou oubliée ne se copie pas", () => {
+    const x = canoniser(chargeDeTravail());
+    const t = tracesVides();
+    salir(t, x, 'participants', 2).inconnue = 1;
+    salir(t, x, 'reglages').cibleRedondance = 800;
+    const refaite = refaire(x, t);
+    assert.equal(Object.hasOwn(refaite.participants[2], 'inconnue'), false);
+    assert.equal(Object.hasOwn(refaite.reglages, 'cibleRedondance'), false);
+  });
+
+  test("un retenu que sa règle refuse se recopie hors du schéma, qu'il le soit devenu en place ou qu'il soit posé entier", () => {
+    const x = canoniser(chargeDeTravail());
+    const t = tracesVides();
+    salir(t, x, 'retenu').note = 'à revoir';
+    assert.equal(refaire(x, t).retenu.note, 'à revoir');
+
+    const y = canoniser(chargeDeTravail());
+    const u = tracesVides();
+    salir(u, y).retenu = neuf(u, { ...aRebours(structuredClone(y.retenu)), note: 'à revoir' });
+    assert.equal(refaire(y, u).retenu.note, 'à revoir');
+  });
+
+  test("un retenu que sa règle refuse, recopié hors du schéma, qui redevient conforme en place se refait entier sous sa règle : ses listes se rangent, enfants propres compris", () => {
+    const charge = chargeDeTravail();
+    charge.retenu = {
+      proposition: 1,
+      siegesAttribues: false,
+      tables: [1, 2],
+      capacites: [2, 2],
+      tours: 2,
+      participants: [4, 2, 1, 3],
+      horodatage: 'pas une date',
+      placement: [
+        { sieges: [[3, 1], [4, 2]], reserve: [] },
+        { sieges: [[4, 1], [3, 2]], reserve: [] },
+      ],
+    };
+    const x = canoniser(charge);
+    assert.deepEqual(x.retenu.participants, [4, 2, 1, 3], "le retenu fautif garde ses listes dans l'ordre écrit");
+    const t = tracesVides();
+    delete salir(t, x, 'retenu').horodatage;
+    const refaite = refaire(x, t);
+    assert.deepEqual(refaite.retenu.participants, [1, 2, 3, 4]);
+    assert.deepEqual(Object.keys(refaite.retenu.placement[0]), ['sieges', 'reserve']);
+    assert.deepEqual(refaite.retenu.placement.map(({ sieges }) => sieges), [[[1, 3], [2, 4]], [[1, 4], [2, 3]]]);
+  });
+
+  test("ce qui n'est ni sali ni neuf revient tel quel, partagé avec la charge reçue, et ce qui l'est revient neuf ; sans rien de touché, la charge elle-même revient", () => {
+    const x = canoniser(chargeDeTravail());
+    assert.equal(recanoniser(x, tracesVides()), x);
+    const t = tracesVides();
+    salir(t, x, 'participants', 0).nom = 'Liseron';
+    const refaite = refaire(x, t);
+    assert.notEqual(refaite, x);
+    assert.notEqual(refaite.participants, x.participants);
+    assert.notEqual(refaite.participants[0], x.participants[0]);
+    for (const cle of ['evenement', 'reglages', 'prochainsIds', 'tables', 'reservations', 'titres', 'propositions', 'retenu']) {
+      assert.equal(refaite[cle], x[cle], cle);
+    }
+    assert.ok(refaite.participants.slice(1).every((participant, rang) => participant === x.participants[rang + 1]));
+  });
+
+  test('sur une copie de canoniserPartagee, les propositions partagées que rien ne touche restent partagées, et une proposition insérée se range parmi elles', () => {
+    const x = canoniserPartagee(gelerPropositions(chargeDeTravail()));
+    const partagees = [...x.propositions];
+    assert.ok(partagees.every(estFigee));
+    const t = tracesVides();
+    const inseree = neuf(t, aRebours({ ...structuredClone(partagees[0]), id: 3 }));
+    salir(t, x, 'propositions').unshift(inseree);
+    const refaite = refaire(x, t);
+    assert.deepEqual(refaite.propositions.map(({ id }) => id), [1, 2, 3]);
+    assert.equal(refaite.propositions[0], partagees[0]);
+    assert.equal(refaite.propositions[1], partagees[1]);
+    assert.equal(estFigee(refaite.propositions[2]), false);
+  });
+
+  test('deux tours de suite, comme une suite de correctifs : la copie refaite, modifiée en place à son tour, se refait encore', () => {
+    let x = canoniser(chargeDeTravail());
+    let t = tracesVides();
+    salir(t, x, 'participants', 0).id = 7;
+    x = refaire(x, t);
+    t = tracesVides();
+    salir(t, x, 'tables', 0).id = 9;
+    salir(t, x, 'propositions', 0, 'placement', 1, 'sieges', 1)[0] = 7;
+    const refaite = refaire(x, t);
+    assert.deepEqual(refaite.participants.map(({ id }) => id), [2, 3, 4, 7]);
+    assert.deepEqual(refaite.tables.map(({ id }) => id), [2, 9]);
+    assert.deepEqual(refaite.propositions[0].placement[1].sieges, [[1, 4], [3, 7]]);
+  });
+
+  test('un objet sali qui perd une clé du schéma lève la TypeError de canoniser, qui nomme son chemin', () => {
+    const x = canoniser(chargeDeTravail());
+    const t = tracesVides();
+    delete salir(t, x, 'participants', 2).notes;
+    const attendu = { name: 'TypeError', message: 'charge.participants[2].notes absente' };
+    assert.throws(() => canoniser(x), attendu);
+    assert.throws(() => recanoniser(x, t), attendu);
+  });
+
+  test('recanoniser ne lit ni horloge ni aléa', () => {
+    const x = canoniser(chargeDeTravail());
+    const t = tracesVides();
+    salir(t, x, 'participants', 0).id = 6;
+    neuf(t, salir(t, x, 'propositions', 1)).siegesAttribues = false;
+    const attendu = JSON.stringify(canoniser(x));
+    assert.equal(sansHorlogeNiAlea(() => JSON.stringify(recanoniser(x, t))), attendu);
   });
 });
