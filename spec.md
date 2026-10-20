@@ -2418,6 +2418,20 @@ lit comme un autre. Seule son impression se refuse (§ 11.7).
 
 Le logiciel ouvre sur une **liste des événements**, avec pour chacun le nom, la
 date, l'état, le nombre de participants, la dernière modification et le chemin.
+La dernière modification est l'horodatage de la dernière entrée du journal
+(§ 8.6), tel que l'horloge de l'application l'a noté (§ 19.4), jamais la date
+du système de fichiers. La liste le lit depuis la fin du journal, sans
+restituer aucune charge : la première ligne du journal se juge comme à la
+lecture, puis la dernière ligne complète qui est une entrée, à l'horodatage de
+forme admise, donne la date ; les jalons ne comptent pas. Ni la forme des
+lignes qui précèdent cette entrée, ni ses autres champs, ni celle des
+instantanés ne se contrôlent. Sur un journal sain, c'est donc la dernière
+entrée que l'ouverture lit ; sur un journal dont une ligne au milieu est de
+celles que l'ouverture refuse (JSON invalide, forme fausse, révision ou cadence
+hors de sa suite), la date reste celle de la dernière entrée du fichier,
+au-delà de l'avarie. Une ligne qui n'est pas de l'UTF-8 arrête la
+date comme elle arrête l'ouverture, à la dernière entrée qui la précède. Sans
+journal, sans ouverture lisible ou sans entrée, la ligne n'en porte pas.
 Un en-tête la résume — « N événements · M participants au total », M la somme
 des participants des lignes listées — et offre la création et l'import. Sous
 lui, une tuile par filtre — tous les événements, puis chaque état du plan dans

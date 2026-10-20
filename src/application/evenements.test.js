@@ -589,6 +589,56 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.equal(ligne.derniereModification, '2031-05-17T08:00:00-04:00');
   });
 
+  test("une ligne de forme fausse au milieu du journal : la dernière modification reste l'horodatage de la dernière entrée, que l'ouverture ne lit pas", async () => {
+    const { fs, horloge, facade } = monter();
+    await facade.demarrer();
+    await facade.creer({ nom: LUCIOLES });
+    horloge.avancer(3_600_000);
+    await facade.renommer(LUCIOLES, { nom: CERFS });
+    const chemin = CERFS + SUFFIXES.journal;
+    const lignes = fs.contenu('documents', chemin).split('\n');
+    fs.deposer('documents', chemin, lignes.toSpliced(2, 0, '{"type":"entree"}').join('\n'));
+    assert.deepEqual(
+      lireJournal(fs.contenu('documents', chemin)).entrees.map(({ horodatage }) => horodatage),
+      [DEPART],
+    );
+    const avant = ecritures(fs);
+    const [ligne] = await facade.lister();
+    assert.equal(ligne.derniereModification, '2026-10-06T20:00:00-04:00');
+    assert.equal(ecritures(fs), avant);
+  });
+
+  test("une ligne qui n'est pas de l'UTF-8 au milieu du journal arrête la dernière modification à l'entrée qui la précède", async () => {
+    const { fs, horloge, facade } = monter();
+    await facade.demarrer();
+    await facade.creer({ nom: LUCIOLES });
+    horloge.avancer(3_600_000);
+    await facade.renommer(LUCIOLES, { nom: CERFS });
+    const chemin = CERFS + SUFFIXES.journal;
+    const lignes = fs.contenu('documents', chemin).split('\n');
+    const derniere = lignes.findLastIndex((ligne) => ligne !== '' && JSON.parse(ligne).type === 'entree');
+    assert.equal(JSON.parse(lignes[derniere]).horodatage, '2026-10-06T20:00:00-04:00');
+    const avantAvarie = UTF8.encode(lignes.slice(0, derniere).map((ligne) => `${ligne}\n`).join(''));
+    const apresAvarie = UTF8.encode(lignes.slice(derniere).join('\n'));
+    fs.deposerOctets('documents', chemin, new Uint8Array([...avantAvarie, 0xff, 0xfe, 0x0a, ...apresAvarie]));
+    const avant = ecritures(fs);
+    const [ligne] = await facade.lister();
+    assert.equal(ligne.derniereModification, DEPART);
+    assert.equal(ecritures(fs), avant);
+  });
+
+  test("un journal dont l'ouverture déclare un format plus récent n'a pas de dernière modification", async () => {
+    const fs = creerFichiersSimules();
+    const { facade } = monter({ fs });
+    await facade.demarrer();
+    const base = await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+    const [ouverture, ...suite] = fs.contenu('documents', base + SUFFIXES.journal).split('\n');
+    const plusRecente = JSON.stringify({ ...JSON.parse(ouverture), format: FORMAT + 1 });
+    fs.deposer('documents', base + SUFFIXES.journal, [plusRecente, ...suite].join('\n'));
+    const [ligne] = await facade.lister();
+    assert.equal(ligne.derniereModification, null);
+  });
+
   test('signalements : état vide, journal seul, doublons ; rien pour les autres fichiers', async () => {
     const fs = creerFichiersSimules();
     const { facade } = monter({ fs });

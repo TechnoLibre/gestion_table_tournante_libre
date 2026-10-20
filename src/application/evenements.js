@@ -38,7 +38,7 @@
 import { deverrouiller, lister as listerDepot, ouvrir as ouvrirDepot, verrouiller } from '../stockage/depot.js';
 import { determinerDossierTravail } from '../stockage/dossier_travail.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
-import { decoderJournal, lireJournal } from '../stockage/journal.js';
+import { decoderJournal, horodatageFinal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import {
   chargerDemonstration as chargerSurDisque,
@@ -123,9 +123,12 @@ function exigerModifiable({ formatPlusRecent, charge }) {
 }
 
 // L'horodatage de la dernière entrée du journal de base, tel que l'horloge
-// de l'application qui l'a écrite l'a noté (§ 19.4) ; null sans journal,
-// sans entrée lisible, ou quand le fichier ne se lit pas. Un journal dont une
-// ligne n'est pas de l'UTF-8 se lit jusqu'à elle, comme à l'ouverture.
+// de l'application qui l'a écrite l'a noté (§ 19.4), lu depuis la fin du
+// texte par horodatageFinal, la ligne d'ouverture seule lue en tête, sans
+// contrôler la forme des lignes qui précèdent l'entrée ni aucun instantané ; null sans
+// journal, sans entrée lisible, ou quand le fichier ne se lit pas. Un
+// journal dont une ligne n'est pas de l'UTF-8 se lit jusqu'à elle, comme à
+// l'ouverture.
 async function derniereModification(fs, racine, base) {
   if (base === null) return null;
   let texte;
@@ -137,7 +140,7 @@ async function derniereModification(fs, racine, base) {
     texte = decoderJournal(erreur.details.octets).texte;
   }
   if (texte === null) return null;
-  return lireJournal(texte).entrees.at(-1)?.horodatage ?? null;
+  return horodatageFinal(texte);
 }
 
 // Les deux résumés d'un événement : mesuresDuRetenu (resumeDuRetenu) et

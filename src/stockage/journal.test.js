@@ -39,6 +39,7 @@ import {
   entreeCanonique,
   estInstantane,
   fil,
+  horodatageFinal,
   ligneEntree,
   ligneJalon,
   ligneOuverture,
@@ -932,6 +933,124 @@ describe('la lecture s’arrête à la première ligne illisible et compte ce qu
     assert.deepEqual(decoderJournal(octets('a\n', [0xe9], '\nd\n')), { texte: 'a\n', ecartees: 2 });
     assert.deepEqual(decoderJournal(octets([0xe9], '\nb\n')), { texte: null, ecartees: 2 });
     assert.deepEqual(decoderJournal(octets([0xc3])), { texte: null, ecartees: 1 });
+  });
+});
+
+// --- La date de la dernière entrée -----------------------------------------
+
+describe('horodatageFinal : l’horodatage de la dernière entrée, lu depuis la fin du texte (§ 8.1, § 8.6, § 19.4)', () => {
+  const cent = memoire(() => journalDe(suite(100)));
+  const lignesCent = memoire(() => lignesDe(cent()));
+  // La date que rend la lecture entière : l'horodatage de sa dernière entrée,
+  // ou null.
+  const parLaLecture = (texte) => lireJournal(texte).entrees.at(-1)?.horodatage ?? null;
+  // La ligne relue, changée, puis réécrite.
+  const retouche = (ligne, changer) => JSON.stringify(changer(JSON.parse(ligne)));
+  // Le journal de cent entrées dont la ligne de rang donné — 0 pour
+  // l'ouverture, r pour l'entrée r — est remplacée par la ligne donnée.
+  const abime = (rang, ligne) => texteDe(lignesCent().toSpliced(rang, 1, ligne));
+  // Cinq entrées dont l'horodatage recule d'une minute à chaque révision.
+  function horlogeQuiRecule() {
+    const etapes = suite(5);
+    const lignes = [ligneOuverture(EVENEMENT)];
+    etapes.forEach(({ apres }, rang) => {
+      lignes.push(
+        ligneEntree({
+          revision: rang + 1,
+          libelle: `Geste ${rang + 1}`,
+          horodatage: horodatage(100 - rang),
+          produitVersion: rang === 0 ? V1 : null,
+          avant: etapes[rang - 1]?.apres,
+          apres,
+          instantane: rang === 0,
+        }),
+      );
+    });
+    return texteDe(lignes);
+  }
+
+  test('un journal sain rend la date de la lecture entière : séance, départ à 137, élagué, format 1, jalons, CRLF, marque d’ordre d’octets, horloge qui recule', () => {
+    const avecJalons = journalDe(suite(10).map((etape, rang) => ({ ...etape, jalons: [4, 9].includes(rang) ? ['Jalon'] : [] })));
+    const format1 = texteDe([retouche(lignesCent()[0], (ouverture) => ({ ...ouverture, format: 1 })), ...lignesCent().slice(1)]);
+    const sains = [
+      ['séance de 120 gestes', texteSeance()],
+      ['cent entrées', cent()],
+      ['départ à la révision 137', journalDe(suite(64), { premiere: 137 })],
+      ['élagué', elaguer(journalDe(suite(650)))],
+      ['format 1', format1],
+      ['jalons, dont un après la dernière entrée', avecJalons],
+      ['fins de ligne CRLF', cent().replaceAll('\n', '\r\n')],
+      ['marque d’ordre d’octets', `\u{FEFF}${cent()}`],
+      ['horloge qui recule', horlogeQuiRecule()],
+      ['une seule entrée', journalDe(suite(1))],
+      ['ouverture seule', texteDe([ligneOuverture(EVENEMENT)])],
+    ];
+    for (const [nom, texte] of sains) {
+      assert.equal(lireJournal(texte).ecartees, 0, nom);
+      assert.equal(horodatageFinal(texte), parLaLecture(texte), nom);
+    }
+    assert.equal(horodatageFinal(cent()), horodatage(100));
+    assert.equal(horodatageFinal(horlogeQuiRecule()), horodatage(96));
+    assert.equal(horodatageFinal(texteDe([ligneOuverture(EVENEMENT)])), null);
+  });
+
+  test('l’ouverture et la fin du texte se jugent comme à la lecture entière : ouverture illisible, ligne finale sans fin de ligne, dernières lignes qui ne sont pas des entrées', () => {
+    const ouvertures = [
+      ['JSON invalide', lignesCent()[0].slice(1)],
+      ['type inconnu', retouche(lignesCent()[0], (valeur) => ({ ...valeur, type: 'jornal' }))],
+      ['format plus récent', retouche(lignesCent()[0], (valeur) => ({ ...valeur, format: FORMAT + 1 }))],
+      ['format 0', retouche(lignesCent()[0], (valeur) => ({ ...valeur, format: 0 }))],
+      ['événement absent', retouche(lignesCent()[0], ({ evenement, ...reste }) => reste)],
+      ['clé inconnue', retouche(lignesCent()[0], (valeur) => ({ ...valeur, nom: "Soirée d'essai" }))],
+      ['une entrée à sa place', lignesCent()[1]],
+    ];
+    for (const [nom, ligne] of ouvertures) {
+      assert.equal(horodatageFinal(abime(0, ligne)), null, nom);
+      assert.equal(parLaLecture(abime(0, ligne)), null, nom);
+    }
+    const jalonTardif = ligneJalon({ revision: 100, nom: 'Clôture', horodatage: horodatage(500) });
+    const fins = [
+      ['texte vide', '', null],
+      ['ouverture sans fin de ligne', ligneOuverture(EVENEMENT), null],
+      ['une fin de ligne seule', '\n', null],
+      ['seule entrée sans fin de ligne', texteDe([ligneOuverture(EVENEMENT)]) + lignesCent()[1], null],
+      ['dernière ligne sans fin de ligne', cent().slice(0, -1), horodatage(99)],
+      ['dernière ligne coupée', cent().slice(0, cent().lastIndexOf('{"op"')), horodatage(99)],
+      ['dernière ligne en JSON tronqué', abime(100, lignesCent()[100].slice(0, -1)), horodatage(99)],
+      ['dernière ligne vide', abime(100, ''), horodatage(99)],
+      ['dernière ligne d’un type inconnu', abime(100, retouche(lignesCent()[100], (valeur) => ({ ...valeur, type: 'entre' }))), horodatage(99)],
+      [
+        'dernière entrée à l’horodatage sans fuseau',
+        abime(100, retouche(lignesCent()[100], (valeur) => ({ ...valeur, horodatage: '2031-05-17T09:40:00' }))),
+        horodatage(99),
+      ],
+      ['dernière entrée à l’horodatage numérique', abime(100, retouche(lignesCent()[100], (valeur) => ({ ...valeur, horodatage: 20310517 }))), horodatage(99)],
+      ['un jalon plus tardif après la dernière entrée', texteDe([...lignesCent(), jalonTardif]), horodatage(100)],
+    ];
+    for (const [nom, texte, attendu] of fins) {
+      assert.equal(horodatageFinal(texte), attendu, nom);
+      assert.equal(parLaLecture(texte), attendu, nom);
+    }
+  });
+
+  test('l’écart accepté : une ligne illisible avant la dernière entrée, ou un instantané hors de sa forme, n’arrête pas la date, que la lecture entière arrête', () => {
+    const instantaneFautif = retouche(lignesCent()[1], (valeur) => {
+      const instantane = copie(valeur.instantane);
+      instantane.participants[0].nom = '';
+      return { ...valeur, instantane };
+    });
+    const ecarts = [
+      ['entrée 37 en JSON tronqué', abime(37, lignesCent()[37].slice(0, -1)), horodatage(36)],
+      ['entrée 37 à clé inconnue', abime(37, retouche(lignesCent()[37], (valeur) => ({ ...valeur, auteur: 'Iris' }))), horodatage(36)],
+      ['entrée 37 manquante', texteDe(lignesCent().toSpliced(37, 1)), horodatage(36)],
+      ['première entrée à l’instantané fautif', abime(1, instantaneFautif), null],
+      // Seuls le type et l'horodatage de la dernière entrée se contrôlent.
+      ['dernière entrée à clé inconnue', abime(100, retouche(lignesCent()[100], (valeur) => ({ ...valeur, auteur: 'Iris' }))), horodatage(99)],
+    ];
+    for (const [nom, texte, lecture] of ecarts) {
+      assert.equal(parLaLecture(texte), lecture, nom);
+      assert.equal(horodatageFinal(texte), horodatage(100), nom);
+    }
   });
 });
 

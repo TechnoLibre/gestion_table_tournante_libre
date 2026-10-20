@@ -21,7 +21,8 @@
 // Le module n'a ni fichier ni horloge. Il rend le texte d'une ligne, sans fin
 // de ligne — l'ajout au fichier appartient au système de fichiers —, et,
 // pour l'entrée d'un geste, la copie canonique de la charge qui en résulte,
-// faite une fois ; il lit le texte entier d'un journal, en décode les octets
+// faite une fois ; il lit le texte entier d'un journal, ou depuis sa fin
+// l'horodatage de sa dernière entrée seul, en décode les octets
 // ligne par ligne, restitue la charge d'un instant, suit le fil courant, rend
 // les lignes de l'historique et le texte d'un journal en mémoire, et élague
 // un texte ou un journal en mémoire. Une table par sorte de ligne —
@@ -410,6 +411,40 @@ function lire(texte) {
  */
 export function lireJournal(texte) {
   return lire(texte).journal;
+}
+
+/**
+ * L'horodatage de la dernière entrée d'un texte de journal (§ 8.1, § 19.4),
+ * lu depuis la fin, sans lire le reste : null quand l'ouverture est
+ * illisible, comme lireJournal la juge, ou quand aucune ligne ne convient.
+ * Les lignes complètes qui suivent l'ouverture se parcourent de la dernière
+ * à la première ; la première qui se parse en un objet de type « entree »
+ * dont l'horodatage a sa forme (estHorodatage) donne le sien. Les jalons et
+ * les lignes qui ne se parsent pas se sautent ; une ligne finale sans fin de
+ * ligne ne compte pas, comme à la lecture ; la marque d'ordre d'octets et un
+ * retour chariot avant la fin de ligne s'ignorent.
+ *
+ * Sur un journal que lireJournal lit entier, c'est l'horodatage de sa
+ * dernière entrée. Ni les autres champs de l'entrée, ni son instantané, ni
+ * les lignes qui la précèdent ne se contrôlent : une ligne illisible au
+ * milieu du texte, qui arrête la lecture, n'arrête pas cette date.
+ *
+ * @param {string} texte
+ * @returns {string|null}
+ */
+export function horodatageFinal(texte) {
+  const corps = texte.startsWith(MARQUE_ORDRE_OCTETS) ? texte.slice(1) : texte;
+  const finOuverture = corps.indexOf('\n');
+  if (finOuverture === -1 || champFautif(analyserLigne(corps.slice(0, finOuverture)), OUVERTURE) !== null) return null;
+  // fin : la fin de ligne qui termine la ligne examinée ; la ligne commence
+  // après la fin de ligne qui la précède, celle de l'ouverture au plus tôt.
+  for (let fin = corps.lastIndexOf('\n'); fin > finOuverture; ) {
+    const debut = corps.lastIndexOf('\n', fin - 1);
+    const ligne = analyserLigne(corps.slice(debut + 1, fin));
+    if (estObjet(ligne) && ligne.type === 'entree' && estHorodatage(ligne.horodatage)) return ligne.horodatage;
+    fin = debut;
+  }
+  return null;
 }
 
 /**
