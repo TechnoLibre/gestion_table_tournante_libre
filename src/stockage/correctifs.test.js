@@ -5,9 +5,10 @@
 // appliquer(a, difference(a, b)) sur des paires de charges tirées, la
 // localité sur la grande démonstration, chaque règle de difference, la copie
 // que rend appliquer, et ses refus, chacun avec le rang de l'opération
-// refusée. Les charges des démonstrations se construisent ici, en forme
-// positionnelle, sans le module des placements : la configuration vient du
-// catalogue, chaque proposition d'une distribution tournante. Ce module ne
+// refusée ; differenceCanonique sur des copies canoniques, qui partagent ou
+// non leurs sous-arbres. Les charges des démonstrations se construisent ici,
+// en forme positionnelle, sans le module des placements : la configuration
+// vient du catalogue, chaque proposition d'une distribution tournante. Ce module ne
 // sert qu'à reconnaître un retenu abîmé, et à examiner un fichier qui en
 // porte un comme le dépôt l'ouvre. Les noms des charges tirées et des
 // retouches sont inventés. Un dernier bloc caractérise, octet pour octet, les
@@ -21,7 +22,7 @@ import { versionVoisine } from '../../test/version_voisine.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { VERSION } from '../version.genere.js';
 import { canoniser, serialiser, serialiserCharge } from './canonique.js';
-import { appliquer, difference } from './correctifs.js';
+import { appliquer, difference, differenceCanonique } from './correctifs.js';
 import { analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { ligneEntree, ligneOuverture, lireJournal, reconstruire } from './journal.js';
@@ -2311,6 +2312,180 @@ describe('la présence par tour dans un correctif (§ 8.6, § 8.9)', () => {
     assert.deepEqual([...lieux].sort(), ['propositions/absents', `propositions/sieges/${tableDe4}`, 'retenu/absents', 'retenu/sieges/5'].sort());
     const taille = octets(JSON.stringify(placements));
     assert.ok(taille < 400, `${taille} octets`);
+  });
+});
+
+// --- differenceCanonique ---------------------------------------------------
+
+// Partie de charge au bout de chemin : une clé, un rang, ou { id },
+// l'enregistrement de cet identifiant ; undefined quand une étape ne trouve
+// rien.
+function partieDe(charge, chemin) {
+  let partie = charge;
+  for (const etape of chemin) {
+    if (partie === undefined || partie === null) return undefined;
+    partie = typeof etape === 'object' ? partie.find((element) => element.id === etape.id) : partie[etape];
+  }
+  return partie;
+}
+
+// Copie de b qui reprend de a chaque sous-arbre qui s'y écrit pareil, à la
+// même place — même clé, même rang —, et ne recrée que le reste, dans l'ordre
+// des clés de b. Le résultat s'écrit comme b et partage avec a tout ce qui
+// n'a pas changé, comme deux copies canoniques successives qui partagent
+// leurs propositions inchangées.
+function partager(a, b) {
+  if (JSON.stringify(a) === JSON.stringify(b)) return a;
+  if (typeof b !== 'object' || b === null || typeof a !== 'object' || a === null) return b;
+  if (Array.isArray(b)) return Array.isArray(a) ? b.map((element, rang) => partager(a[rang], element)) : b;
+  if (Array.isArray(a)) return b;
+  return Object.fromEntries(Object.keys(b).map((cle) => [cle, Object.hasOwn(a, cle) ? partager(a[cle], b[cle]) : b[cle]]));
+}
+
+// Objet qui relaie cible et compte chaque lecture qu'on y fait : une clé,
+// la liste des clés, la présence ou la description d'une clé.
+function espionner(cible) {
+  const lectures = { nombre: 0 };
+  const compter = (lecture) => (...args) => {
+    lectures.nombre += 1;
+    return lecture(...args);
+  };
+  const espion = new Proxy(cible, {
+    get: compter(Reflect.get),
+    ownKeys: compter(Reflect.ownKeys),
+    has: compter(Reflect.has),
+    getOwnPropertyDescriptor: compter(Reflect.getOwnPropertyDescriptor),
+  });
+  return { espion, lectures };
+}
+
+describe('differenceCanonique : le correctif entre deux copies canoniques (§ 8.6)', () => {
+  test(`les ${TIRAGES} paires : differenceCanonique(canoniser(a), canoniser(b)) rend difference(a, b), chaque valeur posée est la partie de la copie de b à sa place, et ni l'une ni l'autre copie ne change`, () => {
+    const paires = fc.sample(unePaire, { seed: GRAINE, numRuns: TIRAGES });
+    let posees = 0;
+    for (const { a, b } of paires) {
+      const [ca, cb] = [geler(canoniser(a)), geler(canoniser(b))];
+      const [texteA, texteB] = [JSON.stringify(ca), JSON.stringify(cb)];
+      const correctif = differenceCanonique(ca, cb);
+      assert.deepEqual(correctif, difference(a, b));
+      for (const operation of correctif) {
+        if (operation.op !== 'poser') continue;
+        assert.ok(operation.valeur === partieDe(cb, operation.chemin), JSON.stringify(operation.chemin));
+        posees += 1;
+      }
+      assert.deepEqual(differenceCanonique(ca, ca), []);
+      assert.equal(JSON.stringify(ca), texteA);
+      assert.equal(JSON.stringify(cb), texteB);
+    }
+    assert.ok(posees >= TIRAGES, `${posees} poses`);
+  });
+
+  test("deux copies canoniques qui partagent leurs sous-arbres inchangés : le correctif est celui de difference, et [] d'une copie à elle-même", () => {
+    const a = grande();
+    const ca = geler(canoniser(a));
+    for (const [rang, b] of retouchesDeLaGrande(a).entries()) {
+      const partagee = geler(partager(ca, canoniser(b)));
+      assert.equal(JSON.stringify(partagee), JSON.stringify(canoniser(b)), `retouche ${rang}`);
+      assert.ok(partagee.propositions.some((p, i) => p === ca.propositions[i]), `retouche ${rang} : rien de partagé`);
+      assert.deepEqual(differenceCanonique(ca, partagee), difference(a, b), `retouche ${rang}`);
+      assert.deepEqual(differenceCanonique(partagee, ca), difference(b, a), `retouche ${rang}, retour`);
+      assert.deepEqual(differenceCanonique(partagee, partagee), [], `retouche ${rang}, elle-même`);
+    }
+    assert.deepEqual(differenceCanonique(ca, ca), []);
+  });
+
+  test('un sous-arbre que les deux copies partagent ne se lit pas : seul ce qui diffère se parcourt', () => {
+    const ca = canoniser(grande());
+    const proposition = ca.propositions[1];
+    const { espion, lectures } = espionner(proposition.placement);
+    const partagee = { ...proposition, placement: espion };
+    const a = { ...ca, propositions: [ca.propositions[0], partagee, ca.propositions[2]] };
+    const personne = a.participants[3];
+    const b = {
+      ...a,
+      participants: a.participants.map((p) => (p === personne ? { ...p, nom: 'Gargouille' } : p)),
+      propositions: [...a.propositions],
+    };
+    lectures.nombre = 0;
+    const correctif = differenceCanonique(a, b);
+    assert.deepEqual(correctif, [
+      { op: 'poser', chemin: ['participants', { id: personne.id }, 'nom'], valeur: 'Gargouille' },
+    ]);
+    assert.equal(lectures.nombre, 0);
+  });
+
+  test("sous une proposition qui diffère, le placement qu'elle partage avec l'autre copie ne se lit pas", () => {
+    const ca = canoniser(grande());
+    const proposition = ca.propositions[1];
+    const { espion, lectures } = espionner(proposition.placement);
+    const avant = { ...proposition, placement: espion };
+    const apres = { ...proposition, placement: espion, graine: proposition.graine + 1 };
+    const a = { ...ca, propositions: [ca.propositions[0], avant, ca.propositions[2]] };
+    const b = { ...ca, propositions: [ca.propositions[0], apres, ca.propositions[2]] };
+    lectures.nombre = 0;
+    assert.deepEqual(differenceCanonique(a, b), [
+      { op: 'poser', chemin: ['propositions', { id: proposition.id }, 'graine'], valeur: apres.graine },
+    ]);
+    assert.equal(lectures.nombre, 0);
+  });
+
+  test("sous deux charges distinctes, les réglages et les tables qu'elles partagent ne se lisent pas", () => {
+    const ca = canoniser(grande());
+    const reglages = espionner(ca.reglages);
+    const tables = espionner(ca.tables);
+    const a = { ...ca, reglages: reglages.espion, tables: tables.espion };
+    const b = { ...a, evenement: { ...ca.evenement, nom: 'Banquet des Quenouilles' } };
+    reglages.lectures.nombre = 0;
+    tables.lectures.nombre = 0;
+    assert.deepEqual(differenceCanonique(a, b), [
+      { op: 'poser', chemin: ['evenement', 'nom'], valeur: 'Banquet des Quenouilles' },
+    ]);
+    assert.equal(reglages.lectures.nombre, 0);
+    assert.equal(tables.lectures.nombre, 0);
+  });
+
+  test('une liste de a qui a des trous : un trou ne se compare pas, et un trou contre null ne donne rien', () => {
+    const a = chargeDe('petite', [{ id: 1, siegesAttribues: true }]);
+    const b = structuredClone(a);
+    b.propositions[0].placement[0].sieges[0][1] = null;
+    delete a.propositions[0].placement[0].sieges[0][1];
+    assert.equal(JSON.stringify(a), JSON.stringify(b));
+    assert.deepEqual(difference(a, b), []);
+    assert.deepEqual(differenceCanonique(canoniser(a), canoniser(b)), []);
+
+    const c = petite();
+    const d = structuredClone(c);
+    delete c.propositions[0].placement[0];
+    assert.deepEqual(difference(c, d), []);
+    assert.deepEqual(differenceCanonique(canoniser(c), canoniser(d)), []);
+  });
+
+  test("deux listes d'identifiants ou d'occupants égales mais distinctes ne donnent rien, sans peser la liste posée entière", () => {
+    const ca = canoniser(petite());
+    const cb = structuredClone(ca);
+    const pesees = { nombre: 0 };
+    const [tour] = cb.propositions[0].placement;
+    for (const liste of [cb.propositions[0].participants, tour.reserve, ...tour.sieges]) {
+      Object.defineProperty(liste, 'toJSON', {
+        value() {
+          pesees.nombre += 1;
+          return [...this];
+        },
+      });
+    }
+    assert.deepEqual(differenceCanonique(ca, cb), []);
+    assert.equal(pesees.nombre, 0);
+  });
+
+  test('deux enregistrements de même identifiant, distincts, se comparent champ par champ', () => {
+    const ca = canoniser(petite());
+    const cb = structuredClone(ca);
+    cb.propositions[0].graine += 1;
+    cb.participants[0].notes = 'part tôt';
+    assert.deepEqual(differenceCanonique(ca, cb), [
+      { op: 'poser', chemin: ['participants', { id: ca.participants[0].id }, 'notes'], valeur: 'part tôt' },
+      { op: 'poser', chemin: ['propositions', { id: ca.propositions[0].id }, 'graine'], valeur: cb.propositions[0].graine },
+    ]);
   });
 });
 

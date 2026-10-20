@@ -17,7 +17,7 @@
 // participants, tables, propositions — l'enregistrement de cet identifiant,
 // et non une place.
 //
-// Les deux fonctions travaillent sur les copies canoniques de canonique.js :
+// Les fonctions travaillent sur les copies canoniques de canonique.js :
 // un rang y désigne une place de l'ordre canonique, que la charge seule
 // détermine, et non de l'ordre dans lequel une liste s'est remplie en
 // mémoire. Un correctif calculé depuis une charge s'applique ainsi à toute
@@ -115,10 +115,28 @@ function identifiantsDistincts(liste) {
 // unités UTF-16, des octets pour les chemins du schéma et les identifiants.
 const poids = (operations) => JSON.stringify(operations).length;
 
+// Le chemin d'une valeur pendant la comparaison : une chaîne de maillons
+// { haut, etape }, null à la charge, que enChemin ne déplie en liste
+// d'étapes que pour l'opération qui la porte. Une comparaison qui ne trouve
+// rien à poser ne construit aucune liste. Une étape { id } est un seul objet
+// pour toutes les opérations qui passent par son maillon.
+const sous = (haut, etape) => ({ haut, etape });
+
+// Liste des étapes de maillon, de la charge à lui ; [] pour null.
+function enChemin(maillon) {
+  const chemin = [];
+  for (let m = maillon; m !== null; m = m.haut) chemin.push(m.etape);
+  return chemin.reverse();
+}
+
 // Ajoute à operations ce qui mène de a à b, deux valeurs canoniques de la
-// règle regle, au bout de chemin. null contre une valeur, et deux scalaires
-// différents, posent b ; deux listes qui se posent entières (sePoseEntiere)
-// et s'écrivent autrement aussi. Un retenu que sa règle refuse, d'un côté ou
+// règle regle, au bout du chemin maillon. Deux valeurs identiques (===)
+// n'ont rien à poser, et un sous-arbre que a et b partagent ne se parcourt
+// pas : le parcourir n'ajouterait rien, puisque chaque branche ci-dessous
+// rend [] pour deux valeurs égales — une liste d'identifiants sans rang qui
+// change compris. null contre une valeur, et deux scalaires différents,
+// posent b ; deux listes qui se posent entières (sePoseEntiere) et
+// s'écrivent autrement aussi. Un retenu que sa règle refuse, d'un côté ou
 // de l'autre, n'a pas de champs que le schéma décrive : b se pose entier
 // quand les deux copies canoniques s'écrivent autrement, et rien sinon. Deux
 // objets se comparent champ par champ, dans l'ordre du schéma. Deux listes
@@ -126,51 +144,58 @@ const poids = (operations) => JSON.stringify(operations).length;
 // deux autres listes, de longueurs différentes, posent b entière, et de même
 // longueur se comparent rang par rang — deux listes d'identifiants ou
 // d'occupants exceptées, qui posent b entière quand leurs poses rang par rang
-// pèsent plus que la sienne. Un champ facultatif absent d'un côté se pose
-// quand b le porte, et se retire quand b ne le porte pas.
-function comparer(a, b, regle, chemin, operations) {
+// pèsent plus que la sienne. Rang par rang, un trou de a (un rang qu'elle
+// n'a pas) ne se compare pas : forEach le saute, ici comme dans
+// comparerIdentifiants. Un champ facultatif absent d'un côté se pose quand b
+// le porte, et se retire quand b ne le porte pas. Chaque valeur posée est b
+// ou une partie de b, sans copie.
+function comparer(a, b, regle, maillon, operations) {
+  if (a === b) return;
   if (a === null || b === null || (regle.genre !== 'objet' && regle.genre !== 'liste')) {
-    if (a !== b) operations.push({ op: 'poser', chemin, valeur: b });
+    operations.push({ op: 'poser', chemin: enChemin(maillon), valeur: b });
   } else if (retenuHorsDeSaRegle(a, regle) || retenuHorsDeSaRegle(b, regle)) {
-    if (JSON.stringify(a) !== JSON.stringify(b)) operations.push({ op: 'poser', chemin, valeur: b });
+    if (JSON.stringify(a) !== JSON.stringify(b)) operations.push({ op: 'poser', chemin: enChemin(maillon), valeur: b });
   } else if (sePoseEntiere(regle)) {
-    if (JSON.stringify(a) !== JSON.stringify(b)) operations.push({ op: 'poser', chemin, valeur: b });
+    if (JSON.stringify(a) !== JSON.stringify(b)) operations.push({ op: 'poser', chemin: enChemin(maillon), valeur: b });
   } else if (regle.genre === 'objet') {
     for (const [cle, regleDeCle] of regle.champs) {
-      const place = [...chemin, cle];
       if (regleDeCle.optionnel && b[cle] === undefined) {
-        if (a[cle] !== undefined) operations.push({ op: 'retirer', chemin: place });
+        if (a[cle] !== undefined) operations.push({ op: 'retirer', chemin: enChemin(sous(maillon, cle)) });
       } else if (regleDeCle.optionnel && a[cle] === undefined) {
-        operations.push({ op: 'poser', chemin: place, valeur: b[cle] });
+        operations.push({ op: 'poser', chemin: enChemin(sous(maillon, cle)), valeur: b[cle] });
       } else {
-        comparer(a[cle], b[cle], regleDeCle, place, operations);
+        comparer(a[cle], b[cle], regleDeCle, sous(maillon, cle), operations);
       }
     }
   } else if (identifiantsDistincts(a) && identifiantsDistincts(b)) {
-    comparerParIdentifiant(a, b, regle.element, chemin, operations);
+    comparerParIdentifiant(a, b, regle.element, maillon, operations);
   } else if (a.length !== b.length) {
-    operations.push({ op: 'poser', chemin, valeur: b });
+    operations.push({ op: 'poser', chemin: enChemin(maillon), valeur: b });
   } else if (regle.element === IDENTIFIANT || regle.element === OCCUPANT) {
-    comparerIdentifiants(a, b, chemin, operations);
+    comparerIdentifiants(a, b, maillon, operations);
   } else {
-    a.forEach((element, rang) => comparer(element, b[rang], regle.element, [...chemin, rang], operations));
+    a.forEach((element, rang) => comparer(element, b[rang], regle.element, sous(maillon, rang), operations));
   }
 }
 
 // Ajoute à operations ce qui mène de a à b, deux listes de même longueur
-// d'identifiants ou d'occupants, des scalaires, au bout de chemin : une pose
-// par rang qui change, ou b entière quand ces poses pèsent plus que la
-// sienne. Une liste triée par identifiant — une liste de table sans
-// attribution, une réserve, les participants d'un plan — décale d'un rang
-// chaque entrée qu'un identifiant remplacé franchit, et ses poses rang par
-// rang se multiplient ; ce qui s'en écrit ne pèse jamais plus que la liste
-// posée entière. Sous des sièges attribués, une chaise libérée ou reprise
-// ne change que son rang : une pose, de valeur null ou de l'occupant.
-function comparerIdentifiants(a, b, chemin, operations) {
-  const parRang = [];
+// d'identifiants ou d'occupants, des scalaires, au bout de maillon : rien
+// quand aucun rang ne change, sans rien peser ; sinon une pose par rang qui
+// change, ou b entière quand ces poses pèsent plus que la sienne. Une liste
+// triée par identifiant — une liste de table sans attribution, une réserve,
+// les participants d'un plan — décale d'un rang chaque entrée qu'un
+// identifiant remplacé franchit, et ses poses rang par rang se multiplient ;
+// ce qui s'en écrit ne pèse jamais plus que la liste posée entière. Sous des
+// sièges attribués, une chaise libérée ou reprise ne change que son rang :
+// une pose, de valeur null ou de l'occupant.
+function comparerIdentifiants(a, b, maillon, operations) {
+  const rangs = [];
   a.forEach((id, rang) => {
-    if (id !== b[rang]) parRang.push({ op: 'poser', chemin: [...chemin, rang], valeur: b[rang] });
+    if (id !== b[rang]) rangs.push(rang);
   });
+  if (rangs.length === 0) return;
+  const chemin = enChemin(maillon);
+  const parRang = rangs.map((rang) => ({ op: 'poser', chemin: [...chemin, rang], valeur: b[rang] }));
   const entiere = { op: 'poser', chemin, valeur: b };
   operations.push(...(poids(parRang) > poids([entiere]) ? [entiere] : parRang));
 }
@@ -179,20 +204,20 @@ function comparerIdentifiants(a, b, chemin, operations) {
 // comme les laisse canoniser : un identifiant de a seul est retiré, un
 // identifiant de b seul est posé entier, un identifiant commun se compare
 // champ par champ. Les opérations suivent l'ordre des identifiants.
-function comparerParIdentifiant(a, b, regleElement, chemin, operations) {
+function comparerParIdentifiant(a, b, regleElement, maillon, operations) {
   let i = 0;
   let j = 0;
   while (i < a.length || j < b.length) {
     const idA = i < a.length ? a[i].id : Infinity;
     const idB = j < b.length ? b[j].id : Infinity;
     if (idA < idB) {
-      operations.push({ op: 'retirer', chemin: [...chemin, { id: idA }] });
+      operations.push({ op: 'retirer', chemin: enChemin(sous(maillon, { id: idA })) });
       i += 1;
     } else if (idB < idA) {
-      operations.push({ op: 'poser', chemin: [...chemin, { id: idB }], valeur: b[j] });
+      operations.push({ op: 'poser', chemin: enChemin(sous(maillon, { id: idB })), valeur: b[j] });
       j += 1;
     } else {
-      comparer(a[i], b[j], regleElement, [...chemin, { id: idA }], operations);
+      comparer(a[i], b[j], regleElement, sous(maillon, { id: idA }), operations);
       i += 1;
       j += 1;
     }
@@ -229,8 +254,29 @@ function comparerParIdentifiant(a, b, regleElement, chemin, operations) {
  * @returns {Operation[]}
  */
 export function difference(a, b) {
+  return differenceCanonique(canoniser(a), canoniser(b));
+}
+
+/**
+ * Correctif menant de a à b, deux copies canoniques (canoniser, ou ce qui
+ * s'écrit pareil, ordre des clés compris), selon les règles de difference :
+ * differenceCanonique(canoniser(a), canoniser(b)) vaut difference(a, b).
+ * Rien n'est recanonisé, et deux valeurs identiques (===) ne se comparent
+ * pas : un sous-arbre que a et b partagent, une proposition inchangée par
+ * exemple, ne coûte rien, et differenceCanonique(x, x) vaut []. Ni a ni b ne
+ * sont modifiées.
+ *
+ * Une valeur posée est b ou une partie de b, et non une copie : le correctif
+ * partage ces objets avec b. Modifier b après coup modifie le correctif, et
+ * réciproquement : qui doit modifier l'un en copie d'abord la partie.
+ *
+ * @param {import('./types.js').Charge} a  copie canonique
+ * @param {import('./types.js').Charge} b  copie canonique
+ * @returns {Operation[]}
+ */
+export function differenceCanonique(a, b) {
   const operations = [];
-  comparer(canoniser(a), canoniser(b), CHARGE, [], operations);
+  comparer(a, b, CHARGE, null, operations);
   return operations;
 }
 
