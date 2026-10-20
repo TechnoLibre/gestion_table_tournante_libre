@@ -84,7 +84,6 @@ sur les captures.
 | `--couleur-action-encre` | texte | 4,5 | 8,29 | 14-qualite-paires | 9,62 | 14-qualite-paires |
 | `--couleur-action-texte` | texte | 4,5 | — | — | 8,45 | 01-premier-ecran |
 | `--couleur-avis` | texte | 4,5 | 6,58 | 03-import-rapport | 8,93 | 03-import-rapport |
-| `--couleur-bandeau-fond` | texte | 4,5 | 15,94 | 01-premier-ecran | 12,84 | 01-premier-ecran |
 | `--couleur-bandeau-texte` | texte | 4,5 | 5,85 | 13a-qualite-tables | 12,84 | 01-premier-ecran |
 | `--couleur-bandeau-texte-secondaire` | texte | 4,5 | 9,05 | 01-premier-ecran | 7,60 | 01-premier-ecran |
 | `--couleur-chaise-pleine` | marque | 3 | 15,09 | 07a-cibles-sieges | 14,94 | 07a-cibles-sieges |
