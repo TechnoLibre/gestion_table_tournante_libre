@@ -437,6 +437,56 @@ describe('changer le défaut (§ 6.1, § 6.2, § 19.3 06)', () => {
   });
 });
 
+describe('le libellé d’une table, saisi au champ (§ 4, § 8.9)', () => {
+  const champLibelle = (m, id) => ligne(m, id).querySelector(`input[data-champ="libelle-${id}"]`);
+
+  test('saisi, il s’écrit en une entrée, sans ses blancs de bord ; le même ne relance rien ; 61 caractères refusés contre le champ ; vidé, il part', async () => {
+    const depart = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 4 });
+    depart.tables[1].libelle = 'Coin des invités';
+    const m = await preparer(depart);
+    expect(champLibelle(m, 1).value).toBe('');
+    expect(champLibelle(m, 2).value).toBe('Coin des invités');
+    // L'étiquette visible, et un nom accessible qui nomme la table.
+    expect(champLibelle(m, 1).getAttribute('aria-label')).toBe(t('tables.nom.table', { cle: 'tables.liste.libelle', numero: 1 }));
+    expect(ligne(m, 1).textContent).toContain(t('tables.liste.libelle'));
+
+    let r = revision(m);
+    await saisir(m, champLibelle(m, 1), '  Honneur ');
+    expect(revision(m)).toBe(r + 1);
+    expect(charge(m).tables[0].libelle).toBe('Honneur');
+    expect(champLibelle(m, 1).value).toBe('Honneur');
+
+    r = revision(m);
+    const avant = ecritures(m);
+    await saisir(m, champLibelle(m, 1), 'Honneur ');
+    expect(revision(m)).toBe(r);
+    expect(ecritures(m)).toBe(avant);
+    expect(ligne(m, 1).querySelector('[data-refus]')).toBeNull();
+    // Le même libellé, ses accents décomposés, se normalise et ne relance rien.
+    await saisir(m, champLibelle(m, 2), 'Coin des invite\u{0301}s');
+    expect(revision(m)).toBe(r);
+    expect(ecritures(m)).toBe(avant);
+    expect(ligne(m, 2).querySelector('[data-refus]')).toBeNull();
+
+    await saisir(m, champLibelle(m, 1), 'x'.repeat(61));
+    const refus = ligne(m, 1).querySelector('[data-refus="LIBELLE_TABLE_TROP_LONG"]');
+    expect(refus).not.toBeNull();
+    expect(refus.querySelector('p').textContent).toBe(t('LIBELLE_TABLE_TROP_LONG', { longueur: 61, maximum: 60 }));
+    expect(refus.querySelector('[data-commande]')).toBeNull();
+    expect(ecritures(m)).toBe(avant);
+    expect(charge(m).tables[0].libelle).toBe('Honneur');
+    await touche('Escape');
+    await attendre(m);
+    expect(ligne(m, 1).querySelector('[data-refus]')).toBeNull();
+
+    r = revision(m);
+    await saisir(m, champLibelle(m, 2), '');
+    expect(revision(m)).toBe(r + 1);
+    expect(Object.hasOwn(charge(m).tables[1], 'libelle')).toBe(false);
+    expect(charge(m).tables[0].libelle).toBe('Honneur');
+  });
+});
+
 describe('la capacité d’une table, saisie au champ (§ 6.2)', () => {
   test('1, 0, -3, 2.5, « 8abc », « huit » et vide : refusés sur le champ, leur cause, aucun remède, rien d’écrit ; 2 accepté', async () => {
     const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 4 }));
@@ -1153,11 +1203,11 @@ describe('les commandes répétées sous chaque table se distinguent (§ 14.5)',
     expect(new Set(remedes.map(texteVu))).toEqual(new Set([t('communs.remede.modifier')]));
 
     const controles = [1, 2].flatMap((id) => [...ligne(m, id).querySelectorAll('input, select, button')]);
-    // Par table : places, réaligner, supprimer, le bouton qui déplie, et,
-    // pour la soirée et les trois tours, un champ et un choix de règle,
-    // plus « Retirer l'objectif » pour les deux objectifs posés ; puis les
-    // cinq remèdes.
-    expect(controles).toHaveLength(2 * (4 + 4 * 2 + 2 + 5));
+    // Par table : libellé, places, réaligner, supprimer, le bouton qui
+    // déplie, et, pour la soirée et les trois tours, un champ et un choix de
+    // règle, plus « Retirer l'objectif » pour les deux objectifs posés ;
+    // puis les cinq remèdes.
+    expect(controles).toHaveLength(2 * (5 + 4 * 2 + 2 + 5));
     const noms = controles.map(nomAccessible);
     for (const [rang, element] of controles.entries()) {
       expect(element).toHaveAccessibleName(noms[rang]);

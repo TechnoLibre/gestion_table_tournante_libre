@@ -100,6 +100,7 @@ export const TABLE = new Map([
   ['communs.remede.creerTable', 'Créer une table'],
   ['communs.remede.supprimerTable', 'Supprimer la table'],
   ['communs.remede.deplacerTable', 'Déplacer la table'],
+  ['communs.remede.changerLibelleTable', 'Changer le libellé de la table'],
   // sieges : le nombre de places que le remède donne à la table, quand il le
   // fixe (SURRESERVATION, § 5.9).
   [

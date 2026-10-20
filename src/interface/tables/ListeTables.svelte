@@ -6,10 +6,15 @@
   // compte les tables et leurs sièges (comptesTables) et porte la création,
   // ronde ou carrée ; puis une ligne par table, par numéro — son numéro, sa
   // forme, son état en pastille (« suit le défaut » ou « surchargée »,
-  // etatTable, de ton tonEtatTable), le champ de ses places, « Réaligner »
-  // pour une surchargée, « Supprimer ». Le champ
-  // montre la capacité ; une saisie lue par lireEntier s'exécute par
-  // changerPlacesTable, au champ, et son refus se pose contre lui.
+  // etatTable, de ton tonEtatTable), le champ de son libellé, celui de ses
+  // places, « Réaligner » pour une surchargée, « Supprimer ». Le champ des
+  // places montre la capacité ; une saisie lue par lireEntier s'exécute par
+  // changerPlacesTable, au champ, et son refus se pose contre lui. Le champ
+  // du libellé montre le libellé de la table, vide sans lui ; la saisie se
+  // lit en NFC, ses blancs de bord retirés — la même qu'un libellé
+  // enregistré ne relance rien —, et s'exécute par changerLibelleTable, qui
+  // la retire quand elle est vide ; son refus, un libellé trop long, se pose
+  // contre le champ.
   //
   // Chaque ligne porte le complément de son dernier geste, tant que la
   // révision qui l'a vu est la courante : les sièges qu'un refus
@@ -251,6 +256,9 @@
   // la met en forme et la refuse.
   const lireTexte = (texte) => ({ valeur: texte });
 
+  // La saisie d'un libellé, comme changerLibelleTable la reçoit.
+  const lireLibelle = (texte) => ({ valeur: texte.normalize('NFC').trim() });
+
   // Les noms d'une commande de la table numero : son texte, sous ses
   // détails, puis la table ; et pour un objectif, son texte, la portée de
   // vue, puis la table.
@@ -370,6 +378,16 @@
             <span class="forme">{t(cleForme(table.forme))}</span>
             <span class="etat" data-etat-table><Pastille sorte="statut" valeur={tonEtatTable(etat)} libelle={t(etat.cle)} /></span>
           </div>
+          <div class="libelle">
+            <Champ
+              cle={`libelle-${table.id}`}
+              etiquette="tables.liste.libelle"
+              nom={nomDeTable(table.numero, 'tables.liste.libelle')}
+              valeur={table.libelle ?? ''}
+              lire={lireLibelle}
+              executer={(libelle) => seance.executer('changerLibelleTable', { id: table.id, libelle })}
+            />
+          </div>
           <div class="saisie" {@attach suivreSaisie(table.id)}>
             <Champ
               cle={`sieges-${table.id}`}
@@ -474,7 +492,7 @@
     list-style: none;
   }
 
-  /* Une table par ligne : en-tête, champ et commandes sur une rangée tant
+  /* Une table par ligne : en-tête, champs et commandes sur une rangée tant
      qu'elle les tient, les messages dessous, sur toute la largeur. */
   .tables > li {
     display: flex;

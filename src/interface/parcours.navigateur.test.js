@@ -164,12 +164,15 @@ const MARQUE_PROVENANCE = versionVisible('documentation', VERSION.affichee, t);
 // La personne que l'ordre de lecture ajoute : un nom inventé.
 const AJOUTEE = { nom: 'Ombrelle', prenom: 'Iris' };
 
+// Le libellé que l'étape « Tables et tours » donne à la première table.
+const LIBELLE_TABLE = 'Table d\u{2019}honneur';
+
 // Les gestes non destructeurs que les fenêtres surveillent (§ 2.1, § 5.9,
-// D19), chacun exécuté au moins une fois par le parcours. Les gestes des
-// étiquettes, des objectifs, des priorités et de la présence portent le nom
-// de leur commande ; les deux cases et le mode des objectifs passent par
-// modifierReglage, que 10a exerce sur chacun d'eux, comme 11 sur le compte
-// d'arrêt.
+// D19), chacun exécuté au moins une fois par le parcours. Les gestes du
+// libellé d'une table, des étiquettes, des objectifs, des priorités et de la
+// présence portent le nom de leur commande ; les deux cases et le mode des
+// objectifs passent par modifierReglage, que 10a exerce sur chacun d'eux,
+// comme 11 sur le compte d'arrêt.
 const GESTES_NON_DESTRUCTEURS = Object.freeze([
   'ajouter',
   'modifier',
@@ -179,6 +182,7 @@ const GESTES_NON_DESTRUCTEURS = Object.freeze([
   'titrer',
   'designer',
   'surcharger',
+  'changerLibelleTable',
   'appliquerDefaut',
   'ajouterTour',
   'modifierReglage',
@@ -216,6 +220,7 @@ const FAMILLES_MODIFIANTES = Object.freeze(
     ['importer des objectifs', ['importerObjectifs']],
     ['créer une table', []],
     ['surcharger', ['surcharger']],
+    ['libeller une table', ['changerLibelleTable']],
     ['changer le défaut', []],
     ['changer les tours', []],
     ['poser ou retirer un objectif', ['poserObjectif', 'retirerObjectif']],
@@ -1318,7 +1323,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     });
   });
 
-  test('05 deux tables à 8, l’une au défaut, l’autre surchargée à 8 : leurs états diffèrent à valeur égale', async () => {
+  test('05 deux tables à 8, l’une au défaut, l’autre surchargée à 8 : leurs états diffèrent à valeur égale ; la première porte un libellé', async () => {
     // La fiche de 04a se ferme : elle reviendrait avec la section.
     if (dans('[data-fiche]') !== null) {
       await cliquer('[data-fiche] [data-commande="fermerFiche"]');
@@ -1341,6 +1346,16 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(charge().tables.map(({ sieges }) => sieges)).toEqual([null, 8]);
     expect(champTable(premiere.id).value).toBe('8');
     expect(champTable(seconde.id).value).toBe('8');
+    // La première table reçoit un libellé, que le plan inscrira sous son
+    // numéro (§ 7.7) ; une entrée, sans fenêtre.
+    const champLibelle = (id) => dans(`[data-section="tables"] [data-table="${id}"] input[data-champ="libelle-${id}"]`);
+    await sansFenetre('changerLibelleTable', async () => {
+      r = revision();
+      await saisir(champLibelle(premiere.id), LIBELLE_TABLE);
+      await uneEntree(r, 'libeller la première table');
+    });
+    expect(charge().tables.map(({ libelle }) => libelle ?? null)).toEqual([LIBELLE_TABLE, null]);
+    expect(champLibelle(premiere.id).value).toBe(LIBELLE_TABLE);
     const etatDe = (id) => dans(`[data-section="tables"] [data-table="${id}"] [data-etat-table]`);
     expect(visible(etatDe(premiere.id))).toBe(true);
     expect(visible(etatDe(seconde.id))).toBe(true);
@@ -2856,6 +2871,10 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
     await famille('surcharger', async () => {
       await frapper(dans(`[data-section="tables"] [data-table="${t2}"] input[data-champ="sieges-${t2}"]`));
       await refusPres(() => dans(`[data-section="tables"] [data-table="${t2}"]`), code, remede, 'surcharger');
+    });
+    await famille('libeller une table', async () => {
+      await frapper(dans(`[data-section="tables"] [data-table="${t2}"] input[data-champ="libelle-${t2}"]`));
+      await refusPres(() => dans(`[data-section="tables"] [data-table="${t2}"]`), code, remede, 'libeller une table');
     });
     await famille('changer le défaut', async () => {
       await frapper(dans('[data-section="tables"] input[data-champ="siegesParDefaut"]'));

@@ -7,8 +7,9 @@
   // tant qu'aucune table en conflit n'est désignée. Plan.svelte l'ouvre par
   // trois déclencheurs — le survol, le focus du clavier, la pression longue —
   // et lui passe le détail des conflits (detailConflits, modele.js) et sa
-  // position dans la surface, en px. Elle énonce la table et son nombre de
-  // violations, puis chaque ligne du détail et ses groupes : chaque nom
+  // position dans la surface, en px. Elle énonce la table, son libellé dans
+  // son propre nœud quand elle en porte un, et son nombre de violations,
+  // puis chaque ligne du détail et ses groupes : chaque nom
   // occupe son propre nœud, relié à l'autre nom d'une paire par « et »,
   // séparé du groupe suivant. Une ligne qui porte une organisation — séparer
   // les organisations — la nomme dans son propre nœud, entre son libellé et
@@ -48,7 +49,12 @@
   bind:offsetHeight={hauteur}
 >
   {#if infobulle !== null}
-    <p class="entete">{t('plan.infobulle.entete', { numero: infobulle.detail.numero, nombre: infobulle.detail.nombre })}</p>
+    {@const { numero, libelle, nombre } = infobulle.detail}
+    <p class="entete">
+      <span>{t('plan.infobulle.table', { numero })}</span>{#if libelle !== null}<span>{t('plan.table.avantLibelle')}</span><span
+          class="donnee">{libelle}</span
+        >{/if}<span>{t('plan.infobulle.nombre', { nombre })}</span>
+    </p>
     {#each infobulle.detail.lignes as ligne, rang (rang)}
       <p>
         <span>{t(ligne.cle)}</span>{#if ligne.organisation !== null}<span class="donnee">{ligne.organisation}</span><span

@@ -121,6 +121,7 @@ const REMEDE_NUL_ADMIS = new Map([
   ['CONVERSION_IMPOSSIBLE', "les réservations « tour » visées sont absentes, aucune commande ne les produit, et l'interface n'offre la conversion que sur des réservations présentes"],
   ['ETIQUETTE_INVALIDE', 'la saisie se corrige dans le champ même, dont le texte dit la forme attendue'],
   ['ETIQUETTES_EN_TROP', 'la saisie se corrige dans le champ même, dont le texte dit le nombre admis'],
+  ['LIBELLE_TABLE_TROP_LONG', 'la saisie se corrige dans le champ même, dont le texte dit la longueur admise'],
   ['OBJECTIF_HORS_SOIREE', 'le tour se choisit dans le champ même, parmi ceux de la soirée'],
   ['OBJECTIF_SANS_ETIQUETTE', "sur un couple sans objectif, rien à retirer : la saisie se corrige dans le champ même"],
   ['TABLE_DISPARUE', 'une table supprimée entre-temps : aucun geste ne la rend'],
@@ -381,6 +382,14 @@ const EXEMPLES = new Map([
       accepte: { args: { id: 2, position: { x: 420, y: -60 } } },
       refuse: 'une table se pose partout : déplacer ne refuse rien du domaine',
       sansEffet: { args: (charge) => ({ id: 2, position: { ...tableDe(charge, 2).position } }) },
+    },
+  ],
+  [
+    'changerLibelleTable',
+    {
+      accepte: { args: { id: 2, libelle: 'Coin des invités' } },
+      refuse: { args: { id: 2, libelle: 'x'.repeat(61) }, code: 'LIBELLE_TABLE_TROP_LONG', remede: null },
+      sansEffet: { args: { id: 2, libelle: ' ' } },
     },
   ],
   [

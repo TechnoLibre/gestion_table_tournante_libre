@@ -3,16 +3,16 @@
 
 // Les textes des commandes du mobilier — tables, sièges, tours, réglages,
 // objectifs des tables, ordre des priorités (§ 4, § 4.5, § 5.7, § 6, § 7.1,
-// § 8.2, § 14.6) : les refus d'une capacité, d'un nombre de tours, d'un
-// objectif, d'un ordre des priorités et d'un mode des objectifs, leurs
-// avertissements, les causes d'un siège retiré, les avis des objectifs, le
-// nom complet de chaque critère (mobilier.critere.<nom>) et les libellés
-// figés du journal. Les détails désignent tables et personnes par
+// § 8.2, § 14.6) : les refus d'un libellé de table, d'une capacité, d'un
+// nombre de tours, d'un objectif, d'un ordre des priorités et d'un mode des
+// objectifs, leurs avertissements, les causes d'un siège retiré, les avis des
+// objectifs, le nom complet de chaque critère (mobilier.critere.<nom>) et les
+// libellés figés du journal. Les détails désignent tables et personnes par
 // identifiant : le refus se pose sur la table qu'il concerne, et son texte ne
 // les nomme pas ; seuls les textes de la présence que le nombre de tours
 // rogne ou n'étend pas nomment les personnes, que la commande lit dans la
-// charge. Un libellé figé reçoit le numéro de table que la commande lit
-// dans la charge.
+// charge. Un libellé figé reçoit le numéro de table que la commande lit dans
+// la charge.
 import { POIDS_MAX } from '../../moteur/criteres.js';
 import { cite, compte, enumeration, nomDans } from './aides.js';
 
@@ -114,6 +114,11 @@ export const TABLE = new Map([
   ['MOINS_D_UN_TOUR', () => 'Une soirée compte au moins un tour.'],
   ['TROP_DE_PLACES', ({ max }) => `Une table compte au plus ${max} places : le plan ne dessinerait pas plus de chaises.`],
   ['TROP_DE_TOURS', ({ max }) => `Une soirée compte au plus ${max} tours.`],
+  // longueur : les caractères du libellé saisi ; maximum : LIBELLE_TABLE_MAX.
+  [
+    'LIBELLE_TABLE_TROP_LONG',
+    ({ longueur, maximum }) => `Le libellé compte ${longueur} caractères : celui d'une table en compte au plus ${maximum}.`,
+  ],
   [
     'PRESENCE_VIDEE_PAR_TOURS',
     ({ participants, tours }) => {
@@ -254,6 +259,11 @@ export const TABLE = new Map([
     },
   ],
   ['ENTREE_DEPLACER_TABLE', ({ numero }) => `Déplacé la table ${numero}`],
+  // libelle : le libellé posé, null quand il est retiré.
+  [
+    'ENTREE_CHANGER_LIBELLE_TABLE',
+    ({ numero, libelle }) => `Table ${numero} : ${libelle === null ? 'libellé retiré' : `libellé ${cite(libelle)}`}`,
+  ],
   ['ENTREE_CHANGER_PLACES_TABLE', ({ numero, sieges }) => `Table ${numero} : ${compte(sieges, 'place', 'places')}`],
   ['ENTREE_REALIGNER_TABLE', ({ numero, sieges }) => `Table ${numero} : suit le défaut (${compte(sieges, 'place', 'places')})`],
   [

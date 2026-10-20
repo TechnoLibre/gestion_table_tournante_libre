@@ -108,7 +108,8 @@ export function libellePlace({ table, siege, absente = false }) {
  * Les feuilles par table (§ 11.7, Q6 c) : par défaut une feuille par table,
  * les tours de la soirée en colonnes ; sous parTour, une feuille par table
  * et par tour, les tours d'une table à la suite. Les tables se rangent par
- * numéro affiché, puis par identifiant. Une feuille liste chaque place de la
+ * numéro affiché, puis par identifiant. Une feuille porte le libellé de sa
+ * table, null quand elle n'en a pas, et liste chaque place de la
  * table, de 1 à sa capacité, et pour chaque tour de ses colonnes ce que
  * l'état des places y montre : l'occupant et son nom affiché, ou une place
  * vide (null), et le titre de la place, pourvu ou non à ce tour, tel que le
@@ -118,7 +119,7 @@ export function libellePlace({ table, siege, absente = false }) {
  * @param {Object} charge
  * @param {Object[]} etatsParTour   etatsDesTours
  * @param {{parTour?: boolean}} [options]
- * @returns {Array<{table: number, numero: number, tours: number[],
+ * @returns {Array<{table: number, numero: number, libelle: string|null, tours: number[],
  *            lignes: Array<{place: number, cellules: Array<{tour: number, occupant: number|null,
  *            nom: string|null, titre: {libelle: string, pourvu: boolean}|null}>}>}>}
  * @throws {TypeError} parTour hors des booléens
@@ -138,6 +139,7 @@ export function feuillesTables(charge, etatsParTour, { parTour = false } = {}) {
     return {
       table: table.id,
       numero: table.numero,
+      libelle: table.libelle ?? null,
       tours: colonnes.map(({ tour }) => tour),
       lignes: Array.from({ length: places }, (_, rang) => ({
         place: rang + 1,
@@ -380,10 +382,10 @@ export function toursParGroupe(part, tours) {
  * (§ 7.4) : la feuille de rang i en ⌈T / parGroupe[i]⌉ groupes, T ses tours,
  * de tailles égales à un près, les plus grands d'abord — dix tours par six
  * donnent deux groupes de cinq. Chaque groupe est une feuille à part
- * entière : la table, son numéro, ses tours, et chaque place avec les
- * cellules de ces tours seuls ; source est le rang de la feuille d'où il
- * vient. Une feuille qui garde tous ses tours donne un seul groupe, égal à
- * elle.
+ * entière : la table, son numéro, son libellé, ses tours, et chaque place
+ * avec les cellules de ces tours seuls ; source est le rang de la feuille
+ * d'où il vient. Une feuille qui garde tous ses tours donne un seul groupe,
+ * égal à elle.
  *
  * @param {ReturnType<typeof feuillesTables>} feuilles
  * @param {number[]} parGroupe   un par feuille, entiers ≥ 1
@@ -408,6 +410,7 @@ export function grouperTours(feuilles, parGroupe) {
       const groupe = {
         table: feuille.table,
         numero: feuille.numero,
+        libelle: feuille.libelle,
         tours: feuille.tours.slice(debut, fin),
         lignes: feuille.lignes.map(({ place, cellules }) => ({ place, cellules: cellules.slice(debut, fin) })),
         source,

@@ -5,13 +5,14 @@
   // Les feuilles par table imprimées (§ 11.7, Q6 c) : par défaut une feuille
   // par table, les tours de la soirée en colonnes ; sous l'option « Une
   // feuille par tour » de l'aperçu (options.parTour), une feuille par table
-  // et par tour. Chaque feuille liste chaque place de la table : l'occupant
-  // de chaque tour, ou la place vide écrite comme telle, et le titre de la
-  // place, « non pourvu » quand rien ne le pourvoit à ce tour
-  // (feuillesTables). Les feuilles sont en portrait. En colonnes, elles
-  // portent le pied de la soirée ; une feuille d'un seul tour porte celui de
-  // son tour, et le filigrane de la règle du brouillon à ce tour
-  // (feuilleDuTour).
+  // et par tour. Le titre d'une feuille nomme sa table par son numéro et,
+  // quand elle en porte un, par son libellé, dans son propre nœud. Chaque
+  // feuille liste chaque place de la table : l'occupant de chaque tour, ou la
+  // place vide écrite comme telle, et le titre de la place, « non pourvu »
+  // quand rien ne le pourvoit à ce tour (feuillesTables). Les feuilles sont
+  // en portrait. En colonnes, elles portent le pied de la soirée ; une
+  // feuille d'un seul tour porte celui de son tour, et le filigrane de la
+  // règle du brouillon à ce tour (feuilleDuTour).
   //
   // Rien ne se tronque : un nom long replie dans sa colonne (§ 7.4). Une
   // colonne de tour garde au moins la largeur du plus long mot de ses
@@ -177,7 +178,11 @@
 
 {#snippet blocTable(liste, rangListe, debut, fin, morceau = null)}
   <div class="liste" data-liste-imprimee={rangListe} data-table={liste.table}>
-    <p class="titre">{t('feuilles.tables.titre', { table: liste.numero })}</p>
+    <p class="titre">
+      {t('feuilles.tables.titre', { table: liste.numero })}{#if liste.libelle !== null}<span>{t('feuilles.tables.avantLibelle')}</span><span
+          >{liste.libelle}</span
+        >{/if}
+    </p>
     <table>
       <colgroup>
         {#each largeursColonnes('tables', liste.tours.length) as largeur, rang (rang)}
@@ -245,11 +250,14 @@
 {/if}
 
 <style>
+  /* Le titre d'une feuille replie, entre deux caractères au besoin : un
+     libellé de table sans espace ne déborde pas de la page. */
   .titre {
     margin: 0;
     padding-bottom: var(--espace-2);
     font-size: var(--taille-titre);
     font-weight: bold;
+    overflow-wrap: anywhere;
   }
 
   /* Disposition fixe, sans espacement entre cellules : la hauteur d'une

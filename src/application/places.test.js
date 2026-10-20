@@ -172,6 +172,19 @@ describe('etatPlaces : la source et la cible (§ 5.8, § 8.9)', () => {
     );
   });
 
+  test('chaque table porte son libellé, null quand elle n\u{2019}en a pas ; il ne change ni les chaises ni les conflits', () => {
+    const charge = petiteRetenue();
+    const sans = etatPlaces(charge, { tour: 1 });
+    assert.deepEqual(sans.tables.map(({ libelle }) => libelle), [null, null, null, null]);
+    charge.tables[1].libelle = 'Coin des invités';
+    const avec = etatPlaces(charge, { tour: 1 });
+    assert.deepEqual(avec.tables.map(({ libelle }) => libelle), [null, 'Coin des invités', null, null]);
+    assert.deepEqual(
+      avec.tables.map(({ libelle, ...reste }) => reste),
+      sans.tables.map(({ libelle, ...reste }) => reste),
+    );
+  });
+
   test('sans retenu ni proposition : les réservations seules ; la réserve porte les douze, moins une réservée à ce tour', () => {
     const charge = petite();
     const etat = etatPlaces(charge, { tour: 1 });

@@ -1,11 +1,12 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le registre des commandes du mobilier — tables, sièges, tours, réglages,
-// objectifs des tables et leur règle par défaut, ordre des priorités et
-// mode des objectifs (§ 4, § 4.5, § 5.3, § 5.7, § 6, § 7.1, § 8.2, § 8.9,
-// § 9), que commandes.js réunit aux autres. Ses imports n'atteignent jamais
-// commandes.js : le registre réuni dépend de lui, non l'inverse.
+// Le registre des commandes du mobilier — tables et leur libellé, sièges,
+// tours, réglages, objectifs des tables et leur règle par défaut, ordre des
+// priorités et mode des objectifs (§ 4, § 4.5, § 5.3, § 5.7, § 6, § 7.1,
+// § 8.2, § 8.9, § 9), que commandes.js réunit aux autres. Ses imports
+// n'atteignent jamais commandes.js : le registre réuni dépend de lui, non
+// l'inverse.
 //
 // Chaque commande suit le contrat de commandes.js : une fonction pure
 // (charge, arguments) → { charge, libelle, avertissements }, la charge reçue
@@ -28,6 +29,7 @@ import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js
 import { CRITERES, MODES_OBJECTIFS, POIDS_MAX, seulsASonPalier, verifierPriorites } from '../moteur/criteres.js';
 import {
   CASES_FACULTATIVES,
+  LIBELLE_TABLE_MAX,
   SCHEMA,
   TOURS_MAX,
   capacite,
@@ -231,6 +233,35 @@ function deplacerTable(charge, { id, position } = {}) {
   // + 0 écrit 0 là où l'arrondi d'une petite valeur négative rend −0.
   suivante.tables.find((candidate) => candidate.id === id).position = { x: Math.round(position.x) + 0, y: Math.round(position.y) + 0 };
   return { charge: suivante, libelle: libelle('ENTREE_DEPLACER_TABLE', { numero: table.numero }), avertissements: [] };
+}
+
+/**
+ * changerLibelleTable {id, libelle} (§ 4, § 8.9) : le libellé saisi entre
+ * en NFC, ses blancs de bord retirés, chaque moitié de paire de substitution
+ * isolée remplacée par le caractère de remplacement ; vide, il retire le
+ * champ. Au-delà de LIBELLE_TABLE_MAX points de code, comptés sur le texte
+ * entré : LIBELLE_TABLE_TROP_LONG {longueur, maximum}, remède nul — la
+ * saisie se corrige dans son champ. Le moteur ne lit pas le libellé :
+ * propositions et retenu restent tels quels, sans dérive. Le même libellé,
+ * ou un retrait sans libellé, ne change rien : l'exécution le refuse,
+ * SANS_EFFET.
+ */
+function changerLibelleTable(charge, { id, libelle: saisie } = {}) {
+  exigerModifiable(charge);
+  const table = tableDe(charge, id);
+  if (typeof saisie !== 'string') throw new TypeError(`libelle : chaîne attendue, reçu ${JSON.stringify(saisie)}`);
+  const texte = saisie.toWellFormed().normalize('NFC').trim();
+  const longueur = [...texte].length;
+  if (longueur > LIBELLE_TABLE_MAX) throw refus('LIBELLE_TABLE_TROP_LONG', { longueur, maximum: LIBELLE_TABLE_MAX });
+  const suivante = copieDeTravail(charge);
+  const libellee = suivante.tables.find((candidate) => candidate.id === id);
+  if (texte === '') delete libellee.libelle;
+  else libellee.libelle = texte;
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CHANGER_LIBELLE_TABLE', { numero: table.numero, libelle: texte === '' ? null : texte }),
+    avertissements: [],
+  };
 }
 
 /**
@@ -715,6 +746,7 @@ export const COMMANDES_MOBILIER = new Map([
   ['creerTable', creerTable],
   ['supprimerTable', supprimerTable],
   ['deplacerTable', deplacerTable],
+  ['changerLibelleTable', changerLibelleTable],
   ['changerPlacesTable', changerPlacesTable],
   ['realignerTable', realignerTable],
   ['changerDefaut', changerDefaut],

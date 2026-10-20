@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des inscriptions du plateau (§ 7.5, § 7.7) : le corps et la place
-// du numéro d'une table, avec ou sans libellé, la marque de gel et la
+// du numéro d'une table, avec ou sans libellé, les lignes du libellé sous le
+// numéro, la marque de gel et la
 // pastille, posée sur le bord du plateau, en haut à droite, hors des
 // chaises. Les tables sont celles de geometrieTable, rondes et carrées, de
 // une à quarante places.
@@ -14,11 +15,14 @@ import {
   DEMI_HAUTEUR_GEL,
   ECART_NUMERO,
   ENCRE_BAS_CHIFFRE,
+  ENCRE_BAS_LIGNE,
   ENCRE_HAUT_CHIFFRE,
+  ENCRE_HAUT_LIGNE,
   PROPORTION_NUMERO,
   RAYON_PASTILLE,
   RETRAIT_GEL,
   corpsNumero,
+  lignesLibelle,
   placeGel,
   placeNumero,
   placePastille,
@@ -213,6 +217,96 @@ describe('plateau : le corps du numéro selon ses chiffres (§ 7.7)', () => {
         const ici = geometrieTable({ id: 1, numero: 123, forme, position: { x: 0, y: 0 } }, places);
         const la = geometrieTable({ id: 4, numero: 987, forme, position: { x: 215, y: -340 } }, places);
         assert.equal(placeNumero(ici).corps, placeNumero(la).corps, `${forme} de ${places}`);
+      }
+    }
+  });
+});
+
+// La boîte qui borne l'encre d'une ligne de libellé de largeur largeur,
+// ancrée en (x, y) : ses bornes au corps des listes, et le décalage de
+// l'arrondi, en hauteur.
+function encreLigne({ x, y }, largeur) {
+  const [haut, bas] = [ENCRE_HAUT_LIGNE * TAILLE_TEXTE_LISTE_CM + DECALAGE_ANCRE, ENCRE_BAS_LIGNE * TAILLE_TEXTE_LISTE_CM + DECALAGE_ANCRE];
+  return { gauche: x - largeur / 2, droite: x + largeur / 2, haut: y - haut, bas: y + bas };
+}
+
+describe('plateau : les lignes du libellé, sous le numéro (§ 7.7)', () => {
+  test('les bornes de l\u{2019}encre d\u{2019}une ligne couvrent le gabarit de hauteur de la police des listes, en part du corps', () => {
+    // Noto Sans : ascendante 1,069, descendante 0,293 ; « Ô » monte de
+    // 0,944 au-dessus de la base, « j » descend de 0,24 dessous.
+    const milieu = (1.069 - 0.293) / 2;
+    assert.ok(ENCRE_HAUT_LIGNE >= 0.944 - milieu && ENCRE_HAUT_LIGNE < 0.944 - milieu + 0.01, String(ENCRE_HAUT_LIGNE));
+    assert.ok(ENCRE_BAS_LIGNE >= milieu + 0.24 && ENCRE_BAS_LIGNE < milieu + 0.24 + 0.01, String(ENCRE_BAS_LIGNE));
+  });
+
+  test('chaque table de une à quarante places, ronde ou carrée, tient au moins une ligne, centrée sur l\u{2019}axe du plateau, au corps des listes', () => {
+    for (const { forme, places, g } of TABLES) {
+      for (const numero of NUMEROS.slice(0, 4)) {
+        const { corps, lignes } = lignesLibelle(numerotee(g, numero));
+        const quoi = `${forme} de ${places}, ${numero}`;
+        assert.equal(corps, TAILLE_TEXTE_LISTE_CM, quoi);
+        assert.ok(lignes.length >= 1, quoi);
+        for (const ligne of lignes) {
+          assert.equal(ligne.x, g.centre.x, quoi);
+          assert.ok(ligne.largeur > 0, `${quoi} : ${JSON.stringify(ligne)}`);
+        }
+      }
+    }
+  });
+
+  test('l\u{2019}encre des lignes passe à ECART_NUMERO sous celle du numéro monté, et à ECART_NUMERO du bord du plateau ; deux lignes ne se chevauchent pas', () => {
+    for (const { forme, places, g } of TABLES) {
+      for (const numero of NUMEROS.slice(0, 4)) {
+        const quoi = `${forme} de ${places}, ${numero}`;
+        const gn = numerotee(g, numero);
+        const encreNumero = encreBornee(placeNumero(gn, { libelle: true }), String(numero).length);
+        const { lignes } = lignesLibelle(gn);
+        lignes.forEach((ligne, rang) => {
+          const b = encreLigne(ligne, ligne.largeur);
+          assert.ok(b.haut >= encreNumero.bas + ECART_NUMERO - PRES, `${quoi}, ligne ${rang} : ${b.haut} sous ${encreNumero.bas}`);
+          assert.ok(ecarts(g, b).bord >= ECART_NUMERO - PRES, `${quoi}, ligne ${rang} : ${JSON.stringify(ecarts(g, b))}`);
+          if (rang > 0) {
+            const precedente = lignes[rang - 1];
+            assert.ok(ligne.y - precedente.y >= (ENCRE_HAUT_LIGNE + ENCRE_BAS_LIGNE) * TAILLE_TEXTE_LISTE_CM - PRES, `${quoi}, ligne ${rang}`);
+          }
+        });
+      }
+    }
+  });
+
+  test('chaque ligne prend toute la largeur que le bord lui laisse, et les lignes descendent tant qu\u{2019}une de plus tient', () => {
+    const pas = (ENCRE_HAUT_LIGNE + ENCRE_BAS_LIGNE) * TAILLE_TEXTE_LISTE_CM;
+    for (const { forme, places, g } of TABLES) {
+      const quoi = `${forme} de ${places}`;
+      const { lignes } = lignesLibelle(g);
+      for (const ligne of lignes) {
+        // Un millimètre de plus de chaque côté passerait sous l'écart.
+        assert.ok(ecarts(g, encreLigne(ligne, ligne.largeur + 0.2)).bord < ECART_NUMERO, `${quoi} : ${JSON.stringify(ligne)}`);
+      }
+      const derniere = lignes.at(-1);
+      const suivante = encreLigne({ x: derniere.x, y: derniere.y + pas }, 0);
+      assert.ok(ecarts(g, suivante).bord < ECART_NUMERO, `${quoi} : une ligne de plus tiendrait`);
+    }
+  });
+
+  test('la plus petite ronde tient une ligne de 40 cm environ ; une ronde de huit places, trois lignes', () => {
+    const petite = lignesLibelle(geometrieTable({ id: 1, numero: 1, forme: 'ronde', position: { x: 0, y: 0 } }, 2)).lignes;
+    assert.equal(petite.length, 1);
+    assert.ok(petite[0].largeur > 39 && petite[0].largeur < 42, String(petite[0].largeur));
+    const huit = lignesLibelle(geometrieTable({ id: 1, numero: 1, forme: 'ronde', position: { x: 0, y: 0 } }, 8)).lignes;
+    assert.equal(huit.length, 3);
+    assert.ok(huit[0].largeur > huit[1].largeur && huit[1].largeur > huit[2].largeur, JSON.stringify(huit));
+  });
+
+  test('les lignes ne dépendent que de la forme, des places et du nombre de chiffres : une table déplacée les garde au même endroit d\u{2019}elle', () => {
+    for (const forme of FORMES) {
+      for (const places of [2, 5, 9]) {
+        const ici = geometrieTable({ id: 1, numero: 123, forme, position: { x: 0, y: 0 } }, places);
+        const la = geometrieTable({ id: 4, numero: 987, forme, position: { x: 215, y: -340 } }, places);
+        const relatives = (g) => lignesLibelle(g).lignes.map(({ x, y, largeur }) => [x - g.centre.x, y - g.centre.y, largeur]);
+        const [a, b] = [relatives(ici), relatives(la)];
+        assert.equal(a.length, b.length, `${forme} de ${places}`);
+        a.forEach((ligne, rang) => ligne.forEach((v, i) => assert.ok(Math.abs(v - b[rang][i]) < 1e-6, `${forme} de ${places}`)));
       }
     }
   });

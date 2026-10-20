@@ -369,6 +369,7 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   creerTable: { numero: 3 },
   supprimerTable: { numero: 2, reservations: 2, titres: 1 },
   deplacerTable: { numero: 3 },
+  changerLibelleTable: { numero: 3, libelle: 'Coin des invités' },
   changerPlacesTable: { numero: 5, sieges: 10 },
   realignerTable: { numero: 5, sieges: 8 },
   changerDefaut: { sieges: 10, realignees: 4 },

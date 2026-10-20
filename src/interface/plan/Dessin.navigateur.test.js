@@ -27,7 +27,18 @@ import { texteLivre } from '../../demo/livrees.js';
 import { constante } from '../../geometrie/constantes.js';
 import { designer } from '../../geometrie/designation.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
-import { AVANCE_CHIFFRE, DECALAGE_ANCRE, DEMI_HAUTEUR_GEL, ECART_NUMERO, ENCRE_BAS_CHIFFRE, ENCRE_HAUT_CHIFFRE } from '../../geometrie/plateau.js';
+import {
+  AVANCE_CHIFFRE,
+  DECALAGE_ANCRE,
+  DEMI_HAUTEUR_GEL,
+  ECART_NUMERO,
+  ENCRE_BAS_CHIFFRE,
+  ENCRE_BAS_LIGNE,
+  ENCRE_HAUT_CHIFFRE,
+  ENCRE_HAUT_LIGNE,
+  lignesLibelle,
+  placeNumero,
+} from '../../geometrie/plateau.js';
 import { PLANCHER_DIAMETRE } from '../../geometrie/tables.js';
 import { GABARIT_HAUTEUR_LIGNE, TAILLE_TEXTE_LISTE_CM } from '../../geometrie/texte.js';
 import { dessinDepuisEcran, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
@@ -937,6 +948,225 @@ describe('le numéro de la table, au centre du plateau (§ 7.7, § 14.5)', () =>
     expect(attendus.map(([texte]) => texte)).toEqual(['7', '42', '3']);
     expect(attributs(imprime)).toEqual(attendus);
     for (const numero of tous(imprime, '[data-numero-table]')) expect(visible(numero)).toBe(true);
+  });
+});
+
+// --- Le libellé de la table, sous son numéro (§ 7.4, § 7.7, § 14.5) -----------------
+
+// Le libellé d'une table : le <text> qui le porte, dans son groupe, et ses
+// lignes, un <tspan> chacune.
+const libelleDe = (svg, id) => svg.querySelector(`[data-table="${id}"] [data-libelle-table="${id}"]`);
+const lignesDuLibelle = (svg, id) => tous(svg, `[data-table="${id}"] [data-libelle-table="${id}"] > tspan`);
+
+// La boîte d'encre d'une ligne du libellé, en cm du dessin, mesurée comme
+// celle du numéro (encreDe), au corps du <text> qui la porte.
+function encreDeLigne(ligne) {
+  const style = getComputedStyle(ligne);
+  const corps = Number(ligne.parentNode.getAttribute('font-size'));
+  const contexte = new OffscreenCanvas(1, 1).getContext('2d');
+  contexte.font = `${style.fontStyle} ${style.fontWeight} ${CORPS_DE_MESURE}px ${style.fontFamily}`;
+  const m = contexte.measureText(ligne.textContent);
+  const echelle = corps / CORPS_DE_MESURE;
+  const cellule = ligne.getExtentOfChar(0);
+  const base = cellule.y + m.fontBoundingBoxAscent * echelle;
+  return {
+    gauche: cellule.x - m.actualBoundingBoxLeft * echelle,
+    droite: cellule.x + m.actualBoundingBoxRight * echelle,
+    haut: base - m.actualBoundingBoxAscent * echelle,
+    bas: base + m.actualBoundingBoxDescent * echelle,
+  };
+}
+
+// Ce qui sépare une boîte d'encre du bord du plateau d'une géométrie, en
+// cm ; négatif quand elle le passe.
+function ecartAuBord({ forme, centre: c, demiTaille }, b) {
+  const coins = [[b.gauche, b.haut], [b.droite, b.haut], [b.gauche, b.bas], [b.droite, b.bas]];
+  const loin = coins.map(([x, y]) => (forme === 'ronde' ? Math.hypot(x - c.x, y - c.y) : Math.max(Math.abs(x - c.x), Math.abs(y - c.y))));
+  return demiTaille - Math.max(...loin);
+}
+
+describe('le libellé de la table, sous son numéro monté (§ 7.4, § 7.7, § 14.5)', () => {
+  // La police des listes, que la sonde et encreDeLigne lisent, et la face
+  // grasse du numéro : chargées d'abord.
+  beforeAll(async () => {
+    for (const face of ['400 16px "Noto Sans"', '700 16px "Noto Sans"']) {
+      const faces = await document.fonts.load(face);
+      expect(faces.map(({ status }) => status)).toEqual(['loaded']);
+    }
+  });
+
+  const LONG = 'Table d\u{2019}honneur des invités venus de loin';
+
+  // Trois tables : la plus petite ronde au libellé court, une carrée au
+  // libellé long, une ronde sans libellé.
+  function libellees() {
+    const charge = chargeDeTables([2, 12, 10], { formes: ['ronde', 'carree', 'ronde'] });
+    charge.tables[0].libelle = 'Coin des invités';
+    charge.tables[1].libelle = LONG;
+    return charge;
+  }
+
+  for (const theme of ['clair', 'sombre']) {
+    test(`thème ${theme} : sous le numéro monté, au corps et à l\u{2019}encre des listes, sur un halo du plateau, sans pointeur ni nom`, async () => {
+      await sousTheme(theme, async () => {
+        const charge = libellees();
+        const k = 1.2;
+        const modele = modeleDe(charge, { k });
+        const { svg } = monterPlan(modele, { k, tx: 120, ty: 300 });
+        await deuxImages();
+        const encre = jeton('--couleur-liste-texte');
+        const fond = jeton('--couleur-table-fond');
+        expect(libelleDe(svg, 3)).toBeNull();
+        for (const table of modele.tables.slice(0, 2)) {
+          const quoi = `table ${table.id}`;
+          const libelle = libelleDe(svg, table.id);
+          expect(libelle, quoi).not.toBeNull();
+          expect(libelle.getAttribute('aria-hidden')).toBe('true');
+          const style = getComputedStyle(libelle);
+          expect(style.pointerEvents).toBe('none');
+          expect(Number(libelle.getAttribute('font-size'))).toBe(TAILLE_TEXTE_LISTE_CM);
+          expect(style.fontWeight).toBe('400');
+          expect(memeCouleur(couleurTexte(libelle), encre)).toBe(true);
+          expect(memeCouleur(composantes(style.stroke), fond)).toBe(true);
+          expect(parseFloat(style.strokeWidth)).toBeCloseTo(HALO_NUMERO * TAILLE_TEXTE_LISTE_CM, 2);
+          expect(style.paintOrder.startsWith('stroke')).toBe(true);
+          expect(fondPeintSous(libelle)).toEqual([fond]);
+          // Le numéro monte à la place que la géométrie lui donne avec un libellé.
+          const numero = numeroDe(svg, table.id);
+          const monte = placeNumero(table.geometrie, { libelle: true });
+          expect(Number(numero.getAttribute('y')), quoi).toBeCloseTo(monte.y, 6);
+          expect(Number(numero.getAttribute('font-size')), quoi).toBeCloseTo(monte.corps, 6);
+          // Chaque ligne à l'ancre de son emplacement, centrée.
+          const emplacements = lignesLibelle(table.geometrie).lignes;
+          const lignes = lignesDuLibelle(svg, table.id);
+          expect(lignes.length, quoi).toBeGreaterThan(0);
+          expect(lignes.length, quoi).toBeLessThanOrEqual(emplacements.length);
+          lignes.forEach((ligne, rang) => {
+            expect(Number(ligne.getAttribute('x'))).toBeCloseTo(emplacements[rang].x, 6);
+            expect(Number(ligne.getAttribute('y'))).toBeCloseTo(emplacements[rang].y, 6);
+            expect(getComputedStyle(ligne).dominantBaseline).toBe('central');
+            expect(ligne.getComputedTextLength(), `${quoi}, ligne ${rang}`).toBeLessThanOrEqual(emplacements[rang].largeur);
+          });
+        }
+        // La petite ronde abrège ; la carrée replie le libellé long sur
+        // plusieurs lignes, entre ses mots, sans l'abréger.
+        const petite = lignesDuLibelle(svg, 1).map((ligne) => ligne.textContent);
+        expect(petite.length).toBe(1);
+        expect(petite[0].endsWith(MARQUE)).toBe(true);
+        const longue = lignesDuLibelle(svg, 2).map((ligne) => ligne.textContent);
+        expect(longue.length).toBeGreaterThan(1);
+        expect(longue.join(' ')).toBe(LONG);
+        // La table sans libellé garde son numéro au centre.
+        const g3 = modele.tables[2].geometrie;
+        expect(Number(numeroDe(svg, 3).getAttribute('y'))).toBe(g3.centre.y);
+      });
+    });
+  }
+
+  test('l\u{2019}encre mesurée de chaque ligne tient dans ses bornes, à ECART_NUMERO du numéro et du bord, de 1 à 16 places', async () => {
+    for (const forme of ['ronde', 'carree']) {
+      const capacites = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16];
+      const charge = chargeDeTables(capacites, { formes: capacites.map(() => forme) });
+      // Des mots ordinaires et le gabarit de hauteur, ou un seul mot coupé
+      // entre ses caractères, qui remplit chaque ligne jusqu'à sa largeur.
+      const libelles = [`${LONG} Ôjgq Æ W`, 'W'.repeat(60)];
+      charge.tables = charge.tables.map((table, rang) => ({ ...table, numero: [7, 88, 888][rang % 3], libelle: libelles[rang % 2] }));
+      const k = 1;
+      const modele = modeleDe(charge, { k });
+      const { svg } = monterPlan(modele, { k, tx: 60, ty: 300 });
+      await deuxImages();
+      for (const table of modele.tables) {
+        const quoi = `${forme} de ${table.geometrie.chaises.length}`;
+        const encreNumero = encreDe(numeroDe(svg, table.id));
+        const lignes = lignesDuLibelle(svg, table.id);
+        expect(lignes.length, quoi).toBeGreaterThan(0);
+        for (const ligne of lignes) {
+          const encre = encreDeLigne(ligne);
+          const y = Number(ligne.getAttribute('y'));
+          const corps = TAILLE_TEXTE_LISTE_CM;
+          expect(encre.haut, `${quoi} : ${ligne.textContent}`).toBeGreaterThanOrEqual(y - ENCRE_HAUT_LIGNE * corps - DECALAGE_ANCRE);
+          expect(encre.bas, `${quoi} : ${ligne.textContent}`).toBeLessThanOrEqual(y + ENCRE_BAS_LIGNE * corps + DECALAGE_ANCRE);
+          expect(encre.haut - encreNumero.bas, `${quoi} : ${ligne.textContent}`).toBeGreaterThanOrEqual(ECART_NUMERO);
+          expect(ecartAuBord(table.geometrie, encre), `${quoi} : ${ligne.textContent}`).toBeGreaterThanOrEqual(ECART_NUMERO);
+        }
+      }
+      demonterTout();
+    }
+  });
+
+  test('sous K_LISTES, aucun libellé, et le numéro revient au centre ; dès K_LISTES, le libellé paraît sous le numéro monté', async () => {
+    const charge = libellees();
+    for (const [k, paraît] of [
+      [K_LISTES - 0.01, false],
+      [K_LISTES + 0.01, true],
+    ]) {
+      const modele = modeleDe(charge, { k });
+      const { svg } = monterPlan(modele, { k, tx: 60, ty: 200 });
+      await deuxImages();
+      const g = modele.tables[1].geometrie;
+      expect(libelleDe(svg, 2) !== null).toBe(paraît);
+      expect(Number(numeroDe(svg, 2).getAttribute('y'))).toBeCloseTo(paraît ? placeNumero(g, { libelle: true }).y : g.centre.y, 6);
+      demonterTout();
+    }
+  });
+
+  test('monté caché, sans mesure, le numéro tient le centre ; montré, il monte au-dessus du libellé dessiné', async () => {
+    const charge = libellees();
+    const k = 1.2;
+    const modele = modeleDe(charge, { k });
+    const { svg, conteneur } = monterPlan(modele, { k, tx: 120, ty: 300 }, { cache: true });
+    await deuxImages();
+    flushSync();
+    const g = modele.tables[1].geometrie;
+    expect(libelleDe(svg, 2)).toBeNull();
+    expect(Number(numeroDe(svg, 2).getAttribute('y'))).toBe(g.centre.y);
+    conteneur.style.display = '';
+    await deuxImages();
+    flushSync();
+    expect(lignesDuLibelle(svg, 2).length).toBeGreaterThan(0);
+    expect(Number(numeroDe(svg, 2).getAttribute('y'))).toBeCloseTo(placeNumero(g, { libelle: true }).y, 6);
+  });
+
+  test('sur une table signalée, chaque ligne repose sur un socle du fond du plateau, peint après les trames, rogné au plateau', async () => {
+    const charge = rencontreRepetee();
+    charge.tables = charge.tables.map((table) => (table.id === 1 ? { ...table, libelle: LONG } : table));
+    const k = 1.5;
+    const modele = modeleDe(charge, { tour: 2, proposition: 1, k });
+    expect(modele.tables[0].conflit).toBe(true);
+    const { svg } = monterPlan(modele, { k, tx: 150, ty: 250 });
+    await deuxImages();
+    const [trame] = tous(svg, `[data-table="1"] :is(${TRAMES})`);
+    const libelle = libelleDe(svg, 1);
+    const socles = tous(svg, '[data-table="1"] [data-socle-libelle]');
+    const fond = jeton('--couleur-table-fond');
+    expect(socles.length).toBe(lignesDuLibelle(svg, 1).length);
+    for (const socle of socles) {
+      expect(trame.compareDocumentPosition(socle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(socle.getAttribute('clip-path')).toMatch(/^url\(#.+-plateau-1\)$/);
+      expect(memeCouleur(composantes(getComputedStyle(socle).fill), fond)).toBe(true);
+    }
+    expect(trame.compareDocumentPosition(libelle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const ligne of lignesDuLibelle(svg, 1)) expect(fondPeintSous(ligne)).toEqual([fond]);
+    // Une table saine n'a pas de socle sous son libellé.
+    expect(tous(svg, '[data-socle-libelle]').length).toBe(socles.length);
+  });
+
+  test('le plan imprimé porte les libellés de l\u{2019}écran, aux mêmes lignes, à la même place', async () => {
+    const charge = libellees();
+    const ecran = monterPlan(modeleDe(charge, { k: 1 }), { k: 1, tx: 150, ty: 300 }).svg;
+    await deuxImages();
+    const attributs = (svg) =>
+      tous(svg, '[data-libelle-table] > tspan').map((n) => [n.textContent, ...['x', 'y'].map((a) => n.getAttribute(a))]);
+    const numeros = (svg) => tous(svg, '[data-numero-table]').map((n) => ['x', 'y', 'font-size'].map((a) => n.getAttribute(a)));
+    const attendus = attributs(ecran);
+    const numerosEcran = numeros(ecran);
+    demonterTout();
+    const imprime = monterPlan(modeleDe(charge, { impression: true }), { k: 1, tx: 150, ty: 300 }).svg;
+    await deuxImages();
+    expect(attendus.length).toBeGreaterThan(2);
+    expect(attributs(imprime)).toEqual(attendus);
+    expect(numeros(imprime)).toEqual(numerosEcran);
+    for (const libelle of tous(imprime, '[data-libelle-table]')) expect(visible(libelle)).toBe(true);
   });
 });
 

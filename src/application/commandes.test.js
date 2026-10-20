@@ -1558,6 +1558,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['creerTable', { forme: 'carree' }],
       ['supprimerTable', { id: 2 }],
       ['deplacerTable', { id: 1, position: { x: 40, y: 40 } }],
+      ['changerLibelleTable', { id: 1, libelle: 'Coin des invités' }],
       ['changerPlacesTable', { id: 2, sieges: 3, origine: 'champ' }],
       ['realignerTable', { id: 1 }],
       ['changerDefaut', { sieges: 3, realigner: false }],

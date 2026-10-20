@@ -26,6 +26,7 @@ import {
   ENTREE_DE_COURSE,
   FORMAT,
   GENERATION_PAR_DEFAUT,
+  LIBELLE_TABLE_MAX,
   SCHEMA,
   SIEGES_MAX,
   TOURS_MAX,
@@ -34,6 +35,7 @@ import {
   configurationDepuisCharge,
   creerCharge,
   critereCoche,
+  estLibelleTable,
   etatDeduit,
   modeObjectifs,
   premiereFaute,
@@ -1432,7 +1434,10 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
       PARTICIPANT.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
       [['exclu', false], ['etiquettes', true], ['presence', true]],
     );
-    assert.deepEqual(TABLE.champs.slice(-2).map(([cle, regle]) => [cle, regle.optionnel]), [['position', false], ['objectifs', true]]);
+    assert.deepEqual(
+      TABLE.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
+      [['position', false], ['libelle', true], ['objectifs', true]],
+    );
   });
 
   test('le document complet se lit tel quel ; il s’écrit dans l’ordre du schéma, listes rangées, et se relit à l’identique', () => {
@@ -1594,6 +1599,76 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
       ]),
     ];
     assert.deepEqual(ecartsDeRefus(cas), []);
+  });
+});
+
+// --- Le libellé d'une table (§ 4, § 8.9) --------------------------------------
+
+describe('le libellé d’une table : un champ facultatif, absent quand la table n’en porte pas (§ 4, § 8.9)', () => {
+  // Soixante points de code, dont des lettres hors du plan de base, qui
+  // comptent chacune pour un.
+  const SOIXANTE = `Table d’honneur ${'\u{1D49C}'.repeat(20)} ${'é'.repeat(23)}`;
+
+  test('un texte en NFC, sans blanc en bord, de 1 à LIBELLE_TABLE_MAX points de code', () => {
+    assert.equal(LIBELLE_TABLE_MAX, 60);
+    assert.equal([...SOIXANTE].length, 60);
+    for (const texte of ['Honneur', 'Table d’honneur', 'A', 'Coin  des  invités', SOIXANTE]) assert.equal(estLibelleTable(texte), true, texte);
+    const fautifs = ['', ' Honneur', 'Honneur ', '\u{0009}Honneur', 'e\u{0301}tage', `${SOIXANTE}x`, 'Hon\u{D800}neur', null, 42, ['Honneur']];
+    for (const valeur of fautifs) assert.equal(estLibelleTable(valeur), false, JSON.stringify(valeur));
+  });
+
+  test('il s’écrit après la position et avant les objectifs, et se relit à l’identique ; absent, il ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.tables[0].libelle = 'Table d’honneur';
+    const lu = analyser(JSON.stringify(d));
+    assert.equal(lu.charge.tables[0].libelle, 'Table d’honneur');
+    assert.equal(Object.hasOwn(lu.charge.tables[1], 'libelle'), false);
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    const attendu = '"position":{"x":0,"y":0},"libelle":"Table d’honneur","objectifs":[';
+    assert.ok(texte.includes(attendu), texte);
+    assert.equal(texte.match(/"libelle":"Table d’honneur"/g).length, 1);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    // Sans libellé, la table s'écrit comme avant lui.
+    const sans = serialiser(documentComplet().charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(sans.includes('"position":{"x":0,"y":0},"objectifs":['), sans);
+  });
+
+  test('soixante points de code se lisent ; une autre forme est une faute de forme nommée par son chemin', () => {
+    assert.equal(analyser(abime((d) => { d.charge.tables[1].libelle = SOIXANTE; })).charge.tables[1].libelle, SOIXANTE);
+    const chemin = 'charge.tables[1].libelle';
+    assert.deepEqual(ecartsDeRefus([
+      ['vide', abime((d) => { d.charge.tables[1].libelle = ''; }), 'FORME', chemin],
+      ['un blanc en tête', abime((d) => { d.charge.tables[1].libelle = ' Honneur'; }), 'FORME', chemin],
+      ['un blanc en fin', abime((d) => { d.charge.tables[1].libelle = 'Honneur '; }), 'FORME', chemin],
+      ['hors de NFC', abime((d) => { d.charge.tables[1].libelle = 'e\u{0301}tage'; }), 'FORME', chemin],
+      ['soixante et un points de code', abime((d) => { d.charge.tables[1].libelle = `${SOIXANTE}x`; }), 'FORME', chemin],
+      ['une moitié de paire isolée', abime((d) => { d.charge.tables[1].libelle = 'Hon\u{D800}neur'; }), 'FORME', chemin],
+      ['nul', abime((d) => { d.charge.tables[1].libelle = null; }), 'FORME', chemin],
+      ['un nombre', abime((d) => { d.charge.tables[1].libelle = 7; }), 'FORME', chemin],
+    ]), []);
+  });
+
+  test('un fichier d’un format plus récent garde le libellé, et lève FORMAT_PLUS_RECENT sur un libellé que le format courant refuse', () => {
+    const lu = analyser(abime((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.tables[0].libelle = 'Honneur';
+    }));
+    assert.equal(lu.formatPlusRecent, true);
+    assert.equal(lu.charge.tables[0].libelle, 'Honneur');
+    assert.deepEqual(ecartsDeRefus([
+      ['un libellé plus long', abime((d) => {
+        d.entete.format = FORMAT + 1;
+        d.charge.tables[0].libelle = 'x'.repeat(LIBELLE_TABLE_MAX + 1);
+      }), 'FORMAT_PLUS_RECENT', 'charge.tables[0].libelle', { format: FORMAT + 1 }],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne lit pas le libellé : une table libellée donne la même configuration', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    const avec = analyser(abime((d) => { d.charge.tables[0].libelle = 'Honneur'; })).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
   });
 });
 

@@ -377,6 +377,14 @@
   fichier de l'événement et dans l'en-tête `organisation` du CSV ; un fichier
   des participants dont la colonne s'intitule encore « appartenance »
   s'importe comme avant.
+- Une table peut porter un **libellé** — « Table d'honneur », « Coin des
+  invités » —, soixante caractères au plus, saisi dans le champ « Libellé » de
+  « Tables et tours » et retiré en vidant le champ. Sur le plan, le numéro
+  monte au-dessus du centre et le libellé s'inscrit dessous, dans le plateau,
+  replié sur plusieurs lignes puis abrégé quand il ne tient pas, aux zooms où
+  les listes de noms paraissent et sur le plan imprimé. Le panneau de la
+  table, son infobulle, son nom pour les lecteurs d'écran et le titre de sa
+  feuille imprimée le portent aussi. Il ne change aucun placement.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
@@ -384,7 +392,8 @@ s'enregistrent dans des champs facultatifs, absents à leur défaut ; une
 proposition dérivée y porte aussi son départ et ses tours figés, `depart` et
 `toursFiges`, absents de toute autre proposition. La présence d'une personne,
 `presence`, est absente quand elle vaut tous les tours, et chaque tour d'un
-placement nomme ses absents, `absents`, seulement quand il en a. Un fichier
+placement nomme ses absents, `absents`, seulement quand il en a. Le libellé
+d'une table, `libelle`, est absent quand elle n'en porte pas. Un fichier
 de format 1 ou 2, écrit par une version de développement, est refusé : il ne
 s'ouvre pas, ne s'importe pas, et l'application dit que son format, trop
 ancien, n'est plus pris en charge, sans rien écrire par-dessus.

@@ -609,7 +609,7 @@ describe('l’infobulle nomme l’organisation d’une paire réunie ; la légen
       await attendre(() => expect(infobulleVisible(infobulle())).toBe(true));
       const lignes = [...infobulle().querySelectorAll('p')];
       expect(lignes.map((p) => p.textContent)).toEqual([
-        t('plan.infobulle.entete', { numero: table, nombre: 1 }),
+        `${t('plan.infobulle.table', { numero: table })}${t('plan.infobulle.nombre', { nombre: 1 })}`,
         `${t('plan.infobulle.separerOrganisations')}${organisation}${t('plan.infobulle.finOrganisation')}${noms.join(t('plan.infobulle.et'))}`,
       ]);
       expect(lignes[1].textContent).toMatch(/^Même organisation \(/);
@@ -619,6 +619,41 @@ describe('l’infobulle nomme l’organisation d’une paire réunie ; la légen
       await pointer('bouger', pointSol(m).x, pointSol(m).y);
       await attendre(() => expect(infobulleVisible(infobulle())).toBe(false));
     }
+  });
+
+  test('une table libellée : son nom accessible le cite ; l’infobulle et le titre de son panneau le portent dans leur propre nœud', async () => {
+    const libellee = deuxOrganisations();
+    libellee.tables[0].libelle = 'Coin des invités';
+    const m = await ouvrir(libellee);
+    expect(tableEl(m, 1).getAttribute('aria-label')).toBe('Table 1 « Coin des invités », 3 places, 1 conflit');
+    expect(tableEl(m, 2).getAttribute('aria-label')).toBe('Table 2, 3 places, 1 conflit');
+    const infobulle = () => document.querySelector('[role="tooltip"]');
+    await pointer('bouger', pointSol(m).x, pointSol(m).y);
+    const entetes = [];
+    for (const table of [1, 2]) {
+      const point = pointTable(m, table);
+      await pointer('bouger', point.x, point.y);
+      await attendre(() => expect(infobulleVisible(infobulle())).toBe(true));
+      entetes.push(infobulle().querySelector('p'));
+      const entete = entetes.at(-1);
+      if (table === 1) {
+        expect(entete.textContent).toBe(
+          `${t('plan.infobulle.table', { numero: 1 })}${t('plan.table.avantLibelle')}Coin des invités${t('plan.infobulle.nombre', { nombre: 1 })}`,
+        );
+        expect([...entete.children].map((e) => e.textContent)).toContain('Coin des invités');
+      } else {
+        expect(entete.textContent).toBe(`${t('plan.infobulle.table', { numero: 2 })}${t('plan.infobulle.nombre', { nombre: 1 })}`);
+      }
+      await pointer('bouger', pointSol(m).x, pointSol(m).y);
+      await attendre(() => expect(infobulleVisible(infobulle())).toBe(false));
+    }
+    m.ui.selectionner({ table: 1 });
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    const titre = panneau(m, 'table').querySelector('h3');
+    expect(titre.textContent).toBe(`${t('plan.refus.table', { numero: 1 })}${t('plan.table.avantLibelle')}Coin des invités`);
+    expect([...titre.children].map((e) => e.textContent)).toContain('Coin des invités');
+    m.ui.selectionner({ table: 2 });
+    await attendre(() => expect(panneau(m, 'table').querySelector('h3').textContent).toBe(t('plan.refus.table', { numero: 2 })));
   });
 
   test('la barre de vue se lit en groupes nommés : le zoom, puis l’affichage, leurs commandes dans l’ordre', async () => {
@@ -674,7 +709,7 @@ describe('l’infobulle : un composant, trois déclencheurs (§ 7.1, § 7.3)', (
     expect(table.conflits.nombre).toBeGreaterThan(0);
     const detail = detailConflits(table, nomDeCharge(charge(m)), organisationDeCharge(charge(m)));
     return [
-      t('plan.infobulle.entete', { numero: detail.numero, nombre: detail.nombre }),
+      `${t('plan.infobulle.table', { numero: detail.numero })}${t('plan.infobulle.nombre', { nombre: detail.nombre })}`,
       ...detail.lignes.map(({ cle, organisation, groupes }) =>
         [
           t(cle),

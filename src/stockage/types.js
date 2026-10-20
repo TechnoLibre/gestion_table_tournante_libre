@@ -181,6 +181,9 @@
  *                                  surcharge (§ 6.1)
  * @property {'ronde'|'carree'} forme
  * @property {{x: number, y: number}} position   nombres finis, en cm
+ * @property {string} [libelle]     facultatif : un texte en NFC, sans blanc
+ *                                  en bord, de 1 à LIBELLE_TABLE_MAX points
+ *                                  de code ; absent, la table n'en porte pas
  * @property {Objectif[]} [objectifs]  facultatif : une liste non vide, au
  *                                  plus un objectif par portée et tour, la
  *                                  soirée d'abord puis les tours
@@ -299,11 +302,12 @@
  * Une règle de SCHEMA, qui décrit une valeur du fichier d'état.
  *
  * @typedef {Object} Regle
- * @property {'objet'|'liste'|'chaine'|'entier'|'nombre'|'booleen'|'parmi'|'date'|'horodatage'|'etiquettes'} genre
+ * @property {'objet'|'liste'|'chaine'|'entier'|'nombre'|'booleen'|'parmi'|'date'|'horodatage'|'etiquettes'|'libelleTable'} genre
  *           chaine : non vide ; nombre : fini ; parmi : l'une de valeurs ;
  *           date : AAAA-MM-JJ d'un jour du calendrier ; horodatage :
  *           AAAA-MM-JJTHH:MM:SS±HH:MM ; etiquettes : une étiquette bien
- *           formée (estEtiquetteBienFormee)
+ *           formée (estEtiquetteBienFormee) ; libelleTable : le libellé
+ *           d'une table (estLibelleTable)
  * @property {boolean} nul                   null est admis
  * @property {boolean} optionnel             le champ peut manquer à son
  *           objet : absent, il ne s'écrit pas et ne se compare pas

@@ -18,13 +18,17 @@ import { constante } from '../../geometrie/constantes.js';
 import { regimeCibles } from '../../geometrie/designation.js';
 import {
   DEMI_HAUTEUR_GEL,
+  ENCRE_BAS_LIGNE,
+  ENCRE_HAUT_LIGNE,
   RAYON_PASTILLE as RAYON_PASTILLE_PLATEAU,
   RETRAIT_GEL as RETRAIT_GEL_PLATEAU,
   corpsNumero,
+  lignesLibelle,
   placeGel,
   placeNumero,
   placePastille,
 } from '../../geometrie/plateau.js';
+import { TAILLE_TEXTE_LISTE_CM, replier } from '../../geometrie/texte.js';
 import { PLANCHER_DIAMETRE, RAYON_POIGNEE, geometrieTable } from '../../geometrie/tables.js';
 import { indexerPlan } from '../../moteur/configuration.js';
 import { conflitsParTable } from '../../moteur/conflits.js';
@@ -42,6 +46,7 @@ import {
   ECART_DESIGNATION,
   ECART_FOCUS,
   ECART_MISE_EN_EVIDENCE,
+  HALO_NUMERO,
   LARGEUR_ECHELLE_PX,
   RAYON_PASTILLE,
   RAYON_SOCLE_PASTILLE,
@@ -54,6 +59,7 @@ import {
   executerSurPlace,
   formesTable,
   legendeConflits,
+  libelleDessin,
   libelleLongueur,
   ligneListe,
   modeleDessin,
@@ -651,6 +657,27 @@ describe('modeleDessin : le dessin d\u{2019}une table (§ 7.3, § 7.6, § 17 poi
     }
   });
 
+  test('le libellé d\u{2019}une table se dessine dès K_LISTES et à l\u{2019}impression, masqué en dessous ; le nom accessible le porte à tout zoom', () => {
+    const charge = chargeDeTables([2, 3, 8]);
+    charge.tables[1].libelle = 'Coin des invités';
+    const etat = etatPlaces(charge, { tour: 1 });
+    const libelles = (opts) => modeleDessin(etat, options(charge, opts)).tables.map(({ libelle }) => libelle);
+    assert.deepEqual(libelles({ k: K_LISTES - 0.01 }), [null, null, null]);
+    assert.deepEqual(libelles({ k: K_LISTES }), [null, 'Coin des invités', null]);
+    assert.deepEqual(libelles({ k: 5 }), [null, 'Coin des invités', null]);
+    // Les listes de noms masquées ne masquent pas le libellé : il suit le zoom seul.
+    assert.deepEqual(libelles({ k: 5, listes: false }), [null, 'Coin des invités', null]);
+    assert.deepEqual(libelles({ impression: true }), [null, 'Coin des invités', null]);
+    assert.deepEqual(libelles({ impression: true, listes: false }), [null, 'Coin des invités', null]);
+    for (const k of [K_LISTES / 10, K_LISTES - 0.01, 1, 5]) {
+      const [, libellee, autre] = modeleDessin(etat, options(charge, { k })).tables;
+      assert.equal(libellee.nomAccessible.details.libelle, 'Coin des invités', String(k));
+      assert.equal(autre.nomAccessible.details.libelle, null, String(k));
+      assert.match(t(libellee.nomAccessible.cle, libellee.nomAccessible.details), /^Table 2 « Coin des invités », 3 places/);
+      assert.match(t(autre.nomAccessible.cle, autre.nomAccessible.details), /^Table 3, 8 places/);
+    }
+  });
+
   test('une table gelée le dit dans son nom accessible et en tête de sa liste ; une surchargée, dans son nom', () => {
     const charge = chargeDeTables([2, 3]);
     charge.reservations = [
@@ -745,6 +772,22 @@ describe('formesTable : les formes d\u{2019}une table, en attributs SVG (§ 7.1,
     const petite = geometrieTable({ id: 1, numero: 888, forme: 'ronde', position: { x: 10, y: 20 } }, 2);
     assert.deepEqual(formesTable(petite).numero, placeNumero(petite));
     assert.ok(formesTable(petite).numero.corps < corpsNumero(petite.demiTaille));
+  });
+
+  test('avec un libellé, le numéro monte au-dessus du centre et les lignes du libellé le suivent ; sans libellé, aucune ligne', () => {
+    for (const forme of ['ronde', 'carree']) {
+      for (const places of [2, 8, 16]) {
+        const geometrie = geometrieTable({ id: 1, numero: 12, forme, position: { x: 10, y: 20 } }, places);
+        const avec = formesTable(geometrie, { libelle: true });
+        assert.deepEqual(avec.numero, placeNumero(geometrie, { libelle: true }));
+        assert.ok(avec.numero.y < 20, `${forme} de ${places}`);
+        assert.deepEqual(avec.libelle, lignesLibelle(geometrie));
+        const sans = formesTable(geometrie, { libelle: false });
+        assert.deepEqual(sans, formesTable(geometrie));
+        assert.equal(sans.libelle, null);
+        assert.deepEqual({ ...avec, numero: sans.numero, libelle: null }, sans);
+      }
+    }
   });
 
   test('le retracé du contour suit le bord du plateau et s\u{2019}interrompt sous le disque de la pastille, à ARRET_RETRACE de son centre', () => {
@@ -1028,6 +1071,7 @@ describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3
     const detail = detailConflits(table, (id) => noms.get(id), (id) => organisations.get(id));
     assert.deepEqual(detail, {
       numero: 7,
+      libelle: null,
       nombre: 6,
       lignes: [
         {
@@ -1041,6 +1085,13 @@ describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3
         { regle: 'nouvelleTable', cle: 'plan.infobulle.nouvelleTable', organisation: null, groupes: [['Grisaille']] },
       ],
     });
+  });
+
+  test('le détail porte le libellé de la table, null quand elle n\u{2019}en a pas', () => {
+    const table = { numero: 7, libelle: 'Coin des invités', conflits: { nombre: 1, regles: [{ regle: 'nouvelleTable', personnes: [4] }] } };
+    const nomDe = () => 'Grisaille';
+    assert.equal(detailConflits(table, nomDe, () => null).libelle, 'Coin des invités');
+    assert.equal(detailConflits({ ...table, libelle: null }, nomDe, () => null).libelle, null);
   });
 
   test('conflits non évalués, ou nuls : null', () => {
@@ -1372,5 +1423,49 @@ describe('modeleDessin, option impression : le plan imprimé (§ 11.7, § 13.5)'
         voisine.chaises.map(({ remplissage, marques }) => [remplissage, marques]),
       );
     }
+  });
+});
+
+describe('libelleDessin : les lignes du libellé d\u{2019}une table, repliées dans son plateau (§ 7.4, § 7.7)', () => {
+  // Une mesure par glyphe, en cm de dessin au corps des listes : 9 cm le
+  // glyphe, la marque comprise.
+  const mesurer = (chaine) => [...chaine].length * 9;
+  const marque = '\u{2026}';
+
+  test('le libellé se replie dans les lignes de lignesLibelle, chacune à son ancre ; son socle couvre son encre et son halo', () => {
+    for (const forme of ['ronde', 'carree']) {
+      for (const places of [2, 8]) {
+        const geometrie = geometrieTable({ id: 1, numero: 4, forme, position: { x: 30, y: -15 } }, places);
+        const texte = 'Table d\u{2019}honneur des invités venus de loin';
+        const { corps, lignes } = libelleDessin(geometrie, texte, { mesurer, marque });
+        const emplacements = lignesLibelle(geometrie).lignes;
+        assert.equal(corps, TAILLE_TEXTE_LISTE_CM);
+        const attendues = replier(texte, emplacements.map(({ largeur }) => largeur), mesurer, marque);
+        assert.deepEqual(lignes.map(({ texte: ligne }) => ligne), attendues, `${forme} de ${places}`);
+        lignes.forEach((ligne, rang) => {
+          const { x, y, largeur } = emplacements[rang];
+          assert.deepEqual([ligne.x, ligne.y], [x, y]);
+          assert.ok(mesurer(ligne.texte) <= largeur);
+          const halo = HALO_NUMERO * corps;
+          assert.deepEqual(ligne.socle, {
+            x: x - (mesurer(ligne.texte) + halo) / 2,
+            y: y - ENCRE_HAUT_LIGNE * corps,
+            width: mesurer(ligne.texte) + halo,
+            height: (ENCRE_HAUT_LIGNE + ENCRE_BAS_LIGNE) * corps,
+          });
+        });
+      }
+    }
+  });
+
+  test('la plus petite ronde abrège un libellé long sur sa seule ligne ; une grande ronde le replie sur plusieurs', () => {
+    const petite = geometrieTable({ id: 1, numero: 4, forme: 'ronde', position: { x: 0, y: 0 } }, 2);
+    const court = libelleDessin(petite, 'Coin des invités', { mesurer, marque }).lignes;
+    assert.equal(court.length, 1);
+    assert.ok(court[0].texte.endsWith(marque), court[0].texte);
+    const grande = geometrieTable({ id: 1, numero: 4, forme: 'ronde', position: { x: 0, y: 0 } }, 8);
+    const replie = libelleDessin(grande, 'Coin des invités venus de loin', { mesurer, marque }).lignes;
+    assert.ok(replie.length >= 2, JSON.stringify(replie));
+    assert.ok(!replie.at(-1).texte.endsWith(marque), JSON.stringify(replie));
   });
 });

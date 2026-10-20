@@ -92,6 +92,31 @@ export const TOURS_MAX = 100;
  */
 export const GENERATION_PAR_DEFAUT = Object.freeze({ nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT });
 
+/**
+ * Le plus grand nombre de points de code du libellé d'une table (§ 4) :
+ * un caractère hors du plan de base compte pour un.
+ */
+export const LIBELLE_TABLE_MAX = 60;
+
+/**
+ * Vrai quand valeur a la forme du libellé d'une table (§ 4, § 8.9) : un
+ * texte bien formé — aucune moitié de paire de substitution isolée —, en
+ * NFC, sans blanc en bord, de 1 à LIBELLE_TABLE_MAX points de code. Faux
+ * pour ce qui n'est pas un texte.
+ *
+ * @param {unknown} valeur
+ * @returns {boolean}
+ */
+export function estLibelleTable(valeur) {
+  return (
+    typeof valeur === 'string' &&
+    valeur !== '' &&
+    valeur.isWellFormed() &&
+    valeur === valeur.normalize('NFC').trim() &&
+    [...valeur].length <= LIBELLE_TABLE_MAX
+  );
+}
+
 // AAAA-MM-JJTHH:MM:SS±HH:MM, la forme que rend l'horloge de l'application.
 // Le calendrier ne se contrôle pas : un horodatage ne décide d'aucun ordre.
 const HORODATAGE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/;
@@ -328,8 +353,11 @@ const TABLE = objet([
   ['sieges', entier(2, SIEGES_MAX, { nul: true })],
   ['forme', parmi('ronde', 'carree')],
   ['position', objet([['x', NOMBRE], ['y', NOMBRE]])],
-  // Facultatif, en dernier : absent, la table n'a aucun objectif. Présent,
-  // une liste non vide, la soirée d'abord, puis les tours croissants.
+  // Facultatifs, après les clés toujours présentes. libelle absent : la
+  // table n'en porte pas ; présent, un libellé de table (estLibelleTable).
+  // objectifs absent : la table n'a aucun objectif ; présent, une liste non
+  // vide, la soirée d'abord, puis les tours croissants.
+  ['libelle', regle('libelleTable', { optionnel: true })],
   ['objectifs', liste(OBJECTIF, { min: 1, tri: ordreDesObjectifs, optionnel: true })],
 ]);
 
@@ -591,6 +619,8 @@ function conforme(valeur, { genre, min, max, valeurs, distincts }) {
       return estHorodatage(valeur);
     case 'etiquettes':
       return estEtiquetteBienFormee(valeur);
+    case 'libelleTable':
+      return estLibelleTable(valeur);
   }
 }
 

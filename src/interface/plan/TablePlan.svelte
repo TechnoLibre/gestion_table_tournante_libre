@@ -52,6 +52,17 @@
   // technologies d'assistance — le nom accessible du groupe porte déjà le
   // numéro.
   //
+  // Quand la table porte un libellé que le modèle dessine (table.libelle), le
+  // libellé [data-libelle-table] se pose sous le numéro, dans le plateau, au
+  // corps des listes : un <text>, une ligne par <tspan>, repliée puis abrégée
+  // (libelleDessin) par la mesure des listes que PlanDessin prend sur la
+  // police rendue (mesures, null tant qu'elle n'est pas prise : le libellé
+  // attend alors). Le numéro monte au-dessus du centre dès qu'une ligne du
+  // libellé se dessine, et tient le centre sinon. Le libellé a l'encre, le
+  // halo et les égards du numéro ; sur une table signalée, chaque ligne a son
+  // socle [data-socle-libelle], un rectangle du fond du plateau sous son
+  // encre, rogné au plateau comme celui de la pastille.
+  //
   // Le groupe de la table porte id="table-<id>", celui d'une chaise
   // id="siege-<table>-<siège>" : la racine du plan, seul arrêt de tabulation,
   // désigne l'élément actif par aria-activedescendant (§ 7.3, § 13.5). Une
@@ -82,10 +93,11 @@
     TAILLE_TEXTE_PASTILLE_CM,
     TRACE_GEL,
     formesTable,
+    libelleDessin,
     texteLigne,
   } from './modele.js';
 
-  let { table, signaler, prefixe, impression = false } = $props();
+  let { table, signaler, prefixe, mesures = null, impression = false } = $props();
 
   const t = getContext('t');
 
@@ -93,7 +105,14 @@
   const MARQUE_DU_REMPLISSAGE = { normal: 'contourChaise', plein: 'remplissagePlein', hachure: 'hachure' };
   const TRACE_DU_CADENAS = { cadenasFerme: CADENAS_FERME, cadenasOuvert: CADENAS_OUVERT };
 
-  const formes = $derived(formesTable(table.geometrie));
+  // Les lignes du libellé, quand il se dessine et que la mesure est prise.
+  const libelle = $derived(
+    table.libelle === null || mesures === null
+      ? null
+      : libelleDessin(table.geometrie, table.libelle, { mesurer: mesures.mesurer, marque: t('plan.liste.abreviation') }),
+  );
+  // Le numéro ne monte que sur un libellé qui a au moins une ligne dessinée.
+  const formes = $derived(formesTable(table.geometrie, { libelle: libelle !== null && libelle.lignes.length > 0 }));
   const poignee = $derived(table.geometrie.poignee);
   const signal = $derived(signaler && table.conflit);
   const hachure = $derived(`url(#${prefixe}-hachure)`);
@@ -146,6 +165,11 @@
     </defs>
     <circle class="socle" data-socle clip-path="url(#{rognure})" cx={formes.pastille.x} cy={formes.pastille.y} r={RAYON_SOCLE_PASTILLE} />
     <circle class="socle" data-socle-numero cx={formes.numero.x} cy={formes.numero.y} r={formes.numero.corps * SOCLE_NUMERO} />
+    {#if libelle !== null}
+      {#each libelle.lignes as ligne, rang (rang)}
+        <rect class="socle" data-socle-libelle clip-path="url(#{rognure})" {...ligne.socle} />
+      {/each}
+    {/if}
     <path class="plateau conflit retrace" d={formes.retrace} />
   {/if}
   {#if table.gelee}
@@ -162,6 +186,19 @@
     text-anchor="middle"
     dominant-baseline="central">{table.numero}</text
   >
+  {#if libelle !== null}
+    <text
+      class="libelle"
+      data-libelle-table={table.id}
+      aria-hidden="true"
+      font-size={libelle.corps}
+      stroke-width={libelle.corps * HALO_NUMERO}
+      text-anchor="middle"
+      >{#each libelle.lignes as ligne, rang (rang)}<tspan x={ligne.x} y={ligne.y} dominant-baseline="central"
+          >{ligne.texte}</tspan
+        >{/each}</text
+    >
+  {/if}
   {#if table.selection}
     {#if autour.ronde}
       <circle class="selection" data-marque="selection" {...autour.emprise} />
@@ -287,6 +324,20 @@
     font-family: var(--police-interface);
     font-weight: 700;
     text-rendering: geometricPrecision;
+    pointer-events: none;
+  }
+
+  /* Le libellé de la table : l'encre et le halo du numéro, dans la police
+     et le rendu des listes, que la sonde de PlanDessin mesure ; white-space:
+     pre garde chaque espace comme elle a été mesurée. */
+  .libelle {
+    fill: var(--couleur-liste-texte);
+    stroke: var(--couleur-table-fond);
+    stroke-linejoin: round;
+    paint-order: stroke;
+    font-family: var(--police-interface);
+    text-rendering: geometricPrecision;
+    white-space: pre;
     pointer-events: none;
   }
 

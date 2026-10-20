@@ -8,24 +8,31 @@
 // tspan : la tête — numéro, puis état de la place —, le nom, puis le titre
 // entre ce qui le précède et ce qui le suit. Le nom et le libellé du titre
 // sont des données : aucun texte de cette table ne les porte. La tête finit
-// par une espace quand un nom la suit (avecNom).
-import { auxToursNommes, compte, enumeration } from '../../application/libelles/aides.js';
+// par une espace quand un nom la suit (avecNom). Le libellé d'une table est
+// une donnée de même : l'écran le pose dans son propre nœud, et seul le nom
+// accessible de la table, un attribut, le cite.
+import { auxToursNommes, cite, compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
   // --- Le dessin d'une table (§ 7.5, § 7.6) ----------------------------------
-  // Le nom accessible d'une table : numéro, places, conflits du tour quand
-  // ils s'évaluent (conflits null sinon), puis gelée et surchargée.
+  // Le nom accessible d'une table : numéro et libellé cité quand elle en
+  // porte un (libelle null sinon), places, conflits du tour quand ils
+  // s'évaluent (conflits null sinon), puis gelée et surchargée.
   [
     'plan.table.nom',
-    ({ numero, places, conflits, gelee, surchargee }) =>
+    ({ numero, libelle = null, places, conflits, gelee, surchargee }) =>
       [
-        `Table ${numero}`,
+        `Table ${numero}${libelle === null ? '' : ` ${cite(libelle)}`}`,
         compte(places, 'place', 'places'),
         ...(conflits === null ? [] : [conflits === 0 ? 'aucun conflit' : compte(conflits, 'conflit', 'conflits')]),
         ...(gelee ? ['gelée'] : []),
         ...(surchargee ? ['surchargée'] : []),
       ].join(', '),
   ],
+
+  // Ce qui sépare le nom d'une table de son libellé, que l'écran pose dans
+  // son propre nœud : l'en-tête de l'infobulle, le titre du panneau.
+  ['plan.table.avantLibelle', ' \u{2014} '],
 
   // --- La liste de noms (§ 7.4, § 7.6) ---------------------------------------
   ['plan.liste.gelee', 'table gelée'],
@@ -131,7 +138,11 @@ export const TABLE = new Map([
   // la phrase se partage en deux clés autour d'elle. Chaque ligne s'ouvre sur
   // une capitale.
   ['plan.vue.role', 'plan de salle interactif'],
-  ['plan.infobulle.entete', ({ numero, nombre }) => `Table ${numero} : ${compte(nombre, 'conflit', 'conflits')}`],
+  // L'en-tête de l'infobulle : la table, son libellé quand elle en porte
+  // un, dans son propre nœud après plan.table.avantLibelle, puis le nombre
+  // de violations.
+  ['plan.infobulle.table', ({ numero }) => `Table ${numero}`],
+  ['plan.infobulle.nombre', ({ nombre }) => ` : ${compte(nombre, 'conflit', 'conflits')}`],
   ['plan.infobulle.separerOrganisations', 'Même organisation ('],
   ['plan.infobulle.finOrganisation', ') : '],
   ['plan.infobulle.nouveauxVoisins', 'Voisins revus : '],

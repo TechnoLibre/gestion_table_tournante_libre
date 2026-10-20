@@ -27,6 +27,9 @@ export const TABLE = new Map([
 
   // --- La feuille par table ----------------------------------------------------
   ['feuilles.tables.titre', ({ table }) => `Table ${table}`],
+  // Ce qui sépare le titre d'une feuille du libellé de sa table, que la
+  // feuille pose dans son propre nœud.
+  ['feuilles.tables.avantLibelle', ' \u{2014} '],
   ['feuilles.tables.place', 'Place'],
   ['feuilles.tables.vide', 'Place vide'],
   ['feuilles.tables.titreNonPourvu', '(titre non pourvu)'],

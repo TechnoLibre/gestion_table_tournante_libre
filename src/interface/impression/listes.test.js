@@ -282,6 +282,21 @@ describe('feuillesTables : la feuille par table (§ 11.7, Q6 c)', () => {
     ]);
   });
 
+  test('chaque feuille porte le libellé de sa table, null quand elle n’en a pas, sous parTour comme en colonnes', () => {
+    const charge = titree();
+    charge.tables.find(({ id }) => id === 1).libelle = 'Coin des invités';
+    assert.deepEqual(feuillesTables(charge, etats(charge)).map(({ table, libelle }) => [table, libelle]), [
+      [2, null],
+      [1, 'Coin des invités'],
+    ]);
+    assert.deepEqual(feuillesTables(charge, etats(charge), { parTour: true }).map(({ table, libelle }) => [table, libelle]), [
+      [2, null],
+      [2, null],
+      [1, 'Coin des invités'],
+      [1, 'Coin des invités'],
+    ]);
+  });
+
   test('un exclu n’occupe aucune place : la sienne s’écrit vide', () => {
     const charge = titree();
     charge.participants[1].exclu = true;
@@ -486,6 +501,7 @@ describe('les groupes de tours de la feuille par table', () => {
   const feuilleDeTours = (table, tours) => ({
     table,
     numero: table,
+    libelle: table === 2 ? 'Coin des invités' : null,
     tours: Array.from({ length: tours }, (_, rang) => rang + 1),
     lignes: [1, 2].map((place) => ({
       place,
@@ -508,6 +524,11 @@ describe('les groupes de tours de la feuille par table', () => {
   test('grouperTours : des groupes consécutifs, de tailles égales à un près, les plus grands d’abord ; chaque cellule suit son tour', () => {
     const feuilles = [feuilleDeTours(1, 10), feuilleDeTours(2, 7), feuilleDeTours(3, 4)];
     const groupes = grouperTours(feuilles, [6, 3, 4]);
+    // Chaque groupe porte le numéro et le libellé de sa table.
+    assert.deepEqual(
+      groupes.map(({ table, numero, libelle }) => [table, numero, libelle]),
+      [[1, 1, null], [1, 1, null], [2, 2, 'Coin des invités'], [2, 2, 'Coin des invités'], [2, 2, 'Coin des invités'], [3, 3, null]],
+    );
     assert.deepEqual(
       groupes.map(({ table, tours, source }) => [table, tours, source]),
       [

@@ -10,9 +10,18 @@
 // au navigateur, une fonction quelconque sous node.
 import { constante } from '../../geometrie/constantes.js';
 import { regimeCibles } from '../../geometrie/designation.js';
-import { RAYON_PASTILLE, RETRAIT_GEL, placeGel, placeNumero, placePastille } from '../../geometrie/plateau.js';
+import {
+  ENCRE_BAS_LIGNE,
+  ENCRE_HAUT_LIGNE,
+  RAYON_PASTILLE,
+  RETRAIT_GEL,
+  lignesLibelle,
+  placeGel,
+  placeNumero,
+  placePastille,
+} from '../../geometrie/plateau.js';
 import { geometrieTable } from '../../geometrie/tables.js';
-import { decalagesLignes, tronquer } from '../../geometrie/texte.js';
+import { decalagesLignes, replier, tronquer } from '../../geometrie/texte.js';
 import { CONFLITS } from '../marques.js';
 
 /** Largeur maximale de la barre de l'échelle graphique, en px d'écran. */
@@ -36,9 +45,9 @@ export const RAYON_SOCLE_PASTILLE = 20;
 export const ARRET_RETRACE = 12;
 /** Corps du chiffre de la pastille, en cm de dessin. */
 export const TAILLE_TEXTE_PASTILLE_CM = 18;
-/** Épaisseur du halo du numéro d'une table, en part de son corps : un trait
- *  du fond du plateau peint sous le chiffre, dont la moitié extérieure le
- *  détache des trames qu'il recouvre (§ 14.5). */
+/** Épaisseur du halo du numéro d'une table, et de son libellé, en part de
+ *  leur corps : un trait du fond du plateau peint sous le texte, dont la
+ *  moitié extérieure le détache des trames qu'il recouvre (§ 14.5). */
 export const HALO_NUMERO = 0.16;
 /** Rayon du socle du numéro, en part de son corps : un disque du fond du
  *  plateau, centré sous le numéro d'une table signalée, qui le sépare des
@@ -77,7 +86,9 @@ export const TRACE_GEL = 'M0,-8 L7,-4 L7,4 L0,8 L-7,4 L-7,-4 Z';
  * disques d'une ronde ({cx, cy, r}), carrés aux côtés parallèles aux axes
  * d'une carrée ({x, y, width, height}) —, la place du numéro, au centre du
  * plateau, au corps que permettent sa largeur et les chiffres du numéro
- * ({x, y, corps}, placeNumero sans libellé), le centre de la
+ * ({x, y, corps}, placeNumero) — monté au-dessus du centre quand l'option
+ * libelle dit qu'un libellé se dessine dessous —, les lignes de ce libellé
+ * (lignesLibelle), null sans lui, le centre de la
  * pastille, sur le bord du plateau en haut à droite (placePastille),
  * celui de la marque de gel, dans le plateau, RETRAIT_GEL sous son haut, et
  * le retracé du contour (retrace, l'attribut d d'un <path> ouvert) : le bord
@@ -88,8 +99,10 @@ export const TRACE_GEL = 'M0,-8 L7,-4 L7,4 L0,8 L-7,4 L-7,-4 Z';
  * droit et fait le tour jusqu'au côté haut.
  *
  * @param {import('../../geometrie/tables.js').GeometrieTable} geometrie
+ * @param {{libelle?: boolean}} [options]
+ *        libelle : vrai quand le libellé de la table se dessine
  */
-export function formesTable(geometrie) {
+export function formesTable(geometrie, { libelle = false } = {}) {
   const { forme, centre, demiTaille, rayonEmprise } = geometrie;
   const ronde = forme === 'ronde';
   const dessiner = (demi) =>
@@ -99,7 +112,8 @@ export function formesTable(geometrie) {
     ronde,
     plateau: dessiner(demiTaille),
     emprise: dessiner(rayonEmprise),
-    numero: placeNumero(geometrie),
+    numero: placeNumero(geometrie, { libelle }),
+    libelle: libelle ? lignesLibelle(geometrie) : null,
     pastille,
     gel: placeGel(geometrie),
     retrace: ronde ? retraceRonde(centre, demiTaille, pastille) : retraceCarree(centre, demiTaille),
@@ -120,6 +134,37 @@ function retraceRonde(centre, demiTaille, pastille) {
 // haut à gauche de ce coin.
 function retraceCarree({ x, y }, demi) {
   return `M${x + demi},${y - demi + ARRET_RETRACE} V${y + demi} H${x - demi} V${y - demi} H${x + demi - ARRET_RETRACE}`;
+}
+
+/**
+ * Les lignes du libellé d'une table sur son plateau (§ 7.4, § 7.7) : le
+ * texte replié (replier) dans les lignes que lignesLibelle tire de la
+ * géométrie, sous le numéro monté, puis abrégé de la marque quand il ne
+ * tient pas dans la dernière. Chaque ligne porte l'ancre de son texte (x,
+ * y), au corps des listes, son texte, et son socle en attributs SVG
+ * ({x, y, width, height}) : un rectangle du fond du plateau, de la largeur
+ * mesurée du texte, son halo compris, et de la hauteur de son encre bornée
+ * (ENCRE_HAUT_LIGNE, ENCRE_BAS_LIGNE), que le dessin peint sous le texte
+ * d'une table signalée. Deux socles voisins se touchent.
+ *
+ * @param {import('../../geometrie/tables.js').GeometrieTable} geometrie
+ * @param {string} texte   le libellé
+ * @param {{mesurer: (s: string) => number, marque: string}} mesures
+ *        mesurer : la largeur d'une chaîne au corps des listes, en cm
+ * @returns {{corps: number, lignes: Array<{x: number, y: number, texte: string,
+ *            socle: {x: number, y: number, width: number, height: number}}>}}
+ */
+export function libelleDessin(geometrie, texte, { mesurer, marque }) {
+  const { corps, lignes: emplacements } = lignesLibelle(geometrie);
+  const halo = HALO_NUMERO * corps;
+  const largeurs = emplacements.map(({ largeur }) => largeur);
+  const lignes = replier(texte, largeurs, mesurer, marque).map((ligne, rang) => {
+    const { x, y } = emplacements[rang];
+    const largeur = mesurer(ligne) + halo;
+    const hauteur = (ENCRE_HAUT_LIGNE + ENCRE_BAS_LIGNE) * corps;
+    return { x, y, texte: ligne, socle: { x: x - largeur / 2, y: y - ENCRE_HAUT_LIGNE * corps, width: largeur, height: hauteur } };
+  });
+  return { corps, lignes };
 }
 
 /**
@@ -362,9 +407,12 @@ function porteurDe(place, id, regime) {
 
 // Le dessin d'une table de l'état des places au zoom k ; places, le nombre
 // de sièges que la poignée montre, sinon sa capacité. Imprimée, la table
-// est en régime sièges, quel que soit k.
+// est en régime sièges, quel que soit k. Son libellé se dessine à
+// l'impression et dès K_LISTES, comme les listes de noms, sans égard à leur
+// affichage ; le nom accessible le porte à tout zoom.
 function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, actif = null, impression = false }, places = etatTable.capacite) {
   const { id, numero, gelee, surchargee, conflits } = etatTable;
+  const libelle = etatTable.libelle ?? null;
   const geometrie = geometrieTable(etatTable, places);
   const trames = conflits === null ? [] : conflits.regles.map(({ regle }) => ({ ...SORTE_DE_REGLE.get(regle) }));
   const regime = impression ? 'sieges' : regimeCibles(k, geometrie);
@@ -392,6 +440,7 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
   return {
     id,
     numero,
+    libelle: impression || k >= constante('K_LISTES') ? libelle : null,
     geometrie,
     regime,
     conflit: pastille > 0,
@@ -403,7 +452,7 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
     surchargee,
     nomAccessible: {
       cle: 'plan.table.nom',
-      details: { numero, places, conflits: conflits === null ? null : conflits.nombre, gelee, surchargee },
+      details: { numero, libelle, places, conflits: conflits === null ? null : conflits.nombre, gelee, surchargee },
     },
     chaises,
     enTete: gelee ? { cle: 'plan.liste.gelee', details: {} } : null,
@@ -415,7 +464,9 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
  * Le modèle de dessin d'un tour (§ 7.3 à § 7.7).
  *
  * Chaque table, dans l'ordre de l'état des places, porte son numéro — celui
- * que le plan inscrit sur son plateau, distinct de son identifiant —, sa
+ * que le plan inscrit sur son plateau, distinct de son identifiant —, son
+ * libellé, quand elle en a un et qu'il se dessine — à l'impression, et dès
+ * que k atteint K_LISTES —, null sinon, sa
  * géométrie (geometrieTable, P2), son régime des cibles au zoom k (regimeCibles) —
  * aucune chaise dessinée en régime table —, son conflit et sa pastille, lus
  * dans conflits — null : ni conflit, ni pastille —, ses trames — la sorte
@@ -482,7 +533,8 @@ export function modeleDessin(
 
 /**
  * Le détail des conflits d'une table au tour montré (§ 7.1, § 7.3, § 7.5),
- * que l'infobulle énonce : son numéro, le nombre de violations, puis ses
+ * que l'infobulle énonce : son numéro, son libellé — null quand elle n'en
+ * porte pas —, le nombre de violations, puis ses
  * lignes, dans l'ordre des règles du moteur (conflitsParTable, M1). Chaque
  * ligne porte sa règle, sa clé de libellé plan.infobulle.<règle>, une
  * organisation et ses groupes nommés. Séparer les organisations donne une
@@ -498,10 +550,10 @@ export function modeleDessin(
  * @param {Object} etatTable   EtatTable (A5)
  * @param {(id: number) => string} nomDe
  * @param {(id: number) => string|null} organisationDe
- * @returns {null|{numero: number, nombre: number,
+ * @returns {null|{numero: number, libelle: string|null, nombre: number,
  *   lignes: Array<{regle: string, cle: string, organisation: string|null, groupes: string[][]}>}}
  */
-export function detailConflits({ numero, conflits }, nomDe, organisationDe) {
+export function detailConflits({ numero, libelle = null, conflits }, nomDe, organisationDe) {
   if (conflits === null || conflits.nombre === 0) return null;
   const lignes = [];
   for (const { regle, paires, personnes } of conflits.regles) {
@@ -521,7 +573,7 @@ export function detailConflits({ numero, conflits }, nomDe, organisationDe) {
       parOrganisation.get(organisation).groupes.push(paire.map(nomDe));
     }
   }
-  return { numero, nombre: conflits.nombre, lignes };
+  return { numero, libelle, nombre: conflits.nombre, lignes };
 }
 
 /**

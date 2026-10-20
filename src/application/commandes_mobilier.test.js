@@ -233,11 +233,12 @@ async function seanceSur(charge) {
 // --- Les épreuves -----------------------------------------------------------
 
 describe('mobilier : le registre (§ 8.2)', () => {
-  test('COMMANDES_MOBILIER porte les treize commandes du mobilier, réunies dans COMMANDES', () => {
+  test('COMMANDES_MOBILIER porte les quatorze commandes du mobilier, réunies dans COMMANDES', () => {
     const noms = [
       'creerTable',
       'supprimerTable',
       'deplacerTable',
+      'changerLibelleTable',
       'changerPlacesTable',
       'realignerTable',
       'changerDefaut',
@@ -260,6 +261,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       ['creerTable', { forme: 'ronde' }],
       ['supprimerTable', { id: 1 }],
       ['deplacerTable', { id: 1, position: { x: 5, y: 5 } }],
+      ['changerLibelleTable', { id: 1, libelle: 'Honneur' }],
       ['changerPlacesTable', { id: 1, sieges: 6, origine: 'champ' }],
       ['realignerTable', { id: 1 }],
       ['changerDefaut', { sieges: 6, realigner: false }],
@@ -289,6 +291,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       ['creerTable', { forme: 'ronde' }],
       ['supprimerTable', { id: 3 }],
       ['deplacerTable', { id: 1, position: { x: 5, y: 5 } }],
+      ['changerLibelleTable', { id: 2, libelle: 'Honneur' }],
       ['changerPlacesTable', { id: 2, sieges: 6, origine: 'champ' }],
       ['realignerTable', { id: 1 }],
       ['changerDefaut', { sieges: 6, realigner: false }],
@@ -628,6 +631,78 @@ describe('mobilier : créer, déplacer et supprimer une table (§ 4, § 6.1, § 
     const deux = await seanceSur(charge);
     const reduit = await deux.seance.executer('changerPlacesTable', { id: 1, sieges: 6, origine: 'champ' });
     assert.deepEqual(reduit.avertissements, [{ code: 'PLACES_MANQUANTES', details: { placesManquantes: 2 } }]);
+  });
+});
+
+describe('mobilier : le libellé d’une table (§ 4, § 8.9)', () => {
+  // Soixante points de code, dont des lettres hors du plan de base.
+  const SOIXANTE = `Coin ${'\u{1D49C}'.repeat(30)} ${'é'.repeat(24)}`;
+
+  test('le libellé saisi entre en NFC, ses blancs de bord retirés, sur la seule table nommée ; une entrée au libellé figé', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2, numero: 5 }], n: 4 });
+    const pose = accepter('changerLibelleTable', charge, { id: 2, libelle: '  Table d\u{2019}honneur\u{0009} ' });
+    assert.equal(pose.libelle, 'Table 5 : libellé « Table d\u{2019}honneur »');
+    assert.deepEqual(pose.avertissements, []);
+    assert.equal(pose.charge.tables[1].libelle, 'Table d\u{2019}honneur');
+    assert.equal(Object.hasOwn(pose.charge.tables[0], 'libelle'), false);
+    const nfc = accepter('changerLibelleTable', charge, { id: 1, libelle: 'E\u{0301}tage' });
+    assert.equal(nfc.charge.tables[0].libelle, '\u{00C9}tage');
+    // Un nouveau libellé remplace l'ancien.
+    const change = accepter('changerLibelleTable', pose.charge, { id: 2, libelle: 'Coin des invités' });
+    assert.equal(change.charge.tables[1].libelle, 'Coin des invités');
+    assert.equal(change.libelle, 'Table 5 : libellé « Coin des invités »');
+  });
+
+  test('un libellé vide, ou fait de blancs, retire le champ ; retirer un libellé absent, ou reposer le même, est sans effet', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2, numero: 5 }], n: 4 });
+    const pose = accepter('changerLibelleTable', charge, { id: 2, libelle: 'Honneur' }).charge;
+    const retire = accepter('changerLibelleTable', pose, { id: 2, libelle: ' \u{0009} ' });
+    assert.equal(retire.libelle, 'Table 5 : libellé retiré');
+    assert.equal(Object.hasOwn(retire.charge.tables[1], 'libelle'), false);
+    assert.equal(serialiser(retire.charge, { revision: 1, produitVersion: 'essai' }), serialiser(charge, { revision: 1, produitVersion: 'essai' }));
+    refuse(() => appliquerCommande('changerLibelleTable', charge, { id: 2, libelle: '' }), 'SANS_EFFET');
+    refuse(() => appliquerCommande('changerLibelleTable', pose, { id: 2, libelle: ' Honneur ' }), 'SANS_EFFET');
+  });
+
+  test('au-delà de LIBELLE_TABLE_MAX points de code, comptés après NFC et sans les blancs de bord : LIBELLE_TABLE_TROP_LONG, remède nul', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2 });
+    assert.equal([...SOIXANTE].length, 60);
+    assert.equal(accepter('changerLibelleTable', charge, { id: 1, libelle: ` ${SOIXANTE} ` }).charge.tables[0].libelle, SOIXANTE);
+    assert.equal(accepter('changerLibelleTable', charge, { id: 1, libelle: 'e\u{0301}'.repeat(60) }).charge.tables[0].libelle, '\u{00E9}'.repeat(60));
+    const leve = refuse(() => COMMANDES.get('changerLibelleTable')(charge, { id: 1, libelle: `${SOIXANTE}x` }), 'LIBELLE_TABLE_TROP_LONG', {
+      longueur: 61,
+      maximum: 60,
+    });
+    assert.equal(leve.details.remede, null);
+    assert.equal(libelle('LIBELLE_TABLE_TROP_LONG', leve.details), "Le libellé compte 61 caractères : celui d'une table en compte au plus 60.");
+  });
+
+  test('une moitié de paire de substitution isolée devient le caractère de remplacement : le fichier reste lisible', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2 });
+    assert.equal(accepter('changerLibelleTable', charge, { id: 1, libelle: 'Hon\u{D800}neur' }).charge.tables[0].libelle, 'Hon\u{FFFD}neur');
+  });
+
+  test('un libellé qui n\u{2019}est pas un texte, ou une table inconnue, sont des fautes du code', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }] });
+    assert.throws(() => COMMANDES.get('changerLibelleTable')(charge, { id: 1, libelle: null }), { name: 'TypeError', message: /^libelle : / });
+    assert.throws(() => COMMANDES.get('changerLibelleTable')(charge, { id: 7, libelle: 'Honneur' }), {
+      name: 'TypeError',
+      message: 'table inconnue : 7',
+    });
+  });
+
+  test('ni dérive ni changement de la configuration du moteur : propositions et retenu restent comparables, une entrée au journal', async () => {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 4, tours: 2 });
+    placer(charge, [[[1, 2], [3, 4]], [[1, 3], [2, 4]]], { id: 1, retenu: true });
+    placer(charge, [[[1, 4], [2, 3]], [[1, 2], [3, 4]]], { id: 2 });
+    const rendu = accepter('changerLibelleTable', charge, { id: 2, libelle: 'Honneur' });
+    assert.deepEqual(configurationDepuisCharge(rendu.charge), configurationDepuisCharge(charge));
+    for (const placement of [...rendu.charge.propositions, rendu.charge.retenu]) assert.deepEqual(derive(placement, rendu.charge), [], String(placement.id ?? 'retenu'));
+    const { seance, entrees } = await seanceSur(charge);
+    const avant = entrees();
+    await seance.executer('changerLibelleTable', { id: 1, libelle: 'Coin' });
+    assert.equal(entrees(), avant + 1);
+    assert.equal(seance.charge.tables[0].libelle, 'Coin');
   });
 });
 

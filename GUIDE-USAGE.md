@@ -227,6 +227,14 @@ porte son propre nombre de places : on dit alors qu’elle est surchargée.
 l’autre est « Surchargée » : seule la première suivra un changement du défaut.
 « Réaligner » ramène une table surchargée au défaut.*
 
+Une table peut porter un **libellé**, soixante caractères au plus — « Table
+d’honneur », « Coin des invités » : saisissez-le dans son champ « Libellé »,
+videz le champ pour le retirer. Sur le plan, le numéro monte au-dessus du
+centre et le libellé s’inscrit dessous, replié dans le plateau, abrégé d’un
+« … » quand il ne tient pas ; il paraît aux zooms où paraissent les listes de
+noms. Le panneau de la table, son infobulle et le titre de sa feuille imprimée
+le portent aussi. Il ne change rien au placement.
+
 Une table peut aussi porter un **objectif** : les étiquettes des personnes
 qu’elle attend, sous la règle « au moins une » (OU) ou « toutes » (ET). Un
 objectif vaut pour la soirée, ou pour un tour désigné, dont l’objectif
@@ -1143,6 +1151,7 @@ l’historique ; les noms des exemples sont inventés.
 | `creerTable` | Ajouté la table 3 |
 | `supprimerTable` | Supprimé la table 2 ; retirés : 2 réservations et 1 titre |
 | `deplacerTable` | Déplacé la table 3 |
+| `changerLibelleTable` | Table 3 : libellé « Coin des invités » |
 | `changerPlacesTable` | Table 5 : 10 places |
 | `realignerTable` | Table 5 : suit le défaut (8 places) |
 | `changerDefaut` | Sièges par défaut : 10 ; 4 tables réalignées |

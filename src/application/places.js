@@ -283,27 +283,27 @@ function aspect(reservation, occupant, titre) {
 }
 
 /**
- * L'état des places d'un tour (contrat de données, EtatPlaces) : la source
- * — la proposition demandée, le retenu, ou les seules réservations —, ce
- * qu'un geste de personne y modifie, chaque table de la charge dans son
- * ordre avec ses chaises, la réserve, qui ne liste que des présentes du
- * tour, et absents, les non-exclues absentes du tour, croissantes. Sièges
- * attribués, la chaise s porte
- * le rang s de la liste de la source, et la source se lit telle quelle : la
- * réservation qui tient un siège que la liste donne à une autre personne,
- * ou laisse vide, se lit sur la chaise sans la remplir — hachure et cadenas
+ * L'état des places d'un tour (contrat de données, EtatPlaces) : la source —
+ * la proposition demandée, le retenu, ou les seules réservations —, ce qu'un
+ * geste de personne y modifie, chaque table de la charge dans son ordre avec
+ * son libellé, null quand elle n'en porte pas, et ses chaises, la réserve,
+ * qui ne liste que des présentes du tour, et absents, les non-exclues
+ * absentes du tour, croissantes. Sièges attribués, la chaise s porte le
+ * rang s de la liste de la source, et la source se lit telle quelle : la
+ * réservation qui tient un siège que la liste donne à une autre personne, ou
+ * laisse vide, se lit sur la chaise sans la remplir — hachure et cadenas
  * fermé —, et sa personne est là où la liste l'assied. Sans attribution,
  * repartirSieges répartit les occupants de la liste, chacun à son siège
- * réservé, une personne réservée sans siège qui pourvoit un titre au siège
- * de ce titre ; quand la liste dépasse la capacité, les personnes réservées
- * à la table passent avant les autres. Sous les seules réservations, les
- * personnes que les réservations du tour tiennent à la table s'y répartissent
- * de même. Un exclu, une personne que la charge n'a plus, n'occupe rien et
- * n'attend pas ; une personne absente au tour (R1) non plus, et absents la
- * nomme ; une personne déjà assise à une table précédente de la charge ne
- * s'assied pas une seconde fois ; une personne présente au tour qu'aucune
- * chaise ne reçoit attend en réserve. Seules les réservations couvrantes du
- * tour (reservationsCouvrantes) tiennent une chaise. Les conflits sont ceux de
+ * réservé, une personne réservée sans siège qui pourvoit un titre au siège de
+ * ce titre ; quand la liste dépasse la capacité, les personnes réservées à la
+ * table passent avant les autres. Sous les seules réservations, les personnes
+ * que les réservations du tour tiennent à la table s'y répartissent de même.
+ * Un exclu, une personne que la charge n'a plus, n'occupe rien et n'attend
+ * pas ; une personne absente au tour (R1) non plus, et absents la nomme ; une
+ * personne déjà assise à une table précédente de la charge ne s'assied pas
+ * une seconde fois ; une personne présente au tour qu'aucune chaise ne reçoit
+ * attend en réserve. Seules les réservations couvrantes du tour
+ * (reservationsCouvrantes) tiennent une chaise. Les conflits sont ceux de
  * conflitsParTable au tour, null quand la source est en dérive ou que la
  * configuration ne se normalise pas ; evalue le dit.
  *
@@ -394,6 +394,7 @@ export function etatPlaces(charge, { tour, proposition = null }) {
     return {
       id,
       numero,
+      libelle: enregistrement.libelle ?? null,
       forme,
       position: { x: position.x, y: position.y },
       capacite: places,

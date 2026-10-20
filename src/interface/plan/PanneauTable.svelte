@@ -6,7 +6,8 @@
   // ouvert quand l'état de navigation sélectionne une table sans siège,
   // {table} — un clic sur une table, ou l'entrée du clavier sur une table
   // en régime table, où les chaises ne sont plus des cibles. Il nomme la
-  // table, compte ses titres et ceux qu'une réservation « tous les tours »
+  // table, son libellé dans son propre nœud quand elle en porte un, compte
+  // ses titres et ceux qu'une réservation « tous les tours »
   // pourvoit (comptesTitres, A5), dit son gel, et liste ses sièges, chacun
   // un bouton [data-choix-siege] qui sélectionne la place : le siège se
   // choisit dans le panneau. Le premier reçoit le focus quand le clavier
@@ -123,7 +124,11 @@
     aria-labelledby="{uid}-titre"
     onkeydown={surTouche}
   >
-    <h3 id="{uid}-titre">{t(nommee.cle, nommee.details)}</h3>
+    <h3 id="{uid}-titre">
+      {t(nommee.cle, nommee.details)}{#if etatTable.libelle !== null}<span>{t('plan.table.avantLibelle')}</span><span class="donnee"
+          >{etatTable.libelle}</span
+        >{/if}
+    </h3>
     <div class="corps">
       <p>{t('plan.panneauTable.titres', comptes)}</p>
       {#if etatTable.gelee}

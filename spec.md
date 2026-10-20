@@ -286,6 +286,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PRE-10` | Fixer le nombre de tours | § 2.1, § 4.3 |
 | `PRE-11` | Donner des objectifs aux tables, à l'écran ou en CSV, et les exporter | § 4.5, § 10.4 |
 | `PRE-12` | Télécharger les modèles CSV et les fichiers d'exemple | § 10.1, § 10.3 |
+| `PRE-13` | Donner un libellé aux tables | § 4, § 7.7 |
 
 **Placer** — `PLA`
 
@@ -401,9 +402,17 @@ présente à un tour au moins ; « présente au tour r » désigne ce tour.
 
 **Table** — un **identifiant entier**, unique dans l'événement et jamais
 réutilisé, exactement comme un participant ; un **numéro affiché** à partir
-de 1 ; un nombre de sièges ; une forme (ronde ou carrée) ; une position sur le
-plan en centimètres. **Le nombre de sièges d'une table ne change pas d'un tour à
-l'autre** : c'est une propriété du mobilier.
+de 1 ; éventuellement un **libellé** — « Table d'honneur », « Coin des
+invités » — de 60 caractères au plus ; un nombre de sièges ; une forme (ronde
+ou carrée) ; une position sur le plan en centimètres. **Le nombre de sièges
+d'une table ne change pas d'un tour à l'autre** : c'est une propriété du
+mobilier.
+
+Le libellé d'une table est **purement informatif**, comme le titre pressenti
+d'une personne : le plan l'inscrit sous le numéro (§ 7.7), le panneau de la
+table, son infobulle et son nom accessible le portent, et le titre de sa
+feuille aussi (§ 11.7). Le moteur ne le lit pas : le poser, le changer ou le
+retirer ne met aucun placement en dérive (§ 9).
 
 > L'identifiant et le numéro affiché sont deux choses. La forme positionnelle du
 > § 8.9 indexe les placements par **identifiant** : indexée par le rang d'une
@@ -2350,14 +2359,21 @@ Le logiciel **n'emploie pas `textLength`** : cet attribut comprime les glyphes
 et produit un nom déformé plutôt qu'un nom tronqué.
 
 Le numéro d'une table, inscrit sur son plateau (§ 7.7), est un seul `<text>` :
-il ne s'abrège ni ne se replie jamais.
+il ne s'abrège ni ne se replie jamais. Le libellé de la table, inscrit sous lui,
+est un `<text>` dont chaque ligne est un `<tspan>` : il **se replie** dans les
+lignes que le plateau lui donne, entre ses mots d'abord, chaque suite de blancs
+réduite à une espace ; un mot plus large que sa ligne s'y coupe entre deux
+caractères — jamais entre les deux moitiés d'une paire de substitution, ni
+devant une marque combinante, ni de part et d'autre d'un liant sans chasse —, et
+sa suite ouvre la ligne suivante. Ce que la dernière ligne ne tient pas
+l'**abrège** : le plus long début qui, suivi de la marque, y tient.
 
 **La troncature se décide par document, pas par support — et sur le badge, par
 champ :**
 
 | document | règle |
 |---|---|
-| le plan de salle, à l'écran comme à l'impression | **abrège** avec une marque, la largeur d'un bloc de noms étant la même contrainte des deux côtés |
+| le plan de salle, à l'écran comme à l'impression | **abrège** avec une marque, la largeur d'un bloc de noms étant la même contrainte des deux côtés ; le libellé d'une table s'y **replie** dans son plateau, **puis s'abrège** |
 | la fiche à l'écran, la feuille par table, la liste d'accueil | **ne tronquent jamais** : elles replient |
 | le **badge** (§ 11.5) | **par champ** : le nom ne s'abrège jamais — il réduit de corps par paliers, puis se replie — tandis que l'organisation s'abrège sur une seule ligne |
 
@@ -2401,10 +2417,11 @@ la diagonale qui monte vers la droite, sauf quand une chaise y toucherait la
 pastille — elle prend alors le milieu de l'intervalle entre deux chaises
 voisines le plus proche de cette diagonale, celui du haut quand deux le sont
 autant. Elle ne couvre ainsi aucune chaise, ni la marque de gel, ni le numéro
-de la table, qui tient le centre et dont le corps se réduit pour rester à
-l'écart d'elle (§ 7.7). Sur une table signalée, un socle du fond du plateau,
-sous la pastille comme sous le numéro, les sépare des trames : l'une et l'autre
-se lisent contre le fond du plateau (§ 14.5), et la trame reste peinte autour.
+de la table, qui tient le centre, ou monte au-dessus quand un libellé le suit
+(§ 7.7), et dont le corps se réduit pour rester à l'écart d'elle. Sur une table
+signalée, un socle du fond du plateau, sous la pastille, le numéro et chaque
+ligne du libellé, les sépare des trames : tous se lisent contre le fond du
+plateau (§ 14.5), et la trame reste peinte autour.
 **Le socle de la pastille est rogné au plateau** : la pastille déborde du bord,
 son socle non, et rien du fond du plateau ne se peint sur le sol ni sur
 l'emprise. **Le contour épaissi**, l'un des trois signaux, **se peint
@@ -2509,8 +2526,25 @@ celui des listes, sans passer sur la marque de gel, et réduit selon ses
 chiffres de la même façon. Sur les plus petites tables, rondes ou carrées de
 une à quatre places, la bande est plus étroite que le corps des listes : le
 numéro y prend ce corps quel que soit son nombre de chiffres. Sur ces rondes, à
-trois chiffres ou plus, son encre peut alors toucher la pastille. Le plan
-n'affiche aucun libellé de table.
+trois chiffres ou plus, son encre peut alors toucher la pastille.
+
+**Le libellé d'une table s'inscrit sous son numéro**, qui monte alors à cette
+place, aux zooms où les listes de noms se dessinent et sur le papier. Sous le
+seuil qui retire les listes (§ 17, point 6), il disparaît comme elles, et le
+numéro revient au centre. Il ne suit pas la commande qui masque les listes : il
+appartient à la table, non au bloc de noms. Il s'écrit au corps, à l'encre et
+dans la police des listes, avec le halo du numéro, et, sur une table signalée,
+chaque ligne repose sur un socle du fond du plateau, rogné au plateau. Sa
+première ligne commence 1,5 cm sous l'encre du numéro ; les suivantes descendent
+d'un pas que bornent l'encre du gabarit de hauteur (§ 7.4) au-dessus et
+au-dessous de la ligne, et tant que l'encre d'une ligne, demi-centimètre du
+rendu compris, reste à 1,5 cm du bord du plateau. Chaque ligne prend la largeur
+que ce bord lui laisse à sa hauteur : la corde d'une ronde, le côté d'une
+carrée. La plus petite ronde en tient une ligne d'environ 40 cm, quelques
+caractères ; une ronde de huit places, trois. Le texte s'y replie, puis
+s'abrège (§ 7.4) ; une épreuve du navigateur vérifie les bornes de l'encre sur
+la police chargée. Transparent au pointeur, il est caché aux technologies
+d'assistance : le nom accessible de la table le cite.
 
 **Le bloc de noms d'une table se pose à droite de son emprise** — le plateau et
 ses chaises —, à 36 cm d'elle : l'écart laisse passer le contour de focus de la
@@ -3421,6 +3455,29 @@ font partie du format 3 : aucune construction qui lit ce format ne les ignore.
 a existé avec ses dérivées et leurs départs ; un identifiant que la
 génération suivante réattribue après un retour désigne, dans chaque état, la
 proposition de cet état.
+
+#### Un champ facultatif : le libellé d'une table
+
+Le libellé d'une table (§ 4) s'écrit dans un champ facultatif, absent quand la
+table n'en porte pas :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `libelle` | chaque table, après `position`, avant `objectifs` | aucun libellé | texte bien formé, en NFC, sans blanc en bord, de 1 à 60 points de code — un caractère hors du plan de base compte pour un |
+
+Une autre forme — un texte vide, un blanc en bord, un texte hors de NFC, plus
+de 60 points de code, une moitié de paire de substitution isolée, `null` — est
+une faute de forme, nommée par son chemin (§ 8.8). Une table sans libellé
+s'écrit octet pour octet comme sans ce champ, démonstrations comprises. Il se
+pose par une commande — une entrée d'historique, refusée en lecture et sur un
+plan bloqué — qui reçoit la saisie du champ « Libellé » de « Tables et tours »,
+la met en NFC, retire ses blancs de bord et remplace une moitié de paire isolée
+par le caractère de remplacement : vide, elle retire le champ ; au-delà de 60
+caractères, elle refuse, contre le champ, en disant la longueur saisie et la
+longueur admise ; le même libellé n'écrit rien. Un correctif du journal le pose
+et le retire comme tout champ. Le moteur ne le lit pas : la configuration
+qu'il reçoit, les empreintes et les raisons de dérive restent les mêmes. Le
+champ fait partie du format 3.
 
 #### Deux champs facultatifs : la présence
 
@@ -4601,7 +4658,9 @@ en groupes de tours consécutifs, et une ligne plus haute qu'une page se poursui
 sur la suivante. La liste d'accueil couvre aussi la soirée, une colonne par
 tour ; la case d'un tour où la personne est absente porte « absente », ni table,
 ni siège, ni réserve. La feuille par table ne nomme pas une personne absente à
-son tour : l'appel nominal ne la cherche pas. Des tours trop nombreux pour la
+son tour : l'appel nominal ne la cherche pas. Son titre nomme la table par son
+numéro et, quand elle en porte un, par son libellé (§ 4), entier : il replie
+dans la largeur de la page, entre deux caractères au besoin. Des tours trop nombreux pour la
 page se répartissent en blocs de tours consécutifs, chacun sous l'en-tête qui
 nomme ses tours (§ 7.4). **Les listes s'impriment en portrait.**
 

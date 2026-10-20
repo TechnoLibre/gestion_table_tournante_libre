@@ -15,6 +15,7 @@ export const EXEMPLES = [
   ['MOINS_D_UN_TOUR', { tours: 0, remede: null }],
   ['TROP_DE_PLACES', { max: 1000, remede: null }],
   ['TROP_DE_TOURS', { max: 100, remede: null }],
+  ['LIBELLE_TABLE_TROP_LONG', { longueur: 61, maximum: 60, remede: null }],
   ['SOUS_RESERVATIONS', { table: 2, n: 7, tour: 1, remede: { geste: 'afficherTour', tour: 1, proposition: null } }],
   ['SOUS_OCCUPES', { table: 2, n: 7, tour: 3, remede: { geste: 'afficherTour', tour: 3, proposition: null } }],
   [
@@ -36,6 +37,7 @@ export const EXEMPLES = [
   ['ENTREE_CREER_TABLE', { numero: 3 }],
   ['ENTREE_SUPPRIMER_TABLE', { numero: 2, reservations: 2, titres: 1 }],
   ['ENTREE_DEPLACER_TABLE', { numero: 3 }],
+  ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: 'Coin des invités' }],
   ['ENTREE_CHANGER_PLACES_TABLE', { numero: 5, sieges: 10 }],
   ['ENTREE_REALIGNER_TABLE', { numero: 5, sieges: 8 }],
   ['ENTREE_CHANGER_DEFAUT', { sieges: 10, realignees: 4 }],
@@ -99,4 +101,6 @@ export const TEXTES = [
     { tours: 3, retirees: 2, objectifsRetires: 1, presencesRognees: 2 },
     'Nombre de tours : 3 ; 2 réservations retirées, 1 objectif retiré, 2 présences rognées',
   ],
+  ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: 'Coin des invités' }, 'Table 3 : libellé « Coin des invités »'],
+  ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: null }, 'Table 3 : libellé retiré'],
 ];

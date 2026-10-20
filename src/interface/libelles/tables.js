@@ -107,6 +107,7 @@ export const TABLE = new Map([
   ],
   ['tables.liste.aucune', 'Aucune table : ajoutez-en une, ronde ou carrée.'],
   ['tables.liste.table', 'Table'],
+  ['tables.liste.libelle', 'Libellé'],
   ['tables.liste.places', 'Places'],
   ['tables.liste.realigner', 'Réaligner'],
   ['tables.liste.supprimer', 'Supprimer'],

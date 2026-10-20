@@ -6,16 +6,19 @@
 <script>
   // Le dessin du plan (§ 7.1, § 7.3 à § 7.7), enfant du groupe <g data-vue>
   // que Plan.svelte transforme : les motifs, les tables — plateaux, numéros,
-  // chaises, poignées, pastilles —, puis les listes de noms, peintes par-dessus et
-  // transparentes au pointeur. Le composant ne lit k qu'à travers le modèle
-  // (modele.js), qu'il reçoit entier ; aucun attribut qu'il écrit ne dépend
-  // de k hors du franchissement d'un seuil — régime des cibles, K_LISTES.
+  // libellés, chaises, poignées, pastilles —, puis les listes de noms,
+  // peintes par-dessus et transparentes au pointeur. Le composant ne lit k
+  // qu'à travers le modèle (modele.js), qu'il reçoit entier ; aucun attribut
+  // qu'il écrit ne dépend de k hors du franchissement d'un seuil — régime des
+  // cibles, K_LISTES.
   //
   // Les mesures du texte se relèvent sur une sonde : un <text> caché au
   // style des listes, et un tspan en italique pour les titres. La hauteur
   // d'une ligne est la hauteur d'encre du gabarit (mesure_texte.js) ; les
   // listes paraissent une fois les mesures prises, et la largeur de leur
-  // bloc est LARGEUR_BLOC_NOMS_CM du registre. Aucun <canvas>.
+  // bloc est LARGEUR_BLOC_NOMS_CM du registre. Le libellé d'une table, au
+  // style des listes, se replie par les mêmes mesures, que chaque table
+  // reçoit. Aucun <canvas>.
   //
   // Un plan monté caché — un ancêtre en display: none — n'a pas de mise en
   // page : ses largeurs mesurées vaudraient 0. Les mesures ne se prennent
@@ -64,7 +67,7 @@
 
 <Motifs {prefixe} />
 {#each modele.tables as table (table.id)}
-  <TablePlan {table} signaler={modele.signalerConflits} {prefixe} impression={modele.impression === true} />
+  <TablePlan {table} signaler={modele.signalerConflits} {prefixe} {mesures} impression={modele.impression === true} />
 {/each}
 <text class="sonde" font-size={TAILLE_TEXTE_LISTE_CM} aria-hidden="true" bind:this={sonde}
   ><tspan class="titre" bind:this={sondeItalique}></tspan></text

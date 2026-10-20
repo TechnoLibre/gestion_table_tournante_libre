@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Ce qui s'inscrit sur le plateau d'une table (§ 7.5, § 7.7), en cm de
-// dessin, l'axe y vers le bas : le numéro de la table, la marque de gel et la
-// pastille des conflits. Les places se tirent de la géométrie de la table
-// (tables.js) ; aucune ne dépend du zoom, de l'écran ou de l'impression, et
-// aucune ne lit le DOM.
+// dessin, l'axe y vers le bas : le numéro de la table, les lignes de son
+// libellé, la marque de gel et la pastille des conflits. Les places se tirent
+// de la géométrie de la table (tables.js) ; aucune ne dépend du zoom, de
+// l'écran ou de l'impression, et aucune ne lit le DOM.
 import { TAILLE_TEXTE_LISTE_CM } from './texte.js';
 
 /** Part de la largeur du plateau que prend le corps du numéro de la table. */
@@ -40,6 +40,15 @@ export const DECALAGE_ANCRE = 0.5;
 /** Écart minimal entre l'encre du numéro et la pastille, la marque de gel ou
  *  le bord du plateau, en cm. */
 export const ECART_NUMERO = 1.5;
+
+/** Bornes de l'encre d'une ligne de libellé, au-dessus et au-dessous de
+ *  l'ancre d'un <text> en dominant-baseline central, en part du corps, dans
+ *  la police des listes : le gabarit de hauteur (texte.js) y monte de 0,944
+ *  au-dessus de la base (« Ô ») et descend de 0,24 dessous (« j »), la base
+ *  étant 0,388 sous l'ancre — 0,556 au-dessus de l'ancre, 0,628 au-dessous,
+ *  bornés par excès. Leur somme est le pas entre deux lignes. */
+export const ENCRE_HAUT_LIGNE = 0.56;
+export const ENCRE_BAS_LIGNE = 0.63;
 
 // L'angle de la diagonale haut droite, y vers le bas, en radians.
 const DIAGONALE = -Math.PI / 4;
@@ -157,6 +166,43 @@ export function placeNumero(geometrie, { libelle = false } = {}) {
     corps = bas;
   }
   return { x: centre.x, y: ancre(corps), corps };
+}
+
+/**
+ * Les lignes du libellé d'une table, sous son numéro monté (placeNumero
+ * avec libellé), au corps des listes : pour chacune, l'ancre de son texte —
+ * text-anchor middle, dominant-baseline central —, sur l'axe vertical du
+ * plateau, et la largeur que son texte peut prendre, en cm.
+ *
+ * L'encre de la première ligne, que bornent ENCRE_HAUT_LIGNE et
+ * DECALAGE_ANCRE, commence ECART_NUMERO sous celle du numéro ; chaque ligne
+ * suivante descend d'un pas, la somme des deux bornes, et deux lignes ne se
+ * chevauchent pas. Les lignes descendent tant que l'encre de la suivante
+ * reste à ECART_NUMERO au moins du bord du plateau. La largeur d'une ligne
+ * est la plus grande qui y tient : la corde du disque rétréci de l'écart à
+ * la hauteur de son encre la plus éloignée du centre pour une ronde, le côté
+ * rétréci de deux écarts pour une carrée. Comme celle du numéro, la place
+ * ne dépend que de la forme, des places et du nombre de chiffres.
+ *
+ * @param {import('./tables.js').GeometrieTable} geometrie
+ * @returns {{corps: number, lignes: Array<{x: number, y: number, largeur: number}>}}
+ */
+export function lignesLibelle(geometrie) {
+  const { forme, centre, demiTaille } = geometrie;
+  const corps = TAILLE_TEXTE_LISTE_CM;
+  const numero = placeNumero(geometrie, { libelle: true });
+  const encreNumero = encreBornee(numero.x, numero.y, numero.corps, String(geometrie.numero).length);
+  const dessus = ENCRE_HAUT_LIGNE * corps + DECALAGE_ANCRE;
+  const dessous = ENCRE_BAS_LIGNE * corps + DECALAGE_ANCRE;
+  const pas = (ENCRE_HAUT_LIGNE + ENCRE_BAS_LIGNE) * corps;
+  const interieur = demiTaille - ECART_NUMERO;
+  const lignes = [];
+  for (let y = encreNumero.bas + ECART_NUMERO + dessus; y + dessous - centre.y <= interieur; y += pas) {
+    const loin = Math.max(Math.abs(y - dessus - centre.y), Math.abs(y + dessous - centre.y));
+    const demi = forme === 'ronde' ? Math.sqrt(interieur * interieur - loin * loin) : interieur;
+    lignes.push({ x: centre.x, y, largeur: 2 * demi });
+  }
+  return { corps, lignes };
 }
 
 /**

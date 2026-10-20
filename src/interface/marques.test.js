@@ -178,9 +178,9 @@ describe('les trois sortes de conflit (§ 7.5, § 12.7)', () => {
 });
 
 describe('registre des textes', () => {
-  test('page, secondaire, bandeau, refus, avis, listes du plan, pastille, numéro de table, puis les textes des cartes, des étiquettes, de la bande de mode, du bandeau, de l’action et des messages, puis les deux encres des cases de graphique ; seuil 4,5', () => {
+  test('page, secondaire, bandeau, refus, avis, listes du plan, pastille, numéro et libellé de table, puis les textes des cartes, des étiquettes, de la bande de mode, du bandeau, de l’action et des messages, puis les deux encres des cases de graphique ; seuil 4,5', () => {
     assert.deepEqual(TEXTES.map((t) => t.nom), [
-      'page', 'secondaire', 'bandeau', 'refus', 'avis', 'listes', 'pastille', 'numeroTable',
+      'page', 'secondaire', 'bandeau', 'refus', 'avis', 'listes', 'pastille', 'numeroTable', 'libelleTable',
       'carte', 'secondaireCarte', 'etiquette', 'bandeMode', 'bandeauSecondaire', 'bandeauChoisi', 'action', 'lien', 'information',
       'graphiqueEncreFoncee', 'graphiqueEncreClaire',
     ]);
@@ -194,6 +194,12 @@ describe('registre des textes', () => {
     const numero = parNom(TEXTES, 'numeroTable');
     assert.equal(numero.jeton, '--couleur-liste-texte');
     assert.deepEqual(numero.fonds, ['--couleur-table-fond']);
+  });
+
+  test('le libellé d’une table s’écrit comme son numéro, de l’encre des listes sur le fond du plateau, que son halo et ses socles prolongent sous les trames (§ 7.7)', () => {
+    const libelle = parNom(TEXTES, 'libelleTable');
+    assert.equal(libelle.jeton, '--couleur-liste-texte');
+    assert.deepEqual(libelle.fonds, ['--couleur-table-fond']);
   });
 
   test('le texte d’une étiquette est l’encre de la page, sur chaque fond teinté d’une pastille (§ 12.7) ; celui d’un message, l’encre de son message sur son fond', () => {

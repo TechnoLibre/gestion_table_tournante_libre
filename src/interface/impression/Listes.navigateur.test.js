@@ -413,6 +413,28 @@ describe('la feuille par table (§ 11.7, Q6 c)', () => {
     }
   });
 
+  test('le titre d\u{2019}une feuille porte le libellé de sa table dans son propre nœud ; un libellé de soixante caractères sans espace replie dans la largeur de la feuille', async () => {
+    let charge = chargePrincipale();
+    const [premiere, seconde] = charge.tables;
+    charge = appliquerCommande('changerLibelleTable', charge, { id: premiere.id, libelle: 'Coin des invités' }).charge;
+    charge = appliquerCommande('changerLibelleTable', charge, { id: seconde.id, libelle: 'W'.repeat(60) }).charge;
+    const m = await ouvrirApercu(contexte, charge);
+    await choisirVue(m, 'tables');
+    expect(verifierPagination(m)).toBe(charge.tables.length);
+    const blocs = tous(m.racine, '[data-impression] [data-liste-imprimee]');
+    const titreDe = (id) => blocs.find((bloc) => Number(bloc.dataset.table) === id).firstElementChild;
+    const titre = titreDe(premiere.id);
+    expect(texte(titre)).toBe(
+      `${t('feuilles.tables.titre', { table: premiere.numero })}${t('feuilles.tables.avantLibelle')}Coin des invités`.replace(/\s+/g, ' ').trim(),
+    );
+    expect([...titre.children].map((e) => e.textContent)).toContain('Coin des invités');
+    const long = titreDe(seconde.id);
+    expect(texte(long)).toContain('W'.repeat(60));
+    expect(long.scrollWidth).toBeLessThanOrEqual(long.clientWidth);
+    const autre = charge.tables.find(({ id }) => id !== premiere.id && id !== seconde.id);
+    expect(texte(titreDe(autre.id))).toBe(t('feuilles.tables.titre', { table: autre.numero }));
+  });
+
   for (const [cas, chargeDuCas] of [
     ['en lecture', chargePrincipale],
     ['sur un plan bloqué', chargeBloquee],
