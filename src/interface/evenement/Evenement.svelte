@@ -18,7 +18,8 @@
   //
   // « Imprimer… » ouvre l'aperçu avant impression (§ 11.7) sur le plan, au
   // tour montré : toute impression passe par lui. Vivante dans tout mode,
-  // elle n'écrit rien.
+  // elle n'écrit rien. L'ouverture et le rendu de l'aperçu, qu'attend
+  // tick(), passent par l'indicateur d'activité (activite.js).
   //
   // La navigation groupe les sections par phase (PHASES, sections.js) —
   // préparer, placer, produire — : chaque phase est un groupe nommé par son
@@ -56,7 +57,7 @@
   // § 12) : un effacement les retire, et le retour qui rend la proposition
   // ne les rend pas. L'oubli se fait avant le rendu des sections, qui ne
   // lisent jamais un départ absent.
-  import { getContext } from 'svelte';
+  import { getContext, tick } from 'svelte';
   import SectionBadges from '../badges/SectionBadges.svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import SectionGeneration from '../generation/SectionGeneration.svelte';
@@ -65,6 +66,7 @@
   import SectionPlan from '../plan/SectionPlan.svelte';
   import SectionPropositions from '../propositions/SectionPropositions.svelte';
   import SectionTables from '../tables/SectionTables.svelte';
+  import { suivre } from '../activite.js';
   import Avertissements from './Avertissements.svelte';
   import BandeMode from './BandeMode.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -103,6 +105,16 @@
   // sans annonce, aucune hauteur ni aucun trait ne lui est gardé.
   const annoncer = $derived($seance.supportRompu !== null || avertissementsOrdonnes($seance).length > 0);
 
+  // « Imprimer… » : l'aperçu au tour montré au clic, ouvert et rendu sous
+  // l'indicateur d'activité.
+  function ouvrirApercu() {
+    const tour = $ui.tour;
+    return suivre(async () => {
+      ui.ouvrirApercu({ vue: 'plan', tour });
+      await tick();
+    });
+  }
+
   $effect.pre(() => {
     const charge = $seance.charge;
     if (charge === null) return;
@@ -119,7 +131,7 @@
     cle="impression.commande.ouvrir"
     nom="apercu"
     variante="principale"
-    executer={() => ui.ouvrirApercu({ vue: 'plan', tour: $ui.tour })}
+    executer={ouvrirApercu}
   />
 {/snippet}
 

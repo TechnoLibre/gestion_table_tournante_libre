@@ -2,7 +2,9 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // La machine d'une commande, et les remèdes d'un refus (§ 2.1, § 8.5,
-// § 14.6), purs : Commande.svelte et Refus.svelte les câblent.
+// § 14.6), purs : Commande.svelte et Refus.svelte les câblent. Seul le
+// remède ecrireAilleurs passe par l'indicateur d'activité de la page
+// (activite.js), qui hors d'une page ne fait qu'attendre une microtâche.
 //
 // Une commande sans confirmation exécute à chaque clic. Une commande à
 // confirmer s'arme au premier clic — son libellé devient celui de la
@@ -37,6 +39,7 @@
 // événements porte « Renommer » sur chacun.
 
 import { COMMANDES } from '../../application/commandes.js';
+import { suivre } from '../activite.js';
 
 /** Les variantes d'une commande, la secondaire en tête — celle d'une
  *  commande qui n'en donne pas : principale, l'action à faire sur l'écran,
@@ -189,7 +192,7 @@ function executionDuGeste(remede, seance, ui) {
     case 'ouvrirSecours':
       return () => seance.ouvrirSecours(seance.etat().evenement.base, remede.source);
     case 'ecrireAilleurs':
-      return () => seance.ecrireAilleurs(remede.racine ?? null);
+      return () => suivre(() => seance.ecrireAilleurs(remede.racine ?? null));
     case 'renommer':
       return () => seance.fermer();
     case 'afficherTour':
@@ -222,7 +225,8 @@ function executionDuGeste(remede, seance, ui) {
  * remède de commande s'exécute par seance.executer, tel quel ; modifier,
  * debloquer, ouvrirSecours et ecrireAilleurs par la méthode de la séance de
  * même nom — passerEnEcriture pour modifier, la base de l'événement ouvert
- * pour ouvrirSecours ; renommer par seance.fermer, qui rend la liste des
+ * pour ouvrirSecours, l'indicateur d'activité pour ecrireAilleurs, qui
+ * recopie l'événement (activite.js) ; renommer par seance.fermer, qui rend la liste des
  * événements, où chacun se renomme ;
  * afficherTour et ouvrirSection par l'état de navigation, ui, comme les deux
  * gestes d'un départ refusé : repartirDeZero retire le départ

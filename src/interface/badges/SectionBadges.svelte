@@ -36,12 +36,17 @@
   // La réédition (Reedition.svelte) passe par la même production, sa
   // sélection dans la demande.
   //
+  // Préparer, produire et « Enregistrer sous… » passent par l'indicateur
+  // d'activité (activite.js) : l'annonce et la planche se calculent sur le
+  // fil du rendu.
+  //
   // Habillage : les réglages, le papier, les commandes, l'annonce et la
   // planche produite vivent dans la carte de la planche ; « Produire la
   // planche » en est l'action principale. L'annonce se pose sur le fond
   // sourd de la carte, la planche produite sur le fond de l'information. La
   // réédition est une carte à elle.
   import { getContext } from 'svelte';
+  import { suivre } from '../activite.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
@@ -110,7 +115,7 @@
   async function preparer(selection) {
     const demande = demandeDe(selection);
     const lue = seance.etat().charge;
-    const annonce = await seance.preparerPlanche(demande);
+    const annonce = await suivre(() => seance.preparerPlanche(demande));
     preparee = { annonce, demande, charge: lue };
     return { annonce, demande };
   }
@@ -127,7 +132,7 @@
       return;
     }
     derniere = demande;
-    produite = await seance.produirePlanche(demande);
+    produite = await suivre(() => seance.produirePlanche(demande));
   }
 
   // Le papier choisi par la question de la section : la production qui
@@ -154,7 +159,7 @@
       return true;
     },
     enregistrerSous: async () => {
-      const chemin = await seance.enregistrerPlancheSous(derniere);
+      const chemin = await suivre(() => seance.enregistrerPlancheSous(derniere));
       if (chemin !== null) produite = { chemin, nom: null, ailleurs: true };
       return chemin;
     },

@@ -19,6 +19,7 @@
 // [attribut, porteur, valeurs], dans l'ordre des attributs.
 const ENTREES = [
   ['data-absentes', 'plan : les absentes d’un tour sur la fiche d’une place ou d’une table, par tour', null],
+  ['data-activite', 'la pastille de l’indicateur d’activité, pendant une opération longue', ['']],
   ['data-affichee', 'import : la valeur affichée d’une cellule de l’aperçu', ['']],
   ['data-annonce-nettoyage', 'propositions : l’annonce des propositions effacées par « Garder les N meilleures »', ['']],
   ['data-annonce-planche', 'badges : l’annonce de la planche, avant de produire', ['']],

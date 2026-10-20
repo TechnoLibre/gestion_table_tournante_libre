@@ -58,6 +58,16 @@
   // séance, en mémoire, posé en data-theme sur <html> (§ 19.2). À la sortie
   // de la page (pagehide), la séance ferme l'événement et rend son verrou,
   // sans question ; aucun beforeunload ne retient la page (§ 8.4).
+  //
+  // App monte la pastille de l'indicateur d'activité (Activite.svelte), et
+  // pose le curseur d'attente sur toute l'application tant qu'une opération
+  // longue est suivie (activite.js). Les composants, et seance(), reçoivent
+  // la séance enveloppée par seanceBarree : un geste fait pendant l'attente
+  // d'image d'une opération suivie atteint la séance après elle. App suit
+  // lui-même la fin d'une génération — le tri et l'enregistrement des
+  // propositions, après le travailleur — : le contrôleur reçoit l'exécuteur
+  // de suivreFinDeGeneration, et la fin suivie se retire quand le
+  // contrôleur publie la génération finie, ou au démontage.
   import './jetons.css';
   import { onDestroy, setContext, tick, untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
@@ -74,6 +84,8 @@
   import { creerChargeurSection } from './evenement/differe.js';
   import Evenement from './evenement/Evenement.svelte';
   import Apercu from './impression/Apercu.svelte';
+  import Activite from './primitives/Activite.svelte';
+  import { activite, seanceBarree, suivreFinDeGeneration } from './activite.js';
   import { blocAPropos, provenanceVisible, versionVisible } from './apropos.js';
   import { creerEtatUi } from './etat_ui.js';
   import { TABLES_INTERFACE } from './libelles.js';
@@ -125,7 +137,20 @@
     polices,
     provenance,
   });
-  const generationApp = creerControleurGeneration({ seance: seanceApp, executeur, horloge, produitVersion });
+  const finDeGeneration = suivreFinDeGeneration(executeur, activite);
+  const generationApp = creerControleurGeneration({
+    seance: seanceApp,
+    executeur: finDeGeneration.executeur,
+    horloge,
+    produitVersion,
+  });
+  const desabonnerGeneration = generationApp.subscribe(({ enCours }) => {
+    if (!enCours) finDeGeneration.terminer();
+  });
+  onDestroy(() => {
+    desabonnerGeneration();
+    finDeGeneration.fermer();
+  });
   const facadeApp = creerFacade({
     fs,
     horloge,
@@ -163,7 +188,8 @@
   // Les sections chargées à part, chacune par sa demande unique.
   const chargeurs = { qualite: creerChargeurSection(sectionQualite) };
 
-  setContext('seance', seanceApp);
+  const seanceInterface = seanceBarree(seanceApp, activite);
+  setContext('seance', seanceInterface);
   setContext('facade', facadeContexte);
   setContext('relireListe', () => relireListe());
   setContext('generation', generationApp);
@@ -320,9 +346,9 @@
   /** Résolue quand la détermination du dossier de travail est faite et le
    *  premier écran rendu : les lignes de la liste lue, ou la question. */
   export const pret = preparer();
-  /** La séance de ce montage. */
+  /** La séance de ce montage, celle que voient ses composants. */
   export function seance() {
-    return seanceApp;
+    return seanceInterface;
   }
   /** Le contrôleur de génération de ce montage. */
   export function generation() {
@@ -340,7 +366,7 @@
   <title>{titre}</title>
 </svelte:head>
 
-<div class="app" bind:this={racineApp}>
+<div class="app" class:occupee={$activite} bind:this={racineApp}>
   <Bandeau
     etat={etatSeance}
     {version}
@@ -362,6 +388,7 @@
       <Evenement {chargeurs} />
     {/if}
   </main>
+  <Activite />
 </div>
 
 <style>
@@ -377,6 +404,13 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+  }
+
+  /* Le curseur d'attente, sur l'application et chacun de ses éléments,
+     pendant une opération longue. */
+  .occupee,
+  .occupee :global(*) {
+    cursor: progress;
   }
 
   .ecran {

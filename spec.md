@@ -1902,6 +1902,25 @@ logiciel — ce qui perd exactement ce que la recherche avait trouvé. Le compte
 d'inactivité du § 8.4 est suspendu tant qu'un calcul tourne, donc le retour
 automatique en lecture ne tombe jamais au milieu d'une génération.
 
+**Une opération longue s'annonce, et l'écran ne paraît pas figé.** Ouvrir un
+événement, charger une démonstration, défaire, refaire ou revenir à un instant,
+appliquer un import, finir une génération — trier et enregistrer ses
+propositions, après la recherche —, ouvrir l'aperçu avant impression, préparer,
+produire ou enregistrer ailleurs la planche de badges, écrire ailleurs : ces
+opérations calculent sur le fil de l'interface. Une pastille « Traitement en
+cours… », au bas de la fenêtre et centrée, se pose et se peint **avant** que le
+calcul ne parte, et ne se voit qu'au bout d'**une demi-seconde** : une opération
+brève passe sans rien montrer. Son apparition et la rotation de son signe sont
+jouées par le compositeur du navigateur pendant que le calcul tient le fil, sans
+minuterie ; sous la préférence de mouvement réduit, elle apparaît de même et son
+signe reste immobile. Le curseur dit l'attente tant qu'elle est là. Elle se
+retire à la fin de l'opération, aboutie ou refusée, et deux opérations qui se
+chevauchent n'en montrent qu'une. L'attente de la peinture ne change pas
+l'ordre des gestes : un geste fait pendant elle part après l'opération qui
+l'attend — « Défaire » puis un ajout défont le geste d'avant, et l'ajout suit.
+Un geste ordinaire du plan ne la montre jamais, et l'écran au repos ne la porte
+pas.
+
 **Les propositions d'une génération se calculent en parallèle, sur les cœurs du
 poste.** Chaque proposition ne dépend que de sa graine dérivée — et, pour une
 dérivée, du plan de son départ et de ses tours figés, que chaque fil reçoit avec
@@ -7823,12 +7842,16 @@ ne les offre de façon portable :
 - **L'émulation d'une préférence système.** Le logiciel règle son **propre**
   réglage de thème, qui est celui que l'opérateur manipule (§ 13.3), et injecte une
   feuille de style qui annule transitions et animations. L'interface n'en porte
-  qu'une : la rotation du signe de chargement de la liste des événements
-  (§ 8.1), qu'aucun état n'attend et dont rien ne lit le rendu ; elle s'arrête
-  sous la préférence de mouvement réduit, et cette feuille l'annule comme toute
-  autre. La préférence système est consultée à chaque lancement, et le réglage
-  de l'opérateur vaut pour la séance : rien ne l'enregistre, ni fichier ni
-  stockage du navigateur (§ 8.6).
+  que deux : la rotation d'un signe de chargement — celui de la liste des
+  événements (§ 8.1), celui de la pastille d'activité (§ 5.10) —, qui s'arrête
+  sous la préférence de mouvement réduit, et l'apparition de cette pastille, de
+  l'opacité 0 à 1 en un seul pas une demi-seconde après son montage, qui n'est
+  pas un mouvement et demeure. Aucun état n'attend l'une ou l'autre, rien ne lit
+  leur rendu, et cette feuille les annule comme toute autre ; la pastille,
+  absente de l'écran au repos, n'entre dans aucune capture. La préférence
+  système est consultée à chaque lancement, et le réglage de l'opérateur vaut
+  pour la séance : rien ne l'enregistre, ni fichier ni stockage du navigateur
+  (§ 8.6).
   **Le scénario pose donc le thème par le réglage, à chaque exécution, et ne le
   déduit jamais de la machine.**
 

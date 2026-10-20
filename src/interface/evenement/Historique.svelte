@@ -24,9 +24,10 @@
   // son libellé figé, ses pastilles — « instant courant », « fil
   // abandonné », une par jalon, de son nom —, puis « Revenir à cet
   // instant », hors de la ligne courante, qui restitue l'instant
-  // (seance.revenir). Une ligne d'un fil abandonné est d'encre secondaire.
-  // Chaque pastille se désigne par data-pastille-instant — courant,
-  // abandonne ou jalon. En lecture, la liste se lit ; « Nommer » et
+  // (seance.revenir), sous l'indicateur d'activité (activite.js). Une
+  // ligne d'un fil abandonné est d'encre secondaire. Chaque pastille se
+  // désigne par data-pastille-instant — courant, abandonne ou jalon. En
+  // lecture, la liste se lit ; « Nommer » et
   // « Revenir » sont refusés à côté d'eux avec leur remède, comme toute
   // commande.
   //
@@ -38,6 +39,7 @@
   // case revient à la première page ; tourner la page rend le focus à
   // l'étendue de la nav du dessus, qui l'annonce.
   import { getContext, onMount, tick } from 'svelte';
+  import { suivre } from '../activite.js';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Pages from '../primitives/Pages.svelte';
@@ -156,7 +158,7 @@
                 nom="revenir"
                 variante="discrete"
                 nomAccessible={t('evenement.historique.revenirNom', { libelle: ligne.libelle, quand: ligne.quand })}
-                executer={() => seance.revenir(ligne.revision)}
+                executer={() => suivre(() => seance.revenir(ligne.revision))}
               />
             {/if}
           </li>

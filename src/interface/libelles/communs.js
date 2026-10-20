@@ -2,7 +2,7 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les libellés communs aux écrans : commandes, menu d'actions,
-// confirmations, remèdes d'un refus (§ 14.6). Chaque clé commence par « communs. ».
+// confirmations, indicateur d'activité, remèdes d'un refus (§ 14.6). Chaque clé commence par « communs. ».
 //
 // communs.commande.* nomme les commandes de mode et de secours, que la place
 // fixe de l'événement et les écrans de la liste reprennent. communs.remede.*
@@ -39,6 +39,11 @@ export const TABLE = new Map([
   ['communs.confirmation.confirmer', 'Confirmer'],
   ['communs.confirmation.annuler', 'Annuler'],
   ['communs.confirmation.enCours', 'Opération en cours\u{2026}'],
+
+  // --- L'indicateur d'activité (§ 5.10) ----------------------------------------
+  // Le texte de la pastille qu'une opération longue pose au bas de la fenêtre
+  // (primitives/Activite.svelte).
+  ['communs.activite', 'Traitement en cours\u{2026}'],
 
   // --- Le nom accessible d'un remède (§ 14.5) ---------------------------------
   // Le remède d'un refus posé contre un contrôle qui porte un nom distinct

@@ -861,23 +861,49 @@ function nomDeDirective(noeud) {
 const ANIMATION_ETEINTE = /^\s*(?:none|0m?s)\s*$/i;
 
 // Les animations admises, chacune nommée par son fichier, le sélecteur de sa
-// règle et le nom de ses images clés, avec sa raison. Une exception admet,
-// dans son seul fichier, les déclarations animation… de sa règle et les
-// @keyframes de son nom ; toute autre animation du fichier, et toute
-// transition, restent relevées. La règle admise s'éteint sous
-// prefers-reduced-motion: reduce, sinon elle se relève ; la feuille qui
-// annule transitions et animations (§ 19.2) l'éteint comme toute autre. Une
-// exception que rien ne sert se relève « sans objet ».
+// règle et le nom de ses images clés, avec sa raison ; un fichier peut en
+// porter plusieurs. Une exception admet, dans son seul fichier, les
+// déclarations animation… de sa règle — animation et animation-name y
+// nomment ses images — et les @keyframes de son nom ; toute autre animation
+// du fichier, et toute transition, restent relevées. Un mouvement s'éteint
+// sous prefers-reduced-motion: reduce, sinon sa règle se relève ; une
+// exception qui n'est pas un mouvement (mouvement faux) n'anime que
+// l'opacité, et n'a pas à s'éteindre. La feuille qui annule transitions et
+// animations (§ 19.2) éteint chacune comme toute autre. Une exception que
+// rien ne sert se relève « sans objet ».
 const ANIMATIONS_ADMISES = [
   {
     fichier: 'src/interface/accueil/Chargement.svelte',
     selecteur: '.rouet',
     images: 'rotation',
+    mouvement: true,
     raison:
       "le signe du chargement des résumés de la liste (§ 8.1) tourne pour dire qu'un calcul se poursuit : aucun état " +
       "n'en dépend ni n'attend sa fin, et rien ne lit son rendu",
   },
+  {
+    fichier: 'src/interface/primitives/Activite.svelte',
+    selecteur: '.activite',
+    images: 'apparition',
+    mouvement: false,
+    raison:
+      "la pastille d'activité (§ 5.10) passe de l'opacité 0 à 1 en un seul pas, une demi-seconde après son montage : " +
+      "le compositeur la montre pendant un bloc synchrone, sans minuterie, et aucun état n'attend sa fin",
+  },
+  {
+    fichier: 'src/interface/primitives/Activite.svelte',
+    selecteur: '.signe',
+    images: 'rotation',
+    mouvement: true,
+    raison:
+      "le signe de la pastille d'activité (§ 5.10) tourne pendant une opération longue, joué par le compositeur : " +
+      "aucun état n'en dépend ni n'attend sa fin, et rien ne lit son rendu",
+  },
 ];
+
+// Les noms que porte la valeur d'une déclaration animation ou
+// animation-name : ses mots, virgules et blancs retirés.
+const nomsAnimes = (valeur) => valeur.split(/[\s,]+/).filter((mot) => mot !== '');
 
 // Vrai sous une règle @media qui demande le mouvement réduit, et lui seul :
 // sa requête entière est (prefers-reduced-motion: reduce), à la casse et aux
@@ -928,32 +954,47 @@ function releverTexteEtAnimation(racine, exceptions = ANIMATIONS_ADMISES) {
       const directive = nomDeDirective(noeud);
       if (directive !== null) relever(noeud.start, `directive ${directive}:${noeud.name}`);
     });
-    // L'exception de ce fichier, la première déclaration qu'elle admet, et
-    // vrai quand sa règle s'éteint sous le mouvement réduit.
-    const admise = exceptions.find(({ fichier }) => fichier === chemin) ?? null;
-    let premiereAdmise = null;
-    let arretee = false;
+    // Les exceptions de ce fichier ; pour chacune, la première déclaration
+    // qu'elle admet, et si sa règle s'éteint sous le mouvement réduit.
+    const admises = exceptions.filter(({ fichier }) => fichier === chemin);
+    const premieres = new Map();
+    const arretees = new Set();
     parcourir(css, (noeud, ancetres) => {
       const anime = noeud.type === 'Declaration' && /^(?:transition|animation)(?:-|$)/.test(noeud.property);
       const regle = ancetres.findLast((a) => a.type === 'Rule');
       const selecteur = regle === undefined ? '' : texte.slice(regle.prelude.start, regle.prelude.end).trim();
-      const deLAdmise = anime && admise !== null && selecteur === admise.selecteur && noeud.property.startsWith('animation');
-      if (anime && !ANIMATION_ETEINTE.test(noeud.value)) {
-        if (deLAdmise) {
+      const eteinte = anime && ANIMATION_ETEINTE.test(noeud.value);
+      const nommeSesImages = (admise) =>
+        eteinte || !['animation', 'animation-name'].includes(noeud.property) || nomsAnimes(noeud.value).includes(admise.images);
+      const admise = anime && noeud.property.startsWith('animation')
+        ? (admises.find((a) => a.selecteur === selecteur && nommeSesImages(a)) ?? null)
+        : null;
+      if (anime && !eteinte) {
+        if (admise !== null) {
           servies.add(admise);
-          premiereAdmise ??= noeud.start;
+          if (!premieres.has(admise)) premieres.set(admise, noeud.start);
         } else {
           relever(noeud.start, `${noeud.property}: ${noeud.value}`);
         }
       }
-      if (deLAdmise && ANIMATION_ETEINTE.test(noeud.value) && sousMouvementReduit(ancetres)) arretee = true;
+      if (admise !== null && eteinte && sousMouvementReduit(ancetres)) arretees.add(admise);
       if (noeud.type === 'Atrule' && /keyframes$/i.test(noeud.name)) {
-        if (admise !== null && noeud.prelude.trim() === admise.images) servies.add(admise);
+        const servie = admises.find((a) => noeud.prelude.trim() === a.images);
+        if (servie !== undefined) servies.add(servie);
         else relever(noeud.start, `@${noeud.name}`);
       }
+      // Les images d'une exception qui n'est pas un mouvement n'animent que
+      // l'opacité.
+      const images = ancetres.findLast((a) => a.type === 'Atrule' && /keyframes$/i.test(a.name));
+      const immobile = images === undefined ? undefined : admises.find((a) => !a.mouvement && images.prelude.trim() === a.images);
+      if (noeud.type === 'Declaration' && immobile !== undefined && noeud.property !== 'opacity') {
+        relever(noeud.start, `animation admise sans mouvement qui anime ${noeud.property} : ${immobile.selecteur}`);
+      }
     });
-    if (premiereAdmise !== null && !arretee) {
-      relever(premiereAdmise, `animation admise sans arrêt sous prefers-reduced-motion : ${admise.selecteur}`);
+    for (const [admise, debut] of premieres) {
+      if (admise.mouvement && !arretees.has(admise)) {
+        relever(debut, `animation admise sans arrêt sous prefers-reduced-motion : ${admise.selecteur}`);
+      }
     }
   }
   const sansObjet = exceptions
@@ -1837,6 +1878,8 @@ describe('sources de l’interface : balisage et fenêtres du navigateur (§ 13.
 });
 
 describe('sources de l’interface : texte comprimé et animations (§ 7.4, § 19.2)', () => {
+  const releverAvec = releverTexteEtAnimation;
+
   test('ni textLength ni lengthAdjust, ni transitionend ni animationend, ni transition ni animation', () => {
     exigerVide(releverTexteEtAnimation(RACINE), 'texte et animation');
   });
@@ -1881,11 +1924,21 @@ describe('sources de l’interface : texte comprimé et animations (§ 7.4, § 1
     assert.throws(() => avecArbre({ 'src/application/a.js': '' }, releverTexteEtAnimation), /aucun fichier examiné/);
   });
 
-  test('l’animation admise : celle du signe du chargement, par son fichier et son sélecteur, arrêtée sous prefers-reduced-motion', () => {
-    assert.equal(ANIMATIONS_ADMISES.length, 1);
-    const [admise] = ANIMATIONS_ADMISES;
-    assert.equal(admise.fichier, 'src/interface/accueil/Chargement.svelte');
-    assert.ok(admise.raison.length > 0);
+  test('les animations admises : le signe du chargement, puis l’apparition et le signe de la pastille d’activité, chacune avec sa raison', () => {
+    assert.deepEqual(
+      ANIMATIONS_ADMISES.map(({ fichier, selecteur, images, mouvement }) => [fichier, selecteur, images, mouvement]),
+      [
+        ['src/interface/accueil/Chargement.svelte', '.rouet', 'rotation', true],
+        ['src/interface/primitives/Activite.svelte', '.activite', 'apparition', false],
+        ['src/interface/primitives/Activite.svelte', '.signe', 'rotation', true],
+      ],
+    );
+    for (const { raison } of ANIMATIONS_ADMISES) assert.ok(raison.length > 0);
+  });
+
+  test('une animation admise : par son fichier et son sélecteur, arrêtée sous prefers-reduced-motion', () => {
+    const admise = { fichier: 'src/interface/accueil/Signe.svelte', selecteur: '.rouet', images: 'rotation', mouvement: true, raison: 'épreuve' };
+    const releverTexteEtAnimation = (racine) => releverAvec(racine, [admise]);
     const tourne = `  ${admise.selecteur} { animation: ${admise.images} 1s linear infinite; }`;
     const images = `  @keyframes ${admise.images} { to { transform: rotate(1turn); } }`;
     const arret = `  @media (prefers-reduced-motion: reduce) { ${admise.selecteur} { animation: none; } }`;
@@ -1928,6 +1981,37 @@ describe('sources de l’interface : texte comprimé et animations (§ 7.4, § 1
     // Un arbre qui ne la porte plus : l'exception est sans objet.
     assert.deepEqual(avecArbre({ [ailleurs]: style() }, releverTexteEtAnimation), [
       `exception sans objet : ${admise.fichier} ${admise.selecteur}`,
+    ]);
+  });
+
+  test('deux animations admises dans un fichier : chacune par son sélecteur ; celle qui n’est pas un mouvement n’anime que l’opacité, et n’a pas à s’arrêter', () => {
+    const fichier = 'src/interface/primitives/Pilule.svelte';
+    const apparition = { fichier, selecteur: '.pilule', images: 'apparition', mouvement: false, raison: 'épreuve' };
+    const rotation = { fichier, selecteur: '.signe', images: 'rotation', mouvement: true, raison: 'épreuve' };
+    const relever = (fichiers) => avecArbre(fichiers, (racine) => releverAvec(racine, [apparition, rotation]));
+    const style = (...regles) => composant({ gabarit: '<div></div>', style: regles.join('\n') });
+    const apparait = '  .pilule { animation: apparition 1ms steps(1, end) 500ms both; }';
+    const opacite = '  @keyframes apparition { from { opacity: 0; } to { opacity: 1; } }';
+    const tourne = '  .signe { animation: rotation 1s linear infinite; }';
+    const images = '  @keyframes rotation { to { transform: rotate(1turn); } }';
+    const arret = '  @media (prefers-reduced-motion: reduce) { .signe { animation: none; } }';
+    // Les deux règles, leurs images, l'arrêt de la seule rotation : rien à
+    // relever.
+    assert.deepEqual(relever({ [fichier]: style(apparait, opacite, tourne, images, arret) }), []);
+    // Sans l'arrêt, seule la rotation se relève.
+    assert.deepEqual(relever({ [fichier]: style(apparait, opacite, tourne, images) }), [
+      `${fichier}:5 animation admise sans arrêt sous prefers-reduced-motion : .signe`,
+    ]);
+    // Une apparition qui anime autre chose que l'opacité est un mouvement.
+    const glisse = '  @keyframes apparition { from { opacity: 0; transform: translateY(1rem); } }';
+    assert.deepEqual(relever({ [fichier]: style(apparait, glisse, tourne, images, arret) }), [
+      `${fichier}:4 animation admise sans mouvement qui anime transform : .pilule`,
+    ]);
+    // La règle d'une exception qui joue les images de l'autre se relève ;
+    // une seule des deux servie laisse l'autre sans objet.
+    assert.deepEqual(relever({ [fichier]: style('  .pilule { animation: rotation 1s linear infinite; }', opacite, arret) }), [
+      `${fichier}:3 animation: rotation 1s linear infinite`,
+      `exception sans objet : ${fichier} .signe`,
     ]);
   });
 });

@@ -9,12 +9,15 @@
   // toujours « Choisir un dossier… », seance.ecrireAilleurs(null), qui
   // demande le dossier à l'opérateur — un refus, NON_DISPONIBLE sous web,
   // s'affiche à côté de la commande ; et « Fermer sans écrire ailleurs »,
-  // confirmé en place, qui abandonne l'événement à ce support.
+  // confirmé en place, qui abandonne l'événement à ce support. Écrire
+  // ailleurs recopie l'événement : il passe par l'indicateur d'activité
+  // (activite.js).
   //
   // C'est un message de refus, comme la primitive Refus : le fond et le
   // filet du refus, son trait à gauche, l'icône « interdit » de sa marque
   // devant le texte, l'encre du refus ; les issues sous le texte.
   import { getContext } from 'svelte';
+  import { suivre } from '../activite.js';
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
 
@@ -39,10 +42,14 @@
           <Commande
             cle="communs.commande.ecrireDocuments"
             nom="ecrireDocuments"
-            executer={() => seance.ecrireAilleurs(rompu.ailleurs)}
+            executer={() => suivre(() => seance.ecrireAilleurs(rompu.ailleurs))}
           />
         {/if}
-        <Commande cle="communs.commande.choisirDossier" nom="choisirDossier" executer={() => seance.ecrireAilleurs(null)} />
+        <Commande
+          cle="communs.commande.choisirDossier"
+          nom="choisirDossier"
+          executer={() => suivre(() => seance.ecrireAilleurs(null))}
+        />
         <Commande
           cle="evenement.supportRompu.abandonner"
           nom="abandonner"

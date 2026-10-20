@@ -340,6 +340,11 @@
   événement qui porte beaucoup de propositions : celles qui ne changent pas ne
   se recopient ni ne se recontrôlent plus. Les fichiers écrits restent les
   mêmes, octet pour octet.
+- Pendant une opération longue — ouvrir un événement, charger une
+  démonstration, défaire, importer un fichier, finir une génération, ouvrir
+  l'aperçu, produire la planche —, une pastille « Traitement en cours… »
+  apparaît au bas de la fenêtre au bout d'une demi-seconde : l'application
+  n'est pas figée.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

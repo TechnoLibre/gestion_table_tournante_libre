@@ -117,6 +117,7 @@
   // closes par le filet de la carte. La surface reste sur le fond de la
   // page.
   import { getContext, onMount, tick, untrack } from 'svelte';
+  import { suivre } from '../activite.js';
   import Commande from '../primitives/Commande.svelte';
   import { CONFIRMATION_DEBLOCAGE } from '../primitives/commande.js';
   import Icone from '../primitives/Icone.svelte';
@@ -181,14 +182,20 @@
     });
   });
 
-  // Le défaire ou le refaire, options passées à la séance ; un refus, une
-  // erreur qui porte un code, se range dans refusRefaire pour un clic sur
-  // « Refaire », dans refusDefaire sinon ; toute autre erreur remonte.
+  // Le défaire ou le refaire, options passées à la séance. Le retour
+  // reconstruit la charge : il passe par l'indicateur d'activité
+  // (activite.js), au clic comme au clavier, quel que soit le mode lu au
+  // moment du geste — un passage en écriture peut encore attendre dans la
+  // file de la séance. En lecture, la séance le refuse sans rien calculer, et
+  // l'indicateur se retire avec le refus. Un refus,
+  // une erreur qui porte un code, se range dans refusRefaire pour un clic
+  // sur « Refaire », dans refusDefaire sinon ; toute autre erreur remonte.
   async function retourner(effet, options, clicRefaire = false) {
     refusDefaire = null;
     refusRefaire = null;
+    const appeler = () => (effet === 'defaire' ? seance.defaire(options) : seance.refaire(options));
     try {
-      await (effet === 'defaire' ? seance.defaire(options) : seance.refaire(options));
+      await suivre(appeler);
     } catch (erreur) {
       if (typeof erreur?.code !== 'string') throw erreur;
       const refus = { code: erreur.code, details: erreur.details ?? {} };

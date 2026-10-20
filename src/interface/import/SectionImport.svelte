@@ -23,6 +23,8 @@
   // participants, les deux de bilanRemplacementObjectifs — objectifs et
   // tables — pour des objectifs, et ne l'ouvre que sur un import que la
   // commande accepterait. Le rapport lit le résumé que la séance rend.
+  // L'import appliqué, et l'essai de « Remplacer » avant sa fenêtre, passent
+  // par l'indicateur d'activité (activite.js).
   //
   // La section est une carte titrée, dont l'en-tête porte la consigne et
   // « Choisir un fichier CSV… », son action principale, et dont le contenu
@@ -47,6 +49,7 @@
   import { getContext, untrack } from 'svelte';
   import { appliquerCommande } from '../../application/commandes.js';
   import { bilanRemplacement, bilanRemplacementObjectifs, decoder, exporterRefus } from '../../application/csv.js';
+  import { suivre } from '../activite.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
@@ -199,9 +202,12 @@
   }
 
   // L'aperçu appliqué par la séance, par la commande de sa nature, dans son
-  // mode ; le rapport lit le résumé rendu, et l'aperçu se ferme.
+  // mode, sous l'indicateur d'activité ; le rapport lit le résumé rendu, et
+  // l'aperçu se ferme.
   async function appliquer(applique, sonMode, depuis, saNature) {
-    const { libelle, resume } = await seance.executer(COMMANDES_DES_NATURES.get(saNature), { apercu: applique, mode: sonMode });
+    const { libelle, resume } = await suivre(() =>
+      seance.executer(COMMANDES_DES_NATURES.get(saNature), { apercu: applique, mode: sonMode }),
+    );
     rapport = {
       nature: saNature,
       modele: modeleApercu({ nature: saNature, encodage: depuis.encodage, apercu: applique }),
@@ -220,7 +226,8 @@
   // la charge sans rien écrire (appliquerCommande, le calcul même que
   // seance.executer applique) — une ambiguïté non tranchée, AMBIGUITE —
   // se posent à côté de la commande, et la fenêtre n'annonce jamais une
-  // destruction qui n'aura pas lieu. Le refus vaut pour l'aperçu qui l'a
+  // destruction qui n'aura pas lieu. L'essai et le bilan de la fenêtre se
+  // calculent sous l'indicateur d'activité. Le refus vaut pour l'aperçu qui l'a
   // reçu : un choix de colonne ou de mode, qui en fait un autre, le retire
   // (la commande se recrée sous {#key apercu}).
   async function importer() {
@@ -234,8 +241,11 @@
     }
     const { refus, charge: courante } = seance.etat();
     if (refus !== null) throw refus;
-    appliquerCommande(COMMANDES_DES_NATURES.get(saNature), courante, { apercu: applique, mode: sonMode });
-    confirmation = { nature: saNature, apercu: applique, depuis, ...annonceDuRemplacement(saNature, courante) };
+    const annonce = await suivre(() => {
+      appliquerCommande(COMMANDES_DES_NATURES.get(saNature), courante, { apercu: applique, mode: sonMode });
+      return annonceDuRemplacement(saNature, courante);
+    });
+    confirmation = { nature: saNature, apercu: applique, depuis, ...annonce };
   }
 
   // Le titre de la fenêtre de « Remplacer » et ce qu'elle nomme détruit :

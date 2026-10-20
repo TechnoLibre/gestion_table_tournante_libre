@@ -35,8 +35,11 @@
   // là où son geste a eu lieu, sans remède : sur la liste, aucun événement
   // n'est ouvert pour l'exécuter (refusDeLaListe). Un geste qui écrit ne se
   // relance pas pendant qu'il s'écrit : la création, comme chaque commande,
-  // ignore une seconde demande et se dit occupée.
+  // ignore une seconde demande et se dit occupée. Ouvrir un événement et
+  // charger une démonstration, opérations longues, passent par l'indicateur
+  // d'activité (activite.js).
   import { getContext, onDestroy, untrack } from 'svelte';
+  import { suivre } from '../activite.js';
   import { versionVisible } from '../apropos.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -199,11 +202,12 @@
     if (importe !== null) apresOperation();
   }
 
-  // Ouvre une ligne en lecture ; un état illisible mène à la récupération.
+  // Ouvre une ligne en lecture, sous l'indicateur d'activité ; un état
+  // illisible mène à la récupération.
   async function ouvrir(ligne) {
     refusOuverture = null;
     try {
-      await seance.ouvrir(ligne.base);
+      await suivre(() => seance.ouvrir(ligne.base));
     } catch (erreur) {
       const refus = refusDeLaListe(erreur);
       if (refus === null) throw erreur;
@@ -212,10 +216,11 @@
     }
   }
 
+  // Charge une démonstration, sous l'indicateur d'activité.
   async function charger(cle) {
     refusDemonstration = null;
     try {
-      await surLaListe(() => facade.chargerDemonstration(cle));
+      await surLaListe(() => suivre(() => facade.chargerDemonstration(cle)));
     } catch (refus) {
       if (typeof refus?.code !== 'string') throw refus;
       refusDemonstration = { cle, refus };
