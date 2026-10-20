@@ -17,7 +17,8 @@ import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
 import { VERSION } from '../version.genere.js';
-import { serialiser, serialiserCharge } from './canonique.js';
+import { canoniser, serialiser, serialiserCharge } from './canonique.js';
+import { appliquer, difference } from './correctifs.js';
 import {
   basesPrises,
   creer,
@@ -33,9 +34,21 @@ import {
 import { courseDe, entreeDeCourse, texteDesCourses } from './courses.js';
 import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
-import { PLAFOND_ENTREES, elaguer, fil, ligneJalon, ligneOuverture, lireJournal, reconstruire, texteDuJournal } from './journal.js';
+import { copieDeTravail, estFigee, figer } from './gel.js';
+import {
+  PLAFOND_ENTREES,
+  elaguer,
+  estInstantane,
+  fil,
+  ligneEntree,
+  ligneJalon,
+  ligneOuverture,
+  lireJournal,
+  reconstruire,
+  texteDuJournal,
+} from './journal.js';
 import { SUFFIXES } from './noms.js';
-import { ajusterALaPresence } from './placements.js';
+import { ajusterALaPresence, examiner } from './placements.js';
 
 const V1 = VERSION.affichee;
 const V2 = versionVoisine(V1);
@@ -734,6 +747,265 @@ describe('dépôt : un geste, une entrée, un état (§ 8.2)', () => {
     await assert.rejects(nommer(ouvert, { nom: '', horodatage: heure(2) }), TypeError);
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await fichiersDe(disque), avant);
+  });
+});
+
+// La charge d'épreuve et une seconde proposition cohérente : deux propositions
+// que le dépôt fige, et que les gestes partagent.
+function deuxPropositions() {
+  const charge = chargeEssai();
+  charge.propositions.push(placement(2, [[1, 2], [3, 4]]));
+  charge.prochainsIds.proposition = 3;
+  return charge;
+}
+
+// La valeur reçue recopiée, les clés de chaque objet à rebours, à toute
+// profondeur.
+function clesARebours(valeur) {
+  if (Array.isArray(valeur)) return valeur.map(clesARebours);
+  if (valeur === null || typeof valeur !== 'object') return valeur;
+  return Object.fromEntries(Object.keys(valeur).reverse().map((cle) => [cle, clesARebours(valeur[cle])]));
+}
+
+// La charge reçue, à rebours hors de ses propositions : chaque objet recopié,
+// ses clés à rebours, et les listes de personnes, de tables et de
+// propositions à rebours. Sa copie canonique est celle de la charge reçue ;
+// ses propositions sont les mêmes objets.
+function aRebours(charge) {
+  const { propositions, ...reste } = charge;
+  const sortie = clesARebours(reste);
+  sortie.participants.reverse();
+  sortie.tables.reverse();
+  return { propositions: [...propositions].reverse(), ...sortie };
+}
+
+// Les objets et les listes que valeur atteint, elle comprise.
+function atteints(valeur, vus = new Set()) {
+  if (valeur === null || typeof valeur !== 'object' || vus.has(valeur)) return vus;
+  vus.add(valeur);
+  for (const enfant of Array.isArray(valeur) ? valeur : Object.values(valeur)) atteints(enfant, vus);
+  return vus;
+}
+
+// Le geste n de la séance d'épreuve, sur une copie de travail de charge, qui
+// partage ses propositions figées : aux gestes 3 et 11, une proposition
+// neuve, ses clés à rebours ; au geste 7, la première proposition retirée ;
+// sinon une table déplacée quand n est multiple de 3, une inscription quand
+// il est impair (inscrire), la note de la première personne sinon.
+function gesteFige(charge, n) {
+  const suivante = copieDeTravail(charge);
+  if (n === 3 || n === 11) {
+    const id = suivante.prochainsIds.proposition;
+    suivante.propositions.push(clesARebours(placement(id, n === 3 ? [[1, 4], [2, 3]] : [[1, 2], [4, 3]])));
+    suivante.prochainsIds.proposition = id + 1;
+  } else if (n === 7) {
+    suivante.propositions.shift();
+  } else if (n % 3 === 0) {
+    suivante.tables[0].position.x += 10;
+  } else if (n % 2 === 1) {
+    const id = suivante.prochainsIds.participant;
+    suivante.participants.push({ ...personne(id, 'Brunelle', null, null), notes: `inscrite au geste ${n}`, exclu: true });
+    suivante.prochainsIds.participant = id + 1;
+  } else {
+    suivante.participants[0].notes = `note ${n}`;
+  }
+  return suivante;
+}
+
+const GESTES_FIGES = 56;
+
+// La séance d'épreuve des propositions figées : creer, puis GESTES_FIGES
+// gestes (gesteFige), chacun à rebours (aRebours), l'événement rouvert du
+// disque après le geste 20, le geste 30 un retour à l'instant 12. clone :
+// chaque apres passe par structuredClone avant enregistrer, ce qui ne laisse
+// rien de figé ni de partagé à aucun cache. Après chaque geste, l'épreuve
+// vérifie la ligne et l'état contre ceux que ligneEntree et serialiser
+// rendent d'une copie de la valeur écrite, la propriété du dépôt sur les
+// propositions d'apres, et qu'aucune valeur atteinte par chargeJournal et
+// par apres, la charge ouverte ou son examen ne soit libre ; puis elle gèle
+// chargeJournal entier et modifie apres et la charge ouverte hors de leurs
+// propositions. Rend les fichiers après chaque geste.
+async function seanceFigee({ clone }) {
+  let { disque, fs } = nouveauDisque();
+  let ouvert = await creer(fs, DOC, deuxPropositions(), CREATION);
+  let precedente = deuxPropositions();
+  const releves = [];
+  for (let n = 1; n <= GESTES_FIGES; n += 1) {
+    if (n === 21) {
+      fs = creerFichiersSimules({ disque });
+      ouvert = await ouvrir(fs, DOC, BASE);
+    }
+    const retour = n === 30 ? { sens: 'revenir', retour: 12 } : {};
+    let apres = aRebours(n === 30 ? reconstruire(ouvert.journal, 12) : gesteFige(ouvert.charge, n));
+    if (clone) apres = structuredClone(apres);
+    const valeur = structuredClone(apres);
+    const revision = n + 1;
+    ouvert = await enregistrer(ouvert, apres, geste(n, retour));
+    const lignes = fs.contenu('documents', JOURNAL).split('\n');
+    const attendue = ligneEntree({
+      revision,
+      libelle: `Geste ${n}`,
+      horodatage: heure(n),
+      produitVersion: null,
+      sens: retour.sens ?? null,
+      retour: retour.retour ?? null,
+      avant: precedente,
+      apres: valeur,
+      instantane: estInstantane(revision, 1),
+    });
+    assert.equal(lignes.at(-2), attendue, `ligne du geste ${n}`);
+    assert.equal(fs.contenu('documents', ETAT), serialiser(valeur, { revision, produitVersion: V1 }), `état du geste ${n}`);
+    for (const p of apres.propositions) {
+      assert.ok(estFigee(p), `geste ${n} : proposition ${p.id} d'apres figée`);
+      assert.throws(() => {
+        p.graine = 1;
+      }, TypeError);
+    }
+    const autres = new Set([...atteints(apres), ...atteints(ouvert.charge), ...atteints(ouvert.examen)]);
+    for (const objet of atteints(ouvert.chargeJournal)) {
+      if (autres.has(objet)) assert.ok(estFigee(objet), `geste ${n} : chargeJournal partage un objet libre`);
+    }
+    figer(ouvert.chargeJournal);
+    apres.participants[0].notes = `modifiée après le geste ${n}`;
+    ouvert.charge.evenement.nom = `Soirée modifiée ${n}`;
+    ouvert.charge.tables[1].position.y += 5;
+    precedente = valeur;
+    releves.push(await fichiersDe(disque));
+  }
+  return releves;
+}
+
+describe('dépôt : les propositions figées au dépôt, une copie canonique par geste (§ 8.1, § 8.2, § 8.8)', () => {
+  test("après creer, ouvrir et enregistrer, chaque proposition de la charge ouverte et de chargeJournal est figée et refuse l'écriture ; canoniser en rend des copies neuves, et appliquer part de chargeJournal", async () => {
+    const { disque, fs } = nouveauDisque();
+    const charge = deuxPropositions();
+    const cree = await creer(fs, DOC, charge, CREATION);
+    for (const p of charge.propositions) {
+      assert.ok(!estFigee(p) && !Object.isFrozen(p), 'creer gèle une copie, non la charge reçue');
+    }
+    const ouvert = await rouvrir(disque, BASE);
+    const apres = gesteSur(ouvert.charge, 1);
+    const enregistre = await enregistrer(ouvert, apres, geste(1));
+    for (const [quoi, o] of [
+      ['creer', cree],
+      ['ouvrir', ouvert],
+      ['enregistrer', enregistre],
+    ]) {
+      for (const cle of ['charge', 'chargeJournal']) {
+        assert.equal(o[cle].propositions.length, 2, `${quoi} ${cle}`);
+        for (const p of o[cle].propositions) {
+          assert.ok(estFigee(p), `${quoi} : proposition ${p.id} de ${cle} figée`);
+          assert.throws(() => {
+            p.placement[0].reserve.push(9);
+          }, TypeError);
+        }
+      }
+      const copie = canoniser(o.chargeJournal);
+      copie.propositions.forEach((p, rang) => {
+        assert.notEqual(p, o.chargeJournal.propositions[rang], quoi);
+        assert.ok(!estFigee(p) && !Object.isFrozen(p) && !Object.isFrozen(p.placement), quoi);
+      });
+      const suivante = modifier(o.charge, 9);
+      const restituee = appliquer(o.chargeJournal, difference(o.chargeJournal, suivante));
+      assert.equal(texteDeCharge(restituee), texteDeCharge(suivante), quoi);
+    }
+  });
+
+  test("creer, ouvrir et enregistrer figent les propositions avant de les examiner : l'examen de l'Ouvert est celui qu'examiner garde en mémoire, et un nouvel examen rend le même tableau de raisons", async () => {
+    // Lacasse exclue : la proposition 1, qui l'assoit, dérive.
+    const derivee = () => {
+      const charge = chargeEssai();
+      charge.participants[3].exclu = true;
+      return charge;
+    };
+    const { disque, fs } = nouveauDisque();
+    const cree = await creer(fs, DOC, derivee(), CREATION);
+    const ouvert = await rouvrir(disque, BASE);
+    const enregistre = await enregistrer(ouvert, modifier(ouvert.charge, 1), geste(1));
+    for (const [quoi, o] of [
+      ['creer', cree],
+      ['ouvrir', ouvert],
+      ['enregistrer', enregistre],
+    ]) {
+      assert.deepEqual(
+        o.examen.derives.map(({ id, raisons }) => [id, raisons.map(({ code }) => code)]),
+        [[1, ['PARTICIPANT_EXCLU']]],
+        quoi,
+      );
+      assert.equal(examiner(o.charge).derives[0].raisons, o.examen.derives[0].raisons, `${quoi} : raisons gardées en mémoire`);
+    }
+  });
+
+  test("écrire ailleurs, avec ou sans geste, gèle une copie : la charge du geste reste libre, et les propositions de l'Ouvert là-bas sont figées", async () => {
+    const { fs } = nouveauDisque();
+    const ouvert = await creer(fs, DOC, deuxPropositions(), CREATION);
+    const apres = structuredClone(deuxPropositions());
+    apres.participants[0].notes = 'renommée';
+    const commun = { existantes: [], horodatage: heure(1) };
+    const avecGeste = await enregistrerAilleurs(ouvert, DOC, {
+      ...commun,
+      geste: { apres, libelle: 'Renommage', produitVersion: V1 },
+    });
+    for (const p of apres.propositions) {
+      assert.ok(!estFigee(p) && !Object.isFrozen(p), 'la charge du geste reste libre');
+    }
+    const sansGeste = await enregistrerAilleurs(ouvert, DOC, commun);
+    for (const [quoi, o] of [
+      ['avec geste', avecGeste],
+      ['sans geste', sansGeste],
+    ]) {
+      for (const cle of ['charge', 'chargeJournal']) {
+        for (const p of o[cle].propositions) assert.ok(estFigee(p), `${quoi} : proposition ${p.id} de ${cle} figée`);
+      }
+      const autres = new Set([...atteints(o.charge), ...atteints(o.examen), ...atteints(ouvert.charge)]);
+      for (const objet of atteints(o.chargeJournal)) {
+        if (autres.has(objet)) assert.ok(estFigee(objet), `${quoi} : chargeJournal partage un objet libre`);
+      }
+    }
+  });
+
+  test("un journal dont le dernier correctif sort la charge de l'ordre canonique s'ouvre sur sa copie canonique : le correctif du geste suivant est celui que ligneEntree rend depuis la valeur écrite", async () => {
+    const { disque, fs } = nouveauDisque();
+    const cree = await creer(fs, DOC, chargeEssai(), CREATION);
+    await enregistrer(cree, modifier(cree.charge, 1), geste(1));
+    // L'entrée 2 change l'identifiant de la personne 2 et insère une
+    // personne, ses clés à rebours : la liste et l'objet sortent de l'ordre
+    // canonique.
+    const lignes = fs.contenu('documents', JOURNAL).split('\n');
+    const rang = rangDeLEntree(lignes.join('\n'), 2);
+    const rompre = [
+      { op: 'poser', chemin: ['participants', { id: 2 }, 'id'], valeur: 9 },
+      { op: 'poser', chemin: ['participants', { id: 5 }], valeur: clesARebours(personne(5, 'Cormoran', null, null)) },
+      { op: 'poser', chemin: ['prochainsIds', 'participant'], valeur: 10 },
+    ];
+    lignes[rang] = JSON.stringify({ ...JSON.parse(lignes[rang]), correctif: rompre });
+    const texteJournal = lignes.join('\n');
+    const valeur = reconstruire(lireJournal(texteJournal), 2);
+    assert.notEqual(JSON.stringify(valeur), JSON.stringify(canoniser(valeur)), "hors de l'ordre canonique");
+    fs.deposer('documents', JOURNAL, texteJournal);
+    fs.deposer('documents', ETAT, etatTexte(valeur, 2));
+    const ouvert = await rouvrir(disque, BASE);
+    assert.equal(JSON.stringify(ouvert.chargeJournal), JSON.stringify(canoniser(valeur)));
+    const apres = modifier(ouvert.charge, 3);
+    const attendue = ligneEntree({
+      revision: 3,
+      libelle: 'Geste 3',
+      horodatage: heure(3),
+      produitVersion: null,
+      avant: valeur,
+      apres: structuredClone(apres),
+      instantane: false,
+    });
+    await enregistrer(ouvert, apres, geste(3));
+    assert.equal(lireJournal(ouvert.fs.contenu('documents', JOURNAL)).ecartees, 0);
+    assert.equal(ouvert.fs.contenu('documents', JOURNAL).split('\n').at(-2), attendue);
+  });
+
+  test(`${GESTES_FIGES} gestes à rebours, rouverts en chemin, un retour compris : chaque ligne et chaque état sont ceux de ligneEntree et de serialiser sur une copie de la valeur écrite, apres appartient au dépôt, chargeJournal ne partage que du figé et ne change jamais ; sans aucun cache (structuredClone), les mêmes octets`, async () => {
+    const partages = await seanceFigee({ clone: false });
+    const libres = await seanceFigee({ clone: true });
+    assert.equal(partages.length, GESTES_FIGES);
+    partages.forEach((fichiers, rang) => assert.deepEqual(fichiers, libres[rang], `geste ${rang + 1}`));
   });
 });
 

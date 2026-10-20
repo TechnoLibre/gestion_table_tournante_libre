@@ -379,7 +379,9 @@ describe('évaluation : chaque placement se valide une fois (§ 8.9)', () => {
   test('un placement à la fois fautif et en dérive est rendu fautif, ses fautes pour raisons : la validation précède la dérive', () => {
     const base = generee(chargeDemo('petite'), { graine: 3, nombre: 3, arret: 300 });
     const retenue = executer(base, 'retenirProposition', { id: base.propositions[0].id });
-    const charge = executer(retenue, 'exclureParticipant', { id: retenue.participants[0].id });
+    // Une commande rend une charge qui partage les propositions figées de la
+    // sienne (copieDeTravail) : l'épreuve modifie une copie de ce qu'elle rend.
+    const charge = structuredClone(executer(retenue, 'exclureParticipant', { id: retenue.participants[0].id }));
     const proposition = charge.propositions[1];
     const [a, b] = proposition.placement[0].sieges;
     a.push(b.shift());

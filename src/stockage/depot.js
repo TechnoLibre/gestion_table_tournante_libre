@@ -106,19 +106,21 @@
 // le compagnon après l'état, et seulement quand les courses connues des
 // propositions écrites ne sont plus celles qu'il porte (poserCompagnon) ;
 // un refus d'écrire le compagnon ne refuse pas l'écriture.
-import { canoniser, serialiser } from './canonique.js';
+import { canoniser, canoniserPartagee, serialiser, serialiserCanonique } from './canonique.js';
 import { avecCourses, cleDeCourse, entreesPour, heriterEmpreintes, lireCourses, texteDesCourses } from './courses.js';
 import { FORMAT, analyser } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { copieDeTravail, gelerPropositions } from './gel.js';
 import {
   PLAFOND_ENTREES,
   decoderJournal,
   elaguerJournal,
+  entreeCanonique,
   estInstantane,
   ligneEntree,
   ligneJalon,
   lireJournal,
-  reconstruire,
+  reconstruireCanonique,
   texteDuJournal,
   versionDe,
 } from './journal.js';
@@ -134,7 +136,8 @@ import { examiner } from './placements.js';
  * @property {import('./systeme_fichiers.js').Racine} racine
  * @property {string} base             base du fichier d'état
  * @property {import('./types.js').Charge} charge   courante, que rend
- *           examiner : propositions fautives écartées, compteur relevé
+ *           examiner : propositions fautives écartées, compteur relevé ;
+ *           chaque proposition est figée (gel.js), le reste se modifie
  * @property {number} revision         révision de la charge courante
  * @property {string} produitVersion   construction qui a produit la charge
  *           courante : en-tête lu, version que le journal note pour sa
@@ -154,7 +157,11 @@ import { examiner } from './placements.js';
  *           base libre que son nom dérive
  * @property {import('./types.js').Charge|null} chargeJournal   charge que
  *           restitue la dernière entrée du journal, d'où part le correctif
- *           de la suivante ; null sans journal
+ *           de la suivante ; null sans journal. C'est une copie canonique,
+ *           que l'Ouvert possède et que rien ne modifie : elle ne partage
+ *           avec la charge d'un geste, la charge courante ou toute autre
+ *           valeur que des objets figés, les propositions figées et leurs
+ *           copies canoniques ; tout le reste lui appartient
  * @property {boolean} journalAReecrire   le fichier du journal porte des
  *           lignes que la lecture a écartées, ou une ouverture d'un format
  *           plus ancien que FORMAT : la prochaine écriture le réécrit en
@@ -543,19 +550,21 @@ async function journalSansEtat(vue, base) {
 
 // Le dernier instant restituable d'un journal lu qui a des entrées : la
 // charge de sa dernière entrée ou, quand un correctif ne s'applique pas, de
-// la dernière entrée qui le précède (§ 8.6). Les entrées qui suivent cet
-// instant et leurs jalons s'écartent et se comptent, comme la lecture compte
-// les lignes qu'elle écarte : le journal rendu finit sur lui. La première
-// entrée porte un instantané, qui se restitue toujours : la recherche
-// s'arrête au plus tard sur elle. Rend null pour un journal absent ou sans
-// entrée.
+// la dernière entrée qui le précède (§ 8.6), en copie canonique
+// (reconstruireCanonique), neuve, ses propositions figées : celle d'où part
+// le correctif de l'entrée suivante (chargeJournal). Les entrées qui suivent
+// cet instant et leurs jalons s'écartent et se comptent, comme la lecture
+// compte les lignes qu'elle écarte : le journal rendu finit sur lui. La
+// première entrée porte un instantané, qui se restitue toujours : la
+// recherche s'arrête au plus tard sur elle. Rend null pour un journal absent
+// ou sans entrée.
 function instantDe(lu) {
   if (lu === null || lu.entrees.length === 0) return null;
   for (let rang = lu.entrees.length - 1; ; rang -= 1) {
     const { revision } = lu.entrees[rang];
     let charge;
     try {
-      charge = reconstruire(lu, revision);
+      charge = gelerPropositions(reconstruireCanonique(lu, revision));
     } catch {
       // Un correctif ne s'applique pas : l'entrée qui précède.
       continue;
@@ -636,19 +645,22 @@ export function rattraper(etat, instant) {
 
 // L'Ouvert d'une source — état, .precedent ou instant du journal — et du
 // journal trouvé pour elle. avecRattrapage : la source suit la règle de
-// rattraper. La source d'un format plus récent, ou un journal d'un format
-// plus récent, gardent l'Ouvert en lecture seule. Un journal dont la lecture
-// a écarté des lignes, ou d'un format plus ancien, se réécrira en entier à
-// la prochaine écriture (journalAReecrire). texteCourses, le texte du
-// compagnon des courses de la base, null quand il ne se lit pas : les
-// courses qu'il confirme pour la charge examinée (lireCourses) sont celles
-// de l'Ouvert, et compagnon leurs clés.
+// rattraper. La charge lue, ou rattrapée, voit ses propositions figées en
+// place avant examiner : l'Ouvert la possède, et les gestes partagent ces
+// propositions. chargeJournal est la copie canonique de l'instant
+// (instantDe), distincte de la charge. La source d'un format plus récent, ou
+// un journal d'un format plus récent, gardent l'Ouvert en lecture seule. Un
+// journal dont la lecture a écarté des lignes, ou d'un format plus ancien, se
+// réécrira en entier à la prochaine écriture (journalAReecrire).
+// texteCourses, le texte du compagnon des courses de la base, null quand il
+// ne se lit pas : les courses qu'il confirme pour la charge examinée
+// (lireCourses) sont celles de l'Ouvert, et compagnon leurs clés.
 function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage, texteCourses }) {
   const lu = avecRattrapage ? rattraper(source, instant) : { ...source, rattrape: false };
   const { charge, revision, produitVersion, manquants, rattrape } = lu;
   const journal = instant?.journal ?? null;
   const ecartees = journal?.ecartees ?? trouve.lu?.ecartees ?? 0;
-  const examen = examiner(charge);
+  const examen = examiner(gelerPropositions(charge));
   const courses = lireCourses(texteCourses, examen.charge);
   return {
     fs,
@@ -931,8 +943,10 @@ function avec(journal, ligne) {
 // reprise. Sans journal, la reprise le commence, instantané de la charge
 // ouverte à sa révision et à sa version. Un journal qui finit sur une autre
 // révision que la charge ouverte reçoit la reprise à la révision qui suit la
-// sienne, qui restitue la charge ouverte. libelleReprise manque : ligneEntree
-// lève TypeError, avant toute écriture.
+// sienne, qui restitue la charge ouverte. charge est toujours une copie
+// canonique : chargeJournal, ou la copie partagée de la charge ouverte
+// (canoniserPartagee), qui ne prête que ses propositions figées.
+// libelleReprise manque : ligneEntree lève TypeError, avant toute écriture.
 function preparer(ouvert, { libelleReprise, horodatage }) {
   const { journal, revision, charge, produitVersion } = ouvert;
   if (journal === null) {
@@ -945,7 +959,7 @@ function preparer(ouvert, { libelleReprise, horodatage }) {
       instantane: true,
     });
     const vide = { evenement: charge.evenement.id, format: FORMAT, entrees: [], jalons: [], ecartees: 0 };
-    return { avant: vide, reprise, journal: avec(vide, reprise), charge: canoniser(charge), entier: true };
+    return { avant: vide, reprise, journal: avec(vide, reprise), charge: canoniserPartagee(charge), entier: true };
   }
   const derniere = journal.entrees.at(-1).revision;
   if (derniere === revision) {
@@ -961,7 +975,7 @@ function preparer(ouvert, { libelleReprise, horodatage }) {
     apres: charge,
     instantane: estInstantane(suivante, journal.entrees[0].revision),
   });
-  return { avant: journal, reprise, journal: avec(journal, reprise), charge: canoniser(charge), entier: true };
+  return { avant: journal, reprise, journal: avec(journal, reprise), charge: canoniserPartagee(charge), entier: true };
 }
 
 // L'en-tête de l'état que restitue la dernière entrée d'un journal : la
@@ -981,12 +995,13 @@ function enteteDeLaDerniere(journal) {
 // journal en avance de plus d'une entrée, ou à la révision de l'état avec
 // une autre charge, et la comparaison des révisions ne rattraperait pas le
 // geste (§ 8.2). Un état illisible ou absent n'a pas de révision : ouvrir le
-// refuse et nomme le journal en secours. Une charge que l'analyse refuserait
-// lève TypeError, avant toute écriture.
+// refuse et nomme le journal en secours. La charge préparée est une copie
+// canonique, qui s'écrit sans être recopiée (serialiserCanonique). Une
+// charge que l'analyse refuserait lève TypeError, avant toute écriture.
 function etatAligne(ouvert, { journal, charge }) {
   const entete = enteteDeLaDerniere(journal);
   if (ouvert.revisionEtat === null || ouvert.revisionEtat === entete.revision) return null;
-  return relisible(serialiser(charge, entete), 'enregistrer');
+  return relisible(serialiserCanonique(charge, entete), 'enregistrer');
 }
 
 // Pose texte, que etatAligne a calculé, avant la ligne d'un geste : la
@@ -1212,27 +1227,49 @@ function apresEcriture(ouvert, { charge, revision, journal, recree = false }) {
   return { ...ouvert, charge: examen.charge, revision, examen, avertissements };
 }
 
-// La ligne de l'entrée d'un geste à la suite du journal que preparer a
-// préparé, et sa révision, celle qui suit la dernière entrée de ce journal :
-// un correctif depuis la charge que restitue cette entrée, ou un instantané à
-// la cadence du journal ; produitVersion n'y paraît que quand la construction
-// change (versionNotee). Une ligne que la lecture refuserait lève TypeError
-// (ligneEntree), avant toute écriture.
+// L'entrée d'un geste à la suite du journal que preparer a préparé :
+// { ligne, canonique, revision }. revision suit la dernière entrée de ce
+// journal ; la ligne porte un correctif depuis la charge que restitue cette
+// entrée, ou un instantané à la cadence du journal ; produitVersion n'y
+// paraît que quand la construction change (versionNotee). canonique est la
+// copie canonique de apres, faite une seule fois (entreeCanonique) : elle
+// donne le texte de l'état (texteDeLEntree) et devient chargeJournal. La
+// charge préparée, une copie canonique, se lit telle quelle. Une ligne que la
+// lecture refuserait lève TypeError, avant toute écriture.
 function ligneDuGeste(preparation, apres, { libelle, horodatage, produitVersion, sens, retour }) {
   const derniere = preparation.journal.entrees.at(-1).revision;
   const revision = derniere + 1;
-  const ligne = ligneEntree({
+  const champs = {
     revision,
     libelle,
     horodatage,
     sens,
     retour,
     produitVersion: versionNotee(produitVersion, preparation.journal, derniere),
-    avant: preparation.charge,
     apres,
     instantane: estInstantane(revision, preparation.journal.entrees[0].revision),
-  });
-  return { ligne, revision };
+  };
+  return { ...entreeCanonique(champs, preparation.charge, { avantCanonique: true }), revision };
+}
+
+// Le texte d'état d'une entrée, depuis sa copie canonique, sous l'en-tête de
+// sa révision et de sa version : celui de serialiser(apres), sans recopier.
+// L'analyse le relit à chaque appel (relisible) : une charge qu'elle
+// refuserait lève TypeError au nom de fonction, avant toute écriture.
+function texteDeLEntree(canonique, revision, produitVersion, fonction) {
+  return relisible(serialiserCanonique(canonique, { revision, produitVersion }), fonction);
+}
+
+// La charge reçue, sa liste de propositions neuve : une proposition déjà
+// figée s'y garde, chacune des autres y prend une copie figée (copieDeTravail,
+// puis gelerPropositions). Les propositions libres de la charge restent à
+// l'appelant, libres ; le reste de la charge est partagé tel quel. Une liste
+// de propositions qui n'est pas un tableau laisse la charge telle quelle, et
+// son refus à son contrôle.
+function avecCopiesFigees(charge) {
+  if (!Array.isArray(charge?.propositions)) return charge;
+  const { propositions } = gelerPropositions(copieDeTravail({ propositions: charge.propositions }));
+  return { ...charge, propositions };
 }
 
 /**
@@ -1241,6 +1278,8 @@ function ligneDuGeste(preparation, apres, { libelle, horodatage, produitVersion,
  * d'un bloc — ouverture, entrée 1 en instantané, jalon nomJalon sur elle —,
  * puis l'état, à la révision 1, puis, quand courses en porte pour les
  * propositions de la charge, le compagnon des courses (poserCompagnon).
+ * L'Ouvert porte des copies figées des propositions de charge, qui reste à
+ * l'appelant, libre (avecCopiesFigees).
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -1255,13 +1294,15 @@ function ligneDuGeste(preparation, apres, { libelle, horodatage, produitVersion,
  *         n'est écrit ; ETAT_NON_ECRIT : le journal est écrit, l'état non ;
  *         CHEMIN_TROP_LONG (deriverBase) ; ABSENT : racine n'existe pas
  */
-export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage, produitVersion, courses = [] }) {
-  const base = await deriver(fs, racine, charge.evenement.nom, []);
-  const entree = ligneEntree({ revision: 1, libelle, horodatage, produitVersion, apres: charge, instantane: true });
+export async function creer(fs, racine, recue, { libelle, nomJalon, horodatage, produitVersion, courses = [] }) {
+  const base = await deriver(fs, racine, recue.evenement.nom, []);
+  const charge = avecCopiesFigees(recue);
+  const champs = { revision: 1, libelle, horodatage, produitVersion, apres: charge, instantane: true };
+  const { ligne: entree, canonique } = entreeCanonique(champs);
   const jalon = ligneJalon({ revision: 1, nom: nomJalon, horodatage });
   const vide = { evenement: charge.evenement.id, format: FORMAT, entrees: [], jalons: [], ecartees: 0 };
   const journal = avec(avec(vide, entree), jalon);
-  const texteEtat = relisible(serialiser(charge, { revision: 1, produitVersion }), 'creer');
+  const texteEtat = texteDeLEntree(canonique, 1, produitVersion, 'creer');
   await fs.ecrireAtomique(racine, base + SUFFIXES.journal, texteDuJournal(journal));
   const cree = {
     fs,
@@ -1272,7 +1313,7 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
     revisionEtat: null,
     journal,
     baseJournal: base,
-    chargeJournal: canoniser(charge),
+    chargeJournal: canonique,
     journalAReecrire: false,
     formatPlusRecent: false,
     etatMalEncode: false,
@@ -1306,6 +1347,14 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
  *
  * Un geste refusé n'écrit rien : chaque ligne et chaque texte d'état se
  * calculent, et se relisent, avant la première écriture.
+ *
+ * enregistrer prend possession des propositions de apres : il les fige en
+ * place (gelerPropositions), après le contrôle d'écriture (exigerEcriture)
+ * et avant tout autre contrôle, refusé ou non, et l'Ouvert rendu les partage
+ * dans sa charge. Une écriture dans l'une d'elles lève
+ * ensuite TypeError ; le reste de apres reste à l'appelant. Une seule copie
+ * canonique de apres sert à la ligne, au texte de l'état et à chargeJournal
+ * (entreeCanonique).
  *
  * (5) Après l'état, le compagnon des courses, quand les courses connues des
  * propositions écrites ne sont plus celles qu'il porte (poserCompagnon) :
@@ -1344,15 +1393,18 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
 export async function enregistrer(ouvert, apres, options) {
   const { horodatage, produitVersion, libelleReprise, courses = [] } = options;
   exigerEcriture(ouvert);
+  // Une charge null ou absente ne porte rien à figer : son refus reste celui
+  // de son contrôle.
+  if (apres !== null && apres !== undefined) gelerPropositions(apres);
   const preparation = preparer(ouvert, { libelleReprise, horodatage });
-  const { ligne, revision } = ligneDuGeste(preparation, apres, options);
-  const texteEtat = relisible(serialiser(apres, { revision, produitVersion }), 'enregistrer');
+  const { ligne, canonique, revision } = ligneDuGeste(preparation, apres, options);
+  const texteEtat = texteDeLEntree(canonique, revision, produitVersion, 'enregistrer');
   const aligne = etatAligne(ouvert, preparation);
   const depart = await mettreDeCoteEtatMalEncode(ouvert, horodatage);
   const suite = aligne === null ? { depart, preparation } : await aligner(depart, preparation, aligne);
   const { recree, ...ecrit } = await ecrireJournal(suite.depart, suite.preparation, ligne);
   const memoire = avecCourses(ouvert.courses, courses);
-  const avance = { ...suite.depart, ...ecrit, produitVersion, chargeJournal: canoniser(apres), courses: memoire };
+  const avance = { ...suite.depart, ...ecrit, produitVersion, chargeJournal: canonique, courses: memoire };
   const examine = apresEcriture(avance, { charge: apres, revision, journal: ecrit.journal, recree });
   return poserCompagnon(await ecrireEtat(examine, texteEtat), ouvert.charge.propositions);
 }
@@ -1422,23 +1474,34 @@ function etatDAvant({ texteEtat, charge, revision, produitVersion }) {
 // version, comme l'écrit enregistrer ; sans geste, la charge préparée sous
 // l'en-tête de cette entrée (enteteDeLaDerniere), comme l'état qu'aligne un
 // geste. La dernière entrée du journal écrit restitue l'état écrit (§ 8.2),
-// et la réouverture n'a rien à rattraper. Une reprise sans libelleReprise, ou
-// un geste dont la ligne ne se relirait pas, lève TypeError.
+// et la réouverture n'a rien à rattraper. texteEtat est le texte de cet
+// état, relu ; charge, celle que l'Ouvert là-bas examine, ne partage avec
+// chargeJournal que du figé : sans geste, une copie de travail de la charge
+// préparée, ses propositions figées ; avec un geste, sa charge, dont les
+// propositions libres prennent des copies figées (avecCopiesFigees), la
+// charge du geste restant à l'appelant. Une reprise sans libelleReprise, ou
+// un geste dont la ligne ou l'état ne se relirait pas, lève TypeError.
 function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
   if (ouvert.journal === null && geste === null) {
     const { charge, revision, produitVersion } = ouvert;
-    return { journal: null, texteJournal: null, charge, chargeJournal: null, revision, produitVersion };
+    const texteEtat = relisible(serialiser(charge, { revision, produitVersion }), 'enregistrerAilleurs');
+    return { journal: null, texteJournal: null, charge, chargeJournal: null, texteEtat, revision, produitVersion };
   }
   const preparation = preparer(ouvert, { libelleReprise, horodatage });
   if (geste === null) {
     const { texte, journal } = textePlein(preparation.journal);
     const { charge } = preparation;
-    return { journal, texteJournal: texte, charge, chargeJournal: charge, ...enteteDeLaDerniere(journal) };
+    const entete = enteteDeLaDerniere(journal);
+    const texteEtat = texteDeLEntree(charge, entete.revision, entete.produitVersion, 'enregistrerAilleurs');
+    const examinee = gelerPropositions(copieDeTravail(charge));
+    return { journal, texteJournal: texte, charge: examinee, chargeJournal: charge, texteEtat, ...entete };
   }
-  const { apres, produitVersion } = geste;
-  const { ligne, revision } = ligneDuGeste(preparation, apres, { ...geste, horodatage });
+  const { produitVersion } = geste;
+  const apres = avecCopiesFigees(geste.apres);
+  const { ligne, canonique, revision } = ligneDuGeste(preparation, apres, { ...geste, horodatage });
+  const texteEtat = texteDeLEntree(canonique, revision, produitVersion, 'enregistrerAilleurs');
   const { texte, journal } = textePlein(avec(preparation.journal, ligne));
-  return { journal, texteJournal: texte, charge: apres, chargeJournal: canoniser(apres), revision, produitVersion };
+  return { journal, texteJournal: texte, charge: apres, chargeJournal: canonique, texteEtat, revision, produitVersion };
 }
 
 /**
@@ -1511,8 +1574,7 @@ export async function enregistrerAilleurs(
   exigerEcriture(ouvert);
   const { fs } = ouvert;
   const paire = paireAilleurs(ouvert, { libelleReprise, horodatage, geste });
-  const { journal, charge, revision, produitVersion } = paire;
-  const texteEtat = relisible(serialiser(charge, { revision, produitVersion }), 'enregistrerAilleurs');
+  const { journal, charge, texteEtat, revision, produitVersion } = paire;
   const precedent = geste === null ? null : etatDAvant(ouvert);
   if (creerRacine) await fs.creerDossier(racine, '');
   const base = await deriver(fs, racine, charge.evenement.nom, [...existantes]);

@@ -86,10 +86,13 @@ function empreinteDuTexte(texte) {
 // Les empreintes déjà calculées, par objet placement, chacune avec le
 // drapeau siegesAttribues sous lequel elle l'a été. Un placement de
 // proposition ne se modifie jamais en place : une commande en fait un neuf,
-// ou modifie une copie (structuredClone) avant toute lecture. Chaque
-// placement se hache ainsi une fois. Une datation, qui recopie la
-// proposition sans copier son placement, retrouve la sienne ; la copie
-// qu'un geste fait d'un placement qu'il garde reçoit celle de l'original
+// ou modifie une copie (structuredClone) avant toute lecture, et le dépôt
+// fige les propositions qu'il enregistre. Chaque placement se hache ainsi
+// une fois. Une proposition figée que les gestes partagent garde le même
+// placement, et son empreinte avec lui ; une datation, qui recopie la
+// proposition sans copier son placement, retrouve la sienne ; une copie
+// d'un placement gardé — une proposition libre qu'un geste recopie, une
+// charge restituée du journal — reçoit celle de l'original
 // (heriterEmpreintes).
 const EMPREINTES = new WeakMap();
 
@@ -149,19 +152,25 @@ function memePlacement(a, b) {
  * dont le placement diffère, même sous la même identité, ne reçoit rien
  * et se hachera à sa prochaine clé. Le drapeau siegesAttribues suit
  * l'empreinte reportée : sous un autre drapeau, empreinteDe la recalcule.
- * Ne modifie aucune proposition. Un geste copie la charge entière
- * (structuredClone) : sans ce report, chaque geste hacherait de nouveau
- * chaque placement qu'il garde.
+ * Ne modifie aucune proposition. Une proposition dont le placement a déjà
+ * son empreinte — le même objet que partagent deux charges successives, ou
+ * une copie déjà reportée — se saute dès ce constat, sans chercher son
+ * original : quand toutes le sont, precedentes ne se lit pas. Le report sert
+ * les copies, celles d'une proposition libre qu'un geste recopie ou d'une
+ * charge restituée : sans lui, chaque geste hacherait de nouveau chaque
+ * placement copié qu'il garde.
  *
  * @param {{id: number, placement: Object[]}[]} precedentes
  * @param {{id: number, placement: Object[]}[]} suivantes   propositions
  *        qui suivent le schéma, comme celles d'une charge examinée
  */
 export function heriterEmpreintes(precedentes, suivantes) {
-  const parId = new Map(precedentes.map((p) => [p.id, p]));
+  let parId = null;
   for (const q of suivantes) {
+    if (EMPREINTES.has(q.placement)) continue;
+    parId ??= new Map(precedentes.map((p) => [p.id, p]));
     const p = parId.get(q.id);
-    if (p === undefined || p.placement === q.placement || EMPREINTES.has(q.placement)) continue;
+    if (p === undefined || p.placement === q.placement) continue;
     const connue = EMPREINTES.get(p.placement);
     if (connue !== undefined && memePlacement(p.placement, q.placement)) EMPREINTES.set(q.placement, connue);
   }

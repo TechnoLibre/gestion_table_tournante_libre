@@ -374,6 +374,24 @@ describe("le compagnon des courses : l'empreinte d'un placement copié (§ 8.9)"
     });
   }
 
+  test("heriterEmpreintes saute d'abord un placement déjà haché, le même objet partagé d'une charge à la suivante : sans copie à reporter, elle ne lit jamais precedentes", () => {
+    const { charge } = chargeEtEntrees([1, 2, 3]);
+    const avant = charge.propositions.map(cleDeCourse);
+    const intouchable = new Proxy([], {
+      get() {
+        throw new Error('precedentes lue');
+      },
+    });
+    const partagees = [...charge.propositions].reverse();
+    assert.equal(hachages(() => heriterEmpreintes(intouchable, partagees)).n, 0, 'le saut ne hache rien');
+    assert.deepEqual(hachages(() => partagees.map(cleDeCourse)), { n: 0, rendu: [...avant].reverse() });
+    // Une copie non hachée cherche son original dans precedentes.
+    const copie = structuredClone(charge.propositions[1]);
+    assert.throws(() => heriterEmpreintes(intouchable, [...partagees, copie]), /precedentes lue/);
+    heriterEmpreintes(charge.propositions, [...partagees, copie]);
+    assert.deepEqual(hachages(() => cleDeCourse(copie)), { n: 0, rendu: avant[1] });
+  });
+
   test("entreesPour ne hache que les propositions dont l'identité est celle d'une entrée ; sans aucune course, elle ne hache rien", () => {
     const { charge, entrees } = chargeEtEntrees([1, 2, 3]);
     const copies = structuredClone(charge.propositions);
