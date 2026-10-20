@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { serialiser } from '../stockage/canonique.js';
 import { analyser, creerCharge } from '../stockage/document.js';
+import { estFigee, gelerPropositions } from '../stockage/gel.js';
 import { VERSION } from '../version.genere.js';
 import { apercevoir } from './apercu.js';
 import { decoder } from './encodage.js';
@@ -751,6 +752,26 @@ describe('appliquerImport : la charge rendue', () => {
       assert.deepEqual({ charge, apercu }, avant, mode);
       const recus = objetsDe({ charge, apercu });
       for (const objet of objetsDe(resultat)) assert.ok(!recus.has(objet), `${mode} : objet partagé ${JSON.stringify(objet)}`);
+    }
+  });
+
+  test("les propositions figées de la charge reçue passent telles quelles dans la charge rendue, qui n'en partage rien d'autre, et la reçue s'écrit comme avant", () => {
+    for (const mode of MODES) {
+      const charge = gelerPropositions(chargeGarnie());
+      const apercu = apercevoir(csv('nom;prenom;courriel', 'Ombrelle;Iris;neuf@exemple.test', 'Bruyère;Anouk;'), {
+        participants: charge.participants,
+        mode,
+      });
+      const texte = JSON.stringify(charge);
+      const { charge: rendue } = appliquerImport(charge, apercu, mode);
+      assert.notEqual(rendue.propositions, charge.propositions, mode);
+      assert.equal(rendue.propositions.length, charge.propositions.length, mode);
+      charge.propositions.forEach((p, rang) => assert.equal(rendue.propositions[rang], p, `${mode} : proposition ${p.id} recopiée`));
+      assert.equal(JSON.stringify(charge), texte, mode);
+      const recus = objetsDe(charge);
+      for (const objet of objetsDe(rendue)) {
+        if (!estFigee(objet)) assert.ok(!recus.has(objet), `${mode} : objet partagé ${JSON.stringify(objet)}`);
+      }
     }
   });
 

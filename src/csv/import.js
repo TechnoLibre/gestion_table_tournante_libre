@@ -8,11 +8,12 @@
 // appliquerImport n'agit que sur un plan qui n'est pas bloqué, sur un
 // aperçu dont la présence est lue sous le nombre de tours de l'événement, et
 // sans refus global ni ambiguïté. Il rend une charge neuve, qui ne
-// partage aucun objet avec celle qu'il reçoit : l'import entier tient dans
-// une seule entrée d'historique, que la commande d'import écrit (§ 8.2). Les
-// personnes ajoutées prennent leurs identifiants à partir de
-// prochainsIds.participant, dans l'ordre du fichier, et le compteur ne recule
-// jamais : un identifiant retiré ne revient pas (§ 4).
+// partage avec celle qu'il reçoit que ses propositions figées (gel.js) :
+// l'import entier tient dans une seule entrée d'historique, que la commande
+// d'import écrit (§ 8.2). Les personnes ajoutées prennent leurs
+// identifiants à partir de prochainsIds.participant, dans l'ordre du
+// fichier, et le compteur ne recule jamais : un identifiant retiré ne revient
+// pas (§ 4).
 //
 // Le CSV des refus reprend chaque ligne refusée telle que découpée, sous
 // l'en-tête d'origine, et ajoute deux colonnes, ligne et motif, qu'aucun
@@ -23,6 +24,7 @@
 // le texte entier, à son rang, par le choix du séparateur.
 
 import { estPresentAuTour, presenceCanonique } from '../moteur/presence.js';
+import { copieDeTravail } from '../stockage/gel.js';
 import { MODES, designer, indexerParNom } from './apercu.js';
 import { ErreurCsv } from './erreurs.js';
 import { SEPARATEUR, ecrireCsv } from './export.js';
@@ -374,7 +376,8 @@ function mettreAJour(participants, lignes, tours) {
  * porte pas, sa présence canonique, absente quand la cellule est vide ou
  * nomme chaque tour ; les identifiants partent de prochainsIds.participant,
  * dans l'ordre du fichier, et le compteur avance d'autant. La charge et l'aperçu
- * reçus ne sont pas modifiés ; la charge rendue n'en partage aucun objet.
+ * reçus ne sont pas modifiés ; la charge rendue n'en partage aucun objet, les
+ * propositions figées (gel.js) exceptées, qu'elle reprend telles quelles.
  *
  * Le résumé (ResumeImport) compte les participants ajoutés, mis à jour,
  * inchangés et retirés, et les réservations retirées. refusees porte les
@@ -416,7 +419,7 @@ export function appliquerImport(charge, apercu, mode) {
   const { ambigus } = apercu.association;
   if (ambigus.length > 0) throw new ErreurCsv('AMBIGUITE', { champs: ambigus.map(({ champ }) => champ) });
 
-  const resultat = structuredClone(charge);
+  const resultat = copieDeTravail(charge);
   let retires = 0;
   let reservationsRetirees = 0;
   let aAjouter = apercu.lignes;

@@ -36,6 +36,7 @@
 // objectif sous une règle que personne n'a choisie.
 
 import { ETIQUETTES_MAX, lireEtiquettes } from '../stockage/etiquettes.js';
+import { copieDeTravail } from '../stockage/gel.js';
 import { associerSelon, reconnaitreSelon } from './colonnes.js';
 import { contientNul } from './encodage.js';
 import { ErreurCsv } from './erreurs.js';
@@ -462,7 +463,8 @@ const memesObjectifs = (a, b) => a.regle === b.regle && JSON.stringify(a.etiquet
  * d'abord, puis par tour croissant, et une table qui n'en garde aucun perd
  * son champ objectifs (§ 8.9). Personnes, réservations, titres,
  * propositions et retenu restent. La charge et l'aperçu reçus ne sont pas
- * modifiés ; la charge rendue n'en partage aucun objet.
+ * modifiés ; la charge rendue n'en partage aucun objet, les propositions
+ * figées (gel.js) exceptées, qu'elle reprend telles quelles.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {ApercuObjectifs} apercu  calculé contre cette charge, pour ce mode
@@ -485,7 +487,7 @@ export function appliquerImportObjectifs(charge, apercu, mode) {
   const { ambigus } = apercu.association;
   if (ambigus.length > 0) throw new ErreurCsv('AMBIGUITE', { champs: ambigus.map(({ champ: nom }) => nom) });
 
-  const resultat = structuredClone(charge);
+  const resultat = copieDeTravail(charge);
   const parId = new Map(resultat.tables.map((table) => [table.id, table]));
   const avant = new Map(resultat.tables.map((table) => [table.id, JSON.stringify(table.objectifs ?? [])]));
   const ecrits = new Set();

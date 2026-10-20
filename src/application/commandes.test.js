@@ -15,6 +15,7 @@ import { rechercher, repartir } from '../moteur/recherche.js';
 import { serialiser, serialiserCharge } from '../stockage/canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { cleDeCourse, courseDe, lireCourses, texteDesCourses } from '../stockage/courses.js';
+import { gelerPropositions } from '../stockage/gel.js';
 import {
   ajusterALaPresence,
   courseDepuisFichier,
@@ -116,6 +117,17 @@ function refuse(appel, code, details) {
 }
 
 const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
+
+// Les objets que valeur atteint, elle comprise, tels que JSON.stringify les
+// parcourt.
+function objetsDe(valeur) {
+  const vus = new Set();
+  JSON.stringify(valeur, (_, v) => {
+    if (typeof v === 'object' && v !== null) vus.add(v);
+    return v;
+  });
+  return vus;
+}
 
 const CSV_DEUX = 'nom;prenom;appartenance\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
@@ -1577,6 +1589,62 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
     }
   });
 
+  // Les commandes qui recomposent la liste des propositions : ajouter une
+  // génération, effacer, garder les meilleures. Les autres la rendent entière,
+  // dans le même ordre.
+  const RECOMPOSENT = new Set(['enregistrerGeneration', 'effacerPropositions', 'garderMeilleures']);
+
+  // Le rendu d'appliquerCommande, daté, en une liste : vide quand le geste
+  // d'exemple ne change rien à la charge reçue (SANS_EFFET).
+  function datee(nom, recue, args) {
+    try {
+      return [appliquerCommande(nom, recue, args, { horodatage: '2031-05-17T20:15:00-04:00' })];
+    } catch (erreur) {
+      if (erreur instanceof ErreurCommande && erreur.code === 'SANS_EFFET') return [];
+      throw erreur;
+    }
+  }
+
+  test("sur une charge aux propositions figées, chaque commande partage celles qu'elle garde, sans les écrire, et la charge reçue s'écrit comme avant", () => {
+    const charge = chargeRiche();
+    const args = exemples(charge);
+    const particulieres = recues(charge);
+    for (const nom of COMMANDES.keys()) {
+      const recue = gelerPropositions(structuredClone(particulieres.get(nom) ?? charge));
+      const texte = serialiserCharge(recue);
+      const parId = new Map(recue.propositions.map((p) => [p.id, p]));
+      for (const { charge: rendue } of [executer(nom, recue, args.get(nom)), ...datee(nom, recue, args.get(nom))]) {
+        assert.notEqual(rendue.propositions, recue.propositions, nom);
+        for (const p of rendue.propositions) {
+          if (parId.has(p.id)) assert.equal(p, parId.get(p.id), `${nom} : proposition ${p.id} recopiée`);
+          else assert.ok(!Object.isFrozen(p), `${nom} : proposition neuve ${p.id} gelée`);
+        }
+        if (!RECOMPOSENT.has(nom)) {
+          assert.equal(rendue.propositions.length, recue.propositions.length, nom);
+          recue.propositions.forEach((p, rang) => assert.equal(rendue.propositions[rang], p, `${nom} : rang ${rang}`));
+        }
+        if (nom === 'retenirProposition') {
+          assert.ok(!Object.isFrozen(rendue.retenu.placement), 'le retenu se modifie sans toucher la proposition');
+          assert.notEqual(rendue.retenu.placement, parId.get(args.get(nom).id).placement);
+        }
+      }
+      assert.equal(serialiserCharge(recue), texte, nom);
+    }
+  });
+
+  test('sur une charge sans proposition figée, la charge rendue ne partage aucun objet avec la reçue', () => {
+    const charge = chargeRiche();
+    const args = exemples(charge);
+    const particulieres = recues(charge);
+    for (const nom of COMMANDES.keys()) {
+      const recue = structuredClone(particulieres.get(nom) ?? charge);
+      assert.ok(recue.propositions.length > 0, nom);
+      const recus = objetsDe(recue);
+      const { charge: rendue } = executer(nom, recue, args.get(nom));
+      for (const objet of objetsDe(rendue)) assert.ok(!recus.has(objet), `${nom} : objet partagé ${JSON.stringify(objet)}`);
+    }
+  });
+
   test('sur un plan bloqué, chaque commande sauf debloquer est refusée PLAN_BLOQUE, remède « Débloquer »', () => {
     const charge = chargeRiche();
     const args = exemples(charge);
@@ -1585,6 +1653,179 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       if (nom === 'debloquer') continue;
       refuse(() => executer(nom, bloquee, args.get(nom)), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
     }
+  });
+
+  describe('SANS_EFFET se juge par la différence des charges (§ 8.2)', () => {
+    // L'issue de fonction : la valeur qu'elle rend ; le code d'une
+    // ErreurCommande qu'elle lève ; pour toute autre erreur, sa classe et son
+    // message.
+    function issue(fonction) {
+      try {
+        return fonction();
+      } catch (erreur) {
+        if (erreur instanceof ErreurCommande) return erreur.code;
+        return `${erreur.constructor.name} : ${erreur.message}`;
+      }
+    }
+
+    // L'issue de appliquerCommande, sans instant : « effet », ou le refus.
+    const issueAppliquee = (nom, recue, args) =>
+      issue(() => (appliquerCommande(nom, recue, args).libelle === null ? 'libellé null' : 'effet'));
+
+    // Le texte d'un retenu, horodatage retiré, sous une charge vidée du
+    // reste : ce qu'appliquerCommande compare avant de juger l'effet.
+    const VIDE = { participants: [], tables: [], reservations: [], titres: [], propositions: [] };
+    function texteDuRetenu(charge, retenu) {
+      const { horodatage, ...reste } = retenu;
+      return serialiserCharge({ ...charge, ...VIDE, retenu: reste });
+    }
+
+    // Le jugement par les textes du rendu de la commande sur recue, une
+    // charge dont le retenu n'est pas daté : la comparaison des retenus, puis
+    // le texte de la charge rendue, puis celui de la reçue ; SANS_EFFET quand
+    // ils sont égaux, « effet » sinon.
+    function jugementParLesTextes(recue, { charge: rendue, libelle }) {
+      if (libelle === null) return 'libellé null';
+      if (rendue.retenu !== null && recue.retenu !== null) {
+        texteDuRetenu(recue, recue.retenu);
+        texteDuRetenu(recue, rendue.retenu);
+      }
+      return serialiserCharge(rendue) === serialiserCharge(recue) ? 'SANS_EFFET' : 'effet';
+    }
+
+    // Le nombre d'objets portant un nom de noms que valeur atteint, elle
+    // comprise, à toute profondeur ; un objet atteint par deux chemins ne
+    // compte qu'une fois.
+    function participantsAtteints(valeur, noms, vus = new Set()) {
+      if (valeur === null || typeof valeur !== 'object' || vus.has(valeur)) return 0;
+      vus.add(valeur);
+      let compte = noms.has(valeur.nom) ? 1 : 0;
+      for (const enfant of Object.values(valeur)) compte += participantsAtteints(enfant, noms, vus);
+      return compte;
+    }
+
+    // Exécute fonction en comptant les participants que JSON.stringify
+    // écrit, ceux de charge reconnus à leur nom, à quelque profondeur de
+    // son argument qu'ils se trouvent : un appel sur la charge entière les
+    // compte tous, comme autant d'appels sur un participant chacun. Rétablit
+    // JSON.stringify, puis rend l'issue de fonction et le compte.
+    function participantsEcrits(charge, fonction) {
+      const noms = new Set(charge.participants.map(({ nom }) => nom));
+      const reel = JSON.stringify;
+      let ecrits = 0;
+      JSON.stringify = (...arguments_) => {
+        ecrits += participantsAtteints(arguments_[0], noms);
+        return reel(...arguments_);
+      };
+      try {
+        return { issue: issue(fonction), ecrits };
+      } finally {
+        JSON.stringify = reel;
+      }
+    }
+
+    test("juger l'effet d'un échange dans le retenu n'écrit pas la charge en texte : aucun participant ne passe par JSON.stringify", () => {
+      const charge = chargeRiche();
+      assert.equal(charge.reglages.attribuerSieges, false);
+      const { voisin, autre } = auTour1(charge);
+      // Les deux personnes de l'autre table : sans attribution des sièges,
+      // leur échange ne change pas la forme canonique du retenu.
+      const [c, d] = charge.retenu.placement[0].sieges.find((liste) => liste.includes(autre));
+      // Les témoins : écrire la charge en texte y fait passer chaque
+      // participant, qu'elle s'écrive participant par participant ou d'un
+      // seul appel.
+      assert.equal(participantsEcrits(charge, () => serialiserCharge(charge)).ecrits, charge.participants.length);
+      assert.equal(participantsEcrits(charge, () => JSON.stringify(charge)).ecrits, charge.participants.length);
+      for (const horodatage of [null, '2031-05-17T20:15:00-04:00']) {
+        const echange = participantsEcrits(charge, () =>
+          appliquerCommande('echangerDansRetenu', charge, { tour: 1, a: voisin, b: autre }, { horodatage }).libelle,
+        );
+        assert.match(echange.issue, /^Échangé /);
+        assert.equal(echange.ecrits, 0, 'échange de deux tables');
+        const memeTable = participantsEcrits(charge, () =>
+          appliquerCommande('echangerDansRetenu', charge, { tour: 1, a: c, b: d }, { horodatage }),
+        );
+        assert.equal(memeTable.issue, 'SANS_EFFET');
+        assert.equal(memeTable.ecrits, 0, 'échange dans une même table');
+      }
+    });
+
+    test('sur une charge privée d’une clé requise, la TypeError nomme le chemin de la charge rendue, qui se copie la première', () => {
+      const charge = chargeRiche();
+      // Supprimer la personne 2 décale la personne 3 d'un rang : son nom
+      // manque au rang 2 de la charge reçue, au rang 1 de la rendue.
+      const sansNom = structuredClone(charge);
+      assert.equal(sansNom.participants[2].id, 3);
+      delete sansNom.participants[2].nom;
+      const attendue = (message) => (erreur) => {
+        assert.equal(erreur.constructor, TypeError);
+        assert.equal(erreur.message, message);
+        return true;
+      };
+      assert.throws(
+        () => appliquerCommande('supprimerParticipant', sansNom, { id: 2 }),
+        attendue('charge.participants[1].nom absente'),
+      );
+      const sansTitres = structuredClone(charge);
+      delete sansTitres.titres;
+      assert.throws(
+        () => appliquerCommande('deplacerTable', sansTitres, { id: 1, position: { x: 40, y: 40 } }),
+        attendue('charge.titres absente'),
+      );
+    });
+
+    // Chaque chemin d'une clé propre d'un objet de valeur, jusqu'à trois
+    // étapes : une liste d'étapes, clé ou rang.
+    function chemins(valeur, chemin = [], sortie = []) {
+      if (valeur === null || typeof valeur !== 'object') return sortie;
+      if (!Array.isArray(valeur)) for (const cle of Object.keys(valeur)) sortie.push([...chemin, cle]);
+      if (chemin.length < 3) {
+        for (const [cle, enfant] of Object.entries(valeur)) {
+          chemins(enfant, [...chemin, Array.isArray(valeur) ? Number(cle) : cle], sortie);
+        }
+      }
+      return sortie;
+    }
+
+    // Une copie de charge privée de la clé au bout de chemin.
+    function privee(charge, chemin) {
+      const copie = structuredClone(charge);
+      const parent = chemin.slice(0, -1).reduce((objet, etape) => objet[etape], copie);
+      delete parent[chemin.at(-1)];
+      return copie;
+    }
+
+    test('sur une charge privée de chacune de ses clés, une à une, appliquerCommande rend l’issue du jugement par les textes : même verdict, même refus, même erreur', () => {
+      const charge = chargeRiche();
+      const args = exemples(charge);
+      const particulieres = recues(charge);
+      assert.equal(Object.hasOwn(charge.retenu, 'horodatage'), false);
+      const comptes = { cas: 0, sansEffet: 0, effet: 0, auJugement: 0 };
+      const ecarts = [];
+      for (const nom of COMMANDES.keys()) {
+        const recue = particulieres.get(nom) ?? charge;
+        for (const chemin of chemins(recue)) {
+          const malFormee = privee(recue, chemin);
+          let rendu = null;
+          const attendue = issue(() => {
+            rendu = executer(nom, malFormee, args.get(nom));
+            return jugementParLesTextes(malFormee, rendu);
+          });
+          const obtenue = issueAppliquee(nom, malFormee, args.get(nom));
+          comptes.cas += 1;
+          if (attendue === 'SANS_EFFET') comptes.sansEffet += 1;
+          if (attendue === 'effet') comptes.effet += 1;
+          // La commande passe : l'erreur vient des textes que le jugement compare.
+          if (rendu !== null && attendue.startsWith('TypeError')) comptes.auJugement += 1;
+          if (obtenue !== attendue && ecarts.length < 5) ecarts.push({ nom, chemin: chemin.join('.'), attendue, obtenue });
+        }
+      }
+      assert.deepEqual(ecarts, []);
+      assert.ok(comptes.cas >= 4500, `cas : ${comptes.cas}`);
+      assert.ok(comptes.auJugement >= 3500, `auJugement : ${comptes.auJugement}`);
+      assert.ok(comptes.sansEffet >= 10, `sansEffet : ${comptes.sansEffet}`);
+      assert.ok(comptes.effet >= 300, `effet : ${comptes.effet}`);
+    });
   });
 });
 

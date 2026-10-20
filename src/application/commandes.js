@@ -4,9 +4,12 @@
 // Les commandes nommées (§ 8.2) : toute modification d'un événement passe par
 // l'une d'elles. Une commande est une fonction pure (charge, arguments) →
 // { charge, libelle, avertissements } : la charge rendue est neuve, celle
-// reçue ne change jamais ; le libellé est le texte français que le journal
-// fige (libelles.js) ; les avertissements, { code, details }, disent ce que le
-// geste emporte de plus que son effet, sans rien empêcher. Un refus lève
+// reçue ne change jamais. Seules les propositions figées (gel.js) passent
+// telles quelles de l'une à l'autre : copieDeTravail les partage au lieu de
+// les recopier, et aucune commande n'écrit dans une proposition existante.
+// Le libellé est le texte français que le journal fige (libelles.js) ; les
+// avertissements, { code, details }, disent ce que le geste emporte de plus
+// que son effet, sans rien empêcher. Un refus lève
 // ErreurCommande(code, details), où details.remede nomme le geste qui le lève,
 // null quand il n'y en a pas ; une faute du code — un argument de forme
 // fausse, un état ou un champ inconnus — lève TypeError. Aucune commande
@@ -37,10 +40,12 @@ import { appliquerImportObjectifs } from '../csv/objectifs.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { presenceCanonique } from '../moteur/presence.js';
 import { serialiserCharge } from '../stockage/canonique.js';
+import { difference } from '../stockage/correctifs.js';
 import { entreeDeCourse } from '../stockage/courses.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
+import { copieDeTravail } from '../stockage/gel.js';
 import { estHorodatage } from '../stockage/journal.js';
 import {
   ajusterALaPresence,
@@ -152,7 +157,7 @@ const titresPourvus = (charge) => bilanRemplacement(charge).titresPourvus;
 // La charge reçue, copiée, son participant id remplacé par ce que rend
 // modifier de sa copie.
 function avecParticipant(charge, id, modifier) {
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.participants = suivante.participants.map((participant) =>
     participant.id === id ? modifier(participant) : participant,
   );
@@ -161,7 +166,7 @@ function avecParticipant(charge, id, modifier) {
 
 // La charge reçue, copiée, à l'état donné.
 function avecEtat(charge, etat) {
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.evenement.etat = etat;
   return suivante;
 }
@@ -205,7 +210,7 @@ function ajouterParticipant(charge, { champs, presence = null }) {
   const canonique = tours === null ? undefined : presenceCanonique(tours, R);
   if (canonique !== undefined) participant.presence = canonique;
   if (id >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'participant' });
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.participants.push(participant);
   suivante.prochainsIds.participant = id + 1;
   const { arrives, ajuste } = ajusterLeRetenu(charge, suivante);
@@ -367,7 +372,7 @@ function reintegrerParticipant(charge, { id }) {
 function supprimerParticipant(charge, { id }) {
   exigerModifiable(charge);
   const participant = participantDe(charge, id);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.participants = suivante.participants.filter((candidat) => candidat.id !== id);
   suivante.reservations = suivante.reservations.filter((reservation) => reservation.participant !== id);
   const reservations = charge.reservations.length - suivante.reservations.length;
@@ -706,7 +711,7 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
   const ids = fichiers.map(({ id }) => id);
   const premier = Math.min(...ids);
   const dernier = Math.max(...ids);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.propositions.push(...fichiers);
   suivante.prochainsIds.proposition = dernier + 1;
   if (suivante.evenement.etat === 'brouillon') suivante.evenement.etat = 'propose';
@@ -768,7 +773,7 @@ function effacerPropositions(charge) {
   const gardees = charge.propositions.filter(({ id }) => id === origine);
   const n = charge.propositions.length - gardees.length;
   if (n === 0) throw refus('SANS_EFFET', { commande: 'effacerPropositions' });
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.propositions = suivante.propositions.filter(({ id }) => id === origine);
   if (suivante.retenu === null && suivante.evenement.etat === 'propose') suivante.evenement.etat = 'brouillon';
   return {
@@ -819,7 +824,7 @@ function garderMeilleures(charge, { n }) {
   }
   if (effacees.length === 0) throw refus('SANS_EFFET', { commande: 'garderMeilleures' });
   const restent = new Set(gardees);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.propositions = suivante.propositions.filter(({ id }) => restent.has(id));
   return {
     charge: suivante,
@@ -920,6 +925,11 @@ function dater(recue, rendue, horodatage, retenuNeuf) {
  * Applique la commande nom à la charge : ce qu'elle rend, avertissements []
  * quand elle n'en donne pas. Un geste dont la charge rendue s'écrit comme la
  * charge reçue ne change rien, et n'est pas une entrée (§ 8.2) : SANS_EFFET.
+ * L'égalité se juge par difference (correctifs.js), vide exactement quand
+ * les textes canoniques des deux charges sont égaux, sans écrire ni l'une
+ * ni l'autre en texte. La charge rendue s'y copie la première : sur une
+ * charge privée d'une clé du schéma, la TypeError nomme le chemin de la
+ * charge rendue.
  * Un rendu au libellé null ne change rien non plus, mais porte ce qu'il y a
  * à lire — l'import dont seules des lignes refusées auraient changé la
  * liste : il passe tel quel, et rien ne s'écrit.
@@ -966,7 +976,7 @@ export function appliquerCommande(nom, charge, args = {}, { horodatage = null } 
     const { horodatage: recu } = charge.retenu;
     suivante = { ...suivante, retenu: recu === undefined ? sansHorodatage(retenu) : { ...sansHorodatage(retenu), horodatage: recu } };
   }
-  if (serialiserCharge(suivante) === serialiserCharge(charge)) throw refus('SANS_EFFET', { commande: nom });
+  if (difference(suivante, charge).length === 0) throw refus('SANS_EFFET', { commande: nom });
   if (horodatage === null) return { ...rendu, charge: suivante, avertissements: rendu.avertissements ?? [] };
   suivante = dater(charge, suivante, horodatage, retenu !== null && !memePlacement);
   const courses = rendu.courses === undefined ? {} : { courses: daterCourses(suivante, rendu.courses) };

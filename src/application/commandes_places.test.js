@@ -13,6 +13,7 @@ import { normaliser } from '../moteur/configuration.js';
 import { rechercher } from '../moteur/recherche.js';
 import { serialiser } from '../stockage/canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { gelerPropositions } from '../stockage/gel.js';
 import { ajusterALaPresence, derive, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { avertissementsApres } from './avertissements.js';
@@ -84,6 +85,19 @@ function figer(valeur) {
     for (const element of Object.values(valeur)) figer(element);
   }
   return valeur;
+}
+
+// La commande nom sur une copie de charge aux propositions figées : la charge
+// rendue garde chaque proposition reçue, même objet au même rang, dans une
+// liste neuve, et la charge reçue s'écrit comme avant.
+function partageLesPropositions(nom, charge, args) {
+  const recue = gelerPropositions(structuredClone(charge));
+  const texte = JSON.stringify(recue);
+  const { charge: rendue } = executer(nom, recue, args);
+  assert.notEqual(rendue.propositions, recue.propositions, nom);
+  assert.equal(rendue.propositions.length, recue.propositions.length, nom);
+  recue.propositions.forEach((p, rang) => assert.equal(rendue.propositions[rang], p, `${nom} : proposition ${p.id} recopiée`));
+  assert.equal(JSON.stringify(recue), texte, nom);
 }
 
 // Un plan de fichier ; la réserve de chaque tour porte les déclarés qu'aucune
@@ -170,6 +184,25 @@ describe('commandes des places : le registre (§ 8.2)', () => {
     ];
     assert.equal(essais.length, COMMANDES_PLACES.size);
     for (const [nom, args] of essais) refuse(() => executer(nom, charge, args), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+  });
+
+  test('sur une charge aux propositions figées, chaque commande des places les partage sans les écrire', () => {
+    const charge = chargeRetenue({ reservations: [resa(3, 5, 3), ...[1, 2, 3].map((tour) => resa(9, 8, null, tour))] });
+    charge.titres = [{ table: 8, siege: 2, libelle: 'accueil' }];
+    const essais = [
+      ['reserver', { participant: 1, table: 5, siege: 1, portee: 'tous', tour: null }],
+      ['retirerReservation', { participant: 3, table: 5, portee: 'tous', tour: null }],
+      ['deplacerReservation', { participant: 3, de: { table: 5, portee: 'tous', tour: null }, vers: { table: 8, siege: null } }],
+      ['poserTitre', { table: 5, siege: 1, libelle: 'animation' }],
+      ['retirerTitre', { table: 8, siege: 2 }],
+      ['designer', { participant: 1, table: 5, siege: 1, libelle: 'animation' }],
+      ['convertirEnTous', { participant: 9, table: 8 }],
+      ['deplacerDansRetenu', { tour: 1, participant: 1, table: 8, siege: 7 }],
+      ['echangerDansRetenu', { tour: 1, a: 1, b: 7 }],
+      ['retirerDuTour', { tour: 1, participant: 1 }],
+    ];
+    assert.equal(essais.length, COMMANDES_PLACES.size);
+    for (const [nom, args] of essais) partageLesPropositions(nom, charge, args);
   });
 });
 

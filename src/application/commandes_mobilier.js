@@ -37,6 +37,7 @@ import {
   regleObjectifs,
 } from '../stockage/document.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
+import { copieDeTravail } from '../stockage/gel.js';
 import { fautes } from '../stockage/placements.js';
 import { presencesSousTours } from '../stockage/presence.js';
 import { bilanChangementDefaut } from './bilans.js';
@@ -88,7 +89,7 @@ function entierSaisi(saisie) {
 // sieges) à son nombre de sièges, null pour une table qui suit le défaut, et
 // le retenu aux capacités qui en résultent.
 function avecSieges(charge, changements, defaut = charge.evenement.siegesParDefaut) {
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.evenement.siegesParDefaut = defaut;
   for (const table of suivante.tables) if (changements.has(table.id)) table.sieges = changements.get(table.id);
   const capacites = new Map(suivante.tables.map((table) => [table.id, capacite(suivante, table)]));
@@ -185,7 +186,7 @@ function creerTable(charge, { forme } = {}) {
   const numero = Math.max(0, ...charge.tables.map((table) => table.numero)) + 1;
   const posees = charge.tables.map((table) => ({ position: table.position, forme: table.forme, places: capacite(charge, table) }));
   const position = caseLibre(posees, { forme, places: charge.evenement.siegesParDefaut });
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.tables.push({ id, numero, sieges: null, forme, position });
   suivante.prochainsIds.table = id + 1;
   const { retenu } = suivante;
@@ -206,7 +207,7 @@ function creerTable(charge, { forme } = {}) {
 function supprimerTable(charge, { id } = {}) {
   exigerModifiable(charge);
   const table = tableDe(charge, id);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.tables = suivante.tables.filter((candidate) => candidate.id !== id);
   suivante.reservations = suivante.reservations.filter((reservation) => reservation.table !== id);
   suivante.titres = suivante.titres.filter((titre) => titre.table !== id);
@@ -226,7 +227,7 @@ function deplacerTable(charge, { id, position } = {}) {
   if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y)) {
     throw new TypeError(`position : {x, y} finis attendus, reçu ${JSON.stringify(position)}`);
   }
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   // + 0 écrit 0 là où l'arrondi d'une petite valeur négative rend −0.
   suivante.tables.find((candidate) => candidate.id === id).position = { x: Math.round(position.x) + 0, y: Math.round(position.y) + 0 };
   return { charge: suivante, libelle: libelle('ENTREE_DEPLACER_TABLE', { numero: table.numero }), avertissements: [] };
@@ -345,7 +346,7 @@ function changerTours(charge, { tours: saisie } = {}) {
   if (videes.length > 0) {
     throw refus('PRESENCE_VIDEE_PAR_TOURS', { participants: nommees(videes), tours }, { geste: 'ouvrirSection', section: 'participants' });
   }
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.evenement.tours = tours;
   suivante.participants = structuredClone(participants);
   suivante.reservations = suivante.reservations.filter(({ portee, tour }) => portee === 'tous' || tour <= tours);
@@ -382,7 +383,7 @@ function changerTours(charge, { tours: saisie } = {}) {
  */
 function modifierReglage(charge, { cle, valeur } = {}) {
   exigerModifiable(charge);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   if (INTERRUPTEURS.has(cle)) {
     if (typeof valeur !== 'boolean') throw new TypeError(`${cle} : booléen attendu, reçu ${JSON.stringify(valeur)}`);
     suivante.reglages[cle] = valeur;
@@ -426,7 +427,7 @@ function tourDeLObjectif(charge, tour) {
 // modifier de sa liste — sans eux, le champ retiré —, rangés la soirée
 // d'abord, puis les tours croissants (§ 8.9).
 function avecObjectifs(charge, id, modifier) {
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   const table = suivante.tables.find((candidate) => candidate.id === id);
   const objectifs = modifier(table.objectifs ?? []).sort(ordreDesObjectifs);
   if (objectifs.length > 0) table.objectifs = objectifs;
@@ -511,7 +512,7 @@ function changerRegleObjectifs(charge, { regle } = {}) {
   exigerModifiable(charge);
   if (!REGLES.has(regle)) throw new TypeError(`regle : 'ou' ou 'et' attendu, reçu ${JSON.stringify(regle)}`);
   if (regle === regleObjectifs(charge)) throw refus('SANS_EFFET', { commande: 'changerRegleObjectifs' });
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   if (regle === regleObjectifs({ reglages: {} })) delete suivante.reglages.regleObjectifs;
   else suivante.reglages.regleObjectifs = regle;
   const connus = new Set(avisObjectifs(charge).map(cleDAvis));
@@ -659,7 +660,7 @@ function changerPriorites(charge, { paliers } = {}) {
   if (faute !== null) throw refus('PRIORITES_INVALIDES', faute);
   const courante = rangerPaliers(priorites(charge));
   if (memesPriorites(liste, courante)) throw refus('SANS_EFFET', { commande: 'changerPriorites' });
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   if (memesPriorites(liste, PAR_DEFAUT)) delete suivante.reglages.priorites;
   else suivante.reglages.priorites = liste;
   return {
@@ -677,7 +678,7 @@ function changerPriorites(charge, { paliers } = {}) {
 function retablirPriorites(charge) {
   exigerModifiable(charge);
   if (charge.reglages.priorites === undefined) throw refus('SANS_EFFET', { commande: 'retablirPriorites' });
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   delete suivante.reglages.priorites;
   return { charge: suivante, libelle: libelle('ENTREE_RETABLIR_PRIORITES'), avertissements: [] };
 }

@@ -34,6 +34,7 @@ import {
 } from '../stockage/document.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
+import { gelerPropositions } from '../stockage/gel.js';
 import { derive, examiner, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { invariantViole } from './avertissements.js';
@@ -120,6 +121,19 @@ function figer(valeur) {
     for (const element of Object.values(valeur)) figer(element);
   }
   return valeur;
+}
+
+// La commande nom sur une copie de charge aux propositions figées : la charge
+// rendue garde chaque proposition reçue, même objet au même rang, dans une
+// liste neuve, et la charge reçue s'écrit comme avant.
+function partageLesPropositions(nom, charge, args) {
+  const recue = gelerPropositions(structuredClone(charge));
+  const texte = JSON.stringify(recue);
+  const { charge: rendue } = COMMANDES.get(nom)(recue, args);
+  assert.notEqual(rendue.propositions, recue.propositions, nom);
+  assert.equal(rendue.propositions.length, recue.propositions.length, nom);
+  recue.propositions.forEach((p, rang) => assert.equal(rendue.propositions[rang], p, `${nom} : proposition ${p.id} recopiée`));
+  assert.equal(JSON.stringify(recue), texte, nom);
 }
 
 // Vrai quand la configuration de la charge se normalise.
@@ -261,6 +275,33 @@ describe('mobilier : le registre (§ 8.2)', () => {
     for (const [nom, args] of gestes) {
       refuse(() => COMMANDES.get(nom)(charge, args), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
     }
+  });
+
+  test('sur une charge aux propositions figées, chaque commande du mobilier les partage sans les écrire', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }, { id: 3, numero: 7 }], n: 6, tours: 3 });
+    charge.participants[0].etiquettes = ['finance'];
+    charge.participants[1].etiquettes = ['Montréal', 'finance'];
+    placer(charge, [[[1, 2], [3, 4], [5, 6]], [[1, 3], [2, 5], [4, 6]], [[1, 4], [2, 6], [3, 5]]], { id: 1, retenu: true });
+    placer(charge, [[[1, 6], [2, 3], [4, 5]], [[1, 5], [2, 4], [3, 6]], [[1, 2], [3, 5], [4, 6]]], { id: 2 });
+    charge.tables[1].objectifs = [soiree(['finance'])];
+    charge.reglages.priorites = COLLISIONS_JOINTES;
+    const gestes = [
+      ['creerTable', { forme: 'ronde' }],
+      ['supprimerTable', { id: 3 }],
+      ['deplacerTable', { id: 1, position: { x: 5, y: 5 } }],
+      ['changerPlacesTable', { id: 2, sieges: 6, origine: 'champ' }],
+      ['realignerTable', { id: 1 }],
+      ['changerDefaut', { sieges: 6, realigner: false }],
+      ['changerTours', { tours: 4 }],
+      ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
+      ['poserObjectif', { table: 1, tour: null, etiquettes: 'finance', regle: null }],
+      ['retirerObjectif', { table: 2, tour: null }],
+      ['changerRegleObjectifs', { regle: 'et' }],
+      ['changerPriorites', { paliers: HORS_JOINTS }],
+      ['retablirPriorites', {}],
+    ];
+    assert.equal(gestes.length, COMMANDES_MOBILIER.size);
+    for (const [nom, args] of gestes) partageLesPropositions(nom, charge, args);
   });
 });
 

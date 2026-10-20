@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
 import { creerCharge } from '../stockage/document.js';
+import { gelerPropositions } from '../stockage/gel.js';
 import { RAISONS_DE_PARTICIPANTS, ajusterALaPresence, derive, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { avertissementsApres } from './avertissements.js';
@@ -132,6 +133,17 @@ describe('changerPresence : la commande (§ 4, § 8.2)', () => {
   test('le registre de la présence porte changerPresence, réuni dans COMMANDES', () => {
     assert.deepEqual([...COMMANDES_PRESENCE.keys()], ['changerPresence']);
     assert.equal(COMMANDES.get('changerPresence'), COMMANDES_PRESENCE.get('changerPresence'));
+  });
+
+  test('sur une charge aux propositions figées, changerPresence les partage sans les écrire, et la charge reçue s’écrit comme avant', () => {
+    const recue = gelerPropositions(chargeDe());
+    const texte = JSON.stringify(recue);
+    const { charge: rendue } = COMMANDES.get('changerPresence')(recue, { id: 2, tours: [1, 3] });
+    assert.notEqual(rendue.propositions, recue.propositions);
+    assert.equal(rendue.propositions.length, 1);
+    assert.equal(rendue.propositions[0], recue.propositions[0]);
+    assert.equal(JSON.stringify(recue), texte);
+    assert.deepEqual(rendue.participants[1].presence, [1, 3]);
   });
 
   test('la présence s’écrit canonique : une liste partielle telle quelle, tous les tours retirent le champ, null aussi', () => {

@@ -34,6 +34,7 @@
 import { ordreDesReservations, pourvoyeursDesTitres } from '../csv/import.js';
 import { capacite } from '../stockage/document.js';
 import { estPresentAuTour, toursDePresence } from '../moteur/presence.js';
+import { copieDeTravail } from '../stockage/gel.js';
 import { fautes } from '../stockage/placements.js';
 import { violationsDuRetenu } from './avertissements.js';
 import { refus } from './erreurs.js';
@@ -154,7 +155,7 @@ function reserver(charge, { participant, table: idTable, siege = null, portee, t
   }
   const { refus: refusPose, signaux } = controlerPose(charge, nouvelle);
   leverRefus(refusPose);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.reservations.push(nouvelle);
   return {
     charge: suivante,
@@ -182,7 +183,7 @@ function retirerReservation(charge, { participant, table: idTable, portee, tour 
   const table = tableDe(charge, idTable);
   const designation = { table: idTable, portee, tour };
   reservationsDesignees(charge, participant, designation);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.reservations = suivante.reservations.filter((r) => !designee(r, participant, designation));
   return {
     charge: suivante,
@@ -210,7 +211,7 @@ function deplacerReservation(charge, { participant, de, vers } = {}) {
   const deplacee = { participant, table: vers.table, siege: siegeEcrit, portee: premiere.portee, tour: premiere.tour };
   const { refus: refusPose, signaux } = controlerPose(charge, { ...deplacee, depuis: de });
   leverRefus(refusPose);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   let remplacee = false;
   suivante.reservations = suivante.reservations.flatMap((r) => {
     if (!designee(r, participant, de)) return [r];
@@ -248,7 +249,7 @@ function convertirEnTous(charge, { participant, table: idTable } = {}) {
   const parTour = (r) => r.participant === participant && r.table === idTable && r.portee === 'tour';
   const sieges = new Set(charge.reservations.filter(parTour).map(({ siege }) => siege));
   const siege = sieges.size === 1 ? [...sieges][0] : null;
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.reservations = suivante.reservations.filter((r) => !parTour(r));
   suivante.reservations.push({ participant, table: idTable, siege, portee: 'tous', tour: null });
   return {
@@ -280,7 +281,7 @@ function poserTitre(charge, { table: idTable, siege = null, libelle: saisi } = {
       arguments: { table: idTable, siege: place },
     });
   }
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.titres.push({ table: idTable, siege: place, libelle: texte });
   return {
     charge: suivante,
@@ -295,7 +296,7 @@ function retirerTitre(charge, { table: idTable, siege } = {}) {
   const table = tableDe(charge, idTable);
   const titre = titreDe(charge, idTable, siege);
   if (titre === undefined) throw refus('TITRE_ABSENT', { table: idTable, siege });
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   const rang = charge.titres.indexOf(titre);
   suivante.titres.splice(rang, 1);
   return {
@@ -335,7 +336,7 @@ function designer(charge, { participant, table: idTable, siege = null, libelle: 
   if (dejaReservee && titre !== undefined) throw refus('SANS_EFFET', { commande: 'designer' });
   const { refus: refusPose, signaux } = controlerPose(charge, reservation);
   leverRefus(refusPose);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   if (!dejaReservee) suivante.reservations.push(reservation);
   if (titre === undefined) suivante.titres.push({ table: idTable, siege: place, libelle: texte });
   return {
@@ -496,7 +497,7 @@ function deplacerDansRetenu(charge, { tour, participant, table: idTable, siege =
   const place = placeDe(charge, tour, participant, assisesDuTour);
   const de = place === null ? null : numeroDuLieu(charge, tour, participant);
   const memeTable = place !== null && place.table === idTable;
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   const { retenu } = suivante;
   const rangTable = rangDeTable(retenu, idTable, places);
   if (lieuDans(retenu, tour, participant) === null) declarer(retenu, personne, charge.evenement.tours);
@@ -685,7 +686,7 @@ function echangerDansRetenu(charge, { tour, a, b } = {}) {
 
   const deA = placeA === null ? null : numeroDuLieu(charge, tour, a);
   const deB = placeB === null ? null : numeroDuLieu(charge, tour, b);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   const { retenu } = suivante;
   for (const personne of [personneA, personneB]) {
     if (lieuDans(retenu, tour, personne.id) === null) declarer(retenu, personne, charge.evenement.tours);
@@ -735,7 +736,7 @@ function retirerDuTour(charge, { tour, participant } = {}) {
     throw refus('SANS_EFFET', { commande: 'retirerDuTour' });
   }
   const numero = numeroDuLieu(charge, tour, participant);
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   reduireAuxAssises(suivante.retenu, tour, rangsDesTables(suivante.retenu, tour, [participant]), assises, presents(charge));
   oter(suivante.retenu, tour, participant);
   enReserve(suivante.retenu, tour, participant);

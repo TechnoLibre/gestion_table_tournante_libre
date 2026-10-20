@@ -22,6 +22,7 @@
 // RESERVATION_NON_HONOREE après le geste, sans le refuser.
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { estPresentAuTour, presenceCanonique } from '../moteur/presence.js';
+import { copieDeTravail } from '../stockage/gel.js';
 import { ajusterALaPresence, fautes } from '../stockage/placements.js';
 import { refus } from './erreurs.js';
 import { libelle } from './libelles.js';
@@ -273,7 +274,7 @@ function changerPresence(charge, { id, tours } = {}) {
   const presence = lus === null ? undefined : presenceCanonique(lus, R);
   const avant = personne.presence === undefined ? undefined : presenceCanonique(personne.presence, R);
   if (memePresence(presence, avant)) throw refus('SANS_EFFET', { commande: 'changerPresence' });
-  const suivante = structuredClone(charge);
+  const suivante = copieDeTravail(charge);
   suivante.participants = suivante.participants.map((candidate) => {
     if (candidate.id !== id) return candidate;
     const reste = { ...candidate };

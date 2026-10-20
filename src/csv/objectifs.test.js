@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
 import { serialiser } from '../stockage/canonique.js';
 import { analyser, creerCharge } from '../stockage/document.js';
+import { estFigee, gelerPropositions } from '../stockage/gel.js';
 import { ETIQUETTES_MAX, ETIQUETTE_LONGUEUR_MAX } from '../stockage/etiquettes.js';
 import { VERSION } from '../version.genere.js';
 import { decoder } from './encodage.js';
@@ -74,6 +75,32 @@ function avecObjectifs() {
   ];
   charge.tables[2].objectifs = [{ portee: 'tour', tour: 3, regle: 'ou', etiquettes: ['Vélo'] }];
   return charge;
+}
+
+// L'événement aux objectifs, deux propositions inventées en plus : chacune
+// assied les deux personnes déclarées à la table 1, à chaque tour.
+function avecPropositions() {
+  const charge = avecObjectifs();
+  const proposition = (id) => ({
+    id, graine: 7 + id, arret: 40, historique: 1000, produitVersion: VERSION.affichee, siegesAttribues: false,
+    tables: [1, 2, 3], capacites: [4, 4, 4], tours: 4, participants: [1, 2],
+    placement: Array.from({ length: 4 }, () => ({ sieges: [[1, 2], [], []], reserve: [] })),
+  });
+  charge.propositions = [proposition(1), proposition(2)];
+  charge.prochainsIds.proposition = 3;
+  charge.evenement.etat = 'propose';
+  return charge;
+}
+
+// Les objets que valeur atteint, elle comprise, tels que JSON.stringify les
+// parcourt.
+function objetsDe(valeur) {
+  const vus = new Set();
+  JSON.stringify(valeur, (_, v) => {
+    if (typeof v === 'object' && v !== null) vus.add(v);
+    return v;
+  });
+  return vus;
 }
 
 // La charge relue par le schéma du fichier d'état : elle s'écrit et se relit.
@@ -395,6 +422,35 @@ describe('objectifs : les étiquettes se réconcilient avec celles de l’évén
 });
 
 describe('objectifs : ce que remplacer touche, et l’import appliqué (§ 10.4)', () => {
+  test("la charge et l'aperçu reçus ne sont pas modifiés, et la charge rendue n'en partage aucun objet", () => {
+    for (const mode of MODES_IMPORT_OBJECTIFS) {
+      const charge = avecPropositions();
+      const apercu = apercevoirObjectifs(csv('table;tour;objectif;regle', '1;;finance;', '2;3;Vélo;ou'), charge, { mode });
+      const avant = structuredClone({ charge, apercu });
+      const { charge: rendue } = appliquerImportObjectifs(charge, apercu, mode);
+      assert.deepEqual({ charge, apercu }, avant, mode);
+      const recus = objetsDe({ charge, apercu });
+      for (const objet of objetsDe(rendue)) assert.ok(!recus.has(objet), `${mode} : objet partagé ${JSON.stringify(objet)}`);
+    }
+  });
+
+  test("les propositions figées de la charge reçue passent telles quelles dans la charge rendue, qui n'en partage rien d'autre, et la reçue s'écrit comme avant", () => {
+    for (const mode of MODES_IMPORT_OBJECTIFS) {
+      const charge = gelerPropositions(avecPropositions());
+      const apercu = apercevoirObjectifs(csv('table;tour;objectif;regle', '1;;finance;', '2;3;Vélo;ou'), charge, { mode });
+      const texte = JSON.stringify(charge);
+      const { charge: rendue } = appliquerImportObjectifs(charge, apercu, mode);
+      assert.notEqual(rendue.propositions, charge.propositions, mode);
+      assert.equal(rendue.propositions.length, 2, mode);
+      charge.propositions.forEach((p, rang) => assert.equal(rendue.propositions[rang], p, `${mode} : proposition ${p.id} recopiée`));
+      assert.equal(JSON.stringify(charge), texte, mode);
+      const recus = objetsDe(charge);
+      for (const objet of objetsDe(rendue)) {
+        if (!estFigee(objet)) assert.ok(!recus.has(objet), `${mode} : objet partagé ${JSON.stringify(objet)}`);
+      }
+    }
+  });
+
   test('bilanRemplacementObjectifs compte les objectifs de l’événement et les tables qui en portent', () => {
     assert.deepEqual(bilanRemplacementObjectifs(avecObjectifs()), { objectifs: 3, tables: 2 });
     assert.deepEqual(bilanRemplacementObjectifs(evenement()), { objectifs: 0, tables: 0 });
