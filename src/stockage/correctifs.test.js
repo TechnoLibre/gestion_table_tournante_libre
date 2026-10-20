@@ -6,7 +6,10 @@
 // localité sur la grande démonstration, chaque règle de difference, la copie
 // que rend appliquer, et ses refus, chacun avec le rang de l'opération
 // refusée ; differenceCanonique sur des copies canoniques, qui partagent ou
-// non leurs sous-arbres. Les charges des démonstrations se construisent ici,
+// non leurs sous-arbres ; difference sur des charges aux propositions
+// figées ou non, et le correctif vide exactement quand deux charges
+// s'écrivent pareil ; appliquerSuite contre la chaîne des appliquer, sur
+// des suites tirées faites pour rompre l'ordre canonique. Les charges des démonstrations se construisent ici,
 // en forme positionnelle, sans le module des placements : la configuration
 // vient du catalogue, chaque proposition d'une distribution tournante. Ce module ne
 // sert qu'à reconnaître un retenu abîmé, et à examiner un fichier qui en
@@ -20,11 +23,13 @@ import fc from 'fast-check';
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
 import { CATALOGUE } from '../demo/catalogue.js';
+import { CRITERES, POIDS_MAX } from '../moteur/criteres.js';
 import { VERSION } from '../version.genere.js';
-import { canoniser, serialiser, serialiserCharge } from './canonique.js';
-import { appliquer, difference, differenceCanonique } from './correctifs.js';
+import { canoniser, canoniserPartagee, serialiser, serialiserCharge } from './canonique.js';
+import { appliquer, appliquerSuite, difference, differenceCanonique } from './correctifs.js';
 import { analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { estFigee, figer, gelerPropositions } from './gel.js';
 import { ligneEntree, ligneOuverture, lireJournal, reconstruire } from './journal.js';
 import { ajusterALaPresence, examiner, fautes } from './placements.js';
 
@@ -2486,6 +2491,576 @@ describe('differenceCanonique : le correctif entre deux copies canoniques (§ 8.
       { op: 'poser', chemin: ['participants', { id: ca.participants[0].id }, 'notes'], valeur: 'part tôt' },
       { op: 'poser', chemin: ['propositions', { id: ca.propositions[0].id }, 'graine'], valeur: cb.propositions[0].graine },
     ]);
+  });
+});
+
+// --- Copies partagées et suite de correctifs -------------------------------
+
+// Copie de charge dont chaque proposition est figée (gel.js), comme celles
+// que le stockage publie.
+const figees = (charge) => gelerPropositions(copie(charge));
+
+// Charge x, ou son refus : le texte JSON du résultat, ordre des clés
+// compris, ou le code et les détails d'une ErreurStockage, ou le nom et le
+// message d'une autre erreur.
+function issueDe(calcul) {
+  try {
+    return { texte: JSON.stringify(calcul()) };
+  } catch (erreur) {
+    if (erreur instanceof ErreurStockage) return { refus: `${erreur.code} ${JSON.stringify(erreur.details)}` };
+    return { refus: `${erreur?.name} : ${erreur?.message}` };
+  }
+}
+
+describe('difference : copies canoniques partagées, propositions figées ou non (§ 8.6)', () => {
+  test(`les ${TIRAGES} paires : difference ne change pas quand les propositions sont figées, appliquer(a, difference(a, b)) s'écrit comme b, une valeur posée ne partage avec b que des objets figés, et le correctif est vide exactement quand les deux charges s'écrivent pareil`, () => {
+    const paires = fc.sample(unePaire, { seed: GRAINE, numRuns: TIRAGES });
+    const bilan = { sansEffet: 0, avecEffet: 0, partagesFiges: 0, propositionsPartagees: 0 };
+    const sansEffet = (x, y) => difference(x, y).length === 0;
+    const memeTexte = (x, y) => serialiserCharge(x) === serialiserCharge(y);
+    for (const { a, b } of paires) {
+      const correctif = difference(a, b);
+      const [af, bf] = [figees(a), figees(b)];
+      const correctifFige = difference(af, bf);
+      assert.equal(JSON.stringify(correctifFige), JSON.stringify(correctif));
+      assert.equal(serialiserCharge(appliquer(a, correctif)), serialiserCharge(b));
+      assert.equal(serialiserCharge(appliquer(af, correctifFige)), serialiserCharge(b));
+      // Des charges libres : le correctif ne partage rien avec b.
+      const deB = objetsDe(b);
+      assert.deepEqual([...objetsDe(correctif)].filter((objet) => deB.has(objet)), []);
+      // Une cible qui porte déjà les copies canoniques partagées de ses
+      // propositions : une proposition posée entière est la sienne, figée.
+      const cible = canoniserPartagee(bf);
+      const versCible = difference(af, cible);
+      assert.equal(JSON.stringify(versCible), JSON.stringify(correctif));
+      const deCible = objetsDe(cible);
+      const partages = [...objetsDe(versCible)].filter((objet) => deCible.has(objet));
+      for (const objet of partages) assert.ok(estFigee(objet), JSON.stringify(objet).slice(0, 80));
+      if (partages.length > 0) bilan.partagesFiges += 1;
+      // Le correctif vide dit « rien à écrire » exactement quand les textes
+      // sont égaux : sur la paire, d'une charge à sa copie canonique, et
+      // entre des charges qui partagent leurs propositions figées.
+      const partageuse = { ...bf, propositions: [...af.propositions] };
+      const renversee = { ...af, propositions: [...af.propositions].reverse() };
+      const couples = [
+        [a, b],
+        [af, bf],
+        [b, canoniser(b)],
+        [bf, cible],
+        [af, partageuse],
+        [partageuse, bf],
+        [af, renversee],
+      ];
+      for (const [x, y] of couples) assert.equal(sansEffet(x, y), memeTexte(x, y));
+      assert.equal(JSON.stringify(difference(af, partageuse)), JSON.stringify(difference(a, { ...b, propositions: a.propositions })));
+      assert.deepEqual(difference(af, renversee), []);
+      if (af.propositions.length > 0) bilan.propositionsPartagees += 1;
+      if (correctif.length === 0) bilan.sansEffet += 1;
+      else bilan.avecEffet += 1;
+    }
+    for (const [famille, plancher] of [['sansEffet', 30], ['avecEffet', 150], ['partagesFiges', 60]]) {
+      assert.ok(bilan[famille] >= plancher, `${famille} : ${bilan[famille]}`);
+    }
+    assert.equal(bilan.propositionsPartagees, TIRAGES);
+  });
+
+  test("une proposition libre, ou gelée en surface seulement, se relit à chaque appel : la modifier en place entre deux appels change le correctif", () => {
+    const a = petite();
+    const libre = petite();
+    assert.deepEqual(difference(a, libre), []);
+    libre.propositions[0].graine += 1;
+    assert.deepEqual(difference(a, libre), [
+      { op: 'poser', chemin: ['propositions', { id: 1 }, 'graine'], valeur: libre.propositions[0].graine },
+    ]);
+    // Object.freeze ne gèle que la surface : ses capacités se modifient
+    // encore, et la proposition n'entre pas au registre.
+    const enSurface = petite();
+    Object.freeze(enSurface.propositions[0]);
+    assert.deepEqual(difference(a, enSurface), []);
+    enSurface.propositions[0].capacites[0] += 1;
+    assert.equal(estFigee(enSurface.propositions[0]), false);
+    assert.deepEqual(difference(a, enSurface), [
+      { op: 'poser', chemin: ['propositions', { id: 1 }, 'capacites', 0], valeur: enSurface.propositions[0].capacites[0] },
+    ]);
+    assert.deepEqual(difference(enSurface, a), [
+      { op: 'poser', chemin: ['propositions', { id: 1 }, 'capacites', 0], valeur: a.propositions[0].capacites[0] },
+    ]);
+  });
+
+  test('deux charges qui partagent une proposition figée : la proposition ne donne rien, et chaque différence ailleurs se pose comme entre charges libres', () => {
+    const a = figees(grande());
+    const b = { ...a, evenement: { ...a.evenement, nom: 'Banquet des Quenouilles' }, propositions: [...a.propositions] };
+    b.propositions[2] = figer({ ...copie(a.propositions[2]), graine: a.propositions[2].graine + 1 });
+    assert.deepEqual(difference(a, b), [
+      { op: 'poser', chemin: ['evenement', 'nom'], valeur: 'Banquet des Quenouilles' },
+      { op: 'poser', chemin: ['propositions', { id: a.propositions[2].id }, 'graine'], valeur: b.propositions[2].graine },
+    ]);
+    assert.deepEqual(difference(a, b), difference(copie(a), copie(b)));
+    assert.deepEqual(difference(a, { ...a, propositions: [...a.propositions] }), []);
+  });
+});
+
+// Tirages reproductibles d'une graine entière : chaque appel rend un réel de
+// [0, 1), le suivant de la suite mulberry32.
+function aleaDe(graine) {
+  let etat = graine >>> 0;
+  return () => {
+    etat = (etat + 0x6d2b79f5) >>> 0;
+    let t = etat;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+// Copie de charge où chaque proposition que le tirage désigne, et le retenu,
+// passe aux sièges attribués, chaque liste de table à rebours de l'ordre des
+// identifiants : l'ordre des sièges n'est pas l'ordre canonique sans
+// attribution, et basculer le drapeau à faux doit ranger les listes. Un
+// placement abîmé se laisse tel quel.
+function aRebours(charge, alea) {
+  const sortie = copie(charge);
+  const porteurs = [...sortie.propositions, ...(sortie.retenu === null ? [] : [sortie.retenu])];
+  for (const porteur of porteurs) {
+    if (alea() >= 0.6 || !Array.isArray(porteur.placement)) continue;
+    porteur.siegesAttribues = true;
+    for (const tour of porteur.placement) {
+      if (!Array.isArray(tour?.sieges)) continue;
+      tour.sieges = tour.sieges.map((liste) => (Array.isArray(liste) ? [...liste].sort((x, y) => (y ?? 0) - (x ?? 0)) : liste));
+    }
+  }
+  return sortie;
+}
+
+// Vrai quand liste est une liste non vide d'objets à id entier distincts.
+const aIdentifiants = (liste) =>
+  liste.length > 0 &&
+  liste.every((e) => typeof e === 'object' && e !== null && Number.isSafeInteger(e.id)) &&
+  new Set(liste.map((e) => e.id)).size === liste.length;
+
+// Chaque place de valeur, { chemin, valeur, sorte } : la valeur elle-même au
+// chemin vide, chaque clé d'objet, chaque élément de liste, par { id } sept
+// fois sur dix dans une liste d'objets à identifiants distincts.
+function placesDe(valeur, alea, chemin = [], places = []) {
+  if (Array.isArray(valeur)) {
+    places.push({ chemin, valeur, sorte: 'liste' });
+    const parId = aIdentifiants(valeur);
+    valeur.forEach((element, rang) =>
+      placesDe(element, alea, [...chemin, parId && alea() < 0.7 ? { id: element.id } : rang], places),
+    );
+  } else if (typeof valeur === 'object' && valeur !== null) {
+    places.push({ chemin, valeur, sorte: 'objet' });
+    for (const cle of Object.keys(valeur)) placesDe(valeur[cle], alea, [...chemin, cle], places);
+  } else {
+    places.push({ chemin, valeur, sorte: 'feuille' });
+  }
+  return places;
+}
+
+// Copie d'objet dont les clés sont à rebours de leur ordre.
+const clesARebours = (objet) => Object.fromEntries(Object.keys(objet).reverse().map((cle) => [cle, copie(objet[cle])]));
+
+// Une pose à une place que x n'a pas, sa valeur hors de l'ordre canonique :
+// l'ordre des priorités, une entrée aux clés à rebours ; les objectifs d'une
+// table qui n'en a pas, repris d'une autre, la liste et les clés de chaque
+// objectif à rebours ; une personne, une table ou une proposition insérée par
+// { id }, copie d'une autre sous un identifiant neuf, ses clés à rebours.
+// null quand x n'en offre aucune.
+function poseHorsOrdre(x, alea) {
+  const tire = (liste) => liste[Math.floor(alea() * liste.length)];
+  const poses = [];
+  for (const cle of ['participants', 'tables', 'propositions']) {
+    if (!aIdentifiants(x[cle])) continue;
+    const id = Math.max(...x[cle].map((e) => e.id)) + 1;
+    poses.push({ op: 'poser', chemin: [cle, { id }], valeur: clesARebours({ ...tire(x[cle]), id }) });
+  }
+  if (x.reglages.priorites === undefined) {
+    const entree = { critere: tire(CRITERES), poids: 1 + Math.floor(alea() * POIDS_MAX) };
+    poses.push({ op: 'poser', chemin: ['reglages', 'priorites'], valeur: [[clesARebours(entree)]] });
+  }
+  const modele = x.tables.find((table) => table.objectifs !== undefined);
+  const sans = x.tables.flatMap((table, rang) => (table.objectifs === undefined ? [rang] : []));
+  if (modele !== undefined && sans.length > 0) {
+    const valeur = [...modele.objectifs].reverse().map(clesARebours);
+    poses.push({ op: 'poser', chemin: ['tables', tire(sans), 'objectifs'], valeur });
+  }
+  return poses.length === 0 ? null : tire(poses);
+}
+
+// Une opération tirée sur x, une copie canonique, faite pour rompre l'ordre
+// canonique : un drapeau siegesAttribues basculé, une pose à une place que x
+// n'a pas, hors de l'ordre canonique (poseHorsOrdre), une feuille changée, une
+// liste posée à rebours ou mélangée, un enregistrement inséré par { id }, ses
+// clés à rebours une fois sur deux, ou retiré, une clé retirée, un objet
+// reposé entier, ses clés à rebours. Elle peut ne pas s'appliquer.
+function operationTiree(x, alea) {
+  const tire = (liste) => liste[Math.floor(alea() * liste.length)];
+  const porteurs = [
+    ...x.propositions.map((p) => ({ chemin: ['propositions', { id: p.id }], porteur: p })),
+    ...(x.retenu === null ? [] : [{ chemin: ['retenu'], porteur: x.retenu }]),
+  ];
+  if (alea() < 1 / 6 && porteurs.length > 0) {
+    const { chemin, porteur } = tire(porteurs);
+    return { op: 'poser', chemin: [...chemin, 'siegesAttribues'], valeur: !porteur.siegesAttribues };
+  }
+  if (alea() < 1 / 10) {
+    const pose = poseHorsOrdre(x, alea);
+    if (pose !== null) return pose;
+  }
+  const { chemin, valeur, sorte } = tire(placesDe(x, alea).filter((place) => place.chemin.length > 0));
+  const de = alea();
+  if (sorte === 'feuille') {
+    let neuve = 1 + Math.floor(alea() * 12);
+    if (typeof valeur === 'boolean') neuve = !valeur;
+    else if (Number.isInteger(valeur)) neuve = de < 0.5 ? valeur + 1 + Math.floor(alea() * 5) : Math.max(1, valeur - 1 - Math.floor(alea() * 5));
+    else if (typeof valeur === 'string') neuve = `${valeur}x`;
+    return { op: 'poser', chemin, valeur: neuve };
+  }
+  if (sorte === 'liste') {
+    if (de < 0.5) return { op: 'poser', chemin, valeur: [...valeur].reverse() };
+    if (aIdentifiants(valeur) && de < 0.75) {
+      const id = Math.max(...valeur.map((e) => e.id)) + 1 + Math.floor(alea() * 3);
+      const neuf = { ...copie(tire(valeur)), id };
+      return { op: 'poser', chemin: [...chemin, { id }], valeur: alea() < 0.5 ? clesARebours(neuf) : neuf };
+    }
+    if (aIdentifiants(valeur)) return { op: 'retirer', chemin: [...chemin, { id: tire(valeur).id }] };
+    const melangee = valeur.map((e) => [alea(), e]).sort(([p], [q]) => p - q).map(([, e]) => e);
+    return { op: 'poser', chemin, valeur: melangee };
+  }
+  const cles = Object.keys(valeur);
+  if (de < 0.3 && cles.length > 0) return { op: 'retirer', chemin: [...chemin, tire(cles)] };
+  return { op: 'poser', chemin, valeur: clesARebours(valeur) };
+}
+
+// Les trois suites nommées : un premier correctif qui rompt l'ordre
+// canonique d'une liste, et un second qui pose au rang de cette liste. Les
+// rangs du second désignent les places de l'ordre canonique : une suite qui
+// ne range pas de nouveau entre les deux pose ailleurs. Chaque fonction
+// rend, pour x, la première opération, et pour la copie suivante, la seconde
+// ; null quand x ne s'y prête pas.
+const SUITES_NOMMEES = {
+  // Le drapeau d'un porteur à sièges attribués basculé à faux : ses listes
+  // de table se rangent ; puis une pose au rang 0 d'une de ses listes.
+  drapeau: {
+    premiere(x, alea) {
+      const unique = (p) => x.propositions.filter((q) => q.id === p.id).length === 1;
+      const candidats = [
+        ...x.propositions.filter((p) => unique(p)).map((p) => ['propositions', { id: p.id }]),
+        ...(x.retenu !== null && !porteUnRetenuAbime(x) ? [['retenu']] : []),
+      ].filter((chemin) => {
+        const porteur = partieDe(x, chemin);
+        return porteur.siegesAttribues === true && porteur.placement.some((tour) => tour.sieges.some((l) => l.length >= 2));
+      });
+      if (candidats.length === 0) return null;
+      const chemin = candidats[Math.floor(alea() * candidats.length)];
+      return { op: 'poser', chemin: [...chemin, 'siegesAttribues'], valeur: false, porteur: chemin };
+    },
+    seconde(x, { porteur }) {
+      const placement = partieDe(x, porteur)?.placement;
+      if (!Array.isArray(placement)) return null;
+      const tour = placement.findIndex((t) => t.sieges.some((l) => l.length >= 2));
+      if (tour === -1) return null;
+      const table = placement[tour].sieges.findIndex((l) => l.length >= 2);
+      const liste = placement[tour].sieges[table];
+      return { op: 'poser', chemin: [...porteur, 'placement', tour, 'sieges', table, 0], valeur: liste.at(-1) };
+    },
+  },
+  // Les réservations posées à rebours, trois inventées s'y ajoutant quand
+  // la copie en porte moins de deux ; puis le siège de la première.
+  reservations: {
+    premiere(x) {
+      const inventees = [2, 5, 9].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+      const liste = x.reservations.length >= 2 ? x.reservations : [...x.reservations, ...inventees];
+      return { op: 'poser', chemin: ['reservations'], valeur: [...liste].reverse() };
+    },
+    seconde(x) {
+      if (x.reservations.length < 2) return null;
+      return { op: 'poser', chemin: ['reservations', 0, 'siege'], valeur: x.reservations[0].siege === null ? 1 : null };
+    },
+  },
+  // L'identifiant d'une personne, ou d'une entrée des participants d'une
+  // proposition, passé au-delà des autres ; puis une pose au rang 0.
+  identifiant: {
+    premiere(x, alea) {
+      const unique = x.propositions.filter((p) => p.participants.length >= 2 && x.propositions.filter((q) => q.id === p.id).length === 1);
+      if (alea() < 0.5 && unique.length > 0) {
+        const p = unique[Math.floor(alea() * unique.length)];
+        const chemin = ['propositions', { id: p.id }, 'participants'];
+        return { op: 'poser', chemin: [...chemin, 0], valeur: Math.max(...p.participants) + 1, liste: chemin };
+      }
+      if (x.participants.length < 2) return null;
+      const id = Math.max(...x.participants.map((p) => p.id)) + 1;
+      return { op: 'poser', chemin: ['participants', 0, 'id'], valeur: id, liste: ['participants'] };
+    },
+    seconde(x, { liste }) {
+      if (liste[0] === 'participants') return { op: 'poser', chemin: ['participants', 0, 'nom'], valeur: 'Quenouille' };
+      const valeurs = partieDe(x, liste);
+      return Array.isArray(valeurs) ? { op: 'poser', chemin: [...liste, 0], valeur: valeurs.at(-1) } : null;
+    },
+  },
+};
+
+// L'opération seule, sans les marques qu'une suite nommée y garde.
+const sansMarque = ({ op, chemin, valeur }) => (op === 'retirer' ? { op, chemin } : { op, chemin, valeur });
+
+// Rang du premier correctif de correctifs que la chaîne des appliquer
+// refuse, depuis a, ou -1.
+function pasDuRefus(a, correctifs) {
+  let charge = a;
+  for (const [pas, correctif] of correctifs.entries()) {
+    try {
+      charge = appliquer(charge, correctif);
+    } catch {
+      return pas;
+    }
+  }
+  return -1;
+}
+
+describe('appliquerSuite : une suite de correctifs sur une seule copie (§ 8.6)', () => {
+  test(`${TIRAGES} suites tirées : appliquerSuite(a, cs) s'écrit comme cs.reduce(appliquer, a), refus compris, au même pas et au même rang, et { canonique: true } comme sa copie canonique`, () => {
+    const bilan = { egales: 0, refus: 0, sensibles: 0, pas: 0, drapeau: 0, reservations: 0, identifiant: 0, facultatifs: 0, insertions: 0 };
+    fc.assert(
+      fc.property(unePaire, fc.integer({ min: 0, max: 2 ** 32 - 1 }), (paire, graine) => {
+        const alea = aleaDe(graine);
+        const [a, b] = [aRebours(paire.a, alea), aRebours(paire.b, alea)];
+        const nom = ['drapeau', 'reservations', 'identifiant'][Math.floor(alea() * 3)];
+        const suite = SUITES_NOMMEES[nom];
+        const debut = 1 + Math.floor(alea() * 4);
+        let marque = null;
+        let suiteFaite = false;
+        // Le premier correctif mène à l'autre charge de la paire ; les
+        // suivants sont des opérations tirées sur la charge du pas, chacune
+        // admise sur celle que les précédentes du même correctif laissent,
+        // ou, aux deux pas d'une suite nommée, ses deux opérations seules.
+        const correctifs = [difference(a, b)];
+        let courant = appliquer(a, correctifs[0]);
+        for (let pas = 1; pas < 6; pas += 1) {
+          const ops = [];
+          const essayer = (op) => {
+            try {
+              appliquer(courant, [...ops, sansMarque(op)]);
+            } catch {
+              return false;
+            }
+            ops.push(sansMarque(op));
+            return true;
+          };
+          if (pas === debut) {
+            const op = suite.premiere(courant, alea);
+            if (op !== null && essayer(op)) marque = op;
+          }
+          if (pas === debut + 1 && marque !== null) {
+            const op = suite.seconde(courant, marque);
+            suiteFaite = op !== null && essayer(op);
+          }
+          if (ops.length === 0) {
+            const n = 1 + Math.floor(alea() * 4);
+            for (let essai = 0; ops.length < n && essai < 60; essai += 1) essayer(operationTiree(appliquer(courant, ops), alea));
+            if (alea() < 0.1) ops.push(sansMarque(operationTiree(appliquer(courant, []), alea)));
+          }
+          correctifs.push(ops);
+          try {
+            courant = appliquer(courant, ops);
+          } catch {
+            break;
+          }
+        }
+        const texteA = JSON.stringify(a);
+        const parLaChaine = issueDe(() => correctifs.reduce(appliquer, a));
+        assert.deepEqual(issueDe(() => appliquerSuite(a, correctifs)), parLaChaine);
+        const canonique = parLaChaine.refus === undefined ? { texte: JSON.stringify(canoniser(correctifs.reduce(appliquer, a))) } : parLaChaine;
+        assert.deepEqual(issueDe(() => appliquerSuite(a, correctifs, { canonique: true })), canonique);
+        assert.equal(JSON.stringify(a), texteA);
+        if (parLaChaine.refus === undefined) {
+          bilan.egales += 1;
+          // Les poses qu'un correctif suivant reçoit sur la copie qu'elles
+          // laissent : un champ facultatif absent, un enregistrement inséré
+          // par { id }, ses clés à rebours.
+          for (const { op, chemin, valeur } of correctifs.slice(1, -1).flat()) {
+            if (op !== 'poser') continue;
+            const derniere = chemin.at(-1);
+            if (derniere === 'priorites' || derniere === 'objectifs') bilan.facultatifs += 1;
+            if (typeof derniere === 'object' && Object.keys(valeur)[0] !== 'id') bilan.insertions += 1;
+          }
+        } else {
+          // Le même pas : la suite arrêtée juste avant s'applique.
+          const pas = pasDuRefus(a, correctifs);
+          assert.ok(pas >= 0, parLaChaine.refus);
+          assert.equal(issueDe(() => appliquerSuite(a, correctifs.slice(0, pas))).refus, undefined);
+          assert.deepEqual(issueDe(() => appliquerSuite(a, correctifs.slice(0, pas + 1))), parLaChaine);
+          bilan.refus += 1;
+        }
+        // Appliqués d'un seul tenant, sans rangement entre les correctifs,
+        // les mêmes opérations rendent autre chose : la suite éprouve le
+        // rangement entre deux pas.
+        if (issueDe(() => appliquer(a, correctifs.flat())).texte !== parLaChaine.texte) bilan.sensibles += 1;
+        bilan.pas += correctifs.length;
+        if (suiteFaite) bilan[nom] += 1;
+      }),
+      { seed: GRAINE, numRuns: TIRAGES },
+    );
+    const planchers = [
+      ['egales', 200],
+      ['refus', 20],
+      ['sensibles', 150],
+      ['pas', 5 * TIRAGES],
+      ['drapeau', 40],
+      ['reservations', 50],
+      ['identifiant', 50],
+      ['facultatifs', 40],
+      ['insertions', 60],
+    ];
+    for (const [famille, plancher] of planchers) {
+      assert.ok(bilan[famille] >= plancher, `${famille} : ${bilan[famille]} (${JSON.stringify(bilan)})`);
+    }
+  });
+
+  test("le drapeau basculé à faux range les listes de table de son porteur avant le correctif suivant : la pose au rang 0 vise la première place de l'ordre des identifiants", () => {
+    const a = aRebours(petite(), () => 0);
+    const chemin = ['propositions', { id: 1 }];
+    const liste = a.propositions[0].placement[0].sieges[0];
+    assert.ok(liste.length >= 2 && liste[0] > liste[1]);
+    const correctifs = [
+      [{ op: 'poser', chemin: [...chemin, 'siegesAttribues'], valeur: false }],
+      [{ op: 'poser', chemin: [...chemin, 'placement', 0, 'sieges', 0, 0], valeur: 99 }],
+    ];
+    const rendue = appliquerSuite(a, correctifs);
+    assert.equal(JSON.stringify(rendue), JSON.stringify(correctifs.reduce(appliquer, a)));
+    assert.deepEqual(rendue.propositions[0].placement[0].sieges[0], [99, ...[...liste].sort(croissant).slice(1)]);
+  });
+
+  test('des réservations posées à rebours se rangent avant le correctif suivant : la pose au rang 0 vise la première réservation de l’ordre canonique', () => {
+    const a = grande();
+    const ca = canoniser(a);
+    assert.ok(ca.reservations.length >= 2 && ca.reservations[0].siege === null);
+    const correctifs = [
+      [{ op: 'poser', chemin: ['reservations'], valeur: [...ca.reservations].reverse() }],
+      [{ op: 'poser', chemin: ['reservations', 0, 'siege'], valeur: 1 }],
+    ];
+    const rendue = appliquerSuite(a, correctifs);
+    assert.equal(JSON.stringify(rendue), JSON.stringify(correctifs.reduce(appliquer, a)));
+    assert.deepEqual(rendue.reservations[0], { ...ca.reservations[0], siege: 1 });
+    assert.deepEqual(rendue.reservations.slice(1), ca.reservations.slice(1));
+  });
+
+  test("un identifiant changé se range de nouveau avant le correctif suivant : la pose au rang 0 vise la personne qui est désormais la première", () => {
+    const a = petite();
+    const correctifs = [
+      [{ op: 'poser', chemin: ['participants', 0, 'id'], valeur: 40 }],
+      [{ op: 'poser', chemin: ['participants', 0, 'nom'], valeur: 'Quenouille' }],
+    ];
+    const rendue = appliquerSuite(a, correctifs);
+    assert.equal(JSON.stringify(rendue), JSON.stringify(correctifs.reduce(appliquer, a)));
+    const ca = canoniser(a);
+    assert.deepEqual(rendue.participants[0], { ...ca.participants[1], nom: 'Quenouille' });
+    assert.deepEqual(rendue.participants.at(-1), { ...ca.participants[0], id: 40 });
+  });
+
+  test("un enregistrement inséré par { id }, ses clés à rebours, se range avant le correctif suivant, comme sous la chaîne des appliquer", () => {
+    const a = petite();
+    const modele = canoniser(a).participants[0];
+    const id = a.prochainsIds.participant;
+    const rebours = clesARebours({ ...modele, id, nom: 'Quenouille' });
+    assert.notDeepEqual(Object.keys(rebours), Object.keys(modele));
+    const correctifs = [
+      [{ op: 'poser', chemin: ['participants', { id }], valeur: rebours }],
+      [{ op: 'poser', chemin: ['evenement', 'nom'], valeur: 'Soirée des Girouettes' }],
+    ];
+    const rendue = appliquerSuite(a, correctifs);
+    assert.equal(JSON.stringify(rendue), JSON.stringify(correctifs.reduce(appliquer, a)));
+    assert.deepEqual(Object.keys(rendue.participants.at(-1)), Object.keys(modele));
+  });
+
+  test("un champ facultatif absent, posé aux clés à rebours, se range avant le correctif suivant, comme sous la chaîne des appliquer : l'ordre des priorités, les objectifs d'une table", () => {
+    const a = petite();
+    assert.equal(a.reglages.priorites, undefined);
+    assert.equal(a.tables[1].objectifs, undefined);
+    const poses = [
+      {
+        chemin: ['reglages', 'priorites'],
+        valeur: [[{ poids: 2, critere: CRITERES[1] }, { poids: 1, critere: CRITERES[0] }]],
+        lire: (charge) => charge.reglages.priorites,
+        attendue: [[{ critere: CRITERES[0], poids: 1 }, { critere: CRITERES[1], poids: 2 }]],
+      },
+      {
+        chemin: ['tables', { id: a.tables[1].id }, 'objectifs'],
+        valeur: [
+          { etiquettes: ['finance'], regle: null, tour: 2, portee: 'tour' },
+          { etiquettes: ['bénévole'], regle: 'ou', tour: null, portee: 'tous' },
+        ],
+        lire: (charge) => charge.tables[1].objectifs,
+        attendue: [
+          { portee: 'tous', tour: null, regle: 'ou', etiquettes: ['bénévole'] },
+          { portee: 'tour', tour: 2, regle: null, etiquettes: ['finance'] },
+        ],
+      },
+    ];
+    for (const { chemin, valeur, lire, attendue } of poses) {
+      const correctifs = [
+        [{ op: 'poser', chemin, valeur }],
+        [{ op: 'poser', chemin: ['evenement', 'nom'], valeur: 'Soirée des Girouettes' }],
+      ];
+      const rendue = appliquerSuite(a, correctifs);
+      assert.equal(JSON.stringify(rendue), JSON.stringify(correctifs.reduce(appliquer, a)), chemin.at(-1));
+      assert.equal(JSON.stringify(lire(rendue)), JSON.stringify(attendue), chemin.at(-1));
+    }
+  });
+
+  test("ni a ni les correctifs ne changent, et le résultat ne partage aucun objet avec eux ; { canonique: true } rend la copie canonique, ordre des clés compris", () => {
+    const a = geler(grande());
+    a.propositions.forEach((p) => figer(p));
+    const neuve = { ...copie(a.participants[0]), id: a.prochainsIds.participant, nom: 'Falbala' };
+    const correctifs = geler([
+      [{ op: 'poser', chemin: ['participants', { id: neuve.id }], valeur: neuve }],
+      [
+        { op: 'poser', chemin: ['tables', 0, 'position'], valeur: { y: 75, x: 10 } },
+        { op: 'poser', chemin: ['propositions', { id: 7 }, 'siegesAttribues'], valeur: false },
+      ],
+      [{ op: 'retirer', chemin: ['participants', { id: a.participants[1].id }] }],
+    ]);
+    const rendue = appliquerSuite(a, correctifs);
+    assert.equal(JSON.stringify(rendue), JSON.stringify(correctifs.reduce(appliquer, a)));
+    const ailleurs = new Set([...objetsDe(a), ...objetsDe(correctifs)]);
+    assert.deepEqual([...objetsDe(rendue)].filter((objet) => ailleurs.has(objet)), []);
+    assert.equal(JSON.stringify(appliquerSuite(a, correctifs, { canonique: true })), JSON.stringify(canoniser(rendue)));
+    // Le deuxième correctif pose une position, ses clés à rebours : le pas
+    // suivant la range ; arrêtée après lui, la suite la garde telle quelle,
+    // et seule { canonique: true } la range.
+    assert.deepEqual(Object.keys(rendue.tables[0].position), ['x', 'y']);
+    assert.deepEqual(Object.keys(appliquerSuite(a, correctifs.slice(0, 2)).tables[0].position), ['y', 'x']);
+    assert.deepEqual(Object.keys(appliquerSuite(a, correctifs.slice(0, 2), { canonique: true }).tables[0].position), ['x', 'y']);
+  });
+
+  test('une suite vide rend la copie canonique de a, et non a', () => {
+    const a = petite();
+    a.participants.reverse();
+    a.propositions[0].placement[0].sieges[0].reverse();
+    for (const options of [undefined, { canonique: true }, { canonique: false }]) {
+      const rendue = appliquerSuite(a, [], options);
+      assert.notEqual(rendue, a);
+      assert.equal(JSON.stringify(rendue), JSON.stringify(canoniser(a)));
+    }
+  });
+
+  test("un correctif qui ne s'applique pas lève CORRECTIF avec son rang, au pas où la chaîne des appliquer le lève ; un correctif qui n'est pas une liste lève la TypeError d'appliquer, à son pas", () => {
+    const a = petite();
+    const bon = [{ op: 'poser', chemin: ['evenement', 'nom'], valeur: 'Soirée des Girouettes' }];
+    const retrait = { op: 'retirer', chemin: ['participants', { id: 3 }] };
+    const correctifs = [bon, [retrait], [bon[0], retrait]];
+    assert.deepEqual(issueDe(() => appliquerSuite(a, correctifs)), { refus: 'CORRECTIF {"rang":1}' });
+    assert.deepEqual(issueDe(() => appliquerSuite(a, correctifs)), issueDe(() => correctifs.reduce(appliquer, a)));
+    assert.equal(issueDe(() => appliquerSuite(a, correctifs.slice(0, 2))).refus, undefined);
+    // Le refus du pas 1 passe avant le correctif mal formé du pas 2.
+    for (const malForme of [null, 'poser', bon[0], new Set(bon)]) {
+      const avecMalForme = [bon, malForme];
+      const attendu = issueDe(() => avecMalForme.reduce(appliquer, a));
+      assert.match(attendu.refus, /^TypeError : appliquer : liste d'opérations attendue/);
+      assert.deepEqual(issueDe(() => appliquerSuite(a, avecMalForme)), attendu);
+      assert.deepEqual(issueDe(() => appliquerSuite(a, [[retrait, retrait], malForme])), { refus: 'CORRECTIF {"rang":1}' });
+    }
+    assert.throws(() => appliquerSuite(a, bon), TypeError);
+    assert.throws(() => appliquerSuite(a, null), TypeError);
   });
 });
 

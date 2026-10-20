@@ -24,6 +24,13 @@
 // charge qui lui est égale à l'ordre près, quelle que soit la façon dont
 // l'une ou l'autre s'est construite.
 //
+// difference compare les copies canoniques partagées (canoniserPartagee) :
+// une proposition figée que les deux charges portent y est un seul objet,
+// qui ne se compare pas. appliquer refait la copie canonique entière à
+// chaque appel ; appliquerSuite applique une suite de correctifs sur une
+// seule copie, qu'elle ne refait entre deux correctifs que là où le
+// précédent a écrit (recanoniser), d'après les traces que tient executer.
+//
 // Le correctif reste local (§ 8.9). Une personne qui prend, au même tour
 // d'une proposition, la place d'une autre à une autre table touche les deux
 // listes de ces tables et rien d'autre : une entrée de chacune quand chaque
@@ -53,7 +60,7 @@
 // contrôle (premiereFauteEnPlace), et le journal le libère, le remet en
 // place ou le remplace tel quel, quelle que soit sa faute. Sous un tel
 // retenu, rien ne se pose : difference ne descend pas en lui.
-import { canoniser, retenuHorsDeSaRegle } from './canonique.js';
+import { canoniser, canoniserPartagee, recanoniser, retenuHorsDeSaRegle } from './canonique.js';
 import { SCHEMA, premiereFaute, premiereFauteEnPlace } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 
@@ -225,13 +232,21 @@ function comparerParIdentifiant(a, b, regleElement, maillon, operations) {
 }
 
 /**
- * Correctif menant de a à b (§ 8.6), calculé entre leurs copies canoniques :
- * [] quand elles sont égales, c'est-à-dire quand a et b ne diffèrent que par
- * l'ordre de leurs clés ou d'une liste que canoniser range. Les opérations
- * suivent l'ordre du schéma, puis celui des identifiants, puis celui des
- * rangs : le correctif ne dépend que des deux charges. Une valeur posée est
- * prise à la copie canonique de b, et ne partage aucun objet avec b. Ni a ni
- * b ne sont modifiées.
+ * Correctif menant de a à b (§ 8.6), calculé entre leurs copies canoniques
+ * partagées (canoniserPartagee) : [] quand elles sont égales, c'est-à-dire
+ * quand a et b ne diffèrent que par l'ordre de leurs clés ou d'une liste que
+ * canoniser range, et alors seulement — exactement quand leurs textes
+ * canoniques sont égaux. Les opérations suivent l'ordre du schéma, puis
+ * celui des identifiants, puis celui des rangs : le correctif ne dépend que
+ * des deux charges, et non du gel de leurs propositions. Une proposition
+ * figée que a et b portent toutes deux a une seule copie canonique, que la
+ * comparaison saute. Ni a ni b ne sont modifiées.
+ *
+ * Une valeur posée est prise à la copie canonique partagée de b : elle ne
+ * partage avec b aucun objet modifiable ; une valeur posée peut être figée.
+ * Une proposition figée de b se pose par sa copie canonique, figée elle
+ * aussi, et par elle-même quand b porte déjà cette copie. Le journal écrit
+ * le correctif en JSON, et appliquer pose une copie de chaque valeur.
  *
  * Règles : les objets clé par clé dans l'ordre du schéma ; une liste
  * d'étiquettes posée entière quand elle change ; les listes d'enregistrements
@@ -254,7 +269,7 @@ function comparerParIdentifiant(a, b, regleElement, maillon, operations) {
  * @returns {Operation[]}
  */
 export function difference(a, b) {
-  return differenceCanonique(canoniser(a), canoniser(b));
+  return differenceCanonique(canoniserPartagee(a), canoniserPartagee(b));
 }
 
 /**
@@ -375,14 +390,20 @@ function descendre(conteneur, etape) {
 // un enregistrement que valeurAdmise a contrôlé, porte cet id ;
 // l'enregistrement s'insère alors avant le premier d'id plus grand, ce qui
 // garde une liste rangée par identifiant croissant. Rend faux quand etape ne
-// désigne aucune de ces places.
-function poser(conteneur, etape, valeur, regle, parent) {
+// désigne aucune de ces places. traces, quand il n'est pas null, reçoit dans
+// neufs la copie posée quand c'est un objet ou une liste.
+function poser(conteneur, etape, valeur, regle, parent, traces) {
+  const neuve = () => {
+    const copie = structuredClone(valeur);
+    if (traces !== null && typeof copie === 'object' && copie !== null) traces.neufs.add(copie);
+    return copie;
+  };
   if (estCleDe(conteneur, etape) || estRangDe(conteneur, etape)) {
-    conteneur[etape] = structuredClone(valeur);
+    conteneur[etape] = neuve();
     return true;
   }
   if (regle.optionnel && typeof etape === 'string' && estObjet(conteneur)) {
-    conteneur[etape] = structuredClone(valeur);
+    conteneur[etape] = neuve();
     const rang = parent.champs.findIndex(([cle]) => cle === etape);
     for (const [cle] of parent.champs.slice(rang + 1)) {
       if (!Object.hasOwn(conteneur, cle)) continue;
@@ -394,7 +415,7 @@ function poser(conteneur, etape, valeur, regle, parent) {
   }
   if (rangsDe(conteneur, etape)?.length !== 0 || valeur.id !== etape.id) return false;
   const suivant = conteneur.findIndex((element) => element.id > etape.id);
-  conteneur.splice(suivant === -1 ? conteneur.length : suivant, 0, structuredClone(valeur));
+  conteneur.splice(suivant === -1 ? conteneur.length : suivant, 0, neuve());
   return true;
 }
 
@@ -425,27 +446,55 @@ function retirer(conteneur, etape, regle) {
 // porterait (oubliees de sa règle), qu'écrivait un journal antérieur, rend
 // vrai sans rien changer, quelle que soit la valeur et que la clé soit là
 // ou non : la charge ne la porte jamais.
-function executer(charge, operation) {
+//
+// traces, quand il n'est pas null, reçoit ce que recanoniser doit refaire :
+// dans sales, la charge et chaque conteneur traversé jusqu'à celui de la
+// dernière étape compris ; dans neufs, chaque copie posée entière (poser) et
+// l'objet dont le drapeau siegesAttribues est posé, que son contenu se range
+// sous le nouveau drapeau. Une opération refusée peut y laisser des
+// conteneurs : refaire une valeur intacte la rend égale à elle-même.
+function executer(charge, operation, traces = null) {
   if (!estObjet(operation) || !Array.isArray(operation.chemin)) return false;
   const { op, chemin, valeur } = operation;
   const lecture = lireChemin(chemin);
   if (lecture === null) return false;
   let conteneur = charge;
+  traces?.sales.add(conteneur);
   for (const etape of chemin.slice(0, -1)) {
     conteneur = descendre(conteneur, etape);
     if (conteneur === undefined) return false;
+    if (traces !== null && typeof conteneur === 'object' && conteneur !== null) traces.sales.add(conteneur);
   }
   const derniere = chemin[chemin.length - 1];
   if (lecture.regle === undefined && lecture.parent?.oubliees?.has(derniere) === true && estObjet(conteneur)) {
     return op === 'poser' ? valeur !== undefined : op === 'retirer';
   }
+  // Les seules écritures de la charge : poser et retirer, dans conteneur,
+  // déjà inscrit dans sales. Toute nouvelle façon d'écrire remplit traces :
+  // une écriture que les traces taisent, recanoniser ne la refait pas.
   if (op === 'poser') {
     if (valeur === undefined || !valeurAdmise(charge, chemin, lecture.regle, valeur)) return false;
-    return poser(conteneur, derniere, valeur, lecture.regle, lecture.parent);
+    if (traces !== null && derniere === 'siegesAttribues' && estObjet(conteneur)) traces.neufs.add(conteneur);
+    return poser(conteneur, derniere, valeur, lecture.regle, lecture.parent, traces);
   }
   if (op === 'retirer') return retirer(conteneur, derniere, lecture.regle);
   return false;
 }
+
+// Applique correctif à charge, en place, opération après opération, chacune
+// par executer avec traces ; lève ErreurStockage('CORRECTIF', { rang }) à la
+// première qui ne s'applique pas, rang étant sa place dans le correctif, à
+// partir de 0. Les opérations qui la précèdent restent écrites.
+function executerTout(charge, correctif, traces) {
+  correctif.forEach((operation, rang) => {
+    if (!executer(charge, operation, traces)) throw new ErreurStockage('CORRECTIF', { rang });
+  });
+}
+
+// TypeError du correctif qui n'est pas une liste d'opérations, la même pour
+// appliquer et pour chaque pas d'appliquerSuite.
+const pasUneListe = (correctif) =>
+  new TypeError(`appliquer : liste d'opérations attendue, reçu ${JSON.stringify(correctif)}`);
 
 /**
  * Applique un correctif à la copie canonique de a (§ 8.6), opération après
@@ -482,12 +531,52 @@ function executer(charge, operation) {
  * @returns {import('./types.js').Charge}
  */
 export function appliquer(a, correctif) {
-  if (!Array.isArray(correctif)) {
-    throw new TypeError(`appliquer : liste d'opérations attendue, reçu ${JSON.stringify(correctif)}`);
-  }
+  if (!Array.isArray(correctif)) throw pasUneListe(correctif);
   const charge = canoniser(a);
-  correctif.forEach((operation, rang) => {
-    if (!executer(charge, operation)) throw new ErreurStockage('CORRECTIF', { rang });
-  });
+  executerTout(charge, correctif, null);
   return charge;
+}
+
+/**
+ * La charge que rend la chaîne appliquer(…appliquer(appliquer(a, c1), c2)…,
+ * cn) pour correctifs = [c1, …, cn], écrite pareil en JSON, ordre des clés
+ * compris, sans recopier la charge entière à chaque pas. Une seule copie
+ * canonique de a, canoniser(a), reçoit chaque correctif en place ; avant
+ * chaque correctif sauf le premier, recanoniser la refait là où le
+ * précédent a écrit, d'après les traces d'executer, ce qui la rend égale à
+ * la copie canonique qu'appliquer referait. Les rangs d'un correctif
+ * désignent ainsi les places de l'ordre canonique de la charge qu'il
+ * reçoit, comme sous appliquer.
+ *
+ * Le dernier correctif laisse sa copie telle qu'il l'a écrite, comme
+ * appliquer ; canonique vrai la recanonise une fois de plus, et rend alors
+ * canoniser de ce résultat. Une suite vide rend canoniser(a), comme
+ * appliquer(a, []), et non a. La charge rendue est neuve : elle ne partage
+ * aucun objet avec a ni avec les correctifs. a n'est pas modifiée.
+ *
+ * Lève ce que lèverait la chaîne des appliquer, au même pas : la TypeError
+ * d'appliquer pour un correctif qui n'est pas une liste, et
+ * ErreurStockage('CORRECTIF', { rang }) pour la première opération qui ne
+ * s'applique pas, rang étant sa place dans son correctif. Un refus d'un pas
+ * passe avant tout défaut d'un pas suivant. Des correctifs qui ne sont pas
+ * une liste lèvent TypeError.
+ *
+ * @param {import('./types.js').Charge} a
+ * @param {Operation[][]} correctifs
+ * @param {{canonique?: boolean}} [options]
+ * @returns {import('./types.js').Charge}
+ */
+export function appliquerSuite(a, correctifs, { canonique = false } = {}) {
+  if (!Array.isArray(correctifs)) {
+    throw new TypeError(`appliquerSuite : liste de correctifs attendue, reçu ${JSON.stringify(correctifs)}`);
+  }
+  let charge = canoniser(a);
+  let traces = null;
+  for (const correctif of correctifs) {
+    if (!Array.isArray(correctif)) throw pasUneListe(correctif);
+    if (traces !== null) charge = recanoniser(charge, traces);
+    traces = { sales: new Set(), neufs: new Set() };
+    executerTout(charge, correctif, traces);
+  }
+  return canonique && traces !== null ? recanoniser(charge, traces) : charge;
 }
