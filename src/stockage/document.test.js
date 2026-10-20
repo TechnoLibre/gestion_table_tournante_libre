@@ -42,6 +42,7 @@ import {
   regleObjectifs,
 } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { ETIQUETTES_MAX, estEtiquetteBienFormee } from './etiquettes.js';
 import { fautes as fautesDePlacement } from './placements.js';
 
 // Un document valide : quatre participants, dont un exclu, l'identifiant 4
@@ -2121,5 +2122,313 @@ describe('la présence par tour : participant.presence et les absents d’un pla
     const proposition = structuredClone(charge.propositions[0]);
     proposition.placement[0].absents = [];
     assert.deepEqual(fautesDePlacement(proposition), [{ code: 'FORME', chemin: 'placement[0].absents' }]);
+  });
+});
+
+// --- Le parcours de forme sans chemin : même faute que le parcours à chemin (§ 8.6, § 14.12)
+
+// L'oracle : le parcours de forme qui forme le chemin à chaque pas, dans
+// l'écriture directe de la règle, avec les fonctions qu'il appelle. Il tient pour
+// vrai le chemin, ou null, que premiereFaute et premiereFauteEnPlace doivent
+// rendre de toute valeur sous toute règle : le refus de l'analyse, d'une
+// ligne du journal et du contrôle des placements en découle.
+const ORACLE = (() => {
+  const estObjet = (valeur) => typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
+  const IDENTIFIANT_JS = /^[A-Za-z_$][\w$]*$/;
+  function joindre(chemin, cle) {
+    if (!IDENTIFIANT_JS.test(cle)) return `${chemin}[${JSON.stringify(cle)}]`;
+    return chemin === '' ? cle : `${chemin}.${cle}`;
+  }
+  const AAAA_MM_JJ = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const JOURS_PAR_MOIS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  function estJour(texte) {
+    const morceaux = AAAA_MM_JJ.exec(texte);
+    if (morceaux === null) return false;
+    const [annee, mois, jour] = morceaux.slice(1).map(Number);
+    const bissextile = annee % 4 === 0 && (annee % 100 !== 0 || annee % 400 === 0);
+    const dernier = mois === 2 && bissextile ? 29 : JOURS_PAR_MOIS[mois - 1];
+    return mois >= 1 && mois <= 12 && jour >= 1 && jour <= dernier;
+  }
+  function conforme(valeur, { genre, min, max, valeurs, distincts }) {
+    switch (genre) {
+      case 'objet':
+        return estObjet(valeur);
+      case 'liste':
+        return (
+          Array.isArray(valeur) &&
+          valeur.length >= (min ?? 0) &&
+          valeur.length <= (max ?? Infinity) &&
+          (distincts !== true || new Set(valeur).size === valeur.length)
+        );
+      case 'chaine':
+        return typeof valeur === 'string' && valeur !== '';
+      case 'entier':
+        return Number.isSafeInteger(valeur) && valeur >= min && valeur <= max;
+      case 'nombre':
+        return Number.isFinite(valeur);
+      case 'booleen':
+        return typeof valeur === 'boolean';
+      case 'parmi':
+        return valeurs.includes(valeur);
+      case 'date':
+        return typeof valeur === 'string' && estJour(valeur);
+      case 'horodatage':
+        return DOCUMENT.estHorodatage(valeur);
+      case 'etiquettes':
+        return estEtiquetteBienFormee(valeur);
+    }
+  }
+  const cleInconnue = (valeur, { cles, oubliees }) =>
+    DOCUMENT.clesRangees(valeur).find((cle) => !cles.has(cle) && oubliees?.has(cle) !== true);
+  const strictementCroissante = (valeur) => valeur.every((element, rang) => rang === 0 || element > valeur[rang - 1]);
+  function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
+    if (valeur === undefined && regleDeValeur.optionnel) return null;
+    if (valeur === null && regleDeValeur.nul) return null;
+    if (!conforme(valeur, regleDeValeur)) return chemin;
+    if (regleDeValeur.aPart && !racine) return null;
+    if (regleDeValeur.genre === 'objet') {
+      for (const [cle, regleDuChamp] of regleDeValeur.champs) {
+        const faute = fauteDeForme(valeur[cle], regleDuChamp, joindre(chemin, cle), false);
+        if (faute !== null) return faute;
+      }
+      const inconnue = cleInconnue(valeur, regleDeValeur);
+      return inconnue === undefined ? null : joindre(chemin, inconnue);
+    }
+    if (regleDeValeur.genre === 'liste') {
+      for (let rang = 0; rang < valeur.length; rang += 1) {
+        const faute = fauteDeForme(valeur[rang], regleDeValeur.element, `${chemin}[${rang}]`, false);
+        if (faute !== null) return faute;
+      }
+      if (regleDeValeur.croissante === true && !strictementCroissante(valeur)) return chemin;
+    }
+    return null;
+  }
+  return {
+    premiereFaute: (valeur, regle, chemin = '') => fauteDeForme(valeur, regle, chemin, true),
+    premiereFauteEnPlace: (valeur, regle, chemin = '') => fauteDeForme(valeur, regle, chemin, false),
+  };
+})();
+
+describe('le parcours de forme sans chemin : la même faute que le parcours qui forme le chemin à chaque pas (§ 8.6, § 14.12)', () => {
+  const PROPOSITION = regleDuChamp(CHARGE_SCHEMA, 'propositions').element;
+  const RETENU = regleDuChamp(CHARGE_SCHEMA, 'retenu');
+
+  // Le document complet portant aussi chaque autre champ facultatif hors de
+  // son défaut : l'ordre des priorités, la présence d'une personne, une
+  // proposition dérivée — depart, toursFiges, horodatage, des absents —, un
+  // retenu daté à absents et une clé oubliée des réglages. Une copie neuve à
+  // chaque appel.
+  function documentRiche() {
+    const d = documentComplet();
+    d.charge.reglages.priorites = [[{ critere: CRITERES[1], poids: 2 }, { critere: CRITERES[2], poids: 1 }], [{ critere: CRITERES[0], poids: 3 }]];
+    d.charge.reglages.cibleRedondance = 4;
+    d.charge.participants[1].presence = [1, 2];
+    const [p1] = d.charge.propositions;
+    const p2 = structuredClone(p1);
+    Object.assign(p2, { id: 2, graine: 8, depart: 1, toursFiges: [1, 2], horodatage: '2031-11-09T10:00:00-05:00' });
+    p2.placement[1].absents = [3];
+    d.charge.propositions.push(p2);
+    d.charge.retenu = { ...retenuValide(), horodatage: '2031-11-09T10:05:00-05:00' };
+    d.charge.retenu.placement[0].absents = [3];
+    return d;
+  }
+
+  // Une entrée du compagnon des courses, bien formée.
+  const entreeDeCourse = () => ({
+    id: 1,
+    graine: 7,
+    arret: 50_000,
+    historique: 500,
+    horodatage: '2031-11-09T10:00:00-05:00',
+    empreinte: 2 ** 40,
+    course: {
+      evalues: 120,
+      releves: [
+        { mouvements: 1, placement: [{ sieges: [[1, 2], [5]], reserve: [] }, { sieges: [[1], [2, 5]], reserve: [3] }] },
+        { mouvements: 10, placement: [{ sieges: [[2, null, 1], [5]], reserve: [], absents: [3] }] },
+      ],
+    },
+  });
+
+  // Les racines du corpus : [libellé, règle, valeur bien formée, chemin].
+  // Sous le document, les propositions et le retenu ne s'abîment qu'en
+  // surface : leur contenu, que l'analyse n'examine pas, s'abîme sous leur
+  // propre règle.
+  const racines = () => [
+    ['document', SCHEMA, documentRiche(), ''],
+    ['proposition dérivée', PROPOSITION, documentRiche().charge.propositions[1], 'charge.propositions[1]'],
+    ['retenu', RETENU, documentRiche().charge.retenu, 'charge.retenu'],
+    ['entrée de course', ENTREE_DE_COURSE, entreeDeCourse(), ''],
+  ];
+
+  // Étapes de chaque valeur que contient valeur, elle comprise, parents
+  // avant enfants, propositions et retenu compris.
+  function toutesLesEtapes(valeur, prefixe = []) {
+    const ici = [prefixe];
+    if (Array.isArray(valeur)) {
+      valeur.forEach((element, rang) => ici.push(...toutesLesEtapes(element, [...prefixe, rang])));
+    } else if (typeof valeur === 'object' && valeur !== null) {
+      for (const cle of DOCUMENT.clesRangees(valeur)) ici.push(...toutesLesEtapes(valeur[cle], [...prefixe, cle]));
+    }
+    return ici;
+  }
+
+  // Ce qui remplace une valeur : les feuilles du cahier, puis les bornes des
+  // règles du schéma — 2^31 et 2^31 − 1 des identifiants, TOURS_MAX + 1,
+  // 2^53 − 1 —, d'autres genres, et la chaîne vide.
+  const FEUILLES = [
+    -1, 0, 1.5, '1', null, undefined, 2 ** 53, NaN, {}, [],
+    2 ** 31, 2 ** 31 - 1, TOURS_MAX + 1, Number.MAX_SAFE_INTEGER, -0, Infinity, true, '', 'ronde',
+  ];
+  // Les clés ajoutées à un objet : inconnue, non identifiant (« 0 », « a b »,
+  // vide), avant toute minuscule (« A »), et la clé oubliée des réglages.
+  const CLES_AJOUTEES = ['zzInconnue', '0', 'a b', '', 'A', 'cibleRedondance'];
+
+  // Chaque valeur abîmée tirée de racine, [libellé, valeur, étapes de ce qui
+  // change] : une valeur remplacée, une clé retirée ou ajoutée, une liste
+  // inversée — un ordre croissant rompu —, vidée, allongée d'un doublon de
+  // son premier élément ou au-delà d'ETIQUETTES_MAX, la plus longue des
+  // bornes du schéma, ou précédée de 1,5.
+  function* abimees(racine) {
+    const etapes = toutesLesEtapes(racine).filter(
+      (e) => !(e[0] === 'charge' && ((e[1] === 'propositions' && e.length > 3) || (e[1] === 'retenu' && e.length > 2))),
+    );
+    assert.ok(etapes.length > 1, 'aucune valeur à abîmer');
+    for (const chemin of etapes) {
+      const nom = JSON.stringify(chemin);
+      // [libellé, copie de racine dont la valeur au bout de chemin devient
+      // changer(valeur), retirée sur RETIRER, chemin].
+      const modifier = (libelle, changer) => {
+        const copie = structuredClone(racine);
+        if (chemin.length === 0) return [`${libelle} ${nom}`, changer(copie), chemin];
+        const parent = valeurEn(copie, chemin.slice(0, -1));
+        const cle = chemin.at(-1);
+        const nouvelle = changer(parent[cle]);
+        if (nouvelle === RETIRER) delete parent[cle];
+        else parent[cle] = nouvelle;
+        return [`${libelle} ${nom}`, copie, chemin];
+      };
+      if (chemin.length > 0) {
+        for (const feuille of FEUILLES) yield modifier(`= ${montrer(feuille)}`, () => structuredClone(feuille));
+        if (typeof chemin.at(-1) === 'string') yield modifier('retirée', () => RETIRER);
+      }
+      const valeur = valeurEn(racine, chemin);
+      if (Array.isArray(valeur)) {
+        yield modifier('inversée', (v) => v.slice().reverse());
+        yield modifier('vidée', () => []);
+        if (valeur.length > 0) {
+          yield modifier('doublon', (v) => [...v, structuredClone(v[0])]);
+          yield modifier('trop longue', (v) => [...v, ...Array.from({ length: ETIQUETTES_MAX }, (_, i) => structuredClone(v[i % v.length]))]);
+          yield modifier('en tête, 1,5', (v) => [1.5, ...v]);
+        }
+      } else if (typeof valeur === 'object' && valeur !== null) {
+        for (const cle of CLES_AJOUTEES) yield modifier(`+ ${JSON.stringify(cle)}`, (v) => ({ ...v, [cle]: 1 }));
+      }
+    }
+  }
+  const RETIRER = Symbol('retirer');
+
+  // Une valeur d'épreuve en clair, undefined, -0, NaN et les infinis compris,
+  // qu'une liste montre élément par élément.
+  const montrer = (v) =>
+    Array.isArray(v) && v.length > 0
+      ? `[${v.map(montrer).join(',')}]`
+      : v === undefined || typeof v === 'number'
+        ? (Object.is(v, -0) ? '-0' : String(v))
+        : JSON.stringify(v);
+
+  test('sur chaque valeur abîmée des quatre racines, premiereFaute et premiereFauteEnPlace rendent le chemin de l’oracle, depuis la racine comme depuis un chemin donné', () => {
+    let examinees = 0;
+    const fautes = { rang: 0, cleEntreCrochets: 0, profondes: 0, ordre: 0 };
+    const ecarts = [];
+    for (const [libelleRacine, regle, racine, chemin] of racines()) {
+      assert.equal(premiereFaute(racine, regle, chemin), null, `${libelleRacine} bien formée`);
+      for (const [libelle, valeur, etapes] of abimees(racine)) {
+        for (const depuis of ['', chemin || 'x']) {
+          for (const [nom, rendu, attendu] of [
+            ['premiereFaute', premiereFaute(valeur, regle, depuis), ORACLE.premiereFaute(valeur, regle, depuis)],
+            ['premiereFauteEnPlace', premiereFauteEnPlace(valeur, regle, depuis), ORACLE.premiereFauteEnPlace(valeur, regle, depuis)],
+          ]) {
+            examinees += 1;
+            if (rendu !== attendu) ecarts.push(`${libelleRacine} ${libelle} ${nom}('${depuis}') : ${rendu} au lieu de ${attendu}`);
+            if (attendu === null || nom !== 'premiereFaute' || depuis !== '') continue;
+            if (/\[\d+\]$/.test(attendu)) fautes.rang += 1;
+            if (/\["/.test(attendu)) fautes.cleEntreCrochets += 1;
+            if ((attendu.match(/[.[]/g) ?? []).length >= 2) fautes.profondes += 1;
+            if (etapes.length > 0 && attendu === cheminDe(etapes) && Array.isArray(valeurEn(racine, etapes))) fautes.ordre += 1;
+          }
+        }
+      }
+    }
+    assert.deepEqual(ecarts.slice(0, 10), []);
+    // Planchers (§ 14.2) : un corpus qui ne fauterait pas, ou ne fauterait
+    // qu'à la surface, rendrait l'épreuve vraie sans rien éprouver.
+    assert.ok(examinees >= 20_000, `${examinees} examens`);
+    assert.ok(fautes.rang >= 1_000, `${fautes.rang} fautes nommées par un rang`);
+    assert.ok(fautes.cleEntreCrochets >= 80, `${fautes.cleEntreCrochets} fautes nommées par une clé entre crochets`);
+    assert.ok(fautes.profondes >= 2_500, `${fautes.profondes} fautes à trois étapes au moins`);
+    assert.ok(fautes.ordre >= 500, `${fautes.ordre} fautes nommées par la liste abîmée`);
+  });
+
+  // Chaque règle de genre donné, une fois, rencontrée dans regle et ce
+  // qu'elle contient, aPart compris.
+  function reglesDe(regle, genre, vues = new Set()) {
+    if (vues.has(regle)) return [];
+    vues.add(regle);
+    const ici = regle.genre === genre ? [regle] : [];
+    if (regle.genre === 'objet') for (const [, r] of regle.champs) ici.push(...reglesDe(r, genre, vues));
+    if (regle.genre === 'liste') ici.push(...reglesDe(regle.element, genre, vues));
+    return ici;
+  }
+
+  test('boucle des entiers ≡ conforme : chaque règle entier du schéma et de l’entrée de course, en liste, aux valeurs limites, rend la faute de l’oracle', () => {
+    const deuxRacines = (genre) => {
+      const vues = new Set();
+      return [...reglesDe(SCHEMA, genre, vues), ...reglesDe(ENTREE_DE_COURSE, genre, vues)];
+    };
+    const entiers = deuxRacines('entier');
+    const listesDEntiers = deuxRacines('liste').filter(({ element }) => element.genre === 'entier');
+    // Les entiers en liste : tables, capacités, participants, réserve,
+    // absents, occupants d'une table, présence, tours figés.
+    assert.ok(entiers.length >= 30, `${entiers.length} règles entier`);
+    assert.ok(listesDEntiers.length >= 8, `${listesDEntiers.length} listes d'entiers`);
+    assert.ok(listesDEntiers.some(({ element }) => element.nul), 'aucune liste d’entiers n’admet null');
+    let fautives = 0;
+    let admises = 0;
+    const ecarts = [];
+    const enListe = (element) => ({ genre: 'liste', nul: false, optionnel: false, element });
+    const enListeFacultative = (element) => enListe({ ...element, optionnel: true });
+    for (const liste of [...listesDEntiers, ...entiers.flatMap((e) => [enListe(e), enListeFacultative(e)])]) {
+      const { min, max } = liste.element;
+      const bornes = [min - 1, min, min + 0.5, min + 1, max - 1, max, max + 1].filter(Number.isFinite);
+      const valeurs = [...bornes, Number.MAX_SAFE_INTEGER, 2 ** 53, -1, 0, -0, 1.5, '1', null, undefined, NaN, Infinity, -Infinity, true, {}, []];
+      for (const v of valeurs) {
+        for (const valeur of [[v], [min, v], [v, min], [min, min + 1, v]]) {
+          const rendu = premiereFaute(valeur, liste, 'l');
+          const attendu = ORACLE.premiereFaute(valeur, liste, 'l');
+          if (rendu !== attendu) ecarts.push(`entier ${montrer([min, max])}${liste.element.nul ? ' nul' : ''}${liste.element.optionnel ? ' facultatif' : ''}, ${montrer(valeur)} : ${rendu} au lieu de ${attendu}`);
+          if (attendu === null) admises += 1;
+          else fautives += 1;
+        }
+      }
+    }
+    assert.deepEqual(ecarts.slice(0, 10), []);
+    assert.ok(fautives >= 4_000, `${fautives} listes fautives`);
+    assert.ok(admises >= 1_000, `${admises} listes admises`);
+  });
+
+  test('le chemin nomme les rangs entre crochets et se forme de la racine vers la faute', () => {
+    const proposition = documentRiche().charge.propositions[1];
+    proposition.placement[1].sieges[0][1] = 0;
+    assert.equal(premiereFaute(proposition, PROPOSITION, 'charge.propositions[1]'), 'charge.propositions[1].placement[1].sieges[0][1]');
+    assert.equal(premiereFaute([[1, 2], [3, 'x']], { genre: 'liste', nul: false, optionnel: false, element: { genre: 'liste', nul: false, optionnel: false, element: regleDuChamp(PROPOSITION, 'id') } }), '[1][1]');
+    // Un élément hors de sa règle se nomme par son rang avant l'ordre de la
+    // liste ; un ordre rompu, par la liste.
+    for (const [toursFiges, chemin] of [[[2, 1], 'toursFiges'], [[2, 0], 'toursFiges[1]'], [[1, 1], 'toursFiges']]) {
+      assert.equal(premiereFaute({ ...documentRiche().charge.propositions[1], toursFiges }, PROPOSITION), chemin, JSON.stringify(toursFiges));
+    }
+    const entree = entreeDeCourse();
+    entree.course.releves[1].placement[0]['a b'] = 1;
+    assert.equal(premiereFaute(entree, ENTREE_DE_COURSE), 'course.releves[1].placement[0]["a b"]');
   });
 });

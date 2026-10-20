@@ -658,33 +658,70 @@ function reduire(valeur, regleDeValeur) {
 // précédent.
 const strictementCroissante = (valeur) => valeur.every((element, rang) => rang === 0 || element > valeur[rang - 1]);
 
-// Chemin de la première valeur qui sort de sa règle, ou null. Une règle
-// aPart rencontrée sous une autre n'examine que son conteneur ; racine
-// vrai fait examiner tout le contenu de la règle donnée, même aPart, et
-// faux la lit à sa place sous une autre, comme l'analyse. L'ordre d'une
-// liste croissante se contrôle après ses éléments : un élément hors de sa
-// règle se nomme par son rang, un ordre rompu par la liste.
-function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
+// Étapes menant à la première valeur qui sort de sa règle, de la plus
+// profonde vers valeur — une clé d'objet, une chaîne, ou un rang de liste,
+// un nombre —, [] quand c'est valeur elle-même, ou null quand rien ne sort
+// de sa règle. Une règle aPart rencontrée sous une autre n'examine que son
+// conteneur ; racine vrai fait examiner tout le contenu de la règle donnée,
+// même aPart, et faux la lit à sa place sous une autre, comme l'analyse.
+// L'ordre d'une liste croissante se contrôle après ses éléments : un
+// élément hors de sa règle se nomme par son rang, un ordre rompu par la
+// liste. Le parcours d'une valeur conforme ne forme aucun texte ni aucune
+// liste d'étapes : la liste naît à la faute, et chaque niveau y ajoute la
+// sienne en remontant.
+function etapesDeLaFaute(valeur, regleDeValeur, racine) {
   if (valeur === undefined && regleDeValeur.optionnel) return null;
   if (valeur === null && regleDeValeur.nul) return null;
-  if (!conforme(valeur, regleDeValeur)) return chemin;
+  if (!conforme(valeur, regleDeValeur)) return [];
   if (regleDeValeur.aPart && !racine) return null;
   if (regleDeValeur.genre === 'objet') {
     for (const [cle, regleDuChamp] of regleDeValeur.champs) {
-      const faute = fauteDeForme(valeur[cle], regleDuChamp, joindre(chemin, cle), false);
-      if (faute !== null) return faute;
+      const etapes = etapesDeLaFaute(valeur[cle], regleDuChamp, false);
+      if (etapes !== null) {
+        etapes.push(cle);
+        return etapes;
+      }
     }
     const inconnue = cleInconnue(valeur, regleDeValeur);
-    return inconnue === undefined ? null : joindre(chemin, inconnue);
+    return inconnue === undefined ? null : [inconnue];
   }
   if (regleDeValeur.genre === 'liste') {
-    for (let rang = 0; rang < valeur.length; rang += 1) {
-      const faute = fauteDeForme(valeur[rang], regleDeValeur.element, `${chemin}[${rang}]`, false);
-      if (faute !== null) return faute;
+    const { element } = regleDeValeur;
+    if (element.genre === 'entier') {
+      // Une liste d'entiers — identifiants, occupants, tours — se lit d'une
+      // boucle qui déplie, pour le genre entier, les contrôles ci-dessus :
+      // facultatif, null, puis le cas entier de conforme, qu'elle recopie et
+      // doit suivre. Un entier n'a pas de contenu : aPart n'y change rien.
+      const { optionnel, nul, min, max } = element;
+      for (let rang = 0; rang < valeur.length; rang += 1) {
+        const v = valeur[rang];
+        if ((v === undefined && optionnel) || (v === null && nul)) continue;
+        if (!(Number.isSafeInteger(v) && v >= min && v <= max)) return [rang];
+      }
+    } else {
+      for (let rang = 0; rang < valeur.length; rang += 1) {
+        const etapes = etapesDeLaFaute(valeur[rang], element, false);
+        if (etapes !== null) {
+          etapes.push(rang);
+          return etapes;
+        }
+      }
     }
-    if (regleDeValeur.croissante === true && !strictementCroissante(valeur)) return chemin;
+    if (regleDeValeur.croissante === true && !strictementCroissante(valeur)) return [];
   }
   return null;
+}
+
+// Chemin de la première valeur qui sort de sa règle, à partir de chemin, ou
+// null (etapesDeLaFaute). Les étapes se joignent de la racine vers la
+// faute : une clé par joindre, un rang entre crochets.
+function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
+  const etapes = etapesDeLaFaute(valeur, regleDeValeur, racine);
+  if (etapes === null) return null;
+  return etapes.reduceRight(
+    (deja, etape) => (typeof etape === 'number' ? `${deja}[${etape}]` : joindre(deja, etape)),
+    chemin,
+  );
 }
 
 /**
