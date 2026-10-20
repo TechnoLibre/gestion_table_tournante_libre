@@ -542,13 +542,16 @@ describe('l’événement ouvert et sa navigation', () => {
 
 describe('« À propos » (§ 18.6)', () => {
   const panneau = (m) => dans(m, '[data-ecran="apropos"]');
+  // Le panneau est plus haut que la fenêtre : il s'ouvre en haut, son titre
+  // visible.
+  const titre = (m) => dans(m, '[data-ecran="apropos"] > h1');
 
   test('le panneau s’ouvre depuis le bandeau sur la liste puis sur un événement ; « Copier » remet exactement le bloc affiché', async () => {
     const m = await monter({ fichiers: [fichier('bal', 'Bal des Grisailles')] });
     const attendu = blocAPropos({ version: VERSION.affichee, plateforme: m.fs.nature, provenance: 'test', format: FORMAT }, t);
     dans(m, '[data-commande="apropos"]').click();
     flushSync();
-    expect(visible(panneau(m))).toBe(true);
+    expect(visible(titre(m))).toBe(true);
     const bloc = dans(m, '[data-bloc]');
     expect(bloc.textContent).toBe(attendu);
     dans(m, '[data-commande="copier"]').click();
@@ -562,7 +565,7 @@ describe('« À propos » (§ 18.6)', () => {
     expect(ecran(m).dataset.ecran).toBe('evenement');
     dans(m, '[data-commande="apropos"]').click();
     flushSync();
-    expect(visible(panneau(m))).toBe(true);
+    expect(visible(titre(m))).toBe(true);
     expect(dans(m, '[data-bloc]').textContent).toBe(attendu);
   });
 

@@ -3766,13 +3766,17 @@ const SCRIPTS_NOMMES = [
   { fichier: 'scripts/windows/lancer.ps1', raison: 'lance le projet sous Windows' },
 ];
 
-// Les données de la police embarquée, à leur seule place : les deux
-// fichiers de police, que Vite incruste, et leur provenance, que lit
-// test/polices.test.js. Ce sont des données, qui ne calculent rien.
+// Les données nommées, chacune à sa seule place : les deux fichiers de la
+// police embarquée, que Vite incruste, et leur provenance, que lit
+// test/polices.test.js ; les deux fichiers du logo de TechnoLibre, que Vite
+// incruste aussi, et qui viennent de l'éditeur. Ce sont des données, qui ne
+// calculent rien.
 const DONNEES_NOMMEES = [
   { fichier: 'src/polices/NotoSans-Regular.ttf', raison: 'la police embarquée, graisse normale (§ 11.1, § 14.15)' },
   { fichier: 'src/polices/NotoSans-Bold.ttf', raison: 'la police embarquée, graisse grasse (§ 11.1, § 14.15)' },
   { fichier: 'src/polices/PROVENANCE', raison: 'version amont, adresse et empreinte de chaque fichier de la police' },
+  { fichier: 'src/actifs/full_logo_technolibre_2023.svg', raison: 'le logo de TechnoLibre, marque de l’éditeur, tel qu’il le fournit (§ 18.6)' },
+  { fichier: 'src/actifs/full_logo_technolibre_2023.png', raison: 'le logo de TechnoLibre, marque de l’éditeur, tel qu’il le fournit (§ 18.6)' },
 ];
 
 // Fichiers que le disque porte sans qu'ils soient du projet : l'index de
@@ -4249,7 +4253,7 @@ describe('arborescence : un seul chemin de code pour les réservations (§ 5.2)'
 });
 
 describe('arborescence : une seule langue (§ 13.2)', () => {
-  test('sous src/, electron/ et scripts/, rien que du JavaScript, des composants Svelte, des feuilles de style, des données JSON, les scripts d’installation nommés et les données nommées de la police', () => {
+  test('sous src/, electron/ et scripts/, rien que du JavaScript, des composants Svelte, des feuilles de style, des données JSON, les scripts d’installation nommés et les données nommées, la police et le logo', () => {
     assert.deepEqual(releverLangages(RACINE), []);
   });
 

@@ -14,14 +14,16 @@
 // les modules et le code de ses morceaux, qui passent par les mêmes relevés.
 //
 // Les sorties (§ 11.1, § 14.15) : la police embarquée voyage dans deux
-// morceaux différés, un par graisse, incrustée octet pour octet ; pdf-lib et
+// morceaux différés, un par graisse, incrustée octet pour octet ; le logo de
+// TechnoLibre et les textes des deux licences du logiciel voyagent chacun dans
+// leur morceau différé, le PNG du logo incrusté octet pour octet ; pdf-lib et
 // fontkit, quand la page les importe, tiennent chacun leur morceau, sous le
 // seuil ; aucun de ces morceaux n'est chargé ni préchargé au lancement ; les
-// avis de licence sont copiés dans www/licences/, et chaque paquet des
-// morceaux construits y a le sien, sous la licence de son package.json. Les
-// deux fichiers de la police sont aussi émis dans www/, octet pour octet,
-// et nommés par la feuille construite : jetons.css en fait la police de
-// l'interface.
+// avis de licence et les textes des deux licences sont copiés dans
+// www/licences/, et chaque paquet des morceaux construits y a le sien, sous
+// la licence de son package.json. Les deux fichiers de la police sont aussi
+// émis dans www/, octet pour octet, et nommés par la feuille construite :
+// jetons.css en fait la police de l'interface.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -518,7 +520,7 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
     );
   });
 
-  test('la police voyage dans deux morceaux différés, octet pour octet, et ses deux fichiers sont émis dans www/, nommés par la feuille construite ; aucun morceau des sorties n’est chargé ni préchargé au lancement ; les avis de licence sont dans www/licences/, et chaque paquet construit y a le sien', async () => {
+  test('la police voyage dans deux morceaux différés, octet pour octet, et ses deux fichiers sont émis dans www/, nommés par la feuille construite ; le logo et les textes des licences voyagent chacun dans un morceau différé, le PNG octet pour octet ; aucun morceau des sorties n’est chargé ni préchargé au lancement ; les avis et les textes des licences sont dans www/licences/, et chaque paquet construit y a le sien', async () => {
     const sortie = mkdtempSync(join(tmpdir(), 'construction-sorties-'));
     const travailleur = releveDuTravailleur();
     try {
@@ -547,6 +549,36 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
       }
       assert.notEqual(morceauxDePolice[0], morceauxDePolice[1]);
 
+      // Le logo et les textes des licences (§ 18.6) : chacun dans un seul
+      // morceau, différé, que chargerLogo et chargerTexteLicence importent à
+      // la demande, avec les fichiers qu'il incruste ; le PNG du logo y est
+      // une URL data:, dont le décodage est le fichier de src/actifs.
+      const sansRequete = (id) => id.replace(/\?.*$/, '');
+      const morceauxDActifs = [];
+      for (const [module, incrustes] of [
+        ['src/actifs/donnees_logo.js', ['src/actifs/full_logo_technolibre_2023.svg', 'src/actifs/full_logo_technolibre_2023.png']],
+        ['src/actifs/textes_licences.js', ['public/licences/AGPL-3.0-or-later.txt', 'public/licences/LiLiQ-Rplus-1.1.txt']],
+      ]) {
+        const id = join(RACINE, ...module.split('/'));
+        const porteurs = morceaux.filter((m) => m.moduleIds.includes(id));
+        assert.equal(porteurs.length, 1, `${module} dans ${porteurs.length} morceaux`);
+        const [morceau] = porteurs;
+        assert.ok(morceau.isDynamicEntry && !morceau.isEntry, `${morceau.fileName} n'est pas un morceau différé`);
+        for (const fichier of incrustes) {
+          const idFichier = join(RACINE, ...fichier.split('/'));
+          assert.ok(morceau.moduleIds.some((m) => sansRequete(m) === idFichier), `${fichier} absent de ${morceau.fileName}`);
+        }
+        morceauxDActifs.push(morceau.fileName);
+      }
+      const morceauDuLogo = morceaux.find((m) => m.fileName === morceauxDActifs[0]);
+      const logos = [...morceauDuLogo.code.matchAll(/data:image\/png;base64,([A-Za-z0-9+/]+=*)/g)].map((m) => m[1]);
+      assert.equal(logos.length, 1, `${morceauDuLogo.fileName} : ${logos.length} PNG incrustés`);
+      assert.equal(
+        sha256(Buffer.from(logos[0], 'base64')),
+        sha256(readFileSync(join(RACINE, 'src', 'actifs', 'full_logo_technolibre_2023.png'))),
+        'full_logo_technolibre_2023.png',
+      );
+
       // Les morceaux des sorties : la police, et tout morceau qui porte un
       // module de pdf-lib, de fontkit ou de ce qu'ils tirent. Quand la page
       // les importe, fontkit et pdf-lib tiennent chacun un morceau à part.
@@ -557,7 +589,7 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
         assert.ok(basename(morceau.fileName).startsWith(`${attendu}-`), `${morceau.fileName} : ${[...nomsDePaquets]}`);
         assert.ok(!(nomsDePaquets.has('@pdf-lib/fontkit') && nomsDePaquets.has('pdf-lib')), morceau.fileName);
       }
-      const desSorties = new Set([...morceauxDePolice, ...deLaProduction.map((m) => m.fileName)]);
+      const desSorties = new Set([...morceauxDePolice, ...morceauxDActifs, ...deLaProduction.map((m) => m.fileName)]);
 
       // Au lancement, la page charge les scripts du HTML et les imports
       // statiques de son point d'entrée, et précharge les modulepreload.
@@ -578,8 +610,9 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
       const auLancement = [...statiques, ...prechargements, ...scriptsDe(html).map((s) => (s.src ?? '').replace(/^\.\//, ''))];
       assert.deepEqual(auLancement.filter((nom) => desSorties.has(nom)), []);
 
-      // Les avis : copiés tels quels de public/licences/.
-      for (const avis of ['NotoSans-OFL.txt', 'TIERS.txt']) {
+      // Les avis et les textes des deux licences du logiciel : copiés tels
+      // quels de public/licences/, d'où l'exécutable les emporte.
+      for (const avis of ['NotoSans-OFL.txt', 'TIERS.txt', 'AGPL-3.0-or-later.txt', 'LiLiQ-Rplus-1.1.txt']) {
         assert.equal(
           readFileSync(join(sortie, 'licences', avis), 'utf8'),
           readFileSync(join(RACINE, 'public', 'licences', avis), 'utf8'),

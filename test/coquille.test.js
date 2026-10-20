@@ -27,6 +27,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { PRIMITIVES } from '../electron/fichiers.js';
 import { CANAL_IMPRESSION, FORMATS_DE_PAGE, imprimer, optionsImpression, servirImpression } from '../electron/impression.js';
 import { PAPIERS } from '../src/geometrie/papiers.js';
+import { LIENS } from '../src/interface/apropos.js';
 import { describe, test } from './lanceur.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
@@ -49,6 +50,23 @@ const SCENARIOS = {
   absent: {},
   vide: { PORTABLE_EXECUTABLE_DIR: '' },
 };
+
+// Les adresses que la page demande d'ouvrir dans une nouvelle fenêtre, puis
+// de naviguer : les liens du panneau « À propos », puis des voisines que la
+// coquille n'ouvre pas — un autre schéma, sans la barre finale, un autre
+// chemin, un hôte qui prolonge le sien, une autre page du même site, un
+// fichier local, une adresse inventée.
+const LIENS_DE_LA_PAGE = Object.values(LIENS);
+const ADRESSES_VOISINES = [
+  'http://technolibre.ca/',
+  'https://technolibre.ca',
+  'https://technolibre.ca/autre',
+  'https://technolibre.ca.exemple.invalid/',
+  'https://www.gnu.org/licenses/agpl-3.0.html',
+  'file:///page.html',
+  'https://exemple.invalid/',
+];
+const ADRESSES_DE_LA_PAGE = [...LIENS_DE_LA_PAGE, ...ADRESSES_VOISINES];
 
 // Délai de l'exécution de la coquille. Le factice ne joue la page qu'une
 // fois le processus sans rien à faire ; un minuteur ou un écouteur laissé
@@ -105,7 +123,14 @@ function executerLaCoquille(scenario) {
     const resultat = spawnSync(process.execPath, ['--import', FACTICE, PRINCIPAL], {
       cwd: ailleurs,
       encoding: 'utf8',
-      env: { ...environnement, TMPDIR: temporaire, TEMP: temporaire, TMP: temporaire, ...SCENARIOS[scenario] },
+      env: {
+        ...environnement,
+        TMPDIR: temporaire,
+        TEMP: temporaire,
+        TMP: temporaire,
+        GTT_ADRESSES_DE_LA_PAGE: JSON.stringify(ADRESSES_DE_LA_PAGE),
+        ...SCENARIOS[scenario],
+      },
       timeout: DELAI_MS,
       killSignal: 'SIGKILL',
     });
@@ -189,11 +214,22 @@ describe('coquille : processus principal', () => {
     }
   });
 
-  test("la page n'ouvre aucune fenêtre et ne navigue nulle part", () => {
+  test("la page n'ouvre aucune fenêtre et ne navigue nulle part, quelle que soit l'adresse", () => {
     const { ouvertures, navigations } = journalDeLaCoquille();
-    assert.deepEqual(ouvertures, [{ action: 'deny' }]);
-    assert.ok(navigations.length > 0, 'aucun écouteur de will-navigate');
+    assert.deepEqual(ouvertures, ADRESSES_DE_LA_PAGE.map(() => ({ action: 'deny' })));
+    assert.ok(navigations.length >= ADRESSES_DE_LA_PAGE.length, 'aucun écouteur de will-navigate');
     assert.deepEqual(navigations, navigations.map(() => true));
+  });
+
+  test('les liens du panneau « À propos », et eux seuls, passent au navigateur du système, dans leur ordre (§ 2, § 18.6)', () => {
+    assert.equal(LIENS_DE_LA_PAGE.length, 4);
+    assert.deepEqual(journalDeLaCoquille().externes, LIENS_DE_LA_PAGE);
+  });
+
+  test('les adresses que la coquille ouvre sont exactement les liens du panneau « À propos »', () => {
+    const texte = readFileSync(PRINCIPAL, 'utf8');
+    const adresses = [...texte.matchAll(/'(https?:\/\/[^']*)'/gu)].map(([, adresse]) => adresse);
+    assert.deepEqual(adresses.sort(), [...LIENS_DE_LA_PAGE].sort());
   });
 
   test('le profil de Chromium est un dossier neuf sous le dossier temporaire, nommé par le pid de la séance, posé avant whenReady, retiré à la sortie (§ 8.6)', () => {

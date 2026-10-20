@@ -62,6 +62,20 @@ async function retirerProfilsTermines() {
   }
 }
 
+// Les adresses que la page peut faire ouvrir au navigateur du système (§ 2,
+// § 18.6) : les liens du panneau « À propos », chacune sous la forme exacte
+// que Chromium passe au gestionnaire d'ouverture, en https. Une adresse qui
+// en diffère d'un caractère — schéma, hôte, chemin, barre finale — n'ouvre
+// rien. L'exécutable n'emporte pas src/, que la coquille ne peut donc pas
+// importer : la liste se recopie ici, et test/coquille.test.js la compare à
+// celle de src/interface/apropos.js.
+const ADRESSES_EXTERNES = new Set([
+  'https://technolibre.ca/',
+  'https://github.com/TechnoLibre/gestion_table_tournante_libre',
+  'https://www.gnu.org/licenses/agpl-3.0.fr.html',
+  'https://forge.gouv.qc.ca/licence/liliq-r+/',
+]);
+
 // Le système de fichiers : emplacements et racines lus une fois, au
 // démarrage (§ 8.6) ; les dialogues s'ouvrent sur la fenêtre de la page. Les
 // gestionnaires sont posés avant le chargement de la page, qui peut les
@@ -109,8 +123,14 @@ function creerFenetre() {
     },
   });
   // La page ne quitte jamais www/ : toute nouvelle fenêtre est refusée, toute
-  // navigation annulée, quelle que soit sa cible.
-  fenetre.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // navigation annulée, quelle que soit sa cible. Un lien que la page ouvre
+  // dans une nouvelle fenêtre, et dont l'adresse est exactement l'une des
+  // ADRESSES_EXTERNES, passe au navigateur du système ; la fenêtre reste
+  // refusée.
+  fenetre.webContents.setWindowOpenHandler(({ url }) => {
+    if (ADRESSES_EXTERNES.has(url)) shell.openExternal(url).catch(() => {});
+    return { action: 'deny' };
+  });
   fenetre.webContents.on('will-navigate', (evenement) => evenement.preventDefault());
   fenetre.loadFile(PAGE);
 }

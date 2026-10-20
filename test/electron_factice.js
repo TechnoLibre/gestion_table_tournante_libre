@@ -8,18 +8,20 @@
 // Chargé avant electron/main.js, ce module fait résoudre le spécificateur
 // « electron » vers lui-même : le processus principal s'exécute contre les
 // fausses API exportées ici, qui consignent chaque appel. Quand le processus
-// n'a plus rien à faire, le module joue le rôle de la page : il exécute
-// electron/preload.cjs dans une fonction qui reçoit require, module et
-// exports, et appelle chaque fonction du pont exposé, qui atteint les
-// gestionnaires posés par le processus principal ; puis gtt.copier, avec un
-// texte d'épreuve, et gtt.fichiers.verrouiller sur la racine documents, deux
-// verrous réels que la page ne rend pas ; le contenu du second est récrit au
-// nom d'une autre séance, comme après une reprise ; puis gtt.imprimer, une
-// fois par jeu d'options d'IMPRESSIONS_DE_LA_PAGE, que le processus principal
-// porte au print de la fenêtre qui l'a demandé. Il joue ensuite la sortie
-// de l'application — before-quit, will-quit, quit —, relève la présence de
-// ces deux verrous et de celui d'une autre séance, autre.gtt.verrou, avant et
-// après la sortie, puis imprime le journal en JSON sur la sortie standard.
+// n'a plus rien à faire, le module joue le rôle de la page : il demande
+// l'ouverture d'une nouvelle fenêtre, puis la navigation, vers chacune des
+// ADRESSES_DE_LA_PAGE ; il exécute electron/preload.cjs dans une fonction
+// qui reçoit require, module et exports, et appelle chaque fonction du pont
+// exposé, qui atteint les gestionnaires posés par le processus principal ;
+// puis gtt.copier, avec un texte d'épreuve, et gtt.fichiers.verrouiller
+// sur la racine documents, deux verrous réels que la page ne rend pas ; le
+// contenu du second est récrit au nom d'une autre séance, comme après une
+// reprise ; puis gtt.imprimer, une fois par jeu d'options
+// d'IMPRESSIONS_DE_LA_PAGE, que le processus principal porte au print de la
+// fenêtre qui l'a demandé. Il joue ensuite la sortie de l'application
+// — before-quit, will-quit, quit —, relève la présence de ces deux verrous
+// et de celui d'une autre séance, autre.gtt.verrou, avant et après la
+// sortie, puis imprime le journal en JSON sur la sortie standard.
 //
 // Seul require est restreint, à electron, comme dans un rendu en bac à
 // sable. Les globales de Node du processus d'épreuve, dont process et Buffer,
@@ -38,11 +40,12 @@
 // désigne par TMPDIR, et par TEMP et TMP sous Windows —, et des Documents et
 // un AppData qui y vivent ; app.getName, le nom de produit de package.json,
 // comme Electron. Les dialogues rendent une annulation ; l'explorateur
-// consigne le dossier qu'on lui demande d'ouvrir, et réussit ; le
-// presse-papiers consigne chaque texte qu'il reçoit ; le print d'une fenêtre
-// consigne ses options et répond à son rappel, dans une microtâche, par
-// l'issue suivante d'ISSUES_DE_PRINT. Un appel de la page parvient à son
-// gestionnaire avec, pour expéditeur, le contenu de la fenêtre.
+// consigne le dossier qu'on lui demande d'ouvrir, et réussit, le navigateur
+// du système chaque adresse qu'on lui passe ; le presse-papiers consigne
+// chaque texte qu'il reçoit ; le print d'une fenêtre consigne ses options et
+// répond à son rappel, dans une microtâche, par l'issue suivante
+// d'ISSUES_DE_PRINT. Un appel de la page parvient à son gestionnaire avec,
+// pour expéditeur, le contenu de la fenêtre.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -90,6 +93,11 @@ const ISSUES_DE_PRINT = [
   [false, 'failed'],
 ];
 const NOM_PRODUIT = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).productName;
+// Les adresses que la page demande d'ouvrir dans une nouvelle fenêtre, puis
+// de naviguer, dans l'ordre : le tableau JSON de GTT_ADRESSES_DE_LA_PAGE,
+// que l'épreuve pose, ou à défaut une adresse externe inventée.
+const ADRESSES_DE_LA_PAGE =
+  process.env.GTT_ADRESSES_DE_LA_PAGE === undefined ? ['https://exemple.invalid/'] : JSON.parse(process.env.GTT_ADRESSES_DE_LA_PAGE);
 
 // Ce que rend app.getPath, par nom.
 const TEMPORAIRE = tmpdir();
@@ -149,10 +157,13 @@ const journal = {
   pressePapiers: [],
   // Options de chaque webContents.print.
   impressions: [],
-  // Réponse du gestionnaire d'ouverture de chaque fenêtre à une adresse
-  // externe.
+  // Réponse du gestionnaire d'ouverture de chaque fenêtre à chacune des
+  // ADRESSES_DE_LA_PAGE, dans leur ordre.
   ouvertures: [],
-  // Pour chaque écouteur de will-navigate : la navigation est-elle annulée ?
+  // Adresse de chaque shell.openExternal.
+  externes: [],
+  // Pour chaque écouteur de will-navigate et chacune des
+  // ADRESSES_DE_LA_PAGE : la navigation est-elle annulée ?
   navigations: [],
   // Ce que fait le préchargement : modules requis, objets exposés, membres
   // de gtt.fichiers, et pour chacun les canaux qu'il invoque et sa réponse ;
@@ -286,6 +297,9 @@ export const shell = {
     journal.explorateur.push(chemin);
     return '';
   },
+  async openExternal(adresse) {
+    journal.externes.push(adresse);
+  },
 };
 
 export const clipboard = {
@@ -412,14 +426,15 @@ function sortir() {
 }
 
 async function jouerLaPage() {
-  const externe = 'https://exemple.invalid/';
   for (const page of pageDeFenetre) {
-    journal.ouvertures.push(page.ouverture === null ? null : page.ouverture({ url: externe }));
-    for (const { evenement, ecouteur } of page.ecouteurs) {
-      if (evenement !== 'will-navigate') continue;
-      let annulee = false;
-      ecouteur({ url: externe, preventDefault: () => (annulee = true) }, externe);
-      journal.navigations.push(annulee);
+    for (const adresse of ADRESSES_DE_LA_PAGE) {
+      journal.ouvertures.push(page.ouverture === null ? null : page.ouverture({ url: adresse }));
+      for (const { evenement, ecouteur } of page.ecouteurs) {
+        if (evenement !== 'will-navigate') continue;
+        let annulee = false;
+        ecouteur({ url: adresse, preventDefault: () => (annulee = true) }, adresse);
+        journal.navigations.push(annulee);
+      }
     }
   }
   try {

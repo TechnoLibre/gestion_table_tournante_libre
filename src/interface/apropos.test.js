@@ -3,7 +3,7 @@
 
 // Le bloc « À propos » (§ 18.6) : une ligne que l'opérateur copie dans un
 // courriel — nom, version affichée, plateforme, provenance, version de
-// format. Ce qui tient lieu de version à l'écran, et la
+// format. Les liens du panneau, sa licence et son attribution. Ce qui tient lieu de version à l'écran, et la
 // provenance, s'éprouvent avec leur définition (src/application/version.js),
 // que ce module réexporte.
 import assert from 'node:assert/strict';
@@ -13,7 +13,7 @@ import { TABLES_APPLICATION } from '../application/libelles.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../application/traduction.js';
 import { FORMAT } from '../stockage/document.js';
 import { VERSION } from '../version.genere.js';
-import { blocAPropos } from './apropos.js';
+import { LIENS, blocAPropos, cleDeLien } from './apropos.js';
 import { TABLES_INTERFACE, libelleProvenance } from './libelles.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -75,6 +75,65 @@ describe('blocAPropos (§ 18.6)', () => {
     assert.ok(bloc.startsWith(ouverture) && bloc.endsWith(fermeture), bloc);
     assert.equal(bloc.split(ouverture).length, 2, bloc);
     assert.equal(bloc.split(fermeture).length, 2, bloc);
+  });
+});
+
+describe('les liens du panneau « À propos » (§ 2, § 18.6)', () => {
+  test('le site de TechnoLibre, le projet, l’AGPLv3 et la LiLiQ-R+, dans cet ordre, chacun en https, sous la forme que rend l’analyse d’une URL', () => {
+    assert.deepEqual(Object.entries(LIENS), [
+      ['site', 'https://technolibre.ca/'],
+      ['projet', 'https://github.com/TechnoLibre/gestion_table_tournante_libre'],
+      ['agpl', 'https://www.gnu.org/licenses/agpl-3.0.fr.html'],
+      ['liliq', 'https://forge.gouv.qc.ca/licence/liliq-r+/'],
+    ]);
+    assert.ok(Object.isFrozen(LIENS));
+    for (const adresse of Object.values(LIENS)) {
+      assert.equal(new URL(adresse).href, adresse);
+      assert.equal(new URL(adresse).protocol, 'https:', adresse);
+    }
+  });
+
+  test('chaque lien a son libellé ; un nom hors de LIENS lève RangeError', () => {
+    for (const nom of Object.keys(LIENS)) {
+      assert.equal(cleDeLien(nom), `coquille.apropos.lien.${nom}`);
+      assert.ok(t(cleDeLien(nom)).length > 0, nom);
+    }
+    for (const faux of ['autre', 'toString', '']) assert.throws(() => cleDeLien(faux), RangeError, faux);
+  });
+});
+
+describe('la licence et l’attribution du panneau « À propos » (§ 18.6)', () => {
+  test('la licence nomme les deux licences, l’identifiant SPDX, et les obligations sous la licence choisie', () => {
+    const texte = [
+      t('coquille.apropos.licence.choix'),
+      ...['agpl', 'liliq'].map((nom) => t(`coquille.apropos.licence.${nom}`)),
+      t('coquille.apropos.licence.spdx'),
+      t('coquille.apropos.licence.spdxValeur'),
+      t('coquille.apropos.licence.textes'),
+      t('coquille.apropos.licence.respecter'),
+      ...[1, 2, 3, 4, 5].map((rang) => t(`coquille.apropos.licence.obligation${rang}`)),
+      t('coquille.apropos.licence.contributions'),
+    ].join('\n');
+    for (const attendu of [
+      'AGPL-3.0-or-later',
+      'LiLiQ-R+',
+      'AGPL-3.0-or-later OR LiLiQ-Rplus-1.1',
+      'LICENSES/',
+      'réciprocité forte',
+      'code source',
+      'réseau',
+      'ces deux licences',
+    ]) {
+      assert.ok(texte.includes(attendu), attendu);
+    }
+    assert.equal(t('coquille.apropos.licence.spdxValeur'), 'AGPL-3.0-or-later OR LiLiQ-Rplus-1.1');
+  });
+
+  test('l’attribution invite à montrer le logo et le lien vers technolibre.ca, et dit qu’elle n’ajoute aucune condition', () => {
+    const texte = t('coquille.apropos.attribution.texte');
+    assert.ok(texte.includes('https://technolibre.ca'), texte);
+    assert.ok(texte.includes('logo de TechnoLibre'), texte);
+    assert.ok(texte.includes('une demande, et non d\u{2019}une condition supplémentaire'), texte);
   });
 });
 

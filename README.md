@@ -161,13 +161,46 @@ l'exécution elle-même —, son statut et la façon de le relever. Une valeur a
 
 ## Licence
 
-© 2026 TechnoLibre. GNU Affero General Public License, version 3 ou ultérieure ;
-texte complet dans `LICENSE`.
+© 2026 TechnoLibre Inc. Ce projet est distribué, au choix de l'utilisateur,
+sous l'une des licences suivantes :
+
+- GNU Affero General Public License v3.0 ou ultérieure (AGPL-3.0-or-later) ;
+- Licence Libre du Québec – Réciprocité forte v1.1 (LiLiQ-R+).
+
+Identifiant SPDX : `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1`. Textes complets :
+dossier `LICENSES/` ; l'application les donne aussi à lire hors ligne, dans
+« À propos », depuis `public/licences/AGPL-3.0-or-later.txt` et
+`public/licences/LiLiQ-Rplus-1.1.txt`, qui voyagent avec la page. Textes
+officiels : [AGPLv3](https://www.gnu.org/licenses/agpl-3.0.fr.html),
+[LiLiQ-R+](https://forge.gouv.qc.ca/licence/liliq-r+/).
+
+Pour respecter la licence choisie :
+
+- conservez les avis de copyright et de licence existants ;
+- indiquez clairement vos modifications et leur date ;
+- toute version modifiée doit rester sous une licence à réciprocité forte
+  (celle choisie ou une licence compatible) ;
+- si vous distribuez le logiciel, fournissez le code source correspondant ;
+- sous l'AGPL, si vous offrez une version modifiée à des utilisateurs par un
+  réseau (SaaS, instance web), vous devez leur donner accès à son code source.
+
+Les contributions à ce projet sont acceptées sous ces deux licences.
 
 L'application embarque la police **Noto Sans** (Regular et Bold), sous la
 **SIL Open Font License 1.1**, sans nom de police réservé : elle sert à la
 planche de badges et à l'interface. Son texte est dans
 `public/licences/NotoSans-OFL.txt`, sa provenance dans `src/polices/PROVENANCE`.
 Les avis des paquets que la page incorpore — Svelte, pdf-lib, fontkit et ce
-qu'ils tirent — sont dans `public/licences/TIERS.txt`. Les deux fichiers
-voyagent avec la page, dans `www/licences/`.
+qu'ils tirent — sont dans `public/licences/TIERS.txt`. Ces fichiers voyagent
+avec la page, dans `www/licences/`.
+
+Le logo de TechnoLibre, `src/actifs/full_logo_technolibre_2023.svg` et `.png`,
+est la marque de l'éditeur ; « À propos » l'affiche et le donne à télécharger.
+
+## Attribution
+
+Si vous utilisez ce logiciel, modifié ou non, nous vous invitons à afficher le
+logo de TechnoLibre sur les badges des participants, puis sur votre site web
+avec un lien vers https://technolibre.ca. Il s'agit d'une demande, et non d'une
+condition supplémentaire : vos droits et obligations sont définis uniquement
+par la licence que vous avez choisie.

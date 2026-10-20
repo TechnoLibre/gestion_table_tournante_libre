@@ -358,6 +358,14 @@
   de l'écran, de 90 à 150 %, et le thème clair ou sombre, qui quitte le bandeau.
   La machine retient la taille d'un lancement à l'autre ; le plan, les pages
   imprimées et les badges gardent la leur.
+- « À propos » présente le logo de TechnoLibre, qu'un clic offre de
+  télécharger en SVG ou en PNG ; les liens vers le site de TechnoLibre, le code
+  source du projet et les deux licences, qui s'ouvrent dans votre navigateur ;
+  la licence, au choix AGPL-3.0-or-later ou LiLiQ-R+, dont les deux textes
+  complets se lisent sur place, sans réseau, et voyagent avec l'exécutable ;
+  une demande d'attribution ; et le sommaire des fonctionnalités, chacune sous
+  un numéro qui ne change pas, `PLA-08` par exemple, que la spécification porte
+  aussi.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

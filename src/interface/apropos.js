@@ -5,10 +5,38 @@
 // une ligne, que l'opérateur copie dans un courriel : il porte la version
 // affichée, celle que nomment le changelog et le nom du livrable. Sa
 // composition est une seule clé de la table de la coquille : la langue
-// témoin l'encadre une fois, en entier. La version et la provenance à l'écran se définissent
-// dans l'application (version.js), que le papier lit aussi : ce module les
-// réexporte.
+// témoin l'encadre une fois, en entier. La version et la provenance à
+// l'écran se définissent dans l'application (version.js), que le papier lit
+// aussi : ce module les réexporte. Le panneau porte aussi des liens vers
+// l'extérieur, que LIENS énumère.
 export { provenanceVisible, versionVisible } from '../application/version.js';
+
+/**
+ * Les liens du panneau « À propos » (§ 2, § 18.6), dans leur ordre : chacun
+ * son nom, que porte data-lien et dont cleDeLien tire le libellé, et son
+ * adresse https, sous la forme exacte que Chromium passe au gestionnaire
+ * d'ouverture de la coquille. La coquille (electron/main.js) n'ouvre au
+ * navigateur du système que ces adresses-là ; le web les ouvre dans un
+ * nouvel onglet.
+ */
+export const LIENS = Object.freeze({
+  site: 'https://technolibre.ca/',
+  projet: 'https://github.com/TechnoLibre/gestion_table_tournante_libre',
+  agpl: 'https://www.gnu.org/licenses/agpl-3.0.fr.html',
+  liliq: 'https://forge.gouv.qc.ca/licence/liliq-r+/',
+});
+
+/**
+ * La clé du libellé d'un lien.
+ *
+ * @param {string} nom  un nom de LIENS
+ * @returns {string}
+ * @throws {RangeError} un nom hors de LIENS
+ */
+export function cleDeLien(nom) {
+  if (!Object.hasOwn(LIENS, nom)) throw new RangeError(`À propos : lien inconnu ${JSON.stringify(nom)}`);
+  return `coquille.apropos.lien.${nom}`;
+}
 
 /**
  * Bloc d'une ligne du panneau « À propos » (§ 18.6) : nom, version affichée,

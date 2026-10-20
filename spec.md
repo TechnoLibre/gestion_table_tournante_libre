@@ -29,6 +29,9 @@ Les conséquences de ce contexte sont des exigences :
 - **Aucune installation de serveur ni de base de données.** L'exécutable se
   copie et se lance.
 - **Rien ne sort de la machine.** Pas de télémétrie, pas de service distant.
+  Le panneau « À propos » porte quatre liens (§ 18.6) : celui que l'opérateur
+  clique s'ouvre dans son navigateur, hors de l'application, qui n'envoie
+  rien elle-même et n'ouvre aucune autre adresse.
 - Les données se copient, se sauvegardent et se transmettent comme des
   fichiers ordinaires.
 - **L'interface est en français.** Une seule langue dans la première
@@ -251,6 +254,101 @@ n'importe quel ordre. Deux dépendances seulement : la 4 **et** au moins l'une
 des étapes 2 ou 3 avant la 9 — le générateur refuse une configuration à zéro
 participant ou à zéro table (§ 15.4) — et la 10 avant la 12 pour qu'une
 impression ne sorte pas en brouillon.
+
+### 2.2 Les fonctionnalités, numérotées
+
+Le panneau « À propos » (§ 18.6) porte le sommaire des fonctionnalités du
+logiciel, par catégorie. Chaque fonctionnalité a un **numéro** : le code de sa
+catégorie, un tiret, deux chiffres. Un numéro est unique et **ne se réutilise
+jamais** : une fonctionnalité retirée laisse le sien parmi les numéros retirés,
+et une fonctionnalité nouvelle prend le plus grand numéro de sa catégorie,
+retirés compris, plus un. Un signalement, une note de version ou une demande
+peut ainsi nommer `PLA-08` sans craindre qu'il désigne demain autre chose.
+
+Le tableau ci-dessous et le sommaire de l'application portent les mêmes
+catégories, les mêmes numéros dans le même ordre, les mêmes intitulés et les
+mêmes renvois ; une épreuve les compare, et vérifie que chaque renvoi désigne
+une section de ce document. Les deux s'écrivent à la main (§ 19.8).
+
+**Préparer** — `PRE`
+
+| numéro | fonctionnalité | sections |
+|---|---|---|
+| `PRE-01` | Importer la liste des participants en CSV, après un aperçu | § 10.1 |
+| `PRE-02` | Réexporter les lignes refusées d'un import | § 10.1 |
+| `PRE-03` | Fondre les orthographes d'une même appartenance, jamais en silence | § 10.1 |
+| `PRE-04` | Saisir et corriger les participants à la main | § 10.2 |
+| `PRE-05` | Exporter la liste des participants en CSV, dans la forme qu'il importe | § 10.2 |
+| `PRE-06` | Étiqueter les personnes | § 4.5 |
+| `PRE-07` | Dire la présence de chacun, tour par tour | § 4, § 10.2 |
+| `PRE-08` | Exclure une personne, puis la réintégrer | § 4.4 |
+| `PRE-09` | Créer les tables, avec un nombre de places par défaut et des surcharges | § 6.1 |
+| `PRE-10` | Fixer le nombre de tours | § 2.1, § 4.3 |
+| `PRE-11` | Donner des objectifs aux tables, à l'écran ou en CSV, et les exporter | § 4.5, § 10.4 |
+| `PRE-12` | Télécharger les modèles CSV et les fichiers d'exemple | § 10.1, § 10.3 |
+
+**Placer** — `PLA`
+
+| numéro | fonctionnalité | sections |
+|---|---|---|
+| `PLA-01` | Disposer les tables sur un plan de salle à l'échelle | § 7.1, § 7.7 |
+| `PLA-02` | Déplacer et échanger les personnes sur le plan, au pointeur, au doigt ou par menu | § 7.1, § 7.3 |
+| `PLA-03` | Désigner les animateurs, table par table | § 2.1, § 5.8 |
+| `PLA-04` | Réserver des places à la main | § 5.8 |
+| `PLA-05` | Refuser un geste impossible en nommant sa cause et son remède | § 5.9 |
+| `PLA-06` | Lire le diagnostic avant toute recherche, avec le plafond et le plancher | § 5.5, § 5.6 |
+| `PLA-07` | Choisir les critères et l'ordre des priorités | § 5.3, § 5.7 |
+| `PLA-08` | Générer plusieurs propositions comparables, reproductibles par leur graine | § 5.7 |
+| `PLA-09` | Calculer les propositions en parallèle, sur les cœurs du poste | § 5.10 |
+| `PLA-10` | Repartir d'une proposition et en figer des tours | § 5.7 |
+| `PLA-11` | Classer les propositions, et garder les meilleures | § 5.7 |
+| `PLA-12` | Mesurer un placement sur la page de qualité | § 12 |
+| `PLA-13` | Comparer deux placements par leur manque | § 12.10 |
+| `PLA-14` | Retenir un placement | § 9 |
+| `PLA-15` | Ajuster le placement retenu, qui suit les présences | § 5.8 |
+| `PLA-16` | Signaler les tables en conflit sur le plan | § 7.5 |
+| `PLA-17` | Inscrire le numéro de chaque table sur son plateau | § 7.7 |
+
+**Produire** — `PRO`
+
+| numéro | fonctionnalité | sections |
+|---|---|---|
+| `PRO-01` | Produire la planche de badges en PDF, sur A4 ou Lettre | § 11.1, § 11.2 |
+| `PRO-02` | Vérifier le découpage par la feuille de contrôle | § 11.3 |
+| `PRO-03` | Ordonner les badges pour l'accueil | § 11.6 |
+| `PRO-04` | Ouvrir le dossier où la planche se dépose | § 11.6 |
+| `PRO-05` | Imprimer la liste d'accueil | § 11.7 |
+| `PRO-06` | Imprimer une feuille par table | § 11.7 |
+| `PRO-07` | Imprimer le plan de salle, tour par tour | § 11.7 |
+| `PRO-08` | Marquer BROUILLON ce qui n'est pas retenu | § 11.7 |
+
+**Fichiers et sécurité** — `FIC`
+
+| numéro | fonctionnalité | sections |
+|---|---|---|
+| `FIC-01` | Garder chaque événement dans des fichiers ordinaires, listés au premier écran | § 8.1, § 8.6 |
+| `FIC-02` | Enregistrer chaque geste avec son entrée d'historique | § 8.2 |
+| `FIC-03` | Revenir à un instant de l'historique | § 8.3 |
+| `FIC-04` | Ouvrir en lecture par défaut, modifier sur demande | § 8.4 |
+| `FIC-05` | Bloquer un plan distribué | § 9 |
+| `FIC-06` | Copier, renommer, importer et supprimer un événement, vers une corbeille | § 8.7 |
+| `FIC-07` | Résister à une panne, et reprendre un fichier abîmé | § 8.8 |
+| `FIC-08` | Choisir le dossier de travail | § 8.6 |
+| `FIC-09` | Travailler hors ligne, sans rien envoyer | § 2 |
+
+**Interface** — `INT`
+
+| numéro | fonctionnalité | sections |
+|---|---|---|
+| `INT-01` | Grouper les sections en trois phases : Préparer, Placer, Produire | § 2.1 |
+| `INT-02` | Charger une démonstration | § 15 |
+| `INT-03` | Choisir le thème clair ou sombre | § 14.5, § 18.6 |
+| `INT-04` | Régler la taille du texte de l'écran | § 18.6 |
+| `INT-05` | Agir au clavier, avec des contrastes vérifiés dans les deux thèmes | § 14.5 |
+| `INT-06` | Voir la version partout, et la copier depuis « À propos » | § 18.6 |
+| `INT-07` | Lire les licences, les liens et ce sommaire dans « À propos » | § 2.2, § 18.6 |
+
+**Numéros retirés** : aucun.
 
 ## 3. Périmètre
 
@@ -7831,6 +7929,34 @@ fichier, et le guide Windows renvoie au nom de l'exécutable pour la version.
 Au-dessus du bloc, le panneau nomme l'éditeur, **TechnoLibre Inc.**, et l'auteur,
 **Mathieu Benoit**, développeur, concepteur et mainteneur du logiciel ; « Copier »
 ne les emporte pas.
+
+**Le reste du panneau « À propos ».** Au-dessus de l'éditeur, le **logo de
+TechnoLibre** : un clic ouvre un petit menu, « Télécharger en SVG » et
+« Télécharger en PNG », dont chaque commande enregistre les octets exacts du
+fichier que l'éditeur fournit, par l'enregistrement commun du logiciel. Le
+chemin écrit se dit sous le logo ; un enregistrement refusé — un dossier où
+rien ne s'écrit — s'y dit aussi, comme tout refus d'écriture, et le
+téléchargement suivant le retire. Le logo se charge à part, et le lancement ne
+le lit pas. Sous l'éditeur, le lien vers son site, `https://technolibre.ca` ;
+sous l'auteur, le lien vers le code source du projet. Suivent trois cartes :
+
+- la **licence** : le choix entre l'AGPL-3.0-or-later et la LiLiQ-R+,
+  l'identifiant SPDX `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1`, ce que demande la
+  licence choisie, les liens vers les deux textes officiels, et les deux textes
+  complets, livrés avec le logiciel et lisibles sur place, sans réseau, un à la
+  fois ;
+- l'**attribution**, une demande de courtoisie — afficher le logo de
+  TechnoLibre sur les badges, puis un lien vers son site — qui n'ajoute aucune
+  condition à la licence ;
+- le **sommaire des fonctionnalités** du § 2.2, par catégorie, chaque numéro
+  devant son intitulé.
+
+**Un lien ne fait jamais naviguer la fenêtre de l'application.** Chacun s'ouvre
+dans une nouvelle fenêtre, sans ouvreur ni référent : un nouvel onglet sur
+`web` ; sous `electron`, la coquille refuse toute fenêtre et toute navigation,
+et passe au navigateur du système l'adresse cliquée quand elle est exactement
+l'une des quatre adresses https du panneau (§ 2). Une autre adresse n'ouvre
+rien.
 
 **Le panneau « Paramètres »** s'ouvre du bandeau, par la commande placée juste à
 gauche de « À propos », et remplace l'écran comme lui ; les deux ne sont jamais
