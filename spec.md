@@ -2251,6 +2251,9 @@ sur un gabarit portant capitales accentuées et jambages — « Ôjgq », « Æ 
 Le logiciel **n'emploie pas `textLength`** : cet attribut comprime les glyphes
 et produit un nom déformé plutôt qu'un nom tronqué.
 
+Le numéro d'une table, inscrit sur son plateau (§ 7.7), est un seul `<text>` :
+il ne s'abrège ni ne se replie jamais.
+
 **La troncature se décide par document, pas par support — et sur le badge, par
 champ :**
 
@@ -2293,6 +2296,17 @@ lit**.
 Le signal **ne repose pas sur la seule couleur** : contour épaissi, trame, et
 une **pastille portant le nombre de violations**. Une part notable des
 opérateurs ne distingue pas un rouge d'un vert.
+
+**La pastille se pose en haut à droite du plateau, sur son bord, comme un
+badge** : au coin haut droit d'une table carrée ; sur le cercle d'une ronde, à
+la diagonale qui monte vers la droite, sauf quand une chaise y toucherait la
+pastille — elle prend alors le milieu de l'intervalle entre deux chaises
+voisines le plus proche de cette diagonale, celui du haut quand deux le sont
+autant. Elle ne couvre ainsi aucune chaise, ni la marque de gel, ni le numéro
+de la table, qui tient le centre (§ 7.7) — jusqu'à deux chiffres sur la plus
+petite table. Sur une table signalée, un socle du fond du plateau, sous la
+pastille comme sous le numéro, les sépare des trames : l'une et l'autre se
+lisent contre le fond du plateau (§ 14.5), et la trame reste peinte autour.
 
 **Chaque règle a sa trame, d'une forme et d'une teinte propres** — hachures
 descendantes pour « séparer les appartenances », hachures montantes pour
@@ -2356,6 +2370,19 @@ pour lui, et toute table s'y dessine selon la formule.
 noms couvre plusieurs mètres carrés fictifs. **Le plan à l'échelle du bâtiment
 est le plan listes masquées**, et le logiciel le dit sur chaque impression
 portant les listes.
+
+**Chaque table porte son numéro au centre de son plateau** — le numéro
+affiché, non son identifiant (§ 4) —, à tout zoom, à l'écran comme sur le
+papier. Son corps suit le plateau : 40 % de sa largeur, jamais moins que le
+corps des listes de noms ; il reste donc affiché au zoom où les listes
+disparaissent, d'autant plus grand que la table l'est. Il s'écrit de l'encre des listes, en gras,
+et, sur une table signalée, un socle et un halo du fond du plateau le détachent
+des trames (§ 7.5). Il est transparent au pointeur, et caché aux technologies
+d'assistance : le nom accessible de la table le porte déjà. La géométrie rend
+aussi sa place quand un libellé le suit dessous : il monte alors au-dessus du
+centre, dans la bande qui va du bas de la marque de gel au centre du plateau,
+au corps de cette bande, plafonné au sien et jamais sous celui des listes, sans
+passer sur la marque de gel ; le plan n'affiche aucun libellé de table.
 
 **Le bloc de noms d'une table se pose à droite de son emprise** — le plateau et
 ses chaises —, à 36 cm d'elle : l'écart laisse passer le contour de focus de la
@@ -4476,6 +4503,12 @@ sa rangée, ses voisines. Le choix reste offert — tenir sur une page, ou déco
 — et le découpage selon le seuil est proposé par défaut. Le plan s'imprime dans
 l'orientation qui donne le moins de pages ; à pages égales, à la plus grande
 échelle ; à échelle égale aussi, en paysage.
+
+**Le plan imprimé est le dessin de l'écran** : chaque table y porte son numéro au
+centre du plateau et sa pastille sur son bord, aux mêmes places et aux mêmes
+corps (§ 7.5, § 7.7). Le numéro n'étant jamais plus petit que les listes, le
+corps des listes reste le plus petit texte du dessin, et c'est lui que le seuil
+de lisibilité compare.
 
 **La mention « disposition relative » et l'échelle graphique du § 7.7 restent sur
 chaque page imprimée du plan.** Elles y gagnent même leur pleine utilité : c'est

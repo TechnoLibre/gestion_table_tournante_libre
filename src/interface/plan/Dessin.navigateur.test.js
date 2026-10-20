@@ -26,6 +26,8 @@ import { texteLivre } from '../../demo/livrees.js';
 import { constante } from '../../geometrie/constantes.js';
 import { designer } from '../../geometrie/designation.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
+import { DEMI_HAUTEUR_GEL } from '../../geometrie/plateau.js';
+import { PLANCHER_DIAMETRE } from '../../geometrie/tables.js';
 import { GABARIT_HAUTEUR_LIGNE } from '../../geometrie/texte.js';
 import { dessinDepuisEcran, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
 import { rechercher } from '../../moteur/recherche.js';
@@ -40,7 +42,7 @@ import BandeauPlan from './BandeauPlan.svelte';
 import Legende from './Legende.svelte';
 import EchellePlan from './EchellePlan.svelte';
 import { creerMesureur } from './mesure_texte.js';
-import { LARGEUR_ECHELLE_PX, legendeConflits, modeleDessin } from './modele.js';
+import { HALO_NUMERO, LARGEUR_ECHELLE_PX, RAYON_PASTILLE, formesTable, legendeConflits, modeleDessin } from './modele.js';
 import { nomDeCharge } from './vue_plan.js';
 import PlanDessin from './PlanDessin.svelte';
 
@@ -713,6 +715,167 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
     const noeuds = [...entrees[1].querySelectorAll('*')].map((e) => e.textContent);
     expect(noeuds).toContain('Club des Merles');
     expect(noeuds).toContain(t('plan.bandeau.plancherGroupe', bandeau[1].details));
+  });
+});
+
+// --- Le numéro de la table (§ 7.5, § 7.7, § 14.5) ------------------------------------
+
+// Le numéro d'une table : le <text> qui le porte, dans son groupe.
+const numeroDe = (svg, id) => svg.querySelector(`[data-table="${id}"] [data-numero-table="${id}"]`);
+
+// La boîte d'encre d'un <text> d'une ligne, en cm du dessin : sa base
+// alphabétique se lit sur la cellule de son premier glyphe
+// (getExtentOfChar), dont le haut est à l'ascendante de la police sous la
+// base ; l'encre autour de la base et du début se mesure sur un canevas, à
+// la police calculée et au corps du texte.
+function encreDe(texte) {
+  const style = getComputedStyle(texte);
+  const corps = Number(texte.getAttribute('font-size'));
+  const contexte = new OffscreenCanvas(1, 1).getContext('2d');
+  contexte.font = `${style.fontStyle} ${style.fontWeight} ${corps}px ${style.fontFamily}`;
+  const m = contexte.measureText(texte.textContent);
+  const cellule = texte.getExtentOfChar(0);
+  const base = cellule.y + m.fontBoundingBoxAscent;
+  return {
+    gauche: cellule.x - m.actualBoundingBoxLeft,
+    droite: cellule.x + m.actualBoundingBoxRight,
+    haut: base - m.actualBoundingBoxAscent,
+    bas: base + m.actualBoundingBoxDescent,
+  };
+}
+
+// La distance d'un point à une boîte, 0 dedans.
+const distanceBoite = ({ x, y }, b) => Math.hypot(Math.max(0, b.gauche - x, x - b.droite), Math.max(0, b.haut - y, y - b.bas));
+
+describe('le numéro de la table, au centre du plateau (§ 7.7, § 14.5)', () => {
+  // encreDe mesure le numéro sur la police calculée, à la face grasse que
+  // jetons.css déclare : chargée d'abord, sans quoi le canevas mesurerait la
+  // police de repli, et l'encre lue dépendrait des épreuves passées avant.
+  beforeAll(async () => {
+    const faces = await document.fonts.load('700 16px "Noto Sans"');
+    expect(faces.map(({ status }) => status)).toEqual(['loaded']);
+  });
+
+  // Trois tables, rondes et carrée, numérotées autrement que leur identifiant.
+  function numerotees() {
+    const charge = chargeDeTables([2, 8, 10], { formes: ['ronde', 'carree', 'ronde'] });
+    charge.tables = charge.tables.map((table, rang) => ({ ...table, numero: [7, 42, 3][rang] }));
+    return charge;
+  }
+
+  for (const theme of ['clair', 'sombre']) {
+    test(`thème ${theme} : chaque table porte son numéro au centre du plateau, au corps de 40 % de sa largeur, de l\u{2019}encre des listes sur un halo du fond du plateau, transparent au pointeur`, async () => {
+      await sousTheme(theme, async () => {
+        const charge = numerotees();
+        const k = 1.2;
+        const modele = modeleDe(charge, { k });
+        const { svg } = monterPlan(modele, { k, tx: 120, ty: 300 });
+        const encre = jeton('--couleur-liste-texte');
+        const fond = jeton('--couleur-table-fond');
+        expect(contraste(encre, fond)).toBeGreaterThanOrEqual(4.5);
+        for (const table of modele.tables) {
+          const numero = numeroDe(svg, table.id);
+          expect(numero, `table ${table.id}`).not.toBeNull();
+          expect(numero.textContent).toBe(String(table.numero));
+          expect(visible(numero)).toBe(true);
+          expect(numero.getAttribute('aria-hidden')).toBe('true');
+          const style = getComputedStyle(numero);
+          expect(style.pointerEvents).toBe('none');
+          const plateau = plateauDe(svg, table.id).getBoundingClientRect();
+          // Le corps se lit en cm du dessin, que le groupe de la vue met à l'échelle k.
+          const corps = Math.max(18, 0.4 * (plateau.width / k));
+          expect(Math.abs(parseFloat(style.fontSize) - corps), `table ${table.id}`).toBeLessThan(0.5);
+          const boite = numero.getBoundingClientRect();
+          expect(Math.abs(boite.left + boite.width / 2 - (plateau.left + plateau.width / 2))).toBeLessThan(1);
+          expect(Math.abs(boite.top + boite.height / 2 - (plateau.top + plateau.height / 2))).toBeLessThan(0.1 * corps * k);
+          expect(memeCouleur(couleurTexte(numero), encre)).toBe(true);
+          expect(memeCouleur(composantes(style.stroke), fond)).toBe(true);
+          // Le halo, en cm du dessin comme le corps : HALO_NUMERO du corps.
+          expect(parseFloat(style.strokeWidth), `table ${table.id}`).toBeCloseTo(HALO_NUMERO * Number(numero.getAttribute('font-size')), 2);
+          expect(style.paintOrder.startsWith('stroke')).toBe(true);
+          // Sans trame dessous, le numéro se lit sur le plateau même.
+          expect(fondPeintSous(numero)).toEqual([fond]);
+        }
+      });
+    });
+  }
+
+  test('sur une table signalée, le numéro se peint après les trames, sur un socle du fond du plateau, son halo entre elles et lui ; la pastille sur le bord du plateau, en haut à droite', () => {
+    const charge = rencontreRepetee();
+    // Deux chiffres sur la plus petite table : leur encre déborde du socle.
+    charge.tables = charge.tables.map((table) => (table.id === 1 ? { ...table, numero: 42 } : table));
+    const k = 1.5;
+    const modele = modeleDe(charge, { tour: 2, proposition: 1, k });
+    const { svg } = monterPlan(modele, { k, tx: 150, ty: 250 });
+    const [trame] = tous(svg, `[data-table="1"] :is(${TRAMES})`);
+    const numero = numeroDe(svg, 1);
+    const fond = jeton('--couleur-table-fond');
+    expect(trame.compareDocumentPosition(numero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(memeCouleur(composantes(getComputedStyle(numero).stroke), fond)).toBe(true);
+    // Le socle du numéro, centré sous lui, le sépare des trames (§ 14.5) ;
+    // il tient dans le plateau, et la trame reste peinte autour.
+    expect(fondPeintSous(numero)).toEqual([fond]);
+    const socle = svg.querySelector('[data-table="1"] [data-socle-numero]');
+    expect(trame.compareDocumentPosition(socle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Number(socle.getAttribute('r'))).toBeLessThan(Number(plateauDe(svg, 1).getAttribute('r')) / 2);
+    expect(tous(svg, '[data-socle-numero]').length).toBe(1);
+    // Hors du socle, les bords des chiffres reposent sur la trame : seul le
+    // halo, du fond du plateau, les en sépare, de la moitié de son épaisseur.
+    expect(Number(plateauDe(svg, 1).getAttribute('r'))).toBe(PLANCHER_DIAMETRE / 2);
+    const encre = encreDe(numero);
+    const cx = Number(socle.getAttribute('cx'));
+    expect(numero.textContent).toBe('42');
+    const debord = Math.max(cx - encre.gauche, encre.droite - cx) - Number(socle.getAttribute('r'));
+    expect(debord).toBeGreaterThan(0);
+    const style = getComputedStyle(numero);
+    expect(parseFloat(style.strokeWidth)).toBeCloseTo(HALO_NUMERO * Number(numero.getAttribute('font-size')), 2);
+    // La moitié du halo, peinte hors de l'encre, couvre ce qui déborde du
+    // socle : aucun bord de chiffre ne touche la trame.
+    expect(debord).toBeLessThanOrEqual(parseFloat(style.strokeWidth) / 2);
+    expect(style.fontWeight).toBe('700');
+    expect(style.paintOrder.startsWith('stroke')).toBe(true);
+    const disque = svg.querySelector('[data-pastille="1"] [data-marque=pastille]');
+    const plateau = plateauDe(svg, 1);
+    const p = centre(disque);
+    const c = centre(plateau);
+    const rayon = plateau.getBoundingClientRect().width / 2;
+    expect(p.x).toBeGreaterThan(c.x);
+    expect(p.y).toBeLessThan(c.y);
+    expect(Math.abs(Math.hypot(p.x - c.x, p.y - c.y) - rayon)).toBeLessThan(1);
+    // Le numéro reste au centre du plateau.
+    const n = centre(numero);
+    expect(Math.hypot(n.x - c.x, n.y - c.y)).toBeLessThan(0.1 * Number(numero.getAttribute('font-size')) * k);
+  });
+
+  test('l\u{2019}encre d\u{2019}un numéro de deux chiffres ne passe pas sous la pastille, ni sous la marque de gel, de la plus petite table à la plus grande', () => {
+    for (const forme of ['ronde', 'carree']) {
+      const capacites = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16];
+      const charge = chargeDeTables(capacites, { formes: capacites.map(() => forme) });
+      charge.tables = charge.tables.map((table) => ({ ...table, numero: 88 }));
+      const modele = modeleDe(charge, { k: 4 });
+      const { svg } = monterPlan(modele, { k: 4, tx: 200, ty: 400 });
+      for (const table of modele.tables) {
+        const quoi = `${forme} de ${table.geometrie.chaises.length}`;
+        const encre = encreDe(numeroDe(svg, table.id));
+        const { pastille, gel } = formesTable(table.geometrie);
+        expect(distanceBoite(pastille, encre), quoi).toBeGreaterThan(RAYON_PASTILLE);
+        expect(encre.haut, quoi).toBeGreaterThan(gel.y + DEMI_HAUTEUR_GEL);
+      }
+      demonterTout();
+    }
+  });
+
+  test('le plan imprimé porte les numéros de l\u{2019}écran, à la même place et au même corps', () => {
+    const charge = numerotees();
+    const ecran = monterPlan(modeleDe(charge, { k: 1 }), { k: 1, tx: 150, ty: 300 }).svg;
+    const attributs = (svg) =>
+      tous(svg, '[data-numero-table]').map((n) => [n.textContent, ...['x', 'y', 'font-size'].map((a) => n.getAttribute(a))]);
+    const attendus = attributs(ecran);
+    demonterTout();
+    const imprime = monterPlan(modeleDe(charge, { impression: true }), { k: 1, tx: 150, ty: 300 }).svg;
+    expect(attendus.map(([texte]) => texte)).toEqual(['7', '42', '3']);
+    expect(attributs(imprime)).toEqual(attendus);
+    for (const numero of tous(imprime, '[data-numero-table]')) expect(visible(numero)).toBe(true);
   });
 });
 

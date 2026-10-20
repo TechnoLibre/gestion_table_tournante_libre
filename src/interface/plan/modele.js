@@ -10,6 +10,7 @@
 // au navigateur, une fonction quelconque sous node.
 import { constante } from '../../geometrie/constantes.js';
 import { regimeCibles } from '../../geometrie/designation.js';
+import { RAYON_PASTILLE, RETRAIT_GEL, placeGel, placeNumero, placePastille } from '../../geometrie/plateau.js';
 import { geometrieTable } from '../../geometrie/tables.js';
 import { decalagesLignes, tronquer } from '../../geometrie/texte.js';
 import { CONFLITS } from '../marques.js';
@@ -17,16 +18,26 @@ import { CONFLITS } from '../marques.js';
 /** Largeur maximale de la barre de l'échelle graphique, en px d'écran. */
 export const LARGEUR_ECHELLE_PX = 120;
 
-/** Rayon du disque de la pastille, en cm de dessin : sous la marque de gel
- *  d'une table de 2, la plus petite. */
-export const RAYON_PASTILLE = 15;
+/** Rayon du disque de la pastille, en cm de dessin (plateau.js). */
+export { RAYON_PASTILLE };
 /** Rayon du socle de la pastille, en cm de dessin : un disque du fond du
- *  plateau, posé sur la trame d'une table signalée, sous la pastille, qui
- *  l'en sépare (§ 14.5). Plus petit que le plateau le plus petit, de rayon
- *  PLANCHER_DIAMETRE / 2 : la trame reste peinte autour. */
+ *  plateau, centré sous la pastille sur le bord d'une table signalée, qui la
+ *  sépare de la trame (§ 14.5). Plus petit que le plateau le plus petit, de
+ *  rayon PLANCHER_DIAMETRE / 2 : il n'en couvre qu'un bord, et la trame reste
+ *  peinte sur le reste. */
 export const RAYON_SOCLE_PASTILLE = 20;
 /** Corps du chiffre de la pastille, en cm de dessin. */
 export const TAILLE_TEXTE_PASTILLE_CM = 18;
+/** Épaisseur du halo du numéro d'une table, en part de son corps : un trait
+ *  du fond du plateau peint sous le chiffre, dont la moitié extérieure le
+ *  détache des trames qu'il recouvre (§ 14.5). */
+export const HALO_NUMERO = 0.16;
+/** Rayon du socle du numéro, en part de son corps : un disque du fond du
+ *  plateau, centré sous le numéro d'une table signalée, qui le sépare des
+ *  trames là où le halo ne passe pas (§ 14.5). Le corps valant 40 % de la
+ *  largeur du plateau, le socle en prend 40 % du diamètre : la trame reste
+ *  peinte autour. */
+export const SOCLE_NUMERO = 0.5;
 
 /** Écart entre le bord d'une chaise et son anneau, ou sa mise en évidence, en cm. */
 export const ECART_ANNEAU = 6;
@@ -47,8 +58,8 @@ export const CADENAS_FERME = `${CORPS} M-6,-6 V-10 A6,6 0 0 1 6,-10 V-6 H3.5 V-1
 /** Le tracé du cadenas ouvert : la branche droite de l'anse ne rejoint pas le corps. */
 export const CADENAS_OUVERT = `${CORPS} M-6,-6 V-13 A6,6 0 0 1 6,-13 V-10 H3.5 V-13 A3.5,3.5 0 0 0 -3.5,-13 V-6 Z`;
 
-/** Distance entre le haut du plateau et le centre de la marque de gel, en cm. */
-export const RETRAIT_GEL = 13;
+/** Distance entre le haut du plateau et le centre de la marque de gel, en cm (plateau.js). */
+export { RETRAIT_GEL };
 
 /** Le tracé de la marque de gel, un hexagone plein centré sur l'origine, en cm. */
 export const TRACE_GEL = 'M0,-8 L7,-4 L7,4 L0,8 L-7,4 L-7,-4 Z';
@@ -56,13 +67,15 @@ export const TRACE_GEL = 'M0,-8 L7,-4 L7,4 L0,8 L-7,4 L-7,-4 Z';
 /**
  * Les formes d'une table en attributs SVG, en cm : plateau et emprise —
  * disques d'une ronde ({cx, cy, r}), carrés aux côtés parallèles aux axes
- * d'une carrée ({x, y, width, height}) —, le centre de la pastille, celui du
- * plateau, et celui de la marque de gel, dans le plateau, RETRAIT_GEL sous
- * son haut.
+ * d'une carrée ({x, y, width, height}) —, la place du numéro, au centre du
+ * plateau ({x, y, corps}, placeNumero sans libellé), le centre de la
+ * pastille, sur le bord du plateau en haut à droite (placePastille), et
+ * celui de la marque de gel, dans le plateau, RETRAIT_GEL sous son haut.
  *
  * @param {import('../../geometrie/tables.js').GeometrieTable} geometrie
  */
-export function formesTable({ forme, centre, demiTaille, rayonEmprise }) {
+export function formesTable(geometrie) {
+  const { forme, centre, demiTaille, rayonEmprise } = geometrie;
   const ronde = forme === 'ronde';
   const dessiner = (demi) =>
     ronde ? { cx: centre.x, cy: centre.y, r: demi } : { x: centre.x - demi, y: centre.y - demi, width: 2 * demi, height: 2 * demi };
@@ -70,8 +83,9 @@ export function formesTable({ forme, centre, demiTaille, rayonEmprise }) {
     ronde,
     plateau: dessiner(demiTaille),
     emprise: dessiner(rayonEmprise),
-    pastille: { x: centre.x, y: centre.y },
-    gel: { x: centre.x, y: centre.y - demiTaille + RETRAIT_GEL },
+    numero: placeNumero(geometrie),
+    pastille: placePastille(geometrie),
+    gel: placeGel(geometrie),
   };
 }
 
@@ -344,6 +358,7 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
         });
   return {
     id,
+    numero,
     geometrie,
     regime,
     conflit: pastille > 0,
@@ -366,8 +381,9 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
 /**
  * Le modèle de dessin d'un tour (§ 7.3 à § 7.7).
  *
- * Chaque table, dans l'ordre de l'état des places, porte sa géométrie
- * (geometrieTable, P2), son régime des cibles au zoom k (regimeCibles) —
+ * Chaque table, dans l'ordre de l'état des places, porte son numéro — celui
+ * que le plan inscrit sur son plateau, distinct de son identifiant —, sa
+ * géométrie (geometrieTable, P2), son régime des cibles au zoom k (regimeCibles) —
  * aucune chaise dessinée en régime table —, son conflit et sa pastille, lus
  * dans conflits — null : ni conflit, ni pastille —, ses trames — la sorte
  * de conflit (CONFLITS, marques.js) de chaque règle violée, {regle, marque,

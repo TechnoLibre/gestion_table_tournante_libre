@@ -347,6 +347,10 @@
   l'aperçu, produire la planche —, une pastille « Traitement en cours… »
   apparaît au bas de la fenêtre au bout d'une demi-seconde : l'application
   n'est pas figée.
+- Chaque table du plan porte son numéro en grand au centre du plateau, affiché
+  même au zoom où les listes de noms disparaissent, à l'écran comme sur le plan
+  imprimé. La pastille qui compte les conflits d'une table passe en haut à
+  droite du plateau, sur son bord, entre deux chaises.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

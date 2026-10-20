@@ -5,8 +5,8 @@
 
 <script>
   // Le dessin du plan (§ 7.1, § 7.3 à § 7.7), enfant du groupe <g data-vue>
-  // que Plan.svelte transforme : les motifs, les tables — plateaux, chaises,
-  // poignées, pastilles —, puis les listes de noms, peintes par-dessus et
+  // que Plan.svelte transforme : les motifs, les tables — plateaux, numéros,
+  // chaises, poignées, pastilles —, puis les listes de noms, peintes par-dessus et
   // transparentes au pointeur. Le composant ne lit k qu'à travers le modèle
   // (modele.js), qu'il reçoit entier ; aucun attribut qu'il écrit ne dépend
   // de k hors du franchissement d'un seuil — régime des cibles, K_LISTES.

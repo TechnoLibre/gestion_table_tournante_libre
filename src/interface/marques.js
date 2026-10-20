@@ -266,7 +266,8 @@ const FONDS_ETIQUETTE = [
 ];
 
 /** Les textes et leurs fonds, même forme, seuil 4,5 : page, secondaire,
- *  bandeau, refus, avis, listes du plan sur le sol, pastille du plan ; puis
+ *  bandeau, refus, avis, listes du plan sur le sol, pastille du plan, numéro
+ *  d'une table sur son plateau, que son halo prolonge sous les trames ; puis
  *  l'encre de la page sur la carte, l'encre secondaire sur la carte, le
  *  texte d'une étiquette — l'encre de la page sur chaque fond teinté de
  *  pastille (§ 12.7) —, celui de la bande de mode, la version et la
@@ -284,6 +285,7 @@ export const TEXTES = Object.freeze([
   texte('avis', 'avis', ['page-fond', 'avis-fond', 'carte-fond']),
   texte('listes', 'liste-texte', ['sol']),
   texte('pastille', 'pastille-texte', ['pastille-fond']),
+  texte('numeroTable', 'liste-texte', ['table-fond']),
   texte('carte', 'page-texte', ['carte-fond', 'carte-fond-sourd']),
   texte('secondaireCarte', 'page-texte-secondaire', ['carte-fond', 'carte-fond-sourd']),
   texte('etiquette', 'page-texte', FONDS_ETIQUETTE),

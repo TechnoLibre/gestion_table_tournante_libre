@@ -16,6 +16,15 @@ import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { constante } from '../../geometrie/constantes.js';
 import { regimeCibles } from '../../geometrie/designation.js';
+import {
+  DEMI_HAUTEUR_GEL,
+  RAYON_PASTILLE as RAYON_PASTILLE_PLATEAU,
+  RETRAIT_GEL as RETRAIT_GEL_PLATEAU,
+  corpsNumero,
+  placeGel,
+  placeNumero,
+  placePastille,
+} from '../../geometrie/plateau.js';
 import { PLANCHER_DIAMETRE, RAYON_POIGNEE, geometrieTable } from '../../geometrie/tables.js';
 import { indexerPlan } from '../../moteur/configuration.js';
 import { conflitsParTable } from '../../moteur/conflits.js';
@@ -35,6 +44,8 @@ import {
   LARGEUR_ECHELLE_PX,
   RAYON_PASTILLE,
   RAYON_SOCLE_PASTILLE,
+  RETRAIT_GEL,
+  TRACE_GEL,
   actionsPersonne,
   actionsPlace,
   ajusterLigne,
@@ -629,6 +640,16 @@ describe('modeleDessin : le dessin d\u{2019}une table (§ 7.3, § 7.6, § 17 poi
     assert.ok(tour1.chaises.every(({ miseEnEvidence }) => miseEnEvidence === false), 'aucune mise en évidence demandée');
   });
 
+  test('chaque table porte le numéro de l’état des places, distinct de son identifiant, à tout zoom', () => {
+    const charge = chargeDeTables([2, 3, 8]);
+    charge.tables = charge.tables.map((table, rang) => ({ ...table, numero: [14, 3, 27][rang] }));
+    const etat = etatPlaces(charge, { tour: 1 });
+    for (const k of [K_LISTES / 10, 1, 5]) {
+      const tables = modeleDessin(etat, options(charge, { k })).tables;
+      assert.deepEqual(tables.map(({ id, numero }) => [id, numero]), [[1, 14], [2, 3], [3, 27]], String(k));
+    }
+  });
+
   test('une table gelée le dit dans son nom accessible et en tête de sa liste ; une surchargée, dans son nom', () => {
     const charge = chargeDeTables([2, 3]);
     charge.reservations = [
@@ -704,14 +725,27 @@ describe('formesTable : les formes d\u{2019}une table, en attributs SVG (§ 7.1,
     });
   });
 
-  test('la pastille au centre du plateau ; la marque de gel dans le plateau, au-dessus de la pastille', () => {
-    for (const places of [2, 8, 16]) {
-      const geometrie = geometrieTable({ id: 1, numero: 1, forme: 'ronde', position: { x: 10, y: 20 } }, places);
-      const { pastille, gel } = formesTable(geometrie);
-      assert.deepEqual(pastille, { x: 10, y: 20 });
-      assert.equal(gel.x, 10);
-      assert.ok(gel.y < 20 && gel.y > 20 - geometrie.demiTaille, `${places} places : ${gel.y}`);
+  test('le numéro au centre du plateau, à son corps ; la pastille en haut à droite, sur le bord ; la marque de gel dans le plateau, au-dessus du numéro', () => {
+    for (const forme of ['ronde', 'carree']) {
+      for (const places of [2, 8, 16]) {
+        const geometrie = geometrieTable({ id: 1, numero: 1, forme, position: { x: 10, y: 20 } }, places);
+        const { numero, pastille, gel } = formesTable(geometrie);
+        assert.deepEqual(numero, { x: 10, y: 20, corps: corpsNumero(geometrie.demiTaille) });
+        assert.deepEqual(numero, placeNumero(geometrie));
+        assert.deepEqual(pastille, placePastille(geometrie));
+        assert.ok(pastille.x > 10 && pastille.y < 20, `${forme} de ${places} : ${pastille.x}, ${pastille.y}`);
+        assert.deepEqual(gel, placeGel(geometrie));
+        assert.equal(gel.x, 10);
+        assert.ok(gel.y + DEMI_HAUTEUR_GEL <= 20 - numero.corps / 2 && gel.y > 20 - geometrie.demiTaille, `${forme} de ${places} : ${gel.y}`);
+      }
     }
+  });
+
+  test('le tracé de la marque de gel tient dans le carré de demi-côté DEMI_HAUTEUR_GEL que la place du numéro évite', () => {
+    const nombres = TRACE_GEL.match(/-?\d+(?:\.\d+)?/g).map(Number);
+    assert.equal(Math.max(...nombres.map(Math.abs)), DEMI_HAUTEUR_GEL);
+    assert.equal(RETRAIT_GEL, RETRAIT_GEL_PLATEAU);
+    assert.equal(RAYON_PASTILLE, RAYON_PASTILLE_PLATEAU);
   });
 });
 
@@ -1286,7 +1320,7 @@ describe('modeleDessin, option impression : le plan imprimé (§ 11.7, § 13.5)'
     assert.equal(modeleDessin(etat, options(charge)).impression, false);
   });
 
-  test('les conflits, les pastilles, les marques et les lignes sont ceux de l’écran', () => {
+  test('les numéros, les conflits, les pastilles, les marques et les lignes sont ceux de l’écran', () => {
     const charge = avecPropositions(petite('petite-conflit'));
     const etat = etatPlaces(charge, { tour: 1, proposition: charge.propositions[0].id });
     const ecran = modeleDessin(etat, options(charge, { k: 5 }));
@@ -1296,8 +1330,8 @@ describe('modeleDessin, option impression : le plan imprimé (§ 11.7, § 13.5)'
     for (const [rang, table] of imprime.tables.entries()) {
       const voisine = ecran.tables[rang];
       assert.deepEqual(
-        [table.conflit, table.pastille, table.trames, table.lignes, table.enTete],
-        [voisine.conflit, voisine.pastille, voisine.trames, voisine.lignes, voisine.enTete],
+        [table.numero, table.conflit, table.pastille, table.trames, table.lignes, table.enTete],
+        [voisine.numero, voisine.conflit, voisine.pastille, voisine.trames, voisine.lignes, voisine.enTete],
       );
       assert.deepEqual(
         table.chaises.map(({ remplissage, marques }) => [remplissage, marques]),

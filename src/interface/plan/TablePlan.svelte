@@ -4,11 +4,11 @@
 <svelte:options namespace="svg" />
 
 <script>
-  // Une table du plan (§ 7.1, § 7.3, § 7.5, § 7.6) : le groupe [data-table],
-  // qui ne porte que le plateau et les chaises, avec les marques posées sur
-  // eux ; puis, frères du groupe, la poignée [data-poignee] et la pastille
-  // [data-pastille]. Tout vient de la TableDessin du modèle (modele.js) ; le
-  // composant ne calcule rien.
+  // Une table du plan (§ 7.1, § 7.3, § 7.5, § 7.6, § 7.7) : le groupe
+  // [data-table], qui ne porte que le plateau et les chaises, avec les
+  // marques posées sur eux ; puis, frères du groupe, la poignée
+  // [data-poignee] et la pastille [data-pastille]. Tout vient de la
+  // TableDessin du modèle (modele.js) ; le composant ne calcule rien.
   //
   // En régime table, les chaises ne se dessinent pas : l'emprise entière se
   // peint au fond de la chaise et devient la seule cible, sous le plateau.
@@ -25,11 +25,22 @@
   // une trame par règle violée (table.trames, dans l'ordre du moteur) : la
   // forme et la teinte de sa sorte (CONFLITS, Motifs.svelte), superposées
   // quand elle en viole plusieurs. Sa pastille porte le nombre de
-  // violations, signalée ou non (§ 7.5). Sur les trames, un socle
-  // [data-socle] du fond du plateau, centré sous la pastille, la sépare de
-  // leurs traits : la pastille se mesure contre le fond du plateau (§ 14.5),
-  // et les trames restent peintes autour. Le socle précède la marque de gel,
-  // qui se peint sur lui.
+  // violations, signalée ou non (§ 7.5), et se pose en haut à droite, sur
+  // le bord du plateau, comme un badge, entre deux chaises (formesTable,
+  // plateau.js). Sur les trames, un socle [data-socle] du fond du plateau,
+  // centré sous la pastille, la sépare de leurs traits : la pastille se
+  // mesure contre le fond du plateau (§ 14.5), et les trames restent peintes
+  // autour. Le socle précède la marque de gel et les chaises, qui se peignent
+  // sur lui.
+  //
+  // Le numéro de la table [data-numero-table] se pose au centre du plateau,
+  // au corps que la géométrie tire de sa largeur (§ 7.7), à tout zoom et sur
+  // le papier. Il suit les trames, les socles et la marque de gel : sur une
+  // table signalée, un socle [data-socle-numero] du fond du plateau, centré
+  // sous lui, et un halo du même fond, son trait peint sous le chiffre, le
+  // détachent des trames, et il se mesure contre le fond du plateau
+  // (§ 14.5). Transparent au pointeur, caché aux technologies d'assistance
+  // — le nom accessible du groupe porte déjà le numéro.
   //
   // Le groupe de la table porte id="table-<id>", celui d'une chaise
   // id="siege-<table>-<siège>" : la racine du plan, seul arrêt de tabulation,
@@ -54,8 +65,10 @@
     ECART_DESIGNATION,
     ECART_FOCUS,
     ECART_MISE_EN_EVIDENCE,
+    HALO_NUMERO,
     RAYON_PASTILLE,
     RAYON_SOCLE_PASTILLE,
+    SOCLE_NUMERO,
     TAILLE_TEXTE_PASTILLE_CM,
     TRACE_GEL,
     formesTable,
@@ -111,10 +124,22 @@
       {/if}
     {/each}
     <circle class="socle" data-socle cx={formes.pastille.x} cy={formes.pastille.y} r={RAYON_SOCLE_PASTILLE} />
+    <circle class="socle" data-socle-numero cx={formes.numero.x} cy={formes.numero.y} r={formes.numero.corps * SOCLE_NUMERO} />
   {/if}
   {#if table.gelee}
     <path class="gel" data-marque="gel" d={TRACE_GEL} transform="translate({formes.gel.x},{formes.gel.y})" />
   {/if}
+  <text
+    class="numero"
+    data-numero-table={table.id}
+    aria-hidden="true"
+    x={formes.numero.x}
+    y={formes.numero.y}
+    font-size={formes.numero.corps}
+    stroke-width={formes.numero.corps * HALO_NUMERO}
+    text-anchor="middle"
+    dominant-baseline="central">{table.numero}</text
+  >
   {#if table.selection}
     {#if autour.ronde}
       <circle class="selection" data-marque="selection" {...autour.emprise} />
@@ -219,6 +244,18 @@
 
   .gel {
     fill: var(--couleur-gel);
+    pointer-events: none;
+  }
+
+  /* Le numéro de la table : l'encre des listes, sur un halo du fond du
+     plateau que paint-order peint avant le chiffre. */
+  .numero {
+    fill: var(--couleur-liste-texte);
+    stroke: var(--couleur-table-fond);
+    stroke-linejoin: round;
+    paint-order: stroke;
+    font-family: var(--police-interface);
+    font-weight: 700;
     pointer-events: none;
   }
 
