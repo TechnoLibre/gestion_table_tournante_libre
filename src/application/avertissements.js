@@ -123,63 +123,86 @@ function violationsCourantes(charge, examen, instance) {
   return violationsDuRetenu(charge, charge.retenu, instance);
 }
 
-// Le nom affiché de la personne id dans la première charge qui la porte,
-// ou null ; le numéro de la table id de même.
-const nomDans = (id, charges) => {
+// Deux index par identifiant, lus en un parcours des charges dans leur
+// ordre : personnes, la première personne qui le porte ; numeros, le numéro
+// de la première table qui le porte, null ou absent compris. La première
+// charge qui porte un identifiant tranche, et en elle sa première entrée :
+// ce que trouverait un find par charge. Un identifiant NaN n'entre pas,
+// puisque === ne le trouve jamais alors qu'une Map le retrouverait.
+function indexDesNoms(charges) {
+  const personnes = new Map();
+  const numeros = new Map();
   for (const charge of charges) {
-    const trouvee = charge.participants.find((candidate) => candidate.id === id);
-    if (trouvee !== undefined) return nomAffiche(trouvee);
+    for (const personne of charge.participants) {
+      if (!personnes.has(personne.id) && !Number.isNaN(personne.id)) personnes.set(personne.id, personne);
+    }
+    for (const table of charge.tables) {
+      if (!numeros.has(table.id) && !Number.isNaN(table.id)) numeros.set(table.id, table.numero);
+    }
   }
-  return null;
-};
-const numeroDans = (id, charges) => {
-  for (const charge of charges) {
-    const trouvee = charge.tables.find((candidate) => candidate.id === id);
-    if (trouvee !== undefined) return trouvee.numero;
-  }
-  return null;
-};
+  return { personnes, numeros };
+}
+
+// Une fonction qui nomme des listes de raisons sur ces charges, comme
+// raisonsNommees ; l'index des charges se construit au premier appel qui
+// reçoit une raison, puis sert à tous les suivants. Les charges ne doivent
+// pas changer entre deux appels.
+function nommeurSur(charges) {
+  let index = null;
+  return (raisons) => {
+    if (raisons.length === 0) return [];
+    index ??= indexDesNoms(charges);
+    const { personnes, numeros } = index;
+    return raisons.map((raison) => {
+      const nommee = { ...raison };
+      if (raison.participant !== undefined && personnes.has(raison.participant)) {
+        const personne = nomAffiche(personnes.get(raison.participant));
+        if (personne !== null) nommee.personne = personne;
+      }
+      if (raison.table !== undefined && numeros.has(raison.table)) {
+        const numero = numeros.get(raison.table);
+        if (numero !== null) nommee.numero = numero;
+      }
+      return nommee;
+    });
+  };
+}
 
 /**
  * Les raisons de dérive nommées (§ 9) : chacune garde ses champs, et gagne
  * personne, le nom affiché de la personne qu'elle désigne, et numero, le
  * numéro de la table qu'elle désigne, lus dans la première des charges qui
- * les porte ; une personne ou une table qu'aucune ne porte garde son seul
- * identifiant. Rend des objets neufs.
+ * les porte, et en elle sur sa première entrée. Un nom affiché ou un numéro
+ * null n'ajoute pas de champ, et la lecture ne passe pas à la charge
+ * suivante ; une personne ou une table qu'aucune ne porte garde son seul
+ * identifiant. Les charges se lisent une fois par appel, en deux index par
+ * identifiant (indexDesNoms), quel que soit le nombre de raisons. Rend des
+ * objets neufs.
  *
  * @param {Object[]} raisons
  * @param {...import('../stockage/types.js').Charge} charges
  * @returns {Object[]}
  */
 export function raisonsNommees(raisons, ...charges) {
-  return raisons.map((raison) => {
-    const nommee = { ...raison };
-    if (raison.participant !== undefined) {
-      const personne = nomDans(raison.participant, charges);
-      if (personne !== null) nommee.personne = personne;
-    }
-    if (raison.table !== undefined) {
-      const numero = numeroDans(raison.table, charges);
-      if (numero !== null) nommee.numero = numero;
-    }
-    return nommee;
-  });
+  return nommeurSur(charges)(raisons);
 }
 
 /**
  * L'examen d'une charge (examiner, S2), ses raisons de dérive nommées sur
  * elle (raisonsNommees) : celles du retenu et de chaque proposition en
- * dérive. Un objet neuf ; l'examen reçu ne change pas.
+ * dérive, sur un seul index de la charge. Un objet neuf ; l'examen reçu ne
+ * change pas.
  *
  * @param {import('../stockage/placements.js').Examen} examen
  * @param {import('../stockage/types.js').Charge} charge
  * @returns {import('../stockage/placements.js').Examen}
  */
 export function examenNomme(examen, charge) {
+  const nommer = nommeurSur([charge]);
   return {
     ...examen,
-    derives: examen.derives.map((derive) => ({ ...derive, raisons: raisonsNommees(derive.raisons, charge) })),
-    retenu: { ...examen.retenu, raisons: raisonsNommees(examen.retenu.raisons, charge) },
+    derives: examen.derives.map((derive) => ({ ...derive, raisons: nommer(derive.raisons) })),
+    retenu: { ...examen.retenu, raisons: nommer(examen.retenu.raisons) },
   };
 }
 
@@ -209,6 +232,36 @@ function raisonQuiLaNomme(violation, raisons) {
   if (code === 'TABLE_INCONNUE' && detail === 'inconnue') return raisons.find(memeRaison('TABLE_SUPPRIMEE', 'table', table));
   if (code === 'TABLE_INCONNUE' && detail === 'absente') return raisons.find(memeRaison('TABLE_AJOUTEE', 'table', table));
   return undefined;
+}
+
+/**
+ * DERIVE_NOUVELLE {touchees: [{id|'retenu', raisons}]}, ou null quand aucun
+ * placement n'en a : par placement, les raisons de l'examen d'après
+ * (derives, retenu.raisons) que celui d'avant ne portait pas, comparées
+ * champ pour champ, puis nommées sur la charge d'après, ou d'avant pour ce
+ * que le geste retire (raisonsNommees, un index pour tout l'appel) ; les
+ * propositions par identifiant, puis le retenu, sous id 'retenu'. Une liste
+ * de raisons que les deux examens partagent, le même tableau, ne se compare
+ * pas : chacune de ses raisons est champ pour champ elle-même, et rien n'y
+ * est neuf.
+ *
+ * @param {import('../stockage/placements.js').Examen} examenAvant   celui d'avant
+ * @param {import('../stockage/placements.js').Examen} examenApres   celui d'après
+ * @param {import('../stockage/types.js').Charge} apres
+ * @param {import('../stockage/types.js').Charge} avant
+ * @returns {{code: 'DERIVE_NOUVELLE', details: {touchees: Object[]}}|null}
+ */
+export function deriveNouvelle(examenAvant, examenApres, apres, avant) {
+  const nommer = nommeurSur([apres, avant]);
+  const anciennes = raisonsParPlacement(examenAvant);
+  const touchees = [];
+  for (const [id, raisons] of raisonsParPlacement(examenApres)) {
+    const connues = anciennes.get(id) ?? [];
+    if (connues === raisons) continue;
+    const nouvelles = raisons.filter((raison) => !connues.some((connue) => memesChamps(connue, raison)));
+    if (nouvelles.length > 0) touchees.push({ id, raisons: nommer(nouvelles) });
+  }
+  return touchees.length > 0 ? avertissement('DERIVE_NOUVELLE', { touchees }) : null;
 }
 
 /**
@@ -258,7 +311,7 @@ export function invariantViole(charge, examen = examiner(charge)) {
  *   DERIVE_NOUVELLE {touchees: [{id|'retenu', raisons}]}   par placement, les
  *     raisons d'examiner(apres) — derives, retenu.raisons — qu'examiner(avant)
  *     ne portait pas, comparées champ pour champ, puis nommées sur la charge
- *     d'après, ou d'avant pour ce que le geste retire (raisonsNommees) ; les
+ *     d'après, ou d'avant pour ce que le geste retire (deriveNouvelle) ; les
  *     propositions par identifiant, puis le retenu, sous id 'retenu' ;
  *   RESERVATION_NON_HONOREE {participant, table, tour, personne, numero}
  *     chaque violation RESERVATION de violationsDuRetenu(apres, apres.retenu,
@@ -297,14 +350,8 @@ export function avertissementsApres(avant, apres) {
     }
   }
 
-  const anciennes = raisonsParPlacement(examenAvant);
-  const touchees = [];
-  for (const [id, raisons] of raisonsParPlacement(examenApres)) {
-    const connues = anciennes.get(id) ?? [];
-    const nouvelles = raisons.filter((raison) => !connues.some((connue) => memesChamps(connue, raison)));
-    if (nouvelles.length > 0) touchees.push({ id, raisons: raisonsNommees(nouvelles, apres, avant) });
-  }
-  if (touchees.length > 0) rendus.push(avertissement('DERIVE_NOUVELLE', { touchees }));
+  const derive = deriveNouvelle(examenAvant, examenApres, apres, avant);
+  if (derive !== null) rendus.push(derive);
 
   const reservations = (charge, examen, inst) =>
     violationsCourantes(charge, examen, inst).filter(({ code }) => code === 'RESERVATION');

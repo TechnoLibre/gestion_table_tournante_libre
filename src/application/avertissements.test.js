@@ -13,8 +13,9 @@ import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { creerCharge } from '../stockage/document.js';
 import { examiner } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
-import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
+import { avertissementsApres, deriveNouvelle, examenNomme, invariantViole, raisonsNommees } from './avertissements.js';
 import { configurationDe } from './configuration.js';
+import { nomAffiche } from './personnes.js';
 
 const personne = (id, nom, exclu = false) => ({
   id,
@@ -598,5 +599,230 @@ describe('avertissements : les violations que nomme une dérive de présence (§
     assert.deepEqual(invariantViole(charge).details.violations, [
       { code: 'RESERVATION', participant: 2, table: 2, tour: 2, siege: 2, occupant: null },
     ]);
+  });
+});
+
+// Une liste sous un Proxy qui compte les éléments lus : chaque lecture d'un
+// indice entier ajoute un à compte.lus.
+function listeComptee(liste) {
+  const compte = { lus: 0 };
+  const vue = new Proxy(liste, {
+    get(cible, cle, recepteur) {
+      if (typeof cle === 'string' && /^\d+$/.test(cle)) compte.lus += 1;
+      return Reflect.get(cible, cle, recepteur);
+    },
+  });
+  return { vue, compte };
+}
+
+// La sémantique de référence de raisonsNommees : un find par raison et par
+// charge, la première charge qui porte l'identifiant tranche.
+function nommeesParRecherche(raisons, ...charges) {
+  const premiere = (id, cle) => {
+    for (const charge of charges) {
+      const trouvee = charge[cle].find((candidate) => candidate.id === id);
+      if (trouvee !== undefined) return { trouvee };
+    }
+    return null;
+  };
+  return raisons.map((raison) => {
+    const nommee = { ...raison };
+    if (raison.participant !== undefined) {
+      const lue = premiere(raison.participant, 'participants');
+      const nom = lue === null ? null : nomAffiche(lue.trouvee);
+      if (nom !== null) nommee.personne = nom;
+    }
+    if (raison.table !== undefined) {
+      const lue = premiere(raison.table, 'tables');
+      const numero = lue === null ? null : lue.trouvee.numero;
+      if (numero !== null) nommee.numero = numero;
+    }
+    return nommee;
+  });
+}
+
+describe('avertissements : les raisons se nomment par un index des charges (§ 9)', () => {
+  // Deux charges réduites à leurs listes : la première porte deux fois la
+  // personne 2 et la table 2, une personne sans nom ni prénom, une personne
+  // d'identifiant NaN, une table de numéro null et une sans numéro ; la
+  // seconde redit ces identifiants autrement, et seule porte la personne 6
+  // et la table 6.
+  const premiere = () => ({
+    participants: [
+      personne(1, 'Mélilot'),
+      { ...personne(2, 'Bourrache'), prenom: 'Odile' },
+      personne(2, 'Cardère'),
+      personne(3, null),
+      personne(Number.NaN, 'Escourgeon'),
+    ],
+    tables: [
+      { ...table(1, 4), numero: 11 },
+      { ...table(2, 4), numero: 12 },
+      { ...table(2, 4), numero: 99 },
+      { ...table(3, 4), numero: null },
+      (({ numero, ...reste }) => reste)(table(4, 4)),
+    ],
+  });
+  const seconde = () => ({
+    participants: [personne(2, 'Salicorne'), personne(3, 'Pimprenelle'), personne(6, 'Tormentille')],
+    tables: [
+      { ...table(2, 4), numero: 22 },
+      { ...table(3, 4), numero: 33 },
+      { ...table(6, 4), numero: 66 },
+    ],
+  });
+  const raisons = [
+    { code: 'PARTICIPANT_EXCLU', participant: 2 },
+    { code: 'PARTICIPANT_SUPPRIME', participant: 3 },
+    { code: 'PARTICIPANT_NON_PLACE', participant: 6 },
+    { code: 'PARTICIPANT_SUPPRIME', participant: 7 },
+    { code: 'PARTICIPANT_EXCLU', participant: Number.NaN },
+    { code: 'CAPACITE_CHANGEE', table: 2, avant: 4, maintenant: 5 },
+    { code: 'TABLE_SUPPRIMEE', table: 3 },
+    { code: 'TABLE_AJOUTEE', table: 4 },
+    { code: 'TABLE_AJOUTEE', table: 6 },
+    { code: 'TABLE_SUPPRIMEE', table: 8 },
+    { code: 'TOURS_CHANGES', avant: 2, maintenant: 3 },
+  ];
+
+  test('la première charge, et en elle la première entrée, tranche ; un nom ou un numéro null ne passe pas à la charge suivante ; un introuvable reste sans clé', () => {
+    const nommees = raisonsNommees(raisons, premiere(), seconde());
+    assert.deepEqual(nommees, [
+      { code: 'PARTICIPANT_EXCLU', participant: 2, personne: 'Odile Bourrache' },
+      { code: 'PARTICIPANT_SUPPRIME', participant: 3 },
+      { code: 'PARTICIPANT_NON_PLACE', participant: 6, personne: 'Tormentille' },
+      { code: 'PARTICIPANT_SUPPRIME', participant: 7 },
+      { code: 'PARTICIPANT_EXCLU', participant: Number.NaN },
+      { code: 'CAPACITE_CHANGEE', table: 2, avant: 4, maintenant: 5, numero: 12 },
+      { code: 'TABLE_SUPPRIMEE', table: 3 },
+      { code: 'TABLE_AJOUTEE', table: 4, numero: undefined },
+      { code: 'TABLE_AJOUTEE', table: 6, numero: 66 },
+      { code: 'TABLE_SUPPRIMEE', table: 8 },
+      { code: 'TOURS_CHANGES', avant: 2, maintenant: 3 },
+    ]);
+    assert.equal(Object.hasOwn(nommees[3], 'personne'), false);
+    assert.equal(Object.hasOwn(nommees[7], 'numero'), true);
+    assert.equal(Object.hasOwn(nommees[9], 'numero'), false);
+    assert.deepEqual(raisonsNommees(raisons, seconde(), premiere()), nommeesParRecherche(raisons, seconde(), premiere()));
+    assert.deepEqual(raisonsNommees(raisons, premiere(), seconde()), nommeesParRecherche(raisons, premiere(), seconde()));
+    assert.deepEqual(raisonsNommees(raisons), nommeesParRecherche(raisons));
+    assert.deepEqual(raisonsNommees([], premiere()), []);
+  });
+
+  test('les raisons rendues sont neuves : celles reçues ne changent pas', () => {
+    const recues = structuredClone(raisons);
+    const nommees = raisonsNommees(recues, premiere(), seconde());
+    assert.deepEqual(recues, raisons);
+    nommees.forEach((nommee, rang) => assert.notEqual(nommee, recues[rang]));
+  });
+
+  test("raisonsNommees lit chaque personne et chaque table au plus une fois par charge, quel que soit le nombre de raisons, et aucune sans raison", () => {
+    const charges = [premiere(), seconde()].map((charge) => {
+      const participants = listeComptee(charge.participants);
+      const tables = listeComptee(charge.tables);
+      return {
+        charge: { participants: participants.vue, tables: tables.vue },
+        comptes: [participants.compte, tables.compte],
+        tailles: [charge.participants.length, charge.tables.length],
+      };
+    });
+    raisonsNommees([], ...charges.map(({ charge }) => charge));
+    for (const { comptes } of charges) comptes.forEach((compte) => assert.equal(compte.lus, 0));
+    const nombreuses = [...raisons, ...raisons, ...raisons];
+    raisonsNommees(nombreuses, ...charges.map(({ charge }) => charge));
+    for (const { comptes, tailles } of charges) {
+      comptes.forEach((compte, rang) =>
+        assert.ok(compte.lus <= tailles[rang], `${compte.lus} lectures pour ${tailles[rang]} éléments`),
+      );
+    }
+  });
+
+  test("examenNomme lit chaque personne et chaque table de la charge au plus une fois pour tout l'examen", () => {
+    const charge = avec(petiteSoiree(), (copie) => {
+      copie.participants[2].exclu = true;
+      copie.participants[3].exclu = true;
+      copie.tables[1].sieges = 3;
+    });
+    const examen = examiner(charge);
+    const attendu = examenNomme(examen, charge);
+    const participants = listeComptee(charge.participants);
+    const tables = listeComptee(charge.tables);
+    const nomme = examenNomme(examen, { ...charge, participants: participants.vue, tables: tables.vue });
+    assert.deepEqual(nomme, attendu);
+    assert.ok(participants.compte.lus <= charge.participants.length, `${participants.compte.lus} lectures de personnes`);
+    assert.ok(tables.compte.lus <= charge.tables.length, `${tables.compte.lus} lectures de tables`);
+  });
+});
+
+describe('avertissements : une liste de raisons partagée par les deux examens ne se compare pas (§ 9)', () => {
+  // Les raisons d'un examen sous des Proxy qui comptent les clés lues, et
+  // un examen d'après qui partage, pour chaque placement dont les raisons
+  // sont champ pour champ celles d'avant, la liste d'avant elle-même.
+  function examensPartages(avant, apres) {
+    const compte = { cles: 0 };
+    const compter = (liste) =>
+      liste.map(
+        (raison) =>
+          new Proxy(raison, {
+            ownKeys(cible) {
+              compte.cles += 1;
+              return Reflect.ownKeys(cible);
+            },
+          }),
+      );
+    const examenAvant = examiner(avant);
+    const sousCompte = {
+      ...examenAvant,
+      derives: examenAvant.derives.map((derive) => ({ ...derive, raisons: compter(derive.raisons) })),
+      retenu: { ...examenAvant.retenu, raisons: compter(examenAvant.retenu.raisons) },
+    };
+    const examenApres = examiner(apres);
+    const memes = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const avantDe = new Map(sousCompte.derives.map((derive) => [derive.id, derive.raisons]));
+    const partage = {
+      ...examenApres,
+      derives: examenApres.derives.map((derive) =>
+        avantDe.has(derive.id) && memes(avantDe.get(derive.id), derive.raisons) ? { ...derive, raisons: avantDe.get(derive.id) } : derive,
+      ),
+      retenu: memes(sousCompte.retenu.raisons, examenApres.retenu.raisons)
+        ? { ...examenApres.retenu, raisons: sousCompte.retenu.raisons }
+        : examenApres.retenu,
+    };
+    return { examenAvant: sousCompte, examenApres, partage, compte };
+  }
+
+  test('même DERIVE_NOUVELLE avec et sans partage ; les raisons partagées ne sont pas relues', () => {
+    // Pervenche est exclue avant le geste, Lacasse l'est par le geste.
+    // L'examen d'après donne à la proposition 2 la liste d'avant elle-même :
+    // elle n'a rien de neuf, et ses raisons ne se lisent pas.
+    const avant = avec(petiteSoiree(), (charge) => (charge.participants[2].exclu = true));
+    const apres = avec(avant, (charge) => (charge.participants[3].exclu = true));
+    const { examenAvant, examenApres, partage, compte } = examensPartages(avant, apres);
+    assert.deepEqual(
+      deriveNouvelle(examenAvant, examenApres, apres, avant),
+      avertissementsApres(avant, apres).find(({ code }) => code === 'DERIVE_NOUVELLE'),
+    );
+    const garde = { ...partage, derives: partage.derives.map((derive) => (derive.id === 2 ? examenAvant.derives[1] : derive)) };
+    const copiee = { ...garde, derives: garde.derives.map((derive) => ({ ...derive, raisons: [...derive.raisons] })) };
+    const lectures = (examen) => {
+      compte.cles = 0;
+      const rendu = deriveNouvelle(examenAvant, examen, apres, avant);
+      return { rendu, cles: compte.cles };
+    };
+    const avecPartage = lectures(garde);
+    const sansPartage = lectures(copiee);
+    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 4, personne: 'Lacasse' }];
+    assert.deepEqual(avecPartage.rendu, {
+      code: 'DERIVE_NOUVELLE',
+      details: { touchees: [{ id: 1, raisons }, { id: 'retenu', raisons }] },
+    });
+    assert.deepEqual(sansPartage.rendu, avecPartage.rendu);
+    assert.ok(avecPartage.cles < sansPartage.cles, `${avecPartage.cles} clés lues avec partage, ${sansPartage.cles} sans`);
+
+    const inchangee = examensPartages(avant, avant);
+    inchangee.compte.cles = 0;
+    assert.equal(deriveNouvelle(inchangee.examenAvant, inchangee.partage, avant, avant), null);
+    assert.equal(inchangee.compte.cles, 0);
+    assert.equal(deriveNouvelle(inchangee.examenAvant, inchangee.examenApres, avant, avant), null);
   });
 });
