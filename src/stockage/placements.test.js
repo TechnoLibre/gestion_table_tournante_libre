@@ -21,6 +21,7 @@ import { VERSION } from '../version.genere.js';
 import { serialiser } from './canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { figer, gelerPropositions } from './gel.js';
 import {
   RAISONS_DE_PARTICIPANTS,
   ajusterALaPresence,
@@ -1244,6 +1245,136 @@ describe("examiner : le partage d'une charge lue (§ 8.9, point 3)", () => {
     assert.deepStrictEqual(examen.charge, { ...avant, propositions: avant.propositions.slice(1) });
     assert.equal(examen.charge.participants, charge.participants);
     assert.equal(examen.charge.retenu, charge.retenu);
+  });
+});
+
+// chargeAvecGeneration, ses propositions figées au registre (gel.js) : la
+// liste, les personnes, les tables et l'événement restent modifiables.
+const chargeFigee = () => gelerPropositions(chargeAvecGeneration());
+
+// Les raisons de dérive de chaque proposition d'un examen, par identifiant.
+const raisonsDe = (examen) => examen.derives.map(({ raisons }) => raisons);
+
+describe('examiner : la mémoire par proposition figée (§ 8.9, point 3)', () => {
+  test("les raisons d'une proposition figée sont le même objet, figé, tant que ce que la dérive lit de la charge ne change pas", () => {
+    const charge = chargeFigee();
+    charge.participants[4].exclu = true;
+    const premier = examiner(charge);
+    const renommee = {
+      ...charge,
+      evenement: { ...charge.evenement, nom: 'Soirée des Mésanges' },
+      participants: charge.participants.map((p) => (p.id === 1 ? { ...p, nom: 'Aulnaie', prenom: 'Aurèle' } : p)),
+      tables: charge.tables.map((t) => ({ ...t, numero: t.numero + 10, position: { x: 0, y: 40 * t.id } })),
+    };
+    const second = examiner(renommee);
+    assert.deepStrictEqual(premier, examiner(structuredClone(charge)));
+    assert.equal(premier.derives.length, 3);
+    raisonsDe(second).forEach((raisons, rang) => {
+      assert.equal(raisons, raisonsDe(premier)[rang]);
+      assert.ok(Object.isFrozen(raisons) && raisons.every((raison) => Object.isFrozen(raison)));
+    });
+    assert.throws(() => raisonsDe(second)[0].push({ code: 'TABLE_AJOUTEE', table: 9 }), TypeError);
+    assert.equal(examiner(charge).derives[0].raisons, raisonsDe(premier)[0]);
+    assert.notEqual(examiner(charge).derives, premier.derives);
+  });
+
+  test('un seul champ lu par la dérive change à chaque étape : les dérives suivent, égales à celles de la copie libre', () => {
+    const charge = chargeFigee();
+    const etapes = [
+      ['exclusion', (c) => (c.participants[4].exclu = true)],
+      ['exclusion levée', (c) => (c.participants[4].exclu = false)],
+      ['présence retirée', (c) => (c.participants[5].presence = [2, 3, 4])],
+      ['présence réduite', (c) => (c.participants[5].presence = [3, 4])],
+      ['présence rendue', (c) => delete c.participants[5].presence],
+      ['participant ajouté', (c) => c.participants.push(personne(13, ...TREIZIEME))],
+      ['participant supprimé', (c) => c.participants.pop()],
+      ['participant renuméroté', (c) => (c.participants[0].id = 14)],
+      ['table ajoutée', (c) => c.tables.push(table(5, 5))],
+      ['table supprimée', (c) => c.tables.pop()],
+      ['table renumérotée', (c) => (c.tables[3].id = 6)],
+      ['sièges de la table', (c) => (c.tables[0].sieges = 4)],
+      ['sièges par défaut', (c) => (c.evenement.siegesParDefaut = 5)],
+      ['tours', (c) => (c.evenement.tours = 5)],
+    ];
+    let precedentes = examiner(charge).derives;
+    assert.deepStrictEqual(precedentes, []);
+    for (const [nom, changer] of etapes) {
+      changer(charge);
+      const examen = examiner(charge);
+      assert.deepStrictEqual(examen, examiner(structuredClone(charge)), nom);
+      assert.notDeepStrictEqual(examen.derives, precedentes, nom);
+      assert.deepStrictEqual(examiner(charge), examen, nom);
+      precedentes = examen.derives;
+    }
+  });
+
+  test("une proposition gelée par Object.freeze seul n'est pas mise en mémoire : ses enfants restent lus à chaque appel", () => {
+    const charge = chargeAvecGeneration();
+    charge.participants[4].exclu = true;
+    for (const p of charge.propositions) Object.freeze(p);
+    const [p1] = charge.propositions;
+    assert.notEqual(raisonsDe(examiner(charge))[0], raisonsDe(examiner(charge))[0]);
+    p1.capacites[0] = 4;
+    assert.deepStrictEqual(raisonsDe(examiner(charge))[0], [
+      { code: 'CAPACITE_CHANGEE', table: 1, avant: 4, maintenant: 3 },
+      { code: 'PARTICIPANT_EXCLU', participant: 5 },
+    ]);
+    p1.placement[0].reserve.push(13);
+    assert.deepStrictEqual(examiner(charge).fautives, [
+      { rang: 0, id: 1, fautes: [{ code: 'INCONNU', tour: 1, participant: 13 }] },
+    ]);
+
+    const gelee = chargeAvecGeneration();
+    gelee.participants[4].exclu = true;
+    geler(gelee.propositions);
+    assert.notEqual(raisonsDe(examiner(gelee))[0], raisonsDe(examiner(gelee))[0]);
+  });
+
+  test("les fautes d'une proposition figée se jugent à chaque appel : répétition, compteur, fautive rendue en liste neuve", () => {
+    const charge = chargeFigee();
+    const [p1, p2] = charge.propositions;
+    assert.deepStrictEqual(examiner(charge).fautives, []);
+    const repetee = { ...charge, propositions: [p1, p2, p1] };
+    assert.deepStrictEqual(examiner(repetee).fautives, [{ rang: 2, id: 1, fautes: [{ code: 'IDENTIFIANT_REPETE' }] }]);
+    const abaissee = { ...charge, prochainsIds: { ...charge.prochainsIds, proposition: 2 } };
+    assert.deepStrictEqual(examiner(abaissee).fautives, [
+      { rang: 1, id: 2, fautes: [{ code: 'IDENTIFIANT_HORS_COMPTEUR' }] },
+      { rang: 2, id: 3, fautes: [{ code: 'IDENTIFIANT_HORS_COMPTEUR' }] },
+    ]);
+    assert.deepStrictEqual(examiner(charge).fautives, []);
+
+    const fautive = figer({ ...structuredClone(p2), id: 4, tours: 5 });
+    const avecFautive = { ...charge, propositions: [p1, fautive], prochainsIds: { ...charge.prochainsIds, proposition: 5 } };
+    const [premier, second] = [examiner(avecFautive), examiner(avecFautive)];
+    assert.deepStrictEqual(premier, examiner(structuredClone(avecFautive)));
+    assert.deepStrictEqual(second, premier);
+    assert.equal(premier.fautives.length, 1);
+    assert.notEqual(second.fautives[0].fautes, premier.fautives[0].fautes);
+    assert.ok(!Object.isFrozen(premier.fautives[0].fautes));
+  });
+
+  test('une charge que la dérive ne sait pas lire lève comme sa copie libre, présence null comprise', () => {
+    const charge = chargeFigee();
+    charge.participants[4].exclu = true;
+    examiner(charge);
+    const abimages = [
+      (c) => (c.tables = [null]),
+      (c) => (c.participants = [null]),
+      (c) => (c.evenement = null),
+      (c) => (c.participants = c.participants.map((p) => (p.id === 1 ? { ...p, presence: null } : p))),
+    ];
+    for (const abimer of abimages) {
+      const abimee = { ...charge, evenement: { ...charge.evenement } };
+      abimer(abimee);
+      let attendue = null;
+      try {
+        examiner(structuredClone(abimee));
+      } catch (erreur) {
+        attendue = erreur;
+      }
+      assert.ok(attendue instanceof TypeError);
+      assert.throws(() => examiner(abimee), { name: attendue.name, message: attendue.message });
+    }
   });
 });
 

@@ -39,6 +39,7 @@
 import { estPresentAuTour } from '../moteur/presence.js';
 import { ENTREE_DE_COURSE, SCHEMA, capacite, premiereFaute } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { estFigee, figer } from './gel.js';
 import { absentsParTour } from './presence.js';
 
 /**
@@ -112,7 +113,9 @@ import { absentsParTour } from './presence.js';
  *           identifiant lu
  * @property {Array<{rang: number, id: number|null, fautes: Faute[]}>} fautives
  *           par rang dans la liste lue ; id null quand il ne se lit pas
- * @property {Array<{id: number, raisons: Raison[]}>} derives   par identifiant
+ * @property {Array<{id: number, raisons: Raison[]}>} derives   par identifiant ;
+ *           les raisons d'une proposition figée, figées et partagées
+ *           (examiner)
  * @property {{fautes: Faute[], raisons: Raison[]}} retenu
  */
 
@@ -663,7 +666,12 @@ function ecartsDePresence(personne, absentsDuTour, n) {
 
 // Raisons de dérive d'un placement cohérent, sans contrôle : derive les
 // rend après l'avoir contrôlé, examiner après l'avoir fait lui-même,
-// deriveSansRevalider après que son appelant l'a fait.
+// deriveSansRevalider après que son appelant l'a fait. De la charge, elle
+// ne lit que ce qu'encode cleDeDerive, dont examiner garde ses raisons :
+// l'identifiant, l'exclusion et la présence de chaque personne
+// (estPresentAuTour ne lit que presence), le nombre de tours de
+// l'événement, l'identifiant et les sièges de chaque table, et les sièges
+// par défaut (capacite). Toute lecture ajoutée ici entre dans cleDeDerive.
 function raisonsDeDerive({ tables, capacites, tours, participants, placement }, charge) {
   const raisons = [];
   const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
@@ -1029,6 +1037,77 @@ const compteurReleve = (charge, plusGrand) =>
 const fautesDuCompteur = (id, charge) =>
   id >= charge.prochainsIds.proposition ? [{ code: 'IDENTIFIANT_HORS_COMPTEUR' }] : [];
 
+// Une valeur que lit la clé de dérive : [valeur] quand elle est écrite, 0
+// quand elle manque. Une absence et null s'y distinguent, là où
+// JSON.stringify écrirait null pour l'une et l'autre.
+const lue = (valeur) => (valeur === undefined ? 0 : [valeur]);
+
+// Ce que raisonsDeDerive lit de la charge, en un texte, dans l'ordre où elle
+// le lit : chaque personne par [identifiant, exclusion 1 ou 0, présence], le
+// nombre de tours de l'événement, chaque table par [identifiant, sièges],
+// puis les sièges par défaut ; personnes et tables dans l'ordre de la
+// charge. Deux charges de même clé donnent à un placement les mêmes raisons :
+// la clé est exacte pour des valeurs que JSON écrit sans perte, celles que
+// le schéma de la charge admet. Rend null pour une charge que la clé ne sait
+// pas lire, une personne, une table ou un événement null par exemple :
+// raisonsDeDerive la lit alors elle-même, et lève ce qu'elle lève.
+function cleDeDerive(charge) {
+  try {
+    return JSON.stringify([
+      charge.participants.map(({ id, exclu, presence }) => [lue(id), exclu ? 1 : 0, lue(presence)]),
+      lue(charge.evenement.tours),
+      charge.tables.map(({ id, sieges }) => [lue(id), lue(sieges)]),
+      lue(charge.evenement.siegesParDefaut),
+    ]);
+  } catch {
+    return null;
+  }
+}
+
+// La mémoire d'examiner, par proposition figée (gel.js) et cohérente. Rien
+// de ce qu'une proposition figée atteint ne change plus, et ses fautes sous
+// la règle d'une proposition ne lisent qu'elle : une fois vides, elles le
+// restent, et sa présence dans la table le dit. cle et raisons sont la clé
+// de dérive de la dernière charge qui l'a examinée et les raisons, figées,
+// qu'elle y a trouvées ; null avant la première. Une proposition fautive n'y
+// entre pas : examiner l'écarte de la charge qu'il rend, et ses fautes se
+// recalculent à chaque appel. La table est une WeakMap : elle ne retient
+// aucune proposition.
+const PAR_PROPOSITION = new WeakMap();
+
+// Les fautes d'une proposition sous la règle d'une proposition, et sa
+// mémoire : { liste, memoire }. Une proposition figée déjà vue cohérente
+// rend [] et sa mémoire, sans contrôle ; une proposition figée qui se
+// découvre cohérente reçoit une mémoire neuve ; une proposition libre ou
+// fautive a pour mémoire null.
+function controlerProposition(proposition) {
+  const figee = estFigee(proposition);
+  const connue = figee ? PAR_PROPOSITION.get(proposition) : undefined;
+  if (connue !== undefined) return { liste: [], memoire: connue };
+  const liste = fautesSelon(proposition, PROPOSITION);
+  if (!figee || liste.length > 0) return { liste, memoire: null };
+  const memoire = { cle: null, raisons: null };
+  PAR_PROPOSITION.set(proposition, memoire);
+  return { liste, memoire };
+}
+
+// Raisons de dérive d'une proposition cohérente et gardée. Sans mémoire, ou
+// sur une charge sans clé lisible, elles se calculent. Avec, ce sont celles
+// de la mémoire quand cleCourante() rend la clé qu'elle porte ; sinon elles
+// se calculent, se figent et remplacent celles de la mémoire, sous la clé
+// courante. cleCourante calcule la clé de la charge au plus une fois par
+// examen.
+function raisonsGardees(proposition, charge, memoire, cleCourante) {
+  if (memoire === null) return raisonsDeDerive(proposition, charge);
+  const cle = cleCourante();
+  if (cle === null) return raisonsDeDerive(proposition, charge);
+  if (memoire.cle !== cle) {
+    memoire.raisons = figer(raisonsDeDerive(proposition, charge));
+    memoire.cle = cle;
+  }
+  return memoire.raisons;
+}
+
 // Fautes et raisons du retenu, examiné sous sa propre règle. Un retenu qui
 // se contredit n'a que ses fautes ; un retenu cohérent a ses raisons de
 // dérive, et la faute d'une proposition d'origine qui atteint le compteur ;
@@ -1091,10 +1170,30 @@ function examinerRetenu(charge) {
  * règle, et un retenu qui ne suit pas la sienne, canonique.js le recopie
  * hors du schéma (retenuHorsDeSaRegle).
  *
+ * Une proposition figée par gel.js ne change plus : examiner garde en
+ * mémoire, par proposition, qu'elle est cohérente, et ses dernières raisons
+ * de dérive sous la clé de la charge qui les a données — ce que la dérive en
+ * lit : l'identifiant, l'exclusion et la présence de chaque personne, le
+ * nombre de tours, l'identifiant et les sièges de chaque table, les sièges
+ * par défaut. Tant que cette clé tient, d'un appel à l'autre et d'une charge
+ * à l'autre, ses raisons sont le même tableau, figé avec chacune de ses
+ * raisons, et partagé entre les examens qui le rendent : qui les lit ne les
+ * modifie pas. Une proposition libre, ou gelée par Object.freeze seul, se
+ * contrôle et se compare à chaque appel, ses raisons dans un tableau neuf.
+ * Ni la répétition d'un identifiant, ni le compteur, ni le retenu ne se
+ * mettent en mémoire, et une proposition fautive non plus : ses fautes sont
+ * une liste neuve à chaque appel. La mémoire ne change aucune valeur rendue :
+ * examiner(charge) égale examiner(structuredClone(charge)).
+ *
  * @param {import('./types.js').Charge} charge
  * @returns {Examen}
  */
 export function examiner(charge) {
+  let cle;
+  const cleCourante = () => {
+    if (cle === undefined) cle = cleDeDerive(charge);
+    return cle;
+  };
   const gardees = [];
   const fautives = [];
   const derives = [];
@@ -1103,7 +1202,8 @@ export function examiner(charge) {
   charge.propositions.forEach((proposition, rang) => {
     const id = identifiantLisible(proposition?.id);
     plusGrand = Math.max(plusGrand, id ?? 0);
-    let liste = fautesSelon(proposition, PROPOSITION);
+    const controle = controlerProposition(proposition);
+    let { liste } = controle;
     if (liste.length === 0 && identifiants.has(proposition.id)) liste = [{ code: 'IDENTIFIANT_REPETE' }];
     if (liste.length === 0) liste = fautesDuCompteur(proposition.id, charge);
     if (liste.length > 0) {
@@ -1112,7 +1212,7 @@ export function examiner(charge) {
     }
     identifiants.add(proposition.id);
     gardees.push(proposition);
-    const raisons = raisonsDeDerive(proposition, charge);
+    const raisons = raisonsGardees(proposition, charge, controle.memoire, cleCourante);
     if (raisons.length > 0) derives.push({ id: proposition.id, raisons });
   });
   derives.sort((a, b) => a.id - b.id);
