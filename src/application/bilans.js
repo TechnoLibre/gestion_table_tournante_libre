@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les bilans du mobilier (§ 6.1, § 6.2, § 2.1 étape 5, § 4.5) : ce qu'un
 // changement de défaut, de tours ou la suppression d'une table emporterait,

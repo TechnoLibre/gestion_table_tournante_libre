@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des clés de comparaison (§ 10.1) : la clé normalisée, que
 // partagent la réconciliation des appartenances et la clé de doublon, et la

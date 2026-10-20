@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3),
 // sans DOM : les sources offertes et celle qui vaut, les réglages d'une

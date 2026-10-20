@@ -1,5 +1,5 @@
 # © 2026 TechnoLibre (http://www.technolibre.ca)
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 #
 # Cibles du projet. Chacune délègue à un script qui porte la logique et se
 # lance aussi sans make : ./run.sh, ./install.sh, ./install_dev.sh, et sous

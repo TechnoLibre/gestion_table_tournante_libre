@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la section des tables et des tours dans un vrai moteur de
 // rendu (§ 4, § 4.3, § 6, § 2.1 étapes 4 et 5, § 19.3 captures 05 et 06).

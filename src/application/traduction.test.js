@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du mécanisme de traduction (§ 14.6) : une clé absente lève et se
 // nomme, une clé de deux tables lève à la création, les clés s'énumèrent

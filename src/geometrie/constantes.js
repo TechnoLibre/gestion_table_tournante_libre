@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le registre des constantes mesurées (§ 14.1, § 19.10). Toute dimension qui
 // dépend du rendu ou du geste se relève, jamais ne se déduit : chaque entrée

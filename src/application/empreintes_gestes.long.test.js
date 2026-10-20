@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Empreintes dorées d'une séance de gestes (§ 8.2, § 8.8, § 14.2, § 15.5) :
 // une séance réelle sur la grande démonstration, horloge pilotée,

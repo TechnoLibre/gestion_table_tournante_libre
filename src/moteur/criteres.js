@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le registre des critères (§ 5.3, § 5.7) : leurs noms, leurs familles, les
 // cases qui les font compter, l'ordre des priorités par défaut, les critères

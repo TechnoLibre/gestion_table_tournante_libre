@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le script de construction de l'exécutable Windows (§ 16, § 18.2, § 18.5) :
 // ce qu'il refuse avant de construire, la commande qu'il passe au conteneur,

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'assemblage des textes de l'application (§ 14.6) : chaque code que lèvent
 // ou rendent src/stockage, src/csv et src/application — refus, avertissements,

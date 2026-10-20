@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'export de la liste des participants (§ 10.2, § 10.3), dans la forme exacte
 // que l'import lit : UTF-8 avec marque d'ordre d'octets, « ; », CRLF, les

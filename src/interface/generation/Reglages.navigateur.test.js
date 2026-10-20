@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les réglages de génération montrés depuis leur définition, dans un vrai
 // moteur de rendu (§ 5.3, § 5.7, § 19.8) : Reglages.svelte, monté par mount

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés de la page de qualité (§ 12 à § 12.14, § 14.6), une table.
 // Chaque clé commence par « qualite. » : la source et ses cas, la liste des

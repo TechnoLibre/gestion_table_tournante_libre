@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'imposition de la planche de badges (§ 11.2, § 11.3, § 11.6) : où
 // tombent les badges sur une feuille, combien de feuilles, dans quel ordre,

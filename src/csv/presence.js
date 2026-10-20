@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La présence écrite en texte (§ 10.1, § 10.2) : la seule grammaire qui lit
 // une cellule « présence » et la seule écriture qui la produit. L'import,

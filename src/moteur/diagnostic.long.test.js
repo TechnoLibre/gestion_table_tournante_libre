@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Oracle exhaustif des planchers du diagnostic sous la présence par tour
 // (§ 5.6, § 12.4). Sur des instances minuscules — cinq personnes au plus,

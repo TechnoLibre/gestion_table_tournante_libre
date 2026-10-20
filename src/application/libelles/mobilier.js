@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes des commandes du mobilier — tables, sièges, tours, réglages,
 // objectifs des tables, ordre des priorités (§ 4, § 4.5, § 5.7, § 6, § 7.1,

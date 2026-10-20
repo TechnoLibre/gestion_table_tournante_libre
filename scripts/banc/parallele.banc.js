@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le gain parallèle de la génération (§ 5.10, Q14) : la durée t(W) d'une
 // génération de W propositions sur W travailleurs, une seule vague, par

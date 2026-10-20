@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le plan imprimé dans un vrai moteur de rendu (§ 7.4, § 7.7, § 11.7,
 // § 13.5) : l'aperçu du plan, une feuille [data-feuille] par page de la

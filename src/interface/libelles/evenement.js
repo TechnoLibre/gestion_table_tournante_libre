@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés de l'événement ouvert : son en-tête et son résumé chiffré,
 // ses états, la bande de mode et la place fixe de sa barre, son panneau

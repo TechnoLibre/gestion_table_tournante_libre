@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le système de fichiers, frontière de plateforme du stockage (§ 13.4). Ce
 // module en déclare l'interface, que trois implémentations portent : celle de

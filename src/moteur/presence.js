@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La présence d'une personne par tour : la seule lecture de la règle « champ
 // presence absent = présente à tous les tours ». Le moteur, le stockage, le

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La liste des participants dans un vrai moteur de rendu (§ 4, § 4.2, § 4.4,
 // § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'appartenance

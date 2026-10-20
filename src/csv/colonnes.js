@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Association des colonnes d'un CSV aux champs d'un participant (§ 10.1). Une
 // colonne s'associe par son en-tête, jamais par sa position : un tableur dont

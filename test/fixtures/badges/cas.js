@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les petites charges des épreuves de la planche (§ 11.4 à § 11.8) : une
 // soirée construite par ses personnes, ses tables et un plan écrit tour par

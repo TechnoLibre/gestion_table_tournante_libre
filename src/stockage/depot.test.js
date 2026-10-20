@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du dépôt (§ 8.1, § 8.2, § 8.4, § 8.6, § 8.8, § 8.9, § 14.10), toutes
 // sur le système de fichiers d'épreuve, chacune comptant ses écritures : une

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La question du papier dans un vrai moteur de rendu (§ 8.5, § 11.2) : le
 // composant que l'aperçu et la section des badges partagent. Sans papier,

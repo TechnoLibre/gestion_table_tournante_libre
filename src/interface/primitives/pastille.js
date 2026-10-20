@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle d'une pastille, pur : Pastille.svelte le câble. Une pastille est
 // un fond teinté, un signe — une icône ou un point — de la marque de sa

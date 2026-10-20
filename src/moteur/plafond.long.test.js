@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves lourdes des plafonds (§ 14.4, § 14.12) : l'accord de la
 // programmation dynamique et de l'énumération sur une grille plus large que

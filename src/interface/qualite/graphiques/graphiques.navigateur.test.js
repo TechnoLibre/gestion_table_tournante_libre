@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des composants de graphique de la page de qualité dans un vrai
 // moteur de rendu (§ 12.3, § 12.4, § 12.5, § 12.7, § 14.5, D30, D34, D44,

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le manifeste des captures et ses contrôles du niveau node (§ 19.3, § 19.5,
 // § 19.7). Pur : aucune lecture de fichier, aucune horloge. L'appelant lit le

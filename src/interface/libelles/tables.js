@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés des tables et des tours (§ 4, § 6, § 2.1 étapes 4 et 5,
 // § 14.6). Chaque clé commence par « tables. ».

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Réservoirs de noms des démonstrations (§ 15.6) : des prénoms courants, des
 // patronymes forgés par produit d'un préfixe et d'une terminaison, des noms

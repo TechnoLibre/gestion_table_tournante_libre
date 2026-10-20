@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le thème d'un lancement (§ 19.2) : la préférence du système, lue à chaque
 // lancement ; rien ne le garde d'une séance à l'autre.

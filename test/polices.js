@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La police embarquée lue sous node : les épreuves y lisent les fichiers de
 // src/polices par le disque, là où la page les reçoit de Vite par « ?inline »

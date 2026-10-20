@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du dessin du plan dans un vrai moteur de rendu (§ 7.1, § 7.3 à
 // § 7.7, § 13.3, § 13.5, § 17 point 6). PlanDessin se monte dans un <svg

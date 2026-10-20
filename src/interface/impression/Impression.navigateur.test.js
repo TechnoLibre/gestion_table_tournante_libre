@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'impression réelle de l'aperçu (§ 11.1, § 11.7, § 14.4) : le document de
 // l'épreuve passe par le moteur d'impression de Chromium, qui en fait un

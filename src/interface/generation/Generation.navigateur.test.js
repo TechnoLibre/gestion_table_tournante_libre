@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La section de la génération dans un vrai moteur de rendu (§ 5.7, § 5.9,
 // § 5.10, § 2.1 étape 9 et « ce qui doit avoir eu lieu », § 15.4, § 8.4,

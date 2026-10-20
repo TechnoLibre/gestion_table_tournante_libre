@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la séance (§ 2.1, § 8.1 à § 8.6, § 8.8, § 9, § 10.1), toutes sur
 // le système de fichiers d'épreuve, qui compte ses écritures, avec une

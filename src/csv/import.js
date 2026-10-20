@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'import appliqué (§ 10.1) : ce que remplacer détruirait, à annoncer avant
 // d'agir ; l'aperçu appliqué à une charge, selon le mode ; le CSV des lignes

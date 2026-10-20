@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Préchargement de la coquille (§ 13.1) : le seul pont entre la page et le
 // processus principal. Il expose window.gtt et rien d'autre : sous

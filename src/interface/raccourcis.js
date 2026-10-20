@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La table des raccourcis clavier de l'interface (§ 7.3, § 13.5, § 19.8) :
 // la seule source du tableau des raccourcis de la documentation. Le code qui

@@ -1,5 +1,5 @@
 ﻿# © 2026 TechnoLibre (http://www.technolibre.ca)
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 # Installe sous Windows de quoi lancer l'application depuis les sources et
 # jouer les épreuves : Node de la majeure de .node-version, posé sous

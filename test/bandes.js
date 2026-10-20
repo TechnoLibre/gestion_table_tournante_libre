@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'épreuve des bandes, partagée par les épreuves de la géométrie des tables
 // et du mobilier : une liste de noms passe-t-elle sur une autre table ? Le

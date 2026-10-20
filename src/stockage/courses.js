@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le compagnon des courses (§ 5.10, § 8.6, § 8.9) : le fichier
 // <base>.gtt-courses.json, à côté du fichier d'état, qui garde la course de

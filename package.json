@@ -3,7 +3,7 @@
   "productName": "Gestion table tournante Libre",
   "version": "2026.1005.1",
   "description": "Placement tournant des participants d’un événement, hors ligne",
-  "license": "AGPL-3.0-or-later",
+  "license": "AGPL-3.0-or-later OR LiLiQ-Rplus-1.1",
   "author": "TechnoLibre (http://www.technolibre.ca)",
   "private": true,
   "type": "module",

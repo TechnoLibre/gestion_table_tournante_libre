@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'imprimante de la plateforme web (§ 13.4, § 11.7) : la boîte de dialogue
 // du navigateur, sans retour sur ce qu'elle devient. Une fenêtre factice

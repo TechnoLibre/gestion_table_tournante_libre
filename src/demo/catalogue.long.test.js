@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Garde des noms forgés (§ 14.9, § 15.6) : aucun patronyme forgé complet, nom
 // long compris, ni aucune racine d'organisation n'apparaît en mot entier dans

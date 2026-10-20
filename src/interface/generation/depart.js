@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le départ d'une génération dérivée dans la section de la génération
 // (§ 5.7, C6), pur : SectionGeneration.svelte et Depart.svelte le câblent.

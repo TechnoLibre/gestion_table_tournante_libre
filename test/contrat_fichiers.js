@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Suite de contrat du système de fichiers (§ 13.4, § 14.10) : ce que les trois
 // implémentations de l'interface de src/stockage/systeme_fichiers.js —

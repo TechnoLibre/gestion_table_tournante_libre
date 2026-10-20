@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le projet banc de Vitest (§ 19.10), décrit sans rien charger de Vitest :
 // vitest.banc.config.js l'enveloppe de defineConfig et lui donne son

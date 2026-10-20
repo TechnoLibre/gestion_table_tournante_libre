@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la configuration (§ 4, § 5.2, § 5.9) : les valeurs du contrat
 // de données, l'instance indexée que rend normaliser et ses refus, le nombre

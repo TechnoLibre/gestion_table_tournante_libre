@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le diagnostic dans un vrai moteur de rendu (§ 2.1 étape 8, § 5.4, § 5.5,
 // § 5.6, § 7.5, § 8.4, § 15.1, § 15.3, § 15.4, § 19.3 capture 10) : le

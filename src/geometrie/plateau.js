@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Ce qui s'inscrit sur le plateau d'une table (§ 7.5, § 7.7), en cm de
 // dessin, l'axe y vers le bas : le numéro de la table, la marque de gel et la

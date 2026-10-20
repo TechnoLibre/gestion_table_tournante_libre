@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du relevé du coût du plafond a priori (§ 17, point 4, § 19.10),
 // sous une horloge factice : la durée d'un appel est la différence de deux

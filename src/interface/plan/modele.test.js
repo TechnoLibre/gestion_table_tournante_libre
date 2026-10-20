@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du modèle de dessin du plan (§ 7.3, § 7.4, § 7.5, § 7.6, § 7.7),
 // sans DOM. Le plan lit les conflits de l'état des places, jamais ne les

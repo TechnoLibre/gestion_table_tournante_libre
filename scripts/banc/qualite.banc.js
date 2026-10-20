@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les deux seuils de la page de qualité (§ 12.5, § 12.6, § 14.1, § 19.10),
 // relevés par le banc au cadre de 1 366 × 700, sur le rendu.

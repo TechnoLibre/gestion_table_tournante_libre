@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Appartenances d'une démonstration tirée (§ 15.2) : la loi des tailles de
 // groupe, et la faisabilité d'un tour qui sépare toutes les appartenances.

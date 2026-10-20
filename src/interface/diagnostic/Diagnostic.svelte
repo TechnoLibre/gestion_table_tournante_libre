@@ -1,5 +1,5 @@
 <!-- © 2026 TechnoLibre (http://www.technolibre.ca)
-     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
+     SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
   // Le diagnostic de la configuration (§ 2.1 étape 8, § 5.6) : ce que la

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La découpe du plan en pages (§ 11.7) : un navigateur ne fragmente pas un
 // SVG, le plan imprimé pose donc un dessin par page, chacun sur sa tuile.

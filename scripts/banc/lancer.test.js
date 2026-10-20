@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de l'orchestrateur du banc (§ 19.10, § 14.1, § 19.8), sous node
 // et sans navigateur : l'assemblage du relevé, qui refuse une mesure

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les statistiques du temps par image (§ 19.10) : une liste d'intervalles
 // entre images, en millisecondes, rend son nombre, sa médiane, son p95 et

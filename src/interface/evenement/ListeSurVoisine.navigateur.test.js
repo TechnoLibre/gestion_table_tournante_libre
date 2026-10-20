@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'avertissement LISTE_SUR_VOISINE dans un vrai moteur de rendu (§ 7.1,
 // § 7.4, § 9) : une table agrandie dont la liste de noms passe sur sa

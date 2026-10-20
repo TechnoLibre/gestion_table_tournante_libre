@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le panneau « À propos » et la version à l'écran (§ 18.6). Le bloc tient en
 // une ligne, que l'opérateur copie dans un courriel : il porte la version

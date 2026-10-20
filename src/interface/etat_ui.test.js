@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'état de navigation de l'interface : chaque transition, le contrat des
 // magasins de Svelte, et l'absence de toute écriture — l'état ne connaît pas

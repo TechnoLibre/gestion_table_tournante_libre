@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les réglages des séries node selon le nombre de cœurs (§ 14.14), sous la
 // mesure de la couverture comme hors d'elle (§ 14.4, § 14.13), et leur

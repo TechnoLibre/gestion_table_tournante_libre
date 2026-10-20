@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'aperçu avant impression sur des réglages locaux que la lecture ne prend
 // pas, ou que le dossier de travail refuse d'écrire (§ 8.5, § 11.2, § 11.7) :

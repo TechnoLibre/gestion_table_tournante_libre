@@ -167,9 +167,11 @@ sous l'une des licences suivantes :
 - GNU Affero General Public License v3.0 ou ultérieure (AGPL-3.0-or-later) ;
 - Licence Libre du Québec – Réciprocité forte v1.1 (LiLiQ-R+).
 
-Identifiant SPDX : `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1`. Textes complets :
-dossier `LICENSES/` ; l'application les donne aussi à lire hors ligne, dans
-« À propos », depuis `public/licences/AGPL-3.0-or-later.txt` et
+Identifiant SPDX : `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1`, que portent
+l'en-tête de chaque fichier source et le champ `license` de `package.json`.
+Textes complets : dossier `LICENSES/`, auquel renvoie la notice `LICENSE` de la
+racine ; l'application les donne aussi à lire hors ligne, dans « À propos »,
+depuis `public/licences/AGPL-3.0-or-later.txt` et
 `public/licences/LiLiQ-Rplus-1.1.txt`, qui voyagent avec la page. Textes
 officiels : [AGPLv3](https://www.gnu.org/licenses/agpl-3.0.fr.html),
 [LiLiQ-R+](https://forge.gouv.qc.ca/licence/liliq-r+/).

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des réservoirs de noms du générateur (§ 15.4, § 15.6) : tailles,
 // unicité, ordre des produits, forme des fragments, noms longs. Ce fichier

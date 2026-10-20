@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les seuils du banc de mesure (§ 19.10, § 19.4, § 6.2), tirés de mesures
 // déjà prises : le plus grand entier qui tient un prédicat, par dichotomie ;

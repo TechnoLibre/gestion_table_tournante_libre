@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le plan imprimé (§ 7.7, § 11.7), sans DOM : les pages du plan d'un tour,
 // chacune la tuile que la découpe (decouperPlan) lui donne, sous le pied

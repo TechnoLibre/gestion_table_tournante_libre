@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du diagnostic (§ 5.6) : les valeurs que le § 15 donne pour le
 // catalogue, chaque règle sur une salle écrite à la main, et, sur des salles

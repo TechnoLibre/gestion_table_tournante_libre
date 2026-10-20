@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de l'aperçu d'un import, § 10.1, § 10.2 et § 10.4 : ce que
 // l'aperçu montre, en clés de libellés et en données, d'un fichier décodé,

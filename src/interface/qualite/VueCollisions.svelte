@@ -1,5 +1,5 @@
 <!-- © 2026 TechnoLibre (http://www.technolibre.ca)
-     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
+     SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
   // La vue « Collisions d'appartenance » (§ 12.4, B13, D31) de la page de

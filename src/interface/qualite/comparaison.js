@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de la vue de comparaison de la page de qualité (§ 12.6,
 // § 12.7, § 12.10.6, § 12.10.7, D56 à D67, D85, C14, C17, C18, C20, C21,

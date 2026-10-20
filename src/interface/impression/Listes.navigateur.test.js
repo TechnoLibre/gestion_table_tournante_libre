@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La liste d'accueil et la feuille par table imprimées, dans un vrai moteur
 // de rendu (§ 11.7, § 7.4, § 11.4, Q6 c) : un nom de deux cents caractères

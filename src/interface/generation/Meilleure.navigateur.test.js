@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La meilleure proposition en tête de la section de la génération, dans un
 // vrai moteur de rendu (§ 5.4, § 5.7, § 14.5, § 14.6) : un bloc d'information

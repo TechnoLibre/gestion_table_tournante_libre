@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La feuille de style que le pilotage injecte (§ 19.2, § 19.4) : elle annule
 // toute transition et toute animation, l'icône de chargement de l'accueil

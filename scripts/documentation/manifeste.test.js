@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du manifeste des captures et de ses contrôles sous node (§ 19.3,
 // § 19.5, § 19.7) : la liste déclarée des captures, l'empreinte d'étape, la

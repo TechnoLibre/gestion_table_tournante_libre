@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les icônes des primitives : des tracés SVG au trait, dans un carré de 24
 // unités, que Icone.svelte dessine sans remplissage, du trait de la couleur

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des commandes nommées (§ 4, § 4.4, § 5.7, § 8.2, § 9, § 10.1) :
 // chacune rend une charge neuve et un libellé figé, ne touche pas la charge

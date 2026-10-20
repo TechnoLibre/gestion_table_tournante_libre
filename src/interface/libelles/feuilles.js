@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés de la liste d'accueil et de la feuille par table imprimées
 // (§ 11.7) : titres, en-têtes de bloc de tours, têtes de colonnes,

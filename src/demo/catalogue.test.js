@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du catalogue de démonstrations (§ 15) : ses quatre entrées, le
 // déterminisme, les grandeurs de chacune, l'ordre contractuel des tirages

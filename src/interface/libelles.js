@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'assemblage des textes des écrans (§ 14.6). Un composant n'écrit aucune
 // chaîne visible en dur : il les lit par la traduction, dont les tables

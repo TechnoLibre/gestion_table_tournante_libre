@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du modèle de la vue des objectifs des tables (§ 12.12, B21, D34,
 // D36, D52) : les personnes jamais servies, la soirée en texte, une barre

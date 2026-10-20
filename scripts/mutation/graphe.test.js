@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du graphe des imports de l'audit par mutation (§ 14.13) : un arbre
 // inventé, tenu en mémoire, où une épreuve atteint un module par un autre ; un

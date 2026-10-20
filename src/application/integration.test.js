@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuve d'intégration de l'application (§ 2.1, § 8.2, § 8.3, § 8.4, § 9,
 // § 10.1) : le parcours de l'opérateur, joué par la séance sur le système de

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La forme d'une étiquette et la découpe d'une saisie (§ 4.5). C'est le seul
 // lieu de cette règle : le schéma du fichier, le CSV, les commandes et

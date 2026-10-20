@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La présence par tour côté fichier (§ 8.9) : les absents de chaque tour
 // qu'un placement écrit, et la présence d'une charge quand le nombre de tours

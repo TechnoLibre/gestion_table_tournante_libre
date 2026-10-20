@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves longues des démonstrations livrées (§ 14.4) : l'empreinte de la
 // charge de chaque fichier livré contre celle que rejoue le script (§ 15.5,

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les sections de l'événement ouvert. Aucune n'en exige une autre : la
 // navigation les offre toutes, dans l'ordre du parcours de l'opérateur

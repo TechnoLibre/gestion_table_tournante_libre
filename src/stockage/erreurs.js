@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Erreurs que lève le stockage. Le code d'une ErreurStockage nomme l'échec,
 // et ses détails ce que l'appelant en lit — chemin, raison, révisions de

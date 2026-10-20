@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La configuration pessimiste du coût du plafond a priori (§ 17, point 4) :
 // la salle de la variante sans exception, 33 tables de 8, et 260 personnes

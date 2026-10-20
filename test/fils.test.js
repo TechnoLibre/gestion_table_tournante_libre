@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Sur une petite machine, les séries node et node-long se jouent en threads
 // (test/machine.js). Un thread de Node refuse ce qui changerait le processus

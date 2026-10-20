@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le bloc « À propos » (§ 18.6) : une ligne que l'opérateur copie dans un
 // courriel — nom, version affichée, plateforme, provenance, version de

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la diversité par animateur (§ 4.5, § 5.4, § 12.13) : les
 // personnes, appartenances et étiquettes distinctes que chaque animateur

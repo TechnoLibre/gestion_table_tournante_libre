@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Registre des marques porteuses d'information et des textes (§ 14.5,
 // § 7.5, § 7.6, § 7.7). Chaque entrée nomme le jeton qui la peint et chaque

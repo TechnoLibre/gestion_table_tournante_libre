@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les lieux d'une personne dans le retenu, et les retouches qui la déplacent
 // à un tour (§ 7.1, § 8.9) : où il la place, la place qu'elle quitte, la

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de la section des tables et des tours (§ 4, § 6, § 2.1 étapes 4
 // et 5), pur : les composants de tables/ le câblent. Il lit la charge et les

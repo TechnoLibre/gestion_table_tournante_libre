@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les sorties de l'application (§ 11.4, § 11.7, § 11.8, § 18.6) : ce que
 // toute sortie — page imprimée, planche de badges, feuille de contrôle — lit

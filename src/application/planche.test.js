@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du modèle de la planche de badges (§ 4.1, § 11.4 à § 11.8,
 // § 15.1, § 15.5) : ce qu'un badge porte et ne porte pas, l'ordre de la pile

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes des sorties (§ 11.7, § 18.6, § 19.4) : ce que porte une page
 // imprimée ou la feuille de contrôle des badges, et que l'écran reprend.

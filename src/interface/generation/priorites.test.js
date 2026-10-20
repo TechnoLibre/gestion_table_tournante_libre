@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du modèle de l'éditeur de l'ordre des priorités (§ 5.3, § 5.7,
 // A11, A12, D8, D23) : l'ordre du registre et l'ordre par défaut, lus par

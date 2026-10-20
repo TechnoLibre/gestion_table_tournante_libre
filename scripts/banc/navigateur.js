@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les outils de page du banc (§ 19.10), pour les épreuves *.banc.js que
 // joue vitest.banc.config.js, sous Chromium sans cadence d'images : le

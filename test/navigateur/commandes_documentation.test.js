@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves sous node des commandes des captures qui touchent au PDF de la
 // planche (§ 19.5, § 19.6) : tramerPdf lit chaque page demandée — texte,

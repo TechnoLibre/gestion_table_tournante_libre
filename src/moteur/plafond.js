@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Plafonds de rencontres (§ 5.5). Le plafond d'une personne p sur un
 // itinéraire — la table qu'elle occupe à chaque tour — vaut

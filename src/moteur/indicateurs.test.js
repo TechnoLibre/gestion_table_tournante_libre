@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des indicateurs (§ 5.4, § 12.6, § 14.10). Chaque valeur attendue
 // est écrite en clair : recopiée de la spécification, ou comptée à la main

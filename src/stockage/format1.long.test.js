@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Un événement écrit par le code du format 1 (§ 8.8, A15) : l'état, son
 // .precedent et le journal de test/fixtures/stockage/format1/, tels que les a

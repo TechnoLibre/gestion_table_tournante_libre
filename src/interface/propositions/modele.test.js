@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du modèle du tableau des propositions (§ 5.4, § 5.5, § 5.7, § 9,
 // § 12.1, § 12.6, § 12.9) : chaque cellule porte la valeur de la table

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Empreintes de référence du moteur (§ 5.7, § 14.10, § 15.5) : ce qui se
 // calcule, et le fichier versionné qui en garde la valeur,

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'imposition de la planche (§ 11.2, § 11.3, § 11.6), éprouvée à égalité
 // sur les deux papiers : les cellules au millimètre, la bande perdue de

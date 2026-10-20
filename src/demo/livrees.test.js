@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des démonstrations livrées et des CSV d'exemple, série surveillée
 // (§ 8.9, § 10.3, § 14.4, § 14.8, § 15) : un fichier par entrée du

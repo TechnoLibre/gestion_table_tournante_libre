@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La commande d'impression des épreuves du navigateur, côté node (§ 11.7,
 // § 14.4) : vitest.config.js la déclare dans browser.commands, et la page

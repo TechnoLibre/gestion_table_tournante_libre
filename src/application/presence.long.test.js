@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuve de propriété de la dérivée sous la présence par tour (§ 5.7,
 // § 5.8) : sur une petite charge, sièges attribués ou non, une proposition

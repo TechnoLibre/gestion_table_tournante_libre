@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le gel en profondeur, et le registre de ce qu'il a gelé. Un objet inscrit
 // au registre est gelé, et tout ce qu'il atteint l'est aussi : figer

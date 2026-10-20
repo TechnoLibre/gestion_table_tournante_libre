@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les modèles de la liste d'accueil et de la feuille par table (§ 11.7),
 // sans DOM : ce que chaque ligne imprime, lu dans l'état des places de

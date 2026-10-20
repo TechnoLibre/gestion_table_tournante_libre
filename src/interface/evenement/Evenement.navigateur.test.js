@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'événement ouvert dans un vrai moteur de rendu (§ 2.1, § 8.3 à § 8.9,
 // § 9, § 14.5) : aucune section n'en exige une autre ; la place fixe de

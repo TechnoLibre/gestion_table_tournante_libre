@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du système de fichiers de la coquille (§ 8.6, § 8.8, § 13.1),
 // sous node et sans disque réel. electron/fichiers.js y reçoit un disque en

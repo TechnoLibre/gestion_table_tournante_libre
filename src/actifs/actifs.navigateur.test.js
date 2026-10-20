@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les actifs chargés à la demande, dans un vrai moteur de rendu : le logo de
 // TechnoLibre et les deux textes de licence. Les octets et les textes que

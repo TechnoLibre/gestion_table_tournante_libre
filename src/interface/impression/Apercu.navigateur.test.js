@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'aperçu avant impression dans un vrai moteur de rendu (§ 11.7, § 8.4,
 // § 8.5, § 14.5, § 18.6) : l'écran data-ecran="apercu", que la commande

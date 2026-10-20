@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de l'aperçu d'un import ou d'un collage (§ 10.1, § 10.2, § 14.10) :
 // les lignes valides et leurs champs, les lignes refusées et leur motif, les

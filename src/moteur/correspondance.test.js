@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la correspondance d'une personne à un objectif (§ 4.5, D18) :
 // la règle « au moins une » (OU), la règle « toutes » (ET), la personne sans

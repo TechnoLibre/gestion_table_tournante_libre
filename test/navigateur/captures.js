@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les captures d'écran du parcours, côté page (§ 19.2 à § 19.5, § 19.7,
 // § 19.11, § 14.5). photographier(m, fichier) contrôle l'écran du montage

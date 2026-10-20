@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes des commandes des places — réservations, titres, pose (§ 5.8,
 // § 5.9, § 8.2, § 14.6) : leurs refus, leurs signaux, leurs libellés figés,

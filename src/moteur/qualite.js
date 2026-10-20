@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le détail d'un placement pour la page de qualité (§ 12, D27) : le profil
 // trié des rencontres et sa répartition, les bornes des tuiles, les barres

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le nombre de sièges lisibles (§ 6.2, § 14.1, § 19.10), relevé par le
 // banc : le plus grand nombre de places d'une table seule dont la liste de

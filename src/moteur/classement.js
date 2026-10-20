@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Classement des propositions (§ 5.7, A11) : un ordre explicite, celui que
 // l'interface écrit, et non le n-uplet que descend la recherche. Il applique

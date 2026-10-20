@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des commandes des places (§ 4, § 4.1, § 5.8, § 5.9, § 7.1, § 8.2,
 // § 8.9, § 9, § 14.12) : réservations, titres, désignation, conversion,

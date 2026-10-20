@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la table d'évaluation (§ 5.4, § 5.5, § 5.7, § 8.9, § 12.6,
 // § 13.2, § 15.1, § 15.3, § 15.4, § 17) : la mesure qui fait foi, le

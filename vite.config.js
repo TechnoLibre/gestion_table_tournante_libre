@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Construit la page que servent la plateforme web de Capacitor et la coquille
 // Electron. La base relative fait commencer chaque chemin d'actif par « ./ » :

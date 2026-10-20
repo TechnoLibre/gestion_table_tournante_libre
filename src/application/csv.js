@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le CSV tel que l'interface l'atteint (§ 13.4) : elle passe par
 // l'application, jamais par src/csv. Ce module réexporte les fonctions et

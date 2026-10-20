@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes de la planche de badges (§ 11.3 à § 11.8, contrainte 25) : les
 // refus qui la gardent avant de produire, ce qu'un badge imprime — ses lignes

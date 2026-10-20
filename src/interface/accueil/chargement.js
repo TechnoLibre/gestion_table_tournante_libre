@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le pas du chargement des résumés de la liste (§ 8.1) : ce qu'attend
 // facade.resumer avant chaque événement, pour rendre la main au navigateur.

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des entrées réelles (§ 7.3) et du cadre d'affichage (§ 19.4).
 // Les entrées passent par CDP : Chromium les traite comme celles d'un

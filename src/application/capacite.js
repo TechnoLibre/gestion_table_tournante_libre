@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le contrôle de capacité (§ 6.2, § 7.1) : ce qu'une capacité de table
 // refuse et ce dont elle avertit, et le seul — les commandes du mobilier et

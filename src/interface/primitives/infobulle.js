@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La place d'une infobulle à côté du terme qu'elle explique, pure :
 // Infobulle.svelte la calcule à chaque ouverture, défilement et

@@ -1,5 +1,5 @@
 <!-- © 2026 TechnoLibre (http://www.technolibre.ca)
-     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
+     SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
   // L'avancement d'une génération en cours (§ 5.10) : les mouvements évalués

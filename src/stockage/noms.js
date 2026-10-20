@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les noms des fichiers d'un événement (§ 8.6, § 8.7) : leurs suffixes, la
 // base que le nom de l'événement donne dans un dossier de travail, le

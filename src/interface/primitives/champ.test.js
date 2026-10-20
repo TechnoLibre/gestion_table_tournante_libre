@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La machine d'un champ (§ 2, § 8.2) : la saisie se tient hors de la valeur
 // enregistrée jusqu'à la validation, que la sortie du champ déclenche ; Échap

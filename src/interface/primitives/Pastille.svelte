@@ -1,5 +1,5 @@
 <!-- © 2026 TechnoLibre (http://www.technolibre.ca)
-     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
+     SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
   // Une pastille (§ 12.7) : un fond teinté, un signe — une icône ou un

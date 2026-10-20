@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La planche dans la séance (§ 11.2, § 11.6, § 11.8, § 8.4, § 8.6, § 9) :
 // préparer annonce, produire dépose le PDF à côté des fichiers d'événement

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle des étiquettes de la fiche (§ 4.5, § 10.2, § 5.9) : les
 // pastilles, la commande que portent l'ajout et le retrait, la saisie qui

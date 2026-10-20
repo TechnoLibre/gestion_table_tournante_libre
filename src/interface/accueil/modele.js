@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de l'accueil, pur (§ 8.1, § 8.6, § 8.8) : ce que les composants
 // de la liste des événements affichent, sans arithmétique ni texte. Une

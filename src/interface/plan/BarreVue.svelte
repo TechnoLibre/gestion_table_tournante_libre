@@ -1,5 +1,5 @@
 <!-- © 2026 TechnoLibre (http://www.technolibre.ca)
-     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
+     SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
   // La barre de vue du plan (§ 7.2, § 7.5, § 7.7, § 8.4) : le sélecteur de

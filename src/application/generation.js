@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La génération (§ 5.7, § 5.8, § 5.10) : les exécuteurs qui font tourner la
 // recherche du moteur, et le contrôleur qui la lance depuis la séance.

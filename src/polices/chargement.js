@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le chargement de la police embarquée, Noto Sans Regular et Bold, dont la
 // production de la planche (src/pdf) embarque les octets (§ 11.1). Chaque

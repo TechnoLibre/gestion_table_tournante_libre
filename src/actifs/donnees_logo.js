@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les deux fichiers du logo de TechnoLibre, incrustés dans le morceau différé
 // que chargerLogo (logo.js) importe à la demande : le SVG en texte, le PNG en

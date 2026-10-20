@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du détail d'un placement (§ 12, D27 à D37, D51, D52) : le
 // pourcentage et ses bords, le profil trié et ses marques, la répartition,

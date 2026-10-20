@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La version datée (§ 18). version.json en est l'unique source ; ce script en
 // dérive tout le reste et contrôle que rien n'en diverge.
@@ -164,7 +164,7 @@ const CONSEIL_ENGENDRER = 'lancer « node scripts/version.js engendrer »';
 
 const EN_TETE_LICENCE = [
   '// © 2026 TechnoLibre (http://www.technolibre.ca)',
-  '// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)',
+  '// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1',
 ];
 
 /**

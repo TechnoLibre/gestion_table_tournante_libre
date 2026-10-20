@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le panneau « À propos » dans un vrai moteur de rendu (§ 18.6) : monté
 // seul, sur un presse-papiers d'épreuve qui relève ce qu'on lui remet ou

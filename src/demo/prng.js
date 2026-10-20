@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le générateur pseudo-aléatoire unique du projet (§ 15.5, point 1) : PCG32,
 // variante XSH RR 64/32 de pcg_basic.c. L'état et l'incrément sont des entiers

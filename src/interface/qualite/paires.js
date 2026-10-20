@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de la vue des paires répétées (§ 12.5, B14, D32, D33, D50) et de
 // la rubrique « Rencontres » de la fiche, pur : VuePaires.svelte et

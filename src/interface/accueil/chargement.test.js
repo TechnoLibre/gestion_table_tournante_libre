@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le pas du chargement des résumés de la liste (§ 8.1, § 19.4) : le premier
 // attend une image, puis la minuterie de l'horloge ; les suivants, la seule

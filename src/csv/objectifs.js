@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le CSV des objectifs de table (§ 10.4) : un second fichier, que
 // l'opérateur choisit d'importer comme tel, jamais une section du fichier

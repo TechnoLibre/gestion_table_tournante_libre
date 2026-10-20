@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La police embarquée (§ 11.1, § 14.15, § 19.4) : les deux fichiers de
 // src/polices sont ceux que PROVENANCE déclare, octet pour octet ; chacun

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La désignation d'un siège (§ 7.3, § 14.10) : ce que contient un point de
 // dessin, lu sur les géométries de tables.js, celles mêmes que le dessin pose.

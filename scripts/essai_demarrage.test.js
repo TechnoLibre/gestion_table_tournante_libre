@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La police que l'essai relève dans la page chargée sous file:// (§ 19.4) :
 // les deux faces de Noto Sans chargées, le corps du document en Noto Sans,

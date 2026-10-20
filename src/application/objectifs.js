@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les étiquettes et les objectifs des tables, côté application (§ 4.5,
 // § 5.9) : les avis d'un objectif qui ne servira personne ou qui vise une

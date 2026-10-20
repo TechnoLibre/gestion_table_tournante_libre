@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Erreurs que lève le moteur. Le code d'une ErreurConfiguration nomme la
 // règle enfreinte ; ses détails désignent participants et tables par

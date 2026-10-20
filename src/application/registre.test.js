@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le registre des commandes, éprouvé en entier (§ 2.1, § 8.2, § 8.3, § 8.4,
 // § 9, § 5.8, § 17 point 3, § 14.12, § 14.15) : chaque commande de COMMANDES

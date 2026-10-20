@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La pagination des listes imprimées (§ 11.7) : la liste d'accueil et la
 // feuille par table ne tronquent jamais, elles replient (§ 7.4) ; la hauteur

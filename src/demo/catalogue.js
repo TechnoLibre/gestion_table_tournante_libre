@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les quatre démonstrations livrées (§ 15) et le générateur des démonstrations
 // tirées. Une démonstration est une configuration (types.js) tirée d'une

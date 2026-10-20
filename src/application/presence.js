@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La présence par tour d'une personne, côté commandes (§ 4, § 5.8, § 8.2,
 // § 9) : la commande changerPresence, son registre COMMANDES_PRESENCE, que

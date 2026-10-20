@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le journal d'un événement (§ 8.2, § 8.3, § 8.6, § 8.8) : le fichier
 // <base>.gtt-journal.jsonl, un objet JSON par ligne, fin de ligne LF, dont

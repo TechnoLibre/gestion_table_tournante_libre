@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'imprimante de la coquille electron, côté page (§ 11.7, § 13.4) : la
 // frontière de plateforme « impression » sous la coquille, qui passe par la

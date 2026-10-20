@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # © 2026 TechnoLibre (http://www.technolibre.ca)
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 # Fonctions communes d'install.sh, d'install_dev.sh, de run.sh et
 # d'avec_node.sh : reconnaître le système, poser le Node du projet, installer

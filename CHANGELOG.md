@@ -366,6 +366,10 @@
   une demande d'attribution ; et le sommaire des fonctionnalités, chacune sous
   un numéro qui ne change pas, `PLA-08` par exemple, que la spécification porte
   aussi.
+- Le logiciel se redistribue au choix sous l'AGPL-3.0-or-later ou sous la
+  LiLiQ-R+ : ses sources portent l'identifiant SPDX
+  `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1` et les deux textes complets, dans
+  `LICENSES/`.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

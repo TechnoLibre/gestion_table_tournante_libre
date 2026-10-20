@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la mise en forme (§ 5.4, § 5.10, § 11.7, § 18.4) : les valeurs
 // du contrat, exactement ; « — » pour une valeur absente, jamais « 0 » ; un

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les avertissements qu'un geste fait naître (§ 5.9, § 9, § 14.12), calculés
 // de la charge d'avant à celle d'après, et les violations du retenu que la

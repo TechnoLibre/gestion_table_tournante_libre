@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des correctifs du journal (§ 8.6, § 8.9) : l'aller-retour
 // appliquer(a, difference(a, b)) sur des paires de charges tirées, la

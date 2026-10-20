@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes des codes de la séance (§ 8.3 à § 8.8, § 14.6), et les libellés
 // figés que la séance écrit au journal : jalons, reprise, retours. Un libellé

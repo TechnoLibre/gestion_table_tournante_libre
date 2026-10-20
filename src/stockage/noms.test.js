@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des noms de fichiers d'un événement (§ 8.6, § 8.7, § 14.10) : les
 // valeurs du contrat, la longueur du plus long chemin relatif qu'un événement

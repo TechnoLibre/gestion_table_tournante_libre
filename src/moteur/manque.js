@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le manque, et ce qui s'en lit (§ 5.5, § 12.10). Chaque personne porte quatre
 // quantités, rangées sur une ligne (§ 12.10.5) :

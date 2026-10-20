@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de l'aperçu avant impression (§ 11.7, § 8.5, § 18.6), sans DOM :
 // les options d'une vue, la feuille et son pied, la bande mesurée, les pages

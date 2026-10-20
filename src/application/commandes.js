@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les commandes nommées (§ 8.2) : toute modification d'un événement passe par
 // l'une d'elles. Une commande est une fonction pure (charge, arguments) →

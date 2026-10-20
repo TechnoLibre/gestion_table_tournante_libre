@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La vue du panneau d'historique (historique.js, § 8.3) : les lignes de la
 // plus récente à la plus ancienne, le filtre des instants nommés, les pages

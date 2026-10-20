@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La police embarquée vue des épreuves, sous node comme dans le navigateur :
 // ce module ne lit aucun fichier. Il porte la chaîne témoin du § 19.4 et sa

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # © 2026 TechnoLibre (http://www.technolibre.ca)
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 # Exécute une commande à la racine du projet, le Node du projet en tête du
 # PATH, une fois l'installation vérifiée : c'est par lui que le Makefile

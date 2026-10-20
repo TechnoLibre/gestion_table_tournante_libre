@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du geste « Comparer » d'une ligne du tableau des propositions
 // (§ 12, C14, D56, D58, D85) : il se juge sur la source de la page de

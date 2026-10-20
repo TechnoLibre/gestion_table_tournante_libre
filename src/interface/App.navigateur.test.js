@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La coquille de l'application dans un vrai moteur de rendu : le titre de la
 // fenêtre et le bandeau (§ 8.4, § 18.6), « Liste des événements » (§ 8.1),

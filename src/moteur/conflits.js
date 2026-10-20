@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Conflits par table (§ 7.5) : les violations des règles actives, table par
 // table et tour par tour, que le plan lit sans rien recalculer. Elles se

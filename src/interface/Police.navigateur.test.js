@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La police de l'interface dans un vrai moteur de rendu (§ 14.1, § 14.15,
 // § 19.4) : jetons.css déclare Noto Sans en deux faces, 400 et 700, dont

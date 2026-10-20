@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de la planche de badges (§ 11.3 à § 11.8) : ce que chaque badge
 // imprime, dans l'ordre de la pile, et les lignes de la feuille de contrôle.

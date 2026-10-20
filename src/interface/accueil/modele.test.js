@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de l'accueil (§ 8.1, § 8.6, § 8.8) : les six informations d'une
 // ligne de la liste, mises en forme, et ses signalements ; les réponses

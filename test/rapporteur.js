@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Rapporteur des durées de Vitest, déclaré dans vitest.config.js à côté du
 // rapporteur par défaut (§ 14.14). À la fin de chaque exécution, en série

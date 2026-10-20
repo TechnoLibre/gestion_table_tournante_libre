@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La palette se valide par calcul (§ 12.7, § 14.5). Le module lit les jetons
 // de couleur dans le texte de jetons.css, simule les trois dichromaties,

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La vue des paires répétées dans un vrai moteur de rendu (§ 12.5, B14,
 // D32, D33, D50) : sur 12 / 4 × 3 / 6, le tableau des paires choisies puis,

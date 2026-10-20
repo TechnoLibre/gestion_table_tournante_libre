@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la lecture d'un texte CSV (§ 10.1, § 14.10) : la découpe en
 // enregistrements — guillemets, guillemets doublés, fins de ligne, ligne vide,

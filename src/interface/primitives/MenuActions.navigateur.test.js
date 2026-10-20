@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du menu d'actions dans un vrai moteur de rendu (§ 2.1, § 14.5,
 // § 14.6) : le motif du bouton de menu de WAI-ARIA — ses attributs, le menu

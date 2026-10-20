@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la machine d'un geste du plan (§ 7.1, § 7.2, § 7.3, § 8.4),
 // sans DOM : un appui sous le seuil sélectionne, au-delà il glisse ; le

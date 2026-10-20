@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la version datée (§ 18). Ce fichier cite des versions en clair
 // par nécessité : le balayage du point 6 du § 18.5 l'exclut, et lui seul.
@@ -236,7 +236,7 @@ const DATE = '2026-10-05';
 // Le module engendré pour VERSION, octet pour octet.
 const MODULE = [
   '// © 2026 TechnoLibre (http://www.technolibre.ca)',
-  '// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)',
+  '// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1',
   '',
   '// Engendré par scripts/version.js depuis version.json — ne pas modifier.',
   'export const VERSION = Object.freeze({',

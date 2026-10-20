@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des énoncés du diagnostic (§ 5.4, § 5.5, § 5.6, § 12.10.4,
 // § 15.1, § 15.3, § 15.4) : chaque énoncé porte les chiffres que rend

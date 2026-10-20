@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le texte du plan (§ 7.4) : la troncature d'un nom dans la largeur d'un bloc
 // de noms, et les ordonnées des lignes d'une liste, chaque ligne étant un

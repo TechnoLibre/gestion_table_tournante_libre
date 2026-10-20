@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'échelle de la taille du texte de l'écran (§ 8.5, § 18.6) : la seule
 // définition de ses paliers. Le stockage en tire le domaine de la clé

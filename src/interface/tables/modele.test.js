@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du modèle de la section des tables (§ 4, § 6.1, § 6.2, § 2.1
 // étape 5) : l'état d'une table, l'énoncé d'un changement de défaut, et ce

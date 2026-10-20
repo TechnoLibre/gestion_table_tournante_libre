@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La vue du panneau d'historique (§ 8.3), pure : Historique.svelte la
 // câble. Elle reçoit ce que rend seance.historique() — { position, lignes,

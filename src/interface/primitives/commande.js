@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La machine d'une commande, et les remèdes d'un refus (§ 2.1, § 8.5,
 // § 14.6), purs : Commande.svelte et Refus.svelte les câblent. Seul le

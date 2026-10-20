@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'exécution d'un mutant, pour l'audit par mutation (§ 14.13) : un processus
 // node --test par mutant, sous le repli du § 14.8, les crochets de

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La vue du plan dans un vrai moteur de rendu (§ 7.2, § 7.3, § 7.7, § 8.2,
 // § 8.4, § 8.5, § 13.3, § 14.10) : l'oracle du moteur de rendu,

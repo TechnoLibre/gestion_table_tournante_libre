@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des plafonds (§ 5.5) : la formule sur un itinéraire, le plafond
 // réalisé sur l'occupation, le plafond a priori maximisé sur les itinéraires

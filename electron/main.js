@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Processus principal de la coquille Electron (§ 13.1) : une fenêtre qui
 // charge la page construite par Vite dans www/, et le système de fichiers de

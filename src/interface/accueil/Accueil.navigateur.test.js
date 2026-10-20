@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La liste des événements et le dossier de travail dans un vrai moteur de
 // rendu (§ 8.1, § 8.4, § 8.5, § 8.6, § 8.7, § 8.8, § 15, § 18.6, § 19.4) :

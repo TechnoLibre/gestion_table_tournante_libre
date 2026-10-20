@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les colonnes côte à côte de la vue de comparaison dans un vrai moteur de
 // rendu (§ 12.10.6, § 12.8, D67, D84, C20, C29) : une colonne par

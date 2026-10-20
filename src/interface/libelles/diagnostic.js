@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés du diagnostic d'une configuration (§ 5.6, § 14.6). Chaque clé
 // commence par « diagnostic. ». Un énoncé (phrases.js) a son texte sous sa

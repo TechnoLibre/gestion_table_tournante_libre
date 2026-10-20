@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de dessin du plan (§ 7.3 à § 7.7), sans DOM : ce que PlanDessin
 // peint, tiré de l'état des places d'un tour (EtatPlaces, A5) et de la

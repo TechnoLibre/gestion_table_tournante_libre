@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Erreurs que lève la lecture d'un CSV. Le code d'une ErreurCsv nomme le
 // refus ; ses détails portent ce que l'appelant lit pour agir, comme le

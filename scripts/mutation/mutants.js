@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Énumération des mutants d'un module, pour l'audit par mutation du moteur
 // (§ 14.13). Le source se lit par parseAst de Vite, dont les décalages start

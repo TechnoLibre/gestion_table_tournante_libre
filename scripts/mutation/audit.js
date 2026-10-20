@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'audit par mutation du moteur (§ 14.13), sa propre commande : make
 // mutation, npm run mutation, node scripts/mutation/audit.js. Hors des séries

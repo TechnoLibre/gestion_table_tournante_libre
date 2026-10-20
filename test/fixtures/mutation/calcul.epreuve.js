@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'épreuve inventée de calcul.js, que test/mutation.long.test.js joue sous
 // le repli node --test (§ 14.8). Son nom ne finit pas par .test.js : aucune

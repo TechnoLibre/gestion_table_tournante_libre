@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La mise en forme des nombres, des durées, des dates et des horodatages
 // (§ 5.4, § 5.10, § 11.7, § 18.4). Aucune fonction ne lit la locale du

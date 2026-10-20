@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # © 2026 TechnoLibre (http://www.technolibre.ca)
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 # Construit l'exécutable Windows portable (§ 16) dans dist-electron/, par
 # electron-builder exécuté sous podman, puis imprime son chemin, sa taille et

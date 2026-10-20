@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le diagnostic de la configuration d'une charge (§ 5.6), pour l'interface,
 // qui n'importe pas le moteur (§ 13.4). Le calcul est celui de diagnostiquer,

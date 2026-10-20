@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'horloge de l'application (§ 19.4, § 14.7) : la seule lecture de
 // l'horloge du moteur d'exécution, et les seules minuteries. Hors du moteur,

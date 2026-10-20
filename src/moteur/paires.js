@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les paires répétées, la ligne d'une personne et la matrice « qui a
 // rencontré qui » (§ 5.4, § 12.5), pour le seul placement que la page de

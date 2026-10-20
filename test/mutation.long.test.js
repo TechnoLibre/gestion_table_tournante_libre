@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'exécution d'un mutant (§ 14.13), sur le module inventé de
 // test/fixtures/mutation/ et son épreuve, jouée sous le repli node --test

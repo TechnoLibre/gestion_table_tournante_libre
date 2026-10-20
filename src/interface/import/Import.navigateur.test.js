@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'import des participants et des objectifs de table dans un vrai moteur de
 // rendu (§ 10.1, § 10.2, § 10.3, § 10.4, § 2.1 étape 2, § 9) : la nature

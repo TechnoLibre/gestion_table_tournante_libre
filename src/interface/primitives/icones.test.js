@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le module des icônes des primitives : chaque icône est une liste de tracés
 // SVG au trait, dans un carré de 24 unités, sans couleur ni texte ; une icône

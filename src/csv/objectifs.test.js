@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du CSV des objectifs de table (§ 10.4, A19, A20, A21) : la table
 // des en-têtes et son association, l'aperçu et ses refus globaux, les refus

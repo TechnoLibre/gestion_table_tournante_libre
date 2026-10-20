@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La section de la qualité dans un vrai moteur de rendu (§ 12, B9, D24,
 // D25, § 8.4) : la page vit en lecture, en écriture et sur un plan bloqué,

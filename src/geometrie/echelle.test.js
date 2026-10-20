@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de l'échelle graphique (§ 7.7) : la plus grande longueur ronde, 1,
 // 2 ou 5 × 10ⁿ cm, dont la barre tient dans la largeur donnée à l'échelle k.

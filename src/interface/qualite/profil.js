@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle du profil trié des rencontres de la page de qualité (§ 12.3,
 // B12, B15, D28, D30, D34, D41, D51), pur : VueProfil.svelte le câble.

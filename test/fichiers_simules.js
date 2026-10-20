@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Système de fichiers d'épreuve (§ 13.4) : la troisième implémentation de
 // l'interface de src/stockage/systeme_fichiers.js, en mémoire, injectée par

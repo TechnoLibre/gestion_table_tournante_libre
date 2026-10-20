@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les modules purs de la liste des participants (§ 4, § 7.4, § 10.2) : les
 // lignes de la grille, triées et filtrées, la navigation au clavier,

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du registre des critères (§ 5.3, § 5.7, D8 à D11, D15, D20, D23) :
 // les constantes du registre, la validation d'une liste de priorités faute

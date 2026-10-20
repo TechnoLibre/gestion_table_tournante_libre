@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La mise en page d'un badge (§ 11.4, § 11.5) : où tombe chaque ligne de
 // texte dans le cadre utile, à quel corps, en quelle graisse. Module pur :

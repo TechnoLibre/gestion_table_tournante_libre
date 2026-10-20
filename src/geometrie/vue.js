@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La vue du plan (§ 7.2) : trois nombres, k en px/cm, tx et ty en px CSS, que
 // le dessin écrit dans un seul attribut, transform="translate(tx,ty) scale(k)",

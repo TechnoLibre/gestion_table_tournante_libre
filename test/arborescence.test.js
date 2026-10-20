@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Gardes de l'arborescence, lues dans le texte des sources : le moteur, la
 // géométrie du plan, le générateur de démonstrations, le stockage,

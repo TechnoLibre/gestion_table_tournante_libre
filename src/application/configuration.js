@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le pont de la charge vers le moteur (§ 4.5, § 5.2, D6) : la configuration
 // que lit le stockage, plus qui anime à chaque tour. Le stockage n'importe

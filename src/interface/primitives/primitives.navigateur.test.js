@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des primitives dans un vrai moteur de rendu (§ 2.1, § 5.9, § 8.2,
 // § 8.4, § 8.5) : le champ, le refus, la fenêtre à confirmer et la commande,

@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // L'en-tête chiffré et le profil trié de la page de qualité dans un vrai
 // moteur de rendu (§ 12.2, § 12.3, B11, B12, B15, D29, D30, D34, D41, D48,

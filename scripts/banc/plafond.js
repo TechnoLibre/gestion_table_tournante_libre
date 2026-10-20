@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le relevé du coût du plafond a priori (§ 17, point 4, § 19.10), sous node :
 // pour chaque configuration, la médiane de la durée de plafondsAPriori sur

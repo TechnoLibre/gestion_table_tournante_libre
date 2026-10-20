@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du journal (§ 8.2, § 8.3, § 8.6, § 8.8) : le texte exact de chaque
 // sorte de ligne et ce que l'écriture refuse ; la cadence des instantanés ;

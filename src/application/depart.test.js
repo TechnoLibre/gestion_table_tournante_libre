@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du départ d'une génération dérivée (§ 5.7, § 8.9, § 14.10) : la
 // filiation lue dans la charge, les refus du lancement dans leur ordre, le

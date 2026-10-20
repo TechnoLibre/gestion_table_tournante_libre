@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des aides de rendu (§ 14.2, § 14.5) dans un vrai moteur de rendu.
 // Chaque épreuve monte un petit fragment HTML ou SVG aux couleurs inventées,

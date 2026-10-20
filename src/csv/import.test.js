@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de l'import appliqué (§ 10.1, § 14.10) : ajouter, mettre à jour,
 // remplacer, et ce que remplacer annonce avant d'agir ; l'import selon l'état

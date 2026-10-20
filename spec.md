@@ -7941,7 +7941,9 @@ le lit pas. Sous l'éditeur, le lien vers son site, `https://technolibre.ca` ;
 sous l'auteur, le lien vers le code source du projet. Suivent trois cartes :
 
 - la **licence** : le choix entre l'AGPL-3.0-or-later et la LiLiQ-R+,
-  l'identifiant SPDX `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1`, ce que demande la
+  l'identifiant SPDX `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1` — celui que
+  déclarent `package.json` et l'en-tête de chaque fichier source, et dont le
+  dossier `LICENSES/` des sources porte les deux textes —, ce que demande la
   licence choisie, les liens vers les deux textes officiels, et les deux textes
   complets, livrés avec le logiciel et lisibles sur place, sans réseau, un à la
   fois ;

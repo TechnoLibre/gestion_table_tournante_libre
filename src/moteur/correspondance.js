@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La correspondance d'une personne à un objectif de table (§ 4.5, D18) : la
 // seule fonction qui la décide. Le moteur, les avis de l'application et

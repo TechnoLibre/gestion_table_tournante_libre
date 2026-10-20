@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Clés de comparaison des textes saisis (§ 10.1). Deux textes qu'un lecteur
 // tient pour le même — casse, accents, blancs mis à part — ont la même clé.

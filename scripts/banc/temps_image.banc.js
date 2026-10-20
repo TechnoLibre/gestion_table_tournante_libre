@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le temps par image pendant un déplacement de vue (§ 19.10, § 17 point 6),
 // relevé par le banc sur la grande démonstration et ses 33 tables avec

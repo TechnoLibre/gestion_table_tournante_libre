@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le Chromium des épreuves du navigateur : celui de Playwright par défaut,
 // celui que GTT_CHROMIUM désigne sinon ; sous des paramètres régionaux qui ne

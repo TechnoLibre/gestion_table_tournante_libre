@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les mesures du texte du plan, au navigateur (§ 7.4, § 14.1) : la hauteur
 // d'une ligne de liste et la largeur d'une chaîne, relevées sur la police

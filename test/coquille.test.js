@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La coquille Electron (§ 13.1) : la fenêtre qu'ouvre le processus principal,
 // la page qu'elle charge, le profil de Chromium hors d'AppData (§ 8.6), le

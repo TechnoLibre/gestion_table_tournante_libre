@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du contrôle de capacité (§ 6.2, § 7.1, § 14.1) : la lecture d'un
 // entier saisi, puis les refus d'une capacité — moins de deux places, sous

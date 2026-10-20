@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de la carte « Absentes » du plan (§ 7.1), sans DOM : les
 // personnes que l'état des places du tour dit absentes (EtatPlaces.absents :

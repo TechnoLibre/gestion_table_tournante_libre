@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le panneau « Paramètres » dans un vrai moteur de rendu (§ 18.6, § 8.5,
 // § 19.2) : d'abord monté seul, sur un état de navigation neuf et une séance

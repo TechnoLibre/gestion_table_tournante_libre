@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le geste qu'une primitive tient ouvert sur la séance (§ 8.4), sur une
 // séance factice qui compte ses gestes comme celle d'A1 : debuterGeste et

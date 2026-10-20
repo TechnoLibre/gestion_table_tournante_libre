@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La pagination des listes imprimées (§ 11.7), sans DOM : des hauteurs
 // mesurées, la hauteur utile d'une page et celle de l'en-tête que chaque

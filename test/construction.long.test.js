@@ -1,5 +1,5 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
-// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le paquet livré n'emporte rien de l'outillage d'épreuve (§ 14.9, § 14.15) :
 // ni fichier de test, ni le lanceur, ni donnée d'épreuve, ni paquet d'un outil
