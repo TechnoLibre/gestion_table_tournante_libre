@@ -440,11 +440,25 @@ describe('jetons.css', () => {
     assert.ok(tailles.size >= 3, `${tailles.size} tailles distinctes`);
   });
 
-  test('le document imprimé prend les jetons du clair dans les deux thèmes (§ 11.7) : le bloc du clair porte [data-impression], aucun autre', () => {
-    const avecPapier = blocs().filter((b) => b.selecteurs.includes('[data-impression]'));
+  test('le document imprimé prend les jetons du clair dans les deux thèmes (§ 11.7) : seul le bloc du clair déclare des couleurs sous [data-impression]', () => {
+    const avecPapier = blocs().filter(
+      (b) => b.selecteurs.includes('[data-impression]') && [...b.declarations.keys()].some((nom) => nom.startsWith('--couleur-')),
+    );
     assert.equal(avecPapier.length, 1);
     assert.ok(avecPapier[0].selecteurs.includes(":root[data-theme='clair']"));
-    assert.ok([...avecPapier[0].declarations.keys()].some((nom) => nom.startsWith('--couleur-')));
+  });
+
+  test('le papier ne suit pas la taille du texte de l’écran (§ 11.7, § 18.6) : le document imprimé et la feuille gabarit redéclarent chaque jeton en rem en px, à sa valeur pour une racine de 16 px, et partent d’un corps de 16 px', () => {
+    const racine = blocs().filter((b) => b.selecteurs.length === 1 && b.selecteurs[0] === ':root');
+    const enRem = racine.flatMap((b) => [...b.declarations].filter(([, valeur]) => /^-?[\d.]+rem$/.test(valeur)));
+    assert.ok(enRem.length >= 20, `${enRem.length} jetons en rem`);
+    const papier = blocs().filter((b) => b.selecteurs.includes('[data-impression]') && b.selecteurs.includes('[data-gabarit]'));
+    assert.equal(papier.length, 1);
+    assert.deepEqual(papier[0].selecteurs, ['[data-impression]', '[data-gabarit]']);
+    const epingles = papier[0].declarations;
+    assert.equal(epingles.get('font-size'), '16px');
+    for (const [nom, valeur] of enRem) assert.equal(epingles.get(nom), `${Number.parseFloat(valeur) * 16}px`, nom);
+    assert.deepEqual([...epingles.keys()].filter((nom) => nom !== 'font-size').sort(), enRem.map(([nom]) => nom).sort());
   });
 
   test('deux thèmes posés par data-theme, de mêmes jetons de couleur ; sans attribut, le clair ; aucune préférence du système lue', () => {

@@ -9,10 +9,13 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
 import { VUES_QUALITE_DEMANDABLES, creerEtatUi } from './etat_ui.js';
 import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
+import { THEMES } from './theme.js';
 
 const DEPART = {
   section: SECTION_OUVERTURE,
   apropos: false,
+  parametres: false,
+  theme: 'clair',
   tour: 1,
   miseEnEvidence: null,
   proposition: null,
@@ -69,7 +72,7 @@ describe('état de navigation : départ et magasin', () => {
       .split('\n')
       .filter((ligne) => ligne.startsWith('import '))
       .map((ligne) => ligne.slice(ligne.lastIndexOf(' ') + 1));
-    assert.deepEqual(imports, ["'./evenement/sections.js';"]);
+    assert.deepEqual(imports, ["'./evenement/sections.js';", "'./theme.js';"]);
   });
 });
 
@@ -115,6 +118,43 @@ describe('état de navigation : chaque transition', () => {
     assert.deepEqual(ui.etat(), { ...DEPART, apropos: true });
     ui.fermerApropos();
     assert.deepEqual(ui.etat(), DEPART);
+  });
+
+  test('ouvrirParametres et fermerParametres ; un seul des deux panneaux est ouvert à la fois : ouvrir l’un ferme l’autre', () => {
+    const ui = creerEtatUi();
+    ui.ouvrirParametres();
+    assert.deepEqual(ui.etat(), { ...DEPART, parametres: true });
+    ui.ouvrirApropos();
+    assert.deepEqual(ui.etat(), { ...DEPART, apropos: true });
+    ui.ouvrirParametres();
+    assert.deepEqual(ui.etat(), { ...DEPART, parametres: true });
+    ui.fermerParametres();
+    assert.deepEqual(ui.etat(), DEPART);
+  });
+
+  test('reinitialiser garde le panneau « Paramètres » et le thème : ils ne tiennent pas à l’événement', () => {
+    const ui = creerEtatUi();
+    ui.allerA('plan');
+    ui.choisirTheme('sombre');
+    ui.ouvrirParametres();
+    ui.reinitialiser();
+    assert.deepEqual(ui.etat(), { ...DEPART, parametres: true, theme: 'sombre' });
+  });
+
+  test('choisirTheme pose l’un des thèmes, pour la séance ; hors de THEMES, RangeError sans rien changer ; le même thème ne publie rien', () => {
+    const { ui, recus } = suivi();
+    for (const theme of THEMES) {
+      ui.choisirTheme(theme);
+      assert.equal(ui.etat().theme, theme);
+    }
+    const avant = ui.etat();
+    const publies = recus.length;
+    ui.choisirTheme(avant.theme);
+    assert.equal(recus.length, publies);
+    for (const faute of ['gris', 'Clair', '', null, undefined, 0]) {
+      assert.throws(() => ui.choisirTheme(faute), RangeError, String(faute));
+    }
+    assert.equal(ui.etat(), avant);
   });
 
   test('montrerTour prend un entier positif ; sinon RangeError', () => {

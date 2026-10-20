@@ -417,8 +417,9 @@ const PICTOGRAMME = /\p{Extended_Pictographic}/u;
 // D34, D52) : la valeur « N % », les graduations de l'axe en pourcentages et
 // le libellé de sa règle, sous les seules clés qualite.pourcentage.*. La
 // consigne d'impression de la planche, « à 100 % », est une échelle, non un
-// mélange, et s'admet sous sa seule clé. Partout ailleurs, au tableau des
-// propositions compris, le signe se relève.
+// mélange, et s'admet sous sa seule clé ; de même un palier de la taille du
+// texte de l'écran, « 115 % », sous la clé de son libellé. Partout ailleurs,
+// au tableau des propositions compris, le signe se relève.
 const EXCEPTIONS_DE_CONTENU = [
   {
     mot: 'évitable',
@@ -444,6 +445,12 @@ const EXCEPTIONS_DE_CONTENU = [
     forme: /(?<![\p{L}\p{N}])a\s100\s%/gu,
     nom: 'planche.controle.consigne « à 100 % »',
   },
+  {
+    mot: 'pourcentage',
+    cles: /^coquille\.parametres\.taille\.palier$/,
+    forme: /%/g,
+    nom: 'coquille.parametres.taille.palier « N % »',
+  },
 ];
 
 // Les exceptions d'un seul mot, pour une épreuve qui n'éprouve que lui.
@@ -455,6 +462,7 @@ const exceptionsDu = (mot) => EXCEPTIONS_DE_CONTENU.filter((exception) => except
 const SERVENT_LE_POURCENTAGE = [
   ['qualite.pourcentage.valeur', '88 %'],
   ['planche.controle.consigne', 'Imprimer en recto seul, à 100 %'],
+  ['coquille.parametres.taille.palier', '115 %'],
 ];
 
 // Une chaîne de forme clé — un code, LECTURE_SEULE, ou un libellé,
@@ -1589,7 +1597,7 @@ describe('sources de l’interface : le contenu des tables de traduction (§ 5.5
     ]);
   });
 
-  test('rouge : le signe « % » ne s’écrit que sous qualite.pourcentage.*, et « à 100 % » sous la seule consigne de la planche ; tout autre « % » se relève, et une exception que rien ne sert est sans objet', () => {
+  test('rouge : le signe « % » ne s’écrit que sous qualite.pourcentage.*, « à 100 % » sous la seule consigne de la planche et un palier sous son seul libellé ; tout autre « % » se relève, et une exception que rien ne sert est sans objet', () => {
     const tables = new Map([
       ['qualite.tuile.x', '88 %'],
       ['qualite.pourcentage.valeur', '88 %'],
@@ -1598,8 +1606,11 @@ describe('sources de l’interface : le contenu des tables de traduction (§ 5.5
       ['planche.controle.consigne', 'Imprimer en recto seul, à 100 %'],
       ['planche.controle.autre', 'à 100 %'],
       ['propositions.phrase', ({ n }) => `${n} %`],
+      ['coquille.parametres.taille.palier', ({ taille }) => `${taille}\u{202F}%`],
+      ['coquille.parametres.taille.titre', 'Taille du texte, 115 %'],
     ]);
     assert.deepEqual(releverContenuTables([tables], () => null, exceptionsDu('pourcentage')), [
+      'coquille.parametres.taille.titre : pourcentage « Taille du texte, 115 % »',
       'planche.controle.autre : pourcentage « à 100 % »',
       'propositions.phrase : pourcentage « % »',
       'qualite.pourcentageX : pourcentage « 88 % »',
@@ -1609,6 +1620,7 @@ describe('sources de l’interface : le contenu des tables de traduction (§ 5.5
     const autre = new Map([
       ['planche.controle.consigne', 'à 100 %, puis 50 %'],
       ['qualite.pourcentage.valeur', '1 %'],
+      ['coquille.parametres.taille.palier', '90 %'],
     ]);
     assert.deepEqual(releverContenuTables([autre], () => null, exceptionsDu('pourcentage')), [
       'planche.controle.consigne : pourcentage « à 100 %, puis 50 % »',
@@ -1617,6 +1629,7 @@ describe('sources de l’interface : le contenu des tables de traduction (§ 5.5
     assert.deepEqual(releverContenuTables([sansPourcentage], () => null, exceptionsDu('pourcentage')), [
       'exception sans objet : qualite.pourcentage.* « % » (D34, D52)',
       'exception sans objet : planche.controle.consigne « à 100 % »',
+      'exception sans objet : coquille.parametres.taille.palier « N % »',
     ]);
   });
 });

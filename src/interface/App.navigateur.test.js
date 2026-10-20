@@ -3,7 +3,8 @@
 
 // La coquille de l'application dans un vrai moteur de rendu : le titre de la
 // fenêtre et le bandeau (§ 8.4, § 18.6), « Liste des événements » (§ 8.1),
-// le panneau « À propos », le réglage de thème (§ 19.2), le collecteur
+// le panneau « À propos », le thème du lancement et de la séance, que le
+// panneau « Paramètres » règle (§ 19.2), le collecteur
 // d'erreurs, l'injection des plateformes (§ 13.4), l'ordre du montage, la
 // liste relue et l'abandon des résumés d'une liste dépassée (§ 8.1), et la
 // fermeture sans question (§ 8.4, § 8.8). Chaque épreuve monte App par
@@ -586,6 +587,14 @@ describe('thème (§ 19.2)', () => {
   const preferer = (valeur) =>
     cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: valeur }] });
   const themePose = () => document.documentElement.getAttribute('data-theme');
+  // Le choix d'un thème dans le panneau « Paramètres », ouvert du bandeau.
+  const choixDuTheme = (m, choix) => {
+    if (dans(m, '[data-ecran="parametres"]') === null) {
+      dans(m, '[data-bandeau] [data-commande="parametres"]').click();
+      flushSync();
+    }
+    return dans(m, `[data-ecran="parametres"] [data-commande="theme"][data-theme-choix="${choix}"]`);
+  };
 
   test('(a) monté sans réglage, préférence sombre du système : thème sombre', async () => {
     await preferer('dark');
@@ -594,7 +603,7 @@ describe('thème (§ 19.2)', () => {
       const m = await monter({ theme: null });
       flushSync();
       expect(themePose()).toBe('sombre');
-      expect(dans(m, '[data-commande="theme"][data-theme-choix="sombre"]').getAttribute('aria-pressed')).toBe('true');
+      expect(choixDuTheme(m, 'sombre').getAttribute('aria-pressed')).toBe('true');
     } finally {
       await preferer('');
     }
@@ -605,7 +614,7 @@ describe('thème (§ 19.2)', () => {
     await preferer('dark');
     try {
       const premier = await monter({ theme: null });
-      dans(premier, '[data-commande="theme"][data-theme-choix="clair"]').click();
+      choixDuTheme(premier, 'clair').click();
       flushSync();
       expect(themePose()).toBe('clair');
       premier.demonter();
@@ -627,7 +636,7 @@ describe('thème (§ 19.2)', () => {
         return `${style.color} sur ${style.backgroundColor}`;
       });
     const clair = couleurs();
-    const boutonSombre = dans(m, '[data-commande="theme"][data-theme-choix="sombre"]');
+    const boutonSombre = choixDuTheme(m, 'sombre');
     expect(boutonSombre.getAttribute('aria-pressed')).toBe('false');
     boutonSombre.click();
     flushSync();
@@ -974,24 +983,18 @@ describe('le bandeau de la maquette (§ 8.4, § 18.6)', () => {
     }
   });
 
-  test('le thème en commutateur segmenté : un groupe nommé et bordé de deux boutons côte à côte ; le retenu plein de l’encre du bandeau et gras, l’autre sans fond', async () => {
-    const m = await monter();
-    const groupe = dans(m, `[role="group"][aria-label="${t('coquille.theme.titre')}"]`);
-    expect(groupe).not.toBeNull();
-    const [clair, sombre] = ['clair', 'sombre'].map((choix) => groupe.querySelector(`[data-commande="theme"][data-theme-choix="${choix}"]`));
-    expect(clair.getBoundingClientRect().top).toBe(sombre.getBoundingClientRect().top);
-    expect(clair.getBoundingClientRect().right).toBeLessThanOrEqual(sombre.getBoundingClientRect().left);
-    for (const theme of THEMES) {
-      await sousTheme(theme, () => {
-        expect(composantes(getComputedStyle(groupe).borderTopColor), theme).toEqual(jeton('--couleur-bandeau-filet'));
-        const [retenu, autre] = clair.getAttribute('aria-pressed') === 'true' ? [clair, sombre] : [sombre, clair];
-        expect(composantes(getComputedStyle(retenu).backgroundColor), theme).toEqual(jeton('--couleur-bandeau-texte'));
-        expect(composantes(getComputedStyle(retenu).color), theme).toEqual(jeton('--couleur-bandeau-fond'));
-        expect(getComputedStyle(retenu).fontWeight, theme).toBe('700');
-        expect(composantes(getComputedStyle(autre).backgroundColor), theme).toEqual([0, 0, 0, 0]);
-        expect(getComputedStyle(autre).fontWeight, theme).toBe('400');
-      });
+  test('les commandes du bandeau, dans l’ordre : « Liste des événements », « Paramètres », « À propos » ; aucun réglage de thème, qui vit dans « Paramètres »', async () => {
+    const m = await avecEvenementOuvert();
+    const commandes = [...bandeau(m).querySelectorAll('button')];
+    expect(commandes.map((bouton) => bouton.dataset.commande)).toEqual(['liste', 'parametres', 'apropos']);
+    expect(commandes.map((bouton) => bouton.textContent.trim())).toEqual([t('coquille.liste'), t('coquille.parametres.titre'), t('coquille.apropos.titre')]);
+    const boites = commandes.map((bouton) => bouton.getBoundingClientRect());
+    for (let rang = 1; rang < boites.length; rang += 1) {
+      expect(boites[rang].top).toBe(boites[0].top);
+      expect(boites[rang - 1].right).toBeLessThanOrEqual(boites[rang].left);
     }
+    expect(bandeau(m).querySelector('[data-commande="theme"]')).toBeNull();
+    expect(bandeau(m).querySelector(`[role="group"][aria-label="${t('coquille.theme.titre')}"]`)).toBeNull();
   });
 
   test('« Liste des événements » et « À propos » : une icône cachée devant le texte de « Liste des événements », le texte inchangé ; le libellé de mode en pilule, en gras', async () => {

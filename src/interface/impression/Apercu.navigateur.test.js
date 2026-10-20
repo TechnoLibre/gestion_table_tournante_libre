@@ -217,7 +217,7 @@ describe('le filigrane BROUILLON (§ 11.7, § 14.5)', () => {
     expect(MARQUES.some(({ nom }) => nom === 'filigrane')).toBe(true);
     const m = await ouvrirApercu(contexte, charge);
     for (const theme of ['clair', 'sombre']) {
-      await cliquer(m, `[data-bandeau] [data-commande="theme"][data-theme-choix="${theme}"]`);
+      m.ui.choisirTheme(theme);
       await attendre(`le thème ${theme}`, () => document.documentElement.getAttribute('data-theme') === theme, IMAGES);
       for (const feuille of feuilles(m)) {
         const { trait, papier } = lireFiligrane(feuille);
@@ -348,7 +348,7 @@ describe('le papier est clair dans les deux thèmes (§ 11.7, § 14.5)', () => {
       }
     };
     const clair = lireSous();
-    await cliquer(m, '[data-bandeau] [data-commande="theme"][data-theme-choix="sombre"]');
+    m.ui.choisirTheme('sombre');
     await attendre('le thème sombre', () => document.documentElement.getAttribute('data-theme') === 'sombre', IMAGES);
     const sombre = lireSous();
     expect(sombre).toEqual(clair);

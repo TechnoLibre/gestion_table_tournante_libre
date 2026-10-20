@@ -1,10 +1,12 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Le réglage de thème (§ 19.2). Chaque lancement repart de la préférence du
-// système ; le choix de l'opérateur vaut ensuite pour la séance, tenu en
-// mémoire par App, qui le pose en data-theme sur <html> (jetons.css). Rien ne
-// l'enregistre : ni fichier, ni stockage du navigateur.
+// Le réglage de thème (§ 19.2), que le panneau « Paramètres » porte. Chaque
+// lancement repart de la préférence du système ; le choix de l'opérateur vaut
+// ensuite pour la séance, tenu en mémoire par l'état de navigation
+// (etat_ui.js), qu'App pose en data-theme sur <html> (jetons.css). Rien ne
+// l'enregistre : ni fichier, ni stockage du navigateur. Le module n'importe
+// rien : l'état de navigation en tire son domaine.
 
 // Chaque thème et la clé de son nom, dans l'ordre du réglage.
 const CLES = new Map([

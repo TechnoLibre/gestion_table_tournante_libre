@@ -15,7 +15,7 @@
 //
 // Un parcours unique, en langue témoin, au cadre de 1 366 × 700, atteint
 // chaque écran de test/navigateur/ecrans.js et y fait ses relevés, une fois
-// dans le thème clair, puis dans le sombre que pose le réglage du bandeau ;
+// dans le thème clair, puis dans le sombre que pose l'état de navigation ;
 // chaque garde lit ensuite les relevés de tous les écrans et échoue en
 // listant chaque faute, écran et élément nommés, en un seul message. Un
 // relevé lit le rendu — style calculé, boîte, élément qu'atteint un point —,
@@ -1194,7 +1194,7 @@ beforeAll(async () => {
       releve.commandesDeLigne = releverCommandesDeLigne(racine);
       releve.filiations = [...racine.querySelectorAll('[data-section="propositions"] [data-filiation]')].filter(rendu).length;
       releve.clair = releverTheme(racine);
-      await cliquer(m, '[data-bandeau] [data-commande="theme"][data-theme-choix="sombre"]');
+      m.ui.choisirTheme('sombre');
       await attendre('le thème sombre', () => document.documentElement.getAttribute('data-theme') === 'sombre');
       releve.sombre = releverTheme(racine);
       releve.erreurs = contexte.erreurs();

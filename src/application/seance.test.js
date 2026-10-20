@@ -3892,6 +3892,173 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   });
 });
 
+describe('séance : la taille du texte de l’écran (§ 8.5, § 18.6)', () => {
+  const tailleLue = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).taille_texte;
+  // Le texte de l'état et du journal sur le disque, null pour un absent.
+  const evenementSurDisque = (fs) => [fs.contenu('documents', ETAT), fs.contenu('documents', JOURNAL)];
+  const RETENUE = { retenue: true, avertissements: [] };
+
+  test('100 au départ ; choisirTailleTexte écrit les seuls réglages, dans tout mode, et l’état la porte ; une séance neuve la relit au changement de racine, comme au lancement', async () => {
+    const cas = [
+      ['lecture', async () => ouvertSur()],
+      ['bloqué', async () => ouvertSur(chargeBloquee())],
+      ['sans événement', async () => monter()],
+    ];
+    assert.equal(cas.length, 3);
+    for (const [libelleCas, monterCas] of cas) {
+      const { fs, seance } = await monterCas();
+      assert.equal(seance.etat().tailleTexte, 100, libelleCas);
+      const textes = evenementSurDisque(fs);
+      const avant = fs.compteurs.ecritures;
+      assert.deepEqual(await seance.choisirTailleTexte(130), RETENUE, libelleCas);
+      assert.equal(fs.compteurs.ecritures, avant + 1, libelleCas);
+      assert.deepEqual([tailleLue(fs), seance.etat().tailleTexte], [130, 130], libelleCas);
+      assert.deepEqual(evenementSurDisque(fs), textes, libelleCas);
+      const neuve = monter({ fs, racine: null, prefixe: 'neuve' });
+      assert.equal(neuve.seance.etat().tailleTexte, 100, `${libelleCas} : sans racine`);
+      await neuve.seance.changerRacine(DOC);
+      assert.equal(neuve.seance.etat().tailleTexte, 130, libelleCas);
+      const surRacine = monter({ fs, prefixe: 'sur-racine' });
+      await surRacine.seance.attendre();
+      assert.equal(surRacine.seance.etat().tailleTexte, 130, libelleCas);
+    }
+  });
+
+  test('l’état porte la taille choisie dès le choix, avant que l’écriture finisse', async () => {
+    const { seance } = monter();
+    const recues = [];
+    seance.subscribe((etat) => recues.push(etat.tailleTexte));
+    const choix = seance.choisirTailleTexte(150);
+    assert.equal(seance.etat().tailleTexte, 150);
+    assert.equal(recues.at(-1), 150);
+    await choix;
+  });
+
+  test('l’écriture garde le papier, les cadrages et les clés inconnues des réglages', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    const texte = '{"cadrages":[{"evenement":"evt-a","k":1,"tx":0,"ty":0}],"format":2,"papier":"A4","zeta":true}\n';
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = monter({ fs });
+    await seance.attendre();
+    await seance.choisirTailleTexte(115);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte.replace('"papier":"A4"', '"papier":"A4","taille_texte":115'));
+  });
+
+  test('une taille hors des paliers est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of [0, 120, '115', null, undefined, Number.NaN]) {
+      await assert.rejects(seance.choisirTailleTexte(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().tailleTexte, 100);
+  });
+
+  test('des réglages illisibles : la taille vaut pour la séance, non retenue, l’avis rendu sans entrer dans l’état, le fichier intact octet pour octet', async () => {
+    for (const [raison, texte] of [
+      ['FORME', '{"format":1,"papier":null,"cadrages":[],"taille_texte":175}'],
+      ['JSON', '{"format":1,"papier":"A4","cadr'],
+    ]) {
+      const fs = creerFichiersSimules();
+      fs.deposerDossier('documents');
+      fs.deposer('documents', FICHIER_REGLAGES, texte);
+      const { seance } = await ouvertSur(chargeEssai(), { fs });
+      assert.equal(seance.etat().tailleTexte, 100, raison);
+      const avertissements = seance.etat().avertissements;
+      const avant = fs.compteurs.ecritures;
+      const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison } };
+      assert.deepEqual(await seance.choisirTailleTexte(115), { retenue: false, avertissements: [avis] }, raison);
+      assert.equal(seance.etat().tailleTexte, 115, raison);
+      assert.deepEqual(seance.etat().avertissements, avertissements, raison);
+      assert.deepEqual(fs.octets('documents', FICHIER_REGLAGES), new TextEncoder().encode(texte), raison);
+      assert.equal(fs.compteurs.ecritures, avant, raison);
+    }
+  });
+
+  test("un dossier qui refuse l'écriture des réglages : la taille vaut pour la séance, non retenue, et l'avis le dit", async () => {
+    const { fs, seance } = await ouvertSur();
+    fs.pannes.ecriture('documents');
+    const avis = { code: 'REGLAGES_NON_ECRITS', details: { chemin: FICHIER_REGLAGES, dossier: DOCUMENTS, cause: 'EROFS' } };
+    assert.deepEqual(await seance.choisirTailleTexte(150), { retenue: false, avertissements: [avis] });
+    assert.equal(seance.etat().tailleTexte, 150);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), null);
+  });
+
+  test('sans dossier de travail, la taille vaut pour la séance, non retenue, et rien ne s’écrit', async () => {
+    const { fs, seance } = monter({ racine: null });
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirTailleTexte(90), { retenue: false, avertissements: [] });
+    assert.equal(seance.etat().tailleTexte, 90);
+    assert.equal(fs.compteurs.ecritures, avant);
+  });
+
+  test('au changement de racine : la taille que les réglages portent, à défaut celle de la séance — une racine sans taille, illisible ou sans réglages la garde', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"taille_texte":130}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().tailleTexte, 130);
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().tailleTexte, 130, 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4"}\n');
+    await seance.changerRacine(DOC);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().tailleTexte, 130, 'des réglages sans taille');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().tailleTexte, 130, 'des réglages illisibles');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"taille_texte":90}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().tailleTexte, 90, 'une taille écrite sur la racine l’emporte');
+  });
+
+  test('une relecture des réglages partie avant un choix de taille ne l’écrase pas, ni dans l’état ni dans le fichier', async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"taille_texte":90}\n');
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(prise, true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirTailleTexte(130);
+    await laisser();
+    liberer();
+    await changement;
+    assert.equal(seance.etat().tailleTexte, 130);
+    assert.deepEqual(await choix, RETENUE);
+    await seance.attendre();
+    assert.deepEqual([tailleLue(fs, PORTABLE.id), seance.etat().tailleTexte], [130, 130]);
+  });
+
+  test('le papier de la séance, non retenu, s’écrit avec la taille dès que les réglages réparés l’acceptent', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    await seance.choisirPapier('Lettre');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null}\n');
+    assert.deepEqual(await seance.choisirTailleTexte(115), RETENUE);
+    const relus = JSON.parse(fs.contenu('documents', FICHIER_REGLAGES));
+    assert.deepEqual([relus.papier, relus.taille_texte], ['Lettre', 115]);
+  });
+});
+
 describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13.4)', () => {
   // Une soirée retenue de quatre personnes sur deux tables de deux places,
   // deux tours, le retenu daté de H_RETENU.

@@ -2547,7 +2547,8 @@ d'un geste** — une personne enlevée d'un siège et pas encore posée.
 
 **Le fichier de réglages locaux du § 8.5 échappe nommément à cette règle** : il
 ne porte aucune entrée d'historique, et le logiciel **diffère** l'écriture du
-cadrage plutôt que de l'écrire à chaque image d'un zoom. Lui appliquer la règle
+cadrage plutôt que de l'écrire à chaque image d'un zoom. Le papier et la taille
+du texte, eux, s'écrivent au geste qui les choisit. Lui appliquer la règle
 écrirait un fichier par image de molette.
 
 **Le coût d'un enregistrement complet est un seuil mesuré**, non un ordre de
@@ -2712,9 +2713,11 @@ version et la provenance de la construction (§ 18.6) et, **quand un plan est
 ouvert**, le libellé de mode. Ils ne font pas double emploi : la bande et le
 libellé de la barre signalent le mode dans l'écran de l'événement ; le bandeau
 porte la version jusque sur la liste des événements, qui est le premier écran
-d'un signalement sur deux. Le bandeau porte aussi la marque du logiciel, le
-réglage de thème et « À propos » ; il garde une hauteur d'une ligne de commande,
-de sorte que la surface de travail ne perd rien.
+d'un signalement sur deux. Le bandeau porte aussi la marque du logiciel,
+« Paramètres » — la taille du texte et le thème (§ 18.6) — et, à sa droite,
+« À propos » ; à la taille du texte par défaut, il garde une hauteur d'une
+ligne de commande, de sorte que la surface de travail ne perd rien ; aux
+paliers plus grands, il peut passer sur deux lignes (§ 18.6).
 
 **Le passage en écriture est une étape nommée du parcours** (§ 2.1, étape 1b),
 et non un sous-entendu : huit des douze étapes sont modifiantes, et toutes sont
@@ -2753,12 +2756,13 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **deux choses, et deux seulement** :
+Ce fichier porte **trois choses, et trois seulement** :
 
 | réglage | portée |
 |---|---|
 | le **cadrage** | indexé par identifiant d'événement |
 | le **format de papier** (§ 11.2) | global à la machine |
+| la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
 le fichier d'événement ferait voyager le bac d'un bureau avec le plan. Le
@@ -2773,15 +2777,33 @@ fichier suit la clé avec les événements.
 
 **Le cadrage s'écrit en différé**, et échappe nommément à la règle « fin du
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
-jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Les deux
-passent par une même file, qui relit le fichier avant chaque écriture : deux
-écrivains qui le liraient chacun avant que l'autre l'ait écrit perdraient l'un
-des deux réglages. Un fichier que la lecture ne prend pas ne s'écrase pas. Ni
-lui, ni un dossier qui refuse de l'écrire, ne bloque le choix du papier : le
-papier choisi vaut pour la séance sur ce dossier de travail, sans être retenu sur
-la machine, et un avertissement nomme le fichier et dit que le choix n'est pas
-retenu ; la première écriture des réglages qui y réussit le retient, et
-l'avertissement se retire. Le cadrage attend.
+jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
+cadrage, le papier et la taille du texte passent par une même file, qui relit le
+fichier avant chaque écriture : deux écrivains qui le liraient chacun avant que
+l'autre l'ait écrit perdraient le réglage de l'un. Un fichier que la lecture ne
+prend pas ne s'écrase pas. Ni lui, ni un dossier qui refuse de l'écrire, ne
+bloque le choix du papier : le papier choisi vaut pour la séance sur ce dossier
+de travail, sans être retenu sur la machine, et un avertissement nomme le
+fichier et dit que le choix n'est pas retenu ; la première écriture des réglages
+qui y réussit le retient, et l'avertissement se retire. Le cadrage attend.
+
+**La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
+(§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
+le code. Elle décrit les yeux de l'opérateur et l'écran du poste, pas le plan :
+elle ne voyage pas avec l'événement. Le fichier ne la porte que choisie ; sans
+elle, l'écran est à 100 %, et un fichier écrit sans ce choix ne change pas d'un
+octet. Une valeur présente hors des paliers rend le fichier illisible, comme un
+papier inconnu. Elle s'écrit au geste qui la choisit, dans tout mode, par la
+même file que le cadrage et le papier, et emporte avec elle le papier de la
+séance que le fichier ne retenait pas encore. Le logiciel la relit au lancement,
+dès que le dossier de travail est déterminé, puis à chaque changement de dossier
+de travail : la taille que le fichier porte, à défaut celle de la séance, de
+sorte qu'un dossier sans réglages ne ramène pas l'écran à 100 %. Une relecture
+partie avant un choix ne l'écrase pas. Ni un fichier que la lecture ne prend
+pas, ni un dossier qui refuse de l'écrire, ni l'absence de dossier de travail —
+une question du § 8.6 encore sans réponse — ne bloquent le choix : la taille vaut
+pour la séance, et le panneau dit, sous les paliers, qu'elle n'est pas retenue
+sur ce poste.
 
 ### 8.6 Les fichiers
 
@@ -2820,7 +2842,7 @@ règle écrite, et l'affiche :
    un dossier nommé d'après le produit, dans les *Documents* de l'opérateur. Le
    logiciel **dit pourquoi**, une fois par séance, sans bloquer : s'en souvenir
    d'une séance à l'autre demanderait un réglage local de plus, et le § 8.5 les
-   borne à deux.
+   borne à trois.
 
 **Le dossier retenu est éprouvé à son tour, et c'est cette épreuve qui le
 crée** : le dossier des *Documents* naît à la détermination, avant que la liste
@@ -7780,6 +7802,24 @@ Au-dessus du bloc, le panneau nomme l'éditeur, **TechnoLibre Inc.**, et l'auteu
 **Mathieu Benoit**, développeur, concepteur et mainteneur du logiciel ; « Copier »
 ne les emporte pas.
 
+**Le panneau « Paramètres »** s'ouvre du bandeau, par la commande placée juste à
+gauche de « À propos », et remplace l'écran comme lui ; les deux ne sont jamais
+ouverts ensemble, et « Fermer » rend l'écran d'où il s'est ouvert. Il porte deux
+réglages, chacun une carte titrée et expliquée, ses choix en commandes enfoncées :
+
+- **la taille du texte de l'écran**, un choix par palier, 90, 100, 115, 130 et
+  150 %, retenue sur le poste (§ 8.5). Elle se pose en taille de police de la
+  racine du document, que suivent tous les jetons de l'interface, exprimés en
+  `rem`. Elle ne touche que l'écran : le dessin du plan, en unités du plan, garde
+  ses tailles à tout palier ; le document imprimé de l'aperçu — plan imprimé,
+  liste d'accueil, feuilles par table — et la feuille gabarit qui mesure sa bande
+  redéclarent ces jetons en pixels, aux valeurs d'une racine de 16 px, si bien que
+  chaque page et la pagination sont celles d'une racine à 100 % (§ 11.7) ; les
+  badges, produits en PDF, ne lisent aucune feuille de style. Le bandeau tient
+  sur une ligne à 1 366 px à 100 % ; à un palier plus grand, ou dans une fenêtre
+  plus étroite, il peut en prendre deux, sans déborder de la fenêtre.
+- **le thème**, clair ou sombre, choisi pour la séance (§ 19.2).
+
 **Le pied des impressions** porte la version parce qu'une feuille circule et survit
 à la séance. La règle vaut pour la **page** ; un carton découpé et porté au cou
 n'est pas une page et n'en porte rien (§ 11.4).
@@ -7877,7 +7917,8 @@ ne les offre de façon portable :
   entrée. Le mécanisme est portable et il attrape ce qu'un journal de console
   n'attrape pas : une promesse rejetée sans gestionnaire.
 - **L'émulation d'une préférence système.** Le logiciel règle son **propre**
-  réglage de thème, qui est celui que l'opérateur manipule (§ 13.3), et injecte une
+  réglage de thème, qui est celui que l'opérateur manipule dans le panneau
+  « Paramètres » (§ 13.3, § 18.6), et injecte une
   feuille de style qui annule transitions et animations. L'interface n'en porte
   que deux : la rotation d'un signe de chargement — celui de la liste des
   événements (§ 8.1), celui de la pastille d'activité (§ 5.10) —, qui s'arrête
@@ -7890,7 +7931,13 @@ ne les offre de façon portable :
   pour la séance : rien ne l'enregistre, ni fichier ni stockage du navigateur
   (§ 8.6).
   **Le scénario pose donc le thème par le réglage, à chaque exécution, et ne le
-  déduit jamais de la machine.**
+  déduit jamais de la machine** : il le donne au montage comme thème de départ.
+  Une épreuve qui mesure un écran dans l'autre thème le change dans l'état de
+  navigation, celui que le panneau « Paramètres » règle, sans ouvrir le panneau,
+  qui remplacerait l'écran mesuré. La taille du texte de l'écran, elle, est retenue
+  sur le poste (§ 8.5) : le scénario démarre sur un dossier de travail neuf,
+  dont aucun fichier de réglages ne la porte, et chaque capture est prise à
+  100 %.
 
 ### 19.3 Le parcours, et ce qu'il photographie
 

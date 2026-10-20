@@ -69,8 +69,9 @@
 // hors du fichier, dans reglages_locaux.json, par un écrivain différé
 // (§ 8.5) : regarder n'écrit jamais l'événement. Le papier des planches, de
 // la machine et non du plan, s'y range aussi, dans tout mode, avec ou sans
-// événement (§ 8.5, § 11.2) ; une seule file y écrit, que le cadrage et le
-// papier partagent. Des réglages que la lecture ne prend pas ne s'écrasent
+// événement (§ 8.5, § 11.2), et de même la taille du texte de l'écran
+// (§ 18.6) ; une seule file y écrit, que le cadrage, le papier et la taille
+// partagent. Des réglages que la lecture ne prend pas ne s'écrasent
 // jamais : le cadrage attend, et le papier choisi vaut pour la séance, en
 // mémoire, sans être retenu sur la machine. Il en va de même du papier d'une
 // écriture que le dossier refuse : ni des réglages illisibles ni un dossier
@@ -99,6 +100,7 @@
 // dans l'ordre de leur appel : chacun part de l'Ouvert que le précédent a
 // laissé. L'horloge et les minuteries entrent en paramètre : la séance ne lit
 // ni l'heure ni un aléa, et n'arme aucune minuterie elle-même.
+import { TAILLE_TEXTE_DEFAUT } from '../geometrie/taille_texte.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { avecCourses, courseDe } from '../stockage/courses.js';
 import {
@@ -121,10 +123,12 @@ import {
   FICHIER_REGLAGES,
   avecCadrage,
   avecPapier,
+  avecTailleTexte,
   cadrageDe,
   creerEcrivainDiffere,
   ecrireReglages,
   lireReglages,
+  tailleTexteDe,
 } from '../stockage/reglages_locaux.js';
 import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
 import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
@@ -321,7 +325,10 @@ export function creerSeance({
   // papier : sur la racine du choix de la séance (choixSeance), le papier de
   // ce choix ; sur une autre, celui que portent ses réglages, à défaut le
   // papier du choix ; relu à chaque changement de racine et après chaque
-  // écriture des réglages, null sans racine ou sans choix.
+  // écriture des réglages, null sans racine ou sans choix ; tailleTexte : la
+  // taille du texte de l'écran, celle que les réglages de la racine portent,
+  // relue à chaque changement de racine, ou la dernière choisie,
+  // TAILLE_TEXTE_DEFAUT tant que ni l'une ni l'autre n'est venue.
   const etat = {
     racine,
     ouvert: null,
@@ -341,6 +348,7 @@ export function creerSeance({
     retourAutomatique: false,
     cadrage: null,
     papier: null,
+    tailleTexte: TAILLE_TEXTE_DEFAUT,
   };
 
   // --- L'observation ------------------------------------------------------------
@@ -411,6 +419,7 @@ export function creerSeance({
       calculEnCours: etat.calculs > 0,
       verrouAutre: etat.verrouAutre,
       papier: etat.papier,
+      tailleTexte: etat.tailleTexte,
     });
     return figer({
       racine: petit.racine,
@@ -426,6 +435,7 @@ export function creerSeance({
       calculEnCours: petit.calculEnCours,
       verrouAutre: petit.verrouAutre,
       papier: petit.papier,
+      tailleTexte: petit.tailleTexte,
     });
   }
 
@@ -450,7 +460,7 @@ export function creerSeance({
     for (const fonction of [...annulations]) fonction();
   }
 
-  // --- Les réglages locaux : le cadrage et le papier (§ 8.5) --------------------
+  // --- Les réglages locaux : le cadrage, le papier, la taille du texte (§ 8.5) ---
 
   // La file unique des accès à reglages_locaux.json, écritures et relectures
   // du papier : chacun part quand le précédent a fini, réussi ou non. Deux
@@ -565,27 +575,36 @@ export function creerSeance({
     });
   }
 
-  // À son tour dans la file des réglages, pose dans l'état le papier de
-  // dossier, quand dossier est encore la racine de la séance : sur la racine
-  // du choix de la séance, le papier du choix, sans rien lire ; ailleurs,
-  // celui des réglages, à défaut celui du choix — sans papier, et pour des
-  // réglages que la lecture ne prend pas ; null sans dossier. Ne lève
-  // jamais ; ne publie pas : l'appelant est un travail de la file des
-  // appels, qui publie en finissant.
-  function relirePapier(dossier) {
+  // Le rang du dernier choix de la taille du texte : une relecture des
+  // réglages partie avant un choix ne pose pas sa taille, plus ancienne.
+  let choixTaille = 0;
+
+  // À son tour dans la file des réglages, lit une fois les réglages de
+  // dossier et pose dans l'état ce que la machine y garde, quand dossier est
+  // encore la racine de la séance. Le papier : sur la racine du choix de la
+  // séance, celui du choix ; ailleurs, celui des réglages, à défaut celui du
+  // choix — sans papier, et pour des réglages que la lecture ne prend pas ;
+  // null sans dossier. La taille du texte : celle que les réglages portent,
+  // à défaut celle de la séance — sans taille, pour des réglages que la
+  // lecture ne prend pas, sans dossier, et quand un choix a suivi le départ
+  // de la relecture. Ne lève jamais ; ne publie pas : l'appelant est un
+  // travail de la file des appels, qui publie en finissant.
+  function relireReglagesMachine(dossier) {
+    const rang = choixTaille;
     return enFileReglages(async () => {
-      let papier = null;
+      let lus = null;
       if (dossier !== null) {
-        papier = papierDuChoix(dossier);
-        if (papier === undefined) {
-          try {
-            papier = (await lireReglages(fs, dossier)).reglages.papier ?? choixSeance?.papier ?? null;
-          } catch {
-            papier = choixSeance?.papier ?? null;
-          }
+        try {
+          const { reglages, avertissement: illisibles } = await lireReglages(fs, dossier);
+          if (illisibles === null) lus = reglages;
+        } catch {
+          lus = null;
         }
       }
-      if (memeRacine(dossier, etat.racine)) etat.papier = papier;
+      const papier = dossier === null ? null : (papierDuChoix(dossier) ?? lus?.papier ?? choixSeance?.papier ?? null);
+      if (!memeRacine(dossier, etat.racine)) return;
+      etat.papier = papier;
+      if (lus !== null && Object.hasOwn(lus, 'taille_texte') && rang === choixTaille) etat.tailleTexte = tailleTexteDe(lus);
     });
   }
 
@@ -1375,7 +1394,7 @@ export function creerSeance({
       ailleurs: null,
       formatLu: null,
     });
-    await relirePapier(nouvelle);
+    await relireReglagesMachine(nouvelle);
     // Le cadrage de l'événement suit la séance : demandé de nouveau pour la
     // racine nouvelle, il y remplace celui qui attendait l'ancienne, que son
     // support refuse.
@@ -1424,7 +1443,7 @@ export function creerSeance({
 
   // Le papier de la racine reçue se lit à son tour dans la file des appels,
   // puis dans celle des réglages, comme à un changement de racine.
-  if (racine !== null) enFile(() => relirePapier(racine));
+  if (racine !== null) enFile(() => relireReglagesMachine(racine));
 
   return {
     /** L'identifiant de la séance, qui signe son verrou. */
@@ -1526,6 +1545,50 @@ export function creerSeance({
       ecrivain.demander({ racine: etat.ouvert.racine, evenement, cadrage });
     },
     /**
+     * Choisit la taille du texte de l'écran, l'un des paliers de
+     * src/geometrie/taille_texte.js (§ 8.5, § 18.6) : EtatSeance.tailleTexte
+     * la porte aussitôt, et le choix s'écrit dans reglages_locaux.json de la
+     * racine, par la file des réglages, avec le papier de la séance que le
+     * fichier ne retient pas encore. Vivant dans tout mode, avec ou sans
+     * événement : l'état et le journal ne s'écrivent pas.
+     *
+     * Rend {retenue, avertissements} : retenue, vrai quand la taille s'est
+     * écrite. Sans dossier de travail, rien ne s'écrit ni ne s'avertit ; des
+     * réglages que la lecture ne prend pas ne s'écrasent pas,
+     * REGLAGES_ILLISIBLES {chemin, raison}, et une écriture que le dossier
+     * refuse laisse le fichier intact, REGLAGES_NON_ECRITS {chemin, dossier,
+     * cause}. Dans ces trois cas, la taille vaut pour la séance, en mémoire,
+     * et l'avis se rend sans rejoindre EtatSeance.avertissements.
+     *
+     * @param {number} taille
+     * @returns {Promise<{retenue: boolean, avertissements: Array<{code: string, details: Object}>}>}
+     * @throws {TypeError} une taille hors des paliers, sans rien lire ni écrire
+     */
+    async choisirTailleTexte(taille) {
+      // Essayée sur des réglages vides, avecTailleTexte lève sur une taille
+      // hors des paliers avant que rien ne change.
+      avecTailleTexte({ format: 1, papier: null, cadrages: [] }, taille);
+      choixTaille += 1;
+      etat.tailleTexte = taille;
+      publier();
+      const dossier = etat.racine;
+      if (dossier === null) return { retenue: false, avertissements: [] };
+      try {
+        await ecrireReglagesLocaux(dossier, (reglages) => avecTailleTexte(reglages, taille));
+        return { retenue: true, avertissements: [] };
+      } catch (erreur) {
+        if (erreur instanceof ErreurSeance) {
+          // L'avis porte les détails de la lecture, sans le remède qu'y
+          // ajoute ErreurSeance.
+          const { remede: _remede, ...details } = erreur.details;
+          return { retenue: false, avertissements: [avertissement(erreur.code, details)] };
+        }
+        if (!(erreur instanceof ErreurStockage)) throw erreur;
+        const details = { chemin: FICHIER_REGLAGES, dossier: dossier.chemin, cause: erreur.details?.cause ?? null };
+        return { retenue: false, avertissements: [avertissement('REGLAGES_NON_ECRITS', details)] };
+      }
+    },
+    /**
      * Choisit le papier des planches de la machine (§ 8.5, § 11.2) :
      * l'écrit dans reglages_locaux.json de la racine, par la file des
      * réglages, puis EtatSeance.papier le porte. Vivant dans tout mode, avec
@@ -1579,7 +1642,7 @@ export function creerSeance({
         exigerSauve(quitter);
         const avertissements = await fermerEvenement();
         etat.racine = nouvelle;
-        await relirePapier(nouvelle);
+        await relireReglagesMachine(nouvelle);
         return { avertissements };
       }),
     passerEnEcriture: () => enFile(passerEnEcriture),

@@ -35,7 +35,8 @@
   // événement après l'autre, et l'accueil montre chacun dès qu'il arrive.
   //
   // L'écran suit la séance : la liste sans événement ouvert, l'événement
-  // sinon ; le panneau « À propos » les remplace tant qu'il est ouvert, et
+  // sinon ; le panneau « À propos » ou le panneau « Paramètres » les
+  // remplace tant qu'il est ouvert, et
   // l'aperçu avant impression remplace l'événement tant que l'état de
   // navigation en porte un (§ 11.7). Fermer l'aperçu rend la section d'où il
   // s'est ouvert et le focus à sa commande « Imprimer… ». Chaque ouverture
@@ -54,8 +55,13 @@
   // [data-impression], ne les reçoit pas.
   //
   // Le thème part de la propriété themeInitial, ou de la préférence du
-  // système lue au montage ; le réglage de l'opérateur le change pour la
-  // séance, en mémoire, posé en data-theme sur <html> (§ 19.2). À la sortie
+  // système lue au montage, posé dans l'état de navigation ; le réglage de
+  // l'opérateur, au panneau « Paramètres », le change pour la séance, en
+  // mémoire. App le pose en data-theme sur <html> (§ 19.2). La taille du
+  // texte de l'écran est celle de la séance (EtatSeance.tailleTexte), relue
+  // dans reglages_locaux.json au lancement : App la pose en taille de police
+  // de <html>, que les jetons en rem suivent, et la retire au démontage
+  // (§ 8.5, § 18.6). À la sortie
   // de la page (pagehide), la séance ferme l'événement et rend son verrou,
   // sans question ; aucun beforeunload ne retient la page (§ 8.4).
   //
@@ -77,6 +83,7 @@
   import { TABLES_APPLICATION } from '../application/libelles.js';
   import { creerSeance } from '../application/seance.js';
   import { creerTraduction } from '../application/traduction.js';
+  import { taillePoliceRacine } from '../geometrie/taille_texte.js';
   import APropos from './APropos.svelte';
   import Accueil from './accueil/Accueil.svelte';
   import { creerPas } from './accueil/chargement.js';
@@ -89,6 +96,7 @@
   import { blocAPropos, provenanceVisible, versionVisible } from './apropos.js';
   import { creerEtatUi } from './etat_ui.js';
   import { TABLES_INTERFACE } from './libelles.js';
+  import Parametres from './Parametres.svelte';
   import { themeInitial as themeDuSysteme } from './theme.js';
 
   // Les dépendances se lisent une fois, au montage : App crée ses services
@@ -185,6 +193,7 @@
     },
   };
   const uiApp = creerEtatUi();
+  uiApp.choisirTheme(themeInitial ?? themeDuSysteme(window.matchMedia('(prefers-color-scheme: dark)').matches));
   // Les sections chargées à part, chacune par sa demande unique.
   const chargeurs = { qualite: creerChargeurSection(sectionQualite) };
 
@@ -289,9 +298,14 @@
   });
   onDestroy(desabonner);
 
-  let theme = $state(themeInitial ?? themeDuSysteme(window.matchMedia('(prefers-color-scheme: dark)').matches));
   $effect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-theme', $uiApp.theme);
+  });
+  $effect(() => {
+    document.documentElement.style.fontSize = taillePoliceRacine(etatSeance.tailleTexte);
+  });
+  onDestroy(() => {
+    document.documentElement.style.removeProperty('font-size');
   });
 
   const titre = t('coquille.titre', { version: produitVersion });
@@ -371,15 +385,16 @@
     etat={etatSeance}
     {version}
     provenance={provenanceAffichee}
-    {theme}
     {refusListe}
-    choisirTheme={(choix) => (theme = choix)}
+    ouvrirParametres={() => uiApp.ouvrirParametres()}
     ouvrirApropos={() => uiApp.ouvrirApropos()}
     {revenirALaListe}
   />
   <main class="ecran">
     {#if $uiApp.apropos}
       <APropos {bloc} {pressePapiers} fermer={() => uiApp.fermerApropos()} />
+    {:else if $uiApp.parametres}
+      <Parametres fermer={() => uiApp.fermerParametres()} />
     {:else if etatSeance.evenement === null}
       <Accueil {provenance} version={produitVersion} {demonstrations} {lignes} {resumes} {refusLecture} />
     {:else if $uiApp.apercu !== null}

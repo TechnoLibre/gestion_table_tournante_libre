@@ -351,6 +351,10 @@
   même au zoom où les listes de noms disparaissent, à l'écran comme sur le plan
   imprimé. La pastille qui compte les conflits d'une table passe en haut à
   droite du plateau, sur son bord, entre deux chaises.
+- Le bouton « Paramètres », à gauche de « À propos », règle la taille du texte
+  de l'écran, de 90 à 150 %, et le thème clair ou sombre, qui quitte le bandeau.
+  La machine retient la taille d'un lancement à l'autre ; le plan, les pages
+  imprimées et les badges gardent la leur.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

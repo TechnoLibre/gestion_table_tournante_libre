@@ -2,10 +2,11 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // L'état de navigation de l'interface : la section ouverte, le panneau « À
-// propos », le tour montré, la personne mise en évidence, la proposition
-// demandée au plan et le numéro de sa demande, le texte d'un import en
-// attente, les listes de noms, le plein écran, la place sélectionnée, la
-// fiche ouverte, le choix en attente du plan, le refus posé sur une place,
+// propos » et le panneau « Paramètres », le thème de la séance, le tour
+// montré, la personne mise en évidence, la proposition demandée au plan et
+// le numéro de sa demande, le texte d'un import en attente, les listes de
+// noms, le plein écran, la place sélectionnée, la fiche ouverte, le choix
+// en attente du plan, le refus posé sur une place,
 // l'appartenance collante du formulaire d'ajout, l'aperçu avant impression,
 // la page du tableau des propositions, la position du sélecteur du
 // mélange des tables de la page de qualité (§ 12.11, D54) — ce que la
@@ -19,18 +20,23 @@
 // qui s'ouvre en repart sans eux.
 // Regarder n'écrit jamais (§ 8.4) : cet état ne reçoit ni la séance, ni la
 // façade, ni un système de fichiers, et rien de ce qu'il tient ne quitte la
-// mémoire.
+// mémoire. Le thème part du clair ; App y pose celui du lancement, puis le
+// réglage de l'opérateur le change pour la séance (§ 19.2).
 //
 // Il suit le contrat des magasins de Svelte : subscribe(fn) appelle fn(etat)
 // tout de suite, puis à chaque nouvel état ; un état est figé, et une
 // transition qui ne change rien n'en publie pas de nouveau. L'écran — liste
 // ou événement — ne s'y lit pas : il suit la séance.
 import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
+import { THEMES } from './theme.js';
 
 /**
  * @typedef {Object} EtatUi
  * @property {string} section             l'une de SECTIONS
  * @property {boolean} apropos            le panneau « À propos » est ouvert
+ * @property {boolean} parametres         le panneau « Paramètres » est ouvert ; jamais
+ *           avec « À propos »
+ * @property {'clair'|'sombre'} theme     le thème de la séance, l'un de THEMES
  * @property {number} tour                le tour montré, entier positif
  * @property {number|null} miseEnEvidence l'identifiant de la personne mise en évidence
  * @property {number|null} proposition    la proposition demandée au plan
@@ -79,8 +85,8 @@ import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
  * changement de section les garde.
  */
 
-// L'état de navigation d'un événement qui s'ouvre, panneau « À propos »
-// excepté : celui-ci ne tient pas à l'événement.
+// L'état de navigation d'un événement qui s'ouvre, panneaux « À propos » et
+// « Paramètres » et thème exceptés : ils ne tiennent pas à l'événement.
 const DEPART = Object.freeze({
   section: SECTION_OUVERTURE,
   tour: 1,
@@ -188,6 +194,7 @@ function choixValide(choix) {
  *
  * @returns {{subscribe: Function, etat: () => EtatUi, allerA: Function,
  *   reinitialiser: Function, ouvrirApropos: Function, fermerApropos: Function,
+ *   ouvrirParametres: Function, fermerParametres: Function, choisirTheme: Function,
  *   montrerTour: Function, mettreEnEvidence: Function,
  *   montrerProposition: Function, ouvrirImport: Function,
  *   prendreImport: () => null|{texte: string, origine: string},
@@ -201,7 +208,7 @@ function choixValide(choix) {
  *   oublierAbsents: Function}}
  */
 export function creerEtatUi() {
-  let etat = Object.freeze({ ...DEPART, apropos: false });
+  let etat = Object.freeze({ ...DEPART, apropos: false, parametres: false, theme: THEMES[0] });
   const abonnes = new Set();
 
   // Publie l'état que donnent les changements, s'il diffère du courant sur
@@ -231,15 +238,29 @@ export function creerEtatUi() {
       if (!SECTIONS.includes(section)) throw new RangeError(`section inconnue : ${JSON.stringify(section)}`);
       changer(section === etat.section ? {} : { section, pose: null });
     },
-    /** Le départ d'un événement qui s'ouvre ; le panneau « À propos » reste tel. */
+    /** Le départ d'un événement qui s'ouvre ; les panneaux et le thème restent tels. */
     reinitialiser() {
       changer(DEPART);
     },
+    /** Ouvre « À propos », et ferme « Paramètres » : un panneau à la fois. */
     ouvrirApropos() {
-      changer({ apropos: true });
+      changer({ apropos: true, parametres: false });
     },
     fermerApropos() {
       changer({ apropos: false });
+    },
+    /** Ouvre « Paramètres », et ferme « À propos » : un panneau à la fois. */
+    ouvrirParametres() {
+      changer({ parametres: true, apropos: false });
+    },
+    fermerParametres() {
+      changer({ parametres: false });
+    },
+    /** Pose le thème de la séance, l'un de THEMES ; RangeError sinon, sans
+     *  rien changer. */
+    choisirTheme(theme) {
+      if (!THEMES.includes(theme)) throw new RangeError(`thème hors de ${THEMES.join(', ')}, reçu ${JSON.stringify(theme)}`);
+      changer({ theme });
     },
     /** Montre le tour r, entier positif ; RangeError sinon. Le choix en
      *  attente s'oublie, et la pose, qui tient à l'état des places d'un tour. */

@@ -6,22 +6,22 @@
   // nom, la version — ou la marque de provenance d'une construction de
   // documentation —, la provenance, et, quand un événement est ouvert, le
   // libellé de mode, l'annonce de format du fichier et la commande « Liste
-  // des événements ». Il porte aussi le réglage de thème, deux commandes à
-  // aria-pressed, et l'ouverture du panneau « À propos ». Collé en haut de la
-  // fenêtre, il ne défile pas.
+  // des événements ». Il porte aussi l'ouverture du panneau « Paramètres »,
+  // où se règlent la taille du texte et le thème, et celle du panneau « À
+  // propos ». Collé en haut de la fenêtre, il ne défile pas.
   //
   // Son habillage : la marque — le dessin d'une table ronde et de ses six
   // chaises, caché aux technologies d'assistance —, le nom, la version et la
   // provenance en pilules, le libellé de mode en pilule grasse, puis, à
-  // droite, « Liste des événements » précédée de son icône, le thème en
-  // commutateur segmenté — le retenu plein de l'encre du bandeau, en gras —
-  // et « À propos ». Chaque élément garde la hauteur d'une ligne de commande
-  // du bandeau : le bandeau tient sur une ligne à 1 366 px, l'événement
-  // ouvert, et la surface de travail garde sa hauteur.
+  // droite, « Liste des événements » précédée de son icône, « Paramètres » et
+  // « À propos ». Chaque élément garde la hauteur d'une ligne de commande du
+  // bandeau : à la taille du texte par défaut, le bandeau tient sur une
+  // ligne à 1 366 px, l'événement ouvert, et la surface de travail garde sa
+  // hauteur ; aux paliers plus grands, il peut passer sur deux lignes.
   //
   // Le bandeau ne décide de rien : App lui donne l'état de la séance, la
-  // version et la provenance telles qu'elles s'affichent, le thème et les
-  // gestes à appeler ; mode.js choisit les clés du libellé de mode et de
+  // version et la provenance telles qu'elles s'affichent et les gestes à
+  // appeler ; mode.js choisit les clés du libellé de mode et de
   // l'annonce. Le refus de « Liste des événements » passe par la primitive
   // Refus, qui pose son texte et son remède en Commande — écrire ailleurs
   // sous un support rompu. Ce refus se pose sous les commandes, hors du
@@ -32,11 +32,10 @@
   import { cleAnnonceFormat, cleDeMode } from './mode.js';
   import Icone from './primitives/Icone.svelte';
   import Refus from './primitives/Refus.svelte';
-  import { THEMES, cleDeTheme } from './theme.js';
 
   const t = getContext('t');
 
-  let { etat, version, provenance, theme, refusListe, choisirTheme, ouvrirApropos, revenirALaListe } = $props();
+  let { etat, version, provenance, refusListe, ouvrirParametres, ouvrirApropos, revenirALaListe } = $props();
 
   const cleMode = $derived(cleDeMode(etat));
   const cleAnnonce = $derived(cleAnnonceFormat(etat));
@@ -72,17 +71,7 @@
         </div>
       {/if}
     {/if}
-    <span class="themes" role="group" aria-label={t('coquille.theme.titre')}>
-      {#each THEMES as choix (choix)}
-        <button
-          type="button"
-          data-commande="theme"
-          data-theme-choix={choix}
-          aria-pressed={theme === choix}
-          onclick={() => choisirTheme(choix)}>{t(cleDeTheme(choix))}</button
-        >
-      {/each}
-    </span>
+    <button type="button" data-commande="parametres" onclick={ouvrirParametres}>{t('coquille.parametres.titre')}</button>
     <button type="button" data-commande="apropos" onclick={ouvrirApropos}>{t('coquille.apropos.titre')}</button>
   </div>
 </header>
@@ -169,29 +158,6 @@
     color: var(--couleur-bandeau-texte);
     font: inherit;
     cursor: pointer;
-  }
-
-  /* Le commutateur de thème : un groupe bordé, sans fond, dont les deux
-     choix se touchent. Le retenu se distingue par sa forme autant que par
-     ses couleurs : plein, aux couleurs du bandeau inversées, et en gras. */
-  .themes {
-    display: inline-flex;
-    padding: 0.0625rem;
-    border: 1px solid var(--couleur-bandeau-filet);
-    border-radius: var(--rayon-2);
-  }
-
-  .themes button {
-    padding: 0.1875rem var(--espace-2);
-    border: none;
-    border-radius: var(--rayon-1);
-    background-color: transparent;
-  }
-
-  .themes button[aria-pressed='true'] {
-    background-color: var(--couleur-bandeau-texte);
-    color: var(--couleur-bandeau-fond);
-    font-weight: bold;
   }
 
   button:focus-visible {

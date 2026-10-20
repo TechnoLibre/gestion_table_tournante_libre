@@ -416,6 +416,8 @@
  * @property {Array<{evenement: string, k: number, tx: number, ty: number}>} cadrages
  *           triés par identifiant d'événement, un par événement ; k fini
  *           > 0, tx et ty finis
+ * @property {number} [taille_texte]  l'un de PALIERS_TAILLE_TEXTE ; absente
+ *           tant que l'opérateur ne l'a pas choisie
  *
  * Avertissement de la lecture des réglages locaux, qui ne lève jamais :
  *

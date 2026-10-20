@@ -11,16 +11,19 @@ import assert from 'node:assert/strict';
 import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { PAPIERS } from '../geometrie/papiers.js';
+import { PALIERS_TAILLE_TEXTE, TAILLE_TEXTE_DEFAUT } from '../geometrie/taille_texte.js';
 import { ErreurStockage } from './erreurs.js';
 import {
   FICHIER_REGLAGES,
   avecCadrage,
   avecPapier,
+  avecTailleTexte,
   cadrageDe,
   creerEcrivainDiffere,
   ecrireReglages,
   lireReglages,
   serialiserReglages,
+  tailleTexteDe,
 } from './reglages_locaux.js';
 
 const DOC = { id: 'documents', chemin: 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre' };
@@ -121,6 +124,9 @@ describe('réglages locaux : lire, jamais bloquant (§ 8.5)', () => {
       ['une translation en texte', avecCadrages(cadrage({ tx: '10' })), 'FORME'],
       ['une translation nulle', avecCadrages(cadrage({ ty: null })), 'FORME'],
       ['un cadrage en double', avecCadrages(cadrage({}), cadrage({ k: 2 })), 'FORME'],
+      ['une taille du texte hors des paliers', '{"cadrages":[],"format":1,"papier":null,"taille_texte":120}\n', 'FORME'],
+      ['une taille du texte en texte', '{"cadrages":[],"format":1,"papier":null,"taille_texte":"100"}\n', 'FORME'],
+      ['une taille du texte nulle', '{"cadrages":[],"format":1,"papier":null,"taille_texte":null}\n', 'FORME'],
     ];
     for (const [nom, texte, raison] of cas) {
       const fs = disque(texte);
@@ -166,6 +172,19 @@ describe('réglages locaux : lire, jamais bloquant (§ 8.5)', () => {
     assert.equal(cadrageDe(reglages, 'evt-c'), null);
     assert.equal(fs.compteurs.ecritures, 0);
   });
+
+  test('la taille du texte se lit sous taille_texte ; un fichier qui ne la porte pas, ou absent, rend le défaut, sans que la clé s’ajoute aux réglages lus', async () => {
+    const porte = await lireReglages(disque('{"cadrages":[],"format":1,"papier":"A4","taille_texte":130}\n'), DOC);
+    assert.equal(porte.avertissement, null);
+    assert.deepEqual(porte.reglages, { format: 1, papier: 'A4', cadrages: [], taille_texte: 130 });
+    assert.equal(tailleTexteDe(porte.reglages), 130);
+    const sans = await lireReglages(disque('{"cadrages":[],"format":1,"papier":"A4"}\n'), DOC);
+    assert.deepEqual(sans.reglages, { format: 1, papier: 'A4', cadrages: [] });
+    assert.equal(tailleTexteDe(sans.reglages), TAILLE_TEXTE_DEFAUT);
+    const absent = await lireReglages(disque(), DOC);
+    assert.equal(Object.hasOwn(absent.reglages, 'taille_texte'), false);
+    assert.equal(tailleTexteDe(absent.reglages), TAILLE_TEXTE_DEFAUT);
+  });
 });
 
 describe('réglages locaux : la forme canonique et l’écriture', () => {
@@ -196,6 +215,12 @@ describe('réglages locaux : la forme canonique et l’écriture', () => {
       '{"cadrages":[],"format":1,"papier":null,"zeta":{"a":[2,{"c":4,"d":3}],"b":1}}\n',
     );
     assert.throws(() => serialiserReglages({ ...DEFAUTS, papier: 'A3' }), TypeError);
+    assert.equal(serialiserReglages(DEFAUTS), '{"cadrages":[],"format":1,"papier":null}\n', 'sans taille choisie, la clé ne s’écrit pas');
+    assert.equal(
+      serialiserReglages({ taille_texte: 115, ...DEFAUTS }),
+      '{"cadrages":[],"format":1,"papier":null,"taille_texte":115}\n',
+    );
+    assert.throws(() => serialiserReglages({ ...DEFAUTS, taille_texte: 120 }), TypeError);
     const zoomIndefini = { evenement: 'evt-a', k: Number.NaN, tx: 0, ty: 0 };
     assert.throws(() => serialiserReglages({ ...DEFAUTS, cadrages: [zoomIndefini] }), TypeError);
     assert.throws(() => serialiserReglages(null), TypeError);
@@ -224,6 +249,27 @@ describe('réglages locaux : la forme canonique et l’écriture', () => {
       ['un papier inconnu', () => avecPapier(DEFAUTS, 'A3')],
     ];
     for (const [nom, appel] of refus) assert.throws(appel, TypeError, nom);
+  });
+
+  test('avecTailleTexte pose la taille du texte, sans modifier les réglages reçus ni leurs autres clés ; chaque palier se pose, s’écrit et se relit ; hors des paliers, TypeError', async () => {
+    const depart = avecCadrage(avecPapier(DEFAUTS, 'A4'), 'evt-a', { k: 1, tx: 0, ty: 0 });
+    const copie = structuredClone(depart);
+    const pose = avecTailleTexte(depart, 130);
+    assert.deepEqual(depart, copie);
+    assert.deepEqual(pose, { ...copie, taille_texte: 130 });
+    assert.equal(avecTailleTexte(pose, 90).taille_texte, 90);
+    assert.ok(PALIERS_TAILLE_TEXTE.length > 0);
+    for (const palier of PALIERS_TAILLE_TEXTE) {
+      const fs = disque();
+      await ecrireReglages(fs, DOC, avecTailleTexte(DEFAUTS, palier));
+      const { reglages, avertissement } = await lireReglages(fs, DOC);
+      assert.equal(avertissement, null, String(palier));
+      assert.equal(tailleTexteDe(reglages), palier);
+    }
+    for (const faute of [0, 120, '115', null, undefined, Number.NaN]) {
+      assert.throws(() => avecTailleTexte(DEFAUTS, faute), TypeError, String(faute));
+    }
+    assert.throws(() => avecTailleTexte(DEFAUTS, 120), /taille du texte 90, 100, 115, 130 ou 150 attendue/);
   });
 
   test('le domaine du papier est celui de PAPIERS (src/geometrie/papiers.js) : chaque papier défini se pose, s’écrit et se relit ; une clé héritée ne passe pas', async () => {

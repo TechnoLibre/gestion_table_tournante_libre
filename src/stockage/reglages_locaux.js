@@ -3,12 +3,14 @@
 
 // Les réglages locaux (§ 8.5) : le fichier reglages_locaux.json, à la racine
 // du dossier de travail, à côté des fichiers d'événement et hors d'eux. Il
-// porte deux choses, et deux seulement : le cadrage de chaque événement,
+// porte trois choses, et trois seulement : le cadrage de chaque événement,
 // indexé par son identifiant — le zoom k en pixels par centimètre, la
-// translation tx, ty en pixels —, et le format de papier des planches,
-// global à la machine (§ 11.2), null tant que l'opérateur ne l'a pas choisi.
-// Ni l'un ni l'autre ne voyage avec un événement ni ne revient par un retour
-// arrière.
+// translation tx, ty en pixels —, le format de papier des planches, global
+// à la machine (§ 11.2), null tant que l'opérateur ne l'a pas choisi, et la
+// taille du texte de l'écran, globale à la machine, sous la clé
+// taille_texte, absente tant que l'opérateur ne l'a pas choisie : le défaut
+// de l'échelle s'applique alors (src/geometrie/taille_texte.js). Aucun ne
+// voyage avec un événement ni ne revient par un retour arrière.
 //
 // La lecture ne bloque jamais : un fichier absent donne les défauts ; un
 // fichier qui ne se lit pas, ou dont une valeur connue sort de sa règle,
@@ -23,6 +25,7 @@
 // écrivain regroupe les demandes d'un délai borné, si bien qu'un zoom
 // continu écrit une fois par délai, jamais à chaque image.
 import { PAPIERS } from '../geometrie/papiers.js';
+import { PALIERS_TAILLE_TEXTE, TAILLE_TEXTE_DEFAUT, estPalierTailleTexte } from '../geometrie/taille_texte.js';
 import { clesRangees } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 
@@ -42,7 +45,9 @@ const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
  * @property {null|import('../geometrie/papiers.js').Papier} papier   une clé de PAPIERS
  * @property {Array<{evenement: string, k: number, tx: number, ty: number}>} cadrages
  *           un par événement, triés par identifiant ; evenement non vide, k
- *           nombre fini > 0, tx et ty nombres finis. Toute autre clé, à tout
+ *           nombre fini > 0, tx et ty nombres finis
+ * @property {number} [taille_texte]      l'un de PALIERS_TAILLE_TEXTE ; absente
+ *           tant que l'opérateur ne l'a pas choisie. Toute autre clé, à tout
  *           niveau, se garde telle quelle
  */
 
@@ -77,12 +82,14 @@ function fauteDeCadrage(cadrage, chemin) {
 
 // Chemin de la première valeur connue des réglages qui sort de sa règle, ou
 // null ; '' quand les réglages ne sont pas un objet. Le second cadrage d'un
-// même événement est fautif.
+// même événement est fautif ; une taille du texte présente est l'un des
+// paliers.
 function fauteDeReglages(reglages) {
   if (!estObjet(reglages)) return '';
   const { format, papier, cadrages } = reglages;
   if (!Number.isSafeInteger(format) || format < 1) return 'format';
   if (papier !== null && !estPapier(papier)) return 'papier';
+  if (Object.hasOwn(reglages, 'taille_texte') && !estPalierTailleTexte(reglages.taille_texte)) return 'taille_texte';
   if (!Array.isArray(cadrages)) return 'cadrages';
   const vus = new Set();
   for (let rang = 0; rang < cadrages.length; rang += 1) {
@@ -119,9 +126,10 @@ const illisibles = (raison) => ({
  * fichier illisible rend les défauts et l'avertissement REGLAGES_ILLISIBLES
  * {chemin, raison} : raison JSON pour un texte qui ne se lit pas, vide
  * compris ; FORME pour une valeur connue hors de sa règle — un format qui
- * n'est pas un entier ≥ 1, un papier hors de null et des clés de PAPIERS, un cadrage
- * fautif ou en double ; le code d'une lecture que le système de fichiers
- * refuse autrement que par ABSENT. Une marque d'ordre d'octets en tête est
+ * n'est pas un entier ≥ 1, un papier hors de null et des clés de PAPIERS,
+ * un cadrage fautif ou en double, une taille du texte présente hors des
+ * paliers ; le code d'une lecture que le système de fichiers refuse
+ * autrement que par ABSENT. Une marque d'ordre d'octets en tête est
  * ignorée. Les réglages lus gardent leurs clés inconnues et leur format ;
  * leurs cadrages sont triés par identifiant d'événement.
  *
@@ -194,6 +202,35 @@ export function avecPapier(reglages, papier) {
     throw new TypeError(`avecPapier : papier null, ${NOMS_PAPIERS.join(' ou ')} attendu, reçu ${JSON.stringify(papier)}`);
   }
   return { ...reglages, papier };
+}
+
+/**
+ * La taille du texte de l'écran que les réglages portent, à défaut
+ * TAILLE_TEXTE_DEFAUT.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @returns {number}   l'un de PALIERS_TAILLE_TEXTE
+ */
+export function tailleTexteDe(reglages) {
+  return Object.hasOwn(reglages, 'taille_texte') ? reglages.taille_texte : TAILLE_TEXTE_DEFAUT;
+}
+
+/**
+ * Les réglages reçus, la taille du texte de l'écran remplacée ; ceux reçus ne
+ * changent pas.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @param {number} taille   l'un de PALIERS_TAILLE_TEXTE
+ * @returns {ReglagesLocaux}
+ * @throws {TypeError} hors des paliers
+ */
+export function avecTailleTexte(reglages, taille) {
+  if (!estPalierTailleTexte(taille)) {
+    throw new TypeError(
+      `avecTailleTexte : taille du texte ${PALIERS_TAILLE_TEXTE.slice(0, -1).join(', ')} ou ${PALIERS_TAILLE_TEXTE.at(-1)} attendue, reçu ${JSON.stringify(taille)}`,
+    );
+  }
+  return { ...reglages, taille_texte: taille };
 }
 
 /**

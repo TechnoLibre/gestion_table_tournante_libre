@@ -860,6 +860,16 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'parametres',
+    mode: null,
+    async atteindre(contexte) {
+      const m = await contexte.monter();
+      await cliquer(m, '[data-bandeau] [data-commande="parametres"]');
+      await element(m, '[data-ecran="parametres"]');
+      return m.racine;
+    },
+  },
+  {
     nom: 'recuperation',
     mode: null,
     async atteindre(contexte) {

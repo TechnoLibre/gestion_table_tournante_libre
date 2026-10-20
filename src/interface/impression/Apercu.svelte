@@ -27,7 +27,9 @@
   // mesure sur une feuille gabarit, que la vue rend hors de la vue, à
   // l'ouverture et chaque fois que la vue, le papier ou le pied changent
   // (HAUTEUR_BANDE_IMPRESSION) ; le document se rend ensuite, la bande
-  // reçue par la vue, qui la passe à sa mise en page.
+  // reçue par la vue, qui la passe à sa mise en page. Le document et le
+  // gabarit portent les tailles du papier, que la taille du texte de l'écran
+  // ne change pas (jetons.css).
   //
   // « Imprimer » demande à l'imprimante du contexte le papier et
   // l'orientation de la vue ; un échec pose son refus (refusImpression) sur
@@ -177,7 +179,7 @@
     </div>
   {:else if refusNom === null}
     {#key cleGabarit}
-      <div class="gabarit" aria-hidden="true" {@attach mesurer}>
+      <div class="gabarit" data-gabarit aria-hidden="true" {@attach mesurer}>
         <Vue etat={sortie.etat} {options} {feuille} />
       </div>
     {/key}

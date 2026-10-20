@@ -4,9 +4,9 @@
 // Les textes de la coquille (§ 8.4, § 18.6, § 19.2) : le nom de
 // l'application, le titre du bandeau et de la fenêtre, la provenance de la
 // construction par mode de Vite, le libellé de mode, l'annonce de format, le
-// réglage de thème, « Liste des événements », le panneau « À propos » et son
-// bloc, et le titre de chaque section de l'événement, que la navigation et
-// chaque section reprennent. Un mode sans clé s'affiche sous son propre nom
+// réglage de thème, « Liste des événements », le panneau « Paramètres », le
+// panneau « À propos » et son bloc, et le titre de chaque section de
+// l'événement, que la navigation et chaque section reprennent. Un mode sans clé s'affiche sous son propre nom
 // (libelles.js). Chaque clé commence par « coquille. ».
 export const TABLE = new Map([
   ['coquille.nom', 'Gestion table tournante Libre'],
@@ -36,6 +36,24 @@ export const TABLE = new Map([
   ['coquille.theme.sombre', 'Sombre'],
 
   ['coquille.liste', 'Liste des événements'],
+
+  // Le panneau « Paramètres » : la taille du texte de l'écran, un choix par
+  // palier (src/geometrie/taille_texte.js), et le thème, sous
+  // coquille.theme.titre.
+  ['coquille.parametres.titre', 'Paramètres'],
+  ['coquille.parametres.taille.titre', 'Taille du texte'],
+  [
+    'coquille.parametres.taille.explication',
+    'Les écrans suivent cette taille ; le plan, les pages imprimées et les badges gardent la leur. ' +
+      'Ce poste la retient d\u{2019}un lancement à l\u{2019}autre.',
+  ],
+  ['coquille.parametres.taille.palier', ({ taille }) => `${taille}\u{202F}%`],
+  [
+    'coquille.parametres.taille.nonRetenue',
+    'La taille choisie vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
+  ['coquille.parametres.theme.explication', 'Chaque lancement repart du thème du système ; le choix vaut pour la séance.'],
+  ['coquille.parametres.fermer', 'Fermer'],
 
   // Le panneau « À propos ». Le bloc : nom, version affichée, plateforme,
   // provenance — son libellé, ou le mode lui-même quand il n'en a pas —,
