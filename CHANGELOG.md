@@ -336,6 +336,10 @@
   partie puis revenue.
 - Le guide d'usage montre la présence, de l'aperçu du modèle aux badges,
   captures à l'appui.
+- Un geste, et son retour par « Défaire », s'enregistrent plus vite sur un
+  événement qui porte beaucoup de propositions : celles qui ne changent pas ne
+  se recopient ni ne se recontrôlent plus. Les fichiers écrits restent les
+  mêmes, octet pour octet.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

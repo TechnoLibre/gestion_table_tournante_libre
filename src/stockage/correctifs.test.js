@@ -3062,6 +3062,15 @@ describe('appliquerSuite : une suite de correctifs sur une seule copie (§ 8.6)'
     assert.throws(() => appliquerSuite(a, bon), TypeError);
     assert.throws(() => appliquerSuite(a, null), TypeError);
   });
+
+  test("des correctifs qui ne sont pas une liste lèvent la TypeError d'appliquerSuite, qui les nomme, avant toute lecture de la charge", () => {
+    const a = petite();
+    for (const nonListe of [null, 'poser', { 0: [] }]) {
+      const message = `appliquerSuite : liste de correctifs attendue, reçu ${JSON.stringify(nonListe)}`;
+      assert.throws(() => appliquerSuite(a, nonListe), { name: 'TypeError', message });
+      assert.throws(() => appliquerSuite(null, nonListe), { name: 'TypeError', message });
+    }
+  });
 });
 
 // --- Caractérisation -------------------------------------------------------

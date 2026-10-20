@@ -2508,7 +2508,16 @@ cadrage plutôt que de l'écrire à chaque image d'un zoom. Lui appliquer la rè
 grandeur posé de tête : la réécriture intégrale du fichier d'état **à chaque
 entrée** est la contrainte réelle qui gouverne le format (§ 8.9). La mesure se
 prend sur la grande démonstration, sur la plateforme livrée, et le test échoue
-au-delà (§ 14.1 ; série `node:long` du § 14.4).
+au-delà (§ 14.1 ; série `node:long` du § 14.4). Le geste mesuré est celui des
+commandes : il retouche une copie de travail qui partage les propositions
+figées de l'événement ouvert (§ 13.4), et l'épreuve refuse un geste dont les
+propositions arriveraient recopiées, qui mesurerait un autre chemin. Le relevé
+sur la plateforme livrée porte sur la durée au mur, écritures comprises. La
+série `node:long` en borne le calcul : le temps que le geste attend la coquille
+pour écrire et vider ses fichiers dépend du système de fichiers et de ce qui
+l'occupe au même moment ; il s'y relève sur chaque geste et s'ajoute à son
+seuil, et l'épreuve vérifie à part que le geste écrit sa ligne de journal, le
+`.precedent` et l'état, une fois chacun, et rien d'autre.
 
 **Est une entrée exactement ce qui change le contenu du fichier.** Changer de
 tour affiché, zoomer, mettre en évidence, masquer les listes **n'en sont pas**.
@@ -3051,6 +3060,11 @@ plateforme**.
   seule ne distingue pas un fichier complet d'un fichier plausible. Le contrôle
   **s'étend aux placements** (§ 8.9) : longueurs déclarées contre listes
   écrites, identifiants vérifiés en multiensemble par tour, réserve comprise.
+- **Le logiciel n'écrit jamais un état qu'il ne relirait pas.** Avant la
+  première écriture d'un geste, le texte d'état se relit par l'analyse même de
+  l'ouverture ; une charge qu'elle refuserait refuse le geste, et rien ne
+  s'écrit, ni journal ni état. Ce contrôle a lieu à chaque geste et jamais
+  seulement en épreuve (§ 14.12) : c'est un geste qui produit l'état fautif.
 - **Sérialisation canonique** : **ordre de clés fixé, et aucune valeur que le
   sérialiseur dérive de l'horloge ou d'un tirage au moment d'écrire.** La règle
   porte sur le **sérialiseur**, jamais sur la provenance de la donnée : une
@@ -5806,7 +5820,7 @@ des fonctions pures du module de géométrie.
 | critère | ce que Svelte apporte |
 |---|---|
 | tenir hors ligne | se compile en JavaScript ordinaire ; Vite est une dépendance de développement qui ne survit pas à la construction |
-| rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main — à une exception près : la table d'évaluation des propositions, gardée dans le modèle pur sous l'identité de la charge figée de la séance, qu'une écriture remplace |
+| rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main — à une exception près : la table d'évaluation des propositions, gardée dans le modèle pur sous l'identité de la charge figée de la séance, qu'une écriture remplace ; ses propositions figées sont partagées d'un état publié au suivant |
 | se tester sans navigateur | n'impose d'écrire aucun calcul dans un composant ; le composant ne contient que le câblage |
 | être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande de mode, les messages (avis, refus, information), le retrait, le plan, le graphique, le papier |
 
@@ -5871,6 +5885,12 @@ d'inscriptibilité **en cours de séance**, et un support amovible. Sans elle, l
 la règle à cinq issues du § 8.6 reste le code le moins éprouvé du logiciel alors
 qu'elle décide de l'endroit où vit la soirée. L'impression a de même sa
 troisième implémentation, simulée, qui rend l'issue que l'épreuve choisit.
+
+**Une proposition entrée dans l'événement ouvert ne change plus** : le stockage
+la fige, et tout changement passe par un objet neuf. Les mémoires du stockage
+(copie canonique, texte, contrôle de forme, examen) se gardent par l'identité de
+ces objets figés ; elles n'ont d'effet que sur le temps, et une épreuve compare
+leurs sorties à celles d'objets non figés, octet pour octet.
 
 **Trois couches servent les sorties, et chacune n'importe que ce que sa liste
 nomme.** `src/pdf` produit la planche de badges (§ 11.1) : l'imposition, la mise
@@ -6216,7 +6236,7 @@ n'égale, octet pour octet, un fichier livré.
 |---|---|---|
 | moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut, détail d'un placement pour la page de qualité, borne de diversité, points de relevé de la recherche |
 | géométrie | `node` + navigateur | conversions, ajustement, bornes de zoom, désignation d'un siège ; l'oracle du moteur de rendu au niveau 2 ; la découpe du plan en pages (§ 11.7) ; les échelles, tracés et pointage des graphiques (§ 12.9) |
-| stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), conversion du format 1 avec son journal, compagnon des courses (§ 8.6) |
+| stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), conversion du format 1 avec son journal, compagnon des courses (§ 8.6), accord de la restitution incrémentale avec la chaîne des correctifs, de l'élagage en mémoire avec le texte relu, de SANS_EFFET par la différence avec le texte, des mémoires par identité avec le recalcul |
 | analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des appartenances et des étiquettes, lignes refusées, aller-retour, CSV des objectifs de table |
 | générateur de démonstrations | `node` | vecteur du générateur pseudo-aléatoire, empreinte des fichiers livrés, refus, noms forgés |
 | PDF | `node` | couche de texte, pagination, police embarquée et table `ToUnicode`, géométrie de la planche, reproductibilité |

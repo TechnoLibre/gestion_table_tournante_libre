@@ -11,21 +11,27 @@
 // est celui de la plateforme electron : la page (fichiers_electron.js) devant
 // les primitives de la coquille (electron/fichiers.js), sous un dossier
 // temporaire neuf, retiré à la fin de l'épreuve ; seul l'IPC d'Electron y est
-// remplacé, par une copie des arguments et des réponses.
+// remplacé, par une copie des arguments et des réponses. Chaque geste mesure
+// aussi le temps qu'il attend la coquille, qui s'ajoute à son seuil.
 //
 // La charge mesurée se construit une fois pour le fichier (chargeMesuree) :
 // le moteur produit ses vingt plans, et une épreuve affirme que l'analyse
 // l'admet et que la forme canonique la réécrit telle quelle. Chaque geste
 // mesuré retouche le placement retenu — deux personnes changent de table à
-// un tour — ; son entrée porte un correctif qui touche deux listes de table,
-// ou l'instantané de la charge à la cadence du journal. Après chaque geste,
-// hors de la mesure, l'état et le .precedent sur le disque sont, octet pour
-// octet, ceux que le geste écrit ; à la fin, le journal relu porte une
+// un tour — sur une copie de travail de la charge de l'Ouvert
+// (copieDeTravail), comme le font les commandes : ses propositions, figées,
+// y restent les mêmes objets. Son entrée porte un correctif qui touche deux
+// listes de table, ou l'instantané de la charge à la cadence du journal.
+// Après chaque geste, hors de la mesure, l'Ouvert rendu garde ces
+// propositions figées, et l'état et le .precedent sur le disque sont, octet
+// pour octet, ceux que le geste écrit ; à la fin, le journal relu porte une
 // entrée par révision et restitue la charge de révisions choisies : la durée
 // retenue vient toujours d'un geste qui a écrit tout ce qu'écrit un
-// enregistrement. Un geste qui n'écrirait plus les
-// propositions, plus le .precedent ou plus le journal élagué mesurerait
-// autre chose, et passerait sous le seuil (§ 14.2).
+// enregistrement. Un geste qui n'écrirait plus les propositions, plus le
+// .precedent ou plus le journal élagué mesurerait autre chose, et passerait
+// sous le seuil (§ 14.2) ; un geste dont les propositions arriveraient
+// recopiées mesurerait un autre chemin que celui des commandes, et l'épreuve
+// le refuse.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -39,6 +45,7 @@ import { canoniser, serialiser } from './canonique.js';
 import { creer, enregistrer, ouvrir } from './depot.js';
 import { analyser, configurationDepuisCharge } from './document.js';
 import { creerFichiersElectron } from './fichiers_electron.js';
+import { copieDeTravail, estFigee } from './gel.js';
 import {
   INTERVALLE_INSTANTANE,
   PLAFOND_ENTREES,
@@ -101,11 +108,30 @@ const FENETRE_MESURE_MS = 10_000;
 // du geste. Le § 8.2 réécrit l'état entier à chaque geste : c'est ce coût
 // qui gouverne la forme du fichier (§ 8.9).
 //
-// SEUIL_MS borne le geste ordinaire : correctif depuis l'entrée qui précède,
-// état sérialisé puis relu, ligne du journal ajoutée et vidée sur le disque,
-// .precedent puis état réécrits par écriture atomique. L'entrée qui porte un
-// instantané, une sur INTERVALLE_INSTANTANE, coûte autant : canoniser la
-// charge y remplace le calcul du correctif, et sa ligne s'ajoute de même.
+// Un geste se mesure en deux parts. La première est son attente de la
+// coquille : la durée au mur pendant laquelle un appel au moins attend une
+// primitive, copie de l'IPC comprise — écrire et vider sur le disque la ligne
+// du journal, le .precedent, l'état. Elle dépend du système de fichiers et de
+// ce qui l'occupe au même moment, non du stockage : en mémoire (tmpfs), elle
+// vaut à peu près ce que le stockage calcule ; sur un disque que d'autres
+// séries vident en même temps, jusqu'à une dizaine de fois. La seconde est
+// son calcul, le reste de la durée au mur : ce que la page exécute. Chaque
+// seuil borne le calcul, et la durée au mur d'un geste admis vaut au plus
+// son seuil plus l'attente de la coquille de ce même geste : l'attente,
+// relevée geste par geste, ne décide pas de l'issue. Ce qu'écrit le geste se
+// vérifie par ailleurs : chaque écriture de la coquille, une fois chacune,
+// et les fichiers, octet pour octet, sur le disque.
+//
+// SEUIL_MS borne le geste ordinaire. Il ne recopie pas la charge entière :
+// ses propositions figées restent les mêmes objets, et ce que le stockage
+// calcule d'elles — copie canonique, texte, contrôle de forme, examen — se
+// garde par leur identité. Restent à calculer la copie canonique du reste de
+// la charge, le correctif depuis l'entrée qui précède, qui saute les
+// propositions partagées, l'état sérialisé puis relu en entier, la ligne du
+// journal ; la coquille ajoute cette ligne et la vide sur le disque, puis
+// réécrit le .precedent et l'état par écriture atomique. L'entrée qui porte
+// un instantané, une sur INTERVALLE_INSTANTANE, coûte autant : la copie
+// canonique du geste y remplace le correctif, et sa ligne s'ajoute de même.
 // SEUIL_ELAGAGE_MS borne le geste dont l'entrée fait passer le journal
 // au-delà de PLAFOND_ENTREES : le journal se réécrit en entier — son texte
 // recomposé et élagué en mémoire — par une écriture atomique de la taille
@@ -117,36 +143,40 @@ const FENETRE_MESURE_MS = 10_000;
 // manque (depot.js) — réparent un événement sorti du cours ordinaire des
 // gestes, et ces épreuves ne les mesurent pas.
 //
-// REFERENCE_MS et REFERENCE_ELAGAGE_MS sont les minimums que relèvent ces
-// épreuves, le fichier lancé seul, médiane de plusieurs lancements arrondie
-// à la milliseconde supérieure, sur un processeur x86-64 de bureau de
-// génération Zen 3, seize cœurs virtuels sous KVM, le dossier temporaire en
-// mémoire (tmpfs), sous Linux et Node 26.
+// REFERENCE_MS et REFERENCE_ELAGAGE_MS sont les minimums, hors de l'attente
+// de la coquille, que relèvent ces épreuves, le fichier lancé seul, médiane
+// de plusieurs lancements arrondie à la milliseconde supérieure, sur un
+// processeur x86-64 de bureau de génération Zen 3, seize cœurs virtuels sous
+// KVM, le dossier temporaire en mémoire (tmpfs), sous Linux et Node 26.
 // MARGE, le facteur qui tire chaque seuil de sa référence, couvre, sur la
-// machine des références, quatre séries node-long lancées ensemble —
-// autant que de conteneurs simultanés par défaut sous make
-// verifier_systemes (GTT_PARALLELES) —, chacune son dossier temporaire sur
-// disque, où vider sur le disque s'ajoute au calcul. Sous cette charge, le
-// plus court des GESTES_MESURES gestes ordinaires monte jusqu'à trois fois
-// REFERENCE_MS, et le plus court des ESSAIS_ELAGAGE essais jusqu'à trois
-// fois REFERENCE_ELAGAGE_MS : il reste un tiers de marge. MARGE ne couvre
-// pas ce qu'un autre conteneur de make verifier_systemes peut exécuter en
-// même temps — make test, npm ci, Chromium —, ni davantage de conteneurs à
-// la fois, ni une machine plus lente d'un tiers sous la même charge : contre
-// une telle charge, quand elle passe, l'échantillonnage mesure d'autres
-// gestes jusqu'à son plafond. Elle reste assez basse pour qu'un état dont
-// les placements pèsent dix fois plus, comme sous leur forme nommée (§ 8.9),
-// dépasse chacun des deux seuils.
+// machine des références, quatre séries node-long lancées ensemble, autant
+// que de conteneurs simultanés par défaut sous make verifier_systemes
+// (GTT_PARALLELES), chacune son dossier temporaire sur disque : le calcul du
+// plus court des gestes y monte de deux à plus de quatre fois sa référence,
+// selon ce qu'exécute la machine par ailleurs. Elle ne couvre pas ce qu'un
+// autre conteneur exécute en même temps — make test, npm ci, Chromium —, ni
+// une machine plus lente : contre une charge passagère, l'échantillonnage
+// mesure d'autres gestes jusqu'à son plafond.
+//
+// Une proposition inchangée ne coûte presque rien au geste. Le
+// seuil du geste ordinaire laisse donc passer un état qui porte dix fois plus
+// de propositions, à environ deux fois REFERENCE_MS, et un geste dont les
+// propositions arriveraient recopiées, à près de quatre fois : l'épreuve
+// refuse ce dernier par l'identité des propositions, hors de la mesure. Un
+// geste qui recopierait et recontrôlerait la charge entière, à plus de cinq
+// fois REFERENCE_MS, le dépasse. Le geste qui élague dépasse son seuil sous
+// dix fois plus de propositions, chaque instantané qu'il réécrit grossissant
+// d'autant.
 //
 // Propriétaire (§ 14.1) : la série node-long, où ces épreuves relèvent la
 // mesure à chaque exécution et la nomment quand elle dépasse son seuil. Le
 // relevé sur la plateforme livrée — l'exécutable Windows, sous un antivirus
-// qui inspecte chaque fichier temporaire — appartient au niveau manuel,
-// avant livraison : tant qu'il n'a pas eu lieu, ces seuils sont des défauts
-// de travail relevés sous Linux.
-const REFERENCE_MS = 20;
-const REFERENCE_ELAGAGE_MS = 87;
-const MARGE = 4;
+// qui inspecte chaque fichier temporaire, dont le coût tombe dans l'attente
+// de la coquille — appartient au niveau manuel, avant livraison : tant qu'il
+// n'a pas eu lieu, ces seuils sont des défauts de travail relevés sous Linux.
+const REFERENCE_MS = 3;
+const REFERENCE_ELAGAGE_MS = 10;
+const MARGE = 5;
 const SEUIL_MS = REFERENCE_MS * MARGE;
 const SEUIL_ELAGAGE_MS = REFERENCE_ELAGAGE_MS * MARGE;
 
@@ -214,9 +244,12 @@ const chargeMesuree = () => (construite ??= construire());
 // deuxième changent de table, comme une retouche à la main (§ 5.8). Une
 // personne réservée ne s'échange pas, ce que le geste refuserait (§ 5.9).
 // Les sièges n'étant pas attribués, chaque liste reste triée par
-// identifiant (§ 8.9).
+// identifiant (§ 8.9). La retouche se fait sur une copie de travail
+// (copieDeTravail), comme celle des commandes : les propositions figées de
+// la charge reçue y sont les mêmes objets, les autres des copies, et la
+// charge reçue ne change pas.
 function echanger(charge, tour) {
-  const apres = structuredClone(charge);
+  const apres = copieDeTravail(charge);
   const reservees = new Set(charge.reservations.map(({ participant }) => participant));
   const [premiere, deuxieme] = apres.retenu.placement[tour].sieges;
   const a = premiere.find((id) => !reservees.has(id));
@@ -282,8 +315,13 @@ const SANS_DIALOGUE = Object.freeze({});
 // (creerFichiers), que servir offre canal par canal, comme le processus
 // principal. L'IPC d'Electron y est remplacé par une copie structurée des
 // arguments et de la réponse, comme il les copie. Les Documents et l'AppData
-// du poste sont des dossiers de dossier ; rend le système et la racine
-// documents, créée.
+// du poste sont des dossiers de dossier. Rend le système, la racine
+// documents, créée, attente, qui rend l'attente de la coquille cumulée
+// depuis la création, en millisecondes : la durée au mur pendant laquelle un
+// appel au moins attend une primitive, copie de l'IPC comprise — des appels
+// qui se chevauchent ne la comptent qu'une fois ; un geste la mesure par
+// différence —, et ecritures, la liste, dans l'ordre des appels, des
+// primitives qui écrivent (ECRITURES), chacune [primitive, chemin, texte].
 async function systemeSur(dossier) {
   const systeme = decrireSysteme({
     env: {},
@@ -295,18 +333,72 @@ async function systemeSur(dossier) {
   servir(creerFichiers({ ...systeme, dialog: SANS_DIALOGUE, shell: SANS_DIALOGUE }), (canal, gestionnaire) =>
     gestionnaires.set(canal, gestionnaire),
   );
+  let attente = 0;
+  let enCours = 0;
+  let depuis = 0;
+  const ecritures = [];
   const pont = Object.fromEntries(
     PRIMITIVES.map((primitive) => {
       const gestionnaire = gestionnaires.get(`${PREFIXE_CANAL}${primitive}`);
-      const appeler = async (...parametres) =>
-        structuredClone(await gestionnaire({ sender: null }, ...structuredClone(parametres)));
+      const appeler = async (...parametres) => {
+        if (ECRITURES.has(primitive)) ecritures.push([primitive, parametres[1], parametres[2]]);
+        if (enCours === 0) depuis = performance.now();
+        enCours += 1;
+        try {
+          return structuredClone(await gestionnaire({ sender: null }, ...structuredClone(parametres)));
+        } finally {
+          enCours -= 1;
+          if (enCours === 0) attente += performance.now() - depuis;
+        }
+      };
       return [primitive, appeler];
     }),
   );
   const fs = creerFichiersElectron(pont);
   const { documents } = await fs.racines();
   mkdirSync(documents.chemin, { recursive: true });
-  return { fs, racine: documents };
+  return { fs, racine: documents, attente: () => attente, ecritures };
+}
+
+// Les primitives de la coquille qui écrivent sur le disque.
+const ECRITURES = new Set([
+  'ecrireAtomique',
+  'ecrireOctetsAtomique',
+  'ajouterLigne',
+  'creerDossier',
+  'deplacer',
+  'supprimer',
+]);
+
+// Affirme ce que la coquille a écrit pour le geste de la révision revision,
+// depuis le rang depuis de ecritures : la ligne du journal par un ajout, ou
+// le journal entier par une écriture atomique quand il s'élague (journal, la
+// primitive attendue), puis le .precedent au texte precedent, puis l'état au
+// texte etat, une fois chacun, et rien d'autre. Le seuil ne bornant que le
+// calcul, ce décompte refuse une écriture de trop, quelle que soit la charge
+// du disque.
+function affirmerEcritures(ecritures, depuis, base, revision, { journal, etat, precedent }) {
+  const faites = ecritures
+    .slice(depuis)
+    .map(([primitive, chemin, texte]) =>
+      chemin === base + SUFFIXES.journal ? [primitive, chemin] : [primitive, chemin, texte],
+    );
+  assert.deepEqual(
+    faites,
+    [
+      [journal, base + SUFFIXES.journal],
+      ['ecrireAtomique', base + SUFFIXES.precedent, precedent],
+      ['ecrireAtomique', base + SUFFIXES.etat, etat],
+    ],
+    `écritures de la coquille pour le geste de la révision ${revision}`,
+  );
+}
+
+// Affirme qu'un geste mesuré a attendu la coquille, ce que fait tout geste
+// qui écrit, et au plus sa durée au mur : un décompte faux de l'attente
+// fausserait le calcul que borne le seuil.
+function affirmerAttente({ duree, coquille }, quoi) {
+  assert.ok(coquille > 0 && coquille <= duree, `${quoi} : attente de la coquille ${coquille} ms pour ${duree} ms au mur`);
 }
 
 // Chemin, sur le disque, du fichier de suffixe de l'événement base sous
@@ -341,36 +433,48 @@ function affirmerEcrits(racine, base, revision, { etat, precedent }) {
   );
 }
 
+// Un geste mesuré, { duree, coquille } : sa durée au mur et son attente de la
+// coquille, en millisecondes. Rend son calcul, la durée au mur moins
+// l'attente, que borne le seuil.
+const calcul = ({ duree, coquille }) => duree - coquille;
+
 // La mesure échantillonnée d'un geste (GESTES_MESURES) : faire exécute un
-// geste et ses vérifications, et rend la durée du seul geste. Un premier
-// appel chauffe, sans compter ; suivent base gestes mesurés, puis d'autres
-// tant que le plus court dépasse seuil, jusqu'à auPlus gestes mesurés ou la
-// fin de FENETRE_MESURE_MS, comptée depuis le premier. Rend les durées, dans
-// l'ordre des gestes, et arret, ce qui a clos une mesure restée au-delà du
-// seuil.
+// geste et ses vérifications, et rend le geste mesuré, { duree, coquille }.
+// Un premier appel chauffe, sans compter ; suivent base gestes mesurés, puis
+// d'autres tant que le plus court calcul dépasse seuil, jusqu'à auPlus gestes
+// mesurés ou la fin de FENETRE_MESURE_MS, comptée depuis le premier. Rend
+// les gestes, dans leur ordre, et arret, ce qui a clos une mesure restée
+// au-delà du seuil.
 async function mesurer(faire, { base, auPlus, seuil }) {
   await faire();
-  const durees = [];
+  const gestes = [];
   const debut = performance.now();
   const ouverte = () => performance.now() - debut < FENETRE_MESURE_MS;
-  while (durees.length < base || (Math.min(...durees) > seuil && durees.length < auPlus && ouverte())) {
-    durees.push(await faire());
+  const auDela = () => Math.min(...gestes.map(calcul)) > seuil;
+  while (gestes.length < base || (auDela() && gestes.length < auPlus && ouverte())) {
+    gestes.push(await faire());
   }
   const arret =
-    durees.length >= auPlus
+    gestes.length >= auPlus
       ? `plafond de ${auPlus} mesures atteint`
       : `fenêtre de ${FENETRE_MESURE_MS / 1000} s écoulée`;
-  return { durees, arret };
+  return { gestes, arret };
 }
 
-// Le message d'un seuil dépassé : le minimum, le nombre de mesures, leur
-// médiane et la plus longue, ce qui a clos la mesure, le seuil, et la
+// Le plus court calcul des gestes mesurés.
+const plusCourt = ({ gestes }) => Math.min(...gestes.map(calcul));
+
+// Le message d'un seuil dépassé : le plus court calcul, la durée au mur et
+// l'attente de la coquille de son geste, le nombre de mesures, la médiane et
+// le plus long des calculs, ce qui a clos la mesure, le seuil, et la
 // référence dont MARGE le tire.
-function depasse(quoi, { durees, arret }, seuil, reference) {
-  const triees = [...durees].sort(croissant);
+function depasse(quoi, { gestes, arret }, seuil, reference) {
+  const triees = gestes.map(calcul).sort(croissant);
+  const { duree, coquille } = gestes.find((mesure) => calcul(mesure) === triees[0]);
   return (
-    `${quoi} s'enregistre en ${ms(triees[0])} au minimum de ${durees.length} mesures ` +
-    `(médiane ${ms(triees[Math.floor((triees.length - 1) / 2)])}, la plus longue ${ms(triees.at(-1))} ; ` +
+    `${quoi} calcule en ${ms(triees[0])} au minimum de ${gestes.length} mesures ` +
+    `(${ms(duree)} au mur, dont ${ms(coquille)} d'attente de la coquille ; ` +
+    `médiane ${ms(triees[Math.floor((triees.length - 1) / 2)])}, le plus long ${ms(triees.at(-1))} ; ` +
     `${arret}), au-delà du seuil de ${ms(seuil)} (§ 8.2) : ${reference}, MARGE ${MARGE}`
   );
 }
@@ -396,29 +500,45 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
     );
   });
 
-  test(`un geste qui retouche le placement retenu s'enregistre — journal, .precedent, état — en au plus ${ms(SEUIL_MS)}, au minimum de ${GESTES_MESURES} à ${GESTES_AU_PLUS} mesures après un geste de chauffe ; chaque geste laisse sur le disque l'état et le .precedent qu'il écrit, et l'événement rouvert est celui du dernier geste, dont le journal porte chaque révision`, async () => {
+  test(`un geste qui retouche le placement retenu s'enregistre — journal, .precedent, état — en au plus ${ms(SEUIL_MS)} de plus que son attente de la coquille, au minimum de ${GESTES_MESURES} à ${GESTES_AU_PLUS} mesures après un geste de chauffe ; chaque geste garde les propositions figées de la charge d'avant, laisse sur le disque l'état et le .precedent qu'il écrit, et l'événement rouvert est celui du dernier geste, dont le journal porte chaque révision`, async () => {
     const dossier = mkdtempSync(join(tmpdir(), 'gtt-cout-'));
     try {
-      const { fs, racine } = await systemeSur(dossier);
+      const { fs, racine, attente, ecritures } = await systemeSur(dossier);
       let ouvert = await creer(fs, racine, chargeMesuree(), CREATION);
-      // La charge de chaque révision, depuis la création, et le texte de
-      // l'état à la dernière. Chaque geste retouche le tour qui suit celui du
-      // geste d'avant.
-      const charges = [chargeMesuree()];
+      // La charge de chaque révision, depuis celle de l'Ouvert créé, dont
+      // creer a figé les propositions sur sa copie de la charge mesurée, et
+      // le texte de l'état à la dernière. Chaque geste retouche le tour qui
+      // suit celui du geste d'avant ; enregistrer garde, dans l'Ouvert rendu,
+      // les propositions figées que la retouche a partagées.
+      const charges = [ouvert.charge];
       let texteEtat = serialiser(chargeMesuree(), { revision: 1, produitVersion: V });
       const faire = async () => {
         const revision = charges.length + 1;
         const avant = charges.at(-1);
         const apres = echanger(avant, (revision - 2) % avant.evenement.tours);
+        const ecrites = ecritures.length;
+        const attendu = attente();
         const debut = performance.now();
         ouvert = await enregistrer(ouvert, apres, geste(revision));
-        const duree = performance.now() - debut;
+        const releve = { duree: performance.now() - debut, coquille: attente() - attendu };
         const texteApres = serialiser(apres, { revision, produitVersion: V });
         assert.equal(ouvert.revision, revision);
+        assert.ok(
+          ouvert.charge.propositions.every(
+            (proposition, rang) => proposition === avant.propositions[rang] && estFigee(proposition),
+          ),
+          `le geste de la révision ${revision} ne garde pas les propositions figées de la charge d'avant`,
+        );
+        affirmerAttente(releve, `le geste de la révision ${revision}`);
+        affirmerEcritures(ecritures, ecrites, ouvert.base, revision, {
+          journal: 'ajouterLigne',
+          etat: texteApres,
+          precedent: texteEtat,
+        });
         affirmerEcrits(racine, ouvert.base, revision, { etat: texteApres, precedent: texteEtat });
         charges.push(apres);
         texteEtat = texteApres;
-        return duree;
+        return releve;
       };
       const mesure = await mesurer(faire, { base: GESTES_MESURES, auPlus: GESTES_AU_PLUS, seuil: SEUIL_MS });
 
@@ -454,7 +574,7 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
       }
 
       assert.ok(
-        Math.min(...mesure.durees) <= SEUIL_MS,
+        plusCourt(mesure) <= SEUIL_MS,
         depasse('un geste sur la grande démonstration', mesure, SEUIL_MS, `REFERENCE_MS ${REFERENCE_MS} ms`),
       );
     } finally {
@@ -462,10 +582,10 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
     }
   });
 
-  test(`le geste dont l'entrée fait passer le journal au-delà de ${PLAFOND_ENTREES} entrées le réécrit élagué — journal, .precedent, état — en au plus ${ms(SEUIL_ELAGAGE_MS)}, au minimum de ${ESSAIS_ELAGAGE} à ${ESSAIS_ELAGAGE_AU_PLUS} essais après un essai de chauffe, chacun sur une copie neuve du journal plein ; le journal écrit part de l'instantané de la coupe et restitue le geste`, async () => {
+  test(`le geste dont l'entrée fait passer le journal au-delà de ${PLAFOND_ENTREES} entrées le réécrit élagué — journal, .precedent, état — en au plus ${ms(SEUIL_ELAGAGE_MS)} de plus que son attente de la coquille, au minimum de ${ESSAIS_ELAGAGE} à ${ESSAIS_ELAGAGE_AU_PLUS} essais après un essai de chauffe, chacun sur une copie neuve du journal plein, les propositions figées de l'Ouvert gardées ; le journal écrit part de l'instantané de la coupe et restitue le geste`, async () => {
     const dossier = mkdtempSync(join(tmpdir(), 'gtt-elagage-'));
     try {
-      const { fs, racine } = await systemeSur(dossier);
+      const { fs, racine, attente, ecritures } = await systemeSur(dossier);
       const { base } = await creer(fs, racine, chargeMesuree(), CREATION);
       const chemin = (suffixe) => cheminDe(racine, base, suffixe);
       const plein = evenementPlein(readFileSync(chemin(SUFFIXES.journal), 'utf8'), chargeMesuree());
@@ -476,30 +596,47 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
       };
 
       // L'événement plein s'ouvre sans rien signaler, son journal à
-      // PLAFOND_ENTREES entrées. enregistrer ne modifie pas l'Ouvert reçu :
-      // chaque essai part du même, sur le journal plein reposé, la chauffe
-      // comprise.
+      // PLAFOND_ENTREES entrées, à la charge de sa dernière révision.
+      // enregistrer ne modifie pas l'Ouvert reçu : chaque essai part du même,
+      // sur le journal plein reposé, la chauffe comprise.
       poser();
       const ouvert = await ouvrir(fs, racine, base);
       assert.deepEqual(
         { avertissements: ouvert.avertissements, revision: ouvert.revision, entrees: ouvert.journal.entrees.length },
         { avertissements: [], revision: PLAFOND_ENTREES, entrees: PLAFOND_ENTREES },
       );
+      assert.deepEqual(ouvert.charge, canoniser(plein.chargeDe(PLAFOND_ENTREES)));
 
       // La coupe de l'élagage : l'instantané le plus récent — révision 1,
       // puis toutes les INTERVALLE_INSTANTANE — d'où le journal garde au
       // moins PLANCHER_ENTREES entrées jusqu'au geste.
       const revision = PLAFOND_ENTREES + 1;
       const coupe = 1 + Math.floor((revision - PLANCHER_ENTREES) / INTERVALLE_INSTANTANE) * INTERVALLE_INSTANTANE;
-      const apres = echanger(plein.chargeDe(PLAFOND_ENTREES), 1);
+      // Le geste retouche la charge de l'Ouvert, dont il partage les
+      // propositions figées, comme un geste ordinaire.
+      const apres = echanger(ouvert.charge, 1);
       const texteApres = serialiser(apres, { revision, produitVersion: V });
       let essai = 0;
       let journal = null;
       const faire = async () => {
         poser();
+        const ecrites = ecritures.length;
+        const attendu = attente();
         const debut = performance.now();
-        await enregistrer(ouvert, apres, geste(revision));
-        const duree = performance.now() - debut;
+        const avance = await enregistrer(ouvert, apres, geste(revision));
+        const releve = { duree: performance.now() - debut, coquille: attente() - attendu };
+        assert.ok(
+          avance.charge.propositions.every(
+            (proposition, rang) => proposition === ouvert.charge.propositions[rang] && estFigee(proposition),
+          ),
+          `le geste de l'essai ${essai} ne garde pas les propositions figées de l'Ouvert`,
+        );
+        affirmerAttente(releve, `l'essai ${essai}`);
+        affirmerEcritures(ecritures, ecrites, base, revision, {
+          journal: 'ecrireAtomique',
+          etat: texteApres,
+          precedent: plein.etat,
+        });
         affirmerEcrits(racine, base, revision, { etat: texteApres, precedent: plein.etat });
         journal = lireJournal(readFileSync(chemin(SUFFIXES.journal), 'utf8'));
         assert.deepEqual(
@@ -514,7 +651,7 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
         );
         assert.deepEqual(reconstruire(journal, revision), canoniser(apres));
         essai += 1;
-        return duree;
+        return releve;
       };
       const mesure = await mesurer(faire, {
         base: ESSAIS_ELAGAGE,
@@ -533,7 +670,7 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
       assert.deepEqual(rouvert.charge, canoniser(apres));
 
       assert.ok(
-        Math.min(...mesure.durees) <= SEUIL_ELAGAGE_MS,
+        plusCourt(mesure) <= SEUIL_ELAGAGE_MS,
         depasse(
           'le geste qui élague le journal plein',
           mesure,

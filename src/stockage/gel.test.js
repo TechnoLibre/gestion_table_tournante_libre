@@ -344,4 +344,15 @@ describe('gel : copieDeTravail', () => {
       assert.equal(JSON.stringify(copie), JSON.stringify(mal));
     }
   });
+
+  test("une proposition figée n'est jamais lue par la copie : un champ que structuredClone refuse n'y lève rien", () => {
+    // structuredClone lève DataCloneError sur une fonction : la copie ne
+    // réussit que si la proposition figée ne passe pas par lui.
+    const p = figer({ ...proposition(1), nonRecopiable: () => 'Ambrelle' });
+    const c = { evenement: { nom: 'Soirée Tamaris' }, propositions: [p, proposition(2)] };
+    assert.throws(() => structuredClone(p), { name: 'DataCloneError' });
+    const copie = copieDeTravail(c);
+    assert.equal(copie.propositions[0], p);
+    assert.deepEqual(copie.propositions[1], proposition(2));
+  });
 });
