@@ -735,7 +735,7 @@ function raisonsDeDerive({ tables, capacites, tours, participants, placement }, 
  * Triées par code, unité UTF-16 par unité, puis par identifiant ; [] quand
  * le placement décrit la configuration courante : son plan passe alors
  * indexerPlan du moteur sur elle. Le coût est linéaire en participants
- * déclarés et en tours : les absents de chaque tour s'indexent une fois. Noms, appartenances, numéros, positions,
+ * déclarés et en tours : les absents de chaque tour s'indexent une fois. Noms, organisations, numéros, positions,
  * formes de table et réglages n'entrent pas dans la dérive. Lève TypeError
  * quand p n'est pas cohérent (fautes).
  *

@@ -79,11 +79,11 @@ const geste = (n, plus = {}) => ({ libelle: `Geste ${n}`, horodatage: heure(n), 
 
 // --- Les charges -----------------------------------------------------------
 
-const personne = (id, nom, prenom, appartenance) => ({
+const personne = (id, nom, prenom, organisation) => ({
   id,
   nom,
   prenom,
-  appartenance,
+  organisation,
   courriel: null,
   titrePressenti: null,
   notes: null,

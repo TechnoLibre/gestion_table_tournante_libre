@@ -27,18 +27,18 @@ const TIRET = '\u{2014}';
 const chargeDemo = (cle) => analyser(texteLivre(cle)).charge;
 
 /**
- * Une charge construite : une personne par appartenance donnée (null : sans
- * appartenance), d'identifiants 1 à N ; une table par capacité, d'identifiant
+ * Une charge construite : une personne par organisation donnée (null : sans
+ * organisation), d'identifiants 1 à N ; une table par capacité, d'identifiant
  * 1 à T et de numéro numeros[rang] (rang + 1 par défaut) ; les réservations
  * de portée « tous les tours », sans siège, données en [participant, table].
  */
-function chargeDe({ appartenances, capacites, tours = 4, ancres = [], separer = true, numeros = null }) {
+function chargeDe({ organisations, capacites, tours = 4, ancres = [], separer = true, numeros = null }) {
   const charge = creerCharge({ id: 'evt-diagnostic', nom: 'Soirée des Merles', siegesParDefaut: 3, tours });
-  charge.participants = appartenances.map((appartenance, rang) => ({
+  charge.participants = organisations.map((organisation, rang) => ({
     id: rang + 1,
     nom: `Ombrelle${rang + 1}`,
     prenom: 'Iris',
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -52,8 +52,8 @@ function chargeDe({ appartenances, capacites, tours = 4, ancres = [], separer = 
     position: { x: 300 * rang, y: 0 },
   }));
   charge.reservations = ancres.map(([participant, table]) => ({ participant, table, siege: null, portee: 'tous', tour: null }));
-  charge.reglages.separerAppartenances = separer;
-  charge.prochainsIds = { participant: appartenances.length + 1, table: capacites.length + 1, proposition: 1 };
+  charge.reglages.separerOrganisations = separer;
+  charge.prochainsIds = { participant: organisations.length + 1, table: capacites.length + 1, proposition: 1 };
   return charge;
 }
 
@@ -66,7 +66,7 @@ const fois = (n, valeur) => Array(n).fill(valeur);
  * des objectifs, absent au défaut ; respecter faux décoche le critère.
  */
 function chargeObjectifs(n, autres, { mode = null, respecter = true } = {}) {
-  const charge = chargeDe({ appartenances: fois(n, null), capacites: [8, ...autres] });
+  const charge = chargeDe({ organisations: fois(n, null), capacites: [8, ...autres] });
   for (const participant of charge.participants) participant.etiquettes = ['finance'];
   charge.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
   if (mode !== null) charge.reglages.modeObjectifs = mode;
@@ -90,21 +90,21 @@ const texte = ({ cle, details }) => t(cle, details);
 
 // Les configurations nommées de l'épreuve.
 const CONFIGURATIONS = {
-  // 28 personnes en 18 appartenances, dix de 2 et huit de 1, quatre tables
+  // 28 personnes en 18 organisations, dix de 2 et huit de 1, quatre tables
   // de 7, quatre tours : la redondance du remède en tours (M1).
   redondance: () =>
     chargeDe({
-      appartenances: [
+      organisations: [
         ...Array.from({ length: 10 }, (_, g) => fois(2, `Cercle ${g + 1}`)).flat(),
         ...Array.from({ length: 8 }, (_, g) => `Atelier ${g + 1}`),
       ],
       capacites: fois(4, 7),
     }),
   // Quatre tables de 3, quatre tours, un animateur par table, tous du Club
-  // des Merles ; les huit autres sans appartenance.
+  // des Merles ; les huit autres sans organisation.
   animateurs: () =>
     chargeDe({
-      appartenances: [...fois(4, 'Club des Merles'), ...fois(8, null)],
+      organisations: [...fois(4, 'Club des Merles'), ...fois(8, null)],
       capacites: fois(4, 3),
       ancres: [[1, 1], [2, 2], [3, 3], [4, 4]],
     }),
@@ -112,29 +112,29 @@ const CONFIGURATIONS = {
   // 4 places, 2 ancrés ; table 3, numérotée 9 : 4 places, aucun.
   ancrage: () =>
     chargeDe({
-      appartenances: fois(10, null),
+      organisations: fois(10, null),
       capacites: [3, 4, 4],
       numeros: [7, 8, 9],
       ancres: [[1, 1], [2, 1], [3, 1], [4, 2], [5, 2]],
     }),
-  // Trois membres d'une appartenance, deux tables de 2, quatre tours.
-  excedent: () => chargeDe({ appartenances: fois(3, 'Grisaille'), capacites: [2, 2] }),
+  // Trois membres d'une organisation, deux tables de 2, quatre tours.
+  excedent: () => chargeDe({ organisations: fois(3, 'Grisaille'), capacites: [2, 2] }),
   // Deux membres réservés à la même table : aucune table ajoutée ne les
   // sépare.
   memeTable: () =>
-    chargeDe({ appartenances: [...fois(2, 'Grisaille'), ...fois(4, null)], capacites: [3, 3], ancres: [[1, 1], [2, 1]] }),
+    chargeDe({ organisations: [...fois(2, 'Grisaille'), ...fois(4, null)], capacites: [3, 3], ancres: [[1, 1], [2, 1]] }),
   // Treize personnes, quatre tables de 3.
-  manque: () => chargeDe({ appartenances: fois(13, null), capacites: fois(4, 3) }),
-  // Douze personnes en deux appartenances de six, quatre tables de 3.
+  manque: () => chargeDe({ organisations: fois(13, null), capacites: fois(4, 3) }),
+  // Douze personnes en deux organisations de six, quatre tables de 3.
   toutesEnConflit: () =>
     chargeDe({
-      appartenances: Array.from({ length: 12 }, (_, p) => (p % 2 === 0 ? 'Club des Merles' : 'Cercle des Hérons')),
+      organisations: Array.from({ length: 12 }, (_, p) => (p % 2 === 0 ? 'Club des Merles' : 'Cercle des Hérons')),
       capacites: fois(4, 3),
     }),
-  // Douze personnes d'une seule appartenance, séparation active.
-  uneSeule: () => chargeDe({ appartenances: fois(12, 'Club des Merles'), capacites: fois(4, 3) }),
-  // Huit personnes en deux appartenances de quatre, une table de 8, un tour.
-  unTour: () => chargeDe({ appartenances: [...fois(4, 'Grisaille'), ...fois(4, 'Club des Merles')], capacites: [8], tours: 1 }),
+  // Douze personnes d'une seule organisation, séparation active.
+  uneSeule: () => chargeDe({ organisations: fois(12, 'Club des Merles'), capacites: fois(4, 3) }),
+  // Huit personnes en deux organisations de quatre, une table de 8, un tour.
+  unTour: () => chargeDe({ organisations: [...fois(4, 'Grisaille'), ...fois(4, 'Club des Merles')], capacites: [8], tours: 1 }),
   petite: () => chargeDemo('petite'),
   petiteConflit: () => chargeDemo('petite-conflit'),
   grande: () => chargeDemo('grande'),
@@ -153,7 +153,7 @@ const SEPARATION = {
   cle: 'diagnostic.remede.separation',
   details: {},
   commande: 'modifierReglage',
-  arguments: { cle: 'separerAppartenances', valeur: false },
+  arguments: { cle: 'separerOrganisations', valeur: false },
 };
 const remedeCollisions = ({ tablesManquantes }) =>
   tablesManquantes === null
@@ -162,8 +162,8 @@ const remedeCollisions = ({ tablesManquantes }) =>
 
 const CHAMPS = [
   {
-    champ: 'uneSeuleAppartenance',
-    attendus: (d) => (d.uneSeuleAppartenance ? [{ cle: 'diagnostic.uneSeuleAppartenance', details: {}, remede: SEPARATION }] : []),
+    champ: 'uneSeuleOrganisation',
+    attendus: (d) => (d.uneSeuleOrganisation ? [{ cle: 'diagnostic.uneSeuleOrganisation', details: {}, remede: SEPARATION }] : []),
   },
   {
     champ: 'collisionPartout',
@@ -206,15 +206,15 @@ const CHAMPS = [
               details: { redondanceMinimale: d.redondanceMinimale },
               remede:
                 d.remedes.toursSansRedondance === null
-                  ? { cle: 'diagnostic.remede.appartenances', details: {} }
+                  ? { cle: 'diagnostic.remede.organisations', details: {} }
                   : { cle: 'diagnostic.remede.tours', details: { toursSansRedondance: d.remedes.toursSansRedondance, tours } },
             },
           ],
   },
   {
-    champ: 'animateursMemeAppartenance',
+    champ: 'animateursMemeOrganisation',
     attendus: (d) =>
-      d.animateursMemeAppartenance && d.redondanceImposeeParAnimateurs > 0
+      d.animateursMemeOrganisation && d.redondanceImposeeParAnimateurs > 0
         ? [
             {
               cle: 'diagnostic.animateurs',
@@ -343,7 +343,7 @@ describe('enonces : chaque champ a son énoncé', () => {
           cle: 'diagnostic.remede.separation',
           details: {},
           commande: 'modifierReglage',
-          arguments: { cle: 'separerAppartenances', valeur: false },
+          arguments: { cle: 'separerOrganisations', valeur: false },
         },
       },
     ]);
@@ -364,7 +364,7 @@ describe('enonces : les phrases du § 5.6', () => {
     const phrase = texte(enonce);
     assert.ok(phrase.includes('au moins 4 collisions cumulées sur les 4 tours, portées par au moins 1 paire distincte'), phrase);
     assert.ok(phrase.includes('5 personnes'), phrase);
-    assert.ok(!phrase.includes(ligne.groupe), 'l\u{2019}appartenance occupe son propre nœud');
+    assert.ok(!phrase.includes(ligne.groupe), 'l\u{2019}organisation occupe son propre nœud');
     assert.doesNotMatch(phrase, /\b4 paires?\b/);
     // Chaque chiffre nomme son unité.
     const nombres = [...phrase.matchAll(/\d+/g)];
@@ -414,11 +414,11 @@ describe('enonces : les phrases du § 5.6', () => {
     }
   });
 
-  test('redondance : la configuration de M1 — au moins 6 appartenances recroisées ; avec 3 tours au lieu de 4, aucune', () => {
+  test('redondance : la configuration de M1 — au moins 6 organisations recroisées ; avec 3 tours au lieu de 4, aucune', () => {
     const { diagnostic, liste } = lire(CONFIGURATIONS.redondance());
     assert.equal(diagnostic.redondanceMinimale, 6);
     const [enonce] = avecCle(liste, 'diagnostic.redondance');
-    assert.equal(texte(enonce), 'au moins 6 appartenances recroisées par personne');
+    assert.equal(texte(enonce), 'au moins 6 organisations recroisées par personne');
     assert.equal(texte(enonce.remede), 'avec 3 tours au lieu de 4, aucune ne le serait');
   });
 
@@ -427,18 +427,18 @@ describe('enonces : les phrases du § 5.6', () => {
     assert.ok(diagnostic.redondanceMinimale > 0);
     assert.equal(diagnostic.remedes.toursSansRedondance, null);
     const [enonce] = avecCle(liste, 'diagnostic.redondance');
-    assert.deepEqual(enonce.remede, { cle: 'diagnostic.remede.appartenances', details: {} });
+    assert.deepEqual(enonce.remede, { cle: 'diagnostic.remede.organisations', details: {} });
     assert.doesNotMatch(texte(enonce.remede), /\d/);
     for (const { remede } of liste) assert.notEqual(remede?.cle, 'diagnostic.remede.tours');
   });
 
-  test('animateurs d\u{2019}une même appartenance : la phrase porte 3 et son remède ; absente de la grande', () => {
+  test('animateurs d\u{2019}une même organisation : la phrase porte 3 et son remède ; absente de la grande', () => {
     const { diagnostic, liste } = lire(CONFIGURATIONS.animateurs());
     assert.equal(diagnostic.redondanceImposeeParAnimateurs, 3);
     const [enonce] = avecCle(liste, 'diagnostic.animateurs');
     assert.ok(texte(enonce).includes('au moins 3 redondances'), texte(enonce));
     assert.equal(enonce.remede.cle, 'diagnostic.remede.animateurs');
-    assert.ok(texte(enonce.remede).includes('sans appartenance déclarée'));
+    assert.ok(texte(enonce.remede).includes('sans organisation déclarée'));
     assert.equal(avecCle(lire(CONFIGURATIONS.grande()).liste, 'diagnostic.animateurs').length, 0);
   });
 
@@ -488,9 +488,9 @@ describe('enonces : les phrases du § 5.6', () => {
     assert.equal(texte(enonce), '99 retours imposés par 33 ancrages');
   });
 
-  test('une seule appartenance : la phrase, puis le remède qui désactive la séparation', () => {
+  test('une seule organisation : la phrase, puis le remède qui désactive la séparation', () => {
     const { liste } = lire(CONFIGURATIONS.uneSeule());
-    assert.equal(liste[0].cle, 'diagnostic.uneSeuleAppartenance');
+    assert.equal(liste[0].cle, 'diagnostic.uneSeuleOrganisation');
     assert.deepEqual(liste[0].remede, SEPARATION);
   });
 });
@@ -574,21 +574,21 @@ describe('enonces : les planchers des objectifs (§ 5.6, A10, D16, D20)', () => 
 
 describe('enonces : aux bords', () => {
   test('un événement neuf, zéro participant, zéro table : aucun plancher, le plafond a priori « — », jamais 0', () => {
-    const { liste } = lire(chargeDe({ appartenances: [], capacites: [] }));
+    const { liste } = lire(chargeDe({ organisations: [], capacites: [] }));
     assert.deepEqual(liste, [{ cle: 'diagnostic.plafondInconnu', details: {}, remede: null }]);
     assert.ok(texte(liste[0]).includes(TIRET));
     assert.doesNotMatch(texte(liste[0]), /\d/);
   });
 
   test('deux personnes sans table : 2 places manquent à chaque tour', () => {
-    const [enonce] = avecCle(lire(chargeDe({ appartenances: [null, null], capacites: [] })).liste, 'diagnostic.placesManquantes');
+    const [enonce] = avecCle(lire(chargeDe({ organisations: [null, null], capacites: [] })).liste, 'diagnostic.placesManquantes');
     assert.equal(texte(enonce), '2 places manquent à chaque tour');
   });
 
-  test('aucune appartenance : ni collisions ni redondance', () => {
-    const { liste } = lire(chargeDe({ appartenances: fois(12, null), capacites: fois(4, 3) }));
+  test('aucune organisation : ni collisions ni redondance', () => {
+    const { liste } = lire(chargeDe({ organisations: fois(12, null), capacites: fois(4, 3) }));
     assert.ok(liste.length > 0);
-    for (const cle of ['diagnostic.collisions', 'diagnostic.excedent', 'diagnostic.redondance', 'diagnostic.uneSeuleAppartenance', 'diagnostic.collisionPartout']) {
+    for (const cle of ['diagnostic.collisions', 'diagnostic.excedent', 'diagnostic.redondance', 'diagnostic.uneSeuleOrganisation', 'diagnostic.collisionPartout']) {
       assert.equal(avecCle(liste, cle).length, 0, cle);
     }
   });
@@ -608,11 +608,11 @@ describe('enonces : aux bords', () => {
   });
 });
 
-describe('cartesDiagnostic : une carte par appartenance (§ 5.6, § 12.7)', () => {
+describe('cartesDiagnostic : une carte par organisation (§ 5.6, § 12.7)', () => {
   // La forme lisible d'une suite de cartes : genre, groupe, clés.
   const formes = (cartes) => cartes.map(({ genre, groupe, enonces: liste }) => [genre, groupe, cles(liste)]);
 
-  test('deux appartenances en collision partout : la séparation, une carte par groupe, puis le reste de l\u{2019}événement', () => {
+  test('deux organisations en collision partout : la séparation, une carte par groupe, puis le reste de l\u{2019}événement', () => {
     const { diagnostic, liste } = lire(CONFIGURATIONS.toutesEnConflit());
     assert.equal(diagnostic.collisionPartout, true);
     const cartes = cartesDiagnostic(liste);
@@ -623,7 +623,7 @@ describe('cartesDiagnostic : une carte par appartenance (§ 5.6, § 12.7)', () =
     assert.deepEqual(formes(cartes), [
       ['separation', null, ['diagnostic.collisionPartout']],
       ...groupes.map((groupe) => [
-        'appartenance',
+        'organisation',
         groupe,
         cles(liste.filter(({ details }) => details.groupe === groupe)),
       ]),
@@ -633,7 +633,7 @@ describe('cartesDiagnostic : une carte par appartenance (§ 5.6, § 12.7)', () =
 
   test('l\u{2019}excédent suit les collisions de son groupe, dans la même carte', () => {
     const { liste } = lire(CONFIGURATIONS.excedent());
-    const [carte] = cartesDiagnostic(liste).filter(({ genre }) => genre === 'appartenance');
+    const [carte] = cartesDiagnostic(liste).filter(({ genre }) => genre === 'organisation');
     assert.deepEqual([carte.groupe, cles(carte.enonces)], ['Grisaille', ['diagnostic.collisions', 'diagnostic.excedent']]);
   });
 
@@ -653,7 +653,7 @@ describe('cartesDiagnostic : une carte par appartenance (§ 5.6, § 12.7)', () =
     }
   });
 
-  test('sans appartenance, une seule carte, celle de l\u{2019}événement ; aucun énoncé, aucune carte ; la liste reçue n\u{2019}est pas modifiée', () => {
+  test('sans organisation, une seule carte, celle de l\u{2019}événement ; aucun énoncé, aucune carte ; la liste reçue n\u{2019}est pas modifiée', () => {
     const { liste } = lire(CONFIGURATIONS.manque());
     const copie = structuredClone(liste);
     assert.deepEqual(formes(cartesDiagnostic(liste)), [['ensemble', null, cles(liste)]]);
@@ -661,19 +661,19 @@ describe('cartesDiagnostic : une carte par appartenance (§ 5.6, § 12.7)', () =
     assert.deepEqual(cartesDiagnostic([]), []);
   });
 
-  test('une seule appartenance : sa phrase ouvre la carte de la séparation', () => {
+  test('une seule organisation : sa phrase ouvre la carte de la séparation', () => {
     const { liste } = lire(CONFIGURATIONS.uneSeule());
     const [premiere] = cartesDiagnostic(liste);
     assert.equal(premiere.genre, 'separation');
-    assert.equal(premiere.enonces[0].cle, 'diagnostic.uneSeuleAppartenance');
+    assert.equal(premiere.enonces[0].cle, 'diagnostic.uneSeuleOrganisation');
   });
 });
 
 describe('enonces : la présence par tour', () => {
-  // Douze personnes, cinq d'une même appartenance, quatre tables de 3,
+  // Douze personnes, cinq d'une même organisation, quatre tables de 3,
   // quatre tours ; presences : [rang, présence] des personnes partielles.
   function chargePresences(presences, { personnes = 12 } = {}) {
-    const charge = chargeDe({ appartenances: [...fois(5, 'Grisaille'), ...fois(personnes - 5, null)], capacites: fois(4, 3) });
+    const charge = chargeDe({ organisations: [...fois(5, 'Grisaille'), ...fois(personnes - 5, null)], capacites: fois(4, 3) });
     for (const [rang, presence] of presences) charge.participants[rang].presence = presence;
     return charge;
   }
@@ -684,7 +684,7 @@ describe('enonces : la présence par tour', () => {
     const enonce = { cle: 'diagnostic.planchersRetires', details: { absentes: 2 }, remede: null };
     const rang = liste.findIndex(({ cle }) => cle === 'diagnostic.planchersRetires');
     assert.deepEqual(liste[rang], enonce);
-    // Il suit les collisions de chaque appartenance et ouvre le reste.
+    // Il suit les collisions de chaque organisation et ouvre le reste.
     assert.ok(liste.slice(0, rang).every(({ details }) => details.groupe !== undefined), cles(liste).join(' | '));
     assert.ok(rang > 0);
     const cartes = cartesDiagnostic(liste);

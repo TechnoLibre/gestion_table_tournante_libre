@@ -34,7 +34,7 @@ const V1 = VERSION.affichee;
 
 // --- Les charges d'épreuve -------------------------------------------------------
 
-// Dix personnes inventées, deux appartenances, trois tables de quatre
+// Dix personnes inventées, deux organisations, trois tables de quatre
 // places, trois tours ; avec objectifs, les trois premières portent
 // « finance », que la première table attend pour la soirée ; reglages
 // s'ajoutent à ceux de la charge.
@@ -52,11 +52,11 @@ function chargeDix({ objectifs = false, reglages = {} } = {}) {
     ['Embrun', 'Gaspard', null],
     ['Saulaie', 'Romane', null],
   ];
-  charge.participants = noms.map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = noms.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -160,9 +160,9 @@ const lignesDe = (element, classe) => [...element.querySelectorAll(`:scope > .${
 
 // Les tuiles dont la borne nomme une personne que la comparaison ne porte
 // pas : la cellule n'en rend que le plancher, et la phrase de la diversité
-// sans appartenance présente.
-const SANS_BORNE_DE_PERSONNE = ['appartenancesVues', 'animateursRencontres'];
-const lignesSansPersonne = (lignes) => lignes.filter((ligne) => ligne.startsWith('plancher') || ligne === t('qualite.tuile.sansAppartenance'));
+// sans organisation présente.
+const SANS_BORNE_DE_PERSONNE = ['organisationsVues', 'animateursRencontres'];
+const lignesSansPersonne = (lignes) => lignes.filter((ligne) => ligne.startsWith('plancher') || ligne === t('qualite.tuile.sansOrganisation'));
 const signes = (texte) => [...texte].filter((caractere) => caractere === '%').length;
 
 async function ouvrir(cible) {

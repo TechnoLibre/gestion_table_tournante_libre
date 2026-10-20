@@ -5,7 +5,7 @@
 // une séance réelle sur la grande démonstration, horloge pilotée,
 // identifiants fixes, système de fichiers d'épreuve (test/fichiers_simules.js).
 // Une génération courte, une proposition retenue, puis une quarantaine de
-// gestes — échanges dans le retenu, notes et appartenance modifiées, personne
+// gestes — échanges dans le retenu, notes et organisation modifiées, personne
 // ajoutée, exclue puis réintégrée, présence réduite, sièges d'une table,
 // titre posé —, deux gestes refusés sans effet, un jalon, cinq défaire, deux
 // refaire, un revenir, puis le même revenir, refusé sans effet. Des deux
@@ -54,7 +54,7 @@ const V = VERSION.affichee;
 
 // L'empreinte repliée des relevés de la séance, et celle des propositions
 // que le moteur rend à la génération.
-const EMPREINTE_SEANCE = '19e7c0254ec2563d343f2ae51ce7f36c44e192134bff2412d5d75ebc9a5c22a6';
+const EMPREINTE_SEANCE = '176423a77b97583fb45da66d365fa0ba9056e578e837f78c31167ae10da5b6f6';
 const EMPREINTE_GENERATION = 'a14f93bd4b0ac9543abb51fdcfa8fb33822225cb4abde28efa1e70ce8098ffff';
 
 // Le nombre de relevés de la séance : une séance qui s'arrêterait en chemin
@@ -245,11 +245,11 @@ describe('empreintes dorées : une séance de gestes sur la grande démonstratio
     // Les gestes : échanges dans le retenu, entre lesquels s'intercalent les
     // autres sortes, chacune à son rang, avec le refus qu'elle attend le cas
     // échéant.
-    const cercle = { id: 23, champs: { appartenance: 'Cercle des Hérons' } };
+    const cercle = { id: 23, champs: { organisation: 'Cercle des Hérons' } };
     const sansEffet = { refus: 'SANS_EFFET' };
     const autres = new Map([
       [3, ['notes', () => seance.executer('modifierParticipant', { id: 17, champs: { notes: 'Arrive en retard' } })]],
-      [5, ['appartenance', () => seance.executer('modifierParticipant', cercle)]],
+      [5, ['organisation', () => seance.executer('modifierParticipant', cercle)]],
       [7, ['ajouter', () => seance.executer('ajouterParticipant', { champs: { nom: 'Brindefeu', prenom: 'Aurèle' } })]],
       [9, ['sièges', () => seance.executer('changerPlacesTable', { id: 4, sieges: 10, origine: 'champ' })]],
       [10, ['sièges sans effet', () => seance.executer('changerPlacesTable', { id: 4, sieges: 10, origine: 'champ' }), sansEffet]],

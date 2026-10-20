@@ -108,7 +108,7 @@
   import PlanDessin from './PlanDessin.svelte';
   import RefusPlace from './RefusPlace.svelte';
   import {
-    appartenanceDeCharge,
+    organisationDeCharge,
     cadreDepuisRect,
     englobantDuTour,
     evidenceDe,
@@ -167,7 +167,7 @@
   const tour = $derived(etat.tour);
   const englobantPlan = $derived(englobantDuTour(etat));
   const nomDe = $derived(nomDeCharge(charge));
-  const appartenanceDe = $derived(appartenanceDeCharge(charge));
+  const organisationDe = $derived(organisationDeCharge(charge));
   // Les règles actives des réglages, que la légende montre.
   const legende = $derived(legendeConflits(charge.reglages));
   const selection = $derived($ui.selection);
@@ -216,7 +216,7 @@
     const etatTable = etat.tables.find(({ id }) => id === infobulleTable);
     const dessin = modele.tables.find(({ id }) => id === infobulleTable);
     if (etatTable === undefined || dessin === undefined) return null;
-    const detail = detailConflits(etatTable, nomDe, appartenanceDe);
+    const detail = detailConflits(etatTable, nomDe, organisationDe);
     if (detail === null) return null;
     const { centre, rayonEmprise } = dessin.geometrie;
     const { x, y } = ecranDepuisDessin(vue, origineSvg, centre.x + rayonEmprise, centre.y - rayonEmprise);

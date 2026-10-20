@@ -75,7 +75,7 @@ function enUtf16(texte, ordre) {
 
 // Un participant de la charge d'épreuve.
 const personne = (id, nom, prenom = null, autres = {}) => ({
-  id, nom, prenom, appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false, ...autres,
+  id, nom, prenom, organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false, ...autres,
 });
 
 // Les montages de l'épreuve en cours, démontés après elle ; le collecteur
@@ -298,7 +298,7 @@ describe('encodage et séparateur nommés (§ 10.1, § 19.3)', () => {
 
   test('un même texte en UTF-16 LE puis BE, à marque : chacun nommé, mêmes lignes', async () => {
     const e = await ouvrir();
-    const texte = 'nom;prenom;appartenance\r\nOmbrelle;Iris;Club des Merles\r\nPervenche;Benoît;Grisaille\r\n';
+    const texte = 'nom;prenom;organisation\r\nOmbrelle;Iris;Club des Merles\r\nPervenche;Benoît;Grisaille\r\n';
     const vus = [];
     for (const ordre of ['le', 'be']) {
       await choisir(e, `liste-${ordre}.csv`, enUtf16(texte, ordre));
@@ -332,19 +332,19 @@ describe('les colonnes s’associent par leur en-tête (§ 10.1)', () => {
     expect(vus[0].association.size).toBe(4);
     expect(vus[1].association).toEqual(vus[0].association);
     expect(vus[0].association.get('NOM')).toBe(t('import.champ.nom'));
-    expect(vus[0].association.get('Équipe')).toBe(t('import.champ.appartenance'));
+    expect(vus[0].association.get('Équipe')).toBe(t('import.champ.organisation'));
     expect(vus[0].association.get('Rôle')).toBe(t('import.champ.titrePressenti'));
     expect(vus[0].association.get('Allergies')).toBe(t('import.colonne.nonReconnue'));
     expect(vus[1].lignes).toEqual(vus[0].lignes);
     expect(vus[0].lignes.length).toBe(2);
   });
 
-  test('« organisation » et « entreprise » : l’aperçu demande laquelle vaut appartenance ; importer est refusé à côté de la commande tant qu’elle demeure ; le choix l’associe, et l’import passe', async () => {
+  test('« appartenance » et « entreprise » : l’aperçu demande laquelle vaut organisation ; importer est refusé à côté de la commande tant qu’elle demeure ; le choix l’associe, et l’import passe', async () => {
     const e = await ouvrir();
-    await choisir(e, 'ambigu.csv', enUtf8('nom;organisation;entreprise\r\nOmbrelle;Club des Merles;Grisaille\r\n'));
-    const question = dans(e, '[data-champ="choix-appartenance"]');
+    await choisir(e, 'ambigu.csv', enUtf8('nom;appartenance;entreprise\r\nOmbrelle;Club des Merles;Grisaille\r\n'));
+    const question = dans(e, '[data-champ="choix-organisation"]');
     expect(vu(question)).toBe(true);
-    expect(texteDe(question)).toContain('organisation');
+    expect(texteDe(question)).toContain('appartenance');
     expect(texteDe(question)).toContain('entreprise');
     const avant = ecritures(e);
     const { refus } = await importer(e);
@@ -355,13 +355,13 @@ describe('les colonnes s’associent par leur en-tête (§ 10.1)', () => {
 
     question.querySelector('input[value="2"]').click();
     flushSync();
-    expect(new Map(association(dans(e, '[data-apercu]'))).get('entreprise')).toBe(t('import.champ.appartenance'));
-    expect(dans(e, '[data-champ="choix-appartenance"]')).toBeNull();
+    expect(new Map(association(dans(e, '[data-apercu]'))).get('entreprise')).toBe(t('import.champ.organisation'));
+    expect(dans(e, '[data-champ="choix-organisation"]')).toBeNull();
     // Le refus valait pour l'ambiguïté : tranchée, il ne reste pas affiché.
     expect(dans(e, '[data-refus="AMBIGUITE"]')).toBeNull();
     const { rendu } = await importer(e);
     expect(rendu.resume.ajoutes).toBe(1);
-    expect(participantsDe(e).map(({ nom, appartenance }) => [nom, appartenance])).toEqual([['Ombrelle', 'Grisaille']]);
+    expect(participantsDe(e).map(({ nom, organisation }) => [nom, organisation])).toEqual([['Ombrelle', 'Grisaille']]);
   });
 
   test('sous « Remplacer », l’ambiguïté refuse l’import à côté de la commande, sans ouvrir la fenêtre ; le choix fait, la fenêtre s’ouvre', async () => {
@@ -376,7 +376,7 @@ describe('les colonnes s’associent par leur en-tête (§ 10.1)', () => {
     expect(imports(e)).toEqual([]);
     expect(ecritures(e)).toBe(avant);
 
-    dans(e, '[data-champ="choix-appartenance"] input[value="1"]').click();
+    dans(e, '[data-champ="choix-organisation"] input[value="1"]').click();
     flushSync();
     expect(dans(e, '[data-refus="AMBIGUITE"]')).toBeNull();
     commande(e, 'importer').click();
@@ -482,11 +482,11 @@ describe('une ligne fausse n’arrête pas le reste (§ 10.1, § 2.1)', () => {
 
 describe('le rapport (§ 10.1, § 19.3)', () => {
   test('« Coopérative Bleue » existante, « cooperative  bleue » et « COOPÉRATIVE BLEUE » lues : un groupe affiché, ses trois orthographes et leurs comptes, dans l’aperçu puis le rapport', async () => {
-    const e = await ouvrir({ participants: [personne(1, 'Ombrelle', 'Iris', { appartenance: 'Coopérative Bleue' })] });
+    const e = await ouvrir({ participants: [personne(1, 'Ombrelle', 'Iris', { organisation: 'Coopérative Bleue' })] });
     await choisir(
       e,
       'bleue.csv',
-      enUtf8('nom;prenom;appartenance\r\nPervenche;Théo;cooperative  bleue\r\nLacasse;Ondine;COOPÉRATIVE BLEUE\r\nFauvelle;;\r\n'),
+      enUtf8('nom;prenom;organisation\r\nPervenche;Théo;cooperative  bleue\r\nLacasse;Ondine;COOPÉRATIVE BLEUE\r\nFauvelle;;\r\n'),
     );
     const attendu = [['Coopérative Bleue', '0'], ['cooperative  bleue', '1'], ['COOPÉRATIVE BLEUE', '1']];
     const groupes = (conteneur) =>
@@ -505,7 +505,7 @@ describe('le rapport (§ 10.1, § 19.3)', () => {
     for (const texte of tous(e, '[data-orthographe] [data-texte]')) expect(texte.textContent.trim()).not.toBe('');
   });
 
-  test('les cas limites : au moins un groupe et une ligne refusée, dans l’aperçu puis le rapport ; aucune appartenance vide listée', async () => {
+  test('les cas limites : au moins un groupe et une ligne refusée, dans l’aperçu puis le rapport ; aucune organisation vide listée', async () => {
     const e = await ouvrir();
     await choisir(e, 'participants_cas_limites.csv', await lireLivre(urlCasLimites));
     for (const conteneur of ['[data-apercu]', null]) {
@@ -629,11 +629,11 @@ describe('une seule entrée, des doublons signalés, une mise à jour qui n’ef
   });
 
   test('deux lignes au même triplet et une égale à un existant : deux doublons ; en mode Ajouter, choisi, trois personnes de plus, d’identifiants distincts', async () => {
-    const e = await ouvrir({ participants: [personne(1, 'Ombrelle', 'Iris', { appartenance: 'Grisaille' })] });
+    const e = await ouvrir({ participants: [personne(1, 'Ombrelle', 'Iris', { organisation: 'Grisaille' })] });
     await choisir(
       e,
       'doublons.csv',
-      enUtf8('nom;prenom;appartenance\r\nPervenche;Théo;Club des Merles\r\npervenche;THÉO;club des merles\r\nOmbrelle;Iris;Grisaille\r\n'),
+      enUtf8('nom;prenom;organisation\r\nPervenche;Théo;Club des Merles\r\npervenche;THÉO;club des merles\r\nOmbrelle;Iris;Grisaille\r\n'),
     );
     expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
     choisirMode(e, 'ajouter');
@@ -674,15 +674,15 @@ describe('une seule entrée, des doublons signalés, une mise à jour qui n’ef
     await choisir(
       e,
       'noms_prenoms.csv',
-      enUtf8('nom;prenom;appartenance\r\nOmbrelle;Iris;Club des Merles\r\nLacasse;;\r\nPervenche;Théo;\r\nPervenche;;\r\nMorillon;Aurèle;\r\n'),
+      enUtf8('nom;prenom;organisation\r\nOmbrelle;Iris;Club des Merles\r\nLacasse;;\r\nPervenche;Théo;\r\nPervenche;;\r\nMorillon;Aurèle;\r\n'),
     );
     expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
     const { rendu } = await importer(e);
-    // Iris reçoit une appartenance : une mise à jour ; Théo, sans valeur
+    // Iris reçoit une organisation : une mise à jour ; Théo, sans valeur
     // nouvelle, reste inchangé.
     expect(rendu.resume).toMatchObject({ ajoutes: 1, misAJour: 1, inchanges: 1, retires: 0, reservationsRetirees: 0 });
     expect(comptesAffiches(e)).toEqual(comptesDu(rendu.resume));
-    expect(participantsDe(e).find(({ id }) => id === 1).appartenance).toBe('Club des Merles');
+    expect(participantsDe(e).find(({ id }) => id === 1).organisation).toBe('Club des Merles');
     const courriels = new Map(participantsDe(e).map(({ id, courriel }) => [id, courriel]));
     expect([courriels.get(1), courriels.get(2), courriels.get(4)]).toEqual(['iris@exemple.test', 'ondine@exemple.test', 'theo@exemple.test']);
     const rapport = dans(e, '[data-rapport]');
@@ -709,9 +709,9 @@ async function avecPropositions(seance, generation, nombre) {
 }
 
 const QUATRE = () => [
-  personne(1, 'Ombrelle', 'Iris', { appartenance: 'Coopérative Bleue' }),
-  personne(2, 'Pervenche', 'Théo', { appartenance: 'Grisaille' }),
-  personne(3, 'Lacasse', 'Ondine', { appartenance: 'Club des Merles' }),
+  personne(1, 'Ombrelle', 'Iris', { organisation: 'Coopérative Bleue' }),
+  personne(2, 'Pervenche', 'Théo', { organisation: 'Grisaille' }),
+  personne(3, 'Lacasse', 'Ondine', { organisation: 'Club des Merles' }),
   personne(4, 'Fauvelle', 'Aurèle'),
 ];
 
@@ -727,12 +727,12 @@ describe('remplacer annonce ce qu’il détruit (§ 10.1)', () => {
         await seance.executer('designer', { participant: 2, table: table.id, siege: null, libelle: 'Animation' });
       },
     });
-    await choisir(e, 'remplace.csv', enUtf8('nom;prenom;appartenance\r\nTisserin;Basilie;cooperative bleue\r\nMorillon;Aurèle;\r\n'));
+    await choisir(e, 'remplace.csv', enUtf8('nom;prenom;organisation\r\nTisserin;Basilie;cooperative bleue\r\nMorillon;Aurèle;\r\n'));
     expect(tous(e, '[data-apercu] [data-fusion]').length).toBe(1);
     choisirMode(e, 'remplacer');
     expect(tous(e, '[data-apercu] [data-fusion]').length).toBe(0);
     expect(tous(e, '[data-apercu] [data-doublon]').length).toBe(0);
-    expect(cellule(dans(e, '[data-apercu]'), 2, 'appartenance')).toBe('cooperative bleue');
+    expect(cellule(dans(e, '[data-apercu]'), 2, 'organisation')).toBe('cooperative bleue');
 
     const charge = e.m.seance.etat().charge;
     const bilan = bilanRemplacement(charge);
@@ -767,7 +767,7 @@ describe('remplacer annonce ce qu’il détruit (§ 10.1)', () => {
     expect(resume).toMatchObject({ ajoutes: 2, misAJour: 0, inchanges: 0, retires: 4, reservationsRetirees: 2 });
     expect(comptesAffiches(e)).toEqual(comptesDu(resume));
     const apres = participantsDe(e);
-    expect(apres.map(({ nom, appartenance }) => [nom, appartenance])).toEqual([['Tisserin', 'cooperative bleue'], ['Morillon', null]]);
+    expect(apres.map(({ nom, organisation }) => [nom, organisation])).toEqual([['Tisserin', 'cooperative bleue'], ['Morillon', null]]);
     for (const { id } of apres) expect(id).toBeGreaterThanOrEqual(prochain);
   });
 });
@@ -856,7 +856,7 @@ describe('importer selon l’état (§ 10.1, § 9)', () => {
 
 describe('le collage en bloc passe par le même analyseur (§ 10.2, § 14.10)', () => {
   const TEXTE = [
-    ['nom', 'prenom', 'appartenance'],
+    ['nom', 'prenom', 'organisation'],
     ['Ombrelle', 'Iris', '"Club\tdes ""Merles"""'],
     ['Pervenche', 'Benoît', 'Grisaille'],
   ].map((champs) => champs.join('\t')).join('\n');
@@ -871,12 +871,12 @@ describe('le collage en bloc passe par le même analyseur (§ 10.2, § 14.10)', 
     await choisir(fichier, 'colle.csv', enUtf8(TEXTE));
     await importer(fichier);
     expect(participantsDe(collage).length).toBe(2);
-    expect(participantsDe(collage)[0].appartenance).toBe('Club\tdes "Merles"');
+    expect(participantsDe(collage)[0].organisation).toBe('Club\tdes "Merles"');
     expect(participantsDe(collage)[1].prenom).toBe('Benoît');
     expect(participantsDe(collage)).toEqual(participantsDe(fichier));
   });
 
-  test('sans sa ligne d’en-tête : AUCUN_ENTETE, puis « Lire les colonnes dans l’ordre de la grille » en fait nom, prénom et appartenance', async () => {
+  test('sans sa ligne d’en-tête : AUCUN_ENTETE, puis « Lire les colonnes dans l’ordre de la grille » en fait nom, prénom et organisation', async () => {
     const e = await ouvrir();
     await coller(e, TEXTE.split('\n').slice(1).join('\n'));
     const pose = dans(e, '[data-refus="AUCUN_ENTETE"]');
@@ -884,7 +884,7 @@ describe('le collage en bloc passe par le même analyseur (§ 10.2, § 14.10)', 
     commande(e, 'ordreDeLaGrille').click();
     await vi.waitFor(() => expect(dans(e, '[data-refus]')).toBeNull());
     expect(association(dans(e, '[data-apercu]')).map(([, devient]) => devient)).toEqual([
-      t('import.champ.nom'), t('import.champ.prenom'), t('import.champ.appartenance'),
+      t('import.champ.nom'), t('import.champ.prenom'), t('import.champ.organisation'),
     ]);
     expect(tous(e, '[data-apercu] [data-lignes] [data-ligne]').map((ligne) => ligne.dataset.ligne)).toEqual(['2', '3']);
     await importer(e);
@@ -907,7 +907,7 @@ describe('les cas du § 10.3', () => {
   function neufCas(conteneur) {
     const colonnes = new Map(association(conteneur));
     expect(colonnes.get('Téléphone'), 'colonne non reconnue').toBe(t('import.colonne.nonReconnue'));
-    expect(cellule(conteneur, 6, 'appartenance'), 'sans appartenance').toBe('');
+    expect(cellule(conteneur, 6, 'organisation'), 'sans organisation').toBe('');
     expect(cellule(conteneur, 7, 'exclu'), 'exclusion').toBe(t('import.exclu.oui'));
     expect(cellule(conteneur, 8, 'notes'), 'champ cité avec le séparateur').toBe('végétarien; sans noix, ni arachides');
     expect(cellule(conteneur, 9, 'notes'), 'champ cité sur deux lignes').toMatch(/premier tour\r?\nrepart/);
@@ -969,7 +969,7 @@ describe('l’habillage : cartes et messages classés en refus, avis ou informat
     expect(bloc('[data-fusions-etiquettes]'), lieu).not.toBe(bloc('[data-fusions]'));
   }
 
-  test('les cas limites : refusées en refus, doublons en avis, fusions d’appartenances et d’étiquettes en information, chacune son bloc, dans l’aperçu puis le rapport', async () => {
+  test('les cas limites : refusées en refus, doublons en avis, fusions d’organisations et d’étiquettes en information, chacune son bloc, dans l’aperçu puis le rapport', async () => {
     const e = await ouvrir();
     await choisir(e, 'participants_cas_limites.csv', await lireLivre(urlCasLimites));
     exigerBlocs(dans(e, '[data-apercu]'), 'aperçu');
@@ -1220,7 +1220,7 @@ describe('l’aperçu des objectifs de table (§ 10.4)', () => {
     expect(texteDe(dans(e, '[data-apercu] [data-valides]'))).toContain(format.nombre(apercu.lignes.length));
   });
 
-  test('« finance » et « FINANCE » fondus en une orthographe : le bloc des étiquettes fondues, en information, nomme la retenue, les orthographes et les lignes réécrites ; aucun bloc d’appartenances', async () => {
+  test('« finance » et « FINANCE » fondus en une orthographe : le bloc des étiquettes fondues, en information, nomme la retenue, les orthographes et les lignes réécrites ; aucun bloc d’organisations', async () => {
     const e = await ouvrir({ tables: NEUF_TABLES() });
     choisirNature(e, 'objectifs');
     await choisir(e, 'motifs.csv', enUtf8(TEXTE_DES_MOTIFS));
@@ -1359,7 +1359,7 @@ describe('importer des objectifs de table (§ 10.4)', () => {
 });
 
 describe('les étiquettes des participants dans l’aperçu (§ 10.1, A17)', () => {
-  test('les cas limites : chaque cellule d’étiquettes en pastilles, sous l’orthographe retenue ; le bloc des étiquettes fondues présent, à part des appartenances, dans l’aperçu puis le rapport', async () => {
+  test('les cas limites : chaque cellule d’étiquettes en pastilles, sous l’orthographe retenue ; le bloc des étiquettes fondues présent, à part des organisations, dans l’aperçu puis le rapport', async () => {
     const e = await ouvrir();
     const octets = await lireLivre(urlCasLimites);
     await choisir(e, 'participants_cas_limites.csv', octets);
@@ -1389,12 +1389,12 @@ describe('les étiquettes des participants dans l’aperçu (§ 10.1, A17)', () 
       expect([...bloc.querySelectorAll('[data-affichee]')].map((a) => a.textContent), lieu).toEqual(
         apercu.fusionsEtiquettes.map(({ retenue }) => retenue),
       );
-      const appartenances = conteneur.querySelector('[data-fusions]');
-      expect(appartenances.contains(bloc), lieu).toBe(false);
-      expect(bloc.contains(appartenances), lieu).toBe(false);
+      const organisations = conteneur.querySelector('[data-fusions]');
+      expect(organisations.contains(bloc), lieu).toBe(false);
+      expect(bloc.contains(organisations), lieu).toBe(false);
       const retenues = new Set(apercu.fusionsEtiquettes.map(({ retenue }) => retenue));
-      for (const affichee of appartenances.querySelectorAll('[data-affichee]')) expect(retenues.has(affichee.textContent), lieu).toBe(false);
-      expect(appartenances.querySelectorAll('[data-fusion]').length, lieu).toBe(apercu.fusions.length);
+      for (const affichee of organisations.querySelectorAll('[data-affichee]')) expect(retenues.has(affichee.textContent), lieu).toBe(false);
+      expect(organisations.querySelectorAll('[data-fusion]').length, lieu).toBe(apercu.fusions.length);
     }
   });
 });

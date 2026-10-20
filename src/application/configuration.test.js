@@ -24,7 +24,7 @@ function chargeDe(modifier = () => {}) {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: rang % 2 === 0 ? 'Atelier des Saules' : null,
+    organisation: rang % 2 === 0 ? 'Atelier des Saules' : null,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -173,7 +173,7 @@ describe('configurationDe : la configuration du stockage, plus les tours animés
       participants: configuration.participants.map(({ anime, ...reste }) => reste),
     };
     assert.deepEqual(sansAnime, configurationDepuisCharge(charge));
-    assert.deepEqual(Object.keys(configuration.participants[1]), ['id', 'nom', 'appartenance', 'exclu', 'anime']);
+    assert.deepEqual(Object.keys(configuration.participants[1]), ['id', 'nom', 'organisation', 'exclu', 'anime']);
   });
 
   test('sans titre pourvu, elle égale celle du stockage', () => {

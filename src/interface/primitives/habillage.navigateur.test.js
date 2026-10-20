@@ -18,7 +18,7 @@ import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerHorlogePilotee } from '../../application/horloge.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme, visible } from '../../../test/navigateur/rendu.js';
-import { RANGS_APPARTENANCE } from '../appartenances.js';
+import { RANGS_ORGANISATION } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import Carte from './Carte.svelte';
 import Champ from './Champ.svelte';
@@ -174,13 +174,13 @@ describe('pastille', () => {
     }
   });
 
-  test('une appartenance : le point de la marque de son rang sur son fond ; au-delà, le neutre ; le libellé reste le nom', async () => {
+  test('une organisation : le point de la marque de son rang sur son fond ; au-delà, le neutre ; le libellé reste le nom', async () => {
     for (const theme of THEMES) {
       await sousTheme(theme, () => {
-        for (const rang of [...Array.from({ length: RANGS_APPARTENANCE }, (_, i) => i + 1), null]) {
+        for (const rang of [...Array.from({ length: RANGS_ORGANISATION }, (_, i) => i + 1), null]) {
           const lieu = `${theme} rang ${rang}`;
-          const teinte = rang === null ? 'neutre' : `appartenance-${rang}`;
-          const { racine, signe, libelle } = pastille({ sorte: 'appartenance', valeur: rang, libelle: 'Cercle des Aulnes' });
+          const teinte = rang === null ? 'neutre' : `organisation-${rang}`;
+          const { racine, signe, libelle } = pastille({ sorte: 'organisation', valeur: rang, libelle: 'Cercle des Aulnes' });
           expect(racine.textContent.trim(), lieu).toBe('Cercle des Aulnes');
           expect(signe.tagName.toLowerCase(), lieu).toBe('span');
           expect(signe.getBoundingClientRect().width, lieu).toBeGreaterThanOrEqual(6);
@@ -212,12 +212,12 @@ describe('pastille', () => {
     }
   });
 
-  // Un nom d'appartenance long, inventé : une donnée n'a pas de longueur
+  // Un nom d'organisation long, inventé : une donnée n'a pas de longueur
   // bornée.
   const LONG = 'Coopérative intercommunale des apiculteurs du littoral';
 
   test('un libellé long se replie dans la largeur donnée : le texte reste dans la pastille, la pastille dans son conteneur', () => {
-    const { racine, libelle } = pastille({ sorte: 'appartenance', valeur: 2, libelle: LONG });
+    const { racine, libelle } = pastille({ sorte: 'organisation', valeur: 2, libelle: LONG });
     const conteneur = racine.parentElement;
     conteneur.style.width = '120px';
     const droite = conteneur.getBoundingClientRect().right - parseFloat(style(conteneur).paddingRight);
@@ -247,7 +247,7 @@ describe('pastille', () => {
 
   test('un mot seul plus long que la place se coupe entre deux caractères, sans sortir de la pastille ni du conteneur', () => {
     const mot = 'Apiculteursintercommunauxdulittoral';
-    const { racine, libelle } = pastille({ sorte: 'appartenance', valeur: 3, libelle: mot });
+    const { racine, libelle } = pastille({ sorte: 'organisation', valeur: 3, libelle: mot });
     const conteneur = racine.parentElement;
     conteneur.style.width = '120px';
     const droite = conteneur.getBoundingClientRect().right - parseFloat(style(conteneur).paddingRight);
@@ -265,7 +265,7 @@ describe('pastille', () => {
     const cellule = tableau.insertRow().insertCell();
     cible.append(tableau);
     document.body.prepend(cible);
-    const composant = mount(Pastille, { target: cellule, props: { sorte: 'appartenance', valeur: 2, libelle: LONG }, context: new Map([['t', t]]) });
+    const composant = mount(Pastille, { target: cellule, props: { sorte: 'organisation', valeur: 2, libelle: LONG }, context: new Map([['t', t]]) });
     flushSync();
     montes.push({ composant, cible });
     const racine = cellule.firstElementChild;
@@ -280,7 +280,7 @@ describe('pastille', () => {
     expect(plage.getClientRects().length).toBe(1);
     expect(racine.scrollWidth).toBeLessThanOrEqual(racine.clientWidth + 1);
     expect(() => monter(Pastille, { sorte: 'etat', valeur: 'archive', libelle: 'x' })).toThrow(RangeError);
-    expect(() => monter(Pastille, { sorte: 'appartenance', valeur: 9, libelle: 'x' })).toThrow(RangeError);
+    expect(() => monter(Pastille, { sorte: 'organisation', valeur: 9, libelle: 'x' })).toThrow(RangeError);
   });
 
   test('dans une rangée flexible trop étroite, un libellé court garde sa ligne : la pastille ne rétrécit pas sous son mot', () => {

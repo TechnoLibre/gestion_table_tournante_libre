@@ -59,11 +59,11 @@ function chargeDe(cle) {
   const configuration = entree.construire();
   const siegesParDefaut = Math.max(...configuration.tables.map(({ capacite }) => capacite));
   const charge = creerCharge({ id: `evt-${cle}`, nom: entree.nom, siegesParDefaut, tours: configuration.tours });
-  charge.participants = configuration.participants.map(({ id, nom, prenom, appartenance }) => ({
+  charge.participants = configuration.participants.map(({ id, nom, prenom, organisation }) => ({
     id,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -95,8 +95,8 @@ function chargeDe(cle) {
 
 const NOMS_AJOUTES = ['Ombrelle', 'Grisaille', 'Pervenche', 'Lacasse', 'Mirabelle', 'Quenouille', 'Sarbacane'];
 const PRENOMS_AJOUTES = ['Iris', 'Théo', 'Ondine', 'Aurèle', null];
-const APPARTENANCES_AJOUTEES = ['Club des Merles', 'Société Alpha', null];
-const REGLAGES = ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances', 'attribuerSieges'];
+const ORGANISATIONS_AJOUTEES = ['Club des Merles', 'Société Alpha', null];
+const REGLAGES = ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable', 'varierOrganisations', 'attribuerSieges'];
 
 function ajouter(charge, n) {
   const suivante = copie(charge);
@@ -106,7 +106,7 @@ function ajouter(charge, n) {
     id,
     nom: NOMS_AJOUTES[n % NOMS_AJOUTES.length],
     prenom: PRENOMS_AJOUTES[n % PRENOMS_AJOUTES.length],
-    appartenance: APPARTENANCES_AJOUTEES[n % APPARTENANCES_AJOUTEES.length],
+    organisation: ORGANISATIONS_AJOUTEES[n % ORGANISATIONS_AJOUTEES.length],
     courriel: null,
     titrePressenti: null,
     notes: null,

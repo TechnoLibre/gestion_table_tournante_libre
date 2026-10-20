@@ -1,16 +1,16 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Les vues des collisions d'appartenance (§ 12.4, B13, D31) et des
-// appartenances à chaque table (§ 12.11, B20, D35, D54) dans un vrai moteur
+// Les vues des collisions d'organisation (§ 12.4, B13, D31) et des
+// organisations à chaque table (§ 12.11, B20, D35, D54) dans un vrai moteur
 // de rendu. Collisions : le segment « prouvé inévitable » égale le plancher
 // que le diagnostic affiche ; les barres suivent l'excédent, non leur
 // longueur ; chaque segment est peint de son jeton de graphique, jamais
-// d'une teinte d'appartenance ou de conflit ; hors du domaine des
+// d'une teinte d'organisation ou de conflit ; hors du domaine des
 // planchers, un seul segment et la phrase. Tables : sous chacune des trois
 // positions, la pire table en tête et l'ordre de la position ; chaque case
 // écrit le compte que sa couleur porte, sans signe « % » ; une table de
-// bénévoles sans appartenance écrit « — » et se range en dernier ; la
+// bénévoles sans organisation écrit « — » et se range en dernier ; la
 // position se choisit au clavier, survit à un aller-retour vers le plan,
 // repart de « sièges » à la réouverture, et la choisir en lecture ou sur un
 // plan bloqué n'écrit rien ; quarante tours au cadre de 1 366 px. Chaque
@@ -34,9 +34,9 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { dessinerGraphiques, fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { teintesAppartenances } from '../appartenances.js';
+import { teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { CASE_MAX_TEXTES, sansCollision } from './appartenances.js';
+import { CASE_MAX_TEXTES, sansCollision } from './organisations.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const V1 = VERSION.affichee;
@@ -53,12 +53,12 @@ const POSITIONS = ['sieges', 'assis', 'doublons'];
 // chaque tour ; premier, le numéro de la première table, les suivantes
 // numérotées à la suite.
 function chargeDe({ personnes, capacites, tours, reserves = tours.map(() => []), premier = 1 }) {
-  const charge = creerCharge({ id: 'evt-appartenances', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: tours.length });
-  charge.participants = personnes.map(([nom, prenom, appartenance], rang) => ({
+  const charge = creerCharge({ id: 'evt-organisations', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: tours.length });
+  charge.participants = personnes.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -88,7 +88,7 @@ function chargeDe({ personnes, capacites, tours, reserves = tours.map(() => []),
 // Treize personnes, quatre tables de 5, 4, 4 et 3 places, le même plan aux
 // deux tours. Pour chaque case (c, o, α, δ) : table 1 (5, 2, 2, 2), table 2
 // (4, 4, 4, 2), table 3 (4, 4, 2, 1), table 4, trois bénévoles sans
-// appartenance. Comptes sièges, assis, doublons : table 1 (3, 0, 0), table
+// organisation. Comptes sièges, assis, doublons : table 1 (3, 0, 0), table
 // 2 (2, 2, 2), table 3 (3, 3, 1). Ordres : sièges 1, 3, 2, 4 ; assis 3, 2,
 // 1, 4 ; doublons 2, 3, 1, 4.
 const PERSONNES_MELANGE = [
@@ -117,8 +117,8 @@ const COMPTES = {
   doublons: { 1: 0, 2: 2, 3: 1, 4: null },
 };
 
-// Six personnes, deux appartenances de deux, deux tables de trois : aucun
-// membre ne retrouve l'autre membre de son appartenance, sur le nombre de
+// Six personnes, deux organisations de deux, deux tables de trois : aucun
+// membre ne retrouve l'autre membre de son organisation, sur le nombre de
 // tours donné.
 const PERSONNES_SIX = [
   ['Ombrelle', 'Iris', AUBIER],
@@ -173,10 +173,10 @@ const chargeExcedent = () =>
     ],
   });
 
-// Six personnes dont deux seules ont une appartenance, la même, et se
-// retrouvent aux deux tours : une appartenance unique, 2 collisions
+// Six personnes dont deux seules ont une organisation, la même, et se
+// retrouvent aux deux tours : une organisation unique, 2 collisions
 // cumulées sur une paire.
-const chargeUneAppartenance = () =>
+const chargeUneOrganisation = () =>
   chargeDe({
     personnes: [
       ['Ombrelle', 'Iris', AUBIER],
@@ -326,7 +326,7 @@ async function choisir(m, position) {
 
 // --- Les collisions ----------------------------------------------------------------
 
-describe('collisions d’appartenance (§ 12.4, B13, D31)', () => {
+describe('collisions d’organisation (§ 12.4, B13, D31)', () => {
   test('petite démonstration au conflit inévitable : le segment prouvé vaut 4 et égale le plancher que le diagnostic affiche', async () => {
     const charge = generee(chargeDemo('petite-conflit'), { graine: 5, nombre: 1, arret: 300 });
     const plancher = diagnostiquerCharge(charge).diagnostic.collisions;
@@ -342,7 +342,7 @@ describe('collisions d’appartenance (§ 12.4, B13, D31)', () => {
     expect(ligne.querySelector('[data-segment="prouve"]')).not.toBeNull();
     const tableau = await ouvrirJumeau(collisions);
     const lignes = lignesJumeau(tableau);
-    const sienne = lignes.find((l) => l.appartenance === plancher[0].groupe);
+    const sienne = lignes.find((l) => l.organisation === plancher[0].groupe);
     expect(sienne.prouve).toBe('4');
     expect(Number(sienne.prouve) + Number(sienne.reste)).toBe(Number(sienne.cumulees));
     // Le plancher que la section du diagnostic écrit, au même chiffre.
@@ -355,7 +355,7 @@ describe('collisions d’appartenance (§ 12.4, B13, D31)', () => {
     expect(texteDe(enonce).match(/au moins (\d+) collisions? cumulées?/)[1]).toBe(sienne.prouve);
   });
 
-  test('les barres suivent l’excédent, non leur longueur ; chaque segment est peint de son jeton de graphique, aucun d’une teinte d’appartenance ou de conflit ; aucun « évitable »', async () => {
+  test('les barres suivent l’excédent, non leur longueur ; chaque segment est peint de son jeton de graphique, aucun d’une teinte d’organisation ou de conflit ; aucun « évitable »', async () => {
     const charge = chargeExcedent();
     const detail = detaillerQualite(charge, 1);
     expect(detail.collisions.lignes.map(({ groupe, cumulees, excedent }) => [groupe, cumulees, excedent])).toEqual([
@@ -371,10 +371,10 @@ describe('collisions d’appartenance (§ 12.4, B13, D31)', () => {
     expect([...collisions.querySelectorAll('[data-ligne-graphique]')].map((g) => g.dataset.ligneGraphique)).toEqual([RESSAC, AUBIER]);
     const interdites = new Set(
       [
-        '--couleur-conflit-appartenance',
+        '--couleur-conflit-organisation',
         '--couleur-conflit-voisins',
         '--couleur-conflit-table',
-        ...[1, 2, 3, 4, 5, 6].flatMap((k) => [`--couleur-appartenance-${k}-fond`, `--couleur-appartenance-${k}-marque`]),
+        ...[1, 2, 3, 4, 5, 6].flatMap((k) => [`--couleur-organisation-${k}-fond`, `--couleur-organisation-${k}-marque`]),
       ].map(couleurDuJeton),
     );
     const segments = [...collisions.querySelectorAll('[data-segment]')];
@@ -387,16 +387,16 @@ describe('collisions d’appartenance (§ 12.4, B13, D31)', () => {
       expect(interdites.has(peint), `${genre} peint ${peint}`).toBe(false);
     }
     // La pastille de chaque intitulé : le fond et le point de la teinte que
-    // teintesAppartenances donne à l'appartenance sur les participants de
+    // teintesOrganisations donne à l'organisation sur les participants de
     // l'événement — deux teintes distinctes, aucune neutre.
-    const teintes = teintesAppartenances(charge.participants);
+    const teintes = teintesOrganisations(charge.participants);
     const pastilles = [...collisions.querySelectorAll('[data-ligne-graphique]')].map((g) => {
       const rang = teintes.get(g.dataset.ligneGraphique);
       expect(rang, g.dataset.ligneGraphique).toBeGreaterThanOrEqual(1);
       const fond = [...g.querySelectorAll('rect')].find((r) => !r.hasAttribute('data-segment'));
       const point = g.querySelector('circle');
-      expect(getComputedStyle(fond).fill, g.dataset.ligneGraphique).toBe(couleurDuJeton(`--couleur-appartenance-${rang}-fond`));
-      expect(getComputedStyle(point).fill, g.dataset.ligneGraphique).toBe(couleurDuJeton(`--couleur-appartenance-${rang}-marque`));
+      expect(getComputedStyle(fond).fill, g.dataset.ligneGraphique).toBe(couleurDuJeton(`--couleur-organisation-${rang}-fond`));
+      expect(getComputedStyle(point).fill, g.dataset.ligneGraphique).toBe(couleurDuJeton(`--couleur-organisation-${rang}-marque`));
       return getComputedStyle(point).fill;
     });
     expect(new Set(pastilles).size).toBe(2);
@@ -424,10 +424,10 @@ describe('collisions d’appartenance (§ 12.4, B13, D31)', () => {
     expect(collisions.querySelector('[data-segment="prouve"]')).toBeNull();
   });
 
-  test('une seule table, aucune appartenance, aucune collision : la phrase du cas, sans graphique', async () => {
+  test('une seule table, aucune organisation, aucune collision : la phrase du cas, sans graphique', async () => {
     const cas = [
       [chargeDe({ personnes: PERSONNES_SIX, capacites: [6], tours: [[[1, 2, 3, 4, 5, 6]], [[1, 2, 3, 4, 5, 6]]] }), 'collisionsUneTable'],
-      [chargeSix({ personnes: PERSONNES_SIX.map(([nom, prenom]) => [nom, prenom, null]) }), 'collisionsAucuneAppartenance'],
+      [chargeSix({ personnes: PERSONNES_SIX.map(([nom, prenom]) => [nom, prenom, null]) }), 'collisionsAucuneOrganisation'],
       [chargeSix(), 'collisionsAucune'],
     ];
     for (const [charge, code] of cas) {
@@ -443,9 +443,9 @@ describe('collisions d’appartenance (§ 12.4, B13, D31)', () => {
   });
 });
 
-// --- Les appartenances à chaque table ----------------------------------------------
+// --- Les organisations à chaque table ----------------------------------------------
 
-describe('appartenances à chaque table (§ 12.11, B20, D35)', () => {
+describe('organisations à chaque table (§ 12.11, B20, D35)', () => {
   test('sous chacune des trois positions : la pire table en tête, l’ordre de la position, chaque case écrit le compte que son niveau colore, sans « % » ; la table de bénévoles écrit « — » et vient en dernier', async () => {
     const charge = chargeMelange();
     const detail = detaillerQualite(charge, 1);
@@ -502,7 +502,7 @@ describe('appartenances à chaque table (§ 12.11, B20, D35)', () => {
       return b;
     });
     expect(bulle.querySelector('[data-pourcentage]').textContent).toBe('40\u{202F}%');
-    expect(texteDe(bulle.querySelector('[data-compte-pire]'))).toBe('2 appartenances pour 5 sièges');
+    expect(texteDe(bulle.querySelector('[data-compte-pire]'))).toBe('2 organisations pour 5 sièges');
     for (const fragment of ['Table 1', 'Tour 1', t('qualite.tables.colonne.occupants'), t('qualite.tables.colonne.capacite')]) {
       expect(texteDe(bulle)).toContain(fragment);
     }
@@ -518,7 +518,7 @@ describe('appartenances à chaque table (§ 12.11, B20, D35)', () => {
     expect(lignes[2]).toMatchObject({ tour: 'Tour 1', sieges: '3', assis: '3', doublons: '1', occupants: '4', affilies: '2', capacite: '4' });
     const cellule = tableau.querySelectorAll('tbody tr')[2].querySelector('[data-colonne="pourcentDoublons"]');
     expect(cellule.querySelector('[data-pourcentage]').textContent).toBe('50\u{202F}%');
-    expect(texteDe(cellule.querySelector('[data-compte-pire]'))).toBe('1 appartenance pour 2 affiliés');
+    expect(texteDe(cellule.querySelector('[data-compte-pire]'))).toBe('1 organisation pour 2 affiliés');
     expect(lignes[7].doublons).toBe(t('format.vide'));
     for (const pourcentage of tableau.querySelectorAll('[data-pourcentage]')) {
       expect(pourcentage.nextElementSibling?.hasAttribute('data-compte-pire')).toBe(true);
@@ -595,8 +595,8 @@ describe('appartenances à chaque table (§ 12.11, B20, D35)', () => {
     expect(tables.querySelectorAll('[data-position-tables]')).toHaveLength(3);
   });
 
-  test('une seule appartenance : les barres, la grille et le sélecteur, comme pour plusieurs (B15)', async () => {
-    const m = await ouvrir(chargeUneAppartenance());
+  test('une seule organisation : les barres, la grille et le sélecteur, comme pour plusieurs (B15)', async () => {
+    const m = await ouvrir(chargeUneOrganisation());
     const tables = await attendre(() => {
       const v = vue(m, 'tables');
       expect(v.querySelector('svg[data-graphique="tables"]:not([data-dessin-differe])')).not.toBeNull();
@@ -627,10 +627,10 @@ describe('appartenances à chaque table (§ 12.11, B20, D35)', () => {
     expect(svg.getBoundingClientRect().width).toBeGreaterThanOrEqual(0.8 * carte);
   });
 
-  test('une seule table, aucune appartenance : la phrase, sans sélecteur ni grille', async () => {
+  test('une seule table, aucune organisation : la phrase, sans sélecteur ni grille', async () => {
     const cas = [
       [chargeDe({ personnes: PERSONNES_SIX, capacites: [6], tours: [[[1, 2, 3, 4, 5, 6]], [[1, 2, 3, 4, 5, 6]]] }), 'tablesUneTable'],
-      [chargeSix({ personnes: PERSONNES_SIX.map(([nom, prenom]) => [nom, prenom, null]) }), 'tablesAucuneAppartenance'],
+      [chargeSix({ personnes: PERSONNES_SIX.map(([nom, prenom]) => [nom, prenom, null]) }), 'tablesAucuneOrganisation'],
     ];
     for (const [charge, code] of cas) {
       const m = await ouvrir(charge);

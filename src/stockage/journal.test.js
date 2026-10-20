@@ -138,7 +138,7 @@ function avecIris() {
     id: 1,
     nom: 'Ombrelle',
     prenom: 'Iris',
-    appartenance: 'Club des Merles',
+    organisation: 'Club des Merles',
     courriel: null,
     titrePressenti: 'animation',
     notes: null,
@@ -164,11 +164,11 @@ function chargeDe(cle) {
   const configuration = entree.construire();
   const siegesParDefaut = Math.max(...configuration.tables.map(({ capacite }) => capacite));
   const charge = creerCharge({ id: `evt-${cle}`, nom: entree.nom, siegesParDefaut, tours: configuration.tours });
-  charge.participants = configuration.participants.map(({ id, nom, prenom, appartenance }) => ({
+  charge.participants = configuration.participants.map(({ id, nom, prenom, organisation }) => ({
     id,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -200,8 +200,8 @@ function chargeDe(cle) {
 
 const NOMS_AJOUTES = ['Ombrelle', 'Grisaille', 'Pervenche', 'Lacasse', 'Mirabelle', 'Quenouille', 'Sarbacane'];
 const PRENOMS_AJOUTES = ['Iris', 'Théo', 'Ondine', 'Aurèle', null];
-const APPARTENANCES_AJOUTEES = ['Club des Merles', 'Société Alpha', null];
-const REGLAGES = ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances', 'attribuerSieges'];
+const ORGANISATIONS_AJOUTEES = ['Club des Merles', 'Société Alpha', null];
+const REGLAGES = ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable', 'varierOrganisations', 'attribuerSieges'];
 // Compte d'arrêt des générations : court, la recherche n'est pas éprouvée ici.
 const ARRET = 200;
 
@@ -213,7 +213,7 @@ function ajouter(charge, n) {
     id,
     nom: NOMS_AJOUTES[n % NOMS_AJOUTES.length],
     prenom: PRENOMS_AJOUTES[n % PRENOMS_AJOUTES.length],
-    appartenance: APPARTENANCES_AJOUTEES[n % APPARTENANCES_AJOUTEES.length],
+    organisation: ORGANISATIONS_AJOUTEES[n % ORGANISATIONS_AJOUTEES.length],
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -376,8 +376,8 @@ const texteSeance = memoire(() => journalDe(SEANCE));
 // Texte compact de la charge du contrat sans liste, dans l'ordre canonique.
 const INSTANTANE_VIDE =
   `{"evenement":{"id":"evt-essai","nom":"Soirée d'essai","date":null,"siegesParDefaut":2,"tours":2,"unite":"cm",` +
-  `"etat":"brouillon","filiation":null},"reglages":{"separerAppartenances":true,"nouveauxVoisins":true,` +
-  `"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,` +
+  `"etat":"brouillon","filiation":null},"reglages":{"separerOrganisations":true,"nouveauxVoisins":true,` +
+  `"nouvelleTable":true,"varierOrganisations":true,"attribuerSieges":false,"generation":{"nombre":5,` +
   `"arret":200000,"historique":1000}},"prochainsIds":{"participant":1,"table":1,"proposition":1},` +
   `"participants":[],"tables":[],"reservations":[],"titres":[],"propositions":[],"retenu":null}`;
 
@@ -439,7 +439,7 @@ describe('les lignes du journal : le texte exact, et ce que l’écriture refuse
         '"sens":null,"retour":null,"produitVersion":null,"instantane":null,"correctif":[' +
         '{"op":"poser","chemin":["prochainsIds","participant"],"valeur":2},' +
         '{"op":"poser","chemin":["participants",{"id":1}],"valeur":{"id":1,"nom":"Ombrelle","prenom":"Iris",' +
-        '"appartenance":"Club des Merles","courriel":null,"titrePressenti":"animation","notes":null,"exclu":false}}]}',
+        '"organisation":"Club des Merles","courriel":null,"titrePressenti":"animation","notes":null,"exclu":false}}]}',
     );
     assert.equal(
       lignes[5],
@@ -1770,7 +1770,7 @@ describe('la restitution sur une seule copie, et l’entrée qui rend sa copie c
       notes: null,
       titrePressenti: null,
       courriel: null,
-      appartenance: null,
+      organisation: null,
       prenom: null,
       nom: 'Cormoran',
       id: 4,
@@ -2038,7 +2038,7 @@ describe('la restitution sur une seule copie, et l’entrée qui rend sa copie c
 // ordre des clés compris, une révision par ligne. Les deux versions se
 // remplacent par des marqueurs avant l'empreinte : une livraison, qui change
 // la version, ne la change pas.
-const EMPREINTE_RESTITUTION = '8b171774c5ec48e5ab547a7da4f28ee5763b135e719097c72de43b7e96262a3c';
+const EMPREINTE_RESTITUTION = '0136acdc67c6a9d11baf19c2c3a5ecfb6371740ffa353a5d1b0150a116f8eda9';
 
 describe('caractérisation : la restitution de chaque instant, octet pour octet (§ 8.3, § 14.2)', () => {
   test("reconstruire(journal, r) s'écrit en JSON comme la chaîne d'appliquer refaite d'entrée en entrée, pour chacune des 120 révisions, et leur empreinte est celle de la référence", () => {

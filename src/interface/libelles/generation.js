@@ -71,10 +71,10 @@ export const TABLE = new Map([
 
   // --- Les contraintes et l'attribution des sièges, sous leur nom du § 5.3 ---
   ['generation.contraintes.titre', 'Contraintes de la génération'],
-  ['generation.contrainte.separerAppartenances', 'Séparer les appartenances'],
+  ['generation.contrainte.separerOrganisations', 'Séparer les organisations'],
   ['generation.contrainte.nouveauxVoisins', 'Nouveaux voisins à chaque tour'],
   ['generation.contrainte.nouvelleTable', 'Nouvelle table à chaque tour'],
-  ['generation.contrainte.varierAppartenances', 'Varier les appartenances rencontrées'],
+  ['generation.contrainte.varierOrganisations', 'Varier les organisations rencontrées'],
   ['generation.contrainte.respecterObjectifs', 'Respecter les objectifs des tables'],
   ['generation.contrainte.rencontrerAnimateurs', "Rencontrer le plus d'animateurs différents"],
   ['generation.contrainte.attribuerSieges', 'Attribuer les sièges'],

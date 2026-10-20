@@ -125,7 +125,7 @@ function chargeSix() {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: rang < 2 ? 'Club des Merles' : null,
+    organisation: rang < 2 ? 'Club des Merles' : null,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -271,7 +271,7 @@ function attendus(chargeLue, placement) {
     ['rencontresRepetees', ecrit(mesures.rencontresRepetees.choisies)],
     ['maxRencontresPaire', ecrit(mesures.maxRencontresPaire)],
     ['retoursChoisis', ecrit(mesures.totalRetoursChoisis)],
-    ['appartenancesVues', ecrit(mesures.aggAppartenancesVues.tous.min)],
+    ['organisationsVues', ecrit(mesures.aggOrganisationsVues.tous.min)],
     ['totalRedondance', ecrit(mesures.totalRedondance)],
     ['diversite', ecrit(mesures.aggDiversite.tous.min, 2)],
     ['manqueMax', ecrit(trois.manqueMax.tous)],
@@ -1085,7 +1085,7 @@ describe('la phrase de l’ordre désigne les colonnes (§ 5.7)', () => {
     expect(section(m).querySelectorAll('[data-ordre] p').length).toBe(1);
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
       "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
-        "puis collisions cumulées, puis rencontres répétées, puis redondance d'appartenance, puis l'identifiant croissant.",
+        "puis collisions cumulées, puis rencontres répétées, puis redondance d'organisation, puis l'identifiant croissant.",
     );
     const cible = colonne(m, 'excedentCollisions');
     const avant = cible.map((cellule) => [getComputedStyle(cellule).color, getComputedStyle(cellule).backgroundColor]);
@@ -1115,7 +1115,7 @@ const NOMS_DES_COLONNES = [
   'rencontresRepetees',
   'maxRencontresPaire',
   'retoursChoisis',
-  'appartenancesVues',
+  'organisationsVues',
   'totalRedondance',
   'diversite',
   'manqueMax',
@@ -1483,7 +1483,7 @@ describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => 
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
       "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
         'puis collisions cumulées, puis personnes jamais servies, puis tours hors objectif, puis rencontres répétées, ' +
-        "puis redondance d'appartenance, puis l'identifiant croissant.",
+        "puis redondance d'organisation, puis l'identifiant croissant.",
     );
   });
 
@@ -1507,7 +1507,7 @@ describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => 
 
   test('« nouvelle table » cochée seule : le nom « retours » surligne la colonne des retours choisis, jamais celle des rencontres répétées', async () => {
     const chargeLue = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
-    for (const cle of ['separerAppartenances', 'nouveauxVoisins', 'varierAppartenances']) chargeLue.reglages[cle] = false;
+    for (const cle of ['separerOrganisations', 'nouveauxVoisins', 'varierOrganisations']) chargeLue.reglages[cle] = false;
     const m = await ouvrir(chargeLue);
     expect(texteDe(section(m).querySelector('[data-ordre]'))).toBe(
       "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis retours, puis l'identifiant croissant.",
@@ -1535,7 +1535,7 @@ describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => 
     const m = await ouvrir(chargeLue);
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
       "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis ensemble, " +
-        "excédent de collisions (poids 3), redondance d'appartenance (poids 2), puis collisions cumulées, " +
+        "excédent de collisions (poids 3), redondance d'organisation (poids 2), puis collisions cumulées, " +
         "puis rencontres répétées, puis l'identifiant croissant.",
     );
     const noms = nomsDesignants(m);
@@ -2072,7 +2072,7 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     // générées ensuite, comparables. Toute commande qui change les
     // participants ajuste le retenu, qui ne dérive pas par elle.
     const enDerive = structuredClone(executer(chargeSix(), 'retenirProposition', { id: 1 }));
-    enDerive.participants.push({ id: 7, nom: 'Quenouillard', prenom: 'Aubépine', appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false });
+    enDerive.participants.push({ id: 7, nom: 'Quenouillard', prenom: 'Aubépine', organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false });
     enDerive.prochainsIds.participant = 8;
     const m = await ouvrir(generee(enDerive, { graine: 4, nombre: 2, arret: 40 }));
     expect(ligneRetenu(m).querySelector('td.raisons')).not.toBeNull();

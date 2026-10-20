@@ -4,7 +4,7 @@
 // Recherche reproductible (§ 5.7, § 5.10). Une génération rend plusieurs
 // propositions ; chacune sort d'une descente par acceptation tardive (late
 // acceptance hill climbing) sur le plan complet, les N participants et les R
-// tours, ancrés compris : l'appartenance d'un ancré pèse sur ses voisins de
+// tours, ancrés compris : l'organisation d'un ancré pèse sur ses voisins de
 // table comme celle de tout autre (§ 5.2).
 //
 // Graines. creerPcg32(graine, FLUX.GRAINES) tire une graine dérivée par
@@ -63,9 +63,9 @@
 // Incrémental. L'état tient à jour ce dont le score dépend : la matrice des
 // rencontres par paire ; rencontres(p) ; l'histogramme des écarts au plafond
 // a priori, d'où leur maximum, et la somme de leurs carrés ; les collisions
-// cumulées de même appartenance et leur excédent ; Σ_paires max(0, M − 1) ;
+// cumulées de même organisation et leur excédent ; Σ_paires max(0, M − 1) ;
 // les visites par (personne, table), d'où les retours choisis ; par
-// personne, le nombre d'affiliés rencontrés de chaque appartenance, d'où
+// personne, le nombre d'affiliés rencontrés de chaque organisation, d'où
 // |F(p)|, A(p) et Σ r(p). Un échange ne touche que les paires des deux tables
 // concernées, au tour concerné : O(capacité).
 //
@@ -253,7 +253,7 @@ import { plafondsAPriori } from './plafond.js';
  *           RESERVE pour un absent, et pour une réserve imposée d'un départ
  * @property {Int32Array} rencontres         |met(p)|, ordre canonique
  * @property {Int32Array} affilies           |F(p)|
- * @property {Int32Array} appartenancesVues  A(p)
+ * @property {Int32Array} organisationsVues  A(p)
  * @property {number} collisionsCumulees
  * @property {number} excedentCollisions     collisions cumulées − paires distinctes
  * @property {number} totalRetoursChoisis
@@ -546,7 +546,7 @@ function changerAffilie(etat, p, g, sens) {
   etat.affilies[p] += sens;
   let vues = 0;
   if (avant === (sens > 0 ? 0 : 1)) {
-    etat.appartenancesVues[p] += sens;
+    etat.organisationsVues[p] += sens;
     vues = sens;
   }
   etat.totalRedondance += sens - vues;
@@ -554,10 +554,10 @@ function changerAffilie(etat, p, g, sens) {
 
 // Ajoute sens, 1 ou −1, aux rencontres de la paire (a, b), a ≠ b, et
 // propage : les collisions cumulées pour deux personnes de la même
-// appartenance. Quand la paire était réunie avant un ajout, ou le reste
+// organisation. Quand la paire était réunie avant un ajout, ou le reste
 // après un retrait, la rencontre ajoutée ou retirée est une répétition :
 // elle compte dans Σ max(0, M − 1) et, entre collègues, dans l'excédent de
-// collisions, qui vaut Σ max(0, M − 1) sur les paires de même appartenance.
+// collisions, qui vaut Σ max(0, M − 1) sur les paires de même organisation.
 // Sinon la paire devient réunie ou cesse de l'être : les rencontres et les
 // affiliés des deux suivent.
 function modifierPaire(etat, a, b, sens) {
@@ -567,7 +567,7 @@ function modifierPaire(etat, a, b, sens) {
   etat.paires[k] = apres;
   const ga = etat.groupe[a];
   const gb = etat.groupe[b];
-  const memeGroupe = ga === gb && etat.porteAppartenance[a] === 1;
+  const memeGroupe = ga === gb && etat.porteOrganisation[a] === 1;
   if (memeGroupe) etat.collisionsCumulees += sens;
   if ((sens > 0 ? avant : apres) !== 0) {
     etat.excedentPaires += sens;
@@ -576,8 +576,8 @@ function modifierPaire(etat, a, b, sens) {
   }
   changerRencontres(etat, a, sens);
   changerRencontres(etat, b, sens);
-  if (etat.porteAppartenance[b] === 1) changerAffilie(etat, a, gb, sens);
-  if (etat.porteAppartenance[a] === 1) changerAffilie(etat, b, ga, sens);
+  if (etat.porteOrganisation[b] === 1) changerAffilie(etat, a, gb, sens);
+  if (etat.porteOrganisation[a] === 1) changerAffilie(etat, b, ga, sens);
 }
 
 // p gagne (sens = 1) ou perd (sens = −1) un tour servi ; p est concerné, et
@@ -726,12 +726,12 @@ function etatInitial(structure, rng, remplir = null) {
     instance,
     contraintes: instance.contraintes,
     groupe: instance.groupe,
-    // porteAppartenance[p] vaut 1 quand p porte une appartenance, 0 pour
+    // porteOrganisation[p] vaut 1 quand p porte une organisation, 0 pour
     // SANS_GROUPE.
     // modifierPaire le lit au lieu de comparer un groupe à SANS_GROUPE : sous
     // le lanceur d'épreuves, chaque lecture d'une valeur importée passe par
     // un accesseur, que la boucle de recherche paierait à chaque paire.
-    porteAppartenance: Uint8Array.from(instance.groupe, (g) => (g === SANS_GROUPE ? 0 : 1)),
+    porteOrganisation: Uint8Array.from(instance.groupe, (g) => (g === SANS_GROUPE ? 0 : 1)),
     N,
     T,
     R,
@@ -748,7 +748,7 @@ function etatInitial(structure, rng, remplir = null) {
     paires: R <= UINT16_MAX ? new Uint16Array(N * N) : new Uint32Array(N * N),
     rencontres: new Int32Array(N),
     affilies: new Int32Array(N),
-    appartenancesVues: new Int32Array(N),
+    organisationsVues: new Int32Array(N),
     parGroupe: new Int32Array(N * G),
     visites: new Int32Array(N * T),
     histogramme: new Int32Array(structure.largeurHistogramme),

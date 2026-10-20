@@ -70,7 +70,7 @@ function relever(etat, instance, palier, releve) {
   confronter('score', scoreIncremental(etat), scoreComplet(etat));
   confronter('rencontres', Array.from(etat.rencontres), mesures.rencontres);
   confronter('affilies', Array.from(etat.affilies), mesures.affilies);
-  confronter('appartenancesVues', Array.from(etat.appartenancesVues), mesures.appartenancesVues);
+  confronter('organisationsVues', Array.from(etat.organisationsVues), mesures.organisationsVues);
   confronter('collisionsCumulees', [etat.collisionsCumulees], [mesures.collisionsCumulees]);
   confronter('excedentCollisions', [etat.excedentCollisions], [mesures.excedentCollisions]);
   confronter('totalRetoursChoisis', [etat.totalRetoursChoisis], [mesures.totalRetoursChoisis]);
@@ -140,7 +140,7 @@ function soireeAObjectifs(mode, priorites) {
   return {
     participants: Array.from({ length: 14 }, (_, rang) => ({
       id: rang + 1,
-      appartenance: ['A', 'B', 'C', null][rang % 4],
+      organisation: ['A', 'B', 'C', null][rang % 4],
       ...(rang < etiquettes.length ? { etiquettes: etiquettes[rang] } : {}),
       ...(anime.has(rang + 1) ? { anime: anime.get(rang + 1) } : {}),
     })),
@@ -152,10 +152,10 @@ function soireeAObjectifs(mode, priorites) {
       auTour(2, 1, 3), auTour(4, 2, 1),
     ],
     contraintes: {
-      separerAppartenances: true,
+      separerOrganisations: true,
       nouveauxVoisins: true,
       nouvelleTable: true,
-      varierAppartenances: true,
+      varierOrganisations: true,
       respecterObjectifs: true,
       rencontrerAnimateurs: true,
     },

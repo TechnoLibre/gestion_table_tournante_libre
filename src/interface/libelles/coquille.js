@@ -155,7 +155,7 @@ export const TABLE = new Map([
   ['coquille.apropos.categorie.int', 'Interface'],
   ['coquille.apropos.fonctionnalite.pre01', 'Importer la liste des participants en CSV, après un aperçu'],
   ['coquille.apropos.fonctionnalite.pre02', 'Réexporter les lignes refusées d\u{2019}un import'],
-  ['coquille.apropos.fonctionnalite.pre03', 'Fondre les orthographes d\u{2019}une même appartenance, jamais en silence'],
+  ['coquille.apropos.fonctionnalite.pre03', 'Fondre les orthographes d\u{2019}une même organisation, jamais en silence'],
   ['coquille.apropos.fonctionnalite.pre04', 'Saisir et corriger les participants à la main'],
   ['coquille.apropos.fonctionnalite.pre05', 'Exporter la liste des participants en CSV, dans la forme qu\u{2019}il importe'],
   ['coquille.apropos.fonctionnalite.pre06', 'Étiqueter les personnes'],

@@ -116,7 +116,7 @@ describe('intégration : de la configuration au classement (§ 5.5, § 5.7, § 1
     assert.equal(classement.critereSaute, null);
     assert.equal(minimumAtteint(premiere.mesures, generation.aPriori), true);
     // Le certificat ne lit que les rencontres : il se décerne aussi à un plan
-    // qui réunit des collègues. Chaque appartenance de quatre membres peut
+    // qui réunit des collègues. Chaque organisation de quatre membres peut
     // se répartir sur les quatre tables à chaque tour, comme dans le plan
     // écrit du § 15.3 : aucune proposition ne réunit de collègues, et le
     // compteur de collisions se mesure à zéro (§ 15.3).

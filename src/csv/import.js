@@ -34,7 +34,7 @@ import { enregistrementVide } from './lecture.js';
 // porte une personne créée, et que pose une mise à jour quand la cellule
 // n'est pas vide. Les étiquettes et la présence, des listes, se posent à
 // part (poser).
-const CHAMPS_LUS = Object.freeze(['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes', 'exclu']);
+const CHAMPS_LUS = Object.freeze(['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu']);
 
 // En-têtes des deux colonnes qu'ajoute le CSV des refus, inconnues de
 // l'association des colonnes.
@@ -263,8 +263,8 @@ const memePresence = (a, b) =>
 // rangées, puis la présence canonique, en dernier, chaque clé absente quand
 // la ligne n'en porte pas (§ 8.9). Une présence vide ou qui nomme chaque
 // tour laisse le champ absent : la personne vient à tous les tours.
-function creer(id, { nom, prenom, appartenance, courriel, titrePressenti, notes, exclu, etiquettes, presence }, tours) {
-  const participant = { id, nom, prenom, appartenance, courriel, titrePressenti, notes, exclu: exclu ?? false };
+function creer(id, { nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence }, tours) {
+  const participant = { id, nom, prenom, organisation, courriel, titrePressenti, notes, exclu: exclu ?? false };
   if (etiquettes !== null) participant.etiquettes = rangees(etiquettes);
   const canonique = presence === null ? undefined : presenceCanonique(presence, tours);
   if (canonique !== undefined) participant.presence = canonique;
@@ -309,7 +309,7 @@ function poser(participant, champs, tours) {
 // les lignes à ajouter, les refus et les comptes. Chaque ligne désigne par
 // designer, contre l'index des participants d'avant l'import : un
 // participant ajouté par une ligne n'est désigné par aucune autre, et le
-// prénom ou l'appartenance qu'une ligne pose n'écarte pas ce participant des
+// prénom ou l'organisation qu'une ligne pose n'écarte pas ce participant des
 // candidats d'une suivante. Une ligne qui ne désigne personne est à ajouter.
 // Une ligne qui en désigne plusieurs est refusée PLUSIEURS_CORRESPONDENT,
 // jamais ajoutée. Le participant qu'une ligne désigne seule est mis à jour
@@ -355,12 +355,12 @@ function mettreAJour(participants, lignes, tours) {
  * - 'ajouter' : chaque ligne valide devient un participant ; un doublon ne se
  *   fusionne jamais ;
  * - 'mettreAJour' : une ligne désigne, par designer, les participants
- *   d'avant l'import de même nom normalisé ; le prénom et l'appartenance
+ *   d'avant l'import de même nom normalisé ; le prénom et l'organisation
  *   n'en écartent un que lorsque la ligne et lui en portent tous deux un,
  *   de clés normalisées différentes, selon leurs valeurs d'avant l'import.
  *   Une ligne ajoutée à côté d'un participant de même nom est celle que
  *   l'aperçu nomme dans homonymes. Désigné seul, le participant prend chaque champ non vide de
- *   la ligne, nom, prénom et appartenance compris, et garde la valeur d'un
+ *   la ligne, nom, prénom et organisation compris, et garde la valeur d'un
  *   champ vide ; exclu vide le garde ; une cellule d'étiquettes non vide
  *   remplace la liste, vide la garde ; une cellule de présence non vide
  *   remplace la présence, vide la garde, et « tous » la retire. Une ligne
@@ -390,7 +390,7 @@ function mettreAJour(participants, lignes, tours) {
  * @param {import('../stockage/types.js').Charge} charge
  * @param {import('./apercu.js').Apercu} apercu  calculé contre les
  *   participants de la charge, pour ce mode : hors de remplacer,
- *   l'appartenance d'une ligne y prend l'orthographe d'un existant de même
+ *   l'organisation d'une ligne y prend l'orthographe d'un existant de même
  *   clé ; en remplacer, celle du fichier
  * @param {'ajouter'|'mettreAJour'|'remplacer'} mode
  * @returns {{charge: import('../stockage/types.js').Charge, resume: ResumeImport}}

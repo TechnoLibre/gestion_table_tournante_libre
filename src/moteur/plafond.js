@@ -211,7 +211,7 @@ export function plafondItineraire(instance, p, itineraire) {
 /**
  * L'occupation d'un plan (§ 5.4, B4), rangée t × R + r : occupants, o_{t,r},
  * les personnes assises à la table t au tour r ; affilies, α_{t,r}, celles
- * d'entre elles qui portent une appartenance, compté seulement sous l'option
+ * d'entre elles qui portent une organisation, compté seulement sous l'option
  * {affilies}, null sans elle. Un tour en réserve n'occupe aucune table. Des
  * Array, jamais un tableau typé.
  *
@@ -273,10 +273,10 @@ export function plafondsRealises(instance, tableDe) {
  * min(N_aff − ε_p, Σ_{t∈D} a^aff_t + min(n^aff_p, Σ_{(t,r)∈I} v^aff_{t,r})),
  * v^aff_{t,r} = α_{t,r} − ε_p − a^aff_t, chaque terme compté sur les seuls
  * affiliés, p non compté. Il borne |F(p)|, les affiliés que p rencontre. G
- * compte les appartenances des personnes présentes (instance.groupes) ;
- * N_aff, les présents affiliés ; g_p, l'effectif de l'appartenance de p.
+ * compte les organisations des personnes présentes (instance.groupes) ;
+ * N_aff, les présents affiliés ; g_p, l'effectif de l'organisation de p.
  *
- * Chaque appartenance autre que celle de p compte au moins une personne :
+ * Chaque organisation autre que celle de p compte au moins une personne :
  * N_aff − g_p ≥ G − 1, et le troisième terme ne descend jamais sous G. Il
  * s'écrit pour que le code se lise contre la formule du § 5.5.
  *

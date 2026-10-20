@@ -5,13 +5,13 @@
   // La vue « Profil trié des rencontres » (§ 12.3, B12, B15, D28, D30, D41,
   // D51) de la page de qualité : deux graphiques empilés au même ordre de
   // rangs, puis leur jumeau. Le premier, en comptes de personnes : les
-  // rencontres en plein, les appartenances rencontrées en tirets, le plafond
+  // rencontres en plein, les organisations rencontrées en tirets, le plafond
   // réalisé en trait mixte, la borne de diversité en pointillés, les rangs
   // marqués de leur signe, et sa phrase de synthèse dessous. Le second, en
   // pourcentages : le pourcentage de chaque rang, interrompu aux rangs sans
   // plafond, la règle à 100 %, les mêmes signes aux mêmes rangs — celui
   // d'un rang sans point au pied de l'axe —, et sa synthèse, la personne au
-  // rang 1, son pourcentage et le compte du pire. Une appartenance au plus :
+  // rang 1, son pourcentage et le compte du pire. Une organisation au plus :
   // une seule série, sans borne, et la phrase du cas ; une seule table : la
   // phrase seule.
   //

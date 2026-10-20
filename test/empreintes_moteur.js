@@ -84,10 +84,10 @@ export const BASCULE = Object.freeze({
 
 /** Les quatre cases du § 5.3, dans l'ordre où une combinaison les nomme. */
 export const CASES = Object.freeze([
-  'separerAppartenances',
+  'separerOrganisations',
   'nouveauxVoisins',
   'nouvelleTable',
-  'varierAppartenances',
+  'varierOrganisations',
 ]);
 
 /**

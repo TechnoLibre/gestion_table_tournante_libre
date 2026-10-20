@@ -137,16 +137,16 @@ export function chargeDeDemonstration({ cle, nom, construire }) {
   const reserves = new Set(animateurs.values());
   const colonnes = colonnesDe(tables.length);
   const pas = ecartsGrille(tables.map(({ capacite }) => ({ forme: 'ronde', places: capacite })));
-  const { separerAppartenances, nouveauxVoisins, nouvelleTable, varierAppartenances } = contraintes;
+  const { separerOrganisations, nouveauxVoisins, nouvelleTable, varierOrganisations } = contraintes;
   return {
     ...neuve,
-    reglages: { ...neuve.reglages, separerAppartenances, nouveauxVoisins, nouvelleTable, varierAppartenances },
+    reglages: { ...neuve.reglages, separerOrganisations, nouveauxVoisins, nouvelleTable, varierOrganisations },
     prochainsIds: { participant: plusGrandId(participants) + 1, table: plusGrandId(tables) + 1, proposition: 1 },
     participants: participants.map((participant) => ({
       id: participant.id,
       nom: participant.nom,
       prenom: participant.prenom ?? null,
-      appartenance: participant.appartenance,
+      organisation: participant.organisation,
       courriel: null,
       titrePressenti: reserves.has(participant.id) ? ANIMATION : null,
       notes: null,

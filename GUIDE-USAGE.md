@@ -88,9 +88,9 @@ sur la fenêtre. **Rien ne s’importe avant l’aperçu.**
 ![L’aperçu d’un import : encodage, séparateur, colonnes reconnues](doc/captures/02-import-apercu.png)
 
 *L’aperçu nomme l’encodage et le séparateur que le logiciel a reconnus, dit ce
-que devient chaque colonne — « Organisation » devient l’appartenance, « Rôle »
-le titre pressenti — et signale une colonne non reconnue, ignorée. Vérifiez ces
-trois lignes avant d’importer.*
+que devient chaque colonne — « Organisation » reste l’organisation, « Rôle »
+devient le titre pressenti — et signale une colonne non reconnue, ignorée.
+Vérifiez ces trois lignes avant d’importer.*
 
 Le mode de l’import se choisit au même endroit : « Ajouter » ajoute des
 personnes, « Mettre à jour » met à jour celles que le fichier reconnaît sans
@@ -112,7 +112,7 @@ Après l’import, le rapport compte ce qui est entré :
 ![Le rapport d’import : personnes ajoutées, orthographes fondues, lignes refusées](doc/captures/03-import-rapport.png)
 
 *Le rapport compte les personnes ajoutées, mises à jour, inchangées ou
-retirées, regroupe les orthographes d’une même appartenance qu’il a fondues, et
+retirées, regroupe les orthographes d’une même organisation qu’il a fondues, et
 liste les lignes refusées avec leur motif. « Enregistrer les lignes refusées »
 les écrit dans un fichier, pour les corriger dans un tableur et les réimporter.
 L’import entier compte pour un seul geste : « Défaire » le reprend d’un coup.*
@@ -362,7 +362,7 @@ réservations, comptés à part de ceux que choisit la recherche, et le
 et ce qu’aucune relance ne changera.*
 
 Le même diagnostic s’affiche à côté du plan, pendant que vous préparez les
-tables : chaque appartenance trop nombreuse pour ses tables y annonce les
+tables : chaque organisation trop nombreuse pour ses tables y annonce les
 retrouvailles qu’elle imposera.
 
 ## Étape 9 — Générer
@@ -414,12 +414,12 @@ celui des priorités réglé plus haut : d’abord l’écart au plafond a prior
 puis, ensemble, l’excédent de collisions et les tours hors objectif avec
 leurs poids, et ainsi de suite, chaque critère au plus faible d’abord. Plus
 large que l’écran, le tableau défile de côté ; il est montré ici défilé vers
-la droite : la diversité des appartenances rencontrées, le manque et le
+la droite : la diversité des organisations rencontrées, le manque et le
 plafond a priori, puis, en dernier groupe, les objectifs des tables — les
 tours hors objectif et le moins de tours servis selon l’objectif. À sa
 gauche, hors de l’image, viennent le rang, la proposition, les personnes
 distinctes rencontrées, les collisions entre personnes d’une même
-appartenance et les rencontres répétées.*
+organisation et les rencontres répétées.*
 
 ### Repartir d’une proposition
 
@@ -558,7 +558,7 @@ autres, avec la graine 4242 et un compte d’arrêt de 300.
 
 *Le profil trié de la première proposition de la grande démonstration. En
 haut, en comptes de personnes : les rencontres de chacun en trait plein, de
-la personne la moins servie, à gauche, à la mieux servie ; les appartenances
+la personne la moins servie, à gauche, à la mieux servie ; les organisations
 rencontrées en tirets ; le plafond réalisé en trait mixte et la borne de
 diversité en pointillés, chacun nommé au bout de son tracé. Les triangles
 marquent les personnes ancrées par une réservation. Dessous, au même ordre
@@ -608,25 +608,25 @@ de manque, de la plus grande à zéro, le nombre de rangs qui la prennent dans
 chaque placement, et l’effectif cumulé, le nombre de rangs qui l’atteignent
 ou la dépassent — le dernier rang où la courbe atteint cette valeur.*
 
-![Les collisions d’appartenance de la variante « conflit inévitable », en deux segments](doc/captures/13-qualite-collisions.png)
+![Les collisions d’organisation de la variante « conflit inévitable », en deux segments](doc/captures/13-qualite-collisions.png)
 
-*Les collisions d’appartenance de la variante « conflit inévitable » : une
-barre par appartenance, le plus grand excédent d’abord. Pour
-l’appartenance de cinq personnes, à quatre tables, le segment gris « prouvé
+*Les collisions d’organisation de la variante « conflit inévitable » : une
+barre par organisation, le plus grand excédent d’abord. Pour
+l’organisation de cinq personnes, à quatre tables, le segment gris « prouvé
 inévitable » vaut 4 collisions cumulées, le plancher que le diagnostic
 annonce ; le segment bleu « reste » est ce que la recherche aurait pu
 éviter. L’effectif, les paires distinctes et l’excédent suivent en encre
 secondaire.*
 
-![Les appartenances à chaque table, sous « appartenances par siège »](doc/captures/13a-qualite-tables.png)
+![Les organisations à chaque table, sous « organisations par siège »](doc/captures/13a-qualite-tables.png)
 
-*Les appartenances à chaque table, même proposition. Le sélecteur est sur
-« appartenances par siège » : une ligne par table, une colonne par tour, et
-chaque case écrit le nombre de sièges qui n’apportent aucune appartenance
+*Les organisations à chaque table, même proposition. Le sélecteur est sur
+« organisations par siège » : une ligne par table, une colonne par tour, et
+chaque case écrit le nombre de sièges qui n’apportent aucune organisation
 nouvelle à leur table ; sa couleur fonce avec lui. La pire table vient en
 tête, une table qui n’en a aucun à aucun tour, en dernier. Les deux autres
 positions comptent les personnes assises, puis les doublons parmi les
-personnes d’une appartenance ; le choix tient le temps de la séance, et
+personnes d’une organisation ; le choix tient le temps de la séance, et
 n’écrit rien.*
 
 ![Le tableau des paires répétées d’une soirée où se revoir est forcé](doc/captures/14-qualite-paires.png)
@@ -668,7 +668,7 @@ gardés.*
 concernée, de la moins servie à la mieux servie, sous la borne des
 animateurs en pointillés — ce que la soirée permet au mieux, sans garantie.
 Dessous commence la diversité par animateur : aucune personne présente ne
-porte d’étiquette, et seule la colonne des appartenances se dessine.*
+porte d’étiquette, et seule la colonne des organisations se dessine.*
 
 ![La performance du calcul : la course de la recherche aux points de relevé](doc/captures/15c-qualite-performance.png)
 
@@ -687,7 +687,7 @@ séance.*
 ![« Minimum atteint » sur la petite démonstration](doc/captures/16-minimum-atteint.png)
 
 *Le bas de l’en-tête chiffré, sur la petite démonstration générée au compte
-d’arrêt par défaut : la diversité d’appartenance, aucun manque, et « minimum
+d’arrêt par défaut : la diversité d’organisation, aucun manque, et « minimum
 atteint ». Plus haut, hors de l’image, les collisions cumulées et les
 rencontres répétées valent 0, et la ligne des ancrés écrit « — » : la
 démonstration n’a aucune réservation, et une population vide n’a pas de
@@ -704,32 +704,32 @@ construite à la main.
 
 *Aucun placement : la variante « conflit inévitable », avant toute
 génération. La page dit qu’il n’y a rien à mesurer, et montre le diagnostic
-préalable : au moins 4 collisions cumulées pour l’appartenance de cinq
+préalable : au moins 4 collisions cumulées pour l’organisation de cinq
 personnes, à quatre tables.*
 
 ![Une seule table : une phrase à la place de chaque vue](doc/captures/12b-qualite-une-table.png)
 
 *Une seule table de six places, six personnes, trois tours : chacun y
-rencontre tous les autres. Le profil, les collisions, les appartenances à
+rencontre tous les autres. Le profil, les collisions, les organisations à
 chaque table et les paires cèdent chacun la place à sa phrase.*
 
 ![Un seul tour : la grille d’une colonne, la phrase des paires](doc/captures/12c-qualite-un-tour.png)
 
 *Un seul tour, douze personnes à trois tables de quatre : le profil et les
 collisions se dessinent plus haut, hors de l’image ; la vue des tables, son
-sélecteur sur « appartenances par siège », n’a qu’une colonne, et aucune
+sélecteur sur « organisations par siège », n’a qu’une colonne, et aucune
 paire ne peut se revoir.*
 
-![Une seule appartenance : le profil à une seule série](doc/captures/12d-qualite-une-appartenance.png)
+![Une seule organisation : le profil à une seule série](doc/captures/12d-qualite-une-appartenance.png)
 
-*Douze personnes d’une même appartenance : le profil n’a qu’une série, les
+*Douze personnes d’une même organisation : le profil n’a qu’une série, les
 rencontres, sans borne de diversité, et sa phrase le dit. Les collisions et
 la grille des tables restent, plus bas.*
 
 ![Aucune collision : la phrase des collisions, la grille à zéro](doc/captures/12e-qualite-sans-collision.png)
 
-*Neuf personnes de neuf appartenances, trois tables de trois, deux tours :
-aucune collision, et la phrase le dit. La grille, sous « appartenances par
+*Neuf personnes de neuf organisations, trois tables de trois, deux tours :
+aucune collision, et la phrase le dit. La grille, sous « organisations par
 siège », écrit 0 dans chaque case.*
 
 ![Une personne en réserve : sa marque dans le profil](doc/captures/12f-qualite-reserve.png)
@@ -892,7 +892,7 @@ Viennent ensuite les planches, quatre badges A6 par feuille A4 :
 
 ![La première planche : quatre badges A6 et leurs traits de coupe](doc/captures/25-badges-planche.png)
 
-*Chaque badge porte le nom, l’appartenance et la table de chaque tour ; en
+*Chaque badge porte le nom, l’organisation et la table de chaque tour ; en
 pied, le nom de l’événement et l’instant du placement. Les traits fins
 marquent la coupe : un vertical au milieu de la feuille, un horizontal sous
 chaque rangée de badges.*
@@ -967,8 +967,8 @@ des mouvements que la recherche n’a pas essayés.
 
 ### Ce que font les contraintes
 
-« Séparer les appartenances », « Nouveaux voisins à chaque tour », « Nouvelle
-table à chaque tour », « Varier les appartenances rencontrées » sont des
+« Séparer les organisations », « Nouveaux voisins à chaque tour », « Nouvelle
+table à chaque tour », « Varier les organisations rencontrées » sont des
 **objectifs**, pas des interdits. Quand ils ne tiennent pas tous ensemble, le
 logiciel produit le meilleur compromis et dit lequel, au lieu de refuser et de
 ne rien montrer.
@@ -1006,10 +1006,10 @@ inconnue » dit que le logiciel ne sait pas si mieux est possible.
 ### Ce que relancer ne peut pas
 
 Relancer n’efface pas les collisions que le diagnostic annonce comme
-inévitables — les « au moins » de chaque appartenance trop nombreuse pour ses
+inévitables — les « au moins » de chaque organisation trop nombreuse pour ses
 tables —, et ne crée pas une table qui n’existe pas. Le diagnostic dit **avant**
 la recherche ce qui est hors d’atteinte, et quel changement de configuration le
-lèverait : une table de plus, un tour de moins, une appartenance mieux
+lèverait : une table de plus, un tour de moins, une organisation mieux
 répartie.
 
 ### Comparer deux propositions
@@ -1068,15 +1068,15 @@ réglage du poste, pour la séance, automatique par défaut (étape 9).
 | Propositions par génération (nombre de propositions) | Génération | 5 |
 | Compte d'arrêt (mouvements évalués par proposition) | Génération | 200 000 |
 | Historique d'acceptation (longueur, en mouvements) | Génération | 1 000 |
-| Séparer les appartenances | Génération | cochée |
+| Séparer les organisations | Génération | cochée |
 | Nouveaux voisins à chaque tour | Génération | cochée |
 | Nouvelle table à chaque tour | Génération | cochée |
-| Varier les appartenances rencontrées | Génération | cochée |
+| Varier les organisations rencontrées | Génération | cochée |
 | Respecter les objectifs des tables | Génération | cochée |
 | Rencontrer le plus d'animateurs différents | Génération | décochée |
 | Attribuer les sièges | Génération | décochée |
 | Objectifs des tables : chercher d'abord | Génération | le plus de places servies |
-| Ordre des priorités | Génération | écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, puis tours hors objectif, puis rencontres répétées et retours, puis animateurs non rencontrés, puis redondance d'appartenance |
+| Ordre des priorités | Génération | écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, puis tours hors objectif, puis rencontres répétées et retours, puis animateurs non rencontrés, puis redondance d'organisation |
 
 <!-- engendre:fin reglages -->
 
@@ -1092,7 +1092,7 @@ majuscules ni aux accents.
 |---|---|
 | `nom` | — |
 | `prenom` | — |
-| `appartenance` | `organisation`, `entreprise`, `équipe` |
+| `organisation` | `appartenance`, `entreprise`, `équipe` |
 | `courriel` | — |
 | `titre_pressenti` | `titre`, `rôle` |
 | `exclu` | — |
@@ -1147,7 +1147,7 @@ l’historique ; les noms des exemples sont inventés.
 | `realignerTable` | Table 5 : suit le défaut (8 places) |
 | `changerDefaut` | Sièges par défaut : 10 ; 4 tables réalignées |
 | `changerTours` | Nombre de tours : 3 ; 2 réservations retirées |
-| `modifierReglage` | Séparer les appartenances : désactivé |
+| `modifierReglage` | Séparer les organisations : désactivé |
 | `poserObjectif` | Table 3 : objectif de la soirée « finance », règle par défaut |
 | `retirerObjectif` | Table 3, tour 2 : objectif retiré |
 | `changerRegleObjectifs` | Règle par défaut des objectifs : toutes les étiquettes |

@@ -53,7 +53,7 @@ import { mettreEnPage, metriquesDe } from './mise_en_page.js';
  * src/application/planche.js, que src/pdf n'importe pas.
  *
  * @typedef {Object} ModelePlanche
- * @property {Array<{textes: {nom: string, lignes: string[], appartenance: string|null,
+ * @property {Array<{textes: {nom: string, lignes: string[], organisation: string|null,
  *            pied: string[], piedReduit: string[]}}>} badges   dans l'ordre de la pile
  * @property {string|null} horodatage   l'horodatage du placement ; null : inconnu
  * @property {boolean} brouillon
@@ -143,7 +143,7 @@ async function documentAvecPolices(polices) {
 // Les textes d'un badge, dans l'ordre où ses absents se nomment.
 const textesDuBadge = ({ textes }) => [
   textes.nom,
-  ...(textes.appartenance === null ? [] : [textes.appartenance]),
+  ...(textes.organisation === null ? [] : [textes.organisation]),
   ...textes.lignes,
   ...textes.pied,
   ...textes.piedReduit,

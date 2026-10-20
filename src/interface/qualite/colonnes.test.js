@@ -33,14 +33,14 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
 const V1 = VERSION.affichee;
 
-// Dix personnes inventées, deux appartenances, trois tables de quatre
+// Dix personnes inventées, deux organisations, trois tables de quatre
 // places, trois tours ; avec objectifs, les trois premières portent
 // « finance », que la première table attend pour la soirée ; aubier : le
 // nombre des premières de la « Coopérative Aubier », les trois suivantes de
-// l'« Atelier Ressac » — sept membres d'une appartenance pour trois tables
+// l'« Atelier Ressac » — sept membres d'une organisation pour trois tables
 // en font asseoir deux ensemble, et le diagnostic prouve des planchers ;
-// appartenances faux : personne ne porte d'appartenance.
-function chargeDix({ objectifs = false, reglages = {}, aubier = 3, appartenances = true } = {}) {
+// organisations faux : personne ne porte d'organisation.
+function chargeDix({ objectifs = false, reglages = {}, aubier = 3, organisations = true } = {}) {
   const charge = creerCharge({ id: 'evt-colonnes', nom: 'Atelier Ressac', siegesParDefaut: 4, tours: 3 });
   const noms = [
     ['Ombrelle', 'Iris'],
@@ -54,7 +54,7 @@ function chargeDix({ objectifs = false, reglages = {}, aubier = 3, appartenances
     ['Embrun', 'Gaspard'],
     ['Saulaie', 'Romane'],
   ];
-  const appartenanceDe = (rang) => {
+  const organisationDe = (rang) => {
     if (rang < aubier) return 'Coopérative Aubier';
     return rang < aubier + 3 ? 'Atelier Ressac' : null;
   };
@@ -62,7 +62,7 @@ function chargeDix({ objectifs = false, reglages = {}, aubier = 3, appartenances
     id: rang + 1,
     nom,
     prenom,
-    appartenance: appartenances ? appartenanceDe(rang) : null,
+    organisation: organisations ? organisationDe(rang) : null,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -132,10 +132,10 @@ const lignesDePlancher = (bornes) => bornes.filter((ligne) => ligne.startsWith('
 
 // Les tuiles dont la borne nomme une personne que la comparaison ne porte
 // pas : la colonne n'en écrit que le plancher, et, pour la diversité sans
-// appartenance présente, la phrase de la tuile.
-const SANS_BORNE_DE_PERSONNE = ['appartenancesVues', 'animateursRencontres'];
-const SANS_APPARTENANCE = t('qualite.tuile.sansAppartenance');
-const lignesSansPersonne = (bornes) => bornes.filter((ligne) => ligne.startsWith('plancher') || ligne === SANS_APPARTENANCE);
+// organisation présente, la phrase de la tuile.
+const SANS_BORNE_DE_PERSONNE = ['organisationsVues', 'animateursRencontres'];
+const SANS_ORGANISATION = t('qualite.tuile.sansOrganisation');
+const lignesSansPersonne = (bornes) => bornes.filter((ligne) => ligne.startsWith('plancher') || ligne === SANS_ORGANISATION);
 
 describe('colonnesComparaison : chaque colonne, le pire cas de son placement (§ 12.10.6, D67, C20, C29)', () => {
   test('rouge : chaque colonne porte le pourcentage du pire cas de son placement — deux rangs 1 différents, « minimum 24 sur 27 » et « minimum 14 sur 27 », chacun sous le sien', () => {
@@ -164,14 +164,14 @@ describe('colonnesComparaison : chaque colonne, le pire cas de son placement (§
     assert.ok(!minimum.b.bornes.some((ligne) => ligne.startsWith('plafond a priori')), minimum.b.bornes.join(' | '));
   });
 
-  test('sur des placements réels — deux propositions avec ou sans objectifs, sans appartenance présente, le retenu non ajusté ou ajusté —, chaque cellule est celle de la tuile du même placement — valeur, bornes, plancher, pourcentage et compte —, et la cellule du tableau quand le tableau la porte', () => {
+  test('sur des placements réels — deux propositions avec ou sans objectifs, sans organisation présente, le retenu non ajusté ou ajusté —, chaque cellule est celle de la tuile du même placement — valeur, bornes, plancher, pourcentage et compte —, et la cellule du tableau quand le tableau la porte', () => {
     const base = generee(chargeDix({ objectifs: true, aubier: 7 }));
     const [premiere, seconde] = deuxPremieres(base);
     const parDefaut = (charge) => ({ charge, cles: deuxPremieres(charge) });
     const cas = [
       ['sans objectifs', parDefaut(generee(chargeDix())), 16],
       ['avec objectifs', parDefaut(generee(chargeDix({ objectifs: true }))), 20],
-      ['sans appartenance', parDefaut(generee(chargeDix({ appartenances: false }))), 16],
+      ['sans organisation', parDefaut(generee(chargeDix({ organisations: false }))), 16],
       ['retenu', { charge: avecRetenu(base, premiere), cles: ['retenu', seconde] }, 20],
       ['retenu ajusté', { charge: avecRetenu(base, premiere, { ajuste: true }), cles: ['retenu', seconde] }, 20],
     ];
@@ -199,10 +199,10 @@ describe('colonnesComparaison : chaque colonne, le pire cas de son placement (§
         }
       }
       assert.equal(nombreDeCellules, 2 * tuilesParColonne, `${nomDuCas} : ${nombreDeCellules} cellules comparées`);
-      // Sans appartenance présente, chaque colonne de la diversité porte la
+      // Sans organisation présente, chaque colonne de la diversité porte la
       // phrase de la tuile ; avec, aucune.
-      const diversite = ligneNommee(colonnes, 'appartenancesVues');
-      for (const cote of ['a', 'b']) assert.equal(diversite[cote].bornes.includes(SANS_APPARTENANCE), nomDuCas === 'sans appartenance', `${nomDuCas} ${cote}`);
+      const diversite = ligneNommee(colonnes, 'organisationsVues');
+      for (const cote of ['a', 'b']) assert.equal(diversite[cote].bornes.includes(SANS_ORGANISATION), nomDuCas === 'sans organisation', `${nomDuCas} ${cote}`);
     }
   });
 

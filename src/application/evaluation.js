@@ -288,7 +288,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
  * lu dans un seul appel à mesurer, la mesure que la ligne du retenu
  * d'evaluer porte :
  * - collisionsCumulees, les occurrences (paire, tour) où deux personnes
- *   d'une même appartenance partagent une table — la valeur que la colonne
+ *   d'une même organisation partagent une table — la valeur que la colonne
  *   « Collisions cumulées (paire et tour) » du tableau des propositions
  *   écrit ;
  * - rencontresRepetees, les paires réunies à plus d'un tour que le placement
@@ -416,10 +416,10 @@ export function nettoyage(table, n) {
  * @property {{mesuree: number, exclue: number}|null} population  effectifs
  * @property {number|null} T
  * @property {number|null} R
- * @property {number|null} G        appartenances des présents
+ * @property {number|null} G        organisations des présents
  * @property {number[]|null} idsTables      ordre des tables de l'instance
  * @property {number[]|null} numerosTables  le numéro de chacune
- * @property {Array<{id: number, nom: string, appartenance: string|null,
+ * @property {Array<{id: number, nom: string, organisation: string|null,
  *            statut: 'mobile'|'partiel'|'ancre'}>|null} personnes
  *           ordre canonique, identifiants croissants
  * @property {number|null} propositionDuRetenu  pour le retenu, la
@@ -442,7 +442,7 @@ export function nettoyage(table, n) {
  *           proposition sans départ
  * @property {object[]} refusDessin   verifierIndicateurs à quatre paramètres,
  *           chaque violation complétée de participant (index) et
- *           d'appartenance (groupe)
+ *           d'organisation (groupe)
  */
 
 // Le nom du statut d'une personne (§ 4.2), par valeur de STATUT. La Map ne
@@ -650,12 +650,12 @@ function courseMesuree({ source, origine, course, instance, aPriori, indicateurs
 }
 
 // Une violation de la garde complétée de ce qu'elle désigne : participant,
-// l'identifiant de son index de personne ; appartenance, le libellé de son
+// l'identifiant de son index de personne ; organisation, le libellé de son
 // index de groupe.
 function violationNommee(instance, violation) {
   const nommee = { ...violation };
   if (Object.hasOwn(violation, 'index')) nommee.participant = instance.ids[violation.index];
-  if (Object.hasOwn(violation, 'groupe')) nommee.appartenance = instance.groupes[violation.groupe];
+  if (Object.hasOwn(violation, 'groupe')) nommee.organisation = instance.groupes[violation.groupe];
   return nommee;
 }
 
@@ -862,7 +862,7 @@ export function detaillerQualite(charge, id, options = {}) {
     personnes: instance.ids.map((personne, p) => ({
       id: personne,
       nom: nomAffiche(parId.get(personne)),
-      appartenance: instance.groupe[p] === SANS_GROUPE ? null : instance.groupes[instance.groupe[p]],
+      organisation: instance.groupe[p] === SANS_GROUPE ? null : instance.groupes[instance.groupe[p]],
       statut: NOM_DU_STATUT.get(instance.statut[p]),
     })),
     propositionDuRetenu: id === 'retenu' && origine !== null ? origine.id : null,

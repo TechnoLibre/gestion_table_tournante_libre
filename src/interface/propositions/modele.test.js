@@ -111,7 +111,7 @@ function avecPlans(charge, plans) {
 }
 
 // Six personnes inventées, deux tables de places, quatre tours ; les deux
-// premières partagent une appartenance quand collegues est vrai, les autres
+// premières partagent une organisation quand collegues est vrai, les autres
 // n'en ont aucune.
 function chargeSix({ places = 3, collegues = true } = {}) {
   const charge = creerCharge({ id: 'evt-propositions', nom: 'Club des Merles', siegesParDefaut: places, tours: 4 });
@@ -120,7 +120,7 @@ function chargeSix({ places = 3, collegues = true } = {}) {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: collegues && rang < 2 ? 'Club des Merles' : null,
+    organisation: collegues && rang < 2 ? 'Club des Merles' : null,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -153,7 +153,7 @@ const COLONNES_PAR_DEFAUT = [
   'rencontresRepetees',
   'maxRencontresPaire',
   'retoursChoisis',
-  'appartenancesVues',
+  'organisationsVues',
   'totalRedondance',
   'diversite',
   'manqueMax',
@@ -227,7 +227,7 @@ const ATTENDUE = new Map([
   ['rencontresRepetees', (l) => l.mesures.rencontresRepetees.choisies],
   ['maxRencontresPaire', (l) => l.mesures.maxRencontresPaire],
   ['retoursChoisis', (l) => l.mesures.totalRetoursChoisis],
-  ['appartenancesVues', (l) => l.mesures.aggAppartenancesVues.tous.min],
+  ['organisationsVues', (l) => l.mesures.aggOrganisationsVues.tous.min],
   ['totalRedondance', (l) => l.mesures.totalRedondance],
   ['diversite', (l) => l.mesures.aggDiversite.tous.min],
   ['manqueMax', (l) => l.troisChiffres.manqueMax.tous],
@@ -241,12 +241,12 @@ const ATTENDUE = new Map([
 const DOUZE = [
   ['personnes distinctes rencontrées', 'rencontresTous'],
   ['collisions cumulées', 'collisionsCumulees'],
-  ['paires de même appartenance', 'pairesDistinctes'],
+  ['paires de même organisation', 'pairesDistinctes'],
   ['excédent de collisions', 'excedentCollisions'],
   ['rencontres répétées', 'rencontresRepetees'],
   ['maximum par paire', 'maxRencontresPaire'],
   ['retours', 'retoursChoisis'],
-  ['A(p)', 'appartenancesVues'],
+  ['A(p)', 'organisationsVues'],
   ['r(p)', 'totalRedondance'],
   ['d(p)', 'diversite'],
   ['manque', 'manqueMax'],
@@ -348,7 +348,7 @@ describe('tableau : les douze chiffres, les chiffres du moteur (§ 5.4, § 12.9,
         ['rencontresRepetees', moteur.mesures.rencontresRepetees.choisies],
         ['maxRencontresPaire', moteur.mesures.maxRencontresPaire],
         ['retoursChoisis', moteur.mesures.totalRetoursChoisis],
-        ['appartenancesVues', moteur.mesures.aggAppartenancesVues.tous.min],
+        ['organisationsVues', moteur.mesures.aggOrganisationsVues.tous.min],
         ['totalRedondance', moteur.mesures.totalRedondance],
         ['diversite', moteur.mesures.aggDiversite.tous.min],
         ['manqueMax', moteur.troisChiffres.manqueMax.tous],
@@ -459,7 +459,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.equal(
       phrase,
       "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
-        "puis collisions cumulées, puis rencontres répétées, puis redondance d'appartenance, puis l'identifiant croissant.",
+        "puis collisions cumulées, puis rencontres répétées, puis redondance d'organisation, puis l'identifiant croissant.",
     );
     assert.equal(phrase, t('propositions.ordre.criteres', { criteres: [...CRITERES] }));
     const positions = CRITERES.map((nom) => phrase.indexOf(t(`moteur.critere.${nom}`)));
@@ -497,10 +497,10 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     for (const mode of MODES_OBJECTIFS) {
       for (let masque = 0; masque < 16; masque += 1) {
         const contraintes = {
-          separerAppartenances: (masque & 1) !== 0,
+          separerOrganisations: (masque & 1) !== 0,
           nouveauxVoisins: (masque & 2) !== 0,
           nouvelleTable: (masque & 4) !== 0,
-          varierAppartenances: (masque & 8) !== 0,
+          varierOrganisations: (masque & 8) !== 0,
         };
         for (const nom of REGISTRE) for (const valeur of valeursQuiClassent(nom, contraintes, mode)) valeurs.add(valeur);
       }
@@ -536,7 +536,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.equal(
       phraseDe(vue.ordre[1]),
       "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, " +
-        "puis collisions cumulées, puis rencontres répétées, puis redondance d'appartenance, puis l'identifiant croissant.",
+        "puis collisions cumulées, puis rencontres répétées, puis redondance d'organisation, puis l'identifiant croissant.",
     );
     assert.deepEqual(designes(vue.ordre[1]), [
       ['excedentCollisions', 'excedentCollisions'],
@@ -552,7 +552,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     // Les quatre cases décochées, sans objectif : l'écart forme le seul
     // palier, et le classement n'applique plus que l'identifiant.
     const charge = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
-    for (const cle of ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances']) charge.reglages[cle] = false;
+    for (const cle of ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable', 'varierOrganisations']) charge.reglages[cle] = false;
     const table = evaluer(charge, { plafondsAPriori: null });
     assert.deepEqual(table.classement.criteresAppliques, []);
     const vue = tableau(table);
@@ -576,7 +576,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
 
   test('une case décochée retire son critère de la phrase : « varier » décochée, la redondance ne s’y nomme plus (Q4)', () => {
     const charge = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
-    charge.reglages.varierAppartenances = false;
+    charge.reglages.varierOrganisations = false;
     const phrase = phraseDe(tableau(evaluer(charge)).ordre[0]);
     assert.equal(
       phrase,
@@ -590,7 +590,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.equal(
       phraseDe(vue.ordre[0]),
       "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
-        "puis collisions cumulées, puis tours hors objectif, puis rencontres répétées, puis redondance d'appartenance, " +
+        "puis collisions cumulées, puis tours hors objectif, puis rencontres répétées, puis redondance d'organisation, " +
         "puis l'identifiant croissant.",
     );
     const horsObjectif = vue.ordre[0].find(({ critere }) => critere === 'toursHorsObjectif');
@@ -616,7 +616,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.equal(
       phraseDe(tableau(evaluer(charge)).ordre[0]),
       "Ordre du classement, chaque critère au plus faible d'abord : tours hors objectif, puis collisions cumulées, " +
-        "puis écart au plafond a priori, puis ensemble, excédent de collisions (poids 1), redondance d'appartenance (poids 2), " +
+        "puis écart au plafond a priori, puis ensemble, excédent de collisions (poids 1), redondance d'organisation (poids 2), " +
         "puis rencontres répétées, puis l'identifiant croissant.",
     );
     const inconnu = tableau(evaluer(charge, { plafondsAPriori: null }));
@@ -630,7 +630,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.equal(
       phraseDe(inconnu.ordre[0]),
       'Critère sauté, faute de plafond a priori par personne : écart au plafond a priori. ' +
-        "Appliqué à sa place : ensemble, excédent de collisions (poids 1), redondance d'appartenance (poids 2).",
+        "Appliqué à sa place : ensemble, excédent de collisions (poids 1), redondance d'organisation (poids 2).",
     );
     assert.ok(!phraseDe(inconnu.ordre[1]).includes('écart au plafond a priori'));
   });
@@ -644,7 +644,7 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
 
   test('« nouvelle table » cochée seule : le palier des rencontres répétées se nomme « retours » et désigne la colonne des retours choisis', () => {
     const charge = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
-    for (const cle of ['separerAppartenances', 'nouveauxVoisins', 'varierAppartenances']) charge.reglages[cle] = false;
+    for (const cle of ['separerOrganisations', 'nouveauxVoisins', 'varierOrganisations']) charge.reglages[cle] = false;
     const vue = tableau(evaluer(charge));
     assert.equal(phraseDe(vue.ordre[0]), `${DEBUT}écart au plafond a priori, puis retours, puis l'identifiant croissant.`);
     assert.deepEqual(designes(vue.ordre[0]), [
@@ -657,7 +657,7 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
   test('a priori inconnu, le critère sauté : le palier appliqué à sa place se nomme par ses valeurs — « retours » sous « nouvelle table » seule, les deux valeurs sous « chacun au moins une fois »', () => {
     const PHRASE = 'Critère sauté, faute de plafond a priori par personne : écart au plafond a priori. Appliqué à sa place : ';
     const seule = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
-    for (const cle of ['separerAppartenances', 'nouveauxVoisins', 'varierAppartenances']) seule.reglages[cle] = false;
+    for (const cle of ['separerOrganisations', 'nouveauxVoisins', 'varierOrganisations']) seule.reglages[cle] = false;
     const [saute] = tableau(evaluer(seule, { plafondsAPriori: null })).ordre[0];
     assert.equal(t(saute.cle, saute.details), `${PHRASE}retours.`);
     const priorites = [
@@ -679,7 +679,7 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
     assert.equal(
       phraseDe(vue.ordre[0]),
       `${DEBUT}écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, ` +
-        "puis personnes jamais servies, puis tours hors objectif, puis rencontres répétées, puis redondance d'appartenance, " +
+        "puis personnes jamais servies, puis tours hors objectif, puis rencontres répétées, puis redondance d'organisation, " +
         "puis l'identifiant croissant.",
     );
     assert.deepEqual(
@@ -719,7 +719,7 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
     const [morceaux] = tableau(evaluer(charge)).ordre;
     assert.equal(
       phraseDe(morceaux),
-      `${DEBUT}écart au plafond a priori, puis ensemble, excédent de collisions (poids 3), redondance d'appartenance (poids 2), ` +
+      `${DEBUT}écart au plafond a priori, puis ensemble, excédent de collisions (poids 3), redondance d'organisation (poids 2), ` +
         "puis collisions cumulées, puis rencontres répétées, puis l'identifiant croissant.",
     );
     const debut = morceaux.findIndex(({ cle }) => cle === 'propositions.ordre.ensemble');
@@ -736,7 +736,7 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
     const charge = structuredClone(chargeDemo('grande'));
     charge.reglages.rencontrerAnimateurs = true;
     const vue = tableau(evaluer(generee(charge, { graine: 1, nombre: 1, arret: 2000 })));
-    assert.ok(phraseDe(vue.ordre[0]).includes("puis rencontres répétées, puis animateurs non rencontrés, puis redondance d'appartenance"), phraseDe(vue.ordre[0]));
+    assert.ok(phraseDe(vue.ordre[0]).includes("puis rencontres répétées, puis animateurs non rencontrés, puis redondance d'organisation"), phraseDe(vue.ordre[0]));
     assert.deepEqual(
       designes(vue.ordre[0]).filter(([critere]) => critere === 'animateursNonRencontres'),
       [['animateursNonRencontres', 'animateursNonRencontres', 'animateursNonRencontres']],
@@ -750,7 +750,7 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
       for (let masque = 0; masque < 16; masque += 1) {
         const charge = structuredClone(base);
         if (mode !== 'places') charge.reglages.modeObjectifs = mode;
-        ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances'].forEach((cle, rang) => {
+        ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable', 'varierOrganisations'].forEach((cle, rang) => {
           charge.reglages[cle] = (masque & (1 << rang)) !== 0;
         });
         for (const options of [{}, { plafondsAPriori: null }]) {
@@ -886,7 +886,7 @@ describe('tableau : la diversité en colonne (§ 5.7)', () => {
     const vue = tableau(evaluer(generee(chargeDemo('petite'), { graine: 6, nombre: 2, arret: 300 })));
     assert.equal(vue.lignes.length, 2);
     for (const ligne of vue.lignes) {
-      for (const nom of ['appartenancesVues', 'totalRedondance', 'diversite', 'pairesDistinctes']) {
+      for (const nom of ['organisationsVues', 'totalRedondance', 'diversite', 'pairesDistinctes']) {
         assert.equal(typeof cellule(ligne, nom).valeur, 'number', nom);
       }
     }
@@ -987,7 +987,7 @@ describe('tableau : le retenu et les placements hors classement (§ 9, § 12.6)'
   test('une exclusion et un ajout, à effectif égal : hors classement aussi', () => {
     let charge = generee(chargeDemo('petite'), { graine: 1, nombre: 1, arret: 200 });
     charge = executer(charge, 'exclureParticipant', { id: 4 });
-    charge = executer(charge, 'ajouterParticipant', { champs: { nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles' } });
+    charge = executer(charge, 'ajouterParticipant', { champs: { nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles' } });
     const vue = tableau(evaluer(charge));
     assert.deepEqual(vue.lignes, []);
     assert.deepEqual(vue.horsClassement.map(({ id }) => id), [1]);
@@ -1362,7 +1362,7 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
     ['rencontresRepetees', 'bas'],
     ['maxRencontresPaire', 'bas'],
     ['retoursChoisis', 'bas'],
-    ['appartenancesVues', 'grand'],
+    ['organisationsVues', 'grand'],
     ['totalRedondance', 'bas'],
     ['diversite', 'grand'],
     ['manqueMax', 'bas'],
@@ -1502,7 +1502,7 @@ describe('GROUPES_COLONNES : les en-têtes groupés du tableau', () => {
         ['rencontresTous', 'rencontresMobiles', 'rencontresAncres'],
         ['collisionsCumulees', 'pairesDistinctes', 'excedentCollisions'],
         ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis'],
-        ['appartenancesVues', 'totalRedondance', 'diversite'],
+        ['organisationsVues', 'totalRedondance', 'diversite'],
         ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori'],
         SIXIEME,
       ],

@@ -38,10 +38,10 @@ const CRITERE_A_PRIORI = 'ecartAuPlafondAPrioriMax';
 // ni case des animateurs, ces deux critères ne comptent pas — décochés comme
 // ici, ou sans objet, la compilation est la même (D10).
 const CASES_DE_REFERENCE = Object.freeze({
-  separerAppartenances: true,
+  separerOrganisations: true,
   nouveauxVoisins: true,
   nouvelleTable: true,
-  varierAppartenances: true,
+  varierOrganisations: true,
   respecterObjectifs: false,
   rencontrerAnimateurs: false,
 });

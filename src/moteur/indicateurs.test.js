@@ -13,10 +13,10 @@ import { VALEURS_DES_MODES } from './criteres.js';
 import { assisAChaqueTourPresent, mesurer, parcourirTours } from './indicateurs.js';
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
 const tous = (participant, table) => ({ participant, table, portee: 'tous' });
@@ -25,10 +25,10 @@ const auTour = (participant, table, tour) => ({ participant, table, portee: 'tou
 // Agrégat d'une population vide.
 const AUCUN = { min: null, moyenne: null, effectif: 0 };
 
-// Appartenances des participants 1..N : le libellé du groupe qui contient
+// Organisations des participants 1..N : le libellé du groupe qui contient
 // l'identifiant, null hors de tout groupe. groupes est une liste de couples
 // [libellé, identifiants].
-function appartenances(N, groupes) {
+function organisations(N, groupes) {
   return Array.from({ length: N }, (_, i) => {
     const groupe = groupes.find(([, membres]) => membres.includes(i + 1));
     return groupe === undefined ? null : groupe[0];
@@ -36,21 +36,21 @@ function appartenances(N, groupes) {
 }
 
 // Instance et plan indexé d'un plan écrit par identifiants. Le participant
-// i + 1 porte appartenance[i] ; les tables portent les identifiants 1..T,
+// i + 1 porte organisation[i] ; les tables portent les identifiants 1..T,
 // toutes de la capacité donnée ; tours[r][i] liste les participants assis à
 // la table i + 1 au tour r + 1, et reserves[r] ceux qui n'y sont assis nulle
 // part.
 function preparer({
-  appartenance,
+  organisation,
   capacite,
   tours,
   reserves = tours.map(() => []),
   reservations = [],
 }) {
-  const participants = appartenance.map((libelle, i) => ({
+  const participants = organisation.map((libelle, i) => ({
     id: i + 1,
     nom: `P${i + 1}`,
-    appartenance: libelle,
+    organisation: libelle,
   }));
   const tables = tours[0].map((_, i) => ({ id: i + 1, numero: i + 1, capacite }));
   const instance = normaliser({
@@ -78,13 +78,13 @@ const PLAN_PARFAIT = [
   [[4, 8, 10], [2, 7, 12], [1, 6, 11], [3, 5, 9]],
   [[5, 7, 11], [1, 9, 10], [3, 4, 12], [2, 6, 8]],
 ];
-const PETITE = appartenances(12, [
+const PETITE = organisations(12, [
   ['A', [1, 5, 8, 12]],
   ['B', [2, 4, 9, 11]],
   ['C', [3, 6, 7, 10]],
 ]);
 // Variante « conflit inévitable » : 10 passe de C à A.
-const VARIANTE = appartenances(12, [
+const VARIANTE = organisations(12, [
   ['A', [1, 5, 8, 10, 12]],
   ['B', [2, 4, 9, 11]],
   ['C', [3, 6, 7]],
@@ -94,7 +94,7 @@ const VARIANTE = appartenances(12, [
 // est mobile ; 3, réservé à la table 2 au tour 3, et 4, réservé à la table 3
 // aux tours 1 et 3, sont partiellement fixés. Chaque réservation est tenue.
 const PLAN_RESERVATIONS = {
-  appartenance: [null, null, null, null],
+  organisation: [null, null, null, null],
   capacite: 3,
   tours: [
     [[1], [2, 3], [4]],
@@ -107,7 +107,7 @@ const PLAN_RESERVATIONS = {
 
 // Deux ancrés à la table 1, seule table, quatre tours.
 const DEUX_ANCRES = {
-  appartenance: [null, null],
+  organisation: [null, null],
   capacite: 2,
   tours: [[[1, 2]], [[1, 2]], [[1, 2]], [[1, 2]]],
   reservations: [tous(1, 1), tous(2, 1)],
@@ -117,10 +117,10 @@ describe('mesurer', () => {
   test('plan parfait de la petite démonstration : huit rencontres chacun, ni collision ni répétition', () => {
     // Aucun retour : chacun visite les quatre tables. Sans réservation, la
     // population des ancrés est vide.
-    assert.deepEqual(mesurerPlan({ appartenance: PETITE, capacite: 3, tours: PLAN_PARFAIT }), {
+    assert.deepEqual(mesurerPlan({ organisation: PETITE, capacite: 3, tours: PLAN_PARFAIT }), {
       rencontres: new Array(12).fill(8),
       affilies: new Array(12).fill(8),
-      appartenancesVues: new Array(12).fill(2),
+      organisationsVues: new Array(12).fill(2),
       redondance: new Array(12).fill(6),
       diversite: new Array(12).fill(0.25),
       toursAssis: new Array(12).fill(4),
@@ -136,9 +136,9 @@ describe('mesurer', () => {
         mobiles: { min: 6, moyenne: 6, effectif: 12 },
         ancres: AUCUN,
       },
-      // Chacun croise deux appartenances, la sienne exclue : A(p) = 2 pour
+      // Chacun croise deux organisations, la sienne exclue : A(p) = 2 pour
       // huit affiliés rencontrés, d(p) = 2 / 8.
-      aggAppartenancesVues: {
+      aggOrganisationsVues: {
         tous: { min: 2, moyenne: 2, effectif: 12 },
         mobiles: { min: 2, moyenne: 2, effectif: 12 },
         ancres: AUCUN,
@@ -167,7 +167,7 @@ describe('mesurer', () => {
   });
 
   test('variante 5, 4, 3 : quatre collisions cumulées sur quatre paires distinctes, excédent nul', () => {
-    const mesures = mesurerPlan({ appartenance: VARIANTE, capacite: 3, tours: PLAN_PARFAIT });
+    const mesures = mesurerPlan({ organisation: VARIANTE, capacite: 3, tours: PLAN_PARFAIT });
     const { collisionsCumulees, pairesDistinctes, excedentCollisions } = mesures;
     assert.deepEqual(
       { collisionsCumulees, pairesDistinctes, excedentCollisions },
@@ -179,14 +179,14 @@ describe('mesurer', () => {
       { groupe: 'C', effectif: 3, collisionsCumulees: 0, pairesDistinctes: 0, excedent: 0 },
     ]);
     // 1, 5, 8 et 12 croisent chacun 10, leur collègue : A(p) compte leur
-    // propre appartenance avec les deux autres. 10 croise A et B, jamais C.
-    assert.deepEqual(mesures.appartenancesVues, [3, 2, 2, 2, 3, 2, 2, 3, 2, 2, 2, 3]);
+    // propre organisation avec les deux autres. 10 croise A et B, jamais C.
+    assert.deepEqual(mesures.organisationsVues, [3, 2, 2, 2, 3, 2, 2, 3, 2, 2, 2, 3]);
   });
 
   test("l'excédent compte les retrouvailles de collègues au-delà de la première", () => {
     // Deux tables de quatre, trois tours ; X = {1, 2, 3, 4}, les autres sans
-    // appartenance.
-    const appartenance = appartenances(8, [['X', [1, 2, 3, 4]]]);
+    // organisation.
+    const organisation = organisations(8, [['X', [1, 2, 3, 4]]]);
     const collisions = ({ collisionsCumulees, pairesDistinctes, excedentCollisions, parGroupe }) => ({
       collisionsCumulees,
       pairesDistinctes,
@@ -194,7 +194,7 @@ describe('mesurer', () => {
       parGroupe,
     });
     const reparti = mesurerPlan({
-      appartenance,
+      organisation,
       capacite: 4,
       tours: [
         [[1, 2, 5, 6], [3, 4, 7, 8]],
@@ -209,9 +209,9 @@ describe('mesurer', () => {
       parGroupe: [{ groupe: 'X', effectif: 4, collisionsCumulees: 6, pairesDistinctes: 6, excedent: 0 }],
     });
     // 5 et 6, puis 7 et 8, se retrouvent aussi à chaque tour : deux personnes
-    // sans appartenance ne sont pas des collègues.
+    // sans organisation ne sont pas des collègues.
     const concentre = mesurerPlan({
-      appartenance,
+      organisation,
       capacite: 4,
       tours: [
         [[1, 2, 5, 6], [3, 4, 7, 8]],
@@ -231,7 +231,7 @@ describe('mesurer', () => {
     // Au tour 1, la table 3 est vide, 4 et 5 sont seuls à leur table. Au
     // tour 2, 5 l'est encore, et la table 1 est vide.
     const mesures = mesurerPlan({
-      appartenance: ['X', 'X', 'Y', 'X', null],
+      organisation: ['X', 'X', 'Y', 'X', null],
       capacite: 3,
       tours: [
         [[1, 2, 3], [4], [], [5]],
@@ -240,7 +240,7 @@ describe('mesurer', () => {
     });
     assert.deepEqual(mesures.rencontres, [3, 2, 2, 1, 0]);
     assert.deepEqual(mesures.affilies, [3, 2, 2, 1, 0]);
-    assert.deepEqual(mesures.appartenancesVues, [2, 2, 1, 1, 0]);
+    assert.deepEqual(mesures.organisationsVues, [2, 2, 1, 1, 0]);
     assert.deepEqual(mesures.redondance, [1, 0, 1, 0, 0]);
     // 5 ne rencontre personne : son taux de diversité n'a pas de diviseur.
     assert.deepEqual(mesures.diversite, [2 / 3, 1, 1 / 2, 1, null]);
@@ -256,7 +256,7 @@ describe('mesurer', () => {
     // Le plan de l'épreuve précédente : r(p) vaut 1, 0, 1, 0 et 0. Le total
     // est le seul Σ r(p) du moteur ; la recherche et le classement le lisent.
     const mesures = mesurerPlan({
-      appartenance: ['X', 'X', 'Y', 'X', null],
+      organisation: ['X', 'X', 'Y', 'X', null],
       capacite: 3,
       tours: [
         [[1, 2, 3], [4], [], [5]],
@@ -269,14 +269,14 @@ describe('mesurer', () => {
 
   test("F(p) ne retient que les affiliés : qui ne croise aucun affilié n'a pas de taux de diversité", () => {
     // 3, seul affilié de la table, rencontre deux personnes sans
-    // appartenance ; chacune d'elles rencontre un seul affilié, 3.
-    const mesures = mesurerPlan({ appartenance: [null, null, 'X'], capacite: 3, tours: [[[1, 2, 3]]] });
+    // organisation ; chacune d'elles rencontre un seul affilié, 3.
+    const mesures = mesurerPlan({ organisation: [null, null, 'X'], capacite: 3, tours: [[[1, 2, 3]]] });
     assert.deepEqual(mesures.rencontres, [2, 2, 2]);
     assert.deepEqual(mesures.affilies, [1, 1, 0]);
-    assert.deepEqual(mesures.appartenancesVues, [1, 1, 0]);
+    assert.deepEqual(mesures.organisationsVues, [1, 1, 0]);
     assert.deepEqual(mesures.diversite, [1, 1, null]);
     // La redondance se lit sur les affiliés rencontrés, |F(p)| − A(p), et non
-    // sur toutes les rencontres : personne ne recroise une appartenance.
+    // sur toutes les rencontres : personne ne recroise une organisation.
     assert.deepEqual(mesures.redondance, [0, 0, 0]);
     assert.deepEqual(mesures.aggRedondance, {
       tous: { min: 0, moyenne: 0, effectif: 3 },
@@ -286,7 +286,7 @@ describe('mesurer', () => {
     // A(p) se replie sur chacun ; d(p) sur les seuls qui rencontrent un
     // affilié : 3 sort de l'effectif, et son null n'entre ni dans le minimum
     // ni dans la moyenne.
-    assert.deepEqual(mesures.aggAppartenancesVues, {
+    assert.deepEqual(mesures.aggOrganisationsVues, {
       tous: { min: 0, moyenne: 2 / 3, effectif: 3 },
       mobiles: { min: 0, moyenne: 2 / 3, effectif: 3 },
       ancres: AUCUN,
@@ -299,12 +299,12 @@ describe('mesurer', () => {
   });
 
   test("le taux de diversité se replie par population : des mobiles qui ne croisent aucun affilié laissent leur ligne vide", () => {
-    // 1 et 2, sans appartenance, sont ancrés à la table 1 ; 3 et 4, de X et
+    // 1 et 2, sans organisation, sont ancrés à la table 1 ; 3 et 4, de X et
     // de Y, mobiles, la visitent tour à tour. 1 et 2 rencontrent chacun 3 et
-    // 4 : d = 2 / 2. 3 rencontre 1 et 2, sans appartenance, au tour 1, puis
+    // 4 : d = 2 / 2. 3 rencontre 1 et 2, sans organisation, au tour 1, puis
     // personne : il sort de l'effectif ; de même 4.
     const mesures = mesurerPlan({
-      appartenance: [null, null, 'X', 'Y'],
+      organisation: [null, null, 'X', 'Y'],
       capacite: 3,
       tours: [
         [[1, 2, 3], [4]],
@@ -318,7 +318,7 @@ describe('mesurer', () => {
       mobiles: AUCUN,
       ancres: { min: 1, moyenne: 1, effectif: 2 },
     });
-    assert.deepEqual(mesures.aggAppartenancesVues, {
+    assert.deepEqual(mesures.aggOrganisationsVues, {
       tous: { min: 0, moyenne: 1, effectif: 4 },
       mobiles: { min: 0, moyenne: 0, effectif: 2 },
       ancres: { min: 2, moyenne: 2, effectif: 2 },
@@ -327,9 +327,9 @@ describe('mesurer', () => {
 
   test("la réserve n'est pas une table : seuls les tours assis comptent", () => {
     // 6 est en réserve aux tours 1 et 2, 5 au tour 2. Ils partagent
-    // l'appartenance X et ne sont jamais assis ensemble.
+    // l'organisation X et ne sont jamais assis ensemble.
     const mesures = mesurerPlan({
-      appartenance: [null, null, null, null, 'X', 'X'],
+      organisation: [null, null, null, null, 'X', 'X'],
       capacite: 3,
       tours: [
         [[1, 2, 5], [3, 4]],
@@ -376,7 +376,7 @@ describe('mesurer', () => {
     // nombre de rencontres est celui de la première personne : un minimum
     // qui retiendrait la dernière valeur lue rendrait 2.
     const mesures = mesurerPlan({
-      appartenance: [null, null, null, null],
+      organisation: [null, null, null, null],
       capacite: 3,
       tours: [[[1], [2, 3, 4]]],
     });
@@ -389,7 +389,7 @@ describe('mesurer', () => {
   });
 
   test('une population vide rend null, jamais 0 ni Infinity', () => {
-    const sansAncre = mesurerPlan({ appartenance: PETITE, capacite: 3, tours: PLAN_PARFAIT });
+    const sansAncre = mesurerPlan({ organisation: PETITE, capacite: 3, tours: PLAN_PARFAIT });
     assert.deepEqual(sansAncre.aggRencontres.ancres, AUCUN);
     assert.deepEqual(sansAncre.aggRedondance.ancres, AUCUN);
     const sansMobile = mesurerPlan(DEUX_ANCRES);
@@ -411,7 +411,7 @@ describe('mesurer', () => {
     // fois réservés tous deux ; (1, 3) et (2, 3) au tour 1 réservés, au tour
     // 2 non ; (3, 4) aux tours 3 et 4, sans réservation.
     const mesures = mesurerPlan({
-      appartenance: [null, null, null, null],
+      organisation: [null, null, null, null],
       capacite: 3,
       tours: [
         [[1, 2, 3], [4]],
@@ -445,7 +445,7 @@ describe('mesurer', () => {
     for (const { libre, partiel, ancre, retoursImposes, retoursChoisis } of cas) {
       test(`rencontre du tour ${libre} réservée pour ${ancre} seul`, () => {
         const mesures = mesurerPlan({
-          appartenance: [null, null],
+          organisation: [null, null],
           capacite: 2,
           tours: [[[1, 2]], [[1, 2]], [[1, 2]]],
           reservations: [
@@ -469,7 +469,7 @@ describe('mesurer', () => {
     // imposée, bien qu'aucun des deux ne soit ancré et que 3 ne soit réservé
     // nulle part au tour 1.
     const mesures = mesurerPlan({
-      appartenance: [null, null, null, null],
+      organisation: [null, null, null, null],
       capacite: 3,
       tours: [
         [[1, 2, 4], [3]],
@@ -487,7 +487,7 @@ describe('mesurer', () => {
     // mesure (§ 9) : la réservation qu'il ne tient pas n'impose ni leurs
     // retours ni leur répétition, qui sont choisis.
     const mesures = mesurerPlan({
-      appartenance: [null, null],
+      organisation: [null, null],
       capacite: 2,
       tours: [
         [[], [1, 2]],
@@ -507,7 +507,7 @@ describe('mesurer', () => {
     // tour à tour celui qui n'est pas réservé à la table de la rencontre.
     for (const reservations of [[tous(1, 1), tous(2, 2)], [tous(1, 2), tous(2, 1)]]) {
       const mesures = mesurerPlan({
-        appartenance: [null, null],
+        organisation: [null, null],
         capacite: 2,
         tours: [
           [[], [1, 2]],
@@ -527,8 +527,8 @@ describe('mesurer', () => {
     const R = 65_536;
     const instance = normaliser({
       participants: [
-        { id: 1, nom: 'P1', appartenance: null },
-        { id: 2, nom: 'P2', appartenance: null },
+        { id: 1, nom: 'P1', organisation: null },
+        { id: 2, nom: 'P2', organisation: null },
       ],
       tables: [{ id: 1, numero: 1, capacite: 2 }],
       tours: R,
@@ -547,7 +547,7 @@ describe('mesurer', () => {
     // (1, 2) se réunit aux tours 1 et 2, (2, 3) au seul tour 3. Dans l'ordre
     // des paires, (2, 3) vient après (1, 2) : le maximum reste 2.
     const mesures = mesurerPlan({
-      appartenance: [null, null, null],
+      organisation: [null, null, null],
       capacite: 2,
       tours: [
         [[1, 2], [3]],
@@ -567,8 +567,8 @@ describe('mesurer', () => {
     const deux = (R) =>
       normaliser({
         participants: [
-          { id: 1, nom: 'P1', appartenance: null },
-          { id: 2, nom: 'P2', appartenance: null },
+          { id: 1, nom: 'P1', organisation: null },
+          { id: 2, nom: 'P2', organisation: null },
         ],
         tables: [{ id: 1, numero: 1, capacite: 2 }],
         tours: R,
@@ -585,7 +585,7 @@ describe('mesurer', () => {
 
   test('personne à la même table : aucune rencontre, maximum par paire à 0', () => {
     const mesures = mesurerPlan({
-      appartenance: ['X', 'X'],
+      organisation: ['X', 'X'],
       capacite: 2,
       tours: [
         [[1], [2]],
@@ -604,10 +604,10 @@ describe('mesurer', () => {
   });
 
   test("parGroupe suit l'ordre de instance.groupes, non l'ordre alphabétique", () => {
-    // instance.groupes range les appartenances par première apparition, en
+    // instance.groupes range les organisations par première apparition, en
     // parcourant les identifiants croissants : Y, portée par 1, puis X, par
     // 2. 1 et 3, tous deux de Y, se rencontrent une fois.
-    const mesures = mesurerPlan({ appartenance: ['Y', 'X', 'Y'], capacite: 3, tours: [[[1, 2, 3]]] });
+    const mesures = mesurerPlan({ organisation: ['Y', 'X', 'Y'], capacite: 3, tours: [[[1, 2, 3]]] });
     assert.deepEqual(mesures.parGroupe, [
       { groupe: 'Y', effectif: 2, collisionsCumulees: 1, pairesDistinctes: 1, excedent: 0 },
       { groupe: 'X', effectif: 1, collisionsCumulees: 0, pairesDistinctes: 0, excedent: 0 },
@@ -616,7 +616,7 @@ describe('mesurer', () => {
 
   test('sans participant présent : tableaux vides, agrégats à null, compteurs à 0', () => {
     const instance = normaliser({
-      participants: [{ id: 1, nom: 'P1', appartenance: 'X', exclu: true }],
+      participants: [{ id: 1, nom: 'P1', organisation: 'X', exclu: true }],
       tables: [{ id: 1, numero: 1, capacite: 2 }],
       tours: 2,
       reservations: [],
@@ -625,7 +625,7 @@ describe('mesurer', () => {
     assert.deepEqual(mesurer(instance, new Int32Array(0)), {
       rencontres: [],
       affilies: [],
-      appartenancesVues: [],
+      organisationsVues: [],
       redondance: [],
       diversite: [],
       toursAssis: [],
@@ -633,7 +633,7 @@ describe('mesurer', () => {
       retoursImposes: [],
       aggRencontres: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
       aggRedondance: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
-      aggAppartenancesVues: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
+      aggOrganisationsVues: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
       aggDiversite: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
       totalRedondance: 0,
       collisionsCumulees: 0,
@@ -650,7 +650,7 @@ describe('mesurer', () => {
   });
 
   test("un plan indexé qui n'a pas la forme de l'instance lève RangeError, qui nomme le participant et le tour", () => {
-    const { instance, tableDe } = preparer({ appartenance: PETITE, capacite: 3, tours: PLAN_PARFAIT });
+    const { instance, tableDe } = preparer({ organisation: PETITE, capacite: 3, tours: PLAN_PARFAIT });
     // Douze participants, quatre tours : 48 cases, ni une de moins ni une de
     // trop.
     assert.throws(() => mesurer(instance, tableDe.subarray(1)), RangeError);
@@ -698,7 +698,7 @@ describe('mesurer', () => {
 // réserve au tour 3. Les paires se rangent par rangPaire : (0, 1), (0, 2),
 // (0, 3), (1, 2), (1, 3), (2, 3), en index de personnes.
 const PARCOURS = {
-  appartenance: ['X', 'X', null, null],
+  organisation: ['X', 'X', null, null],
   capacite: 3,
   tours: [
     [[1, 2, 3], [4]],
@@ -760,7 +760,7 @@ describe('parcourirTours', () => {
 
   test('une table, ses tours, et aucune personne présente : chaque case est vide', () => {
     const instance = normaliser({
-      participants: [{ id: 1, nom: 'P1', appartenance: 'X', exclu: true }],
+      participants: [{ id: 1, nom: 'P1', organisation: 'X', exclu: true }],
       tables: [{ id: 1, numero: 1, capacite: 2 }],
       tours: 2,
       reservations: [],
@@ -800,7 +800,7 @@ function configurer({ personnes, tables, tours, reservations = [], objectifs = [
     participants: personnes.map(([id, etiquettes, anime]) => ({
       id,
       nom: `P${id}`,
-      appartenance: null,
+      organisation: null,
       ...(etiquettes === undefined ? {} : { etiquettes }),
       ...(anime === undefined ? {} : { anime }),
     })),
@@ -1408,7 +1408,7 @@ describe('mesurer : un objectif et des sièges libres qui changent d’un tour �
 });
 
 describe('mesurer et assisAChaqueTourPresent : les tours de présence (§ 5.4, § 12.4)', () => {
-  // Des personnes sans appartenance, d'identifiants 1..presences.length,
+  // Des personnes sans organisation, d'identifiants 1..presences.length,
   // presences[i] étant la présence de i + 1 (undefined : chaque tour) ; une
   // table de capacité donnée par élément de capacites, d'identifiants 1, 2…
   // tours[r][i] liste les assis de la table i + 1 au tour r + 1, reserves[r]
@@ -1417,7 +1417,7 @@ describe('mesurer et assisAChaqueTourPresent : les tours de présence (§ 5.4, �
     const participants = presences.map((presence, i) => ({
       id: i + 1,
       nom: `P${i + 1}`,
-      appartenance: null,
+      organisation: null,
       ...(presence === undefined ? {} : { presence }),
     }));
     const tables = capacites.map((capacite, i) => ({ id: i + 1, numero: i + 1, capacite }));

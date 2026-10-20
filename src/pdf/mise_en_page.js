@@ -9,7 +9,7 @@
 // coin haut gauche du cadre utile, y sur la ligne de base ; les corps en
 // points.
 //
-// La page est un flux. En haut, le nom en gras, puis l'appartenance, puis
+// La page est un flux. En haut, le nom en gras, puis l'organisation, puis
 // les lignes de tour ; en bas, le pied, sa dernière ligne posée sur le bord
 // du cadre. Chaque ligne occupe la hauteur que la police lui donne, de
 // l'ascendante à la descendante : deux lignes empilées ne se recouvrent
@@ -29,7 +29,7 @@ import { cadreUtile } from './imposition.js';
 /** Le point typographique en millimètres. */
 const MM_PAR_PT = 25.4 / 72;
 
-/** La marque d'abrègement d'une appartenance ou d'un titre. */
+/** La marque d'abrègement d'une organisation ou d'un titre. */
 const MARQUE = '\u{2026}';
 
 /** Le séparateur que les libellés d'une ligne de tour posent devant la
@@ -145,9 +145,9 @@ function paliers(depart, plancher) {
  * au plus. Au plancher, ou au-delà de trois lignes, où il se replie au
  * plancher sur autant de lignes qu'il lui faut, le badge perd le nom de
  * l'événement (le pied devient le pied réduit), puis, s'il ne tient
- * toujours pas, l'appartenance. Le nom ne s'abrège jamais.
+ * toujours pas, l'organisation. Le nom ne s'abrège jamais.
  *
- * Appartenance : une ligne, abrégée par « … » au plus long préfixe qui
+ * Organisation : une ligne, abrégée par « … » au plus long préfixe qui
  * tient. Pied : chaque ligne se replie comme le nom, rien ne s'y abrège.
  *
  * Tours : une colonne, du corps des tours à leur plancher, puis deux
@@ -161,7 +161,7 @@ function paliers(depart, plancher) {
  * de lignes de tour. src/pdf ne connaît pas la personne : l'appelant
  * complète les détails.
  *
- * @param {{nom: string, lignes: string[], appartenance: string|null,
+ * @param {{nom: string, lignes: string[], organisation: string|null,
  *          pied: string[], piedReduit: string[]}} textes
  * @param {Metriques} metriques
  * @returns {{blocs: Array<{texte: string, corps: number, gras: boolean, x: number, y: number}>,
@@ -313,18 +313,18 @@ export function mettreEnPage(textes, metriques) {
   const centre = (texte, corps, gras) => (L - largeur(texte, corps, gras)) / 2;
 
   // Le badge sous une forme du nom, avec ou sans le nom de l'événement et
-  // l'appartenance ; null quand aucune disposition des tours n'y tient.
-  function composer(forme, { evenement, avecAppartenance }) {
+  // l'organisation ; null quand aucune disposition des tours n'y tient.
+  function composer(forme, { evenement, avecOrganisation }) {
     const auPlusNom = (corps) => Math.min(corps, forme.corps);
-    const corpsAppartenance = auPlusNom(constante('CORPS_APPARTENANCE_PT'));
+    const corpsOrganisation = auPlusNom(constante('CORPS_ORGANISATION_PT'));
     const corpsPied = auPlusNom(constante('CORPS_PIED_PT'));
     const corpsTours = paliers(auPlusNom(constante('CORPS_TOURS_PT')), auPlusNom(constante('CORPS_TOURS_PLANCHER_PT')));
     const plancherTours = corpsTours.at(-1);
 
-    const appartenance =
-      !avecAppartenance || textes.appartenance === null || textes.appartenance.trim() === ''
+    const organisation =
+      !avecOrganisation || textes.organisation === null || textes.organisation.trim() === ''
         ? null
-        : abreger(textes.appartenance, corpsAppartenance, false, L);
+        : abreger(textes.organisation, corpsOrganisation, false, L);
     const pied = piedReplie(evenement ? textes.pied : textes.piedReduit, corpsPied);
     if (pied === null) return null;
 
@@ -378,11 +378,11 @@ export function mettreEnPage(textes, metriques) {
       blocs.push({ texte, corps: forme.corps, gras: true, x: centre(texte, forme.corps, true), y });
       curseur = y + pasNom.descendante;
     }
-    if (appartenance !== null) {
-      const pasAppartenance = pas(corpsAppartenance);
-      const y = curseur + pasAppartenance.ascendante;
-      blocs.push({ texte: appartenance, corps: corpsAppartenance, gras: false, x: centre(appartenance, corpsAppartenance, false), y });
-      curseur = y + pasAppartenance.descendante;
+    if (organisation !== null) {
+      const pasOrganisation = pas(corpsOrganisation);
+      const y = curseur + pasOrganisation.ascendante;
+      blocs.push({ texte: organisation, corps: corpsOrganisation, gras: false, x: centre(organisation, corpsOrganisation, false), y });
+      curseur = y + pasOrganisation.descendante;
     }
     // Les dispositions des tours, dans l'ordre de préférence : une colonne
     // du corps des tours au plancher, puis deux.
@@ -418,13 +418,13 @@ export function mettreEnPage(textes, metriques) {
 
   // Les essais, du badge complet au plus dépouillé : chaque forme du nom
   // avec le badge entier, puis le nom au plancher sans le nom de
-  // l'événement, puis sans l'appartenance. Un nom au-delà de trois lignes a
+  // l'événement, puis sans l'organisation. Un nom au-delà de trois lignes a
   // déjà perdu le nom de l'événement.
   const plancherNom = nom.formes.at(-1);
   const essais = [
-    ...(nom.auDela ? [] : nom.formes.map((forme) => ({ forme, evenement: true, avecAppartenance: true }))),
-    { forme: plancherNom, evenement: false, avecAppartenance: true },
-    { forme: plancherNom, evenement: false, avecAppartenance: false },
+    ...(nom.auDela ? [] : nom.formes.map((forme) => ({ forme, evenement: true, avecOrganisation: true }))),
+    { forme: plancherNom, evenement: false, avecOrganisation: true },
+    { forme: plancherNom, evenement: false, avecOrganisation: false },
   ];
   for (const { forme, ...niveau } of essais) {
     const page = composer(forme, niveau);

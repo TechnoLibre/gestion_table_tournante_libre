@@ -15,7 +15,7 @@ const personne = (id, nom, etiquettes, autres = {}) => ({
   id,
   nom,
   prenom: null,
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,

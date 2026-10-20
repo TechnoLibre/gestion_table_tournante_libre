@@ -1,8 +1,8 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le modèle pur des vues des collisions d'appartenance (§ 12.4, B13, D31)
-// et des appartenances à chaque table (§ 12.11, B20, D35) :
+// Le modèle pur des vues des collisions d'organisation (§ 12.4, B13, D31)
+// et des organisations à chaque table (§ 12.11, B20, D35) :
 // VueCollisions.svelte et VueTables.svelte le câblent. Il met en forme ce
 // que le détail du placement porte, dans l'ordre où il le porte, et ne
 // trie, ne réduit ni ne recompte rien (contrainte 41) : chaque nombre rendu
@@ -17,7 +17,7 @@
 import { POSITIONS_MELANGE } from '../etat_ui.js';
 
 /**
- * Vrai quand aucune appartenance ne compte de collision : chaque ligne des
+ * Vrai quand aucune organisation ne compte de collision : chaque ligne des
  * collisions a zéro collision cumulée (§ 12.6, B15).
  * @param {{collisions: {lignes: Array<{cumulees: number}>}}} detail
  * @returns {boolean}
@@ -30,23 +30,23 @@ export function sansCollision(detail) {
 const phraseSeule = (cas, code, phrase) => ({ cas, code, phrase, graphique: null, tableaux: [] });
 
 /**
- * La vue des collisions d'appartenance (§ 12.4, B13, D31). Une seule
- * table, aucune appartenance, aucune collision : la phrase de son cas,
- * dans cet ordre. Sinon des barres, une ligne par appartenance dans l'ordre
- * du détail — l'excédent décroissant —, chacune intitulée de l'appartenance,
+ * La vue des collisions d'organisation (§ 12.4, B13, D31). Une seule
+ * table, aucune organisation, aucune collision : la phrase de son cas,
+ * dans cet ordre. Sinon des barres, une ligne par organisation dans l'ordre
+ * du détail — l'excédent décroissant —, chacune intitulée de l'organisation,
  * sa pastille de la teinte que teintes lui donne, ses deux segments,
  * prouvé inévitable et reste, puis en encre secondaire son effectif, ses
  * paires distinctes et son excédent. Hors du domaine des planchers, chaque
  * barre n'a qu'un segment, les collisions cumulées, et la phrase dit
  * pourquoi. Le jumeau, et l'infobulle de chaque barre, portent la ligne de
- * l'appartenance : tous ses chiffres, prouvé et reste sur le domaine
+ * l'organisation : tous ses chiffres, prouvé et reste sur le domaine
  * seulement.
  *
  * @param {Object} detail   le détail du placement (detaillerQualite), comparable
  * @param {{t: Function, teintes: Map<string, number|null>}} contexte
- *        t, la traduction ; teintes, teintesAppartenances des participants
+ *        t, la traduction ; teintes, teintesOrganisations des participants
  *        de l'événement, exclus compris
- * @returns {{cas: 'uneTable'|'aucuneAppartenance'|'aucune'|'barres',
+ * @returns {{cas: 'uneTable'|'aucuneOrganisation'|'aucune'|'barres',
  *   code: string, phrase: string|null,
  *   graphique: {nom, synthese, segments, lignes, infobulle}|null,
  *   tableaux: Array<{nom, colonnes, lignes}>}}
@@ -54,14 +54,14 @@ const phraseSeule = (cas, code, phrase) => ({ cas, code, phrase, graphique: null
 export function modeleCollisions(detail, { t, teintes }) {
   if (detail.T === 1) return phraseSeule('uneTable', 'collisionsUneTable', t('qualite.collisions.uneTable'));
   if (detail.G === 0) {
-    return phraseSeule('aucuneAppartenance', 'collisionsAucuneAppartenance', t('qualite.collisions.aucuneAppartenance'));
+    return phraseSeule('aucuneOrganisation', 'collisionsAucuneOrganisation', t('qualite.collisions.aucuneOrganisation'));
   }
   if (sansCollision(detail)) return phraseSeule('aucune', 'collisionsAucune', t('qualite.collisions.aucune'));
 
   const { planchersValides, lignes } = detail.collisions;
   const colonne = (cle, genre = 'nombre') => ({ cle, libelle: t(`qualite.collisions.colonne.${cle}`), genre });
   const colonnes = [
-    colonne('appartenance', 'texte'),
+    colonne('organisation', 'texte'),
     colonne('effectif'),
     colonne('cumulees'),
     ...(planchersValides ? [colonne('prouve'), colonne('reste')] : []),
@@ -69,7 +69,7 @@ export function modeleCollisions(detail, { t, teintes }) {
     colonne('excedent'),
   ];
   const lignesJumeau = lignes.map(({ groupe, effectif, cumulees, prouve, reste, pairesDistinctes, excedent }) => ({
-    appartenance: groupe,
+    organisation: groupe,
     effectif,
     cumulees,
     ...(planchersValides ? { prouve, reste } : {}),
@@ -89,12 +89,12 @@ export function modeleCollisions(detail, { t, teintes }) {
     phrase: planchersValides ? null : t('qualite.collisions.horsDomaine'),
     graphique: {
       nom: t('qualite.collisions.graphique'),
-      synthese: t('qualite.collisions.synthese', { appartenance: pire.groupe, excedent: pire.excedent }),
+      synthese: t('qualite.collisions.synthese', { organisation: pire.groupe, excedent: pire.excedent }),
       segments,
       lignes: lignes.map(({ groupe, effectif, cumulees, prouve, reste, pairesDistinctes, excedent }) => ({
         id: groupe,
         nom: groupe,
-        appartenance: teintes.get(groupe) ?? null,
+        organisation: teintes.get(groupe) ?? null,
         valeurs: planchersValides ? [prouve, reste] : [cumulees],
         secondaire: t('qualite.collisions.secondaire', { effectif, paires: pairesDistinctes, excedent }),
       })),
@@ -115,7 +115,7 @@ const COLONNE_POURCENT = Object.freeze({ sieges: 'pourcentSieges', assis: 'pourc
 
 // Le pourcentage d'une case sous une position, pour Pourcentage : l'entier
 // du détail suivi du signe, ou null pour « — », et le compte de sa ligne —
-// δ appartenances pour c sièges, o assis ou α affiliés. Une case sans
+// δ organisations pour c sièges, o assis ou α affiliés. Une case sans
 // affilié n'a ni pourcentage ni compte : elle le dit.
 function pourcentDe(t, cellule, position, capacite) {
   if (cellule === null) return { texte: null, compte: t('qualite.tables.sansAffilie') };
@@ -123,7 +123,7 @@ function pourcentDe(t, cellule, position, capacite) {
   return {
     texte: pourcent === null ? null : t('qualite.pourcentage.valeur', { pourcent }),
     compte: t(`qualite.tables.ligne.${position}`, {
-      appartenances: cellule.appartenances,
+      organisations: cellule.organisations,
       sieges: capacite,
       assis: cellule.occupants,
       affilies: cellule.affilies,
@@ -168,8 +168,8 @@ function jumeauTables(detail, position, t) {
 }
 
 /**
- * La vue des appartenances à chaque table sous une position du sélecteur
- * (§ 12.11, B20, D35). Une seule table, aucune appartenance : la phrase de
+ * La vue des organisations à chaque table sous une position du sélecteur
+ * (§ 12.11, B20, D35). Une seule table, aucune organisation : la phrase de
  * son cas sous les trois positions, sans sélecteur. Sous « doublons », sans
  * collision : la phrase de la vue des collisions, le sélecteur et le
  * jumeau restant. Sinon la grille, une ligne par table dans l'ordre de la
@@ -187,7 +187,7 @@ function jumeauTables(detail, position, t) {
  * @param {Object} detail   le détail du placement (detaillerQualite), comparable
  * @param {'sieges'|'assis'|'doublons'} position
  * @param {{t: Function}} contexte
- * @returns {{cas: 'uneTable'|'aucuneAppartenance'|'sansCollision'|'grille',
+ * @returns {{cas: 'uneTable'|'aucuneOrganisation'|'sansCollision'|'grille',
  *   code: string, phrase: string|null, selecteur: boolean,
  *   grille: {nom, synthese, phrase, lignes, colonnes, valeurs, infobulle}|null,
  *   tableaux: Array<{nom, colonnes, lignes}>}}
@@ -198,7 +198,7 @@ export function modeleTables(detail, position, { t }) {
   }
   const sansSelecteur = (cas, code, cle) => ({ cas, code, phrase: t(cle), selecteur: false, grille: null, tableaux: [] });
   if (detail.T === 1) return sansSelecteur('uneTable', 'tablesUneTable', 'qualite.tables.uneTable');
-  if (detail.G === 0) return sansSelecteur('aucuneAppartenance', 'tablesAucuneAppartenance', 'qualite.tables.aucuneAppartenance');
+  if (detail.G === 0) return sansSelecteur('aucuneOrganisation', 'tablesAucuneOrganisation', 'qualite.tables.aucuneOrganisation');
 
   const tableaux = jumeauTables(detail, position, t);
   if (position === 'doublons' && sansCollision(detail)) {
@@ -241,7 +241,7 @@ export function modeleTables(detail, position, { t }) {
       nom: t('qualite.tables.graphique'),
       synthese:
         tete.ligne.pire === null
-          ? t('qualite.tables.aucuneAppartenance')
+          ? t('qualite.tables.aucuneOrganisation')
           : t('qualite.tables.synthese', { numero: detail.numerosTables[tetes[0]], valeur: tete.ligne.pire[position] }),
       phrase: t('qualite.tables.tropLarge'),
       lignes: lignes.map(({ libelle }) => ({ libelle })),

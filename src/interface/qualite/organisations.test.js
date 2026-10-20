@@ -1,8 +1,8 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Épreuves du modèle des vues des collisions d'appartenance (§ 12.4, B13,
-// D31) et des appartenances à chaque table (§ 12.11, B20, D35) : chaque
+// Épreuves du modèle des vues des collisions d'organisation (§ 12.4, B13,
+// D31) et des organisations à chaque table (§ 12.11, B20, D35) : chaque
 // nombre vient du détail du placement, dans son ordre ; les barres, leur
 // pastille, leurs segments et leur jumeau ; la grille de la position, ses
 // cases, son infobulle et son jumeau des trois comptes ; les cas qui cèdent
@@ -16,9 +16,9 @@ import { detaillerQualite } from '../../application/evaluation.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { capacite, creerCharge } from '../../stockage/document.js';
 import { VERSION } from '../../version.genere.js';
-import { teintesAppartenances } from '../appartenances.js';
+import { teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { modeleCollisions, modeleTables, sansCollision } from './appartenances.js';
+import { modeleCollisions, modeleTables, sansCollision } from './organisations.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const AUBIER = 'Coopérative Aubier';
@@ -29,12 +29,12 @@ const RESSAC = 'Atelier Ressac';
 // table dans l'ordre des tables, sièges non attribués ; reserves, les
 // personnes en réserve de chaque tour.
 function chargeDe({ personnes, capacites, tours, reserves = tours.map(() => []) }) {
-  const charge = creerCharge({ id: 'evt-appartenances', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: tours.length });
-  charge.participants = personnes.map(([nom, prenom, appartenance], rang) => ({
+  const charge = creerCharge({ id: 'evt-organisations', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: tours.length });
+  charge.participants = personnes.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -68,10 +68,10 @@ function chargeDe({ personnes, capacites, tours, reserves = tours.map(() => []) 
 }
 
 // Treize personnes, quatre tables de 5, 4, 4 et 3 places, le même plan aux
-// deux tours. Table 1 : un membre de chaque appartenance, trois places
+// deux tours. Table 1 : un membre de chaque organisation, trois places
 // vides. Table 2 : deux membres de chacune. Table 3 : deux membres d'Aubier
-// et deux personnes sans appartenance. Table 4 : trois bénévoles sans
-// appartenance. Pour chaque case (c, o, α, δ) : table 1 (5, 2, 2, 2),
+// et deux personnes sans organisation. Table 4 : trois bénévoles sans
+// organisation. Pour chaque case (c, o, α, δ) : table 1 (5, 2, 2, 2),
 // table 2 (4, 4, 4, 2), table 3 (4, 4, 2, 1), table 4 sans affilié. Les
 // comptes sièges, assis, doublons : table 1 (3, 0, 0), table 2 (2, 2, 2),
 // table 3 (3, 3, 1). Les trois ordres diffèrent : sièges 1, 3, 2, 4 (1 et 3
@@ -98,8 +98,8 @@ const PLAN_MELANGE = [[1, 2], [3, 4, 5, 6], [7, 8, 9, 10], [11, 12, 13]];
 const chargeMelange = () =>
   chargeDe({ personnes: PERSONNES_MELANGE, capacites: [5, 4, 4, 3], tours: [PLAN_MELANGE, PLAN_MELANGE] });
 
-// Six personnes, deux appartenances de deux, deux tables de trois, deux
-// tours : aucun membre ne retrouve l'autre membre de son appartenance.
+// Six personnes, deux organisations de deux, deux tables de trois, deux
+// tours : aucun membre ne retrouve l'autre membre de son organisation.
 const PERSONNES_SIX = [
   ['Ombrelle', 'Iris', AUBIER],
   ['Pervenche', 'Théo', AUBIER],
@@ -120,11 +120,11 @@ const chargeSix = (personnes = PERSONNES_SIX) =>
 
 // Sept personnes, deux tables de 5 et 4 places, deux tours. Au tour 1, la
 // table 1 réunit deux membres d'Aubier, un de Ressac et une personne sans
-// appartenance (c, o, α, δ) = (5, 4, 3, 2), comptes (3, 2, 1) ; la table 2,
-// trois personnes sans appartenance, sans affilié. Au tour 2, la table 1
-// réunit les deux membres d'Aubier et deux personnes sans appartenance
+// organisation (c, o, α, δ) = (5, 4, 3, 2), comptes (3, 2, 1) ; la table 2,
+// trois personnes sans organisation, sans affilié. Au tour 2, la table 1
+// réunit les deux membres d'Aubier et deux personnes sans organisation
 // (5, 4, 2, 1), comptes (4, 3, 1) ; la table 2, le membre de Ressac et deux
-// personnes sans appartenance (4, 3, 1, 1), comptes (3, 2, 0). La table 1
+// personnes sans organisation (4, 3, 1, 1), comptes (3, 2, 0). La table 1
 // est en tête sous les trois positions, et ses cases les plus hautes
 // diffèrent d'une position à l'autre : 4, 3 et 1, chacune hors du tour 1
 // sous « sièges » et « assis ».
@@ -146,10 +146,10 @@ const chargeSynthese = () =>
     ],
   });
 
-// Six personnes dont deux seules ont une appartenance, la même : une
-// appartenance unique, dont les deux membres se retrouvent aux deux tours,
+// Six personnes dont deux seules ont une organisation, la même : une
+// organisation unique, dont les deux membres se retrouvent aux deux tours,
 // 2 collisions cumulées sur une paire.
-const chargeUneAppartenance = () =>
+const chargeUneOrganisation = () =>
   chargeDe({
     personnes: [
       ['Ombrelle', 'Iris', AUBIER],
@@ -167,10 +167,10 @@ const chargeUneAppartenance = () =>
   });
 
 const detailDe = (charge) => detaillerQualite(charge, 1);
-const teintesDe = (charge) => teintesAppartenances(charge.participants);
+const teintesDe = (charge) => teintesOrganisations(charge.participants);
 
 describe('modèle des collisions (§ 12.4, B13, D31)', () => {
-  test('une barre par appartenance dans l’ordre du détail, sa pastille, ses deux segments et ses trois autres chiffres en encre secondaire', () => {
+  test('une barre par organisation dans l’ordre du détail, sa pastille, ses deux segments et ses trois autres chiffres en encre secondaire', () => {
     const charge = chargeMelange();
     const detail = detailDe(charge);
     assert.equal(detail.statut, 'comparable');
@@ -199,21 +199,21 @@ describe('modèle des collisions (§ 12.4, B13, D31)', () => {
       detail.collisions.lignes.map((l) => ({
         id: l.groupe,
         nom: l.groupe,
-        appartenance: teintes.get(l.groupe),
+        organisation: teintes.get(l.groupe),
         valeurs: [l.prouve, l.reste],
         secondaire: t('qualite.collisions.secondaire', { effectif: l.effectif, paires: l.pairesDistinctes, excedent: l.excedent }),
       })),
     );
     assert.deepEqual(
-      modele.graphique.lignes.map(({ appartenance }) => appartenance),
+      modele.graphique.lignes.map(({ organisation }) => organisation),
       [2, 1],
       'Ressac avant Aubier au comparateur de noms',
     );
     assert.match(modele.graphique.lignes[0].secondaire, /5/);
-    assert.equal(modele.graphique.synthese, t('qualite.collisions.synthese', { appartenance: AUBIER, excedent: detail.collisions.lignes[0].excedent }));
+    assert.equal(modele.graphique.synthese, t('qualite.collisions.synthese', { organisation: AUBIER, excedent: detail.collisions.lignes[0].excedent }));
   });
 
-  test('le jumeau et l’infobulle portent la même ligne par appartenance, tous ses chiffres, dans l’ordre des barres', () => {
+  test('le jumeau et l’infobulle portent la même ligne par organisation, tous ses chiffres, dans l’ordre des barres', () => {
     const charge = chargeMelange();
     const detail = detailDe(charge);
     const modele = modeleCollisions(detail, { t, teintes: teintesDe(charge) });
@@ -223,7 +223,7 @@ describe('modèle des collisions (§ 12.4, B13, D31)', () => {
     assert.deepEqual(
       tableau.colonnes.map(({ cle, genre }) => [cle, genre]),
       [
-        ['appartenance', 'texte'],
+        ['organisation', 'texte'],
         ['effectif', 'nombre'],
         ['cumulees', 'nombre'],
         ['prouve', 'nombre'],
@@ -235,7 +235,7 @@ describe('modèle des collisions (§ 12.4, B13, D31)', () => {
     assert.deepEqual(
       tableau.lignes,
       detail.collisions.lignes.map((l) => ({
-        appartenance: l.groupe,
+        organisation: l.groupe,
         effectif: l.effectif,
         cumulees: l.cumulees,
         prouve: l.prouve,
@@ -268,12 +268,12 @@ describe('modèle des collisions (§ 12.4, B13, D31)', () => {
     );
     assert.deepEqual(
       modele.tableaux[0].colonnes.map(({ cle }) => cle),
-      ['appartenance', 'effectif', 'cumulees', 'pairesDistinctes', 'excedent'],
+      ['organisation', 'effectif', 'cumulees', 'pairesDistinctes', 'excedent'],
     );
   });
 
-  test('une seule appartenance : ses barres et son jumeau, comme pour plusieurs (B15)', () => {
-    const charge = chargeUneAppartenance();
+  test('une seule organisation : ses barres et son jumeau, comme pour plusieurs (B15)', () => {
+    const charge = chargeUneOrganisation();
     const detail = detailDe(charge);
     assert.equal(detail.G, 1);
     const modele = modeleCollisions(detail, { t, teintes: teintesDe(charge) });
@@ -287,13 +287,13 @@ describe('modèle des collisions (§ 12.4, B13, D31)', () => {
     assert.equal(modele.tableaux.length, 1);
   });
 
-  test('une seule table, aucune appartenance, aucune collision : la phrase de chaque cas, sans graphique ni jumeau', () => {
+  test('une seule table, aucune organisation, aucune collision : la phrase de chaque cas, sans graphique ni jumeau', () => {
     const uneTable = chargeDe({ personnes: PERSONNES_SIX, capacites: [6], tours: [[[1, 2, 3, 4, 5, 6]], [[1, 2, 3, 4, 5, 6]]] });
     const sans = chargeSix(PERSONNES_SIX.map(([nom, prenom]) => [nom, prenom, null]));
     const six = chargeSix();
     const cas = [
       [uneTable, 'uneTable', 'collisionsUneTable', 'qualite.collisions.uneTable'],
-      [sans, 'aucuneAppartenance', 'collisionsAucuneAppartenance', 'qualite.collisions.aucuneAppartenance'],
+      [sans, 'aucuneOrganisation', 'collisionsAucuneOrganisation', 'qualite.collisions.aucuneOrganisation'],
       [six, 'aucune', 'collisionsAucune', 'qualite.collisions.aucune'],
     ];
     for (const [charge, nom, code, cle] of cas) {
@@ -305,7 +305,7 @@ describe('modèle des collisions (§ 12.4, B13, D31)', () => {
   });
 });
 
-describe('modèle des appartenances à chaque table (§ 12.11, B20, D35)', () => {
+describe('modèle des organisations à chaque table (§ 12.11, B20, D35)', () => {
   // Le numéro de table de chaque ligne de la grille, dans l'ordre rendu.
   const numeros = (modele) => modele.grille.lignes.map(({ libelle }) => libelle);
   const tables = (...n) => n.map((numero) => t('qualite.tables.table', { numero }));
@@ -366,19 +366,19 @@ describe('modèle des appartenances à chaque table (§ 12.11, B20, D35)', () =>
       table: t('qualite.tables.table', { numero: 1 }),
       tour: t('qualite.tables.tour', { tour: 1 }),
       compte: 3,
-      pourcent: { texte: pour(40), compte: t('qualite.tables.ligne.sieges', { appartenances: 2, sieges: 5 }) },
+      pourcent: { texte: pour(40), compte: t('qualite.tables.ligne.sieges', { organisations: 2, sieges: 5 }) },
       occupants: 2,
       affilies: 2,
       capacite: 5,
     });
     assert.equal(pour(40), '40\u{202F}%');
-    assert.equal(sieges.lignes[0].pourcent.compte, '2 appartenances pour 5 sièges');
+    assert.equal(sieges.lignes[0].pourcent.compte, '2 organisations pour 5 sièges');
     // Table 3, tour 2, sous « assis » : δ = 1 pour 4 assis, 25 %.
     const assis = modeleTables(detail, 'assis', { t }).grille.infobulle;
-    assert.deepEqual(assis.lignes[1].pourcent, { texte: pour(25), compte: '1 appartenance pour 4 assis' });
+    assert.deepEqual(assis.lignes[1].pourcent, { texte: pour(25), compte: '1 organisation pour 4 assis' });
     // Table 2, sous « doublons » : δ = 2 pour 4 affiliés, 50 %.
     const doublons = modeleTables(detail, 'doublons', { t }).grille.infobulle;
-    assert.deepEqual(doublons.lignes[0].pourcent, { texte: pour(50), compte: '2 appartenances pour 4 affiliés' });
+    assert.deepEqual(doublons.lignes[0].pourcent, { texte: pour(50), compte: '2 organisations pour 4 affiliés' });
     // Le compte de chaque case est celui de la position : la table 1 en
     // compte 3 sous « sièges », 0 sous « assis » et « doublons » ; la
     // table 3, 3 sous « assis », 1 sous « doublons ».
@@ -434,11 +434,11 @@ describe('modèle des appartenances à chaque table (§ 12.11, B20, D35)', () =>
       table: t('qualite.tables.table', { numero: 3 }),
       tour: t('qualite.tables.tour', { tour: 1 }),
       sieges: 3,
-      pourcentSieges: { texte: pour(25), compte: '1 appartenance pour 4 sièges' },
+      pourcentSieges: { texte: pour(25), compte: '1 organisation pour 4 sièges' },
       assis: 3,
-      pourcentAssis: { texte: pour(25), compte: '1 appartenance pour 4 assis' },
+      pourcentAssis: { texte: pour(25), compte: '1 organisation pour 4 assis' },
       doublons: 1,
-      pourcentDoublons: { texte: pour(50), compte: '1 appartenance pour 2 affiliés' },
+      pourcentDoublons: { texte: pour(50), compte: '1 organisation pour 2 affiliés' },
       occupants: 4,
       affilies: 2,
       capacite: 4,
@@ -464,8 +464,8 @@ describe('modèle des appartenances à chaque table (§ 12.11, B20, D35)', () =>
     }
   });
 
-  test('une seule appartenance : la grille sous les trois positions, le sélecteur et le jumeau (B15)', () => {
-    const detail = detailDe(chargeUneAppartenance());
+  test('une seule organisation : la grille sous les trois positions, le sélecteur et le jumeau (B15)', () => {
+    const detail = detailDe(chargeUneOrganisation());
     assert.equal(detail.G, 1);
     for (const position of ['sieges', 'assis', 'doublons']) {
       const modele = modeleTables(detail, position, { t });
@@ -492,7 +492,7 @@ describe('modèle des appartenances à chaque table (§ 12.11, B20, D35)', () =>
     }
   });
 
-  test('une seule table, aucune appartenance : la phrase sous les trois positions, sans sélecteur, grille ni jumeau', () => {
+  test('une seule table, aucune organisation : la phrase sous les trois positions, sans sélecteur, grille ni jumeau', () => {
     const uneTable = chargeDe({ personnes: PERSONNES_SIX, capacites: [6], tours: [[[1, 2, 3, 4, 5, 6]], [[1, 2, 3, 4, 5, 6]]] });
     const sans = chargeSix(PERSONNES_SIX.map(([nom, prenom]) => [nom, prenom, null]));
     for (const position of ['sieges', 'assis', 'doublons']) {
@@ -505,9 +505,9 @@ describe('modèle des appartenances à chaque table (§ 12.11, B20, D35)', () =>
         tableaux: [],
       });
       assert.deepEqual(modeleTables(detailDe(sans), position, { t }), {
-        cas: 'aucuneAppartenance',
-        code: 'tablesAucuneAppartenance',
-        phrase: t('qualite.tables.aucuneAppartenance'),
+        cas: 'aucuneOrganisation',
+        code: 'tablesAucuneOrganisation',
+        phrase: t('qualite.tables.aucuneOrganisation'),
         selecteur: false,
         grille: null,
         tableaux: [],

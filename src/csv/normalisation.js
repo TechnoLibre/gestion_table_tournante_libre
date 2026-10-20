@@ -3,7 +3,7 @@
 
 // Clés de comparaison des textes saisis (§ 10.1). Deux textes qu'un lecteur
 // tient pour le même — casse, accents, blancs mis à part — ont la même clé.
-// La réconciliation des appartenances et la clé de doublon comparent par la
+// La réconciliation des organisations et la clé de doublon comparent par la
 // même clé : deux règles divergeraient sans qu'aucune épreuve de l'une ne le
 // voie. La clé sert à comparer, jamais à afficher.
 

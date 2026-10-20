@@ -222,7 +222,7 @@ et de celle du placement retenu, y mène. La page de qualité est la section « 
 elle mesure le placement que le plan montre, et chaque ligne du tableau des
 propositions y mène. Elle répond à deux questions — ce placement est-il bon, qui
 s'y trouve mal servi — par le profil des rencontres, les collisions
-d'appartenance, les paires répétées, le mélange des appartenances à chaque
+d'organisation, les paires répétées, le mélange des organisations à chaque
 table, les objectifs des tables tour par tour, les animateurs, et la performance
 du calcul qui a produit la proposition. Le logiciel sépare ce que le moteur a
 décidé de ce que les réservations imposent (§ 5.4). Retenir fait passer le plan
@@ -276,7 +276,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 |---|---|---|
 | `PRE-01` | Importer la liste des participants en CSV, après un aperçu | § 10.1 |
 | `PRE-02` | Réexporter les lignes refusées d'un import | § 10.1 |
-| `PRE-03` | Fondre les orthographes d'une même appartenance, jamais en silence | § 10.1 |
+| `PRE-03` | Fondre les orthographes d'une même organisation, jamais en silence | § 10.1 |
 | `PRE-04` | Saisir et corriger les participants à la main | § 10.2 |
 | `PRE-05` | Exporter la liste des participants en CSV, dans la forme qu'il importe | § 10.2 |
 | `PRE-06` | Étiqueter les personnes | § 4.5 |
@@ -371,8 +371,8 @@ reste ci-dessous. Le logiciel en gère plusieurs (§ 8).
 
 **Participant** — un **identifiant entier court**, unique dans l'événement et
 jamais réutilisé ; un nom ; éventuellement un prénom, un courriel, des notes, et
-une **appartenance** — le groupe qui sépare les gens qui se connaissent déjà :
-entreprise, équipe, famille, école.
+une **organisation**, au sens large — le groupe qui sépare les gens qui se
+connaissent déjà : entreprise, équipe, famille, école.
 
 > L'identifiant est un petit entier et non un identifiant opaque. Le calcul de
 > taille du § 8.6 repose dessus : sous la forme positionnelle du § 8.9, un
@@ -429,7 +429,7 @@ les tours*. Elle contraint la génération, qui l'honore, et elle lui survit.
 toute la soirée.
 
 **Étiquette** — un mot court qu'une personne porte — « finance », « Montréal »,
-« bénévole » — et qu'un objectif de table vise. L'appartenance sépare les gens
+« bénévole » — et qu'un objectif de table vise. L'organisation sépare les gens
 qui se connaissent déjà ; l'étiquette dit à quelle table une personne est
 attendue. Une personne en porte de zéro à vingt.
 
@@ -573,10 +573,10 @@ pas encore, dans une même saisie ou dans les lignes d'un même import, se fonde
 de même en la plus petite : le résultat ne dépend ni de l'orthographe tapée ni
 de l'ordre des lignes. Une saisie ne pose jamais deux fois la même étiquette
 dans une liste : un doublon s'y fond. Le moteur compare ensuite les étiquettes
-par égalité de chaînes, comme les appartenances (§ 5.2). Un fichier retouché à
+par égalité de chaînes, comme les organisations (§ 5.2). Un fichier retouché à
 la main peut donc porter deux orthographes d'une même étiquette, que le moteur
 tient pour deux ; l'analyse du fichier ne le refuse pas, même limite que pour
-les appartenances (§ 10.1).
+les organisations (§ 10.1).
 
 **La règle d'un objectif.** Un objectif porte une liste non vide d'étiquettes et
 une règle :
@@ -648,7 +648,7 @@ que cette règle désigne. Une réservation pourvoit le titre : qui anime au tou
 est fixé à ce tour à la table du titre. Le logiciel ne porte aucune case « est
 animateur » ; une réservation sans titre ne fait pas animer, et le titre
 pressenti reste informatif (§ 4). Le diagnostic du § 5.6 garde son propre emploi
-du mot, les ancrés d'une même appartenance : un ancré sans titre n'anime pas,
+du mot, les ancrés d'une même organisation : un ancré sans titre n'anime pas,
 qui n'anime qu'à un tour n'est pas ancré, et le code nomme les deux
 différemment.
 
@@ -697,9 +697,9 @@ place libre de la recherche. Une seule fonction dit qu'une personne est présent
 à un tour, une liste absente valant tous les tours (§ 13.2).
 
 C'est la forme du problème initial **à une donnée près, et elle n'est pas
-facultative** : chaque table transporte **l'ensemble des appartenances de ses
-ancrés**. Un mobile d'appartenance X placé à une table où siège un ancré
-d'appartenance X viole « séparer les appartenances » à **chacun des R tours**.
+facultative** : chaque table transporte **l'ensemble des organisations de ses
+ancrés**. Un mobile d'organisation X placé à une table où siège un ancré
+d'organisation X viole « séparer les organisations » à **chacun des R tours**.
 Réduire sans cette donnée produit un plan qui assoit un invité à côté d'un
 collègue animateur tous les tours, **sans qu'aucun indicateur ne s'en
 aperçoive**.
@@ -719,10 +719,10 @@ le score de la soirée.
 
 | contrainte | ce qu'elle exige |
 |---|---|
-| **Séparer les appartenances** | deux personnes de la même appartenance ne partagent pas une table |
+| **Séparer les organisations** | deux personnes de la même organisation ne partagent pas une table |
 | **Nouveaux voisins à chaque tour** | deux personnes ne se retrouvent pas deux fois à la même table |
 | **Nouvelle table à chaque tour** | *voir ci-dessous* |
-| **Varier les appartenances rencontrées** | sur l'ensemble des tours, chacun rencontre le plus d'appartenances **différentes** possible |
+| **Varier les organisations rencontrées** | sur l'ensemble des tours, chacun rencontre le plus d'organisations **différentes** possible |
 | **Respecter les objectifs des tables** | à chacun de ses tours de présence, chacun est assis à une table dont l'objectif lui correspond, quand une telle table peut l'accueillir (§ 4.5), selon le mode réglé : le plus de places servies, chacun au moins une fois, ou l'équité d'abord |
 | **Rencontrer le plus d'animateurs différents** | sur l'ensemble des tours, chacun rencontre le plus d'animateurs **différents** possible, là où ils animent (§ 4.5) |
 | **Attribuer les sièges** | chacun reçoit un numéro de siège, pas seulement une table |
@@ -752,11 +752,11 @@ aucune case : il montre l'état que donnent les cases de ce tableau.
 | critère de l'ordre | il compte quand |
 |---|---|
 | écart au plafond a priori | toujours |
-| excédent de collisions, collisions cumulées | « Séparer les appartenances » est cochée — une case, deux critères |
+| excédent de collisions, collisions cumulées | « Séparer les organisations » est cochée — une case, deux critères |
 | tours hors objectif | « Respecter les objectifs des tables » est cochée et a un objet |
 | rencontres répétées et retours | « Nouveaux voisins » **ou** « Nouvelle table » est cochée ; décoché quand aucune des deux ne l'est |
 | animateurs non rencontrés | « Rencontrer le plus d'animateurs différents » est cochée et a un objet |
-| redondance d'appartenance | « Varier les appartenances rencontrées » est cochée |
+| redondance d'organisation | « Varier les organisations rencontrées » est cochée |
 
 **« Attribuer les sièges » change les animateurs.** Sans sièges attribués, une
 réservation sans siège à une table titrée peut pourvoir un titre de cette
@@ -823,7 +823,7 @@ porte donc sur **ce que le moteur décide** :
 Aucune exception n'est nécessaire. Pour un ancré, le moteur ne décide rien : la
 règle est vraie sans rien exiger.
 
-**« Varier les appartenances » n'est pas « séparer les appartenances ».** La
+**« Varier les organisations » n'est pas « séparer les organisations ».** La
 première porte sur **celle des autres**, **à travers les tours** ; la seconde
 sur **la sienne**, **à l'intérieur d'un tour**. Elles s'activent séparément.
 
@@ -835,14 +835,14 @@ une lecture et non un jugement :
 | indicateur | définition |
 |---|---|
 | **personnes distinctes rencontrées** | sur ses tours de présence ; une personne revue compte une fois |
-| **collisions cumulées** | occurrences (paire, tour) où deux personnes d'une même appartenance partagent une table — l'unité dans laquelle les planchers du § 5.6 se démontrent |
-| **paires de même appartenance** | **paires distinctes** réunies au moins une fois ; jamais la même unité que la ligne précédente |
-| **excédent de collisions** | collisions cumulées − paires distinctes : le nombre de **retrouvailles au-delà de la première** entre deux personnes d'une même appartenance. Nul quand aucune paire de collègues n'est réunie deux fois |
+| **collisions cumulées** | occurrences (paire, tour) où deux personnes d'une même organisation partagent une table — l'unité dans laquelle les planchers du § 5.6 se démontrent |
+| **paires de même organisation** | **paires distinctes** réunies au moins une fois ; jamais la même unité que la ligne précédente |
+| **excédent de collisions** | collisions cumulées − paires distinctes : le nombre de **retrouvailles au-delà de la première** entre deux personnes d'une même organisation. Nul quand aucune paire de collègues n'est réunie deux fois |
 | **rencontres répétées** | paires réunies plus d'une fois |
 | **nombre maximal de rencontres d'une même paire** | |
 | **retours à une table déjà occupée** | *voir ci-dessous* |
-| **appartenances distinctes rencontrées** — A(p) | nombre d'appartenances différentes portées par les personnes **affiliées** que p rencontre, **la sienne comprise** |
-| **redondance d'appartenance** — r(p) | \|F(p)\| − A(p), où F(p) sont les affiliés rencontrés ; r = 0 signifie qu'aucune appartenance n'a été recroisée |
+| **organisations distinctes rencontrées** — A(p) | nombre d'organisations différentes portées par les personnes **affiliées** que p rencontre, **la sienne comprise** |
+| **redondance d'organisation** — r(p) | \|F(p)\| − A(p), où F(p) sont les affiliés rencontrés ; r = 0 signifie qu'aucune organisation n'a été recroisée |
 | **taux de diversité** — d(p) | A(p) / \|F(p)\| ; « — » quand \|F(p)\| = 0 |
 | **manque** | plafond réalisé − rencontres (§ 5.5) — la grandeur qui compare deux propositions (§ 12.10) |
 | **écart d'itinéraire** | plafond a priori − plafond réalisé (§ 5.5, § 12.10) |
@@ -961,22 +961,22 @@ des tours.
 |---|---|---|
 | **capacité** — c_t | sièges de la table t (§ 4) | toute table |
 | **occupants** — o_{t,r} | personnes assises à la table t au tour r | toute table, tout tour ; une table vide à un tour donne une case vide, « — » |
-| **affiliés assis** — α_{t,r} | occupants qui portent une appartenance | idem |
-| **appartenances à la table** — δ_{t,r} | appartenances distinctes portées par les affiliés assis | « — » quand α_{t,r} = 0 |
-| **sièges sans appartenance nouvelle** — c_t − δ_{t,r} | sièges de la table au-delà du nombre de ses appartenances distinctes : siège vide, assis sans appartenance, ou second d'une appartenance ; zéro veut dire que chaque siège porte une appartenance de plus | « — » quand α_{t,r} = 0 |
-| **assis sans appartenance nouvelle** — o_{t,r} − δ_{t,r} | occupants au-delà du nombre des appartenances distinctes ; zéro veut dire que chaque assis porte une appartenance de plus | idem |
-| **doublons d'appartenance** — α_{t,r} − δ_{t,r} | affiliés assis au-delà du premier de leur appartenance ; zéro veut dire qu'aucune appartenance n'est assise deux fois à cette table ce tour-là | idem |
+| **affiliés assis** — α_{t,r} | occupants qui portent une organisation | idem |
+| **organisations à la table** — δ_{t,r} | organisations distinctes portées par les affiliés assis | « — » quand α_{t,r} = 0 |
+| **sièges sans organisation nouvelle** — c_t − δ_{t,r} | sièges de la table au-delà du nombre de ses organisations distinctes : siège vide, assis sans organisation, ou second d'une organisation ; zéro veut dire que chaque siège porte une organisation de plus | « — » quand α_{t,r} = 0 |
+| **assis sans organisation nouvelle** — o_{t,r} − δ_{t,r} | occupants au-delà du nombre des organisations distinctes ; zéro veut dire que chaque assis porte une organisation de plus | idem |
+| **doublons d'organisation** — α_{t,r} − δ_{t,r} | affiliés assis au-delà du premier de leur organisation ; zéro veut dire qu'aucune organisation n'est assise deux fois à cette table ce tour-là | idem |
 | **possibles du tour** — Π_r | couples (p, r) possibles au tour r (§ 4.5), fixés compris | personnes concernées ; « — » sans couple possible à ce tour |
 | **servis du tour** — S_r | couples (p, r) servis au tour r : p assis à une table dont l'objectif en vigueur au tour r lui correspond et qu'il peut occuper | idem |
 | **hors objectif du tour** | Π_r − S_r ; la somme sur les tours est le total des tours hors objectif | idem |
 | **assis sans table possible** — σ_r | personnes présentes au tour r et assises à une table dont le couple (p, r) n'est pas possible : concernées ou non, sans étiquette comprises ; une personne en réserve à ce tour n'y est pas, une personne absente à ce tour non plus | tout tour, dès qu'une personne est concernée ; écrit même quand Π_r = 0 |
 | **personnes rencontrées en animant** — U_f, U_{f,r} | pour un animateur f, les personnes distinctes assises à sa table à un tour où il anime, à une table qu'elles peuvent occuper (§ 4.5), lui non compté : sur l'union de ses tours animés, U_f ; au seul tour r, U_{f,r} | animateurs présents ; « — » sans animateur |
-| **appartenances rencontrées en animant** — A_f, A_{f,r} | appartenances distinctes portées par les affiliés de U_f, de U_{f,r} | idem |
+| **organisations rencontrées en animant** — A_f, A_{f,r} | organisations distinctes portées par les affiliés de U_f, de U_{f,r} | idem |
 | **étiquettes rencontrées en animant** — E_f, E_{f,r} | étiquettes distinctes portées par les personnes de U_f, de U_{f,r}, chaque étiquette comptée une fois quel que soit le nombre de ses porteurs | animateurs présents, quand une personne présente porte une étiquette ; « — » sinon |
 | **tours animés** — T_f | tours où f anime | animateurs présents |
 
 Les trois comptes du mélange d'une table s'emboîtent : c_t − δ ≥ o − δ ≥ α − δ
-≥ 0, chacun nul exactement quand son dénominateur ne porte que des appartenances
+≥ 0, chacun nul exactement quand son dénominateur ne porte que des organisations
 distinctes.
 
 Un couple fixé n'est possible que si sa table réservée lui correspond, et il y
@@ -999,7 +999,7 @@ d'eux seuls (§ 12.8) :
 | rencontres d'une personne | rencontres(p) | plafond réalisé(p) |
 | tours possibles servis, d'un tour ou de la soirée | S_r, ou Σ_r S_r | Π_r, ou Σ_r Π_r |
 | tours servis d'une personne | s(p) | P(p), ses tours possibles |
-| appartenances d'une table à un tour, par siège, par assis, par affilié | δ_{t,r} | c_t, o_{t,r}, α_{t,r} |
+| organisations d'une table à un tour, par siège, par assis, par affilié | δ_{t,r} | c_t, o_{t,r}, α_{t,r} |
 
 Le moteur les calcule, par une seule fonction : ⌊100 · n / d⌋, borné à 1 et à 99
 quand 0 < n < d, et « — » quand d vaut 0. Jamais 0 % tant que le compte n'est
@@ -1133,9 +1133,9 @@ l'un invite à relancer, l'autre dit que relancer ne prouvera rien.
 le plafond réalisé, sur l'occupation de la proposition. Elle borne une autre
 grandeur que les rencontres et ne prouve rien : elle se nomme **borne de
 diversité**, jamais plafond, pour ne jamais se confondre avec le plafond des
-rencontres. Soit G le nombre d'appartenances distinctes des personnes
+rencontres. Soit G le nombre d'organisations distinctes des personnes
 présentes — les exclues n'en apportent aucune —, N_aff le nombre de personnes
-présentes affiliées, g_p l'effectif de l'appartenance de p, et ε_p = 1 si p est
+présentes affiliées, g_p l'effectif de l'organisation de p, et ε_p = 1 si p est
 affiliée, 0 sinon :
 
 ```
@@ -1157,15 +1157,15 @@ a^aff_t compte les ancrés affiliés de t, p non compté ; n^aff_p, les mobiles 
 partiellement fixés affiliés, p non compté ; α_{t,r}, les affiliés assis
 (§ 5.4). Φ_aff(p) borne |F(p)|, les affiliés que p rencontre, pour la même
 raison que le plafond réalisé borne ses rencontres. Le « + 1 » compte
-l'appartenance de p, qu'un collègue rencontré suffit à apporter : sans lui, un
-événement où tout le monde partage une appartenance annoncerait A_max = 0 alors
-que chacun en rencontre une. Une personne sans appartenance n'en apporte aucune,
-et ses autres termes la bornent déjà. Chaque autre appartenance comptant au
+l'organisation de p, qu'un collègue rencontré suffit à apporter : sans lui, un
+événement où tout le monde partage une organisation annoncerait A_max = 0 alors
+que chacun en rencontre une. Une personne sans organisation n'en apporte aucune,
+et ses autres termes la bornent déjà. Chaque autre organisation comptant au
 moins une personne présente, (N_aff − g_p) + 1 ne descend jamais sous G : le
 terme rappelle d'où vient la borne, G la tient.
 
 La borne de diversité se trace sur le profil en comptes, en pointillés, sous son
-nom, et s'écrit dans la tuile des appartenances distinctes rencontrées, dans le
+nom, et s'écrit dans la tuile des organisations distinctes rencontrées, dans le
 jumeau et dans l'infobulle du profil (§ 12.2, § 12.3) ; aucun pourcentage ne la
 prend pour dénominateur. La garde du § 12.3 éprouve A(p) ≤ |F(p)| ≤ Φ_aff(p) et
 A(p) ≤ A_max(p). Elle ne se calcule pas a priori : le diagnostic garde sa
@@ -1177,7 +1177,7 @@ Certaines configurations rendent un conflit **inévitable**, quel que soit
 l'algorithme. Le logiciel les détecte **avant** de chercher et énonce ce qui est
 inévitable, **combien**, et ce qui le rendrait évitable :
 
-- plus de personnes d'une appartenance que de tables → « au moins 8 collisions
+- plus de personnes d'une organisation que de tables → « au moins 8 collisions
   cumulées sur les 4 tours, portées par au moins 2 paires distinctes ». Le
   plancher se démontre **en occurrences** ; le chiffre nomme donc son unité, et
   le compte de paires distinctes l'accompagne (§ 5.4). Le plancher se calcule
@@ -1189,11 +1189,11 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   **quand il est strictement positif**, et se tait sinon — annoncer un plancher
   nul laisserait croire qu'un plancher a été calculé là où il n'y en a pas ;
 - redondance minimale `r_min(p) = max(0, |F(p)| − G)` → « au moins 6
-  appartenances recroisées par personne ; avec 3 tours au lieu de 4, aucune ne
+  organisations recroisées par personne ; avec 3 tours au lieu de 4, aucune ne
   le serait » ;
-- **tous les animateurs de même appartenance** → chaque mobile accumule au
+- **tous les animateurs de même organisation** → chaque mobile accumule au
   moins min(R, T) − 1 redondances qu'aucune recherche ne réduit. Remède : les
-  laisser sans appartenance déclarée, ou leur en donner des distinctes ;
+  laisser sans organisation déclarée, ou leur en donner des distinctes ;
 - **taux d'ancrage par table** : une table dont tous les sièges sont ancrés ne
   tourne plus ; une table à moitié ancrée réduit d'autant le brassage de tout
   l'événement ;
@@ -1251,8 +1251,8 @@ absence ne sort pas un plan de leur domaine (§ 12.4). Seul l'écart
 d'itinéraire perd le sien.
 
 À l'écran, les énoncés se regroupent en cartes, sans changer d'ordre : la
-séparation des appartenances vidée de son sens, une carte par appartenance en
-collision, titrée de sa pastille d'appartenance (§ 12.7), puis ce qui vaut pour
+séparation des organisations vidée de son sens, une carte par organisation en
+collision, titrée de sa pastille d'organisation (§ 12.7), puis ce qui vaut pour
 tout l'événement.
 
 Un opérateur à qui l'on dit « c'est impossible, voici pourquoi, voici le
@@ -1542,7 +1542,7 @@ entier ≥ 0, et la plus faible est la meilleure.
 | tours hors objectif | selon le mode (§ 5.3) : les tours hors objectif ; ou les personnes jamais servies, puis les tours hors objectif ; ou le plus de tours hors objectif d'une personne, puis les tours hors objectif | les mêmes ; sous « l'équité d'abord », entre les deux, le nombre de personnes qui ont ce plus grand nombre de tours hors objectif, zéro quand il est nul | contrainte |
 | rencontres répétées et retours | les rencontres répétées choisies sous « nouveaux voisins » ; sinon, sous « nouvelle table » seule, les retours choisis | Σ_paires max(0, M − 1) sous « nouveaux voisins », plus les retours choisis sous « nouvelle table » | contrainte |
 | animateurs non rencontrés | Σ (B(p) − m(p)) (§ 5.4) | la même | raffinement |
-| redondance d'appartenance | Σ r(p) | la même | raffinement |
+| redondance d'organisation | Σ r(p) | la même | raffinement |
 
 **La liste est complète** : chaque critère y figure une fois, coché ou non. Deux
 critères y sont **seuls à leur palier** : ils se déplacent, ils ne partagent pas
@@ -1574,7 +1574,7 @@ liste ainsi rangée, sans qu'aucun critère change de palier.
 
 **Ordre par défaut** : écart au plafond a priori, puis excédent de collisions,
 puis collisions cumulées, puis tours hors objectif, puis rencontres répétées et
-retours, puis animateurs non rencontrés, puis redondance d'appartenance, chacun
+retours, puis animateurs non rencontrés, puis redondance d'organisation, chacun
 seul à son palier, sous le mode « le plus de places servies ». L'**ordre fixe de
 référence** est la liste écart, excédent, cumulées, rencontres répétées,
 redondance, chacun seul à son palier : l'ordre par défaut sans les deux critères
@@ -1589,9 +1589,9 @@ défaut » retire le réglage.
 
 **L'ordre par défaut se justifie par l'asymétrie des gains.** Il met l'écart au
 plafond a priori en tête : rencontrer une personne de plus est un gain certain,
-rencontrer une appartenance de plus, ou un animateur de plus, un raffinement.
+rencontrer une organisation de plus, ou un animateur de plus, un raffinement.
 Mettre la diversité au-dessus ferait **refuser un contact neuf** parce que
-l'appartenance du voisin est déjà croisée. Il met l'excédent de collisions
+l'organisation du voisin est déjà croisée. Il met l'excédent de collisions
 devant les collisions cumulées : le § 5.4 le démontre en trois plans, classer
 d'abord sur les collisions cumulées — comme classer d'abord sur les paires
 distinctes — met en tête le plan qui fait passer toute la soirée aux deux mêmes
@@ -1681,8 +1681,8 @@ classement complet.
 Un départage ne se déclenchant presque jamais, les chiffres de diversité sont
 affichés **en colonne pour chaque proposition**, et non pour la seule gagnante.
 Le tableau réunit ses colonnes de mesure voisines sous cinq intitulés de groupe
-— les personnes rencontrées, les collisions d'appartenance, les rencontres
-répétées et les retours, la diversité d'appartenance, le manque et le plafond a
+— les personnes rencontrées, les collisions d'organisation, les rencontres
+répétées et les retours, la diversité d'organisation, le manque et le plafond a
 priori —, et sous un sixième, « les objectifs des tables et les animateurs »,
 quand l'un de ces deux critères est coché et a un objet : ses colonnes sont,
 pour le premier, les tours hors objectif et le minimum des tours selon
@@ -2359,7 +2359,7 @@ champ :**
 |---|---|
 | le plan de salle, à l'écran comme à l'impression | **abrège** avec une marque, la largeur d'un bloc de noms étant la même contrainte des deux côtés |
 | la fiche à l'écran, la feuille par table, la liste d'accueil | **ne tronquent jamais** : elles replient |
-| le **badge** (§ 11.5) | **par champ** : le nom ne s'abrège jamais — il réduit de corps par paliers, puis se replie — tandis que l'appartenance s'abrège sur une seule ligne |
+| le **badge** (§ 11.5) | **par champ** : le nom ne s'abrège jamais — il réduit de corps par paliers, puis se replie — tandis que l'organisation s'abrège sur une seule ligne |
 
 Un nom coupé sur la feuille que tient le personnel de salle ne sert à personne ;
 un nom de deux cents caractères déployé sur un plan de 33 tables détruit la
@@ -2371,7 +2371,7 @@ tours qui n'y tiennent pas côte à côte se scindent en **groupes de tours
 consécutifs**, chacun sur ses pages, sous ses propres têtes de tour. La liste
 d'accueil donne à chaque colonne de tour au moins la largeur du plus large
 libellé de place ou tête de tour, sur une ligne, et garde aux nom, prénom et
-appartenance au moins le tiers de la largeur ; des tours qui n'y tiennent pas
+organisation au moins le tiers de la largeur ; des tours qui n'y tiennent pas
 côte à côte se répartissent en **blocs de tours consécutifs**, aussi peu que
 possible, de même taille, le dernier plus court s'il le faut. Un libellé plus
 large que les deux tiers laissés aux tours tient seul dans son bloc et y replie,
@@ -2413,7 +2413,7 @@ plateau et de part et d'autre de la pastille, où seul son disque le couvre ;
 les chaises, posées sur le bord, se peignent par-dessus lui.
 
 **Chaque règle a sa trame, d'une forme et d'une teinte propres** — hachures
-descendantes pour « séparer les appartenances », hachures montantes pour
+descendantes pour « séparer les organisations », hachures montantes pour
 « nouveaux voisins », points pour « nouvelle table ». La forme suffit sans la
 couleur ; la teinte la redit. Une table qui viole plusieurs règles superpose
 leurs trames — les deux hachures se croisent en quadrillage — sous un même
@@ -2426,8 +2426,8 @@ teinte que le plan peint — et son nom ; elle dit aussi ce que compte la
 pastille. Une règle inactive n'y paraît pas.
 
 Le détail d'une table en conflit nomme les personnes de chaque violation ;
-pour « séparer les appartenances », il nomme aussi **l'appartenance qui les
-réunit**, telle que la liste la porte : « Même appartenance (Club des Merles) :
+pour « séparer les organisations », il nomme aussi **l'organisation qui les
+réunit**, telle que la liste la porte : « Même organisation (Club des Merles) :
 Iris Ombrelle et Théo Pervenche ».
 
 **Quand toutes les tables sont en conflit, le plan cesse de signaler quoi que ce
@@ -2960,7 +2960,7 @@ règle écrite, et l'affiche :
    l'exécutable, qu'il crée au besoin : il écrit un fichier témoin, le relit,
    l'efface, et efface un témoin resté d'une séance précédente. Un contrôle de
    droits ne répond pas à la question posée — les droits effectifs dépendent
-   d'héritages, d'appartenances de groupe, de stratégies d'antivirus, et un
+   d'héritages, des groupes du compte, de stratégies d'antivirus, et un
    support amovible en lecture seule présente un dossier d'apparence
    inscriptible. Une écriture suivie d'une relecture répond.
 4. L'épreuve réussit → `data/` est le dossier de travail. C'est le **mode
@@ -3074,7 +3074,7 @@ horodatage — ou n'en porte pas, comme l'entrée — et l'empreinte de son
 placement. Les quatre premiers ne suffisent pas à désigner une recherche : le
 compteur des propositions recule quand l'opérateur reprend un état d'avant une
 génération (un `.precedent`), et la graine proposée peut être la même ; après un
-changement qui laisse la déclaration intacte — une appartenance, une
+changement qui laisse la déclaration intacte — une organisation, une
 réservation, un réglage —, la recherche suivante porte les mêmes quatre champs
 et une autre course, qui finit sur un autre placement **ou sur le même**.
 L'empreinte seule ne départage donc pas deux recherches ; l'horodatage, que la
@@ -3738,13 +3738,13 @@ sauter ne garde rien.
 
 **Les colonnes s'associent par leur en-tête, jamais par leur position** — un
 tableur où une colonne a été déplacée importerait sinon les noms dans les
-appartenances sans rien signaler.
+organisations sans rien signaler.
 
 | en-tête | obligatoire | contenu |
 |---|---|---|
 | `nom` | **oui** | |
 | `prenom` | non | |
-| `appartenance` | non | synonymes : `organisation`, `entreprise`, `équipe` |
+| `organisation` | non | synonymes : `appartenance`, `entreprise`, `équipe` |
 | `courriel` | non | |
 | `titre_pressenti` | non | synonymes : `titre`, `rôle` — **informatif, ne pourvoit aucune place** |
 | `exclu` | non | liste fermée ; vide vaut `non` |
@@ -3828,15 +3828,15 @@ refusé, et le refus nomme ce qui écarte le séparateur.
 > constant : **un**. Une règle qui ne retiendrait que la constance importerait
 > chaque ligne entière dans la colonne `nom`.
 
-**Les appartenances se réconcilient sur la même forme normalisée que la clé de
+**Les organisations se réconcilient sur la même forme normalisée que la clé de
 doublon** — espaces réduits, casse et accents ignorés ; la première orthographe
 rencontrée s'affiche. **Le rapport d'import nomme chaque groupe d'orthographes
 fondues et son nombre de lignes** : une fusion silencieuse est aussi fausse
-qu'une séparation silencieuse. Une appartenance vide vaut **absence**, jamais
-une appartenance nommée « ».
+qu'une séparation silencieuse. Une organisation vide vaut **absence**, jamais
+une organisation nommée « ».
 
 > Sans cette réconciliation, deux orthographes d'une même organisation
-> deviennent deux appartenances : « séparer les appartenances » cesse de séparer
+> deviennent deux organisations : « séparer les organisations » cesse de séparer
 > deux collègues, G est gonflé, et A_max avec lui. Le défaut est muet — aucun
 > indicateur ne s'en aperçoit.
 
@@ -3877,7 +3877,7 @@ tiendrait dans un seul champ, et deux personnes se fondraient en une.
 
 **L'import entier est une seule entrée d'historique.**
 
-**Les doublons** se repèrent sur le triplet (nom, prénom, appartenance)
+**Les doublons** se repèrent sur le triplet (nom, prénom, organisation)
 normalisé, et le logiciel **ne fusionne jamais tout seul** : deux personnes
 portent le même nom, et la fusion silencieuse fait disparaître un convive qui se
 présentera quand même.
@@ -3920,25 +3920,25 @@ Trois mécanismes rendent tenable la saisie de 260 personnes :
 1. **Le collage en bloc**, passé **au même analyseur** que l'import — un second
    analyseur « simplifié » divergerait sur les accents et les guillemets, et les
    tests des deux resteraient verts.
-2. **L'appartenance collante** : le champ conserve sa dernière valeur. Saisir
+2. **L'organisation collante** : le champ conserve sa dernière valeur. Saisir
    les sept personnes d'une organisation, c'est taper sept noms.
 3. **La grille éditable**, au clavier, avec tri et filtre. Corriger est ce que
    l'opérateur fait le plus, la veille et sur place.
 
 La liste des participants porte une ligne de comptes — personnes, à placer,
-exclues, appartenances, et « 2 présences partielles » quand des personnes non
-exclues n'ont pas tous les tours — et une légende des appartenances, chacune
+exclues, organisations, et « 2 présences partielles » quand des personnes non
+exclues n'ont pas tous les tours — et une légende des organisations, chacune
 avec le nombre de personnes qui la portent, exclues comprises ; dans la grille,
-l'appartenance s'affiche en pastille de sa teinte (§ 12.7), le titre pressenti
+l'organisation s'affiche en pastille de sa teinte (§ 12.7), le titre pressenti
 et l'exclusion en pastilles à icône.
 
 La fiche d'une personne porte ses étiquettes, en pastilles **neutres** — la
-teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7) —, chacune suivie,
+teinte d'organisation ne sert qu'à l'organisation (§ 12.7) —, chacune suivie,
 en mode écriture seulement, d'une petite croix cerclée rouge qui la retire,
 nommée « Retirer « étiquette » » pour les technologies d'assistance, et un
 champ qui en ajoute une ou plusieurs, séparées comme dans une cellule CSV ; la saisie passe par la même lecture que l'import (§ 4.5,
 § 10.1). Quand l'événement porte des étiquettes, une légende des étiquettes suit
-celle des appartenances, chacune avec le nombre de personnes qui la portent,
+celle des organisations, chacune avec le nombre de personnes qui la portent,
 exclues comprises.
 
 **La présence se saisit dans la grille et dans la fiche.** La colonne
@@ -3994,9 +3994,9 @@ livrés, **jamais saisis à la main** — la dérive entre l'exemple et la
 démonstration devient impossible plutôt que surveillée.
 
 Le fichier de cas limites exerce, ligne par ligne : une colonne non reconnue,
-une personne sans appartenance, une exclusion, un champ cité contenant le
+une personne sans organisation, une exclusion, un champ cité contenant le
 séparateur, un champ cité sur deux lignes, un doublon, une personne sans prénom,
-une **paire d'orthographes d'une même appartenance à fondre** (§ 10.1), et une
+une **paire d'orthographes d'une même organisation à fondre** (§ 10.1), et une
 ligne refusée faute de nom. Il **alimente aussi deux captures d'écran** du guide
 (§ 19.3) — l'aperçu d'import et son rapport —, qui sont les deux écrans où une
 fusion d'orthographes et un refus de ligne se montrent ensemble.
@@ -4333,7 +4333,7 @@ cherche à qui il parle.
 |---|---|---|
 | 1 | **prénom et nom**, le plus grand corps de la planche | c'est l'identité, et c'est ce que lit l'hôte à un mètre |
 | 2 | **une ligne par tour** : « Tour 1 — table 12 », et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
-| 3 | **appartenance**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
+| 3 | **organisation**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
 
@@ -4377,9 +4377,9 @@ part au cou de deux cents personnes.
   la personne qui porte le carton.
 
 **Les homonymes que rien ne sépare.** Le § 12.6 distingue les homonymes par leur
-appartenance et navigue par identifiant ; sur un badge, deux personnes de même
-nom normalisé **et sans appartenance, ou de même appartenance normalisée**, ne
-se distinguent par rien : une appartenance imprimée deux fois à l'identique ne
+organisation et navigue par identifiant ; sur un badge, deux personnes de même
+nom normalisé **et sans organisation, ou de même organisation normalisée**, ne
+se distinguent par rien : une organisation imprimée deux fois à l'identique ne
 les sépare pas plus que son absence. La pile étant
 alphabétique, leurs deux cartons sont voisins : l'hôte en tend un au hasard et
 deux personnes passent la soirée aux tables l'une de l'autre, sans que rien ne le
@@ -4393,7 +4393,7 @@ zone de silence. Ce qu'on y met est variable. Le logiciel fixe donc un **ordre d
 sacrifice**, écrit une fois, et ne laisse jamais la mise en page se résoudre par
 un débordement.
 
-> nom › lignes de tour › appartenance › nom de l'événement
+> nom › lignes de tour › organisation › nom de l'événement
 
 - **Un nom très long.** Le nom **ne s'abrège jamais**. Le logiciel réduit le corps
   par paliers jusqu'à un plancher de lisibilité **mesuré sur les métriques de la
@@ -4401,16 +4401,16 @@ un débordement.
   aux espaces, et entre deux lettres seulement quand un mot seul ne tient pas,
   jamais entre une lettre et son accent. Si, le nom au plancher, le badge ne tient
   toujours pas, il se dépouille dans l'ordre de sacrifice : le nom de l'événement
-  quitte le pied, sa date restant, puis l'appartenance part. **Au-delà de trois
+  quitte le pied, sa date restant, puis l'organisation part. **Au-delà de trois
   lignes, le nom continue de se replier** au corps plancher, sur autant de lignes
   qu'il lui faut, et le badge perd d'emblée le nom de l'événement, puis
-  l'appartenance s'il le faut ; si les lignes de tour ne tiennent plus sous lui,
+  l'organisation s'il le faut ; si les lignes de tour ne tiennent plus sous lui,
   le logiciel **refuse de produire la planche** et nomme la personne, dont le nom
   se corrige dans la liste des participants. L'horodatage ne quitte jamais le
   pied. Le seuil se cale sur le **glyphe le plus large** de l'alphabet visé,
   jamais sur une moyenne (§ 14.1) : un nom en capitales larges déborde sinon
   par-dessus la première ligne de tour, en silence.
-- **Une appartenance très longue.** Elle **s'abrège** avec une marque, sur une
+- **Une organisation très longue.** Elle **s'abrège** avec une marque, sur une
   seule ligne. C'est une étiquette de contexte, pas une identité, et un
   repliement sur trois lignes mange les tours.
 - **Beaucoup de tours.** Le logiciel passe à deux colonnes au-dessus d'un nombre
@@ -4430,7 +4430,7 @@ un débordement.
   **avant de produire** ; la feuille de contrôle les liste par leur point de code
   — « U+674E » — et n'en écrit jamais un tel quel. La planche se produit : le
   remède est dans la liste des participants, et l'opérateur décide.
-- **Un participant sans appartenance.** La ligne **n'existe pas**. Ni espace
+- **Un participant sans organisation.** La ligne **n'existe pas**. Ni espace
   réservé, ni tiret : le « — » signale une mesure vide dans la page de qualité
   (§ 5.4), et sur un carton il se lit comme une donnée manquante dont la personne
   viendra demander la cause à l'accueil. La place libérée revient au bloc du nom.
@@ -4670,7 +4670,7 @@ marges ôtées, et la découpe du plan reçoit la même hauteur. Le registre n'e
 écrit aucune valeur (§ 14.1) : elle suit la police et le rendu.
 
 **Fiches participants : la sortie imprimée est supprimée.** Son contenu — nom,
-appartenance, titre, table et siège par tour — est exactement celui du badge.
+organisation, titre, table et siège par tour — est exactement celui du badge.
 Deux sorties pour la même information divergent ; celle qui tient autour du cou
 gagne. **La fiche à l'écran demeure** : sa rubrique « Rencontres » est le chemin
 d'accès garanti à la ligne d'une seule personne quand la matrice n'est pas
@@ -4743,12 +4743,12 @@ mène à chacune.
 | en-tête chiffré (§ 12.2) | les deux | une rangée de tuiles | les tuiles sont du texte |
 | profil trié (§ 12.3) | qui est le plus mal servi, de combien, et combien sont-ils ? | deux graphiques au même ordre de rangs : l'escalier en comptes, deux séries, le plafond réalisé et la borne de diversité en repères ; dessous, les rencontres en pourcentage du plafond réalisé | une ligne par personne dans l'ordre du profil, comptes et pourcentage, et la répartition des rencontres |
 | comparaison (§ 12.10.6) | laquelle des deux sert mieux, et qui y perd ? | un tracé, le manque des deux placements en escaliers superposés sur un axe commun, en comptes ; au-dessus, leurs chiffres en deux colonnes côte à côte, chacun en compte, ou en pourcentage suivi du compte du pire là où sa tuile en porte un | l'escalier du manque : une ligne par valeur de manque, et par placement l'effectif et l'effectif cumulé, en comptes |
-| collisions d'appartenance (§ 12.4) | d'où vient le problème, et relancer peut-il y changer quelque chose ? | barres horizontales à deux segments | une ligne par appartenance |
-| appartenances à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table, et par tour les trois comptes et leurs pourcentages |
+| collisions d'organisation (§ 12.4) | d'où vient le problème, et relancer peut-il y changer quelque chose ? | barres horizontales à deux segments | une ligne par organisation |
+| organisations à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table, et par tour les trois comptes et leurs pourcentages |
 | paires répétées (§ 12.5) | qui revoit trop souvent la même personne ? | tableau paginé ; matrice sous le seuil | le tableau est la vue ; la matrice a le sien |
 | objectifs des tables (§ 12.12) | qui n'est jamais assis à une table qui lui correspond, et à quel tour l'objectif perd-il ? | la soirée en texte, puis des barres horizontales par tour, à deux segments, chacune avec son pourcentage et ses assis sans table possible | une ligne par tour, et la liste des personnes jamais servies |
 | animateurs rencontrés (§ 12.13) | qui a rencontré le moins d'animateurs ? | escalier, une série, la borne des animateurs en repère | une ligne par personne concernée, et la répartition |
-| diversité par animateur (§ 12.13) | quel animateur voit le moins de diversité à sa table ? | deux colonnes de barres horizontales juxtaposées, appartenances et étiquettes, chacune son axe, sur la soirée | une ligne par animateur sur la soirée, puis une par animateur et tour animé |
+| diversité par animateur (§ 12.13) | quel animateur voit le moins de diversité à sa table ? | deux colonnes de barres horizontales juxtaposées, organisations et étiquettes, chacune son axe, sur la soirée | une ligne par animateur sur la soirée, puis une par animateur et tour animé |
 | performance du calcul (§ 12.14) | relancer plus longtemps aurait-il donné mieux ? | petits multiples, un indicateur par graphique, points aux seuls points de relevé, abscisse logarithmique | une ligne par point de relevé, une colonne par indicateur |
 
 Une vue sans objet — aucune personne concernée par les objectifs, aucun
@@ -4765,7 +4765,7 @@ colonne de la vue de comparaison (§ 12.10.6), d'une phrase de synthèse ou de l
 soirée est celui de sa population. **Le pourcentage d'une ligne** — une ligne de
 jumeau, une infobulle — est suivi du **compte de cette ligne**, son numérateur
 sur son dénominateur, une ligne n'ayant qu'un cas : « 24 sur 27 », « 5
-appartenances pour 8 sièges », « 24 servis sur 30 possibles ». Les graduations
+organisations pour 8 sièges », « 24 servis sur 30 possibles ». Les graduations
 d'un axe en pourcentages et le libellé « 100 % » de sa règle sont des repères,
 non le pourcentage d'une mesure, et n'ont pas de compte. Les rapports admis sont
 ceux du § 5.4, et d'eux seuls (§ 12.8). Les pourcentages s'écrivent sur cette
@@ -4784,7 +4784,7 @@ chaque vue porte en toutes lettres la question qu'elle traite — **la vue de
 comparaison du § 12.10.6 comprise** : *laquelle des deux sert mieux, et qui y
 perd ?*
 
-Les vues des mélanges — appartenances à chaque table, objectifs des tables,
+Les vues des mélanges — organisations à chaque table, objectifs des tables,
 animateurs — et celle de la performance écrivent la leur (§ 12) : chacune
 précise l'une des deux, sur une table, un tour, un animateur ou un compte de
 mouvements.
@@ -4831,7 +4831,7 @@ distinctes et l'excédent ; les rencontres répétées choisies, les imposées
 énoncées à part ; le plus grand nombre de rencontres d'une paire ; les retours
 choisis, les imposés à part ; le minimum de A(p), avec la borne de diversité de
 la personne au rang 1 du même tri sur A(p) (§ 5.5) — une phrase dit à sa place
-qu'aucune personne présente ne porte d'appartenance — ; la somme de redondance ;
+qu'aucune personne présente ne porte d'organisation — ; la somme de redondance ;
 le minimum du taux de diversité d(p), au centième, comme au tableau des
 propositions. Puis le manque maximal, avec l'effectif au manque maximal — les
 personnes dont le manque l'égale, que la tuile tait quand il vaut 0, personne
@@ -4852,7 +4852,7 @@ et là seulement, en dernière ligne, sous son chiffre : « plancher 4 », ou
 Ces deux lignes ne parlent que de cette mesure, jamais du placement entier, et
 ne nomment personne. Sept tuiles peuvent en porter un : les collisions cumulées,
 les paires distinctes et l'excédent, chacun la somme des planchers de ses
-appartenances en collision ; l'écart d'itinéraire maximal, aucun quand le
+organisations en collision ; l'écart d'itinéraire maximal, aucun quand le
 plafond a priori est inconnu ou qu'une personne est absente à un tour (§ 5.6),
 sa tuile écrivant alors, sous son chiffre, « Plancher non prouvé : une personne
 au moins est absente à un tour. » ; les personnes jamais servies, le plus de
@@ -4862,7 +4862,7 @@ comme au diagnostic : une tuile des objectifs qui ne classe pas n'en porte
 aucun. Un plancher nul ne s'écrit jamais, pas plus qu'un 0 à sa place, et aucune
 tuile n'en porte sur un plan hors du domaine des planchers (§ 12.4). Le détail
 du placement en porte d'autres, qui se lisent dans leur propre vue : ceux des
-collisions par appartenance (§ 12.4), ceux des objectifs par tour (§ 12.12), que
+collisions par organisation (§ 12.4), ceux des objectifs par tour (§ 12.12), que
 cette vue dessine même quand le critère ne classe pas.
 
 **Trois tuiles portent un pourcentage** (§ 5.4), écrit sous leur valeur et
@@ -4889,10 +4889,10 @@ l'en-tête ne compare rien. Un critère sans objet n'a pas de tuile.
 
 Une **courbe en escalier**. En abscisse les participants **triés du moins bien
 au mieux servi** — c'est un rang, et l'axe le dit. Deux séries sur **un seul axe
-vertical** : personnes distinctes rencontrées, et appartenances distinctes
+vertical** : personnes distinctes rencontrées, et organisations distinctes
 rencontrées.
 
-> Un seul axe, parce que le nombre d'appartenances rencontrées **ne peut pas
+> Un seul axe, parce que le nombre d'organisations rencontrées **ne peut pas
 > dépasser** le nombre de personnes rencontrées : la seconde courbe est partout
 > sous la première, et **l'écart se lit directement** comme la redondance des
 > cercles fréquentés. Deux axes détruiraient cette propriété et fabriqueraient,
@@ -4927,7 +4927,7 @@ mixte, libellée « 100 % » —, **dans le même ordre de rangs**, les abscisse
 deux graphiques alignées. Le pourcentage n'y est pas une clé de tri : trier sur
 lui serait trier sur le manque relatif, que le § 12.10.3 refuse. Un rang dont le
 plafond réalisé est nul n'y a pas de point, et le tracé s'interrompt. Les
-appartenances rencontrées n'y ont pas de série : leur seule borne est la borne
+organisations rencontrées n'y ont pas de série : leur seule borne est la borne
 de diversité, dont aucun pourcentage ne se prend. Deux graphiques, jamais deux
 axes sur un même graphique (§ 12.7). Sa phrase de synthèse porte le pire cas en
 compte : « minimum 24 sur 27 ».
@@ -4943,10 +4943,10 @@ faux : la page **refuse de dessiner** et le dit, plutôt que d'afficher un
 graphique impossible que personne ne regardera d'assez près.
 
 La page lui passe en complément les planchers des collisions cumulées par
-appartenance, les planchers des objectifs par tour (§ 12.12), la validité de ces
+organisation, les planchers des objectifs par tour (§ 12.12), la validité de ces
 planchers pour le plan (§ 12.4) et les bornes de diversité : la garde éprouve
 alors aussi que le segment « reste » n'est jamais négatif, ni pour une
-appartenance ni pour un tour, et que A(p) ne dépasse ni les rencontres de p,
+organisation ni pour un tour, et que A(p) ne dépasse ni les rencontres de p,
 ni |F(p)|, ni sa borne de diversité, |F(p)| ne dépassant pas Φ_aff(p) (§ 5.5).
 La propriété A(p) ≤ rencontres(p) fonde l'axe unique de cette vue ; elle n'est
 vraie que par construction tant qu'aucune garde ne l'éprouve. Le refus vaut pour
@@ -4966,7 +4966,7 @@ autres rangs ne portent aucune marque : un escalier est un tracé, non 260
 points.
 
 **Le pointage au plus proche** (§ 12.7) désigne le rang sous le pointeur ; son
-infobulle porte la ligne entière — le rang, le nom entier, l'appartenance, les
+infobulle porte la ligne entière — le rang, le nom entier, l'organisation, les
 rencontres, le plafond réalisé, leur pourcentage suivi de leur compte (§ 12), le
 plafond a priori, A(p), la borne de diversité, les tours en réserve, et les
 tours d'absence quand la personne en a ; le rang
@@ -5001,12 +5001,12 @@ mieux les plus mal lotis, l'autre la masse — et le graphique le montre au lieu
 de le trancher. En comparaison, l'abscisse change de sens et **la page
 l'écrit** : le rang 1 de l'une et de l'autre ne désignent pas la même personne.
 
-### 12.4 Deuxième vue — les collisions d'appartenance
+### 12.4 Deuxième vue — les collisions d'organisation
 
 **Question : d'où vient le problème, et relancer peut-il y changer quelque
 chose ?**
 
-Des barres **horizontales**, une par appartenance, la pire en haut, chacune
+Des barres **horizontales**, une par organisation, la pire en haut, chacune
 empilée en **deux segments** : **prouvé inévitable** (le plancher du diagnostic)
 et **reste**. Chaque ligne porte l'effectif du groupe.
 
@@ -5025,15 +5025,15 @@ l'excédent qui ordonne les propositions (§ 5.7) : une vue qui ne montrerait qu
 le volume ferait conclure que le plan le mieux classé est le plus mauvais.
 
 **Les lignes se trient sur l'excédent, pas sur la longueur de la barre.** La pire
-appartenance est celle qui remet le plus souvent les mêmes personnes ensemble,
+organisation est celle qui remet le plus souvent les mêmes personnes ensemble,
 non celle qui porte le plus d'occurrences — c'est le même arbitrage qu'au § 5.7,
 et deux tris opposés dans une même page se contredisent devant l'opérateur.
 
 À excédent égal, les collisions cumulées décroissantes, puis la clé normalisée
-de l'appartenance (§ 10.1), puis sa chaîne.
+de l'organisation (§ 10.1), puis sa chaîne.
 
 **« Prouvé inévitable » est le plancher des collisions cumulées du diagnostic**
-(§ 5.6) pour cette appartenance, zéro quand le diagnostic n'en écrit pas. **Ce
+(§ 5.6) pour cette organisation, zéro quand le diagnostic n'en écrit pas. **Ce
 plancher vaut sur un plan qui assoit chaque personne présente à chacun de ses
 tours de présence et honore les réservations** : c'est le domaine où il se
 démontre. Une absence n'en sort pas le plan, le plancher se calculant sur les
@@ -5044,8 +5044,8 @@ alors qu'un segment, les collisions cumulées, et la vue écrit pourquoi le
 plancher ne s'y applique pas. La garde n'éprouve le segment « reste » que sur le
 domaine.
 
-L'intitulé de chaque ligne porte la **pastille de l'appartenance** (§ 12.7) :
-c'est une liste. Les segments ne portent ni teinte d'appartenance ni teinte de
+L'intitulé de chaque ligne porte la **pastille de l'organisation** (§ 12.7) :
+c'est une liste. Les segments ne portent ni teinte d'organisation ni teinte de
 conflit : « prouvé inévitable » et « reste » ont chacun leur jeton de graphique,
 leur forme et leur libellé, posé sur la première barre où leur segment est non
 nul et repris par la légende. Les barres partent de zéro, sur un axe commun à
@@ -5067,11 +5067,11 @@ relâchant les contraintes : c'est une **borne inférieure**, jamais un fait.
 Nommer « évitable » le complément affirmerait qu'un meilleur placement le
 retire, et condamnerait l'opérateur à relancer indéfiniment sur un conflit
 qu'aucun placement ne retire. Le mot garde son sens dans les remèdes du
-diagnostic (§ 5.6), et là seulement : une table de plus, ou une appartenance
+diagnostic (§ 5.6), et là seulement : une table de plus, ou une organisation
 répartie autrement, « la rend évitable » parce qu'elle change la
 **configuration** — jamais parce qu'une relance ferait mieux.
 
-**Les participants sans appartenance ne forment pas un groupe** : sinon un
+**Les participants sans organisation ne forment pas un groupe** : sinon un
 pseudo-groupe de quarante personnes produit la plus longue barre, un plancher
 entièrement fictif, et l'opérateur conclut que sa salle est trop petite.
 
@@ -5088,7 +5088,7 @@ que R+1 valeurs dont trois sont décisionnelles ; et en ordre alphabétique elle
 ne montre qu'un grain aléatoire où l'opérateur croira voir un motif.
 
 **Ce qui la remplace** : un **tableau des paires répétées**, trié par nombre
-décroissant — les deux noms, leurs appartenances, le nombre de fois, les tours.
+décroissant — les deux noms, leurs organisations, le nombre de fois, les tours.
 Une ligne n'est pas cliquable : **sa première commande mène au plan au premier
 tour où la paire se revoit**, la première des deux personnes mise en évidence,
 et chacun de ses tours est une commande sœur vers le plan à ce tour. Les
@@ -5140,13 +5140,13 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | une personne absente à un tour dans la configuration | les planchers des collisions et des objectifs restent ; l'écart d'itinéraire maximal n'en porte aucun, sa tuile le dit, et le diagnostic dit que sa preuve suppose chacun présent à chaque tour |
 | personne en réserve à un tour | gardée, point marqué, avec le nombre de tours non assis ; son plafond réalisé se calcule sur les seuls tours où elle est assise, **et son écart d'itinéraire porte ce que son manque ne porte pas** |
 | aucun placement — ni proposition ni retenu | le diagnostic préalable et une phrase, **jamais des axes vides** |
-| une seule table | le profil, les collisions, les appartenances à chaque table et les paires cèdent la place à une phrase : elles diraient la même chose ; les objectifs, les animateurs et la performance restent |
+| une seule table | le profil, les collisions, les organisations à chaque table et les paires cèdent la place à une phrase : elles diraient la même chose ; les objectifs, les animateurs et la performance restent |
 | un seul tour | le tableau des paires est remplacé par une phrase, non par un tableau vide |
-| une seule appartenance | le profil n'a qu'une série et pas de borne de diversité, et la phrase le dit ; les collisions et les appartenances à chaque table restent : les doublons disent où le groupe se retrouve |
-| aucune appartenance | le profil n'a qu'une série et pas de borne de diversité ; les collisions et les appartenances à chaque table cèdent la place à une phrase ; **jamais** une seconde courbe plate à zéro, qui se lit comme une panne |
+| une seule organisation | le profil n'a qu'une série et pas de borne de diversité, et la phrase le dit ; les collisions et les organisations à chaque table restent : les doublons disent où le groupe se retrouve |
+| aucune organisation | le profil n'a qu'une série et pas de borne de diversité ; les collisions et les organisations à chaque table cèdent la place à une phrase ; **jamais** une seconde courbe plate à zéro, qui se lit comme une panne |
 | aucune collision | la vue des collisions cède la place à sa phrase ; la grille des tables aussi sous la position « doublons » du sélecteur, dont toutes les cases vaudraient zéro ; sous « sièges » et « assis », la grille reste, ses comptes ne dépendant pas des collisions |
 | noms longs | tronqués à une largeur **mesurée**, entiers dans l'infobulle et le tableau |
-| homonymes | distingués par leur appartenance ; la navigation se fait par identifiant |
+| homonymes | distingués par leur organisation ; la navigation se fait par identifiant |
 | les deux profils de manque réunis prennent moins de valeurs distinctes que le seuil du registre (§ 19.10) — le cas courant d'une soirée détendue, où le manque est nul pour presque tous | ni tracé ni escalier dessiné : une phrase portant, par valeur et par placement, les effectifs, puis les trois effectifs de rangs, puis, quand le rang 1 ne désigne pas la même personne, la phrase qui le dit ; le jumeau reste |
 | deux placements au même profil de manque | « indiscernables sur le manque » ; entre deux propositions, la page nomme ce qui les départage au classement — le premier palier appliqué (§ 5.7) où leurs clés diffèrent, ou l'identifiant quand toutes sont égales ; avec le retenu, qui ne se classe pas, l'indiscernabilité seule |
 | deux profils qui alternent plusieurs fois | les trois effectifs de rangs, **sans** rang de bascule ; le jumeau tabulaire porte le détail |
@@ -5167,9 +5167,9 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | aucune personne concernée par les objectifs | la vue des objectifs cède la place à sa phrase |
 | un tour sans couple possible | sa ligne écrit « — », sans barre ni pourcentage ; ses assis sans table possible restent écrits |
 | aucune personne concernée par les animateurs, ou aucun animateur | les deux vues des animateurs cèdent la place à leur phrase |
-| aucune étiquette portée | la diversité par animateur n'a que la colonne des appartenances, et la phrase le dit |
-| aucune appartenance, ou une seule, mais des étiquettes | la diversité par animateur n'a que la colonne des étiquettes, triée sur E_f |
-| ni étiquette, ni plus d'une appartenance | la diversité par animateur cède la place à sa phrase ; son jumeau garde les tours animés et les personnes rencontrées en animant |
+| aucune étiquette portée | la diversité par animateur n'a que la colonne des organisations, et la phrase le dit |
+| aucune organisation, ou une seule, mais des étiquettes | la diversité par animateur n'a que la colonne des étiquettes, triée sur E_f |
+| ni étiquette, ni plus d'une organisation | la diversité par animateur cède la place à sa phrase ; son jumeau garde les tours animés et les personnes rencontrées en animant |
 | une grille tables × tours trop large pour ses cases | le jumeau seul, et la phrase qui le dit |
 | la matrice sous le seuil, mais trop étroite pour la largeur de la carte | la phrase de la matrice non dessinée, qui renvoie à la fiche |
 | le placement retenu | la performance dit qu'elle mesure une proposition ; un retenu non ajusté nomme la proposition d'où il vient et en montre la course tant qu'elle est dans la liste ; un retenu ajusté, aux participants ou à la main, ou dont la proposition a été effacée, n'en a aucune |
@@ -5203,11 +5203,11 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 - **Le rouge du retrait** (`--couleur-retrait`) ne peint que la croix cerclée
   d'une commande qui retire, sur une carte, jamais sur le plan : c'est le seul
   jeton chromatique admis à moins de 30° d'une teinte de conflit.
-- **Les couleurs d'appartenance ne vont que sur les listes**, jamais sur le
+- **Les couleurs d'organisation ne vont que sur les listes**, jamais sur le
   plan, dont le canal chromatique appartient aux conflits : au plus six teintes
   catégorielles, chacune à 30° au moins des teintes de conflit dans chaque
   thème, distinctes deux à deux une fois les trois dichromaties simulées et,
-  deux teintes voisines, en clarté. Les appartenances distinctes de l'événement
+  deux teintes voisines, en clarté. Les organisations distinctes de l'événement
   — deux chaînes différentes en font deux, comme pour le moteur — se rangent par
   leur clé normalisée (§ 10.1), comparée point de code par point de code, puis,
   à clé égale, par leur chaîne, et reçoivent les teintes dans cet ordre.
@@ -5226,7 +5226,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   clair. Le niveau zéro n'est pas tenu à 3:1 : il ne porte rien que la bordure
   et le chiffre ne portent déjà.
 - **Le texte garde une encre neutre** ; la couleur est portée par la marque. Une
-  pastille d'état, de statut ou d'appartenance est un fond teinté, un signe —
+  pastille d'état, de statut ou d'organisation est un fond teinté, un signe —
   icône ou point — de la teinte, et un libellé de l'encre de la page.
 - **La palette se valide par calcul, jamais à l'œil** : simuler d'abord les trois
   dichromaties, **puis** mesurer l'écart — mesurer sur les couleurs d'origine ne
@@ -5248,9 +5248,9 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   repère d'un plafond, celui d'une borne, l'axe, « prouvé inévitable » et
   « reste », l'échelle séquentielle, ses encres et la bordure des cases, dans
   les deux thèmes. Les deux séries se distinguent l'une de l'autre et des six
-  teintes d'appartenance une fois les trois dichromaties simulées, chacune à 3:1
+  teintes d'organisation une fois les trois dichromaties simulées, chacune à 3:1
   au moins sur le fond de la carte et à 30° au moins des teintes de conflit :
-  une série voisine d'une pastille se lirait comme cette appartenance. Une
+  une série voisine d'une pastille se lirait comme cette organisation. Une
   série à motif tracée par-dessus une autre — les tirets du second placement
   sur le trait plein du premier (§ 12.10.6) — se mesure contre le fond de la
   carte, que les vides de son motif laissent voir, quand sa couleur diffère de
@@ -5269,10 +5269,10 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 - **Un score unique, une jauge, un feu vert** : il moyenne ce que l'opérateur
   doit arbitrer, cache quel critère a été sacrifié, et éteint la seconde
   question — un placement à 87 % ne dit pas qui est à 14.
-- **Un camembert des appartenances** : il décrit les **entrées**, pas la qualité
+- **Un camembert des organisations** : il décrit les **entrées**, pas la qualité
   de la sortie ; identique sous un bon et un mauvais placement.
 - **La moyenne seule**, sous quelque forme que ce soit.
-- **Un nuage « rencontres contre appartenances »** : deux entiers bornés, 260
+- **Un nuage « rencontres contre organisations »** : deux entiers bornés, 260
   points se superposent sur quelques centaines de positions.
 - **Deux placements dans deux graphiques aux axes différents.**
 - **Le taux de satisfaction**, `Σ rencontres / Σ plafond réalisé` : il affiche
@@ -5315,7 +5315,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 **Les pourcentages de mélange sont une exception nommée à cette liste**, bornée
 aux quatre rapports du § 5.4 : les rencontres d'une personne sur son plafond
 réalisé, les tours possibles servis d'un tour ou de la soirée, les tours servis
-d'une personne sur ses tours possibles, les appartenances distinctes d'une table
+d'une personne sur ses tours possibles, les organisations distinctes d'une table
 et d'un tour sur ses sièges, ses assis ou ses affiliés. La première est le
 complément du rapport manque / plafond ; la deuxième, prise sur la soirée, est
 le taux de satisfaction transposé aux objectifs. Leur défaut est celui que le
@@ -5565,7 +5565,7 @@ rang 1, l'effectif du manque et l'écart d'itinéraire maximal. Dessous, replié
 sous « Tous les indicateurs », un repli que le clavier ouvre et ferme, les
 indicateurs des tuiles de l'en-tête chiffré (§ 12.2), par les groupes des
 colonnes du tableau des propositions (§ 5.7) — personnes rencontrées, collisions
-d'appartenance, rencontres répétées et retours, diversité, objectifs des tables
+d'organisation, rencontres répétées et retours, diversité, objectifs des tables
 et animateurs ; une colonne que le tableau ne porte pas sous un critère décoché
 y reste, comme sa tuile, avec « ne classe pas » —, lus dans les deux lignes de
 la table d'évaluation, sans le détail de B. Chaque chiffre porte son plancher
@@ -5573,7 +5573,7 @@ quand il est prouvé, comme sur les tuiles (§ 12.2) ; les planchers sont ceux d
 diagnostic, communs aux deux placements. Une colonne nomme la personne que la
 tuile nomme, sauf au minimum de A(p) et au minimum de m(p), dont la borne ne se
 lit que dans le détail : ces deux chiffres s'y écrivent sans personne ni borne ;
-quand aucune personne présente ne porte d'appartenance, la cellule de la
+quand aucune personne présente ne porte d'organisation, la cellule de la
 diversité écrit, comme sa tuile, la phrase qui le dit (§ 12.2). Une dérivée y
 porte « dérivée de n° X ».
 
@@ -5728,7 +5728,7 @@ page. Le chemin « inconnu » reste celui du moteur, que l'application n'emprunt
 pas : là, le troisième chiffre s'écrit **« inconnu »** et le départage du § 5.7
 qui en dépend est sauté en nommant le palier appliqué à sa place.
 
-### 12.11 Les appartenances à chaque table
+### 12.11 Les organisations à chaque table
 
 **Question : où les mêmes cercles se retrouvent-ils à une même table ?**
 
@@ -5737,9 +5737,9 @@ table t au tour r (§ 5.4) :
 
 | position | la case écrit et colore | son pourcentage, à l'infobulle et au jumeau |
 |---|---|---|
-| **appartenances par siège** — par défaut | les **sièges sans appartenance nouvelle**, c_t − δ_{t,r} | δ appartenances pour c sièges |
-| **appartenances par personne assise** | les **assis sans appartenance nouvelle**, o_{t,r} − δ_{t,r} | δ appartenances pour o assis |
-| **doublons parmi les affiliés** | les **doublons d'appartenance**, α_{t,r} − δ_{t,r} | δ appartenances pour α affiliés |
+| **organisations par siège** — par défaut | les **sièges sans organisation nouvelle**, c_t − δ_{t,r} | δ organisations pour c sièges |
+| **organisations par personne assise** | les **assis sans organisation nouvelle**, o_{t,r} − δ_{t,r} | δ organisations pour o assis |
+| **doublons parmi les affiliés** | les **doublons d'organisation**, α_{t,r} − δ_{t,r} | δ organisations pour α affiliés |
 
 La position est un état de la séance, comme le tour montré : elle survit au
 changement de section, repart de « par siège » à l'ouverture d'un événement,
@@ -5750,13 +5750,13 @@ Une **grille**, une ligne par table, une colonne par tour. Sous chaque position,
 chaque case **écrit et colore le même nombre** — le compte de la position —, sur
 l'échelle séquentielle à quatre niveaux, 0, 1, 2, 3 et plus. Les trois comptes
 ont le même sens : zéro veut dire que chaque siège, chaque assis ou chaque
-affilié porte une appartenance de plus, et ce niveau est le plus proche du fond
+affilié porte une organisation de plus, et ce niveau est le plus proche du fond
 de la carte (§ 12.7). Ils s'emboîtent, le compte des sièges majorant celui des
 assis, qui majore les doublons (§ 5.4). Une case sans affilié, ou d'une table
 vide à ce tour, écrit « — » sous les trois positions, sans couleur : une table
-de bénévoles sans appartenance n'a rien à mélanger, et ne se lit pas comme la
+de bénévoles sans organisation n'a rien à mélanger, et ne se lit pas comme la
 pire de la soirée. L'infobulle d'une case porte le pourcentage de la position,
-puis ses deux comptes — « 62 % », puis « 5 appartenances pour 8 sièges » —, les
+puis ses deux comptes — « 62 % », puis « 5 organisations pour 8 sièges » —, les
 occupants, les affiliés et la capacité. Une case ne porte qu'un nombre : le
 pourcentage n'y tient pas à côté du compte, et la couleur ne porte que ce que la
 case écrit.
@@ -5768,9 +5768,9 @@ dernier. La pire case est donc dans la première ligne. Le moteur rend les trois
 ordres ; l'écran lit celui de la position.
 
 La vue décrit **la sortie**, pas les entrées : elle ne dit jamais combien chaque
-appartenance compte de membres (§ 12.8, le camembert). Elle complète la vue des
-collisions (§ 12.4) : celle-ci dit quelle appartenance se retrouve, la grille où
-et quand ; un doublon d'appartenance non nul est exactement une table où la vue
+organisation compte de membres (§ 12.8, le camembert). Elle complète la vue des
+collisions (§ 12.4) : celle-ci dit quelle organisation se retrouve, la grille où
+et quand ; un doublon d'organisation non nul est exactement une table où la vue
 des collisions compte au moins une collision ce tour-là.
 
 **Le jumeau** porte une ligne par table dans l'ordre de la position, et par tour
@@ -5782,8 +5782,8 @@ cède la place à son jumeau, avec la phrase qui le dit, et le sélecteur reste.
 Une case n'est pas une cible : le pointage au plus proche désigne la case sous
 le pointeur (§ 12.7), et le jumeau porte les mêmes valeurs. Sans collision, la
 grille cède la place à la phrase de la vue des collisions sous la position
-« doublons » seulement ; sans appartenance, à celle du § 12.6 sous les trois ;
-avec une seule appartenance, elle reste.
+« doublons » seulement ; sans organisation, à celle du § 12.6 sous les trois ;
+avec une seule organisation, elle reste.
 
 ### 12.12 Les objectifs des tables
 
@@ -5846,13 +5846,13 @@ la plus haute.
 
 **La diversité par animateur.** *Quel animateur voit le moins de diversité à sa
 table ?* Pour chaque animateur, **sur la soirée** — l'union de ses tours
-animés — **et à chacun de ses tours animés** : les appartenances rencontrées en
+animés — **et à chacun de ses tours animés** : les organisations rencontrées en
 animant A_f, A_{f,r} et, quand une personne présente porte une étiquette, les
 étiquettes rencontrées en animant E_f, E_{f,r} (§ 5.4). Le graphique dessine la
 soirée ; les deux grandeurs se dessinent en **deux colonnes de barres
 horizontales juxtaposées**, chacune avec son axe et sa graduation, les
 animateurs dans le même ordre d'une colonne à l'autre : ce sont de petits
-multiples, jamais deux séries empilées ni un axe commun — une appartenance et
+multiples, jamais deux séries empilées ni un axe commun — une organisation et
 une étiquette ne s'additionnent pas et ne se comparent pas. **Le moins varié en
 tête** : A_f croissant, puis E_f, puis les personnes rencontrées en animant,
 puis l'identifiant. Chaque ligne porte en encre secondaire ses tours animés et
@@ -5860,7 +5860,7 @@ ses personnes rencontrées en animant : un animateur d'un seul tour en rencontre
 moins, et la vue le montre au lieu de le corriger.
 
 **Le jumeau** porte, dans l'ordre du graphique, la ligne de la soirée de chaque
-animateur — tours animés, personnes, appartenances et étiquettes rencontrées en
+animateur — tours animés, personnes, organisations et étiquettes rencontrées en
 animant —, puis sous elle une ligne par tour animé, dans l'ordre des tours, avec
 les mêmes comptes pour ce tour seul : il détaille au-delà du graphique (§ 12.7),
 et dit lequel des tours d'un animateur a appauvri sa soirée. Le pire (animateur,
@@ -5872,7 +5872,7 @@ existe. Leurs libellés à l'écran sont « le moins varié », « le plus vari�
 « au minimum » ; le mot « équité » n'y paraît pas, réservé au libellé du mode
 « l'équité d'abord » (§ 5.3). Aucun indice ne les résume (§ 12.8).
 
-Sans appartenance, ou avec une seule, mais avec des étiquettes, la vue ne trace
+Sans organisation, ou avec une seule, mais avec des étiquettes, la vue ne trace
 que la colonne des étiquettes, triée sur E_f puis comme ci-dessus ; les autres
 cas sont au § 12.6.
 
@@ -6020,7 +6020,7 @@ des fonctions pures du module de géométrie.
 | tenir hors ligne | se compile en JavaScript ordinaire ; Vite est une dépendance de développement qui ne survit pas à la construction |
 | rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main — à une exception près : la table d'évaluation des propositions, gardée dans le modèle pur sous l'identité de la charge figée de la séance, qu'une écriture remplace ; ses propositions figées sont partagées d'un état publié au suivant |
 | se tester sans navigateur | n'impose d'écrire aucun calcul dans un composant ; le composant ne contient que le câblage |
-| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande de mode, les messages (avis, refus, information), le retrait, le plan, le graphique, le papier |
+| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les organisations, la bande de mode, les messages (avis, refus, information), le retrait, le plan, le graphique, le papier |
 
 **Les candidates écartées.** Vue 3 est le second choix défendable, écarté de peu
 sur le poids et sur la discipline qu'exige sa réactivité. React est écarté sur la
@@ -6435,7 +6435,7 @@ n'égale, octet pour octet, un fichier livré.
 | moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut, détail d'un placement pour la page de qualité, borne de diversité, points de relevé de la recherche |
 | géométrie | `node` + navigateur | conversions, ajustement, bornes de zoom, désignation d'un siège ; l'oracle du moteur de rendu au niveau 2 ; la découpe du plan en pages (§ 11.7) ; les échelles, tracés et pointage des graphiques (§ 12.9) |
 | stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), refus des formats plus anciens, état, journal et secours compris, compagnon des courses (§ 8.6), accord de la restitution incrémentale avec la chaîne des correctifs, de l'élagage en mémoire avec le texte relu, de SANS_EFFET par la différence avec le texte, des mémoires par identité avec le recalcul |
-| analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des appartenances et des étiquettes, lignes refusées, aller-retour, CSV des objectifs de table |
+| analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des organisations et des étiquettes, lignes refusées, aller-retour, CSV des objectifs de table |
 | générateur de démonstrations | `node` | vecteur du générateur pseudo-aléatoire, empreinte des fichiers livrés, refus, noms forgés |
 | PDF | `node` | couche de texte, pagination, police embarquée et table `ToUnicode`, géométrie de la planche, reproductibilité |
 | application | `node` | les commandes et leurs refus, la séance observable, les contrôles de pose et de capacité, la table d'évaluation — sur le système de fichiers simulé et l'horloge pilotée |
@@ -6467,8 +6467,8 @@ affirme les deux comptes **séparés et chacun à sa valeur** (§ 5.4).
 `0`, et refuse un minimum d'ensemble vide rendu en `Infinity` que la mise en forme
 convertit en tiret par accident plutôt que par décision.
 
-**L'appartenance d'un ancré voyage dans l'instance réduite.** Une table porte un
-ancré d'une appartenance inventée, un mobile de la même appartenance existe, la
+**L'organisation d'un ancré voyage dans l'instance réduite.** Une table porte un
+ancré d'une organisation inventée, un mobile de la même organisation existe, la
 séparation est active : le plan rendu signale la collision ou l'évite, il ne
 l'ignore pas. Il refuse la réduction qui n'annote pas les tables, laquelle assoit
 un invité à côté d'un collègue animateur aux quatre tours **sans qu'aucun
@@ -6547,9 +6547,9 @@ chacun trois tours au moins. Sous « le plus de places servies », les trois son
 égaux sur le critère ; sous « chacun au moins une fois », le premier passe
 derrière les deux autres ; sous « l'équité d'abord », le dernier passe devant
 les deux autres. Sur une soirée inventée où servir la dernière personne coûte
-une collision — des personnes « finance » d'une même appartenance, une personne
-de cette appartenance réservée à la table « finance », « séparer les
-appartenances » seule cochée, les tours hors objectif au premier palier —,
+une collision — des personnes « finance » d'une même organisation, une personne
+de cette organisation réservée à la table « finance », « séparer les
+organisations » seule cochée, les tours hors objectif au premier palier —,
 chaque mode atteint, à trois graines, le plancher que le diagnostic donne de la
 valeur qu'il compare d'abord, que la même graine laisse au-dessus sous « le plus
 de places servies ». Il refuse le mode lu sur le total seul, le plus de tours
@@ -6581,9 +6581,9 @@ le suivant, reste derrière. Il refuse le palier lu critère par critère.
 exhaustive comme le plafond : sur des configurations inventées de quelques
 personnes, chaque plan admissible mesure A(p) ≤ A_max(p) et |F(p)| ≤ Φ_aff(p)
 pour chacun, et au moins un plan atteint Φ_aff(p) pour une personne. Une seule
-appartenance partagée par tous donne A_max = 1 à toute personne qui rencontre au
+organisation partagée par tous donne A_max = 1 à toute personne qui rencontre au
 moins une personne ; puis un cas où Φ_aff(p) l'emporte, un où G l'emporte, et un
-où (N_aff − g_p) + 1 égale G — chaque autre appartenance réduite à une
+où (N_aff − g_p) + 1 égale G — chaque autre organisation réduite à une
 personne —, sans jamais descendre sous lui (§ 5.5).
 
 **Un point de relevé est le plan d'un compte d'arrêt plus court.** Pour une
@@ -6662,7 +6662,7 @@ de l'application garde qu'aucun geste sur les participants ne laisse le retenu
 en dérive par ses participants, et que « Défaire » reprend le geste et
 l'ajustement ensemble.
 
-**Le détail d'un placement ne recompte rien.** Ses doublons d'appartenance d'une
+**Le détail d'un placement ne recompte rien.** Ses doublons d'organisation d'une
 case sont non nuls exactement là où les collisions de ce tour et de cette table
 le sont ; ses servis des tours somment s(p) ; ses paires répétées ont l'effectif
 que compte `mesurer`, choisies et imposées ; ses planchers par tour sont ceux
@@ -6860,7 +6860,7 @@ compris fausse. Pris hors du code, il arbitre. Si l'algorithme retenu ne publie 
 de vecteur, le test change de nature et le dit : il devient un **témoin de
 non-régression**, pas un oracle (§ 14.11).
 
-**Le profil d'appartenances attendu est lu dans le fichier livré**, jamais écrit à
+**Le profil d'organisations attendu est lu dans le fichier livré**, jamais écrit à
 la main (§ 15.2).
 
 **Le générateur refuse quatre configurations**, chacune son test : zéro
@@ -6877,7 +6877,7 @@ comparer le plan obtenu au plan écrit (§ 15.5, point 6).
 paire distincte.** Les deux chiffres sont différents et le test les sépare : cinq
 personnes ne tiennent pas sur quatre tables sans que deux se retrouvent, donc **au
 moins une collision par tour, quatre sur les quatre tours** — mais l'indicateur
-« paires de même appartenance » compte des **paires distinctes**, et un plan qui
+« paires de même organisation » compte des **paires distinctes**, et un plan qui
 garde les deux mêmes personnes ensemble aux quatre tours n'en affiche qu'**une**.
 Affirmer « aucune proposition ne descend sous quatre » sur cet indicateur ferait
 échouer le test sur un plan légitime. Un second test tient l'autre bout : le
@@ -6996,7 +6996,7 @@ d'être appelé** ; appelé par les commandes, il refuse au moment du geste, là
 `verifier_indicateurs(mesures, plafonds_a_priori, plafonds_realises,
 complements)` éprouve les **trois** inégalités de la ligne de décomposition du
 § 12.10.5. Avec ses compléments, que seule la page de qualité lui passe, elle
-éprouve aussi le segment « reste » de chaque appartenance et de chaque tour sur
+éprouve aussi le segment « reste » de chaque organisation et de chaque tour sur
 le domaine des planchers (§ 12.4, § 12.12) et la diversité de chacun contre ses
 rencontres et sa borne (§ 5.5) ; la table d'évaluation l'appelle sans eux. Quand
 les mesures portent les objectifs des tables ou les animateurs (§ 5.4), elle
@@ -7233,7 +7233,7 @@ son vrai plan d'un clic.
 | animateurs | 33, un par table, **pris parmi les 260** |
 | mobiles | 227 |
 | tours | 4 |
-| appartenances | tirées, de 1 à 12 membres |
+| organisations | tirées, de 1 à 12 membres |
 
 **Le calcul, et pourquoi il ne tombe pas juste tout seul.** 260 ÷ 8 = 32,5 :
 aucun nombre entier de tables de 8 ne reçoit 260 personnes. 33 tables de 8
@@ -7267,7 +7267,7 @@ recherche, pas un détail.
 **99 retours imposés** (33 × 3), attribués aux réservations et non additionnés
 aux autres.
 
-**Les animateurs sont tirés sans égard à leur appartenance**, et aucun
+**Les animateurs sont tirés sans égard à leur organisation**, et aucun
 regroupement ne leur en impose une commune — sinon chaque mobile accumulerait au
 moins 3 redondances qu'aucune recherche ne réduit, et la démonstration vedette
 illustrerait une impossibilité. Un test le garde.
@@ -7296,7 +7296,7 @@ capture d'écran a besoin et que le catalogue ne porte pas se **construisent** p
 des scénarios courts (§ 19.3) ; le catalogue reste à **quatre** entrées, et
 l'étape qui lit leur nombre le lit dans le catalogue plutôt que de l'écrire.
 
-### 15.2 La distribution des appartenances
+### 15.2 La distribution des organisations
 
 Loi discrète sur 1..12, à poids fixés, décrochant après 3 :
 
@@ -7319,15 +7319,15 @@ certitude fausse.
 **La faisabilité se construit, elle ne se déduit pas d'une inégalité.** « Le plus
 gros groupe tient dans le nombre de tables » est nécessaire mais **ne suffit
 pas** : trois tables de 10, 1 et 1 ne peuvent séparer quatre groupes de 3, parce
-que la table de 10 exigerait 10 appartenances distinctes. Le logiciel vérifie
+que la table de 10 exigerait 10 organisations distinctes. Le logiciel vérifie
 **deux** inégalités — plus gros groupe ≤ nombre de tables, plus grande
 capacité − places vides ≤ nombre de groupes — puis **construit un tour
 témoin**. Les places vides sont les sièges qui restent une fois chaque membre
 assis, zéro quand la salle n'en laisse pas : une table reçoit au moins sa
-capacité moins ces places, chacun de ses occupants d'une appartenance
+capacité moins ces places, chacun de ses occupants d'une organisation
 différente. Dans une salle exactement pleine, la seconde inégalité se lit
 « plus grande capacité ≤ nombre de groupes » ; ailleurs, cette lecture
-refuserait à tort deux tables de 3 pour deux membres d'appartenances
+refuserait à tort deux tables de 3 pour deux membres d'organisations
 différentes, qu'un tour sépare. Le générateur **refuse une graine dont aucun
 tour témoin ne se construit**.
 
@@ -7339,7 +7339,7 @@ tour témoin ne se construit**.
 | tables | 4, de **3 sièges** |
 | tours | 4 |
 | réservations | **aucune** |
-| appartenances | **4, 4, 4**, fixées à la main |
+| organisations | **4, 4, 4**, fixées à la main |
 
 Elle tient sur un écran, et c'est sa raison d'être : la grande noie un défaut
 dans 33 tables, la petite le montre d'un coup d'œil.
@@ -7354,7 +7354,7 @@ par tour, nul ne peut rencontrer plus de **8** personnes sur 11.
 | 3 | 4, 8, 10 | 2, 7, 12 | 1, 6, 11 | 3, 5, 9 |
 | 4 | 5, 7, 11 | 1, 9, 10 | 3, 4, 12 | 2, 6, 8 |
 
-Appartenances : **A** = {1, 5, 8, 12}, **B** = {2, 4, 9, 11}, **C** = {3, 6, 7,
+Organisations : **A** = {1, 5, 8, 12}, **B** = {2, 4, 9, 11}, **C** = {3, 6, 7,
 10}. Chaque table réunit à chaque tour un membre de chacune. **Vérifié par
 énumération** : partition valide à chaque tour, zéro paire répétée, chacun
 visite les quatre tables, 8 rencontres pour les douze, zéro collision. Le
@@ -7363,7 +7363,7 @@ répétition **mesurés** à zéro, et la ligne secondaire « ancrés » à **«
 cette démonstration n'ayant aucune réservation, sa population d'ancrés est vide,
 et le § 5.4 exige le tiret, jamais zéro.
 
-**La variante « conflit inévitable »** ne change qu'une colonne : appartenances
+**La variante « conflit inévitable »** ne change qu'une colonne : organisations
 de tailles **5, 4, 3**. Cinq personnes ne se répartissent pas sur quatre tables
 sans que deux se retrouvent : **au moins une collision par tour, quatre collisions
 cumulées sur les quatre tours**, quel que soit l'algorithme — et **au moins une
@@ -7383,7 +7383,7 @@ plus court que la spécification puisse offrir.
 
 ### 15.4 Les cas limites, exercés plutôt que supposés
 
-- **Une seule appartenance** — la contrainte de séparation est vide de sens : le
+- **Une seule organisation** — la contrainte de séparation est vide de sens : le
   logiciel doit l'annoncer et proposer de la désactiver, non afficher 12
   conflits sans commentaire.
 - **Une seule table, un seul tour** — les indicateurs de répétition doivent
@@ -7442,7 +7442,7 @@ préfixe et d'une terminaison. Le réservoir compte **au moins 320 combinaisons*
 plus que les 260 personnes : un réservoir plus étroit forcerait des homonymes de
 famille, que l'œil lit comme des parentés sur une feuille de table.
 
-**Les appartenances** : une tête de nom d'organisation — `Ateliers`,
+**Les organisations** : une tête de nom d'organisation — `Ateliers`,
 `Coopérative`, `Verrerie` — et une racine forgée. La tête dit immédiatement
 qu'il s'agit d'une organisation. Le réservoir se dimensionne sur le **maximum
 structurel** : une loi qui peut tirer 260 groupes d'une personne exige 260
@@ -8138,24 +8138,24 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `11a-depart-derive.png` | **variante sans exception** (§ 15.1), ses propositions engendrées sous une graine écrite et un compte réduit | la section de la génération sous un départ choisi : « Départ : proposition n° X », « Repartir de zéro », les cases des tours, le tour 1 coché, et la commande « Générer depuis n° X » (§ 5.7) | le départ nommé est celui dont la ligne a reçu « Repartir d'elle », de son menu « Actions » ; aucune écriture n'a eu lieu avant le lancement |
 | `11b-propositions-derivees.png` | idem, la génération dérivée faite | les lignes des dérivées au tableau des propositions, chacune portant « Dérivée de n° X, tour 1 figé. » sous son numéro, et le départ dans le même classement (§ 5.7) | chaque dérivée garde le tour 1 de son départ case par case ; le libellé d'historique est celui du § 5.7 |
 | `11c-derivee-presence.png` | idem que `02c`, la partante et l'arrivée dites, n° 1 en dérive par ses participants | la carte du départ n° 1, tours 1 et 2 figés, qui nomme ses écarts — la partante retirée des tours 3 et 4, l'arrivée à asseoir à ces tours —, puis l'issue « … ; n° 1, en dérive, n'est pas classée » (§ 5.7) | les écarts se lisent avant le lancement, sans écriture ; chaque dérivée reprend les tours figés du départ ajusté, qui sont ceux du retenu, et décrit la soirée, comparable ; aucune comparaison n'est offerte, aucun écart au retenu n'est annoncé |
-| `12-qualite-profil.png` | **grande démonstration** | le profil en deux graphiques au même ordre de rangs : l'escalier en comptes de personnes, deux séries — rencontres en trait plein, appartenances en tirets —, le plafond réalisé en repère mixte et la borne de diversité en repère pointillé, chacun nommé sur le tracé ; dessous, les rencontres en pourcentage du plafond réalisé jusqu'à la règle à 100 %, du motif du plafond, l'axe des rangs de ce second graphique hors de l'image ; le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée ; chaque graphique a un seul axe vertical ; le rang 1 est le même dans les deux ; chaque pourcentage écrit est suivi de son compte du pire ; aucun repère n'a le motif d'une série |
+| `12-qualite-profil.png` | **grande démonstration** | le profil en deux graphiques au même ordre de rangs : l'escalier en comptes de personnes, deux séries — rencontres en trait plein, organisations en tirets —, le plafond réalisé en repère mixte et la borne de diversité en repère pointillé, chacun nommé sur le tracé ; dessous, les rencontres en pourcentage du plafond réalisé jusqu'à la règle à 100 %, du motif du plafond, l'axe des rangs de ce second graphique hors de l'image ; le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée ; chaque graphique a un seul axe vertical ; le rang 1 est le même dans les deux ; chaque pourcentage écrit est suivi de son compte du pire ; aucun repère n'a le motif d'une série |
 | `12a-qualite-sans-placement.png` | **petite démonstration, variante « conflit inévitable »**, avant sa génération | la page sans placement : la ligne de source, le diagnostic préalable et sa phrase (§ 12.6) | aucun graphique n'est dessiné ; la phrase est celle d'« aucun placement » |
-| `12b-qualite-une-table.png` | **6 personnes de trois appartenances, une table de 6, 3 tours**, construite, sa génération faite | la phrase d'une seule table à la place du profil, des collisions, de la grille et des paires ; la performance (§ 12.6) | ni profil, ni barre de collision, ni grille, ni tableau des paires n'est dessiné ; la phrase est celle d'« une seule table » |
-| `12c-qualite-un-tour.png` | **12 personnes de trois appartenances, 3 tables de 4, 1 tour**, construite, sa génération faite | la vue des tables entière, le sélecteur sur « par siège » et la grille d'une seule colonne, puis la phrase du tableau des paires ; le profil et les collisions, dessinés plus haut, sont affirmés sans l'image (§ 12.6) | aucun tableau des paires, vide ou non, n'est rendu ; la phrase est celle d'« un seul tour » |
-| `12d-qualite-une-appartenance.png` | **12 personnes d'une même appartenance, 3 tables de 4, 3 tours**, construite, sa génération faite | le profil à une seule série et sa phrase ; les collisions et la grille des tables, qui restent (§ 12.6) | le profil porte une série et aucune borne de diversité ; les barres des collisions sont dessinées |
-| `12e-qualite-sans-collision.png` | **9 personnes de neuf appartenances distinctes, 3 tables de 3, 2 tours**, construite, sa génération faite | la phrase de la vue des collisions ; la grille sous la position « par siège », qui reste (§ 12.6, § 12.11) | aucune barre de collision n'est dessinée ; le sélecteur est sur « par siège » et chaque case écrit 0 |
+| `12b-qualite-une-table.png` | **6 personnes de trois organisations, une table de 6, 3 tours**, construite, sa génération faite | la phrase d'une seule table à la place du profil, des collisions, de la grille et des paires ; la performance (§ 12.6) | ni profil, ni barre de collision, ni grille, ni tableau des paires n'est dessiné ; la phrase est celle d'« une seule table » |
+| `12c-qualite-un-tour.png` | **12 personnes de trois organisations, 3 tables de 4, 1 tour**, construite, sa génération faite | la vue des tables entière, le sélecteur sur « par siège » et la grille d'une seule colonne, puis la phrase du tableau des paires ; le profil et les collisions, dessinés plus haut, sont affirmés sans l'image (§ 12.6) | aucun tableau des paires, vide ou non, n'est rendu ; la phrase est celle d'« un seul tour » |
+| `12d-qualite-une-appartenance.png` | **12 personnes d'une même organisation, 3 tables de 4, 3 tours**, construite, sa génération faite | le profil à une seule série et sa phrase ; les collisions et la grille des tables, qui restent (§ 12.6) | le profil porte une série et aucune borne de diversité ; les barres des collisions sont dessinées |
+| `12e-qualite-sans-collision.png` | **9 personnes de neuf organisations distinctes, 3 tables de 3, 2 tours**, construite, sa génération faite | la phrase de la vue des collisions ; la grille sous la position « par siège », qui reste (§ 12.6, § 12.11) | aucune barre de collision n'est dessinée ; le sélecteur est sur « par siège » et chaque case écrit 0 |
 | `12f-qualite-reserve.png` | **petite démonstration, variante « conflit inévitable »**, sa première proposition retenue puis ajustée au plan : une personne mobile — ni ancrée ni partiellement fixée — mise en réserve au tour 2 | le premier graphique du profil, le point de la personne marqué « en réserve » ; les collisions à un seul segment et la phrase qui dit pourquoi le plancher ne s'applique pas, plus bas, sont affirmées sans l'image (§ 12.4, § 12.6) | aucun segment « prouvé inévitable » n'est dessiné ; le point de la personne porte la marque de la réserve |
 | `12g-qualite-plafond-nul.png` | **5 personnes, une table de 4 et une table de 2, 2 tours**, construite : quatre réservées à la table de 4 aux deux tours, la cinquième sans réservation, que sa génération assoit seule à la table de 2 aux deux tours | le point marqué d'un plafond réalisé nul au rang 1 du profil, son infobulle ouverte ; au second graphique, ce rang sans point (§ 12.3, § 12.6) | la cinquième, ni ancrée, ni partiellement fixée, ni en réserve, porte la marque du plafond réalisé nul ; l'infobulle écrit le plafond réalisé 0 et le pourcentage « — » ; le second graphique n'a pas de point à ce rang |
 | `12h-qualite-absence.png` | idem, la meilleure dérivée montrée | le bas de l'en-tête chiffré : la tuile de l'écart d'itinéraire maximal, « Plancher non prouvé : une personne au moins est absente à un tour. », et ses voisines (§ 12.2) | seule cette tuile le dit ; hors de l'image, les collisions gardent leur segment « prouvé inévitable », égal au plancher du diagnostic — une collision à chacun des tours de l'arrivée, son groupe y comptant une personne de plus que les tables —, et le profil marque d'un losange la partante et l'arrivée, « absente à un tour au moins » |
 | `13-qualite-collisions.png` | **petite démonstration, variante « conflit inévitable »** | les barres horizontales à deux segments, « prouvé inévitable » et « reste », en **collisions cumulées**, avec l'effectif, les paires distinctes et l'**excédent** en encre secondaire | le segment prouvé vaut **4 collisions cumulées** et égale le plancher du diagnostic, au chiffre près ; les lignes sont triées sur l'excédent (§ 12.4) |
-| `13a-qualite-tables.png` | **petite démonstration, variante « conflit inévitable »** | le sélecteur à trois positions sur « par siège », la grille tables × tours, chaque case ses sièges sans appartenance nouvelle, la pire table en première ligne (§ 12.11) | la première ligne porte le plus grand compte de la position « par siège » ; chaque case écrit le nombre que son niveau colore ; une case sans affilié écrit « — » |
+| `13a-qualite-tables.png` | **petite démonstration, variante « conflit inévitable »** | le sélecteur à trois positions sur « par siège », la grille tables × tours, chaque case ses sièges sans organisation nouvelle, la pire table en première ligne (§ 12.11) | la première ligne porte le plus grand compte de la position « par siège » ; chaque case écrit le nombre que son niveau colore ; une case sans affilié écrit « — » |
 | `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et la première commande de chaque ligne mène au premier tour où la paire se revoit |
 | `14a-fiche-rencontres.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | la rubrique « Rencontres » de la fiche d'une personne, ses premières lignes, les plus revues d'abord ; le haut de la fiche, son nom compris, hors de l'image (§ 12.5) | la ligne de la fiche égale la ligne de la personne dans le tableau des paires |
 | `15-pas-de-matrice.png` | **grande démonstration** | à 260 participants, le tableau et non la matrice, avec la phrase qui le dit | aucune matrice n'est dessinée |
 | `15a-qualite-objectifs.png` | l'événement en construction, la première proposition du classement montrée | les personnes jamais servies en tête, la soirée en texte, son pourcentage et le compte des jamais servies dessous, puis les barres des tours hors objectif, « prouvé inévitable » et « reste », chacune avec son pourcentage, ses deux comptes et ses assis sans table possible (§ 12.12) | la somme des planchers des tours égale le plancher du diagnostic ; possibles − servis de la soirée égale la colonne des tours hors objectif du tableau des propositions ; chaque ligne de tour écrit ses assis sans table possible |
 | `15b-qualite-animateurs.png` | **grande démonstration** | le profil des animateurs rencontrés avec la borne des animateurs en repère pointillé, puis le début de la diversité par animateur sur la soirée, le moins varié en tête ; ses colonnes et leurs trois nombres, plus bas, sont affirmés sans l'image (§ 12.13) | le mot « plafond » n'est pas écrit dans la vue ; la première barre porte le minimum annoncé |
 | `15c-qualite-performance.png` | **grande démonstration**, une proposition montrée, dans la séance qui l'a engendrée | la ligne de tête — mouvements évalués, durée et cadence de la génération — et les deux premiers rangs des petits multiples sur l'abscisse logarithmique ; les autres multiples et la phrase du dernier changement, plus bas, sont affirmés sans l'image (§ 12.14) | le dernier point de relevé est le plan de la proposition ; ses valeurs égalent la ligne du tableau des propositions ; la durée écrite est celle dont le parcours a avancé l'horloge |
-| `16-minimum-atteint.png` | **petite démonstration** | le bas de l'en-tête chiffré : la diversité d'appartenance, le manque à zéro et **« minimum atteint »** ; les compteurs de collision et de répétition **mesurés** à zéro et la ligne secondaire « ancrés » à **« — »**, plus haut, sont affirmés sans l'image (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
+| `16-minimum-atteint.png` | **petite démonstration** | le bas de l'en-tête chiffré : la diversité d'organisation, le manque à zéro et **« minimum atteint »** ; les compteurs de collision et de répétition **mesurés** à zéro et la ligne secondaire « ancrés » à **« — »**, plus haut, sont affirmés sans l'image (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
 | `17-comparaison-manque.png` | **variante sans exception** (§ 15.1), une paire de placements écrite dans le scénario | la vue de comparaison : « Tous les indicateurs » replié, les deux profils de manque superposés qui se croisent, l'axe commun, le zéro libellé, la synthèse du tracé, les trois effectifs de rangs (§ 12.10.6) ; la question, la ligne qui nomme les deux placements et leurs colonnes, plus haut, sont affirmées sans l'image, et `17a` les montre | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe ; chaque pourcentage d'une colonne est suivi de son compte du pire ; aucun pourcentage hors des colonnes — ni au tracé, ni à sa synthèse, ni dans les phrases ; le signe change au moins une fois |
 | `17a-comparaison-colonnes.png` | idem, la même paire | la même vue, cadrée sur ses colonnes : la ligne qui nomme les deux placements, leurs chiffres en deux colonnes côte à côte — le minimum brut de chacune en pourcentage, le compte du pire dessous —, « Tous les indicateurs » replié | chaque colonne porte un pourcentage par indicateur visible qui en a un, le pire cas de son placement, chacun suivi de son compte du pire |
 | `18-comparaison-escalier.png` | idem | l'escalier du manque ouvert, jumeau tabulaire de la vue précédente, une colonne d'effectif et une d'effectif cumulé par placement | les effectifs cumulés du tableau reproduisent la courbe ; l'escalier n'écrit aucun pourcentage |
@@ -8256,8 +8256,8 @@ forme.**
 - **Les paires répétées ne sont pas garanties sur la grande démonstration** — le
   § 12.5 donne le dénombrement. Le tableau se photographie sur une configuration où
   la répétition est forcée.
-- **Les collisions d'appartenance ne sont pas garanties non plus sur la grande** :
-  sa plus grosse appartenance compte 12 membres pour 33 tables. La variante
+- **Les collisions d'organisation ne sont pas garanties non plus sur la grande** :
+  sa plus grosse organisation compte 12 membres pour 33 tables. La variante
   « conflit inévitable » les force.
 
 **Les configurations qu'aucun catalogue ne porte sont construites, pas
@@ -8271,7 +8271,7 @@ d'une configuration de plus.
 **Les cas dégénérés du § 12.6 se photographient à part**, par des scénarios
 courts qui montent la configuration visée et vont droit à l'écran : aucun
 placement (`12a`), une seule table (`12b`), un seul tour (`12c`), une seule
-appartenance (`12d`), aucune collision (`12e`), une personne en réserve (`12f`),
+organisation (`12d`), aucune collision (`12e`), une personne en réserve (`12f`),
 un plafond réalisé nul (`12g`). Chacune affirme qu'aucun axe vide n'est dessiné
 et que la phrase est celle du cas. Les autres cas du § 12.6 s'éprouvent sans
 image. La raison n'est pas la fragilité d'une chaîne longue : **chacun exige une
@@ -8537,7 +8537,7 @@ questions et s'arrête.
    « prouvé inévitable » (§ 12.4), ni rendre une table qui n'existe pas. Le
    diagnostic (§ 5.6) dit **avant** la recherche ce qui est hors d'atteinte et quel
    changement de configuration le lèverait — une table de plus, un tour de moins,
-   une appartenance redistribuée.
+   une organisation redistribuée.
 8. **Comment comparer deux propositions** : par le **manque**, et pourquoi les
    nombres bruts ne se comparent pas dès qu'une table est incomplète (§ 12.10.1).
    La section explique les trois chiffres de l'en-tête et, surtout, pourquoi un
@@ -8564,7 +8564,7 @@ propositions en donnant les chiffres ; une dérivée s'y lit sur `11b`, qui mont
 qu'elle entre au même classement que son départ. Le point 3 s'appuie en outre
 sur `15c` : la course d'une recherche, et son plateau. Le contraste de la
 variante « conflit inévitable » (§ 15.3) — une personne déplacée d'une
-appartenance à l'autre, et la mention bascule — est le plus court exposé de
+organisation à l'autre, et la mention bascule — est le plus court exposé de
 toute la section, et il tient en deux images.
 
 ### 19.10 Le banc de mesure

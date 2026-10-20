@@ -39,12 +39,12 @@ const csv = (...lignes) => lignes.map((ligne) => `${ligne}\r\n`).join('');
 
 // Participant, ses champs omis vides et non exclu.
 const personne = (id, nom, autres = {}) => ({
-  id, nom, prenom: null, appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false, ...autres,
+  id, nom, prenom: null, organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false, ...autres,
 });
 
 // Champs d'un participant, dans l'ordre du fichier d'état.
 const CHAMPS_DU_PARTICIPANT = [
-  'id', 'nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes', 'exclu', 'etiquettes', 'presence',
+  'id', 'nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu', 'etiquettes', 'presence',
 ];
 
 // Participants qu'un import crée, en ajoutant, sur une charge neuve de tours
@@ -74,7 +74,7 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
   test("marque UTF-8, « ; », CRLF, les neuf en-têtes de l'import dans leur ordre, un participant par ligne", () => {
     const octets = exporterParticipants([
       personne(1, 'Ombrelle', {
-        prenom: 'Iris', appartenance: 'Club des Merles', courriel: 'iris@exemple.test', titrePressenti: 'animation',
+        prenom: 'Iris', organisation: 'Club des Merles', courriel: 'iris@exemple.test', titrePressenti: 'animation',
       }),
       personne(2, 'Pervenche', { prenom: 'Théo', notes: 'arrive tard', exclu: true }),
     ]);
@@ -84,7 +84,7 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
       texteDe(octets),
       MARQUE +
         csv(
-          'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes;presence',
+          'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence',
           'Ombrelle;Iris;Club des Merles;iris@exemple.test;animation;non;;;',
           'Pervenche;Théo;;;;oui;arrive tard;;',
         ),
@@ -93,7 +93,7 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
 
   test("les en-têtes sont les champs de l'import, CHAMPS, et le séparateur « ; »", () => {
     assert.equal(SEPARATEUR, ';');
-    assert.equal(CHAMPS.join(';'), 'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes;presence');
+    assert.equal(CHAMPS.join(';'), 'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence');
     assert.equal(texteDe(exporterParticipants([])), `${MARQUE}${CHAMPS.join(SEPARATEUR)}\r\n`);
   });
 
@@ -106,7 +106,7 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
 
   test('un champ qui porte « ; », un guillemet ou une fin de ligne s\'écrit cité, ses guillemets doublés', () => {
     const octets = exporterParticipants([
-      personne(1, 'Ombrelle', { appartenance: 'Club "Les Merles" ; nord', notes: 'premier\r\nsecond' }),
+      personne(1, 'Ombrelle', { organisation: 'Club "Les Merles" ; nord', notes: 'premier\r\nsecond' }),
       personne(2, '"Pervenche"', { courriel: 'theo\r@exemple.test', notes: 'a\nb' }),
       personne(3, 'Sarcelle', { notes: 'virgule, tabulation\tseules' }),
     ]);
@@ -218,12 +218,12 @@ describe("exporterParticipants : l'aller-retour, champ par champ (§ 10.2)", () 
   test('une liste aux valeurs difficiles : guillemets, séparateurs, fins de ligne, formules, accents, exclusions', () => {
     const difficiles = [
       personne(1, 'Ombrelle', {
-        prenom: 'Iris', appartenance: 'Club "Les Merles" ; nord', courriel: 'iris@exemple.test',
+        prenom: 'Iris', organisation: 'Club "Les Merles" ; nord', courriel: 'iris@exemple.test',
         titrePressenti: 'animation', notes: 'premier\r\nsecond', exclu: true,
       }),
       personne(2, '"Pervenche"', { prenom: 'Théo', notes: 'virgule, tabulation\tet ; point-virgule' }),
-      personne(3, '=SOMME(A1:A3)', { prenom: '+33', appartenance: '-moins', courriel: '@arobase' }),
-      personne(4, 'Sarcelle', { prenom: 'Ondine', appartenance: 'Chœur de l\u{2019}Anse', notes: 'saut\nseul\rretour seul' }),
+      personne(3, '=SOMME(A1:A3)', { prenom: '+33', organisation: '-moins', courriel: '@arobase' }),
+      personne(4, 'Sarcelle', { prenom: 'Ondine', organisation: 'Chœur de l\u{2019}Anse', notes: 'saut\nseul\rretour seul' }),
       personne(5, 'Bruyère', { titrePressenti: 'fin"', notes: '"' }),
       personne(6, 'Lacasse', { etiquettes: ['=SOMME(A1)', 'Montréal', 'finance', 'ressources humaines', 'é'] }),
       personne(7, 'Pervenche', { etiquettes: Array.from({ length: 20 }, (_, i) => `m${String(i).padStart(2, '0')}`) }),
@@ -295,7 +295,7 @@ describe("ecrireCsv : l'écriture d'un CSV, qu'une découpe relit telle quelle",
 describe("modeleParticipants : le modèle à télécharger, dans la forme de l'export (§ 10.1)", () => {
   // Le modèle sous quatre tours : la plage « 1-3 », la liste « 2, 3 ».
   const ATTENDU = csv(
-    'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes;presence',
+    'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence',
     'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal;',
     'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines;2, 3',
     'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;;',
@@ -350,15 +350,15 @@ describe("modeleParticipants : le modèle à télécharger, dans la forme de l'e
   test("importé tel quel : aucun refus, les quatre personnes, champ par champ", () => {
     memesParticipants(importer(modeleParticipants({ tours: 4 }), 'modèle'), [
       personne(1, 'Ombrelle', {
-        prenom: 'Iris', appartenance: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
+        prenom: 'Iris', organisation: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
         etiquettes: ['Montréal', 'finance'],
       }),
       personne(2, 'Pervenche', {
-        prenom: 'Théo', appartenance: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],
+        prenom: 'Théo', organisation: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],
         presence: [2, 3],
       }),
       personne(3, 'Lacasse', {
-        prenom: 'Ondine', appartenance: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé',
+        prenom: 'Ondine', organisation: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé',
         exclu: true,
       }),
       personne(4, 'Tourteau', { prenom: 'Basile', etiquettes: ['bénévole'], presence: [1, 2, 3] }),

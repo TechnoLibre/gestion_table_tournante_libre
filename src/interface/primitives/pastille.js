@@ -11,17 +11,17 @@
 // fond où le signe se pose.
 //
 //   sorte 'etat'          valeur : un état du plan (§ 9), son icône propre ;
-//   sorte 'appartenance'  valeur : un rang de 1 à RANGS_APPARTENANCE, ou null
-//                         pour une appartenance au-delà, neutre ; un point ;
+//   sorte 'organisation'  valeur : un rang de 1 à RANGS_ORGANISATION, ou null
+//                         pour une organisation au-delà, neutre ; un point ;
 //   sorte 'statut'        valeur : un ton, sans signe par défaut.
 //
 // Une icône donnée remplace le signe par défaut.
 
-import { RANGS_APPARTENANCE } from '../appartenances.js';
+import { RANGS_ORGANISATION } from '../organisations.js';
 import { NOMS_ICONES } from './icones.js';
 
 /** Les sortes de pastille. */
-export const SORTES_PASTILLE = Object.freeze(['etat', 'appartenance', 'statut']);
+export const SORTES_PASTILLE = Object.freeze(['etat', 'organisation', 'statut']);
 
 /** Les états du plan, dans l'ordre du § 9, et l'icône de chacun. */
 const ICONES_ETAT = new Map([
@@ -48,7 +48,7 @@ const nommer = (valeur) => JSON.stringify(valeur) ?? String(valeur);
 /**
  * Le modèle d'une pastille.
  *
- * @param {'etat'|'appartenance'|'statut'} sorte
+ * @param {'etat'|'organisation'|'statut'} sorte
  * @param {string|number|null} valeur  selon la sorte : un état, un rang ou
  *        null, un ton
  * @param {string|null} [icone]  une icône de NOMS_ICONES, qui remplace le
@@ -64,10 +64,10 @@ export function modelePastille(sorte, valeur, icone = null) {
   if (sorte === 'etat') {
     if (!ICONES_ETAT.has(valeur)) throw new RangeError(`pastille : état inconnu ${nommer(valeur)}`);
     defaut = { teinte: `etat-${valeur}`, icone: ICONES_ETAT.get(valeur), point: false };
-  } else if (sorte === 'appartenance') {
-    const rang = valeur === null || (Number.isInteger(valeur) && valeur >= 1 && valeur <= RANGS_APPARTENANCE);
-    if (!rang) throw new RangeError(`pastille : rang d'appartenance hors de 1 à ${RANGS_APPARTENANCE}, ou null : ${nommer(valeur)}`);
-    defaut = { teinte: valeur === null ? 'neutre' : `appartenance-${valeur}`, icone: null, point: true };
+  } else if (sorte === 'organisation') {
+    const rang = valeur === null || (Number.isInteger(valeur) && valeur >= 1 && valeur <= RANGS_ORGANISATION);
+    if (!rang) throw new RangeError(`pastille : rang d'organisation hors de 1 à ${RANGS_ORGANISATION}, ou null : ${nommer(valeur)}`);
+    defaut = { teinte: valeur === null ? 'neutre' : `organisation-${valeur}`, icone: null, point: true };
   } else if (sorte === 'statut') {
     if (!TEINTES_TON.has(valeur)) throw new RangeError(`pastille : ton inconnu ${nommer(valeur)}`);
     defaut = { teinte: TEINTES_TON.get(valeur), icone: null, point: false };

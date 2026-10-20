@@ -5,7 +5,7 @@
 // (§ 11.7) : titres, en-têtes de bloc de tours, têtes de colonnes,
 // places. Chaque clé commence par « feuilles. ». Un numéro de table, de
 // siège ou de tour entre dans le texte ; une donnée de la charge — nom,
-// prénom, appartenance, libellé d'un titre — n'entre dans aucun : la vue la
+// prénom, organisation, libellé d'un titre — n'entre dans aucun : la vue la
 // pose dans son propre nœud.
 export const TABLE = new Map([
   // --- Les têtes de colonnes communes ----------------------------------------
@@ -15,7 +15,7 @@ export const TABLE = new Map([
   ['feuilles.accueil.titre', "Liste d'accueil"],
   ['feuilles.accueil.nom', 'Nom'],
   ['feuilles.accueil.prenom', 'Prénom'],
-  ['feuilles.accueil.appartenance', 'Appartenance'],
+  ['feuilles.accueil.organisation', 'Organisation'],
   ['feuilles.accueil.table', ({ table }) => `Table ${table}`],
   ['feuilles.accueil.tableSiege', ({ table, siege }) => `Table ${table}, siège ${siege}`],
   ['feuilles.accueil.reserve', 'Réserve'],

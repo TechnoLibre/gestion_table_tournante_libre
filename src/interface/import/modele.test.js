@@ -6,7 +6,7 @@
 // celle du remède de chaque refus global, l'encodage et le séparateur
 // nommés, les titres que « Remplacer » annonce, comptés par la règle unique
 // des titres pourvus, la nature du fichier reçue et jamais devinée, les
-// objectifs de table et les étiquettes fondues, à part des appartenances ;
+// objectifs de table et les étiquettes fondues, à part des organisations ;
 // la cellule de la présence, lue sous le nombre de tours de l'événement ;
 // le modèle à télécharger de chaque nature, son nom et son nom accessible.
 // Les noms d'épreuve sont inventés.
@@ -72,7 +72,7 @@ const utf8 = (texte) => new TextEncoder().encode(texte);
 const MARQUE_UTF8 = [0xef, 0xbb, 0xbf];
 
 describe('avecEntetesDeLaGrille : un collage sans en-tête lu dans l’ordre de la grille (§ 10.2)', () => {
-  test('trois colonnes à tabulations, sans en-tête : AUCUN_ENTETE, puis nom, prénom et appartenance, les rangs comptant la ligne ajoutée', () => {
+  test('trois colonnes à tabulations, sans en-tête : AUCUN_ENTETE, puis nom, prénom et organisation, les rangs comptant la ligne ajoutée', () => {
     const texte = lignes(
       ['Ombrelle', 'Iris', 'Club des Merles'].join(TAB),
       ['Pervenche', 'Théo', 'Grisaille'].join(TAB),
@@ -80,13 +80,13 @@ describe('avecEntetesDeLaGrille : un collage sans en-tête lu dans l’ordre de 
     const sans = apercevoir(texte);
     assert.equal(sans.refusGlobal, 'AUCUN_ENTETE');
     const avec = avecEntetesDeLaGrille(texte, sans);
-    assert.equal(avec, `${['nom', 'prenom', 'appartenance'].join(TAB)}\n${texte}`);
+    assert.equal(avec, `${['nom', 'prenom', 'organisation'].join(TAB)}\n${texte}`);
     const lu = apercevoir(avec);
     assert.equal(lu.refusGlobal, null);
-    assert.deepEqual(lu.association.colonnes, { nom: 0, prenom: 1, appartenance: 2 });
+    assert.deepEqual(lu.association.colonnes, { nom: 0, prenom: 1, organisation: 2 });
     assert.equal(lu.lignes.length, 2);
     assert.deepEqual(lu.lignes.map(({ ligne }) => ligne), [2, 3]);
-    assert.deepEqual(lu.lignes[0].champs.appartenance, 'Club des Merles');
+    assert.deepEqual(lu.lignes[0].champs.organisation, 'Club des Merles');
   });
 
   test('deux colonnes : nom et prénom', () => {
@@ -282,11 +282,11 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
       ],
     );
     assert.deepEqual(ambigu.ambigus, [
-      { champ: 'appartenance', cle: 'import.champ.appartenance', rangs: [{ rang: 1, entete: 'Organisation' }, { rang: 2, entete: 'Entreprise' }] },
+      { champ: 'organisation', cle: 'import.champ.organisation', rangs: [{ rang: 1, entete: 'Organisation' }, { rang: 2, entete: 'Entreprise' }] },
     ]);
-    const tranche = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte, { choix: { appartenance: 2 } }) });
+    const tranche = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte, { choix: { organisation: 2 } }) });
     assert.deepEqual(tranche.colonnes.map(({ cle }) => cle), [
-      'import.champ.nom', 'import.colonne.ecartee', 'import.champ.appartenance', 'import.colonne.nonReconnue',
+      'import.champ.nom', 'import.colonne.ecartee', 'import.champ.organisation', 'import.colonne.nonReconnue',
     ]);
     assert.deepEqual(tranche.ambigus, []);
     for (const { cle } of [...ambigu.colonnes, ...tranche.colonnes]) assert.ok(t(cle).length > 0, cle);
@@ -303,9 +303,9 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
   });
 
   test('lignes refusées, fusions et doublons, en données ; le motif affiché est celui de t', () => {
-    const existants = [{ id: 4, nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Coopérative Bleue' }];
+    const existants = [{ id: 4, nom: 'Ombrelle', prenom: 'Iris', organisation: 'Coopérative Bleue' }];
     const texte = lignes(
-      'nom;prenom;appartenance;exclu',
+      'nom;prenom;organisation;exclu',
       'Ombrelle;Iris;cooperative  bleue;',
       ';Théo;Grisaille;',
       'Pervenche;Théo;COOPÉRATIVE BLEUE;peut-être',
@@ -409,7 +409,7 @@ function chargeAuxTitres({ attribuerSieges }) {
   const charge = creerCharge({ id: 'epreuve', nom: 'Soirée des Merles', siegesParDefaut: 6, tours: 2 });
   charge.reglages.attribuerSieges = attribuerSieges;
   charge.participants = ['Ombrelle', 'Pervenche', 'Lacasse'].map((nom, rang) => ({
-    id: rang + 1, nom, prenom: null, appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false,
+    id: rang + 1, nom, prenom: null, organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false,
   }));
   charge.tables = [{ id: 1, numero: 1, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } }];
   charge.titres = [1, 2, 3].map((siege) => ({ table: 1, siege, libelle: `Animation ${siege}` }));
@@ -451,7 +451,7 @@ describe('messageDuBloc : chaque message de l’aperçu et du rapport classé en
     }
   });
 
-  test('les informations : les orthographes fondues, d’appartenance ou d’étiquette, un import qui n’a rien écrit', () => {
+  test('les informations : les orthographes fondues, d’organisation ou d’étiquette, un import qui n’a rien écrit', () => {
     for (const bloc of ['fusions', 'fusionsEtiquettes', 'rienEcrit']) {
       assert.deepEqual(messageDuBloc(bloc), { sorte: 'information', cle: 'import.sorte.information', icone: 'information' }, bloc);
     }
@@ -488,7 +488,7 @@ function chargeDesObjectifs({ participants = [], tables = null } = {}) {
 
 // Une personne d'épreuve, ses étiquettes données.
 const porteuse = (id, nom, etiquettes) => ({
-  id, nom, prenom: null, appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false, etiquettes,
+  id, nom, prenom: null, organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false, etiquettes,
 });
 
 // Le CSV des objectifs qui refuse une ligne pour chaque motif du § 10.4,
@@ -663,7 +663,7 @@ describe('modeleApercu des objectifs de table (§ 10.4)', () => {
     assert.match(parCode.get('ETIQUETTES_TROP_NOMBREUSES'), /21/);
   });
 
-  test('les étiquettes fondues : un bloc à part, en information, jamais mêlé aux appartenances ; l’orthographe d’une personne de l’événement retenue', () => {
+  test('les étiquettes fondues : un bloc à part, en information, jamais mêlé aux organisations ; l’orthographe d’une personne de l’événement retenue', () => {
     const charge = chargeDesObjectifs({ participants: [porteuse(1, 'Ombrelle', ['Finance'])] });
     const modele = modeleApercu({ nature: 'objectifs', encodage: 'utf-8', apercu: apercevoirObjectifs(TEXTE_DES_MOTIFS, charge) });
     assert.deepEqual(modele.fusions, []);
@@ -671,10 +671,10 @@ describe('modeleApercu des objectifs de table (§ 10.4)', () => {
     assert.deepEqual(modele.lignes.find(({ ligne }) => ligne === 2).cellules[2].etiquettes, ['Finance']);
   });
 
-  test('participants : appartenances et étiquettes fondues, chacune dans son bloc', () => {
-    const existants = [{ ...porteuse(4, 'Ombrelle', ['bénévole']), prenom: 'Iris', appartenance: 'Coopérative Bleue' }];
+  test('participants : organisations et étiquettes fondues, chacune dans son bloc', () => {
+    const existants = [{ ...porteuse(4, 'Ombrelle', ['bénévole']), prenom: 'Iris', organisation: 'Coopérative Bleue' }];
     const texte = lignes(
-      'nom;prenom;appartenance;etiquettes',
+      'nom;prenom;organisation;etiquettes',
       'Pervenche;Théo;cooperative  bleue;Bénévole|finance',
       'Lacasse;Ondine;Grisaille;FINANCE',
     );
@@ -829,8 +829,8 @@ describe('la cellule de la présence (§ 10.1)', () => {
   test('en mise à jour, la cellule vide d’une personne existante se lit « présence inchangée » ; celle d’une ligne que l’import crée, rien', () => {
     // Ombrelle et Pervenche existent ; Sarcelle et une Ombrelle neuve non.
     const existants = [
-      { id: 1, nom: 'Ombrelle', prenom: null, appartenance: null },
-      { id: 2, nom: 'Pervenche', prenom: null, appartenance: null },
+      { id: 1, nom: 'Ombrelle', prenom: null, organisation: null },
+      { id: 2, nom: 'Pervenche', prenom: null, organisation: null },
     ];
     const misAJour = lignes('nom;prénom;présence', 'Ombrelle;;', 'Pervenche;;tous', 'Sarcelle;;', 'Lacasse;;2-4');
     const modele = modeleApercu({

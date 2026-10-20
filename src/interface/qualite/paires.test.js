@@ -34,7 +34,7 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
 const V1 = VERSION.affichee;
 
-// Douze personnes inventées, deux appartenances, la dernière sans ; les deux
+// Douze personnes inventées, deux organisations, la dernière sans ; les deux
 // premières réservées ensemble à la table 1 à chaque tour : leur paire est
 // imposée.
 const NOMS = [
@@ -57,11 +57,11 @@ const NOMS = [
 // chacun (§ 12.5).
 function chargeDouze() {
   const charge = creerCharge({ id: 'evt-paires', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 6 });
-  charge.participants = NOMS.map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = NOMS.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -139,16 +139,16 @@ describe('les lignes du tableau des paires (§ 12.5, D32)', () => {
     assert.equal(imposees[0].repetition, 2);
   });
 
-  test('chaque personne porte son nom affiché et son appartenance ; un homonyme se signale, pas les autres', () => {
+  test('chaque personne porte son nom affiché et son organisation ; un homonyme se signale, pas les autres', () => {
     const { a, b } = imposees[0];
-    assert.deepEqual(a, { id: 1, nom: 'Iris Ombrelle', appartenance: 'Coopérative Aubier', homonyme: false });
-    assert.deepEqual(b, { id: 2, nom: 'Théo Pervenche', appartenance: 'Coopérative Aubier', homonyme: false });
+    assert.deepEqual(a, { id: 1, nom: 'Iris Ombrelle', organisation: 'Coopérative Aubier', homonyme: false });
+    assert.deepEqual(b, { id: 2, nom: 'Théo Pervenche', organisation: 'Coopérative Aubier', homonyme: false });
     const forge = {
       ...DETAIL,
       personnes: [
-        { id: 1, nom: 'Iris Ombrelle', appartenance: 'Coopérative Aubier', statut: 'mobile' },
-        { id: 2, nom: 'Iris Ombrelle', appartenance: 'Atelier Ressac', statut: 'mobile' },
-        { id: 3, nom: 'Ondine Lacasse', appartenance: null, statut: 'mobile' },
+        { id: 1, nom: 'Iris Ombrelle', organisation: 'Coopérative Aubier', statut: 'mobile' },
+        { id: 2, nom: 'Iris Ombrelle', organisation: 'Atelier Ressac', statut: 'mobile' },
+        { id: 3, nom: 'Ondine Lacasse', organisation: null, statut: 'mobile' },
       ],
       idsTables: [1],
       numerosTables: [7],
@@ -341,7 +341,7 @@ describe('la rubrique « Rencontres » de la fiche (§ 12.5, B14, D33)', () => {
     const { lignes } = rubriqueRencontres(CHARGE, PREMIERE, 1);
     assert.deepEqual(lignes[0].id, 2);
     assert.equal(lignes[0].nom, 'Théo Pervenche');
-    assert.deepEqual([lignes[0].appartenance, lignes[0].homonyme], ['Coopérative Aubier', false]);
+    assert.deepEqual([lignes[0].organisation, lignes[0].homonyme], ['Coopérative Aubier', false]);
     assert.equal(lignes[0].fois, 6);
     assert.deepEqual(lignes[0].tours, [1, 2, 3, 4, 5, 6].map((tour) => ({ tour, table: 11 })));
     for (let k = 1; k < lignes.length; k += 1) assert.ok(lignes[k - 1].fois >= lignes[k].fois);
@@ -364,9 +364,9 @@ describe('la rubrique « Rencontres » de la fiche (§ 12.5, B14, D33)', () => {
     assert.deepEqual(rubriqueRencontres(chargeDouze(), null, 3), { statut: 'sansPlacement', source: null, lignes: [] });
   });
 
-  test('deux homonymes rencontrés : chaque ligne porte son identifiant, son appartenance et le signe homonyme, comme au tableau des paires', () => {
+  test('deux homonymes rencontrés : chaque ligne porte son identifiant, son organisation et le signe homonyme, comme au tableau des paires', () => {
     // La personne 2, réservée avec la personne 1, prend son nom : qui
-    // rencontre l'une rencontre l'autre. La 12, sans appartenance.
+    // rencontre l'une rencontre l'autre. La 12, sans organisation.
     const charge = structuredClone(CHARGE);
     Object.assign(charge.participants[1], { nom: 'Ombrelle', prenom: 'Iris' });
     const lignesDe = (personne) => rubriqueRencontres(charge, PREMIERE, personne).lignes;
@@ -376,12 +376,12 @@ describe('la rubrique « Rencontres » de la fiche (§ 12.5, B14, D33)', () => {
     const de = (id) => lignes.find((ligne) => ligne.id === id);
     assert.deepEqual(
       [1, 2].map((id) => {
-        const { nom, appartenance, homonyme } = de(id);
-        return { id, nom, appartenance, homonyme };
+        const { nom, organisation, homonyme } = de(id);
+        return { id, nom, organisation, homonyme };
       }),
       [
-        { id: 1, nom: 'Iris Ombrelle', appartenance: 'Coopérative Aubier', homonyme: true },
-        { id: 2, nom: 'Iris Ombrelle', appartenance: 'Coopérative Aubier', homonyme: true },
+        { id: 1, nom: 'Iris Ombrelle', organisation: 'Coopérative Aubier', homonyme: true },
+        { id: 2, nom: 'Iris Ombrelle', organisation: 'Coopérative Aubier', homonyme: true },
       ],
     );
     for (const ligne of lignes.filter(({ id }) => id > 2)) assert.equal(ligne.homonyme, false, `personne ${ligne.id}`);
@@ -389,9 +389,9 @@ describe('la rubrique « Rencontres » de la fiche (§ 12.5, B14, D33)', () => {
     const detail = detaillerQualite(charge, PREMIERE);
     const paire = lignesDesPaires(detail).imposees[0];
     assert.deepEqual([paire.a.homonyme, paire.b.homonyme], [true, true]);
-    // Une personne sans appartenance n'en porte aucune.
+    // Une personne sans organisation n'en porte aucune.
     const rencontreLa12 = [3, 4, 5, 6, 7, 8, 9, 10, 11].find((personne) => lignesDe(personne).some(({ id }) => id === 12));
-    assert.equal(lignesDe(rencontreLa12).find(({ id }) => id === 12).appartenance, null);
+    assert.equal(lignesDe(rencontreLa12).find(({ id }) => id === 12).organisation, null);
   });
 
   test('une personne exclue, une source qui ne se mesure pas : le statut le dit, sans ligne', () => {

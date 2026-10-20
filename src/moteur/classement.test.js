@@ -30,7 +30,7 @@ const SANS_A_PRIORI = ['excedentCollisions', 'collisionsCumulees', 'rencontresRe
 // Ce que classer rend, ses critères appliqués lus en noms.
 const lu = ({ ordre, criteresAppliques, critereSaute }) => ({ ordre, criteres: aplatir(criteresAppliques), critereSaute });
 
-const QUATRE_CASES = { separerAppartenances: true, nouveauxVoisins: true, nouvelleTable: true, varierAppartenances: true };
+const QUATRE_CASES = { separerOrganisations: true, nouveauxVoisins: true, nouvelleTable: true, varierOrganisations: true };
 
 // Une entrée de palier.
 const e = (critere, poids = 1) => ({ critere, poids });
@@ -410,10 +410,10 @@ describe('classer : un palier pondéré classe par sa somme (A11, A21)', () => {
 });
 
 describe('classer : les cases et les critères qui ne comptent pas (§ 5.3, D10, Q4)', () => {
-  test('un critère décoché ne classe pas : séparer les appartenances décochée, l’excédent ne départage plus', () => {
+  test('un critère décoché ne classe pas : séparer les organisations décochée, l’excédent ne départage plus', () => {
     const entrees = [proposition(1, { collisions: [2, 1, 1] }), proposition(2, { repetees: 1 })];
     assert.deepEqual(classer(entrees).ordre, [2, 1]);
-    const contraintes = { ...QUATRE_CASES, separerAppartenances: false };
+    const contraintes = { ...QUATRE_CASES, separerOrganisations: false };
     const classement = classer(entrees, compilationSous(PAR_DEFAUT, { contraintes }));
     assert.deepEqual(lu(classement), {
       ordre: [1, 2],
@@ -457,7 +457,7 @@ describe('classer : les cases et les critères qui ne comptent pas (§ 5.3, D10,
   });
 
   test('les quatre cases décochées, sans objectif : le palier sauté était le seul, aucun ne prend sa place', () => {
-    const contraintes = { separerAppartenances: false, nouveauxVoisins: false, nouvelleTable: false, varierAppartenances: false };
+    const contraintes = { separerOrganisations: false, nouveauxVoisins: false, nouvelleTable: false, varierOrganisations: false };
     const entrees = [inconnu(proposition(2)), inconnu(proposition(1, { repetees: 3 }))];
     const classement = classer(entrees, compilationSous(PAR_DEFAUT, { contraintes }));
     assert.deepEqual(classement.criteresAppliques, []);
@@ -501,11 +501,11 @@ describe('classer : un critère à deux valeurs, seul à son palier, compare la 
 // priori, inconnu, fait sauter l'écart.
 function soireeFinance(mode) {
   return normaliser({
-    participants: Array.from({ length: 10 }, (_, rang) => ({ id: rang + 1, appartenance: null, etiquettes: ['finance'] })),
+    participants: Array.from({ length: 10 }, (_, rang) => ({ id: rang + 1, organisation: null, etiquettes: ['finance'] })),
     tables: [{ id: 1, capacite: 8 }, { id: 2, capacite: 2 }],
     tours: 4,
     reservations: [],
-    contraintes: { separerAppartenances: false, nouveauxVoisins: false, nouvelleTable: false, varierAppartenances: false },
+    contraintes: { separerOrganisations: false, nouveauxVoisins: false, nouvelleTable: false, varierOrganisations: false },
     objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }],
     ...(mode === 'places' ? {} : { modeObjectifs: mode }),
   });

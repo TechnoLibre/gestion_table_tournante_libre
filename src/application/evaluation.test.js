@@ -123,10 +123,10 @@ function nombres(valeur, trouves = []) {
 }
 
 // Les plans écrits à la main sur la petite démonstration au conflit
-// inévitable — appartenances de tailles 5, 4 et 3 —, nommés par leurs
+// inévitable — organisations de tailles 5, 4 et 3 —, nommés par leurs
 // collisions (cumulées, distinctes). Les trois premiers ont le même plus
 // grand écart au plafond a priori, 3 ; le quatrième garde ensemble, aux
-// quatre tours, les personnes 1, 2 et 3, d'appartenances distinctes, et ses
+// quatre tours, les personnes 1, 2 et 3, d'organisations distinctes, et ses
 // quatre collisions tombent sur quatre paires.
 const PLANS_CONFLIT = [
   {
@@ -263,7 +263,7 @@ describe('évaluation : les formes closes ne corrigent rien (§ 5.4)', () => {
   test("un retenu qui laisse une personne en réserve à trois tours mesure moins de collisions que le plancher, et la table porte la mesure", () => {
     const charge = structuredClone(chargeDemo('petite-conflit'));
     // Le plan parfait de la petite démonstration, la personne 10 en réserve
-    // aux tours 2 à 4 : elle seule fait deux membres d'une même appartenance
+    // aux tours 2 à 4 : elle seule fait deux membres d'une même organisation
     // à une table, au premier tour.
     const tours = [
       [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]],
@@ -307,7 +307,7 @@ describe('évaluation : les populations différentes (§ 9, § 12.6)', () => {
   test('une exclusion et un ajout, à effectif égal, mettent en dérive ; une table ajoutée aussi, TABLE_AJOUTEE', () => {
     let charge = generee(chargeDemo('petite'), { graine: 1, nombre: 1, arret: 200 });
     charge = executer(charge, 'exclureParticipant', { id: 4 });
-    charge = executer(charge, 'ajouterParticipant', { champs: { nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles' } });
+    charge = executer(charge, 'ajouterParticipant', { champs: { nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles' } });
     const echange = evaluer(figer(charge));
     assert.equal(echange.population.length, 12);
     assert.equal(echange.propositions[0].statut, 'derive');
@@ -444,7 +444,7 @@ describe('évaluation : les imposés (§ 5.4, § 15.1)', () => {
     assert.deepEqual(table.imposes, { retours: diagnostic.retoursImposes, ancrages: diagnostic.ancragesImposantRetours });
   });
 
-  test("deux personnes d'appartenances distinctes réservées ensemble : une rencontre répétée imposée par ligne, hors des choisies", () => {
+  test("deux personnes d'organisations distinctes réservées ensemble : une rencontre répétée imposée par ligne, hors des choisies", () => {
     const charge = structuredClone(chargeDemo('petite'));
     charge.reservations = [1, 2].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
     const avec = generee(charge, { graine: 6, nombre: 3, arret: 500 });
@@ -796,9 +796,9 @@ describe('évaluation : sous les seize combinaisons des cases, la clé de réfé
   // « nouvelle table » seule ; la redondance sous « varier ».
   const cleSous = (cases) => [
     'ecartAuPlafondAPrioriMax',
-    ...(cases.separerAppartenances ? ['excedentCollisions', 'collisionsCumulees'] : []),
+    ...(cases.separerOrganisations ? ['excedentCollisions', 'collisionsCumulees'] : []),
     ...(cases.nouveauxVoisins ? ['rencontresRepeteesChoisies'] : cases.nouvelleTable ? ['retoursChoisis'] : []),
-    ...(cases.varierAppartenances ? ['redondance'] : []),
+    ...(cases.varierOrganisations ? ['redondance'] : []),
   ];
   // Le nom du critère appliqué qui classe chaque grandeur de la clé.
   const CRITERE_DE = {
@@ -922,7 +922,7 @@ const CHAMPS_DE_MESURE = [
   'repartitionRencontres', 'collisions', 'tables', 'paires', 'matrice', 'objectifs', 'animateurs', 'course',
 ];
 
-// Une charge de n personnes inventées, deux appartenances, des tables de
+// Une charge de n personnes inventées, deux organisations, des tables de
 // cinq places, deux tours.
 function chargeDeN(n) {
   const charge = creerCharge({ id: `evt-matrice-${n}`, nom: 'Atelier Ressac', siegesParDefaut: 5, tours: 2 });
@@ -930,7 +930,7 @@ function chargeDeN(n) {
     id: rang + 1,
     nom: `Ombrelle ${rang + 1}`,
     prenom: 'Iris',
-    appartenance: rang % 3 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
+    organisation: rang % 3 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -1078,7 +1078,7 @@ describe('detaillerQualite : une seule arithmétique (§ 12.9, § 13.2, contrain
   });
 
   test('les planchers des tuiles passent tels que le moteur les rend, sur des plans écrits à la main', () => {
-    // La petite démonstration au conflit : l'appartenance de cinq pour
+    // La petite démonstration au conflit : l'organisation de cinq pour
     // quatre tables prouve 4 collisions cumulées, une par tour, et 1 paire
     // distincte ; l'excédent, 4 sous C(5, 2), ne s'écrit pas. « (4, 1) »
     // atteint les deux, « (4, 2) » les cumulées seules, « (6, 6) » aucun.
@@ -1124,7 +1124,7 @@ describe('detaillerQualite : une seule arithmétique (§ 12.9, § 13.2, contrain
     for (const id of [1, 2]) assert.equal(detaillerQualite(charge, id, { plafondsAPriori: null }).bornes.planchers.ecartItineraireMax, null);
   });
 
-  test("chaque personne en entier — appartenance ou null, statut ancré, partiel ou mobile — et le numéro de chaque table, distinct de son identifiant", () => {
+  test("chaque personne en entier — organisation ou null, statut ancré, partiel ou mobile — et le numéro de chaque table, distinct de son identifiant", () => {
     const charge = structuredClone(chargeDemo('petite-conflit'));
     const [premiere, seconde] = [...charge.tables].sort((a, b) => a.id - b.id);
     // Les numéros dans l'ordre inverse des identifiants, décalés de dix :
@@ -1132,7 +1132,7 @@ describe('detaillerQualite : une seule arithmétique (§ 12.9, § 13.2, contrain
     charge.tables.forEach((table, rang) => {
       table.numero = 10 + charge.tables.length - rang;
     });
-    charge.participants.find(({ id }) => id === 1).appartenance = null;
+    charge.participants.find(({ id }) => id === 1).organisation = null;
     charge.reservations.push({ participant: 2, table: premiere.id, siege: null, portee: 'tous', tour: null });
     charge.reservations.push({ participant: 3, table: seconde.id, siege: null, portee: 'tour', tour: 1 });
     const generation = figer(generee(charge, { graine: 2, nombre: 1, arret: 200 }));
@@ -1150,18 +1150,18 @@ describe('detaillerQualite : une seule arithmétique (§ 12.9, § 13.2, contrain
       instance.ids.map((id, p) => ({
         id,
         nom: nomAffiche(nommee.get(id)),
-        appartenance: instance.groupe[p] === SANS_GROUPE ? null : instance.groupes[instance.groupe[p]],
+        organisation: instance.groupe[p] === SANS_GROUPE ? null : instance.groupes[instance.groupe[p]],
         statut: nomDuStatut.get(instance.statut[p]),
       })),
     );
     const parId = new Map(detail.personnes.map((personne) => [personne.id, personne]));
     assert.deepEqual(
-      [1, 2, 3, 4].map((id) => [parId.get(id).appartenance, parId.get(id).statut]),
+      [1, 2, 3, 4].map((id) => [parId.get(id).organisation, parId.get(id).statut]),
       [
         [null, 'mobile'],
-        [nommee.get(2).appartenance, 'ancre'],
-        [nommee.get(3).appartenance, 'partiel'],
-        [nommee.get(4).appartenance, 'mobile'],
+        [nommee.get(2).organisation, 'ancre'],
+        [nommee.get(3).organisation, 'partiel'],
+        [nommee.get(4).organisation, 'mobile'],
       ],
     );
     assert.deepEqual(detail.idsTables, [...instance.idsTables]);
@@ -1265,10 +1265,10 @@ describe('detaillerQualite : la garde à quatre paramètres (§ 12.3, D31, D42)'
     const instance = normaliser(configurationDe(charge));
     let visee = null;
     // Une borne falsifiée : celle du calcul, moins une pour la première
-    // personne qui rencontre au moins une appartenance.
+    // personne qui rencontre au moins une organisation.
     const falsifiee = (inst, tableDe) => {
       const borne = borneDiversite(inst, tableDe);
-      const vues = mesurer(inst, tableDe).appartenancesVues;
+      const vues = mesurer(inst, tableDe).organisationsVues;
       visee = vues.findIndex((a) => a > 0);
       borne.aMax[visee] = vues[visee] - 1;
       return borne;
@@ -1301,14 +1301,14 @@ describe('detaillerQualite : la garde à quatre paramètres (§ 12.3, D31, D42)'
     assert.deepEqual(detail.refusDessin, [{ code: 'AFFILIES_PLAFOND', index: visee, participant: instance.ids[visee] }]);
   });
 
-  test("sur un plan où les planchers valent, un plancher au-dessus de la mesure : RESTE_NEGATIF nomme l'appartenance, RESTE_OBJECTIFS_NEGATIF le tour", () => {
+  test("sur un plan où les planchers valent, un plancher au-dessus de la mesure : RESTE_NEGATIF nomme l'organisation, RESTE_OBJECTIFS_NEGATIF le tour", () => {
     const { charge } = genereeAvecCourses(chargeAObjectifs(), { graine: 3, nombre: 1, arret: 300 });
     figer(charge);
     const instance = normaliser(configurationDe(charge));
     const juste = detaillerQualite(charge, 1);
     assert.equal(juste.collisions.planchersValides, true);
     assert.deepEqual(juste.refusDessin, []);
-    // Le plancher de la première appartenance que le diagnostic chiffre, et
+    // Le plancher de la première organisation que le diagnostic chiffre, et
     // celui du premier tour qui a des places à servir, un au-dessus de ce
     // que le plan mesure : le reste vaut −1, la plus petite violation.
     const [{ groupe }] = diagnostiquer(configurationDe(charge)).collisions;
@@ -1324,7 +1324,7 @@ describe('detaillerQualite : la garde à quatre paramètres (§ 12.3, D31, D42)'
     const detail = detaillerQualite(charge, 1, { diagnostiquer: releves });
     assert.equal(detail.collisions.planchersValides, true);
     assert.deepEqual(detail.refusDessin, [
-      { code: 'RESTE_NEGATIF', groupe: instance.groupes.indexOf(groupe), appartenance: groupe },
+      { code: 'RESTE_NEGATIF', groupe: instance.groupes.indexOf(groupe), organisation: groupe },
       { code: 'RESTE_OBJECTIFS_NEGATIF', tour: tour + 1 },
     ]);
     // Au plancher même, le reste est nul et rien ne se lève.

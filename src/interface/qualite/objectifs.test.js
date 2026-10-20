@@ -45,11 +45,11 @@ const PERSONNES = [
 // objectif, et une au moins n'est jamais servie.
 function chargeObjectifs({ n = 9, tours = 3, toursObjectif = [1, 2], respecter = true, mode = null } = {}) {
   const charge = creerCharge({ id: 'evt-objectifs', nom: 'Atelier Ressac', siegesParDefaut: 3, tours });
-  charge.participants = PERSONNES.slice(0, n).map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = PERSONNES.slice(0, n).map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -174,7 +174,7 @@ describe('objectifs : les barres par tour (§ 12.12, B21, D36)', () => {
       if (tour.possibles === 0) continue;
       assert.equal(tour.reste, tour.hors - tour.plancher, `tour ${ligne.id}`);
       assert.deepEqual(ligne.valeurs, [tour.plancher, tour.reste], `tour ${ligne.id}`);
-      assert.equal(Object.hasOwn(ligne, 'appartenance'), false, `tour ${ligne.id} : aucune pastille`);
+      assert.equal(Object.hasOwn(ligne, 'organisation'), false, `tour ${ligne.id} : aucune pastille`);
     }
   });
 

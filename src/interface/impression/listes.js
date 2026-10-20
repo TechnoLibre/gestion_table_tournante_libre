@@ -5,7 +5,7 @@
 // sans DOM : ce que chaque ligne imprime, lu dans l'état des places de
 // chaque tour (etatPlaces) — la source que l'aperçu imprime, tour par tour.
 // Le modèle rend des nombres, des identifiants et des données — noms,
-// appartenances, libellés de titre — tels que la charge les porte, jamais
+// organisations, libellés de titre — tels que la charge les porte, jamais
 // abrégés : ces deux vues replient (§ 7.4). Des tours trop nombreux pour
 // tenir côte à côte se répartissent en groupes (feuille par table) ou en
 // blocs (liste d'accueil) de tours consécutifs. Les composants les
@@ -49,9 +49,9 @@ function placesDuTour(etat) {
 
 /**
  * La liste d'accueil (§ 11.7) : une ligne par personne non exclue, triée par
- * la clé de son nom, puis de son prénom, puis de son appartenance — un champ
+ * la clé de son nom, puis de son prénom, puis de son organisation — un champ
  * absent pour clé celle du texte vide —, par points de code, puis par
- * identifiant. Chaque ligne porte nom, prénom et appartenance tels que la
+ * identifiant. Chaque ligne porte nom, prénom et organisation tels que la
  * charge les écrit, et, pour chaque tour, la table où la personne s'assied —
  * son numéro affiché —, le siège sous sièges attribués seulement (§ 11.4),
  * table et siège null pour la réserve. Un tour où l'état des places la dit
@@ -62,7 +62,7 @@ function placesDuTour(etat) {
  * @param {Object} charge
  * @param {Object[]} etatsParTour   etatsDesTours
  * @param {(texte: string) => string} cle   la clé normalisée (cleNormalisee)
- * @returns {Array<{participant: number, nom: string, prenom: string|null, appartenance: string|null,
+ * @returns {Array<{participant: number, nom: string, prenom: string|null, organisation: string|null,
  *            places: Array<{tour: number, table: number|null, siege: number|null, absente?: true}>}>}
  */
 export function lignesAccueil(charge, etatsParTour, cle) {
@@ -72,12 +72,12 @@ export function lignesAccueil(charge, etatsParTour, cle) {
   const lignes = charge.participants
     .filter(({ exclu }) => !exclu)
     .map((personne) => ({
-      cles: [cle(personne.nom), cle(personne.prenom ?? ''), cle(personne.appartenance ?? '')],
+      cles: [cle(personne.nom), cle(personne.prenom ?? ''), cle(personne.organisation ?? '')],
       ligne: {
         participant: personne.id,
         nom: personne.nom,
         prenom: personne.prenom,
-        appartenance: personne.appartenance,
+        organisation: personne.organisation,
         places: parTour.map((duTour) => placeDe(personne.id, duTour)),
       },
     }));
@@ -178,21 +178,21 @@ const champPose = (texte) => (texte === null || texte.trim() === '' ? '' : texte
 
 /**
  * Les textes qu'une ligne de la liste d'accueil pose, dans l'ordre du
- * document : le nom, le prénom, l'appartenance, puis le libellé de la place
+ * document : le nom, le prénom, l'organisation, puis le libellé de la place
  * à chaque tour (libellePlace). Le texte vide pour un champ absent ou fait
  * de blancs. Une ligne plus haute qu'une page se continue sur les suivantes
  * par morceaux de cette suite (couperLigne, trancher).
  *
- * @param {{nom: string, prenom: string|null, appartenance: string|null,
+ * @param {{nom: string, prenom: string|null, organisation: string|null,
  *          places: Array<{table: number|null, siege: number|null, absente?: boolean}>}} ligne   lignesAccueil
  * @param {(cle: string, details?: Object) => string} t
  * @returns {string[]}
  */
-export function textesLigneAccueil({ nom, prenom, appartenance, places }, t) {
+export function textesLigneAccueil({ nom, prenom, organisation, places }, t) {
   return [
     champPose(nom),
     champPose(prenom),
-    champPose(appartenance),
+    champPose(organisation),
     ...places.map((place) => {
       const { cle, details } = libellePlace(place);
       return t(cle, details);
@@ -225,14 +225,14 @@ export function feuilleDuTour(charge, feuille, etat) {
 }
 
 // La part de la largeur que prennent les colonnes de texte de chaque vue —
-// nom, prénom, appartenance ; le numéro de la place —, en pour cent, quand
+// nom, prénom, organisation ; le numéro de la place —, en pour cent, quand
 // les tours se partagent le reste à parts égales.
 const COLONNES_FIXES = new Map([
   ['accueil', [24, 18, 18]],
   ['tables', [12]],
 ]);
 
-// La part que nom, prénom et appartenance de la liste d'accueil gardent au
+// La part que nom, prénom et organisation de la liste d'accueil gardent au
 // moins quand les colonnes de tour se règlent sur leur texte, en pour cent :
 // au-delà, les tours se partagent le reste et leurs libellés replient.
 const PLANCHER_NOMS = 100 / 3;
@@ -294,7 +294,7 @@ const colonnesQuiTiennent = (budget, part, tours) => Math.max(1, Math.min(tours,
  * Le nombre de colonnes de tour qu'un bloc de la liste d'accueil garde côte
  * à côte quand chacune prend part de la largeur — la part de son plus large
  * libellé de place ou tête de tour (mesurerPlace) — et que nom, prénom et
- * appartenance gardent PLANCHER_NOMS : le plus grand n de 1 à tours dont
+ * organisation gardent PLANCHER_NOMS : le plus grand n de 1 à tours dont
  * n × part tient dans ce que le plancher laisse. Un libellé plus large que
  * toute cette part donne 1 : il replie, entre ses mots d'abord, dans la plus
  * large colonne que le plancher permet (largeursColonnes).
@@ -318,7 +318,7 @@ export function toursParBloc(part, tours) {
  * ⌈T / blocs⌉ tours sauf le dernier, plus court quand la division ne tombe
  * pas juste — 31 tours par 30 donnent 16 et 15, 100 par 34 donnent 34, 34 et
  * 32. Chaque bloc porte ses tours et chaque ligne de la liste, dans l'ordre
- * reçu, nom, prénom et appartenance entiers, ses places réduites à celles
+ * reçu, nom, prénom et organisation entiers, ses places réduites à celles
  * des tours du bloc : chaque bloc se lit seul, les colonnes de noms répétées.
  * Une liste qui garde tous ses tours donne un seul bloc, égal à elle. Les
  * lignes reçues ne changent pas.

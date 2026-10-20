@@ -19,7 +19,7 @@ const SEPARATEURS = [';', ',', '\t'];
 
 // Double de la reconnaissance d'en-têtes que reçoit choisirSeparateur : les
 // trois noms de colonne, tels quels.
-const ENTETES = new Set(['nom', 'prenom', 'appartenance']);
+const ENTETES = new Set(['nom', 'prenom', 'organisation']);
 const reconnaitre = (entete) => ENTETES.has(entete);
 
 // Une reconnaissance rend un booléen, ou le nom du champ reconnu et null
@@ -274,19 +274,19 @@ describe('choisirSeparateur : le candidat retenu (§ 10.1)', () => {
   });
 
   test('un fichier séparé par des virgules, ses en-têtes reconnus', () => {
-    const texte = 'nom,prenom,appartenance\nBenoît,Exemple,Groupe Azur\nOdile,Fictive,Groupe Ambre\n';
+    const texte = 'nom,prenom,organisation\nBenoît,Exemple,Groupe Azur\nOdile,Fictive,Groupe Ambre\n';
     assert.deepEqual(choisirSeparateur(texte, reconnaitre), { separateur: ',' });
   });
 
   test('un collage de tableur est séparé par des tabulations, même quand un champ porte une virgule', () => {
-    const texte = 'nom\tprenom\tappartenance\nBenoît\tExemple\tGroupe Azur, nord\nOdile\tFictive\tGroupe Ambre\n';
+    const texte = 'nom\tprenom\torganisation\nBenoît\tExemple\tGroupe Azur, nord\nOdile\tFictive\tGroupe Ambre\n';
     assert.deepEqual(largeurs(texte, ','), [1, 2, 1]);
     assert.deepEqual(choisirSeparateur(texte, reconnaitre), { separateur: '\t' });
   });
 
   // « ; » donne deux champs, « , » trois, l'un et l'autre constants : seule la
   // reconnaissance des en-têtes les départage.
-  const TEXTE_A_EGALITE = 'nom,prenom,appartenance;x\nBenoît,Exemple,Groupe Azur;y\n';
+  const TEXTE_A_EGALITE = 'nom,prenom,organisation;x\nBenoît,Exemple,Groupe Azur;y\n';
 
   for (const [libelle, reconnaissance] of RECONNAISSANCES) {
     test(`égalité de constance : le candidat aux plus d'en-têtes reconnus, fût-il le dernier essayé (reconnaissance ${libelle})`, () => {
@@ -298,7 +298,7 @@ describe('choisirSeparateur : le candidat retenu (§ 10.1)', () => {
   }
 
   test("la même égalité, une reconnaissance qui favorise l'autre lecture : le choix suit le verdict", () => {
-    const lectureParPointVirgule = (entete) => entete === 'x' || entete === 'nom,prenom,appartenance';
+    const lectureParPointVirgule = (entete) => entete === 'x' || entete === 'nom,prenom,organisation';
     assert.deepEqual(choisirSeparateur(TEXTE_A_EGALITE, lectureParPointVirgule), { separateur: ';' });
   });
 
@@ -322,7 +322,7 @@ describe('choisirSeparateur : le candidat retenu (§ 10.1)', () => {
   });
 
   test("une colonne d'en-tête vide compte comme un champ", () => {
-    assert.deepEqual(choisirSeparateur('nom;;appartenance\nBenoît;;Groupe Azur\n', reconnaitre), { separateur: ';' });
+    assert.deepEqual(choisirSeparateur('nom;;organisation\nBenoît;;Groupe Azur\n', reconnaitre), { separateur: ';' });
     assert.deepEqual(choisirSeparateur('nom;prenom;\nBenoît;Exemple;\n', reconnaitre), { separateur: ';' });
   });
 
@@ -340,7 +340,7 @@ describe('choisirSeparateur : le candidat retenu (§ 10.1)', () => {
     // à partir de 1, est remplacé.
     const texteAvec = (rang, remplacement) => {
       const lignes = [
-        'nom;prenom;appartenance',
+        'nom;prenom;organisation',
         ...Array.from({ length: 24 }, (_, i) => `n${i};p${i};a${i}`),
       ];
       lignes[rang - 1] = remplacement;
@@ -411,7 +411,7 @@ describe('choisirSeparateur : le séparateur introuvable (§ 10.1)', () => {
 
   test("un nombre de champs qui varie, pour chaque candidat : un enregistrement plus court, jusqu'à un seul champ", () => {
     assertSeparateurIntrouvable(
-      () => choisirSeparateur('nom;prenom;appartenance\nBenoît;Exemple\n', reconnaitre),
+      () => choisirSeparateur('nom;prenom;organisation\nBenoît;Exemple\n', reconnaitre),
       ecart(';', 2),
     );
     assertSeparateurIntrouvable(
@@ -455,7 +455,7 @@ describe('choisirSeparateur : le séparateur introuvable (§ 10.1)', () => {
   test("le refus nomme le premier défaut dans l'ordre du texte, à son rang, les enregistrements vides comptés", () => {
     // Un enregistrement plus court passe avant le guillemet ouvert qui le suit.
     assertSeparateurIntrouvable(
-      () => choisirSeparateur('nom;prenom;appartenance\nBenoît;Exemple\nOdile;"Fictive\n', reconnaitre),
+      () => choisirSeparateur('nom;prenom;organisation\nBenoît;Exemple\nOdile;"Fictive\n', reconnaitre),
       ecart(';', 2),
     );
     // Une ligne vide et une ligne de séparateurs seuls ne rompent rien, mais
@@ -509,7 +509,7 @@ describe('choisirSeparateur : le séparateur introuvable (§ 10.1)', () => {
 describe("de l'octet à l'enregistrement : un CSV tel qu'un tableur l'écrit", () => {
   test('marque UTF-8 et CRLF, champ cité à guillemets doublés, ligne vide, blancs, colonne sans en-tête, dernière ligne sans fin', () => {
     const texteTableur = [
-      'nom;prenom;appartenance;;notes',
+      'nom;prenom;organisation;;notes',
       'Exemple;Benoît;Groupe Azur;;"dit ""bonjour"" ; puis part"',
       '',
       ' Fictif ; Odile ;;;',
@@ -523,7 +523,7 @@ describe("de l'octet à l'enregistrement : un CSV tel qu'un tableur l'écrit", (
     assert.equal(separateur, ';');
     assert.deepEqual(decouper(texte, separateur), {
       enregistrements: [
-        ['nom', 'prenom', 'appartenance', '', 'notes'],
+        ['nom', 'prenom', 'organisation', '', 'notes'],
         ['Exemple', 'Benoît', 'Groupe Azur', '', 'dit "bonjour" ; puis part'],
         [''],
         [' Fictif ', ' Odile ', '', '', ''],

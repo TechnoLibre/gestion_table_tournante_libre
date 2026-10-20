@@ -58,11 +58,11 @@ const PERSONNES = [
 // servie.
 function chargeObjectifs({ tours = 3, toursObjectif = [1, 2], respecter = true, mode = null } = {}) {
   const charge = creerCharge({ id: 'evt-objectifs', nom: 'Atelier Ressac', siegesParDefaut: 3, tours });
-  charge.participants = PERSONNES.map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = PERSONNES.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,

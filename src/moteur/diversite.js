@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La diversité par animateur (§ 4.5, § 5.4, § 12.13) : pour chaque
-// animateur, les personnes, appartenances et étiquettes distinctes qu'il
+// animateur, les personnes, organisations et étiquettes distinctes qu'il
 // rencontre en animant, sur la soirée — l'union de ses tours animés — et à
 // chacun de ses tours animés. Ces mesures décrivent un plan et ne classent
 // rien : ni la recherche ni le classement ne les lisent.
@@ -18,7 +18,7 @@
 // assied ailleurs qu'à sa table à un tour qu'il anime n'y rencontre
 // personne ; le tour reste écrit, à comptes nuls.
 //
-// Une appartenance compte une fois, quels que soient ses affiliés ; une
+// Une organisation compte une fois, quels que soient ses affiliés ; une
 // étiquette, une fois, quels que soient ses porteurs. Les comptes d'un tour
 // se lisent au même passage que ceux de la soirée : chaque table animée se
 // parcourt une fois par animateur qui l'anime.
@@ -29,14 +29,14 @@ import { LIBRE, RESERVE, SANS_GROUPE, exigerPlanIndexe } from './configuration.j
  * @property {number} tour          index du tour, à partir de 0
  * @property {number} t             index de la table animée
  * @property {number} personnes     U_{f,r}
- * @property {number} appartenances A_{f,r}
+ * @property {number} organisations A_{f,r}
  * @property {number|null} etiquettes  E_{f,r} ; null sans étiquette portée
  *
  * @typedef {Object} DiversiteLigne
  * @property {number} p             index canonique de l'animateur
  * @property {number} toursAnimes   T_f
  * @property {number} personnes     U_f
- * @property {number} appartenances A_f
+ * @property {number} organisations A_f
  * @property {number|null} etiquettes  E_f ; null sans étiquette portée
  * @property {DiversiteTour[]} parTour  un par tour animé, tours croissants
  *
@@ -47,12 +47,12 @@ import { LIBRE, RESERVE, SANS_GROUPE, exigerPlanIndexe } from './configuration.j
 /**
  * La diversité par animateur d'un plan indexé (§ 12.13, D38).
  *
- * colonnes.appartenances est faux quand les présents portent au plus une
- * appartenance ; colonnes.etiquettes, quand aucun présent ne porte
+ * colonnes.organisations est faux quand les présents portent au plus une
+ * organisation ; colonnes.etiquettes, quand aucun présent ne porte
  * d'étiquette, et chaque compte d'étiquettes vaut alors null. Les lignes vont
- * du moins varié au plus varié, sur la soirée seule : appartenances
+ * du moins varié au plus varié, sur la soirée seule : organisations
  * croissantes, puis étiquettes (null compté 0), puis personnes, puis l'index ;
- * sans la colonne des appartenances, ce compte, qu'aucune colonne ne montre,
+ * sans la colonne des organisations, ce compte, qu'aucune colonne ne montre,
  * ne départage pas : étiquettes, puis personnes, puis l'index. equite porte,
  * pour chaque colonne présente, ses trois nombres sur la soirée ; null pour
  * une colonne absente ou sans animateur. Aucun animateur : lignes vide.
@@ -62,15 +62,15 @@ import { LIBRE, RESERVE, SANS_GROUPE, exigerPlanIndexe } from './configuration.j
  *
  * @param {import('./types.js').Instance} instance
  * @param {ArrayLike<number>} tableDe
- * @returns {{colonnes: {appartenances: boolean, etiquettes: boolean},
+ * @returns {{colonnes: {organisations: boolean, etiquettes: boolean},
  *            lignes: DiversiteLigne[],
- *            equite: {appartenances: TroisNombres|null, etiquettes: TroisNombres|null}}}
+ *            equite: {organisations: TroisNombres|null, etiquettes: TroisNombres|null}}}
  */
 export function diversiteAnimateurs(instance, tableDe) {
   exigerPlanIndexe(instance, tableDe);
   const { N, T, R, fixe, siegesLibres, groupe, groupes, A, animateurs, debutAnimes, animes } = instance;
   const { debutEtiquettes, etiquettes, libellesEtiquettes } = instance;
-  const colonnes = { appartenances: groupes.length > 1, etiquettes: libellesEtiquettes.length > 0 };
+  const colonnes = { organisations: groupes.length > 1, etiquettes: libellesEtiquettes.length > 0 };
 
   // Les assis de chaque table à chaque tour, ligne t × R + r de debutAssis à
   // la suivante, par index croissants.
@@ -111,13 +111,13 @@ export function diversiteAnimateurs(instance, tableDe) {
   const lignes = [];
   for (let f = 0; f < A; f += 1) {
     const soi = animateurs[f];
-    const soiree = { personnes: 0, appartenances: 0, etiquettes: 0 };
+    const soiree = { personnes: 0, organisations: 0, etiquettes: 0 };
     const parTour = [];
     for (const ligne of lignesAnimees[f]) {
       jeton += 1;
       const t = Math.floor(ligne / R);
       const r = ligne % R;
-      const tour = { tour: r, t, personnes: 0, appartenances: 0, etiquettes: 0 };
+      const tour = { tour: r, t, personnes: 0, organisations: 0, etiquettes: 0 };
       const present = tableDe[soi * R + r] === t;
       for (let k = debutAssis[ligne]; present && k < debutAssis[ligne + 1]; k += 1) {
         const q = assis[k];
@@ -132,11 +132,11 @@ export function diversiteAnimateurs(instance, tableDe) {
         if (g !== SANS_GROUPE) {
           if (groupeVuAuTour[g] !== jeton) {
             groupeVuAuTour[g] = jeton;
-            tour.appartenances += 1;
+            tour.organisations += 1;
           }
           if (groupeVu[g] !== f) {
             groupeVu[g] = f;
-            soiree.appartenances += 1;
+            soiree.organisations += 1;
           }
         }
         for (let j = debutEtiquettes[q]; j < debutEtiquettes[q + 1]; j += 1) {
@@ -158,19 +158,19 @@ export function diversiteAnimateurs(instance, tableDe) {
       p: soi,
       toursAnimes: parTour.length,
       personnes: soiree.personnes,
-      appartenances: soiree.appartenances,
+      organisations: soiree.organisations,
       etiquettes: colonnes.etiquettes ? soiree.etiquettes : null,
       parTour,
     });
   }
 
   const avant = (a, b) => (a.etiquettes ?? 0) - (b.etiquettes ?? 0) || a.personnes - b.personnes || a.p - b.p;
-  lignes.sort(colonnes.appartenances ? (a, b) => a.appartenances - b.appartenances || avant(a, b) : avant);
+  lignes.sort(colonnes.organisations ? (a, b) => a.organisations - b.organisations || avant(a, b) : avant);
   return {
     colonnes,
     lignes,
     equite: {
-      appartenances: colonnes.appartenances ? troisNombres(lignes, 'appartenances') : null,
+      organisations: colonnes.organisations ? troisNombres(lignes, 'organisations') : null,
       etiquettes: colonnes.etiquettes ? troisNombres(lignes, 'etiquettes') : null,
     },
   };

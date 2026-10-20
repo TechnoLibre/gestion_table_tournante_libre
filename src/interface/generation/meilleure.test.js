@@ -29,7 +29,7 @@ function generee(charge, reglages) {
 }
 
 // Six personnes inventées, deux tables de 3, quatre tours ; les deux
-// premières partagent une appartenance.
+// premières partagent une organisation.
 function chargeSix() {
   const charge = creerCharge({ id: 'evt-meilleure', nom: 'Club des Merles', siegesParDefaut: 3, tours: 4 });
   const noms = [['Ombrelle', 'Iris'], ['Pervenche', 'Théo'], ['Lacasse', 'Ondine'], ['Grisaille', null], ['Bruyère', 'Anouk'], ['Sarcelle', 'Capucine']];
@@ -37,7 +37,7 @@ function chargeSix() {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: rang < 2 ? 'Club des Merles' : null,
+    organisation: rang < 2 ? 'Club des Merles' : null,
     courriel: null,
     titrePressenti: null,
     notes: null,

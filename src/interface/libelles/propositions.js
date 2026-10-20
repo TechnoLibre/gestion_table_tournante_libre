@@ -100,13 +100,13 @@ export const TABLE = new Map([
   ['propositions.colonne.rencontresMobiles', 'Personnes distinctes rencontrées, minimum : mobiles'],
   ['propositions.colonne.rencontresAncres', 'Personnes distinctes rencontrées, minimum : ancrés'],
   ['propositions.colonne.collisionsCumulees', 'Collisions cumulées (paire et tour)'],
-  ['propositions.colonne.pairesDistinctes', 'Paires distinctes de même appartenance'],
+  ['propositions.colonne.pairesDistinctes', 'Paires distinctes de même organisation'],
   ['propositions.colonne.excedentCollisions', 'Excédent de collisions (retrouvailles au-delà de la première)'],
   ['propositions.colonne.rencontresRepetees', 'Rencontres répétées choisies (paires)'],
   ['propositions.colonne.maxRencontresPaire', "Rencontres d'une même paire, au plus"],
   ['propositions.colonne.retoursChoisis', 'Retours choisis à une table déjà occupée'],
-  ['propositions.colonne.appartenancesVues', 'Appartenances rencontrées A(p), minimum'],
-  ['propositions.colonne.totalRedondance', "Redondance d'appartenance, somme Σ r(p)"],
+  ['propositions.colonne.organisationsVues', 'Organisations rencontrées A(p), minimum'],
+  ['propositions.colonne.totalRedondance', "Redondance d'organisation, somme Σ r(p)"],
   ['propositions.colonne.diversite', 'Taux de diversité d(p), minimum'],
   ['propositions.colonne.manqueMax', 'Plus grand manque (personnes)'],
   ['propositions.colonne.effectifManque', 'Personnes à qui il en manque'],
@@ -127,9 +127,9 @@ export const TABLE = new Map([
   // gardent chacun son unité. Le sixième ne paraît que quand le critère des
   // objectifs ou celui des animateurs compte (A11).
   ['propositions.groupe.rencontres', 'Personnes rencontrées'],
-  ['propositions.groupe.collisions', "Collisions d'appartenance"],
+  ['propositions.groupe.collisions', "Collisions d'organisation"],
   ['propositions.groupe.repetitions', 'Rencontres répétées et retours'],
-  ['propositions.groupe.diversite', "Diversité d'appartenance"],
+  ['propositions.groupe.diversite', "Diversité d'organisation"],
   ['propositions.groupe.manque', 'Manque et plafond a priori'],
   ['propositions.groupe.objectifs', 'Objectifs des tables et animateurs'],
 
@@ -171,20 +171,20 @@ export const TABLE = new Map([
   ],
   [
     'propositions.explication.collisionsCumulees',
-    'Chaque fois que deux personnes de la même appartenance partagent une table, compté une fois par paire et par tour : ' +
+    'Chaque fois que deux personnes de la même organisation partagent une table, compté une fois par paire et par tour : ' +
       "deux collègues ensemble aux quatre tours font 4. Critère du classement à la place que lui donne " +
       "l'ordre écrit au-dessus du tableau ; l'ordre par défaut le lit après l'excédent, pour départager deux " +
       "propositions de même excédent. Plus il est bas, mieux c'est.",
   ],
   [
     'propositions.explication.pairesDistinctes',
-    'Le nombre de paires différentes de personnes de la même appartenance réunies au moins une fois : deux collègues ' +
+    'Le nombre de paires différentes de personnes de la même organisation réunies au moins une fois : deux collègues ' +
       "ensemble aux quatre tours font 1. Ce n'est pas un critère du classement : il vaut les collisions cumulées moins " +
       "l'excédent.",
   ],
   [
     'propositions.explication.excedentCollisions',
-    'Les retrouvailles entre personnes de même appartenance après leur première rencontre, soit les collisions ' +
+    'Les retrouvailles entre personnes de même organisation après leur première rencontre, soit les collisions ' +
       'cumulées moins les paires distinctes : deux collègues ensemble aux quatre tours font 3. Critère du classement ' +
       "placé par l'ordre écrit au-dessus du tableau, par défaut avant les collisions cumulées : passer la soirée avec " +
       "le même collègue est pire que croiser six collègues une fois. Plus il est bas, mieux c'est.",
@@ -210,22 +210,22 @@ export const TABLE = new Map([
       "Plus il est bas, mieux c'est.",
   ],
   [
-    'propositions.explication.appartenancesVues',
-    "A(p) : le nombre d'appartenances différentes parmi les personnes que p rencontre et qui en ont une, la sienne " +
+    'propositions.explication.organisationsVues',
+    "A(p) : le nombre d'organisations différentes parmi les personnes que p rencontre et qui en ont une, la sienne " +
       "comptée dès qu'elle rencontre un collègue. La colonne donne le plus petit A(p), celui de la personne qui en voit " +
       "le moins. Plus il est grand, mieux c'est.",
   ],
   [
     'propositions.explication.totalRedondance',
-    "r(p) : le nombre de personnes que p rencontre et qui ont une appartenance, moins A(p), le nombre d'appartenances " +
-      "différentes qu'elles portent ; à 0, aucune appartenance n'est recroisée. La colonne donne la somme sur toutes les " +
+    "r(p) : le nombre de personnes que p rencontre et qui ont une organisation, moins A(p), le nombre d'organisations " +
+      "différentes qu'elles portent ; à 0, aucune organisation n'est recroisée. La colonne donne la somme sur toutes les " +
       "personnes, Σ r(p), critère du classement à la place que lui donne l'ordre écrit au-dessus du tableau. " +
       "Plus elle est basse, mieux c'est.",
   ],
   [
     'propositions.explication.diversite',
-    "d(p) : A(p) divisé par le nombre de personnes que p rencontre et qui ont une appartenance ; à 1, elles portent " +
-      "toutes des appartenances différentes. La colonne donne le plus petit d(p), « \u{2014} » quand personne ne rencontre " +
+    "d(p) : A(p) divisé par le nombre de personnes que p rencontre et qui ont une organisation ; à 1, elles portent " +
+      "toutes des organisations différentes. La colonne donne le plus petit d(p), « \u{2014} » quand personne ne rencontre " +
       "quelqu'un qui en a une. Plus il est grand, mieux c'est.",
   ],
   [

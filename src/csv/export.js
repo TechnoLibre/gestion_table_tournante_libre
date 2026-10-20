@@ -46,7 +46,7 @@ const NON = 'non';
 const PROPRIETE_DU_CHAMP = new Map([
   ['nom', 'nom'],
   ['prenom', 'prenom'],
-  ['appartenance', 'appartenance'],
+  ['organisation', 'organisation'],
   ['courriel', 'courriel'],
   ['titre_pressenti', 'titrePressenti'],
   ['exclu', 'exclu'],
@@ -130,7 +130,7 @@ function cellule(participant, champ, rang) {
 /**
  * La liste des participants en CSV, dans la forme exacte que l'import lit
  * (§ 10.2) : UTF-8 avec marque, « ; », CRLF ; l'en-tête
- * nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes;presence,
+ * nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence,
  * les champs de CHAMPS dans leur ordre ; puis un participant par ligne, dans
  * l'ordre de la liste reçue, que la charge range par identifiant. exclu
  * s'écrit oui ou non, un champ null vide, la colonne etiquettes toujours,
@@ -154,23 +154,23 @@ export function exporterParticipants(participants) {
 
 // Une personne inventée du modèle, ses champs omis vides et non exclue.
 const exemple = (nom, prenom, autres) => ({
-  nom, prenom, appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false, etiquettes: [], ...autres,
+  nom, prenom, organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false, etiquettes: [], ...autres,
 });
 
 // Les personnes du modèle : à elles quatre, elles remplissent chaque colonne
-// de CHAMPS, exclu sous ses deux valeurs, une appartenance partagée, une
+// de CHAMPS, exclu sous ses deux valeurs, une organisation partagée, une
 // absente, et une cellule à deux étiquettes. Leur présence s'ajoute selon le
 // nombre de tours (presencesDuModele).
 const EXEMPLES_DU_MODELE = [
   exemple('Ombrelle', 'Iris', {
-    appartenance: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
+    organisation: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
     etiquettes: ['finance', 'Montréal'],
   }),
   exemple('Pervenche', 'Théo', {
-    appartenance: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],
+    organisation: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],
   }),
   exemple('Lacasse', 'Ondine', {
-    appartenance: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé', exclu: true,
+    organisation: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé', exclu: true,
   }),
   exemple('Tourteau', 'Basile', { etiquettes: ['bénévole'] }),
 ];

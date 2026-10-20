@@ -134,11 +134,11 @@ async function enEcriture(montage, champs = {}) {
   await montage.seance.passerEnEcriture();
 }
 
-const personne = (id, nom, prenom = null, appartenance = null) => ({
+const personne = (id, nom, prenom = null, organisation = null) => ({
   id,
   nom,
   prenom,
-  appartenance,
+  organisation,
   courriel: null,
   titrePressenti: null,
   notes: null,
@@ -4165,9 +4165,9 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
   // son .precedent. La génération suivante, sous la même graine, porte
   // alors les mêmes id, graine, arret et historique que celles du journal,
   // et après un changement qui laisse la déclaration intacte — ici une
-  // appartenance — un autre placement. Le retour à la première génération
+  // organisation — un autre placement. Le retour à la première génération
   // ne rend jamais la course de la seconde, et réécrit le compagnon.
-  test("une génération refaite sous la même graine après un changement d'appartenance ne prête jamais sa course à la première ; le retour à la première réécrit le compagnon", async () => {
+  test("une génération refaite sous la même graine après un changement d'organisation ne prête jamais sa course à la première ; le retour à la première réécrit le compagnon", async () => {
     const fs = creerFichiersSimules();
     await deposerEssai(fs);
     const montage = monter({ fs });
@@ -4183,7 +4183,7 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
     await seance.ouvrirSecours(BASE, 'precedent');
     await seance.passerEnEcriture();
     assert.deepEqual(seance.charge.propositions, []);
-    await seance.executer('modifierParticipant', { id: 2, champs: { appartenance: 'Société Alpha' } });
+    await seance.executer('modifierParticipant', { id: 2, champs: { organisation: 'Société Alpha' } });
     await seance.executer('enregistrerGeneration', generer(seance.charge));
     const identite = ({ id, graine, arret, historique }) => [id, graine, arret, historique];
     assert.deepEqual(seance.charge.propositions.map(identite), premieres.map(identite));
@@ -4244,7 +4244,7 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
 
     await seance.ouvrirSecours(BASE, 'precedent');
     await seance.passerEnEcriture();
-    await seance.executer('modifierParticipant', { id: 2, champs: { appartenance: 'Club des Merles' } });
+    await seance.executer('modifierParticipant', { id: 2, champs: { organisation: 'Club des Merles' } });
     await seance.executer('enregistrerGeneration', generationDouze(seance.charge));
     const [p1] = premieres;
     const [q1] = seance.charge.propositions;
@@ -4288,7 +4288,7 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
     await ouvrirSansEcrire(seconde);
     await seconde.seance.ouvrirSecours(BASE, 'precedent');
     await seconde.seance.passerEnEcriture();
-    await seconde.seance.executer('modifierParticipant', { id: 2, champs: { appartenance: 'Club des Merles' } });
+    await seconde.seance.executer('modifierParticipant', { id: 2, champs: { organisation: 'Club des Merles' } });
     await seconde.seance.executer('enregistrerGeneration', generationDouze(seconde.seance.charge));
     assert.deepEqual(seconde.seance.charge.propositions[0].placement, premieres[0].placement);
     assert.notDeepEqual(seconde.seance.courseDe(1), premiereCourse);

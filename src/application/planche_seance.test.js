@@ -94,7 +94,7 @@ const AUTRE_PLAN = [{ sieges: [[1, 4], [2, 3]] }, { sieges: [[1, 2], [3, 4]] }];
 function chargeLucioles({ personnes = null, ...champs } = {}) {
   return soiree({
     personnes: personnes ?? [
-      personne(1, 'Iris', 'Ombrelle', { appartenance: 'Club des Merles' }),
+      personne(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
       personne(2, 'Théo', 'Pervenche'),
       personne(3, 'Ondine', 'Lacasse'),
       personne(4, null, 'Grisaille'),
@@ -300,8 +300,8 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
   test('les homonymes que rien ne sépare sont nommés ; un nom à glyphe absent, « Ondine 李 », nomme le caractère', async () => {
     const charge = chargeLucioles({
       personnes: [
-        personne(1, 'Iris', 'Ombrelle', { appartenance: 'Club des Merles' }),
-        personne(2, 'Iris', 'Ombrelle', { appartenance: 'Club des Merles' }),
+        personne(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
+        personne(2, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
         personne(3, 'Ondine', '李'),
         personne(4, null, 'Grisaille'),
       ],

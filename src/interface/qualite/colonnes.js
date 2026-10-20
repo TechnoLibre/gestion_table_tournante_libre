@@ -27,7 +27,7 @@
 // Une comparaison ne porte ni la borne de diversité ni celle des
 // animateurs : leurs cellules écrivent la valeur et le plancher, sans
 // ligne de borne. Seule exception, commune aux deux côtés : quand aucune
-// personne présente ne porte d'appartenance — le diagnostic de la table
+// personne présente ne porte d'organisation — le diagnostic de la table
 // n'a alors pas de redondance minimale (null), comme le détail n'a pas de
 // borne de diversité —, la cellule de la diversité reçoit cette borne
 // nulle et écrit la phrase de sa tuile.
@@ -113,10 +113,10 @@ export function colonnesComparaison(comparaison, table, outils) {
   const { t, format, nomDe } = outils;
   const cotes = { a: comparaison.a, b: comparaison.b };
   const lignes = { a: ligneDuCote(table, cotes.a.cle), b: ligneDuCote(table, cotes.b.cle) };
-  // Sans appartenance présente, la borne de diversité est nulle des deux
+  // Sans organisation présente, la borne de diversité est nulle des deux
   // côtés, comme dans le détail ; sinon elle reste absente.
-  const sansAppartenance = table.diagnostic.redondanceMinimale === null;
-  const bornesDuCote = (cote) => (sansAppartenance ? { ...cotes[cote].bornes, diversite: null } : cotes[cote].bornes);
+  const sansOrganisation = table.diagnostic.redondanceMinimale === null;
+  const bornesDuCote = (cote) => (sansOrganisation ? { ...cotes[cote].bornes, diversite: null } : cotes[cote].bornes);
   const cellule = (nom, cote) => celluleDeTuile(nom, { bornes: bornesDuCote(cote), ligne: lignes[cote], table, t, format, nomDe });
   const ligneDe = ({ nom, classe }) => {
     const { libelle, neClassePas } = enTeteDeTuile(nom, classe, t);

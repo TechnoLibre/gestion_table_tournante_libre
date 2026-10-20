@@ -30,10 +30,10 @@ import {
 import { plafondsAPriori, plafondsRealises } from './plafond.js';
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
 // Un chiffre sur trois populations vides (§ 5.4) : null, jamais 0.
@@ -58,8 +58,8 @@ function figer(valeur) {
   return Object.freeze(valeur);
 }
 
-// Participants d'identifiants donnés, sans appartenance.
-const sansAppartenance = (ids) => ids.map((id) => ({ id, nom: `P${id}`, appartenance: null }));
+// Participants d'identifiants donnés, sans organisation.
+const sansOrganisation = (ids) => ids.map((id) => ({ id, nom: `P${id}`, organisation: null }));
 
 // Tables d'identifiant et de numéro 1 à n, n le nombre de capacités.
 const tablesDe = (capacites) =>
@@ -96,12 +96,12 @@ const PLAN_DEUX_MANQUES = {
   reserves: [[], [], [], []],
 };
 
-// Deux tables de 3 sièges, quatre tours, six participants sans appartenance.
+// Deux tables de 3 sièges, quatre tours, six participants sans organisation.
 // 1 est ancré à la table 1 et 2 à la table 2 ; 3, réservé à la table 1 au
 // tour 1, est partiellement fixé et compte parmi les mobiles (§ 5.4) ; 4, 5 et
 // 6 sont mobiles. 6, assis au seul tour 1, est en réserve ensuite (§ 12.6).
 const CONFIGURATION_ANCRAGES = {
-  participants: sansAppartenance([1, 2, 3, 4, 5, 6]),
+  participants: sansOrganisation([1, 2, 3, 4, 5, 6]),
   tables: tablesDe([3, 3]),
   tours: 4,
   reservations: [
@@ -149,7 +149,7 @@ const A_PRIORI_ANCRAGES = [4, 4, 5, 5, 5, 5];
 // manque 0. Une table pleine lui en offrait deux : plafond a priori 2, écart
 // d'itinéraire 1.
 const BAS = normaliser({
-  participants: sansAppartenance([1, 2, 3, 4]),
+  participants: sansOrganisation([1, 2, 3, 4]),
   tables: tablesDe([3, 3]),
   tours: 1,
   reservations: [],
@@ -315,7 +315,7 @@ describe('troisChiffres (§ 12.10.4)', () => {
     // troisChiffres lit des listes, non un plan : celles de l'exemple, écrites
     // à la main sur trois personnes, le plafond a priori inconnu.
     const trois = normaliser({
-      participants: sansAppartenance([1, 2, 3]),
+      participants: sansOrganisation([1, 2, 3]),
       tables: tablesDe([3]),
       tours: 1,
       reservations: [],
@@ -413,7 +413,7 @@ describe('profilManque (§ 12.10.6)', () => {
     // Identifiants 10 à 50, reçus dans le désordre ; les listes suivent
     // l'ordre canonique, celui de instance.ids.
     const instance = normaliser({
-      participants: sansAppartenance([30, 10, 50, 20, 40]),
+      participants: sansOrganisation([30, 10, 50, 20, 40]),
       tables: tablesDe([5]),
       tours: 1,
       reservations: [],
@@ -505,7 +505,7 @@ function chacunRencontreHuit(plan) {
 describe('teteDuManque (§ 12.2, § 12.10.6)', () => {
   test('rouge : la personne au rang 1, son plafond réalisé, et les rangs au manque maximal — non ceux dont le manque vaut au moins 1', () => {
     const instance = normaliser({
-      participants: sansAppartenance([10, 20, 30, 40, 50]),
+      participants: sansOrganisation([10, 20, 30, 40, 50]),
       tables: tablesDe([5]),
       tours: 1,
       reservations: [],

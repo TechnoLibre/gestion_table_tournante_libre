@@ -7,12 +7,12 @@
 // Le profil se dessine en deux graphiques empilés, au même ordre de rangs,
 // celui que le détail rend (detail.profil, D28) : rien ne s'y trie ni ne
 // s'y recompte. Le premier, en comptes de personnes : les rencontres, puis
-// les appartenances rencontrées, et deux repères, le plafond réalisé et la
+// les organisations rencontrées, et deux repères, le plafond réalisé et la
 // borne de diversité. Le second, en pourcentages : le pourcentage de chaque
 // rang, l'entier que le détail porte, null — sans point — à plafond réalisé
 // nul, et la règle à 100 %, l'image du plafond réalisé. Chaque rang marqué
 // porte son signe dans les deux graphiques : au second, celui d'un rang
-// sans point se pose au pied de l'axe. Une appartenance au plus : une
+// sans point se pose au pied de l'axe. Une organisation au plus : une
 // seule série, sans borne de diversité tracée, et la phrase du cas (B15) ;
 // une seule table : la phrase seule, pour les deux graphiques.
 //
@@ -31,24 +31,24 @@ export const graduerPourcent =
     t('qualite.pourcentage.axe', { valeur: format.nombre(valeur) });
 
 // Les colonnes de la ligne d'un rang, dans l'ordre de l'infobulle et du
-// jumeau : [clé, genre] ; les deux colonnes des appartenances s'écrivent
-// dès qu'une appartenance est portée (B5), même quand le premier graphique
-// ne les trace pas ; sans appartenance, elles valent 0 partout et tombent.
+// jumeau : [clé, genre] ; les deux colonnes des organisations s'écrivent
+// dès qu'une organisation est portée (B5), même quand le premier graphique
+// ne les trace pas ; sans organisation, elles valent 0 partout et tombent.
 const COLONNES_LIGNE = [
   ['rang', 'nombre'],
   ['nom', 'texte'],
-  ['appartenance', 'texte'],
+  ['organisation', 'texte'],
   ['rencontres', 'nombre'],
   ['plafondRealise', 'nombre'],
   ['pourcent', 'pourcentage'],
   ['plafondAPriori', 'nombre'],
-  ['appartenances', 'nombre'],
+  ['organisations', 'nombre'],
   ['borneDiversite', 'nombre'],
   ['toursNonAssis', 'nombre'],
   ['absences', 'texte'],
   ['marque', 'texte'],
 ];
-const DES_APPARTENANCES = new Set(['appartenances', 'borneDiversite']);
+const DES_ORGANISATIONS = new Set(['organisations', 'borneDiversite']);
 
 // Les colonnes de la répartition des rencontres : la valeur, l'effectif,
 // l'effectif cumulé, les personnes à leur plafond réalisé.
@@ -62,7 +62,7 @@ const COLONNES_REPARTITION = ['valeur', 'effectif', 'cumul', 'auPlafond'];
  * @param {Object|null} detail   le détail du placement (detaillerQualite)
  * @param {{t: Function, format: {nombre: Function}}} outils
  * @returns {null|{cas: 'uneTable', phrase: 'uneTable'}|{cas: 'profil',
- *   phrase: null|'uneAppartenance'|'aucuneAppartenance',
+ *   phrase: null|'uneOrganisation'|'aucuneOrganisation',
  *   comptes: {nom, series, reperes, marques, synthese},
  *   pourcentages: {nom, series, reperes, marques,
  *     synthese: {texte, pourcentage: null|{texte, compte}}},
@@ -81,13 +81,13 @@ export function profilDe(detail, { t }) {
   if (detail.idsTables.length === 1) return { cas: 'uneTable', phrase: 'uneTable' };
   const { profil, bornes } = detail;
   const personnes = new Map(detail.personnes.map((personne) => [personne.id, personne]));
-  const avecAppartenances = detail.G > 1;
-  const colonnesAppartenances = detail.G > 0;
+  const avecOrganisations = detail.G > 1;
+  const colonnesOrganisations = detail.G > 0;
   const colonneAbsences = profil.some(({ toursAbsents }) => toursAbsents > 0);
-  const ecrite = (cle) => (colonnesAppartenances || !DES_APPARTENANCES.has(cle)) && (colonneAbsences || cle !== 'absences');
+  const ecrite = (cle) => (colonnesOrganisations || !DES_ORGANISATIONS.has(cle)) && (colonneAbsences || cle !== 'absences');
   let phrase = null;
-  if (detail.G === 1) phrase = 'uneAppartenance';
-  else if (detail.G === 0) phrase = 'aucuneAppartenance';
+  if (detail.G === 1) phrase = 'uneOrganisation';
+  else if (detail.G === 0) phrase = 'aucuneOrganisation';
   const pourcent = (valeur) => (valeur === null ? null : t('qualite.pourcentage.valeur', { pourcent: valeur }));
   const valeursDe = (champ) => profil.map((rang) => rang[champ]);
   const rencontres = { libelle: t('qualite.profil.serie.rencontres'), valeurs: valeursDe('rencontres') };
@@ -102,7 +102,7 @@ export function profilDe(detail, { t }) {
     const ligne = {
       rang: indice + 1,
       nom: personne.nom,
-      appartenance: personne.appartenance,
+      organisation: personne.organisation,
       rencontres: rang.rencontres,
       plafondRealise: rang.plafondRealise,
       pourcent: {
@@ -113,8 +113,8 @@ export function profilDe(detail, { t }) {
       toursNonAssis: rang.toursNonAssis,
       marque: rang.marque === null ? null : t(`qualite.profil.marque.${rang.marque}`),
     };
-    if (colonnesAppartenances) {
-      ligne.appartenances = rang.appartenances;
+    if (colonnesOrganisations) {
+      ligne.organisations = rang.organisations;
       ligne.borneDiversite = rang.borneDiversite;
     }
     if (colonneAbsences) ligne.absences = rang.toursAbsents === 0 ? null : t('qualite.profil.absences', { n: rang.toursAbsents });
@@ -130,12 +130,12 @@ export function profilDe(detail, { t }) {
     phrase,
     comptes: {
       nom: t('qualite.profil.graphique.comptes'),
-      series: avecAppartenances
-        ? [rencontres, { libelle: t('qualite.profil.serie.appartenances'), valeurs: valeursDe('appartenances') }]
+      series: avecOrganisations
+        ? [rencontres, { libelle: t('qualite.profil.serie.organisations'), valeurs: valeursDe('organisations') }]
         : [rencontres],
       reperes: [
         { genre: 'plafond', libelle: t('qualite.profil.repere.plafond'), valeurs: valeursDe('plafondRealise') },
-        ...(avecAppartenances ? [{ genre: 'borne', libelle: t('qualite.profil.repere.borne'), valeurs: valeursDe('borneDiversite') }] : []),
+        ...(avecOrganisations ? [{ genre: 'borne', libelle: t('qualite.profil.repere.borne'), valeurs: valeursDe('borneDiversite') }] : []),
       ],
       marques,
       synthese: t('qualite.profil.synthese', detail.synthese),

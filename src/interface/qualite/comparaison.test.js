@@ -59,7 +59,7 @@ function chargeDouze() {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: rang % 2 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
+    organisation: rang % 2 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
     courriel: null,
     titrePressenti: null,
     notes: null,

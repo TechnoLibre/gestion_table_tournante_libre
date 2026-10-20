@@ -39,7 +39,7 @@ const texte = (nom, jeton, fonds) => entree(nom, jeton, fonds, 4.5);
 
 // Les sortes de conflit : règle, marque de la trame, jeton court, forme.
 const SORTES_CONFLIT = [
-  ['separerAppartenances', 'trameAppartenance', 'conflit-appartenance', 'hachuresDescendantes'],
+  ['separerOrganisations', 'trameOrganisation', 'conflit-organisation', 'hachuresDescendantes'],
   ['nouveauxVoisins', 'trameVoisins', 'conflit-voisins', 'hachuresMontantes'],
   ['nouvelleTable', 'trameTable', 'conflit-table', 'points'],
 ];
@@ -78,20 +78,20 @@ export const JETON_RETRAIT = c('retrait');
  *  elle se pose juste sous la plus petite séparation que la palette tient
  *  entre une teinte de conflit et une autre marque, et garde la palette de
  *  reculer sans établir qu'un écart de 5 se perçoit. */
-export const SEPARATIONS = Object.freeze({ entreConflits: 12, autresMarques: 5, entreAppartenances: 10, clarteAppartenances: 10 });
+export const SEPARATIONS = Object.freeze({ entreConflits: 12, autresMarques: 5, entreOrganisations: 10, clarteOrganisations: 10 });
 
-/** La palette catégorielle des appartenances, sur les listes seulement —
+/** La palette catégorielle des organisations, sur les listes seulement —
  *  jamais sur le plan, dont le canal chromatique appartient aux conflits :
  *  { rang, marque, fond }, rang de 1 à n, le jeton de son point et celui du
  *  fond de sa pastille. Ses marques se séparent deux à deux de
- *  SEPARATIONS.entreAppartenances sous les trois dichromaties, et deux
- *  teintes voisines de SEPARATIONS.clarteAppartenances en clarté
+ *  SEPARATIONS.entreOrganisations sous les trois dichromaties, et deux
+ *  teintes voisines de SEPARATIONS.clarteOrganisations en clarté
  *  (verifierClartes) : six teintes au plus tiennent ces deux seuils à 3:1
- *  sur la carte. Au-delà de n appartenances, la pastille est neutre
- *  (appartenances.js). */
-export const TEINTES_APPARTENANCE = Object.freeze(
+ *  sur la carte. Au-delà de n organisations, la pastille est neutre
+ *  (organisations.js). */
+export const TEINTES_ORGANISATION = Object.freeze(
   [1, 2, 3, 4, 5, 6].map((rang) =>
-    Object.freeze({ rang, marque: c(`appartenance-${rang}-marque`), fond: c(`appartenance-${rang}-fond`) }),
+    Object.freeze({ rang, marque: c(`organisation-${rang}-marque`), fond: c(`organisation-${rang}-fond`) }),
   ),
 );
 
@@ -104,7 +104,7 @@ const TEINTES_DE_PASTILLE = [
   ['etatRetenu', 'etat-retenu'],
   ['etatBloque', 'etat-bloque'],
   ['neutre', 'neutre'],
-  ...TEINTES_APPARTENANCE.map(({ rang }) => [`appartenance${rang}`, `appartenance-${rang}`]),
+  ...TEINTES_ORGANISATION.map(({ rang }) => [`organisation${rang}`, `organisation-${rang}`]),
 ];
 
 /** Les signes, même forme que MARQUES, seuil 3 : l'icône ou le point d'une

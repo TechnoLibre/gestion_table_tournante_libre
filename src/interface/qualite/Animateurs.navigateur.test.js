@@ -35,7 +35,7 @@ const CONTEXTE = new Map([
 ]);
 const V1 = VERSION.affichee;
 
-// Neuf personnes inventées, leurs appartenances et leurs étiquettes.
+// Neuf personnes inventées, leurs organisations et leurs étiquettes.
 const PERSONNES = [
   ['Ombrelle', 'Iris', 'Coopérative Aubier', []],
   ['Pervenche', 'Théo', 'Atelier Ressac', []],
@@ -52,17 +52,17 @@ const PERSONNES = [
 // 1 et 2. Iris Ombrelle, réservée à la table 1 pour la soirée, y anime à
 // chaque tour ; Théo Pervenche, réservé à la table 2 au seul tour 2, y anime
 // ce tour-là, avec Ondine Lacasse et Ysaline Grésil, réservées à sa table à
-// ce tour : une appartenance et une étiquette, moins qu'Iris Ombrelle sur sa
+// ce tour : une organisation et une étiquette, moins qu'Iris Ombrelle sur sa
 // soirée, de sorte que le moins varié et le plus varié diffèrent dans chaque
-// colonne. appartenances : false pour une seule appartenance ; etiquettes :
+// colonne. organisations : false pour une seule organisation ; etiquettes :
 // false pour aucune ; titres : false pour aucun animateur.
-function chargeAnimateurs({ appartenances = true, etiquettes = true, titres = true } = {}) {
+function chargeAnimateurs({ organisations = true, etiquettes = true, titres = true } = {}) {
   const charge = creerCharge({ id: 'evt-animateurs', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 3 });
-  charge.participants = PERSONNES.map(([nom, prenom, appartenance, liste], rang) => ({
+  charge.participants = PERSONNES.map(([nom, prenom, organisation, liste], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance: appartenances ? appartenance : 'Coopérative Aubier',
+    organisation: organisations ? organisation : 'Coopérative Aubier',
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -177,7 +177,7 @@ describe('diversité par animateur (§ 12.13, D38)', () => {
     expect(svg.querySelectorAll('line[data-marque="graphiqueAxe"]').length).toBe(2);
     const barres = [...svg.querySelectorAll('[data-ligne-graphique]')];
     expect(barres.map((ligne) => Number(ligne.dataset.ligneGraphique))).toEqual(lignes.map(({ id }) => id));
-    expect(lignes[0].appartenances).toBeLessThan(lignes[1].appartenances);
+    expect(lignes[0].organisations).toBeLessThan(lignes[1].organisations);
     const fins = [...svg.querySelectorAll('rect[data-segment="serie1"]')].map((rect) => rect.x.baseVal.value + rect.width.baseVal.value);
     const debuts = [...svg.querySelectorAll('rect[data-segment="serie2"]')].map((rect) => rect.x.baseVal.value);
     expect(fins.length).toBeGreaterThan(0);
@@ -193,7 +193,7 @@ describe('diversité par animateur (§ 12.13, D38)', () => {
     const detail = detailDe();
     const vue = await monter(VueDiversite, detail);
     const { equite } = detail.animateurs.diversite;
-    for (const genre of ['appartenances', 'etiquettes']) {
+    for (const genre of ['organisations', 'etiquettes']) {
       // Les deux animateurs diffèrent : chaque nombre se lit à sa place.
       expect(equite[genre].moins, genre).toBeLessThan(equite[genre].plus);
       const bloc = vue.querySelector(`[data-equite="${genre}"]`);
@@ -207,11 +207,11 @@ describe('diversité par animateur (§ 12.13, D38)', () => {
       );
     }
     // Au-dessus : chaque bloc précède le graphique dans le document. Dans
-    // l'ordre des colonnes : appartenances, la série 1 à gauche du dessin,
+    // l'ordre des colonnes : organisations, la série 1 à gauche du dessin,
     // puis étiquettes, la série 2 à sa droite, à l'écran comme au document.
     const svg = vue.querySelector('svg[data-graphique="diversite"]');
     const blocs = [...vue.querySelectorAll('[data-equite]')];
-    expect(blocs.map((bloc) => bloc.dataset.equite)).toEqual(['appartenances', 'etiquettes']);
+    expect(blocs.map((bloc) => bloc.dataset.equite)).toEqual(['organisations', 'etiquettes']);
     for (const bloc of blocs) {
       expect(bloc.compareDocumentPosition(svg) & Node.DOCUMENT_POSITION_FOLLOWING, bloc.dataset.equite).toBeTruthy();
       expect(bloc.getBoundingClientRect().bottom, bloc.dataset.equite).toBeLessThanOrEqual(svg.getBoundingClientRect().top);
@@ -236,7 +236,7 @@ describe('diversité par animateur (§ 12.13, D38)', () => {
         const tour = rangees[rang + k];
         expect(tour.animateur).toBe(soiree.animateur);
         expect(tour.portee).not.toBe(t('qualite.diversite.soiree'));
-        for (const cle of ['personnes', 'appartenances', 'etiquettes']) {
+        for (const cle of ['personnes', 'organisations', 'etiquettes']) {
           expect(nombre(tour[cle]), `${tour.animateur}, ${tour.portee}, ${cle}`).toBeLessThanOrEqual(nombre(soiree[cle]));
         }
       }
@@ -245,11 +245,11 @@ describe('diversité par animateur (§ 12.13, D38)', () => {
     expect(texteDe(vue)).not.toMatch(/équité|plafond|%/i);
   });
 
-  test('une seule appartenance et des étiquettes : la colonne des étiquettes seule, et la phrase', async () => {
-    const detail = detailDe({ appartenances: false });
+  test('une seule organisation et des étiquettes : la colonne des étiquettes seule, et la phrase', async () => {
+    const detail = detailDe({ organisations: false });
     const vue = await monter(VueDiversite, detail);
-    expect(vue.querySelector('[data-phrase-qualite="diversite.sansAppartenance"]')).not.toBeNull();
-    expect(vue.querySelector('[data-equite="appartenances"]')).toBeNull();
+    expect(vue.querySelector('[data-phrase-qualite="diversite.sansOrganisation"]')).not.toBeNull();
+    expect(vue.querySelector('[data-equite="organisations"]')).toBeNull();
     expect(vue.querySelector('[data-equite="etiquettes"]')).not.toBeNull();
     const svg = vue.querySelector('svg[data-graphique="diversite"]');
     expect(svg.querySelectorAll('line[data-marque="graphiqueAxe"]').length).toBe(1);
@@ -257,15 +257,15 @@ describe('diversité par animateur (§ 12.13, D38)', () => {
     expect(svg.querySelectorAll('rect[data-segment="serie2"]').length).toBeGreaterThan(0);
   });
 
-  test('aucune étiquette : la colonne des appartenances seule, et la phrase', async () => {
+  test('aucune étiquette : la colonne des organisations seule, et la phrase', async () => {
     const vue = await monter(VueDiversite, detailDe({ etiquettes: false }));
     expect(vue.querySelector('[data-phrase-qualite="diversite.sansEtiquette"]')).not.toBeNull();
     expect(vue.querySelector('[data-equite="etiquettes"]')).toBeNull();
     expect(vue.querySelectorAll('svg rect[data-segment="serie2"]').length).toBe(0);
   });
 
-  test('ni étiquette ni plus d’une appartenance : la phrase, aucun graphique, le jumeau garde tours animés et personnes', async () => {
-    const vue = await monter(VueDiversite, detailDe({ appartenances: false, etiquettes: false }));
+  test('ni étiquette ni plus d’une organisation : la phrase, aucun graphique, le jumeau garde tours animés et personnes', async () => {
+    const vue = await monter(VueDiversite, detailDe({ organisations: false, etiquettes: false }));
     expect(vue.querySelector('[data-phrase-qualite="diversite.rien"]')).not.toBeNull();
     expect(vue.querySelector('svg')).toBeNull();
     expect(vue.querySelector('[data-equite]')).toBeNull();

@@ -43,15 +43,15 @@ const PATRONYMES = [
 const fenetre = (ligne, nombre = 19) => PATRONYMES.slice(0, nombre).map(ligne);
 
 // Participant existant, ses autres champs vides.
-const existant = (id, nom, prenom, appartenance) => ({
-  id, nom, prenom, appartenance, courriel: null, titrePressenti: null, notes: null, exclu: false,
+const existant = (id, nom, prenom, organisation) => ({
+  id, nom, prenom, organisation, courriel: null, titrePressenti: null, notes: null, exclu: false,
 });
 
 // Champs d'une ligne valide, dans l'ordre de l'aperçu ; un champ omis vaut null.
 const champs = ({
-  nom, prenom = null, appartenance = null, courriel = null, titrePressenti = null, notes = null, exclu = null,
+  nom, prenom = null, organisation = null, courriel = null, titrePressenti = null, notes = null, exclu = null,
   etiquettes = null, presence = null,
-}) => ({ nom, prenom, appartenance, courriel, titrePressenti, notes, exclu, etiquettes, presence });
+}) => ({ nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence });
 
 // Aperçu d'un texte refusé en entier : ce que la lecture a établi avant le
 // refus, aucune ligne.
@@ -112,7 +112,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       separateur: ';',
       entetes: ['Nom', 'Prénom', 'Équipe', 'Courriel', 'Rôle', 'Exclu', 'Notes'],
       association: {
-        colonnes: { nom: 0, prenom: 1, appartenance: 2, courriel: 3, titre_pressenti: 4, exclu: 5, notes: 6 },
+        colonnes: { nom: 0, prenom: 1, organisation: 2, courriel: 3, titre_pressenti: 4, exclu: 5, notes: 6 },
         ambigus: [],
         nonReconnues: [],
       },
@@ -120,7 +120,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
         {
           ligne: 2,
           champs: champs({
-            nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles', courriel: 'iris@exemple.test',
+            nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles', courriel: 'iris@exemple.test',
             titrePressenti: 'animation', notes: 'arrive tôt', exclu: false,
           }),
           brut: ['Ombrelle', 'Iris', 'Club des Merles', 'iris@exemple.test', 'animation', 'non', 'arrive tôt'],
@@ -149,20 +149,20 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
     ).lignes;
     assert.equal(
       JSON.stringify(ligne.champs),
-      '{"nom":"Ombrelle","prenom":"p","appartenance":"a","courriel":"c@exemple.test","titrePressenti":"t","notes":"n",' +
+      '{"nom":"Ombrelle","prenom":"p","organisation":"a","courriel":"c@exemple.test","titrePressenti":"t","notes":"n",' +
         '"exclu":true,"etiquettes":["e"],"presence":null}',
     );
   });
 
   test("un champ : NFC, bouts retirés, vide ou blanc → null ; le brut reste tel qu'écrit", () => {
     const texte = csv(
-      'nom;prenom;appartenance;courriel;notes',
+      'nom;prenom;organisation;courriel;notes',
       ' Ombrelle ;The\u{301}o;  Club  des   Merles ;  \u{A0} ;"ligne un\nligne deux "',
     );
     const [ligne] = apercevoir(texte).lignes;
     assert.deepEqual(
       ligne.champs,
-      champs({ nom: 'Ombrelle', prenom: 'Th\u{E9}o', appartenance: 'Club  des   Merles', notes: 'ligne un\nligne deux' }),
+      champs({ nom: 'Ombrelle', prenom: 'Th\u{E9}o', organisation: 'Club  des   Merles', notes: 'ligne un\nligne deux' }),
     );
     assert.deepEqual(ligne.brut, [' Ombrelle ', 'The\u{301}o', '  Club  des   Merles ', '  \u{A0} ', 'ligne un\nligne deux ']);
   });
@@ -187,13 +187,13 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
   test("le choix tranche une ambiguïté de l'en-tête, et les lignes en suivent", () => {
     const texte = csv('nom;organisation;entreprise', 'Ombrelle;Club des Merles;Chorale du Givre');
     const sansChoix = apercevoir(texte);
-    assert.deepEqual(sansChoix.association.ambigus, [{ champ: 'appartenance', rangs: [1, 2] }]);
+    assert.deepEqual(sansChoix.association.ambigus, [{ champ: 'organisation', rangs: [1, 2] }]);
     assert.equal(sansChoix.refusGlobal, null);
-    assert.equal(sansChoix.lignes[0].champs.appartenance, null);
+    assert.equal(sansChoix.lignes[0].champs.organisation, null);
 
-    const avecChoix = apercevoir(texte, { choix: { appartenance: 2 } });
-    assert.deepEqual(avecChoix.association, { colonnes: { nom: 0, appartenance: 2 }, ambigus: [], nonReconnues: [] });
-    assert.equal(avecChoix.lignes[0].champs.appartenance, 'Chorale du Givre');
+    const avecChoix = apercevoir(texte, { choix: { organisation: 2 } });
+    assert.deepEqual(avecChoix.association, { colonnes: { nom: 0, organisation: 2 }, ambigus: [], nonReconnues: [] });
+    assert.equal(avecChoix.lignes[0].champs.organisation, 'Chorale du Givre');
   });
 
   test("un texte qui n'est pas une chaîne est refusé par un TypeError : des octets passent par decoder", () => {
@@ -217,10 +217,10 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       Object.freeze(existant(7, 'Givre', null, 'cooperative bleue')),
       Object.freeze(existant(3, 'Houle', null, 'Coopérative Bleue')),
     ]);
-    const choix = Object.freeze({ appartenance: 2 });
+    const choix = Object.freeze({ organisation: 2 });
     const texte = csv('nom;organisation;entreprise', 'Givre;;COOPÉRATIVE BLEUE');
     const apercu = apercevoir(texte, { participants, choix });
-    assert.equal(apercu.lignes[0].champs.appartenance, 'Coopérative Bleue');
+    assert.equal(apercu.lignes[0].champs.organisation, 'Coopérative Bleue');
     assert.deepEqual(participants.map(({ id }) => id), [7, 3]);
   });
 
@@ -230,7 +230,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       existant(7, 'Givre', null, 'cooperative bleue'),
       existant(5, 'Ombrelle', 'Iris', null),
     ];
-    const texte = csv('nom;prenom;appartenance', 'Ombrelle;Iris;COOPÉRATIVE BLEUE', 'Givre;;cooperative bleue');
+    const texte = csv('nom;prenom;organisation', 'Ombrelle;Iris;COOPÉRATIVE BLEUE', 'Givre;;cooperative bleue');
     const apercu = apercevoir(texte, { participants });
     assert.deepEqual(apercevoir(texte, { participants: [...participants].reverse() }), apercu);
     assert.equal(apercu.fusions[0].affichee, 'Coopérative Bleue');
@@ -240,7 +240,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
 
 describe('apercevoir : la ligne refusée, le reste importé (§ 10.1)', () => {
   test('un nom vide ou blanc refuse la ligne : NOM_ABSENT', () => {
-    const apercu = apercevoir(csv('prenom;nom;appartenance', 'Iris;;Club des Merles', 'Théo; \u{A0}\t;', 'Ondine;Sarcelle;'));
+    const apercu = apercevoir(csv('prenom;nom;organisation', 'Iris;;Club des Merles', 'Théo; \u{A0}\t;', 'Ondine;Sarcelle;'));
     assert.deepEqual(apercu.refusees, [
       { ligne: 2, code: 'NOM_ABSENT', valeur: null, brut: ['Iris', '', 'Club des Merles'] },
       { ligne: 3, code: 'NOM_ABSENT', valeur: null, brut: ['Théo', ' \u{A0}\t', ''] },
@@ -343,12 +343,12 @@ describe('apercevoir : « exclu », une liste fermée (§ 10.1)', () => {
   });
 });
 
-describe("apercevoir : les orthographes d'une appartenance (§ 10.1, § 14.10)", () => {
+describe("apercevoir : les orthographes d'une organisation (§ 10.1, § 14.10)", () => {
   test("le rapport nomme chaque fusion : trois orthographes, leurs lignes, l'existante affichée", () => {
     const participants = [existant(1, 'Ombrelle', 'Iris', 'Coopérative Bleue')];
     const apercu = apercevoir(
       csv(
-        'nom;prenom;appartenance',
+        'nom;prenom;organisation',
         'Pervenche;Théo;cooperative  bleue',
         'Sarcelle;Ondine;COOPÉRATIVE BLEUE',
         'Bruyère;Anouk;cooperative  bleue',
@@ -366,14 +366,14 @@ describe("apercevoir : les orthographes d'une appartenance (§ 10.1, § 14.10)",
       },
     ]);
     assert.deepEqual(
-      apercu.lignes.map(({ champs: lus }) => lus.appartenance),
+      apercu.lignes.map(({ champs: lus }) => lus.organisation),
       ['Coopérative Bleue', 'Coopérative Bleue', 'Coopérative Bleue'],
     );
   });
 
   test("sans participant existant, la première orthographe du fichier s'affiche", () => {
     const apercu = apercevoir(csv(
-      'nom;appartenance',
+      'nom;organisation',
       'Ombrelle;club des merles',
       'Pervenche;Club des Merles',
       'Sarcelle; CLUB DES MERLES ',
@@ -388,56 +388,56 @@ describe("apercevoir : les orthographes d'une appartenance (§ 10.1, § 14.10)",
         ],
       },
     ]);
-    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.appartenance), [
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.organisation), [
       'club des merles', 'club des merles', 'club des merles',
     ]);
   });
 
   test("une orthographe répétée, ou la même en NFC et en NFD, n'est pas une fusion", () => {
     const apercu = apercevoir(csv(
-      'nom;appartenance',
+      'nom;organisation',
       'Ombrelle;Club des Merles',
       'Pervenche;Club des Merles',
       'Sarcelle;Chorale d\u{2019}\u{E9}t\u{E9}',
       'Bruyère;Chorale d\u{2019}e\u{301}te\u{301}',
     ));
     assert.deepEqual(apercu.fusions, []);
-    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.appartenance), [
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.organisation), [
       'Club des Merles', 'Club des Merles', 'Chorale d\u{2019}\u{E9}t\u{E9}', 'Chorale d\u{2019}\u{E9}t\u{E9}',
     ]);
   });
 
-  test("une appartenance vide vaut absence, jamais une appartenance nommée « »", () => {
+  test("une organisation vide vaut absence, jamais une organisation nommée « »", () => {
     const participants = [existant(1, 'Houle', null, null), existant(2, 'Givre', null, '')];
-    const apercu = apercevoir(csv('nom;appartenance', 'Ombrelle;', 'Pervenche;   ', 'Sarcelle;\u{A0}'), { participants });
-    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.appartenance), [null, null, null]);
+    const apercu = apercevoir(csv('nom;organisation', 'Ombrelle;', 'Pervenche;   ', 'Sarcelle;\u{A0}'), { participants });
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.organisation), [null, null, null]);
     assert.deepEqual(apercu.fusions, []);
   });
 
-  test("une appartenance blanche ou faite de marques combinantes seules vaut absence, dans le fichier comme chez un existant", () => {
+  test("une organisation blanche ou faite de marques combinantes seules vaut absence, dans le fichier comme chez un existant", () => {
     // Sa clé normalisée est vide, celle que la clé de doublon donne à une
-    // appartenance absente : elle n'est l'orthographe d'aucun groupe.
+    // organisation absente : elle n'est l'orthographe d'aucun groupe.
     const participants = [existant(1, 'Houle', null, '   '), existant(2, 'Givre', null, '\u{301}')];
-    const apercu = apercevoir(csv('nom;appartenance', 'Ombrelle;\u{301}', 'Pervenche;\u{301}\u{20DD}', 'Givre;'), {
+    const apercu = apercevoir(csv('nom;organisation', 'Ombrelle;\u{301}', 'Pervenche;\u{301}\u{20DD}', 'Givre;'), {
       participants,
     });
-    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.appartenance), [null, null, null]);
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.organisation), [null, null, null]);
     assert.deepEqual(apercu.fusions, []);
     assert.deepEqual(apercu.doublons, [{ cle: '["givre","",""]', lignes: [4], existants: [2] }]);
   });
 
-  test("un trait d'union, un trait de soulignement ou une espace de moins distinguent deux appartenances", () => {
+  test("un trait d'union, un trait de soulignement ou une espace de moins distinguent deux organisations", () => {
     // La clé d'en-tête les ignore, la clé normalisée non : la réconciliation
     // compare par la seconde, comme la clé de doublon.
     const orthographes = ['Club des Merles', 'Club-des-Merles', 'Club_des_Merles', 'Clubdes Merles', 'Val-Brume', 'Val Brume'];
-    const apercu = apercevoir(csv('nom;appartenance', ...orthographes.map((orthographe, rang) => `${PATRONYMES[rang]};${orthographe}`)));
+    const apercu = apercevoir(csv('nom;organisation', ...orthographes.map((orthographe, rang) => `${PATRONYMES[rang]};${orthographe}`)));
     assert.deepEqual(apercu.fusions, []);
-    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.appartenance), orthographes);
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.organisation), orthographes);
   });
 
   test("les orthographes existantes d'abord, par identifiant croissant, puis celles du fichier", () => {
     const participants = [existant(7, 'Givre', null, 'cooperative bleue'), existant(3, 'Houle', null, 'Coopérative Bleue')];
-    const apercu = apercevoir(csv('nom;appartenance', 'Ombrelle;COOPÉRATIVE BLEUE'), { participants });
+    const apercu = apercevoir(csv('nom;organisation', 'Ombrelle;COOPÉRATIVE BLEUE'), { participants });
     assert.deepEqual(apercu.fusions, [
       {
         affichee: 'Coopérative Bleue',
@@ -452,29 +452,29 @@ describe("apercevoir : les orthographes d'une appartenance (§ 10.1, § 14.10)",
 
   test("l'orthographe existante s'affiche telle qu'elle est enregistrée", () => {
     const participants = [existant(4, 'Houle', null, 'Club des Merles ')];
-    const apercu = apercevoir(csv('nom;appartenance', 'Ombrelle;club des merles'), { participants });
-    assert.equal(apercu.lignes[0].champs.appartenance, 'Club des Merles ');
+    const apercu = apercevoir(csv('nom;organisation', 'Ombrelle;club des merles'), { participants });
+    assert.equal(apercu.lignes[0].champs.organisation, 'Club des Merles ');
     assert.equal(apercu.fusions[0].affichee, 'Club des Merles ');
   });
 
   test("un groupe sans ligne du fichier n'est pas une fusion de l'import", () => {
     const participants = [existant(3, 'Houle', null, 'Coopérative Bleue'), existant(7, 'Givre', null, 'cooperative bleue')];
-    const apercu = apercevoir(csv('nom;appartenance', 'Ombrelle;Club des Merles'), { participants });
+    const apercu = apercevoir(csv('nom;organisation', 'Ombrelle;Club des Merles'), { participants });
     assert.deepEqual(apercu.fusions, []);
   });
 
   test("la ligne qui reprend l'orthographe existante n'ajoute pas d'orthographe", () => {
     const participants = [existant(1, 'Houle', null, 'Club des Merles')];
-    const apercu = apercevoir(csv('nom;appartenance', 'Ombrelle;Club des Merles'), { participants });
+    const apercu = apercevoir(csv('nom;organisation', 'Ombrelle;Club des Merles'), { participants });
     assert.deepEqual(apercu.fusions, []);
-    assert.equal(apercu.lignes[0].champs.appartenance, 'Club des Merles');
+    assert.equal(apercu.lignes[0].champs.organisation, 'Club des Merles');
   });
 
   test('deux groupes, rangés par leur première ligne du fichier', () => {
     const participants = [existant(1, 'Houle', null, 'chorale du givre')];
     const apercu = apercevoir(
       csv(
-        'nom;appartenance',
+        'nom;organisation',
         'Ombrelle;Club des Merles',
         'Pervenche;Chorale du Givre',
         'Sarcelle;club des merles',
@@ -499,14 +499,14 @@ describe("apercevoir : les orthographes d'une appartenance (§ 10.1, § 14.10)",
         ],
       },
     ]);
-    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.appartenance), [
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.organisation), [
       'Club des Merles', 'chorale du givre', 'Club des Merles', 'chorale du givre',
     ]);
   });
 
   test("une ligne refusée ne prend part à aucun groupe", () => {
     const apercu = apercevoir(csv(
-      'nom;appartenance;exclu',
+      'nom;organisation;exclu',
       'Ombrelle;CLUB DES MERLES;peut-être',
       'Pervenche;Club des Merles;',
       'Sarcelle;club des merles;',
@@ -564,11 +564,11 @@ describe('apercevoir : la colonne des étiquettes, lue par la règle de la saisi
     const apercu = apercevoir(csv('nom;etiquettes', 'Ombrelle;finance', 'Pervenche;Finance', 'Lacasse;fínance', 'Sarcelle;Finance'));
     assert.deepEqual(etiquettesDe(apercu), [[2, ['Finance']], [3, ['Finance']], [4, ['Finance']], [5, ['Finance']]]);
     assert.deepEqual(apercu.fusionsEtiquettes, [{ retenue: 'Finance', orthographes: ['Finance', 'finance', 'fínance'], lignes: 2 }]);
-    assert.deepEqual(apercu.fusions, [], 'les fusions des appartenances restent à part');
+    assert.deepEqual(apercu.fusions, [], 'les fusions des organisations restent à part');
   });
 
-  test("une étiquette égale au nom d'une appartenance ne se mêle pas à elle", () => {
-    const apercu = apercevoir(csv('nom;appartenance;etiquettes', 'Ombrelle;finance;Finance', 'Pervenche;FINANCE;Montréal'));
+  test("une étiquette égale au nom d'une organisation ne se mêle pas à elle", () => {
+    const apercu = apercevoir(csv('nom;organisation;etiquettes', 'Ombrelle;finance;Finance', 'Pervenche;FINANCE;Montréal'));
     assert.deepEqual(etiquettesDe(apercu), [[2, ['Finance']], [3, ['Montréal']]]);
     assert.deepEqual(apercu.fusionsEtiquettes, []);
     assert.equal(apercu.fusions.length, 1);
@@ -742,7 +742,7 @@ describe('apercevoir : une étiquette fautive refuse la ligne, jamais en silence
 describe('apercevoir : les doublons, signalés et jamais fusionnés (§ 10.1)', () => {
   test('deux lignes du même triplet normalisé : un doublon, et deux lignes restent deux', () => {
     const apercu = apercevoir(csv(
-      'nom;prenom;appartenance',
+      'nom;prenom;organisation',
       'Ombrelle;Iris;Club des Merles',
       'OMBRELLE; iris ;club  des merles',
       'Ombrelle;Iris;Chorale du Givre',
@@ -755,18 +755,18 @@ describe('apercevoir : les doublons, signalés et jamais fusionnés (§ 10.1)', 
 
   test("une ligne du triplet d'un participant existant : ses identifiants, croissants", () => {
     const participants = [existant(9, 'Ombrelle', 'Iris', 'Club des Merles'), existant(4, 'ombrelle', 'IRIS', 'club des merles')];
-    const apercu = apercevoir(csv('nom;prenom;appartenance', 'Ombrelle;Iris;Club des Merles'), { participants });
+    const apercu = apercevoir(csv('nom;prenom;organisation', 'Ombrelle;Iris;Club des Merles'), { participants });
     assert.deepEqual(apercu.doublons, [
       { cle: '["ombrelle","iris","club des merles"]', lignes: [2], existants: [4, 9] },
     ]);
     assert.equal(apercu.lignes.length, 1);
   });
 
-  test("un triplet qui diffère par le prénom ou par l'appartenance n'est pas un doublon", () => {
+  test("un triplet qui diffère par le prénom ou par l'organisation n'est pas un doublon", () => {
     const participants = [existant(1, 'Ombrelle', 'Ondine', null)];
     const apercu = apercevoir(
       csv(
-        'nom;prenom;appartenance',
+        'nom;prenom;organisation',
         'Ombrelle;Iris;Club des Merles',
         'Ombrelle;Iris;Chorale du Givre',
         'Ombrelle;;Club des Merles',
@@ -777,7 +777,7 @@ describe('apercevoir : les doublons, signalés et jamais fusionnés (§ 10.1)', 
     assert.deepEqual(apercu.doublons, []);
   });
 
-  test("un nom seul : le prénom et l'appartenance absents comptent comme vides", () => {
+  test("un nom seul : le prénom et l'organisation absents comptent comme vides", () => {
     const participants = [existant(2, 'Givre', '', null)];
     const apercu = apercevoir(csv('nom', 'Givre', 'givre ', 'Houle'), { participants });
     assert.equal(apercu.separateur, null);
@@ -803,10 +803,10 @@ describe('apercevoir : les doublons, signalés et jamais fusionnés (§ 10.1)', 
 });
 
 describe("apercevoir : le mode de l'import (§ 10.1)", () => {
-  // Deux participants existants, dont l'appartenance de l'un s'écrit
+  // Deux participants existants, dont l'organisation de l'un s'écrit
   // autrement dans le fichier.
   const participants = [existant(1, 'Ombrelle', 'Iris', 'Club des Merles'), existant(2, 'Lacasse', 'Ondine', null)];
-  const texte = csv('nom;prenom;appartenance', 'Ombrelle;Iris;club des merles', 'Lacasse;Ondine;', 'Lacasse;Ondine;');
+  const texte = csv('nom;prenom;organisation', 'Ombrelle;Iris;club des merles', 'Lacasse;Ondine;', 'Lacasse;Ondine;');
 
   test("ajouter, par défaut, et mettre à jour lisent le fichier contre les existants : doublons et fusions les comptent", () => {
     for (const mode of [undefined, 'ajouter', 'mettreAJour']) {
@@ -819,7 +819,7 @@ describe("apercevoir : le mode de l'import (§ 10.1)", () => {
       assert.deepEqual(apercu.fusions, [
         { affichee: 'Club des Merles', orthographes: [{ texte: 'Club des Merles', lignes: [] }, { texte: 'club des merles', lignes: [2] }] },
       ], String(mode));
-      assert.equal(apercu.lignes[0].champs.appartenance, 'Club des Merles', String(mode));
+      assert.equal(apercu.lignes[0].champs.organisation, 'Club des Merles', String(mode));
     }
   });
 
@@ -828,11 +828,11 @@ describe("apercevoir : le mode de l'import (§ 10.1)", () => {
     assert.equal(apercu.mode, 'remplacer');
     assert.deepEqual(apercu.doublons, [{ cle: '["lacasse","ondine",""]', lignes: [3, 4], existants: [] }]);
     assert.deepEqual(apercu.fusions, []);
-    assert.equal(apercu.lignes[0].champs.appartenance, 'club des merles');
+    assert.equal(apercu.lignes[0].champs.organisation, 'club des merles');
     assert.deepEqual(apercu, apercevoir(texte, { participants: [], mode: 'remplacer' }));
   });
 
-  test("mettre à jour nomme chaque ligne qu'il ajoute à côté d'un existant de même nom, que le prénom ou l'appartenance écarte des deux côtés", () => {
+  test("mettre à jour nomme chaque ligne qu'il ajoute à côté d'un existant de même nom, que le prénom ou l'organisation écarte des deux côtés", () => {
     // Iris passe du Club des Merles à la Société Alpha : la ligne ne désigne
     // personne, et l'import ajouterait une seconde Iris Ombrelle.
     const existants = [
@@ -841,17 +841,17 @@ describe("apercevoir : le mode de l'import (§ 10.1)", () => {
       existant(3, 'Lacasse', 'Ondine', null),
     ];
     const changeDeClub = csv(
-      'nom;prenom;appartenance',
+      'nom;prenom;organisation',
       // Iris écarte 2, la Société Alpha écarte 1 : un homonyme de 1 et 2.
       'OMBRELLE;Iris;Société Alpha',
-      // Désigne 3, qui n'a pas d'appartenance : aucun homonyme.
+      // Désigne 3, qui n'a pas d'organisation : aucun homonyme.
       'Lacasse;Ondine;Club des Merles',
       // Aucun existant de ce nom : un ajout, pas un homonyme.
       'Pervenche;Théo;',
-      // Sans prénom ni appartenance : les deux Ombrelle, un refus de
+      // Sans prénom ni organisation : les deux Ombrelle, un refus de
       // l'import, pas un ajout.
       'Ombrelle;;',
-      // Désigne 2, sans prénom ni appartenance de part et d'autre.
+      // Désigne 2, sans prénom ni organisation de part et d'autre.
       'Ombrelle;Théo;Chorale du Givre',
     );
     assert.deepEqual(apercevoir(changeDeClub, { participants: existants, mode: 'mettreAJour' }).homonymes, [
@@ -879,7 +879,7 @@ describe("apercevoir : le mode de l'import (§ 10.1)", () => {
       existant(3, 'Lacasse', 'Ondine', null),
     ];
     const texte = csv(
-      'nom;prenom;appartenance',
+      'nom;prenom;organisation',
       // Un homonyme : la Société Alpha écarte 1, Iris écarte 2.
       'Ombrelle;Iris;Société Alpha',
       // Désigne 3.
@@ -914,22 +914,22 @@ describe("apercevoir : le mode de l'import (§ 10.1)", () => {
 });
 
 describe('apercevoir : la réconciliation et la clé de doublon, une seule forme normalisée (§ 10.1)', () => {
-  test('deux personnes du même nom et du même prénom forment un doublon si et seulement si leurs appartenances se fondent', () => {
+  test('deux personnes du même nom et du même prénom forment un doublon si et seulement si leurs organisations se fondent', () => {
     // Chaque orthographe éprouve une dimension de la clé : casse, accent
     // composé ou décomposé, blancs, trait d'union, trait de soulignement,
-    // absence. L'appartenance affichée d'une ligne désigne son groupe ; une
-    // appartenance absente n'en a aucun, et la clé de doublon la compte vide.
+    // absence. L'organisation affichée d'une ligne désigne son groupe ; une
+    // organisation absente n'en a aucun, et la clé de doublon la compte vide.
     const orthographes = [
       'Club des Merles', 'CLUB DES MERLES', ' club  des\u{A0}merles ', 'Clu\u{301}b des Merles', 'Club-des-Merles',
       'Club_des_Merles', 'Clubdes Merles', 'Val-Brume', 'Val Brume', 'VAL BRUME', '', '   ', '\u{301}',
     ];
     const participants = [existant(1, 'Ombrelle', 'Iris', 'club des merles')];
     const apercu = apercevoir(
-      csv('nom;prenom;appartenance', ...orthographes.map((orthographe) => `Ombrelle;Iris;${orthographe}`)),
+      csv('nom;prenom;organisation', ...orthographes.map((orthographe) => `Ombrelle;Iris;${orthographe}`)),
       { participants },
     );
     // Les groupes attendus : la propriété ne se vérifie pas sur du vide.
-    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.appartenance), [
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.organisation), [
       'club des merles', 'club des merles', 'club des merles', 'club des merles', 'Club-des-Merles',
       'Club_des_Merles', 'Clubdes Merles', 'Val-Brume', 'Val Brume', 'Val Brume', null, null, null,
     ]);
@@ -939,11 +939,11 @@ describe('apercevoir : la réconciliation et la clé de doublon, une seule forme
     });
     for (const a of apercu.lignes) {
       const avecExistant = apercu.doublons.some(({ lignes, existants }) => lignes.includes(a.ligne) && existants.includes(1));
-      assert.equal(avecExistant, a.champs.appartenance === 'club des merles', `ligne ${a.ligne} et l'existant`);
+      assert.equal(avecExistant, a.champs.organisation === 'club des merles', `ligne ${a.ligne} et l'existant`);
       for (const b of apercu.lignes) {
         if (b.ligne <= a.ligne) continue;
         const memeDoublon = doublonDe.has(a.ligne) && doublonDe.get(a.ligne) === doublonDe.get(b.ligne);
-        assert.equal(memeDoublon, a.champs.appartenance === b.champs.appartenance, `lignes ${a.ligne} et ${b.ligne}`);
+        assert.equal(memeDoublon, a.champs.organisation === b.champs.organisation, `lignes ${a.ligne} et ${b.ligne}`);
       }
     }
   });
@@ -969,11 +969,11 @@ describe('apercevoir : les refus globaux (§ 10.1)', () => {
 
   test('aucune colonne associée à nom : NOM_NON_ASSOCIE', () => {
     assert.deepEqual(
-      apercevoir(csv('prenom;appartenance', 'Iris;Club des Merles')),
+      apercevoir(csv('prenom;organisation', 'Iris;Club des Merles')),
       refusGlobal('NOM_NON_ASSOCIE', {
         separateur: ';',
-        entetes: ['prenom', 'appartenance'],
-        association: { colonnes: { prenom: 0, appartenance: 1 }, ambigus: [], nonReconnues: [] },
+        entetes: ['prenom', 'organisation'],
+        association: { colonnes: { prenom: 0, organisation: 1 }, ambigus: [], nonReconnues: [] },
       }),
     );
   });
@@ -1161,7 +1161,7 @@ describe('apercevoir : les refus globaux (§ 10.1)', () => {
     // sur une seule ligne, n'est pas nommée ; une cellule qui porte les
     // deux l'est, une fois par cellule, quel que soit le séparateur.
     const notes = csv(
-      'nom,prenom,appartenance,notes',
+      'nom,prenom,organisation,notes',
       'Ombrelle,Iris,"Club, nord","arrive tôt\nrepart tard"',
       'Lacasse,Ondine,"Chorale\ndu Givre","noix, arachides\r\nsans gluten"',
       'Pervenche,Théo,,"au fond\rprès de la scène, côté jardin"',
@@ -1181,9 +1181,9 @@ describe('apercevoir : les refus globaux (§ 10.1)', () => {
   test("sous GUILLEMET_OUVERT, l'association suit le choix, dans la fenêtre comme au-delà", () => {
     for (const rang of [2, 21]) {
       const texte = csv('nom;organisation;entreprise', ...fenetre((patronyme) => `${patronyme};x;y`, rang - 2), 'Ombrelle;"x');
-      const apercu = apercevoir(texte, { choix: { appartenance: 2 } });
+      const apercu = apercevoir(texte, { choix: { organisation: 2 } });
       assert.equal(apercu.refusGlobal, 'GUILLEMET_OUVERT', String(rang));
-      assert.deepEqual(apercu.association, { colonnes: { nom: 0, appartenance: 2 }, ambigus: [], nonReconnues: [] }, String(rang));
+      assert.deepEqual(apercu.association, { colonnes: { nom: 0, organisation: 2 }, ambigus: [], nonReconnues: [] }, String(rang));
     }
   });
 
@@ -1225,7 +1225,7 @@ describe('apercevoir : les refus globaux (§ 10.1)', () => {
     // enregistrement n'est qu'une ligne refusée, ou complétée de null.
     const cas = [
       [csv('nom;prenom;notes', 'Ombrelle;Iris;arrive tard; vers 20 h', 'Pervenche;Théo;'), 2],
-      [csv('nom;prenom;appartenance', 'Ombrelle;Iris', 'Pervenche;Théo;Club des Merles'), 2],
+      [csv('nom;prenom;organisation', 'Ombrelle;Iris', 'Pervenche;Théo;Club des Merles'), 2],
       [csv('nom;prenom;notes', 'Ombrelle;Iris;', 'Pervenche;Théo;arrive tard; vers 20 h', 'Sarcelle;Ondine;'), 3],
       [csv('nom;prenom', 'Ombrelle'), 2],
       // Un enregistrement vide ne compte pas, avant l'en-tête ni après.
@@ -1366,7 +1366,7 @@ describe('apercevoir : les refus globaux (§ 10.1)', () => {
 // cellule à deux lignes, citée. C'est aussi le texte du fichier
 // utf16le_tabulation.csv, l'enregistrement « Texte Unicode » d'un tableur.
 const COLLAGE = csv(
-  'nom\tprenom\tappartenance\tnotes',
+  'nom\tprenom\torganisation\tnotes',
   'Ombrelle\tIris\tCh\u{153}ur de l\u{2019}Anse\tcaf\u{E9} \u{E0} 8 h',
   'Pervenche\tTh\u{E9}o\tClub des Merles\t"dit ""oui""\r\npuis part"',
 );
@@ -1376,14 +1376,14 @@ const LIGNES_DU_COLLAGE = [
   {
     ligne: 2,
     champs: champs({
-      nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Ch\u{153}ur de l\u{2019}Anse', notes: 'caf\u{E9} \u{E0} 8 h',
+      nom: 'Ombrelle', prenom: 'Iris', organisation: 'Ch\u{153}ur de l\u{2019}Anse', notes: 'caf\u{E9} \u{E0} 8 h',
     }),
     brut: ['Ombrelle', 'Iris', 'Ch\u{153}ur de l\u{2019}Anse', 'caf\u{E9} \u{E0} 8 h'],
   },
   {
     ligne: 3,
     champs: champs({
-      nom: 'Pervenche', prenom: 'Th\u{E9}o', appartenance: 'Club des Merles', notes: 'dit "oui"\r\npuis part',
+      nom: 'Pervenche', prenom: 'Th\u{E9}o', organisation: 'Club des Merles', notes: 'dit "oui"\r\npuis part',
     }),
     brut: ['Pervenche', 'Th\u{E9}o', 'Club des Merles', 'dit "oui"\r\npuis part'],
   },
@@ -1453,14 +1453,14 @@ describe("apercevoir : les données d'épreuve, un CSV tel qu'un tableur l'écri
     assert.deepEqual(finsDeLigne(lireFixture('marque_crlf.csv')), { crlf: 4, isolees: 0 });
     const apercu = apercuDe('marque_crlf.csv');
     assert.equal(apercu.separateur, ';');
-    assert.deepEqual(apercu.entetes, ['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes']);
+    assert.deepEqual(apercu.entetes, ['nom', 'prenom', 'organisation', 'courriel', 'titre_pressenti', 'exclu', 'notes']);
     assert.deepEqual(lignesDe(apercu), [
       [2, champs({
-        nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles', courriel: 'iris.ombrelle@exemple.test',
+        nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles', courriel: 'iris.ombrelle@exemple.test',
         titrePressenti: 'animation', exclu: false,
       })],
       [3, champs({ nom: 'Pervenche', prenom: 'Théo', courriel: 'theo.pervenche@exemple.test', notes: 'arrive tard' })],
-      [4, champs({ nom: 'Sarcelle', prenom: 'Ondine', appartenance: 'Chorale du Givre', exclu: true })],
+      [4, champs({ nom: 'Sarcelle', prenom: 'Ondine', organisation: 'Chorale du Givre', exclu: true })],
     ]);
     assert.deepEqual(apercu.refusees, []);
     assert.equal(apercu.refusGlobal, null);
@@ -1471,17 +1471,17 @@ describe("apercevoir : les données d'épreuve, un CSV tel qu'un tableur l'écri
     assert.notEqual(octets[octets.length - 1], 0x0a);
     assert.deepEqual(finsDeLigne(octets), { crlf: 2, isolees: 0 });
     assert.deepEqual(lignesDe(apercuDe('derniere_ligne_sans_fin.csv')), [
-      [2, champs({ nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles' })],
-      [3, champs({ nom: 'Bruyère', prenom: 'Anouk', appartenance: 'Chorale du Givre' })],
+      [2, champs({ nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles' })],
+      [3, champs({ nom: 'Bruyère', prenom: 'Anouk', organisation: 'Chorale du Givre' })],
     ]);
   });
 
   test('une ligne vide et une ligne de séparateurs au milieu : ignorées, les rangs suivants gardés', () => {
     const apercu = apercuDe('ligne_vide_au_milieu.csv');
     assert.deepEqual(lignesDe(apercu), [
-      [2, champs({ nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles' })],
+      [2, champs({ nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles' })],
       [4, champs({ nom: 'Pervenche', prenom: 'Théo' })],
-      [6, champs({ nom: 'Sarcelle', prenom: 'Ondine', appartenance: 'Chorale du Givre' })],
+      [6, champs({ nom: 'Sarcelle', prenom: 'Ondine', organisation: 'Chorale du Givre' })],
     ]);
     assert.deepEqual(apercu.refusees, []);
   });
@@ -1490,11 +1490,11 @@ describe("apercevoir : les données d'épreuve, un CSV tel qu'un tableur l'écri
     const apercu = apercuDe('champ_cite.csv');
     assert.deepEqual(lignesDe(apercu), [
       [2, champs({
-        nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club "Les Merles" ; section nord',
+        nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club "Les Merles" ; section nord',
         notes: 'dit "bonjour" ; puis part',
       })],
       [3, champs({
-        nom: 'Pervenche', prenom: 'Théo', appartenance: 'Chorale du Givre', notes: 'première ligne\r\ndeuxième ligne',
+        nom: 'Pervenche', prenom: 'Théo', organisation: 'Chorale du Givre', notes: 'première ligne\r\ndeuxième ligne',
       })],
       [4, champs({ nom: 'Sarcelle', prenom: 'Ondine', notes: 'fin' })],
     ]);
@@ -1503,13 +1503,13 @@ describe("apercevoir : les données d'épreuve, un CSV tel qu'un tableur l'écri
 
   test('des espaces autour des valeurs et des en-têtes : retirés des champs, gardés dans le brut', () => {
     const apercu = apercuDe('espaces_autour.csv');
-    assert.deepEqual(apercu.entetes, [' nom ', ' prenom ', ' appartenance ', ' courriel ', ' exclu ']);
-    assert.deepEqual(apercu.association.colonnes, { nom: 0, prenom: 1, appartenance: 2, courriel: 3, exclu: 4 });
+    assert.deepEqual(apercu.entetes, [' nom ', ' prenom ', ' organisation ', ' courriel ', ' exclu ']);
+    assert.deepEqual(apercu.association.colonnes, { nom: 0, prenom: 1, organisation: 2, courriel: 3, exclu: 4 });
     assert.deepEqual(apercu.lignes, [
       {
         ligne: 2,
         champs: champs({
-          nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles', courriel: 'iris@exemple.test', exclu: true,
+          nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles', courriel: 'iris@exemple.test', exclu: true,
         }),
         brut: [' Ombrelle ', '  Iris ', '  Club des Merles  ', ' iris@exemple.test ', ' Oui '],
       },
@@ -1540,14 +1540,14 @@ describe("apercevoir : les données d'épreuve, un CSV tel qu'un tableur l'écri
   test("une colonne d'en-tête vide : non reconnue, sa valeur ignorée, la ligne importée", () => {
     const apercu = apercuDe('entete_vide.csv');
     assert.deepEqual(apercu.association, {
-      colonnes: { nom: 0, prenom: 1, appartenance: 3 },
+      colonnes: { nom: 0, prenom: 1, organisation: 3 },
       ambigus: [],
       nonReconnues: [2],
     });
     assert.deepEqual(apercu.lignes, [
       {
         ligne: 2,
-        champs: champs({ nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles' }),
+        champs: champs({ nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles' }),
         brut: ['Ombrelle', 'Iris', 'note sans en-tête', 'Club des Merles'],
       },
       { ligne: 3, champs: champs({ nom: 'Pervenche', prenom: 'Théo' }), brut: ['Pervenche', 'Théo', '', ''] },

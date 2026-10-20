@@ -15,7 +15,7 @@
 // chiffre se lit donc sur les seuls tours de présence, et les rencontres
 // d'une personne aux tours où elle est assise comptent, qu'elle parte ou
 // arrive ensuite. Deux personnes
-// sans appartenance ne sont pas collègues. Un ensemble vide rend null, jamais
+// sans organisation ne sont pas collègues. Un ensemble vide rend null, jamais
 // 0 : le taux de diversité de qui ne rencontre aucun affilié, le minimum et la
 // moyenne d'une population sans membre.
 //
@@ -74,7 +74,7 @@ import {
  * @typedef {Object} Mesures
  * @property {number[]} rencontres          |met(p)|, ordre canonique
  * @property {number[]} affilies            |F(p)|
- * @property {number[]} appartenancesVues   A(p) — appartenances des affiliés
+ * @property {number[]} organisationsVues   A(p) — organisations des affiliés
  *                                          rencontrés, la sienne comprise quand
  *                                          un collègue est rencontré
  * @property {number[]} redondance          r(p) = |F(p)| − A(p)
@@ -86,7 +86,7 @@ import {
  *                                          ses retours choisis
  * @property {TroisAgregats} aggRencontres
  * @property {TroisAgregats} aggRedondance
- * @property {TroisAgregats} aggAppartenancesVues   A(p)
+ * @property {TroisAgregats} aggOrganisationsVues   A(p)
  * @property {TroisAgregats} aggDiversite   d(p), sur les seules personnes qui
  *                                          rencontrent un affilié
  * @property {number} totalRedondance       Σ_p r(p), le seul total de la
@@ -119,13 +119,13 @@ const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
 
 /**
  * Le plan lu tour par tour, puis table par table, par index croissants : le
- * seul code qui décide qu'une paire est réunie, de même appartenance ou
+ * seul code qui décide qu'une paire est réunie, de même organisation ou
  * revue, et qu'une personne revient. mesurer en tire chacun de ses chiffres,
  * conflitsParTable (conflits.js) le détail par table.
  *
  * parTour[r][t], en index de personnes, chaque paire [a, b] avec a < b,
  * chaque liste croissante — paires dans l'ordre de a, puis de b :
- * - collegues : paires de même appartenance assises à t au tour r ;
+ * - collegues : paires de même organisation assises à t au tour r ;
  * - revues : paires assises à t au tour r et réunies à un tour antérieur,
  *   sauf quand chacune de leurs rencontres jusqu'à r a lieu à une table où
  *   les deux sont réservés ce tour-là ;
@@ -490,9 +490,9 @@ export function mesurer(instance, tableDe) {
 
   const rencontres = Array.from(paires.rencontres);
   const affilies = Array.from(paires.affilies);
-  const appartenancesVues = Array.from(paires.vues);
-  const redondance = affilies.map((f, p) => f - appartenancesVues[p]);
-  const diversite = affilies.map((f, p) => (f === 0 ? null : appartenancesVues[p] / f));
+  const organisationsVues = Array.from(paires.vues);
+  const redondance = affilies.map((f, p) => f - organisationsVues[p]);
+  const diversite = affilies.map((f, p) => (f === 0 ? null : organisationsVues[p] / f));
   const retoursImposes = retours.map((total, p) => total - retoursChoisis[p]);
 
   const effectifs = new Array(groupes.length).fill(0);
@@ -512,7 +512,7 @@ export function mesurer(instance, tableDe) {
   return {
     rencontres,
     affilies,
-    appartenancesVues,
+    organisationsVues,
     redondance,
     diversite,
     toursAssis,
@@ -520,7 +520,7 @@ export function mesurer(instance, tableDe) {
     retoursImposes,
     aggRencontres: troisAgregats(rencontres, statut),
     aggRedondance: troisAgregats(redondance, statut),
-    aggAppartenancesVues: troisAgregats(appartenancesVues, statut),
+    aggOrganisationsVues: troisAgregats(organisationsVues, statut),
     aggDiversite: troisAgregats(diversite, statut, ajouterSiDefinie),
     totalRedondance: somme(redondance),
     collisionsCumulees,

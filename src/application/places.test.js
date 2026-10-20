@@ -43,7 +43,7 @@ const personne = (id, nom, prenom = null, autres = {}) => ({
   id,
   nom,
   prenom,
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,
@@ -95,7 +95,7 @@ const retenuDe = (proposition, plan) => ({ proposition, ...plan });
 // quatre tours, aucune réservation.
 const petite = () => analyser(readFileSync(new URL('../demo/livrees/petite.gtt.json', import.meta.url), 'utf8')).charge;
 
-// Un plan qui sépare les trois appartenances, ne réunit jamais deux fois les
+// Un plan qui sépare les trois organisations, ne réunit jamais deux fois les
 // mêmes voisins et n'assied personne deux fois à la même table.
 const PARFAIT = [
   [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]],
@@ -226,7 +226,7 @@ describe('etatPlaces : la source et la cible (§ 5.8, § 8.9)', () => {
 
   test('sans source, les conflits sont ceux des seules réservations', () => {
     const charge = petite();
-    // 1 et 5 sont de la même appartenance : réservés à la même table.
+    // 1 et 5 sont de la même organisation : réservés à la même table.
     charge.reservations = [resa(1, 1, null), resa(5, 1, null, 2)];
     const etat = etatPlaces(charge, { tour: 2 });
     assert.equal(etat.evalue, true);

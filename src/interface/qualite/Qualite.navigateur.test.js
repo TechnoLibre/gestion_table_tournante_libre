@@ -44,7 +44,7 @@ const VUES = ['entete', 'profil', 'comparaison', 'collisions', 'tables', 'paires
 
 // --- Les charges d'épreuve -------------------------------------------------------
 
-// Six personnes inventées, deux appartenances, deux tables de trois places,
+// Six personnes inventées, deux organisations, deux tables de trois places,
 // deux tours, sans proposition ni retenu.
 function chargeSix() {
   const charge = creerCharge({ id: 'evt-qualite', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 2 });
@@ -56,11 +56,11 @@ function chargeSix() {
     ['Quenouille', 'Maëlle', null],
     ['Varech', 'Sidonie', null],
   ];
-  charge.participants = noms.map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = noms.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -556,7 +556,7 @@ describe('une source dérivée : sa filiation, et la course partie de son dépar
       id: rang + 1,
       nom,
       prenom,
-      appartenance: rang % 3 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
+      organisation: rang % 3 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -627,13 +627,13 @@ describe('une source dérivée : sa filiation, et la course partie de son dépar
 });
 
 describe('la présence par tour : une absence ne retire que le plancher de l’écart d’itinéraire (§ 12.4, § 12.6)', () => {
-  // Cinq membres de la Coopérative Aubier, deux autres sans appartenance,
+  // Cinq membres de la Coopérative Aubier, deux autres sans organisation,
   // une table de trois et une de quatre, où Ondine Ressac est réservée pour
   // la soirée, trois tours : le plancher des collisions tient à chaque tour.
   function chargeSept() {
     const charge = chargeSix();
     charge.evenement.tours = 3;
-    for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+    for (const personne of charge.participants) personne.organisation = personne.id <= 5 ? 'Coopérative Aubier' : null;
     charge.participants.push({ ...charge.participants[5], id: 7, nom: 'Ressac', prenom: 'Ondine' });
     charge.tables[1].sieges = 4;
     charge.reservations = [{ participant: 7, table: 2, siege: null, portee: 'tous', tour: null }];

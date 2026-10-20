@@ -21,7 +21,7 @@ const personne = (id, autres = {}) => ({
   id,
   nom: NOMS[(id - 1) % NOMS.length],
   prenom: null,
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,

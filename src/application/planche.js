@@ -43,10 +43,10 @@ import { versionVisible } from './version.js';
  * @typedef {Object} Badge
  * @property {number} participant
  * @property {string} nom                 le nom affiché, en NFC
- * @property {string|null} appartenance   en NFC ; null : la ligne n'existe pas
+ * @property {string|null} organisation   en NFC ; null : la ligne n'existe pas
  * @property {LigneTour[]} lignes
  * @property {number|null} identifiant    celui d'un homonyme que rien ne sépare
- * @property {{nom: string, lignes: string[], appartenance: string|null,
+ * @property {{nom: string, lignes: string[], organisation: string|null,
  *             pied: string[], piedReduit: string[]}} textes
  * @typedef {Object} ModelePlanche
  * @property {Badge[]} badges             dans l'ordre de la pile
@@ -105,17 +105,17 @@ export function comparerPointsDeCode(a, b) {
   return a.length < b.length ? -1 : 1;
 }
 
-// La clé d'appartenance d'une personne : la clé normalisée, vide sans
-// appartenance ou pour une appartenance faite de blancs.
-const cleAppartenance = ({ appartenance }) => cleNormalisee(appartenance ?? '');
+// La clé d'organisation d'une personne : la clé normalisée, vide sans
+// organisation ou pour une organisation faite de blancs.
+const cleOrganisation = ({ organisation }) => cleNormalisee(organisation ?? '');
 
 /**
  * Les homonymes que rien ne sépare sur un badge (§ 11.4, décision 7) : les
  * personnes non exclues de même nom affiché normalisé et de même
- * appartenance normalisée, ou toutes deux sans appartenance. Un groupe par
+ * organisation normalisée, ou toutes deux sans organisation. Un groupe par
  * collision : nom, le nom affiché en NFC de sa personne d'identifiant le
  * plus petit ; ids, croissants. Les groupes se rangent par clé de nom, puis
- * d'appartenance, par points de code. Le calcul porte sur toute la soirée,
+ * d'organisation, par points de code. Le calcul porte sur toute la soirée,
  * jamais sur une sélection : un badge réédité garde son identifiant.
  *
  * @param {import('../stockage/types.js').Charge} charge
@@ -125,7 +125,7 @@ export function homonymesDe(charge) {
   const groupes = new Map();
   const triees = charge.participants.filter(({ exclu }) => !exclu).sort((a, b) => a.id - b.id);
   for (const personne of triees) {
-    const cles = [cleNormalisee(nomAffiche(personne)), cleAppartenance(personne)];
+    const cles = [cleNormalisee(nomAffiche(personne)), cleOrganisation(personne)];
     const cle = JSON.stringify(cles);
     if (!groupes.has(cle)) groupes.set(cle, { cles, nom: nomAffiche(personne).normalize('NFC'), ids: [] });
     groupes.get(cle).ids.push(personne.id);
@@ -272,7 +272,7 @@ function lignesDe(id, places, titres) {
 // porte l'événement et sa date, l'horodatage, puis l'identifiant d'un
 // homonyme ; piedReduit, le même sans le nom de l'événement, date gardée.
 // Aucun ne porte la version, ni le tour.
-function textesDe({ nom, appartenance, lignes, identifiant }, evenement, horodatage) {
+function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodatage) {
   const ligneHorodatage =
     horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
   const ligneIdentifiant = identifiant === null ? [] : [libelle('planche.pied.identifiant', { identifiant })];
@@ -280,7 +280,7 @@ function textesDe({ nom, appartenance, lignes, identifiant }, evenement, horodat
   return {
     nom,
     lignes: lignes.map((ligne) => libelle(ligne.tour === null ? 'planche.touteLaSoiree' : 'planche.tour', ligne)),
-    appartenance,
+    organisation,
     pied: [libelle('planche.pied.evenement', evenement), ligneHorodatage, ...ligneIdentifiant],
     piedReduit: [...ligneDate, ligneHorodatage, ...ligneIdentifiant],
   };
@@ -379,11 +379,11 @@ export function modelePlanche(
     .map((personne) => ({ personne, places: places.get(personne.id) }))
     .sort(ordre === 'table' ? ordreParTable : ordreAlphabetique);
   const badges = retenues.map(({ personne }) => {
-    const appartenance = cleAppartenance(personne) === '' ? null : personne.appartenance.normalize('NFC');
+    const organisation = cleOrganisation(personne) === '' ? null : personne.organisation.normalize('NFC');
     const badge = {
       participant: personne.id,
       nom: nomAffiche(personne).normalize('NFC'),
-      appartenance,
+      organisation,
       lignes: lignesDe(personne.id, places, titres),
       identifiant: identifiants.has(personne.id) ? personne.id : null,
     };

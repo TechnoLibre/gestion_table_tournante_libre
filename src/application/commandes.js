@@ -95,7 +95,7 @@ const ETATS = ['brouillon', 'propose', 'retenu', 'bloque'];
 
 // Les champs de texte d'un participant que la saisie pose, dans l'ordre du
 // fichier.
-const CHAMPS_DE_SAISIE = ['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes'];
+const CHAMPS_DE_SAISIE = ['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes'];
 
 // Une saisie de texte : en NFC, ses blancs de bord retirés, null quand il ne
 // reste rien ; null et l'absence valent null.
@@ -199,7 +199,7 @@ function ajouterParticipant(charge, { champs, presence = null }) {
     id,
     nom: lus.nom ?? null,
     prenom: lus.prenom ?? null,
-    appartenance: lus.appartenance ?? null,
+    organisation: lus.organisation ?? null,
     courriel: lus.courriel ?? null,
     titrePressenti: lus.titrePressenti ?? null,
     notes: lus.notes ?? null,

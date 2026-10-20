@@ -15,7 +15,7 @@
 // l'élément i échange sa place avec l'élément i + borne(n − i) ; les k
 // premiers sont rendus dans cet ordre.
 import { ErreurConfiguration } from '../moteur/erreurs.js';
-import { faisabilite, somme, tirerTailles, tourTemoin } from './appartenances.js';
+import { faisabilite, somme, tirerTailles, tourTemoin } from './organisations.js';
 import { NOMS_LONGS, PRENOMS, organisations, patronymes } from './noms.js';
 import { FLUX, creerPcg32 } from './prng.js';
 
@@ -35,7 +35,7 @@ const DEFINITION_SANS_EXCEPTION = Object.freeze({
   tours: 4,
 });
 
-// Appartenances A, B et C de la petite démonstration (§ 15.3), puis celles de
+// Organisations A, B et C de la petite démonstration (§ 15.3), puis celles de
 // la variante, où la personne 10 passe de C à A.
 const GROUPES_PETITE = [[1, 5, 8, 12], [2, 4, 9, 11], [3, 6, 7, 10]];
 const GROUPES_PETITE_CONFLIT = [[1, 5, 8, 10, 12], [2, 4, 9, 11], [3, 6, 7]];
@@ -50,10 +50,10 @@ const idsJusqua = (n) => Array.from({ length: n }, (_, rang) => rang + 1);
 // Les quatre contraintes, toutes actives : un objet neuf à chaque appel.
 function contraintesActives() {
   return {
-    separerAppartenances: true,
+    separerOrganisations: true,
     nouveauxVoisins: true,
     nouvelleTable: true,
-    varierAppartenances: true,
+    varierOrganisations: true,
   };
 }
 
@@ -78,12 +78,12 @@ function tirerPrenoms(rng, effectif) {
 
 // Participants d'ids 1 à N, à partir des listes tirées, indexées par
 // id − 1.
-function participantsDe(noms, prenoms, appartenances) {
+function participantsDe(noms, prenoms, organisationsDesMembres) {
   return noms.map((nom, rang) => ({
     id: rang + 1,
     nom,
     prenom: prenoms[rang],
-    appartenance: appartenances[rang],
+    organisation: organisationsDesMembres[rang],
   }));
 }
 
@@ -124,14 +124,14 @@ function exigerTailles(tailles) {
  *    groupe, les suivants le deuxième, et ainsi de suite ;
  * 6. un mélange des ids 1 à N : ses T premiers sont les animateurs, le rang
  *    i réservé à la table i + 1 pour tous les tours, sans égard à son
- *    appartenance (§ 15.1).
+ *    organisation (§ 15.1).
  *
  * Après le tirage 1, et avant tout autre, la définition est refusée par
  * ErreurConfiguration, contrôlée dans cet ordre : DEMO_SANS_PARTICIPANT
  * (aucun membre), DEMO_SANS_TABLE (aucune table), DEMO_RESERVOIR (plus de
  * personnes que de patronymes, ou plus de groupes que d'organisations ;
  * détails reservoir, demandes, disponibles), DEMO_SANS_TOUR_TEMOIN (aucun
- * tour ne sépare toutes les appartenances ; détails graine et raison : la
+ * tour ne sépare toutes les organisations ; détails graine et raison : la
  * première inégalité rompue de faisabilite, ou CONSTRUCTION quand les deux
  * tiennent et que tourTemoin ne trouve aucun tour). Le tour témoin porte sur
  * les tailles et les capacités ; les animateurs n'y entrent pas.
@@ -181,13 +181,13 @@ export function engendrer({ graine, capacites, tours, effectif, tailles: tailles
   const ordre = rng.melanger(idsJusqua(N));
   const animateurs = rng.melanger(idsJusqua(N));
 
-  const appartenances = new Array(N);
+  const organisationsDesMembres = new Array(N);
   let rang = 0;
   for (let g = 0; g < tailles.length; g += 1) {
-    for (let m = 0; m < tailles[g]; m += 1, rang += 1) appartenances[ordre[rang] - 1] = libelles[g];
+    for (let m = 0; m < tailles[g]; m += 1, rang += 1) organisationsDesMembres[ordre[rang] - 1] = libelles[g];
   }
   return {
-    participants: participantsDe(noms, prenoms, appartenances),
+    participants: participantsDe(noms, prenoms, organisationsDesMembres),
     tables: tablesDe(capacites),
     tours,
     reservations: capacites.map((_, t) => ({
@@ -199,7 +199,7 @@ export function engendrer({ graine, capacites, tours, effectif, tailles: tailles
   };
 }
 
-// Petite démonstration (§ 15.3) : 12 personnes en appartenances fixées à la
+// Petite démonstration (§ 15.3) : 12 personnes en organisations fixées à la
 // main, 4 tables de 3, 4 tours, aucune réservation. Tirages, dans l'ordre :
 // un patronyme par personne, sans remise ; un prénom par personne, ids
 // croissants, un borne() chacun ; un libellé d'organisation par groupe, sans
@@ -209,12 +209,12 @@ function construirePetite(graine, groupes) {
   const noms = tirerSansRemise(rng, patronymes(), PETITE.membres);
   const prenoms = tirerPrenoms(rng, PETITE.membres);
   const libelles = tirerSansRemise(rng, organisations(), groupes.length);
-  const appartenances = new Array(PETITE.membres);
+  const organisationsDesMembres = new Array(PETITE.membres);
   groupes.forEach((ids, g) => {
-    for (const id of ids) appartenances[id - 1] = libelles[g];
+    for (const id of ids) organisationsDesMembres[id - 1] = libelles[g];
   });
   return {
-    participants: participantsDe(noms, prenoms, appartenances),
+    participants: participantsDe(noms, prenoms, organisationsDesMembres),
     tables: tablesDe(Array(PETITE.tables).fill(PETITE.capacite)),
     tours: PETITE.tours,
     reservations: [],

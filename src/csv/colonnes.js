@@ -4,7 +4,7 @@
 // Association des colonnes d'un CSV aux champs d'un participant (§ 10.1). Une
 // colonne s'associe par son en-tête, jamais par sa position : un tableur dont
 // une colonne a été déplacée importerait sinon les noms dans les
-// appartenances, sans rien signaler. Deux colonnes reconnues sous le même
+// organisations, sans rien signaler. Deux colonnes reconnues sous le même
 // champ ne se départagent pas toutes seules ; le choix de l'opérateur tranche.
 // La règle se lit sur une table d'en-têtes : reconnaitreSelon et
 // associerSelon la portent pour toute table, celle des objectifs de table
@@ -27,7 +27,7 @@ const champ = (nom, entetes) => Object.freeze([nom, Object.freeze(entetes)]);
 export const ENTETES_DES_CHAMPS = Object.freeze([
   champ('nom', ['nom']),
   champ('prenom', ['prenom']),
-  champ('appartenance', ['appartenance', 'organisation', 'entreprise', 'équipe']),
+  champ('organisation', ['organisation', 'appartenance', 'entreprise', 'équipe']),
   champ('courriel', ['courriel']),
   champ('titre_pressenti', ['titre_pressenti', 'titre', 'rôle']),
   champ('exclu', ['exclu']),

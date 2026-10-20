@@ -16,7 +16,7 @@
 // détermine (a, d) tant que d ≤ 16 : les 260 paires sont distinctes, et les
 // 260 signatures aussi. Les deux tours d'une personne diffèrent de 5. Aucune
 // table ne reçoit plus de 8 personnes fixées au même tour : le moteur la
-// normalise sans SURRESERVATION. Personne n'a d'appartenance, et les quatre
+// normalise sans SURRESERVATION. Personne n'a d'organisation, et les quatre
 // contraintes sont actives, comme dans les démonstrations.
 //
 // Les noms sont forgés : le produit de 20 prénoms et de 13 noms, hors des
@@ -53,7 +53,7 @@ export function configurationPessimiste() {
       id,
       nom: NOMS[i % NOMS.length],
       prenom: PRENOMS[Math.floor(i / NOMS.length)],
-      appartenance: null,
+      organisation: null,
     });
     const a = i % tables;
     const b = (a + 1 + Math.floor(i / tables)) % tables;
@@ -69,10 +69,10 @@ export function configurationPessimiste() {
     tours,
     reservations,
     contraintes: {
-      separerAppartenances: true,
+      separerOrganisations: true,
       nouveauxVoisins: true,
       nouvelleTable: true,
-      varierAppartenances: true,
+      varierOrganisations: true,
     },
   };
 }

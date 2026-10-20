@@ -122,7 +122,7 @@ export function presenceDeCharge(charge) {
 const BORNE_DE_TUILE = new Map([
   ['rencontresTous', 'rang1'],
   ['manqueMax', 'manque'],
-  ['appartenancesVues', 'diversite'],
+  ['organisationsVues', 'diversite'],
   ['toursHorsObjectif', 'soiree'],
   ['toursSelonObjectif', 'objectifs'],
   ['animateursRencontres', 'animateurs'],
@@ -163,9 +163,9 @@ function bornesDe(nom, { bornes, ligne, table, t, nommer }) {
         t('qualite.tuile.plafondRealise', { plafond: manque.plafondRealise }),
       ]);
     }
-    case 'appartenancesVues': {
+    case 'organisationsVues': {
       const { diversite } = bornes;
-      if (diversite === null) return rendu([t('qualite.tuile.sansAppartenance')]);
+      if (diversite === null) return rendu([t('qualite.tuile.sansOrganisation')]);
       return rendu([nommer(diversite.id), t('qualite.tuile.borneDiversite', { borne: diversite.aMax })]);
     }
     case 'toursHorsObjectif': {

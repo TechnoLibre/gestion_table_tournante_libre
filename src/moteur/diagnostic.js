@@ -28,7 +28,7 @@
 
 /**
  * @typedef {Object} PlancherCollisions
- * @property {string} groupe                    libellé de l'appartenance
+ * @property {string} groupe                    libellé de l'organisation
  * @property {number} effectif                  membres présents
  * @property {number} plancherCumulees          collisions cumulées, sur les R tours
  * @property {number} plancherPairesDistinctes
@@ -55,10 +55,10 @@
  * @property {{toursSansRedondance: number|null}} remedes
  *           toursSansRedondance : plus grand R′ < R où redondanceMinimale vaut
  *           0 ; null quand elle vaut déjà 0 ou null, ou qu'aucun R′ ne l'annule
- * @property {boolean} animateursMemeAppartenance
+ * @property {boolean} animateursMemeOrganisation
  * @property {number} redondanceImposeeParAnimateurs   min(R, T) − 1 ou 0
- * @property {boolean} uneSeuleAppartenance     séparation active, une seule
- *           appartenance, portée par chaque présent (§ 15.4)
+ * @property {boolean} uneSeuleOrganisation     séparation active, une seule
+ *           organisation, portée par chaque présent (§ 15.4)
  * @property {boolean} collisionPartout         tout plan qui assied chacun
  *           porte une collision à chaque table de chaque tour (§ 7.5)
  * @property {Array<{table: number, ancres: number, capacite: number, gelee: boolean,
@@ -191,8 +191,8 @@ function redondanceMinimale({ N, groupe, groupes }, aPriori) {
 }
 
 // Vrai quand les ancrés, les animateurs, sont au moins deux et portent tous
-// la même appartenance déclarée (§ 5.6).
-function animateursMemeAppartenance({ N, statut, groupe }) {
+// la même organisation déclarée (§ 5.6).
+function animateursMemeOrganisation({ N, statut, groupe }) {
   let commun = SANS_GROUPE;
   let animateurs = 0;
   for (let p = 0; p < N; p += 1) {
@@ -319,44 +319,44 @@ function toursSansRedondance(configuration, R, minimale) {
 }
 
 // Vrai quand la séparation est active et que les présents portent tous une
-// même appartenance, la seule (§ 15.4) ; faux dès qu'un présent est sans
-// appartenance : la séparation y garde un sens.
-function uneSeuleAppartenance({ groupe, groupes, contraintes }) {
-  return contraintes.separerAppartenances && groupes.length === 1 && !groupe.includes(SANS_GROUPE);
+// même organisation, la seule (§ 15.4) ; faux dès qu'un présent est sans
+// organisation : la séparation y garde un sens.
+function uneSeuleOrganisation({ groupe, groupes, contraintes }) {
+  return contraintes.separerOrganisations && groupes.length === 1 && !groupe.includes(SANS_GROUPE);
 }
 
 // Vrai quand tout plan qui assied chacun porte une collision à chaque table
 // de chaque tour (§ 7.5). Au tour r, les autres tables tiennent au plus
 // Σ c − c_t personnes : la table t reçoit au moins n_r − (Σ c − c_t) des
 // n_r présents du tour. Sans collision, elle n'assied qu'un membre de
-// chacune des G_r appartenances présentes au tour et les U_r présents sans
-// appartenance : au-delà de G_r + U_r, la collision est forcée. Vrai quand
+// chacune des G_r organisations présentes au tour et les U_r présents sans
+// organisation : au-delà de G_r + U_r, la collision est forcée. Vrai quand
 // elle l'est à chaque table de chaque tour. Faux quand la séparation est
 // inactive, qu'une place manque à un tour — aucun plan n'assied chacun —, ou
 // sans table : rien ne le prouve.
 function collisionPartout(instance, placesManquantes) {
   const { N, T, R, capacite, groupe, groupes, contraintes, present, presentsParTour } = instance;
-  if (!contraintes.separerAppartenances || placesManquantes > 0 || T === 0) return false;
+  if (!contraintes.separerOrganisations || placesManquantes > 0 || T === 0) return false;
   const places = nombrePlaces(instance);
   let plusPetite = capacite[0];
   for (let t = 1; t < T; t += 1) if (capacite[t] < plusPetite) plusPetite = capacite[t];
   const vue = new Uint8Array(groupes.length);
   for (let r = 0; r < R; r += 1) {
     vue.fill(0);
-    let appartenances = 0;
-    let sansAppartenance = 0;
+    let organisations = 0;
+    let sansOrganisation = 0;
     for (let p = 0; p < N; p += 1) {
       if (present[p * R + r] === 0) continue;
       const g = groupe[p];
-      if (g === SANS_GROUPE) sansAppartenance += 1;
+      if (g === SANS_GROUPE) sansOrganisation += 1;
       else if (vue[g] === 0) {
         vue[g] = 1;
-        appartenances += 1;
+        organisations += 1;
       }
     }
     // La plus petite table reçoit le moins de personnes : elle décide du
     // tour.
-    if (presentsParTour[r] - (places - plusPetite) <= appartenances + sansAppartenance) return false;
+    if (presentsParTour[r] - (places - plusPetite) <= organisations + sansOrganisation) return false;
   }
   return true;
 }
@@ -519,10 +519,10 @@ function etendue(valeurs) {
  *   tour ; chacun avec les tables qui l'annulent.
  * - redondanceMinimale : max_p max(0, min(a priori(p), affiliés autres que
  *   p) − G) ; remedes.toursSansRedondance, le nombre de tours qui l'annule.
- * - animateursMemeAppartenance, et redondanceImposeeParAnimateurs : la forme
+ * - animateursMemeOrganisation, et redondanceImposeeParAnimateurs : la forme
  *   close min(R, T) − 1 du § 5.6, qui compte un animateur à chaque table
- *   visitée ; 0 quand les animateurs ne partagent pas une appartenance.
- * - uneSeuleAppartenance et collisionPartout : une séparation vide de sens,
+ *   visitée ; 0 quand les animateurs ne partagent pas une organisation.
+ * - uneSeuleOrganisation et collisionPartout : une séparation vide de sens,
  *   une collision forcée à chaque table de chaque tour, jugée sur les
  *   présents du tour.
  * - ancrage : ancrés, capacité, gel et demi-ancrage de chaque table.
@@ -540,7 +540,7 @@ function etendue(valeurs) {
  *   personne, nuls sans objectif ; l'interface écrit ceux que le mode
  *   compare. parTour porte le plancher de chaque tour, que le détail de la
  *   page de qualité lit sans le recompter (qualite.js).
- *   animateursMemeAppartenance garde son sens : les ancrés.
+ *   animateursMemeOrganisation garde son sens : les ancrés.
  *
  * @param {import('./types.js').Configuration} configuration
  * @param {{planchersCollisions?: typeof planchersCollisions}} [calcul]
@@ -551,7 +551,7 @@ function etendue(valeurs) {
 export function diagnostiquer(configuration, { planchersCollisions: chiffrer = planchersCollisions } = {}) {
   const instance = normaliser(configuration);
   const aPriori = plafondsAPriori(instance);
-  const memeAppartenance = animateursMemeAppartenance(instance);
+  const memeOrganisation = animateursMemeOrganisation(instance);
   const placesManquantes = nombrePlacesManquantes(instance);
   const avecAbsences = instance.absences > 0;
   const minimale = redondanceMinimale(instance, aPriori);
@@ -566,9 +566,9 @@ export function diagnostiquer(configuration, { planchersCollisions: chiffrer = p
     collisions: avecTablesManquantes(configuration, instance, chiffrer(instance), chiffrer),
     redondanceMinimale: minimale,
     remedes: { toursSansRedondance: toursSansRedondance(configuration, instance.R, minimale) },
-    animateursMemeAppartenance: memeAppartenance,
-    redondanceImposeeParAnimateurs: memeAppartenance ? Math.min(instance.R, instance.T) - 1 : 0,
-    uneSeuleAppartenance: uneSeuleAppartenance(instance),
+    animateursMemeOrganisation: memeOrganisation,
+    redondanceImposeeParAnimateurs: memeOrganisation ? Math.min(instance.R, instance.T) - 1 : 0,
+    uneSeuleOrganisation: uneSeuleOrganisation(instance),
     collisionPartout: collisionPartout(instance, placesManquantes),
     ancrage: ancrage(instance),
     retoursImposes: imposes.totalRetoursImposes,

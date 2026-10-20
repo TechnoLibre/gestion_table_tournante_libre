@@ -147,10 +147,10 @@ describe("engendrer_livrables : la charge d'une démonstration (§ 15)", () => {
         { ...lue, reservations: [...lue.reservations].sort(parTable) },
         {
           ...configuration,
-          participants: configuration.participants.map(({ id, nom, appartenance }) => ({
+          participants: configuration.participants.map(({ id, nom, organisation }) => ({
             id,
             nom,
-            appartenance,
+            organisation,
             exclu: false,
           })),
           reservations: [...configuration.reservations].sort(parTable),
@@ -196,10 +196,10 @@ describe("engendrer_livrables : la charge d'une démonstration (§ 15)", () => {
       );
     }
     const contraintes = {
-      separerAppartenances: false,
+      separerOrganisations: false,
       nouveauxVoisins: true,
       nouvelleTable: false,
-      varierAppartenances: true,
+      varierOrganisations: true,
     };
     const entree = entreeRetouchee((configuration) => ({ ...configuration, contraintes }));
     assert.deepEqual(chargeDeDemonstration(entree).reglages, {

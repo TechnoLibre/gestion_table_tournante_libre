@@ -57,7 +57,7 @@ const cles = (phrases) => phrases.map(({ cle }) => cle);
 // Deux tables de quatre, deux tours : quatre personnes, dont une sans
 // prénom ; la personne 5 est exclue.
 const PERSONNES = () => [
-  personne(1, 'Iris', 'Ombrelle', { appartenance: 'Club des Merles' }),
+  personne(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
   personne(2, 'Théo', 'Pervenche'),
   personne(3, 'Ondine', 'Lacasse'),
   personne(4, null, 'Grisaille'),
@@ -225,7 +225,7 @@ describe('les phrases de l’annonce (§ 11.2, § 11.5, § 11.8)', () => {
 
   test('des homonymes : chaque groupe nommé, avec les identifiants que le badge imprime', async () => {
     const charge = retenue();
-    charge.participants[2] = personne(3, 'Iris', 'Ombrelle', { appartenance: 'Club des Merles' });
+    charge.participants[2] = personne(3, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' });
     const annonce = await annoncer(charge, 'A4');
     assert.deepEqual(annonce.homonymes, [{ nom: 'Iris Ombrelle', ids: [1, 3] }]);
     const phrases = phrasesAnnonce(annonce, { source: 'retenu', proposition: null, selection: null });
@@ -276,15 +276,15 @@ describe('la réédition (§ 11.8)', () => {
     const charge = retenue();
     charge.participants.push(personne(6, 'éloi', 'Abeille'));
     assert.deepEqual(personnesReeditables(charge), [
-      { id: 6, nom: 'éloi Abeille', appartenance: null },
-      { id: 4, nom: 'Grisaille', appartenance: null },
-      { id: 1, nom: 'Iris Ombrelle', appartenance: 'Club des Merles' },
-      { id: 3, nom: 'Ondine Lacasse', appartenance: null },
-      { id: 2, nom: 'Théo Pervenche', appartenance: null },
+      { id: 6, nom: 'éloi Abeille', organisation: null },
+      { id: 4, nom: 'Grisaille', organisation: null },
+      { id: 1, nom: 'Iris Ombrelle', organisation: 'Club des Merles' },
+      { id: 3, nom: 'Ondine Lacasse', organisation: null },
+      { id: 2, nom: 'Théo Pervenche', organisation: null },
     ]);
   });
 
-  test('le filtre retient les noms ou appartenances qui contiennent la saisie normalisée ; une saisie vide retient tout', () => {
+  test('le filtre retient les noms ou organisations qui contiennent la saisie normalisée ; une saisie vide retient tout', () => {
     const personnes = personnesReeditables(retenue());
     assert.deepEqual(filtrerPersonnes(personnes, ''), personnes);
     assert.deepEqual(filtrerPersonnes(personnes, '   '), personnes);

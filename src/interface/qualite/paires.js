@@ -37,14 +37,14 @@ export function casDesPaires({ T, R, paires }) {
   return 'tableau';
 }
 
-// Les personnes données par identifiant, chacune {id, nom, appartenance,
+// Les personnes données par identifiant, chacune {id, nom, organisation,
 // homonyme} : homonyme vrai quand une autre personne de la liste porte le
 // même nom affiché — la vue écrit alors son identifiant à côté du nom.
 function personnesParId(personnes) {
   const parNom = new Map();
   for (const { nom } of personnes) parNom.set(nom, (parNom.get(nom) ?? 0) + 1);
   return new Map(
-    personnes.map(({ id, nom, appartenance }) => [id, { id, nom, appartenance, homonyme: parNom.get(nom) > 1 }]),
+    personnes.map(({ id, nom, organisation }) => [id, { id, nom, organisation, homonyme: parNom.get(nom) > 1 }]),
   );
 }
 
@@ -65,7 +65,7 @@ const numerosParTable = ({ idsTables, numerosTables }) => new Map(idsTables.map(
  * Les lignes du tableau des paires (§ 12.5, D32) : {choisies, imposees},
  * chacune dans l'ordre du détail. Une ligne : {cle, genre, a, b, fois,
  * tours, repetition} — cle, « a:b » par identifiants ; genre, 'choisie' ou
- * 'imposee' ; a et b, {id, nom, appartenance, homonyme} ; tours, chaque
+ * 'imposee' ; a et b, {id, nom, organisation, homonyme} ; tours, chaque
  * tour où la paire est assise ensemble, {tour, table}, tour à partir de 1,
  * table son numéro ; repetition, le premier tour où la paire se revoit —
  * son second tour ensemble —, où mène la première commande de la ligne.
@@ -193,9 +193,9 @@ export function syntheseMatrice({ paires: { choisies, imposees } }) {
  * Rend {statut, source, lignes} : statut, celui de rencontresDePersonne —
  * mesuree, nonMesurable, exclue ou sansPlacement ; source, {cle, details},
  * le libellé du placement, null sans placement ; lignes, chaque personne
- * rencontrée, {id, nom, appartenance, homonyme, fois, tours: [{tour,
+ * rencontrée, {id, nom, organisation, homonyme, fois, tours: [{tour,
  * table}]}, les plus revues d'abord, tour à partir de 1, table son numéro.
- * appartenance et homonyme sont ceux du tableau des paires, sur les
+ * organisation et homonyme sont ceux du tableau des paires, sur les
  * personnes non exclues de la charge, celles que le placement mesure. Ne
  * modifie pas la charge.
  *
@@ -215,7 +215,7 @@ export function rubriqueRencontres(charge, demandee, personne) {
   const personnes = personnesParId(
     charge.participants
       .filter(({ exclu }) => !exclu)
-      .map((p) => ({ id: p.id, nom: nomAffiche(p), appartenance: (p.appartenance ?? '').trim() === '' ? null : p.appartenance })),
+      .map((p) => ({ id: p.id, nom: nomAffiche(p), organisation: (p.organisation ?? '').trim() === '' ? null : p.organisation })),
   );
   return {
     statut,

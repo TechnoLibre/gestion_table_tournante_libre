@@ -913,6 +913,32 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
     assert.doesNotThrow(() => creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]));
   });
 
+  test('le groupe qui sépare les gens se nomme « organisation » sur chaque intitulé qui le désigne', () => {
+    const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+    assert.deepEqual(
+      [
+        'participants.colonne.organisation',
+        'participants.legende.titre',
+        'import.champ.organisation',
+        'generation.contrainte.separerOrganisations',
+        'generation.contrainte.varierOrganisations',
+        'plan.legende.separerOrganisations',
+        'qualite.vue.tables.titre',
+        'moteur.critere.redondance',
+      ].map((cle) => t(cle)),
+      [
+        'Organisation',
+        'Organisations',
+        'organisation',
+        'Séparer les organisations',
+        'Varier les organisations rencontrées',
+        'Séparer les organisations : même organisation à la table',
+        'Organisations à chaque table',
+        "redondance d'organisation",
+      ],
+    );
+  });
+
   test('CAPACITE et TOURS, levés sous deux formes, ont un seul texte qui les distingue par leurs détails', () => {
     const configuration = libelle('CAPACITE', { table: 2, capacite: 1 });
     const violation = libelle('CAPACITE', { table: 2, tour: 3 });
@@ -933,10 +959,10 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
     assert.throws(() => libelle('TABLE_INCONNUE', { table: 9, detail: 'inventee' }), RangeError);
   });
 
-  test("un reste négatif nomme l'appartenance quand l'appelant la traduit, son rang sinon, compté à partir de 1", () => {
-    assert.match(libelle('RESTE_NEGATIF', { groupe: 1, appartenance: 'Atelier Ressac' }), /l'appartenance « Atelier Ressac »/);
-    assert.match(libelle('RESTE_NEGATIF', { groupe: 1 }), /l'appartenance de rang 2 /);
-    assert.match(libelle('RESTE_NEGATIF', { groupe: 1, appartenance: null }), /l'appartenance de rang 2 /);
+  test("un reste négatif nomme l'organisation quand l'appelant la traduit, son rang sinon, compté à partir de 1", () => {
+    assert.match(libelle('RESTE_NEGATIF', { groupe: 1, organisation: 'Atelier Ressac' }), /l'organisation « Atelier Ressac »/);
+    assert.match(libelle('RESTE_NEGATIF', { groupe: 1 }), /l'organisation de rang 2 /);
+    assert.match(libelle('RESTE_NEGATIF', { groupe: 1, organisation: null }), /l'organisation de rang 2 /);
   });
 
   test('chaque refus de valider et de generer a son texte, dans la table de son domaine', async () => {
@@ -1119,7 +1145,7 @@ describe("libellés : l'ordre des priorités et le mode des objectifs (§ 5.7, �
       libelle('PRIORITES_INVALIDES', { faute: 'seulASonPalier', critere: 'ecartAuPlafondAPrioriMax', palier: 0, remede: null }),
       '« écart au plafond a priori » se range seul à son palier : le palier 1 ne peut pas le partager avec un autre critère.',
     );
-    assert.match(libelle('PRIORITES_INVALIDES', { faute: 'critereAbsent', critere: 'redondance', remede: null }), /omet « redondance d'appartenance »/);
+    assert.match(libelle('PRIORITES_INVALIDES', { faute: 'critereAbsent', critere: 'redondance', remede: null }), /omet « redondance d'organisation »/);
     assert.match(libelle('PRIORITES_INVALIDES', { faute: 'critereRepete', critere: 'excedentCollisions', palier: 7, remede: null }), /« excédent de collisions » deux fois/);
     assert.match(libelle('PRIORITES_INVALIDES', { faute: 'critereInconnu', critere: 'constructor', palier: 7, remede: null }), /inconnu, « constructor »/);
     assert.match(libelle('PRIORITES_INVALIDES', { faute: 'palierVide', palier: 3, remede: null }), /palier 4\b/);

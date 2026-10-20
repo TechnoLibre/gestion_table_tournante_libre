@@ -282,10 +282,10 @@ const PRIORITES = liste(
 // plus.
 const REGLAGES = objet(
   [
-    ['separerAppartenances', BOOLEEN],
+    ['separerOrganisations', BOOLEEN],
     ['nouveauxVoisins', BOOLEEN],
     ['nouvelleTable', BOOLEEN],
-    ['varierAppartenances', BOOLEEN],
+    ['varierOrganisations', BOOLEEN],
     ['attribuerSieges', BOOLEEN],
     ['generation', objet([['nombre', entier(1)], ['arret', entier(1)], ['historique', entier(1)]])],
     // Facultatifs, en dernier, dans l'ordre de A16 : un fichier qui n'en
@@ -308,7 +308,7 @@ const PARTICIPANT = objet([
   ['id', IDENTIFIANT],
   ['nom', CHAINE],
   ['prenom', CHAINE_OU_NUL],
-  ['appartenance', CHAINE_OU_NUL],
+  ['organisation', CHAINE_OU_NUL],
   ['courriel', CHAINE_OU_NUL],
   ['titrePressenti', CHAINE_OU_NUL],
   ['notes', CHAINE_OU_NUL],
@@ -510,10 +510,10 @@ export function creerCharge({ id, nom, date = null, siegesParDefaut, tours }) {
   return {
     evenement: { id, nom, date, siegesParDefaut, tours, unite: 'cm', etat: 'brouillon', filiation: null },
     reglages: {
-      separerAppartenances: true,
+      separerOrganisations: true,
       nouveauxVoisins: true,
       nouvelleTable: true,
-      varierAppartenances: true,
+      varierOrganisations: true,
       attribuerSieges: false,
       generation: { ...GENERATION_PAR_DEFAUT },
     },
@@ -974,7 +974,7 @@ export function analyser(texte) {
 
 /**
  * Configuration du moteur tirée d'une charge : les participants avec leur
- * appartenance, leur exclusion, leurs étiquettes et leur présence ; les
+ * organisation, leur exclusion, leurs étiquettes et leur présence ; les
  * tables avec leur capacité courante ; le nombre de tours ; les réservations
  * sans leur siège, que le moteur ne lit pas, et sans tour pour la portée
  * « tous » ; les quatre contraintes des réglages et les deux cases
@@ -1013,17 +1013,17 @@ export function configurationDepuisCharge(charge) {
       .map(({ tour, regle: propre, etiquettes }) => ({ table: id, tour, regle: propre ?? regleParDefaut, etiquettes: [...etiquettes] })),
   );
   const contraintes = {
-    separerAppartenances: reglages.separerAppartenances,
+    separerOrganisations: reglages.separerOrganisations,
     nouveauxVoisins: reglages.nouveauxVoisins,
     nouvelleTable: reglages.nouvelleTable,
-    varierAppartenances: reglages.varierAppartenances,
+    varierOrganisations: reglages.varierOrganisations,
   };
   for (const [cle, defaut] of CASES_FACULTATIVES) {
     if (critereCoche(charge, cle) !== defaut) contraintes[cle] = !defaut;
   }
   const configuration = {
-    participants: charge.participants.map(({ id, nom, appartenance, exclu, etiquettes, presence }) => {
-      const participant = { id, nom, appartenance, exclu };
+    participants: charge.participants.map(({ id, nom, organisation, exclu, etiquettes, presence }) => {
+      const participant = { id, nom, organisation, exclu };
       if (etiquettes !== undefined) participant.etiquettes = [...etiquettes];
       if (presence !== undefined) participant.presence = [...presence].sort(croissant);
       return participant;
@@ -1063,10 +1063,10 @@ const MODE_OBJECTIFS_PAR_DEFAUT = 'places';
 
 // Les quatre cases toujours portées par les réglages (§ 5.3, § 8.9).
 const CASES_TOUJOURS_PRESENTES = new Set([
-  'separerAppartenances',
+  'separerOrganisations',
   'nouveauxVoisins',
   'nouvelleTable',
-  'varierAppartenances',
+  'varierOrganisations',
 ]);
 
 // Les défauts des cases facultatives, que seul CASES_FACULTATIVES expose.
@@ -1113,7 +1113,7 @@ export function regleObjectifs(charge) {
  * des deux cases facultatives.
  *
  * @param {import('./types.js').Charge} charge
- * @param {'separerAppartenances'|'nouveauxVoisins'|'nouvelleTable'|'varierAppartenances'|'respecterObjectifs'|'rencontrerAnimateurs'} cle
+ * @param {'separerOrganisations'|'nouveauxVoisins'|'nouvelleTable'|'varierOrganisations'|'respecterObjectifs'|'rencontrerAnimateurs'} cle
  * @returns {boolean}
  * @throws {RangeError} pour toute autre clé
  */

@@ -89,7 +89,7 @@ const ECART_AU_PLAFOND_A_PRIORI_MAX = 1;
 // Collisions cumulées : 0 mesuré à chacune des trois propositions, la
 // meilleure valeur possible ; le diagnostic n'impose à cette configuration
 // aucun plancher de collisions. Une recherche qui ne sépare pas les
-// appartenances en laisse de 14 à 20 à chaque proposition.
+// organisations en laisse de 14 à 20 à chaque proposition.
 const COLLISIONS_CUMULEES_MAX = 0;
 
 // Plus grand élément d'une liste non vide.
@@ -225,7 +225,7 @@ describe('intégration : la grande démonstration de bout en bout (§ 5.5, § 12
 });
 
 // Grille de propriétés (§ 14.12). Les quatre démonstrations ont quatre
-// tours, chacun y porte une appartenance, aucune n'a de partiellement fixé
+// tours, chacun y porte une organisation, aucune n'a de partiellement fixé
 // ni d'exclu, et une seule laisse des places vides : la grille tire des
 // configurations hors de ce cadre, d'une graine écrite ici. Les propriétés
 // éprouvées valent pour tout plan que rend la recherche, quelle qu'en soit
@@ -266,7 +266,7 @@ function tirerSansRemise(rng, n, k) {
 //   tours, un ou deux exclus. Une réservation d'une partie des tours fait un
 //   partiellement fixé quand R ≥ 2, parfois deux fois à la même table, et un
 //   ancré par la portée « tour » quand R = 1 ;
-// - de 1 à 3 appartenances, et des personnes sans appartenance ;
+// - de 1 à 3 organisations, et des personnes sans organisation ;
 // - des identifiants de participant croissants à trous, des identifiants de
 //   table dans un ordre quelconque, une liste de participants mélangée ;
 // - une réservation d'exclu une fois sur deux, suspendue et sans siège, sa
@@ -302,7 +302,7 @@ function tirerConfiguration(rng) {
     return {
       id,
       nom: `P${id}`,
-      appartenance: g < G ? LIBELLES[g] : null,
+      organisation: g < G ? LIBELLES[g] : null,
       exclu: idsExclus.has(id),
     };
   });
@@ -349,10 +349,10 @@ function tirerConfiguration(rng) {
   }
   rng.melanger(participants);
   const contraintes = {
-    separerAppartenances: rng.borne(4) > 0,
+    separerOrganisations: rng.borne(4) > 0,
     nouveauxVoisins: rng.borne(4) > 0,
     nouvelleTable: rng.borne(4) > 0,
-    varierAppartenances: rng.borne(4) > 0,
+    varierOrganisations: rng.borne(4) > 0,
   };
   const reglages = {
     graine: rng.suivant(),

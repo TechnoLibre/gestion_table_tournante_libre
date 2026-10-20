@@ -3,7 +3,7 @@
 
 // Épreuves longues des démonstrations livrées (§ 14.4) : l'empreinte de la
 // charge de chaque fichier livré contre celle que rejoue le script (§ 15.5,
-// point 5), le profil d'appartenances lu dans le fichier (§ 15.2), et
+// point 5), le profil d'organisations lu dans le fichier (§ 15.2), et
 // l'aller-retour sur chacun, grande démonstration comprise (§ 8.9). Le
 // fichier livré est la source de vérité : un écart d'empreinte se nomme par
 // les chemins de la charge qui diffèrent, et se résout en engendrant de
@@ -45,13 +45,13 @@ function memeEmpreinte(livree, rejouee, cle) {
   );
 }
 
-// Profil d'appartenances d'une liste de participants (§ 15.2) : pour chaque
+// Profil d'organisations d'une liste de participants (§ 15.2) : pour chaque
 // taille de groupe, le nombre de groupes de cette taille, tailles
-// croissantes ; les personnes sans appartenance ne forment pas de groupe.
+// croissantes ; les personnes sans organisation ne forment pas de groupe.
 function profil(participants) {
   const tailles = new Map();
-  for (const { appartenance } of participants) {
-    if (appartenance !== null) tailles.set(appartenance, (tailles.get(appartenance) ?? 0) + 1);
+  for (const { organisation } of participants) {
+    if (organisation !== null) tailles.set(organisation, (tailles.get(organisation) ?? 0) + 1);
   }
   const groupesParTaille = new Map();
   for (const taille of tailles.values()) groupesParTaille.set(taille, (groupesParTaille.get(taille) ?? 0) + 1);
@@ -129,8 +129,8 @@ describe('démonstrations livrées : empreinte (§ 15.5, point 5)', () => {
   });
 });
 
-describe("démonstrations livrées : profil d'appartenances (§ 15.2)", () => {
-  test("les tailles d'appartenance lues dans chaque fichier livré égalent celles du générateur", () => {
+describe("démonstrations livrées : profil d'organisations (§ 15.2)", () => {
+  test("les tailles d'organisation lues dans chaque fichier livré égalent celles du générateur", () => {
     for (const entree of CATALOGUE) {
       const attendu = profil(analyser(texteLivre(entree.cle)).charge.participants);
       assert.ok(attendu.length > 0, entree.cle);
@@ -138,8 +138,8 @@ describe("démonstrations livrées : profil d'appartenances (§ 15.2)", () => {
     }
   });
 
-  test('le profil compte les groupes par taille, sans les personnes sans appartenance', () => {
-    const personne = (id, appartenance) => ({ id, appartenance });
+  test('le profil compte les groupes par taille, sans les personnes sans organisation', () => {
+    const personne = (id, organisation) => ({ id, organisation });
     assert.deepEqual(
       profil([
         personne(1, 'Chœur de l\u{2019}Anse'),

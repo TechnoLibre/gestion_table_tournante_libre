@@ -27,7 +27,7 @@ function chargeDEpreuve() {
     id,
     nom,
     prenom,
-    appartenance: null,
+    organisation: null,
     courriel: null,
     titrePressenti: null,
     notes: null,

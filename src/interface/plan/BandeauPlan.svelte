@@ -5,7 +5,7 @@
   // Le bandeau du plan (§ 7.5), au-dessus du <svg data-plan> et dans la
   // surface de travail de l'événement : vide tant qu'une table au moins est saine ; quand toutes
   // sont en conflit, la phrase, puis ce que le diagnostic prouve — chaque
-  // entrée {cle, details} du modèle (modele.js), traduite. L'appartenance
+  // entrée {cle, details} du modèle (modele.js), traduite. L'organisation
   // d'un plancher de groupe est une donnée : elle occupe son propre nœud,
   // avant le texte. Le bandeau d'application garde la version, la
   // provenance et le mode.

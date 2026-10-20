@@ -31,7 +31,7 @@ const PIED_HORODATAGE = 'Placement du 17 mai 2031 à 20:15:07';
 // Le badge de la personne id dans un modèle.
 const badgeDe = (m, id) => m.badges.find(({ participant }) => participant === id);
 // Tous les textes d'un badge, à plat.
-const textesDe = ({ textes }) => [textes.nom, ...textes.lignes, textes.appartenance ?? '', ...textes.pied, ...textes.piedReduit];
+const textesDe = ({ textes }) => [textes.nom, ...textes.lignes, textes.organisation ?? '', ...textes.pied, ...textes.piedReduit];
 
 // Cinq personnes sur deux tables de deux places, deux tours : chaque tour
 // laisse une personne en réserve — Théo au tour 2, Grisaille au tour 1.
@@ -75,18 +75,18 @@ const titree = ({ reservations = [], tour2 = [2, 1, 3] } = {}) =>
   });
 
 // Huit personnes sur deux tables de quatre, deux tours : deux « Théo
-// Pervenche » sans appartenance, deux « Iris Ombrelle » de la même
-// appartenance écrite autrement, deux « Ondine Lacasse » d'appartenances
+// Pervenche » sans organisation, deux « Iris Ombrelle » de la même
+// organisation écrite autrement, deux « Ondine Lacasse » d'organisations
 // différentes, et deux autres.
 function homonymes(autres = {}) {
   return soiree({
     personnes: [
       personne(1, 'Théo', 'Pervenche'),
       personne(2, 'Théo', 'Pervenche'),
-      personne(3, 'Iris', 'Ombrelle', { appartenance: 'Club des Merles' }),
-      personne(4, 'iris', 'OMBRELLE', { appartenance: ' club  des MERLES ' }),
-      personne(5, 'Ondine', 'Lacasse', { appartenance: 'Grisaille' }),
-      personne(6, 'Ondine', 'Lacasse', { appartenance: 'Club des Merles' }),
+      personne(3, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
+      personne(4, 'iris', 'OMBRELLE', { organisation: ' club  des MERLES ' }),
+      personne(5, 'Ondine', 'Lacasse', { organisation: 'Grisaille' }),
+      personne(6, 'Ondine', 'Lacasse', { organisation: 'Club des Merles' }),
       personne(7, 'Émile', 'Ombrelle'),
       personne(8, 'Ångel', 'Ombrelle'),
     ],
@@ -204,19 +204,19 @@ describe('planche : ce que porte un badge (§ 11.4, § 11.5, § 4.1)', () => {
     assert.equal(m.version, VERSION.affichee);
   });
 
-  test('le nom affiché et l’appartenance, en NFC ; sans appartenance, rien', () => {
+  test('le nom affiché et l’organisation, en NFC ; sans organisation, rien', () => {
     const decomposee = soiree({
-      personnes: [personne(1, 'Ze\u{0301}lie', 'Ombrelle', { appartenance: 'Cafe\u{0301} des Merles' }), personne(2, 'Théo', 'Pervenche')],
+      personnes: [personne(1, 'Ze\u{0301}lie', 'Ombrelle', { organisation: 'Cafe\u{0301} des Merles' }), personne(2, 'Théo', 'Pervenche')],
       tables: [table(1, 7, 2)],
       plan: [{ sieges: [[1, 2]] }],
     });
     const m = modele(decomposee);
     assert.equal(badgeDe(m, 1).nom, 'Z\u{00E9}lie Ombrelle');
     assert.equal(badgeDe(m, 1).textes.nom, 'Z\u{00E9}lie Ombrelle');
-    assert.equal(badgeDe(m, 1).appartenance, 'Caf\u{00E9} des Merles');
-    assert.equal(badgeDe(m, 1).textes.appartenance, 'Caf\u{00E9} des Merles');
-    assert.equal(badgeDe(m, 2).appartenance, null);
-    assert.equal(badgeDe(m, 2).textes.appartenance, null);
+    assert.equal(badgeDe(m, 1).organisation, 'Caf\u{00E9} des Merles');
+    assert.equal(badgeDe(m, 1).textes.organisation, 'Caf\u{00E9} des Merles');
+    assert.equal(badgeDe(m, 2).organisation, null);
+    assert.equal(badgeDe(m, 2).textes.organisation, null);
   });
 
   test('le pied porte l’événement et sa date, puis l’horodatage ; piedReduit retire le nom de l’événement et garde la date', () => {
@@ -410,7 +410,7 @@ describe('planche : l’ordre de la pile (§ 11.6, § 15.5, décision 9)', () =>
 });
 
 describe('planche : les homonymes que rien ne sépare (§ 11.4, décision 7)', () => {
-  test('même nom normalisé, sans appartenance ou de même appartenance normalisée : nommés ; d’appartenances différentes, non', () => {
+  test('même nom normalisé, sans organisation ou de même organisation normalisée : nommés ; d’organisations différentes, non', () => {
     assert.deepEqual(homonymesDe(homonymes()), [
       { nom: 'Iris Ombrelle', ids: [3, 4] },
       { nom: 'Théo Pervenche', ids: [1, 2] },
@@ -431,11 +431,11 @@ describe('planche : les homonymes que rien ne sépare (§ 11.4, décision 7)', (
 
   test('le nom imprimé décide : « Théo Pervenche » sans prénom rejoint « Théo » « Pervenche » ; un exclu ne compte pas', () => {
     const charge = homonymes();
-    // L'exclu porte le nom et l'appartenance du groupe [3, 4] : compté, il
+    // L'exclu porte le nom et l'organisation du groupe [3, 4] : compté, il
     // le rejoindrait.
     charge.participants.push(
       personne(9, null, 'Théo Pervenche'),
-      personne(10, 'Iris', 'Ombrelle', { appartenance: 'Club des Merles', exclu: true }),
+      personne(10, 'Iris', 'Ombrelle', { organisation: 'Club des Merles', exclu: true }),
     );
     charge.retenu = { proposition: 1, ...placementDe(charge, [{ sieges: [[1, 2, 3, 4], [5, 6, 7, 8, 9]] }, { sieges: [[1, 3, 5, 7, 9], [2, 4, 6, 8]] }]) };
     charge.tables[1].sieges = 5;
@@ -464,13 +464,13 @@ describe('planche : les homonymes que rien ne sépare (§ 11.4, décision 7)', (
     assert.deepEqual(badgeDe(m, 1).textes.piedReduit, [PIED_DATE, PIED_HORODATAGE]);
   });
 
-  test('deux collisions du même nom, d’appartenances différentes : deux groupes, rangés par appartenance normalisée', () => {
+  test('deux collisions du même nom, d’organisations différentes : deux groupes, rangés par organisation normalisée', () => {
     const charge = soiree({
       personnes: [
-        personne(1, 'Ondine', 'Lacasse', { appartenance: 'Grisaille' }),
-        personne(2, 'Ondine', 'Lacasse', { appartenance: 'Club des Merles' }),
-        personne(3, 'Ondine', 'Lacasse', { appartenance: 'grisaille' }),
-        personne(4, 'Ondine', 'Lacasse', { appartenance: 'Club des merles' }),
+        personne(1, 'Ondine', 'Lacasse', { organisation: 'Grisaille' }),
+        personne(2, 'Ondine', 'Lacasse', { organisation: 'Club des Merles' }),
+        personne(3, 'Ondine', 'Lacasse', { organisation: 'grisaille' }),
+        personne(4, 'Ondine', 'Lacasse', { organisation: 'Club des merles' }),
       ],
       tables: [table(1, 1, 4)],
       plan: [{ sieges: [[1, 2, 3, 4]] }],

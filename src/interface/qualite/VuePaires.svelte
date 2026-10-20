@@ -12,7 +12,7 @@
   // Le tableau des paires : les paires choisies, puis, sous leur intitulé,
   // les paires que les réservations imposent, chacune dans l'ordre du
   // détail — chaque groupe est un tableau titré de sa légende. Une ligne
-  // (data-paire, « a:b ») nomme les deux personnes, leur appartenance et,
+  // (data-paire, « a:b ») nomme les deux personnes, leur organisation et,
   // pour un homonyme, son identifiant ; puis le nombre de fois ; puis ses
   // commandes. Une ligne n'est pas une cible : seule sa première commande
   // mène au plan au premier tour où la paire se revoit, la première
@@ -88,8 +88,8 @@
     {#if p.homonyme}
       <span class="secondaire">{t('qualite.paires.homonyme', { id: p.id })}</span>
     {/if}
-    {#if p.appartenance !== null}
-      <span class="secondaire">{p.appartenance}</span>
+    {#if p.organisation !== null}
+      <span class="secondaire">{p.organisation}</span>
     {/if}
   </span>
 {/snippet}
@@ -289,7 +289,7 @@
   }
 
   /* Les deux personnes d'une paire, l'une sous l'autre : le nom en gras,
-     l'identifiant d'un homonyme et l'appartenance en encre secondaire. */
+     l'identifiant d'un homonyme et l'organisation en encre secondaire. */
   .personne {
     display: flex;
     flex-wrap: wrap;

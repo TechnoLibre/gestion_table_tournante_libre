@@ -323,7 +323,7 @@ describe('documentation : les producteurs, chacun sur sa source unique (§ 19.8)
       choix: () => 'le plus de places servies',
       ordre: () =>
         'écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, puis tours hors objectif, ' +
-        "puis rencontres répétées et retours, puis animateurs non rencontrés, puis redondance d'appartenance",
+        "puis rencontres répétées et retours, puis animateurs non rencontrés, puis redondance d'organisation",
     };
     REGLAGES_GENERATION.forEach((entree, rang) => {
       assert.deepEqual(lignes[rang], [t(entree.etiquette), t(`coquille.section.${entree.section}`), ecrit[entree.genre](entree)]);

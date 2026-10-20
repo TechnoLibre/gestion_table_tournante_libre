@@ -370,6 +370,13 @@
   LiLiQ-R+ : ses sources portent l'identifiant SPDX
   `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1` et les deux textes complets, dans
   `LICENSES/`.
+- Le groupe qui sépare les gens qui se connaissent déjà s'appelle désormais
+  l'**organisation** — une entreprise, une équipe, une famille, une école —,
+  partout : à l'écran, dans les réglages « Séparer les organisations » et
+  « Varier les organisations rencontrées », sur les listes imprimées, dans le
+  fichier de l'événement et dans l'en-tête `organisation` du CSV ; un fichier
+  des participants dont la colonne s'intitule encore « appartenance »
+  s'importe comme avant.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

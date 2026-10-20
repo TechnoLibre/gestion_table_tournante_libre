@@ -232,7 +232,7 @@ async function derouler() {
     await processus.seance.executer('modifierParticipant', { id: brunoeil.id, champs: { prenom: 'Aurèle' } }),
     await processus.seance.executer('modifierParticipant', {
       id: givrecoeur.id,
-      champs: { appartenance: ' Cercle des Saules ' },
+      champs: { organisation: ' Cercle des Saules ' },
     }),
   ];
   releverJournal();
@@ -300,7 +300,7 @@ const leParcours = () => {
 // --- Les épreuves -----------------------------------------------------------
 
 describe('intégration : le parcours de l’opérateur par la séance (§ 2.1)', () => {
-  test("l'import du CSV des cas limites est une seule entrée : le refus nommé et réexporté, l'exclusion, le doublon gardé, les appartenances fondues (§ 10.1)", async () => {
+  test("l'import du CSV des cas limites est une seule entrée : le refus nommé et réexporté, l'exclusion, le doublon gardé, les organisations fondues (§ 10.1)", async () => {
     const { vu } = await leParcours();
     assert.equal(vu.entreesImport, 1);
     assert.deepEqual(
@@ -316,7 +316,7 @@ describe('intégration : le parcours de l’opérateur par la séance (§ 2.1)',
     assert.deepEqual(charge.participants.filter((p) => Object.hasOwn(p, 'presence')), []);
     assert.equal(charge.participants.filter((p) => p.nom === 'Lanterneau' && p.prenom === 'Basile').length, 2);
     assert.equal(personneDe(charge, 'Tourterel', 'Héloïse').exclu, true);
-    assert.equal(personneDe(charge, 'Ormelin', 'Faustine').appartenance, 'Société des Hérons');
+    assert.equal(personneDe(charge, 'Ormelin', 'Faustine').organisation, 'Société des Hérons');
     assert.equal(personneDe(charge, 'Fenouillet', 'Côme').notes, 'végétarien; sans noix, ni arachides');
     assert.equal(personneDe(charge, 'Coudraie', 'Apolline').notes, 'Arrive après le premier tour\nrepart avant le dessert');
   });
@@ -327,8 +327,8 @@ describe('intégration : le parcours de l’opérateur par la séance (§ 2.1)',
       vu.corrections.map((rendu) => rendu.avertissements),
       [[], []],
     );
-    assert.equal(personneDe(vu.chargeRouverte, 'Brunœil', 'Aurèle').appartenance, 'Cercle des Saules');
-    assert.equal(personneDe(vu.chargeRouverte, 'Givrecœur', 'Anselme').appartenance, 'Cercle des Saules');
+    assert.equal(personneDe(vu.chargeRouverte, 'Brunœil', 'Aurèle').organisation, 'Cercle des Saules');
+    assert.equal(personneDe(vu.chargeRouverte, 'Givrecœur', 'Anselme').organisation, 'Cercle des Saules');
     const libelles = vu.journalFinal.entrees.map((entree) => entree.libelle);
     assert.deepEqual(libelles.slice(3, 5), vu.corrections.map((rendu) => rendu.libelle));
   });
@@ -509,11 +509,11 @@ const DEPARTS = Object.freeze({
 
 function chargeDuParcours() {
   const charge = creerCharge({ id: 'evt-ricochets', nom: NOM_EVENEMENT_RICOCHETS, date: '2033-11-12', siegesParDefaut: 5, tours: 3 });
-  charge.participants = GENS.map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = GENS.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,

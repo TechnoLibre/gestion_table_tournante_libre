@@ -505,7 +505,7 @@ describe('la langue témoin (§ 14.6)', () => {
       dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
       await attendre('la planche', () => dans(m, '[data-chemin-planche]'), IMAGES);
       const racine = m.seance.etat().racine.chemin;
-      const noms = new Set([...personnesReeditables(charge).flatMap(({ nom, appartenance }) => [nom, appartenance]), charge.evenement.nom]);
+      const noms = new Set([...personnesReeditables(charge).flatMap(({ nom, organisation }) => [nom, organisation]), charge.evenement.nom]);
       const { ouverture, fermeture } = MARQUE_TEMOIN;
       const fautes = [];
       const marchant = document.createTreeWalker(section(m), NodeFilter.SHOW_TEXT);

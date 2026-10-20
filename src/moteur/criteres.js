@@ -50,12 +50,12 @@ export const FAMILLE = Object.freeze({
  */
 export const CASES = Object.freeze({
   ecartAuPlafondAPrioriMax: Object.freeze([]),
-  excedentCollisions: Object.freeze(['separerAppartenances']),
-  collisionsCumulees: Object.freeze(['separerAppartenances']),
+  excedentCollisions: Object.freeze(['separerOrganisations']),
+  collisionsCumulees: Object.freeze(['separerOrganisations']),
   toursHorsObjectif: Object.freeze(['respecterObjectifs']),
   rencontresRepetees: Object.freeze(['nouveauxVoisins', 'nouvelleTable']),
   animateursNonRencontres: Object.freeze(['rencontrerAnimateurs']),
-  redondance: Object.freeze(['varierAppartenances']),
+  redondance: Object.freeze(['varierOrganisations']),
 });
 
 // La valeur d'une case facultative absente des contraintes (A16) : les

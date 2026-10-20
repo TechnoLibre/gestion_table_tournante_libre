@@ -23,7 +23,7 @@ import { modeleAnimateurs, modeleDiversite } from './animateurs.js';
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const V1 = VERSION.affichee;
 
-// Neuf personnes inventées, leurs appartenances et leurs étiquettes.
+// Neuf personnes inventées, leurs organisations et leurs étiquettes.
 const PERSONNES = [
   ['Ombrelle', 'Iris', 'Coopérative Aubier', []],
   ['Pervenche', 'Théo', 'Atelier Ressac', []],
@@ -39,15 +39,15 @@ const PERSONNES = [
 // Trois tables de trois places, trois tours ; un titre au siège 1 des tables
 // 1 et 2. Iris Ombrelle, réservée à la table 1 pour la soirée, y anime à
 // chaque tour ; Théo Pervenche, réservé à la table 2 au seul tour 2, y anime
-// ce tour-là. appartenances : false pour une seule appartenance ;
+// ce tour-là. organisations : false pour une seule organisation ;
 // etiquettes : false pour aucune ; titres : false pour aucun animateur.
-function chargeAnimateurs({ appartenances = true, etiquettes = true, titres = true } = {}) {
+function chargeAnimateurs({ organisations = true, etiquettes = true, titres = true } = {}) {
   const charge = creerCharge({ id: 'evt-animateurs', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 3 });
-  charge.participants = PERSONNES.map(([nom, prenom, appartenance, liste], rang) => ({
+  charge.participants = PERSONNES.map(([nom, prenom, organisation, liste], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance: appartenances ? appartenance : 'Coopérative Aubier',
+    organisation: organisations ? organisation : 'Coopérative Aubier',
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -168,28 +168,28 @@ describe('diversité par animateur : la soirée en graphique, chaque tour au jum
     assert.equal(modeleDiversite(null, t), null);
   });
 
-  test('deux colonnes juxtaposées, appartenances puis étiquettes, chacune son axe ; les valeurs de la soirée ; le moins varié en tête', () => {
+  test('deux colonnes juxtaposées, organisations puis étiquettes, chacune son axe ; les valeurs de la soirée ; le moins varié en tête', () => {
     const detail = detailDe();
     const { colonnes, lignes } = detail.animateurs.diversite;
-    assert.deepEqual(colonnes, { appartenances: true, etiquettes: true });
+    assert.deepEqual(colonnes, { organisations: true, etiquettes: true });
     const modele = modeleDiversite(detail, t);
     assert.equal(modele.phrase, null);
     assert.equal(modele.barres.segments, null);
     assert.deepEqual(modele.barres.colonnes, [
-      { genre: 'serie1', libelle: t('qualite.diversite.colonne.appartenances') },
+      { genre: 'serie1', libelle: t('qualite.diversite.colonne.organisations') },
       { genre: 'serie2', libelle: t('qualite.diversite.colonne.etiquettes') },
     ]);
     assert.deepEqual(
       modele.barres.lignes.map(({ id, valeurs }) => [id, valeurs]),
-      lignes.map(({ id, appartenances, etiquettes }) => [id, [appartenances, etiquettes]]),
+      lignes.map(({ id, organisations, etiquettes }) => [id, [organisations, etiquettes]]),
     );
     const premiere = modele.barres.lignes[0];
-    const minimum = Math.min(...lignes.map(({ appartenances }) => appartenances));
+    const minimum = Math.min(...lignes.map(({ organisations }) => organisations));
     assert.equal(premiere.valeurs[0], minimum, 'le moins varié en tête');
     for (const ligne of modele.barres.lignes) {
       const source = lignes.find(({ id }) => id === ligne.id);
       assert.equal(ligne.secondaire, t('qualite.diversite.secondaire', { tours: source.toursAnimes, personnes: source.personnes }));
-      assert.equal(Object.hasOwn(ligne, 'appartenance'), false);
+      assert.equal(Object.hasOwn(ligne, 'organisation'), false);
     }
   });
 
@@ -206,7 +206,7 @@ describe('diversité par animateur : la soirée en graphique, chaque tour au jum
     const detail = detailDe();
     const { equite } = detail.animateurs.diversite;
     assert.deepEqual(modeleDiversite(detail, t).equite, [
-      { genre: 'appartenances', titre: t('qualite.diversite.colonne.appartenances'), ...equite.appartenances },
+      { genre: 'organisations', titre: t('qualite.diversite.colonne.organisations'), ...equite.organisations },
       { genre: 'etiquettes', titre: t('qualite.diversite.colonne.etiquettes'), ...equite.etiquettes },
     ]);
   });
@@ -218,7 +218,7 @@ describe('diversité par animateur : la soirée en graphique, chaque tour au jum
     const [jumeau] = modele.jumeau;
     assert.deepEqual(
       jumeau.colonnes.map(({ cle }) => cle),
-      ['animateur', 'portee', 'toursAnimes', 'personnes', 'appartenances', 'etiquettes'],
+      ['animateur', 'portee', 'toursAnimes', 'personnes', 'organisations', 'etiquettes'],
     );
     const nomDe = new Map(detail.personnes.map(({ id, nom }) => [id, nom]));
     const numeroDe = new Map(detail.idsTables.map((id, rang) => [id, detail.numerosTables[rang]]));
@@ -228,7 +228,7 @@ describe('diversité par animateur : la soirée en graphique, chaque tour au jum
         portee: t('qualite.diversite.soiree'),
         toursAnimes: ligne.toursAnimes,
         personnes: ligne.personnes,
-        appartenances: ligne.appartenances,
+        organisations: ligne.organisations,
         etiquettes: ligne.etiquettes,
       },
       ...ligne.parTour.map((tour) => ({
@@ -236,7 +236,7 @@ describe('diversité par animateur : la soirée en graphique, chaque tour au jum
         portee: t('qualite.diversite.tour', { tour: tour.tour + 1, table: numeroDe.get(tour.table) }),
         toursAnimes: null,
         personnes: tour.personnes,
-        appartenances: tour.appartenances,
+        organisations: tour.organisations,
         etiquettes: tour.etiquettes,
       })),
     ]);
@@ -248,7 +248,7 @@ describe('diversité par animateur : la soirée en graphique, chaque tour au jum
     for (const ligne of lignes) {
       assert.equal(ligne.parTour.length, ligne.toursAnimes);
       for (const tour of ligne.parTour) {
-        for (const cle of ['personnes', 'appartenances', 'etiquettes']) assert.ok(tour[cle] <= ligne[cle], `${ligne.id}, ${cle}`);
+        for (const cle of ['personnes', 'organisations', 'etiquettes']) assert.ok(tour[cle] <= ligne[cle], `${ligne.id}, ${cle}`);
       }
     }
     assert.ok(attendues.some(({ portee }) => portee === t('qualite.diversite.tour', { tour: 2, table: 12 })));
@@ -260,37 +260,37 @@ describe('diversité par animateur : la soirée en graphique, chaque tour au jum
     assert.equal(new Set(noms).size, noms.length, 'noms accessibles distincts');
   });
 
-  test('aucune étiquette : la colonne des appartenances seule, et la phrase', () => {
+  test('aucune étiquette : la colonne des organisations seule, et la phrase', () => {
     const detail = detailDe({ etiquettes: false });
-    assert.deepEqual(detail.animateurs.diversite.colonnes, { appartenances: true, etiquettes: false });
+    assert.deepEqual(detail.animateurs.diversite.colonnes, { organisations: true, etiquettes: false });
     const modele = modeleDiversite(detail, t);
     assert.equal(modele.phrase, 'sansEtiquette');
     assert.equal(modele.barres.colonnes, null);
-    assert.deepEqual(modele.barres.segments, [{ genre: 'serie1', libelle: t('qualite.diversite.colonne.appartenances') }]);
+    assert.deepEqual(modele.barres.segments, [{ genre: 'serie1', libelle: t('qualite.diversite.colonne.organisations') }]);
     assert.deepEqual(
       modele.barres.lignes.map(({ valeurs }) => valeurs),
-      detail.animateurs.diversite.lignes.map(({ appartenances }) => [appartenances]),
+      detail.animateurs.diversite.lignes.map(({ organisations }) => [organisations]),
     );
-    assert.deepEqual(modele.equite.map(({ genre }) => genre), ['appartenances']);
+    assert.deepEqual(modele.equite.map(({ genre }) => genre), ['organisations']);
     assert.equal(modele.jumeau[0].colonnes.some(({ cle }) => cle === 'etiquettes'), false);
   });
 
-  test('une seule appartenance et des étiquettes : la colonne des étiquettes seule, triée sur E_f, et la phrase', () => {
-    const detail = detailDe({ appartenances: false });
-    assert.deepEqual(detail.animateurs.diversite.colonnes, { appartenances: false, etiquettes: true });
+  test('une seule organisation et des étiquettes : la colonne des étiquettes seule, triée sur E_f, et la phrase', () => {
+    const detail = detailDe({ organisations: false });
+    assert.deepEqual(detail.animateurs.diversite.colonnes, { organisations: false, etiquettes: true });
     const modele = modeleDiversite(detail, t);
-    assert.equal(modele.phrase, 'sansAppartenance');
+    assert.equal(modele.phrase, 'sansOrganisation');
     assert.deepEqual(modele.barres.segments, [{ genre: 'serie2', libelle: t('qualite.diversite.colonne.etiquettes') }]);
     assert.deepEqual(
       modele.barres.lignes.map(({ id, valeurs }) => [id, valeurs]),
       detail.animateurs.diversite.lignes.map(({ id, etiquettes }) => [id, [etiquettes]]),
     );
     assert.deepEqual(modele.equite.map(({ genre }) => genre), ['etiquettes']);
-    assert.equal(modele.jumeau[0].colonnes.some(({ cle }) => cle === 'appartenances'), false);
+    assert.equal(modele.jumeau[0].colonnes.some(({ cle }) => cle === 'organisations'), false);
   });
 
-  test('ni étiquette ni plus d’une appartenance : la phrase, aucun graphique, le jumeau garde tours animés et personnes', () => {
-    const detail = detailDe({ appartenances: false, etiquettes: false });
+  test('ni étiquette ni plus d’une organisation : la phrase, aucun graphique, le jumeau garde tours animés et personnes', () => {
+    const detail = detailDe({ organisations: false, etiquettes: false });
     const modele = modeleDiversite(detail, t);
     assert.equal(modele.phrase, 'rien');
     assert.equal(modele.barres, null);
@@ -303,7 +303,7 @@ describe('diversité par animateur : la soirée en graphique, chaque tour au jum
   });
 
   test('aucun « équité », aucun « plafond », aucun pourcentage', () => {
-    for (const options of [{}, { etiquettes: false }, { appartenances: false }]) {
+    for (const options of [{}, { etiquettes: false }, { organisations: false }]) {
       for (const texte of textes(modeleDiversite(detailDe(options), t))) {
         assert.doesNotMatch(texte, /équité|equite|plafond|%/i, texte);
       }

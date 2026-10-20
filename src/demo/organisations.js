@@ -1,12 +1,12 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Appartenances d'une démonstration tirée (§ 15.2) : la loi des tailles de
-// groupe, et la faisabilité d'un tour qui sépare toutes les appartenances.
+// Organisations d'une démonstration tirée (§ 15.2) : la loi des tailles de
+// groupe, et la faisabilité d'un tour qui sépare toutes les organisations.
 // Les fonctions reçoivent des tailles de groupe et des capacités de table,
 // jamais des personnes : un membre se désigne par son rang dans la suite des
 // groupes, les membres du premier groupe d'abord, puis ceux du deuxième, et
-// ainsi de suite. Une table sépare les appartenances quand elle ne reçoit
+// ainsi de suite. Une table sépare les organisations quand elle ne reçoit
 // jamais deux membres d'un même groupe. Aucune fonction ne modifie les listes
 // qu'elle reçoit ; tirerTailles fait avancer le générateur qu'on lui passe.
 
@@ -62,7 +62,7 @@ export function tirerTailles(rng, total) {
 }
 
 /**
- * Les deux inégalités qu'un tour séparant toutes les appartenances exige
+ * Les deux inégalités qu'un tour séparant toutes les organisations exige
  * (§ 15.2), contrôlées dans cet ordre ; la première rompue est nommée.
  * - PLUS_GROS_GROUPE : le plus gros groupe dépasse le nombre de tables, alors
  *   que chacun de ses membres occupe une table différente.

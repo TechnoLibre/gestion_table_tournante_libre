@@ -23,7 +23,7 @@
 //      valide ou refusée pour un seul motif ; zéro ligne valide refuse. La
 //      présence se lit sous le nombre de tours de l'aperçu (Apercu.tours),
 //      le seul réglage de l'événement que l'aperçu reçoive ;
-//   7. les appartenances des lignes valides se réconcilient avec celles des
+//   7. les organisations des lignes valides se réconcilient avec celles des
 //      existants, et les doublons se relèvent ; en mode remplacer, qui
 //      retire chaque existant, avec ceux du fichier seuls. Leurs étiquettes
 //      se réconcilient avec celles des existants, hors du mode remplacer, et
@@ -78,7 +78,7 @@ export const VALEURS_EXCLU = new Map([
  * @typedef {Object} ChampsLus
  * @property {string} nom
  * @property {string|null} prenom
- * @property {string|null} appartenance    l'orthographe affichée de son groupe ;
+ * @property {string|null} organisation    l'orthographe affichée de son groupe ;
  *           null pour une cellule vide, blanche ou faite de marques
  *           combinantes seules : sa clé normalisée est vide
  * @property {string|null} courriel
@@ -142,9 +142,9 @@ export const VALEURS_EXCLU = new Map([
  *           les fusions d'orthographes d'étiquettes que rend reconcilier
  *           (etiquettes.js) sur les lignes valides : chacune nomme
  *           l'orthographe retenue, les orthographes de sa clé et son nombre
- *           de lignes réécrites ; distinctes des fusions des appartenances
+ *           de lignes réécrites ; distinctes des fusions des organisations
  * @property {Array<{cle: string, lignes: number[], existants: number[]}>} doublons
- *           chaque triplet (nom, prénom, appartenance) normalisé que portent au
+ *           chaque triplet (nom, prénom, organisation) normalisé que portent au
  *           moins deux personnes, dont une ligne valide, rangé par sa première
  *           ligne ; cle : le triplet normalisé, en JSON ; existants :
  *           identifiants croissants, toujours vide en mode remplacer
@@ -152,7 +152,7 @@ export const VALEURS_EXCLU = new Map([
  *           en mode mettreAJour, chaque ligne valide qui ne désigne personne
  *           (designer) alors que des existants portent son nom normalisé :
  *           l'import l'ajoute à côté d'eux, une seconde personne de ce nom,
- *           parce que le prénom ou l'appartenance, présents des deux côtés,
+ *           parce que le prénom ou l'organisation, présents des deux côtés,
  *           diffèrent ; participants : ces existants, identifiants
  *           croissants ; rangée par ligne. Toujours vide dans les autres
  *           modes : ajouter crée chaque ligne, remplacer retire chaque
@@ -221,13 +221,13 @@ function valeurDe(brut, rang) {
   return valeur === '' ? null : valeur;
 }
 
-// Vrai pour une appartenance qui en nomme une : une chaîne dont la clé
-// normalisée n'est pas vide. Une appartenance vide, blanche ou faite de
+// Vrai pour une organisation qui en nomme une : une chaîne dont la clé
+// normalisée n'est pas vide. Une organisation vide, blanche ou faite de
 // marques combinantes seules vaut absence (§ 10.1) : la clé de doublon la
-// compte vide, comme une appartenance absente, et elle n'est l'orthographe
+// compte vide, comme une organisation absente, et elle n'est l'orthographe
 // d'aucun groupe. La réconciliation et la clé de doublon s'accordent ainsi
-// sur chaque appartenance, lue ou existante.
-const appartenanceNommee = (texte) => typeof texte === 'string' && cleNormalisee(texte) !== '';
+// sur chaque organisation, lue ou existante.
+const organisationNommee = (texte) => typeof texte === 'string' && cleNormalisee(texte) !== '';
 
 // Les étiquettes d'une cellule (§ 4.5, § 10.1), par la découpe de la saisie
 // (lireEtiquettes) : { etiquettes }, null quand la cellule n'en donne aucune,
@@ -271,7 +271,7 @@ function presenceDe(cellule, tours) {
 
 // Lit un enregistrement de données selon les colonnes associées, largeur
 // étant le nombre d'en-têtes et tours celui de l'aperçu. Rend { champs },
-// l'appartenance telle qu'écrite ou null quand elle n'en nomme aucune, les
+// l'organisation telle qu'écrite ou null quand elle n'en nomme aucune, les
 // étiquettes telles que découpées, ou le motif du refus { code, valeur },
 // avec raison, nombre, tour ou tours selon le code, un seul, dans cet
 // ordre : un champ non vide au-delà de l'en-tête, qui dit une ligne décalée
@@ -290,12 +290,12 @@ function lireLigne(brut, largeur, colonnes, tours) {
   if (refus !== undefined) return refus;
   const lue = presenceDe(colonnes.presence === undefined ? undefined : brut[colonnes.presence], tours);
   if (lue.refus !== undefined) return lue.refus;
-  const appartenance = lire('appartenance');
+  const organisation = lire('organisation');
   return {
     champs: {
       nom,
       prenom: lire('prenom'),
-      appartenance: appartenanceNommee(appartenance) ? appartenance : null,
+      organisation: organisationNommee(organisation) ? organisation : null,
       courriel: lire('courriel'),
       titrePressenti: lire('titre_pressenti'),
       notes: lire('notes'),
@@ -317,7 +317,7 @@ function etiquettesExistantes(existants, tables) {
   ];
 }
 
-// Réconcilie les appartenances (§ 10.1). Les orthographes de même clé
+// Réconcilie les organisations (§ 10.1). Les orthographes de même clé
 // normalisée forment un groupe, que représente la première rencontrée :
 // celles des participants existants d'abord, dans l'ordre de existants,
 // telles qu'enregistrées, puis celles des lignes valides, dans l'ordre du
@@ -344,11 +344,11 @@ function reconcilier(existants, valides) {
       groupe.lignes.push(ligne);
     }
   };
-  for (const { appartenance } of existants) {
-    if (appartenanceNommee(appartenance)) noter(appartenance, null);
+  for (const { organisation } of existants) {
+    if (organisationNommee(organisation)) noter(organisation, null);
   }
   for (const { ligne, champs } of valides) {
-    if (champs.appartenance !== null) noter(champs.appartenance, ligne);
+    if (champs.organisation !== null) noter(champs.organisation, ligne);
   }
   const fusions = [...groupes.values()]
     .filter((groupe) => groupe.orthographes.length > 1 && groupe.lignes.length > 0)
@@ -357,11 +357,11 @@ function reconcilier(existants, valides) {
   return { afficheeDe: (texte) => groupes.get(cleNormalisee(texte)).affichee, fusions };
 }
 
-// Clé de doublon : le triplet (nom, prénom, appartenance), chacun par sa clé
-// normalisée, un prénom ou une appartenance absents comptant comme vides,
+// Clé de doublon : le triplet (nom, prénom, organisation), chacun par sa clé
+// normalisée, un prénom ou une organisation absents comptant comme vides,
 // écrit en JSON pour qu'aucun texte ne se confonde avec une frontière.
-const cleDoublon = (nom, prenom, appartenance) =>
-  JSON.stringify([nom, prenom ?? '', appartenance ?? ''].map((texte) => cleNormalisee(texte)));
+const cleDoublon = (nom, prenom, organisation) =>
+  JSON.stringify([nom, prenom ?? '', organisation ?? ''].map((texte) => cleNormalisee(texte)));
 
 // Doublons (§ 10.1) : chaque clé de doublon que portent au moins deux
 // personnes, dont une ligne valide, avec les rangs de ses lignes et les
@@ -373,11 +373,11 @@ function doublonsDe(existants, valides) {
     if (!groupes.has(cle)) groupes.set(cle, { cle, lignes: [], existants: [] });
     return groupes.get(cle);
   };
-  for (const { id, nom, prenom, appartenance } of existants) {
-    groupeDe(cleDoublon(nom, prenom, appartenance)).existants.push(id);
+  for (const { id, nom, prenom, organisation } of existants) {
+    groupeDe(cleDoublon(nom, prenom, organisation)).existants.push(id);
   }
   for (const { ligne, champs } of valides) {
-    groupeDe(cleDoublon(champs.nom, champs.prenom, champs.appartenance)).lignes.push(ligne);
+    groupeDe(cleDoublon(champs.nom, champs.prenom, champs.organisation)).lignes.push(ligne);
   }
   return [...groupes.values()]
     .filter((groupe) => groupe.lignes.length > 0 && groupe.lignes.length + groupe.existants.length > 1)
@@ -395,19 +395,19 @@ function compatibles(deLaLigne, duParticipant) {
 
 /**
  * Index des participants par nom normalisé, que lit designer. Chaque entrée
- * copie l'identifiant, le prénom et l'appartenance du participant : ce
+ * copie l'identifiant, le prénom et l'organisation du participant : ce
  * qu'une mise à jour pose ensuite sur lui ne change pas l'index, qui garde
  * les valeurs d'avant l'import.
  *
- * @param {Array<{id: number, nom: string, prenom: string|null, appartenance: string|null}>} participants
- * @returns {Map<string, Array<{id: number, prenom: string|null, appartenance: string|null}>>}
+ * @param {Array<{id: number, nom: string, prenom: string|null, organisation: string|null}>} participants
+ * @returns {Map<string, Array<{id: number, prenom: string|null, organisation: string|null}>>}
  */
 export function indexerParNom(participants) {
   const index = new Map();
-  for (const { id, nom, prenom, appartenance } of participants) {
+  for (const { id, nom, prenom, organisation } of participants) {
     const cle = cleNormalisee(nom);
     if (!index.has(cle)) index.set(cle, []);
-    index.get(cle).push({ id, prenom, appartenance });
+    index.get(cle).push({ id, prenom, organisation });
   }
   return index;
 }
@@ -416,12 +416,12 @@ export function indexerParNom(participants) {
  * Participants qu'une ligne désigne en mise à jour (§ 10.1), seule règle de
  * la désignation, que l'aperçu et l'import lisent tous deux. memeNom : les
  * participants de l'index de même nom normalisé que la ligne. candidats :
- * ceux d'entre eux que ni le prénom ni l'appartenance n'écartent ; l'un ou
+ * ceux d'entre eux que ni le prénom ni l'organisation n'écartent ; l'un ou
  * l'autre n'écarte un participant que lorsque la ligne et lui en portent
  * tous deux un, de clés normalisées différentes : une colonne absente ou une
  * cellule vide n'écarte personne, comme elle ne vide aucune valeur.
  *
- * @param {{nom: string, prenom: string|null, appartenance: string|null}} champs
+ * @param {{nom: string, prenom: string|null, organisation: string|null}} champs
  * @param {ReturnType<typeof indexerParNom>} index
  * @returns {{memeNom: number[], candidats: number[]}}  identifiants croissants
  */
@@ -432,8 +432,8 @@ export function designer(champs, index) {
     memeNom: croissants(memeNom),
     candidats: croissants(
       memeNom.filter(
-        ({ prenom, appartenance }) =>
-          compatibles(champs.prenom, prenom) && compatibles(champs.appartenance, appartenance),
+        ({ prenom, organisation }) =>
+          compatibles(champs.prenom, prenom) && compatibles(champs.organisation, organisation),
       ),
     ),
   };
@@ -488,7 +488,7 @@ function multilignesDe(lignes, separateur) {
  *
  * @param {string} texte  le texte que rend decoder, ou celui d'un collage
  * @param {Object} [options]
- * @param {Array<{id: number, nom: string, prenom: string|null, appartenance: string|null}>} [options.participants]
+ * @param {Array<{id: number, nom: string, prenom: string|null, organisation: string|null}>} [options.participants]
  *   les participants existants, dans n'importe quel ordre : l'identifiant
  *   ordonne leurs orthographes
  * @param {Array<{objectifs?: Array<{etiquettes: string[]}>}>} [options.tables]
@@ -568,7 +568,7 @@ export function apercevoir(
     ligne,
     champs: {
       ...champs,
-      appartenance: champs.appartenance === null ? null : afficheeDe(champs.appartenance),
+      organisation: champs.organisation === null ? null : afficheeDe(champs.organisation),
       etiquettes: listes[rang],
     },
     brut,

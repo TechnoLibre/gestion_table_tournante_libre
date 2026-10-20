@@ -6,11 +6,11 @@
   // D31, D38) : une ligne par entrée, dans l'ordre reçu du détail, intitulée
   // de son nom tronqué à LARGEUR_TRONCATURE_NOM_PX (registre des constantes)
   // sur des largeurs mesurées — le nom entier reste dans l'infobulle et le
-  // jumeau —, précédé d'une pastille d'appartenance quand la ligne en porte
+  // jumeau —, précédé d'une pastille d'organisation quand la ligne en porte
   // une : la liste garde sa teinte, le tracé n'en prend aucune (§ 12.7).
   //
-  // lignes : [{id, nom, appartenance?, valeurs, secondaire?}] — appartenance,
-  // le rang de teinte de 1 à 6 (teintesAppartenances), null pour la pastille
+  // lignes : [{id, nom, organisation?, valeurs, secondaire?}] — organisation,
+  // le rang de teinte de 1 à 6 (teintesOrganisations), null pour la pastille
   // neutre, absente sans pastille ; secondaire, un texte déjà écrit ou null,
   // les autres chiffres de la ligne, ou « — » d'une ligne sans barre, écrit
   // en encre secondaire après la barre et les libellés posés sur elle
@@ -96,7 +96,7 @@
     return { x: ligne.fin, y: ligne.y + ligne.hauteur / 2 };
   };
   // La classe de teinte d'une pastille : son rang, ou la neutre.
-  const teinte = (rang) => (rang === null ? 'neutre' : `appartenance-${rang}`);
+  const teinte = (rang) => (rang === null ? 'neutre' : `organisation-${rang}`);
 </script>
 
 <Graphique
@@ -135,8 +135,8 @@
       <g data-ligne-graphique={ligne.id}>
         {#if ligne.pastille !== null}
           {@const p = ligne.pastille}
-          <rect class="pastille {teinte(ligne.appartenance)}" x={p.x} y={p.y} width={p.largeur} height={p.hauteur} rx={p.rayon} />
-          <circle class="point {teinte(ligne.appartenance)}" cx={p.point.x} cy={p.point.y} r="4" />
+          <rect class="pastille {teinte(ligne.organisation)}" x={p.x} y={p.y} width={p.largeur} height={p.hauteur} rx={p.rayon} />
+          <circle class="point {teinte(ligne.organisation)}" cx={p.point.x} cy={p.point.y} r="4" />
         {/if}
         <text class="intitule" x={ligne.intitule.x} y={ligne.intitule.y} dominant-baseline="central">{ligne.intitule.texte}</text>
         {#if ligne.secondaire !== null}
@@ -207,7 +207,7 @@
     fill: var(--couleur-page-texte);
   }
 
-  /* La pastille d'appartenance d'un intitulé : le fond teinté et le point de
+  /* La pastille d'organisation d'un intitulé : le fond teinté et le point de
      la marque de sa teinte, comme la primitive Pastille ; le nom se lit de
      l'encre de la page. */
   .pastille.neutre {
@@ -218,51 +218,51 @@
     fill: var(--couleur-neutre-marque);
   }
 
-  .pastille.appartenance-1 {
-    fill: var(--couleur-appartenance-1-fond);
+  .pastille.organisation-1 {
+    fill: var(--couleur-organisation-1-fond);
   }
 
-  .point.appartenance-1 {
-    fill: var(--couleur-appartenance-1-marque);
+  .point.organisation-1 {
+    fill: var(--couleur-organisation-1-marque);
   }
 
-  .pastille.appartenance-2 {
-    fill: var(--couleur-appartenance-2-fond);
+  .pastille.organisation-2 {
+    fill: var(--couleur-organisation-2-fond);
   }
 
-  .point.appartenance-2 {
-    fill: var(--couleur-appartenance-2-marque);
+  .point.organisation-2 {
+    fill: var(--couleur-organisation-2-marque);
   }
 
-  .pastille.appartenance-3 {
-    fill: var(--couleur-appartenance-3-fond);
+  .pastille.organisation-3 {
+    fill: var(--couleur-organisation-3-fond);
   }
 
-  .point.appartenance-3 {
-    fill: var(--couleur-appartenance-3-marque);
+  .point.organisation-3 {
+    fill: var(--couleur-organisation-3-marque);
   }
 
-  .pastille.appartenance-4 {
-    fill: var(--couleur-appartenance-4-fond);
+  .pastille.organisation-4 {
+    fill: var(--couleur-organisation-4-fond);
   }
 
-  .point.appartenance-4 {
-    fill: var(--couleur-appartenance-4-marque);
+  .point.organisation-4 {
+    fill: var(--couleur-organisation-4-marque);
   }
 
-  .pastille.appartenance-5 {
-    fill: var(--couleur-appartenance-5-fond);
+  .pastille.organisation-5 {
+    fill: var(--couleur-organisation-5-fond);
   }
 
-  .point.appartenance-5 {
-    fill: var(--couleur-appartenance-5-marque);
+  .point.organisation-5 {
+    fill: var(--couleur-organisation-5-marque);
   }
 
-  .pastille.appartenance-6 {
-    fill: var(--couleur-appartenance-6-fond);
+  .pastille.organisation-6 {
+    fill: var(--couleur-organisation-6-fond);
   }
 
-  .point.appartenance-6 {
-    fill: var(--couleur-appartenance-6-marque);
+  .point.organisation-6 {
+    fill: var(--couleur-organisation-6-marque);
   }
 </style>

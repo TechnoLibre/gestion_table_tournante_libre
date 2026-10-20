@@ -8,7 +8,7 @@
   // séparateur nommés, le refus global avec sa cause et son remède — texte,
   // ou commande du geste qui y mène —, l'association des colonnes et ses
   // ambiguïtés, les lignes valides sous les colonnes de leur nature, les
-  // lignes refusées et leur motif, les orthographes fondues d'appartenances
+  // lignes refusées et leur motif, les orthographes fondues d'organisations
   // puis, dans un bloc à part, celles d'étiquettes, les doublons, les
   // homonymes d'une mise à jour, les cellules sur plusieurs lignes. Le
   // rapport le reprend pour l'aperçu appliqué, ses refus remplacés par ceux
@@ -25,7 +25,7 @@
   // Chaque message est classé (Message, messageDuBloc) : le refus global et
   // les lignes refusées en refus, les doublons, les homonymes et les
   // cellules sur plusieurs lignes en avis, les orthographes fondues,
-  // d'appartenances et d'étiquettes, en information. Les tableaux prennent le langage des cartes : en-tête sur
+  // d'organisations et d'étiquettes, en information. Les tableaux prennent le langage des cartes : en-tête sur
   // le fond sourd, lignes séparées d'un filet léger.
   import { getContext } from 'svelte';
   import { actionRemede } from '../primitives/commande.js';

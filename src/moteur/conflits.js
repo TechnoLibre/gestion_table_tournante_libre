@@ -11,7 +11,7 @@
 // une paire en collision, une paire revue, une personne revenue —, et chaque
 // règle porte les siennes dans son unité (§ 5.4).
 //
-// « Varier les appartenances » ne se localise pas à une table : aucune
+// « Varier les organisations » ne se localise pas à une table : aucune
 // violation n'en sort.
 import { parcourirTours } from './indicateurs.js';
 
@@ -19,7 +19,7 @@ import { parcourirTours } from './indicateurs.js';
  * @typedef {Object} ConflitsTable
  * @property {number} table    identifiant
  * @property {number} nombre   violations des règles actives à ce tour, toutes règles
- * @property {Array<{regle: 'separerAppartenances'|'nouveauxVoisins', paires: number[][]}
+ * @property {Array<{regle: 'separerOrganisations'|'nouveauxVoisins', paires: number[][]}
  *                  |{regle: 'nouvelleTable', personnes: number[]}>} regles
  *           identifiants croissants, règles dans cet ordre ; une règle inactive
  *           ou sans violation est omise
@@ -27,7 +27,7 @@ import { parcourirTours } from './indicateurs.js';
 
 /**
  * Violations des règles actives (§ 7.5), lues dans parcourirTours et rendues
- * en identifiants : séparer les appartenances — les collègues réunis ;
+ * en identifiants : séparer les organisations — les collègues réunis ;
  * nouveaux voisins — les paires revues ; nouvelle table — les personnes
  * revenues. Une paire revue se signale à chaque rencontre répétée, sauf quand
  * toutes ses rencontres jusque-là ont eu lieu à une table où les deux étaient
@@ -49,8 +49,8 @@ export function conflitsParTable(instance, tableDe) {
   return parcourirTours(instance, tableDe).parTour.map((tables) =>
     tables.map(({ collegues, revues, revenus }, t) => {
       const regles = [];
-      if (contraintes.separerAppartenances && collegues.length > 0) {
-        regles.push({ regle: 'separerAppartenances', paires: enIds(collegues) });
+      if (contraintes.separerOrganisations && collegues.length > 0) {
+        regles.push({ regle: 'separerOrganisations', paires: enIds(collegues) });
       }
       if (contraintes.nouveauxVoisins && revues.length > 0) {
         regles.push({ regle: 'nouveauxVoisins', paires: enIds(revues) });

@@ -7,7 +7,7 @@
 // le numéro de sa demande, le texte d'un import en attente, les listes de
 // noms, le plein écran, la place sélectionnée, la fiche ouverte, le choix
 // en attente du plan, le refus posé sur une place,
-// l'appartenance collante du formulaire d'ajout, l'aperçu avant impression,
+// l'organisation collante du formulaire d'ajout, l'aperçu avant impression,
 // la page du tableau des propositions, la position du sélecteur du
 // mélange des tables de la page de qualité (§ 12.11, D54) — ce que la
 // grille compte : sièges, assis ou doublons —, le départ d'une génération
@@ -56,7 +56,7 @@ import { THEMES } from './theme.js';
  *            avertissements: Object[]}} pose
  *           le refus, ou les avertissements, posés sur une place du plan, que
  *           Plan.svelte montre sur la place (§ 5.9)
- * @property {string} appartenance        l'appartenance collante du formulaire d'ajout
+ * @property {string} organisation        l'organisation collante du formulaire d'ajout
  *           des participants : celle du dernier ajout (§ 10.2), '' au départ
  * @property {null|{vue: 'plan'|'accueil'|'tables', tour: number|'tous', listes: boolean,
  *            decoupe: 'auto'|'unePage'|'decoupe', parTour: boolean, retour: string}} apercu
@@ -99,7 +99,7 @@ const DEPART = Object.freeze({
   fiche: null,
   choix: null,
   pose: null,
-  appartenance: '',
+  organisation: '',
   apercu: null,
   visee: 0,
   pagePropositions: null,
@@ -200,7 +200,7 @@ function choixValide(choix) {
  *   prendreImport: () => null|{texte: string, origine: string},
  *   basculerListes: Function, basculerPleinEcran: Function,
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
- *   poserSurPlace: Function, garderAppartenance: Function,
+ *   poserSurPlace: Function, garderOrganisation: Function,
  *   ouvrirApercu: Function, reglerApercu: Function, fermerApercu: Function,
  *   retenirPagePropositions: Function, reglerMelangeTables: Function,
  *   choisirDepart: Function, reglerToursFiges: Function, retirerDepart: Function,
@@ -399,11 +399,11 @@ export function creerEtatUi() {
       }
       changer({ pose: Object.freeze({ place, refus, avertissements }) });
     },
-    /** Garde l'appartenance collante du formulaire d'ajout, une chaîne ;
+    /** Garde l'organisation collante du formulaire d'ajout, une chaîne ;
      *  RangeError sinon. */
-    garderAppartenance(texte) {
-      if (typeof texte !== 'string') throw new RangeError(`appartenance : chaîne attendue, reçu ${String(texte)}`);
-      changer({ appartenance: texte });
+    garderOrganisation(texte) {
+      if (typeof texte !== 'string') throw new RangeError(`organisation : chaîne attendue, reçu ${String(texte)}`);
+      changer({ organisation: texte });
     },
     /** Ouvre l'aperçu avant impression sur la vue et le tour reçus : les
      *  listes du plan telles que l'écran les montre, la découpe proposée par

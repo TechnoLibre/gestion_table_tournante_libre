@@ -393,6 +393,7 @@ const MOTS_INTERDITS = [
   ['évitable', /(?<!in)evitable/],
   ['pourcentage', /%/],
   ['sert mieux chaque personne', /\bsert mieux chaque personne\b/],
+  ['appartenance, devenue organisation', /appartenan/],
 ];
 const PICTOGRAMME = /\p{Extended_Pictographic}/u;
 

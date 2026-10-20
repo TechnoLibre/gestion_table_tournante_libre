@@ -15,10 +15,10 @@ import { mesurer, parcourirTours } from './indicateurs.js';
 import { matriceRencontres, pairesRepetees, rencontresDe } from './paires.js';
 
 const SANS_CONTRAINTE = Object.freeze({
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 });
 
 // Noms inventés : leur ordre alphabétique est l'inverse de celui des
@@ -46,7 +46,7 @@ function preparer({ N, capacite, tours, reserves = tours.map(() => []), reservat
   const participants = Array.from({ length: N }, (_, i) => ({
     id: i + 1,
     nom: NOMS[i % NOMS.length],
-    appartenance: i % 2 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
+    organisation: i % 2 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
     ...(exclus.includes(i + 1) ? { exclu: true } : {}),
   }));
   const tables = tours[0].map((_, i) => ({ id: i + 1, numero: i + 1, capacite }));

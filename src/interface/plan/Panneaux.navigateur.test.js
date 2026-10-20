@@ -47,7 +47,7 @@ import { monterApp } from '../../../test/navigateur/montage.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import ListesTravail from './ListesTravail.svelte';
 import { detailConflits } from './modele.js';
-import { appartenanceDeCharge, cadreDepuisRect, englobantDuTour, nomDeCharge } from './vue_plan.js';
+import { organisationDeCharge, cadreDepuisRect, englobantDuTour, nomDeCharge } from './vue_plan.js';
 
 const BASE = 'soiree';
 const DUREE_PRESSION = constante('DUREE_PRESSION_LONGUE_MS');
@@ -94,7 +94,7 @@ function chargeDe({ id, defaut = 8, places, ecart = 300, personnes, nombreTours 
     id: rang + 1,
     nom,
     prenom,
-    appartenance: null,
+    organisation: null,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -578,29 +578,29 @@ describe('le plan est un seul arrêt de tabulation (§ 7.3, § 13.5)', () => {
   });
 });
 
-// --- L'appartenance nommée, la légende des conflits (§ 7.5) -------------------
+// --- L'organisation nommée, la légende des conflits (§ 7.5) -------------------
 
-describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légende des conflits (§ 7.5)', () => {
+describe('l’infobulle nomme l’organisation d’une paire réunie ; la légende des conflits (§ 7.5)', () => {
 
   // Deux tables de trois, six personnes, un tour : la table 1 réunit Iris
   // et Théo, du Club des Merles ; la table 2, Basile et Capucine, d'une
-  // appartenance écrite avec une minuscule et un blanc final, telle que la
+  // organisation écrite avec une minuscule et un blanc final, telle que la
   // liste la porte.
-  function deuxAppartenances(reglages = {}) {
-    const charge = chargeDe({ id: 'evt-appartenances', defaut: 3, places: [null, null], personnes: 6, nombreTours: 1, tours: [[[1, 2, 4], [3, 5, 6]]] });
-    const appartenances = new Map([[1, 'Club des Merles'], [2, 'Club des Merles'], [5, 'cercle des Hérons '], [6, 'cercle des Hérons ']]);
-    for (const personne of charge.participants) personne.appartenance = appartenances.get(personne.id) ?? null;
+  function deuxOrganisations(reglages = {}) {
+    const charge = chargeDe({ id: 'evt-organisations', defaut: 3, places: [null, null], personnes: 6, nombreTours: 1, tours: [[[1, 2, 4], [3, 5, 6]]] });
+    const organisations = new Map([[1, 'Club des Merles'], [2, 'Club des Merles'], [5, 'cercle des Hérons '], [6, 'cercle des Hérons ']]);
+    for (const personne of charge.participants) personne.organisation = organisations.get(personne.id) ?? null;
     Object.assign(charge.reglages, reglages);
     return charge;
   }
 
-  test('le survol d’une table en conflit d’appartenance : « Même appartenance (…) : … et … », l’appartenance dans son propre nœud', async () => {
-    const m = await ouvrir(deuxAppartenances());
+  test('le survol d’une table en conflit d’organisation : « Même organisation (…) : … et … », l’organisation dans son propre nœud', async () => {
+    const m = await ouvrir(deuxOrganisations());
     expect(etatMontre(m).tables.map(({ conflits }) => conflits.nombre)).toEqual([1, 1]);
     const infobulle = () => document.querySelector('[role="tooltip"]');
     // Le pointeur part du sol : un survol commence par un mouvement.
     await pointer('bouger', pointSol(m).x, pointSol(m).y);
-    for (const [table, appartenance, noms] of [
+    for (const [table, organisation, noms] of [
       [1, 'Club des Merles', ['Iris Ombrelle', 'Théo Pervenche']],
       [2, 'cercle des Hérons ', ['Basile Tourmaline', 'Capucine Arrosoir']],
     ]) {
@@ -610,11 +610,11 @@ describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légen
       const lignes = [...infobulle().querySelectorAll('p')];
       expect(lignes.map((p) => p.textContent)).toEqual([
         t('plan.infobulle.entete', { numero: table, nombre: 1 }),
-        `${t('plan.infobulle.separerAppartenances')}${appartenance}${t('plan.infobulle.finAppartenance')}${noms.join(t('plan.infobulle.et'))}`,
+        `${t('plan.infobulle.separerOrganisations')}${organisation}${t('plan.infobulle.finOrganisation')}${noms.join(t('plan.infobulle.et'))}`,
       ]);
-      expect(lignes[1].textContent).toMatch(/^Même appartenance \(/);
+      expect(lignes[1].textContent).toMatch(/^Même organisation \(/);
       const noeuds = [...lignes[1].children].map((e) => e.textContent);
-      expect(noeuds).toContain(appartenance);
+      expect(noeuds).toContain(organisation);
       for (const nom of noms) expect(noeuds).toContain(nom);
       await pointer('bouger', pointSol(m).x, pointSol(m).y);
       await attendre(() => expect(infobulleVisible(infobulle())).toBe(false));
@@ -622,7 +622,7 @@ describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légen
   });
 
   test('la barre de vue se lit en groupes nommés : le zoom, puis l’affichage, leurs commandes dans l’ordre', async () => {
-    const m = await ouvrir(deuxAppartenances({ nouvelleTable: false }));
+    const m = await ouvrir(deuxOrganisations({ nouvelleTable: false }));
     const barre = dans(m, '[role="toolbar"]');
     expect(barre).not.toBeNull();
     const groupes = [...barre.querySelectorAll('[role="group"]')];
@@ -635,7 +635,7 @@ describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légen
 
   for (const mode of ['ecriture', 'lecture']) {
     test(`mode ${mode} : le bouton « Légende » de la barre de vue ouvre la légende des seules règles actives, et la referme ; rien ne s’écrit`, async () => {
-      const m = await ouvrir(deuxAppartenances({ nouvelleTable: false }), { mode });
+      const m = await ouvrir(deuxOrganisations({ nouvelleTable: false }), { mode });
       const revision = m.seance.etat().evenement.revision;
       const bouton = dans(m, '[data-commande="legende"]');
       expect(bouton).not.toBeNull();
@@ -651,7 +651,7 @@ describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légen
       await attendre(() => expect(dans(m, '[data-legende]')).not.toBeNull());
       expect(bouton.getAttribute('aria-expanded')).toBe('true');
       expect(bouton.getAttribute('aria-controls')).toBe(dans(m, '[data-legende]').id);
-      expect(tous(m, '[data-legende] [data-legende-regle]').map((e) => e.dataset.legendeRegle)).toEqual(['separerAppartenances', 'nouveauxVoisins']);
+      expect(tous(m, '[data-legende] [data-legende-regle]').map((e) => e.dataset.legendeRegle)).toEqual(['separerOrganisations', 'nouveauxVoisins']);
       expect(dans(m, '[data-legende] [data-marque="trameTable"]')).toBeNull();
       expect(infobulleVisible(dans(m, '[data-legende]'))).toBe(true);
       await cliquer(bouton);
@@ -672,13 +672,13 @@ describe('l’infobulle : un composant, trois déclencheurs (§ 7.1, § 7.3)', (
   function detailAttendu(m) {
     const table = etatMontre(m).tables.find(({ id }) => id === 1);
     expect(table.conflits.nombre).toBeGreaterThan(0);
-    const detail = detailConflits(table, nomDeCharge(charge(m)), appartenanceDeCharge(charge(m)));
+    const detail = detailConflits(table, nomDeCharge(charge(m)), organisationDeCharge(charge(m)));
     return [
       t('plan.infobulle.entete', { numero: detail.numero, nombre: detail.nombre }),
-      ...detail.lignes.map(({ cle, appartenance, groupes }) =>
+      ...detail.lignes.map(({ cle, organisation, groupes }) =>
         [
           t(cle),
-          ...(appartenance === null ? [] : [appartenance, t('plan.infobulle.finAppartenance')]),
+          ...(organisation === null ? [] : [organisation, t('plan.infobulle.finOrganisation')]),
           groupes.map((groupe) => groupe.join(t('plan.infobulle.et'))).join(t('plan.infobulle.separateur')),
         ]
           .join('')

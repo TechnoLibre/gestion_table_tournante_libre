@@ -145,15 +145,15 @@ export function evidenceDe(id, nomDe, etat) {
 }
 
 /**
- * La fonction appartenanceDe de l'infobulle (detailConflits) : l'identifiant
- * d'un participant de la charge vers son appartenance, la chaîne même que la
- * liste porte, ou null — sans appartenance, ou pour un identifiant que la
+ * La fonction organisationDe de l'infobulle (detailConflits) : l'identifiant
+ * d'un participant de la charge vers son organisation, la chaîne même que la
+ * liste porte, ou null — sans organisation, ou pour un identifiant que la
  * charge n'a pas.
  * @returns {(id: number) => string|null}
  */
-export function appartenanceDeCharge(charge) {
-  const appartenances = new Map(charge.participants.map(({ id, appartenance }) => [id, appartenance]));
-  return (id) => appartenances.get(id) ?? null;
+export function organisationDeCharge(charge) {
+  const organisations = new Map(charge.participants.map(({ id, organisation }) => [id, organisation]));
+  return (id) => organisations.get(id) ?? null;
 }
 
 /**

@@ -63,7 +63,7 @@ function chargeDouze() {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: rang % 2 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
+    organisation: rang % 2 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -144,7 +144,7 @@ const lignesDe = (section) =>
   });
 
 // Ce que l'intitulé d'une ligne écrit après le nom, un texte par élément :
-// l'identifiant d'un homonyme, puis l'appartenance.
+// l'identifiant d'un homonyme, puis l'organisation.
 const secondairesDe = (ligne) => [...ligne.querySelector('th').children].slice(1).map(texteDe);
 
 describe('la rubrique « Rencontres » de la fiche (§ 12.5, D33)', () => {
@@ -237,7 +237,7 @@ describe('la rubrique « Rencontres » de la fiche (§ 12.5, D33)', () => {
     expect(rubrique(autre).querySelector('table')).toBeNull();
   });
 
-  test('deux homonymes rencontrés : chaque ligne écrit, après le nom, l’identifiant puis l’appartenance, et les deux lignes diffèrent', async () => {
+  test('deux homonymes rencontrés : chaque ligne écrit, après le nom, l’identifiant puis l’organisation, et les deux lignes diffèrent', async () => {
     // La personne 2, réservée avec la personne 1, prend son nom : qui
     // rencontre l'une rencontre l'autre.
     const homonymes = structuredClone(lue);
@@ -255,7 +255,7 @@ describe('la rubrique « Rencontres » de la fiche (§ 12.5, D33)', () => {
     expect(secondairesDe(une)).toEqual([t('qualite.paires.homonyme', { id: 1 }), 'Coopérative Aubier']);
     expect(secondairesDe(autre)).toEqual([t('qualite.paires.homonyme', { id: 2 }), 'Atelier Ressac']);
     expect(texteDe(une)).not.toBe(texteDe(autre));
-    // Les autres : le nom, puis l'appartenance seule.
+    // Les autres : le nom, puis l'organisation seule.
     for (const rangee of rangees.filter((r) => r !== une && r !== autre)) {
       expect(secondairesDe(rangee)).toHaveLength(1);
       expect(secondairesDe(rangee)[0]).not.toMatch(/n°/);

@@ -54,7 +54,7 @@ const HORODATAGE = '2026-10-09T19:00:00-04:00';
 
 /** Un badge écrit à la main : ses textes tels que BA1 les compose ; chaque
  *  tour de la liste absentes porte la ligne d'une absente, sans table. */
-function badge(participant, nom, { appartenance = null, tours = 2, horodatage = HORODATAGE, evenement = EVENEMENT, absentes = [] } = {}) {
+function badge(participant, nom, { organisation = null, tours = 2, horodatage = HORODATAGE, evenement = EVENEMENT, absentes = [] } = {}) {
   const lignes = Array.from({ length: tours }, (_, i) =>
     absentes.includes(i + 1)
       ? { tour: i + 1, table: null, siege: null, titre: null, absente: true }
@@ -64,13 +64,13 @@ function badge(participant, nom, { appartenance = null, tours = 2, horodatage = 
   return {
     participant,
     nom,
-    appartenance,
+    organisation,
     lignes,
     identifiant: null,
     textes: {
       nom,
       lignes: lignes.map((ligne) => libelle('planche.tour', ligne)),
-      appartenance,
+      organisation,
       pied: [libelle('planche.pied.evenement', evenement), ligneHorodatage],
       piedReduit: [libelle('planche.pied.date', evenement), ligneHorodatage],
     },
@@ -95,7 +95,7 @@ function modele(badges, { horodatage = HORODATAGE, brouillon = false, exclus = 0
 
 const NOMS_A4 = ['Iris Ombrelle', 'Ôjgq Æ Grisaille', 'Théo Pervenche', 'Ondine Lacasse', 'Merle Bleuet'];
 const MODELE_A4 = modele(
-  NOMS_A4.map((nom, i) => badge(i + 1, nom, { appartenance: i % 2 === 0 ? 'Club des Merles' : null })),
+  NOMS_A4.map((nom, i) => badge(i + 1, nom, { organisation: i % 2 === 0 ? 'Club des Merles' : null })),
   { brouillon: true, exclus: 1, proposition: 7 },
 );
 const NOMS_LETTRE = ['Aube Sarcelle', 'Côme Pervenche', 'Ysée Lacasse'];
@@ -365,11 +365,11 @@ describe('produirePlanche : les badges (§ 11.3, § 11.4, § 11.6)', () => {
     });
   });
 
-  test('chaque texte du badge se lit dans la couche de texte : nom, appartenance, tours, pied', () => {
+  test('chaque texte du badge se lit dans la couche de texte : nom, organisation, tours, pied', () => {
     const page = A4.pages[1];
     const lus = new Set(page.textes.map(({ texte }) => texte));
     const [premier] = MODELE_A4.badges;
-    for (const texte of [premier.textes.nom, premier.textes.appartenance, ...premier.textes.lignes, ...premier.textes.pied]) {
+    for (const texte of [premier.textes.nom, premier.textes.organisation, ...premier.textes.lignes, ...premier.textes.pied]) {
       assert.ok(lus.has(texte), `« ${texte} » absent : ${[...lus].join(' | ')}`);
     }
     assert.ok([...lus].some((texte) => texte.includes(`Tour 2 ${TIRET} table`)));

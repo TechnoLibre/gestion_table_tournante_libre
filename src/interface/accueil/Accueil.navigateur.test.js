@@ -1273,7 +1273,7 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1)', () => {
       'rencontresRepetees',
     ]);
     expect(tous(m, '[data-colonne="diffRedondance"], [data-terme="diffRedondance"]')).toEqual([]);
-    expect(accueil(m).textContent).not.toContain("Diff somme d'appartenance");
+    expect(accueil(m).textContent).not.toContain("Diff somme d'organisation");
     expect(ecritures(m)).toBe(avant);
   });
 

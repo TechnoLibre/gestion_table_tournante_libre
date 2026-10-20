@@ -80,7 +80,7 @@ function chargeDe({ id, defaut = 8, places, ecart = 300, personnes, nombreTours 
     id: rang + 1,
     nom,
     prenom,
-    appartenance: null,
+    organisation: null,
     courriel: null,
     titrePressenti: null,
     notes: null,

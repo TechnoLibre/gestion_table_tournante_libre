@@ -42,17 +42,17 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 // Dix personnes, dont une exclue, sur deux tables de quatre, deux tours :
 // Anouk Eboulis attend au tour 1, Iris Ombrelle au tour 2. Les Lacasse
 // partagent leur nom ; quatre Ondine Lacasse ne se séparent que par
-// l'appartenance, deux d'entre elles par l'identifiant seul.
+// l'organisation, deux d'entre elles par l'identifiant seul.
 function accueil(autres = {}) {
   return soiree({
     personnes: [
-      personne(1, 'Iris', 'Ombrelle', { appartenance: 'Club des Merles' }),
+      personne(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
       personne(2, 'Théo', '\u{0152}illet'),
       personne(3, '\u{00C9}lise', 'Lacasse'),
       personne(4, 'Ondine', 'Lacasse'),
-      personne(5, 'Ondine', 'Lacasse', { appartenance: 'Grisaille' }),
-      personne(6, 'Ondine', 'Lacasse', { appartenance: 'Club des Merles' }),
-      personne(7, 'Ondine', 'Lacasse', { appartenance: ' club  des MERLES ' }),
+      personne(5, 'Ondine', 'Lacasse', { organisation: 'Grisaille' }),
+      personne(6, 'Ondine', 'Lacasse', { organisation: 'Club des Merles' }),
+      personne(7, 'Ondine', 'Lacasse', { organisation: ' club  des MERLES ' }),
       personne(8, null, '\u{00C9}zard'),
       personne(9, 'Rémi', 'Zinnia', { exclu: true }),
       personne(10, 'Anouk', 'Eboulis'),
@@ -108,24 +108,24 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
     assert.deepEqual(ids(lignes), [10, 4, 7, 6, 5, 3, 1, 8, 2]);
   });
 
-  test('des homonymes se départagent par l’appartenance — absente d’abord —, puis par l’identifiant', () => {
+  test('des homonymes se départagent par l’organisation — absente d’abord —, puis par l’identifiant', () => {
     const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee);
     const ondines = lignes.filter(({ nom, prenom }) => nom === 'Lacasse' && prenom === 'Ondine');
     assert.deepEqual(ids(ondines), [4, 6, 7, 5]);
     assert.deepEqual(
-      ondines.map(({ appartenance }) => appartenance),
+      ondines.map(({ organisation }) => organisation),
       [null, 'Club des Merles', ' club  des MERLES ', 'Grisaille'],
     );
   });
 
-  test('un exclu n’a pas de ligne ; chaque autre personne en a une, avec nom, prénom et appartenance tels quels', () => {
+  test('un exclu n’a pas de ligne ; chaque autre personne en a une, avec nom, prénom et organisation tels quels', () => {
     const charge = accueil();
     const lignes = lignesAccueil(charge, etats(charge), cleNormalisee);
     assert.equal(ligneDe(lignes, 9), undefined);
     assert.equal(lignes.length, 9);
     assert.deepEqual(
-      { nom: ligneDe(lignes, 8).nom, prenom: ligneDe(lignes, 8).prenom, appartenance: ligneDe(lignes, 8).appartenance },
-      { nom: '\u{00C9}zard', prenom: null, appartenance: null },
+      { nom: ligneDe(lignes, 8).nom, prenom: ligneDe(lignes, 8).prenom, organisation: ligneDe(lignes, 8).organisation },
+      { nom: '\u{00C9}zard', prenom: null, organisation: null },
     );
     // Exclue, la personne ne revient pas même quand un état la nommerait.
     const exclue = accueil();
@@ -328,7 +328,7 @@ describe('feuilleDuTour : le pied et le filigrane d’une feuille d’un seul to
 });
 
 describe('largeursColonnes : les colonnes d’une liste imprimée, en pour cent', () => {
-  test('la liste d’accueil : nom, prénom, appartenance, puis un tour par colonne ; la feuille par table : la place, puis les tours', () => {
+  test('la liste d’accueil : nom, prénom, organisation, puis un tour par colonne ; la feuille par table : la place, puis les tours', () => {
     assert.deepEqual(largeursColonnes('accueil', 2), [24, 18, 18, 20, 20]);
     assert.deepEqual(largeursColonnes('tables', 1), [12, 88]);
     assert.deepEqual(largeursColonnes('tables', 4), [12, 22, 22, 22, 22]);
@@ -382,7 +382,7 @@ describe('les blocs de tours de la liste d’accueil (§ 7.4)', () => {
     participant: id,
     nom: `Brumaire${id}`,
     prenom: id % 2 === 0 ? null : 'Ysaline',
-    appartenance: null,
+    organisation: null,
     places: numeros(tours).map((tour) => ({ tour, table: tour, siege: null })),
   });
   const lignesDeTours = (tours) => [3, 1, 2].map((id) => ligneDeTours(id, tours));
@@ -568,13 +568,13 @@ describe('textesCellule : les textes d’une cellule de la feuille par table, da
 });
 
 describe('textesLigneAccueil : les textes d’une ligne de la liste d’accueil, dans l’ordre où elle les pose', () => {
-  test('le nom, le prénom, l’appartenance, puis le libellé de la place à chaque tour ; le texte vide pour un champ absent ou blanc', () => {
+  test('le nom, le prénom, l’organisation, puis le libellé de la place à chaque tour ; le texte vide pour un champ absent ou blanc', () => {
     const places = [
       { tour: 1, table: 2, siege: null },
       { tour: 2, table: null, siege: null },
       { tour: 3, table: 4, siege: 5 },
     ];
-    assert.deepEqual(textesLigneAccueil({ participant: 1, nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles', places }, t), [
+    assert.deepEqual(textesLigneAccueil({ participant: 1, nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles', places }, t), [
       'Ombrelle',
       'Iris',
       'Club des Merles',
@@ -582,7 +582,7 @@ describe('textesLigneAccueil : les textes d’une ligne de la liste d’accueil,
       t('feuilles.accueil.reserve'),
       t('feuilles.accueil.tableSiege', { table: 4, siege: 5 }),
     ]);
-    assert.deepEqual(textesLigneAccueil({ participant: 2, nom: 'Pervenche', prenom: null, appartenance: ' ', places: places.slice(1, 2) }, t), [
+    assert.deepEqual(textesLigneAccueil({ participant: 2, nom: 'Pervenche', prenom: null, organisation: ' ', places: places.slice(1, 2) }, t), [
       'Pervenche',
       '',
       '',

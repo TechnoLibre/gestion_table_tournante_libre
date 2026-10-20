@@ -20,8 +20,8 @@
    alpha : la couleur relue dans le style calculé est alors la couleur peinte.
 
    Trois teintes sont réservées aux conflits (§ 7.5, § 12.7), une par règle
-   que le plan localise : --couleur-conflit-appartenance (séparer les
-   appartenances), --couleur-conflit-voisins (nouveaux voisins) et
+   que le plan localise : --couleur-conflit-organisation (séparer les
+   organisations), --couleur-conflit-voisins (nouveaux voisins) et
    --couleur-conflit-table (nouvelle table). Chacune ne peint que la trame de
    sa règle ; tout autre jeton chromatique se tient à 30° au moins de chacune,
    sauf le rouge du retrait, et aucun ne porte la valeur de l'une. Elles se
@@ -76,7 +76,7 @@
    un en-tête de tableau, son filet, son ombre, le filet léger entre deux
    lignes d'un tableau — ; l'action principale — son fond, son texte, sa
    teinte claire et son encre, celle d'un lien — ; les quatre états du plan,
-   le neutre et les appartenances, chacun un fond teinté et une marque, que
+   le neutre et les organisations, chacun un fond teinté et une marque, que
    lisent les pastilles ; la bande de mode, un fond, un filet et une
    teinte par mode, celle de son icône ; les messages — avis, refus,
    information —, chacun son encre, un fond, un filet et une marque ; le
@@ -87,14 +87,14 @@
    pastilles, des messages et de la bande se valident par calcul (SIGNES,
    marques.js).
 
-   Les teintes d'appartenance ne vont que sur les listes, jamais sur le
+   Les teintes d'organisation ne vont que sur les listes, jamais sur le
    plan : six teintes au plus, catégorielles, chacune à 30° au moins des
    teintes de conflit, distinctes deux à deux sous les trois dichromaties et,
-   deux teintes voisines, en clarté (TEINTES_APPARTENANCE, marques.js).
+   deux teintes voisines, en clarté (TEINTES_ORGANISATION, marques.js).
 
    Le graphique (§ 12.7) : deux séries, chacune à 3:1 sur la carte, la page
    et la grille de fond, séparées l'une de l'autre et des six teintes
-   d'appartenance sous les trois dichromaties ; le repère d'un plafond et
+   d'organisation sous les trois dichromaties ; le repère d'un plafond et
    celui d'une borne, neutres, à 3:1, que leur trait distingue — mixte et
    pointillé ; l'axe, neutre ; « prouvé inévitable », neutre, et « reste »,
    la teinte de la première série, séparés l'un de l'autre ; l'échelle à
@@ -106,7 +106,7 @@
    et 3, et le sombre inverse leurs clartés avec l'échelle ; la bordure des
    cases, à 3:1 sur la carte. La grille et le niveau 0 ne portent aucune
    information : hors de la mesure 3:1 (FONDS_GRAPHIQUE, marques.js). Aucun
-   jeton du graphique ne prend une teinte de conflit, d'appartenance ni le
+   jeton du graphique ne prend une teinte de conflit, d'organisation ni le
    rouge du retrait. */
 
 @font-face {
@@ -244,7 +244,7 @@ textarea {
   --couleur-action-teinte: #e8f0fb;
   --couleur-action-encre: #184c99;
 
-  /* États du plan (§ 9), le neutre et les appartenances : fond teinté et
+  /* États du plan (§ 9), le neutre et les organisations : fond teinté et
      marque. */
   --couleur-neutre-fond: #eef1f5;
   --couleur-neutre-marque: #5e6b7a;
@@ -256,18 +256,18 @@ textarea {
   --couleur-etat-retenu-marque: #1a8566;
   --couleur-etat-bloque-fond: #ece9fa;
   --couleur-etat-bloque-marque: #6a55c8;
-  --couleur-appartenance-1-fond: #e4eff4;
-  --couleur-appartenance-1-marque: #185a72;
-  --couleur-appartenance-2-fond: #f7f1e3;
-  --couleur-appartenance-2-marque: #a17317;
-  --couleur-appartenance-3-fond: #f1eafc;
-  --couleur-appartenance-3-marque: #7c24e0;
-  --couleur-appartenance-4-fond: #e4f2ef;
-  --couleur-appartenance-4-marque: #32857a;
-  --couleur-appartenance-5-fond: #f2ede3;
-  --couleur-appartenance-5-marque: #6b4d0f;
-  --couleur-appartenance-6-fond: #f3f0fc;
-  --couleur-appartenance-6-marque: #8f6dd5;
+  --couleur-organisation-1-fond: #e4eff4;
+  --couleur-organisation-1-marque: #185a72;
+  --couleur-organisation-2-fond: #f7f1e3;
+  --couleur-organisation-2-marque: #a17317;
+  --couleur-organisation-3-fond: #f1eafc;
+  --couleur-organisation-3-marque: #7c24e0;
+  --couleur-organisation-4-fond: #e4f2ef;
+  --couleur-organisation-4-marque: #32857a;
+  --couleur-organisation-5-fond: #f2ede3;
+  --couleur-organisation-5-marque: #6b4d0f;
+  --couleur-organisation-6-fond: #f3f0fc;
+  --couleur-organisation-6-marque: #8f6dd5;
 
   /* Bande de mode (§ 8.4) : la teinte de chaque mode, que porte son icône,
      puis son fond et son filet. */
@@ -315,7 +315,7 @@ textarea {
   --couleur-hachure: #1f1f1f;
   --couleur-marque: #767676;
   --couleur-contour-fort: #2b2f36;
-  --couleur-conflit-appartenance: #8f1d14;
+  --couleur-conflit-organisation: #8f1d14;
   --couleur-conflit-voisins: #c0189f;
   --couleur-conflit-table: #6a9400;
   --couleur-pastille-fond: #2b2f36;
@@ -388,18 +388,18 @@ textarea {
   --couleur-etat-retenu-marque: #4cc3a0;
   --couleur-etat-bloque-fond: #29254a;
   --couleur-etat-bloque-marque: #a99af0;
-  --couleur-appartenance-1-fond: #1f2335;
-  --couleur-appartenance-1-marque: #96a1e9;
-  --couleur-appartenance-2-fond: #2b2416;
-  --couleur-appartenance-2-marque: #c98f1d;
-  --couleur-appartenance-3-fond: #251d34;
-  --couleur-appartenance-3-marque: #9c5ae7;
-  --couleur-appartenance-4-fond: #162b2a;
-  --couleur-appartenance-4-marque: #70e1d2;
-  --couleur-appartenance-5-fond: #2a2717;
-  --couleur-appartenance-5-marque: #e7cb5a;
-  --couleur-appartenance-6-fond: #152826;
-  --couleur-appartenance-6-marque: #298e88;
+  --couleur-organisation-1-fond: #1f2335;
+  --couleur-organisation-1-marque: #96a1e9;
+  --couleur-organisation-2-fond: #2b2416;
+  --couleur-organisation-2-marque: #c98f1d;
+  --couleur-organisation-3-fond: #251d34;
+  --couleur-organisation-3-marque: #9c5ae7;
+  --couleur-organisation-4-fond: #162b2a;
+  --couleur-organisation-4-marque: #70e1d2;
+  --couleur-organisation-5-fond: #2a2717;
+  --couleur-organisation-5-marque: #e7cb5a;
+  --couleur-organisation-6-fond: #152826;
+  --couleur-organisation-6-marque: #298e88;
 
   --couleur-mode-lecture: #9aa5b4;
   --couleur-mode-ecriture: #81c784;
@@ -439,7 +439,7 @@ textarea {
   --couleur-hachure: #ededed;
   --couleur-marque: #7a7a7a;
   --couleur-contour-fort: #e6e8eb;
-  --couleur-conflit-appartenance: #fc9890;
+  --couleur-conflit-organisation: #fc9890;
   --couleur-conflit-voisins: #c0689c;
   --couleur-conflit-table: #549c00;
   --couleur-pastille-fond: #e6e8eb;

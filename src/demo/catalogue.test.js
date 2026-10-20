@@ -4,26 +4,26 @@
 // Épreuves du catalogue de démonstrations (§ 15) : ses quatre entrées, le
 // déterminisme, les grandeurs de chacune, l'ordre contractuel des tirages
 // (§ 15.5, point 3), le plan parfait de la petite et les refus du générateur
-// (§ 15.4). Le profil d'appartenances de la grande n'est écrit nulle part ici
+// (§ 15.4). Le profil d'organisations de la grande n'est écrit nulle part ici
 // (§ 15.2) : il se recalcule en rejouant le tirage des tailles.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { indexerPlan, normaliser } from '../moteur/configuration.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
-import { tirerTailles, tourTemoin } from './appartenances.js';
+import { tirerTailles, tourTemoin } from './organisations.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE, engendrer } from './catalogue.js';
 import { NOMS_LONGS, PRENOMS, organisations, patronymes } from './noms.js';
 import { FLUX, creerPcg32 } from './prng.js';
 
 const CLES = ['grande', 'grande-sans-exception', 'petite', 'petite-conflit'];
 const TOUTES_ACTIVES = {
-  separerAppartenances: true,
+  separerOrganisations: true,
   nouveauxVoisins: true,
   nouvelleTable: true,
-  varierAppartenances: true,
+  varierOrganisations: true,
 };
 
-// Appartenances de la petite démonstration (§ 15.3), puis de sa variante,
+// Organisations de la petite démonstration (§ 15.3), puis de sa variante,
 // où la personne 10 passe de C à A.
 const A = [1, 5, 8, 12];
 const B = [2, 4, 9, 11];
@@ -55,14 +55,14 @@ function configurationDe(cle) {
   return construites.get(cle);
 }
 
-// Membres de chaque appartenance, en ids croissants, les groupes rangés par
+// Membres de chaque organisation, en ids croissants, les groupes rangés par
 // leur plus petit id. La Map retrouve le groupe d'un libellé ; le tri fixe
 // l'ordre de sortie.
 function groupesDe({ participants }) {
   const membres = new Map();
-  for (const { id, appartenance } of participants) {
-    if (!membres.has(appartenance)) membres.set(appartenance, []);
-    membres.get(appartenance).push(id);
+  for (const { id, organisation } of participants) {
+    if (!membres.has(organisation)) membres.set(organisation, []);
+    membres.get(organisation).push(id);
   }
   return [...membres.values()].map((ids) => ids.sort(croissant)).sort((a, b) => a[0] - b[0]);
 }
@@ -141,7 +141,7 @@ describe('catalogue : grande (§ 15.1)', () => {
     const prenoms = new Set(PRENOMS);
     const reservoir = new Set(organisations());
     const ecarts = participants
-      .filter((p) => typeof p.nom !== 'string' || !prenoms.has(p.prenom) || !reservoir.has(p.appartenance)
+      .filter((p) => typeof p.nom !== 'string' || !prenoms.has(p.prenom) || !reservoir.has(p.organisation)
         || p.exclu !== undefined)
       .map((p) => p.id);
     assert.deepEqual(ecarts, []);
@@ -169,11 +169,11 @@ describe('catalogue : grande (§ 15.1)', () => {
     assert.ok(animateurs.every((id) => Number.isInteger(id) && id >= 1 && id <= 260));
   });
 
-  test('les animateurs ne partagent pas tous une même appartenance', () => {
+  test('les animateurs ne partagent pas tous une même organisation', () => {
     const { participants, reservations } = configurationDe('grande');
-    const appartenanceDe = new Map(participants.map((p) => [p.id, p.appartenance]));
-    const appartenances = new Set(reservations.map((r) => appartenanceDe.get(r.participant)));
-    assert.ok(appartenances.size > 1);
+    const organisationDe = new Map(participants.map((p) => [p.id, p.organisation]));
+    const distinctes = new Set(reservations.map((r) => organisationDe.get(r.participant)));
+    assert.ok(distinctes.size > 1);
   });
 
   test('tailles de groupe de 1 à 12, somme 260 : celles que rejoue le tirage des tailles', () => {
@@ -214,10 +214,10 @@ describe('catalogue : grande (§ 15.1)', () => {
     const libelles = tirerSansRemise(rng, organisations(), tailles.length); // (4)
     const ordre = rng.melanger(suite(1, N)); // (5)
     const animateurs = rng.melanger(suite(1, N)).slice(0, 33); // (6)
-    const appartenance = [];
+    const organisation = [];
     let rang = 0;
     tailles.forEach((taille, g) => {
-      for (let m = 0; m < taille; m += 1, rang += 1) appartenance[ordre[rang]] = libelles[g];
+      for (let m = 0; m < taille; m += 1, rang += 1) organisation[ordre[rang]] = libelles[g];
     });
     const longs = new Map([[7, NOMS_LONGS[0]], [77, NOMS_LONGS[1]], [177, NOMS_LONGS[2]]]);
     assert.deepEqual(
@@ -226,7 +226,7 @@ describe('catalogue : grande (§ 15.1)', () => {
         id,
         nom: longs.get(id) ?? noms[id - 1],
         prenom: prenoms[id - 1],
-        appartenance: appartenance[id],
+        organisation: organisation[id],
       })),
     );
     assert.deepEqual(
@@ -237,7 +237,7 @@ describe('catalogue : grande (§ 15.1)', () => {
 });
 
 describe('catalogue : grande sans exception (§ 15.1)', () => {
-  test('mêmes participants, appartenances et animateurs que la grande', () => {
+  test('mêmes participants, organisations et animateurs que la grande', () => {
     const grande = configurationDe('grande');
     const variante = configurationDe('grande-sans-exception');
     assert.deepStrictEqual(variante.participants, grande.participants);
@@ -265,7 +265,7 @@ describe('catalogue : petite et conflit inévitable (§ 15.3)', () => {
     }
   });
 
-  test('appartenances A, B, C : 4, 4, 4 ; dans la variante 5, 4, 3', () => {
+  test('organisations A, B, C : 4, 4, 4 ; dans la variante 5, 4, 3', () => {
     const conflit = configurationDe('petite-conflit');
     assert.deepEqual(groupesDe(configurationDe('petite')), [A, B, C]);
     assert.deepEqual(groupesDe(conflit), [A_CONFLIT, B, C_CONFLIT]);
@@ -274,7 +274,7 @@ describe('catalogue : petite et conflit inévitable (§ 15.3)', () => {
 
   test('trois libellés distincts tirés parmi les organisations ; noms et prénoms des réservoirs', () => {
     const configuration = configurationDe('petite');
-    const libelles = new Set(configuration.participants.map((p) => p.appartenance));
+    const libelles = new Set(configuration.participants.map((p) => p.organisation));
     assert.equal(libelles.size, 3);
     const reservoir = new Set(organisations());
     assert.ok([...libelles].every((libelle) => reservoir.has(libelle)));
@@ -285,13 +285,13 @@ describe('catalogue : petite et conflit inévitable (§ 15.3)', () => {
     assert.ok(configuration.participants.every((p) => PRENOMS.includes(p.prenom)));
   });
 
-  test('la variante ne change que l’appartenance de la personne 10', () => {
+  test('la variante ne change que l’organisation de la personne 10', () => {
     const { participants } = configurationDe('petite');
     const conflit = configurationDe('petite-conflit');
-    const libelleA = participants[0].appartenance;
+    const libelleA = participants[0].organisation;
     assert.deepEqual(
       conflit.participants,
-      participants.map((p) => (p.id === 10 ? { ...p, appartenance: libelleA } : p)),
+      participants.map((p) => (p.id === 10 ? { ...p, organisation: libelleA } : p)),
     );
   });
 
@@ -304,7 +304,7 @@ describe('catalogue : petite et conflit inévitable (§ 15.3)', () => {
     const libelleDe = (id) => (A.includes(id) ? a : B.includes(id) ? b : c);
     assert.deepEqual(
       configuration.participants,
-      suite(1, 12).map((id) => ({ id, nom: noms[id - 1], prenom: prenoms[id - 1], appartenance: libelleDe(id) })),
+      suite(1, 12).map((id) => ({ id, nom: noms[id - 1], prenom: prenoms[id - 1], organisation: libelleDe(id) })),
     );
   });
 });
@@ -434,7 +434,7 @@ describe('engendrer : refus (§ 15.4, § 15.6)', () => {
       capacites: tablesPour(nombreOrganisations),
       tours: 4,
     });
-    assert.equal(new Set(parOrganisation.participants.map((p) => p.appartenance)).size, nombreOrganisations);
+    assert.equal(new Set(parOrganisation.participants.map((p) => p.organisation)).size, nombreOrganisations);
     const tailles = Array(Math.floor(nombrePatronymes / 2)).fill(2);
     if (nombrePatronymes % 2 === 1) tailles.push(1);
     const parPatronyme = engendrer({ graine: 1, tailles, capacites: tablesPour(nombrePatronymes), tours: 4 });

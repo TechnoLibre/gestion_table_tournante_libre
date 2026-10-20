@@ -38,7 +38,7 @@ function chargeGeneree() {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: rang < 3 ? 'Coopérative Aubier' : 'Atelier Ressac',
+    organisation: rang < 3 ? 'Coopérative Aubier' : 'Atelier Ressac',
     courriel: null,
     titrePressenti: null,
     notes: null,

@@ -35,7 +35,7 @@ import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage
 import { planDepuisFichier, versFichier } from '../../stockage/placements.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { CONFLITS } from '../marques.js';
-import { appartenanceDeCharge, nomDeCharge } from './vue_plan.js';
+import { organisationDeCharge, nomDeCharge } from './vue_plan.js';
 import {
   ARRET_RETRACE,
   ECART_ANNEAU,
@@ -85,11 +85,11 @@ const NOMS = [
   ['Solveig', 'Sarcelle'],
 ];
 
-const personne = (id, nom, prenom, appartenance) => ({
+const personne = (id, nom, prenom, organisation) => ({
   id,
   nom,
   prenom,
-  appartenance,
+  organisation,
   courriel: null,
   titrePressenti: null,
   notes: null,
@@ -110,7 +110,7 @@ function avecPropositions(charge, { graine = 7, nombre = 1 } = {}) {
   return charge;
 }
 
-/** Douze personnes en deux appartenances de six — une seule avec uneSeule —,
+/** Douze personnes en deux organisations de six — une seule avec uneSeule —,
  *  quatre tables rondes de 3, quatre tours, séparation active, et une
  *  proposition de rechercher(…, {graine: 7, nombre: 1, arret: 4000}). */
 function toutesEnConflit({ uneSeule = false } = {}) {
@@ -226,11 +226,11 @@ describe('modeleDessin : les conflits se lisent, jamais ne se recalculent (§ 7.
 describe('modeleDessin : le bandeau énonce le diagnostic (§ 7.5)', () => {
   const lire = (charge) => etatPlaces(charge, { tour: 1, proposition: 1 });
 
-  test('deux appartenances de six : la phrase, collisionPartout, puis un plancher par groupe, chiffres du moteur', () => {
+  test('deux organisations de six : la phrase, collisionPartout, puis un plancher par groupe, chiffres du moteur', () => {
     const charge = toutesEnConflit();
     const diagnostic = diagnostiquer(configurationDepuisCharge(charge));
     assert.equal(diagnostic.collisionPartout, true);
-    assert.equal(diagnostic.uneSeuleAppartenance, false);
+    assert.equal(diagnostic.uneSeuleOrganisation, false);
     assert.equal(diagnostic.collisions.length, 2);
     const { bandeau } = modeleDessin(lire(charge), options(charge, { diagnostic }));
     assert.deepEqual(bandeau, [
@@ -248,10 +248,10 @@ describe('modeleDessin : le bandeau énonce le diagnostic (§ 7.5)', () => {
     for (const { cle, details } of bandeau) assert.equal(typeof t(cle, details), 'string');
   });
 
-  test('une seule appartenance : l\u{2019}entrée uneSeuleAppartenance, sans plancher par groupe', () => {
+  test('une seule organisation : l\u{2019}entrée uneSeuleOrganisation, sans plancher par groupe', () => {
     const charge = toutesEnConflit({ uneSeule: true });
     const diagnostic = diagnostiquer(configurationDepuisCharge(charge));
-    assert.equal(diagnostic.uneSeuleAppartenance, true);
+    assert.equal(diagnostic.uneSeuleOrganisation, true);
     const { bandeau, signalerConflits } = modeleDessin(lire(charge), options(charge, { diagnostic }));
     assert.equal(signalerConflits, false);
     assert.deepEqual(
@@ -259,14 +259,14 @@ describe('modeleDessin : le bandeau énonce le diagnostic (§ 7.5)', () => {
       [
         'plan.bandeau.toutesEnConflit',
         ...(diagnostic.collisionPartout ? ['plan.bandeau.collisionPartout'] : []),
-        'plan.bandeau.uneSeuleAppartenance',
+        'plan.bandeau.uneSeuleOrganisation',
       ],
     );
   });
 
   test('un diagnostic sans plancher : la phrase, puis l\u{2019}entrée qui le dit', () => {
     const charge = toutesEnConflit();
-    const diagnostic = { collisions: [], uneSeuleAppartenance: false, collisionPartout: false };
+    const diagnostic = { collisions: [], uneSeuleOrganisation: false, collisionPartout: false };
     const { bandeau } = modeleDessin(lire(charge), options(charge, { diagnostic }));
     assert.deepEqual(bandeau, [
       { cle: 'plan.bandeau.toutesEnConflit', details: {} },
@@ -949,17 +949,17 @@ describe('modeleDessin : les options selection et actif marquent leur chaise, ou
 
 // --- Le détail d'une table en conflit --------------------------------------------
 
-// L'appartenance de chaque participant de la charge, par identifiant : celle
+// L'organisation de chaque participant de la charge, par identifiant : celle
 // que l'infobulle reçoit.
-const appartenancesDe = appartenanceDeCharge;
+const organisationsDe = organisationDeCharge;
 
 describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3)', () => {
   // Ce que le détail d'une table doit tenir, jugé sans en refaire le calcul :
   // les règles dans l'ordre du moteur, une ligne par règle hors séparer, et,
-  // pour séparer, des lignes d'appartenances deux à deux distinctes dont la
+  // pour séparer, des lignes d'organisations deux à deux distinctes dont la
   // suite des groupes, ligne après ligne, est une permutation stable des
-  // paires du moteur, chaque paire sous l'appartenance de ses deux personnes.
-  function verifierDetail(detail, table, nomDe, appartenanceDe) {
+  // paires du moteur, chaque paire sous l'organisation de ses deux personnes.
+  function verifierDetail(detail, table, nomDe, organisationDe) {
     assert.equal(detail.numero, table.numero);
     assert.equal(detail.nombre, table.conflits.nombre);
     const regles = [...new Set(detail.lignes.map(({ regle }) => regle))];
@@ -968,41 +968,41 @@ describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3
       const lignes = detail.lignes.filter((ligne) => ligne.regle === regle.regle);
       for (const ligne of lignes) assert.equal(ligne.cle, `plan.infobulle.${regle.regle}`);
       const groupes = (regle.paires ?? regle.personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe));
-      if (regle.regle !== 'separerAppartenances') {
-        assert.deepEqual(lignes, [{ regle: regle.regle, cle: lignes[0].cle, appartenance: null, groupes }]);
+      if (regle.regle !== 'separerOrganisations') {
+        assert.deepEqual(lignes, [{ regle: regle.regle, cle: lignes[0].cle, organisation: null, groupes }]);
         continue;
       }
-      const appartenances = lignes.map(({ appartenance }) => appartenance);
-      assert.deepEqual(appartenances, [...new Set(regle.paires.map(([a]) => appartenanceDe(a)))]);
+      const organisations = lignes.map(({ organisation }) => organisation);
+      assert.deepEqual(organisations, [...new Set(regle.paires.map(([a]) => organisationDe(a)))]);
       for (const ligne of lignes) {
-        const paires = regle.paires.filter(([a]) => appartenanceDe(a) === ligne.appartenance);
-        for (const [a, b] of paires) assert.equal(appartenanceDe(b), ligne.appartenance);
+        const paires = regle.paires.filter(([a]) => organisationDe(a) === ligne.organisation);
+        for (const [a, b] of paires) assert.equal(organisationDe(b), ligne.organisation);
         assert.deepEqual(ligne.groupes, paires.map((paire) => paire.map(nomDe)));
       }
       assert.equal(lignes.reduce((n, ligne) => n + ligne.groupes.length, 0), groupes.length);
     }
   }
 
-  test('petite démonstration en conflit : chaque règle violée, ses paires ou ses personnes, dans l’ordre du moteur ; chaque paire réunie nomme son appartenance', () => {
+  test('petite démonstration en conflit : chaque règle violée, ses paires ou ses personnes, dans l’ordre du moteur ; chaque paire réunie nomme son organisation', () => {
     const charge = avecPropositions(petite('petite-conflit'));
     const nomDe = nomsDe(charge);
-    const appartenanceDe = appartenancesDe(charge);
+    const organisationDe = organisationsDe(charge);
     let vus = 0;
     let separees = 0;
     for (let tour = 1; tour <= charge.evenement.tours; tour += 1) {
       for (const table of etatPlaces(charge, { tour, proposition: 1 }).tables) {
-        const detail = detailConflits(table, nomDe, appartenanceDe);
+        const detail = detailConflits(table, nomDe, organisationDe);
         if (table.conflits.nombre === 0) {
           assert.equal(detail, null);
           continue;
         }
         vus += 1;
-        verifierDetail(detail, table, nomDe, appartenanceDe);
+        verifierDetail(detail, table, nomDe, organisationDe);
         for (const ligne of detail.lignes) {
           assert.ok(typeof t(ligne.cle) === 'string' && t(ligne.cle).length > 0, ligne.cle);
-          if (ligne.regle === 'separerAppartenances') {
+          if (ligne.regle === 'separerOrganisations') {
             separees += 1;
-            assert.equal(typeof ligne.appartenance, 'string');
+            assert.equal(typeof ligne.organisation, 'string');
           }
         }
       }
@@ -1011,34 +1011,34 @@ describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3
     assert.ok(separees > 0, 'au moins une paire réunie');
   });
 
-  test('séparer les appartenances : une ligne par appartenance, ses paires dans l’ordre du moteur ; l’appartenance telle que la liste la porte', () => {
+  test('séparer les organisations : une ligne par organisation, ses paires dans l’ordre du moteur ; l’organisation telle que la liste la porte', () => {
     const noms = new Map([[1, 'Iris Ombrelle'], [2, 'Théo Pervenche'], [3, 'Ondine Lacasse'], [4, 'Grisaille'], [5, 'Basile Tourmaline']]);
-    const appartenances = new Map([[1, 'Club des Merles'], [2, 'cercle des Hérons '], [3, 'Club des Merles'], [4, 'cercle des Hérons '], [5, 'Club des Merles']]);
+    const organisations = new Map([[1, 'Club des Merles'], [2, 'cercle des Hérons '], [3, 'Club des Merles'], [4, 'cercle des Hérons '], [5, 'Club des Merles']]);
     const table = {
       numero: 7,
       conflits: {
         nombre: 6,
         regles: [
-          { regle: 'separerAppartenances', paires: [[1, 3], [1, 5], [2, 4], [3, 5]] },
+          { regle: 'separerOrganisations', paires: [[1, 3], [1, 5], [2, 4], [3, 5]] },
           { regle: 'nouveauxVoisins', paires: [[1, 2]] },
           { regle: 'nouvelleTable', personnes: [4] },
         ],
       },
     };
-    const detail = detailConflits(table, (id) => noms.get(id), (id) => appartenances.get(id));
+    const detail = detailConflits(table, (id) => noms.get(id), (id) => organisations.get(id));
     assert.deepEqual(detail, {
       numero: 7,
       nombre: 6,
       lignes: [
         {
-          regle: 'separerAppartenances',
-          cle: 'plan.infobulle.separerAppartenances',
-          appartenance: 'Club des Merles',
+          regle: 'separerOrganisations',
+          cle: 'plan.infobulle.separerOrganisations',
+          organisation: 'Club des Merles',
           groupes: [['Iris Ombrelle', 'Ondine Lacasse'], ['Iris Ombrelle', 'Basile Tourmaline'], ['Ondine Lacasse', 'Basile Tourmaline']],
         },
-        { regle: 'separerAppartenances', cle: 'plan.infobulle.separerAppartenances', appartenance: 'cercle des Hérons ', groupes: [['Théo Pervenche', 'Grisaille']] },
-        { regle: 'nouveauxVoisins', cle: 'plan.infobulle.nouveauxVoisins', appartenance: null, groupes: [['Iris Ombrelle', 'Théo Pervenche']] },
-        { regle: 'nouvelleTable', cle: 'plan.infobulle.nouvelleTable', appartenance: null, groupes: [['Grisaille']] },
+        { regle: 'separerOrganisations', cle: 'plan.infobulle.separerOrganisations', organisation: 'cercle des Hérons ', groupes: [['Théo Pervenche', 'Grisaille']] },
+        { regle: 'nouveauxVoisins', cle: 'plan.infobulle.nouveauxVoisins', organisation: null, groupes: [['Iris Ombrelle', 'Théo Pervenche']] },
+        { regle: 'nouvelleTable', cle: 'plan.infobulle.nouvelleTable', organisation: null, groupes: [['Grisaille']] },
       ],
     });
   });
@@ -1046,8 +1046,8 @@ describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3
   test('conflits non évalués, ou nuls : null', () => {
     const charge = petite();
     const [table] = etatPlaces(charge, { tour: 1 }).tables;
-    assert.equal(detailConflits({ ...table, conflits: null }, nomsDe(charge), appartenancesDe(charge)), null);
-    assert.equal(detailConflits({ ...table, conflits: { nombre: 0, regles: [] } }, nomsDe(charge), appartenancesDe(charge)), null);
+    assert.equal(detailConflits({ ...table, conflits: null }, nomsDe(charge), organisationsDe(charge)), null);
+    assert.equal(detailConflits({ ...table, conflits: { nombre: 0, regles: [] } }, nomsDe(charge), organisationsDe(charge)), null);
   });
 });
 
@@ -1073,7 +1073,7 @@ describe('les trames de conflit : une par règle violée, sa marque et son jeton
         if (attendu.length === 0) saines += 1;
       });
     }
-    assert.deepEqual([...sortes].sort(), ['nouveauxVoisins', 'nouvelleTable', 'separerAppartenances']);
+    assert.deepEqual([...sortes].sort(), ['nouveauxVoisins', 'nouvelleTable', 'separerOrganisations']);
     assert.ok(multiples > 0, 'une table au moins viole plusieurs règles');
     assert.ok(saines > 0, 'une table au moins est saine');
   });
@@ -1089,10 +1089,10 @@ describe('les trames de conflit : une par règle violée, sa marque et son jeton
 
 describe('legendeConflits : les règles actives, leur marque et leur libellé (§ 7.5)', () => {
   const reglages = (actives) => ({
-    separerAppartenances: actives.includes('separerAppartenances'),
+    separerOrganisations: actives.includes('separerOrganisations'),
     nouveauxVoisins: actives.includes('nouveauxVoisins'),
     nouvelleTable: actives.includes('nouvelleTable'),
-    varierAppartenances: true,
+    varierOrganisations: true,
     attribuerSieges: false,
   });
   const entree = (regle) => {
@@ -1101,15 +1101,15 @@ describe('legendeConflits : les règles actives, leur marque et leur libellé (�
   };
 
   test('les trois règles actives, dans l’ordre du moteur', () => {
-    assert.deepEqual(legendeConflits(reglages(['nouvelleTable', 'separerAppartenances', 'nouveauxVoisins'])), [
-      entree('separerAppartenances'),
+    assert.deepEqual(legendeConflits(reglages(['nouvelleTable', 'separerOrganisations', 'nouveauxVoisins'])), [
+      entree('separerOrganisations'),
       entree('nouveauxVoisins'),
       entree('nouvelleTable'),
     ]);
   });
 
-  test('une règle inactive n’y paraît pas ; aucune règle active, une légende vide ; varier les appartenances ne se localise pas', () => {
-    assert.deepEqual(legendeConflits(reglages(['separerAppartenances', 'nouvelleTable'])), [entree('separerAppartenances'), entree('nouvelleTable')]);
+  test('une règle inactive n’y paraît pas ; aucune règle active, une légende vide ; varier les organisations ne se localise pas', () => {
+    assert.deepEqual(legendeConflits(reglages(['separerOrganisations', 'nouvelleTable'])), [entree('separerOrganisations'), entree('nouvelleTable')]);
     assert.deepEqual(legendeConflits(reglages(['nouveauxVoisins'])), [entree('nouveauxVoisins')]);
     assert.deepEqual(legendeConflits(reglages([])), []);
   });
@@ -1275,12 +1275,12 @@ describe('les clés que les panneaux composent existent (§ 14.6)', () => {
     assert.equal(menu.size, 10);
     for (const action of actions) assert.equal(typeof t(`plan.action.${action}`), 'string', action);
     for (const action of menu) assert.equal(typeof t(`plan.menu.${action}`), 'string', action);
-    for (const regle of ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable']) assert.equal(typeof t(`plan.infobulle.${regle}`), 'string');
-    assert.equal(typeof t('plan.infobulle.finAppartenance'), 'string');
+    for (const regle of ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable']) assert.equal(typeof t(`plan.infobulle.${regle}`), 'string');
+    assert.equal(typeof t('plan.infobulle.finOrganisation'), 'string');
   });
 
   test('plan.infobulle.<règle> : chaque ligne de l’infobulle s’ouvre sur une capitale, la même casse pour toutes', () => {
-    for (const regle of ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable']) {
+    for (const regle of ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable']) {
       assert.match(t(`plan.infobulle.${regle}`), /^\p{Lu}/u, regle);
     }
   });

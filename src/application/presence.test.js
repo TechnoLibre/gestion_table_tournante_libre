@@ -36,7 +36,7 @@ const personne = (id, autres = {}) => ({
   id,
   nom: NOMS[id - 1][0],
   prenom: NOMS[id - 1][1],
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,

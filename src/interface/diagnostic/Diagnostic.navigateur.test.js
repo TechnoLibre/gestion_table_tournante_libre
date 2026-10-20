@@ -12,7 +12,7 @@
 // la boîte, les attributs data-… — jamais une classe.
 //
 // Un énoncé porte data-enonce (sa clé), son texte data-phrase, une
-// appartenance data-donnee, un remède data-remede. La valeur attendue vient
+// organisation data-donnee, un remède data-remede. La valeur attendue vient
 // de diagnostiquer, sollicité une seconde fois sur la configuration de la
 // charge ouverte (§ 19.1) ; le texte, de la même traduction que celle de
 // l'application. Les noms d'épreuve sont inventés.
@@ -32,7 +32,7 @@ import TEXTE_TOUTES_EN_CONFLIT from '../../../test/fixtures/plan/toutes_en_confl
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, visible } from '../../../test/navigateur/rendu.js';
-import { teintesAppartenances } from '../appartenances.js';
+import { teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { cartesDiagnostic, enonces, numeroDeCharge } from './phrases.js';
 
@@ -43,15 +43,15 @@ const V1 = VERSION.affichee;
 
 const chargeDemo = (cle) => analyser(texteLivre(cle)).charge;
 
-// Douze personnes inventées, quatre tables de 3, quatre tours ; appartenance
+// Douze personnes inventées, quatre tables de 3, quatre tours ; organisation
 // donne celle de la personne de rang p.
-function chargeDouze(appartenance) {
+function chargeDouze(organisation) {
   const charge = creerCharge({ id: 'evt-diagnostic', nom: 'Soirée des Merles', siegesParDefaut: 3, tours: 4 });
   charge.participants = Array.from({ length: 12 }, (_, p) => ({
     id: p + 1,
     nom: `Pervenche${p + 1}`,
     prenom: 'Théo',
-    appartenance: appartenance(p),
+    organisation: organisation(p),
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -136,7 +136,7 @@ const revision = (m) => m.seance.etat().evenement.revision;
 // nommée par son titre (aria-labelledby).
 const intituleDe = (li) => document.getElementById(li.closest('ul').getAttribute('aria-labelledby'));
 
-// Chaque énoncé rendu sous la racine : sa clé, son appartenance — la donnée
+// Chaque énoncé rendu sous la racine : sa clé, son organisation — la donnée
 // du titre de sa carte —, son texte, et son remède, null quand il n'en porte
 // pas.
 function lus(racine) {
@@ -292,7 +292,7 @@ describe('les planchers des objectifs (§ 5.6, A10, D16, D20)', () => {
       id: p + 1,
       nom: `Lacasse${p + 1}`,
       prenom: 'Ondine',
-      appartenance: null,
+      organisation: null,
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -345,19 +345,19 @@ describe('les planchers des objectifs (§ 5.6, A10, D16, D20)', () => {
   });
 });
 
-describe('une seule appartenance (§ 15.4)', () => {
+describe('une seule organisation (§ 15.4)', () => {
   test('la phrase et son remède ; en lecture, refusé avec « Modifier » ; en écriture, exécuté en une entrée', async () => {
     const m = await ouvrirCharge(chargeDouze(() => 'Club des Merles'));
     m.ui.allerA('diagnostic');
     flushSync();
     const [premier] = lus(section(m));
     expect(premier).toEqual({
-      cle: 'diagnostic.uneSeuleAppartenance',
+      cle: 'diagnostic.uneSeuleOrganisation',
       groupe: null,
-      phrase: t('diagnostic.uneSeuleAppartenance'),
+      phrase: t('diagnostic.uneSeuleOrganisation'),
       remede: t('diagnostic.remede.separation'),
     });
-    const ligne = section(m).querySelector('[data-enonce="diagnostic.uneSeuleAppartenance"]');
+    const ligne = section(m).querySelector('[data-enonce="diagnostic.uneSeuleOrganisation"]');
     const bouton = ligne.querySelector('[data-commande="modifierReglage"]');
     expect(bouton).not.toBeNull();
     expect(texteDe(bouton)).toBe(t('communs.remede.modifierReglage'));
@@ -383,9 +383,9 @@ describe('une seule appartenance (§ 15.4)', () => {
     await attendre(() => expect(m.seance.etat().mode).toBe('ecriture'));
     const revisionEcriture = revision(m);
     ligne.querySelector('[data-commande="modifierReglage"]').click();
-    await attendre(() => expect(charge(m).reglages.separerAppartenances).toBe(false));
+    await attendre(() => expect(charge(m).reglages.separerOrganisations).toBe(false));
     expect(revision(m)).toBe(revisionEcriture + 1);
-    await attendre(() => expect(section(m).querySelector('[data-enonce="diagnostic.uneSeuleAppartenance"]')).toBeNull());
+    await attendre(() => expect(section(m).querySelector('[data-enonce="diagnostic.uneSeuleOrganisation"]')).toBeNull());
   });
 });
 
@@ -429,12 +429,12 @@ describe('la configuration refusée (§ 5.6, § 5.9)', () => {
 
 
 describe('le diagnostic en cartes (§ 5.6, § 12.7)', () => {
-  test('toutes en conflit : la section pose une carte par appartenance, titrée de sa pastille, de la teinte de son rang ; le panneau compact titre chaque groupe de même', async () => {
+  test('toutes en conflit : la section pose une carte par organisation, titrée de sa pastille, de la teinte de son rang ; le panneau compact titre chaque groupe de même', async () => {
     const m = await ouvrirTexte(TEXTE_TOUTES_EN_CONFLIT, 'toutes_en_conflit');
-    const rangs = teintesAppartenances(charge(m).participants);
+    const rangs = teintesOrganisations(charge(m).participants);
     const attendues = cartesAttendues(charge(m));
-    const appartenances = attendues.filter(({ genre }) => genre === 'appartenance');
-    expect(appartenances.length).toBe(2);
+    const organisations = attendues.filter(({ genre }) => genre === 'organisation');
+    expect(organisations.length).toBe(2);
     const sansGenre = attendues.map(({ groupe, cles }) => ({ groupe, cles }));
 
     for (const [nom, racine] of [
@@ -443,7 +443,7 @@ describe('le diagnostic en cartes (§ 5.6, § 12.7)', () => {
     ]) {
       await attendre(() => expect(cartesLues(racine())).toEqual(sansGenre));
       const listes = [...racine().querySelectorAll('ul')].filter((ul) => ul.querySelector('[data-enonce]') !== null);
-      for (const { groupe } of appartenances) {
+      for (const { groupe } of organisations) {
         const ul = listes.find((liste) => document.getElementById(liste.getAttribute('aria-labelledby')).textContent.includes(groupe));
         const titre = document.getElementById(ul.getAttribute('aria-labelledby'));
         expect(/^H[2-6]$/.test(titre.tagName), `${nom} ${groupe} : un intitulé`).toBe(true);
@@ -453,7 +453,7 @@ describe('le diagnostic en cartes (§ 5.6, § 12.7)', () => {
         const point = donnee.querySelector('[aria-hidden="true"]');
         expect(point, `${nom} ${groupe} : le point de la pastille`).not.toBeNull();
         const rang = rangs.get(groupe);
-        expect(composantes(getComputedStyle(point).backgroundColor)).toEqual(jeton(`--couleur-appartenance-${rang}-marque`));
+        expect(composantes(getComputedStyle(point).backgroundColor)).toEqual(jeton(`--couleur-organisation-${rang}-marque`));
         expect(visible(donnee)).toBe(true);
       }
       if (nom === 'section') {
@@ -467,16 +467,16 @@ describe('le diagnostic en cartes (§ 5.6, § 12.7)', () => {
 });
 
 describe('le rang de teinte d’une carte se compte sur tous les participants, exclus compris (§ 12.7)', () => {
-  test('une personne exclue dont l’appartenance se range avant les autres décale les deux cartes aux rangs 2 et 3', async () => {
+  test('une personne exclue dont l’organisation se range avant les autres décale les deux cartes aux rangs 2 et 3', async () => {
     // La charge « toutes en conflit » et une treizième personne, exclue,
-    // d'une appartenance qui se range avant les deux autres : le moteur ne
+    // d'une organisation qui se range avant les deux autres : le moteur ne
     // la voit pas, les collisions restent celles des deux groupes.
     const chargeAvecExclue = analyser(TEXTE_TOUTES_EN_CONFLIT).charge;
     chargeAvecExclue.participants.push({
       id: 13,
       nom: 'Varech',
       prenom: null,
-      appartenance: 'Atelier des Alisiers',
+      organisation: 'Atelier des Alisiers',
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -484,7 +484,7 @@ describe('le rang de teinte d’une carte se compte sur tous les participants, e
     });
     chargeAvecExclue.prochainsIds = { ...chargeAvecExclue.prochainsIds, participant: 14 };
     const m = await ouvrirCharge(chargeAvecExclue);
-    const attendues = cartesAttendues(charge(m)).filter(({ genre }) => genre === 'appartenance');
+    const attendues = cartesAttendues(charge(m)).filter(({ genre }) => genre === 'organisation');
     expect(attendues.map(({ groupe }) => groupe).sort()).toEqual(['Cercle des Hérons', 'Club des Merles']);
 
     for (const [nom, racine] of [
@@ -500,7 +500,7 @@ describe('le rang de teinte d’une carte se compte sur tous les participants, e
         expect(donnee, `${nom} ${groupe} : la pastille`).not.toBeUndefined();
         const point = donnee.querySelector('[aria-hidden="true"]');
         expect(composantes(getComputedStyle(point).backgroundColor), `${nom} ${groupe} : la marque du rang ${rang}`).toEqual(
-          jeton(`--couleur-appartenance-${rang}-marque`),
+          jeton(`--couleur-organisation-${rang}-marque`),
         );
       }
     }
@@ -524,7 +524,7 @@ describe('le bandeau du plan énonce le diagnostic (§ 7.5)', () => {
   }
 
   const bandeau = (m) => dans(m, '[data-bandeau-plan]');
-  // Chaque entrée, ses nœuds — l'appartenance, puis le texte — joints par
+  // Chaque entrée, ses nœuds — l'organisation, puis le texte — joints par
   // une espace.
   const entrees = (m) => [...bandeau(m).querySelectorAll('li')].map((li) => [...li.children].map(texteDe).join(' '));
 
@@ -545,9 +545,9 @@ describe('le bandeau du plan énonce le diagnostic (§ 7.5)', () => {
 
   test('une table rendue saine au tour montré : ni phrase ni plancher', async () => {
     // La personne 8, à la table 1 du tour 1 avec 4 et 7, prend une troisième
-    // appartenance : la table 1 réunit trois appartenances à ce tour.
+    // organisation : la table 1 réunit trois organisations à ce tour.
     const lue = analyser(TEXTE_TOUTES_EN_CONFLIT).charge;
-    lue.participants.find(({ id }) => id === 8).appartenance = 'Grisaille';
+    lue.participants.find(({ id }) => id === 8).organisation = 'Grisaille';
     expect(lue.propositions[0].placement[0].sieges[0]).toEqual([4, 7, 8]);
     const m = await ouvrirCharge(lue);
     m.ui.montrerProposition(1);

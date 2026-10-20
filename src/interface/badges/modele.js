@@ -168,31 +168,31 @@ const cleDeNom = (personne) => cleNormalisee(nomAffiche(personne));
 /**
  * Les personnes dont un badge peut se rééditer (§ 11.8) : les non exclues,
  * par ordre de leur nom affiché normalisé, comparé par points de code,
- * départagées par identifiant. {id, nom, appartenance}, nom affiché.
+ * départagées par identifiant. {id, nom, organisation}, nom affiché.
  *
  * @param {Object} charge   la charge de l'événement ouvert
- * @returns {Array<{id: number, nom: string, appartenance: string|null}>}
+ * @returns {Array<{id: number, nom: string, organisation: string|null}>}
  */
 export function personnesReeditables(charge) {
   return charge.participants
     .filter(({ exclu }) => !exclu)
     .map((personne) => ({ personne, cle: cleDeNom(personne) }))
     .sort((a, b) => comparerPointsDeCode(a.cle, b.cle) || a.personne.id - b.personne.id)
-    .map(({ personne }) => ({ id: personne.id, nom: nomAffiche(personne), appartenance: personne.appartenance }));
+    .map(({ personne }) => ({ id: personne.id, nom: nomAffiche(personne), organisation: personne.organisation }));
 }
 
 /**
- * Les personnes dont le nom affiché ou l'appartenance contient la saisie,
+ * Les personnes dont le nom affiché ou l'organisation contient la saisie,
  * l'un et l'autre normalisés ; toutes pour une saisie vide ou de blancs.
  *
- * @param {Array<{id: number, nom: string, appartenance: string|null}>} personnes
+ * @param {Array<{id: number, nom: string, organisation: string|null}>} personnes
  * @param {string} saisie
  */
 export function filtrerPersonnes(personnes, saisie) {
   const cherchee = cleNormalisee(saisie);
   if (cherchee === '') return personnes;
   return personnes.filter(
-    ({ nom, appartenance }) => cleNormalisee(nom).includes(cherchee) || cleNormalisee(appartenance ?? '').includes(cherchee),
+    ({ nom, organisation }) => cleNormalisee(nom).includes(cherchee) || cleNormalisee(organisation ?? '').includes(cherchee),
   );
 }
 

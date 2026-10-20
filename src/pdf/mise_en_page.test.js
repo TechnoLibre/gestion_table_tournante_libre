@@ -6,7 +6,7 @@
 // métriques factices à chasse fixe dont chaque cote se calcule de tête.
 // Chaque épreuve affirme ce que voit le porteur du carton : le nom jamais
 // abrégé et toujours dans le cadre utile, l'ordre de sacrifice, une
-// appartenance sur une ligne, des tours jamais tronqués, aucun texte qui en
+// organisation sur une ligne, des tours jamais tronqués, aucun texte qui en
 // chevauche un autre.
 import assert from 'node:assert/strict';
 import fontkit from '@pdf-lib/fontkit';
@@ -70,7 +70,7 @@ const tours = (n) => Array.from({ length: n }, (_, i) => tour(i + 1, i + 3));
 const textes = (champs = {}) => ({
   nom: 'Iris Ombrelle',
   lignes: tours(4),
-  appartenance: 'Club des Merles',
+  organisation: 'Club des Merles',
   pied: PIED,
   piedReduit: PIED_REDUIT,
   ...champs,
@@ -303,8 +303,8 @@ describe('mise en page : le nom (§ 11.4, § 11.5)', () => {
 
 describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
   for (const [jeu, metriques] of JEUX) {
-    test(`${jeu} : au-delà de trois lignes, le nom de l’événement part d’abord, puis l’appartenance ; date et horodatage restent`, () => {
-      const vus = { complet: 0, sansEvenement: 0, sansAppartenance: 0, refus: 0 };
+    test(`${jeu} : au-delà de trois lignes, le nom de l’événement part d’abord, puis l’organisation ; date et horodatage restent`, () => {
+      const vus = { complet: 0, sansEvenement: 0, sansOrganisation: 0, refus: 0 };
       for (let longueur = 10; longueur <= 600; longueur += 10) {
         const nom = repete('Iris Ombrelle-Pervenche ', longueur);
         const page = mettreEnPage(textes({ nom, lignes: tours(5) }), metriques);
@@ -315,18 +315,18 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
         }
         const tout = textesDe(page);
         const evenement = tout.some((t) => t.includes(EVENEMENT));
-        const appartenance = tout.includes('Club des Merles');
+        const organisation = tout.includes('Club des Merles');
         assert.ok(tout.includes(HORODATAGE), `horodatage, ${longueur}`);
         assert.ok(tout.some((t) => t.includes(DATE)), `date, ${longueur}`);
         assert.equal(tours(5).filter((t) => tout.includes(t)).length, 5, `tours, ${longueur}`);
-        // L'appartenance ne part jamais avant le nom de l'événement.
-        assert.ok(evenement ? appartenance : true, `ordre, ${longueur}`);
+        // L'organisation ne part jamais avant le nom de l'événement.
+        assert.ok(evenement ? organisation : true, `ordre, ${longueur}`);
         // Rien ne part tant que le nom tient en trois lignes.
-        if (blocsNom(page).length <= 3) assert.ok(evenement && appartenance, `trois lignes, ${longueur}`);
+        if (blocsNom(page).length <= 3) assert.ok(evenement && organisation, `trois lignes, ${longueur}`);
         else assert.ok(!evenement, `au-delà de trois lignes, ${longueur}`);
         if (evenement) vus.complet += 1;
-        else if (appartenance) vus.sansEvenement += 1;
-        else vus.sansAppartenance += 1;
+        else if (organisation) vus.sansEvenement += 1;
+        else vus.sansOrganisation += 1;
         assert.deepEqual(horsDuCadre(page, metriques), [], `${longueur}`);
         assert.deepEqual(chevauchements(page, metriques), [], `${longueur}`);
       }
@@ -337,7 +337,7 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
       // Un nom d'événement long occupe plusieurs lignes du pied : son départ
       // libère de quoi poser une ligne de tour de plus.
       const pied = [`${repete('Grand souper annuel du Club des Merles et de la Grisaille ', 160)} ${TIRET} ${DATE}`, HORODATAGE];
-      const vus = { descendu: 0, sansEvenement: 0, sansAppartenance: 0, refus: 0 };
+      const vus = { descendu: 0, sansEvenement: 0, sansOrganisation: 0, refus: 0 };
       for (const nom of NOMS_COMPOSES) {
         const depart = blocsNom(mettreEnPage(textes({ nom }), metriques))[0].corps;
         let precedent = { corps: depart, refus: false };
@@ -354,7 +354,7 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
           assert.ok(!precedent.refus, `${cas} : accepté après un refus`);
           const tout = textesDe(page);
           const evenement = tout.some((t) => t.startsWith('Grand souper'));
-          const appartenance = tout.includes('Club des Merles');
+          const organisation = tout.includes('Club des Merles');
           const nomBlocs = blocsNom(page);
           const corps = nomBlocs[0].corps;
           const auPlancher = Math.abs(corps - corpsNomPlancher(metriques)) < 1e-9;
@@ -365,12 +365,12 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
           assert.ok(corps <= precedent.corps + 1e-9, `${cas} : ${corps} après ${precedent.corps}`);
           // Un texte ne part que sous le nom au plancher, l'événement d'abord.
           assert.ok(evenement || auPlancher, `${cas} : l’événement part sous un nom de ${corps} pt`);
-          assert.ok(appartenance || !evenement, `${cas} : l’appartenance part avant l’événement`);
+          assert.ok(organisation || !evenement, `${cas} : l’organisation part avant l’événement`);
           if (evenement && corps < depart - 1e-9 && !auPlancher) vus.descendu += 1;
           // Un nom qui partait au-dessus du plancher y est descendu avant que
           // l'événement ne parte.
           if (!evenement && depart > corpsNomPlancher(metriques) + 1e-9) {
-            vus[appartenance ? 'sansEvenement' : 'sansAppartenance'] += 1;
+            vus[organisation ? 'sansEvenement' : 'sansOrganisation'] += 1;
           }
           assert.deepEqual(horsDuCadre(page, metriques), [], cas);
           assert.deepEqual(chevauchements(page, metriques), [], cas);
@@ -382,34 +382,34 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
   }
 });
 
-describe('mise en page : l’appartenance (§ 11.5)', () => {
+describe('mise en page : l’organisation (§ 11.5)', () => {
   for (const [jeu, metriques] of JEUX) {
     test(`${jeu} : 200 caractères tiennent sur une ligne finie par « … », au plus long préfixe qui tient`, () => {
-      const appartenance = repete('Club des Merles et de la Grisaille ', 200);
-      const page = mettreEnPage(textes({ appartenance }), metriques);
+      const organisation = repete('Club des Merles et de la Grisaille ', 200);
+      const page = mettreEnPage(textes({ organisation }), metriques);
       const blocs = page.blocs.filter((b) => b.texte.endsWith(MARQUE));
       assert.equal(blocs.length, 1);
       const [bloc] = blocs;
-      assert.equal(bloc.corps, constante('CORPS_APPARTENANCE_PT'));
+      assert.equal(bloc.corps, constante('CORPS_ORGANISATION_PT'));
       assert.equal(bloc.gras, false);
       const prefixe = bloc.texte.slice(0, -MARQUE.length);
-      assert.ok(prefixe.length > 0 && appartenance.startsWith(prefixe) && prefixe === prefixe.trimEnd());
+      assert.ok(prefixe.length > 0 && organisation.startsWith(prefixe) && prefixe === prefixe.trimEnd());
       assert.ok(metriques.largeur(bloc.texte, bloc.corps, false) <= CADRE.largeur);
       // Le préfixe suivant, espaces finales retirées, déborderait.
       let fin = prefixe.length + 1;
-      while (appartenance.slice(0, fin).trimEnd() === prefixe) fin += 1;
-      const suivant = appartenance.slice(0, fin).trimEnd();
+      while (organisation.slice(0, fin).trimEnd() === prefixe) fin += 1;
+      const suivant = organisation.slice(0, fin).trimEnd();
       assert.ok(metriques.largeur(`${suivant}${MARQUE}`, bloc.corps, false) > CADRE.largeur, suivant);
       assert.deepEqual(horsDuCadre(page, metriques), []);
     });
 
-    test(`${jeu} : sans appartenance, aucun bloc, et les tours remontent de la hauteur de sa ligne`, () => {
+    test(`${jeu} : sans organisation, aucun bloc, et les tours remontent de la hauteur de sa ligne`, () => {
       const avec = mettreEnPage(textes(), metriques);
-      const sans = mettreEnPage(textes({ appartenance: null }), metriques);
+      const sans = mettreEnPage(textes({ organisation: null }), metriques);
       assert.equal(sans.blocs.length, avec.blocs.length - 1);
       assert.ok(!textesDe(sans).includes('Club des Merles'));
       const premierTour = (page) => page.blocs.find((b) => b.texte === tour(1, 3));
-      const { ascendante, descendante } = metriques.hauteurs(constante('CORPS_APPARTENANCE_PT'));
+      const { ascendante, descendante } = metriques.hauteurs(constante('CORPS_ORGANISATION_PT'));
       assert.ok(Math.abs(premierTour(avec).y - premierTour(sans).y - (ascendante + descendante)) < 1e-9);
       assert.ok(textesDe(sans).every((t) => t !== TIRET && t.trim() !== ''));
     });
@@ -418,11 +418,11 @@ describe('mise en page : l’appartenance (§ 11.5)', () => {
     // Sous la chasse fixe, le préfixe tient avec la marque, et la capitale
     // large qui le suit fait déborder le préfixe seul : la recherche du plus
     // long préfixe ne s'arrête pas un caractère trop tôt.
-    const corps = constante('CORPS_APPARTENANCE_PT');
+    const corps = constante('CORPS_ORGANISATION_PT');
     const prefixe = 'Grisaille Grisaille Grisaille Grisaille Ondin';
     assert.ok(FACTICES.largeur(`${prefixe}${MARQUE}`, corps, false) <= CADRE.largeur);
     assert.ok(FACTICES.largeur(`${prefixe}W`, corps, false) > CADRE.largeur);
-    const page = mettreEnPage(textes({ appartenance: `${prefixe}WWW du Club` }), FACTICES);
+    const page = mettreEnPage(textes({ organisation: `${prefixe}WWW du Club` }), FACTICES);
     assert.ok(textesDe(page).includes(`${prefixe}${MARQUE}`), JSON.stringify(textesDe(page)));
   });
 });
@@ -624,12 +624,12 @@ describe('mise en page : le pied (§ 11.4)', () => {
 });
 
 describe('mise en page : le corps du nom plafonne les autres corps (§ 11.4)', () => {
-  test('sous une grande capitale, le nom au plancher plafonne le corps des tours, de l’appartenance et du pied', () => {
+  test('sous une grande capitale, le nom au plancher plafonne le corps des tours, de l’organisation et du pied', () => {
     // Capitale de 1,2 cadratin : le plancher du nom tombe sous le corps
-    // plancher des tours et sous celui de l'appartenance.
+    // plancher des tours et sous celui de l'organisation.
     const metriques = metriquesFactices({ capitale: 1.2 });
     const plancher = corpsNomPlancher(metriques);
-    assert.ok(plancher < constante('CORPS_TOURS_PLANCHER_PT') && plancher < constante('CORPS_APPARTENANCE_PT'), `${plancher}`);
+    assert.ok(plancher < constante('CORPS_TOURS_PLANCHER_PT') && plancher < constante('CORPS_ORGANISATION_PT'), `${plancher}`);
     const nom = repete('Iris Ombrelle-Pervenche ', 150);
     for (const n of [4, 12]) {
       const page = mettreEnPage(textes({ nom, lignes: tours(n) }), metriques);
@@ -680,7 +680,7 @@ describe('mise en page : propriétés sur des noms engendrés', () => {
     };
     return () => ({
       nom: texte(suivant() < 0.5 ? 30 : 260),
-      appartenance: suivant() < 0.25 ? null : texte(120),
+      organisation: suivant() < 0.25 ? null : texte(120),
       tours: entier(1, 30),
       sieges: suivant() < 0.5,
     });
@@ -698,11 +698,11 @@ describe('mise en page : propriétés sur des noms engendrés', () => {
       const bilan = { acceptes: 0, auDela: 0, deuxColonnes: 0, abregees: 0, refus: 0 };
       const tirer = tirage(GRAINE);
       for (let rang = 0; rang < TIRAGES.get(metriques); rang += 1) {
-        const { nom, appartenance, tours: n, sieges } = tirer();
-        const cas = JSON.stringify({ rang, nom, appartenance, tours: n, sieges });
+        const { nom, organisation, tours: n, sieges } = tirer();
+        const cas = JSON.stringify({ rang, nom, organisation, tours: n, sieges });
         const nomPropre = nom.trim().replace(/ +/g, ' ');
         const lignes = Array.from({ length: n }, (_, i) => `${tour(i + 1, i + 2)}${sieges ? `, siège ${i + 1}` : ''}`);
-        const page = mettreEnPage(textes({ nom: nomPropre, appartenance, lignes }), metriques);
+        const page = mettreEnPage(textes({ nom: nomPropre, organisation, lignes }), metriques);
         if ('refus' in page) {
           bilan.refus += 1;
           assert.ok(['PLANCHE_TROP_DE_TOURS', 'PLANCHE_NOM_TROP_LONG'].includes(page.refus.code), cas);

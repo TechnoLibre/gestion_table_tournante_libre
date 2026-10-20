@@ -172,7 +172,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['12a-qualite-sans-placement', 'petite-conflit'],
       ['12b-qualite-une-table', 'construite-une-table'],
       ['12c-qualite-un-tour', 'construite-un-tour'],
-      ['12d-qualite-une-appartenance', 'construite-une-appartenance'],
+      ['12d-qualite-une-appartenance', 'construite-une-organisation'],
       ['12e-qualite-sans-collision', 'construite-sans-collision'],
       ['12f-qualite-reserve', 'petite-conflit'],
       ['12g-qualite-plafond-nul', 'construite-plafond-nul'],

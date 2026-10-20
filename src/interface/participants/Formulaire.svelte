@@ -9,10 +9,10 @@
   // NOM_REQUIS, que le formulaire pose contre le champ du nom. Un autre
   // refus — le mode, l'état du plan — se pose contre « Ajouter ».
   //
-  // L'appartenance est collante : après un ajout, chaque champ se vide sauf
-  // elle, et l'état de navigation la garde (garderAppartenance) : le
+  // L'organisation est collante : après un ajout, chaque champ se vide sauf
+  // elle, et l'état de navigation la garde (garderOrganisation) : le
   // formulaire remonté — retour d'une autre section, fermeture d'« À propos »
-  // — repart d'elle. Une appartenance qui ne diffère d'une existante que par la casse,
+  // — repart d'elle. Une organisation qui ne diffère d'une existante que par la casse,
   // les accents ou les blancs (orthographeExistante, grille.js) est signalée
   // contre son champ, avec l'orthographe existante à reprendre d'un clic ;
   // rien ne fusionne seul.
@@ -22,7 +22,7 @@
   // étroite, ils tomberaient sinon sous le bord, loin du champ ou de la
   // commande qu'ils commentent.
   //
-  // Une saisie non envoyée — un champ rempli, l'appartenance exceptée — est
+  // Une saisie non envoyée — un champ rempli, l'organisation exceptée — est
   // un geste ouvert (geste.js), qui suspend le compte d'inactivité.
   //
   // L'envoi n'est pas ré-entrant : tant que l'ajout s'écrit, une seconde
@@ -57,14 +57,14 @@
   const geste = creerGeste(seance);
 
   // Les champs du formulaire, dans l'ordre des colonnes de la grille.
-  const CHAMPS = ['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes'];
-  // Ceux qu'un ajout vide : tous, l'appartenance exceptée.
-  const EPHEMERES = CHAMPS.filter((cle) => cle !== 'appartenance');
+  const CHAMPS = ['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes'];
+  // Ceux qu'un ajout vide : tous, l'organisation exceptée.
+  const EPHEMERES = CHAMPS.filter((cle) => cle !== 'organisation');
 
   let valeurs = $state({
     nom: '',
     prenom: '',
-    appartenance: untrack(() => ui.etat().appartenance),
+    organisation: untrack(() => ui.etat().organisation),
     courriel: '',
     titrePressenti: '',
     notes: '',
@@ -76,7 +76,7 @@
   // Vrai pendant l'écriture d'un ajout.
   let envoiEnCours = $state(false);
 
-  const orthographe = $derived(orthographeExistante(valeurs.appartenance, participants, cleNormalisee));
+  const orthographe = $derived(orthographeExistante(valeurs.organisation, participants, cleNormalisee));
   const idRefusNom = `${uid}-refus-nom`;
   const idOrthographe = `${uid}-orthographe`;
 
@@ -97,7 +97,7 @@
     const champs = {
       nom: valeurs.nom,
       prenom: valeurs.prenom,
-      appartenance: valeurs.appartenance,
+      organisation: valeurs.organisation,
       courriel: valeurs.courriel,
       titrePressenti: valeurs.titrePressenti,
       notes: valeurs.notes,
@@ -114,7 +114,7 @@
     } finally {
       envoiEnCours = false;
     }
-    ui.garderAppartenance(champs.appartenance);
+    ui.garderOrganisation(champs.organisation);
     const intacts = EPHEMERES.filter((cle) => valeurs[cle] === champs[cle]);
     for (const cle of intacts) valeurs[cle] = '';
     if (intacts.length < EPHEMERES.length) return;
@@ -136,7 +136,7 @@
   }
 
   function reprendre() {
-    valeurs.appartenance = orthographe;
+    valeurs.organisation = orthographe;
   }
 
   onDestroy(() => geste.liberer());
@@ -164,12 +164,12 @@
               <Refus id={idRefusNom} refus={refusNom} lever={() => (refusNom = null)} />
             </div>
           {/if}
-        {:else if cle === 'appartenance'}
+        {:else if cle === 'organisation'}
           <input
             id={`${uid}-${cle}`}
             type="text"
             data-champ={cle}
-            bind:value={valeurs.appartenance}
+            bind:value={valeurs.organisation}
             aria-describedby={orthographe === null ? undefined : idOrthographe}
           />
           {#if orthographe !== null}

@@ -19,13 +19,13 @@ import { etatPlaces } from './places.js';
  * @property {number} tour
  * @property {number} table     identifiant
  * @property {number} numero    numéro affiché de la table
- * @property {'separerAppartenances'|'nouveauxVoisins'|'nouvelleTable'} regle
+ * @property {'separerOrganisations'|'nouveauxVoisins'|'nouvelleTable'} regle
  * @property {number[]} personnes   la paire, croissante, ou la personne revenue
  * @property {Array<{tour: number, numero: number}>} deja
  *           les tours antérieurs où la paire était réunie à une même table
  *           (nouveauxVoisins) ou où la personne était à cette table
  *           (nouvelleTable), dans l'ordre des tours ; vide pour
- *           separerAppartenances
+ *           separerOrganisations
  */
 
 /**
@@ -33,7 +33,7 @@ import { etatPlaces } from './places.js';
  * source, celle d'etatPlaces(charge, {tour, proposition}), est la
  * proposition demandée ou le retenu, et dont les conflits s'évaluent, une
  * entrée par violation d'une règle active — par paire pour séparer les
- * appartenances et nouveaux voisins, par personne pour nouvelle table —,
+ * organisations et nouveaux voisins, par personne pour nouvelle table —,
  * dans l'ordre des tours, puis des tables de la charge, puis des règles et
  * des paires de conflitsParTable. Un tour dont la source n'est que les
  * réservations n'en rend aucun.
@@ -111,10 +111,10 @@ function historique(etat, lus, relire) {
 // Les tours antérieurs, dans leur ordre, où les deux personnes d'une paire
 // revue étaient à une même table, ou où la personne revenue était à la
 // table d'identifiant table, chacun avec le numéro affiché de cette table ;
-// aucun pour une paire de même appartenance.
+// aucun pour une paire de même organisation.
 function rencontresAnterieures(regle, personnes, table, tablesParTour) {
   const deja = [];
-  if (regle === 'separerAppartenances') return deja;
+  if (regle === 'separerOrganisations') return deja;
   tablesParTour.forEach((tableDe, rang) => {
     const premiere = tableDe.get(personnes[0]);
     if (premiere === undefined) return;

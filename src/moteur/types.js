@@ -17,7 +17,7 @@
  * @property {number} id             entier ≥ 1, unique, jamais réutilisé
  * @property {string} nom
  * @property {string} [prenom]
- * @property {string|null} appartenance  null = sans appartenance ; l'égalité
+ * @property {string|null} organisation  null = sans organisation ; l'égalité
  *                                       de chaînes fait le groupe (la
  *                                       réconciliation est l'affaire du CSV)
  * @property {boolean} [exclu]       absent = false
@@ -51,10 +51,10 @@
  * @property {string[]} etiquettes
  *
  * @typedef {Object} Contraintes
- * @property {boolean} separerAppartenances
+ * @property {boolean} separerOrganisations
  * @property {boolean} nouveauxVoisins
  * @property {boolean} nouvelleTable
- * @property {boolean} varierAppartenances
+ * @property {boolean} varierOrganisations
  * @property {boolean} [respecterObjectifs]    absent = vrai (A16)
  * @property {boolean} [rencontrerAnimateurs]  absent = faux (A16)
  *
@@ -87,7 +87,7 @@
  * @property {Map<number, number>} indexTableDe
  * @property {Int32Array} capacite   par index de table
  * @property {Int32Array} groupe     par index participant ; SANS_GROUPE (−1)
- *                                   sans appartenance
+ *                                   sans organisation
  * @property {string[]} groupes      index de groupe → libellé ; ordre de première
  *                                   apparition en parcourant les ids croissants
  * @property {Int32Array} debutEtiquettes N + 1 cases : les étiquettes de la

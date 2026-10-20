@@ -3691,7 +3691,7 @@ function codeSeul(texte) {
 
 // Les seuls lecteurs des réservations dans le moteur (§ 5.2) : la
 // réservation est un prétraitement qui réduit l'instance — capacités,
-// mobiles, appartenances des ancrés —, jamais un second algorithme.
+// mobiles, organisations des ancrés —, jamais un second algorithme.
 const LECTEURS_DES_RESERVATIONS = [
   {
     fichier: 'src/moteur/configuration.js',

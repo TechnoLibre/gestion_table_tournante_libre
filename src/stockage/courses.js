@@ -23,7 +23,7 @@
 // Les quatre premiers champs ne suffisent pas : le compteur des
 // propositions recule quand l'opérateur reprend un état d'avant une
 // génération, et la graine proposée peut être la même. Après un changement
-// qui laisse la déclaration intacte — une appartenance, une réservation, un
+// qui laisse la déclaration intacte — une organisation, une réservation, un
 // réglage —, la recherche suivante porte alors les mêmes quatre champs et
 // une autre course, qui finit sur un autre placement ou sur le même.
 // L'horodatage les départage : la génération le pose une fois sur chaque

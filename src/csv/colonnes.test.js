@@ -15,7 +15,7 @@ import { cleEntete } from './normalisation.js';
 describe('CHAMPS', () => {
   test('les neuf champs du § 10.1, dans leur ordre, etiquettes puis presence en dernier, figés', () => {
     assert.deepEqual(CHAMPS, [
-      'nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes', 'presence',
+      'nom', 'prenom', 'organisation', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes', 'presence',
     ]);
     assert.ok(Object.isFrozen(CHAMPS));
   });
@@ -28,7 +28,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
       [
         ['nom', ['nom']],
         ['prenom', ['prenom']],
-        ['appartenance', ['appartenance', 'organisation', 'entreprise', 'équipe']],
+        ['organisation', ['organisation', 'appartenance', 'entreprise', 'équipe']],
         ['courriel', ['courriel']],
         ['titre_pressenti', ['titre_pressenti', 'titre', 'rôle']],
         ['exclu', ['exclu']],
@@ -78,11 +78,19 @@ describe('reconnaitre (§ 10.1)', () => {
     for (const champ of CHAMPS) assert.equal(reconnaitre(champ), champ);
   });
 
-  test('les synonymes : organisation, entreprise et équipe ; titre et rôle ; étiquette et mots-clés', () => {
+  test('les synonymes : appartenance, entreprise et équipe ; titre et rôle ; étiquette et mots-clés', () => {
     assert.deepEqual(
-      ['organisation', 'entreprise', 'équipe', 'titre', 'rôle', 'étiquette', 'mots-clés'].map((entete) => reconnaitre(entete)),
-      ['appartenance', 'appartenance', 'appartenance', 'titre_pressenti', 'titre_pressenti', 'etiquettes', 'etiquettes'],
+      ['appartenance', 'entreprise', 'équipe', 'titre', 'rôle', 'étiquette', 'mots-clés'].map((entete) => reconnaitre(entete)),
+      ['organisation', 'organisation', 'organisation', 'titre_pressenti', 'titre_pressenti', 'etiquettes', 'etiquettes'],
     );
+  });
+
+  test('« appartenance », l’en-tête des anciens fichiers, désigne l’organisation, sans égard à la casse ni aux accents', () => {
+    assert.deepEqual(
+      ['appartenance', 'Appartenance', 'APPARTENANCE', ' Appartenance ', 'appar_tenance'].map((entete) => reconnaitre(entete)),
+      ['organisation', 'organisation', 'organisation', 'organisation', 'organisation'],
+    );
+    assert.deepEqual(['appartenances', 'appartenir'].map((entete) => reconnaitre(entete)), [null, null]);
   });
 
   test('Étiquettes, ETIQUETTE, Mots clés et mots_clés désignent les étiquettes ; « mot-clé » et « tags » restent inconnus', () => {
@@ -107,7 +115,7 @@ describe('reconnaitre (§ 10.1)', () => {
     const cas = [
       ['NOM', 'nom'],
       [' Prénom ', 'prenom'],
-      ['Équipe', 'appartenance'],
+      ['Équipe', 'organisation'],
       ['titre', 'titre_pressenti'],
       ['Rôle', 'titre_pressenti'],
       ['E X C L U', 'exclu'],
@@ -115,9 +123,9 @@ describe('reconnaitre (§ 10.1)', () => {
       ['titre pressenti', 'titre_pressenti'],
       ['COURRIEL', 'courriel'],
       ['Notes ', 'notes'],
-      ['ORGANISATION', 'appartenance'],
-      ['Entre-prise', 'appartenance'],
-      ['Equipe', 'appartenance'],
+      ['ORGANISATION', 'organisation'],
+      ['Entre-prise', 'organisation'],
+      ['Equipe', 'organisation'],
     ];
     assert.deepEqual(
       cas.map(([entete]) => reconnaitre(entete)),
@@ -139,15 +147,15 @@ describe('reconnaitre (§ 10.1)', () => {
 
 describe('associer : par en-tête, jamais par position (§ 10.1)', () => {
   test('chaque champ reconnu reçoit le rang de sa colonne, à partir de 0', () => {
-    assert.deepEqual(associer(['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes']), {
-      colonnes: { nom: 0, prenom: 1, appartenance: 2, courriel: 3, titre_pressenti: 4, exclu: 5, notes: 6, etiquettes: 7 },
+    assert.deepEqual(associer(['nom', 'prenom', 'organisation', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes']), {
+      colonnes: { nom: 0, prenom: 1, organisation: 2, courriel: 3, titre_pressenti: 4, exclu: 5, notes: 6, etiquettes: 7 },
       ambigus: [],
       nonReconnues: [],
     });
   });
 
   test('des colonnes déplacées donnent à chaque champ la même valeur', () => {
-    const entetes = ['nom', 'prenom', 'appartenance', 'courriel'];
+    const entetes = ['nom', 'prenom', 'organisation', 'courriel'];
     const enregistrement = ['Ombrelle', 'Iris', 'Club des Merles', 'iris@exemple.test'];
     // La colonne i du fichier déplacé est la colonne deplacement[i] de l'autre.
     const deplacement = [3, 2, 0, 1];
@@ -159,12 +167,12 @@ describe('associer : par en-tête, jamais par position (§ 10.1)', () => {
 
     const association = associer(entetes);
     const associationDeplacee = associer(entetesDeplaces);
-    assert.deepEqual(associationDeplacee.colonnes, { nom: 2, prenom: 3, appartenance: 1, courriel: 0 });
+    assert.deepEqual(associationDeplacee.colonnes, { nom: 2, prenom: 3, organisation: 1, courriel: 0 });
     assert.deepEqual(lire(associationDeplacee, enregistrementDeplace), lire(association, enregistrement));
     assert.deepEqual(lire(association, enregistrement), [
       ['nom', 'Ombrelle'],
       ['prenom', 'Iris'],
-      ['appartenance', 'Club des Merles'],
+      ['organisation', 'Club des Merles'],
       ['courriel', 'iris@exemple.test'],
     ]);
   });
@@ -176,44 +184,44 @@ describe('associer : par en-tête, jamais par position (§ 10.1)', () => {
     );
   });
 
-  test("organisation et entreprise ensemble : ni l'une ni l'autre, une ambiguïté sur appartenance", () => {
+  test("organisation et entreprise ensemble : ni l'une ni l'autre, une ambiguïté sur organisation", () => {
     assert.deepEqual(associer(['nom', 'organisation', 'entreprise']), {
       colonnes: { nom: 0 },
-      ambigus: [{ champ: 'appartenance', rangs: [1, 2] }],
+      ambigus: [{ champ: 'organisation', rangs: [1, 2] }],
       nonReconnues: [],
     });
   });
 
   test("le choix tranche l'ambiguïté, pour l'une comme pour l'autre colonne", () => {
     const entetes = ['nom', 'organisation', 'entreprise'];
-    assert.deepEqual(associer(entetes, { appartenance: 2 }), {
-      colonnes: { nom: 0, appartenance: 2 },
+    assert.deepEqual(associer(entetes, { organisation: 2 }), {
+      colonnes: { nom: 0, organisation: 2 },
       ambigus: [],
       nonReconnues: [],
     });
-    assert.deepEqual(associer(entetes, { appartenance: 1 }).colonnes, { nom: 0, appartenance: 1 });
+    assert.deepEqual(associer(entetes, { organisation: 1 }).colonnes, { nom: 0, organisation: 1 });
   });
 
   test('des colonnes déplacées donnent la même ambiguïté, aux rangs déplacés', () => {
     const entetes = ['entreprise', 'nom', 'organisation'];
     assert.deepEqual(associer(entetes), {
       colonnes: { nom: 1 },
-      ambigus: [{ champ: 'appartenance', rangs: [0, 2] }],
+      ambigus: [{ champ: 'organisation', rangs: [0, 2] }],
       nonReconnues: [],
     });
-    assert.deepEqual(associer(entetes, { appartenance: 0 }).colonnes, { nom: 1, appartenance: 0 });
+    assert.deepEqual(associer(entetes, { organisation: 0 }).colonnes, { nom: 1, organisation: 0 });
   });
 
   test("un choix qui ne désigne pas l'une des colonnes en conflit est sans effet", () => {
     const entetes = ['nom', 'organisation', 'entreprise', 'inconnue'];
     const sansChoix = associer(entetes);
-    assert.deepEqual(sansChoix.ambigus, [{ champ: 'appartenance', rangs: [1, 2] }]);
+    assert.deepEqual(sansChoix.ambigus, [{ champ: 'organisation', rangs: [1, 2] }]);
     const choix = [
-      { appartenance: 0 },
-      { appartenance: 3 },
-      { appartenance: 7 },
-      { appartenance: '2' },
-      { appartenance: null },
+      { organisation: 0 },
+      { organisation: 3 },
+      { organisation: 7 },
+      { organisation: '2' },
+      { organisation: null },
       { nom: 1 },
       { prenom: 3 },
       { inconnu: 1 },
@@ -241,7 +249,7 @@ describe('associer : par en-tête, jamais par position (§ 10.1)', () => {
     assert.deepEqual(associer(['titre', 'équipe', 'nom', 'rôle', 'organisation', 'entreprise']), {
       colonnes: { nom: 2 },
       ambigus: [
-        { champ: 'appartenance', rangs: [1, 4, 5] },
+        { champ: 'organisation', rangs: [1, 4, 5] },
         { champ: 'titre_pressenti', rangs: [0, 3] },
       ],
       nonReconnues: [],
@@ -273,11 +281,11 @@ describe('associerSelon et reconnaitreSelon : la même règle sur une autre tabl
   test('sur la table des participants, associerSelon rend exactement ce que rend associer', () => {
     const associerParticipants = associerSelon(ENTETES_DES_CHAMPS);
     const cas = [
-      [['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes'], {}],
+      [['nom', 'prenom', 'organisation', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes'], {}],
       [['notes', 'exclu', 'courriel', 'nom'], {}],
       [['nom', 'organisation', 'entreprise'], {}],
-      [['nom', 'organisation', 'entreprise'], { appartenance: 2 }],
-      [['nom', 'organisation', 'entreprise', 'inconnue'], { appartenance: 3 }],
+      [['nom', 'organisation', 'entreprise'], { organisation: 2 }],
+      [['nom', 'organisation', 'entreprise', 'inconnue'], { organisation: 3 }],
       [['titre', 'équipe', 'nom', 'rôle', 'organisation', 'entreprise'], {}],
       [['x', 'nom', '', 'ligne', '  '], {}],
       [[], {}],

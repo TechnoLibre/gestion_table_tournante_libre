@@ -13,7 +13,7 @@ import { cleNormalisee } from './normalisation.js';
 
 /**
  * Clé d'identité d'une étiquette : la clé normalisée du § 10.1, la même
- * fonction que celle des appartenances et de la clé de doublon.
+ * fonction que celle des organisations et de la clé de doublon.
  *
  * @type {(texte: string) => string}
  */

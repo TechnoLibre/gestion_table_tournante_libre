@@ -7,7 +7,7 @@
 // LARGEUR_TRONCATURE_NOM_PX : la largeur rendue du nom de référence, fait de
 // LONGUEUR_NOM_REFERENCE fois le glyphe le plus large de l'alphabet visé,
 // au corps des étiquettes de graphique. App s'ouvre sur la page de qualité
-// d'un événement de deux tables dont une appartenance porte ce nom ; la vue
+// d'un événement de deux tables dont une organisation porte ce nom ; la vue
 // des collisions l'écrit en intitulé d'une ligne de barres. Les glyphes se
 // mesurent un à un par le mesureur des graphiques (creerMesureur) sur
 // l'intitulé rendu d'une première ouverture, et nomDeReference (seuils.js)
@@ -85,7 +85,7 @@ const ALPHABET =
 // Les noms courts des autres personnes de la matrice, inventés ; un numéro
 // les rend distincts, sans homonyme.
 const PRENOMS = Object.freeze(['Iris', 'Théo', 'Ondine', 'Basile', 'Maëlle']);
-const APPARTENANCES = Object.freeze(['Coopérative Aubier', 'Atelier Ressac']);
+const ORGANISATIONS = Object.freeze(['Coopérative Aubier', 'Atelier Ressac']);
 
 const sansGuillemets = (texte) => texte.trim().replace(/^(["'])(.*)\1$/, '$2');
 
@@ -93,15 +93,15 @@ const sansGuillemets = (texte) => texte.trim().replace(/^(["'])(.*)\1$/, '$2');
  * Un événement de n personnes, ⌈n / 4⌉ tables de quatre places, tours
  * tours, placé par une génération courte enregistrée par la commande.
  * nomDe(i) donne le nom de la personne d'indice i, sans prénom ;
- * appartenanceDe(i), son appartenance.
+ * organisationDe(i), son organisation.
  */
-function evenementPlace({ id, n, tours, nomDe, appartenanceDe }) {
+function evenementPlace({ id, n, tours, nomDe, organisationDe }) {
   const charge = creerCharge({ id, nom: 'Club des Merles', siegesParDefaut: 4, tours });
   charge.participants = Array.from({ length: n }, (_, i) => ({
     id: i + 1,
     nom: nomDe(i),
     prenom: null,
-    appartenance: appartenanceDe(i),
+    organisation: organisationDe(i),
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -121,15 +121,15 @@ function evenementPlace({ id, n, tours, nomDe, appartenanceDe }) {
   return appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
 }
 
-// Huit personnes, deux tables, deux tours : six de l'appartenance nommée,
+// Huit personnes, deux tables, deux tours : six de l'organisation nommée,
 // qui se rencontrent forcément, et deux d'une autre.
-const evenementCollisions = (appartenance) =>
+const evenementCollisions = (organisation) =>
   evenementPlace({
     id: 'banc-troncature',
     n: 8,
     tours: 2,
     nomDe: (i) => `${PRENOMS[i % PRENOMS.length]} ${i + 1}`,
-    appartenanceDe: (i) => (i < 6 ? appartenance : APPARTENANCES[0]),
+    organisationDe: (i) => (i < 6 ? organisation : ORGANISATIONS[0]),
   });
 
 // n personnes, la première au nom de référence.
@@ -139,7 +139,7 @@ const evenementMatrice = (n, nomReference) =>
     n,
     tours: 3,
     nomDe: (i) => (i === 0 ? nomReference : `${PRENOMS[i % PRENOMS.length]} ${i + 1}`),
-    appartenanceDe: (i) => APPARTENANCES[i % APPARTENANCES.length],
+    organisationDe: (i) => ORGANISATIONS[i % ORGANISATIONS.length],
   });
 
 // La police d'un texte rendu : la première famille calculée, et la face
@@ -150,12 +150,12 @@ function policeDe(texte) {
   return { premiere, chargee };
 }
 
-// L'intitulé rendu de la ligne de barres de l'appartenance donnée, dans la
+// L'intitulé rendu de la ligne de barres de l'organisation donnée, dans la
 // vue des collisions ; le graphique et son axe avec lui.
-const intituleDe = (m, appartenance) =>
-  attendre(`l’intitulé de « ${appartenance} »`, () => {
+const intituleDe = (m, organisation) =>
+  attendre(`l’intitulé de « ${organisation} »`, () => {
     const graphique = m.racine.querySelector('[data-vue-qualite="collisions"] [data-graphique="collisions"]');
-    const ligne = [...(graphique?.querySelectorAll('[data-ligne-graphique]') ?? [])].find((l) => l.dataset.ligneGraphique === appartenance);
+    const ligne = [...(graphique?.querySelectorAll('[data-ligne-graphique]') ?? [])].find((l) => l.dataset.ligneGraphique === organisation);
     const texte = ligne?.querySelector(':scope > text') ?? null;
     const axe = graphique?.querySelector('[data-marque="graphiqueAxe"]') ?? null;
     return texte !== null && texte.textContent !== '' && axe !== null ? { texte, axe } : null;
@@ -228,8 +228,8 @@ describe('les deux seuils de la page de qualité (§ 12.5, § 12.6, § 14.1)', (
   test(`le nom de référence : ${LONGUEUR_NOM_REFERENCE} fois le glyphe le plus large de l’alphabet visé, au corps des étiquettes de graphique`, async () => {
     const contexte = creerContexte();
     try {
-      const m = await ouvrirEvenement(contexte, evenementCollisions(APPARTENANCES[1]), { section: 'qualite' });
-      const { texte } = await intituleDe(m, APPARTENANCES[1]);
+      const m = await ouvrirEvenement(contexte, evenementCollisions(ORGANISATIONS[1]), { section: 'qualite' });
+      const { texte } = await intituleDe(m, ORGANISATIONS[1]);
       polices.push(policeDe(texte));
       reference = nomDeReference(ALPHABET, LONGUEUR_NOM_REFERENCE, creerMesureur(texte));
     } finally {

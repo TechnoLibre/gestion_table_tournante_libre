@@ -21,7 +21,7 @@ const personne = (id, nom, exclu = false) => ({
   id,
   nom,
   prenom: null,
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,

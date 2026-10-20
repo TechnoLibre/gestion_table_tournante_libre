@@ -73,22 +73,22 @@ function documentValide() {
         },
       },
       reglages: {
-        separerAppartenances: true,
+        separerOrganisations: true,
         nouveauxVoisins: false,
         nouvelleTable: true,
-        varierAppartenances: false,
+        varierOrganisations: false,
         attribuerSieges: false,
         generation: { nombre: 3, arret: 50_000, historique: 500 },
       },
       prochainsIds: { participant: 6, table: 4, proposition: 2 },
       participants: [
-        { id: 1, nom: 'Brindille', prenom: 'Anouk', appartenance: 'Chorale du Vallon',
+        { id: 1, nom: 'Brindille', prenom: 'Anouk', organisation: 'Chorale du Vallon',
           courriel: 'anouk@exemple.test', titrePressenti: 'animation', notes: null, exclu: false },
-        { id: 2, nom: 'Sarrasin', prenom: null, appartenance: 'Chorale du Vallon', courriel: null,
+        { id: 2, nom: 'Sarrasin', prenom: null, organisation: 'Chorale du Vallon', courriel: null,
           titrePressenti: null, notes: 'part à 21 h', exclu: false },
-        { id: 3, nom: 'Coquelicot', prenom: 'Basile', appartenance: null, courriel: null,
+        { id: 3, nom: 'Coquelicot', prenom: 'Basile', organisation: null, courriel: null,
           titrePressenti: null, notes: null, exclu: true },
-        { id: 5, nom: 'Mirabelle', prenom: 'Ysé', appartenance: 'Cercle Gamma', courriel: null,
+        { id: 5, nom: 'Mirabelle', prenom: 'Ysé', organisation: 'Cercle Gamma', courriel: null,
           titrePressenti: null, notes: null, exclu: false },
       ],
       tables: [
@@ -214,7 +214,7 @@ const ADMETTENT_NULL = new Set([
   'charge.evenement.date',
   'charge.evenement.filiation',
   'charge.participants[].prenom',
-  'charge.participants[].appartenance',
+  'charge.participants[].organisation',
   'charge.participants[].courriel',
   'charge.participants[].titrePressenti',
   'charge.participants[].notes',
@@ -274,10 +274,10 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
         filiation: null,
       },
       reglages: {
-        separerAppartenances: true,
+        separerOrganisations: true,
         nouveauxVoisins: true,
         nouvelleTable: true,
-        varierAppartenances: true,
+        varierOrganisations: true,
         attribuerSieges: false,
         generation: { nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT },
       },
@@ -922,10 +922,10 @@ describe('configurationDepuisCharge (§ 6.1)', () => {
   test('la configuration porte les participants, les tours, les réservations sans siège et les quatre contraintes', () => {
     assert.deepEqual(configurationDepuisCharge(documentValide().charge), {
       participants: [
-        { id: 1, nom: 'Brindille', appartenance: 'Chorale du Vallon', exclu: false },
-        { id: 2, nom: 'Sarrasin', appartenance: 'Chorale du Vallon', exclu: false },
-        { id: 3, nom: 'Coquelicot', appartenance: null, exclu: true },
-        { id: 5, nom: 'Mirabelle', appartenance: 'Cercle Gamma', exclu: false },
+        { id: 1, nom: 'Brindille', organisation: 'Chorale du Vallon', exclu: false },
+        { id: 2, nom: 'Sarrasin', organisation: 'Chorale du Vallon', exclu: false },
+        { id: 3, nom: 'Coquelicot', organisation: null, exclu: true },
+        { id: 5, nom: 'Mirabelle', organisation: 'Cercle Gamma', exclu: false },
       ],
       tables: [
         { id: 1, numero: 1, capacite: 3 },
@@ -937,10 +937,10 @@ describe('configurationDepuisCharge (§ 6.1)', () => {
         { participant: 2, table: 1, portee: 'tour', tour: 2 },
       ],
       contraintes: {
-        separerAppartenances: true,
+        separerOrganisations: true,
         nouveauxVoisins: false,
         nouvelleTable: true,
-        varierAppartenances: false,
+        varierOrganisations: false,
       },
     });
   });
@@ -1468,11 +1468,11 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
     assert.deepEqual(relue.tables[0].objectifs, documentComplet().charge.tables[0].objectifs);
   });
 
-  test('variantes admises : deux orthographes d’une même clé, une étiquette égale à une appartenance, 20 étiquettes de 40 points de code, la règle propre « et », un objectif à chaque tour sans soirée', () => {
+  test('variantes admises : deux orthographes d’une même clé, une étiquette égale à une organisation, 20 étiquettes de 40 points de code, la règle propre « et », un objectif à chaque tour sans soirée', () => {
     const vingt = Array.from({ length: 20 }, (_, rang) => `${String.fromCharCode(65 + rang)}${'x'.repeat(39)}`);
     const variantes = [
       ['Finance et finance', abimeComplet((d) => { d.charge.participants[0].etiquettes = ['Finance', 'finance']; })],
-      ['une étiquette égale à une appartenance', abimeComplet((d) => { d.charge.participants[0].etiquettes = ['Chorale du Vallon']; })],
+      ['une étiquette égale à une organisation', abimeComplet((d) => { d.charge.participants[0].etiquettes = ['Chorale du Vallon']; })],
       ['20 étiquettes de 40 points de code', abimeComplet((d) => { d.charge.participants[3].etiquettes = vingt; })],
       ['un objectif de 20 étiquettes', abimeComplet((d) => { d.charge.tables[0].objectifs[0].etiquettes = vingt; })],
       ['règle propre « et »', abimeComplet((d) => { d.charge.tables[0].objectifs[1].regle = 'et'; })],
@@ -1668,7 +1668,7 @@ describe('les lecteurs des réglages facultatifs (§ 8.9)', () => {
   test('critereCoche lit aussi les quatre cases toujours présentes, et lève RangeError sur une clé qu’il ne connaît pas', () => {
     const { charge } = documentValide();
     assert.deepEqual(
-      ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances'].map((cle) => critereCoche(charge, cle)),
+      ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable', 'varierOrganisations'].map((cle) => critereCoche(charge, cle)),
       [true, false, true, false],
     );
     for (const cle of ['attribuerSieges', 'generation', 'cibleRedondance', 'modeObjectifs', 'inconnue', '__proto__', 'toString']) {
@@ -1700,7 +1700,7 @@ describe('configurationDepuisCharge : étiquettes, objectifs, mode et cases (con
   test('sans champ nouveau, la configuration n’en porte aucun', () => {
     const configuration = configurationDepuisCharge(documentValide().charge);
     assert.deepEqual(Object.keys(configuration).sort(), ['contraintes', 'participants', 'reservations', 'tables', 'tours']);
-    assert.deepEqual(Object.keys(configuration.contraintes).sort(), ['nouveauxVoisins', 'nouvelleTable', 'separerAppartenances', 'varierAppartenances']);
+    assert.deepEqual(Object.keys(configuration.contraintes).sort(), ['nouveauxVoisins', 'nouvelleTable', 'separerOrganisations', 'varierOrganisations']);
     assert.ok(configuration.participants.every((participant) => !Object.hasOwn(participant, 'etiquettes')));
   });
 
@@ -1723,10 +1723,10 @@ describe('configurationDepuisCharge : étiquettes, objectifs, mode et cases (con
     ]);
     assert.equal(configuration.modeObjectifs, 'minimum');
     assert.deepEqual(configuration.contraintes, {
-      separerAppartenances: true,
+      separerOrganisations: true,
       nouveauxVoisins: false,
       nouvelleTable: true,
-      varierAppartenances: false,
+      varierOrganisations: false,
       respecterObjectifs: false,
       rencontrerAnimateurs: true,
     });
@@ -2100,14 +2100,14 @@ describe('la présence par tour : participant.presence et les absents d’un pla
     const { charge } = avecPresence([3, 1]);
     charge.participants[1].etiquettes = ['finance'];
     const configuration = configurationDepuisCharge(charge);
-    assert.deepEqual(configuration.participants[1], { id: 2, nom: 'Sarrasin', appartenance: 'Chorale du Vallon', exclu: false, etiquettes: ['finance'], presence: [1, 3] });
-    assert.deepEqual(Object.keys(configuration.participants[1]), ['id', 'nom', 'appartenance', 'exclu', 'etiquettes', 'presence']);
+    assert.deepEqual(configuration.participants[1], { id: 2, nom: 'Sarrasin', organisation: 'Chorale du Vallon', exclu: false, etiquettes: ['finance'], presence: [1, 3] });
+    assert.deepEqual(Object.keys(configuration.participants[1]), ['id', 'nom', 'organisation', 'exclu', 'etiquettes', 'presence']);
     assert.notEqual(configuration.participants[1].presence, charge.participants[1].presence);
     assert.deepEqual(charge.participants[1].presence, [3, 1]);
     for (const rang of [0, 2, 3]) assert.equal(Object.hasOwn(configuration.participants[rang], 'presence'), false);
     // Sans présence, la configuration est celle d’aujourd’hui, clé pour clé.
     const sans = configurationDepuisCharge(avecPresence(undefined).charge);
-    assert.deepEqual(sans.participants.map((p) => Object.keys(p)), [0, 1, 2, 3].map(() => ['id', 'nom', 'appartenance', 'exclu']));
+    assert.deepEqual(sans.participants.map((p) => Object.keys(p)), [0, 1, 2, 3].map(() => ['id', 'nom', 'organisation', 'exclu']));
   });
 
   test('absents : une liste non vide d’identifiants, admise désordonnée ; vide ou d’une autre forme, FORME au chemin du placement', () => {

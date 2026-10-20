@@ -48,7 +48,7 @@ export const TABLE = new Map([
   ['plan.ligne.apresTitreNonPourvu', ' non pourvu'],
 
   // --- Le bandeau du plan (§ 7.5) --------------------------------------------
-  // L'appartenance d'un plancher de groupe est une donnée : l'écran la pose
+  // L'organisation d'un plancher de groupe est une donnée : l'écran la pose
   // dans son propre nœud, avant ce texte.
   ['plan.bandeau.toutesEnConflit', 'toutes les tables sont en conflit à ce tour'],
   [
@@ -56,8 +56,8 @@ export const TABLE = new Map([
     'tout placement porte une collision à chaque table : ajouter des tables ou désactiver la séparation',
   ],
   [
-    'plan.bandeau.uneSeuleAppartenance',
-    'une seule appartenance sous séparation active : chaque table réunit des personnes de la même appartenance',
+    'plan.bandeau.uneSeuleOrganisation',
+    'une seule organisation sous séparation active : chaque table réunit des personnes de la même organisation',
   ],
   [
     'plan.bandeau.plancherGroupe',
@@ -126,14 +126,14 @@ export const TABLE = new Map([
   // déplacer. L'infobulle d'une table en conflit nomme chaque règle violée,
   // puis ses groupes : les noms sont des données, chacun dans son nœud,
   // reliés par « et » dans une paire et séparés d'un groupe à l'autre. Une
-  // ligne de séparer les appartenances nomme l'appartenance de ses paires,
-  // une donnée dans son nœud, entre separerAppartenances et finAppartenance :
+  // ligne de séparer les organisations nomme l'organisation de ses paires,
+  // une donnée dans son nœud, entre separerOrganisations et finOrganisation :
   // la phrase se partage en deux clés autour d'elle. Chaque ligne s'ouvre sur
   // une capitale.
   ['plan.vue.role', 'plan de salle interactif'],
   ['plan.infobulle.entete', ({ numero, nombre }) => `Table ${numero} : ${compte(nombre, 'conflit', 'conflits')}`],
-  ['plan.infobulle.separerAppartenances', 'Même appartenance ('],
-  ['plan.infobulle.finAppartenance', ') : '],
+  ['plan.infobulle.separerOrganisations', 'Même organisation ('],
+  ['plan.infobulle.finOrganisation', ') : '],
   ['plan.infobulle.nouveauxVoisins', 'Voisins revus : '],
   ['plan.infobulle.nouvelleTable', 'Table revue : '],
   ['plan.infobulle.et', ' et '],
@@ -145,7 +145,7 @@ export const TABLE = new Map([
   // le chiffre que porte son échantillon.
   ['plan.legende.ouvrir', 'Légende'],
   ['plan.legende.titre', 'Légende des conflits'],
-  ['plan.legende.separerAppartenances', 'Séparer les appartenances : même appartenance à la table'],
+  ['plan.legende.separerOrganisations', 'Séparer les organisations : même organisation à la table'],
   ['plan.legende.nouveauxVoisins', 'Nouveaux voisins à chaque tour : voisins revus'],
   ['plan.legende.nouvelleTable', 'Nouvelle table à chaque tour : table revue'],
   ['plan.legende.forme.hachuresDescendantes', '(hachures descendantes)'],

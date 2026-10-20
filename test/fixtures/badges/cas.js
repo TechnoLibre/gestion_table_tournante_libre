@@ -20,7 +20,7 @@ export const H_PROPOSITION = '2031-05-17T19:05:00-04:00';
 
 /**
  * Une personne de la charge : identifiant, prénom (null admis), nom ;
- * appartenance, courriel, titre pressenti et notes à null, non exclue,
+ * organisation, courriel, titre pressenti et notes à null, non exclue,
  * sauf ce que champs remplace.
  *
  * @param {number} id
@@ -34,7 +34,7 @@ export function personne(id, prenom, nom, champs = {}) {
     id,
     nom,
     prenom,
-    appartenance: null,
+    organisation: null,
     courriel: null,
     titrePressenti: null,
     notes: null,

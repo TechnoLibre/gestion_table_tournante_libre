@@ -1,7 +1,7 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Épreuves des appartenances tirées (§ 15.2) : la loi des tailles, la
+// Épreuves des organisations tirées (§ 15.2) : la loi des tailles, la
 // troncature du dernier groupe, les deux inégalités et le tour témoin. Les
 // bornes de la loi sont calculées à la main depuis le tableau des poids du
 // § 15.2 ; le tour témoin se compare à une recherche exhaustive sur toutes les
@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
 import { describe, test } from '../../test/lanceur.js';
-import { POIDS_TAILLES, faisabilite, tirerTailles, tourTemoin } from './appartenances.js';
+import { POIDS_TAILLES, faisabilite, tirerTailles, tourTemoin } from './organisations.js';
 import { FLUX, creerPcg32 } from './prng.js';
 
 // Générateur scripté : borne(n) rend les valeurs données, dans l'ordre, et
@@ -93,7 +93,7 @@ function suites(longueurMax, valeurMax) {
   return toutes;
 }
 
-describe('appartenances : la loi des tailles', () => {
+describe('organisations : la loi des tailles', () => {
   test('les poids du § 15.2, tailles 1 à 12, somme 92', () => {
     assert.deepEqual(POIDS_TAILLES, [24, 20, 16, 8, 6, 5, 4, 3, 2, 2, 1, 1]);
     assert.ok(Object.isFrozen(POIDS_TAILLES));
@@ -150,11 +150,11 @@ describe('appartenances : la loi des tailles', () => {
   });
 });
 
-describe('appartenances : les deux inégalités', () => {
+describe('organisations : les deux inégalités', () => {
   // [tailles, capacités, verdict attendu, ce que le cas exerce]
   const CAS = [
     [[3, 3, 3, 3], [10, 1, 1], { ok: false, raison: 'PLUS_GRANDE_CAPACITE' },
-      '§ 15.2 : la table de 10 exigerait 10 appartenances distinctes'],
+      '§ 15.2 : la table de 10 exigerait 10 organisations distinctes'],
     [[2, 2], [3, 1], { ok: false, raison: 'PLUS_GRANDE_CAPACITE' },
       'salle pleine : une table de 3 pour 2 groupes'],
     [[2, 2, 2], [5, 2], { ok: false, raison: 'PLUS_GRANDE_CAPACITE' },
@@ -185,7 +185,7 @@ describe('appartenances : les deux inégalités', () => {
   });
 });
 
-describe('appartenances : le tour témoin', () => {
+describe('organisations : le tour témoin', () => {
   test('un tour qui sépare chaque groupe quand il en existe un', () => {
     // [tailles, capacités], chacun admettant un tour
     const cas = [

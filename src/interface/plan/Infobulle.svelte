@@ -10,9 +10,9 @@
   // position dans la surface, en px. Elle énonce la table et son nombre de
   // violations, puis chaque ligne du détail et ses groupes : chaque nom
   // occupe son propre nœud, relié à l'autre nom d'une paire par « et »,
-  // séparé du groupe suivant. Une ligne qui porte une appartenance — séparer
-  // les appartenances — la nomme dans son propre nœud, entre son libellé et
-  // finAppartenance.
+  // séparé du groupe suivant. Une ligne qui porte une organisation — séparer
+  // les organisations — la nomme dans son propre nœud, entre son libellé et
+  // finOrganisation.
   //
   // infobulle : null, ou {detail, x, y, xRepli} — x et y, le coin haut droit
   // de l'emprise de la table, xRepli son bord gauche, en px de la surface ;
@@ -51,8 +51,8 @@
     <p class="entete">{t('plan.infobulle.entete', { numero: infobulle.detail.numero, nombre: infobulle.detail.nombre })}</p>
     {#each infobulle.detail.lignes as ligne, rang (rang)}
       <p>
-        <span>{t(ligne.cle)}</span>{#if ligne.appartenance !== null}<span class="donnee">{ligne.appartenance}</span><span
-            >{t('plan.infobulle.finAppartenance')}</span
+        <span>{t(ligne.cle)}</span>{#if ligne.organisation !== null}<span class="donnee">{ligne.organisation}</span><span
+            >{t('plan.infobulle.finOrganisation')}</span
           >{/if}{#each ligne.groupes as groupe, g (g)}{#if g > 0}<span
               >{t('plan.infobulle.separateur')}</span
             >{/if}{#each groupe as nom, n (n)}{#if n > 0}<span>{t('plan.infobulle.et')}</span>{/if}<span class="donnee"

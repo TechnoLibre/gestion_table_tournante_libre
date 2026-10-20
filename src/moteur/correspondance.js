@@ -6,7 +6,7 @@
 // l'import la lisent ; aucune autre arithmétique de la correspondance n'existe.
 //
 // Les étiquettes se comparent par égalité de chaînes, comme les
-// appartenances (§ 5.2) : la forme et la réconciliation des orthographes se
+// organisations (§ 5.2) : la forme et la réconciliation des orthographes se
 // font à l'entrée (src/stockage/etiquettes.js, src/csv/etiquettes.js), et
 // deux orthographes qu'un fichier retouché à la main porterait restent deux
 // étiquettes ici.

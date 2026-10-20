@@ -43,8 +43,8 @@ const BASE = 'soiree';
 
 // --- Les charges d'épreuve -------------------------------------------------
 
-// Des personnes inventées, de deux appartenances ou sans — aucune quand
-// appartenances est faux —, réparties sur des tables numérotées de 1 à
+// Des personnes inventées, de deux organisations ou sans — aucune quand
+// organisations est faux —, réparties sur des tables numérotées de 1 à
 // tables, sans proposition ni retenu.
 const PERSONNES = [
   ['Ombrelle', 'Iris', 'Coopérative Aubier'],
@@ -61,13 +61,13 @@ const PERSONNES = [
   ['Fenouil', 'Rosalie', null],
 ];
 
-function chargeDe({ personnes = 6, tables = 2, sieges = 3, tours = 2, appartenances = true } = {}) {
+function chargeDe({ personnes = 6, tables = 2, sieges = 3, tours = 2, organisations = true } = {}) {
   const charge = creerCharge({ id: 'evt-performance', nom: 'Atelier Ressac', siegesParDefaut: sieges, tours });
-  charge.participants = PERSONNES.slice(0, personnes).map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = PERSONNES.slice(0, personnes).map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance: appartenances ? appartenance : null,
+    organisation: organisations ? organisation : null,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -403,7 +403,7 @@ describe('les cas d’un seul point, du retenu et de la course absente (§ 12.6,
   });
 
   test('zéro mouvement : « le plan initial n’avait rien à reprendre », aucun graphique', async () => {
-    const m = await ouvrir(chargeDe({ personnes: 4, tables: 1, sieges: 4, tours: 1, appartenances: false }));
+    const m = await ouvrir(chargeDe({ personnes: 4, tables: 1, sieges: 4, tours: 1, organisations: false }));
     await m.app.generation().generer({ graine: 3, nombre: 1, arret: 50, historique: 1000 });
     montrer(m, 1);
     await attendre(() => expect(tete(m)[0]).toBe(t('qualite.performance.planInitial')));

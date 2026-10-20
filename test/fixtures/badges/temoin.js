@@ -9,7 +9,7 @@
 //
 // Chaque personne porte un courriel, des notes et un titre pressenti, que le
 // badge ne doit jamais imprimer (§ 11.4), et une personne sur cinq une
-// appartenance. Le plan du tour r range les 257 présentes à partir du rang
+// organisation. Le plan du tour r range les 257 présentes à partir du rang
 // 64 × (r − 1), en boucle, et remplit les tables dans l'ordre de leurs
 // identifiants : chaque tour est une partition, les trois sièges libres
 // tombent à la dernière table. Aucune réservation, aucun titre. Chaque appel
@@ -49,7 +49,7 @@ export function chargeTemoin() {
     const id = rang + 1;
     const n = numeroTemoin(id);
     return personne(id, null, `Témoin ${n}`, {
-      appartenance: id % 5 === 0 ? 'Club des Merles' : null,
+      organisation: id % 5 === 0 ? 'Club des Merles' : null,
       courriel: `temoin${n}@exemple.test`,
       titrePressenti: `pressenti ${n}`,
       notes: `note confidentielle ${n}`,

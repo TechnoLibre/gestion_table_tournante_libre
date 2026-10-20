@@ -22,7 +22,7 @@ import { CAS_QUALITE, sourceQualite } from './source.js';
 
 const V1 = VERSION.affichee;
 
-// Six personnes inventées, deux appartenances, deux tables de trois places,
+// Six personnes inventées, deux organisations, deux tables de trois places,
 // deux tours, sans proposition ni retenu.
 function chargeSix() {
   const charge = creerCharge({ id: 'evt-qualite', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 2 });
@@ -34,11 +34,11 @@ function chargeSix() {
     ['Quenouille', 'Maëlle', null],
     ['Varech', 'Sidonie', null],
   ];
-  charge.participants = noms.map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = noms.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,

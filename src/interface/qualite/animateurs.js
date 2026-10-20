@@ -12,7 +12,7 @@
 //
 // La diversité par animateur : le graphique dessine la soirée, une ligne
 // par animateur, le moins varié en tête, dans l'ordre du détail ; les
-// appartenances et les étiquettes en deux colonnes juxtaposées, chacune son
+// organisations et les étiquettes en deux colonnes juxtaposées, chacune son
 // axe, jamais empilées. Une colonne seule quand le détail n'a que celle-là,
 // sous le jeton de sa série ; aucune quand il n'en a ni l'une ni l'autre. Le
 // jumeau porte la soirée de chaque animateur, puis une ligne par tour animé,
@@ -22,7 +22,7 @@
 // drapeau dans detail.animateurs.diversite.colonnes, de son compte dans une
 // ligne et de son libellé, avec le genre de sa série.
 const COLONNES_DIVERSITE = [
-  ['appartenances', 'serie1'],
+  ['organisations', 'serie1'],
   ['etiquettes', 'serie2'],
 ];
 
@@ -94,7 +94,7 @@ export function modeleAnimateurs(detail, t) {
  *   phrase ;
  * - sinon {cas: 'diversite', phrase, equite, barres, infobulle, jumeau} :
  *   phrase, null quand les deux colonnes se dessinent, sinon le cas du
- *   § 12.6 — 'sansEtiquette', 'sansAppartenance' ou 'rien' ;
+ *   § 12.6 — 'sansEtiquette', 'sansOrganisation' ou 'rien' ;
  *   equite, une entrée {genre, titre, moins, plus, auMinimum} par colonne
  *   dessinée, ses trois nombres ;
  *   barres, null sans colonne, sinon {nom, synthese, lignes, colonnes,
@@ -122,7 +122,7 @@ export function modeleDiversite(detail, t) {
   let phrase = null;
   if (dessinees.length === 0) phrase = 'rien';
   else if (!drapeaux.etiquettes) phrase = 'sansEtiquette';
-  else if (!drapeaux.appartenances) phrase = 'sansAppartenance';
+  else if (!drapeaux.organisations) phrase = 'sansOrganisation';
   const parts = dessinees.map(([cle, genre]) => ({ genre, libelle: t(`qualite.diversite.colonne.${cle}`) }));
 
   const colonnes = [

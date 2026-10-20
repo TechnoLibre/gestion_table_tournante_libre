@@ -7,7 +7,7 @@
 // borne de diversité en repères, les rangs marqués ; le second en
 // pourcentages, une série interrompue aux rangs sans plafond, la règle à
 // 100 % ; l'infobulle et le jumeau portent la ligne entière, le
-// pourcentage suivi du compte de la ligne ; une seule appartenance ou
+// pourcentage suivi du compte de la ligne ; une seule organisation ou
 // aucune ne trace qu'une série, une seule table cède la place à sa phrase.
 // Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
@@ -30,9 +30,9 @@ const outils = { t, format };
 const V1 = VERSION.affichee;
 
 // Six personnes inventées, deux tables de trois places, trois tours ;
-// appartenances : les deux premières à l'une, les deux suivantes à l'autre
+// organisations : les deux premières à l'une, les deux suivantes à l'autre
 // (deux), toutes à la même (une), aucune. tables : 2, ou 1 de six places.
-function chargeSix({ appartenances = 'deux', tables = 2, reservation = false } = {}) {
+function chargeSix({ organisations = 'deux', tables = 2, reservation = false } = {}) {
   const charge = creerCharge({ id: 'evt-profil', nom: 'Atelier Ressac', siegesParDefaut: tables === 1 ? 6 : 3, tours: 3 });
   const noms = [
     ['Ombrelle', 'Iris'],
@@ -42,16 +42,16 @@ function chargeSix({ appartenances = 'deux', tables = 2, reservation = false } =
     ['Quenouille', 'Maëlle'],
     ['Varech', 'Sidonie'],
   ];
-  const appartenanceDe = (rang) => {
-    if (appartenances === 'une') return 'Coopérative Aubier';
-    if (appartenances === 'aucune' || rang >= 4) return null;
+  const organisationDe = (rang) => {
+    if (organisations === 'une') return 'Coopérative Aubier';
+    if (organisations === 'aucune' || rang >= 4) return null;
     return rang < 2 ? 'Coopérative Aubier' : 'Atelier Ressac';
   };
   charge.participants = noms.map(([nom, prenom], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance: appartenanceDe(rang),
+    organisation: organisationDe(rang),
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -92,7 +92,7 @@ function chargeSeule({ reservee = false } = {}) {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: rang < 2 ? 'Coopérative Aubier' : 'Atelier Ressac',
+    organisation: rang < 2 ? 'Coopérative Aubier' : 'Atelier Ressac',
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -127,14 +127,14 @@ const nomDe = (detail, id) => detail.personnes.find((personne) => personne.id ==
 const cles = (colonnes) => colonnes.map(({ cle }) => cle);
 
 describe('profilDe : le premier graphique, en comptes (§ 12.3, B12, D30, D41)', () => {
-  test('deux séries et deux repères, chacun une valeur par rang dans l’ordre du profil : rencontres, appartenances, plafond réalisé, borne de diversité', () => {
+  test('deux séries et deux repères, chacun une valeur par rang dans l’ordre du profil : rencontres, organisations, plafond réalisé, borne de diversité', () => {
     const detail = detailDe(chargeSix());
     const { comptes, cas, phrase } = profilDe(detail, outils);
     assert.equal(cas, 'profil');
     assert.equal(phrase, null);
     assert.deepEqual(comptes.series, [
       { libelle: t('qualite.profil.serie.rencontres'), valeurs: detail.profil.map(({ rencontres }) => rencontres) },
-      { libelle: t('qualite.profil.serie.appartenances'), valeurs: detail.profil.map(({ appartenances }) => appartenances) },
+      { libelle: t('qualite.profil.serie.organisations'), valeurs: detail.profil.map(({ organisations }) => organisations) },
     ]);
     assert.deepEqual(comptes.reperes, [
       { genre: 'plafond', libelle: t('qualite.profil.repere.plafond'), valeurs: detail.profil.map(({ plafondRealise }) => plafondRealise) },
@@ -231,19 +231,19 @@ describe('profilDe : le second graphique, en pourcentages (§ 12.3, B12, D51)', 
 });
 
 describe('profilDe : l’infobulle et le jumeau portent la ligne entière (§ 12.3, B12, D34)', () => {
-  test('une ligne par rang : rang, nom, appartenance, rencontres, plafond réalisé, pourcentage et son compte, a priori, A(p), borne de diversité, tours non assis, marque', () => {
+  test('une ligne par rang : rang, nom, organisation, rencontres, plafond réalisé, pourcentage et son compte, a priori, A(p), borne de diversité, tours non assis, marque', () => {
     const detail = detailDe(chargeSix({ reservation: true }));
     const { infobulle, tableaux } = profilDe(detail, outils);
     exigerColonnes(infobulle.colonnes);
     assert.deepEqual(cles(infobulle.colonnes), [
       'rang',
       'nom',
-      'appartenance',
+      'organisation',
       'rencontres',
       'plafondRealise',
       'pourcent',
       'plafondAPriori',
-      'appartenances',
+      'organisations',
       'borneDiversite',
       'toursNonAssis',
       'marque',
@@ -254,7 +254,7 @@ describe('profilDe : l’infobulle et le jumeau portent la ligne entière (§ 12
       assert.deepEqual(infobulle.lignes[i], {
         rang: i + 1,
         nom: personne.nom,
-        appartenance: personne.appartenance,
+        organisation: personne.organisation,
         rencontres: rang.rencontres,
         plafondRealise: rang.plafondRealise,
         pourcent: {
@@ -262,7 +262,7 @@ describe('profilDe : l’infobulle et le jumeau portent la ligne entière (§ 12
           compte: t('qualite.profil.ligne', { rencontres: rang.rencontres, plafond: rang.plafondRealise }),
         },
         plafondAPriori: rang.plafondAPriori,
-        appartenances: rang.appartenances,
+        organisations: rang.organisations,
         borneDiversite: rang.borneDiversite,
         toursNonAssis: rang.toursNonAssis,
         marque: rang.marque === null ? null : t(`qualite.profil.marque.${rang.marque}`),
@@ -281,29 +281,29 @@ describe('profilDe : l’infobulle et le jumeau portent la ligne entière (§ 12
 });
 
 describe('profilDe : les cas limites (§ 12.6, B15)', () => {
-  // Une seule appartenance : A(p) et la borne de diversité valent 1 et
+  // Une seule organisation : A(p) et la borne de diversité valent 1 et
   // restent écrites dans l'infobulle et le jumeau (B5) ; aucune : elles
   // valent 0 partout et leurs colonnes tombent avec le tracé.
-  for (const [appartenances, code, colonnesEcrites] of [
-    ['une', 'uneAppartenance', true],
-    ['aucune', 'aucuneAppartenance', false],
+  for (const [organisations, code, colonnesEcrites] of [
+    ['une', 'uneOrganisation', true],
+    ['aucune', 'aucuneOrganisation', false],
   ]) {
-    test(`${code} : une seule série, ni borne de diversité tracée ; la phrase le dit ; les colonnes des appartenances ${colonnesEcrites ? 'restent écrites' : 'tombent'}`, () => {
-      const detail = detailDe(chargeSix({ appartenances }));
+    test(`${code} : une seule série, ni borne de diversité tracée ; la phrase le dit ; les colonnes des organisations ${colonnesEcrites ? 'restent écrites' : 'tombent'}`, () => {
+      const detail = detailDe(chargeSix({ organisations }));
       const { cas, phrase, comptes, infobulle, tableaux } = profilDe(detail, outils);
       assert.equal(cas, 'profil');
       assert.equal(phrase, code);
       assert.equal(comptes.series.length, 1);
       assert.deepEqual(comptes.reperes.map(({ genre }) => genre), ['plafond']);
       for (const colonnes of [infobulle.colonnes, tableaux[0].colonnes]) {
-        assert.equal(cles(colonnes).includes('appartenances'), colonnesEcrites);
+        assert.equal(cles(colonnes).includes('organisations'), colonnesEcrites);
         assert.equal(cles(colonnes).includes('borneDiversite'), colonnesEcrites);
       }
       if (colonnesEcrites) {
         // La phrase ne nie que le tracé : la colonne écrite ne la contredit
         // pas.
         assert.match(t(`qualite.profil.${code}`), /pas de borne de diversité tracée/);
-        assert.deepEqual(infobulle.lignes.map(({ appartenances: a }) => a), detail.profil.map(({ appartenances: a }) => a));
+        assert.deepEqual(infobulle.lignes.map(({ organisations: a }) => a), detail.profil.map(({ organisations: a }) => a));
         assert.deepEqual(infobulle.lignes.map(({ borneDiversite }) => borneDiversite), detail.profil.map(({ borneDiversite }) => borneDiversite));
       }
     });

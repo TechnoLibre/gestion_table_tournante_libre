@@ -145,7 +145,7 @@ function motsCoupes(element) {
 
 // Les cellules des colonnes de tour de la liste d'accueil — en-tête et
 // lignes —, sur toutes les feuilles : celles qui suivent nom, prénom et
-// appartenance.
+// organisation.
 const cellulesDeTour = (m) =>
   tous(m.racine, '[data-impression] [data-liste-imprimee] tr').flatMap((rangee) => [...rangee.cells].slice(3));
 
@@ -307,7 +307,7 @@ describe('la liste d’accueil : des tours trop nombreux pour la page, en blocs 
   // dernier au plus aussi long ; sur chaque feuille d'un bloc, l'en-tête qui
   // nomme ses tours — aucun sous un seul bloc ; dans chaque bloc, chaque
   // personne non exclue, dans l'ordre de la liste ; chaque place et chaque
-  // tête de tour sur une ligne ; nom, prénom et appartenance sur un tiers au
+  // tête de tour sur une ligne ; nom, prénom et organisation sur un tiers au
   // moins de la largeur ; le moins de blocs que ce plancher permet. Rend les
   // blocs.
   function verifierBlocs(m, charge) {

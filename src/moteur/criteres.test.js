@@ -34,7 +34,7 @@ import {
 } from './criteres.js';
 
 // Les quatre cases que porte toute configuration.
-const QUATRE_CASES = ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances'];
+const QUATRE_CASES = ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable', 'varierOrganisations'];
 
 // Les contraintes d'un masque de quatre bits, dans l'ordre de QUATRE_CASES.
 const contraintesDu = (masque) =>
@@ -103,10 +103,10 @@ const CONTRAINTES_SANS_REGISTRE = [2, 3, 4, 0, 1, 5];
 const nullesSansRegistre = (c) => [
   false,
   false,
-  !c.separerAppartenances,
-  !c.separerAppartenances,
+  !c.separerOrganisations,
+  !c.separerOrganisations,
   !c.nouveauxVoisins && !c.nouvelleTable,
-  !c.varierAppartenances,
+  !c.varierOrganisations,
 ];
 
 describe('criteres : le registre (contrat de données, § 5.7)', () => {
@@ -134,12 +134,12 @@ describe('criteres : le registre (contrat de données, § 5.7)', () => {
   test('les cases qui font compter chaque critère (tableau de A8)', () => {
     assert.deepEqual(CRITERES.map((nom) => CASES[nom]), [
       [],
-      ['separerAppartenances'],
-      ['separerAppartenances'],
+      ['separerOrganisations'],
+      ['separerOrganisations'],
       ['respecterObjectifs'],
       ['nouveauxVoisins', 'nouvelleTable'],
       ['rencontrerAnimateurs'],
-      ['varierAppartenances'],
+      ['varierOrganisations'],
     ]);
     assert.ok(Object.isFrozen(CASES) && CRITERES.every((nom) => Object.isFrozen(CASES[nom])));
   });
@@ -211,10 +211,10 @@ describe('criteres : les cases (§ 5.3, A8)', () => {
     for (let masque = 0; masque < 16; masque += 1) {
       const c = contraintesDu(masque);
       assert.equal(estCoche('ecartAuPlafondAPrioriMax', c), true);
-      assert.equal(estCoche('excedentCollisions', c), c.separerAppartenances);
-      assert.equal(estCoche('collisionsCumulees', c), c.separerAppartenances);
+      assert.equal(estCoche('excedentCollisions', c), c.separerOrganisations);
+      assert.equal(estCoche('collisionsCumulees', c), c.separerOrganisations);
       assert.equal(estCoche('rencontresRepetees', c), c.nouveauxVoisins || c.nouvelleTable);
-      assert.equal(estCoche('redondance', c), c.varierAppartenances);
+      assert.equal(estCoche('redondance', c), c.varierOrganisations);
     }
   });
 

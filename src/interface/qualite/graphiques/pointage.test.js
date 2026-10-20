@@ -112,7 +112,7 @@ describe('pointage : les traits (§ 12.7, D30)', () => {
 
 describe('pointage : exigerTraces', () => {
   test('une ou deux séries, plein puis tirets ; zéro à deux repères', () => {
-    const { n, traces } = exigerTraces([serie([1, 2]), serie([0, 1], 'appartenances')], [{ genre: 'borne', libelle: 'b', valeurs: [1, 1] }]);
+    const { n, traces } = exigerTraces([serie([1, 2]), serie([0, 1], 'organisations')], [{ genre: 'borne', libelle: 'b', valeurs: [1, 1] }]);
     assert.equal(n, 2);
     assert.deepEqual(traces.map((t) => t.genre), ['serie1', 'serie2', 'borne']);
     assert.throws(() => exigerTraces([], []), RangeError);
@@ -174,7 +174,7 @@ describe('pointage : la disposition d’un escalier (§ 12.3)', () => {
 
   test('les libellés se posent au bout de leur tracé, sans se chevaucher', () => {
     const d = escalier({
-      series: [serie([3, 5, 8]), serie([2, 4, 7], 'appartenances')],
+      series: [serie([3, 5, 8]), serie([2, 4, 7], 'organisations')],
       reperes: [
         { genre: 'plafond', libelle: 'plafond réalisé', valeurs: [8, 8, 8] },
         { genre: 'borne', libelle: 'borne de diversité', valeurs: [7, 7, 7] },
@@ -334,7 +334,7 @@ describe('pointage : deux séries sur une borne haute reçue (C20, D59, D60)', (
     assert.deepEqual(traces.map((t) => [t.genre, t.cle]), [['serie1', 'a'], ['serie2', 'b'], ['plafond', 'plafond']]);
     assert.equal(TRAITS[traces[0].genre].motif, 'none');
     assert.notEqual(TRAITS[traces[1].genre].motif, 'none');
-    const sansCle = exigerTraces([serie([1]), serie([2], 'appartenances')], []).traces;
+    const sansCle = exigerTraces([serie([1]), serie([2], 'organisations')], []).traces;
     assert.deepEqual(sansCle.map((t) => t.cle), ['serie1', 'serie2'], 'sans clé, la désignation par rang');
     const d = escalier({ series: [a(), b()], borneHaute: 7 });
     assert.deepEqual(d.traces.map((t) => [t.cle, t.libelle]), [['a', 'n° 4'], ['b', 'n° 7']]);
@@ -407,9 +407,9 @@ describe('pointage : les points de relevé (§ 12.14, D49)', () => {
 describe('pointage : les barres (§ 12.4)', () => {
   const NOM_LONG = 'Maëlle-Hortense Quenouille-Vasque de Belle-Rive';
   const lignes = [
-    { id: 'a', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [0, 3] },
-    { id: 'b', nom: NOM_LONG, appartenance: null, valeurs: [2, 0] },
-    { id: 'c', nom: 'Atelier Ressac', appartenance: 2, valeurs: [1, 1] },
+    { id: 'a', nom: 'Coopérative Aubier', organisation: 1, valeurs: [0, 3] },
+    { id: 'b', nom: NOM_LONG, organisation: null, valeurs: [2, 0] },
+    { id: 'c', nom: 'Atelier Ressac', organisation: 2, valeurs: [1, 1] },
   ];
   const segments = [
     { genre: 'prouve', libelle: 'prouvé inévitable' },
@@ -445,9 +445,9 @@ describe('pointage : les barres (§ 12.4)', () => {
     assert.equal(LARGEUR_MIN_CONTOUR_PX, 2 * TRAIT_CONTOUR_PX + 2);
     const d = disposer({
       lignes: [
-        { id: 'a', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [0, 300] },
-        { id: 'b', nom: 'Atelier Ressac', appartenance: 2, valeurs: [1, 9] },
-        { id: 'c', nom: 'Iris Ombrelle', appartenance: null, valeurs: [1, 0] },
+        { id: 'a', nom: 'Coopérative Aubier', organisation: 1, valeurs: [0, 300] },
+        { id: 'b', nom: 'Atelier Ressac', organisation: 2, valeurs: [1, 9] },
+        { id: 'c', nom: 'Iris Ombrelle', organisation: null, valeurs: [1, 0] },
       ],
     });
     const naturelle = d.ex.versPx(1) - d.ex.versPx(0);
@@ -473,7 +473,7 @@ describe('pointage : les barres (§ 12.4)', () => {
     // Une première ligne de 600 fixe l'axe : une unité y fait moins de
     // 2 px, si bien qu'un prouvé de 1 et un reste de 2 tiennent dans moins
     // que LARGEUR_MIN_CONTOUR_PX.
-    const axe = { id: 'a', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [0, 600] };
+    const axe = { id: 'a', nom: 'Coopérative Aubier', organisation: 1, valeurs: [0, 600] };
     const unite = (() => {
       const d = disposer({ lignes: [axe] });
       return d.ex.versPx(1) - d.ex.versPx(0);
@@ -486,8 +486,8 @@ describe('pointage : les barres (§ 12.4)', () => {
     const d = disposer({
       lignes: [
         axe,
-        { id: 'b', nom: 'Atelier Ressac', appartenance: 2, valeurs: [1, 2] },
-        { id: 'c', nom: 'Iris Ombrelle', appartenance: null, valeurs: [1, reste] },
+        { id: 'b', nom: 'Atelier Ressac', organisation: 2, valeurs: [1, 2] },
+        { id: 'c', nom: 'Iris Ombrelle', organisation: null, valeurs: [1, reste] },
       ],
     });
     const zero = d.ex.versPx(0);
@@ -513,7 +513,7 @@ describe('pointage : les barres (§ 12.4)', () => {
       segments: [...segments].reverse(),
       lignes: [
         { ...axe, valeurs: [600, 0] },
-        { id: 'd', nom: 'Théo Pervenche', appartenance: null, valeurs: [reste + 1, 1] },
+        { id: 'd', nom: 'Théo Pervenche', organisation: null, valeurs: [reste + 1, 1] },
       ],
     });
     const derniere = inverse.lignes[1];
@@ -527,10 +527,10 @@ describe('pointage : les barres (§ 12.4)', () => {
     const d = disposer({
       segments: [...segments].reverse(),
       lignes: [
-        { id: 'a', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [300, 0] },
-        { id: 'b', nom: 'Atelier Ressac', appartenance: 2, valeurs: [9, 1] },
-        { id: 'c', nom: 'Iris Ombrelle', appartenance: null, valeurs: [1, 1] },
-        { id: 'd', nom: 'Théo Pervenche', appartenance: null, valeurs: [0, 1] },
+        { id: 'a', nom: 'Coopérative Aubier', organisation: 1, valeurs: [300, 0] },
+        { id: 'b', nom: 'Atelier Ressac', organisation: 2, valeurs: [9, 1] },
+        { id: 'c', nom: 'Iris Ombrelle', organisation: null, valeurs: [1, 1] },
+        { id: 'd', nom: 'Théo Pervenche', organisation: null, valeurs: [0, 1] },
       ],
     });
     const zero = d.ex.versPx(0);
@@ -596,7 +596,7 @@ describe('pointage : les barres (§ 12.4)', () => {
         { id: 'f2', nom: 'Théo Pervenche', valeurs: [4, 1] },
       ],
       colonnes: [
-        { genre: 'serie1', libelle: 'appartenances' },
+        { genre: 'serie1', libelle: 'organisations' },
         { genre: 'serie2', libelle: 'étiquettes' },
       ],
     });
@@ -642,7 +642,7 @@ describe('pointage : les barres (§ 12.4)', () => {
       marque: MARQUE,
       lignes: [{ id: 'f1', nom: 'Iris Ombrelle', valeurs: [2, 9], secondaire: '12 tours animés' }],
       colonnes: [
-        { genre: 'serie1', libelle: 'appartenances' },
+        { genre: 'serie1', libelle: 'organisations' },
         { genre: 'serie2', libelle: 'étiquettes' },
       ],
     });
@@ -748,7 +748,7 @@ describe('pointage : ce qu’un graphique en attente de son dessin porte déjà 
     { genre: 'reste', libelle: 'reste' },
   ];
   const colonnes = [
-    { genre: 'serie1', libelle: 'appartenances' },
+    { genre: 'serie1', libelle: 'organisations' },
     { genre: 'serie2', libelle: 'étiquettes' },
   ];
 

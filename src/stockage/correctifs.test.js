@@ -174,11 +174,11 @@ function chargeDe(cle, demandes) {
     table: Math.max(...configuration.tables.map((t) => t.id)) + 1,
     proposition: Math.max(0, ...demandes.map(({ id }) => id)) + 1,
   };
-  charge.participants = configuration.participants.map(({ id, nom, prenom, appartenance }) => ({
+  charge.participants = configuration.participants.map(({ id, nom, prenom, organisation }) => ({
     id,
     nom,
     prenom,
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -230,7 +230,7 @@ const IDS_TABLES = [1, 2, 3, 4, 5];
 const ID_PROPOSITION_MAX = 3;
 const NOMS_INVENTES = ['Brindille', 'Calembour', 'Dentelle', 'Escarbille', 'Falbala', 'Girouette'];
 const PRENOMS_INVENTES = ['Azur', 'Céladon', 'Nacre', 'Opale'];
-const APPARTENANCES = ['Cercle du Héron', 'Club Lanterne', 'Atelier Boussole'];
+const ORGANISATIONS = ['Cercle du Héron', 'Club Lanterne', 'Atelier Boussole'];
 const LIBELLES = ['animation', 'accueil', 'secrétariat'];
 const ETIQUETTES_INVENTEES = ['finance', 'Montréal', 'bénévole', 'ressources humaines', 'Finance'];
 
@@ -254,14 +254,14 @@ const unParticipant = (id) =>
       id: fc.constant(id),
       nom: fc.constantFrom(...NOMS_INVENTES),
       prenom: ouNul(fc.constantFrom(...PRENOMS_INVENTES)),
-      appartenance: ouNul(fc.constantFrom(...APPARTENANCES)),
+      organisation: ouNul(fc.constantFrom(...ORGANISATIONS)),
       courriel: ouNul(fc.constantFrom('a@exemple.test', 'b@exemple.test')),
       titrePressenti: ouNul(fc.constantFrom(...LIBELLES)),
       notes: ouNul(fc.constantFrom('arrive tard', 'part tôt')),
       exclu: fc.boolean(),
       etiquettes: desEtiquettes,
     },
-    { requiredKeys: ['id', 'nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes', 'exclu'] },
+    { requiredKeys: ['id', 'nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu'] },
   );
 
 const coordonnee = fc.oneof(fc.integer({ min: -400, max: 400 }), fc.double({ min: -1e4, max: 1e4, noNaN: true }));
@@ -319,10 +319,10 @@ const unEvenement = fc.record({
 // pour lui-même ; présents, ils portent une valeur hors de leur défaut.
 const desReglages = fc.record(
   {
-    separerAppartenances: fc.boolean(),
+    separerOrganisations: fc.boolean(),
     nouveauxVoisins: fc.boolean(),
     nouvelleTable: fc.boolean(),
-    varierAppartenances: fc.boolean(),
+    varierOrganisations: fc.boolean(),
     attribuerSieges: fc.boolean(),
     generation: fc.record({
       nombre: fc.integer({ min: 1, max: 20 }),
@@ -336,10 +336,10 @@ const desReglages = fc.record(
   },
   {
     requiredKeys: [
-      'separerAppartenances',
+      'separerOrganisations',
       'nouveauxVoisins',
       'nouvelleTable',
-      'varierAppartenances',
+      'varierOrganisations',
       'attribuerSieges',
       'generation',
     ],
@@ -822,7 +822,7 @@ describe('difference : localité sur la grande démonstration (§ 8.9)', () => {
       id,
       nom: 'Brindille',
       prenom: 'Azur',
-      appartenance: 'Club Lanterne',
+      organisation: 'Club Lanterne',
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -957,7 +957,7 @@ describe('difference : les règles (§ 8.6)', () => {
       id: 1,
       nom: 'Brindille',
       prenom: 'Azur',
-      appartenance: null,
+      organisation: null,
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -2009,7 +2009,7 @@ describe('les étiquettes, les objectifs et les réglages facultatifs dans un co
       id,
       nom: ['Ombrelle', 'Pervenche'][id - 1],
       prenom: null,
-      appartenance: null,
+      organisation: null,
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -2258,7 +2258,7 @@ describe('la présence par tour dans un correctif (§ 8.6, § 8.9)', () => {
       id,
       nom: ['Ancolie', 'Bourrache', 'Capucine'][id - 1],
       prenom: null,
-      appartenance: null,
+      organisation: null,
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -3088,8 +3088,8 @@ describe('appliquerSuite : une suite de correctifs sur une seule copie (§ 8.6)'
 // entière. Les retouches de la grande démonstration (retouchesDeLaGrande)
 // donnent, elles, plusieurs poses au rang dans une même liste, dont l'ordre
 // entre ainsi dans l'empreinte.
-const EMPREINTE_CORRECTIFS = 'a6dff60ae4017c21234ca63f3341ed0350eb23c5b75ab313cb482b7992540aec';
-const EMPREINTE_APPLIQUEES = 'c176c63a917e6f3b9563c438612069f984461484a6b63bd123c86a9928cbf503';
+const EMPREINTE_CORRECTIFS = '0e2010a8c7c217f11f8dd7a06cf0911430c636cae50cf63785cc7d0510dc7ed4';
+const EMPREINTE_APPLIQUEES = 'd7fd95719f2bee1d3c15170fe17f7b9f75bf660b72797bde9acba7bc783720d3';
 
 // L'empreinte d'une liste de valeurs, chacune en JSON sur sa ligne, les
 // versions remplacées par leur marqueur.
@@ -3103,7 +3103,7 @@ function empreinteDesJson(valeurs) {
 }
 
 const EMPREINTE_CORRECTIFS_GRANDE = 'd300e73b4c27f6e0c1675d89fbb09b0a07e79260a44f644861548b5296b441b9';
-const EMPREINTE_APPLIQUEES_GRANDE = 'eab7c4c78f82ad8cadf2fc864b07febedfa40aeb8b4ab5a4eff1bacd9773e0f1';
+const EMPREINTE_APPLIQUEES_GRANDE = 'ef635b684977258c764f4b2f47ee0b1402f6dd04b71f2a5e5981ef6b2efa09f9';
 
 // Les retouches de la grande démonstration a, seize charges neuves, deux par
 // j de 0 à 7. La première : dans la proposition de rang j mod 3, la personne

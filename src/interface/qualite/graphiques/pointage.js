@@ -578,9 +578,9 @@ export function legendeBarres({ segments = null, colonnes = null }) {
 
 /**
  * La disposition de barres horizontales (§ 12.4, § 12.12, § 12.13) : une
- * ligne par entrée de lignes, {id, nom, appartenance?, valeurs}, dans
+ * ligne par entrée de lignes, {id, nom, organisation?, valeurs}, dans
  * l'ordre reçu, chacune intitulée de son nom tronqué à LARGEUR_NOM_PX —
- * précédé d'une pastille quand appartenance est donnée, un rang de teinte
+ * précédé d'une pastille quand organisation est donnée, un rang de teinte
  * ou null pour la neutre —, le nom entier gardé pour l'infobulle et le
  * jumeau. Deux formes, exclusives : segments, un ou deux, empilés depuis
  * zéro sur un axe commun, valeurs[k] celle du segment k, le libellé de
@@ -597,7 +597,7 @@ export function legendeBarres({ segments = null, colonnes = null }) {
  * Lève TypeError sur un secondaire qui n'est pas un texte ou sur un
  * identifiant qui n'est ni un texte ni un nombre, RangeError sur deux
  * lignes du même identifiant ou deux segments du même genre.
- * @returns {{lignes: Array<{id, nom, appartenance, indice, y, hauteur, fin,
+ * @returns {{lignes: Array<{id, nom, organisation, indice, y, hauteur, fin,
  *   intitule: {texte, largeur, tronque, x, y}, pastille: {x, y, largeur, hauteur, rayon, point: {x, y}}|null,
  *   secondaire: {texte, x, y}|null,
  *   segments: Array<{genre, colonne, x, y, largeur, hauteur, marque, jeton}>}>,
@@ -619,7 +619,7 @@ export function dispositionBarres({ largeur, lignes, segments = null, colonnes =
 
   const hauteurLigne = hauteurTexte + ESPACE_PX;
   const intitules = lignes.map((l) => tronquerNom(l.nom, LARGEUR_NOM_PX, mesurer, marque));
-  const avecPastille = lignes.some((l) => l.appartenance !== undefined);
+  const avecPastille = lignes.some((l) => l.organisation !== undefined);
   const retraitNom = avecPastille ? 2 * RETRAIT_PASTILLE_PX + 2 * POINT_PASTILLE_PX : 0;
   const largeurNoms = Math.max(0, ...intitules.map((i) => i.largeur)) + retraitNom + (avecPastille ? RETRAIT_PASTILLE_PX : 0);
   const x0 = largeurNoms + ESPACE_PX;
@@ -689,7 +689,7 @@ export function dispositionBarres({ largeur, lignes, segments = null, colonnes =
     const intitule = intitules[indice];
     const centre = y + hauteurLigne / 2;
     const pastille =
-      l.appartenance === undefined
+      l.organisation === undefined
         ? null
         : {
             x: 0,
@@ -703,7 +703,7 @@ export function dispositionBarres({ largeur, lignes, segments = null, colonnes =
     return {
       id: l.id,
       nom: l.nom,
-      appartenance: l.appartenance ?? null,
+      organisation: l.organisation ?? null,
       indice,
       y,
       hauteur: hauteurLigne,

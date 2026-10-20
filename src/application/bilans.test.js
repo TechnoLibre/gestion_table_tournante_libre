@@ -18,7 +18,7 @@ const personne = (id, autres = {}) => ({
   id,
   nom: NOMS[(id - 1) % NOMS.length],
   prenom: id === 2 ? 'Théo' : null,
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,

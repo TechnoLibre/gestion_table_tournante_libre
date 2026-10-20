@@ -8,8 +8,8 @@
   // teinte, le signe — est celui de pastille.js ; une sorte ou une valeur
   // hors contrat lève RangeError au montage.
   //
-  // sorte : 'etat', 'appartenance' ou 'statut' ; valeur : l'état du plan, le
-  // rang de 1 à 6 ou null (teintesAppartenances), le ton ; libelle : le
+  // sorte : 'etat', 'organisation' ou 'statut' ; valeur : l'état du plan, le
+  // rang de 1 à 6 ou null (teintesOrganisations), le ton ; libelle : le
   // texte affiché, déjà traduit ou une donnée ; icone : une icône des
   // primitives, qui remplace le signe par défaut. Le signe est caché aux
   // technologies d'assistance.
@@ -137,64 +137,64 @@
     background-color: var(--couleur-etat-bloque-marque);
   }
 
-  .appartenance-1 {
-    background-color: var(--couleur-appartenance-1-fond);
+  .organisation-1 {
+    background-color: var(--couleur-organisation-1-fond);
   }
-  .appartenance-1 .signe {
-    color: var(--couleur-appartenance-1-marque);
+  .organisation-1 .signe {
+    color: var(--couleur-organisation-1-marque);
   }
-  .appartenance-1 .point {
-    background-color: var(--couleur-appartenance-1-marque);
-  }
-
-  .appartenance-2 {
-    background-color: var(--couleur-appartenance-2-fond);
-  }
-  .appartenance-2 .signe {
-    color: var(--couleur-appartenance-2-marque);
-  }
-  .appartenance-2 .point {
-    background-color: var(--couleur-appartenance-2-marque);
+  .organisation-1 .point {
+    background-color: var(--couleur-organisation-1-marque);
   }
 
-  .appartenance-3 {
-    background-color: var(--couleur-appartenance-3-fond);
+  .organisation-2 {
+    background-color: var(--couleur-organisation-2-fond);
   }
-  .appartenance-3 .signe {
-    color: var(--couleur-appartenance-3-marque);
+  .organisation-2 .signe {
+    color: var(--couleur-organisation-2-marque);
   }
-  .appartenance-3 .point {
-    background-color: var(--couleur-appartenance-3-marque);
-  }
-
-  .appartenance-4 {
-    background-color: var(--couleur-appartenance-4-fond);
-  }
-  .appartenance-4 .signe {
-    color: var(--couleur-appartenance-4-marque);
-  }
-  .appartenance-4 .point {
-    background-color: var(--couleur-appartenance-4-marque);
+  .organisation-2 .point {
+    background-color: var(--couleur-organisation-2-marque);
   }
 
-  .appartenance-5 {
-    background-color: var(--couleur-appartenance-5-fond);
+  .organisation-3 {
+    background-color: var(--couleur-organisation-3-fond);
   }
-  .appartenance-5 .signe {
-    color: var(--couleur-appartenance-5-marque);
+  .organisation-3 .signe {
+    color: var(--couleur-organisation-3-marque);
   }
-  .appartenance-5 .point {
-    background-color: var(--couleur-appartenance-5-marque);
+  .organisation-3 .point {
+    background-color: var(--couleur-organisation-3-marque);
   }
 
-  .appartenance-6 {
-    background-color: var(--couleur-appartenance-6-fond);
+  .organisation-4 {
+    background-color: var(--couleur-organisation-4-fond);
   }
-  .appartenance-6 .signe {
-    color: var(--couleur-appartenance-6-marque);
+  .organisation-4 .signe {
+    color: var(--couleur-organisation-4-marque);
   }
-  .appartenance-6 .point {
-    background-color: var(--couleur-appartenance-6-marque);
+  .organisation-4 .point {
+    background-color: var(--couleur-organisation-4-marque);
+  }
+
+  .organisation-5 {
+    background-color: var(--couleur-organisation-5-fond);
+  }
+  .organisation-5 .signe {
+    color: var(--couleur-organisation-5-marque);
+  }
+  .organisation-5 .point {
+    background-color: var(--couleur-organisation-5-marque);
+  }
+
+  .organisation-6 {
+    background-color: var(--couleur-organisation-6-fond);
+  }
+  .organisation-6 .signe {
+    color: var(--couleur-organisation-6-marque);
+  }
+  .organisation-6 .point {
+    background-color: var(--couleur-organisation-6-marque);
   }
 
   .information {

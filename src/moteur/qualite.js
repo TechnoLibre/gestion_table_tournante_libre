@@ -3,7 +3,7 @@
 
 // Le détail d'un placement pour la page de qualité (§ 12, D27) : le profil
 // trié des rencontres et sa répartition, les bornes des tuiles, les barres
-// des collisions jointes à leurs planchers, le mélange des appartenances à
+// des collisions jointes à leurs planchers, le mélange des organisations à
 // chaque table, les objectifs tour par tour, le profil des animateurs. Ces
 // mesures décrivent un placement à la fois ; aucune n'entre dans la
 // recherche, le classement ni le tableau des propositions, et rien de rendu
@@ -37,7 +37,7 @@ import { borneDiversite, occupations } from './plafond.js';
  * @property {number|null} pourcent     rencontres sur plafond réalisé ;
  *                                      null à plafond nul
  * @property {number|null} plafondAPriori  null quand il est inconnu
- * @property {number} appartenances     A(p)
+ * @property {number} organisations     A(p)
  * @property {number} affilies          |F(p)|
  * @property {number} borneDiversite    A_max(p)
  * @property {number} toursNonAssis     tours de présence passés en réserve
@@ -53,7 +53,7 @@ import { borneDiversite, occupations } from './plafond.js';
  * @typedef {Object} CaseMelange
  * @property {number} occupants      o_{t,r}
  * @property {number} affilies       α_{t,r}
- * @property {number} appartenances  δ_{t,r}
+ * @property {number} organisations  δ_{t,r}
  * @property {TroisComptes} comptes
  * @property {{sieges: number, assis: number, doublons: number}} pourcents
  *           δ sur c, sur o, sur α
@@ -138,7 +138,7 @@ export function profilRencontres(instance, mesures, plafondsRealises, plafondsAP
   exigerParPersonne(plafondsRealises, N, 'plafondsRealises');
   if (plafondsAPriori !== null) exigerParPersonne(plafondsAPriori, N, 'plafondsAPriori');
   exigerParPersonne(aMax, N, 'aMax');
-  const { rencontres, appartenancesVues, affilies, toursAssis } = mesures;
+  const { rencontres, organisationsVues, affilies, toursAssis } = mesures;
   const lignes = [];
   for (let p = 0; p < N; p += 1) {
     const toursNonAssis = toursPresents[p] - toursAssis[p];
@@ -149,7 +149,7 @@ export function profilRencontres(instance, mesures, plafondsRealises, plafondsAP
       plafondRealise: plafondsRealises[p],
       pourcent: pourcentage(rencontres[p], plafondsRealises[p]),
       plafondAPriori: plafondsAPriori === null ? null : plafondsAPriori[p],
-      appartenances: appartenancesVues[p],
+      organisations: organisationsVues[p],
       affilies: affilies[p],
       borneDiversite: aMax[p],
       toursNonAssis,
@@ -300,7 +300,7 @@ export function teteDesColonnes(instance, mesures, plafondsRealises) {
  *   null sans personne ;
  * - diversite : au plus petit A(p), à égalité la plus grande borne de
  *   diversité, puis l'index — le tri du profil sur A(p) —, la personne et
- *   sa borne, sans pourcentage ; null sans appartenance présente ;
+ *   sa borne, sans pourcentage ; null sans organisation présente ;
  * - animateurs : le rang 1 du profil des animateurs et sa borne B(p), sans
  *   pourcentage ; null sans personne concernée ;
  * - objectifs : au plus petit s(p) des concernées, à égalité les tours
@@ -347,7 +347,7 @@ export function bornesDesTuiles(instance, lus) {
 
   let diversite = null;
   if (groupes.length > 0) {
-    const A = mesures.appartenancesVues;
+    const A = mesures.organisationsVues;
     const p = premier(N, () => true, (x, y) => A[x] < A[y] || (A[x] === A[y] && aMax[x] > aMax[y]));
     diversite = { p, aMax: aMax[p] };
   }
@@ -369,7 +369,7 @@ export function bornesDesTuiles(instance, lus) {
 const plancherDe = (plancher, valeur) => (plancher > 0 ? { plancher, atteint: valeur === plancher } : null);
 
 // La somme d'un champ des planchers de collisions du diagnostic, un par
-// appartenance en collision ; un champ null compte pour 0.
+// organisation en collision ; un champ null compte pour 0.
 const sommeDe = (collisions, champ) => collisions.reduce((total, ligne) => total + (ligne[champ] ?? 0), 0);
 
 // Les colonnes de collisions, chacune avec le champ qui porte son plancher
@@ -409,8 +409,8 @@ const aucunPlancher = () => ({
  * avant d'être confrontés aux mesures de chaque placement
  * (planchersAtteints). Sous le nom de chaque colonne (§ 5.7) :
  * - collisionsCumulees, pairesDistinctes, excedentCollisions : la somme des
- *   planchers de chaque appartenance en collision ; chaque mesure somme
- *   celles des appartenances, et chaque plancher minore la sienne ; 0 quand
+ *   planchers de chaque organisation en collision ; chaque mesure somme
+ *   celles des organisations, et chaque plancher minore la sienne ; 0 quand
  *   le diagnostic n'en nomme aucune ;
  * - ecartItineraireMax : le plancher de l'écart d'itinéraire maximal, null
  *   quand le diagnostic n'en porte pas ;
@@ -483,12 +483,12 @@ function planchersDe(instance, lus) {
 }
 
 /**
- * Le plancher des collisions cumulées de chaque appartenance (§ 5.6), dans
+ * Le plancher des collisions cumulées de chaque organisation (§ 5.6), dans
  * l'ordre de instance.groupes, lu dans le diagnostic : 0 pour une
- * appartenance qu'il ne nomme pas, dont le plancher est nul. La forme que
+ * organisation qu'il ne nomme pas, dont le plancher est nul. La forme que
  * barresCollisions et la garde (verifierIndicateurs) reçoivent.
  *
- * Lève RangeError quand le diagnostic nomme une appartenance absente de
+ * Lève RangeError quand le diagnostic nomme une organisation absente de
  * l'instance : il décrit une autre configuration.
  *
  * @param {import('./types.js').Instance} instance  groupes est lu
@@ -501,24 +501,24 @@ export function planchersParGroupe({ groupes }, collisions) {
   const planchers = new Array(groupes.length).fill(0);
   for (const { groupe, plancherCumulees } of collisions) {
     const g = rang.get(groupe);
-    if (g === undefined) throw new RangeError(`plancher d'une appartenance absente : ${decrire(groupe)}`);
+    if (g === undefined) throw new RangeError(`plancher d'une organisation absente : ${decrire(groupe)}`);
     planchers[g] = plancherCumulees;
   }
   return planchers;
 }
 
 /**
- * Les barres des collisions d'appartenance (§ 12.4, D31, B13) : une ligne
- * par appartenance, ses collisions cumulées, paires distinctes et excédent
+ * Les barres des collisions d'organisation (§ 12.4, D31, B13) : une ligne
+ * par organisation, ses collisions cumulées, paires distinctes et excédent
  * lus dans mesures.parGroupe, et, sur le domaine des planchers, ses deux
  * segments : prouvé inévitable, le plancher du diagnostic, et le reste,
  * cumulées moins ce plancher. Hors du domaine — un plan qui laisse
  * quelqu'un en réserve ou ne tient pas une réservation —, prouve et reste
  * valent null. Les lignes vont de l'excédent le plus grand au plus petit,
  * puis des collisions cumulées décroissantes, puis par la clé normalisée de
- * l'appartenance, puis par sa chaîne, comparées par unités de code.
+ * l'organisation, puis par sa chaîne, comparées par unités de code.
  *
- * Lève RangeError quand planchers n'a pas une case par appartenance.
+ * Lève RangeError quand planchers n'a pas une case par organisation.
  *
  * @param {import('./types.js').Instance} instance  groupes est lu
  * @param {import('./indicateurs.js').Mesures} mesures
@@ -554,19 +554,19 @@ export function barresCollisions(instance, mesures, planchers, planchersValides,
 }
 
 /**
- * Le mélange des appartenances à chaque table (§ 12.11, D35, B20). Une
+ * Le mélange des organisations à chaque table (§ 12.11, D35, B20). Une
  * ligne par table, dans l'ordre de l'instance, et par tour une case : ses
- * occupants o, ses affiliés α, ses appartenances distinctes δ, les trois
+ * occupants o, ses affiliés α, ses organisations distinctes δ, les trois
  * comptes — sièges c − δ, assis o − δ, doublons α − δ, emboîtés — et leurs
  * trois pourcentages, δ sur c, sur o, sur α. La case vaut null quand α est
  * nul, table vide comprise.
  *
  * Les doublons se lisent dans les collègues de parcourirTours : chaque
- * affilié assis après un premier membre de son appartenance, dans l'ordre
+ * affilié assis après un premier membre de son organisation, dans l'ordre
  * des index, est le second terme d'une paire de collègues, si bien que les
  * seconds termes distincts sont α − δ, et un doublon est non nul exactement
  * là où la table compte une collision ce tour-là. Une personne sans
- * appartenance n'en forme aucune.
+ * organisation n'en forme aucune.
  *
  * Par position, pire et somme sont le plus grand compte et la somme des
  * comptes des cases non null de la ligne ; ils valent null, tous deux,
@@ -616,7 +616,7 @@ export function mixTables(instance, tableDe, occupation, parcours = parcourirTou
       tours.push({
         occupants: o,
         affilies: a,
-        appartenances: d,
+        organisations: d,
         comptes,
         pourcents: { sieges: pourcentage(d, c), assis: pourcentage(d, o), doublons: pourcentage(d, a) },
       });

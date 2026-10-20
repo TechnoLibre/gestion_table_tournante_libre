@@ -55,7 +55,7 @@ const personne = (id, exclu = false) => ({
   id,
   nom: NOMS[(id - 1) % NOMS.length][0],
   prenom: NOMS[(id - 1) % NOMS.length][1],
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,

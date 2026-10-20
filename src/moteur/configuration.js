@@ -38,7 +38,7 @@
 // - TypeError, quand la configuration sort de l'une des formes que garantit
 //   le code qui la bâtit — stockage, import, interface — et qu'aucune saisie
 //   ne produit : un identifiant de participant ou de table qui n'est pas un
-//   entier ≥ 1, une appartenance ni chaîne ni null, un exclu présent et non
+//   entier ≥ 1, une organisation ni chaîne ni null, un exclu présent et non
 //   booléen, une portée ni « tous » ni « tour », des contraintes qui ne sont
 //   pas un objet de quatre booléens, ou dont une case facultative présente
 //   n'est pas booléenne, une liste qui n'est pas un tableau, des étiquettes
@@ -87,7 +87,7 @@ export const LIBRE = -1;
  */
 export const RESERVE = -1;
 
-/** instance.groupe d'un participant sans appartenance. */
+/** instance.groupe d'un participant sans organisation. */
 export const SANS_GROUPE = -1;
 
 /** Case de instance.objectifDe d'une table sans objectif en vigueur au tour. */
@@ -104,10 +104,10 @@ const NON_PLACE = -2;
 const ENTIER_32_MAX = 2 ** 31 - 1;
 
 const NOMS_CONTRAINTES = [
-  'separerAppartenances',
+  'separerOrganisations',
   'nouveauxVoisins',
   'nouvelleTable',
-  'varierAppartenances',
+  'varierOrganisations',
 ];
 
 // Les deux cases facultatives (A16), absentes à leur défaut : la copie ne les
@@ -132,10 +132,10 @@ function exigerIdentifiant(id, quoi) {
   }
 }
 
-function exigerAppartenance({ id, appartenance }) {
-  if (appartenance !== null && typeof appartenance !== 'string') {
+function exigerOrganisation({ id, organisation }) {
+  if (organisation !== null && typeof organisation !== 'string') {
     throw new TypeError(
-      `participant ${id} : appartenance chaîne ou null attendue, reçu ${decrire(appartenance)}`,
+      `participant ${id} : organisation chaîne ou null attendue, reçu ${decrire(organisation)}`,
     );
   }
 }
@@ -193,23 +193,23 @@ function lireMode(mode) {
 
 // Groupe de chaque participant présent, présents triés par identifiant
 // croissant : un libellé reçoit le numéro de sa première apparition,
-// SANS_GROUPE marque l'absence d'appartenance. L'égalité de chaînes fait le
+// SANS_GROUPE marque l'absence d'organisation. L'égalité de chaînes fait le
 // groupe. La Map ne sert qu'à retrouver un libellé déjà numéroté.
 function numeroterGroupes(presents) {
   const groupe = new Int32Array(presents.length);
   const groupes = [];
   const numeroDe = new Map();
   for (let p = 0; p < presents.length; p += 1) {
-    const { appartenance } = presents[p];
-    if (appartenance === null) {
+    const { organisation } = presents[p];
+    if (organisation === null) {
       groupe[p] = SANS_GROUPE;
       continue;
     }
-    if (!numeroDe.has(appartenance)) {
-      numeroDe.set(appartenance, groupes.length);
-      groupes.push(appartenance);
+    if (!numeroDe.has(organisation)) {
+      numeroDe.set(organisation, groupes.length);
+      groupes.push(organisation);
     }
-    groupe[p] = numeroDe.get(appartenance);
+    groupe[p] = numeroDe.get(organisation);
   }
   return { groupe, groupes };
 }
@@ -743,7 +743,7 @@ function etatDesCriteres(contraintes, mode, possibles, borne) {
  * configuration.reservations, à partir de 0.
  *
  * Lève TypeError sur les seules formes qu'énumère l'en-tête du module :
- * identifiants de participant et de table, appartenance, exclu, portée,
+ * identifiants de participant et de table, organisation, exclu, portée,
  * contraintes, listes, étiquettes, règle d'un objectif, mode, ordre des
  * tours animés, présence qui n'est pas une liste strictement croissante. Une
  * capacité, un nombre de tours, un tour désigné, le tour d'un objectif, un
@@ -851,7 +851,7 @@ function instanceDe(configuration) {
       throw new ErreurConfiguration('PARTICIPANT_DOUBLON', { participant: participant.id });
     }
     connus.add(participant.id);
-    exigerAppartenance(participant);
+    exigerOrganisation(participant);
     if (participant.etiquettes !== undefined) exigerEtiquettes(participant.etiquettes, `participant ${participant.id}, étiquettes`);
     if (estExclu(participant)) exclus.push(participant.id);
     else presents.push(participant);

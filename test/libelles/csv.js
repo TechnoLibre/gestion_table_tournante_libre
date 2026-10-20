@@ -32,7 +32,7 @@ export const EXEMPLES = [
   ['PLUSIEURS_CORRESPONDENT', { ligne: 7, valeur: null, participants: [3, 8] }],
   ['DEJA_DESIGNE', { ligne: 9, valeur: null, participants: [3], premiereLigne: 4 }],
   ['PLAN_BLOQUE', { remede: { geste: 'debloquer' } }],
-  ['AMBIGUITE', { champs: ['appartenance', 'courriel'] }],
+  ['AMBIGUITE', { champs: ['organisation', 'courriel'] }],
   // Le CSV des objectifs de table (§ 10.4)
   ['TABLE_NON_ASSOCIEE', {}],
   ['OBJECTIF_NON_ASSOCIE', {}],

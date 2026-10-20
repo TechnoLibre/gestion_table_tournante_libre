@@ -8,10 +8,10 @@
     "arret": 20000,
     "historique": 1000,
     "cases": [
-      "separerAppartenances",
+      "separerOrganisations",
       "nouveauxVoisins",
       "nouvelleTable",
-      "varierAppartenances"
+      "varierOrganisations"
     ],
     "classement": {
       "cles": [
@@ -173,7 +173,7 @@
     }
   },
   "combinaisons": {
-    "separerAppartenances+nouveauxVoisins+nouvelleTable+varierAppartenances": {
+    "separerOrganisations+nouveauxVoisins+nouvelleTable+varierOrganisations": {
       "empreinte": "d13db767aaa2fc7ad59ad69973d663320931598b7d02a9212ca0f4e2949f8a21",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 1,
@@ -184,7 +184,7 @@
         "redondance": 58
       }
     },
-    "separerAppartenances+nouveauxVoisins+nouvelleTable": {
+    "separerOrganisations+nouveauxVoisins+nouvelleTable": {
       "empreinte": "f76257b5ecf1260a0d7c81b948c5971ffb0c0c18ed6310979cfb7b2be6698dfb",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 1,
@@ -195,7 +195,7 @@
         "redondance": 58
       }
     },
-    "separerAppartenances+nouveauxVoisins+varierAppartenances": {
+    "separerOrganisations+nouveauxVoisins+varierOrganisations": {
       "empreinte": "9b22b885a65791752a5928b7fe1b285355a4c336dec9cbd9e630aaa4f084ef04",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 1,
@@ -206,7 +206,7 @@
         "redondance": 58
       }
     },
-    "separerAppartenances+nouveauxVoisins": {
+    "separerOrganisations+nouveauxVoisins": {
       "empreinte": "00885d606c84f32f15eef4731a9835a5f97a4754842f00e26f7f6fd73d6d3b4d",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 0,
@@ -217,7 +217,7 @@
         "redondance": 60
       }
     },
-    "separerAppartenances+nouvelleTable+varierAppartenances": {
+    "separerOrganisations+nouvelleTable+varierOrganisations": {
       "empreinte": "cb80a1470adbb6203469abeafdf4f5fa03797242b0a80ca1665d73d5ab5ccc3b",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 0,
@@ -228,7 +228,7 @@
         "redondance": 60
       }
     },
-    "separerAppartenances+nouvelleTable": {
+    "separerOrganisations+nouvelleTable": {
       "empreinte": "b97d6d1666c04024d0958b44e04667d0c68b205ef0a8a8473aafa61eaf688cbe",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 1,
@@ -239,7 +239,7 @@
         "redondance": 58
       }
     },
-    "separerAppartenances+varierAppartenances": {
+    "separerOrganisations+varierOrganisations": {
       "empreinte": "1765e4f6977feac2298a40c8558b76cec322b2ddd3783db78b1fbe923aa1e88e",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 0,
@@ -250,7 +250,7 @@
         "redondance": 60
       }
     },
-    "separerAppartenances": {
+    "separerOrganisations": {
       "empreinte": "caceccc8edeed9a9dcbd999308cb3a8b1bbca95475d9eddbbeb3563e4749ed40",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 1,
@@ -261,7 +261,7 @@
         "redondance": 58
       }
     },
-    "nouveauxVoisins+nouvelleTable+varierAppartenances": {
+    "nouveauxVoisins+nouvelleTable+varierOrganisations": {
       "empreinte": "9e498d46ae56717fe5fee4cd33f06bc0c159116cfce761bac73969e85d668983",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 1,
@@ -283,7 +283,7 @@
         "redondance": 58
       }
     },
-    "nouveauxVoisins+varierAppartenances": {
+    "nouveauxVoisins+varierOrganisations": {
       "empreinte": "2104c85460bc6751ec96249c8a65b5a5b09cb3028f6455d57145596b2ed893ef",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 1,
@@ -305,7 +305,7 @@
         "redondance": 58
       }
     },
-    "nouvelleTable+varierAppartenances": {
+    "nouvelleTable+varierOrganisations": {
       "empreinte": "f680569b067ea17677aae9659dea9977e528171dd28c788a6b9536da28316732",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 1,
@@ -327,7 +327,7 @@
         "redondance": 58
       }
     },
-    "varierAppartenances": {
+    "varierOrganisations": {
       "empreinte": "c3df5155baa7cbbb7d0b980c9fbd071247e2934ce19732137291b6bad66fcdcc",
       "grandeurs": {
         "ecartAuPlafondAPrioriMax": 0,

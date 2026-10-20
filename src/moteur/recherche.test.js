@@ -6,7 +6,7 @@
 // est son rang dans la suite des graines dérivées, et son plan sort de sa
 // graine dérivée, de son compte d'arrêt et de son historique, trois champs à
 // partir desquels regenerer le rend ; chaque plan rendu tient les invariants
-// et les réservations, et l'appartenance d'un ancré y pèse comme une autre ;
+// et les réservations, et l'organisation d'un ancré y pèse comme une autre ;
 // une salle trop petite est refusée avec le nombre de places manquantes ;
 // l'avancement se rapporte toutes les 1 000 itérations, une descente
 // s'arrête sur un score nul, une annulation ne rend rien ; le placement
@@ -87,22 +87,22 @@ import {
 } from '../../test/empreintes_moteur.js';
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 const TOUTES_CONTRAINTES = {
-  separerAppartenances: true,
+  separerOrganisations: true,
   nouveauxVoisins: true,
   nouvelleTable: true,
-  varierAppartenances: true,
+  varierOrganisations: true,
 };
 const NOMS_CONTRAINTES = [
-  'separerAppartenances',
+  'separerOrganisations',
   'nouveauxVoisins',
   'nouvelleTable',
-  'varierAppartenances',
+  'varierOrganisations',
 ];
 // Longueur d'historique que rechercher prend quand les réglages n'en donnent
 // pas (plan, ReglagesGeneration).
@@ -114,11 +114,11 @@ const demo = (cle) => CATALOGUE.find((entree) => entree.cle === cle).construire(
 const tous = (participant, table) => ({ participant, table, portee: 'tous' });
 const auTour = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
 
-// Configuration dont le participant d'id i + 1 porte appartenances[i] ; les
+// Configuration dont le participant d'id i + 1 porte organisations[i] ; les
 // tables reçoivent leurs numéros dans l'ordre de la liste ; un id cité dans
 // exclus est exclu.
 function configurationDe({
-  appartenances,
+  organisations,
   tables,
   tours,
   reservations = [],
@@ -126,10 +126,10 @@ function configurationDe({
   exclus = [],
 }) {
   return {
-    participants: appartenances.map((appartenance, i) => ({
+    participants: organisations.map((organisation, i) => ({
       id: i + 1,
       nom: `P${i + 1}`,
-      appartenance,
+      organisation,
       exclu: exclus.includes(i + 1),
     })),
     tables: tables.map(({ id, capacite }, i) => ({ id, numero: i + 1, capacite })),
@@ -146,7 +146,7 @@ function configurationDe({
 // à la table 10 et au tour 3 à la table 20. Huit couples (réservation, tour).
 const salleReservee = () =>
   configurationDe({
-    appartenances: ['A', 'B', 'A', null, 'B', 'A', null, 'B', null],
+    organisations: ['A', 'B', 'A', null, 'B', 'A', null, 'B', null],
     tables: [
       { id: 10, capacite: 4 },
       { id: 20, capacite: 3 },
@@ -180,13 +180,13 @@ function reservationsRompues(configuration, plan) {
   return { rompues, examines };
 }
 
-// Six participants sans appartenance, trois tables de 2, un tour, aucune
+// Six participants sans organisation, trois tables de 2, un tour, aucune
 // contrainte : chacun rencontre son seul voisin, qui est son plafond a
 // priori, quel que soit le placement. Le score est nul dès le placement
 // initial, et chaque descente rend ce placement.
 const troisTablesDeDeux = () =>
   configurationDe({
-    appartenances: Array(6).fill(null),
+    organisations: Array(6).fill(null),
     tables: [
       { id: 1, capacite: 2 },
       { id: 2, capacite: 2 },
@@ -294,7 +294,7 @@ function grandeursBrutes(configuration, instance, tableDe, aPriori) {
   }
   const rencontres = Array(N).fill(0);
   const affilies = Array(N).fill(0);
-  const appartenances = Array.from({ length: N }, () => new Set());
+  const organisations = Array.from({ length: N }, () => new Set());
   let cumulees = 0;
   let distinctes = 0;
   let excedentPaires = 0;
@@ -307,7 +307,7 @@ function grandeursBrutes(configuration, instance, tableDe, aPriori) {
         rencontres[p] += 1;
         if (groupe[q] !== SANS_GROUPE) {
           affilies[p] += 1;
-          appartenances[p].add(groupe[q]);
+          organisations[p].add(groupe[q]);
         }
       }
       if (groupe[a] !== SANS_GROUPE && groupe[a] === groupe[b]) {
@@ -344,7 +344,7 @@ function grandeursBrutes(configuration, instance, tableDe, aPriori) {
     collisionsCumulees: cumulees,
     excedentPaires,
     retoursChoisis: retours,
-    redondance: affilies.reduce((somme, f, p) => somme + f - appartenances[p].size, 0),
+    redondance: affilies.reduce((somme, f, p) => somme + f - organisations[p].size, 0),
     toursHorsObjectif: hors.reduce((somme, h) => somme + h, 0),
     jamaisServies: possibles.filter((P, p) => P > 0 && servis[p] === 0).length,
     horsObjectifMax,
@@ -852,7 +852,7 @@ describe('regenerer : une proposition depuis ses seuls champs (§ 5.7, § 8.9)',
       );
     }
     const tropPetite = configurationDe({
-      appartenances: Array(11).fill(null),
+      organisations: Array(11).fill(null),
       tables: [
         { id: 1, capacite: 4 },
         { id: 2, capacite: 4 },
@@ -895,16 +895,16 @@ describe('rechercher : plans valides (§ 5.2, § 5.9, § 14.12)', () => {
     assert.equal(examines, 2 * 8 + 2 * 33 * 4);
   });
 
-  test("l'appartenance d'un ancré compte : son collègue mobile n'est jamais assis à sa table", () => {
-    // Trois tables de 3, trois tours. 1 et 2 portent l'appartenance X, 1 est
+  test("l'organisation d'un ancré compte : son collègue mobile n'est jamais assis à sa table", () => {
+    // Trois tables de 3, trois tours. 1 et 2 portent l'organisation X, 1 est
     // ancré à la table 1. Chacun peut rencontrer six personnes sans croiser
     // personne deux fois, 2 compris, sans jamais s'asseoir à la table 1 :
     // trois des quatre classes parallèles du plan affine d'ordre 3, celle où
     // 1 et 2 se retrouvent écartée. Éviter la table 1 coûte à 2 au moins un
     // retour, que la séparation fait accepter. Une recherche qui ignorerait
-    // l'appartenance de l'ancré l'y assiérait pour épargner ce retour.
+    // l'organisation de l'ancré l'y assiérait pour épargner ce retour.
     const configuration = configurationDe({
-      appartenances: ['X', 'X', null, null, null, null, null, null, null],
+      organisations: ['X', 'X', null, null, null, null, null, null, null],
       tables: [
         { id: 1, capacite: 3 },
         { id: 2, capacite: 3 },
@@ -912,7 +912,7 @@ describe('rechercher : plans valides (§ 5.2, § 5.9, § 14.12)', () => {
       ],
       tours: 3,
       reservations: [tous(1, 1)],
-      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true, nouvelleTable: true },
+      contraintes: { ...SANS_CONTRAINTE, separerOrganisations: true, nouvelleTable: true },
     });
     const instance = normaliser(configuration);
     const propositions = rechercher(configuration, { graine: 4, arret: 20_000, nombre: 3 });
@@ -940,10 +940,10 @@ describe('rechercher : plans valides (§ 5.2, § 5.9, § 14.12)', () => {
       { id: 2, capacite: 4 },
       { id: 3, capacite: 2 },
     ];
-    const appartenances = Array(12).fill(null);
-    const sansReservation = configurationDe({ appartenances, tables, tours: 2, exclus: [12] });
+    const organisations = Array(12).fill(null);
+    const sansReservation = configurationDe({ organisations, tables, tours: 2, exclus: [12] });
     const avecReservations = configurationDe({
-      appartenances,
+      organisations,
       tables,
       tours: 2,
       exclus: [12],
@@ -957,7 +957,7 @@ describe('rechercher : plans valides (§ 5.2, § 5.9, § 14.12)', () => {
         details: { placesManquantes: 1 },
       });
     }
-    const unDePlus = configurationDe({ appartenances: Array(13).fill(null), tables, tours: 2 });
+    const unDePlus = configurationDe({ organisations: Array(13).fill(null), tables, tours: 2 });
     assert.throws(() => rechercher(unDePlus, reglages), {
       code: 'PLACES_MANQUANTES',
       details: { placesManquantes: 3 },
@@ -1105,18 +1105,18 @@ describe('état de recherche : placement initial et score incrémental (§ 5.10)
 describe("rechercher : l'échange avec une place fantôme (paragraphe « Mouvement » de recherche.js)", () => {
   test("une personne passe au siège vide d'une autre table : deux tables de 3 pour A, A, B, B, aucune collision sur vingt graines", () => {
     // Le placement initial assied trois personnes à la première table et la
-    // quatrième à la seconde : deux d'une même appartenance s'y retrouvent.
+    // quatrième à la seconde : deux d'une même organisation s'y retrouvent.
     // Un échange entre deux personnes garde trois et une ; seul l'échange
     // avec une place fantôme fait passer quelqu'un à la seconde table. À
     // deux par table, chacune peut réunir un A et un B, sans collision.
     const configuration = configurationDe({
-      appartenances: ['A', 'A', 'B', 'B'],
+      organisations: ['A', 'A', 'B', 'B'],
       tables: [
         { id: 1, capacite: 3 },
         { id: 2, capacite: 3 },
       ],
       tours: 1,
-      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+      contraintes: { ...SANS_CONTRAINTE, separerOrganisations: true },
     });
     const instance = normaliser(configuration);
     const collisions = [];
@@ -1149,7 +1149,7 @@ describe("mouvement : les tirages d'un tour et ses refus (paragraphe « Mouvemen
   // table 1 et 4 à la table 2 : aucun siège mobile.
   const configuration = () =>
     configurationDe({
-      appartenances: [null, null, null, null],
+      organisations: [null, null, null, null],
       tables: [
         { id: 1, capacite: 2 },
         { id: 2, capacite: 2 },
@@ -1189,7 +1189,7 @@ describe("mouvement : les tirages d'un tour et ses refus (paragraphe « Mouvemen
     // assied aux sièges 0 et 1, ceux de la table 1 ; les sièges 2 à 5, aux
     // tables 2 et 3, sont des places fantômes.
     const instance = normaliser(configurationDe({
-      appartenances: [null, null],
+      organisations: [null, null],
       tables: [
         { id: 1, capacite: 2 },
         { id: 2, capacite: 2 },
@@ -1381,7 +1381,7 @@ function soireeAObjectifs({ mode = 'places', priorites } = {}) {
     participants: Array.from({ length: 14 }, (_, rang) => ({
       id: rang + 1,
       nom: `P${rang + 1}`,
-      appartenance: ['A', 'B', 'C', null][rang % 4],
+      organisation: ['A', 'B', 'C', null][rang % 4],
       exclu: false,
       ...(rang < etiquettes.length ? { etiquettes: etiquettes[rang] } : {}),
       ...(anime.has(rang + 1) ? { anime: anime.get(rang + 1) } : {}),
@@ -1596,7 +1596,7 @@ describe('score : chaque critère de CRITERES se lit sous sa propre grandeur, so
 
 describe("état de recherche : valeurs de départ, bornes de la composition, comptes au-delà d'un octet et de seize bits (§ 5.10)", () => {
   test('une personne seule ne peut rencontrer personne : écart et score nuls dès le placement, aucun mouvement évalué', () => {
-    const configuration = configurationDe({ appartenances: [null], tables: [{ id: 1, capacite: 2 }], tours: 2 });
+    const configuration = configurationDe({ organisations: [null], tables: [{ id: 1, capacite: 2 }], tours: 2 });
     const instance = normaliser(configuration);
     assert.deepEqual(plafondsAPriori(instance), [0]);
     const etat = creerEtat(instance, creerPcg32(1, FLUX.RECHERCHE));
@@ -1612,7 +1612,7 @@ describe("état de recherche : valeurs de départ, bornes de la composition, com
     // Deux personnes « finance » à la seule table, « finance » : chacune y
     // est servie à son seul tour possible.
     const servies = {
-      participants: [1, 2].map((id) => ({ id, nom: `F${id}`, appartenance: null, exclu: false, etiquettes: ['finance'] })),
+      participants: [1, 2].map((id) => ({ id, nom: `F${id}`, organisation: null, exclu: false, etiquettes: ['finance'] })),
       tables: [{ id: 1, numero: 1, capacite: 2 }],
       tours: 1,
       reservations: [],
@@ -1642,7 +1642,7 @@ describe("état de recherche : valeurs de départ, bornes de la composition, com
     const R = 257;
     const anime = Array.from({ length: R }, (_, r) => r + 1);
     const base = configurationDe({
-      appartenances: [null, null],
+      organisations: [null, null],
       tables: [{ id: 1, capacite: 2 }],
       tours: R,
       reservations: [tous(1, 1), tous(2, 1)],
@@ -1658,7 +1658,7 @@ describe("état de recherche : valeurs de départ, bornes de la composition, com
 
   test("deux personnes ancrées à la même table pendant 65 537 tours ont une seule rencontre chacune : le compte d'une paire dépasse seize bits", () => {
     const configuration = configurationDe({
-      appartenances: [null, null],
+      organisations: [null, null],
       tables: [{ id: 1, capacite: 2 }],
       tours: 65_537,
       reservations: [tous(1, 1), tous(2, 1)],
@@ -1725,13 +1725,13 @@ describe("rechercher : l'arrêt sur le n-uplet nul lit chaque composante (§ 5.1
     // les collisions de la composante de tête varient. Un placement qui
     // réunit les deux A et les deux B n'est pas nul : la descente le quitte.
     const base = configurationDe({
-      appartenances: ['A', 'A', 'B', 'B'],
+      organisations: ['A', 'A', 'B', 'B'],
       tables: [
         { id: 1, capacite: 2 },
         { id: 2, capacite: 2 },
       ],
       tours: 1,
-      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+      contraintes: { ...SANS_CONTRAINTE, separerOrganisations: true },
     });
     const configuration = {
       ...base,
@@ -1747,10 +1747,10 @@ describe("rechercher : l'arrêt sur le n-uplet nul lit chaque composante (§ 5.1
   });
 });
 
-// Dix personnes « finance », dont 10 d'appartenance A ; 11, sans étiquette,
-// d'appartenance A, réservé à la table « finance » de huit places pour la
-// soirée ; 12, sans étiquette ni appartenance. Une table sans objectif de
-// quatre, quatre tours, la seule case « séparer les appartenances » cochée
+// Dix personnes « finance », dont 10 d'organisation A ; 11, sans étiquette,
+// d'organisation A, réservé à la table « finance » de huit places pour la
+// soirée ; 12, sans étiquette ni organisation. Une table sans objectif de
+// quatre, quatre tours, la seule case « séparer les organisations » cochée
 // hors des objectifs ; les tours hors objectif au premier palier, les
 // collisions cumulées au deuxième, l'écart au troisième. Chaque tour où 10
 // est servi coûte une collision avec 11 sans changer les tours hors
@@ -1760,14 +1760,14 @@ function soireeFinance(mode) {
   const premiers = ['toursHorsObjectif', 'collisionsCumulees', 'ecartAuPlafondAPrioriMax'];
   return {
     participants: [
-      ...Array.from({ length: 10 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, appartenance: rang === 9 ? 'A' : null, exclu: false, etiquettes: ['finance'] })),
-      { id: 11, nom: 'G11', appartenance: 'A', exclu: false },
-      { id: 12, nom: 'G12', appartenance: null, exclu: false },
+      ...Array.from({ length: 10 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, organisation: rang === 9 ? 'A' : null, exclu: false, etiquettes: ['finance'] })),
+      { id: 11, nom: 'G11', organisation: 'A', exclu: false },
+      { id: 12, nom: 'G12', organisation: null, exclu: false },
     ],
     tables: [{ id: 1, numero: 1, capacite: 8 }, { id: 2, numero: 2, capacite: 4 }],
     tours: 4,
     reservations: [tous(11, 1)],
-    contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+    contraintes: { ...SANS_CONTRAINTE, separerOrganisations: true },
     objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }],
     priorites: [...premiers.map((nom) => [e(nom)]), ...CRITERES.filter((nom) => !premiers.includes(nom)).map((nom) => [e(nom)])],
     ...(mode === 'places' ? {} : { modeObjectifs: mode }),
@@ -1830,7 +1830,7 @@ describe('rechercher : chaque mode descend jusqu’aux planchers du diagnostic (
     for (const mode of ['minimum', 'chacun']) {
       const configuration = {
         priorites: [[e('toursHorsObjectif')], [e('ecartAuPlafondAPrioriMax')], ...parDefaut().slice(1).filter(([{ critere }]) => critere !== 'toursHorsObjectif')],
-        participants: Array.from({ length: 6 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, appartenance: null, exclu: false, etiquettes: ['finance'] })),
+        participants: Array.from({ length: 6 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, organisation: null, exclu: false, etiquettes: ['finance'] })),
         tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 6 }],
         tours: 1,
         reservations: [],
@@ -1917,7 +1917,7 @@ function confronterCourse(configuration, proposition, nom) {
 // s'arrête sur le n-uplet nul, toutes à la seconde, avant son compte.
 const soireeQuiSAnnule = () => ({
   priorites: [[e('toursHorsObjectif')], [e('ecartAuPlafondAPrioriMax')], ...parDefaut().slice(1).filter(([{ critere }]) => critere !== 'toursHorsObjectif')],
-  participants: Array.from({ length: 6 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, appartenance: null, exclu: false, etiquettes: ['finance'] })),
+  participants: Array.from({ length: 6 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, organisation: null, exclu: false, etiquettes: ['finance'] })),
   tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 6 }],
   tours: 1,
   reservations: [],
@@ -2396,7 +2396,7 @@ describe('repartir : une dérivée continue son départ (§ 5.7, D69 à D71, C24
     // cinq personnes sont réservées : deux sièges restent mobiles, à la
     // même table ; au tour 3, six le sont, un seul siège reste mobile.
     const configuration = configurationDe({
-      appartenances: ['A', 'B', 'A', 'B', 'A', 'B', null],
+      organisations: ['A', 'B', 'A', 'B', 'A', 'B', null],
       tables: [
         { id: 1, capacite: 2 },
         { id: 2, capacite: 2 },
@@ -2477,13 +2477,13 @@ describe('repartir : une dérivée continue son départ (§ 5.7, D69 à D71, C24
     // départ : l'acceptation compare dans l'ordre des contraintes, et chaque
     // itération compte sans changement.
     const configuration = configurationDe({
-      appartenances: ['A', 'A', 'A', 'B'],
+      organisations: ['A', 'A', 'A', 'B'],
       tables: [
         { id: 1, capacite: 2 },
         { id: 2, capacite: 2 },
       ],
       tours: 1,
-      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+      contraintes: { ...SANS_CONTRAINTE, separerOrganisations: true },
     });
     const depart = { plan: { tables: [1, 2], tours: [[[1, 2], [3, 4]]], reserves: [[]] }, toursFiges: [] };
     const relances = [10, 11, 20, 21].map((arret) =>
@@ -2681,11 +2681,11 @@ function fautesDuPlan(configuration, plan, reservesImposees = []) {
   return fautes;
 }
 
-// Deux tables de 2, cinq personnes sans appartenance, deux tours : quatre
+// Deux tables de 2, cinq personnes sans organisation, deux tours : quatre
 // sièges par tour ; presences dit qui est absent où.
 const deuxTablesDeDeux = (presences) =>
   avecPresences(configurationDe({
-    appartenances: Array(5).fill(null),
+    organisations: Array(5).fill(null),
     tables: [
       { id: 1, capacite: 2 },
       { id: 2, capacite: 2 },
@@ -2712,7 +2712,7 @@ describe('rechercher : la présence par tour (§ 5.9, § 5.10)', () => {
       // 5 aux tours 1 et 2 ; il manque 2, 1 et 0 places.
       [
         avecPresences(configurationDe({
-          appartenances: Array(6).fill(null),
+          organisations: Array(6).fill(null),
           tables: [
             { id: 1, capacite: 2 },
             { id: 2, capacite: 2 },
@@ -2890,7 +2890,7 @@ describe('repartir : le départ ajusté à la présence (§ 5.7)', () => {
     }
   });
 
-  // Au tour 2, 6 (appartenance A) n'est plus assise ; la table 10 est pleine,
+  // Au tour 2, 6 (organisation A) n'est plus assise ; la table 10 est pleine,
   // les tables 20 et 30 gardent chacune une place. La table 20, la première
   // dans l'ordre des sièges, assied 1, de A ; la table 30 assied deux B.
   const departSansSix = () => departRetouche((p) => { p.tours[1] = [[2, 3, 4, 7], [1, 9], [5, 8]]; });
@@ -2935,19 +2935,19 @@ describe('repartir : le départ ajusté à la présence (§ 5.7)', () => {
       copie.tours[0][i].push(4);
       return copie;
     };
-    const egales = configurationDe({ appartenances: [null, null, null, null], tables, tours: 2 });
+    const egales = configurationDe({ organisations: [null, null, null, null], tables, tours: 2 });
     const instance = normaliser(egales);
     const { ORDRE_DU_SCORE } = ordresDe(instance);
     const [a1, a2, a3] = [0, 1, 2].map((i) => scoreDuPlan(instance, avecQuatre(i)));
     assert.equal(comparerDans(ORDRE_DU_SCORE, a1, a2), 0);
     assert.ok(comparerDans(ORDRE_DU_SCORE, a1, a3) < 0);
     assert.equal(tableAu(departAjuste(egales, { plan, toursFiges: [1] }), 4, 1), 1);
-    // 1 et 4 de même appartenance, séparation cochée : la table 2 l'emporte.
+    // 1 et 4 de même organisation, séparation cochée : la table 2 l'emporte.
     const collegues = configurationDe({
-      appartenances: ['A', null, null, 'A'],
+      organisations: ['A', null, null, 'A'],
       tables,
       tours: 2,
-      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+      contraintes: { ...SANS_CONTRAINTE, separerOrganisations: true },
     });
     assert.equal(tableAu(departAjuste(collegues, { plan, toursFiges: [1] }), 4, 1), 2);
     for (const proposition of sousLeDepart(collegues, { plan, toursFiges: [1] })) {
@@ -2956,12 +2956,12 @@ describe('repartir : le départ ajusté à la présence (§ 5.7)', () => {
   });
 
   test("deux arrivantes au même tour figé : la seconde prend la première table à égalité, avant celle de son siège canonique", () => {
-    // Six personnes sans appartenance, tables 1 et 2 de 2 places, table 3 de
+    // Six personnes sans organisation, tables 1 et 2 de 2 places, table 3 de
     // 3 places, deux tours, le tour 1 figé. Au tour 1, 4 et 5 arrivent, leurs
     // sièges canoniques aux tables 1 et 2. 4 part à la table 3 ; pour 5, les
     // tables 1 et 2 se valent, et la table 1 vient la première.
     const configuration = configurationDe({
-      appartenances: Array(6).fill(null),
+      organisations: Array(6).fill(null),
       tables: [
         { id: 1, capacite: 2 },
         { id: 2, capacite: 2 },
@@ -2991,14 +2991,14 @@ describe('repartir : le départ ajusté à la présence (§ 5.7)', () => {
     // collègue de 1, est réservée à la table 1 au tour 1, où le départ ne
     // l'assied pas : la table 2, sans collègue, vaudrait mieux.
     const configuration = configurationDe({
-      appartenances: ['A', 'A', null],
+      organisations: ['A', 'A', null],
       tables: [
         { id: 1, capacite: 2 },
         { id: 2, capacite: 2 },
       ],
       tours: 2,
       reservations: [auTour(2, 1, 1)],
-      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+      contraintes: { ...SANS_CONTRAINTE, separerOrganisations: true },
     });
     const plan = { tables: [1, 2], tours: [[[1], [3]], [[1, 3], [2]]], reserves: [[], []] };
     const instance = normaliser(configuration);
@@ -3243,7 +3243,7 @@ describe('repartir : le départ ajusté à la présence (§ 5.7)', () => {
 const soireeAReservesImposees = () => ({
   participants: Array.from({ length: 8 }, (_, rang) => ({
     id: rang + 1,
-    appartenance: ['A', 'B', null, 'A'][rang % 4],
+    organisation: ['A', 'B', null, 'A'][rang % 4],
     ...(rang + 1 === 7 ? { etiquettes: ['x'] } : {}),
     ...(rang + 1 === 4 ? { anime: [2] } : {}),
   })),
@@ -3322,7 +3322,7 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
     // Deux tables de 3, cinq personnes, deux tours ; 4 est absente au tour 2.
     // Au tour 2, la réserve liste 3, présente, puis deux fois 4.
     const configuration = avecPresences(configurationDe({
-      appartenances: Array(5).fill(null),
+      organisations: Array(5).fill(null),
       tables: [
         { id: 1, capacite: 3 },
         { id: 2, capacite: 3 },
@@ -3346,7 +3346,7 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
     // première place libre, à la table 10, et 5 la suivante, à la table 30.
     // 6, à la table 30, ne bouge pas.
     const configuration = configurationDe({
-      appartenances: Array(6).fill(null),
+      organisations: Array(6).fill(null),
       tables: [
         { id: 10, capacite: 2 },
         { id: 20, capacite: 2 },
@@ -3371,7 +3371,7 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
 
   test('au tour figé, deux arrivantes fixées qui font déborder la première table : DEPART_INCOMPATIBLE sur cette table', () => {
     const configuration = configurationDe({
-      appartenances: Array(6).fill(null),
+      organisations: Array(6).fill(null),
       tables: [
         { id: 10, capacite: 2 },
         { id: 20, capacite: 2 },
@@ -3396,7 +3396,7 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
     const configuration = {
       participants: Array.from({ length: 8 }, (_, rang) => ({
         id: rang + 1,
-        appartenance: null,
+        organisation: null,
         ...(rang + 1 === 3 ? { anime: [1] } : {}),
         ...(rang + 1 === 4 || rang + 1 === 5 ? { anime: [2] } : {}),
       })),
@@ -3429,7 +3429,7 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
     // table 1, qu'au tour qu'elle anime, et ce tour figé la laisse en réserve.
     for (const tour of [1, 2]) {
       const configuration = {
-        participants: Array.from({ length: 5 }, (_, rang) => ({ id: rang + 1, appartenance: null, ...(rang === 0 ? { anime: [tour] } : {}) })),
+        participants: Array.from({ length: 5 }, (_, rang) => ({ id: rang + 1, organisation: null, ...(rang === 0 ? { anime: [tour] } : {}) })),
         tables: [1, 2].map((id) => ({ id, numero: id, capacite: 3 })),
         tours: 2,
         reservations: [auTour(1, 1, tour)],
@@ -3456,7 +3456,7 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
     // imposée. Au tour 1, sans fixée, la table 2 assied 1, 2 et 3 ; 4, 5 et
     // 6 arrivent.
     const configuration = configurationDe({
-      appartenances: Array(6).fill(null),
+      organisations: Array(6).fill(null),
       tables: [
         { id: 1, capacite: 3 },
         { id: 2, capacite: 3 },
@@ -3485,7 +3485,7 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
     const configuration = {
       participants: Array.from({ length: 5 }, (_, rang) => ({
         id: rang + 1,
-        appartenance: null,
+        organisation: null,
         ...(rang + 1 === 3 || rang + 1 === 4 ? { etiquettes: ['x'] } : {}),
       })),
       tables: [
@@ -3518,11 +3518,11 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
     // table 1, auprès de 1, sa collègue. À la table 3, elle retrouverait 4 :
     // la table 2 l'emporte.
     const configuration = configurationDe({
-      appartenances: ['A', null, 'A', null],
+      organisations: ['A', null, 'A', null],
       tables: [1, 2, 3].map((id) => ({ id, capacite: 2 })),
       tours: 2,
       reservations: [auTour(2, 2, 2)],
-      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+      contraintes: { ...SANS_CONTRAINTE, separerOrganisations: true },
     });
     const plan = { tables: [1, 2, 3], tours: [[[1, 2], [3, 4], []], [[1], [2], [4]]], reserves: [[], []] };
     assert.equal(tableAu(departAjuste(configuration, { plan, toursFiges: [] }), 3, 2), 1);
@@ -3531,7 +3531,7 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
 
   test('une fixée à la première place de sa table, en réserve imposée au tour 1, la reprend au tour 2', () => {
     const configuration = configurationDe({
-      appartenances: Array(4).fill(null),
+      organisations: Array(4).fill(null),
       tables: [
         { id: 1, capacite: 2 },
         { id: 2, capacite: 2 },

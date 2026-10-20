@@ -48,11 +48,11 @@ import { ErreurCommande as ErreurDesErreurs, refus } from './erreurs.js';
 
 const V1 = VERSION.affichee;
 
-const personne = (id, nom, prenom = null, appartenance = null) => ({
+const personne = (id, nom, prenom = null, organisation = null) => ({
   id,
   nom,
   prenom,
-  appartenance,
+  organisation,
   courriel: null,
   titrePressenti: null,
   notes: null,
@@ -129,7 +129,7 @@ function objetsDe(valeur) {
   return vus;
 }
 
-const CSV_DEUX = 'nom;prenom;appartenance\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
+const CSV_DEUX = 'nom;prenom;organisation\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
   test("le registre porte les onze commandes d'A1, changerEtiquettes, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
@@ -192,7 +192,7 @@ describe('commandes : les participants (§ 4, § 4.4, § 10.2)', () => {
     assert.equal(libelle, 'Ajouté Pervenche');
     assert.deepEqual(avertissements, []);
     const complet = executer('ajouterParticipant', chargeEssai(), {
-      champs: { nom: 'Parasol', prenom: 'Iris', appartenance: 'Club des Merles', courriel: '', notes: ' arrive tard ', exclu: true },
+      champs: { nom: 'Parasol', prenom: 'Iris', organisation: 'Club des Merles', courriel: '', notes: ' arrive tard ', exclu: true },
     });
     assert.deepEqual(complet.charge.participants.at(-1), {
       ...personne(5, 'Parasol', 'Iris', 'Club des Merles'),
@@ -434,7 +434,7 @@ describe("commandes : l'import (§ 10.1)", () => {
     const avant = chargeEssai();
     const apercu = apercevoir(CSV_DEUX, { participants: avant.participants });
     const { charge, libelle, resume } = executer('importerParticipants', avant, { apercu, mode: 'ajouter' });
-    assert.deepEqual(charge.participants.slice(4).map(({ id, nom, prenom, appartenance }) => [id, nom, prenom, appartenance]), [
+    assert.deepEqual(charge.participants.slice(4).map(({ id, nom, prenom, organisation }) => [id, nom, prenom, organisation]), [
       [5, 'Ancolie', 'Bastien', 'Club des Merles'],
       [6, 'Bruyère', 'Capucine', null],
     ]);
@@ -494,7 +494,7 @@ describe("commandes : l'import (§ 10.1)", () => {
     });
     const ambigu = apercevoir('nom;organisation;entreprise\nAncolie;A;B\n', { participants: avant.participants });
     refuse(() => executer('importerParticipants', avant, { apercu: ambigu, mode: 'ajouter' }), 'AMBIGUITE', {
-      champs: ['appartenance'],
+      champs: ['organisation'],
       remede: null,
     });
     const bloquee = { ...avant, evenement: { ...avant.evenement, etat: 'bloque' } };

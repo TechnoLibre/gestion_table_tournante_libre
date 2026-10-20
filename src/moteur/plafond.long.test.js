@@ -31,10 +31,10 @@ import {
 } from './plafond.js';
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
 // Graine de la grille, écrite ici (§ 14.12) ; chaque case de la grille en
@@ -56,7 +56,7 @@ function instanceDe({ capacites, ancres, mobiles, tours, partiels = [], presence
   const nouveau = () => {
     const id = participants.length + 1;
     const presence = presences[id - 1];
-    participants.push({ id, nom: `P${id}`, appartenance: null, ...(presence === undefined ? {} : { presence }) });
+    participants.push({ id, nom: `P${id}`, organisation: null, ...(presence === undefined ? {} : { presence }) });
     return id;
   };
   ancres.forEach((a, t) => {
@@ -473,20 +473,20 @@ describe("plafond a priori : le coût, sous un seuil tiré d'une référence (§
   });
 });
 
-// Appartenances inventées des salles énumérées.
+// Organisations inventées des salles énumérées.
 const AUBIER = 'Coopérative Aubier';
 const RESSAC = 'Atelier Ressac';
 const BRISANT = 'Collectif Brisant';
 
 /**
- * Instance d'une salle aux appartenances données : personnes[i] = [id,
- * appartenance ou null] ; la table d'index t a la capacité capacites[t] et
+ * Instance d'une salle aux organisations données : personnes[i] = [id,
+ * organisation ou null] ; la table d'index t a la capacité capacites[t] et
  * l'identifiant 100 + t ; reservations : [id, index de table, tour ou null],
  * null pour tous les tours.
  */
 function salle({ personnes, capacites, tours, reservations }) {
   return normaliser({
-    participants: personnes.map(([id, appartenance]) => ({ id, nom: `P${id}`, appartenance })),
+    participants: personnes.map(([id, organisation]) => ({ id, nom: `P${id}`, organisation })),
     tables: capacites.map((capacite, t) => ({ id: 100 + t, numero: t + 1, capacite })),
     tours,
     reservations: reservations.map(([participant, t, tour]) =>
@@ -576,11 +576,11 @@ describe('borne de diversité : chaque plan de deux salles inventées (§ 5.5, B
     let avecReserve = 0;
     const plans = enumererPlans(instance, reserve, (tableDe) => {
       const { phiAffilies, aMax } = borneDiversite(instance, tableDe);
-      const { appartenancesVues, affilies } = mesurerPlan(instance, tableDe);
+      const { organisationsVues, affilies } = mesurerPlan(instance, tableDe);
       if (tableDe.includes(RESERVE)) avecReserve += 1;
       for (let p = 0; p < instance.N; p += 1) {
         const id = instance.ids[p];
-        if (appartenancesVues[p] > aMax[p]) ecarts.push(`${tableDe.join(',')} : A(${id}) > A_max`);
+        if (organisationsVues[p] > aMax[p]) ecarts.push(`${tableDe.join(',')} : A(${id}) > A_max`);
         if (affilies[p] > phiAffilies[p]) ecarts.push(`${tableDe.join(',')} : |F(${id})| > Φ_aff`);
         if (phiAffilies[p] > 0 && affilies[p] === phiAffilies[p]) atteintes.add(id);
       }
@@ -588,9 +588,9 @@ describe('borne de diversité : chaque plan de deux salles inventées (§ 5.5, B
     return { ecarts: ecarts.slice(0, 10), atteintes: [...atteintes].sort((x, y) => x - y), plans, avecReserve };
   }
 
-  test('une table de 3 et une de 2, 2 tours, la réserve permise : un ancré affilié, un partiellement fixé, une personne sans appartenance', () => {
+  test('une table de 3 et une de 2, 2 tours, la réserve permise : un ancré affilié, un partiellement fixé, une personne sans organisation', () => {
     // 1 (Aubier) ancré à la table de 3 ; 3 (Ressac) fixé à la table de 2 au
-    // tour 1 ; 2 (Aubier), 4 (Ressac), 5 sans appartenance, libres.
+    // tour 1 ; 2 (Aubier), 4 (Ressac), 5 sans organisation, libres.
     const instance = salle({
       personnes: [[1, AUBIER], [2, AUBIER], [3, RESSAC], [4, RESSAC], [5, null]],
       capacites: [3, 2],
@@ -605,7 +605,7 @@ describe('borne de diversité : chaque plan de deux salles inventées (§ 5.5, B
     assert.deepEqual(atteintes, [1, 2, 3, 4, 5]);
   });
 
-  test('trois tables de 2, 3 tours, chacun assis : un ancré seul de son appartenance, un partiellement fixé', () => {
+  test('trois tables de 2, 3 tours, chacun assis : un ancré seul de son organisation, un partiellement fixé', () => {
     // 1 (Brisant) ancré à la table d'index 2 ; 5 (Ressac) fixé à la table
     // d'index 0 au tour 2 ; 2, 3, 6 (Aubier), 4 (Ressac), libres.
     const instance = salle({

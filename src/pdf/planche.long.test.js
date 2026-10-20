@@ -40,13 +40,13 @@ function modele(n, { brouillon = false, reedition = false } = {}) {
     return {
       participant: i + 1,
       nom: nomTemoin(i),
-      appartenance: i % 3 === 0 ? 'Club des Merles' : null,
+      organisation: i % 3 === 0 ? 'Club des Merles' : null,
       lignes,
       identifiant: null,
       textes: {
         nom: nomTemoin(i),
         lignes: lignes.map((ligne) => libelle('planche.tour', ligne)),
-        appartenance: i % 3 === 0 ? 'Club des Merles' : null,
+        organisation: i % 3 === 0 ? 'Club des Merles' : null,
         pied: [libelle('planche.pied.evenement', EVENEMENT), ligneHorodatage],
         piedReduit: [libelle('planche.pied.date', EVENEMENT), ligneHorodatage],
       },

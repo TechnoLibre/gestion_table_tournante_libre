@@ -32,7 +32,7 @@ const personne = (id, nom, etiquettes) => ({
   id,
   nom,
   prenom: null,
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,

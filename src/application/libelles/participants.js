@@ -16,7 +16,7 @@ import { auxToursNommes, cite, compte, enumeration, nomDans, toursNommes } from 
 const NOMS_DES_CHAMPS = new Map([
   ['nom', 'nom'],
   ['prenom', 'prénom'],
-  ['appartenance', 'appartenance'],
+  ['organisation', 'organisation'],
   ['courriel', 'courriel'],
   ['titrePressenti', 'titre pressenti'],
   ['notes', 'notes'],

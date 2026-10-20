@@ -136,11 +136,11 @@ const NOMS = [
   ['Solveig', 'Sarcelle'],
 ];
 
-const personne = (id, nom, prenom, appartenance = null) => ({
+const personne = (id, nom, prenom, organisation = null) => ({
   id,
   nom,
   prenom,
-  appartenance,
+  organisation,
   courriel: null,
   titrePressenti: null,
   notes: null,
@@ -200,7 +200,7 @@ const toutesEnConflit = () => analyser(TEXTE_TOUTES_EN_CONFLIT).charge;
 // 2, la table 1 seule est en rencontre répétée.
 function rencontreRepetee() {
   const charge = analyser(texteLivre('petite')).charge;
-  Object.assign(charge.reglages, { separerAppartenances: false, nouvelleTable: false, varierAppartenances: false });
+  Object.assign(charge.reglages, { separerOrganisations: false, nouvelleTable: false, varierOrganisations: false });
   const tours = [
     PLAN_PARFAIT_PETITE.tours[0],
     [
@@ -712,7 +712,7 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
     expect(visible(porteur.querySelector('li span'))).toBe(true);
   });
 
-  test('le bandeau pose l\u{2019}appartenance d\u{2019}un plancher dans son propre nœud', () => {
+  test('le bandeau pose l\u{2019}organisation d\u{2019}un plancher dans son propre nœud', () => {
     const bandeau = [
       { cle: 'plan.bandeau.toutesEnConflit', details: {} },
       { cle: 'plan.bandeau.plancherGroupe', details: { groupe: 'Club des Merles', effectif: 6, plancherCumulees: 8 } },
@@ -1118,7 +1118,7 @@ describe('les trois sortes de conflit : une forme et une teinte par règle (§ 7
 });
 
 describe('la légende des conflits (§ 7.5, § 14.5)', () => {
-  const REGLAGES = { separerAppartenances: true, nouveauxVoisins: true, nouvelleTable: true, varierAppartenances: true, attribuerSieges: false };
+  const REGLAGES = { separerOrganisations: true, nouveauxVoisins: true, nouvelleTable: true, varierOrganisations: true, attribuerSieges: false };
 
   for (const theme of ['clair', 'sombre']) {
     test(`thème ${theme} : un échantillon par règle active, de la forme et de la teinte du plan, et son nom ; la pastille et ce qu\u{2019}elle compte ; texte à 4,5:1`, async () => {
@@ -1158,9 +1158,9 @@ describe('la légende des conflits (§ 7.5, § 14.5)', () => {
 
   test('une règle inactive n\u{2019}y paraît pas ; aucune règle active : la légende le dit, et garde la pastille', () => {
     const deux = monterHtml(Legende, { entrees: legendeConflits({ ...REGLAGES, nouveauxVoisins: false }) });
-    expect(tous(deux, '[data-legende-regle]').map((e) => e.dataset.legendeRegle)).toEqual(['separerAppartenances', 'nouvelleTable']);
+    expect(tous(deux, '[data-legende-regle]').map((e) => e.dataset.legendeRegle)).toEqual(['separerOrganisations', 'nouvelleTable']);
     expect(deux.querySelector('[data-marque="trameVoisins"]')).toBeNull();
-    const aucune = monterHtml(Legende, { entrees: legendeConflits({ ...REGLAGES, separerAppartenances: false, nouveauxVoisins: false, nouvelleTable: false }) });
+    const aucune = monterHtml(Legende, { entrees: legendeConflits({ ...REGLAGES, separerOrganisations: false, nouveauxVoisins: false, nouvelleTable: false }) });
     expect(tous(aucune, '[data-legende-regle]').length).toBe(0);
     expect(aucune.querySelector('[data-legende]').textContent).toContain(t('plan.legende.aucune'));
     expect(aucune.querySelector('[data-legende-pastille]')).not.toBeNull();

@@ -28,7 +28,7 @@ import { creerCharge } from '../../stockage/document.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
   FACTEUR_BOUTON,
-  appartenanceDeCharge,
+  organisationDeCharge,
   cadreDepuisRect,
   englobantDuTour,
   evidenceDe,
@@ -220,8 +220,8 @@ function chargeDEpreuve() {
     { id: 2, numero: 2, sieges: 5, forme: 'carree', position: { x: 300, y: 120 } },
   ];
   charge.participants = [
-    { id: 1, nom: 'Ombrelle', prenom: 'Iris', appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false },
-    { id: 2, nom: 'Grisaille', prenom: null, appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false },
+    { id: 1, nom: 'Ombrelle', prenom: 'Iris', organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false },
+    { id: 2, nom: 'Grisaille', prenom: null, organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false },
   ];
   return charge;
 }
@@ -259,13 +259,13 @@ describe('l’englobant d’un tour, le tour montré, les noms', () => {
     assert.equal(nomDe(2), 'Grisaille');
   });
 
-  test('appartenanceDeCharge : l’appartenance de chaque participant telle que la liste la porte, null sans appartenance ni participant', () => {
+  test('organisationDeCharge : l’organisation de chaque participant telle que la liste la porte, null sans organisation ni participant', () => {
     const charge = chargeDEpreuve();
-    charge.participants[0].appartenance = ' Cercle des Hérons';
-    const appartenanceDe = appartenanceDeCharge(charge);
-    assert.equal(appartenanceDe(1), ' Cercle des Hérons');
-    assert.equal(appartenanceDe(2), null);
-    assert.equal(appartenanceDe(99), null);
+    charge.participants[0].organisation = ' Cercle des Hérons';
+    const organisationDe = organisationDeCharge(charge);
+    assert.equal(organisationDe(1), ' Cercle des Hérons');
+    assert.equal(organisationDe(2), null);
+    assert.equal(organisationDe(99), null);
   });
 });
 

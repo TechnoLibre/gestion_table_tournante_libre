@@ -43,23 +43,23 @@ const separer = () => ({
   cle: 'diagnostic.remede.separation',
   details: {},
   commande: 'modifierReglage',
-  arguments: { cle: 'separerAppartenances', valeur: false },
+  arguments: { cle: 'separerOrganisations', valeur: false },
 });
 
 // Un remède neuf de la clé donnée.
 const remede = (cle, details = {}) => ({ cle, details });
 
-// La séparation des appartenances vidée de son sens : une seule
-// appartenance, ou une collision forcée à chaque table de chaque tour.
-function separation({ uneSeuleAppartenance, collisionPartout }) {
+// La séparation des organisations vidée de son sens : une seule
+// organisation, ou une collision forcée à chaque table de chaque tour.
+function separation({ uneSeuleOrganisation, collisionPartout }) {
   const liste = [];
-  if (uneSeuleAppartenance) liste.push({ cle: 'diagnostic.uneSeuleAppartenance', details: {}, remede: separer() });
+  if (uneSeuleOrganisation) liste.push({ cle: 'diagnostic.uneSeuleOrganisation', details: {}, remede: separer() });
   if (collisionPartout) liste.push({ cle: 'diagnostic.collisionPartout', details: {}, remede: separer() });
   return liste;
 }
 
 // Les tables à ajouter que rend le moteur, ou, quand aucune ne suffit, la
-// redistribution de l'appartenance.
+// redistribution de l'organisation.
 const remedeCollisions = ({ tablesManquantes }) =>
   tablesManquantes === null ? remede('diagnostic.remede.redistribuer') : remede('diagnostic.remede.tables', { tablesManquantes });
 
@@ -93,16 +93,16 @@ function redondance({ redondanceMinimale, remedes }, tours) {
       details: { redondanceMinimale },
       remede:
         toursSansRedondance === null
-          ? remede('diagnostic.remede.appartenances')
+          ? remede('diagnostic.remede.organisations')
           : remede('diagnostic.remede.tours', { toursSansRedondance, tours }),
     },
   ];
 }
 
-// Les animateurs d'une même appartenance, quand ils imposent au moins une
+// Les animateurs d'une même organisation, quand ils imposent au moins une
 // redondance.
-function animateurs({ animateursMemeAppartenance, redondanceImposeeParAnimateurs }) {
-  if (!animateursMemeAppartenance || redondanceImposeeParAnimateurs === 0) return [];
+function animateurs({ animateursMemeOrganisation, redondanceImposeeParAnimateurs }) {
+  if (!animateursMemeOrganisation || redondanceImposeeParAnimateurs === 0) return [];
   return [
     {
       cle: 'diagnostic.animateurs',
@@ -271,26 +271,26 @@ export function numeroDeCharge(charge) {
 
 // Les énoncés de la séparation vidée de son sens, que porte la carte de la
 // séparation.
-const CLES_SEPARATION = new Set(['diagnostic.uneSeuleAppartenance', 'diagnostic.collisionPartout']);
+const CLES_SEPARATION = new Set(['diagnostic.uneSeuleOrganisation', 'diagnostic.collisionPartout']);
 
 // Le genre et le groupe de la carte d'un énoncé.
 function carteDe({ cle, details }) {
-  if (details.groupe !== undefined) return { genre: 'appartenance', groupe: details.groupe };
+  if (details.groupe !== undefined) return { genre: 'organisation', groupe: details.groupe };
   return { genre: CLES_SEPARATION.has(cle) ? 'separation' : 'ensemble', groupe: null };
 }
 
 /**
  * Les cartes du diagnostic (§ 5.6) : les énoncés regroupés, sans en changer
  * l'ordre, par suites d'énoncés voisins de même carte — la séparation vidée
- * de son sens ('separation'), une appartenance, celle de details.groupe
- * ('appartenance'), ou le reste de l'événement ('ensemble'). Dans l'ordre
- * d'enonces, la séparation vient d'abord, puis une carte par appartenance
+ * de son sens ('separation'), une organisation, celle de details.groupe
+ * ('organisation'), ou le reste de l'événement ('ensemble'). Dans l'ordre
+ * d'enonces, la séparation vient d'abord, puis une carte par organisation
  * en collision — ses collisions et son excédent —, puis l'événement : les
  * cartes mises bout à bout redonnent la liste reçue, énoncé pour énoncé, les
  * mêmes objets. Ne modifie pas la liste.
  *
  * @param {Array<{cle: string, details: Object}>} liste  celle que rend enonces
- * @returns {Array<{genre: 'separation'|'appartenance'|'ensemble', groupe: string|null,
+ * @returns {Array<{genre: 'separation'|'organisation'|'ensemble', groupe: string|null,
  *           enonces: Array<Object>}>}
  */
 export function cartesDiagnostic(liste) {

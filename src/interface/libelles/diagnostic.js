@@ -5,7 +5,7 @@
 // commence par « diagnostic. ». Un énoncé (phrases.js) a son texte sous sa
 // clé, son remède sous diagnostic.remede.<nom>. Chaque chiffre nomme son
 // unité : une collision se compte en occurrences, une paire distincte à
-// part (§ 5.4). L'appartenance d'un groupe est une donnée : l'écran la pose
+// part (§ 5.4). L'organisation d'un groupe est une donnée : l'écran la pose
 // dans son propre nœud, avant le texte, qu'aucune entrée de cette table ne
 // lui fait porter.
 import { auxToursNommes, compte, enumeration } from '../../application/libelles/aides.js';
@@ -30,15 +30,15 @@ export const TABLE = new Map([
   // --- Le cadre de l'écran ---------------------------------------------------
   ['diagnostic.enonces', 'Ce que la configuration impose'],
   ['diagnostic.nonCalcule', 'La configuration ne se normalise pas : le diagnostic ne se calcule pas.'],
-  // Les intitulés des cartes que ne nomme pas une appartenance
+  // Les intitulés des cartes que ne nomme pas une organisation
   // (cartesDiagnostic) : la séparation vidée de son sens, puis le reste.
-  ['diagnostic.carte.separation', 'Séparation des appartenances'],
+  ['diagnostic.carte.separation', 'Séparation des organisations'],
   ['diagnostic.carte.ensemble', "Tout l'événement"],
 
   // --- La séparation vidée de son sens (§ 7.5, § 15.4) -----------------------
   [
-    'diagnostic.uneSeuleAppartenance',
-    'une seule appartenance, portée par chaque personne, sous séparation active : la séparation est vide de sens',
+    'diagnostic.uneSeuleOrganisation',
+    'une seule organisation, portée par chaque personne, sous séparation active : la séparation est vide de sens',
   ],
   ['diagnostic.collisionPartout', 'tout placement porte une collision à chaque table, à chaque tour'],
 
@@ -61,12 +61,12 @@ export const TABLE = new Map([
   [
     'diagnostic.redondance',
     ({ redondanceMinimale }) =>
-      `au moins ${compte(redondanceMinimale, 'appartenance recroisée', 'appartenances recroisées')} par personne`,
+      `au moins ${compte(redondanceMinimale, 'organisation recroisée', 'organisations recroisées')} par personne`,
   ],
   [
     'diagnostic.animateurs',
     ({ redondanceImposeeParAnimateurs }) =>
-      'tous les animateurs partagent une appartenance : chaque mobile accumule au moins ' +
+      'tous les animateurs partagent une organisation : chaque mobile accumule au moins ' +
       `${compte(redondanceImposeeParAnimateurs, 'redondance', 'redondances')} qu'aucune recherche ne réduit`,
   ],
 
@@ -142,7 +142,7 @@ export const TABLE = new Map([
   ],
 
   // --- Les remèdes -----------------------------------------------------------
-  ['diagnostic.remede.separation', 'désactiver la séparation des appartenances'],
+  ['diagnostic.remede.separation', 'désactiver la séparation des organisations'],
   [
     'diagnostic.remede.tables',
     ({ tablesManquantes }) =>
@@ -152,15 +152,15 @@ export const TABLE = new Map([
   ],
   [
     'diagnostic.remede.redistribuer',
-    "les réservations assoient des membres ensemble : répartir autrement l'appartenance la rend évitable",
+    "les réservations assoient des membres ensemble : répartir autrement l'organisation la rend évitable",
   ],
   [
     'diagnostic.remede.tours',
     ({ toursSansRedondance, tours }) =>
       `avec ${compte(toursSansRedondance, 'tour', 'tours')} au lieu de ${tours}, aucune ne le serait`,
   ],
-  ['diagnostic.remede.appartenances', "aucun nombre de tours plus petit ne l'annule : elle tient aux appartenances déclarées"],
-  ['diagnostic.remede.animateurs', 'laisser les animateurs sans appartenance déclarée, ou leur en donner des distinctes'],
+  ['diagnostic.remede.organisations', "aucun nombre de tours plus petit ne l'annule : elle tient aux organisations déclarées"],
+  ['diagnostic.remede.animateurs', 'laisser les animateurs sans organisation déclarée, ou leur en donner des distinctes'],
   [
     'diagnostic.remede.ancrage',
     'retirer des réservations de portée « tous les tours » à cette table, ou lui ajouter des places, la remet en rotation',

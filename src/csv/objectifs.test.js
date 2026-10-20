@@ -46,7 +46,7 @@ const csv = (...lignes) => lignes.map((ligne) => `${ligne}\r\n`).join('');
 const texteDe = (octets) => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(octets);
 
 const personne = (id, nom, prenom, autres = {}) => ({
-  id, nom, prenom, appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false, ...autres,
+  id, nom, prenom, organisation: null, courriel: null, titrePressenti: null, notes: null, exclu: false, ...autres,
 });
 
 const table = (id, numero, autres = {}) => ({ id, numero, sieges: null, forme: 'ronde', position: { x: 200 * id, y: 0 }, ...autres });

@@ -139,14 +139,14 @@ const surfaceDe = (svg) => svg.querySelector(':scope > rect[pointer-events="all"
 
 const infobulleDe = (cible) => cible.querySelector('[role="tooltip"]');
 
-// Le profil forgé de n personnes : rencontres croissantes, appartenances
+// Le profil forgé de n personnes : rencontres croissantes, organisations
 // rencontrées dessous, plafond réalisé en escalier, borne de diversité ;
 // marques aux rangs 2 et 4.
 function profil(n) {
   const rencontres = Array.from({ length: n }, (_, i) => 10 + Math.floor((17 * i) / Math.max(1, n - 1)));
   return {
     rencontres,
-    appartenances: rencontres.map((r) => Math.floor(r / 3)),
+    organisations: rencontres.map((r) => Math.floor(r / 3)),
     plafond: rencontres.map((_, i) => (i < n / 2 ? 27 : 26)),
     borne: rencontres.map(() => 6),
     marques: rencontres.map((_, i) => (i === 1 ? 'ancre' : i === 3 ? 'reserve' : null)),
@@ -180,7 +180,7 @@ function propsProfil(n, extra = {}) {
     synthese: 'Minimum 10 rencontres, une personne.',
     series: [
       { libelle: 'rencontres', valeurs: p.rencontres },
-      { libelle: 'appartenances rencontrées', valeurs: p.appartenances },
+      { libelle: 'organisations rencontrées', valeurs: p.organisations },
     ],
     reperes: [
       { genre: 'plafond', libelle: 'plafond réalisé', valeurs: p.plafond },
@@ -251,7 +251,7 @@ describe('graphiques : l’escalier du profil (§ 12.3, D30)', () => {
     const surface = surfaceDe(svg);
     const fin = Number(surface.getAttribute('x')) + Number(surface.getAttribute('width'));
     const textes = [...svg.querySelectorAll('text')];
-    for (const libelle of ['rencontres', 'appartenances rencontrées', 'plafond réalisé', 'borne de diversité']) {
+    for (const libelle of ['rencontres', 'organisations rencontrées', 'plafond réalisé', 'borne de diversité']) {
       const etiquette = textes.find((x) => x.textContent === libelle);
       expect(etiquette, libelle).toBeDefined();
       expect(Number(etiquette.getAttribute('x'))).toBeGreaterThan(fin);
@@ -606,7 +606,7 @@ describe('graphiques : les points de relevé (§ 12.14, D49)', () => {
     const partage = rangPartage();
     const aligner = margesPartagees(2);
     const a = await monter(Escalier, aligner(partage.avec(multiple('collisions', [9, 7, 4, 2, 1, 1])), 0), 700);
-    const b = await monter(Escalier, aligner(partage.avec(multiple('appartenances rencontrées', [3, 5, 8, 9, 10, 10])), 1), 700);
+    const b = await monter(Escalier, aligner(partage.avec(multiple('organisations rencontrées', [3, 5, 8, 9, 10, 10])), 1), 700);
     await tick();
     flushSync();
     for (const cible of [a, b]) expect(cible.querySelectorAll('[data-point-releve]')).toHaveLength(6);
@@ -642,21 +642,21 @@ describe('graphiques : les points de relevé (§ 12.14, D49)', () => {
 
 describe('graphiques : les barres (§ 12.4, § 12.13)', () => {
   const LIGNES = [
-    { id: 'aubier', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [0, 3] },
-    { id: 'long', nom: NOM_LONG, appartenance: null, valeurs: [2, 0] },
-    { id: 'ressac', nom: 'Atelier Ressac', appartenance: 2, valeurs: [1, 1] },
+    { id: 'aubier', nom: 'Coopérative Aubier', organisation: 1, valeurs: [0, 3] },
+    { id: 'long', nom: NOM_LONG, organisation: null, valeurs: [2, 0] },
+    { id: 'ressac', nom: 'Atelier Ressac', organisation: 2, valeurs: [1, 1] },
   ];
   const INFOBULLE = {
     colonnes: [
-      { cle: 'nom', libelle: 'Appartenance', genre: 'texte' },
+      { cle: 'nom', libelle: 'Organisation', genre: 'texte' },
       { cle: 'cumulees', libelle: 'Collisions cumulées', genre: 'nombre' },
     ],
     lignes: LIGNES.map((l) => ({ nom: l.nom, cumulees: l.valeurs[0] + l.valeurs[1] })),
   };
   const props = (extra) => ({
     graphique: 'collisions',
-    nom: 'Où les appartenances se retrouvent-elles ?',
-    synthese: 'Trois appartenances.',
+    nom: 'Où les organisations se retrouvent-elles ?',
+    synthese: 'Trois organisations.',
     lignes: LIGNES,
     segments: [
       { genre: 'prouve', libelle: 'prouvé inévitable' },
@@ -752,7 +752,7 @@ describe('graphiques : les barres (§ 12.4, § 12.13)', () => {
         { id: 'theo', nom: 'Théo Pervenche', valeurs: [4, 1] },
       ],
       colonnes: [
-        { genre: 'serie1', libelle: 'appartenances' },
+        { genre: 'serie1', libelle: 'organisations' },
         { genre: 'serie2', libelle: 'étiquettes' },
       ],
     });
@@ -928,7 +928,7 @@ describe('graphiques : les marques mesurées dans les deux thèmes (§ 14.5)', (
         graphique: 'collisions',
         nom: 'Collisions',
         synthese: 'Deux.',
-        lignes: [{ id: 'a', nom: 'Atelier Ressac', appartenance: 1, valeurs: [2, 1] }],
+        lignes: [{ id: 'a', nom: 'Atelier Ressac', organisation: 1, valeurs: [2, 1] }],
         segments: [
           { genre: 'prouve', libelle: 'prouvé inévitable' },
           { genre: 'reste', libelle: 'reste' },
@@ -1066,11 +1066,11 @@ describe('graphiques : le dessin différé et les mesures de la séance (E2s)', 
     const barres = {
       graphique: 'collisions',
       nom: 'Collisions',
-      synthese: 'Trois appartenances.',
+      synthese: 'Trois organisations.',
       lignes: [
-        { id: 'aubier', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [0, 3] },
-        { id: 'long', nom: NOM_LONG, appartenance: null, valeurs: [2, 0] },
-        { id: 'ressac', nom: 'Atelier Ressac', appartenance: 2, valeurs: [1, 1] },
+        { id: 'aubier', nom: 'Coopérative Aubier', organisation: 1, valeurs: [0, 3] },
+        { id: 'long', nom: NOM_LONG, organisation: null, valeurs: [2, 0] },
+        { id: 'ressac', nom: 'Atelier Ressac', organisation: 2, valeurs: [1, 1] },
       ],
       segments: [
         { genre: 'prouve', libelle: 'prouvé inévitable' },
@@ -1082,7 +1082,7 @@ describe('graphiques : le dessin différé et les mesures de la séance (E2s)', 
       graphique: 'diversite',
       segments: undefined,
       colonnes: [
-        { genre: 'serie1', libelle: 'Appartenances' },
+        { genre: 'serie1', libelle: 'Organisations' },
         { genre: 'serie2', libelle: 'Personnes' },
       ],
     };

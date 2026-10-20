@@ -71,7 +71,7 @@ export const SEPARATEURS = new Map([
 const CLES_DES_CHAMPS = new Map([
   ['nom', 'import.champ.nom'],
   ['prenom', 'import.champ.prenom'],
-  ['appartenance', 'import.champ.appartenance'],
+  ['organisation', 'import.champ.organisation'],
   ['courriel', 'import.champ.courriel'],
   ['titre_pressenti', 'import.champ.titrePressenti'],
   ['exclu', 'import.champ.exclu'],
@@ -194,7 +194,7 @@ const ICONES_DE_SORTE = new Map([
 // que le logiciel ne fusionne jamais seul — doublons, homonymes d'une mise
 // à jour —, ou une cellule sur plusieurs lignes qui porte le séparateur,
 // peut-être un guillemet mal fermé ; une information dit ce qui a été fait
-// ou lu sans rien écarter — les orthographes fondues d'appartenances et
+// ou lu sans rien écarter — les orthographes fondues d'organisations et
 // celles d'étiquettes, deux blocs distincts.
 const SORTES_DES_BLOCS = new Map([
   ['global', 'refus'],
@@ -498,11 +498,11 @@ const RIEN = Object.freeze({
  * encodage (null pour un collage) et séparateur nommés — « une seule
  * colonne » pour un séparateur null —, association par colonne, ambiguïtés,
  * colonnes et lignes valides, lignes refusées, orthographes fondues
- * d'appartenances et d'étiquettes, chacune dans son bloc, doublons, et le
+ * d'organisations et d'étiquettes, chacune dans son bloc, doublons, et le
  * refus global, de decoder (refusDecodage, apercu null) ou de l'aperçu
  * (apercu.refusGlobal), avec la clé de sa cause et celle de son remède — en
  * clés de libellés et en données. Un aperçu des objectifs n'a ni
- * appartenances, ni doublons, ni homonymes : ces listes y sont vides.
+ * organisations, ni doublons, ni homonymes : ces listes y sont vides.
  *
  * La cause est le code du refus, sa propre clé ; ses détails sont ceux de
  * decoder, ou { ligne } quand l'aperçu nomme un rang. Le remède d'un refus

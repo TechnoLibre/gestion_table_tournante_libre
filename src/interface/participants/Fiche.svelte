@@ -3,7 +3,7 @@
 
 <script>
   // La fiche d'une personne à l'écran (§ 4, § 4.2, § 4.5, § 7.4, § 10.2) :
-  // nom, prénom, appartenance, courriel, titre pressenti, notes, statut
+  // nom, prénom, organisation, courriel, titre pressenti, notes, statut
   // calculé, ses étiquettes, sa présence par tour, ses réservations, et sa
   // table et son siège à chaque tour du retenu, ou son absence à ce tour ;
   // un tour que le retenu ne porte pas se dit hors du retenu. La fiche replie, ne tronque jamais : un nom de deux cents
@@ -18,8 +18,8 @@
   // cases de la présence.
   //
   // Les étiquettes (etiquettes.js) : une pastille neutre à icône par
-  // étiquette, dans l'ordre de la charge — la teinte d'appartenance ne sert
-  // qu'à l'appartenance (§ 12.7) —, chacune suivie, en écriture seulement,
+  // étiquette, dans l'ordre de la charge — la teinte d'organisation ne sert
+  // qu'à l'organisation (§ 12.7) —, chacune suivie, en écriture seulement,
   // de sa commande de retrait : une croix cerclée rouge (Commande, variante
   // retrait), nommée « Retirer « <étiquette> » » ; puis un formulaire
   // d'ajout, dont le champ reçoit une ou plusieurs étiquettes séparées
@@ -74,7 +74,7 @@
   // personne rencontrée, le nombre de fois, et chaque tour avec sa table,
   // les plus revues d'abord. Comme au tableau des paires, une personne
   // s'écrit par son nom, puis en encre secondaire l'identifiant d'un
-  // homonyme et son appartenance : deux homonymes n'y font pas deux lignes
+  // homonyme et son organisation : deux homonymes n'y font pas deux lignes
   // pareilles. Une source qui ne se mesure pas, une personne
   // exclue : une phrase le dit. Sans placement, la rubrique est absente,
   // sans phrase. Elle n'a aucune commande : elle se lit en lecture et sur un
@@ -105,7 +105,7 @@
   const geste = creerGeste(seance);
 
   // Les valeurs de la fiche, sous l'étiquette de leur colonne.
-  const CHAMPS = ['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes'];
+  const CHAMPS = ['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes'];
 
   const statut = $derived.by(() => {
     if (participant.exclu) return t('participants.fiche.statutExclue');
@@ -507,8 +507,8 @@
                   {#if rencontre.homonyme}
                     <span class="secondaire">{t('qualite.paires.homonyme', { id: rencontre.id })}</span>
                   {/if}
-                  {#if rencontre.appartenance !== null}
-                    <span class="secondaire">{rencontre.appartenance}</span>
+                  {#if rencontre.organisation !== null}
+                    <span class="secondaire">{rencontre.organisation}</span>
                   {/if}
                 </th>
                 <td class="fois">{rencontre.fois}</td>
@@ -735,7 +735,7 @@
   }
 
   /* Une personne rencontrée : son nom, puis l'identifiant d'un homonyme et
-     son appartenance, chacun à la ligne, en petit corps d'encre secondaire. */
+     son organisation, chacun à la ligne, en petit corps d'encre secondaire. */
   .rencontres tbody th .secondaire {
     display: block;
     color: var(--couleur-page-texte-secondaire);

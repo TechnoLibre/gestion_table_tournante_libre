@@ -395,19 +395,19 @@ describe('les contraintes et l’attribution des sièges (§ 5.3)', () => {
   // Les sept bascules, dans l'ordre du § 5.3 ; les deux cases facultatives
   // valent leur défaut tant que la charge ne les porte pas.
   const BASCULES = [
-    'separerAppartenances',
+    'separerOrganisations',
     'nouveauxVoisins',
     'nouvelleTable',
-    'varierAppartenances',
+    'varierOrganisations',
     'respecterObjectifs',
     'rencontrerAnimateurs',
     'attribuerSieges',
   ];
   const NOMS_DU_SPEC = [
-    'Séparer les appartenances',
+    'Séparer les organisations',
     'Nouveaux voisins à chaque tour',
     'Nouvelle table à chaque tour',
-    'Varier les appartenances rencontrées',
+    'Varier les organisations rencontrées',
     'Respecter les objectifs des tables',
     "Rencontrer le plus d'animateurs différents",
     'Attribuer les sièges',

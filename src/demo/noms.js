@@ -5,7 +5,7 @@
 // patronymes forgés par produit d'un préfixe et d'une terminaison, des noms
 // d'organisation formés d'une tête, qui dit le genre d'organisation, et d'une
 // racine forgée. Les produits se tirent sans remise : chaque personne reçoit
-// un patronyme distinct, chaque appartenance un libellé distinct, sans boucle
+// un patronyme distinct, chaque organisation un libellé distinct, sans boucle
 // de rattrapage. Les fragments sont forgés pour ne désigner personne ;
 // catalogue.long.test.js refuse qu'un patronyme complet ou une racine
 // apparaisse ailleurs dans le projet, hors des fichiers que

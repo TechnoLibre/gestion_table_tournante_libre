@@ -31,10 +31,10 @@ import { ErreurConfiguration } from './erreurs.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
 // Identifiant du participant de numéro donné.
@@ -47,14 +47,14 @@ const table = (numero) => 20 + numero;
 // table.
 const ETRANGER = 99;
 
-// Numéros des membres de chaque appartenance de la petite démonstration
+// Numéros des membres de chaque organisation de la petite démonstration
 // (§ 15.3).
 const MEMBRES = [
   ['A', [1, 5, 8, 12]],
   ['B', [2, 4, 9, 11]],
   ['C', [3, 6, 7, 10]],
 ];
-const appartenanceDe = (numero) => MEMBRES.find(([, numeros]) => numeros.includes(numero))[0];
+const organisationDe = (numero) => MEMBRES.find(([, numeros]) => numeros.includes(numero))[0];
 
 const RESERVATION_HONOREE = { participant: participant(6), table: table(1), portee: 'tour', tour: 2 };
 const RESERVATION_SUSPENDUE = { participant: participant(13), table: table(2), portee: 'tous' };
@@ -63,10 +63,10 @@ function configuration(reservations = [RESERVATION_HONOREE, RESERVATION_SUSPENDU
   const membres = Array.from({ length: 12 }, (_, i) => ({
     id: participant(i + 1),
     nom: `P${i + 1}`,
-    appartenance: appartenanceDe(i + 1),
+    organisation: organisationDe(i + 1),
   }));
   return {
-    participants: [...membres, { id: participant(13), nom: 'P13', appartenance: null, exclu: true }],
+    participants: [...membres, { id: participant(13), nom: 'P13', organisation: null, exclu: true }],
     tables: [3, 1, 4, 2].map((numero) => ({ id: table(numero), numero, capacite: 3 })),
     tours: 4,
     reservations,
@@ -76,7 +76,7 @@ function configuration(reservations = [RESERVATION_HONOREE, RESERVATION_SUSPENDU
 
 // Le plan parfait de la petite démonstration (§ 15.3), écrit en numéros : à
 // chaque tour, les tables de numéro 1 à 4, chacune réunissant un membre de
-// chaque appartenance ; personne en réserve. Gelé, comme chaque plan que les
+// chaque organisation ; personne en réserve. Gelé, comme chaque plan que les
 // épreuves passent à verifierInvariants : une écriture du vérificateur y lève
 // TypeError, quelle que soit la branche qui la fait.
 const PLAN_PARFAIT = gelerPlan({
@@ -438,7 +438,7 @@ describe('verifierInvariants : ce que chaque code couvre', () => {
     // Deux tables de capacités différentes, que le plan déclare dans l'ordre
     // inverse de l'instance.
     const instance = normaliser({
-      participants: [1, 2, 3, 4, 5, 6].map((id) => ({ id, nom: `P${id}`, appartenance: null })),
+      participants: [1, 2, 3, 4, 5, 6].map((id) => ({ id, nom: `P${id}`, organisation: null })),
       tables: [{ id: 7, numero: 1, capacite: 2 }, { id: 5, numero: 2, capacite: 4 }],
       tours: 1,
       reservations: [],
@@ -626,11 +626,11 @@ describe('verifierInvariants : la présence par tour (§ 8.9, § 14.12)', () => 
   // personnes ne suivent pas leurs index.
   const PRESENCES = normaliser({
     participants: [
-      { id: 101, nom: 'P101', appartenance: null },
-      { id: 102, nom: 'P102', appartenance: null },
-      { id: 103, nom: 'P103', appartenance: null, presence: [1] },
-      { id: 104, nom: 'P104', appartenance: null },
-      { id: 105, nom: 'P105', appartenance: null, presence: [2] },
+      { id: 101, nom: 'P101', organisation: null },
+      { id: 102, nom: 'P102', organisation: null },
+      { id: 103, nom: 'P103', organisation: null, presence: [1] },
+      { id: 104, nom: 'P104', organisation: null },
+      { id: 105, nom: 'P105', organisation: null, presence: [2] },
     ],
     tables: [{ id: 22, numero: 1, capacite: 3 }, { id: 21, numero: 2, capacite: 3 }],
     tours: 2,
@@ -1005,10 +1005,10 @@ describe('verifierIndicateurs : les objectifs et les animateurs (§ 5.4, A9)', (
     assert.deepEqual(verifierIndicateurs(base(), plafonds(), plafonds()), []);
     const instance = normaliser({
       participants: [
-        { id: 1, nom: 'P1', appartenance: null, anime: [1, 2] },
-        { id: 2, nom: 'P2', appartenance: null, etiquettes: ['finance'] },
-        { id: 3, nom: 'P3', appartenance: null, etiquettes: ['finance'] },
-        { id: 4, nom: 'P4', appartenance: null },
+        { id: 1, nom: 'P1', organisation: null, anime: [1, 2] },
+        { id: 2, nom: 'P2', organisation: null, etiquettes: ['finance'] },
+        { id: 3, nom: 'P3', organisation: null, etiquettes: ['finance'] },
+        { id: 4, nom: 'P4', organisation: null },
       ],
       tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 2 }],
       tours: 2,
@@ -1074,7 +1074,7 @@ describe('verifierIndicateurs : les objectifs et les animateurs (§ 5.4, A9)', (
 });
 
 describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3, § 14.12, D42)', () => {
-  // Quatre personnes, trois rencontres chacune ; deux appartenances, de
+  // Quatre personnes, trois rencontres chacune ; deux organisations, de
   // collisions cumulées 2 et 1 sur des planchers 1 et 1 ; deux tours, hors
   // objectif 2 puis 0 sur des planchers 1 et 0. A(p) 2, 2, 1, 2 ; |F(p)| 3,
   // 2, 2, 3 ; Φ_aff 3, 3, 2, 3 ; A_max 2, 2, 2, 3. Chaque inégalité y tient,
@@ -1082,7 +1082,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
   const base = () => ({
     rencontres: [3, 3, 3, 3],
     affilies: [3, 2, 2, 3],
-    appartenancesVues: [2, 2, 1, 2],
+    organisationsVues: [2, 2, 1, 2],
     parGroupe: [
       { groupe: 'Coopérative Aubier', effectif: 2, collisionsCumulees: 2, pairesDistinctes: 1, excedent: 1 },
       { groupe: 'Atelier Ressac', effectif: 2, collisionsCumulees: 1, pairesDistinctes: 1, excedent: 0 },
@@ -1126,7 +1126,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
     assert.deepEqual(verifier(avec(() => {})), []);
     const egalite = avec((m, c) => {
       m.affilies = [3, 3, 3, 3];
-      m.appartenancesVues = [3, 3, 3, 3];
+      m.organisationsVues = [3, 3, 3, 3];
       m.parGroupe[0].collisionsCumulees = 1;
       c.phiAffilies = [3, 3, 3, 3];
       c.aMax = [3, 3, 3, 3];
@@ -1204,7 +1204,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
     assert.deepEqual(ecarts(cas), []);
   });
 
-  test('les violations d’une personne suivent sa ligne ; les restes viennent après les totaux, appartenance puis tour', () => {
+  test('les violations d’une personne suivent sa ligne ; les restes viennent après les totaux, organisation puis tour', () => {
     const { mesures, complements } = avec((m, c) => {
       for (const [, modifier] of MUTATIONS_COMPLEMENTS) modifier(m, c);
       m.parGroupe[0].collisionsCumulees = 0;
@@ -1229,7 +1229,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
 
   test('une valeur qui n’est pas un nombre fait tomber les inégalités qui la lisent', () => {
     const cas = [
-      ['A(p) NaN', (m) => { m.appartenancesVues[2] = Number.NaN; },
+      ['A(p) NaN', (m) => { m.organisationsVues[2] = Number.NaN; },
         [{ code: 'DIVERSITE_RENCONTRES', index: 2 }, { code: 'DIVERSITE_AFFILIES', index: 2 }, { code: 'BORNE_DIVERSITE', index: 2 }]],
       ['|F(p)| en texte', (m) => { m.affilies[2] = '2'; },
         [{ code: 'DIVERSITE_AFFILIES', index: 2 }, { code: 'AFFILIES_PLAFOND', index: 2 }]],
@@ -1250,7 +1250,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
         { name: 'TypeError', message: 'parGroupe : liste attendue avec planchersCollisions' }],
       ['parGroupe en objet, des planchers de collisions', (m) => { m.parGroupe = { length: 2 }; },
         { name: 'TypeError', message: 'parGroupe : liste attendue avec planchersCollisions' }],
-      ['A(p) absent', (m) => { delete m.appartenancesVues; }, TypeError],
+      ['A(p) absent', (m) => { delete m.organisationsVues; }, TypeError],
       ['|F(p)| de 3 cases', (m) => { m.affilies.pop(); }, RangeError],
       ['objectifsParTour qui n’est pas une liste', (m, c) => { c.objectifsParTour = { hors: 0, plancher: 0 }; },
         { name: 'TypeError', message: 'objectifsParTour : liste ou null attendue' }],
@@ -1297,7 +1297,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
     const tableDe = indexerPlan(INSTANCE, PLAN_PARFAIT);
     const mesures = mesurer(INSTANCE, tableDe);
     const { phiAffilies, aMax } = borneDiversite(INSTANCE, tableDe);
-    // Le plancher de chaque appartenance, 0 quand le diagnostic se tait.
+    // Le plancher de chaque organisation, 0 quand le diagnostic se tait.
     const parNom = new Map(planchersCollisions(INSTANCE).map(({ groupe, plancherCumulees }) => [groupe, plancherCumulees]));
     const planchers = INSTANCE.groupes.map((groupe) => parNom.get(groupe) ?? 0);
     const complements = { planchersValides: true, planchersCollisions: planchers, objectifsParTour: null, phiAffilies, aMax };

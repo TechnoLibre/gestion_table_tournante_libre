@@ -45,10 +45,10 @@ const V1 = VERSION.affichee;
 // --- Les charges d'épreuve -------------------------------------------------------
 
 // Six personnes inventées, deux tables de trois places, trois tours ;
-// appartenances : deux (les quatre premières), ou aucune ; la première
+// organisations : deux (les quatre premières), ou aucune ; la première
 // table attend « finance », que portent les trois premières, quand
 // objectifs est vrai ; reservation ancre la première à la première table.
-function chargeSix({ appartenances = true, objectifs = false, reservation = false, reglages = {} } = {}) {
+function chargeSix({ organisations = true, objectifs = false, reservation = false, reglages = {} } = {}) {
   const charge = creerCharge({ id: 'evt-profil', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 3 });
   const noms = [
     ['Ombrelle', 'Iris', 'Coopérative Aubier'],
@@ -58,11 +58,11 @@ function chargeSix({ appartenances = true, objectifs = false, reservation = fals
     ['Quenouille', 'Maëlle', null],
     ['Varech', 'Sidonie', null],
   ];
-  charge.participants = noms.map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = noms.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance: appartenances ? appartenance : null,
+    organisation: organisations ? organisation : null,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -227,7 +227,7 @@ describe('l’en-tête chiffré (§ 12.2, B11, D48)', () => {
     // quatre collisions par tour, douze sur trois tours, que tout plan
     // atteint.
     const charge = chargeSix();
-    for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+    for (const personne of charge.participants) personne.organisation = personne.id <= 5 ? 'Coopérative Aubier' : null;
     const cible = await monter(VueEntete, vueDe(generee(charge)));
     const tuile = tuileDe(cible, 'collisionsCumulees');
     const ligne = t('qualite.tuile.plancherAtteint', { plancher: 12 });
@@ -269,10 +269,10 @@ const contexteDe = (charge) =>
   ]);
 
 // Cinq membres de la Coopérative Aubier pour deux tables de trois, et la
-// présence de Sidonie Varech, sans appartenance.
+// présence de Sidonie Varech, sans organisation.
 function chargeAbsente(presence) {
   const charge = chargeSix();
-  for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+  for (const personne of charge.participants) personne.organisation = personne.id <= 5 ? 'Coopérative Aubier' : null;
   charge.participants[5].presence = presence;
   return charge;
 }
@@ -481,12 +481,12 @@ describe('le profil trié, deux graphiques au même ordre (§ 12.3, B12, D30, D4
     expect(synthese.querySelector('[data-compte-pire]')).toBeNull();
   });
 
-  test('aucune appartenance : une seule série, ni borne de diversité, et la phrase ; une seule table : la phrase seule', async () => {
-    const cible = await monter(VueProfil, vueDe(generee(chargeSix({ appartenances: false }))));
+  test('aucune organisation : une seule série, ni borne de diversité, et la phrase ; une seule table : la phrase seule', async () => {
+    const cible = await monter(VueProfil, vueDe(generee(chargeSix({ organisations: false }))));
     const svg = svgDe(cible, 'profilComptes');
     expect(svg.querySelectorAll('path[data-serie]')).toHaveLength(1);
     expect(svg.querySelector('[data-repere="borne"]')).toBeNull();
-    expect(texteDe(cible.querySelector('[data-phrase-qualite="aucuneAppartenance"]'))).toBe(t('qualite.profil.aucuneAppartenance'));
+    expect(texteDe(cible.querySelector('[data-phrase-qualite="aucuneOrganisation"]'))).toBe(t('qualite.profil.aucuneOrganisation'));
 
     const seule = chargeSix();
     seule.tables = [{ id: 1, numero: 1, sieges: 6, forme: 'ronde', position: { x: 300, y: 0 } }];

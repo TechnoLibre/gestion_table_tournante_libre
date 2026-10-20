@@ -1194,7 +1194,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     const filtre = 'Hérons';
     const retenus = charge()
       .participants.filter((p) =>
-        ['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes'].some(
+        ['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes'].some(
           (c) => p[c] !== null && cleNormalisee(p[c]).includes(cleNormalisee(filtre)),
         ),
       )
@@ -1926,7 +1926,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(texteDe(phrase)).toContain(plat(t('propositions.ordre.ensemble')));
     for (const poids of [1, 3]) expect(texteDe(phrase)).toContain(plat(t('propositions.ordre.poids', { poids })));
     const colonnes = [...section.querySelectorAll('th[data-colonne]')].map((th) => th.dataset.colonne);
-    for (const colonne of ['appartenancesVues', 'totalRedondance', 'diversite']) expect(colonnes, colonne).toContain(colonne);
+    for (const colonne of ['organisationsVues', 'totalRedondance', 'diversite']) expect(colonnes, colonne).toContain(colonne);
     // Le sixième groupe : les tours hors objectif, que le mode par défaut
     // classe, et leur minimum ; rien des animateurs, décochés.
     for (const colonne of ['toursHorsObjectif', 'toursSelonObjectif']) expect(colonnes, colonne).toContain(colonne);
@@ -1956,11 +1956,11 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     // colonnes du rang, de la proposition et des rencontres sortent de
     // l'image.
     const enTete = (nom) => section.querySelector(`th[data-colonne="${nom}"]`);
-    await cadrerEnLargeur([enTete('appartenancesVues'), enTete('toursSelonObjectif')]);
+    await cadrerEnLargeur([enTete('organisationsVues'), enTete('toursSelonObjectif')]);
     await photographier(m, '11-propositions', {
       condition: [
         '[data-section="propositions"] [data-ordre]',
-        ...['appartenancesVues', 'diversite', 'toursHorsObjectif', 'toursSelonObjectif'].map((nom) => `[data-section="propositions"] th[data-colonne="${nom}"]`),
+        ...['organisationsVues', 'diversite', 'toursHorsObjectif', 'toursSelonObjectif'].map((nom) => `[data-section="propositions"] th[data-colonne="${nom}"]`),
       ],
       graine: GRAINE,
     });
@@ -3004,7 +3004,7 @@ const ARRET_GRANDE = 2_000;
 // le relais en compte un à chaque multiple, proposition par proposition.
 const CADENCE_AVANCEMENTS = 1_000;
 
-// Des personnes et des appartenances inventées (contrainte 48), pour les
+// Des personnes et des organisations inventées (contrainte 48), pour les
 // configurations que la page de qualité photographie et qu'aucun catalogue
 // ne porte : chaque configuration en prend les premières.
 const PERSONNES_INVENTEES = Object.freeze([
@@ -3021,7 +3021,7 @@ const PERSONNES_INVENTEES = Object.freeze([
   ['Escourgeon', 'Paulin'],
   ['Fenouil', 'Rosalie'],
 ]);
-const APPARTENANCES_INVENTEES = Object.freeze([
+const ORGANISATIONS_INVENTEES = Object.freeze([
   'Coopérative Aubier',
   'Atelier Ressac',
   'Chantier Grève',
@@ -3034,32 +3034,32 @@ const APPARTENANCES_INVENTEES = Object.freeze([
 ]);
 
 // Les configurations construites (§ 19.3, B27) : le nom de l'événement,
-// le nombre de personnes, l'appartenance de la personne de rang donné, les
+// le nombre de personnes, l'organisation de la personne de rang donné, les
 // places par défaut, le nombre de tables, les places surchargées par rang
 // de table, le nombre de tours, et le nombre de personnes réservées pour la
 // soirée, dans l'ordre de leurs rangs, aux premiers sièges de la table 1.
 const CONSTRUITES = Object.freeze({
-  uneTable: { nom: 'Une seule table', personnes: 6, appartenance: (rang) => APPARTENANCES_INVENTEES[rang % 3], sieges: 6, tables: 1, tours: 3 },
-  unTour: { nom: 'Un seul tour', personnes: 12, appartenance: (rang) => APPARTENANCES_INVENTEES[rang % 3], sieges: 4, tables: 3, tours: 1 },
-  uneAppartenance: { nom: 'Une seule appartenance', personnes: 12, appartenance: () => APPARTENANCES_INVENTEES[0], sieges: 4, tables: 3, tours: 3 },
-  sansCollision: { nom: 'Sans collision', personnes: 9, appartenance: (rang) => APPARTENANCES_INVENTEES[rang], sieges: 3, tables: 3, tours: 2 },
+  uneTable: { nom: 'Une seule table', personnes: 6, organisation: (rang) => ORGANISATIONS_INVENTEES[rang % 3], sieges: 6, tables: 1, tours: 3 },
+  unTour: { nom: 'Un seul tour', personnes: 12, organisation: (rang) => ORGANISATIONS_INVENTEES[rang % 3], sieges: 4, tables: 3, tours: 1 },
+  uneOrganisation: { nom: 'Une seule organisation', personnes: 12, organisation: () => ORGANISATIONS_INVENTEES[0], sieges: 4, tables: 3, tours: 3 },
+  sansCollision: { nom: 'Sans collision', personnes: 9, organisation: (rang) => ORGANISATIONS_INVENTEES[rang], sieges: 3, tables: 3, tours: 2 },
   plafondNul: {
     nom: 'Plafond nul',
     personnes: 5,
-    appartenance: (rang) => APPARTENANCES_INVENTEES[rang % 2],
+    organisation: (rang) => ORGANISATIONS_INVENTEES[rang % 2],
     sieges: 4,
     tables: 2,
     surcharges: [[1, 2]],
     tours: 2,
     reservees: 4,
   },
-  paires: { nom: 'Paires répétées', personnes: 12, appartenance: (rang) => APPARTENANCES_INVENTEES[rang % 3], sieges: 3, tables: 4, tours: 6 },
+  paires: { nom: 'Paires répétées', personnes: 12, organisation: (rang) => ORGANISATIONS_INVENTEES[rang % 3], sieges: 3, tables: 4, tours: 6 },
 });
 
 // Le CSV des participants d'une configuration construite, en UTF-8.
-function csvConstruite({ personnes, appartenance }) {
-  const lignes = PERSONNES_INVENTEES.slice(0, personnes).map(([nom, prenom], rang) => `${nom};${prenom};${appartenance(rang)}`);
-  return new TextEncoder().encode(`nom;prenom;appartenance\r\n${lignes.join('\r\n')}\r\n`);
+function csvConstruite({ personnes, organisation }) {
+  const lignes = PERSONNES_INVENTEES.slice(0, personnes).map(([nom, prenom], rang) => `${nom};${prenom};${organisation(rang)}`);
+  return new TextEncoder().encode(`nom;prenom;organisation\r\n${lignes.join('\r\n')}\r\n`);
 }
 
 // Revient à la liste des événements, quand un événement est ouvert.
@@ -3511,7 +3511,7 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     const [lignes] = await lireJumeau(vue);
     expect(lignes.length).toBeGreaterThan(0);
     for (const ligne of lignes) {
-      expect(ligne.get('prouve'), ligne.get('appartenance')).toBe(String(plancherDe.get(ligne.get('appartenance')) ?? 0));
+      expect(ligne.get('prouve'), ligne.get('organisation')).toBe(String(plancherDe.get(ligne.get('organisation')) ?? 0));
     }
     expect(lignes.map((ligne) => ligne.get('prouve'))).toContain('4');
     const excedents = lignes.map((ligne) => Number(ligne.get('excedent')));
@@ -3668,19 +3668,19 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     });
   });
 
-  test('12d une seule appartenance : une série, sans borne, sa phrase ; les collisions et la grille restent', async () => {
-    await construire(CONSTRUITES.uneAppartenance);
+  test('12d une seule organisation : une série, sans borne, sa phrase ; les collisions et la grille restent', async () => {
+    await construire(CONSTRUITES.uneOrganisation);
     const comptes = graphique('profilComptes');
     expect(comptes.querySelectorAll('path[data-serie]')).toHaveLength(1);
     expect(comptes.querySelector('[data-repere="borne"]')).toBeNull();
-    const phrase = vueQualite('profil').querySelector('[data-phrase-qualite="uneAppartenance"]');
-    expect(texteDe(phrase)).toBe(plat(t('qualite.profil.uneAppartenance')));
+    const phrase = vueQualite('profil').querySelector('[data-phrase-qualite="uneOrganisation"]');
+    expect(texteDe(phrase)).toBe(plat(t('qualite.profil.uneOrganisation')));
     expect(graphique('collisions')?.querySelectorAll('rect[data-segment]').length).toBeGreaterThan(0);
     expect(graphique('tables')).not.toBeNull();
     expect(axesVides()).toEqual([]);
     await cadrerDansLaSurface([phrase, comptes]);
     await photographier(m, '12d-qualite-une-appartenance', {
-      condition: ['[data-vue-qualite="profil"] [data-phrase-qualite="uneAppartenance"]', '[data-vue-qualite="profil"] svg[data-graphique="profilComptes"]'],
+      condition: ['[data-vue-qualite="profil"] [data-phrase-qualite="uneOrganisation"]', '[data-vue-qualite="profil"] svg[data-graphique="profilComptes"]'],
       graine: GRAINE,
     });
   });
@@ -4353,7 +4353,7 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
 // démonstration d'identifiant donné, reste aux tours toursPartante, dits
 // par la grille au clavier ; l'arrivante, ajoutée par le formulaire sous un
 // nom inventé, vient aux tours toursArrivante, dits par sa fiche. Elle prend
-// l'appartenance de la personne d'identifiant groupe, d'un autre groupe que
+// l'organisation de la personne d'identifiant groupe, d'un autre groupe que
 // la partante : aux tours de l'arrivée, ce groupe compte une personne de
 // plus que les tables, et la configuration y impose une collision par tour,
 // le plancher que les collisions gardent sous l'absence. Aux tours de
@@ -4442,7 +4442,7 @@ describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
     const colonne = entete.indexOf('presence');
     expect(colonne).toBe(entete.length - 1);
     const inscrite = personneDe(PRESENCE.groupe);
-    expect(inscrite.appartenance, 'une appartenance : la ligne qui la désigne n’est pas un doublon').not.toBeNull();
+    expect(inscrite.organisation, 'une organisation : la ligne qui la désigne n’est pas un doublon').not.toBeNull();
     const designe = entete.map((champ) => ({ nom: inscrite.nom, prenom: inscrite.prenom ?? '' })[champ] ?? '');
     const complete = ecrireCsv([entete, ...lignes, designe], ';');
     const apercu = await ouvrirApercu(nomPropose, complete);
@@ -4481,20 +4481,20 @@ describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
     const { tours } = charge().evenement;
     const tous = Array.from({ length: tours }, (_, rang) => rang + 1);
 
-    // L'arrivante, par le formulaire : son appartenance est celle d'un
+    // L'arrivante, par le formulaire : son organisation est celle d'un
     // autre groupe que la partante.
     await ouvrirSection('participants');
-    const appartenance = personneDe(groupe).appartenance;
-    expect(appartenance).not.toBe(personneDe(partante).appartenance);
+    const organisation = personneDe(groupe).organisation;
+    expect(organisation).not.toBe(personneDe(partante).organisation);
     let r = revision();
     const formulaire = dans('[data-section="participants"] form');
-    await taper(formulaire.querySelector('input[data-champ="appartenance"]'), appartenance);
+    await taper(formulaire.querySelector('input[data-champ="organisation"]'), organisation);
     await taper(formulaire.querySelector('input[data-champ="prenom"]'), nommee.prenom);
     await taper(formulaire.querySelector('input[data-champ="nom"]'), nommee.nom);
     await touche('Enter');
     await uneEntree(r, 'ajouter l’arrivante');
     const arrivante = charge().participants.at(-1);
-    expect(arrivante).toMatchObject({ ...nommee, appartenance });
+    expect(arrivante).toMatchObject({ ...nommee, organisation });
     memoire.presence.arrivante = arrivante.id;
     memoire.presence.ajout = r;
     // Le retenu l'attend dans la réserve de chaque tour.
@@ -4722,13 +4722,13 @@ describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
     expect(texteDe(nonProuves[0])).toBe(plat(t('qualite.entete.plancherNonProuve')));
     // Les collisions : le plancher du groupe de l'arrivante, une collision
     // à chacun de ses tours, reste prouvé et se dessine.
-    const appartenance = personneDe(groupe).appartenance;
+    const organisation = personneDe(groupe).organisation;
     const diagnostic = diagnostiquer(configurationDepuisCharge(charge()));
-    expect(diagnostic.collisions.find((c) => c.groupe === appartenance)?.plancherCumulees).toBe(toursArrivante.length);
+    expect(diagnostic.collisions.find((c) => c.groupe === organisation)?.plancherCumulees).toBe(toursArrivante.length);
     const collisions = vueQualite('collisions');
     expect(collisions.querySelectorAll('svg[data-graphique="collisions"] rect[data-segment="prouve"]').length).toBeGreaterThan(0);
     const [barres] = await lireJumeau(collisions);
-    expect(barres.find((barre) => barre.get('appartenance') === plat(appartenance))?.get('prouve')).toBe(String(toursArrivante.length));
+    expect(barres.find((barre) => barre.get('organisation') === plat(organisation))?.get('prouve')).toBe(String(toursArrivante.length));
     // Le profil : la marque « absente » de la partante et de l'arrivante,
     // un losange chacune.
     const profil = vueQualite('profil');

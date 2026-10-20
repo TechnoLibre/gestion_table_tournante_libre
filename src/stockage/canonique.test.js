@@ -37,13 +37,13 @@ const TEXTE_CONTRAT = `{
   "entete": {"format":3,"produitVersion":"${VERSION.affichee}","revision":3,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},
   "charge": {
     "evenement": {"id":"evt-essai","nom":"Soirée d'essai","date":null,"siegesParDefaut":2,"tours":2,"unite":"cm","etat":"propose","filiation":null},
-    "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
+    "reglages": {"separerOrganisations":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierOrganisations":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
     "prochainsIds": {"participant":5,"table":3,"proposition":2},
     "participants": [
-      {"id":1,"nom":"Ombrelle","prenom":"Iris","appartenance":"Club des Merles","courriel":null,"titrePressenti":"animation","notes":null,"exclu":false},
-      {"id":2,"nom":"Grisaille","prenom":null,"appartenance":"Club des Merles","courriel":"g@exemple.test","titrePressenti":null,"notes":null,"exclu":false},
-      {"id":3,"nom":"Pervenche","prenom":"Théo","appartenance":null,"courriel":null,"titrePressenti":null,"notes":"arrive tard","exclu":false},
-      {"id":4,"nom":"Lacasse","prenom":"Ondine","appartenance":"Société Alpha","courriel":null,"titrePressenti":null,"notes":null,"exclu":false}
+      {"id":1,"nom":"Ombrelle","prenom":"Iris","organisation":"Club des Merles","courriel":null,"titrePressenti":"animation","notes":null,"exclu":false},
+      {"id":2,"nom":"Grisaille","prenom":null,"organisation":"Club des Merles","courriel":"g@exemple.test","titrePressenti":null,"notes":null,"exclu":false},
+      {"id":3,"nom":"Pervenche","prenom":"Théo","organisation":null,"courriel":null,"titrePressenti":null,"notes":"arrive tard","exclu":false},
+      {"id":4,"nom":"Lacasse","prenom":"Ondine","organisation":"Société Alpha","courriel":null,"titrePressenti":null,"notes":null,"exclu":false}
     ],
     "tables": [
       {"id":1,"numero":1,"sieges":null,"forme":"ronde","position":{"x":0,"y":0}},
@@ -80,22 +80,22 @@ function chargeContrat() {
       filiation: null,
     },
     reglages: {
-      separerAppartenances: true,
+      separerOrganisations: true,
       nouveauxVoisins: true,
       nouvelleTable: true,
-      varierAppartenances: true,
+      varierOrganisations: true,
       attribuerSieges: false,
       generation: { nombre: 5, arret: 200_000, historique: 1_000 },
     },
     prochainsIds: { participant: 5, table: 3, proposition: 2 },
     participants: [
-      { id: 1, nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles', courriel: null,
+      { id: 1, nom: 'Ombrelle', prenom: 'Iris', organisation: 'Club des Merles', courriel: null,
         titrePressenti: 'animation', notes: null, exclu: false },
-      { id: 2, nom: 'Grisaille', prenom: null, appartenance: 'Club des Merles', courriel: 'g@exemple.test',
+      { id: 2, nom: 'Grisaille', prenom: null, organisation: 'Club des Merles', courriel: 'g@exemple.test',
         titrePressenti: null, notes: null, exclu: false },
-      { id: 3, nom: 'Pervenche', prenom: 'Théo', appartenance: null, courriel: null,
+      { id: 3, nom: 'Pervenche', prenom: 'Théo', organisation: null, courriel: null,
         titrePressenti: null, notes: 'arrive tard', exclu: false },
-      { id: 4, nom: 'Lacasse', prenom: 'Ondine', appartenance: 'Société Alpha', courriel: null,
+      { id: 4, nom: 'Lacasse', prenom: 'Ondine', organisation: 'Société Alpha', courriel: null,
         titrePressenti: null, notes: null, exclu: false },
     ],
     tables: [
@@ -183,10 +183,10 @@ function chargeSansListe() {
       },
     },
     reglages: {
-      separerAppartenances: false,
+      separerOrganisations: false,
       nouveauxVoisins: true,
       nouvelleTable: false,
-      varierAppartenances: true,
+      varierOrganisations: true,
       attribuerSieges: false,
       generation: { nombre: 2, arret: 1_000, historique: 10 },
     },
@@ -203,7 +203,7 @@ const TEXTE_SANS_LISTE = `{
   "entete": {"format":3,"produitVersion":"${VERSION.affichee}","revision":1,"comptes":{"participants":0,"tables":0,"reservations":0,"titres":0,"propositions":0,"retenu":0}},
   "charge": {
     "evenement": {"id":"evt-neuf","nom":"Atelier \\"jeudi\\"","date":"2026-11-12","siegesParDefaut":8,"tours":3,"unite":"cm","etat":"brouillon","filiation":{"source":{"id":"evt-modele","nom":"Atelier modèle"},"instant":{"revision":7,"libelle":"Tables posées"}}},
-    "reglages": {"separerAppartenances":false,"nouveauxVoisins":true,"nouvelleTable":false,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":2,"arret":1000,"historique":10}},
+    "reglages": {"separerOrganisations":false,"nouveauxVoisins":true,"nouvelleTable":false,"varierOrganisations":true,"attribuerSieges":false,"generation":{"nombre":2,"arret":1000,"historique":10}},
     "prochainsIds": {"participant":1,"table":1,"proposition":1},
     "participants": [],
     "tables": [],
@@ -915,7 +915,7 @@ describe('la présence par tour dans le texte canonique (§ 8.9)', () => {
   }
 
   test('une charge sans absence garde ses octets : empreinte figée du texte de la charge témoin', () => {
-    assert.deepEqual(empreinte(serialiserCharge(chargeTemoin())), { longueur: 2427, valeur: 1810167972 });
+    assert.deepEqual(empreinte(serialiserCharge(chargeTemoin())), { longueur: 2427, valeur: 2316040032 });
   });
 
   test('presence s’écrit après etiquettes, absents après reserve ; chacun omis quand il manque', () => {
@@ -1428,7 +1428,7 @@ describe('recanoniser : la copie canonique refaite là seulement où des opérat
     salir(t, x).reservations = posee;
     const insere = neuf(
       t,
-      aRebours({ id: 5, nom: 'Liseron', prenom: null, appartenance: null, courriel: null,
+      aRebours({ id: 5, nom: 'Liseron', prenom: null, organisation: null, courriel: null,
         titrePressenti: null, notes: null, exclu: false, presence: [3, 1] }),
     );
     salir(t, x, 'participants').splice(1, 0, insere);

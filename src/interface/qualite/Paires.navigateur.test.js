@@ -45,7 +45,7 @@ const BASE = 'soiree';
 // combinent.
 const PRENOMS = ['Iris', 'Théo', 'Ondine', 'Basile', 'Maëlle', 'Sidonie', 'Aurèle', 'Clovis'];
 const NOMS = ['Ombrelle', 'Pervenche', 'Lacasse', 'Tourteau', 'Quenouille'];
-const APPARTENANCES = ['Coopérative Aubier', 'Atelier Ressac', null];
+const ORGANISATIONS = ['Coopérative Aubier', 'Atelier Ressac', null];
 
 // n personnes inventées, t tables de s places numérotées 10 + identifiant,
 // r tours ; avec reserver, les deux premières sont réservées ensemble à la
@@ -56,7 +56,7 @@ function chargeDe({ n, tables, sieges, tours, reserver = false }) {
     id: i + 1,
     nom: NOMS[Math.floor(i / PRENOMS.length) % NOMS.length],
     prenom: PRENOMS[i % PRENOMS.length],
-    appartenance: APPARTENANCES[i % APPARTENANCES.length],
+    organisation: ORGANISATIONS[i % ORGANISATIONS.length],
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -197,7 +197,7 @@ function detailForge({ n, choisies, imposees }) {
     personnes: Array.from({ length: n }, (_, i) => ({
       id: i + 1,
       nom: `${PRENOMS[i % PRENOMS.length]} ${NOMS[Math.floor(i / PRENOMS.length) % NOMS.length]}`,
-      appartenance: null,
+      organisation: null,
       statut: 'mobile',
     })),
     paires: { choisies, imposees },
@@ -433,14 +433,14 @@ describe('les pages de cent (§ 5.7, D50)', () => {
 });
 
 describe('les homonymes (§ 12.6)', () => {
-  // Deux personnes mesurées du même nom et de la même appartenance, chacune
+  // Deux personnes mesurées du même nom et de la même organisation, chacune
   // revue par la troisième au tour 3 : seul l'identifiant les distingue.
   const detail = {
     ...detailForge({ n: 3, choisies: [], imposees: [] }),
     personnes: [
-      { id: 1, nom: 'Iris Ombrelle', appartenance: 'Coopérative Aubier', statut: 'mobile' },
-      { id: 2, nom: 'Iris Ombrelle', appartenance: 'Coopérative Aubier', statut: 'mobile' },
-      { id: 3, nom: 'Ondine Lacasse', appartenance: 'Atelier Ressac', statut: 'mobile' },
+      { id: 1, nom: 'Iris Ombrelle', organisation: 'Coopérative Aubier', statut: 'mobile' },
+      { id: 2, nom: 'Iris Ombrelle', organisation: 'Coopérative Aubier', statut: 'mobile' },
+      { id: 3, nom: 'Ondine Lacasse', organisation: 'Atelier Ressac', statut: 'mobile' },
     ],
     paires: {
       choisies: [

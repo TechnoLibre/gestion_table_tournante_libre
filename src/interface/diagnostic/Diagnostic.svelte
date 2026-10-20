@@ -10,10 +10,10 @@
   // lecture comme sur un plan bloqué.
   //
   // Les énoncés se regroupent par cartesDiagnostic, sans changer d'ordre :
-  // la séparation vidée de son sens, une carte par appartenance en
+  // la séparation vidée de son sens, une carte par organisation en
   // collision, puis le reste de l'événement. Chaque groupe a son intitulé,
-  // qui nomme sa liste (aria-labelledby) : celui d'une appartenance est sa
-  // pastille, de la teinte que teintesAppartenances donne à son rang sur
+  // qui nomme sa liste (aria-labelledby) : celui d'une organisation est sa
+  // pastille, de la teinte que teintesOrganisations donne à son rang sur
   // toute la liste des participants, exclus compris, et porte la donnée
   // [data-donnee] ; les autres, un intertitre.
   //
@@ -38,7 +38,7 @@
   import { getContext } from 'svelte';
   import { diagnostiquerCharge } from '../../application/diagnostic.js';
   import { presencesPartielles } from '../../application/places.js';
-  import { teintesAppartenances } from '../appartenances.js';
+  import { teintesOrganisations } from '../organisations.js';
   import Carte from '../primitives/Carte.svelte';
   import { actionRemede } from '../primitives/commande.js';
   import Commande from '../primitives/Commande.svelte';
@@ -66,8 +66,8 @@
         }),
   );
   const cartes = $derived(cartesDiagnostic(liste));
-  // Le rang de teinte de chaque appartenance, sur tous les participants.
-  const rangs = $derived(charge === null ? new Map() : teintesAppartenances(charge.participants));
+  // Le rang de teinte de chaque organisation, sur tous les participants.
+  const rangs = $derived(charge === null ? new Map() : teintesOrganisations(charge.participants));
   // L'intitulé d'un groupe est un h3 dans la section, un h4 sous le titre
   // du panneau.
   const balise = $derived(compact ? 'h4' : 'h3');
@@ -79,9 +79,9 @@
 
 {#snippet groupe(carte, rang)}
   {@const id = `${uid}-groupe-${rang}`}
-  <svelte:element this={balise} {id} class="intitule" class:intertitre={carte.genre !== 'appartenance'}>
-    {#if carte.genre === 'appartenance'}<span class="donnee" data-donnee
-        ><Pastille sorte="appartenance" valeur={rangs.get(carte.groupe) ?? null} libelle={carte.groupe} /></span
+  <svelte:element this={balise} {id} class="intitule" class:intertitre={carte.genre !== 'organisation'}>
+    {#if carte.genre === 'organisation'}<span class="donnee" data-donnee
+        ><Pastille sorte="organisation" valeur={rangs.get(carte.groupe) ?? null} libelle={carte.groupe} /></span
       >{:else if carte.genre === 'separation'}{t('diagnostic.carte.separation')}{:else}{t('diagnostic.carte.ensemble')}{/if}
   </svelte:element>
   <ul aria-labelledby={id}>
@@ -154,7 +154,7 @@
     gap: var(--espace-3);
   }
 
-  /* L'intitulé d'un groupe : la pastille de son appartenance, ou un
+  /* L'intitulé d'un groupe : la pastille de son organisation, ou un
      intertitre en petites capitales d'encre secondaire. */
   .intitule {
     margin: 0 0 var(--espace-2);

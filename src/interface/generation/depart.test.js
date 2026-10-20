@@ -196,7 +196,7 @@ function chargeEcarts() {
     id: rang + 1,
     nom,
     prenom,
-    appartenance: null,
+    organisation: null,
     courriel: null,
     titrePressenti: null,
     notes: null,

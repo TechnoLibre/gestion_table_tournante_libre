@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves de la diversité par animateur (§ 4.5, § 5.4, § 12.13) : les
-// personnes, appartenances et étiquettes distinctes que chaque animateur
+// personnes, organisations et étiquettes distinctes que chaque animateur
 // rencontre en animant, sur la soirée et à chacun de ses tours animés, le
 // tri du moins varié au plus varié, les colonnes et les trois nombres de
 // chaque colonne. Les cas comptés à la main nomment chacun la règle qu'ils
@@ -20,18 +20,18 @@ const AUBIER = 'Coopérative Aubier';
 const RESSAC = 'Atelier Ressac';
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
-// Participant présent : son appartenance, ses étiquettes et les tours où il
+// Participant présent : son organisation, ses étiquettes et les tours où il
 // anime, chacun facultatif.
-const personne = (id, appartenance = null, etiquettes, anime) => ({
+const personne = (id, organisation = null, etiquettes, anime) => ({
   id,
   nom: `P${id}`,
-  appartenance,
+  organisation,
   ...(etiquettes === undefined ? {} : { etiquettes }),
   ...(anime === undefined ? {} : { anime }),
 });
@@ -87,7 +87,7 @@ function lectureDirecte(config, instance, tableDe) {
   const avecEtiquettes = presents.some(({ etiquettes = [] }) => etiquettes.length > 0);
   const compter = (rencontrees) => ({
     personnes: rencontrees.length,
-    appartenances: new Set(rencontrees.filter((q) => q.appartenance !== null).map((q) => q.appartenance)).size,
+    organisations: new Set(rencontrees.filter((q) => q.organisation !== null).map((q) => q.organisation)).size,
     etiquettes: avecEtiquettes ? new Set(rencontrees.flatMap(({ etiquettes = [] }) => etiquettes)).size : null,
   });
   return presents
@@ -115,11 +115,11 @@ function lectureDirecte(config, instance, tableDe) {
     });
 }
 
-// L'ordre du § 12.13 (D38), écrit à part : appartenances, puis étiquettes,
+// L'ordre du § 12.13 (D38), écrit à part : organisations, puis étiquettes,
 // puis personnes croissantes, puis l'index ; sans la colonne des
-// appartenances, les étiquettes d'abord, puis personnes et index.
-function dansLOrdre(lignes, avecAppartenances) {
-  const cle = (l) => [...(avecAppartenances ? [l.appartenances] : []), l.etiquettes ?? 0, l.personnes, l.p];
+// organisations, les étiquettes d'abord, puis personnes et index.
+function dansLOrdre(lignes, avecOrganisations) {
+  const cle = (l) => [...(avecOrganisations ? [l.organisations] : []), l.etiquettes ?? 0, l.personnes, l.p];
   for (let i = 1; i < lignes.length; i += 1) {
     const [a, b] = [cle(lignes[i - 1]), cle(lignes[i])];
     const k = a.findIndex((v, j) => v !== b[j]);
@@ -175,27 +175,27 @@ describe('diversiteAnimateurs : ce que chaque animateur rencontre en animant (§
 
   test('compté à la main : la soirée réunit les tours animés, chaque tour garde ses propres comptes', () => {
     // Index : 1 → 0, …, 8 → 7 ; table 21 → 1, 22 → 0.
-    // 6, au tour 1 à 21 : 7, 1, 2 — deux appartenances, finance et Montréal ;
+    // 6, au tour 1 à 21 : 7, 1, 2 — deux organisations, finance et Montréal ;
     // au tour 2 : 3 et 8, 5 n'y pouvant s'asseoir — Aubier et Ressac, aucune
     // étiquette. La soirée : 7, 1, 2, 3, 8.
     assert.deepEqual(ligneDe(6), {
       p: 5,
       toursAnimes: 2,
       personnes: 5,
-      appartenances: 2,
+      organisations: 2,
       etiquettes: 2,
       parTour: [
-        { tour: 0, t: 1, personnes: 3, appartenances: 2, etiquettes: 2 },
-        { tour: 1, t: 1, personnes: 2, appartenances: 2, etiquettes: 0 },
+        { tour: 0, t: 1, personnes: 3, organisations: 2, etiquettes: 2 },
+        { tour: 1, t: 1, personnes: 2, organisations: 2, etiquettes: 0 },
       ],
     });
   });
 
   test('un animateur d’un seul tour a une seule entrée par tour, égale à sa soirée', () => {
-    const { parTour, toursAnimes, personnes, appartenances, etiquettes } = ligneDe(7);
+    const { parTour, toursAnimes, personnes, organisations, etiquettes } = ligneDe(7);
     assert.equal(toursAnimes, 1);
-    assert.deepEqual(parTour, [{ tour: 0, t: 1, personnes, appartenances, etiquettes }]);
-    assert.deepEqual([personnes, appartenances, etiquettes], [3, 2, 2]);
+    assert.deepEqual(parTour, [{ tour: 0, t: 1, personnes, organisations, etiquettes }]);
+    assert.deepEqual([personnes, organisations, etiquettes], [3, 2, 2]);
   });
 
   test('deux animateurs d’une même table au même tour se comptent l’un l’autre, chacun hors de ses propres rencontres', () => {
@@ -207,7 +207,7 @@ describe('diversiteAnimateurs : ce que chaque animateur rencontre en animant (§
   test('une personne assise à la table d’un animateur à un tour où il n’anime pas ne compte pas pour lui', () => {
     // 8 n'anime qu'au tour 1 : au tour 2, ni 6 ni 5 ni 3 ne le comptent ; 7
     // n'anime pas au tour 2, où 1, 2 et 4 partagent sa table.
-    assert.deepEqual(ligneDe(8).parTour, [{ tour: 0, t: 0, personnes: 3, appartenances: 2, etiquettes: 1 }]);
+    assert.deepEqual(ligneDe(8).parTour, [{ tour: 0, t: 0, personnes: 3, organisations: 2, etiquettes: 1 }]);
     assert.equal(ligneDe(8).personnes, 3);
   });
 
@@ -224,7 +224,7 @@ describe('diversiteAnimateurs : ce que chaque animateur rencontre en animant (§
     });
     const autre = normaliser(plein);
     const { lignes } = diversiteAnimateurs(autre, planDe(autre, [[[31, [11, 12, 13]]]]));
-    assert.deepEqual(lignes[0].parTour, [{ tour: 0, t: 0, personnes: 1, appartenances: 1, etiquettes: 0 }]);
+    assert.deepEqual(lignes[0].parTour, [{ tour: 0, t: 0, personnes: 1, organisations: 1, etiquettes: 0 }]);
   });
 
   test('une étiquette portée par trois personnes de la table se compte une fois', () => {
@@ -233,12 +233,12 @@ describe('diversiteAnimateurs : ce que chaque animateur rencontre en animant (§
   });
 
   test('un animateur exclu est absent ; les lignes vont du moins varié au plus varié', () => {
-    // Appartenances égales (2) ; étiquettes 1 pour 8, 2 pour 7 et 6 ; puis 3
+    // Organisations égales (2) ; étiquettes 1 pour 8, 2 pour 7 et 6 ; puis 3
     // personnes pour 7, 5 pour 6.
     assert.deepEqual(diversite.lignes.map(({ p }) => instance.ids[p]), [8, 7, 6]);
-    assert.deepEqual(diversite.colonnes, { appartenances: true, etiquettes: true });
+    assert.deepEqual(diversite.colonnes, { organisations: true, etiquettes: true });
     assert.deepEqual(diversite.equite, {
-      appartenances: { moins: 2, plus: 2, auMinimum: 3 },
+      organisations: { moins: 2, plus: 2, auMinimum: 3 },
       etiquettes: { moins: 1, plus: 2, auMinimum: 1 },
     });
   });
@@ -270,9 +270,9 @@ describe('diversiteAnimateurs : le tri du moins varié au plus varié (§ 12.13,
   const larges = tables.map((table) => ({ ...table, capacite: 4 }));
   const reservations = [tous(10, 41), tous(20, 42), tous(30, 43), tous(40, 44)];
 
-  test('les appartenances d’abord, avant les personnes ; à égalité de tout, l’index', () => {
-    // 10 rencontre trois personnes d'une appartenance ; 20, deux personnes
-    // de deux appartenances ; 30 et 40, une personne chacun.
+  test('les organisations d’abord, avant les personnes ; à égalité de tout, l’index', () => {
+    // 10 rencontre trois personnes d'une organisation ; 20, deux personnes
+    // de deux organisations ; 30 et 40, une personne chacun.
     const config = configuration({
       participants: [
         personne(10, null, undefined, [1]), personne(20, null, undefined, [1]),
@@ -287,19 +287,19 @@ describe('diversiteAnimateurs : le tri du moins varié au plus varié (§ 12.13,
     const instance = normaliser(config);
     const plan = planDe(instance, [[[41, [10, 1, 2, 3]], [42, [20, 4, 5]], [43, [30, 6]], [44, [40, 7]]]]);
     const { lignes, colonnes, equite } = diversiteAnimateurs(instance, plan);
-    // Une appartenance pour 30, 40 (une personne) et 10 (trois), deux pour
+    // Une organisation pour 30, 40 (une personne) et 10 (trois), deux pour
     // 20 : par les personnes d'abord, 20 précéderait 10. 30 et 40, égaux en
     // tout, se rangent par l'index.
     assert.deepEqual(lignes.map(({ p }) => instance.ids[p]), [30, 40, 10, 20]);
-    assert.deepEqual(colonnes, { appartenances: true, etiquettes: false });
+    assert.deepEqual(colonnes, { organisations: true, etiquettes: false });
     // Sans étiquette portée : la colonne manque, chaque compte vaut null.
     assert.ok(lignes.every(({ etiquettes, parTour }) => etiquettes === null && parTour.every((tour) => tour.etiquettes === null)));
-    assert.deepEqual(equite, { appartenances: { moins: 1, plus: 2, auMinimum: 3 }, etiquettes: null });
+    assert.deepEqual(equite, { organisations: { moins: 1, plus: 2, auMinimum: 3 }, etiquettes: null });
   });
 
-  test('une seule appartenance et des étiquettes : la colonne des étiquettes seule, qui ordonne avant les personnes', () => {
-    // 10 : 1, Aubier, finance — 1 appartenance, 1 étiquette, 1 personne.
-    // 20 : 2 et 3 sans appartenance, tous deux finance — 0, 1, 2.
+  test('une seule organisation et des étiquettes : la colonne des étiquettes seule, qui ordonne avant les personnes', () => {
+    // 10 : 1, Aubier, finance — 1 organisation, 1 étiquette, 1 personne.
+    // 20 : 2 et 3 sans organisation, tous deux finance — 0, 1, 2.
     // 30 : 4, Aubier, finance et Montréal — 1, 2, 1. 40 : personne.
     const config = configuration({
       participants: [
@@ -315,19 +315,19 @@ describe('diversiteAnimateurs : le tri du moins varié au plus varié (§ 12.13,
     const instance = normaliser(config);
     const plan = planDe(instance, [[[41, [10, 1]], [42, [20, 2, 3]], [43, [30, 4]], [44, [40]]]]);
     const { lignes, colonnes, equite } = diversiteAnimateurs(instance, plan);
-    assert.deepEqual(colonnes, { appartenances: false, etiquettes: true });
+    assert.deepEqual(colonnes, { organisations: false, etiquettes: true });
     // Étiquettes 0 pour 40 ; 1 pour 10 (une personne) et 20 (deux) ; 2 pour
-    // 30. Les appartenances, qu'aucune colonne ne montre, ne départagent pas
+    // 30. Les organisations, qu'aucune colonne ne montre, ne départagent pas
     // 10 et 20 : 20 n'en a aucune et viendrait sinon en tête des deux.
     assert.deepEqual(lignes.map(({ p }) => instance.ids[p]), [40, 10, 20, 30]);
-    assert.deepEqual(lignes.map(({ appartenances }) => appartenances), [0, 1, 0, 1]);
-    assert.deepEqual(equite, { appartenances: null, etiquettes: { moins: 0, plus: 2, auMinimum: 1 } });
+    assert.deepEqual(lignes.map(({ organisations }) => organisations), [0, 1, 0, 1]);
+    assert.deepEqual(equite, { organisations: null, etiquettes: { moins: 0, plus: 2, auMinimum: 1 } });
   });
 
   test('les trois nombres de chaque colonne se lisent sur toutes les lignes, non sur la première du tri', () => {
-    // 10 rencontre 1, Aubier, finance et Montréal : 1 appartenance, 2
+    // 10 rencontre 1, Aubier, finance et Montréal : 1 organisation, 2
     // étiquettes. 20 rencontre 2, Aubier, et 3, Ressac, sans étiquette : 2
-    // appartenances, 0 étiquette. Le tri met 10 en tête, et le minimum des
+    // organisations, 0 étiquette. Le tri met 10 en tête, et le minimum des
     // étiquettes, 0, est à la seconde ligne.
     const config = configuration({
       participants: [
@@ -340,15 +340,15 @@ describe('diversiteAnimateurs : le tri du moins varié au plus varié (§ 12.13,
     });
     const instance = normaliser(config);
     const { lignes, colonnes, equite } = diversiteAnimateurs(instance, planDe(instance, [[[41, [10, 1]], [42, [20, 2, 3]]]]));
-    assert.deepEqual(colonnes, { appartenances: true, etiquettes: true });
-    assert.deepEqual(lignes.map(({ p, appartenances, etiquettes }) => [instance.ids[p], appartenances, etiquettes]), [[10, 1, 2], [20, 2, 0]]);
+    assert.deepEqual(colonnes, { organisations: true, etiquettes: true });
+    assert.deepEqual(lignes.map(({ p, organisations, etiquettes }) => [instance.ids[p], organisations, etiquettes]), [[10, 1, 2], [20, 2, 0]]);
     assert.deepEqual(equite, {
-      appartenances: { moins: 1, plus: 2, auMinimum: 1 },
+      organisations: { moins: 1, plus: 2, auMinimum: 1 },
       etiquettes: { moins: 0, plus: 2, auMinimum: 1 },
     });
   });
 
-  test('ni étiquette ni plus d’une appartenance : aucune colonne, les comptes de personnes restent', () => {
+  test('ni étiquette ni plus d’une organisation : aucune colonne, les comptes de personnes restent', () => {
     const config = configuration({
       participants: [personne(10, null, undefined, [1]), personne(20, null, undefined, [1]), personne(1), personne(2), personne(3)],
       tables,
@@ -357,9 +357,9 @@ describe('diversiteAnimateurs : le tri du moins varié au plus varié (§ 12.13,
     });
     const instance = normaliser(config);
     const { lignes, colonnes, equite } = diversiteAnimateurs(instance, planDe(instance, [[[41, [10, 1, 2]], [42, [20, 3]]]]));
-    assert.deepEqual(colonnes, { appartenances: false, etiquettes: false });
+    assert.deepEqual(colonnes, { organisations: false, etiquettes: false });
     assert.deepEqual(lignes.map(({ p, personnes }) => [instance.ids[p], personnes]), [[20, 1], [10, 2]]);
-    assert.deepEqual(equite, { appartenances: null, etiquettes: null });
+    assert.deepEqual(equite, { organisations: null, etiquettes: null });
   });
 
   test('sans animateur, aucune ligne et aucun des trois nombres', () => {
@@ -372,9 +372,9 @@ describe('diversiteAnimateurs : le tri du moins varié au plus varié (§ 12.13,
     const instance = normaliser(config);
     const diversite = diversiteAnimateurs(instance, planDe(instance, [[[41, [1, 2]]], [[41, [1, 2]]]]));
     assert.deepEqual(diversite, {
-      colonnes: { appartenances: true, etiquettes: true },
+      colonnes: { organisations: true, etiquettes: true },
       lignes: [],
-      equite: { appartenances: null, etiquettes: null },
+      equite: { organisations: null, etiquettes: null },
     });
   });
 });
@@ -429,7 +429,7 @@ describe('diversiteAnimateurs : recoupements sur des plans quelconques', () => {
     for (const graine of GRAINES) {
       const { lignes, equite } = diversiteAnimateurs(instance, planQuelconque(instance, graine));
       assert.ok(dansLOrdre(lignes, true), `graine ${graine}`);
-      for (const nom of ['appartenances', 'etiquettes']) {
+      for (const nom of ['organisations', 'etiquettes']) {
         const valeurs = lignes.map((ligne) => ligne[nom]);
         const moins = Math.min(...valeurs);
         assert.deepEqual(equite[nom], {
@@ -451,7 +451,7 @@ describe('diversiteAnimateurs : recoupements sur des plans quelconques', () => {
         assert.equal(ligne.parTour.length, ligne.toursAnimes);
         assert.deepEqual(ligne.parTour.map(({ tour }) => tour), [...ligne.parTour.map(({ tour }) => tour)].sort((a, b) => a - b));
         for (const tour of ligne.parTour) {
-          for (const nom of ['personnes', 'appartenances', 'etiquettes']) assert.ok(tour[nom] <= ligne[nom], `graine ${graine}`);
+          for (const nom of ['personnes', 'organisations', 'etiquettes']) assert.ok(tour[nom] <= ligne[nom], `graine ${graine}`);
         }
         const directe = directes.find(({ p }) => p === ligne.p);
         assert.ok(ligne.personnes <= ligne.parTour.reduce((somme, tour) => somme + tour.personnes, 0));
@@ -475,6 +475,6 @@ describe('diversiteAnimateurs : recoupements sur des plans quelconques', () => {
     // 2 anime 51 (index 1) aux trois tours ; on l'assied à 53 au tour 1.
     plan[p * instance.R] = 0;
     const ligne = diversiteAnimateurs(instance, plan).lignes.find((l) => l.p === p);
-    assert.deepEqual(ligne.parTour[0], { tour: 0, t: 1, personnes: 0, appartenances: 0, etiquettes: 0 });
+    assert.deepEqual(ligne.parTour[0], { tour: 0, t: 1, personnes: 0, organisations: 0, etiquettes: 0 });
   });
 });

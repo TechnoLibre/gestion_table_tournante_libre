@@ -19,15 +19,15 @@ const SCRIPT = fileURLToPath(new URL('./plafond.js', import.meta.url));
 // autres libres ; contraintes inactives.
 function salle({ tables, personnes, tours }) {
   return {
-    participants: Array.from({ length: personnes }, (_, i) => ({ id: i + 1, nom: `Ombrelle ${i + 1}`, appartenance: null })),
+    participants: Array.from({ length: personnes }, (_, i) => ({ id: i + 1, nom: `Ombrelle ${i + 1}`, organisation: null })),
     tables: Array.from({ length: tables }, (_, t) => ({ id: t + 1, numero: t + 1, capacite: 3 })),
     tours,
     reservations: [{ participant: 1, table: 1, portee: 'tour', tour: 1 }],
     contraintes: {
-      separerAppartenances: false,
+      separerOrganisations: false,
       nouveauxVoisins: false,
       nouvelleTable: false,
-      varierAppartenances: false,
+      varierOrganisations: false,
     },
   };
 }

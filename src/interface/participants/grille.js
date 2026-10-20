@@ -6,7 +6,7 @@
 // la grille, ses lignes triées et filtrées, la cellule qu'atteint une
 // touche, la commande qu'exécute une cellule validée, les groupes,
 // imbriqués, de la liste groupée par une colonne ou plusieurs et les lignes
-// que laissent voir les groupes repliés, l'orthographe d'appartenance à
+// que laissent voir les groupes repliés, l'orthographe d'organisation à
 // reprendre, l'itinéraire d'une personne dans le retenu et ses
 // réservations. La présence par tour se lit par presenceSaisie
 // (src/application/places.js) et se range par clePresence (presence.js).
@@ -21,7 +21,7 @@ import { affichagePresence, clePresence } from './presence.js';
  *  à l'export par leur champ (CHAMP_DE_COLONNE), non par leur rang : la
  *  grille ne montre pas les étiquettes, et la présence y suit l'exclusion.
  *  Le collage en bloc suit l'ordre des champs de l'export, non celui-ci. */
-export const COLONNES = Object.freeze(['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+export const COLONNES = Object.freeze(['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
 
 /** Le champ de l'export CSV (CHAMPS, src/application/csv.js) de chaque
  *  colonne, dans l'ordre de COLONNES : l'en-tête sous lequel l'export écrit
@@ -36,7 +36,7 @@ const TEXTES = COLONNES.filter((colonne) => colonne !== 'exclu' && colonne !== '
 const CLES_COLONNES = new Map([
   ['nom', 'participants.colonne.nom'],
   ['prenom', 'participants.colonne.prenom'],
-  ['appartenance', 'participants.colonne.appartenance'],
+  ['organisation', 'participants.colonne.organisation'],
   ['courriel', 'participants.colonne.courriel'],
   ['titrePressenti', 'participants.colonne.titrePressenti'],
   ['exclu', 'participants.colonne.exclu'],
@@ -505,15 +505,15 @@ export function celluleSuivante({ ligne, colonne }, touche, { lignes, colonnes }
 }
 
 /**
- * L'orthographe déjà portée par un autre participant pour une appartenance
+ * L'orthographe déjà portée par un autre participant pour une organisation
  * saisie, à proposer sans fusionner : la première, dans l'ordre reçu, dont
  * la clé normalisée égale celle de la saisie. null quand la saisie est
- * nouvelle, vide, ou identique à une appartenance portée — lue comme la
- * saisie l'enregistre, en NFC, sans ses blancs de bord. Une appartenance
+ * nouvelle, vide, ou identique à une organisation portée — lue comme la
+ * saisie l'enregistre, en NFC, sans ses blancs de bord. Une organisation
  * null ne se compare pas.
  *
  * @param {string|null} saisie
- * @param {Array<{appartenance: string|null}>} participants
+ * @param {Array<{organisation: string|null}>} participants
  * @param {(texte: string) => string} cleNormalisee
  * @returns {string|null}
  */
@@ -521,10 +521,10 @@ export function orthographeExistante(saisie, participants, cleNormalisee) {
   if (saisie === null) return null;
   const texte = saisie.normalize('NFC').trim();
   if (texte === '') return null;
-  const portees = participants.map(({ appartenance }) => appartenance).filter((a) => a !== null);
+  const portees = participants.map(({ organisation }) => organisation).filter((a) => a !== null);
   if (portees.includes(texte)) return null;
   const cle = cleNormalisee(texte);
-  return portees.find((appartenance) => cleNormalisee(appartenance) === cle) ?? null;
+  return portees.find((organisation) => cleNormalisee(organisation) === cle) ?? null;
 }
 
 /**

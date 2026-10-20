@@ -31,10 +31,10 @@ import {
 } from './plafond.js';
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
 // Graine de la propriété, écrite ici pour que chaque exécution tire les
@@ -87,7 +87,7 @@ function forme({ capacites, ancres, autres, tours, partiels = [] }) {
     });
   });
   const instance = normaliser({
-    participants: suite(1, K + autres).map((id) => ({ id, nom: `P${id}`, appartenance: null })),
+    participants: suite(1, K + autres).map((id) => ({ id, nom: `P${id}`, organisation: null })),
     tables: capacites.map((capacite, t) => ({ id: idTable(t), numero: t + 1, capacite })),
     tours,
     reservations,
@@ -609,14 +609,14 @@ describe("plafond a priori : la programmation dynamique contre l'énumération (
   });
 });
 
-// Appartenances inventées des épreuves de la borne de diversité.
+// Organisations inventées des épreuves de la borne de diversité.
 const AUBIER = 'Coopérative Aubier';
 const RESSAC = 'Atelier Ressac';
 const BRISANT = 'Collectif Brisant';
 
 /**
- * Instance d'une salle aux appartenances données. personnes[i] = [id,
- * appartenance ou null] ; la table d'index t a la capacité capacites[t] et
+ * Instance d'une salle aux organisations données. personnes[i] = [id,
+ * organisation ou null] ; la table d'index t a la capacité capacites[t] et
  * l'identifiant 10 × (T − t), qu'un index lu comme un identifiant ne désigne
  * pas. reservations : [id, index de table, tour ou null], null pour tous les
  * tours ; exclus : des ids. Lève ce que normaliser lève.
@@ -625,10 +625,10 @@ function salle({ personnes, capacites, tours, reservations = [], exclus = [] }) 
   const T = capacites.length;
   const idTable = (t) => 10 * (T - t);
   return normaliser({
-    participants: personnes.map(([id, appartenance]) => ({
+    participants: personnes.map(([id, organisation]) => ({
       id,
       nom: `P${id}`,
-      appartenance,
+      organisation,
       ...(exclus.includes(id) ? { exclu: true } : {}),
     })),
     tables: capacites.map((capacite, t) => ({ id: idTable(t), numero: t + 1, capacite })),
@@ -652,10 +652,10 @@ function bornesEtMesures(instance, tableDe) {
   const bornes = borneDiversite(instance, tableDe);
   const mesures = mesurer(instance, tableDe);
   for (let p = 0; p < instance.N; p += 1) {
-    assert.ok(mesures.appartenancesVues[p] <= bornes.aMax[p], `A(${instance.ids[p]}) > A_max`);
+    assert.ok(mesures.organisationsVues[p] <= bornes.aMax[p], `A(${instance.ids[p]}) > A_max`);
     assert.ok(mesures.affilies[p] <= bornes.phiAffilies[p], `|F(${instance.ids[p]})| > Φ_aff`);
   }
-  return { ...bornes, appartenances: mesures.appartenancesVues, affilies: mesures.affilies };
+  return { ...bornes, organisations: mesures.organisationsVues, affilies: mesures.affilies };
 }
 
 describe('occupations : o_{t,r} et α_{t,r} (§ 5.4, B4)', () => {
@@ -677,9 +677,9 @@ describe('occupations : o_{t,r} et α_{t,r} (§ 5.4, B4)', () => {
     assert.ok(listeOrdinaire(occupants));
   });
 
-  test('avec {affilies}, les occupants qui portent une appartenance', () => {
+  test('avec {affilies}, les occupants qui portent une organisation', () => {
     const { occupants, affilies } = occupations(instance, tableDe, { affilies: true });
-    // t0 : 3 et 8, puis 3 ; t1 : 11, puis 8 seul (5 et 14 sans appartenance).
+    // t0 : 3 et 8, puis 3 ; t1 : 11, puis 8 seul (5 et 14 sans organisation).
     assert.deepEqual(occupants, [3, 1, 1, 3]);
     assert.deepEqual(affilies, [2, 1, 1, 1]);
     assert.ok(listeOrdinaire(affilies));
@@ -695,7 +695,7 @@ describe('occupations : o_{t,r} et α_{t,r} (§ 5.4, B4)', () => {
 });
 
 describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5, B5, D41)', () => {
-  test("tous d'une même appartenance : A_max = 1 pour qui rencontre quelqu'un, 0 pour qui ne rencontre personne", () => {
+  test("tous d'une même organisation : A_max = 1 pour qui rencontre quelqu'un, 0 pour qui ne rencontre personne", () => {
     // Cinq personnes d'Aubier, une table de 4 et une de 2, deux tours : 10
     // est seul à la table de 2 aux deux tours. N_aff = 5, G = 1, g_p = 5 :
     // le troisième terme vaut 1. Pour 2, 4, 6, 8 : 3 sièges par tour, 6 ;
@@ -709,24 +709,24 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     const obtenu = bornesEtMesures(instance, tableDe);
     assert.deepEqual(obtenu.phiAffilies, [4, 4, 4, 4, 0]);
     assert.deepEqual(obtenu.aMax, [1, 1, 1, 1, 0]);
-    assert.deepEqual(obtenu.appartenances, [1, 1, 1, 1, 0]);
+    assert.deepEqual(obtenu.organisations, [1, 1, 1, 1, 0]);
     assert.ok(listeOrdinaire(obtenu.phiAffilies) && listeOrdinaire(obtenu.aMax));
   });
 
   test("Φ_aff l'emporte à une table pauvre en affiliés, G quand on en rencontre beaucoup", () => {
-    // Aubier 1, 2, 5 ; Ressac 3, 6 ; Brisant 7, 8 ; 4 sans appartenance.
+    // Aubier 1, 2, 5 ; Ressac 3, 6 ; Brisant 7, 8 ; 4 sans organisation.
     // Deux tables de 4 : 1, 2, 3, 4 à l'une, 5 à 8 à l'autre. G = 3,
     // N_aff = 7 ; troisième terme 5 pour Aubier, 6 pour les autres.
     const personnes = [[1, AUBIER], [2, AUBIER], [3, RESSAC], [4, null], [5, AUBIER], [6, RESSAC], [7, BRISANT], [8, BRISANT]];
     const listes = [[1, 2, 3, 4], [5, 6, 7, 8]];
     // Un tour : à la première table α = 3, Φ_aff = 3 − 1 = 2 pour 1, 2
-    // et 3, sous G = 3 ; 4, sans appartenance, n'ôte rien : Φ_aff = 3. À la
+    // et 3, sous G = 3 ; 4, sans organisation, n'ôte rien : Φ_aff = 3. À la
     // seconde, α = 4, Φ_aff = 3 pour chacun.
     const unTour = salle({ personnes, capacites: [4, 4], tours: 1 });
     const un = bornesEtMesures(unTour, planIndexe(unTour, [listes]));
     assert.deepEqual(un.phiAffilies, [2, 2, 2, 3, 3, 3, 3, 3]);
     assert.deepEqual(un.aMax, [2, 2, 2, 3, 3, 3, 3, 3]);
-    assert.deepEqual(un.appartenances, [2, 2, 1, 2, 2, 2, 3, 3]);
+    assert.deepEqual(un.organisations, [2, 2, 1, 2, 2, 2, 3, 3]);
     // Deux tours, les mêmes tables : Φ_aff double, plafonné par n^aff_p et
     // N_aff − ε_p ; 5 monte à 6, au-dessus de G = 3 et de son troisième
     // terme 5 : G borne seul.
@@ -736,11 +736,11 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     assert.deepEqual(deux.aMax, [3, 3, 3, 3, 3, 3, 3, 3]);
   });
 
-  test('le troisième terme égale G quand chaque autre appartenance a une seule personne, sans jamais descendre sous lui', () => {
+  test('le troisième terme égale G quand chaque autre organisation a une seule personne, sans jamais descendre sous lui', () => {
     // Aubier 1, 2, 3 ; Ressac 4 ; Brisant 5 ; une table de 5, deux tours.
     // N_aff = 5 : pour Aubier, (5 − 3) + 1 = 3 = G ; pour 4 et 5,
     // (5 − 1) + 1 = 5. Φ_aff = min(4, min(4, 8)) = 4 pour chacun.
-    // Chaque appartenance autre que celle de p compte au moins une
+    // Chaque organisation autre que celle de p compte au moins une
     // personne : N_aff − g_p ≥ G − 1, et le terme ne passe jamais sous G.
     const instance = salle({
       personnes: [[1, AUBIER], [2, AUBIER], [3, AUBIER], [4, RESSAC], [5, BRISANT]],
@@ -750,10 +750,10 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     const obtenu = bornesEtMesures(instance, planIndexe(instance, [[[1, 2, 3, 4, 5]], [[1, 2, 3, 4, 5]]]));
     assert.deepEqual(obtenu.phiAffilies, [4, 4, 4, 4, 4]);
     assert.deepEqual(obtenu.aMax, [3, 3, 3, 3, 3]);
-    assert.deepEqual(obtenu.appartenances, [3, 3, 3, 2, 2]);
+    assert.deepEqual(obtenu.organisations, [3, 3, 3, 2, 2]);
   });
 
-  test('seule de son appartenance (g_p = 1), p ne se compte pas parmi les affiliés qu\u{2019}elle rencontre', () => {
+  test('seule de son organisation (g_p = 1), p ne se compte pas parmi les affiliés qu\u{2019}elle rencontre', () => {
     // Ressac 1 seule, avec Aubier 2, 3, 4 à une table de 4 ; Brisant 5 et 6
     // à une table de 2 ; un tour. G = 3, N_aff = 6.
     //   1      α = 4 : Φ_aff = min(5, min(5, 4 − 1)) = 3 ; terme (6 − 1) + 1
@@ -767,13 +767,13 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     const obtenu = bornesEtMesures(instance, planIndexe(instance, [[[1, 2, 3, 4], [5, 6]]]));
     assert.deepEqual(obtenu.phiAffilies, [3, 3, 3, 3, 1, 1]);
     assert.deepEqual(obtenu.aMax, [3, 3, 3, 3, 1, 1]);
-    assert.deepEqual(obtenu.appartenances, [1, 2, 2, 2, 1, 1]);
+    assert.deepEqual(obtenu.organisations, [1, 2, 2, 2, 1, 1]);
     assert.deepEqual(obtenu.affilies, [3, 3, 3, 3, 1, 1]);
   });
 
-  test("ancrés affiliés : un par table visitée, une fois ; p ancré ne se compte pas ; un ancré sans appartenance n'est pas un affilié", () => {
+  test("ancrés affiliés : un par table visitée, une fois ; p ancré ne se compte pas ; un ancré sans organisation n'est pas un affilié", () => {
     // Trois tables de 3, trois tours. 1 (Aubier) ancré à t0, 2 (Ressac) à
-    // t1, 9 (sans appartenance) à t2 ; mobiles 3, 7 (Aubier), 4 (Ressac),
+    // t1, 9 (sans organisation) à t2 ; mobiles 3, 7 (Aubier), 4 (Ressac),
     // 5, 8 (Brisant), 6 (sans). N_aff = 7, n^aff = 5, G = 3 ; a^aff vaut 1
     // à t0 et t1, 0 à t2.
     const instance = salle({
@@ -793,10 +793,10 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     //   3  t0, t0, t1 : ancrés 1 + 1 (t0 une fois) ; sièges 1 + 1 + 0 → 4
     //   4  t0, t1, t2 : ancrés 2 ; sièges 1 + 1 + 1 → 5
     //   5  t1, t2, t0 : ancrés 2 ; sièges 0 + 0 + 1 → 3
-    //   6  sans appartenance, t1, t2, t1 : ancrés 1 ; sièges 1 + 1 + 1 → 4
+    //   6  sans organisation, t1, t2, t1 : ancrés 1 ; sièges 1 + 1 + 1 → 4
     //   7  t2, t1, t0 : ancrés 2 ; sièges 1 + 1 + 1 → 5
     //   8  t2, t0, t2 : ancrés 1 ; sièges 1 + 1 + 1 → 4
-    //   9  ancré sans appartenance à t2 : ancré vu 0, sièges 2 + 1 + 2 → 5
+    //   9  ancré sans organisation à t2 : ancré vu 0, sièges 2 + 1 + 2 → 5
     const obtenu = bornesEtMesures(instance, tableDe);
     assert.deepEqual(obtenu.phiAffilies, [5, 4, 4, 5, 3, 4, 5, 4, 5]);
     assert.deepEqual(obtenu.aMax, [3, 3, 3, 3, 3, 3, 3, 3, 3]);
@@ -805,12 +805,12 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
   });
 
   test("mobiles affiliés : n^aff_p ne compte pas p, et borne quand les sièges dépassent", () => {
-    // 1 (Aubier) ancré à la table de 2 avec 5, sans appartenance ; 2
+    // 1 (Aubier) ancré à la table de 2 avec 5, sans organisation ; 2
     // (Aubier), 3 et 4 (Ressac) à la table de 5, deux tours. N_aff = 4,
     // n^aff = 3, G = 2.
     //   1     α = 1 à sa table : 0
     //   2..4  sièges 2 + 2 = 4, n^aff_p = 2 : min(3, min(2, 4)) = 2
-    //   5     sans appartenance, ancré affilié 1 vu, α − a^aff = 0 : 1
+    //   5     sans organisation, ancré affilié 1 vu, α − a^aff = 0 : 1
     const instance = salle({
       personnes: [[1, AUBIER], [2, AUBIER], [3, RESSAC], [4, RESSAC], [5, null]],
       capacites: [2, 5],
@@ -825,7 +825,7 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
 
   test("table incomplète : l'occupation, jamais la capacité", () => {
     // Deux tables de 4, occupées par 3 et 2 : Aubier 1, Ressac 2, 3 sans
-    // appartenance, puis Aubier 4, Ressac 5. G = 2, N_aff = 4. Sur les
+    // organisation, puis Aubier 4, Ressac 5. G = 2, N_aff = 4. Sur les
     // capacités, Φ_aff de 1 vaudrait 3 ; sur l'occupation, α = 2 : 1.
     const instance = salle({
       personnes: [[1, AUBIER], [2, RESSAC], [3, null], [4, AUBIER], [5, RESSAC]],
@@ -838,12 +838,12 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
   });
 
   test("personne en réserve : ses tours en réserve n'entrent ni dans son Φ_aff ni dans l'occupation des autres", () => {
-    // Aubier 1, 2 ; Ressac 3, 4 ; 5 sans appartenance ; deux tables de 3,
+    // Aubier 1, 2 ; Ressac 3, 4 ; 5 sans organisation ; deux tables de 3,
     // deux tours ; 1 en réserve au tour 2.
     //   1  tour 1 seul, α = 3 : 2 ; A_max = min(2, 2, 3) = 2
     //   2  α = 3 puis 3 : min(3, min(3, 4)) = 3
     //   3  idem : 3
-    //   4  α = 1 (5 sans appartenance) puis 3 : 0 + 2 = 2
+    //   4  α = 1 (5 sans organisation) puis 3 : 0 + 2 = 2
     //   5  α = 1 puis 0 : 1
     const instance = salle({
       personnes: [[1, AUBIER], [2, AUBIER], [3, RESSAC], [4, RESSAC], [5, null]],
@@ -856,8 +856,8 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     assert.deepEqual(obtenu.aMax, [2, 2, 2, 2, 1]);
   });
 
-  test("G compte les appartenances des seules personnes présentes : un exclu n'en apporte aucune", () => {
-    // Aubier 1, 2, 3 et 4 sans appartenance à une table de 4 ; 5, seul de
+  test("G compte les organisations des seules personnes présentes : un exclu n'en apporte aucune", () => {
+    // Aubier 1, 2, 3 et 4 sans organisation à une table de 4 ; 5, seul de
     // Ressac, exclu. G = 1 : A_max(4) = min(Φ_aff = 3, 1) = 1.
     const instance = salle({
       personnes: [[1, AUBIER], [2, AUBIER], [3, AUBIER], [4, null], [5, RESSAC]],
@@ -871,7 +871,7 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     assert.deepEqual(obtenu.aMax, [1, 1, 1, 1]);
   });
 
-  test('sans aucune appartenance, Φ_aff et A_max sont nuls ; un plan hors forme lève', () => {
+  test('sans aucune organisation, Φ_aff et A_max sont nuls ; un plan hors forme lève', () => {
     const { instance } = forme({ capacites: [3, 3], ancres: [1, 0], autres: 4, tours: 2 });
     const tableDe = planBrasse(instance, 3);
     assert.deepEqual(borneDiversite(instance, tableDe), { phiAffilies: [0, 0, 0, 0, 0], aMax: [0, 0, 0, 0, 0] });
@@ -880,7 +880,7 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
 
   test('une salle dont chacun est exclu : N = 0, le plan vide, et chaque fonction rend une liste vide sans lire une case d’une liste vide', () => {
     // Le seul participant est exclu : aucune personne présente, aucune
-    // appartenance, un plan indexé sans case. Chaque liste vide de
+    // organisation, un plan indexé sans case. Chaque liste vide de
     // l'instance, et le plan, lèvent à la lecture d'un index : une boucle
     // sur les personnes qui tournerait à N = 0 échoue sur sa première
     // lecture, nommée, au lieu de ne jamais finir.
@@ -919,7 +919,7 @@ function salleAPresences({ capacites, tours, presences, reservations = [] }) {
     participants: presences.map((presence, i) => ({
       id: i + 1,
       nom: `P${i + 1}`,
-      appartenance: null,
+      organisation: null,
       ...(presence === undefined ? {} : { presence }),
     })),
     tables: capacites.map((capacite, t) => ({ id: 10 * (t + 1), numero: t + 1, capacite })),

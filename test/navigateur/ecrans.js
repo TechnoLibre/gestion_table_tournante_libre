@@ -225,16 +225,16 @@ const PRENOMS = ['Iris', 'Théo', 'Ondine', 'Basile', 'Maëlle', 'Sidonie', 'Aur
 const NOMS = ['Ombrelle', 'Pervenche', 'Lacasse', 'Tourteau', 'Quenouille', 'Cormoran', 'Belette', 'Garance'];
 
 // Un événement d'épreuve inventé, sans proposition ni retenu : une
-// personne par entrée d'appartenances — son appartenance, null sans —,
+// personne par entrée d'organisations — son organisation, null sans —,
 // tables tables rondes de sieges places numérotées de 1 à tables, tours
 // tours.
-function chargeInventee({ appartenances, tables, sieges, tours }) {
+function chargeInventee({ organisations, tables, sieges, tours }) {
   const charge = creerCharge({ id: 'evt-qualite', nom: 'Soirée Pervenche', siegesParDefaut: sieges, tours });
-  charge.participants = appartenances.map((appartenance, rang) => ({
+  charge.participants = organisations.map((organisation, rang) => ({
     id: rang + 1,
     nom: NOMS[Math.floor(rang / PRENOMS.length) % NOMS.length],
     prenom: PRENOMS[rang % PRENOMS.length],
-    appartenance,
+    organisation,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -247,7 +247,7 @@ function chargeInventee({ appartenances, tables, sieges, tours }) {
     forme: 'ronde',
     position: { x: 300 * (rang + 1), y: 0 },
   }));
-  charge.prochainsIds = { participant: appartenances.length + 1, table: tables + 1, proposition: 1 };
+  charge.prochainsIds = { participant: organisations.length + 1, table: tables + 1, proposition: 1 };
   return charge;
 }
 
@@ -259,7 +259,7 @@ const RESSAC = 'Atelier Ressac';
  *  pour tous les tours, forment une paire imposée. Une génération de deux
  *  propositions. */
 export function chargePaires() {
-  const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 4, sieges: 3, tours: 6 });
+  const charge = chargeInventee({ organisations: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 4, sieges: 3, tours: 6 });
   charge.reservations = [1, 2].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
   return generee(charge, { graine: 5, nombre: 2, arret: 60 }).charge;
 }
@@ -268,7 +268,7 @@ export function chargePaires() {
 // portent l'étiquette « finance », que la table 1 a pour objectif à tous
 // les tours. Aucune proposition.
 function sousObjectif() {
-  const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
+  const charge = chargeInventee({ organisations: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
   for (const personne of charge.participants) if (personne.id <= 6) personne.etiquettes = ['finance'];
   charge.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
   return charge;
@@ -301,7 +301,7 @@ export function chargeComparaison() {
 // Douze personnes, trois tables de quatre, trois tours ; une génération de
 // deux propositions sous la graine donnée, sans retenu.
 function deuxPropositions(graine) {
-  const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
+  const charge = chargeInventee({ organisations: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
   return generee(charge, { graine, nombre: 2, arret: 60 }).charge;
 }
 
@@ -337,7 +337,7 @@ export function chargeDerivees() {
 // Le placement de chargeNiveaux, tours par tours, sièges non attribués.
 // Les doublons parmi les affiliés (α − δ) valent 3 à la table 1 à chaque
 // tour, 2 et 1 aux tables 2 et 3 du tour 1, 0 ailleurs ; les sièges sans
-// appartenance nouvelle (c − δ) valent 0 à la table 2 du tour 2, 1 aux
+// organisation nouvelle (c − δ) valent 0 à la table 2 du tour 2, 1 aux
 // tables 2 et 3 du tour 3, 2 et 3 ailleurs ; la table 4 du tour 3 n'a aucun
 // affilié. Les quatre de la table 1 se voient trois fois, 5 et 6 deux
 // fois, 5 et 7 une fois, 1 et 5 jamais.
@@ -348,14 +348,14 @@ const NIVEAUX = Object.freeze([
 ]);
 
 /** Seize personnes inventées, trois tables de quatre et une de cinq, trois
- *  tours : les quatre de la première appartenance réservées ensemble à la
+ *  tours : les quatre de la première organisation réservées ensemble à la
  *  table 1 pour tous les tours, et la proposition NIVEAUX, écrite à la
  *  main, où la grille des tables, sous chaque position, et la matrice des
  *  rencontres portent les quatre niveaux de l'échelle (§ 12.7, D33, D35).
  *  La table 4 garde un siège vide à chaque tour : ses sièges et ses assis
  *  diffèrent, et leurs deux pourcentages aussi aux tours 1 et 2. */
 export function chargeNiveaux() {
-  const appartenances = [
+  const organisations = [
     ...Array(4).fill(AUBIER),
     ...Array(3).fill(RESSAC),
     ...Array(2).fill('Collectif Brisant'),
@@ -363,7 +363,7 @@ export function chargeNiveaux() {
     'Brigade Sauge',
     ...Array(5).fill(null),
   ];
-  let charge = chargeInventee({ appartenances, tables: 4, sieges: 4, tours: 3 });
+  let charge = chargeInventee({ organisations, tables: 4, sieges: 4, tours: 3 });
   charge.tables[3].sieges = 5;
   for (const participant of [1, 2, 3, 4]) {
     charge = executer(charge, 'reserver', { participant, table: 1, siege: participant, portee: 'tous', tour: null });
@@ -376,7 +376,7 @@ const TOURS_ETROITS = 10;
 
 /** Soixante-quatre personnes inventées, huit tables de huit, TOURS_ETROITS
  *  tours, et une proposition écrite à la main, la même à chaque tour : les
- *  huit de la première appartenance réunies à la table 1, vingt-huit
+ *  huit de la première organisation réunies à la table 1, vingt-huit
  *  collisions par tour, aucune prouvée ; les huit de la seconde, une par
  *  table sauf deux à la table 2, une collision par tour, dont une seule
  *  prouvée — les deux réservées ensemble à la table 2 au tour 1. Le segment
@@ -384,11 +384,11 @@ const TOURS_ETROITS = 10;
  *  étroit (§ 12.4, B13). Au-delà de SEUIL_MATRICE_PARTICIPANTS, la matrice
  *  ne se dessine pas. */
 export function chargeCollisionsEtroites() {
-  const appartenances = [...Array(8).fill(AUBIER), ...Array(8).fill(RESSAC), ...Array(48).fill(null)];
-  const charge = chargeInventee({ appartenances, tables: 8, sieges: 8, tours: TOURS_ETROITS });
+  const organisations = [...Array(8).fill(AUBIER), ...Array(8).fill(RESSAC), ...Array(48).fill(null)];
+  const charge = chargeInventee({ organisations, tables: 8, sieges: 8, tours: TOURS_ETROITS });
   charge.reservations = [9, 10].map((participant) => ({ participant, table: 2, siege: null, portee: 'tour', tour: 1 }));
-  // Les tables 2 à 8 : la seconde appartenance, 9 et 10 à la table 2, puis
-  // une de 11 à 16 par table, complétées des personnes sans appartenance.
+  // Les tables 2 à 8 : la seconde organisation, 9 et 10 à la table 2, puis
+  // une de 11 à 16 par table, complétées des personnes sans organisation.
   const sans = Array.from({ length: 48 }, (_, rang) => 17 + rang);
   const autres = [
     [9, 10, ...sans.slice(0, 6)],
@@ -418,7 +418,7 @@ export const fichierCourses = (charge, entrees, base = BASE) => ({
 
 // Un placement de la petite démonstration en conflit, quatre tours de
 // quatre tables de trois, sièges non attribués : au tour 3, la table 1 réunit
-// une même appartenance, des voisins revus et un retour à sa table, la
+// une même organisation, des voisins revus et un retour à sa table, la
 // table 2 aucun conflit. Écrit tel quel, il ne dépend d'aucun chemin de la
 // recherche.
 const TROIS_CONFLITS = Object.freeze([
@@ -1022,7 +1022,7 @@ export const ECRANS = Object.freeze([
         await touche('ArrowDown');
         flushSync();
       }
-      for (const marque of ['trameAppartenance', 'trameVoisins', 'trameTable']) await element(m, `[data-table="1"] [data-marque="${marque}"]`);
+      for (const marque of ['trameOrganisation', 'trameVoisins', 'trameTable']) await element(m, `[data-table="1"] [data-marque="${marque}"]`);
       await cliquer(m, '[data-commande="legende"]');
       await element(m, '[data-legende] [data-legende-regle="nouvelleTable"]');
       return m.racine;
@@ -1056,7 +1056,7 @@ export const ECRANS = Object.freeze([
       // « FINANCE » tapé au clavier s'enregistre sous l'orthographe que
       // l'événement porte : les pastilles neutres et leur croix de retrait, le
       // signal d'orthographe contre le champ, et la légende des étiquettes
-      // sous celle des appartenances.
+      // sous celle des organisations.
       let charge = chargePrincipale();
       charge = executer(charge, 'changerEtiquettes', { id: 1, ajouter: 'finance, Montréal' });
       charge = executer(charge, 'changerEtiquettes', { id: 2, ajouter: 'bénévole' });
@@ -1099,12 +1099,12 @@ export const ECRANS = Object.freeze([
     nom: 'participants.groupes',
     mode: 'ecriture',
     async atteindre(contexte) {
-      // La liste groupée par appartenance, choisie au clavier dans le
+      // La liste groupée par organisation, choisie au clavier dans le
       // sélecteur, puis le premier groupe replié.
       const m = await ouvrirEvenement(contexte, chargePrincipale(), { ecriture: true, section: 'participants' });
       const choix = await element(m, '[data-section="participants"] [data-champ="grouper"]');
       choix.focus();
-      for (let essai = 0; essai < choix.options.length && choix.value !== 'appartenance'; essai += 1) {
+      for (let essai = 0; essai < choix.options.length && choix.value !== 'organisation'; essai += 1) {
         await touche('ArrowDown');
         flushSync();
       }
@@ -1118,13 +1118,13 @@ export const ECRANS = Object.freeze([
     nom: 'participants.conflits',
     mode: 'ecriture',
     async atteindre(contexte) {
-      // La liste groupée par appartenance, choisie au clavier, sous la
+      // La liste groupée par organisation, choisie au clavier, sous la
       // proposition montrée au plan : un groupe en conflit porte sa marque,
       // ses lignes de conflit et celles de ses personnes.
       const m = await ouvrirEvenement(contexte, chargePrincipale(), { ecriture: true, section: 'participants' });
       const choix = await element(m, '[data-section="participants"] [data-champ="grouper"]');
       choix.focus();
-      for (let essai = 0; essai < choix.options.length && choix.value !== 'appartenance'; essai += 1) {
+      for (let essai = 0; essai < choix.options.length && choix.value !== 'organisation'; essai += 1) {
         await touche('ArrowDown');
         flushSync();
       }
@@ -1495,7 +1495,7 @@ export const ECRANS = Object.freeze([
     nom: 'qualite.collisions.etroit',
     mode: 'lecture',
     async atteindre(contexte) {
-      // chargeCollisionsEtroites : la barre de la seconde appartenance
+      // chargeCollisionsEtroites : la barre de la seconde organisation
       // porte un segment « prouvé inévitable » étroit, à côté de son reste.
       const m = await ouvrirQualite(contexte, chargeCollisionsEtroites());
       await element(m, '[data-graphique="collisions"] [data-segment="prouve"]');

@@ -15,7 +15,7 @@
 // se disent à part, sur chaque ligne, jamais ajoutés aux choisis.
 //
 // Chaque minimum affiché désigne la personne la plus mal servie (§ 12.1) :
-// le moins de rencontres, d'appartenances vues, de diversité. La redondance
+// le moins de rencontres, d'organisations vues, de diversité. La redondance
 // r(p) va dans l'autre sens — plus elle est grande, pire est le sort —, et
 // son minimum désignerait la personne la mieux servie : elle se lit par sa
 // somme Σ r(p), la grandeur que la recherche et le classement lisent.
@@ -52,7 +52,7 @@ const LECTURES = new Map([
   ['rencontresRepetees', (l) => l.mesures.rencontresRepetees.choisies],
   ['maxRencontresPaire', (l) => l.mesures.maxRencontresPaire],
   ['retoursChoisis', (l) => l.mesures.totalRetoursChoisis],
-  ['appartenancesVues', (l) => l.mesures.aggAppartenancesVues.tous.min],
+  ['organisationsVues', (l) => l.mesures.aggOrganisationsVues.tous.min],
   ['totalRedondance', (l) => l.mesures.totalRedondance],
   ['diversite', (l) => l.mesures.aggDiversite.tous.min],
   ['manqueMax', (l) => l.troisChiffres.manqueMax.tous],
@@ -115,7 +115,7 @@ const GROUPES = [
   ['rencontres', ['rencontresTous', 'rencontresMobiles', 'rencontresAncres']],
   ['collisions', ['collisionsCumulees', 'pairesDistinctes', 'excedentCollisions']],
   ['repetitions', ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis']],
-  ['diversite', ['appartenancesVues', 'totalRedondance', 'diversite']],
+  ['diversite', ['organisationsVues', 'totalRedondance', 'diversite']],
   ['manque', ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori']],
   ['objectifs', ['jamaisServies', 'horsObjectifMax', 'toursHorsObjectif', 'toursSelonObjectif', 'animateursRencontres', 'animateursNonRencontres']],
 ];

@@ -4,7 +4,7 @@
 // Épreuves du détail d'un placement (§ 12, D27 à D37, D51, D52) : le
 // pourcentage et ses bords, le profil trié et ses marques, la répartition,
 // la synthèse, les bornes des tuiles, les barres des collisions, le mélange
-// des appartenances à chaque table et ses trois ordres, les objectifs tour
+// des organisations à chaque table et ses trois ordres, les objectifs tour
 // par tour, le profil des animateurs, et detailler qui les réunit. Chaque
 // configuration est inventée et petite ; ses valeurs sont comptées à la main
 // dans le commentaire qui la précède, et une lecture directe du plan, qui
@@ -43,25 +43,25 @@ const AUBIER = 'Coopérative Aubier';
 const RESSAC = 'Atelier Ressac';
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
-// La clé normalisée d'une appartenance, telle que l'appelant la passe : le
+// La clé normalisée d'une organisation, telle que l'appelant la passe : le
 // moteur n'importe pas le CSV, et l'épreuve n'en a pas besoin.
 const cle = (libelle) => libelle.toLowerCase();
 
 const tous = (participant, table) => ({ participant, table, portee: 'tous' });
 const auTour = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
 
-// Participant présent : [id, appartenance, étiquettes, tours animés], les
+// Participant présent : [id, organisation, étiquettes, tours animés], les
 // trois derniers facultatifs.
-const participant = ([id, appartenance = null, etiquettes, anime]) => ({
+const participant = ([id, organisation = null, etiquettes, anime]) => ({
   id,
   nom: `P${id}`,
-  appartenance,
+  organisation,
   ...(etiquettes === undefined ? {} : { etiquettes }),
   ...(anime === undefined ? {} : { anime }),
 });
@@ -159,7 +159,7 @@ describe('pourcentage (D52, § 5.4)', () => {
 // 4 : {5, 6, 2}, 3 sur 4 ; 5 : {4, 6, 2}, 3 sur 4 ; 6 : {4, 5, 3}, 3 sur 3.
 // À trois rencontres, 4 et 5, au plafond le plus haut, passent devant 3 et
 // 6 ; trié sur le pourcentage, 4 et 5, à 75, viendraient en tête.
-// Appartenances : 1, 3 Aubier ; 2, 4 Ressac ; 5, 6 sans. A(p) vaut 1 pour 4
+// Organisations : 1, 3 Aubier ; 2, 4 Ressac ; 5, 6 sans. A(p) vaut 1 pour 4
 // et 5 seulement ; A_max(4) = min(Φ_aff = 1, G = 2, 4 − 2 + 1) = 1,
 // A_max(5) = min(Φ_aff = 3, 2) = 2.
 const PROFIL = {
@@ -194,7 +194,7 @@ describe('profilRencontres (§ 12.3, D28, D51)', () => {
         plafondRealise: realises[p],
         pourcent: pourcentage(mesures.rencontres[p], realises[p]),
         plafondAPriori: aPriori[p],
-        appartenances: mesures.appartenancesVues[p],
+        organisations: mesures.organisationsVues[p],
         affilies: mesures.affilies[p],
         borneDiversite: aMax[p],
         toursNonAssis: 2 - mesures.toursAssis[p],
@@ -203,7 +203,7 @@ describe('profilRencontres (§ 12.3, D28, D51)', () => {
       });
     }
     // A(p) et A_max, comptés à la main.
-    assert.deepEqual(mesures.appartenancesVues, [2, 2, 2, 1, 1, 2]);
+    assert.deepEqual(mesures.organisationsVues, [2, 2, 2, 1, 1, 2]);
     assert.deepEqual([aMax[3], aMax[4]], [1, 2]);
   });
 
@@ -447,7 +447,7 @@ describe('objectifsParTour (§ 12.12, D36, B21)', () => {
 // Onze personnes, cinq tables de trois, deux tours, sans réservation.
 // « atelier ressac » (1, 2), « Atelier Ressac » (3, 4), « Zinc » (5, 6),
 // « Grès » (7, 8, 9), « Coopérative Aubier » (10, 11), dans cet ordre
-// d'apparition. Tour 1 : chaque appartenance à sa table, Grès à trois. Tour 2 :
+// d'apparition. Tour 1 : chaque organisation à sa table, Grès à trois. Tour 2 :
 // 1, 3, 5 ; 2, 4, 6 ; 7 ; 8 ; 9, 10, 11. Aubier : 2 collisions, 1 paire,
 // excédent 1 ; Grès : 3, 3, 0 ; les trois autres : 1, 1, 0.
 const COLLISIONS = {
@@ -493,7 +493,7 @@ describe('barresCollisions et planchersParGroupe (§ 12.4, D31, B13)', () => {
     assert.equal(somme(lignes.map(({ cumulees }) => cumulees)), 8);
   });
 
-  test('la variante conflit : le plancher du diagnostic, 4, est prouvé inévitable pour l’appartenance de cinq', () => {
+  test('la variante conflit : le plancher du diagnostic, 4, est prouvé inévitable pour l’organisation de cinq', () => {
     const configuration = CATALOGUE.find(({ cle: nom }) => nom === 'petite-conflit').construire();
     const instance = normaliser(configuration);
     const tableDe = indexerPlan(instance, PLAN_PARFAIT_PETITE);
@@ -505,7 +505,7 @@ describe('barresCollisions et planchersParGroupe (§ 12.4, D31, B13)', () => {
     assert.ok(lignes.filter((ligne) => ligne !== conflit).every(({ prouve }) => prouve === 0));
   });
 
-  test('un plancher d’une appartenance absente de l’instance, ou une liste d’une autre longueur, lève RangeError', () => {
+  test('un plancher d’une organisation absente de l’instance, ou une liste d’une autre longueur, lève RangeError', () => {
     const { instance, tableDe } = preparer(COLLISIONS);
     assert.throws(() => planchersParGroupe(instance, [{ groupe: 'Ardoise', plancherCumulees: 2 }]), RangeError);
     assert.throws(() => barresCollisions(instance, mesurer(instance, tableDe), [0, 0], true, cle), RangeError);
@@ -513,16 +513,16 @@ describe('barresCollisions et planchersParGroupe (§ 12.4, D31, B13)', () => {
 });
 
 // Lecture directe d'une case (§ 5.4, B4) : capacité, occupants, affiliés et
-// appartenances distinctes de la table i au tour r, sur le plan préparé.
+// organisations distinctes de la table i au tour r, sur le plan préparé.
 function caseLue({ configuration, tours }, r, i) {
-  const appartenance = new Map(configuration.participants.map(({ id, appartenance: a }) => [id, a]));
+  const organisation = new Map(configuration.participants.map(({ id, organisation: a }) => [id, a]));
   const occupants = tours[r][i];
-  const affilies = occupants.filter((id) => appartenance.get(id) !== null);
+  const affilies = occupants.filter((id) => organisation.get(id) !== null);
   return {
     capacite: configuration.tables[i].capacite,
     occupants: occupants.length,
     affilies: affilies.length,
-    appartenances: new Set(affilies.map((id) => appartenance.get(id))).size,
+    organisations: new Set(affilies.map((id) => organisation.get(id))).size,
   };
 }
 
@@ -531,12 +531,12 @@ function melange({ instance, tableDe }) {
   return mixTables(instance, tableDe, occupations(instance, tableDe, { affilies: true }));
 }
 
-// Une table par cas, un seul tour, quatre appartenances : W, en tête de
-// l'ordre des tables, quatre places et deux sans appartenance ; X, huit
-// places, quatre affiliés de quatre appartenances et un sans ; Y, quatre
+// Une table par cas, un seul tour, quatre organisations : W, en tête de
+// l'ordre des tables, quatre places et deux sans organisation ; X, huit
+// places, quatre affiliés de quatre organisations et un sans ; Y, quatre
 // places, deux Aubier, un Ressac, un Grès ; Z, quatre places, un Aubier et
 // trois sans ; V, quatre places, pleine de quatre affiliés de quatre
-// appartenances. Sièges : —, 4, 1, 3, 0 ; assis : —, 1, 1, 3, 0 ;
+// organisations. Sièges : —, 4, 1, 3, 0 ; assis : —, 1, 1, 3, 0 ;
 // doublons : —, 0, 1, 0, 0. W, à l'index 0, ne finit chaque ordre que par
 // la règle des tables toutes « — », non par l'ordre des tables ; V, sans
 // rien à compter, finit les tables mesurées.
@@ -561,21 +561,21 @@ describe('mixTables (§ 12.11, D35, B20)', () => {
         assert.equal(cas, null);
         return;
       }
-      const { capacite: c, occupants: o, affilies: a, appartenances: d } = lu;
+      const { capacite: c, occupants: o, affilies: a, organisations: d } = lu;
       assert.deepEqual(cas, {
         occupants: o,
         affilies: a,
-        appartenances: d,
+        organisations: d,
         comptes: { sieges: c - d, assis: o - d, doublons: a - d },
         pourcents: { sieges: pourcentage(d, c), assis: pourcentage(d, o), doublons: pourcentage(d, a) },
       });
       assert.ok(cas.comptes.sieges >= cas.comptes.assis && cas.comptes.assis >= cas.comptes.doublons && cas.comptes.doublons >= 0);
     });
-    // La table incomplète, avec un assis sans appartenance : 4 ≥ 1 ≥ 0,
-    // quatre appartenances pour huit sièges, cinq assis, quatre affiliés.
+    // La table incomplète, avec un assis sans organisation : 4 ≥ 1 ≥ 0,
+    // quatre organisations pour huit sièges, cinq assis, quatre affiliés.
     assert.deepEqual(lignes[1].tours[0].comptes, { sieges: 4, assis: 1, doublons: 0 });
     assert.deepEqual(lignes[1].tours[0].pourcents, { sieges: 50, assis: 80, doublons: 100 });
-    // Le sans-appartenance de Z n'est pas un doublon.
+    // Le sans-organisation de Z n'est pas un doublon.
     assert.deepEqual(lignes[3].tours[0].comptes, { sieges: 3, assis: 3, doublons: 0 });
     // La table pleine d'affiliés tous distincts : rien à compter.
     assert.deepEqual(lignes[4].tours[0].comptes, { sieges: 0, assis: 0, doublons: 0 });
@@ -643,7 +643,7 @@ describe('mixTables (§ 12.11, D35, B20)', () => {
     assert.deepEqual(ordres.doublons, [0, 1]);
   });
 
-  test('un doublon d’appartenance est non nul exactement là où parcourirTours compte des collègues', () => {
+  test('un doublon d’organisation est non nul exactement là où parcourirTours compte des collègues', () => {
     for (const description of [COLLISIONS, TROIS_ORDRES, PROFIL]) {
       const prepare = preparer(description);
       const { parTour } = parcourirTours(prepare.instance, prepare.tableDe);
@@ -851,7 +851,7 @@ describe('bornesDesTuiles (§ 12.2, D29, D34, D52, B11)', () => {
 
   test('sans personne présente : ni rang 1, ni tête de manque', () => {
     const configuration = {
-      participants: [{ id: 1, nom: 'P1', appartenance: AUBIER, exclu: true }],
+      participants: [{ id: 1, nom: 'P1', organisation: AUBIER, exclu: true }],
       tables: [{ id: 1, numero: 1, capacite: 2 }],
       tours: 1,
       reservations: [],
@@ -898,7 +898,7 @@ function bornesDuPlan(prepare, { planchersValides = true, aPrioriConnu = true } 
   });
 }
 
-// Cinq de la Coopérative Aubier et une personne sans appartenance, deux
+// Cinq de la Coopérative Aubier et une personne sans organisation, deux
 // tables de trois, trois tours : chaque tour assied trois membres à une
 // table et deux à l'autre, quatre collisions. Le diagnostic prouve 12
 // collisions cumulées, 4 paires distinctes — le plus grand minimum d'un
@@ -914,7 +914,7 @@ const MEMES_TABLES = [
   { 1: [1, 2, 3], 2: [4, 5, 6] },
   { 1: [1, 2, 3], 2: [4, 5, 6] },
 ];
-// Chaque tour ne revoit que 1 et 2 : les dix paires de l'appartenance,
+// Chaque tour ne revoit que 1 et 2 : les dix paires de l'organisation,
 // excédent 2.
 const TABLES_VARIEES = [
   { 1: [1, 2, 3], 2: [4, 5, 6] },
@@ -922,7 +922,7 @@ const TABLES_VARIEES = [
   { 1: [1, 2, 5], 2: [3, 4, 6] },
 ];
 
-// Cinq personnes sans appartenance, une table de trois et une de deux, deux
+// Cinq personnes sans organisation, une table de trois et une de deux, deux
 // tours : le diagnostic prouve un écart d'itinéraire maximal de 1 au moins
 // (diagnostic.test.js, § 12.10.4). Le plan qui fait passer quatre personnes
 // distinctes par la table de deux l'atteint ; celui qui y garde les deux
@@ -983,7 +983,7 @@ describe('bornesDesTuiles : les planchers des tuiles (§ 12.2, § 5.6, B11)', ()
     });
   });
 
-  test('rouge : deux appartenances en collision : chaque plancher somme ceux des deux, l’excédent ceux qui en écrivent un', () => {
+  test('rouge : deux organisations en collision : chaque plancher somme ceux des deux, l’excédent ceux qui en écrivent un', () => {
     // Trois de la Coopérative Aubier et trois de l'Atelier Ressac, deux
     // tables de trois, trois tours : un tour réunit au moins deux membres
     // de chacune, une collision ; 3 cumulées, 1 distincte, excédent 3 − 3 =
@@ -1118,7 +1118,7 @@ describe('bornesDesTuiles : les planchers des tuiles (§ 12.2, § 5.6, B11)', ()
   test('rouge : hors du domaine des planchers, aucun ; un plancher nul ne s’écrit pas, jamais 0', () => {
     assert.deepEqual(bornesDuPlan(preparer({ ...CINQ_MEMBRES, plan: MEMES_TABLES }), { planchersValides: false }).planchers, SANS_PLANCHER);
     assert.deepEqual(bornesDuPlan(preparer({ ...DEUX_SIEGES, plan: QUATRE_SERVIES }), { planchersValides: false }).planchers, SANS_PLANCHER);
-    // Deux membres par appartenance pour deux tables, aucune table
+    // Deux membres par organisation pour deux tables, aucune table
     // inférieure, aucun objectif : le diagnostic ne prouve rien.
     const rien = preparer(PROFIL);
     const diagnostic = diagnostiquer(rien.configuration);
@@ -1194,7 +1194,7 @@ describe('le détail sur chaque plan d’une petite configuration (§ 14.10, B25
     const instance = normaliser(configuration);
     const { N, R, T, ids } = instance;
     const diagnostic = diagnostiquer(configuration);
-    const appartenance = new Map(configuration.participants.map(({ id, appartenance: a }) => [id, a]));
+    const organisation = new Map(configuration.participants.map(({ id, organisation: a }) => [id, a]));
     let plans = 0;
     for (const tableDe of tousLesPlans(instance)) {
       plans += 1;
@@ -1203,13 +1203,13 @@ describe('le détail sur chaque plan d’une petite configuration (§ 14.10, B25
       const { lignes } = mixTables(instance, tableDe, occupations(instance, tableDe, { affilies: true }), parcours);
       for (const { t, tours: cases } of lignes) {
         cases.forEach((cas, r) => {
-          const affilies = tours[r][t].filter((id) => appartenance.get(id) !== null);
+          const affilies = tours[r][t].filter((id) => organisation.get(id) !== null);
           if (affilies.length === 0) {
             assert.equal(cas, null);
             return;
           }
-          const d = new Set(affilies.map((id) => appartenance.get(id))).size;
-          assert.equal(cas.appartenances, d);
+          const d = new Set(affilies.map((id) => organisation.get(id))).size;
+          assert.equal(cas.organisations, d);
           assert.equal(cas.comptes.doublons, affilies.length - d);
           assert.equal(cas.comptes.doublons > 0, parcours.parTour[r][t].collegues.length > 0);
           assert.ok(cas.comptes.sieges >= cas.comptes.assis && cas.comptes.assis >= cas.comptes.doublons);
@@ -1239,7 +1239,7 @@ function sansTableauType(valeur, chemin = 'détail') {
 }
 
 describe('detailler (§ 12.9, D27)', () => {
-  // Les deux configurations réunies : appartenances, objectifs et animateurs.
+  // Les deux configurations réunies : organisations, objectifs et animateurs.
   function complet() {
     const prepare = preparer({
       ...OBJECTIFS,
@@ -1316,7 +1316,7 @@ describe('detailler (§ 12.9, D27)', () => {
   });
 
   test('hors du domaine des planchers, aucune tuile ne porte de plancher, même prouvé par le diagnostic', () => {
-    // Cinq membres d'une appartenance, 5 en réserve à chaque tour : deux
+    // Cinq membres d'une organisation, 5 en réserve à chaque tour : deux
     // collisions par tour, 6 en tout, sous les 12 que le diagnostic prouve
     // pour un plan qui assoit chacun. Ce plancher ne tient pas ici.
     const prepare = preparer({ ...CINQ_MEMBRES, plan: [0, 1, 2].map(() => ({ 1: [1, 2, 6], 2: [3, 4] })) });
@@ -1380,7 +1380,7 @@ describe('profilRencontres : la présence par tour (§ 12.3, § 12.6)', () => {
       participants: [1, 2, 3, 4, 5].map((id) => ({
         id,
         nom: `P${id}`,
-        appartenance: null,
+        organisation: null,
         ...(id >= 4 ? { presence: [1, 3] } : {}),
       })),
       tables: [{ id: 10, numero: 1, capacite: 3 }, { id: 20, numero: 2, capacite: 3 }],
@@ -1425,7 +1425,7 @@ describe('profilRencontres : la présence par tour (§ 12.3, § 12.6)', () => {
     // Une table de 3, deux tours ; 2 n'est présente qu'au tour 2, seule à la
     // table 20 : plafond réalisé nul, mais absente au tour 1.
     const configuration = {
-      participants: [{ id: 1, nom: 'P1', appartenance: null }, { id: 2, nom: 'P2', appartenance: null, presence: [2] }, { id: 3, nom: 'P3', appartenance: null }],
+      participants: [{ id: 1, nom: 'P1', organisation: null }, { id: 2, nom: 'P2', organisation: null, presence: [2] }, { id: 3, nom: 'P3', organisation: null }],
       tables: [{ id: 10, numero: 1, capacite: 3 }, { id: 20, numero: 2, capacite: 3 }],
       tours: 2,
       reservations: [],
@@ -1473,7 +1473,7 @@ describe('qualite : la source du module', () => {
 // profonde sur chaque configuration de ce fichier et sur les neuf cents plans
 // de la petite.
 
-// Les colonnes de collisions, le champ du plancher de chaque appartenance
+// Les colonnes de collisions, le champ du plancher de chaque organisation
 // dans le diagnostic ; les colonnes des objectifs, leur champ dans
 // objectifsInevitables comme dans mesures.objectifs.
 const COLLISIONS_DE_REFERENCE = [
@@ -1511,7 +1511,7 @@ function bornesDeReference(instance, { mesures, plafondsRealises, aMax, profil, 
   }
   let diversite = null;
   if (groupes.length > 0) {
-    const A = mesures.appartenancesVues;
+    const A = mesures.organisationsVues;
     const p = premierIndex(() => true, (x, y) => A[x] < A[y] || (A[x] === A[y] && aMax[x] > aMax[y]));
     diversite = { p, aMax: aMax[p] };
   }
@@ -1655,7 +1655,7 @@ describe('teteDesColonnes (§ 12.10.6, D67, D28)', () => {
 
   test('sans personne présente : rang 1, objectifs et soirée null', () => {
     const configuration = {
-      participants: [{ id: 1, nom: 'P1', appartenance: AUBIER, exclu: true }],
+      participants: [{ id: 1, nom: 'P1', organisation: AUBIER, exclu: true }],
       tables: [{ id: 1, numero: 1, capacite: 2 }],
       tours: 1,
       reservations: [],

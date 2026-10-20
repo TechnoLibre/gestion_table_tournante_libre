@@ -18,7 +18,7 @@
 // désigne sans identifiant l'est par son rang à partir de 0, que le texte
 // affiche à partir de 1 ; une personne qu'une violation d'indicateur désigne
 // par son index se nomme par participant quand l'appelant l'a traduit, par
-// son rang sinon ; l'appartenance d'un reste négatif, de même, par son
+// son rang sinon ; l'organisation d'un reste négatif, de même, par son
 // libellé ou par son rang. INCONNU, aux mêmes détails que la faute de
 // placement du stockage, a son texte dans libelles/stockage.js.
 import { auxToursNommes, capitale, compte, enumeration, nomDans } from './aides.js';
@@ -35,13 +35,13 @@ const CAS_DE_TABLE = new Map([
 const personneDe = ({ index, participant }) =>
   participant === undefined || participant === null ? `la personne de rang ${index + 1}` : `la personne n° ${participant}`;
 
-// L'appartenance d'un reste négatif : son libellé quand l'appelant l'a
-// traduit, son rang dans les appartenances sinon, compté à partir de 0 par
+// L'organisation d'un reste négatif : son libellé quand l'appelant l'a
+// traduit, son rang dans les organisations sinon, compté à partir de 0 par
 // le moteur.
-const appartenanceDe = ({ groupe, appartenance }) =>
-  appartenance === undefined || appartenance === null
-    ? `l'appartenance de rang ${groupe + 1}`
-    : `l'appartenance « ${appartenance} »`;
+const organisationDe = ({ groupe, organisation }) =>
+  organisation === undefined || organisation === null
+    ? `l'organisation de rang ${groupe + 1}`
+    : `l'organisation « ${organisation} »`;
 
 // Les manques d'une salle trop petite, tour par tour : les tours d'un même
 // manque se nomment ensemble, les manques dans l'ordre de leur premier tour.
@@ -271,7 +271,7 @@ export const TABLE = new Map([
   [
     'RESTE_NEGATIF',
     (details) =>
-      `Les collisions cumulées de ${appartenanceDe(details)} passent sous la part prouvée inévitable : le reste est négatif, le calcul est faux.`,
+      `Les collisions cumulées de ${organisationDe(details)} passent sous la part prouvée inévitable : le reste est négatif, le calcul est faux.`,
   ],
   [
     'RESTE_OBJECTIFS_NEGATIF',
@@ -280,12 +280,12 @@ export const TABLE = new Map([
   ],
   [
     'DIVERSITE_RENCONTRES',
-    (details) => `Les appartenances rencontrées par ${personneDe(details)} dépassent ses rencontres : le calcul est faux.`,
+    (details) => `Les organisations rencontrées par ${personneDe(details)} dépassent ses rencontres : le calcul est faux.`,
   ],
   [
     'DIVERSITE_AFFILIES',
     (details) =>
-      `Les appartenances rencontrées par ${personneDe(details)} dépassent les personnes affiliées qu'elle rencontre : le calcul est faux.`,
+      `Les organisations rencontrées par ${personneDe(details)} dépassent les personnes affiliées qu'elle rencontre : le calcul est faux.`,
   ],
   [
     'AFFILIES_PLAFOND',
@@ -294,7 +294,7 @@ export const TABLE = new Map([
   ],
   [
     'BORNE_DIVERSITE',
-    (details) => `Les appartenances rencontrées par ${personneDe(details)} dépassent sa borne de diversité : le calcul est faux.`,
+    (details) => `Les organisations rencontrées par ${personneDe(details)} dépassent sa borne de diversité : le calcul est faux.`,
   ],
 
   // --- Les critères du classement (§ 5.7) -----------------------------------------
@@ -304,7 +304,7 @@ export const TABLE = new Map([
   ['moteur.critere.toursHorsObjectif', 'tours hors objectif'],
   ['moteur.critere.rencontresRepetees', 'rencontres répétées'],
   ['moteur.critere.animateursNonRencontres', 'animateurs non rencontrés'],
-  ['moteur.critere.redondance', "redondance d'appartenance"],
+  ['moteur.critere.redondance', "redondance d'organisation"],
 
   // --- Les valeurs qui classent (§ 5.7, A11, D9, D20) ------------------------------
   ['moteur.valeur.ecartAuPlafondAPrioriMax', 'écart au plafond a priori'],
@@ -316,7 +316,7 @@ export const TABLE = new Map([
   ['moteur.valeur.rencontresRepeteesChoisies', 'rencontres répétées'],
   ['moteur.valeur.retoursChoisis', 'retours'],
   ['moteur.valeur.animateursNonRencontres', 'animateurs non rencontrés'],
-  ['moteur.valeur.redondance', "redondance d'appartenance"],
+  ['moteur.valeur.redondance', "redondance d'organisation"],
 
   // --- Un palier partagé (§ 5.7, A11) : « ensemble, », puis chaque critère
   // suivi de son poids.

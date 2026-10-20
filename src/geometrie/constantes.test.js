@@ -34,7 +34,7 @@ const CONTRAT = [
   ['HAUTEUR_CAPITALE_NOM_PLANCHER_MM', 4, 'mm', 'manuel', 'defautDeTravail'],
   ['CORPS_TOURS_PT', 14, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_TOURS_PLANCHER_PT', 10, 'pt', 'manuel', 'defautDeTravail'],
-  ['CORPS_APPARTENANCE_PT', 12, 'pt', 'manuel', 'defautDeTravail'],
+  ['CORPS_ORGANISATION_PT', 12, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_PIED_PT', 8, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_MIN_IMPRESSION_MM', 2.5, 'mm', 'manuel', 'defautDeTravail'],
   ['MARGE_PAGE_MM', 10, 'mm', 'manuel', 'defautDeTravail'],

@@ -90,7 +90,7 @@ import { TABLES_INTERFACE } from './libelles.js';
 import { nomDe } from './propositions/modele.js';
 import { colonnesComparaison } from './qualite/colonnes.js';
 import SOURCE_CAPTURES from '../../test/navigateur/captures.js?raw';
-import { CONFLITS, FONDS_GRAPHIQUE, JETON_RETRAIT, MARQUES, MARQUES_GRAPHIQUE, NIVEAUX_GRAPHIQUE, SEPARATIONS, TEINTES_APPARTENANCE } from './marques.js';
+import { CONFLITS, FONDS_GRAPHIQUE, JETON_RETRAIT, MARQUES, MARQUES_GRAPHIQUE, NIVEAUX_GRAPHIQUE, SEPARATIONS, TEINTES_ORGANISATION } from './marques.js';
 import { SIMULATIONS, ecartPercu, simuler } from './palette.js';
 
 const { t: tTemoin } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue: 'temoin' });
@@ -120,7 +120,7 @@ const LETTRE = /\p{L}/u;
 /**
  * Ce qu'un écran peut montrer sans la marque de la langue témoin, parce que
  * c'est une donnée (§ 14.6, « La traduction ») : noms, prénoms, noms
- * affichés, appartenances, courriels, titres, notes et étiquettes des
+ * affichés, organisations, courriels, titres, notes et étiquettes des
  * personnes, nom et base des événements du disque, libellés des titres,
  * libellés figés du journal, version, provenance, identifiant et instant d'un
  * verrou, cellules du CSV servi, nom de chaque démonstration du catalogue —
@@ -132,7 +132,7 @@ async function donneesConnues(contexte, { cellules = [] } = {}) {
   const valeurs = new Set([VERSION.affichee, PROVENANCE, ...CATALOGUE.map(({ nom }) => nom), ...cellules]);
   const racines = new Set();
   const personne = (p) => {
-    for (const v of [p.nom, p.prenom, p.appartenance, p.courriel, p.titrePressenti, p.notes, ...(p.etiquettes ?? [])]) if (v) valeurs.add(v);
+    for (const v of [p.nom, p.prenom, p.organisation, p.courriel, p.titrePressenti, p.notes, ...(p.etiquettes ?? [])]) if (v) valeurs.add(v);
     if (p.nom) valeurs.add(nomAffiche(p));
   };
   for (const m of contexte.montages) {
@@ -721,8 +721,8 @@ export function releverNiveaux(racine) {
   return grilles;
 }
 
-// Les jetons des teintes d'appartenance, la marque et le fond de chacune.
-const JETONS_APPARTENANCE = TEINTES_APPARTENANCE.flatMap(({ marque, fond }) => [marque, fond]);
+// Les jetons des teintes d'organisation, la marque et le fond de chacune.
+const JETONS_ORGANISATION = TEINTES_ORGANISATION.flatMap(({ marque, fond }) => [marque, fond]);
 
 /**
  * Ce que les tracés de la page portent hors de leur couleur (§ 12.7, D30,
@@ -775,17 +775,17 @@ export function fautesTraces({ traces, segments }) {
   return fautes;
 }
 
-// Les vues sous lesquelles une série se mesure à une teinte d'appartenance :
+// Les vues sous lesquelles une série se mesure à une teinte d'organisation :
 // les couleurs d'origine, puis chaque dichromatie (§ 12.7 : simuler d'abord,
 // puis mesurer l'écart).
 const VUES_SEPARATION = ['origine', ...Object.keys(SIMULATIONS)];
 
 /**
- * Les couleurs que les séries et les teintes d'appartenance peignent
+ * Les couleurs que les séries et les teintes d'organisation peignent
  * réellement sous racine, dans le thème courant (§ 12.7, D43) : series,
  * chaque tracé de série rendu [{ ou, couleur }], couleur son trait calculé ;
  * teintes, chaque élément rendu, hors des conteneurs de référence et des
- * tracés de série, qui peint la marque d'une teinte d'appartenance — le
+ * tracés de série, qui peint la marque d'une teinte d'organisation — le
  * point d'une pastille — [{ ou, couleur }]. Une couleur déjà relevée ne se relève pas deux fois.
  */
 export function releverSeparation(racine) {
@@ -797,7 +797,7 @@ export function releverSeparation(racine) {
   for (const trace of racine.querySelectorAll('path[data-serie]')) {
     if (rendu(trace)) for (const couleur of couleursPeintes(trace).stroke) ajouter(series, situer(trace), couleur);
   }
-  const marques = TEINTES_APPARTENANCE.map(({ marque }) => couleurDeJeton(marque));
+  const marques = TEINTES_ORGANISATION.map(({ marque }) => couleurDeJeton(marque));
   for (const element of racine.querySelectorAll('*')) {
     if (element.closest(CONTENEURS_DE_REFERENCE) !== null || element.matches('[data-serie]') || !rendu(element)) continue;
     for (const { couleurs } of peinturesDe(element)) {
@@ -808,12 +808,12 @@ export function releverSeparation(racine) {
 }
 
 /** Fautes de séparation (releverSeparation, réunis de plusieurs écrans) :
- *  chaque série rendue et chaque teinte d'appartenance rendue s'écartent
+ *  chaque série rendue et chaque teinte d'organisation rendue s'écartent
  *  d'au moins SEPARATIONS.autresMarques (ecartPercu), sur les couleurs
  *  d'origine puis sous chaque dichromatie (§ 12.7, D43). Aucune série ou
  *  aucune teinte relevée est une faute : la mesure n'a pas eu lieu. */
 export function fautesSeparation({ series, teintes }) {
-  if (series.length === 0 || teintes.length === 0) return [`séries / teintes d’appartenance : paire absente (${series.length} et ${teintes.length})`];
+  if (series.length === 0 || teintes.length === 0) return [`séries / teintes d’organisation : paire absente (${series.length} et ${teintes.length})`];
   const fautes = [];
   for (const serie of series) {
     for (const teinte of teintes) {
@@ -830,11 +830,11 @@ export function fautesSeparation({ series, teintes }) {
 }
 
 /** Fautes des marques de graphique sous racine (D43, § 12.7) : une marque
- *  d'un <svg data-graphique> peinte d'une teinte d'appartenance — sa marque
+ *  d'un <svg data-graphique> peinte d'une teinte d'organisation — sa marque
  *  ou son fond — ou du rouge du retrait, dans le thème courant. → { fautes,
  *  lus }, lus le nombre de marques de graphique lues. */
 export function fautesTeintesGraphique(racine) {
-  const reservees = [...JETONS_APPARTENANCE, JETON_RETRAIT].map((jeton) => ({ jeton, couleur: couleurDeJeton(jeton) }));
+  const reservees = [...JETONS_ORGANISATION, JETON_RETRAIT].map((jeton) => ({ jeton, couleur: couleurDeJeton(jeton) }));
   const fautes = [];
   let lus = 0;
   for (const marque of racine.querySelectorAll('svg[data-graphique] [data-marque]')) {
@@ -1457,7 +1457,7 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     const { lus, fautes } = avecFragment(
       `<p>${paire('88\u{202F}%', 'minimum 24 sur 27')}</p><p>${paire('77\u{202F}% des tours possibles servis', '3 personnes jamais servies')}</p>` +
         '<table data-jumeau="0"><tbody>' +
-        ligne('62\u{202F}%', '5 appartenances pour 8 sièges') +
+        ligne('62\u{202F}%', '5 organisations pour 8 sièges') +
         ligne('80\u{202F}%', '24 servis sur 30 possibles') +
         ligne('1\u{202F}%', '1 sur 250') +
         ligne('\u{2014}', '0 sur 0') +
@@ -1516,33 +1516,33 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(fautesTraces({ traces: {}, segments: { prouve: [], reste: [] } }).some((f) => f.includes('paire absente'))).toBe(true);
   });
 
-  test('qualité, séparation : une série peinte d’une couleur que la marque d’une teinte d’appartenance rendue ne quitte pas d’assez loin est relevée, sous chaque vue ; ses jetons passent ; sans série ou sans teinte, la paire absente', () => {
+  test('qualité, séparation : une série peinte d’une couleur que la marque d’une teinte d’organisation rendue ne quitte pas d’assez loin est relevée, sous chaque vue ; ses jetons passent ; sans série ou sans teinte, la paire absente', () => {
     const fragment = (jetonSerie) =>
       '<svg width="200" height="30">' +
       `<path data-serie="serie1" d="M10 10 H190" style="fill:none;stroke:var(${jetonSerie});stroke-width:2px" /></svg>` +
-      '<span style="display:inline-block;width:12px;height:12px;background-color:var(--couleur-appartenance-2-marque)"></span>';
+      '<span style="display:inline-block;width:12px;height:12px;background-color:var(--couleur-organisation-2-marque)"></span>';
     const juste = avecFragment(fragment('--couleur-graphique-serie-1'), (c) => releverSeparation(c));
     expect(juste.series).toHaveLength(1);
     expect(juste.teintes).toHaveLength(1);
     expect(fautesSeparation(juste)).toEqual([]);
-    const fautes = fautesSeparation(avecFragment(fragment('--couleur-appartenance-2-marque'), (c) => releverSeparation(c)));
+    const fautes = fautesSeparation(avecFragment(fragment('--couleur-organisation-2-marque'), (c) => releverSeparation(c)));
     expect(fautes).toHaveLength(4);
     expect(fautes[0]).toMatch(/^path\b.*span\b.*écart 0\.0 \(origine\)/);
     expect(fautes.map((f) => /\(([a-z]+)\)/.exec(f)[1])).toEqual(['origine', ...Object.keys(SIMULATIONS)]);
-    expect(fautesSeparation({ series: juste.series, teintes: [] })).toEqual(['séries / teintes d’appartenance : paire absente (1 et 0)']);
+    expect(fautesSeparation({ series: juste.series, teintes: [] })).toEqual(['séries / teintes d’organisation : paire absente (1 et 0)']);
   });
 
-  test('qualité, teintes : une marque de graphique peinte d’une teinte d’appartenance ou du rouge du retrait est relevée ; une série de son jeton passe', () => {
+  test('qualité, teintes : une marque de graphique peinte d’une teinte d’organisation ou du rouge du retrait est relevée ; une série de son jeton passe', () => {
     const { fautes, lus } = avecFragment(
       '<svg data-graphique="collisions" width="200" height="30">' +
         '<rect data-marque="graphiqueSerie1" width="20" height="20" style="fill:var(--couleur-graphique-serie-1)" />' +
-        '<rect data-marque="graphiqueReste" x="40" width="20" height="20" style="fill:var(--couleur-appartenance-2-marque)" />' +
+        '<rect data-marque="graphiqueReste" x="40" width="20" height="20" style="fill:var(--couleur-organisation-2-marque)" />' +
         '<path data-marque="graphiqueRepere" d="M80 10 H150" style="fill:none;stroke:var(--couleur-retrait);stroke-width:2px" /></svg>',
       (c) => fautesTeintesGraphique(c),
     );
     expect(lus).toBe(3);
     expect(fautes).toHaveLength(2);
-    expect(fautes[0]).toContain('--couleur-appartenance-2-marque');
+    expect(fautes[0]).toContain('--couleur-organisation-2-marque');
     expect(fautes[1]).toContain('--couleur-retrait');
   });
 
@@ -1644,14 +1644,14 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
   test('teintes réservées : un texte peint d’une teinte de conflit, et la trame d’une règle peinte de la teinte d’une autre, sont relevés ; une trame de sa propre teinte passe', () => {
     const { fautes, lus } = avecFragment(
       '<p style="color:var(--couleur-conflit-voisins)">alerte</p>' +
-        '<svg width="80" height="20"><rect data-marque="trameAppartenance" width="20" height="20" style="fill:var(--couleur-conflit-table)" />' +
+        '<svg width="80" height="20"><rect data-marque="trameOrganisation" width="20" height="20" style="fill:var(--couleur-conflit-table)" />' +
         '<rect data-marque="trameTable" x="40" width="20" height="20" style="fill:var(--couleur-conflit-table)" /></svg>',
       (c) => fautesTeinte(c, teintesDeConflit()),
     );
     expect(lus).toBeGreaterThan(2);
     expect(fautes).toHaveLength(2);
     expect(fautes[0]).toContain('--couleur-conflit-voisins');
-    expect(fautes[1]).toMatch(/trameAppartenance.*--couleur-conflit-table/);
+    expect(fautes[1]).toMatch(/trameOrganisation.*--couleur-conflit-table/);
   });
 
   test('listes : une partie qui traverse une chaise loin de son centre est relevée ; une boîte qui n’entre que dans le coin d’un cercle passe', () => {
@@ -1879,7 +1879,7 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     const trois = atteints().find((r) => r.nom === 'plan.troisConflits');
     expect(trois, 'le plan des trois sortes de conflit relevé').toBeDefined();
     const [a, b, c] = CONFLITS.map(({ marque }) => trois.etats.trames[marque]);
-    fautes.push(...fautesPaire('trame appartenance / voisins', a, b), ...fautesPaire('trame appartenance / table', a, c), ...fautesPaire('trame voisins / table', b, c));
+    fautes.push(...fautesPaire('trame organisation / voisins', a, b), ...fautesPaire('trame organisation / table', a, c), ...fautesPaire('trame voisins / table', b, c));
     const modes = ['lecture', 'ecriture', 'bloque'].map((mode) => {
       const r = atteints().find((x) => x.nom === `evenement.plan.${mode}`);
       return { ou: `mode ${mode}`, sig: r?.signatureMode?.sig ?? null, trait: r?.signatureMode?.trait ?? null };
@@ -2056,7 +2056,7 @@ describe('la page de qualité, sur chacun de ses écrans (§ 12.7, § 14.5, D30,
     aucuneFaute([...new Set(fautesTraces(reunis))], 'jamais la seule couleur (graphiques)');
   });
 
-  test('chaque série rendue se sépare de chaque teinte d’appartenance rendue, sur les couleurs d’origine et sous les trois dichromaties, dans les deux thèmes', () => {
+  test('chaque série rendue se sépare de chaque teinte d’organisation rendue, sur les couleurs d’origine et sous les trois dichromaties, dans les deux thèmes', () => {
     const fautes = [];
     for (const theme of THEMES) {
       // Les couleurs réunies de tous les écrans, chacune nommée sur le
@@ -2071,10 +2071,10 @@ describe('la page de qualité, sur chacun de ses écrans (§ 12.7, § 14.5, D30,
       }
       fautes.push(...fautesSeparation(reunis).map((f) => `[${theme}] ${f}`));
     }
-    aucuneFaute(fautes, 'séries et teintes d’appartenance');
+    aucuneFaute(fautes, 'séries et teintes d’organisation');
   });
 
-  test('aucune teinte d’appartenance ni le rouge du retrait sur une marque de graphique, dans les deux thèmes', () => {
+  test('aucune teinte d’organisation ni le rouge du retrait sur une marque de graphique, dans les deux thèmes', () => {
     for (const theme of THEMES) {
       expect(deQualite().reduce((n, r) => n + r[theme].teintesGraphique.lus, 0), `marques de graphique lues [${theme}]`).toBeGreaterThan(0);
     }
@@ -2339,11 +2339,11 @@ describe('balisage littéral (§ 13.1)', () => {
   test('une personne nommée par du balisage : son nom littéral dans la grille, la fiche, le plan et l’infobulle ; aucun img créé ; rien d’exécuté', async () => {
     await fixerCadre(1366, 700);
     const charge = chargePrincipale();
-    // Les cinq personnes de l'appartenance en conflit portent le nom
+    // Les cinq personnes de l'organisation en conflit portent le nom
     // injecté : l'infobulle d'une table en conflit les nomme.
-    const appartenance = charge.participants[0].appartenance;
+    const organisation = charge.participants[0].organisation;
     for (const p of charge.participants) {
-      if (p.appartenance === appartenance) {
+      if (p.organisation === organisation) {
         p.nom = INJECTION;
         p.prenom = null;
       }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves des clés de comparaison (§ 10.1) : la clé normalisée, que
-// partagent la réconciliation des appartenances et la clé de doublon, et la
+// partagent la réconciliation des organisations et la clé de doublon, et la
 // clé d'en-tête, qui en dérive. Les lettres décomposées et les blancs autres
 // que l'espace s'écrivent par leur point de code : un éditeur qui recompose
 // une lettre ou remplace un caractère invisible changerait l'épreuve sans
@@ -49,7 +49,7 @@ describe('cleNormalisee (§ 10.1)', () => {
   });
 
   test("le trait d'union, le trait de soulignement et l'espace restent : seule la clé d'en-tête les retire", () => {
-    // La réconciliation des appartenances et la clé de doublon comparent par
+    // La réconciliation des organisations et la clé de doublon comparent par
     // cette clé : « Club-des-Merles » et « Club des Merles » y restent deux.
     assert.equal(cleNormalisee('Club-des-Merles'), 'club-des-merles');
     assert.equal(cleNormalisee('Club_des_Merles'), 'club_des_merles');

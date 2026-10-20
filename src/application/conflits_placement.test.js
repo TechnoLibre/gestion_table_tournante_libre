@@ -19,11 +19,11 @@ import { etatPlaces } from './places.js';
 
 const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
 
-const personne = (id, nom, prenom, appartenance) => ({
+const personne = (id, nom, prenom, organisation) => ({
   id,
   nom,
   prenom,
-  appartenance,
+  organisation,
   courriel: null,
   titrePressenti: null,
   notes: null,
@@ -38,7 +38,7 @@ const TABLES = [
 ];
 
 // Six personnes : 1 et 2 du Club des Merles, 3 et 4 des Pinsons, 5 et 6
-// sans appartenance.
+// sans organisation.
 const PERSONNES = [
   personne(1, 'Ombrelle', 'Iris', 'Club des Merles'),
   personne(2, 'Fontaine', 'Noé', 'Club des Merles'),
@@ -64,7 +64,7 @@ const AUTRE = [
 ];
 
 const ATTENDUS = [
-  { tour: 1, table: 1, numero: 4, regle: 'separerAppartenances', personnes: [1, 2], deja: [] },
+  { tour: 1, table: 1, numero: 4, regle: 'separerOrganisations', personnes: [1, 2], deja: [] },
   { tour: 2, table: 1, numero: 4, regle: 'nouveauxVoisins', personnes: [4, 5], deja: [{ tour: 1, numero: 1 }] },
   { tour: 2, table: 1, numero: 4, regle: 'nouvelleTable', personnes: [1], deja: [{ tour: 1, numero: 4 }] },
   { tour: 2, table: 2, numero: 1, regle: 'nouveauxVoisins', personnes: [2, 3], deja: [{ tour: 1, numero: 4 }] },
@@ -160,7 +160,7 @@ describe('conflitsDuPlacement : la proposition montrée, sinon le retenu (§ 7.5
     c.reglages.nouvelleTable = false;
     c.reglages.nouveauxVoisins = false;
     assert.deepEqual(conflitsDuPlacement(c, { proposition: 1 }), [ATTENDUS[0]]);
-    c.reglages.separerAppartenances = false;
+    c.reglages.separerOrganisations = false;
     assert.deepEqual(conflitsDuPlacement(c, { proposition: 1 }), []);
   });
 

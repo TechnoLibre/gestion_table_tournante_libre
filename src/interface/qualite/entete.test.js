@@ -33,11 +33,11 @@ const format = creerFormat(t);
 const outils = { t, format };
 const V1 = VERSION.affichee;
 
-// Six personnes inventées, deux appartenances, deux tables de trois places,
+// Six personnes inventées, deux organisations, deux tables de trois places,
 // trois tours ; les finance premières portent « finance », que la première
 // table attend pour la soirée quand objectifs est vrai ; reservees : les
 // deux dernières réservées ensemble à la seconde table pour la soirée.
-function chargeSix({ objectifs = false, appartenances = true, reglages = {}, finance = 3, reservees = false } = {}) {
+function chargeSix({ objectifs = false, organisations = true, reglages = {}, finance = 3, reservees = false } = {}) {
   const charge = creerCharge({ id: 'evt-entete', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 3 });
   const noms = [
     ['Ombrelle', 'Iris', 'Coopérative Aubier'],
@@ -47,11 +47,11 @@ function chargeSix({ objectifs = false, appartenances = true, reglages = {}, fin
     ['Quenouille', 'Maëlle', null],
     ['Varech', 'Sidonie', null],
   ];
-  charge.participants = noms.map(([nom, prenom, appartenance], rang) => ({
+  charge.participants = noms.map(([nom, prenom, organisation], rang) => ({
     id: rang + 1,
     nom,
     prenom,
-    appartenance: appartenances ? appartenance : null,
+    organisation: organisations ? organisation : null,
     courriel: null,
     titrePressenti: null,
     notes: null,
@@ -238,7 +238,7 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
     assert.ok(manque.bornes.includes(t('qualite.tuile.effectifAuManqueMax', { effectif: 5 })), manque.bornes.join(' | '));
     assert.equal(manque.pourcentage, null);
     // A(p) : la borne de diversité de la personne nommée, sans pourcentage.
-    const diversite = tuile(entete, 'appartenancesVues');
+    const diversite = tuile(entete, 'organisationsVues');
     assert.deepEqual(diversite.bornes, [t('qualite.tuile.personne', { nom: autre.nom }), t('qualite.tuile.borneDiversite', { borne: 17 })]);
     assert.equal(diversite.pourcentage, null);
     assert.ok(!diversite.bornes.some((ligne) => /plafond|%/.test(ligne)), diversite.bornes.join(' | '));
@@ -287,10 +287,10 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
     assert.ok(tuile(enteteDe(vue, outils), 'manqueMax').bornes.includes(t('qualite.tuile.effectifAuManqueMax', { effectif: manque.effectif })));
   });
 
-  test('sans appartenance : la tuile de A(p) le dit, sans borne de diversité', () => {
-    const vue = vueDe(generee(chargeSix({ appartenances: false })));
+  test('sans organisation : la tuile de A(p) le dit, sans borne de diversité', () => {
+    const vue = vueDe(generee(chargeSix({ organisations: false })));
     assert.equal(vue.detail.bornes.diversite, null);
-    assert.deepEqual(tuile(enteteDe(vue, outils), 'appartenancesVues').bornes, [t('qualite.tuile.sansAppartenance')]);
+    assert.deepEqual(tuile(enteteDe(vue, outils), 'organisationsVues').bornes, [t('qualite.tuile.sansOrganisation')]);
   });
 
   test('les objectifs : la soirée sur les tours hors objectif, la personne au minimum de s(p) et ses tours possibles, chacun suivi du compte du pire', () => {
@@ -333,9 +333,9 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
     for (const autre of tuiles(enteteDe({ ...vue, detail }, outils))) assert.deepEqual(lignesDePlancher(autre.bornes), [], autre.nom);
   });
 
-  test('rouge : cinq membres d’une appartenance pour deux tables de trois : 12 collisions cumulées au moins, atteintes ; chaque plancher du détail écrit', () => {
+  test('rouge : cinq membres d’une organisation pour deux tables de trois : 12 collisions cumulées au moins, atteintes ; chaque plancher du détail écrit', () => {
     const charge = chargeSix();
-    for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+    for (const personne of charge.participants) personne.organisation = personne.id <= 5 ? 'Coopérative Aubier' : null;
     const vue = vueDe(generee(charge));
     assert.equal(vue.ligne.mesures.collisionsCumulees, 12);
     assert.deepEqual(vue.detail.bornes.planchers.collisionsCumulees, { plancher: 12, atteint: true });
@@ -462,7 +462,7 @@ describe('celluleDeTuile : la tuile et la cellule d’une colonne de la comparai
     assert.notEqual(diversite, undefined);
     assert.notEqual(animateurs, undefined);
     // Un plancher forgé sur chacune des deux tuiles dont la borne manque.
-    const forges = { appartenancesVues: { plancher: 2, atteint: false }, animateursRencontres: { plancher: 1, atteint: true } };
+    const forges = { organisationsVues: { plancher: 2, atteint: false }, animateursRencontres: { plancher: 1, atteint: true } };
     const planchers = { ...Object.fromEntries(TUILES_A_PLANCHER.map((nom) => [nom, null])), ...forges };
     for (const [nom, plancher] of Object.entries(forges)) {
       const cellule = celluleDeTuile(nom, contexteDe(vue, { ...portees, planchers }));
@@ -476,10 +476,10 @@ describe('celluleDeTuile : la tuile et la cellule d’une colonne de la comparai
 describe('enteteDe : la présence par tour (§ 12.2, § 12.6)', () => {
   // Cinq membres de la Coopérative Aubier pour deux tables de trois : le
   // plancher des collisions cumulées tient sous absence. presence : celle
-  // de Sidonie Varech, sans appartenance.
+  // de Sidonie Varech, sans organisation.
   const chargeAbsente = (presence) => {
     const charge = chargeSix();
-    for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+    for (const personne of charge.participants) personne.organisation = personne.id <= 5 ? 'Coopérative Aubier' : null;
     if (presence !== null) charge.participants[5].presence = presence;
     return charge;
   };

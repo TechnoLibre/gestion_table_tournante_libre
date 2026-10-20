@@ -7,10 +7,10 @@
 // participants.entete.comptes compose la ligne de comptes de la carte
 // (comptesEntete, entete.js), ses parties séparées d'un point médian, les
 // présences partielles en dernier, seulement quand il y en a ;
-// participants.legende.* nomme la légende des appartenances et chacune de
+// participants.legende.* nomme la légende des organisations et chacune de
 // ses pastilles, le nom puis le compte ; participants.legendeEtiquettes.titre
 // nomme la légende des étiquettes, dont chaque pastille se compose comme
-// celle d'une appartenance. participants.etiquettes.* porte la saisie des
+// celle d'une organisation. participants.etiquettes.* porte la saisie des
 // étiquettes sur la fiche : son champ, son ajout, et le retrait nommé par
 // l'étiquette qu'il ôte.
 //
@@ -53,7 +53,7 @@ const dejaReunis = (deja) =>
 
 // Le texte court de chaque règle dans la marque d'une personne en conflit.
 const REGLES_COURTES = new Map([
-  ['separerAppartenances', 'même appartenance'],
+  ['separerOrganisations', 'même organisation'],
   ['nouveauxVoisins', 'se revoient'],
   ['nouvelleTable', 'revient à une table'],
 ]);
@@ -62,7 +62,7 @@ export const TABLE = new Map([
   // --- Les colonnes, que la grille, le formulaire et la fiche partagent ------
   ['participants.colonne.nom', 'Nom'],
   ['participants.colonne.prenom', 'Prénom'],
-  ['participants.colonne.appartenance', 'Appartenance'],
+  ['participants.colonne.organisation', 'Organisation'],
   ['participants.colonne.courriel', 'Courriel'],
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
   ['participants.colonne.exclu', 'Exclusion'],
@@ -72,23 +72,23 @@ export const TABLE = new Map([
   // --- L'en-tête de la carte : la ligne de comptes et la légende -----------
   [
     'participants.entete.comptes',
-    ({ personnes, aPlacer, exclues, appartenances, partielles }) =>
+    ({ personnes, aPlacer, exclues, organisations, partielles }) =>
       [
         compte(personnes, 'personne', 'personnes'),
         `${aPlacer} à placer`,
         compte(exclues, 'exclue', 'exclues'),
-        compte(appartenances, 'appartenance', 'appartenances'),
+        compte(organisations, 'organisation', 'organisations'),
         ...(partielles > 0 ? [compte(partielles, 'présence partielle', 'présences partielles')] : []),
       ].join(' \u{00B7} '),
   ],
-  ['participants.legende.titre', 'Appartenances'],
+  ['participants.legende.titre', 'Organisations'],
   ['participants.legende.element', ({ nom, compte: n }) => `${nom} \u{00B7} ${n}`],
   ['participants.legendeEtiquettes.titre', 'Étiquettes'],
 
   // --- Le formulaire d'ajout (§ 10.2) ---------------------------------------
   ['participants.formulaire.titre', 'Ajouter une personne'],
   ['participants.formulaire.ajouter', 'Ajouter'],
-  ['participants.formulaire.orthographe', 'Cette appartenance existe déjà sous l\u{2019}orthographe'],
+  ['participants.formulaire.orthographe', 'Cette organisation existe déjà sous l\u{2019}orthographe'],
   ['participants.formulaire.reprendre', 'Reprendre cette orthographe'],
 
   // --- La grille (§ 10.2) ---------------------------------------------------
@@ -135,7 +135,7 @@ export const TABLE = new Map([
   ['participants.conflit.personne', ({ regles }) => `en conflit : ${regles.map((regle) => REGLES_COURTES.get(regle)).join(', ')}`],
   ['participants.conflit.lieu', ({ tour, numero }) => `Tour ${tour}, table ${numero} :`],
   ['participants.conflit.et', 'et'],
-  ['participants.conflit.raison.separerAppartenances', '\u{2014} même appartenance'],
+  ['participants.conflit.raison.separerOrganisations', '\u{2014} même organisation'],
   [
     'participants.conflit.raison.nouveauxVoisins',
     ({ deja }) => `\u{2014} se revoient${dejaReunis(deja)}`,

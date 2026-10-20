@@ -8,7 +8,7 @@
   // des traits --couleur-hachure sur le fond de la chaise — et les trois
   // trames de conflit, une par règle (CONFLITS, marques.js), chacune d'une
   // forme et d'une teinte : hachures descendantes pour séparer les
-  // appartenances, hachures montantes pour nouveaux voisins, points pour
+  // organisations, hachures montantes pour nouveaux voisins, points pour
   // nouvelle table. L'identifiant d'une trame est <prefixe>-trame-<règle>.
   //
   // La hachure peint son fond, opaque, puis ses traits. Une trame de conflit
@@ -36,16 +36,16 @@
     <rect class="fond-chaise" width="8" height="8" />
     <line class="trait-hachure" x1="4" y1="0" x2="4" y2="8" />
   </pattern>
-  <!-- Séparer les appartenances : un trait du carreau, tourné de −45°, descend vers la droite. -->
+  <!-- Séparer les organisations : un trait du carreau, tourné de −45°, descend vers la droite. -->
   <pattern
-    id="{prefixe}-trame-separerAppartenances"
+    id="{prefixe}-trame-separerOrganisations"
     patternUnits="userSpaceOnUse"
     width="12"
     height="12"
     patternTransform="rotate(-45)"
   >
     <line class="halo" x1="6" y1="0" x2="6" y2="12" />
-    <line class="trait appartenance-conflit" x1="6" y1="0" x2="6" y2="12" />
+    <line class="trait organisation-conflit" x1="6" y1="0" x2="6" y2="12" />
   </pattern>
   <!-- Nouveaux voisins : tourné de 45°, le trait monte vers la droite. -->
   <pattern id="{prefixe}-trame-nouveauxVoisins" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(45)">
@@ -84,8 +84,8 @@
     stroke-width: 4;
   }
 
-  .trait.appartenance-conflit {
-    stroke: var(--couleur-conflit-appartenance);
+  .trait.organisation-conflit {
+    stroke: var(--couleur-conflit-organisation);
   }
 
   .trait.voisins-conflit {

@@ -79,7 +79,7 @@ export const TABLE = new Map([
   // compte le nombre, d'où il vient, et quand il vaut « — ».
   [
     'accueil.explication.collisionsCumulees',
-    'Les collisions du placement retenu. Chaque fois que deux personnes de la même appartenance partagent une ' +
+    'Les collisions du placement retenu. Chaque fois que deux personnes de la même organisation partagent une ' +
       'table, compté une fois par paire et par tour : deux collègues ensemble aux quatre tours font 4. Le même nombre ' +
       'que la colonne « Collisions cumulées (paire et tour) » du tableau des propositions, sur la ligne du retenu. ' +
       "Plus il est bas, mieux c'est. « \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit " +

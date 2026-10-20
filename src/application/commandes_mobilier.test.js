@@ -66,7 +66,7 @@ const personne = (id, autres = {}) => ({
   id,
   nom: NOMS[(id - 1) % NOMS.length][0],
   prenom: NOMS[(id - 1) % NOMS.length][1],
-  appartenance: null,
+  organisation: null,
   courriel: null,
   titrePressenti: null,
   notes: null,
@@ -1228,13 +1228,13 @@ describe('mobilier : les tours et la présence de chacun (§ 2.1 étape 5, § 4.
 });
 
 describe('mobilier : les réglages (§ 5.3, § 15.4)', () => {
-  test('« Séparer les appartenances : désactivé », une entrée', async () => {
+  test('« Séparer les organisations : désactivé », une entrée', async () => {
     const { seance, entrees } = await seanceSur(chargeDe({ tables: [{ id: 1 }], n: 2 }));
     const avant = entrees();
-    const rendu = await seance.executer('modifierReglage', { cle: 'separerAppartenances', valeur: false });
-    assert.equal(rendu.libelle, 'Séparer les appartenances : désactivé');
+    const rendu = await seance.executer('modifierReglage', { cle: 'separerOrganisations', valeur: false });
+    assert.equal(rendu.libelle, 'Séparer les organisations : désactivé');
     assert.equal(entrees() - avant, 1);
-    assert.equal(seance.charge.reglages.separerAppartenances, false);
+    assert.equal(seance.charge.reglages.separerOrganisations, false);
   });
 
   test('chaque réglage nommé se change ; une clé inconnue ou une valeur de forme fausse est une faute du code', () => {
@@ -1242,7 +1242,7 @@ describe('mobilier : les réglages (§ 5.3, § 15.4)', () => {
     const attendus = [
       ['nouveauxVoisins', false, 'Nouveaux voisins à chaque tour : désactivé'],
       ['nouvelleTable', false, 'Nouvelle table à chaque tour : désactivé'],
-      ['varierAppartenances', false, 'Varier les appartenances rencontrées : désactivé'],
+      ['varierOrganisations', false, 'Varier les organisations rencontrées : désactivé'],
       ['attribuerSieges', true, 'Attribuer les sièges : activé'],
       ['generation.nombre', 8, 'Propositions par génération : 8'],
       ['generation.arret', 300000, 'Mouvements par proposition : 300000'],
@@ -1607,11 +1607,11 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
     // Un palier porté d'un bout à l'autre.
     assert.equal(
       libelleDe(charge, ordre(REDONDANCE, ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS)),
-      "Ordre des priorités : « redondance d'appartenance » au palier 1 sur 7",
+      "Ordre des priorités : « redondance d'organisation » au palier 1 sur 7",
     );
     assert.equal(
       libelleDe(charge, ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, REDONDANCE, ANIMATEURS)),
-      "Ordre des priorités : « redondance d'appartenance » au palier 6 sur 7",
+      "Ordre des priorités : « redondance d'organisation » au palier 6 sur 7",
     );
     const jointe = accepter('changerPriorites', charge, { paliers: COLLISIONS_JOINTES }).charge;
     // Le poids d'un critère d'un palier partagé.

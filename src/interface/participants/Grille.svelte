@@ -60,8 +60,8 @@
   // la cellule d'exclusion suit sa ligne de même : la personne exclue ou
   // réintégrée passe dans son nouveau groupe, et sa cellule garde le focus.
   //
-  // L'appartenance s'affiche en pastille de la teinte que teintes lui donne
-  // (teintesAppartenances, calculée par la section sur la liste entière),
+  // L'organisation s'affiche en pastille de la teinte que teintes lui donne
+  // (teintesOrganisations, calculée par la section sur la liste entière),
   // neutre au-delà de la palette ; le titre pressenti en pastille
   // d'information à étoile ; « exclue » en pastille neutre à croix,
   // « présente » en texte secondaire. Chaque pastille porte la valeur ou le
@@ -496,9 +496,9 @@
           {:else}
             <span class="presente">{t('participants.grille.presente')}</span>
           {/if}
-        {:else if colonne === 'appartenance' && personne.appartenance !== null}
+        {:else if colonne === 'organisation' && personne.organisation !== null}
           <span class="donnee-pastille">
-            <Pastille sorte="appartenance" valeur={teintes.get(personne.appartenance) ?? null} libelle={personne.appartenance} />
+            <Pastille sorte="organisation" valeur={teintes.get(personne.organisation) ?? null} libelle={personne.organisation} />
           </span>
         {:else if colonne === 'titrePressenti' && personne.titrePressenti !== null}
           <span class="donnee-pastille">

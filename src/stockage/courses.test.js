@@ -141,7 +141,7 @@ describe('le compagnon des courses : son texte (§ 8.9, B31)', () => {
 describe("le compagnon des courses : une identité désigne une seule recherche (§ 8.9, B31)", () => {
   // Une génération défaite remet le compteur des propositions en arrière, et
   // la graine proposée repart de la même valeur : après un changement qui
-  // laisse la déclaration intacte — une appartenance, une réservation, un
+  // laisse la déclaration intacte — une organisation, une réservation, un
   // réglage —, la recherche suivante porte les mêmes id, graine, arret et
   // historique, et un autre placement.
   test('une proposition régénérée sous la même identité, sur un autre placement, ne reçoit jamais la course de la première', () => {

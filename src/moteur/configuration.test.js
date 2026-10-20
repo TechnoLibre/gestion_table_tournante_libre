@@ -37,18 +37,18 @@ import { occupations, plafondsRealises } from './plafond.js';
 const { MOBILE, PARTIELLEMENT_FIXE, ANCRE } = STATUT;
 
 const SANS_CONTRAINTE = {
-  separerAppartenances: false,
+  separerOrganisations: false,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
 // Entiers de debut à fin, inclus.
 const suite = (debut, fin) => Array.from({ length: fin - debut + 1 }, (_, i) => debut + i);
 
-// Participants des identifiants donnés, sans appartenance.
-const personnes = (ids) => ids.map((id) => ({ id, nom: `P${id}`, appartenance: null }));
-const exclu = (id) => ({ id, nom: `P${id}`, appartenance: null, exclu: true });
+// Participants des identifiants donnés, sans organisation.
+const personnes = (ids) => ids.map((id) => ({ id, nom: `P${id}`, organisation: null }));
+const exclu = (id) => ({ id, nom: `P${id}`, organisation: null, exclu: true });
 
 // Tables des identifiants donnés, toutes de la même capacité, numérotées dans
 // l'ordre fourni.
@@ -329,16 +329,16 @@ describe('normaliser : exclusion (§ 4.4)', () => {
   });
 });
 
-describe('normaliser : appartenances', () => {
+describe('normaliser : organisations', () => {
   test('les groupes se numérotent par première apparition en ids croissants, quel que soit l’ordre fourni', () => {
     const fournis = [
-      { id: 9, nom: 'P9', appartenance: 'Y' },
-      { id: 2, nom: 'P2', appartenance: 'Z' },
-      { id: 5, nom: 'P5', appartenance: 'X' },
-      { id: 7, nom: 'P7', appartenance: null },
-      { id: 3, nom: 'P3', appartenance: 'W', exclu: true },
-      { id: 4, nom: 'P4', appartenance: 'Z' },
-      { id: 1, nom: 'P1', appartenance: 'Y' },
+      { id: 9, nom: 'P9', organisation: 'Y' },
+      { id: 2, nom: 'P2', organisation: 'Z' },
+      { id: 5, nom: 'P5', organisation: 'X' },
+      { id: 7, nom: 'P7', organisation: null },
+      { id: 3, nom: 'P3', organisation: 'W', exclu: true },
+      { id: 4, nom: 'P4', organisation: 'Z' },
+      { id: 1, nom: 'P1', organisation: 'Y' },
     ];
     const ordres = [fournis, [...fournis].reverse(), [3, 6, 0, 5, 1, 4, 2].map((i) => fournis[i])];
     assert.ok(ordres.length > 0, 'aucun ordre examiné');
@@ -351,16 +351,16 @@ describe('normaliser : appartenances', () => {
   });
 
   test('l’égalité de chaînes fait le groupe : normaliser ne réconcilie rien', () => {
-    // La chaîne vide est une appartenance comme une autre : seul null marque
-    // l'absence d'appartenance.
+    // La chaîne vide est une organisation comme une autre : seul null marque
+    // l'absence d'organisation.
     const participants = [
-      { id: 1, nom: 'P1', appartenance: 'X' },
-      { id: 2, nom: 'P2', appartenance: 'x' },
-      { id: 3, nom: 'P3', appartenance: 'X ' },
-      { id: 4, nom: 'P4', appartenance: 'X' },
-      { id: 5, nom: 'P5', appartenance: '' },
-      { id: 6, nom: 'P6', appartenance: null },
-      { id: 7, nom: 'P7', appartenance: '' },
+      { id: 1, nom: 'P1', organisation: 'X' },
+      { id: 2, nom: 'P2', organisation: 'x' },
+      { id: 3, nom: 'P3', organisation: 'X ' },
+      { id: 4, nom: 'P4', organisation: 'X' },
+      { id: 5, nom: 'P5', organisation: '' },
+      { id: 6, nom: 'P6', organisation: null },
+      { id: 7, nom: 'P7', organisation: '' },
     ];
     const instance = normaliser(configuration({ participants, tables: tablesDe([11], 8), tours: 1 }));
     assert.deepEqual(instance.groupes, ['X', 'x', 'X ', '']);
@@ -371,7 +371,7 @@ describe('normaliser : appartenances', () => {
 describe('normaliser : la configuration reçue', () => {
   test('normaliser ne modifie pas la configuration reçue', () => {
     const recue = geler(configuration({
-      participants: [...personnes([9, 2]), exclu(5), { id: 4, nom: 'P4', appartenance: 'X' }],
+      participants: [...personnes([9, 2]), exclu(5), { id: 4, nom: 'P4', organisation: 'X' }],
       tables: tablesDe([30, 10], 4),
       tours: 2,
       reservations: [tous(9, 30), auTour(2, 10, 2)],
@@ -382,15 +382,15 @@ describe('normaliser : la configuration reçue', () => {
   });
 
   test('l’instance copie les contraintes au lieu de les partager', () => {
-    const contraintes = { ...SANS_CONTRAINTE, separerAppartenances: true };
+    const contraintes = { ...SANS_CONTRAINTE, separerOrganisations: true };
     const instance = normaliser(configuration({
       participants: personnes([1, 2]),
       tables: tablesDe([11], 2),
       tours: 1,
       contraintes,
     }));
-    contraintes.separerAppartenances = false;
-    assert.deepEqual(instance.contraintes, { ...SANS_CONTRAINTE, separerAppartenances: true });
+    contraintes.separerOrganisations = false;
+    assert.deepEqual(instance.contraintes, { ...SANS_CONTRAINTE, separerOrganisations: true });
   });
 });
 
@@ -531,16 +531,16 @@ describe('normaliser : refus (§ 5.9, § 6.2)', () => {
       ['identifiant de participant en texte', { participants: personnes(['1']) }],
       ['identifiant de table 0', { tables: tablesDe([0, 12], 2) }],
       ['identifiant de table en texte', { tables: tablesDe(['11', 12], 2) }],
-      ['appartenance absente', { participants: [{ id: 1, nom: 'P1' }] }],
-      ['appartenance numérique', { participants: [{ id: 1, nom: 'P1', appartenance: 7 }] }],
+      ['organisation absente', { participants: [{ id: 1, nom: 'P1' }] }],
+      ['organisation numérique', { participants: [{ id: 1, nom: 'P1', organisation: 7 }] }],
       ...['oui', '', 0, null].map((valeur) => [
         `exclusion ${libelleDe(valeur)}`,
-        { participants: [{ id: 1, nom: 'P1', appartenance: null, exclu: valeur }] },
+        { participants: [{ id: 1, nom: 'P1', organisation: null, exclu: valeur }] },
       ]),
       ['portée inconnue', { reservations: [{ participant: 1, table: 11, portee: 'chaque' }] }],
       ['contraintes absentes', { contraintes: undefined }],
       ['une contrainte absente', {
-        contraintes: { separerAppartenances: true, nouveauxVoisins: false, nouvelleTable: false },
+        contraintes: { separerOrganisations: true, nouveauxVoisins: false, nouvelleTable: false },
       }],
       ['une contrainte non booléenne', { contraintes: { ...SANS_CONTRAINTE, nouvelleTable: 1 } }],
       // Une liste absente, puis une valeur qui n'est pas un tableau mais que le
@@ -573,7 +573,7 @@ describe('normaliser : refus (§ 5.9, § 6.2)', () => {
     // sous le message d'une contrainte non booléenne qui « reçoit undefined » ;
     // undefined et null, à la première lecture, sous le message du moteur
     // JavaScript. Seul le message distingue la garde.
-    for (const contraintes of [undefined, null, 'separerAppartenances', true]) {
+    for (const contraintes of [undefined, null, 'separerOrganisations', true]) {
       exigerTypeError(avec({ contraintes }), 'configuration.contraintes : objet attendu', libelleDe(contraintes));
     }
   });
@@ -894,8 +894,8 @@ describe('figerConfiguration : une normalisation par configuration figée', () =
     ...configuration({
       participants: [
         ...personnes([9]),
-        { id: 2, nom: 'P2', appartenance: null, anime: [1, 2] },
-        { id: 4, nom: 'P4', appartenance: 'X', etiquettes: ['finance'] },
+        { id: 2, nom: 'P2', organisation: null, anime: [1, 2] },
+        { id: 4, nom: 'P4', organisation: 'X', etiquettes: ['finance'] },
       ],
       tables: tablesDe([30, 10], 4),
       tours: 2,
@@ -997,7 +997,7 @@ describe('erreurs du moteur', () => {
 const etiquete = (id, etiquettes, anime) => ({
   id,
   nom: `P${id}`,
-  appartenance: null,
+  organisation: null,
   ...(etiquettes === undefined ? {} : { etiquettes }),
   ...(anime === undefined ? {} : { anime }),
 });

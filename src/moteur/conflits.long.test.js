@@ -51,7 +51,7 @@ function sommer(conflits) {
   for (const tables of conflits) {
     for (const { regles } of tables) {
       for (const { regle, paires, personnes } of regles) {
-        if (regle === 'separerAppartenances') separer += paires.length;
+        if (regle === 'separerOrganisations') separer += paires.length;
         else if (regle === 'nouvelleTable') nouvelleTable += personnes.length;
         else for (const [a, b] of paires) revues.add(`${a},${b}`);
       }
@@ -62,7 +62,7 @@ function sommer(conflits) {
 
 // L'oracle des trois sommes d'un plan qui assied chacun, écrit sans le
 // moteur, par les règles de l'itération 1. Séparer : chaque paire de même
-// appartenance réunie, à chaque tour. Nouveaux voisins : une paire réunie
+// organisation réunie, à chaque tour. Nouveaux voisins : une paire réunie
 // au moins deux fois est choisie quand une de ses rencontres a lieu hors
 // d'une table où les deux sont réservés. Nouvelle table : pour chaque
 // personne et chaque table qu'elle visite m fois, dont f réservée, m − 1
@@ -123,7 +123,7 @@ function ecarts(nom, instance, tableDe) {
 }
 
 // Une petite configuration tirée de rng : de 2 à 6 tables de 2 à 5 sièges,
-// de 1 à 5 tours, de la moitié des sièges à tous occupés ; une appartenance
+// de 1 à 5 tours, de la moitié des sièges à tous occupés ; une organisation
 // parmi trois, ou aucune, pour chacun. Un participant sur cinq est ancré, un
 // sur trois réservé à une partie des tours quand R ≥ 2, chacun à une table
 // où il reste un siège à chacun de ses tours : normaliser l'accepte toujours.
@@ -140,7 +140,7 @@ function tirerConfiguration(rng) {
   const reservations = [];
   for (let id = 1; id <= N; id += 1) {
     const g = rng.borne(LIBELLES.length + 1);
-    participants.push({ id, nom: `P${id}`, appartenance: g < LIBELLES.length ? LIBELLES[g] : null });
+    participants.push({ id, nom: `P${id}`, organisation: g < LIBELLES.length ? LIBELLES[g] : null });
     const role = rng.borne(15);
     if (role < 3) {
       const t = rng.borne(T);
@@ -164,10 +164,10 @@ function tirerConfiguration(rng) {
     tours: R,
     reservations,
     contraintes: {
-      separerAppartenances: true,
+      separerOrganisations: true,
       nouveauxVoisins: true,
       nouvelleTable: true,
-      varierAppartenances: rng.borne(2) === 0,
+      varierOrganisations: rng.borne(2) === 0,
     },
   };
 }

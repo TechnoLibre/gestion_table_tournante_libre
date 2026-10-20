@@ -17,7 +17,7 @@ describe('personnes : le nom affiché (§ 8.2)', () => {
 
   test('les autres champs de la personne ne comptent pas', () => {
     assert.equal(
-      nomAffiche({ id: 4, nom: 'Lacasse', prenom: 'Ondine', appartenance: 'Club des Merles', exclu: true }),
+      nomAffiche({ id: 4, nom: 'Lacasse', prenom: 'Ondine', organisation: 'Club des Merles', exclu: true }),
       'Ondine Lacasse',
     );
   });

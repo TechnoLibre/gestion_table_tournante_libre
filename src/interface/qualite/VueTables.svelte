@@ -2,7 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // La vue « Appartenances à chaque table » (§ 12.11, B20, D35, D54) de la
+  // La vue « Organisations à chaque table » (§ 12.11, B20, D35, D54) de la
   // page de qualité. Un sélecteur à trois positions — un groupe de boutons
   // radio, au clavier — choisit ce que la grille compte : les sièges, les
   // assis ou les doublons parmi les affiliés. La position est un état de la
@@ -19,17 +19,17 @@
   // largeur de la carte cède la place à sa phrase, et son jumeau s'ouvre ;
   // le sélecteur reste. Sous « doublons », sans collision, la phrase de la
   // vue des collisions tient lieu de grille. Une seule table, aucune
-  // appartenance : la phrase du cas, sans sélecteur (§ 12.6, B15). Sous la
+  // organisation : la phrase du cas, sans sélecteur (§ 12.6, B15). Sous la
   // grille, son jumeau : les trois comptes de chaque table à chaque tour.
   //
   // Elle reçoit le contrat de propriétés des vues — detail, le détail du
   // placement mesuré, null tant qu'il n'est pas calculé ; ligne et table, que
   // cette vue ne lit pas — et met en forme le détail par modeleTables
-  // (appartenances.js), sans rien calculer. Son <div> porte data-vue-qualite,
+  // (organisations.js), sans rien calculer. Son <div> porte data-vue-qualite,
   // que la carte ne transmet pas : il enveloppe la carte.
   import { getContext } from 'svelte';
   import Carte from '../primitives/Carte.svelte';
-  import { CASE_MAX_TEXTES, modeleTables } from './appartenances.js';
+  import { CASE_MAX_TEXTES, modeleTables } from './organisations.js';
   import Grille from './graphiques/Grille.svelte';
   import Jumeau from './graphiques/Jumeau.svelte';
 

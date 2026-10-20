@@ -19,10 +19,10 @@ import { cite, compte, enumeration, nomDans } from './aides.js';
 // Le nom de chaque réglage que modifierReglage change, tel que le journal le
 // fige (§ 5.3, § 5.10).
 const NOMS_DES_REGLAGES = new Map([
-  ['separerAppartenances', 'Séparer les appartenances'],
+  ['separerOrganisations', 'Séparer les organisations'],
   ['nouveauxVoisins', 'Nouveaux voisins à chaque tour'],
   ['nouvelleTable', 'Nouvelle table à chaque tour'],
-  ['varierAppartenances', 'Varier les appartenances rencontrées'],
+  ['varierOrganisations', 'Varier les organisations rencontrées'],
   ['attribuerSieges', 'Attribuer les sièges'],
   ['generation.nombre', 'Propositions par génération'],
   ['generation.arret', 'Mouvements par proposition'],
@@ -239,7 +239,7 @@ export const TABLE = new Map([
   ['mobilier.critere.toursHorsObjectif', 'tours hors objectif'],
   ['mobilier.critere.rencontresRepetees', 'rencontres répétées et retours'],
   ['mobilier.critere.animateursNonRencontres', 'animateurs non rencontrés'],
-  ['mobilier.critere.redondance', "redondance d'appartenance"],
+  ['mobilier.critere.redondance', "redondance d'organisation"],
 
   // --- Les libellés figés du journal (§ 8.2) ---------------------------------
   ['ENTREE_CREER_TABLE', ({ numero }) => `Ajouté la table ${numero}`],

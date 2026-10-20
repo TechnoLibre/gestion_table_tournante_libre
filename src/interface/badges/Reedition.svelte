@@ -6,7 +6,7 @@
   // planche des seules personnes cochées, annoncée comme telle sur sa
   // feuille de contrôle. La liste porte les personnes non exclues, par ordre
   // alphabétique de leur nom affiché (personnesReeditables) ; la saisie du
-  // filtre la restreint aux noms et appartenances qui la contiennent, et une
+  // filtre la restreint aux noms et organisations qui la contiennent, et une
   // personne cochée le reste quand le filtre la cache. « Rééditer n badges »
   // paraît dès qu'une personne cochée reste rééditable, et remet la
   // sélection — dans l'ordre de la liste — à executer, la production de la
@@ -14,7 +14,7 @@
   // commande, avec son remède, que gestes exécute quand l'écran le fournit.
   //
   // Habillage : le groupe est une carte, titrée de son intitulé ; la liste
-  // défile dans un cadre au filet de la carte, l'appartenance d'une personne
+  // défile dans un cadre au filet de la carte, l'organisation d'une personne
   // en encre secondaire.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -55,8 +55,8 @@
           <label>
             <input type="checkbox" checked={cochees.includes(personne.id)} onchange={(evenement) => cocher(personne.id, evenement.currentTarget.checked)} />
             <span>{personne.nom}</span>
-            {#if personne.appartenance !== null}
-              <span class="appartenance">{personne.appartenance}</span>
+            {#if personne.organisation !== null}
+              <span class="organisation">{personne.organisation}</span>
             {/if}
           </label>
         </li>
@@ -136,7 +136,7 @@
     gap: var(--espace-2);
   }
 
-  .appartenance {
+  .organisation {
     color: var(--couleur-page-texte-secondaire);
   }
 </style>

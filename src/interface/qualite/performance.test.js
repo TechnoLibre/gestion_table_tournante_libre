@@ -253,7 +253,7 @@ describe('qualite/performance : le retenu et la course absente (§ 12.6, § 12.1
 });
 
 describe('qualite/performance : sur le détail d’une génération du moteur (§ 12.14, D40)', () => {
-  // Six personnes inventées, deux appartenances, deux tables de trois
+  // Six personnes inventées, deux organisations, deux tables de trois
   // places, deux tours.
   function chargeSix() {
     const charge = creerCharge({ id: 'evt-performance', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 2 });
@@ -265,11 +265,11 @@ describe('qualite/performance : sur le détail d’une génération du moteur (�
       ['Quenouille', 'Maëlle', null],
       ['Varech', 'Sidonie', null],
     ];
-    charge.participants = noms.map(([nom, prenom, appartenance], rang) => ({
+    charge.participants = noms.map(([nom, prenom, organisation], rang) => ({
       id: rang + 1,
       nom,
       prenom,
-      appartenance,
+      organisation,
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -351,7 +351,7 @@ describe('qualite/performance : la course d’une dérivée part du plan de son 
       id: rang + 1,
       nom,
       prenom,
-      appartenance: rang < 3 ? 'Coopérative Aubier' : null,
+      organisation: rang < 3 ? 'Coopérative Aubier' : null,
       courriel: null,
       titrePressenti: null,
       notes: null,

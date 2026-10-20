@@ -10,7 +10,7 @@
   // vue ne calcule rien.
   //
   // Le graphique dessine la soirée, le moins varié en tête : les
-  // appartenances et les étiquettes rencontrées en animant, en deux colonnes
+  // organisations et les étiquettes rencontrées en animant, en deux colonnes
   // de barres juxtaposées, chacune son axe — une seule quand le détail n'a
   // que celle-là, et la phrase qui le dit. Au-dessus, pour chaque colonne
   // dessinée, ses trois nombres : le moins varié, le plus varié, au minimum.
@@ -58,8 +58,8 @@
               {#each modele.equite as colonne (colonne.genre)}
                 <div class="colonne">
                   <p class="titre">{colonne.titre}</p>
-                  {#if colonne.genre === 'appartenances'}
-                    <dl data-equite="appartenances">{@render troisNombres(colonne)}</dl>
+                  {#if colonne.genre === 'organisations'}
+                    <dl data-equite="organisations">{@render troisNombres(colonne)}</dl>
                   {:else}
                     <dl data-equite="etiquettes">{@render troisNombres(colonne)}</dl>
                   {/if}

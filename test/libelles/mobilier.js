@@ -45,7 +45,7 @@ export const EXEMPLES = [
     { participants: [{ participant: 4, personne: 'Iris Ombrelle' }], tours: 3, remede: { geste: 'ouvrirSection', section: 'participants' } },
   ],
   ['PRESENCE_TOURS_AJOUTES', { personnes: [{ participant: 2, personne: 'Théo Pervenche' }] }],
-  ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerAppartenances', valeur: false }],
+  ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerOrganisations', valeur: false }],
   // Objectifs des tables
   ['OBJECTIF_HORS_SOIREE', { tour: 5, remede: null }],
   ['OBJECTIF_SANS_ETIQUETTE', { table: 2, tour: 3, remede: { commande: 'retirerObjectif', arguments: { table: 2, tour: 3 } } }],

@@ -18,7 +18,7 @@ import { LIBRE, decrire } from './configuration.js';
  *            tour?: number}} ViolationIndicateur
  *          index : rang de la personne dans l'ordre canonique, celui de
  *          instance.ids ; absent d'une violation qui porte sur un total.
- *          groupe : rang de l'appartenance dans instance.groupes, à partir
+ *          groupe : rang de l'organisation dans instance.groupes, à partir
  *          de 0 ; tour : numéroté à partir de 1. Seuls les restes les portent
  *
  * @typedef {Object} ComplementsIndicateurs   ce que la page de qualité ajoute
@@ -26,7 +26,7 @@ import { LIBRE, decrire } from './configuration.js';
  *           chaque tour et honore les réservations : les planchers n'y valent
  *           que là (§ 12.4)
  * @property {ArrayLike<number>|null} planchersCollisions  plancher des
- *           collisions cumulées par appartenance, ordre de instance.groupes,
+ *           collisions cumulées par organisation, ordre de instance.groupes,
  *           0 quand le diagnostic se tait
  * @property {Array<{hors: number|null, plancher: number|null}>|null}
  *           objectifsParTour  un élément par tour ; un tour sans couple
@@ -270,7 +270,7 @@ function exigerLongueur(valeurs, N, nom, attendu) {
 // donnée. complements vaut null sans compléments.
 function verifierDiversite(p, rencontres, mesures, complements, violations) {
   if (complements === null) return;
-  const { appartenancesVues: vues, affilies } = mesures;
+  const { organisationsVues: vues, affilies } = mesures;
   if (!tient(rencontres[p], vues[p])) violations.push({ code: 'DIVERSITE_RENCONTRES', index: p });
   if (!tient(affilies[p], vues[p])) violations.push({ code: 'DIVERSITE_AFFILIES', index: p });
   const { phiAffilies, aMax } = complements;
@@ -284,14 +284,14 @@ function verifierDiversite(p, rencontres, mesures, complements, violations) {
 // une, qu'un élément de objectifsParTour n'est pas un objet, ou que mesures
 // n'a pas les listes que les compléments font lire ;
 // RangeError quand une liste n'a pas la longueur de sa population : N pour
-// les personnes, mesures.parGroupe pour les appartenances.
+// les personnes, mesures.parGroupe pour les organisations.
 function lireComplements(complements, mesures, N) {
   if (complements === null) return null;
   if (typeof complements !== 'object') throw new TypeError('complements : objet ou null attendu');
   const { planchersValides, planchersCollisions = null, objectifsParTour = null } = complements;
   const { phiAffilies = null, aMax = null } = complements;
   if (typeof planchersValides !== 'boolean') throw new TypeError('complements.planchersValides : booléen attendu');
-  exigerLongueur(mesures.appartenancesVues, N, 'appartenancesVues', 'liste');
+  exigerLongueur(mesures.organisationsVues, N, 'organisationsVues', 'liste');
   exigerLongueur(mesures.affilies, N, 'affilies', 'liste');
   if (phiAffilies !== null) exigerLongueur(phiAffilies, N, 'phiAffilies', 'liste ou null');
   if (aMax !== null) exigerLongueur(aMax, N, 'aMax', 'liste ou null');
@@ -315,8 +315,8 @@ function lireComplements(complements, mesures, N) {
 }
 
 // Les restes négatifs, ajoutés à violations, sur un plan où les planchers
-// valent : collisions cumulées sous leur plancher, appartenance par
-// appartenance, puis hors objectif sous leur plancher, tour par tour. Un
+// valent : collisions cumulées sous leur plancher, organisation par
+// organisation, puis hors objectif sous leur plancher, tour par tour. Un
 // tour dont hors et plancher sont tous deux null est sans objet et passe ;
 // un seul des deux null fait tomber l'inégalité, comme toute non-valeur.
 function verifierRestes(complements, parGroupe, violations) {
@@ -372,10 +372,10 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * elle éprouve en plus, pour chacun, A(p) ≤ rencontres(p)
  * (DIVERSITE_RENCONTRES), A(p) ≤ |F(p)| (DIVERSITE_AFFILIES), |F(p)| ≤
  * Φ_aff(p) (AFFILIES_PLAFOND) et A(p) ≤ A_max(p) (BORNE_DIVERSITE), A(p) et
- * |F(p)| lus dans mesures.appartenancesVues et mesures.affilies, les deux
+ * |F(p)| lus dans mesures.organisationsVues et mesures.affilies, les deux
  * derniers seulement quand la borne est donnée ; puis, sur un plan où les
  * planchers valent, que le reste n'est jamais négatif : les collisions
- * cumulées de chaque appartenance, mesures.parGroupe, au moins son plancher
+ * cumulées de chaque organisation, mesures.parGroupe, au moins son plancher
  * (RESTE_NEGATIF, groupe), et les tours hors objectif de chaque tour au moins
  * le sien (RESTE_OBJECTIFS_NEGATIF, tour), un tour sans couple possible,
  * hors et plancher null, n'étant pas lu. Un complément null n'est pas lu.
@@ -396,7 +396,7 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * que instance.ids[index] traduit. Les violations se rangent par index
  * croissant, puis de gauche à droite sur la ligne, suivie des dépassements
  * de la personne, puis de sa diversité ; les deux violations des totaux
- * viennent ensuite, et les restes en dernier, appartenances puis tours.
+ * viennent ensuite, et les restes en dernier, organisations puis tours.
  *
  * Lève RangeError quand une liste de plafonds, ou une liste par personne des
  * objectifs, des animateurs ou des tours assis, n'a pas N cases : elle décrit

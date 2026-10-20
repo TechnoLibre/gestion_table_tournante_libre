@@ -13,7 +13,7 @@
 //
 // Chaque plancher que le diagnostic garde sous absence est au plus le
 // minimum de sa mesure sur l'ensemble des plans : collisions cumulées, paires
-// distinctes et excédent de chaque appartenance, tours hors objectif (total,
+// distinctes et excédent de chaque organisation, tours hors objectif (total,
 // par tour, plus grand d'une personne) et personnes jamais servies. Les
 // retours imposés égalent ceux de chaque plan. collisionPartout vrai impose
 // une collision à chaque table de chaque tour de chaque plan. Un manque de
@@ -28,10 +28,10 @@ import { diagnostiquer } from './diagnostic.js';
 import { mesurer, parcourirTours } from './indicateurs.js';
 
 const SEPARER = {
-  separerAppartenances: true,
+  separerOrganisations: true,
   nouveauxVoisins: false,
   nouvelleTable: false,
-  varierAppartenances: false,
+  varierOrganisations: false,
 };
 
 // Graine des masques tirés à cinq personnes, et leur nombre par gabarit.
@@ -42,16 +42,16 @@ const ancrer = (participant, table) => ({ participant, table, portee: 'tous' });
 const fixer = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
 
 /**
- * Un gabarit : la configuration sans présence. appartenances[j] et
+ * Un gabarit : la configuration sans présence. organisations[j] et
  * etiquettes[j] sont celles du participant d'id j + 1 ; tables, des paires
  * [id, capacité].
  */
-function gabarit({ appartenances, etiquettes = [], tables, tours, reservations = [], objectifs = [] }) {
+function gabarit({ organisations, etiquettes = [], tables, tours, reservations = [], objectifs = [] }) {
   return {
-    participants: appartenances.map((appartenance, j) => ({
+    participants: organisations.map((organisation, j) => ({
       id: j + 1,
       nom: `P${j + 1}`,
-      appartenance,
+      organisation,
       ...(etiquettes[j] === undefined ? {} : { etiquettes: etiquettes[j] }),
     })),
     tables: tables.map(([id, capacite], i) => ({ id, numero: i + 1, capacite })),
@@ -71,7 +71,7 @@ const GABARITS = [
   // au tour 1 ; la table 10 attend « x » pour la soirée, que 1, 3 et 4
   // portent : plus de couples possibles que de sièges libres.
   ['trois A et un B, un tour réservé, un objectif de soirée', gabarit({
-    appartenances: ['A', 'A', 'A', 'B'],
+    organisations: ['A', 'A', 'A', 'B'],
     etiquettes: [['x'], undefined, ['x'], ['x']],
     tables: [[10, 2], [20, 3]],
     tours: 3,
@@ -82,7 +82,7 @@ const GABARITS = [
   // excédent forcé, que leur absence à l'un de ces tours défait ; 3 ancrée
   // à la table 20 ; la table 10 attend « x » au tour 2.
   ['deux A réservées ensemble, une ancrée, un objectif de tour', gabarit({
-    appartenances: ['A', 'A', null, null],
+    organisations: ['A', 'A', null, null],
     etiquettes: [['x'], ['x'], ['x']],
     tables: [[10, 2], [20, 2]],
     tours: 3,
@@ -92,7 +92,7 @@ const GABARITS = [
   // Quatre « A », deux tables de 2, deux tours : la collision est forcée à
   // chaque table quand chacun est présent.
   ['quatre A sur quatre sièges, deux tours', gabarit({
-    appartenances: ['A', 'A', 'A', 'A'],
+    organisations: ['A', 'A', 'A', 'A'],
     tables: [[10, 2], [20, 2]],
     tours: 2,
   }), 'tous'],
@@ -100,7 +100,7 @@ const GABARITS = [
   // 20 au tour 3 ; la table 10 attend « x » pour la soirée, que 1, 2, 3 et 5
   // portent.
   ['trois A et deux B, un tour réservé, un objectif de soirée', gabarit({
-    appartenances: ['A', 'A', 'A', 'B', 'B'],
+    organisations: ['A', 'A', 'A', 'B', 'B'],
     etiquettes: [['x'], ['x'], ['x'], undefined, ['x']],
     tables: [[10, 2], [20, 3]],
     tours: 3,
@@ -110,7 +110,7 @@ const GABARITS = [
   // Cinq « A » pour quatre sièges : un tour sans absente manque d'une place,
   // un tour à quatre présentes force la collision à chaque table.
   ['cinq A pour quatre sièges', gabarit({
-    appartenances: ['A', 'A', 'A', 'A', 'A'],
+    organisations: ['A', 'A', 'A', 'A', 'A'],
     tables: [[10, 2], [20, 2]],
     tours: 3,
   }), 'uneAbsenteAuPlus'],
@@ -202,7 +202,7 @@ function enumererPlans(instance, visiter) {
 }
 
 // Vrai quand chaque table porte, à chaque tour, deux personnes de même
-// appartenance, lu case à case sur le plan.
+// organisation, lu case à case sur le plan.
 function collisionAChaqueTable({ N, T, R, groupe }, tableDe) {
   for (let r = 0; r < R; r += 1) {
     for (let t = 0; t < T; t += 1) {

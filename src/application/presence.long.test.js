@@ -74,7 +74,7 @@ function chargeDeDepart(graine, attribuerSieges) {
     id: rang + 1,
     nom: NOMS[rang],
     prenom: PRENOMS[rang],
-    appartenance: rang % 2 === 0 ? 'Atelier Ressac' : 'Coopérative Aubier',
+    organisation: rang % 2 === 0 ? 'Atelier Ressac' : 'Coopérative Aubier',
     courriel: null,
     titrePressenti: null,
     notes: null,

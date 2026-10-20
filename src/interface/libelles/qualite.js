@@ -60,9 +60,9 @@ export const TABLE = new Map([
   ['qualite.vue.profil.question', 'Qui est le plus mal servi, de combien, et combien sont-ils ?'],
   ['qualite.vue.comparaison.titre', 'Comparaison'],
   ['qualite.vue.comparaison.question', 'Laquelle des deux sert mieux, et qui y perd ?'],
-  ['qualite.vue.collisions.titre', "Collisions d'appartenance"],
+  ['qualite.vue.collisions.titre', "Collisions d'organisation"],
   ['qualite.vue.collisions.question', "D'où vient le problème, et relancer peut-il y changer quelque chose ?"],
-  ['qualite.vue.tables.titre', 'Appartenances à chaque table'],
+  ['qualite.vue.tables.titre', 'Organisations à chaque table'],
   ['qualite.vue.tables.question', 'Où les mêmes cercles se retrouvent-ils à une même table ?'],
   ['qualite.vue.paires.titre', 'Paires répétées'],
   ['qualite.vue.paires.question', 'Qui revoit trop souvent la même personne ?'],
@@ -110,7 +110,7 @@ export const TABLE = new Map([
   ['qualite.tuile.toursPossibles', ({ possibles }) => compte(possibles, 'tour possible', 'tours possibles')],
   ['qualite.tuile.imposees', ({ imposees }) => `${compte(imposees, 'imposée', 'imposées')}, à part`],
   ['qualite.tuile.imposes', ({ imposes }) => `${compte(imposes, 'imposé', 'imposés')}, à part`],
-  ['qualite.tuile.sansAppartenance', "Aucune personne présente ne porte d'appartenance."],
+  ['qualite.tuile.sansOrganisation', "Aucune personne présente ne porte d'organisation."],
   ['qualite.tuile.pireRencontres', ({ rencontres, plafond }) => `minimum ${rencontres} sur ${plafond}`],
   ['qualite.tuile.pireServis', ({ servis, possibles }) => `minimum ${servis} sur ${possibles}`],
   [
@@ -144,7 +144,7 @@ export const TABLE = new Map([
   ['qualite.profil.axe.comptes', 'Personnes distinctes'],
   ['qualite.profil.axe.pourcentages', 'Rencontres en pourcentage du plafond réalisé'],
   ['qualite.profil.serie.rencontres', 'rencontres'],
-  ['qualite.profil.serie.appartenances', 'appartenances rencontrées'],
+  ['qualite.profil.serie.organisations', 'organisations rencontrées'],
   ['qualite.profil.repere.plafond', 'plafond réalisé'],
   ['qualite.profil.repere.borne', 'borne de diversité'],
   [
@@ -163,12 +163,12 @@ export const TABLE = new Map([
   ['qualite.profil.marque.plafondNul', 'plafond réalisé nul'],
   ['qualite.profil.colonne.rang', 'Rang'],
   ['qualite.profil.colonne.nom', 'Personne'],
-  ['qualite.profil.colonne.appartenance', 'Appartenance'],
+  ['qualite.profil.colonne.organisation', 'Organisation'],
   ['qualite.profil.colonne.rencontres', 'Personnes distinctes rencontrées'],
   ['qualite.profil.colonne.plafondRealise', 'Plafond réalisé'],
   ['qualite.profil.colonne.pourcent', 'Rencontres sur le plafond réalisé'],
   ['qualite.profil.colonne.plafondAPriori', 'Plafond a priori'],
-  ['qualite.profil.colonne.appartenances', 'Appartenances rencontrées'],
+  ['qualite.profil.colonne.organisations', 'Organisations rencontrées'],
   ['qualite.profil.colonne.borneDiversite', 'Borne de diversité'],
   ['qualite.profil.colonne.toursNonAssis', 'Tours non assis'],
   ['qualite.profil.colonne.absences', 'Absences'],
@@ -188,15 +188,15 @@ export const TABLE = new Map([
     'qualite.profil.uneTable',
     "Une seule table : chacun y rencontre tous les autres, et le profil dirait la même chose de chacun.",
   ],
-  // À une appartenance, la borne de diversité ne se trace pas, mais le
+  // À une organisation, la borne de diversité ne se trace pas, mais le
   // jumeau et l'infobulle l'écrivent (B5) : la phrase dit « tracée ».
   [
-    'qualite.profil.uneAppartenance',
-    "Une seule appartenance : le profil n'a qu'une série, les rencontres, et pas de borne de diversité tracée.",
+    'qualite.profil.uneOrganisation',
+    "Une seule organisation : le profil n'a qu'une série, les rencontres, et pas de borne de diversité tracée.",
   ],
   [
-    'qualite.profil.aucuneAppartenance',
-    "Aucune appartenance : le profil n'a qu'une série, les rencontres, et pas de borne de diversité.",
+    'qualite.profil.aucuneOrganisation',
+    "Aucune organisation : le profil n'a qu'une série, les rencontres, et pas de borne de diversité.",
   ],
   // La synthèse du second graphique quand la personne au rang 1 a un
   // plafond réalisé nul : aucun pourcentage, une phrase entière.
@@ -301,12 +301,12 @@ export const TABLE = new Map([
   ['qualite.comparaison.escalier.effectif', ({ nom }) => `Effectif, ${nom}`],
   ['qualite.comparaison.escalier.cumul', ({ nom }) => `Effectif cumulé, ${nom}`],
 
-  // --- Les collisions d'appartenance (§ 12.4, B13, D31) ----------------------
-  ['qualite.collisions.graphique', "Collisions d'appartenance, par appartenance"],
+  // --- Les collisions d'organisation (§ 12.4, B13, D31) ----------------------
+  ['qualite.collisions.graphique', "Collisions d'organisation, par organisation"],
   ['qualite.collisions.axe', 'Collisions cumulées (paire et tour)'],
   ['qualite.collisions.segment.prouve', 'prouvé inévitable'],
   ['qualite.collisions.segment.reste', 'reste'],
-  ['qualite.collisions.colonne.appartenance', 'Appartenance'],
+  ['qualite.collisions.colonne.organisation', 'Organisation'],
   ['qualite.collisions.colonne.effectif', 'Effectif'],
   ['qualite.collisions.colonne.cumulees', 'Collisions cumulées'],
   ['qualite.collisions.colonne.prouve', 'Prouvé inévitable'],
@@ -321,49 +321,49 @@ export const TABLE = new Map([
   ],
   [
     'qualite.collisions.synthese',
-    ({ appartenance, excedent }) => `L'excédent le plus grand est celui de « ${appartenance} » : ${compte(excedent, 'collision', 'collisions')}.`,
+    ({ organisation, excedent }) => `L'excédent le plus grand est celui de « ${organisation} » : ${compte(excedent, 'collision', 'collisions')}.`,
   ],
   [
     'qualite.collisions.horsDomaine',
     "Ce placement laisse quelqu'un en réserve ou n'honore pas une réservation : le plancher du diagnostic ne s'y applique pas, et chaque barre n'a qu'un segment, les collisions cumulées.",
   ],
-  ['qualite.collisions.aucune', "Aucune collision d'appartenance : à chaque tour, chaque table réunit des appartenances distinctes."],
-  ['qualite.collisions.aucuneAppartenance', "Aucune appartenance : il n'y a pas de collision à montrer."],
-  ['qualite.collisions.uneTable', 'Une seule table : chacun y retrouve chaque membre de son appartenance, à chaque tour.'],
+  ['qualite.collisions.aucune', "Aucune collision d'organisation : à chaque tour, chaque table réunit des organisations distinctes."],
+  ['qualite.collisions.aucuneOrganisation', "Aucune organisation : il n'y a pas de collision à montrer."],
+  ['qualite.collisions.uneTable', 'Une seule table : chacun y retrouve chaque membre de son organisation, à chaque tour.'],
 
-  // --- Les appartenances à chaque table (§ 12.11, B20, D35, D54) -------------
+  // --- Les organisations à chaque table (§ 12.11, B20, D35, D54) -------------
   ['qualite.tables.selecteur', 'Ce que la grille compte'],
-  ['qualite.tables.position.sieges', 'appartenances par siège'],
-  ['qualite.tables.position.assis', 'appartenances par personne assise'],
+  ['qualite.tables.position.sieges', 'organisations par siège'],
+  ['qualite.tables.position.assis', 'organisations par personne assise'],
   ['qualite.tables.position.doublons', 'doublons parmi les affiliés'],
-  ['qualite.tables.compte.sieges', 'sièges sans appartenance nouvelle'],
-  ['qualite.tables.compte.assis', 'assis sans appartenance nouvelle'],
-  ['qualite.tables.compte.doublons', "doublons d'appartenance"],
+  ['qualite.tables.compte.sieges', 'sièges sans organisation nouvelle'],
+  ['qualite.tables.compte.assis', 'assis sans organisation nouvelle'],
+  ['qualite.tables.compte.doublons', "doublons d'organisation"],
   [
     'qualite.tables.ligne.sieges',
-    ({ appartenances, sieges }) => `${compte(appartenances, 'appartenance', 'appartenances')} pour ${compte(sieges, 'siège', 'sièges')}`,
+    ({ organisations, sieges }) => `${compte(organisations, 'organisation', 'organisations')} pour ${compte(sieges, 'siège', 'sièges')}`,
   ],
   [
     'qualite.tables.ligne.assis',
-    ({ appartenances, assis }) => `${compte(appartenances, 'appartenance', 'appartenances')} pour ${assis} assis`,
+    ({ organisations, assis }) => `${compte(organisations, 'organisation', 'organisations')} pour ${assis} assis`,
   ],
   [
     'qualite.tables.ligne.doublons',
-    ({ appartenances, affilies }) => `${compte(appartenances, 'appartenance', 'appartenances')} pour ${compte(affilies, 'affilié', 'affiliés')}`,
+    ({ organisations, affilies }) => `${compte(organisations, 'organisation', 'organisations')} pour ${compte(affilies, 'affilié', 'affiliés')}`,
   ],
-  ['qualite.tables.graphique', 'Appartenances à chaque table, tables par tours'],
+  ['qualite.tables.graphique', 'Organisations à chaque table, tables par tours'],
   ['qualite.tables.table', ({ numero }) => `Table ${numero}`],
   ['qualite.tables.tour', ({ tour }) => `Tour ${tour}`],
   // Les colonnes du jumeau et de l'infobulle d'une case : les trois comptes,
   // puis le pourcentage de chacun, δ sur c, sur o, sur α.
   ['qualite.tables.colonne.table', 'Table'],
   ['qualite.tables.colonne.tour', 'Tour'],
-  ['qualite.tables.colonne.sieges', 'Sièges sans appartenance nouvelle'],
-  ['qualite.tables.colonne.assis', 'Assis sans appartenance nouvelle'],
-  ['qualite.tables.colonne.doublons', "Doublons d'appartenance"],
-  ['qualite.tables.colonne.pourcentSieges', 'Appartenances par siège'],
-  ['qualite.tables.colonne.pourcentAssis', 'Appartenances par personne assise'],
-  ['qualite.tables.colonne.pourcentDoublons', 'Appartenances par affilié'],
+  ['qualite.tables.colonne.sieges', 'Sièges sans organisation nouvelle'],
+  ['qualite.tables.colonne.assis', 'Assis sans organisation nouvelle'],
+  ['qualite.tables.colonne.doublons', "Doublons d'organisation"],
+  ['qualite.tables.colonne.pourcentSieges', 'Organisations par siège'],
+  ['qualite.tables.colonne.pourcentAssis', 'Organisations par personne assise'],
+  ['qualite.tables.colonne.pourcentDoublons', 'Organisations par affilié'],
   ['qualite.tables.colonne.occupants', 'Occupants'],
   ['qualite.tables.colonne.affilies', 'Affiliés'],
   ['qualite.tables.colonne.capacite', 'Capacité'],
@@ -373,8 +373,8 @@ export const TABLE = new Map([
     ({ numero, valeur }) => `La table ${numero} porte la case la plus haute : ${valeur}.`,
   ],
   ['qualite.tables.tropLarge', 'La grille ne tient pas dans la largeur de la carte : son tableau jumeau la remplace.'],
-  ['qualite.tables.aucuneAppartenance', "Aucune appartenance : aucune table n'a d'appartenance à mélanger."],
-  ['qualite.tables.uneTable', 'Une seule table : elle réunit toutes les appartenances à chaque tour.'],
+  ['qualite.tables.aucuneOrganisation', "Aucune organisation : aucune table n'a d'organisation à mélanger."],
+  ['qualite.tables.uneTable', 'Une seule table : elle réunit toutes les organisations à chaque tour.'],
 
   // --- Les paires répétées, la matrice (§ 12.5, B14, D32, D33, D50) ----------
   ['qualite.paires.choisies', "Paires que la recherche réunit plus d'une fois"],
@@ -521,7 +521,7 @@ export const TABLE = new Map([
 
   // --- La diversité par animateur (§ 12.13, B22, D38) ------------------------
   ['qualite.diversite.graphique', 'Diversité rencontrée en animant, sur la soirée'],
-  ['qualite.diversite.colonne.appartenances', 'Appartenances rencontrées en animant'],
+  ['qualite.diversite.colonne.organisations', 'Organisations rencontrées en animant'],
   ['qualite.diversite.colonne.etiquettes', 'Étiquettes rencontrées en animant'],
   ['qualite.diversite.colonne.toursAnimes', 'Tours animés'],
   ['qualite.diversite.colonne.personnes', 'Personnes rencontrées en animant'],
@@ -534,15 +534,15 @@ export const TABLE = new Map([
   ['qualite.diversite.personnes', ({ personnes }) => `${compte(personnes, 'personne rencontrée', 'personnes rencontrées')} en animant`],
   [
     'qualite.diversite.sansEtiquette',
-    "Aucune personne présente ne porte d'étiquette : seule la colonne des appartenances se dessine.",
+    "Aucune personne présente ne porte d'étiquette : seule la colonne des organisations se dessine.",
   ],
   [
-    'qualite.diversite.sansAppartenance',
-    'Une appartenance au plus : seule la colonne des étiquettes se dessine, triée sur les étiquettes.',
+    'qualite.diversite.sansOrganisation',
+    'Une organisation au plus : seule la colonne des étiquettes se dessine, triée sur les étiquettes.',
   ],
   [
     'qualite.diversite.rien',
-    "Ni étiquette, ni plus d'une appartenance : la diversité par animateur n'a rien à dessiner. Son tableau jumeau garde les tours animés et les personnes rencontrées en animant.",
+    "Ni étiquette, ni plus d'une organisation : la diversité par animateur n'a rien à dessiner. Son tableau jumeau garde les tours animés et les personnes rencontrées en animant.",
   ],
   ['qualite.diversite.aucunAnimateur', "Aucun animateur n'est désigné : la vue n'a rien à montrer."],
   // Le texte secondaire d'une ligne : ses tours animés et ses personnes
@@ -556,12 +556,12 @@ export const TABLE = new Map([
   // chaque colonne dessinée, chacune null quand elle ne l'est pas.
   [
     'qualite.diversite.synthese',
-    ({ appartenances, etiquettes }) =>
+    ({ organisations, etiquettes }) =>
       [
-        appartenances === null
+        organisations === null
           ? null
-          : `Le moins varié rencontre ${compte(appartenances.moins, 'appartenance', 'appartenances')} en animant ; ` +
-            `${compte(appartenances.auMinimum, 'animateur', 'animateurs')} au minimum.`,
+          : `Le moins varié rencontre ${compte(organisations.moins, 'organisation', 'organisations')} en animant ; ` +
+            `${compte(organisations.auMinimum, 'animateur', 'animateurs')} au minimum.`,
         etiquettes === null
           ? null
           : `Le moins varié rencontre ${compte(etiquettes.moins, 'étiquette', 'étiquettes')} en animant ; ` +

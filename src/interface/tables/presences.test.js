@@ -23,7 +23,7 @@ function personne(id, { exclu = false, presence } = {}) {
     id,
     nom: NOMS[(id - 1) % NOMS.length][0],
     prenom: NOMS[(id - 1) % NOMS.length][1],
-    appartenance: null,
+    organisation: null,
     courriel: null,
     titrePressenti: null,
     notes: null,

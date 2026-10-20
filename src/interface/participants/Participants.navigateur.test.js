@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La liste des participants dans un vrai moteur de rendu (§ 4, § 4.2, § 4.4,
-// § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'appartenance
+// § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'organisation
 // collante, la grille au clavier, le tri, le filtre et le compte,
 // l'exclusion, la présence par tour saisie en cases dans la grille, le
 // manque de places à l'ajout et à la réintégration, la fiche
@@ -37,7 +37,7 @@ import { actionDe, boutonActions } from '../../../test/navigateur/menus.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { composantes, sousTheme, visible } from '../../../test/navigateur/rendu.js';
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
-import { RANGS_APPARTENANCE, teintesAppartenances } from '../appartenances.js';
+import { RANGS_ORGANISATION, teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { comptesEntete } from './entete.js';
 import { COLONNES, GROUPEMENTS, cheminDe, cleDeGroupement, cleDeStatut, groupesGrille, lignesGrille, lignesVisibles } from './grille.js';
@@ -96,12 +96,12 @@ async function attendreSeance(m) {
   await rendu();
 }
 
-// Un CSV d'épreuve, séparé par « ; » : nom, prénom, appartenance, exclu,
+// Un CSV d'épreuve, séparé par « ; » : nom, prénom, organisation, exclu,
 // titre pressenti, notes.
 const csv = (personnes) =>
   [
-    'nom;prenom;appartenance;exclu;titre_pressenti;notes',
-    ...personnes.map((p) => [p.nom, p.prenom ?? '', p.appartenance ?? '', p.exclu ? 'oui' : '', p.titre ?? '', p.notes ?? ''].join(';')),
+    'nom;prenom;organisation;exclu;titre_pressenti;notes',
+    ...personnes.map((p) => [p.nom, p.prenom ?? '', p.organisation ?? '', p.exclu ? 'oui' : '', p.titre ?? '', p.notes ?? ''].join(';')),
   ].join('\n');
 
 // L'aperçu d'un texte sous le nombre de tours de l'événement ouvert, comme
@@ -252,7 +252,7 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(champs).toEqual({
       nom: 'Pervenche',
       prenom: null,
-      appartenance: null,
+      organisation: null,
       courriel: null,
       titrePressenti: null,
       notes: null,
@@ -332,57 +332,57 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(participants(m)).toHaveLength(0);
   });
 
-  test('appartenance collante : trois personnes portent « Club des Merles » ; le champ vidé, la quatrième n’en porte aucune', async () => {
+  test('organisation collante : trois personnes portent « Club des Merles » ; le champ vidé, la quatrième n’en porte aucune', async () => {
     const m = await evenementOuvert();
-    await ajouter(m, { nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB });
-    expect(champ(m, 'appartenance').value).toBe(CLUB);
+    await ajouter(m, { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB });
+    expect(champ(m, 'organisation').value).toBe(CLUB);
     expect(champ(m, 'prenom').value).toBe('');
     await ajouter(m, { nom: 'Pervenche' });
     await ajouter(m, { nom: 'Lacasse' });
-    expect(participants(m).map((p) => [p.nom, p.prenom, p.appartenance])).toEqual([
+    expect(participants(m).map((p) => [p.nom, p.prenom, p.organisation])).toEqual([
       ['Ombrelle', 'Iris', CLUB],
       ['Pervenche', null, CLUB],
       ['Lacasse', null, CLUB],
     ]);
-    await saisir(champ(m, 'appartenance'), '');
+    await saisir(champ(m, 'organisation'), '');
     await ajouter(m, { nom: 'Grisaille' });
-    expect(participants(m).at(-1).appartenance).toBeNull();
+    expect(participants(m).at(-1).organisation).toBeNull();
   });
 
-  test('l’appartenance collante survit à un aller-retour par le plan et par « À propos » ; un autre événement repart d’un champ vide', async () => {
+  test('l’organisation collante survit à un aller-retour par le plan et par « À propos » ; un autre événement repart d’un champ vide', async () => {
     const m = await evenementOuvert();
-    await ajouter(m, { nom: 'Ombrelle', appartenance: CLUB });
+    await ajouter(m, { nom: 'Ombrelle', organisation: CLUB });
     m.ui.allerA('plan');
     await rendu();
     m.ui.allerA('participants');
     await rendu();
-    expect(champ(m, 'appartenance').value).toBe(CLUB);
+    expect(champ(m, 'organisation').value).toBe(CLUB);
     m.ui.ouvrirApropos();
     await rendu();
     m.ui.fermerApropos();
     await rendu();
-    expect(champ(m, 'appartenance').value).toBe(CLUB);
+    expect(champ(m, 'organisation').value).toBe(CLUB);
     await ajouter(m, { nom: 'Pervenche' });
-    expect(participants(m).at(-1).appartenance).toBe(CLUB);
+    expect(participants(m).at(-1).organisation).toBe(CLUB);
     await m.seance.fermer();
     await m.seance.creer({ nom: 'Bal des Grisailles', date: null, siegesParDefaut: 8, tours: 2 });
     m.ui.allerA('participants');
     await rendu();
-    expect(champ(m, 'appartenance').value).toBe('');
+    expect(champ(m, 'organisation').value).toBe('');
   });
 
-  test('une appartenance qui ne diffère d’une existante que par la casse et les blancs est signalée sur le champ, l’orthographe existante à reprendre ; rien ne fusionne seul', async () => {
-    const m = await evenementOuvert({ personnes: [{ nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB }] });
+  test('une organisation qui ne diffère d’une existante que par la casse et les blancs est signalée sur le champ, l’orthographe existante à reprendre ; rien ne fusionne seul', async () => {
+    const m = await evenementOuvert({ personnes: [{ nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB }] });
     const trace = m.trace.length;
-    await saisir(champ(m, 'appartenance'), 'club des  merles');
+    await saisir(champ(m, 'organisation'), 'club des  merles');
     const signal = formulaire(m).querySelector('[data-avertissement]');
     expect(signal).not.toBeNull();
     expect(visible(signal)).toBe(true);
     expect(signal.textContent).toContain(CLUB);
-    expect(champ(m, 'appartenance').getAttribute('aria-describedby')).toContain(signal.id);
-    expect(champ(m, 'appartenance').value).toBe('club des  merles');
+    expect(champ(m, 'organisation').getAttribute('aria-describedby')).toContain(signal.id);
+    expect(champ(m, 'organisation').value).toBe('club des  merles');
     await cliquer(signal.querySelector('[data-commande="reprendreOrthographe"]'));
-    expect(champ(m, 'appartenance').value).toBe(CLUB);
+    expect(champ(m, 'organisation').value).toBe(CLUB);
     expect(formulaire(m).querySelector('[data-avertissement]')).toBeNull();
     expect(m.trace.length).toBe(trace);
   });
@@ -390,8 +390,8 @@ describe('la saisie (§ 4, § 10.2)', () => {
 
 describe('la grille (§ 10.2, § 19.3)', () => {
   const TROIS = [
-    { nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB },
-    { nom: 'Pervenche', prenom: 'Théo', appartenance: 'CLUB DES MERLES' },
+    { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB },
+    { nom: 'Pervenche', prenom: 'Théo', organisation: 'CLUB DES MERLES' },
     { nom: 'Lacasse', prenom: 'Ondine' },
     { nom: 'Grisaille' },
   ];
@@ -488,10 +488,10 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     const [premier, second] = idsAffiches(m);
     expect(idsAffiches(m)).toHaveLength(2);
 
-    cellule(m, premier, 'appartenance').focus();
+    cellule(m, premier, 'organisation').focus();
     await touche('Enter');
     await rendu();
-    await saisir(cellule(m, premier, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await saisir(cellule(m, premier, 'organisation').querySelector('input'), 'Cercle des Pinsons');
     await touche('Tab');
     await attendreSeance(m);
     expect(idsAffiches(m)).toEqual([second]);
@@ -504,14 +504,14 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     await saisir(section(m).querySelector('[data-champ="filtre"]'), 'merles');
     const [premier, second] = idsAffiches(m);
 
-    cellule(m, premier, 'appartenance').focus();
+    cellule(m, premier, 'organisation').focus();
     await touche('Enter');
     await rendu();
-    await saisir(cellule(m, premier, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await saisir(cellule(m, premier, 'organisation').querySelector('input'), 'Cercle des Pinsons');
     await touche('Enter');
     await attendreSeance(m);
     expect(idsAffiches(m)).toEqual([second]);
-    await vi.waitFor(() => expect(document.activeElement).toBe(cellule(m, second, 'appartenance')));
+    await vi.waitFor(() => expect(document.activeElement).toBe(cellule(m, second, 'organisation')));
   });
 
   test('Tab sur une saisie refusée : une seule commande, l’édition et le focus restent dans le champ, le refus contre lui', async () => {
@@ -543,10 +543,10 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     const [premier, second] = idsAffiches(m);
     expect(idsAffiches(m)).toHaveLength(2);
 
-    cellule(m, second, 'appartenance').focus();
+    cellule(m, second, 'organisation').focus();
     await touche('Enter');
     await rendu();
-    await saisir(cellule(m, second, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await saisir(cellule(m, second, 'organisation').querySelector('input'), 'Cercle des Pinsons');
     await majTab();
     await attendreSeance(m);
     expect(idsAffiches(m)).toEqual([premier]);
@@ -635,7 +635,7 @@ describe('la grille (§ 10.2, § 19.3)', () => {
         .sort((a, b) => (a.nom < b.nom ? -1 : a.nom > b.nom ? 1 : a.id - b.id) * (sens === 'croissant' ? 1 : -1))
         .map((p) => p.id);
     const merles = participants(m)
-      .filter((p) => p.appartenance !== null)
+      .filter((p) => p.organisation !== null)
       .map((p) => p.id);
     expect(merles).toHaveLength(2);
 
@@ -1187,12 +1187,12 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
   const legendeEtiquettes = (m) => section(m).querySelector('[data-legende-etiquettes]');
   const etiquettesDe = (m, nom) => participants(m).find((p) => p.nom === nom).etiquettes;
 
-  // Trois personnes de deux appartenances : les teintes d'appartenance
+  // Trois personnes de deux organisations : les teintes d'organisation
   // existent, et aucune ne doit peindre une étiquette.
   const TROIS_ETIQUETEES = [
-    { nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB },
-    { nom: 'Pervenche', prenom: 'Théo', appartenance: 'Cercle des Pinsons' },
-    { nom: 'Lacasse', prenom: 'Ondine', appartenance: CLUB, exclu: true },
+    { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB },
+    { nom: 'Pervenche', prenom: 'Théo', organisation: 'Cercle des Pinsons' },
+    { nom: 'Lacasse', prenom: 'Ondine', organisation: CLUB, exclu: true },
   ];
 
   // La fiche de la personne nommée, ouverte.
@@ -1222,8 +1222,8 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
       expect(pastille.querySelector('svg')).not.toBeNull();
       expect(composantes(getComputedStyle(pastille).color)).toEqual(encre);
     }
-    // La teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7).
-    const teintes = new Set([1, 2, 3, 4, 5, 6].map((rang) => JSON.stringify(jeton(`--couleur-appartenance-${rang}-fond`))));
+    // La teinte d'organisation ne sert qu'à l'organisation (§ 12.7).
+    const teintes = new Set([1, 2, 3, 4, 5, 6].map((rang) => JSON.stringify(jeton(`--couleur-organisation-${rang}-fond`))));
     for (const li of elements) expect(teintes.has(JSON.stringify(fondDe(pastilleDans(li))))).toBe(false);
     // La croix de retrait : une icône seule, sans texte, la croix cerclée
     // de la teinte du retrait, marquée « retrait », dans une cible de
@@ -1432,7 +1432,7 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
     expect(champEtiquettes(m).hasAttribute('aria-invalid')).toBe(false);
   });
 
-  test('la légende des étiquettes suit celle des appartenances, chacune chiffrée exclues comprises, en pastilles neutres ; absente sans étiquette', async () => {
+  test('la légende des étiquettes suit celle des organisations, chacune chiffrée exclues comprises, en pastilles neutres ; absente sans étiquette', async () => {
     const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
     expect(legendeEtiquettes(m)).toBeNull();
     expect(legende(m)).not.toBeNull();
@@ -1442,7 +1442,7 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
     const porteur = legendeEtiquettes(m);
     expect(porteur).not.toBeNull();
     expect(porteur.getAttribute('aria-label')).toBe(t('participants.legendeEtiquettes.titre'));
-    // Sous celle des appartenances : sa voisine immédiate, dans le même
+    // Sous celle des organisations : sa voisine immédiate, dans le même
     // porteur des légendes.
     expect(legende(m).nextElementSibling).toBe(porteur);
     expect(porteur.parentElement).toBe(legende(m).parentElement);
@@ -1564,13 +1564,13 @@ describe('export et collage (§ 10.2)', () => {
 
 describe('la liste groupée par une colonne ou plusieurs', () => {
   // Cinq personnes : deux du Club des Merles sous deux orthographes, deux
-  // du Cercle des Pinsons dont une exclue, une sans appartenance.
+  // du Cercle des Pinsons dont une exclue, une sans organisation.
   const CINQ = [
-    { nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB, titre: 'hôtesse' },
-    { nom: 'Pervenche', prenom: 'Théo', appartenance: 'CLUB DES MERLES' },
+    { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB, titre: 'hôtesse' },
+    { nom: 'Pervenche', prenom: 'Théo', organisation: 'CLUB DES MERLES' },
     { nom: 'Lacasse', prenom: 'Ondine' },
-    { nom: 'Grisaille', appartenance: 'Cercle des Pinsons', exclu: true },
-    { nom: 'Brindelle', appartenance: 'Cercle des Pinsons' },
+    { nom: 'Grisaille', organisation: 'Cercle des Pinsons', exclu: true },
+    { nom: 'Brindelle', organisation: 'Cercle des Pinsons' },
   ];
   const PINSONS = 'texte:cercle des pinsons';
   const MERLES = 'texte:club des merles';
@@ -1621,14 +1621,14 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     await rendu();
   }
 
-  // Le groupement par appartenance puis par statut, Ombrelle ancrée par une
+  // Le groupement par organisation puis par statut, Ombrelle ancrée par une
   // réservation : les autres présentes sont mobiles.
-  async function appartenancePuisStatut() {
+  async function organisationPuisStatut() {
     const m = await evenementOuvert({ tables: 1, personnes: CINQ });
     const charge = m.seance.etat().charge;
     await m.seance.executer('reserver', { participant: idDe(m, 'Ombrelle'), table: charge.tables[0].id, siege: null, portee: 'tous', tour: null });
     await attendreSeance(m);
-    await grouperPar(m, 'appartenance', 1);
+    await grouperPar(m, 'organisation', 1);
     await grouperPar(m, 'statut', 2);
     return m;
   }
@@ -1651,19 +1651,19 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
 
   test('chaque colonne choisie ouvre le niveau suivant, aux colonnes pas encore prises ; « Aucun » retire un niveau et les suivants', async () => {
     const m = await evenementOuvert({ personnes: CINQ });
-    await grouperPar(m, 'appartenance', 1);
+    await grouperPar(m, 'organisation', 1);
     expect(selecteurs(m)).toHaveLength(2);
     expect(selecteur(m, 2).value).toBe('');
     const deuxieme = [...selecteur(m, 2).options];
-    expect(deuxieme.map((o) => o.value)).toEqual(['', ...GROUPEMENTS.filter((c) => c !== 'appartenance')]);
+    expect(deuxieme.map((o) => o.value)).toEqual(['', ...GROUPEMENTS.filter((c) => c !== 'organisation')]);
     expect(deuxieme[0].textContent).toBe(t('participants.groupe.aucunSousGroupe'));
     // Chaque sélecteur a son étiquette, distincte des autres.
     const etiquettes = selecteurs(m).map((choix) => choix.labels[0]?.textContent);
     expect(etiquettes).toEqual([t('participants.groupe.grouperPar'), t('participants.groupe.puisPar', { niveau: 2 })]);
 
     await grouperPar(m, 'statut', 2);
-    expect(selecteurs(m).map((choix) => choix.value)).toEqual(['appartenance', 'statut', '']);
-    expect([...selecteur(m, 3).options].map((o) => o.value)).toEqual(['', ...GROUPEMENTS.filter((c) => c !== 'appartenance' && c !== 'statut')]);
+    expect(selecteurs(m).map((choix) => choix.value)).toEqual(['organisation', 'statut', '']);
+    expect([...selecteur(m, 3).options].map((o) => o.value)).toEqual(['', ...GROUPEMENTS.filter((c) => c !== 'organisation' && c !== 'statut')]);
     expect(new Set(groupes(m).map((g) => g.dataset.niveau))).toEqual(new Set(['1', '2']));
 
     // La colonne d'un niveau prise plus haut quitte le niveau plus bas.
@@ -1685,14 +1685,14 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     expect(selecteurs(m)).toHaveLength(GROUPEMENTS.length);
   });
 
-  test('par appartenance : un en-tête par groupe, son libellé et son compte, ses lignes dessous ; puis chaque colonne groupable suit groupesGrille ; rien ne s’écrit', async () => {
+  test('par organisation : un en-tête par groupe, son libellé et son compte, ses lignes dessous ; puis chaque colonne groupable suit groupesGrille ; rien ne s’écrit', async () => {
     const m = await evenementOuvert({ tables: 1, personnes: CINQ });
     const charge = m.seance.etat().charge;
     await m.seance.executer('reserver', { participant: idDe(m, 'Ombrelle'), table: charge.tables[0].id, siege: null, portee: 'tous', tour: null });
     await attendreSeance(m);
     const avant = empreinte(m);
 
-    await grouperPar(m, 'appartenance');
+    await grouperPar(m, 'organisation');
     expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS, MERLES, 'vide']);
     expect(entete(m, PINSONS)).toEqual({ libelle: 'Cercle des Pinsons', compte: t('participants.groupe.compte', { compte: 2 }) });
     expect(entete(m, MERLES)).toEqual({ libelle: CLUB, compte: t('participants.groupe.compte', { compte: 2 }) });
@@ -1763,7 +1763,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
         await rendu();
       }
       const avant = empreinte(m);
-      await grouperPar(m, 'appartenance');
+      await grouperPar(m, 'organisation');
       const tous = idsAffiches(m);
       expect(tous, mode).toHaveLength(5);
       const merles = idsDuGroupe(m, MERLES);
@@ -1808,10 +1808,10 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
   test('le filtre passe d’abord : un groupe sans ligne disparaît, chaque compte est celui des lignes montrées ; trié par la colonne groupée, les groupes suivent le sens', async () => {
     const m = await evenementOuvert({ personnes: CINQ });
     // Deux orthographes du même groupe : la plus ancienne personne le nomme.
-    await m.seance.executer('modifierParticipant', { id: idDe(m, 'Pervenche'), champs: { appartenance: 'CLUB DES MERLES' } });
-    await grouperPar(m, 'appartenance');
+    await m.seance.executer('modifierParticipant', { id: idDe(m, 'Pervenche'), champs: { organisation: 'CLUB DES MERLES' } });
+    await grouperPar(m, 'organisation');
     const libelleEntier = entete(m, MERLES).libelle;
-    expect(participants(m).find(({ nom }) => nom === 'Pervenche').appartenance).toBe('CLUB DES MERLES');
+    expect(participants(m).find(({ nom }) => nom === 'Pervenche').organisation).toBe('CLUB DES MERLES');
     expect(libelleEntier).toBe(CLUB);
     await saisir(section(m).querySelector('[data-champ="filtre"]'), 'pinsons');
     expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS]);
@@ -1836,8 +1836,8 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     expect(lignes(m)).toHaveLength(0);
     await cliquer(section(m).querySelector('[data-commande="toutDeplier"]'));
 
-    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="appartenance"]'));
-    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="appartenance"]'));
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="organisation"]'));
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="organisation"]'));
     expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([MERLES, PINSONS, 'vide']);
     // Trié par nom décroissant : groupes croissants, lignes au tri dans chacun.
     await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="nom"]'));
@@ -1849,7 +1849,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
 
   test('au clavier, les flèches et Tab passent d’une ligne visible à la suivante, par-dessus les en-têtes et les groupes repliés', async () => {
     const m = await evenementOuvert({ personnes: CINQ });
-    await grouperPar(m, 'appartenance');
+    await grouperPar(m, 'organisation');
     await cliquer(bascule(m, MERLES));
     const [grisaille, brindelle, lacasse] = ['Grisaille', 'Brindelle', 'Lacasse'].map((nom) => idDe(m, nom));
     expect(idsAffiches(m)).toEqual([grisaille, brindelle, lacasse]);
@@ -1881,41 +1881,41 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
 
   test('une saisie qui change la valeur groupée mène la ligne à son nouveau groupe, la cellule garde le focus ; un groupe replié qui la reçoit se déplie ; une entrée par saisie', async () => {
     const m = await evenementOuvert({ personnes: CINQ });
-    await grouperPar(m, 'appartenance');
+    await grouperPar(m, 'organisation');
     const lacasse = idDe(m, 'Lacasse');
     const brindelle = idDe(m, 'Brindelle');
     const avant = entrees(m).length;
 
-    cellule(m, lacasse, 'appartenance').focus();
+    cellule(m, lacasse, 'organisation').focus();
     await touche('Enter');
     await rendu();
-    await saisir(cellule(m, lacasse, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await saisir(cellule(m, lacasse, 'organisation').querySelector('input'), 'Cercle des Pinsons');
     await touche('Enter');
     await attendreSeance(m);
     expect(entrees(m)).toHaveLength(avant + 1);
     expect(idsDuGroupe(m, PINSONS)).toContain(lacasse);
     expect(groupe(m, 'vide')).toBeNull();
-    expect(document.activeElement).toBe(cellule(m, lacasse, 'appartenance'));
+    expect(document.activeElement).toBe(cellule(m, lacasse, 'organisation'));
     expect(entete(m, PINSONS).compte).toBe(t('participants.groupe.compte', { compte: 3 }));
 
     // Vers un groupe replié : il se déplie, et la cellule garde le focus.
     await cliquer(bascule(m, MERLES));
     expect(idsDuGroupe(m, MERLES)).toEqual([]);
-    cellule(m, brindelle, 'appartenance').focus();
+    cellule(m, brindelle, 'organisation').focus();
     await touche('Enter');
     await rendu();
-    await saisir(cellule(m, brindelle, 'appartenance').querySelector('input'), CLUB);
+    await saisir(cellule(m, brindelle, 'organisation').querySelector('input'), CLUB);
     await touche('Enter');
     await attendreSeance(m);
     expect(entrees(m)).toHaveLength(avant + 2);
     expect(bascule(m, MERLES).getAttribute('aria-expanded')).toBe('true');
     expect(idsDuGroupe(m, MERLES)).toContain(brindelle);
-    expect(document.activeElement).toBe(cellule(m, brindelle, 'appartenance'));
+    expect(document.activeElement).toBe(cellule(m, brindelle, 'organisation'));
   });
 
   test('changer de groupement déplie tout : d’une colonne à une autre, ou à l’ajout d’un niveau', async () => {
     const m = await evenementOuvert({ personnes: CINQ });
-    await grouperPar(m, 'appartenance');
+    await grouperPar(m, 'organisation');
     await cliquer(bascule(m, 'vide'));
     expect(bascule(m, 'vide').getAttribute('aria-expanded')).toBe('false');
     expect(idsAffiches(m)).toHaveLength(4);
@@ -1936,16 +1936,16 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
 
   test('validée par la sortie du champ, le focus posé ailleurs y reste ; le groupe replié qui reçoit la ligne le reste', async () => {
     const m = await evenementOuvert({ personnes: CINQ });
-    await grouperPar(m, 'appartenance');
+    await grouperPar(m, 'organisation');
     const lacasse = idDe(m, 'Lacasse');
     const ombrelle = idDe(m, 'Ombrelle');
     const filtre = section(m).querySelector('[data-champ="filtre"]');
     const avant = entrees(m).length;
 
-    cellule(m, lacasse, 'appartenance').focus();
+    cellule(m, lacasse, 'organisation').focus();
     await touche('Enter');
     await rendu();
-    await saisir(cellule(m, lacasse, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await saisir(cellule(m, lacasse, 'organisation').querySelector('input'), 'Cercle des Pinsons');
     await cliquer(filtre);
     await attendreSeance(m);
     expect(entrees(m)).toHaveLength(avant + 1);
@@ -1954,10 +1954,10 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
 
     // Le groupe qui reçoit la ligne, replié avant la saisie, le reste.
     await cliquer(bascule(m, PINSONS));
-    cellule(m, ombrelle, 'appartenance').focus();
+    cellule(m, ombrelle, 'organisation').focus();
     await touche('Enter');
     await rendu();
-    await saisir(cellule(m, ombrelle, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await saisir(cellule(m, ombrelle, 'organisation').querySelector('input'), 'Cercle des Pinsons');
     await cliquer(filtre);
     await attendreSeance(m);
     expect(entrees(m)).toHaveLength(avant + 2);
@@ -1967,11 +1967,11 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     expect(document.activeElement).toBe(filtre);
   });
 
-  test('appartenance puis statut : en-têtes imbriqués, comptes, repli du sous-groupe seul ou du parent entier ; rien ne s’écrit', async () => {
-    const m = await appartenancePuisStatut();
+  test('organisation puis statut : en-têtes imbriqués, comptes, repli du sous-groupe seul ou du parent entier ; rien ne s’écrit', async () => {
+    const m = await organisationPuisStatut();
     const avant = empreinte(m);
     const [ombrelle, pervenche] = ['Ombrelle', 'Pervenche'].map((nom) => idDe(m, nom));
-    const attendus = groupesGrille(lignesGrille(participants(m), { tri: null, filtre: '' }, cleNormalisee), ['appartenance', 'statut'], {
+    const attendus = groupesGrille(lignesGrille(participants(m), { tri: null, filtre: '' }, cleNormalisee), ['organisation', 'statut'], {
       tri: null,
       cleNormalisee,
       statuts: statuts(m.seance.etat().charge).parId,
@@ -2032,7 +2032,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
   });
 
   test('imbriqués : les flèches sautent tout en-tête ; une ligne menée sous un parent et un sous-groupe repliés les déplie', async () => {
-    const m = await appartenancePuisStatut();
+    const m = await organisationPuisStatut();
     const [ombrelle, pervenche, lacasse, grisaille, brindelle] = ['Ombrelle', 'Pervenche', 'Lacasse', 'Grisaille', 'Brindelle'].map((nom) => idDe(m, nom));
     await cliquer(bascule(m, `${MERLES}/statut:ancre`));
     expect(idsAffiches(m)).toEqual([brindelle, grisaille, pervenche, lacasse]);
@@ -2049,7 +2049,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     // Lacasse rejoint les Merles, mobile comme Pervenche : le sous-groupe
     // et son parent, tous deux repliés, se déplient.
     const destination = `${MERLES}/statut:mobile`;
-    expect(cheminDe(groupesGrille(lignesGrille(participants(m), { tri: null, filtre: '' }, cleNormalisee), ['appartenance', 'statut'], {
+    expect(cheminDe(groupesGrille(lignesGrille(participants(m), { tri: null, filtre: '' }, cleNormalisee), ['organisation', 'statut'], {
       tri: null,
       cleNormalisee,
       statuts: statuts(m.seance.etat().charge).parId,
@@ -2057,17 +2057,17 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     await cliquer(bascule(m, destination));
     await cliquer(bascule(m, MERLES));
     const avant = entrees(m).length;
-    cellule(m, lacasse, 'appartenance').focus();
+    cellule(m, lacasse, 'organisation').focus();
     await touche('Enter');
     await rendu();
-    await saisir(cellule(m, lacasse, 'appartenance').querySelector('input'), CLUB);
+    await saisir(cellule(m, lacasse, 'organisation').querySelector('input'), CLUB);
     await touche('Enter');
     await attendreSeance(m);
     expect(entrees(m)).toHaveLength(avant + 1);
     expect(bascule(m, MERLES).getAttribute('aria-expanded')).toBe('true');
     expect(bascule(m, destination).getAttribute('aria-expanded')).toBe('true');
     expect(idsDuGroupe(m, destination)).toEqual([pervenche, lacasse]);
-    expect(document.activeElement).toBe(cellule(m, lacasse, 'appartenance'));
+    expect(document.activeElement).toBe(cellule(m, lacasse, 'organisation'));
   });
 
   test('groupée par exclusion, Entrée sur l’exclusion : la ligne change de groupe, garde le focus, déplie son groupe', async () => {
@@ -2101,7 +2101,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
   describe('les conflits du placement montré (§ 7.5)', () => {
     // Deux tables de trois places, numérotées 4 (identifiant 1) et 1
     // (identifiant 2), deux tours. 1 et 2 du Club des Merles, 3 et 4 du
-    // Cercle des Pinsons, 5 et 6 sans appartenance, 7 des Pinsons, exclue.
+    // Cercle des Pinsons, 5 et 6 sans organisation, 7 des Pinsons, exclue.
     const SEPT = [
       ['Ombrelle', 'Iris', CLUB],
       ['Fontaine', 'Noé', CLUB],
@@ -2138,11 +2138,11 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
 
     function chargeSept() {
       const charge = creerCharge({ id: 'evt-conflits', nom: EVENEMENT, siegesParDefaut: 3, tours: 2 });
-      charge.participants = SEPT.map(([nom, prenom, appartenance], rang) => ({
+      charge.participants = SEPT.map(([nom, prenom, organisation], rang) => ({
         id: rang + 1,
         nom,
         prenom,
-        appartenance,
+        organisation,
         courriel: null,
         titrePressenti: null,
         notes: null,
@@ -2206,11 +2206,11 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     const marqueDePersonne = (m, id) => ligne(m, id).querySelector('[data-conflit-personne]');
     const toutesLesMarques = (m) => grille(m).querySelectorAll('[data-groupe-conflits], [data-conflits], [data-conflit], [data-conflit-personne]');
 
-    // Ce que montre la liste groupée par appartenance sous la proposition 1,
+    // Ce que montre la liste groupée par organisation sous la proposition 1,
     // ou sous un retenu du même plan.
     const SOUS_LE_PLAN_1 = {
       [MERLES]: [
-        `Tour 1, table 4 : Iris Ombrelle et Noé Fontaine ${TIRET} même appartenance`,
+        `Tour 1, table 4 : Iris Ombrelle et Noé Fontaine ${TIRET} même organisation`,
         `Tour 2, table 4 : Iris Ombrelle ${TIRET} revient à la table 4 (déjà au tour 1)`,
         `Tour 2, table 1 : Noé Fontaine et Théo Pervenche ${TIRET} se revoient (déjà à la table 4 au tour 1)`,
       ],
@@ -2229,7 +2229,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
         expect(texteDe(marqueDeGroupe(m, cle)), cle).toBe(t('participants.conflit.groupe', { nombre: attendues.length }));
         expect(conflitsDuGroupe(m, cle), cle).toEqual(attendues);
       }
-      expect(texteDe(marqueDePersonne(m, 1))).toBe('en conflit : même appartenance, revient à une table');
+      expect(texteDe(marqueDePersonne(m, 1))).toBe('en conflit : même organisation, revient à une table');
       expect(texteDe(marqueDePersonne(m, 3))).toBe('en conflit : se revoient');
       expect(marqueDePersonne(m, 7)).toBeNull();
     }
@@ -2239,7 +2239,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
       await gesteDeProposition(m, 1, 'voir');
       expect(m.ui.etat().proposition).toBe(1);
       const avant = { journal: texteJournal(m), etat: texteEtat(m) };
-      await grouperPar(m, 'appartenance');
+      await grouperPar(m, 'organisation');
       expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS, MERLES, 'vide']);
       await attendreSousLePlan1(m);
 
@@ -2263,7 +2263,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     test('imbriqués : un en-tête compte son sous-arbre, les lignes vont au plus étroit groupe', async () => {
       const m = await ouvrirSept();
       await gesteDeProposition(m, 1, 'voir');
-      await grouperPar(m, 'appartenance');
+      await grouperPar(m, 'organisation');
       await grouperPar(m, 'prenom', 2);
       expect(texteDe(marqueDeGroupe(m, MERLES))).toBe(t('participants.conflit.groupe', { nombre: 3 }));
       expect(conflitsDuGroupe(m, MERLES)).toEqual([]);
@@ -2281,12 +2281,12 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
       await gesteDeProposition(m, 1, 'retenir');
       expect(m.seance.etat().charge.retenu?.proposition).toBe(1);
       expect(m.ui.etat().proposition).toBeNull();
-      await grouperPar(m, 'appartenance');
+      await grouperPar(m, 'organisation');
       await attendreSousLePlan1(m);
 
       await gesteDeProposition(m, 2, 'voir');
       expect(m.ui.etat().proposition).toBe(2);
-      await grouperPar(m, 'appartenance');
+      await grouperPar(m, 'organisation');
       expect(texteDe(marqueDeGroupe(m, PINSONS))).toBe(t('participants.conflit.groupe', { nombre: 4 }));
       expect(conflitsDuGroupe(m, PINSONS)).toEqual([
         `Tour 2, table 4 : Noé Fontaine et Théo Pervenche ${TIRET} se revoient (déjà à la table 4 au tour 1)`,
@@ -2299,9 +2299,9 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     test('une règle désactivée retire ses conflits des groupes et des personnes', async () => {
       const m = await ouvrirSept();
       await gesteDeProposition(m, 1, 'voir');
-      await grouperPar(m, 'appartenance');
+      await grouperPar(m, 'organisation');
       expect(texteDe(marqueDeGroupe(m, MERLES))).toBe(t('participants.conflit.groupe', { nombre: 3 }));
-      await m.seance.executer('modifierReglage', { cle: 'separerAppartenances', valeur: false });
+      await m.seance.executer('modifierReglage', { cle: 'separerOrganisations', valeur: false });
       await attendreSeance(m);
       expect(texteDe(marqueDeGroupe(m, MERLES))).toBe(t('participants.conflit.groupe', { nombre: 2 }));
       expect(conflitsDuGroupe(m, MERLES)).toEqual(SOUS_LE_PLAN_1[MERLES].slice(1));
@@ -2311,7 +2311,7 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     test('ni proposition montrée ni retenu : aucune marque ; sans groupement, rien ne change', async () => {
       const m = await ouvrirSept();
       expect(m.ui.etat().proposition).toBeNull();
-      await grouperPar(m, 'appartenance');
+      await grouperPar(m, 'organisation');
       expect(groupes(m)).toHaveLength(3);
       expect(toutesLesMarques(m)).toHaveLength(0);
 
@@ -2349,17 +2349,17 @@ const pastilleDans = (conteneur) => [...conteneur.querySelectorAll('*')].find(op
 const carte = (m) => section(m).querySelector('section[aria-labelledby]');
 const legende = (m) => section(m).querySelector(`[aria-label="${t('participants.legende.titre')}"]`);
 
-// Sept appartenances — une de plus que la palette —, une exclue, une
-// personne sans appartenance et une au titre pressenti.
+// Sept organisations — une de plus que la palette —, une exclue, une
+// personne sans organisation et une au titre pressenti.
 const SEPT = [
-  { nom: 'Quenouillet', appartenance: 'Atelier Pivoine' },
-  { nom: 'Brindelle', appartenance: 'Banc des Loutres', exclu: true },
-  { nom: 'Calvaille', appartenance: 'Cercle des Grives', titre: 'hôtesse' },
-  { nom: 'Doucemer', appartenance: 'Cercle des Grives' },
-  { nom: 'Esquirol', appartenance: 'Dune des Hérons' },
-  { nom: 'Faverolle', appartenance: 'Étang des Sarcelles' },
-  { nom: 'Glanduc', appartenance: 'Forge des Martres' },
-  { nom: 'Houblonnet', appartenance: 'Grange des Mulots' },
+  { nom: 'Quenouillet', organisation: 'Atelier Pivoine' },
+  { nom: 'Brindelle', organisation: 'Banc des Loutres', exclu: true },
+  { nom: 'Calvaille', organisation: 'Cercle des Grives', titre: 'hôtesse' },
+  { nom: 'Doucemer', organisation: 'Cercle des Grives' },
+  { nom: 'Esquirol', organisation: 'Dune des Hérons' },
+  { nom: 'Faverolle', organisation: 'Étang des Sarcelles' },
+  { nom: 'Glanduc', organisation: 'Forge des Martres' },
+  { nom: 'Houblonnet', organisation: 'Grange des Mulots' },
   { nom: 'Isardin' },
 ];
 
@@ -2370,19 +2370,19 @@ describe('l’habillage de la liste : carte, bandes, légende, pastilles', () =>
     expect(region).not.toBeNull();
     expect(texteDe(document.getElementById(region.getAttribute('aria-labelledby')))).toBe(t('coquille.section.participants'));
     const ligneDeComptes = () => [...region.querySelectorAll('p')].map((p) => p.textContent);
-    expect(comptesEntete(participants(m))).toEqual({ personnes: 9, aPlacer: 8, exclues: 1, appartenances: 7, partielles: 0 });
+    expect(comptesEntete(participants(m))).toEqual({ personnes: 9, aPlacer: 8, exclues: 1, organisations: 7, partielles: 0 });
     expect(ligneDeComptes()).toContain(t('participants.entete.comptes', comptesEntete(participants(m))));
 
     await m.seance.executer('exclureParticipant', { id: idDe(m, 'Isardin') });
     await attendreSeance(m);
-    expect(ligneDeComptes()).toContain(t('participants.entete.comptes', { personnes: 9, aPlacer: 7, exclues: 2, appartenances: 7 }));
+    expect(ligneDeComptes()).toContain(t('participants.entete.comptes', { personnes: 9, aPlacer: 7, exclues: 2, organisations: 7 }));
     // Deux présences partielles, dont celle d'une exclue, qui ne compte pas :
     // « 1 présence partielle » s'ajoute à la ligne.
     expect(ligneDeComptes().join(' ')).not.toContain('présence');
     await m.seance.executer('changerPresence', { id: idDe(m, 'Quenouillet'), tours: [2] });
     await m.seance.executer('changerPresence', { id: idDe(m, 'Isardin'), tours: [1] });
     await attendreSeance(m);
-    expect(ligneDeComptes()).toContain(t('participants.entete.comptes', { personnes: 9, aPlacer: 7, exclues: 2, appartenances: 7, partielles: 1 }));
+    expect(ligneDeComptes()).toContain(t('participants.entete.comptes', { personnes: 9, aPlacer: 7, exclues: 2, organisations: 7, partielles: 1 }));
     expect(ligneDeComptes().join(' ')).toContain('1 présence partielle');
 
     expect(region.contains(formulaire(m))).toBe(true);
@@ -2398,11 +2398,11 @@ describe('l’habillage de la liste : carte, bandes, légende, pastilles', () =>
     expect(exporter.compareDocumentPosition(formulaire(m)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  test('la légende : une pastille par appartenance, dans l’ordre des teintes, avec son compte, la teinte de son rang ; un filtre ne la change pas', async () => {
+  test('la légende : une pastille par organisation, dans l’ordre des teintes, avec son compte, la teinte de son rang ; un filtre ne la change pas', async () => {
     const m = await evenementOuvert({ personnes: SEPT });
-    const teintes = teintesAppartenances(participants(m));
+    const teintes = teintesOrganisations(participants(m));
     const attendue = [...teintes].map(([nom, rang]) => ({
-      texte: t('participants.legende.element', { nom, compte: participants(m).filter((p) => p.appartenance === nom).length }),
+      texte: t('participants.legende.element', { nom, compte: participants(m).filter((p) => p.organisation === nom).length }),
       rang,
     }));
     expect(attendue.map(({ rang }) => rang)).toEqual([1, 2, 3, 4, 5, 6, null]);
@@ -2410,7 +2410,7 @@ describe('l’habillage de la liste : carte, bandes, légende, pastilles', () =>
       [...legende(m).querySelectorAll('li')].map((li) => ({ texte: texteDe(li), fond: fondDe(pastilleDans(li)) }));
     const peinte = attendue.map(({ texte, rang }) => ({
       texte,
-      fond: jeton(rang === null ? '--couleur-neutre-fond' : `--couleur-appartenance-${rang}-fond`),
+      fond: jeton(rang === null ? '--couleur-neutre-fond' : `--couleur-organisation-${rang}-fond`),
     }));
     expect(lue()).toEqual(peinte);
     expect(lue()[2].texte).toBe('Cercle des Grives \u{00B7} 2');
@@ -2421,19 +2421,19 @@ describe('l’habillage de la liste : carte, bandes, légende, pastilles', () =>
     expect(lue()).toEqual(peinte);
   });
 
-  test('la grille : appartenance en pastille de sa teinte, stable sous le filtre ; « exclue » et le titre pressenti en pastilles à icône ; encre de la page', async () => {
+  test('la grille : organisation en pastille de sa teinte, stable sous le filtre ; « exclue » et le titre pressenti en pastilles à icône ; encre de la page', async () => {
     const m = await evenementOuvert({ personnes: SEPT });
-    const teintes = teintesAppartenances(participants(m));
+    const teintes = teintesOrganisations(participants(m));
     const encre = jeton('--couleur-page-texte');
     for (const p of participants(m)) {
-      const pastille = pastilleDans(cellule(m, p.id, 'appartenance'));
-      if (p.appartenance === null) {
+      const pastille = pastilleDans(cellule(m, p.id, 'organisation'));
+      if (p.organisation === null) {
         expect(pastille, p.nom).toBeNull();
         continue;
       }
-      const rang = teintes.get(p.appartenance);
-      expect(texteDe(pastille), p.nom).toBe(p.appartenance);
-      expect(fondDe(pastille), p.nom).toEqual(jeton(rang === null ? '--couleur-neutre-fond' : `--couleur-appartenance-${rang}-fond`));
+      const rang = teintes.get(p.organisation);
+      expect(texteDe(pastille), p.nom).toBe(p.organisation);
+      expect(fondDe(pastille), p.nom).toEqual(jeton(rang === null ? '--couleur-neutre-fond' : `--couleur-organisation-${rang}-fond`));
       expect(composantes(getComputedStyle(pastille).color), p.nom).toEqual(encre);
     }
     const loutres = idDe(m, 'Brindelle');
@@ -2452,17 +2452,17 @@ describe('l’habillage de la liste : carte, bandes, légende, pastilles', () =>
 
     // Le filtre ne repeint rien : la teinte se lit sur la liste entière.
     const grives = idDe(m, 'Doucemer');
-    const avant = fondDe(pastilleDans(cellule(m, grives, 'appartenance')));
+    const avant = fondDe(pastilleDans(cellule(m, grives, 'organisation')));
     await saisir(section(m).querySelector('[data-champ="filtre"]'), 'Doucemer');
     await rendu();
     expect(idsAffiches(m)).toEqual([grives]);
-    expect(fondDe(pastilleDans(cellule(m, grives, 'appartenance')))).toEqual(avant);
+    expect(fondDe(pastilleDans(cellule(m, grives, 'organisation')))).toEqual(avant);
 
     // En sombre, la pastille prend la teinte sombre du même rang.
     await sousTheme('sombre', async () => {
-      expect(fondDe(pastilleDans(cellule(m, grives, 'appartenance')))).toEqual(jeton(`--couleur-appartenance-${teintes.get('Cercle des Grives')}-fond`));
+      expect(fondDe(pastilleDans(cellule(m, grives, 'organisation')))).toEqual(jeton(`--couleur-organisation-${teintes.get('Cercle des Grives')}-fond`));
     });
-    expect(RANGS_APPARTENANCE).toBe(6);
+    expect(RANGS_ORGANISATION).toBe(6);
   });
 
   test('les actions de ligne sont des boutons secondaires : fond de la carte, filet de la page, rayon de 8 px', async () => {
@@ -2540,8 +2540,8 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
 
   test('dans une fenêtre basse, le signal d’orthographe et le refus du nom viennent dans la fenêtre, à côté de leur champ', async () => {
     await dansLeCadre(1024, 420, async () => {
-      const m = await evenementOuvert({ personnes: [{ nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB }] });
-      await saisir(champ(m, 'appartenance'), 'club des  merles');
+      const m = await evenementOuvert({ personnes: [{ nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB }] });
+      await saisir(champ(m, 'organisation'), 'club des  merles');
       const signal = formulaire(m).querySelector('[data-avertissement]');
       expect(visible(signal)).toBe(true);
       await cliquer(signal.querySelector('[data-commande="reprendreOrthographe"]'));

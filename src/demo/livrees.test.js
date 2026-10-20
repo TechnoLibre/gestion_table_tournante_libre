@@ -226,7 +226,7 @@ describe("CSV d'exemple : les cas limites (§ 10.3)", () => {
       const bruts = apercu.lignes.flatMap(({ brut }) => brut);
       const cas = [
         ['une colonne non reconnue', apercu.association.nonReconnues.length > 0],
-        ['une personne sans appartenance', champs.some(({ appartenance }) => appartenance === null)],
+        ['une personne sans organisation', champs.some(({ organisation }) => organisation === null)],
         ['une exclusion', champs.some(({ exclu }) => exclu === true)],
         // Un champ qui porte le séparateur n'a pu se lire entier que cité.
         ['un champ cité contenant le séparateur', bruts.some((champ) => champ.includes(apercu.separateur))],

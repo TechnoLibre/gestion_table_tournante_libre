@@ -12,7 +12,7 @@ import { absentsParTour, presencesSousTours } from './presence.js';
 
 // Une personne d'épreuve : présente à tous les tours quand presence manque.
 function personne(id, { presence, exclu = false } = {}) {
-  const enregistrement = { id, nom: `Ancolie ${id}`, appartenance: null, exclu };
+  const enregistrement = { id, nom: `Ancolie ${id}`, organisation: null, exclu };
   if (presence !== undefined) enregistrement.presence = presence;
   return enregistrement;
 }

@@ -317,7 +317,7 @@ export function libelleLongueur(longueurCm) {
 
 // Le bandeau du plan (§ 7.5) : vide tant qu'une table au moins est saine ;
 // sinon la phrase, puis collisionPartout quand le diagnostic le prouve, puis
-// les planchers — une seule appartenance, ou chaque groupe de collisions,
+// les planchers — une seule organisation, ou chaque groupe de collisions,
 // ou l'absence de plancher prouvé. Les chiffres sont ceux du moteur, tels
 // quels, sans somme ; sans diagnostic, la phrase seule.
 function bandeauDe(toutesEnConflit, diagnostic) {
@@ -325,8 +325,8 @@ function bandeauDe(toutesEnConflit, diagnostic) {
   const entrees = [{ cle: 'plan.bandeau.toutesEnConflit', details: {} }];
   if (diagnostic === null) return entrees;
   if (diagnostic.collisionPartout) entrees.push({ cle: 'plan.bandeau.collisionPartout', details: {} });
-  if (diagnostic.uneSeuleAppartenance) {
-    entrees.push({ cle: 'plan.bandeau.uneSeuleAppartenance', details: {} });
+  if (diagnostic.uneSeuleOrganisation) {
+    entrees.push({ cle: 'plan.bandeau.uneSeuleOrganisation', details: {} });
   } else if (diagnostic.collisions.length > 0) {
     for (const { groupe, effectif, plancherCumulees } of diagnostic.collisions) {
       entrees.push({ cle: 'plan.bandeau.plancherGroupe', details: { groupe, effectif, plancherCumulees } });
@@ -485,40 +485,40 @@ export function modeleDessin(
  * que l'infobulle énonce : son numéro, le nombre de violations, puis ses
  * lignes, dans l'ordre des règles du moteur (conflitsParTable, M1). Chaque
  * ligne porte sa règle, sa clé de libellé plan.infobulle.<règle>, une
- * appartenance et ses groupes nommés. Séparer les appartenances donne une
- * ligne par appartenance, dans l'ordre de sa première paire, qui nomme
- * l'appartenance qu'ont en commun les deux personnes de chacune de ses
- * paires — le moteur ne réunit que des personnes de même appartenance non
+ * organisation et ses groupes nommés. Séparer les organisations donne une
+ * ligne par organisation, dans l'ordre de sa première paire, qui nomme
+ * l'organisation qu'ont en commun les deux personnes de chacune de ses
+ * paires — le moteur ne réunit que des personnes de même organisation non
  * nulle, la chaîne même que la liste porte — ; nouveaux voisins et nouvelle
- * table, une ligne chacune, appartenance null, une paire de noms ou un nom
- * seul par groupe. Les noms et l'appartenance sont des données :
+ * table, une ligne chacune, organisation null, une paire de noms ou un nom
+ * seul par groupe. Les noms et l'organisation sont des données :
  * l'infobulle pose chacun dans son nœud. null quand les conflits ne
  * s'évaluent pas ou qu'il n'y en a aucun.
  *
  * @param {Object} etatTable   EtatTable (A5)
  * @param {(id: number) => string} nomDe
- * @param {(id: number) => string|null} appartenanceDe
+ * @param {(id: number) => string|null} organisationDe
  * @returns {null|{numero: number, nombre: number,
- *   lignes: Array<{regle: string, cle: string, appartenance: string|null, groupes: string[][]}>}}
+ *   lignes: Array<{regle: string, cle: string, organisation: string|null, groupes: string[][]}>}}
  */
-export function detailConflits({ numero, conflits }, nomDe, appartenanceDe) {
+export function detailConflits({ numero, conflits }, nomDe, organisationDe) {
   if (conflits === null || conflits.nombre === 0) return null;
   const lignes = [];
   for (const { regle, paires, personnes } of conflits.regles) {
     const cle = `plan.infobulle.${regle}`;
-    if (regle !== 'separerAppartenances') {
-      lignes.push({ regle, cle, appartenance: null, groupes: (paires ?? personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe)) });
+    if (regle !== 'separerOrganisations') {
+      lignes.push({ regle, cle, organisation: null, groupes: (paires ?? personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe)) });
       continue;
     }
-    const parAppartenance = new Map();
+    const parOrganisation = new Map();
     for (const paire of paires) {
-      const appartenance = appartenanceDe(paire[0]);
-      if (!parAppartenance.has(appartenance)) {
-        const ligne = { regle, cle, appartenance, groupes: [] };
-        parAppartenance.set(appartenance, ligne);
+      const organisation = organisationDe(paire[0]);
+      if (!parOrganisation.has(organisation)) {
+        const ligne = { regle, cle, organisation, groupes: [] };
+        parOrganisation.set(organisation, ligne);
         lignes.push(ligne);
       }
-      parAppartenance.get(appartenance).groupes.push(paire.map(nomDe));
+      parOrganisation.get(organisation).groupes.push(paire.map(nomDe));
     }
   }
   return { numero, nombre: conflits.nombre, lignes };
@@ -529,9 +529,9 @@ export function detailConflits({ numero, conflits }, nomDe, appartenanceDe) {
  * chaque règle active des réglages, dans l'ordre du moteur, avec la clé de
  * son nom, plan.legende.<règle>, et celle de sa forme,
  * plan.legende.forme.<forme>. Une règle inactive n'y paraît pas ; varier
- * les appartenances, qui ne se localise pas à une table, n'a pas de sorte.
+ * les organisations, qui ne se localise pas à une table, n'a pas de sorte.
  *
- * @param {{separerAppartenances: boolean, nouveauxVoisins: boolean, nouvelleTable: boolean}} reglages
+ * @param {{separerOrganisations: boolean, nouveauxVoisins: boolean, nouvelleTable: boolean}} reglages
  * @returns {Array<{regle: string, marque: string, jeton: string, forme: string, cle: string, cleForme: string}>}
  */
 export function legendeConflits(reglages) {

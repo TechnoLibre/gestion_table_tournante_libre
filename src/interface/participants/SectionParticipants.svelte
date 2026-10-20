@@ -6,7 +6,7 @@
   // titrée, dont l'en-tête porte la ligne de comptes (comptesEntete,
   // entete.js) et l'export ; dessous, le formulaire d'ajout en bande de tête,
   // puis la barre du filtre, du groupement, du compte et des légendes des
-  // appartenances et des étiquettes, puis la grille ; à côté, la fiche ouverte, ou dessous
+  // organisations et des étiquettes, puis la grille ; à côté, la fiche ouverte, ou dessous
   // quand la ligne ne tient pas les deux. Les lignes de la grille sont
   // celles de lignesGrille (grille.js) sur la liste de la séance, le tri et le filtre de la
   // section : regarder, trier et filtrer n'écrivent rien, en écriture comme
@@ -39,14 +39,14 @@
   // écrit. Sans groupement, ou sans placement montré, aucun conflit ne se
   // lit.
   //
-  // Les teintes d'appartenance (teintesAppartenances) se calculent une fois
+  // Les teintes d'organisation (teintesOrganisations) se calculent une fois
   // sur la liste entière, exclues comprises, et la légende comme la grille
   // les lisent : un filtre ne repeint rien. La légende nomme chaque
-  // appartenance avec le nombre de personnes qui la portent. Dessous, quand
+  // organisation avec le nombre de personnes qui la portent. Dessous, quand
   // l'événement porte des étiquettes, la légende des étiquettes
   // (legendeEtiquettes, entete.js) nomme chacune avec le nombre de
   // personnes qui la portent, exclues comprises, en pastilles neutres à
-  // icône : la teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7).
+  // icône : la teinte d'organisation ne sert qu'à l'organisation (§ 12.7).
   // Sans étiquette, elle n'est pas montrée.
   //
   // Supprimer une personne qui porte des réservations ouvre la fenêtre à
@@ -57,7 +57,7 @@
   import { getContext } from 'svelte';
   import { cleNormalisee, exporterParticipants } from '../../application/csv.js';
   import { nomAffiche } from '../../application/personnes.js';
-  import { teintesAppartenances } from '../appartenances.js';
+  import { teintesOrganisations } from '../organisations.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
@@ -68,7 +68,7 @@
   import { statuts } from '../../application/places.js';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
   import { conflitsDesGroupes, lignesDeConflit, reglesParPersonne } from './conflits.js';
-  import { comptesEntete, legendeAppartenances, legendeEtiquettes } from './entete.js';
+  import { comptesEntete, legendeOrganisations, legendeEtiquettes } from './entete.js';
   import {
     choisirGroupement,
     cleDeGroupement,
@@ -98,9 +98,9 @@
 
   const charge = $derived($seance.charge);
   const participants = $derived(charge?.participants ?? []);
-  const teintes = $derived(teintesAppartenances(participants));
+  const teintes = $derived(teintesOrganisations(participants));
   const comptes = $derived(comptesEntete(participants));
-  const legende = $derived(legendeAppartenances(participants, teintes));
+  const legende = $derived(legendeOrganisations(participants, teintes));
   const legendeDesEtiquettes = $derived(legendeEtiquettes(participants));
   const lignes = $derived(lignesGrille(participants, { tri, filtre }, cleNormalisee));
   const toutes = $derived(lignesGrille(participants, { tri, filtre: '' }, cleNormalisee));
@@ -193,7 +193,7 @@
               {#if legende.length > 0}
                 <ul class="legende" aria-label={t('participants.legende.titre')}>
                   {#each legende as { nom, rang, compte } (nom)}
-                    <li><Pastille sorte="appartenance" valeur={rang} libelle={t('participants.legende.element', { nom, compte })} /></li>
+                    <li><Pastille sorte="organisation" valeur={rang} libelle={t('participants.legende.element', { nom, compte })} /></li>
                   {/each}
                 </ul>
               {/if}
@@ -303,7 +303,7 @@
   }
 
   /* Les légendes, poussées à droite tant que la ligne les tient : celle
-     des étiquettes sous celle des appartenances. */
+     des étiquettes sous celle des organisations. */
   .legendes {
     display: flex;
     flex-direction: column;

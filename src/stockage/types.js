@@ -94,10 +94,10 @@
  *                                                          libellé non vide
  *
  * @typedef {Object} Reglages
- * @property {boolean} separerAppartenances
+ * @property {boolean} separerOrganisations
  * @property {boolean} nouveauxVoisins
  * @property {boolean} nouvelleTable
- * @property {boolean} varierAppartenances
+ * @property {boolean} varierOrganisations
  * @property {boolean} attribuerSieges   le réglage que reçoit la prochaine
  *                                       génération ; il ne décide d'aucun
  *                                       tri : chaque proposition porte son
@@ -156,7 +156,7 @@
  * @property {number} id                    identifiant, unique
  * @property {string} nom                   non vide
  * @property {string|null} prenom
- * @property {string|null} appartenance
+ * @property {string|null} organisation
  * @property {string|null} courriel
  * @property {string|null} titrePressenti   informatif (§ 4)
  * @property {string|null} notes

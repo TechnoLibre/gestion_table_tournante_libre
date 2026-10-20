@@ -137,15 +137,15 @@ const PERSONNES = Object.freeze([
   ['Mélisse', 'Mathurin'],
 ]);
 const TREIZIEME = Object.freeze(['Nigelle', 'Noémie']);
-// Appartenances inventées, données aux groupes de la démonstration dans
+// Organisations inventées, données aux groupes de la démonstration dans
 // l'ordre où ils apparaissent, par identifiant croissant.
 const CERCLES = Object.freeze(['Cercle Aulne', 'Cercle Bouleau', 'Cercle Charme']);
 
-const personne = (id, nom, prenom, appartenance = null) => ({
+const personne = (id, nom, prenom, organisation = null) => ({
   id,
   nom,
   prenom,
-  appartenance,
+  organisation,
   courriel: null,
   titrePressenti: null,
   notes: null,
@@ -160,10 +160,10 @@ function chargePetite() {
   const configuration = petite();
   const charge = creerCharge({ id: 'evt-pinsons', nom: 'Soirée des Pinsons', siegesParDefaut: 3, tours: 4 });
   const cercleDe = new Map();
-  charge.participants = configuration.participants.map(({ id, appartenance }) => {
-    if (!cercleDe.has(appartenance)) cercleDe.set(appartenance, CERCLES[cercleDe.size]);
+  charge.participants = configuration.participants.map(({ id, organisation }) => {
+    if (!cercleDe.has(organisation)) cercleDe.set(organisation, CERCLES[cercleDe.size]);
     const [nom, prenom] = PERSONNES[id - 1];
-    return personne(id, nom, prenom, cercleDe.get(appartenance));
+    return personne(id, nom, prenom, cercleDe.get(organisation));
   });
   charge.tables = configuration.tables.map(({ id, numero }) => table(id, numero));
   charge.prochainsIds = { participant: 13, table: 5, proposition: 1 };
@@ -281,7 +281,7 @@ describe('versFichier et planDepuisFichier : la proposition du moteur et sa form
 
   test("sièges non attribués : chaque liste de table se trie par identifiant croissant ; attribués : l'ordre des sièges est gardé ; la réserve se trie dans les deux cas", () => {
     const configuration = petite();
-    configuration.participants.push({ id: 13, nom: TREIZIEME[0], prenom: TREIZIEME[1], appartenance: null });
+    configuration.participants.push({ id: 13, nom: TREIZIEME[0], prenom: TREIZIEME[1], organisation: null });
     const inverses = PLAN_PARFAIT_PETITE.tours.map((listes) => listes.map((liste) => [...liste].reverse()));
     inverses[0][3] = [11, 10];
     const proposition = {
@@ -378,7 +378,7 @@ describe('versFichier et planDepuisFichier : la proposition du moteur et sa form
     }
     const options = { produitVersion: VERSION.affichee, attribuerSieges: false, decalage: 0 };
     const avecTreize = petite();
-    avecTreize.participants.push({ id: 13, nom: TREIZIEME[0], appartenance: null });
+    avecTreize.participants.push({ id: 13, nom: TREIZIEME[0], organisation: null });
     leveTypeError(() => versFichier(PARFAITE, avecTreize, options), /"MANQUANT"/, 'personne 13 non placée');
     const tableReduite = petite();
     tableReduite.tables[3].capacite = 2;
@@ -752,9 +752,9 @@ describe('derive : la péremption délibérée (§ 8.9, point 3 ; § 9 ; § 4.4)
         [{ code: 'TOURS_CHANGES', avant: 4, maintenant: 5 }]],
       ['passer à trois tours', (c) => { c.evenement.tours = 3; },
         [{ code: 'TOURS_CHANGES', avant: 4, maintenant: 3 }]],
-      ["renommer, changer d'appartenance, renuméroter, déplacer et changer de forme, attribuer les sièges", (c) => {
+      ["renommer, changer d'organisation, renuméroter, déplacer et changer de forme, attribuer les sièges", (c) => {
         c.participants[0].nom = 'Aubier';
-        c.participants[1].appartenance = null;
+        c.participants[1].organisation = null;
         c.tables[1].numero = 7;
         c.tables[2].position = { x: -40, y: 125.5 };
         c.tables[3].forme = 'carree';
@@ -2036,7 +2036,7 @@ describe('la dérivation : deux champs facultatifs de la proposition (§ 8.9, C1
   }
   function configurationATreize() {
     const configuration = petite();
-    configuration.participants.push({ id: 13, nom: TREIZIEME[0], prenom: TREIZIEME[1], appartenance: null });
+    configuration.participants.push({ id: 13, nom: TREIZIEME[0], prenom: TREIZIEME[1], organisation: null });
     return configuration;
   }
 

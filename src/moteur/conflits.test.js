@@ -15,10 +15,10 @@ import { indexerPlan, normaliser } from './configuration.js';
 import { mesurer } from './indicateurs.js';
 
 const TOUTES = Object.freeze({
-  separerAppartenances: true,
+  separerOrganisations: true,
   nouveauxVoisins: true,
   nouvelleTable: true,
-  varierAppartenances: true,
+  varierOrganisations: true,
 });
 
 const MERLES = 'Club des Merles';
@@ -31,24 +31,24 @@ const sansConflit = (table) => ({ table, nombre: 0, regles: [] });
 
 /**
  * Instance et plan indexé d'un plan écrit par identifiants. ids[i] porte
- * appartenance[i] (par défaut, l'identifiant i + 1) ; idsTables[i] est
+ * organisation[i] (par défaut, l'identifiant i + 1) ; idsTables[i] est
  * l'identifiant de la table d'index i (par défaut i + 1), de la capacité
  * donnée ; tours[r][i] liste les participants assis à la table d'index i au
  * tour r + 1.
  */
 function preparer({
-  appartenance,
-  ids = appartenance.map((_, i) => i + 1),
+  organisation,
+  ids = organisation.map((_, i) => i + 1),
   capacite,
   idsTables,
   tours,
   reservations = [],
   contraintes = TOUTES,
 }) {
-  const participants = appartenance.map((libelle, i) => ({
+  const participants = organisation.map((libelle, i) => ({
     id: ids[i],
     nom: `P${ids[i]}`,
-    appartenance: libelle,
+    organisation: libelle,
   }));
   const tables = (idsTables ?? tours[0].map((_, i) => i + 1)).map((id, i) => ({
     id,
@@ -84,18 +84,18 @@ describe('conflitsParTable', () => {
   test('séparer : la table 2 réunit 1 et 2 au tour 1, une violation ; aucune autre table, à aucun tour', () => {
     // Au tour 2, (2, 6), (3, 5) et (1, 4) se rencontrent pour la première
     // fois, et chacun change de table.
-    const description = { appartenance: SIX, capacite: 2, tours: [TOUR_1, [[2, 6], [3, 5], [1, 4]]] };
+    const description = { organisation: SIX, capacite: 2, tours: [TOUR_1, [[2, 6], [3, 5], [1, 4]]] };
     assert.deepEqual(conflits(description), [
       [
         sansConflit(1),
-        { table: 2, nombre: 1, regles: [{ regle: 'separerAppartenances', paires: [[1, 2]] }] },
+        { table: 2, nombre: 1, regles: [{ regle: 'separerOrganisations', paires: [[1, 2]] }] },
         sansConflit(3),
       ],
       [sansConflit(1), sansConflit(2), sansConflit(3)],
     ]);
     const sansSeparer = conflits({
       ...description,
-      contraintes: { ...TOUTES, separerAppartenances: false },
+      contraintes: { ...TOUTES, separerOrganisations: false },
     });
     assert.deepEqual(sansSeparer, [
       [sansConflit(1), sansConflit(2), sansConflit(3)],
@@ -106,7 +106,7 @@ describe('conflitsParTable', () => {
   test('nouvelle table : 3 revient à la table 1, 2 à la table 2 ; une visite réservée deux fois ne se signale pas', () => {
     // Tour 2 : [3, 6], [2, 5], [1, 4]. 3 était à la table 1 au tour 1, 2 à
     // la table 2 ; 6, 5, 1 et 4 découvrent la leur.
-    const description = { appartenance: SIX, capacite: 2, tours: [TOUR_1, [[3, 6], [2, 5], [1, 4]]] };
+    const description = { organisation: SIX, capacite: 2, tours: [TOUR_1, [[3, 6], [2, 5], [1, 4]]] };
     const auTour2 = (resultat) => resultat[1];
     assert.deepEqual(auTour2(conflits(description)), [
       { table: 1, nombre: 1, regles: [{ regle: 'nouvelleTable', personnes: [3] }] },
@@ -135,10 +135,10 @@ describe('conflitsParTable', () => {
   });
 
   test('nouveaux voisins : une paire réunie librement puis réservée ensemble reste signalée ; réservée aux deux rencontres, elle ne l’est plus', () => {
-    // Quatre personnes sans appartenance, deux tables de 2. Tour 1 : [1, 2],
+    // Quatre personnes sans organisation, deux tables de 2. Tour 1 : [1, 2],
     // [3, 4] ; tour 2 : [3, 4], [1, 2]. Personne ne revient à sa table.
     const description = {
-      appartenance: [null, null, null, null],
+      organisation: [null, null, null, null],
       capacite: 2,
       tours: [
         [[1, 2], [3, 4]],
@@ -171,7 +171,7 @@ describe('conflitsParTable', () => {
     // et 9 revenus, quatre violations ; la table 10, (14, 20) revus, 14 et
     // 20 revenus, trois.
     const description = {
-      appartenance: ['Grisaille', 'Grisaille', null, null],
+      organisation: ['Grisaille', 'Grisaille', null, null],
       ids: [5, 9, 14, 20],
       idsTables: [40, 10],
       capacite: 2,
@@ -182,7 +182,7 @@ describe('conflitsParTable', () => {
     };
     assert.deepEqual(conflits(description), [
       [
-        { table: 40, nombre: 1, regles: [{ regle: 'separerAppartenances', paires: [[5, 9]] }] },
+        { table: 40, nombre: 1, regles: [{ regle: 'separerOrganisations', paires: [[5, 9]] }] },
         sansConflit(10),
       ],
       [
@@ -190,7 +190,7 @@ describe('conflitsParTable', () => {
           table: 40,
           nombre: 4,
           regles: [
-            { regle: 'separerAppartenances', paires: [[5, 9]] },
+            { regle: 'separerOrganisations', paires: [[5, 9]] },
             { regle: 'nouveauxVoisins', paires: [[5, 9]] },
             { regle: 'nouvelleTable', personnes: [5, 9] },
           ],
@@ -211,7 +211,7 @@ describe('conflitsParTable', () => {
       table: 40,
       nombre: 3,
       regles: [
-        { regle: 'separerAppartenances', paires: [[5, 9]] },
+        { regle: 'separerOrganisations', paires: [[5, 9]] },
         { regle: 'nouvelleTable', personnes: [5, 9] },
       ],
     });
@@ -227,7 +227,7 @@ describe('conflitsParTable', () => {
     // 2, 4, 6 et 8 du Club des Merles, assis tous les quatre à une table de 5
     // avec 3, donné avant eux dans la liste : C(4, 2) = 6 paires.
     const resultat = conflits({
-      appartenance: [null, MERLES, null, MERLES, MERLES, MERLES],
+      organisation: [null, MERLES, null, MERLES, MERLES, MERLES],
       ids: [1, 2, 3, 4, 6, 8],
       capacite: 5,
       tours: [[[8, 6, 3, 4, 2], [1]]],
@@ -237,7 +237,7 @@ describe('conflitsParTable', () => {
       nombre: 6,
       regles: [
         {
-          regle: 'separerAppartenances',
+          regle: 'separerOrganisations',
           paires: [[2, 4], [2, 6], [2, 8], [4, 6], [4, 8], [6, 8]],
         },
       ],
@@ -246,23 +246,23 @@ describe('conflitsParTable', () => {
 
   test('une seule table, un seul tour : aucune violation, des répétitions à zéro, sans lever (§ 15.4)', () => {
     // Trois personnes, 3 seule du Club des Merles. 1 et 2 rencontrent un
-    // affilié d'une appartenance : A = 1, d = 1 ; 3 n'en rencontre aucun :
+    // affilié d'une organisation : A = 1, d = 1 ; 3 n'en rencontre aucun :
     // A = 0, et il sort de l'effectif de la diversité.
     const description = {
-      appartenance: [null, null, MERLES],
+      organisation: [null, null, MERLES],
       capacite: 3,
       tours: [[[1, 2, 3]]],
     };
     assert.deepEqual(conflits(description), [[sansConflit(1)]]);
-    const { rencontresRepetees, aggAppartenancesVues, aggDiversite } = mesures(description);
+    const { rencontresRepetees, aggOrganisationsVues, aggDiversite } = mesures(description);
     assert.deepEqual(rencontresRepetees, { choisies: 0, imposees: 0 });
-    assert.deepEqual(aggAppartenancesVues.tous, { min: 0, moyenne: 2 / 3, effectif: 3 });
+    assert.deepEqual(aggOrganisationsVues.tous, { min: 0, moyenne: 2 / 3, effectif: 3 });
     assert.deepEqual(aggDiversite.tous, { min: 1, moyenne: 1, effectif: 2 });
   });
 
   test('aucun présent : une table, deux tours, chacun à zéro, sans lever', () => {
     const instance = normaliser({
-      participants: [{ id: 1, nom: 'P1', appartenance: MERLES, exclu: true }],
+      participants: [{ id: 1, nom: 'P1', organisation: MERLES, exclu: true }],
       tables: [{ id: 1, numero: 1, capacite: 2 }],
       tours: 2,
       reservations: [],
@@ -285,7 +285,7 @@ describe('conflitsParTable', () => {
 
   test("lève ce que lève exigerPlanIndexe, et ne modifie ni l'instance ni le plan", () => {
     const { instance, tableDe } = preparer({
-      appartenance: SIX,
+      organisation: SIX,
       capacite: 2,
       tours: [TOUR_1, [[3, 6], [2, 5], [1, 4]]],
     });

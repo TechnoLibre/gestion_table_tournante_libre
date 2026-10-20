@@ -58,7 +58,7 @@ const IDENTIFIANT_MAX = regleDuChamp(regleDuChamp(regleDuChamp(SCHEMA, 'charge')
 
 // Les réglages que modifierReglage change : un interrupteur, ou un entier ≥ 1
 // de la génération (§ 5.3, § 5.10).
-const INTERRUPTEURS = new Set(['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances', 'attribuerSieges']);
+const INTERRUPTEURS = new Set(['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable', 'varierOrganisations', 'attribuerSieges']);
 const ENTIERS_DE_GENERATION = new Set(['generation.nombre', 'generation.arret', 'generation.historique']);
 const REGLES = new Set(['ou', 'et']);
 

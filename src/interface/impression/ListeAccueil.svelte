@@ -3,7 +3,7 @@
 
 <script>
   // La liste d'accueil imprimée (§ 11.7) : une ligne par personne non
-  // exclue, par ordre de nom, de prénom, d'appartenance, puis d'identifiant
+  // exclue, par ordre de nom, de prénom, d'organisation, puis d'identifiant
   // (lignesAccueil), et pour chaque tour de la soirée, en colonnes, la table,
   // le siège sous sièges attribués, ou la réserve. Les feuilles sont en
   // portrait et portent le pied de la soirée (« Tous les tours »).
@@ -24,7 +24,7 @@
   // ne se coupe pas au bord de la page : la même passe en essaie les
   // morceaux sur la ligne rendue (couperLigne), et la ligne se continue, un
   // morceau par page, sous l'en-tête répété. Ses textes se suivent dans
-  // l'ordre de ses cellules — nom, prénom, appartenance, places
+  // l'ordre de ses cellules — nom, prénom, organisation, places
   // (textesLigneAccueil) — et chaque page pose de chaque cellule la part qui
   // tombe dans son morceau (morcelerPages, trancher).
   //
@@ -35,7 +35,7 @@
   // la reçoit. Des tours qui ne tiennent pas tous côte à côte en laissant
   // aux noms leur plancher se répartissent en blocs de tours consécutifs
   // (toursParBloc, blocsAccueil) : chaque bloc reprend chaque ligne, nom,
-  // prénom et appartenance répétés, sous un en-tête qui nomme ses tours
+  // prénom et organisation répétés, sous un en-tête qui nomme ses tours
   // (« Tours 1 à 34 »), et commence une page ; un bloc plus long qu'une page
   // continue sur la suivante, sous son en-tête répété. Une soirée dont les
   // tours tiennent garde un seul bloc, sans en-tête de bloc. La mesure se
@@ -151,7 +151,7 @@
         <tr>
           <th scope="col">{t('feuilles.accueil.nom')}</th>
           <th scope="col">{t('feuilles.accueil.prenom')}</th>
-          <th scope="col">{t('feuilles.accueil.appartenance')}</th>
+          <th scope="col">{t('feuilles.accueil.organisation')}</th>
           {#each bloc.tours as tour (tour)}
             <th scope="col">{t('feuilles.tour', { tour })}</th>
           {/each}
@@ -160,13 +160,13 @@
       <tbody>
         {#each bloc.lignes.slice(debut, fin) as ligne, rang (ligne.participant)}
           {@const textes = textesLigneAccueil(ligne, t)}
-          {@const [nom, prenom, appartenance, ...places] = morceau === null ? textes : trancher(textes, morceau.debut, morceau.fin)}
+          {@const [nom, prenom, organisation, ...places] = morceau === null ? textes : trancher(textes, morceau.debut, morceau.fin)}
           <tr data-ligne-imprimee={debut + rang} data-participant={ligne.participant}>
             <td>
               {#if nom !== ''}<span class="nom" data-nom-imprime>{nom}</span>{/if}
             </td>
             <td>{prenom}</td>
-            <td>{appartenance}</td>
+            <td>{organisation}</td>
             {#each places as place, rangPlace (rangPlace)}
               <td>{place}</td>
             {/each}
