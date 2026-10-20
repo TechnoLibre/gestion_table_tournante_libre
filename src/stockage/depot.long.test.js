@@ -108,9 +108,9 @@ const FENETRE_MESURE_MS = 10_000;
 // charge y remplace le calcul du correctif, et sa ligne s'ajoute de même.
 // SEUIL_ELAGAGE_MS borne le geste dont l'entrée fait passer le journal
 // au-delà de PLAFOND_ENTREES : le journal se réécrit en entier — son texte
-// recomposé, lu par l'élagage, puis relu une fois élagué — par une écriture
-// atomique de la taille d'une dizaine d'instantanés de la charge, avant le
-// .precedent et l'état. Le plafond atteint, ce geste revient environ une
+// recomposé et élagué en mémoire — par une écriture atomique de la taille
+// d'une dizaine d'instantanés de la charge, avant le .precedent et l'état.
+// Le plafond atteint, ce geste revient environ une
 // fois par centaine de gestes : l'élagage garde un peu plus de
 // PLANCHER_ENTREES entrées. Les autres réécritures entières du journal —
 // une entrée de reprise, des lignes écartées à la lecture, un journal qui

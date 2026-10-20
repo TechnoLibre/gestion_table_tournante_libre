@@ -6,14 +6,15 @@
 // chaque instant d'une séance de 120 gestes sur la petite démonstration,
 // restitué tel qu'il s'est écrit ; la lecture qui s'arrête à la première
 // ligne illisible et compte ce qu'elle écarte ; le fil courant, défaire et
-// refaire ; les lignes de l'historique ; la construction notée ; l'élagage ;
-// le journal d'un format plus ancien, qui se lit ; la restitution de chaque
-// instant de la séance, caractérisée octet pour octet. Les journaux s'écrivent
-// comme les écrit l'enregistreur, une ligne après l'autre, par les fonctions
-// du module ; chaque charge de la séance passe l'analyse du fichier d'état et
-// le contrôle des placements. Les noms des personnes ajoutées sont inventés,
-// hors des réservoirs des démonstrations ; les versions viennent du module
-// engendré, seul à en porter le texte.
+// refaire ; les lignes de l'historique ; la construction notée ; l'élagage,
+// par le texte et en mémoire ; le journal d'un format plus ancien, qui se
+// lit ; la restitution de chaque instant de la séance, caractérisée octet
+// pour octet. Les journaux s'écrivent comme les écrit l'enregistreur, une
+// ligne après l'autre, par les fonctions du module ; chaque charge de la
+// séance passe l'analyse du fichier d'état et le contrôle des placements. Les
+// noms des personnes ajoutées sont inventés, hors des réservoirs des
+// démonstrations ; les versions viennent du module engendré, seul à en porter
+// le texte.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, test } from '../../test/lanceur.js';
@@ -31,6 +32,7 @@ import {
   PLANCHER_ENTREES,
   decoderJournal,
   elaguer,
+  elaguerJournal,
   estInstantane,
   fil,
   ligneEntree,
@@ -39,6 +41,7 @@ import {
   lignesHistorique,
   lireJournal,
   reconstruire,
+  texteDuJournal,
   versionDe,
 } from './journal.js';
 import { ajusterALaPresence, examiner, versFichier } from './placements.js';
@@ -1211,6 +1214,131 @@ describe('l’élagage : au-delà du plafond, depuis la frontière d’instantan
     assert.equal(journal.entrees[0].revision, 101);
     assert.deepEqual(fil(journal), { position: 601, pile: [], courant: de(601, 590), cibleDefaire: 600, cibleRefaire: null });
     assert.equal(texteCanonique(reconstruire(journal, 590)), texteCanonique(etapes[59].apres));
+  });
+
+  // L'élagage en mémoire (elaguerJournal) contre sa référence, le chemin par
+  // le texte : texteDuJournal, elaguer, puis lireJournal, null sous le
+  // plafond.
+  const parLeTexte = (journal) => {
+    const texte = elaguer(texteDuJournal(journal));
+    return texte === null ? null : { texte, journal: lireJournal(texte) };
+  };
+  // elaguerJournal rend ce que rend la référence, au JSON près, ordre des clés
+  // compris, sans toucher au journal reçu ; le texte du journal se relit en
+  // entier, l'hypothèse sous laquelle elaguerJournal ne relit rien.
+  function exigerMemeElagage(journal, message) {
+    const relu = lireJournal(texteDuJournal(journal));
+    assert.deepEqual([relu.ecartees, relu.entrees.length], [0, journal.entrees.length], `${message} : le texte se relit`);
+    const avant = JSON.stringify(journal);
+    const elague = elaguerJournal(journal);
+    assert.equal(JSON.stringify(elague), JSON.stringify(parLeTexte(journal)), message);
+    assert.equal(JSON.stringify(journal), avant, `${message} : le journal reçu est intact`);
+    return elague;
+  }
+  const CLES_ENTREE = ['type', 'revision', 'libelle', 'horodatage', 'sens', 'retour', 'produitVersion', 'instantane', 'correctif'];
+  // L'entrée, ses clés dans l'ordre inverse de celui qu'écrit ligneEntree.
+  const aRebours = (entree) => Object.fromEntries(CLES_ENTREE.toReversed().map((cle) => [cle, entree[cle]]));
+  const unJalon = (revision, nom) => ({ type: 'jalon', revision, nom, horodatage: horodatage(revision) });
+  // Le journal des 700 étapes, ses jalons dans le désordre : un second jalon
+  // de la révision 650 avant le sien, un jalon d'une révision qu'aucune
+  // entrée ne porte, ceux de l'ordre des lignes à rebours, un jalon de la
+  // révision 3, que l'élagage retire, et un de la révision 201, où tombe la
+  // coupe de 700 entrées.
+  const SECOND_650 = unJalon(650, 'Second de 650');
+  const TROISIEME = unJalon(3, 'Troisième');
+  const SUR_LA_COUPE = unJalon(201, 'Sur la coupe');
+  const enDesordre = (journal) => ({
+    ...journal,
+    jalons: [SECOND_650, unJalon(9999, 'Hors du journal'), ...journal.jalons.toReversed(), TROISIEME, SUR_LA_COUPE],
+  });
+
+  test('texteDuJournal récrit le texte d’un journal lu ; chaque jalon suit son entrée, dans l’ordre de la liste ; un jalon sans entrée ne s’écrit pas ; l’ouverture porte le format courant', () => {
+    const texte = prefixe(650);
+    const journal = lireJournal(texte);
+    assert.equal(texteDuJournal(journal), texte);
+    assert.equal(texteDuJournal({ ...journal, format: 1 }), texte);
+    const lignes = lignesDe(texte);
+    const rangDe = (debut) => lignes.findIndex((ligne) => ligne.startsWith(debut));
+    const attendu = lignes
+      .toSpliced(rangDe('{"type":"jalon","revision":650,'), 0, ligneJalon(SECOND_650))
+      .toSpliced(rangDe('{"type":"entree","revision":201,') + 1, 0, ligneJalon(SUR_LA_COUPE))
+      .toSpliced(rangDe('{"type":"entree","revision":3,') + 1, 0, ligneJalon(TROISIEME));
+    assert.equal(texteDuJournal(enDesordre(journal)), texteDe(attendu));
+    assert.equal(texteDuJournal(lireJournal(texteDe([ligneOuverture(EVENEMENT)]))), texteDe([ligneOuverture(EVENEMENT)]));
+  });
+
+  test('elaguerJournal rend le texte élagué et sa relecture comme le chemin par le texte, de 601 à 700 entrées ; la coupe sans version la reçoit ; les entrées qui la suivent sont celles du journal, non relues', () => {
+    for (const n of [601, 602, 625, 649, 650, 651, 675, 699, 700]) {
+      const journal = lireJournal(prefixe(n));
+      const elague = exigerMemeElagage(journal, `${n} entrées`);
+      assert.notEqual(elague, null, `${n} entrées`);
+      const rang = journal.entrees.findIndex(({ revision }) => revision === elague.journal.entrees[0].revision);
+      assert.equal(journal.entrees[rang].produitVersion, null, `${n} entrées : coupe sans version`);
+      assert.equal(elague.journal.entrees[0].produitVersion, versionDe(journal, journal.entrees[rang].revision), `${n} entrées`);
+      if (n === 650) assert.equal(elague.journal.entrees[0].produitVersion, V2);
+      assert.ok(
+        elague.journal.entrees.slice(1).every((entree, i) => entree === journal.entrees[rang + 1 + i]),
+        `${n} entrées : entrées partagées`,
+      );
+    }
+  });
+
+  test('elaguerJournal : une coupe qui porte sa version garde sa ligne ; les clés d’une entrée à rebours ; un journal d’un format plus ancien', () => {
+    const etapes = suite(650).map((etape, rang) => ({ ...etape, version: rang + 1 >= 151 ? V2 : V1 }));
+    const versionnee = lireJournal(journalDe(etapes));
+    const ligne151 = lignesDe(journalDe(etapes)).find((ligne) => ligne.startsWith('{"type":"entree","revision":151,'));
+    assert.equal(lignesDe(exigerMemeElagage(versionnee, 'coupe versionnée').texte)[1], ligne151);
+    for (const [nom, journal] of [
+      ['coupe sans version', lireJournal(prefixe(650))],
+      ['coupe versionnée', versionnee],
+    ]) {
+      const elague = exigerMemeElagage({ ...journal, entrees: journal.entrees.map(aRebours) }, `${nom}, à rebours`);
+      // La coupe sans version se réécrit dans l'ordre de ligneEntree ; les
+      // autres entrées se recopient à rebours.
+      assert.equal(lignesDe(elague.texte)[1].startsWith('{"type":"entree"'), nom === 'coupe sans version', nom);
+      assert.ok(lignesDe(elague.texte)[2].startsWith('{"correctif":'), nom);
+      const ancien = exigerMemeElagage({ ...journal, format: 1 }, `${nom}, format 1`);
+      assert.equal(ancien.journal.format, FORMAT);
+    }
+  });
+
+  test('elaguerJournal : les jalons dans le désordre, d’une révision absente ou d’une entrée retirée', () => {
+    const elague = exigerMemeElagage(enDesordre(lireJournal(prefixe(700))), 'jalons dans le désordre');
+    assert.equal(elague.journal.entrees[0].revision, 201);
+    const jalons = elague.journal.jalons.map(({ revision, nom }) => `${revision} ${nom}`);
+    assert.deepEqual(jalons, [
+      '201 Sur la coupe',
+      ...de(201, 700)
+        .filter((revision) => revision % 25 === 0)
+        .flatMap((revision) => (revision === 650 ? ['650 Second de 650', '650 Jalon 650'] : [`${revision} Jalon ${revision}`])),
+    ]);
+  });
+
+  test('elaguerJournal : un journal déjà élagué, de nouveau au-delà du plafond, et un retour dont la cible part ; le journal élagué ne s’élague plus', () => {
+    const etapes = suite(601);
+    etapes[589] = { apres: etapes[59].apres, sens: 'revenir', retour: 60 };
+    for (const [nom, texte] of [
+      ['depuis 137', journalDe(suite(601), { premiere: 137 })],
+      ['depuis 101', journalDe(suite(700), { premiere: 101 })],
+      ['retour', journalDe(etapes)],
+    ]) {
+      const elague = exigerMemeElagage(lireJournal(texte), nom);
+      assert.notEqual(elague, null, nom);
+      assert.equal(elaguerJournal(elague.journal), null, nom);
+    }
+  });
+
+  test('elaguerJournal : sous le plafond, null', () => {
+    const jalonne = suite(600).map((etape) => ({ ...etape, jalons: ['Jalon'] }));
+    for (const [nom, texte] of [
+      ['600 entrées', prefixe(600)],
+      ['600 entrées jalonnées', journalDe(jalonne)],
+      ['une entrée', prefixe(1)],
+      ['ouverture seule', texteDe([ligneOuverture(EVENEMENT)])],
+    ]) {
+      assert.equal(exigerMemeElagage(lireJournal(texte), nom), null, nom);
+    }
+    assert.equal(elaguerJournal(lireJournal('')), null);
   });
 });
 

@@ -113,13 +113,13 @@ import { ErreurStockage } from './erreurs.js';
 import {
   PLAFOND_ENTREES,
   decoderJournal,
-  elaguer,
+  elaguerJournal,
   estInstantane,
   ligneEntree,
   ligneJalon,
-  ligneOuverture,
   lireJournal,
   reconstruire,
+  texteDuJournal,
   versionDe,
 } from './journal.js';
 import { DOSSIER_CORBEILLE, SUFFIXES, cleSansCasse, deriverBase, dossierCorbeille } from './noms.js';
@@ -921,20 +921,6 @@ function avec(journal, ligne) {
   return { ...journal, entrees: [...journal.entrees, lue] };
 }
 
-// Texte d'un journal en mémoire : son ouverture, puis chaque entrée suivie
-// des jalons de sa révision, dans leur ordre. Une entrée lue se récrit par
-// JSON.stringify, comme ligneEntree l'a écrite : ses clés dans l'ordre lu.
-function texteDe({ evenement, entrees, jalons }) {
-  const lignes = [ligneOuverture(evenement)];
-  for (const entree of entrees) {
-    lignes.push(JSON.stringify(entree));
-    for (const jalon of jalons) {
-      if (jalon.revision === entree.revision) lignes.push(ligneJalon(jalon));
-    }
-  }
-  return `${lignes.join('\n')}\n`;
-}
-
 // Le journal de l'Ouvert prêt à recevoir une ligne, en mémoire : avant, le
 // journal tel que le fichier le porte, vide quand il manque ; reprise, la
 // ligne de l'entrée de reprise qui le fait finir sur la charge ouverte, ou
@@ -1025,15 +1011,14 @@ async function aligner(ouvert, preparation, texte) {
   return { depart: aligne, preparation: { journal, entier } };
 }
 
-// Le texte entier d'un journal en mémoire, élagué au-delà de PLAFOND_ENTREES
-// (elaguer), et le journal que ce texte porte, sans ligne écartée, au
-// format courant que porte son ouverture (ligneOuverture) : ce que le
-// fichier porte une fois écrit d'un bloc.
+// Le texte entier d'un journal en mémoire (texteDuJournal), élagué sans
+// relecture au-delà de PLAFOND_ENTREES (elaguerJournal), et le journal que
+// ce texte porte, sans ligne écartée, au format courant que porte son
+// ouverture : ce que le fichier porte une fois écrit d'un bloc.
 function textePlein(journal) {
-  const texte = texteDe(journal);
-  const elague = elaguer(texte);
-  if (elague === null) return { texte, journal: { ...journal, format: FORMAT, ecartees: 0 } };
-  return { texte: elague, journal: lireJournal(elague) };
+  return (
+    elaguerJournal(journal) ?? { texte: texteDuJournal(journal), journal: { ...journal, format: FORMAT, ecartees: 0 } }
+  );
 }
 
 // L'ECRITURE d'une recherche dans le dossier de racine qui échoue avant une
@@ -1277,7 +1262,7 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
   const vide = { evenement: charge.evenement.id, format: FORMAT, entrees: [], jalons: [], ecartees: 0 };
   const journal = avec(avec(vide, entree), jalon);
   const texteEtat = relisible(serialiser(charge, { revision: 1, produitVersion }), 'creer');
-  await fs.ecrireAtomique(racine, base + SUFFIXES.journal, texteDe(journal));
+  await fs.ecrireAtomique(racine, base + SUFFIXES.journal, texteDuJournal(journal));
   const cree = {
     fs,
     racine,

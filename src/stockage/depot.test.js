@@ -33,7 +33,7 @@ import {
 import { courseDe, entreeDeCourse, texteDesCourses } from './courses.js';
 import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
-import { PLAFOND_ENTREES, elaguer, fil, ligneJalon, ligneOuverture, lireJournal, reconstruire } from './journal.js';
+import { PLAFOND_ENTREES, elaguer, fil, ligneJalon, ligneOuverture, lireJournal, reconstruire, texteDuJournal } from './journal.js';
 import { SUFFIXES } from './noms.js';
 import { ajusterALaPresence } from './placements.js';
 
@@ -2607,11 +2607,17 @@ describe('dépôt : format plus récent, élagage', () => {
     }
   });
 
-  test("au-delà de PLAFOND_ENTREES, le journal s'élague sur une frontière d'instantané qui garde au moins 500 entrées, au geste qui le dépasse comme à l'écriture ailleurs ; relu, il est la version élaguée", async () => {
+  test("au-delà de PLAFOND_ENTREES, le journal s'élague sur une frontière d'instantané qui garde au moins 500 entrées, au geste qui le dépasse comme à l'écriture ailleurs ; relu, il est la version élaguée, et le journal en mémoire récrit le fichier", async () => {
     const { disque, fs } = nouveauDisque();
     const trace = tracer(fs);
     let ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
-    for (let n = 2; n <= PLAFOND_ENTREES; n += 1) ouvert = await enregistrer(ouvert, modifier(ouvert.charge, n), geste(n));
+    assert.equal(fs.contenu('documents', JOURNAL), texteDuJournal(ouvert.journal));
+    // Un jalon d'une entrée que l'élagage retire, deux d'une entrée qu'il garde.
+    const jalonsDe = { 50: ['Retiré'], 550: ['Gardé', 'Gardé aussi'] };
+    for (let n = 2; n <= PLAFOND_ENTREES; n += 1) {
+      ouvert = await enregistrer(ouvert, modifier(ouvert.charge, n), geste(n));
+      for (const nom of jalonsDe[n] ?? []) ouvert = await nommer(ouvert, { nom, horodatage: heure(n) });
+    }
     const avant = fs.contenu('documents', JOURNAL);
     assert.equal(lireJournal(avant).entrees.length, PLAFOND_ENTREES);
     // Jusqu'au plafond compris, chaque geste s'ajoute en fin de journal.
@@ -2642,10 +2648,19 @@ describe('dépôt : format plus récent, élagage', () => {
     const apres = fs.contenu('documents', JOURNAL);
     const derniere = apres.slice(apres.lastIndexOf('\n', apres.length - 2) + 1);
     assert.equal(apres, elaguer(avant + derniere));
+    assert.equal(apres, texteDuJournal(ouvert.journal));
     const relu = exigerEquivalence(fs, BASE);
     assert.equal(relu.entrees[0].revision, 101);
     assert.equal(relu.entrees.length, 501);
+    assert.deepEqual(
+      relu.jalons.map(({ revision, nom }) => [revision, nom]),
+      [
+        [550, 'Gardé'],
+        [550, 'Gardé aussi'],
+      ],
+    );
     assert.deepEqual(ouvert.journal, relu);
+    assert.equal(JSON.stringify(ouvert.journal), JSON.stringify(relu));
 
     ouvert = await enregistrer(ouvert, modifier(ouvert.charge, 602), geste(602));
     assert.deepEqual(trace.at(-3), ['ajouterLigne', JOURNAL]);

@@ -22,7 +22,8 @@
 // de ligne — l'ajout au fichier appartient au système de fichiers —, lit le
 // texte entier d'un journal, en décode les octets ligne par ligne, restitue
 // la charge d'un instant, suit le fil courant, rend les lignes de
-// l'historique et élague. Une table par sorte de ligne — OUVERTURE, ENTREE,
+// l'historique et le texte d'un journal en mémoire, et élague un texte ou un
+// journal en mémoire. Une table par sorte de ligne — OUVERTURE, ENTREE,
 // JALON — donne à la fois l'ordre des clés à l'écriture et la règle de
 // chaque clé à la lecture : l'écriture refuse par TypeError la ligne dont la
 // lecture refuserait la forme. La suite des révisions et la cadence des
@@ -548,4 +549,90 @@ export function elaguer(texte) {
     else gardees.push(ecrire(ENTREE, { ...coupe, produitVersion: versionDe(journal, coupe.revision) }, 'elaguer'));
   });
   return [...gardees, ...segments.slice(1 + lues.length)].join('\n');
+}
+
+// Les jalons groupés par révision dans une Map, chaque groupe dans l'ordre
+// de la liste.
+function jalonsParRevision(jalons) {
+  const groupes = new Map();
+  for (const jalon of jalons) {
+    const groupe = groupes.get(jalon.revision);
+    if (groupe === undefined) groupes.set(jalon.revision, [jalon]);
+    else groupe.push(jalon);
+  }
+  return groupes;
+}
+
+/**
+ * Texte d'un journal en mémoire (§ 8.6), celui qu'il porte une fois écrit
+ * d'un bloc : l'ouverture au format courant (ligneOuverture), puis chaque
+ * entrée par JSON.stringify — ses clés dans l'ordre de l'objet, celui de la
+ * ligne lue —, suivie des jalons de sa révision, dans l'ordre de la liste
+ * (ligneJalon) ; chaque ligne suivie d'une fin de ligne. Un jalon dont la
+ * révision n'est celle d'aucune entrée ne s'écrit pas. Lève TypeError quand
+ * l'événement, ou un jalon écrit, sort de sa règle.
+ *
+ * @param {Journal} journal
+ * @returns {string}
+ */
+export function texteDuJournal({ evenement, entrees, jalons }) {
+  const jalonsDe = jalonsParRevision(jalons);
+  const lignes = [ligneOuverture(evenement)];
+  for (const entree of entrees) {
+    lignes.push(JSON.stringify(entree));
+    for (const jalon of jalonsDe.get(entree.revision) ?? []) lignes.push(ligneJalon(jalon));
+  }
+  return `${lignes.join('\n')}\n`;
+}
+
+/**
+ * L'élagage d'un journal en mémoire (§ 8.6) : { texte, journal }, où texte
+ * est elaguer(texteDuJournal(journal)) et journal, lireJournal(texte) ; null
+ * quand ses entrées ne dépassent pas PLAFOND_ENTREES. La coupe est celle
+ * d'elaguer ; l'entrée de la coupe sans version se réécrit avec celle de la
+ * construction qui l'a produite (versionDe), ses clés dans l'ordre de
+ * ligneEntree ; chaque autre entrée gardée se recopie par JSON.stringify,
+ * suivie des jalons de sa révision, dans l'ordre de la liste. Rien ne se
+ * relit : les entrées gardées hors de la coupe sont celles du journal reçu,
+ * partagées ; les jalons gardés sont neufs. Le journal reçu n'est pas
+ * modifié.
+ *
+ * L'égalité avec le chemin par le texte tient quand chaque ligne de
+ * texteDuJournal(journal) se relit, ce que garantit un journal tenu en
+ * mémoire par le dépôt : lu par lireJournal, ou suivi de lignes que
+ * ligneEntree et ligneJalon ont écrites, relues par JSON.parse. Lève
+ * TypeError quand l'événement, un jalon gardé ou la coupe réécrite sortent
+ * de leur règle.
+ *
+ * @param {Journal} journal
+ * @returns {{texte: string, journal: Journal}|null}
+ */
+export function elaguerJournal(journal) {
+  const { evenement, entrees } = journal;
+  if (entrees.length <= PLAFOND_ENTREES) return null;
+  let rang = entrees.length - PLANCHER_ENTREES;
+  while (entrees[rang].instantane === null) rang -= 1;
+  const jalonsDe = jalonsParRevision(journal.jalons);
+  const lignes = [ligneOuverture(evenement)];
+  const gardees = [];
+  const jalons = [];
+  for (let suivante = rang; suivante < entrees.length; suivante += 1) {
+    let entree = entrees[suivante];
+    if (suivante === rang && entree.produitVersion === null) {
+      const valeurs = { ...entree, produitVersion: versionDe(journal, entree.revision) };
+      lignes.push(ecrire(ENTREE, valeurs, 'elaguer'));
+      entree = Object.fromEntries(ENTREE.champs.map(([cle]) => [cle, valeurs[cle]]));
+    } else {
+      lignes.push(JSON.stringify(entree));
+    }
+    gardees.push(entree);
+    for (const jalon of jalonsDe.get(entree.revision) ?? []) {
+      lignes.push(ligneJalon(jalon));
+      jalons.push({ type: 'jalon', revision: jalon.revision, nom: jalon.nom, horodatage: jalon.horodatage });
+    }
+  }
+  return {
+    texte: `${lignes.join('\n')}\n`,
+    journal: { evenement, format: FORMAT, entrees: gardees, jalons, ecartees: 0 },
+  };
 }
