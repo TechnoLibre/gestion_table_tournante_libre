@@ -10,7 +10,9 @@
   contrôle à mesurer sous une règle avant d'imprimer la rame. Les badges se
   rangent dans l'ordre alphabétique ou par table, feuille par feuille ou en pile
   pour le massicot. Sous Windows, la planche se dépose à côté des fichiers de
-  l'événement et l'application en affiche le chemin.
+  l'événement et l'application en affiche le chemin ; « Ouvrir le dossier »,
+  offert en tout temps dans la section, avant comme après la production, montre
+  ce dossier dans l'explorateur.
 - Le format de papier se demande une seule fois, à la première planche ou au
   premier aperçu, puis la machine le retient ; il se change d'un clic.
 - Avant de produire, l'application annonce le nombre de badges et de feuilles,

@@ -27,9 +27,11 @@
   // pose la même question. Le papier choisi se montre et se change.
   //
   // La planche produite nomme son chemin — à côté des fichiers d'événement
-  // —, et « Ouvrir le dossier » montre le dossier de travail par la façade,
-  // quand la plateforme a un explorateur ; sous web, la planche se
-  // télécharge, et la section dit son nom. Une écriture refusée se dit
+  // —, ou, sous web, où elle se télécharge, son nom. « Ouvrir le dossier »
+  // se tient parmi les commandes en tout temps, avant comme après une
+  // production, quand la plateforme a un explorateur : il montre par la
+  // façade le dossier de travail, où la planche se dépose, et jamais le
+  // chemin choisi par « Enregistrer sous… ». Une écriture refusée se dit
   // PLANCHE_NON_ECRITE, remède « Enregistrer sous… » (enregistrerPlancheSous),
   // dont le chemin choisi remplace celui de la planche.
   //
@@ -160,7 +162,7 @@
     },
     enregistrerSous: async () => {
       const chemin = await suivre(() => seance.enregistrerPlancheSous(derniere));
-      if (chemin !== null) produite = { chemin, nom: null, ailleurs: true };
+      if (chemin !== null) produite = { chemin, nom: null };
       return chemin;
     },
   };
@@ -214,11 +216,16 @@
             <button type="button" data-commande="produirePlanche" aria-disabled="true" aria-describedby={`${uid}-bloque`}
               >{t('badges.commande.produire')}</button
             >
-            <p class="explication" id={`${uid}-bloque`}>{t('badges.produire.bloque')}</p>
           {:else}
             <Commande cle="badges.commande.produire" nom="produirePlanche" variante="principale" executer={() => produire(null)} {gestes} />
           {/if}
+          {#if explorateur.disponible}
+            <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => facade.ouvrirExplorateur()} />
+          {/if}
         </div>
+        {#if bloque}
+          <p class="explication" id={`${uid}-bloque`}>{t('badges.produire.bloque')}</p>
+        {/if}
         {#if refusRepris !== null}
           <Refus refus={refusRepris} lever={() => (refusRepris = null)} {gestes} />
         {/if}
@@ -244,9 +251,6 @@
                 <span>{t('badges.produite.chemin')}</span>
                 <span class="chemin" data-chemin-planche>{produite.chemin}</span>
               </p>
-              {#if explorateur.disponible && !produite.ailleurs}
-                <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => facade.ouvrirExplorateur()} />
-              {/if}
             {:else}
               <p data-chemin-planche>{t('badges.produite.telechargee', { nom: produite.nom })}</p>
             {/if}
@@ -331,7 +335,8 @@
 
   /* « Produire » désactivé tant qu'un refus tient : à la hauteur de l'action
      principale, son filet tireté et son texte secondaire le distinguent, et
-     son explication le suit. */
+     son explication suit la rangée des commandes, sans séparer deux
+     commandes. */
   button {
     min-height: var(--hauteur-cible);
     padding: 0 var(--espace-4);

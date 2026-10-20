@@ -7,11 +7,11 @@
 // l'annonce avant de produire — planches des deux papiers, dérive nommée,
 // « Produire » désactivé et expliqué tant que le refus tient ; la
 // production en lecture et sur un plan bloqué sans écriture de l'état ni du
-// journal ; le chemin produit, « Ouvrir le dossier », la réédition ; le
-// refus d'écriture et son remède « Enregistrer sous… » ; le choix de la
-// source, de l'imposition et de l'ordre, et le retrait de l'annonce quand
-// un réglage ou le papier change ; le téléchargement sous web ; la langue
-// témoin.
+// journal ; le chemin produit, « Ouvrir le dossier » avant comme après la
+// production, la réédition ; le refus d'écriture et son remède
+// « Enregistrer sous… » ; le choix de la source, de l'imposition et de
+// l'ordre, et le retrait de l'annonce quand un réglage ou le papier
+// change ; le téléchargement sous web ; la langue témoin.
 //
 // App est montée par test/navigateur/ecrans.js sur le système de fichiers
 // simulé ; le texte attendu vient de la même traduction que celle de
@@ -74,6 +74,18 @@ function chargeRetenue() {
   return appliquerCommande('retenirProposition', principale, { id: principale.propositions[0].id }).charge;
 }
 
+// La retenue, une personne de plus posée dans la charge sans passer par une
+// commande, comme un fichier écrit ailleurs : la dérive que le retenu ne
+// porte pas. Rend la charge et l'id de la personne ajoutée.
+function chargeEnDerive() {
+  const charge = structuredClone(chargeRetenue());
+  const ajoutee = charge.prochainsIds.participant;
+  const { id: _id, nom: _nom, prenom: _prenom, ...reste } = charge.participants[0];
+  charge.participants.push({ ...reste, id: ajoutee, nom: 'Ombrelle', prenom: 'Iris' });
+  charge.prochainsIds.participant = ajoutee + 1;
+  return { charge, ajoutee };
+}
+
 // Ouvre l'événement de la charge sur la section des badges, le papier de
 // la machine posé dans les réglages locaux ; null n'en pose aucun.
 function ouvrirBadges(charge, { papier = 'A4', ecriture = false, options = {} } = {}) {
@@ -111,6 +123,18 @@ const textePlanches = (planches, choisi) =>
   t('badges.annonce.planches', {
     parPapier: Object.keys(PAPIERS).map((papier) => ({ papier, nom: clesPapier(papier).nom, planches: planches[papier], choisi: papier === choisi })),
   });
+
+// Relève chaque racine que la section passe à l'explorateur du système de
+// fichiers, et la transmet telle quelle.
+function releverExplorateur(m) {
+  const ouvertes = [];
+  const originale = m.fs.ouvrirDansExplorateur;
+  m.fs.ouvrirDansExplorateur = async (racine) => {
+    ouvertes.push(racine);
+    return originale(racine);
+  };
+  return ouvertes;
+}
 
 // Le chemin attendu d'un fichier du dossier de travail des épreuves.
 async function cheminDocuments(m, nom) {
@@ -231,14 +255,7 @@ describe('sortir n’est pas modifier (§ 8.4, § 11.6, contrainte 24)', () => {
 
 describe('la dérive, nommée avant toute production (§ 11.8)', () => {
   test('« Produire » sur un retenu en dérive : le refus nomme la personne ajoutée, rien ne s’écrit ; « Produire » reste désactivé et expliqué tant que le refus tient', async () => {
-    // Le retenu suit chaque geste sur les personnes : une personne posée dans
-    // la charge sans passer par une commande, comme un fichier écrit ailleurs,
-    // est la dérive qu'il ne porte pas.
-    const charge = structuredClone(chargeRetenue());
-    const ajoutee = charge.prochainsIds.participant;
-    const { id: _id, nom: _nom, prenom: _prenom, ...reste } = charge.participants[0];
-    charge.participants.push({ ...reste, id: ajoutee, nom: 'Ombrelle', prenom: 'Iris' });
-    charge.prochainsIds.participant = ajoutee + 1;
+    const { charge, ajoutee } = chargeEnDerive();
     const m = await ouvrirBadges(charge);
     const depuis = m.trace.length;
     await cliquerProduire(m, 'le refus de dérive', () => dans(m, '[data-annonce-planche] [data-refus="PLANCHE_DERIVE"]'));
@@ -267,6 +284,38 @@ describe('la dérive, nommée avant toute production (§ 11.8)', () => {
 });
 
 describe('la planche produite, le dossier, la réédition (§ 11.6, § 11.8)', () => {
+  test('« Ouvrir le dossier » s’offre avant toute production, sans papier retenu comme sous une dérive qui bloque « Produire », et appelle la façade sur le dossier de travail, sans rien écrire', async () => {
+    // La commande active ouvre la racine de travail, sans rien écrire.
+    const ouvreLeDossier = async (m) => {
+      const commande = dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]');
+      expect(commande).not.toBeNull();
+      expect(commande.getAttribute('aria-disabled')).toBeNull();
+      const ouvertes = releverExplorateur(m);
+      const depuis = m.trace.length;
+      commande.click();
+      await attendre('l’explorateur appelé', () => ouvertes.length === 1, IMAGES);
+      expect(ouvertes[0].id).toBe(m.seance.etat().racine.id);
+      expect(planchesEcrites(m, depuis)).toEqual([]);
+      expect(ecrituresEvenement(m, depuis)).toEqual([]);
+    };
+
+    const papierRetenu = await ouvrirBadges(chargeBloquee());
+    expect(dans(papierRetenu, '[data-chemin-planche]')).toBeNull();
+    await ouvreLeDossier(papierRetenu);
+
+    // Une machine neuve : aucun papier retenu dans les réglages locaux.
+    const sansPapier = await ouvrirBadges(chargeBloquee(), { papier: null });
+    expect(sansPapier.seance.etat().papier).toBeNull();
+    await ouvreLeDossier(sansPapier);
+
+    // La dérive annoncée bloque « Produire », pas « Ouvrir le dossier ».
+    const enDerive = await ouvrirBadges(chargeEnDerive().charge);
+    await cliquerProduire(enDerive, 'le refus de dérive', () => dans(enDerive, '[data-annonce-planche] [data-refus="PLANCHE_DERIVE"]'));
+    expect(produire(enDerive).getAttribute('aria-disabled')).toBe('true');
+    await ouvreLeDossier(enDerive);
+    expect(dans(enDerive, '[data-chemin-planche]')).toBeNull();
+  });
+
   test('le chemin s’affiche ; « Ouvrir le dossier » appelle la façade sur le dossier de travail ; trois badges se rééditent', async () => {
     const charge = chargeBloquee();
     const m = await ouvrirBadges(charge);
@@ -276,12 +325,7 @@ describe('la planche produite, le dossier, la réédition (§ 11.6, § 11.8)', (
     expect(texte(dans(m, '[data-chemin-planche]'))).toBe(await cheminDocuments(m, nom));
     expect(new TextDecoder().decode(m.fs.octets('documents', nom).slice(0, 5))).toBe('%PDF-');
 
-    const ouvertes = [];
-    const originale = m.fs.ouvrirDansExplorateur;
-    m.fs.ouvrirDansExplorateur = async (racine) => {
-      ouvertes.push(racine);
-      return originale(racine);
-    };
+    const ouvertes = releverExplorateur(m);
     dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]').click();
     await attendre('l’explorateur appelé', () => ouvertes.length === 1, IMAGES);
     expect(ouvertes[0].id).toBe(m.seance.etat().racine.id);
@@ -367,8 +411,9 @@ describe('l’imposition et l’ordre (§ 11.6)', () => {
 });
 
 describe('sous web, la planche se télécharge (§ 11.6)', () => {
-  test('la section dit le nom téléchargé ; ni « Ouvrir le dossier » ni écriture du PDF', async () => {
+  test('la section dit le nom téléchargé ; ni « Ouvrir le dossier », avant comme après, ni écriture du PDF', async () => {
     const m = await ouvrirBadges(chargeBloquee(), { options: { systeme: { nature: 'web' } } });
+    expect(dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]')).toBeNull();
     const telechargees = [];
     m.fs.enregistrerSous = async (nom, octets) => {
       telechargees.push({ nom, debut: new TextDecoder().decode(octets.slice(0, 5)) });
@@ -387,7 +432,7 @@ describe('sous web, la planche se télécharge (§ 11.6)', () => {
 });
 
 describe('une écriture refusée, et son remède (§ 8.5, § 11.6)', () => {
-  test('PLANCHE_NON_ECRITE s’affiche à côté de « Produire », remède « Enregistrer sous… », dont le chemin choisi s’affiche', async () => {
+  test('PLANCHE_NON_ECRITE s’affiche à côté de « Produire », remède « Enregistrer sous… », dont le chemin choisi s’affiche ; « Ouvrir le dossier » montre le dossier de travail', async () => {
     const m = await ouvrirBadges(chargeBloquee());
     m.fs.pannes.ecriture('documents');
     const proposes = [];
@@ -404,10 +449,13 @@ describe('une écriture refusée, et son remède (§ 8.5, § 11.6)', () => {
     expect(proposes).toHaveLength(1);
     expect(proposes[0].nom).toMatch(/_A4_feuille_.*\.pdf$/);
     expect(proposes[0].debut).toBe('%PDF-');
-    // Le refus levé ; « Ouvrir le dossier » ne montre que le dossier de
+    // Le refus levé ; « Ouvrir le dossier » demeure, et montre le dossier de
     // travail, pas celui choisi ailleurs.
     expect(dans(m, '[data-refus="PLANCHE_NON_ECRITE"]')).toBeNull();
-    expect(dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]')).toBeNull();
+    const ouvertes = releverExplorateur(m);
+    dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]').click();
+    await attendre('l’explorateur appelé', () => ouvertes.length === 1, IMAGES);
+    expect(ouvertes[0].id).toBe(m.seance.etat().racine.id);
   });
 
   test('une production refusée après une réussie ne montre plus le chemin de la précédente', async () => {

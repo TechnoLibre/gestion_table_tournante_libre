@@ -4372,9 +4372,13 @@ dépose la planche ailleurs.
 
 **Sous `electron`, le fichier se dépose à côté des fichiers d'événement** (§ 8.6),
 par une écriture atomique, et le logiciel en nomme le chemin ; une écriture
-refusée se dit et offre « Enregistrer sous… ». **Sous `web`, la planche se
-télécharge** : le dossier de travail y est invisible à l'opérateur, et la section
-nomme le fichier, sans chemin.
+refusée se dit et offre « Enregistrer sous… ». La section des badges offre **en
+tout temps « Ouvrir le dossier »**, parmi ses commandes, avant toute production
+comme après : la commande montre dans l'explorateur du système le dossier de
+travail, où la planche se dépose, et jamais l'emplacement choisi par
+« Enregistrer sous… ». **Sous `web`, la planche se télécharge** : le dossier de
+travail y est invisible à l'opérateur, la section nomme le fichier, sans chemin,
+et n'offre pas « Ouvrir le dossier ».
 
 **La planche se produit depuis le retenu, ou depuis une proposition choisie**
 (§ 2.1, étape 12). La section des badges offre le retenu quand il existe, et la
