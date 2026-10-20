@@ -34,10 +34,16 @@ function instanceDe(charge) {
   }
 }
 
-// Deux objets plats égaux champ pour champ : mêmes clés, mêmes valeurs.
+// Deux valeurs de champ de raison égales : le même scalaire, ou deux listes
+// de scalaires égales rang pour rang (les tours de PRESENCE_RETIREE et de
+// PRESENCE_AJOUTEE), que chaque examen construit à neuf.
+const memeValeur = (a, b) =>
+  Object.is(a, b) || (Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => Object.is(x, b[i])));
+
+// Deux raisons égales champ pour champ : mêmes clés, mêmes valeurs.
 function memesChamps(a, b) {
   const cles = Object.keys(a);
-  return cles.length === Object.keys(b).length && cles.every((cle) => Object.hasOwn(b, cle) && Object.is(a[cle], b[cle]));
+  return cles.length === Object.keys(b).length && cles.every((cle) => Object.hasOwn(b, cle) && memeValeur(a[cle], b[cle]));
 }
 
 // Les raisons de dérive de chaque placement d'un examen : les propositions

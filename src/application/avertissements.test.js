@@ -554,6 +554,19 @@ describe('avertissements : les violations que nomme une dérive de présence (§
     assert.equal(invariantViole(charge), null);
   });
 
+  test('une présence retirée avertit au geste qui la retire, puis plus aux gestes suivants', () => {
+    const avant = petiteSoiree();
+    const retiree = avec(avant, presentes({ 4: [1] }));
+    const derive = avertissementsApres(avant, retiree).find(({ code }) => code === 'DERIVE_NOUVELLE');
+    assert.ok(derive.details.touchees.some(({ raisons }) => raisons.some(({ code }) => code === 'PRESENCE_RETIREE')));
+    const suivante = avec(retiree, (charge) => (charge.participants[0].exclu = true));
+    const raisonsSuivantes = avertissementsApres(retiree, suivante)
+      .filter(({ code }) => code === 'DERIVE_NOUVELLE')
+      .flatMap(({ details }) => details.touchees.flatMap(({ raisons }) => raisons.map(({ code }) => code)));
+    assert.equal(raisonsSuivantes.includes('PRESENCE_RETIREE'), false, raisonsSuivantes.join(', '));
+    assert.ok(raisonsSuivantes.includes('PARTICIPANT_EXCLU'));
+  });
+
   test('le retenu dit Lacasse absente au tour 2, où elle est présente : NON_ASSIS se tait, nommée par PRESENCE_AJOUTEE ; une autre violation reste', () => {
     const absente = (charge) => {
       charge.retenu.placement[1] = { sieges: [[1, 3], [2]], reserve: [], absents: [4] };
