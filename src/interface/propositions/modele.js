@@ -542,15 +542,18 @@ export function demandeConfirmation({ refus, charge }, id) {
 }
 
 // La table d'évaluation de chaque charge figée en profondeur, sous l'identité
-// de la charge. La charge de l'état observable de la séance est une copie
-// figée en profondeur (seance.js, figer), remplacée par une copie neuve à
-// chaque changement de l'événement ouvert et gardée telle quelle sinon : son
-// identité suffit à dire que son contenu n'a pas changé, et Génération et
-// Propositions relisent la même table. Une charge qui n'est pas figée
-// partout se mesure à chaque appel, son contenu pouvant changer sous la
-// même identité. Le § 13.3 compte sur la réactivité de Svelte plutôt que sur
-// une mémoïsation posée à la main ; ce cache en est l'exception voulue, posé
-// dans le modèle pur et tenu par l'immuabilité de son entrée.
+// de la charge. La charge de l'état observable de la séance est figée en
+// profondeur (seance.js, copiePubliee) : une charge neuve à chaque changement
+// de l'événement ouvert, gardée telle quelle sinon, dont les propositions
+// figées sont partagées d'une charge à la suivante. L'identité de la charge
+// suffit donc à dire que son contenu n'a pas changé, et Génération et
+// Propositions relisent la même table. La table dépend de la charge
+// entière : elle se garde sous la charge, jamais sous une proposition que
+// deux charges partagent. Une charge qui n'est pas figée partout se mesure à
+// chaque appel, son contenu pouvant changer sous la même identité. Le § 13.3
+// compte sur la réactivité de Svelte plutôt que sur une mémoïsation posée à
+// la main ; ce cache en est l'exception voulue, posé dans le modèle pur et
+// tenu par l'immuabilité de son entrée.
 const evaluees = new WeakMap();
 
 /** Vrai quand chaque objet atteint depuis valeur est figé. Un objet figé ne

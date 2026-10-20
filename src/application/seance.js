@@ -114,6 +114,7 @@ import {
 } from '../stockage/depot.js';
 import { FORMAT, analyser } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
+import { estFigee, figer } from '../stockage/gel.js';
 import { fil, lignesHistorique, reconstruire } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import {
@@ -172,13 +173,42 @@ const refusEncodage = () =>
 // Deux racines désignent le même dossier.
 const memeRacine = (a, b) => a?.id === b?.id && a?.chemin === b?.chemin;
 
-// Fige un objet et tout ce qu'il atteint. Un objet déjà figé est laissé
-// tel quel : l'état observable ne reçoit que des copies neuves
-// (structuredClone) ou des objets déjà passés par cette fonction.
-function figer(valeur) {
-  if (valeur === null || typeof valeur !== 'object' || Object.isFrozen(valeur)) return valeur;
-  for (const cle of Object.keys(valeur)) figer(valeur[cle]);
-  return Object.freeze(valeur);
+/**
+ * La charge et l'examen qu'un Ouvert publie dans l'état observable,
+ * {charge, examen}, figés en profondeur par figer (gel.js). La valeur est
+ * celle d'un structuredClone de {charge, examen nommé (examenNomme)}, clés
+ * dans le même ordre à toute profondeur, mais chaque proposition figée de la
+ * charge y garde sa place, même objet : elle ne change plus, et deux états
+ * successifs la partagent. Tout le reste est neuf, la charge et sa liste de
+ * propositions comprises, et une proposition libre se recopie, puis se fige
+ * sans que l'originale le soit.
+ *
+ * Un seul structuredClone recopie la charge et l'examen nommé, chaque
+ * proposition figée remplacée par null et la charge de l'examen par null
+ * quand c'est celle de l'Ouvert ; les propositions figées reprennent ensuite
+ * leur rang, et l'examen reçoit la charge copiée. Les alias que
+ * structuredClone garde se gardent donc aussi, celui de l'examen vers la
+ * charge compris. Un examen qui porte une autre charge la voit recopiée à
+ * part, comme le reste. Rien de ce que reçoit copiePubliee n'est figé ni
+ * modifié.
+ *
+ * @param {{charge: Object, examen: import('../stockage/placements.js').Examen}} ouvert
+ * @returns {{charge: Object, examen: Object}}
+ */
+export function copiePubliee({ charge, examen }) {
+  const { propositions } = charge;
+  const figees = Array.isArray(propositions) ? propositions.map((p) => (estFigee(p) ? p : null)) : [];
+  const nomme = examenNomme(examen, charge);
+  const memeCharge = examen.charge === charge;
+  const copie = structuredClone({
+    charge: figees.length === 0 ? charge : { ...charge, propositions: propositions.map((p, rang) => (figees[rang] === null ? p : null)) },
+    examen: memeCharge ? { ...nomme, charge: null } : nomme,
+  });
+  figees.forEach((p, rang) => {
+    if (p !== null) copie.charge.propositions[rang] = p;
+  });
+  if (memeCharge) copie.examen.charge = copie.charge;
+  return figer(copie);
 }
 
 // Le format qu'annonce l'en-tête de l'état sur le disque, null sans texte :
@@ -320,16 +350,17 @@ export function creerSeance({
   const abonnes = new Set();
   const annulations = new Set();
   let instantane = null;
-  // Par Ouvert, sa charge et son examen figés, et INVARIANT_VIOLE : un
-  // Ouvert ne change jamais, ses copies se font une fois. L'examen de l'état
+  // Par Ouvert, sa charge et son examen figés (copiePubliee), et
+  // INVARIANT_VIOLE : un Ouvert ne change jamais, ses copies se font une
+  // fois. La charge publiée est neuve pour chaque Ouvert, et partage ses
+  // propositions figées avec celle de l'Ouvert précédent. L'examen de l'état
   // nomme ses raisons de dérive sur la charge (examenNomme).
   const parOuvert = new WeakMap();
 
   function figesDe(ouvert) {
     let figes = parOuvert.get(ouvert);
     if (figes === undefined) {
-      const copie = structuredClone({ charge: ouvert.charge, examen: examenNomme(ouvert.examen, ouvert.charge) });
-      figes = { ...figer(copie), invariant: figer(invariantViole(ouvert.charge, ouvert.examen)) };
+      figes = { ...copiePubliee(ouvert), invariant: figer(invariantViole(ouvert.charge, ouvert.examen)) };
       parOuvert.set(ouvert, figes);
     }
     return figes;
@@ -1447,7 +1478,8 @@ export function creerSeance({
 
     /**
      * L'état observable (EtatSeance), figé en profondeur : le même objet
-     * entre deux changements, un neuf après chacun.
+     * entre deux changements, un objet neuf à chaque changement, ses
+     * propositions figées partagées d'un état au suivant.
      */
     etat: () => lireEtat(),
     /**

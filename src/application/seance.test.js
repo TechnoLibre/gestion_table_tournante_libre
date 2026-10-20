@@ -23,12 +23,14 @@ import { serialiser, serialiserCharge } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot, ouvrir as ouvrirDansLeDepot } from '../stockage/depot.js';
 import { FORMAT, analyser, configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
+import { estFigee } from '../stockage/gel.js';
 import { ligneEntree, ligneOuverture, lireJournal, reconstruire } from '../stockage/journal.js';
 import { SUFFIXES, nomPlanche } from '../stockage/noms.js';
 import { FICHIER_REGLAGES } from '../stockage/reglages_locaux.js';
 import { VERSION } from '../version.genere.js';
+import { examenNomme } from './avertissements.js';
 import { libelle } from './libelles.js';
-import { DELAI_REGLAGES_MS, INACTIVITE_MS, creerSeance } from './seance.js';
+import { DELAI_REGLAGES_MS, INACTIVITE_MS, copiePubliee, creerSeance } from './seance.js';
 
 const V1 = VERSION.affichee;
 
@@ -2489,6 +2491,150 @@ describe('séance observable : etat() et subscribe (§ 8.4)', () => {
     assert.deepEqual([seance.etat().calculEnCours, recus.at(-1).calculEnCours], [true, true]);
     seance.finirCalcul();
     assert.deepEqual([seance.etat().calculEnCours, recus.at(-1).calculEnCours], [false, false]);
+  });
+});
+
+// La copie entière d'un Ouvert : sa charge et son examen nommé en un seul
+// structuredClone. Les épreuves la prennent pour valeur attendue de la
+// charge et de l'examen publiés, au caractère près.
+const copieEntiere = ({ charge, examen }) => structuredClone({ charge, examen: examenNomme(examen, charge) });
+
+// Deux personnes du retenu assises au tour 1 à des tables différentes, hors
+// de la réservée : un échange qui change le retenu sans toucher aux
+// propositions.
+function deuxTablesDuRetenu(charge) {
+  const [premiere, seconde] = charge.retenu.placement[0].sieges;
+  return { tour: 1, a: premiere.find((id) => id !== 1), b: seconde.find((id) => id !== 1) };
+}
+
+// Une séance en écriture dont l'événement d'essai porte trois propositions
+// générées et retient la première.
+async function avecPropositions(options = {}) {
+  const montage = await ouvertSur(chargeEssai(), options);
+  await montage.seance.passerEnEcriture();
+  await montage.seance.executer('enregistrerGeneration', generer(montage.seance.charge, 3));
+  await montage.seance.executer('retenirProposition', { id: 1 });
+  return montage;
+}
+
+describe("séance observable : la charge publiée partage les propositions figées (§ 8.4, § 13.3)", () => {
+  test("après un échange dans le retenu, la charge publiée est neuve, ses propositions les mêmes objets figés que celles de l'état d'avant et de l'Ouvert, et l'examen porte cette charge", async () => {
+    const { seance } = await avecPropositions();
+    const e1 = seance.etat();
+    await seance.executer('echangerDansRetenu', deuxTablesDuRetenu(seance.charge));
+    const e2 = seance.etat();
+    assert.notEqual(e2.charge, e1.charge);
+    assert.notEqual(e2.charge, seance.ouvert.charge);
+    assert.equal(Object.isFrozen(seance.ouvert.charge), false);
+    assert.equal(Object.isFrozen(seance.ouvert.charge.propositions), false);
+    assert.notDeepEqual(e2.charge.retenu, e1.charge.retenu);
+    assert.equal(e2.charge.propositions.length, 3);
+    e2.charge.propositions.forEach((proposition, i) => {
+      assert.equal(proposition, e1.charge.propositions[i], `proposition ${i} recopiée`);
+      assert.equal(proposition, seance.charge.propositions[i], `proposition ${i} distincte de celle de l'Ouvert`);
+      assert.ok(estFigee(proposition), `proposition ${i} hors du registre`);
+    });
+    for (const etat of [e1, e2]) {
+      assert.equal(etat.examen.charge, etat.charge);
+      assert.ok(estFigee(etat) && estFigee(etat.charge) && estFigee(etat.examen), 'état hors du registre');
+      compterFiges(etat);
+    }
+  });
+
+  test("une écriture dans une proposition publiée lève TypeError, et ne change ni l'état ni l'Ouvert", async () => {
+    const { seance } = await avecPropositions();
+    const etat = seance.etat();
+    const [proposition] = etat.charge.propositions;
+    const avant = JSON.stringify(seance.ouvert.charge);
+    assert.throws(() => {
+      proposition.placement[0].sieges[0][0] = 99;
+    }, TypeError);
+    assert.throws(() => {
+      proposition.note = 'Bruyère';
+    }, TypeError);
+    assert.throws(() => proposition.placement.push({ sieges: [], reserve: [] }), TypeError);
+    assert.equal(JSON.stringify(seance.ouvert.charge), avant);
+    assert.equal(seance.etat(), etat);
+  });
+
+  test("à chaque geste, la charge et l'examen publiés s'écrivent comme la copie entière de l'Ouvert, et comme ceux d'une seconde séance qui rouvre l'événement du disque", async () => {
+    const { fs, seance } = await avecPropositions();
+    const gestes = [
+      () => seance.executer('echangerDansRetenu', deuxTablesDuRetenu(seance.charge)),
+      () => seance.executer('exclureParticipant', { id: 4 }),
+      () => seance.executer('retenirProposition', { id: 2 }),
+      () => seance.defaire(),
+      () => seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }),
+    ];
+    for (const [rang, geste] of [[-1, async () => {}], ...gestes.map((g, i) => [i, g])]) {
+      await geste();
+      const etat = seance.etat();
+      const publie = { charge: etat.charge, examen: etat.examen };
+      assert.equal(JSON.stringify(publie), JSON.stringify(copieEntiere(seance.ouvert)), `geste ${rang} : copie entière`);
+      assert.deepStrictEqual(publie, copieEntiere(seance.ouvert));
+      const autre = monter({ fs, prefixe: 'autre' }).seance;
+      await autre.ouvrir(BASE);
+      const relu = autre.etat();
+      assert.equal(relu.evenement.revision, etat.evenement.revision);
+      assert.equal(JSON.stringify({ charge: relu.charge, examen: relu.examen }), JSON.stringify(publie), `geste ${rang} : relu`);
+      assert.deepStrictEqual({ charge: relu.charge, examen: relu.examen }, publie);
+    }
+  });
+});
+
+describe('séance : copiePubliee (§ 8.4)', () => {
+  test("copiePubliee partage chaque proposition figée à sa place, recopie et fige une proposition libre sans figer l'original, et s'écrit comme la copie entière", async () => {
+    const { seance } = await avecPropositions();
+    const { charge, examen } = seance.ouvert;
+    const [p1, p2] = charge.propositions;
+    assert.ok(estFigee(p1) && estFigee(p2));
+    const libre = structuredClone(p2);
+    const melee = { ...charge, propositions: [p1, libre, p1] };
+    const ouvert = { charge: melee, examen: { ...examen, charge: melee } };
+    const copie = copiePubliee(ouvert);
+    assert.notEqual(copie.charge, melee);
+    assert.notEqual(copie.charge.propositions, melee.propositions);
+    assert.notEqual(copie.charge.participants, melee.participants);
+    assert.equal(copie.charge.propositions[0], p1);
+    assert.equal(copie.charge.propositions[2], p1);
+    assert.notEqual(copie.charge.propositions[1], libre);
+    assert.deepStrictEqual(copie.charge.propositions[1], libre);
+    assert.ok(estFigee(copie.charge.propositions[1]));
+    assert.equal(Object.isFrozen(libre), false, "l'original libre est figé");
+    assert.equal(copie.examen.charge, copie.charge);
+    assert.ok(estFigee(copie) && estFigee(copie.charge) && estFigee(copie.examen));
+    assert.deepStrictEqual(Object.keys(copie), ['charge', 'examen']);
+    assert.equal(JSON.stringify(copie), JSON.stringify(copieEntiere(ouvert)));
+    assert.deepStrictEqual(copie, copieEntiere(ouvert));
+    assert.equal(copie.charge.propositions.length, 3);
+  });
+
+  test("une proposition gelée en surface seulement (Object.freeze) se recopie : le registre décide du partage, non Object.isFrozen", async () => {
+    const { seance } = await avecPropositions();
+    const { charge, examen } = seance.ouvert;
+    const surface = Object.freeze(structuredClone(charge.propositions[0]));
+    assert.equal(estFigee(surface), false);
+    const melee = { ...charge, propositions: [surface] };
+    const copie = copiePubliee({ charge: melee, examen: { ...examen, charge: melee } });
+    assert.notEqual(copie.charge.propositions[0], surface);
+    assert.deepStrictEqual(copie.charge.propositions[0], surface);
+    assert.equal(Object.isFrozen(surface.placement), false, "l'original gelé en surface est figé en place");
+  });
+
+  test("copiePubliee recopie à part la charge d'un examen qui n'est pas celle de l'Ouvert, et ne fige rien de ce qu'elle reçoit hors des propositions déjà figées", async () => {
+    const { seance } = await avecPropositions();
+    const { charge, examen } = seance.ouvert;
+    const autre = structuredClone(charge);
+    const ouvert = { charge, examen: { ...examen, charge: autre } };
+    const copie = copiePubliee(ouvert);
+    assert.notEqual(copie.examen.charge, copie.charge);
+    assert.notEqual(copie.examen.charge, autre);
+    assert.deepStrictEqual(copie.examen.charge, autre);
+    assert.equal(JSON.stringify(copie), JSON.stringify(copieEntiere(ouvert)));
+    assert.equal(Object.isFrozen(autre), false);
+    assert.equal(Object.isFrozen(charge), false);
+    assert.equal(Object.isFrozen(charge.participants), false);
+    assert.equal(Object.isFrozen(examen), false);
   });
 });
 
