@@ -349,8 +349,11 @@
   n'est pas figée.
 - Chaque table du plan porte son numéro en grand au centre du plateau, affiché
   même au zoom où les listes de noms disparaissent, à l'écran comme sur le plan
-  imprimé. La pastille qui compte les conflits d'une table passe en haut à
-  droite du plateau, sur son bord, entre deux chaises.
+  imprimé. Un numéro de trois chiffres ou plus s'écrit un peu plus petit sur les
+  petites tables, pour ne pas toucher la pastille. La pastille qui compte les
+  conflits d'une table passe en haut à droite du plateau, sur son bord, entre
+  deux chaises, sans peindre le fond de la table sur le sol autour d'elle ni
+  interrompre le contour épaissi d'une table en conflit.
 - Le bouton « Paramètres », à gauche de « À propos », règle la taille du texte
   de l'écran, de 90 à 150 %, et le thème clair ou sombre, qui quitte le bandeau.
   La machine retient la taille d'un lancement à l'autre ; le plan, les pages

@@ -19,6 +19,28 @@ export const DEMI_HAUTEUR_GEL = 8;
 /** Rayon du disque de la pastille, en cm de dessin. */
 export const RAYON_PASTILLE = 15;
 
+/** Bornes de l'encre d'un chiffre de la face grasse de Noto Sans, en part
+ *  du corps. Sa chasse, 0,572 : les chiffres y sont tabulaires, et l'encre
+ *  d'un nombre tient dans la somme de leurs chasses. Puis l'encre au-dessus
+ *  et au-dessous de l'ancre d'un <text> en dominant-baseline central :
+ *  l'ancre est au milieu de la boîte de la police (ascendante 1,069,
+ *  descendante 0,293), la ligne de base 0,388 sous elle, et l'encre d'un
+ *  chiffre monte de 0,735 au plus au-dessus de la base, descend de 0,016 au
+ *  plus dessous : 0,347 au-dessus de l'ancre, 0,404 au-dessous, bornés par
+ *  excès. */
+export const AVANCE_CHIFFRE = 0.572;
+export const ENCRE_HAUT_CHIFFRE = 0.35;
+export const ENCRE_BAS_CHIFFRE = 0.41;
+/** Décalage vertical de l'encre d'un <text> en dominant-baseline central,
+ *  en cm, au plus : le moteur de rendu tire le milieu de la boîte de la
+ *  police de son ascendante et de sa descendante arrondies à l'unité du
+ *  dessin, et la ligne de base s'écarte d'un demi-cm au plus de celle que la
+ *  police donne, à tout zoom. */
+export const DECALAGE_ANCRE = 0.5;
+/** Écart minimal entre l'encre du numéro et la pastille, la marque de gel ou
+ *  le bord du plateau, en cm. */
+export const ECART_NUMERO = 1.5;
+
 // L'angle de la diagonale haut droite, y vers le bas, en radians.
 const DIAGONALE = -Math.PI / 4;
 
@@ -45,6 +67,39 @@ export function placeGel({ centre, demiTaille }) {
   return { x: centre.x, y: centre.y - demiTaille + RETRAIT_GEL };
 }
 
+// Les pas de la dichotomie qui cherche le corps du numéro : chacun divise
+// par deux un intervalle de quelques centaines de cm au plus.
+const PAS_DU_CORPS = 40;
+
+// La boîte qui borne l'encre d'un numéro de chiffres chiffres, ancré en
+// (x, y) au corps corps, en cm.
+function encreBornee(x, y, corps, chiffres) {
+  const demi = (chiffres * AVANCE_CHIFFRE * corps) / 2;
+  return {
+    gauche: x - demi,
+    droite: x + demi,
+    haut: y - ENCRE_HAUT_CHIFFRE * corps - DECALAGE_ANCRE,
+    bas: y + ENCRE_BAS_CHIFFRE * corps + DECALAGE_ANCRE,
+  };
+}
+
+// Vrai quand l'encre bornée encre se tient à ECART_NUMERO au moins du
+// disque de la pastille centré en pastille, du bas de la marque de gel,
+// basGel, et du bord du plateau : le coin de la boîte le plus loin du centre
+// reste dans le disque d'une ronde, ou le carré d'une carrée, rétréci de
+// l'écart.
+function degagee({ forme, centre, demiTaille }, pastille, basGel, encre) {
+  const dx = Math.max(0, encre.gauche - pastille.x, pastille.x - encre.droite);
+  const dy = Math.max(0, encre.haut - pastille.y, pastille.y - encre.bas);
+  const lx = Math.max(centre.x - encre.gauche, encre.droite - centre.x);
+  const ly = Math.max(centre.y - encre.haut, encre.bas - centre.y);
+  return (
+    Math.hypot(dx, dy) >= RAYON_PASTILLE + ECART_NUMERO &&
+    encre.haut >= basGel + ECART_NUMERO &&
+    (forme === 'ronde' ? Math.hypot(lx, ly) : Math.max(lx, ly)) <= demiTaille - ECART_NUMERO
+  );
+}
+
 /**
  * La place du numéro d'une table : x et y, le centre de son cadratin —
  * l'ancre d'un <text> centré, text-anchor middle et dominant-baseline
@@ -56,8 +111,20 @@ export function placeGel({ centre, demiTaille }) {
  * remplit, au corps de la bande, plafonné à corpsNumero. Une bande plus
  * étroite que le corps des listes donne ce corps au numéro, son cadratin
  * posé sous la marque de gel : il descend alors sous le centre, mais reste
- * au-dessus du point où il se poserait seul. La place ne dépend pas de la
- * présence de la marque de gel : geler une table ne déplace pas son numéro.
+ * au-dessus du point où il se poserait seul.
+ *
+ * Ce corps est un plafond. L'encre du numéro, que bornent ses chiffres
+ * (AVANCE_CHIFFRE, ENCRE_HAUT_CHIFFRE, ENCRE_BAS_CHIFFRE) et l'arrondi du
+ * rendu (DECALAGE_ANCRE), se tient à ECART_NUMERO de la pastille, du bas de
+ * la marque de gel et du bord du plateau : quand elle ne le fait pas au
+ * plafond, le corps est le plus grand qui l'y tient, cherché par
+ * dichotomie, à la même place. Il ne descend jamais sous le corps des
+ * listes : un numéro que ce corps ne dégage pas le garde. Jusqu'à deux
+ * chiffres, aucun plateau ne réduit le corps.
+ *
+ * La place ne dépend que de la forme, des places et du nombre de chiffres,
+ * pas de la présence de la pastille ni de la marque de gel : un conflit ou
+ * le gel d'une table ne déplace pas son numéro, ni n'en change le corps.
  *
  * @param {import('./tables.js').GeometrieTable} geometrie
  * @param {{libelle?: boolean}} [options]   libelle : vrai quand un libellé suit le numéro
@@ -65,11 +132,31 @@ export function placeGel({ centre, demiTaille }) {
  */
 export function placeNumero(geometrie, { libelle = false } = {}) {
   const { centre, demiTaille } = geometrie;
-  const corps = corpsNumero(demiTaille);
-  if (!libelle) return { x: centre.x, y: centre.y, corps };
   const basGel = placeGel(geometrie).y + DEMI_HAUTEUR_GEL;
-  const corpsMonte = Math.min(corps, Math.max(TAILLE_TEXTE_LISTE_CM, centre.y - basGel));
-  return { x: centre.x, y: Math.max(centre.y - corpsMonte / 2, basGel + corpsMonte / 2), corps: corpsMonte };
+  const corpsMax = corpsNumero(demiTaille);
+  const plafond = libelle ? Math.min(corpsMax, Math.max(TAILLE_TEXTE_LISTE_CM, centre.y - basGel)) : corpsMax;
+  // L'ordonnée de l'ancre au corps c. Avec un libellé, sous le plafond, le
+  // cadratin touche le centre par le bas, ou se pose sous la marque de gel.
+  const ancre = libelle ? (c) => Math.max(centre.y - c / 2, basGel + c / 2) : () => centre.y;
+  const chiffres = String(geometrie.numero).length;
+  const pastille = placePastille(geometrie);
+  const tient = (c) => degagee(geometrie, pastille, basGel, encreBornee(centre.x, ancre(c), c, chiffres));
+  let corps = plafond;
+  if (!tient(plafond)) {
+    // Sous le plafond, un corps plus petit rétrécit l'encre autour de son
+    // ancre, qui ne monte pas : tient est vrai jusqu'à un corps, faux
+    // au-delà.
+    let [bas, haut] = [TAILLE_TEXTE_LISTE_CM, plafond];
+    if (tient(bas)) {
+      for (let pas = 0; pas < PAS_DU_CORPS; pas += 1) {
+        const milieu = (bas + haut) / 2;
+        if (tient(milieu)) bas = milieu;
+        else haut = milieu;
+      }
+    }
+    corps = bas;
+  }
+  return { x: centre.x, y: ancre(corps), corps };
 }
 
 /**

@@ -37,6 +37,7 @@ import { TABLES_INTERFACE } from '../libelles.js';
 import { CONFLITS } from '../marques.js';
 import { appartenanceDeCharge, nomDeCharge } from './vue_plan.js';
 import {
+  ARRET_RETRACE,
   ECART_ANNEAU,
   ECART_DESIGNATION,
   ECART_FOCUS,
@@ -738,6 +739,39 @@ describe('formesTable : les formes d\u{2019}une table, en attributs SVG (§ 7.1,
         assert.equal(gel.x, 10);
         assert.ok(gel.y + DEMI_HAUTEUR_GEL <= 20 - numero.corps / 2 && gel.y > 20 - geometrie.demiTaille, `${forme} de ${places} : ${gel.y}`);
       }
+    }
+    // Le corps suit les chiffres du numéro de la table : trois chiffres le
+    // réduisent sur la plus petite ronde.
+    const petite = geometrieTable({ id: 1, numero: 888, forme: 'ronde', position: { x: 10, y: 20 } }, 2);
+    assert.deepEqual(formesTable(petite).numero, placeNumero(petite));
+    assert.ok(formesTable(petite).numero.corps < corpsNumero(petite.demiTaille));
+  });
+
+  test('le retracé du contour suit le bord du plateau et s\u{2019}interrompt sous le disque de la pastille, à ARRET_RETRACE de son centre', () => {
+    assert.ok(ARRET_RETRACE > 0 && ARRET_RETRACE < RAYON_PASTILLE);
+    const carree = geometrieTable({ id: 2, numero: 2, forme: 'carree', position: { x: 0, y: 0 } }, 12);
+    assert.deepEqual(formesTable(carree).pastille, { x: 90, y: -90 });
+    assert.equal(formesTable(carree).retrace, `M90,${-90 + ARRET_RETRACE} V90 H-90 V-90 H${90 - ARRET_RETRACE}`);
+    const angle = (q, centre) => Math.atan2(q.y - centre.y, q.x - centre.x);
+    const ecart = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+    for (const places of [1, 2, 4, 5, 8, 16, 40]) {
+      const ronde = geometrieTable({ id: 1, numero: 1, forme: 'ronde', position: { x: 10, y: 20 } }, places);
+      const { centre, demiTaille } = ronde;
+      const { pastille, retrace } = formesTable(ronde);
+      const trace = /^M(\S+),(\S+) A(\S+),(\S+) 0 1 1 (\S+),(\S+)$/.exec(retrace);
+      assert.ok(trace !== null, retrace);
+      const [sx, sy, rx, ry, ex, ey] = trace.slice(1).map(Number);
+      assert.deepEqual([rx, ry], [demiTaille, demiTaille]);
+      const debut = { x: sx, y: sy };
+      const fin = { x: ex, y: ey };
+      for (const bout of [debut, fin]) {
+        assert.ok(Math.abs(Math.hypot(bout.x - centre.x, bout.y - centre.y) - demiTaille) < 1e-9, `${places} : ${retrace}`);
+        assert.ok(Math.abs(Math.hypot(bout.x - pastille.x, bout.y - pastille.y) - ARRET_RETRACE) < 1e-9, `${places} : ${retrace}`);
+      }
+      // L'arc part après la pastille, dans le sens des angles croissants, et
+      // la rejoint par le grand tour.
+      assert.ok(ecart(angle(debut, centre), angle(pastille, centre)) > 0, `${places} : ${retrace}`);
+      assert.ok(ecart(angle(fin, centre), angle(pastille, centre)) < 0, `${places} : ${retrace}`);
     }
   });
 

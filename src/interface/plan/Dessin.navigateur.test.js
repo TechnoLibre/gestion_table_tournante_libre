@@ -14,6 +14,7 @@
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
 import { afterEach, beforeAll, describe, expect, test } from 'vitest';
+import { page } from 'vitest/browser';
 import { flushSync, mount, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import '../jetons.css';
@@ -26,9 +27,9 @@ import { texteLivre } from '../../demo/livrees.js';
 import { constante } from '../../geometrie/constantes.js';
 import { designer } from '../../geometrie/designation.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
-import { DEMI_HAUTEUR_GEL } from '../../geometrie/plateau.js';
+import { AVANCE_CHIFFRE, DECALAGE_ANCRE, DEMI_HAUTEUR_GEL, ECART_NUMERO, ENCRE_BAS_CHIFFRE, ENCRE_HAUT_CHIFFRE } from '../../geometrie/plateau.js';
 import { PLANCHER_DIAMETRE } from '../../geometrie/tables.js';
-import { GABARIT_HAUTEUR_LIGNE } from '../../geometrie/texte.js';
+import { GABARIT_HAUTEUR_LIGNE, TAILLE_TEXTE_LISTE_CM } from '../../geometrie/texte.js';
 import { dessinDepuisEcran, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
 import { rechercher } from '../../moteur/recherche.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
@@ -663,11 +664,18 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
         const socle = trames[0].closest('[data-table]').querySelector('[data-socle]');
         expect(Number(socle.getAttribute('r'))).toBeLessThan(Number(enConflit.getAttribute('r')));
         expect(getComputedStyle(pastilles[0]).pointerEvents).toBe('none');
+        // Le retracé du contour épaissi n'existe que sur la table signalée, et
+        // se peint avant ses chaises : il ne couvre pas leur bord.
+        const retraces = tous(svg, 'path.retrace');
+        expect(retraces.length).toBe(1);
+        expect(retraces[0].closest('[data-table]').dataset.table).toBe('1');
+        const chaise = svg.querySelector('[data-table="1"] [data-siege]');
+        expect(retraces[0].compareDocumentPosition(chaise) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         demonterTout();
 
         const tour1 = monterPlan(modeleDe(charge, { tour: 1, proposition: 1, k: 1.5 }), vue).svg;
         expect(plateauDe(tour1, 1).dataset.marque).toBe('contourTable');
-        expect(tous(tour1, `${TRAMES}, [data-pastille]`).length).toBe(0);
+        expect(tous(tour1, `${TRAMES}, [data-pastille], path.retrace`).length).toBe(0);
         expect(getComputedStyle(plateauDe(tour1, 1)).strokeWidth).toBe(getComputedStyle(plateauDe(tour1, 2)).strokeWidth);
 
         const reserve = chargeDeTables([8]);
@@ -684,7 +692,7 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
     const modele = modeleDe(charge, { proposition: 1, k: 1 });
     expect(modele.signalerConflits).toBe(false);
     const { svg } = monterPlan(modele, { k: 1, tx: 150, ty: 250 });
-    expect(tous(svg, `[data-marque=contourConflit], ${TRAMES}`).length).toBe(0);
+    expect(tous(svg, `[data-marque=contourConflit], ${TRAMES}, path.retrace`).length).toBe(0);
     const saine = monterPlan(modeleDe(chargeDeTables([3]), { k: 1 }), { k: 1, tx: 150, ty: 600 }).svg;
     const reference = getComputedStyle(plateauDe(saine, 1));
     for (const id of [1, 2, 3, 4]) {
@@ -723,24 +731,29 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
 // Le numéro d'une table : le <text> qui le porte, dans son groupe.
 const numeroDe = (svg, id) => svg.querySelector(`[data-table="${id}"] [data-numero-table="${id}"]`);
 
+// Le corps auquel le canevas mesure l'encre, en px : le canevas arrondit les
+// bornes d'encre au px, soit un millième du corps à ce corps.
+const CORPS_DE_MESURE = 1000;
+
 // La boîte d'encre d'un <text> d'une ligne, en cm du dessin : sa base
 // alphabétique se lit sur la cellule de son premier glyphe
 // (getExtentOfChar), dont le haut est à l'ascendante de la police sous la
 // base ; l'encre autour de la base et du début se mesure sur un canevas, à
-// la police calculée et au corps du texte.
+// la police calculée, au corps CORPS_DE_MESURE ramené à celui du texte.
 function encreDe(texte) {
   const style = getComputedStyle(texte);
   const corps = Number(texte.getAttribute('font-size'));
   const contexte = new OffscreenCanvas(1, 1).getContext('2d');
-  contexte.font = `${style.fontStyle} ${style.fontWeight} ${corps}px ${style.fontFamily}`;
+  contexte.font = `${style.fontStyle} ${style.fontWeight} ${CORPS_DE_MESURE}px ${style.fontFamily}`;
   const m = contexte.measureText(texte.textContent);
+  const echelle = corps / CORPS_DE_MESURE;
   const cellule = texte.getExtentOfChar(0);
-  const base = cellule.y + m.fontBoundingBoxAscent;
+  const base = cellule.y + m.fontBoundingBoxAscent * echelle;
   return {
-    gauche: cellule.x - m.actualBoundingBoxLeft,
-    droite: cellule.x + m.actualBoundingBoxRight,
-    haut: base - m.actualBoundingBoxAscent,
-    bas: base + m.actualBoundingBoxDescent,
+    gauche: cellule.x - m.actualBoundingBoxLeft * echelle,
+    droite: cellule.x + m.actualBoundingBoxRight * echelle,
+    haut: base - m.actualBoundingBoxAscent * echelle,
+    bas: base + m.actualBoundingBoxDescent * echelle,
   };
 }
 
@@ -865,6 +878,54 @@ describe('le numéro de la table, au centre du plateau (§ 7.7, § 14.5)', () =>
     }
   });
 
+  test('trois et quatre chiffres sur la plus petite table de chaque forme : l\u{2019}encre mesurée reste à ECART_NUMERO de la pastille et de la marque de gel, au corps des listes au moins', () => {
+    for (const forme of ['ronde', 'carree']) {
+      const numeros = [100, 888, 1000, 8888];
+      const capacites = [1, 2, 3, 4].flatMap((places) => numeros.map(() => places));
+      const charge = chargeDeTables(capacites, { formes: capacites.map(() => forme) });
+      charge.tables = charge.tables.map((table, rang) => ({ ...table, numero: numeros[rang % numeros.length] }));
+      const k = 2;
+      const modele = modeleDe(charge, { k });
+      const { svg } = monterPlan(modele, { k, tx: 100, ty: 300 });
+      for (const table of modele.tables) {
+        const quoi = `${forme} de ${table.geometrie.chaises.length}, ${table.numero}`;
+        const numero = numeroDe(svg, table.id);
+        expect(numero.textContent).toBe(String(table.numero));
+        expect(Number(numero.getAttribute('font-size')), quoi).toBeGreaterThanOrEqual(TAILLE_TEXTE_LISTE_CM);
+        const encre = encreDe(numero);
+        const { pastille, gel } = formesTable(table.geometrie);
+        expect(distanceBoite(pastille, encre), quoi).toBeGreaterThanOrEqual(RAYON_PASTILLE + ECART_NUMERO);
+        expect(encre.haut, quoi).toBeGreaterThanOrEqual(gel.y + DEMI_HAUTEUR_GEL + ECART_NUMERO);
+      }
+      demonterTout();
+    }
+  });
+
+  test('les bornes d\u{2019}encre des chiffres de la géométrie couvrent l\u{2019}encre mesurée sur la police chargée, à quarante corps', () => {
+    // Des corps variés, de la plus petite table à la plus grande : l'arrondi
+    // de la ligne de base et des chasses change d'un corps à l'autre. Les
+    // numéros les plus longs vont aux plus petites tables, où l'encre laisse
+    // le moins de marge en px à sa chasse.
+    const numeros = [35160, 9999, 2048, 111, 47, 10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const charge = chargeDeTables(Array.from({ length: 40 }, (_, rang) => rang + 1));
+    charge.tables = charge.tables.map((table, rang) => ({ ...table, numero: numeros[rang % numeros.length] }));
+    const k = 1;
+    const modele = modeleDe(charge, { k });
+    const { svg } = monterPlan(modele, { k, tx: 60, ty: 300 });
+    for (const table of modele.tables) {
+      const numero = numeroDe(svg, table.id);
+      const corps = Number(numero.getAttribute('font-size'));
+      const [x, y] = ['x', 'y'].map((a) => Number(numero.getAttribute(a)));
+      const demi = (String(table.numero).length * AVANCE_CHIFFRE * corps) / 2;
+      const encre = encreDe(numero);
+      const quoi = `${table.numero} : ${JSON.stringify(encre)}`;
+      expect(encre.gauche, quoi).toBeGreaterThanOrEqual(x - demi);
+      expect(encre.droite, quoi).toBeLessThanOrEqual(x + demi);
+      expect(encre.haut, quoi).toBeGreaterThanOrEqual(y - ENCRE_HAUT_CHIFFRE * corps - DECALAGE_ANCRE);
+      expect(encre.bas, quoi).toBeLessThanOrEqual(y + ENCRE_BAS_CHIFFRE * corps + DECALAGE_ANCRE);
+    }
+  });
+
   test('le plan imprimé porte les numéros de l\u{2019}écran, à la même place et au même corps', () => {
     const charge = numerotees();
     const ecran = monterPlan(modeleDe(charge, { k: 1 }), { k: 1, tx: 150, ty: 300 }).svg;
@@ -877,6 +938,100 @@ describe('le numéro de la table, au centre du plateau (§ 7.7, § 14.5)', () =>
     expect(attributs(imprime)).toEqual(attendus);
     for (const numero of tous(imprime, '[data-numero-table]')) expect(visible(numero)).toBe(true);
   });
+});
+
+// --- Le socle de la pastille, dans le plateau (§ 7.5, § 14.5) ------------------------
+
+// Les pixels peints d'un élément, lus sur une capture d'écran au facteur
+// d'échelle 1 : une fonction de (x, y), en px de la fenêtre, vers [r, g, b].
+async function pixelsDe(element) {
+  const boite = element.getBoundingClientRect();
+  const base64 = await page.screenshot({ element, save: false });
+  const octets = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const image = await createImageBitmap(new Blob([octets], { type: 'image/png' }));
+  expect([image.width, image.height]).toEqual([Math.round(boite.width), Math.round(boite.height)]);
+  const contexte = new OffscreenCanvas(image.width, image.height).getContext('2d');
+  contexte.drawImage(image, 0, 0);
+  const { data } = contexte.getImageData(0, 0, image.width, image.height);
+  return ({ x, y }) => {
+    const i = (Math.floor(y - boite.top) * image.width + Math.floor(x - boite.left)) * 4;
+    return [data[i], data[i + 1], data[i + 2]];
+  };
+}
+
+// Vrai quand un pixel a la couleur donnée, à l'arrondi du rendu près.
+const pixelDe = (pixel, couleur) => pixel.every((c, i) => Math.abs(c - couleur[i]) <= 3);
+
+describe('le socle de la pastille, dans le plateau (§ 7.5, § 14.5)', () => {
+  for (const theme of ['clair', 'sombre']) {
+    test(`thème ${theme} : près de la pastille d\u{2019}une table signalée, ronde ou carrée, le contour épaissi garde toute son épaisseur et le fond du plateau ne déborde pas sur le sol`, async () => {
+      await sousTheme(theme, async () => {
+        for (const forme of ['ronde', 'carree']) {
+          const charge = rencontreRepetee();
+          charge.tables = charge.tables.map((table) => (table.id === 1 ? { ...table, forme } : table));
+          const k = 4;
+          const modele = modeleDe(charge, { tour: 2, proposition: 1, k, listes: false });
+          const table = modele.tables.find(({ id }) => id === 1);
+          expect(modele.signalerConflits && table.conflit, forme).toBe(true);
+          expect(table.regime).toBe('sieges');
+          const { centre, demiTaille, chaises } = table.geometrie;
+          const vue = { k, tx: 300 - k * centre.x, ty: 350 - k * centre.y };
+          const { svg, ecran } = monterPlan(modele, vue);
+          svg.style.background = 'var(--couleur-sol)';
+          const pixel = await pixelsDe(svg);
+          const px = 1 / k;
+          const p = formesTable(table.geometrie).pastille;
+          // Hors des chaises, peintes après le plateau, et de leur trait.
+          const horsChaises = (q) => chaises.every((chaise) => Math.hypot(q.x - chaise.x, q.y - chaise.y) > chaise.rayon + 2 * px);
+
+          // Le contour : un px de part et d'autre du bord, dans chaque
+          // moitié du trait de 4 px, des deux côtés de la pastille, entre son
+          // disque et 20 cm de son centre, où le socle couvre les trames.
+          const contour = [];
+          for (const cote of [-1, 1]) {
+            for (const d of [16, 17.5, 19]) {
+              let bord;
+              let normale;
+              if (forme === 'ronde') {
+                const a = Math.atan2(p.y - centre.y, p.x - centre.x) + cote * 2 * Math.asin(d / (2 * demiTaille));
+                normale = { x: Math.cos(a), y: Math.sin(a) };
+                bord = { x: centre.x + demiTaille * normale.x, y: centre.y + demiTaille * normale.y };
+              } else {
+                normale = cote < 0 ? { x: 0, y: -1 } : { x: 1, y: 0 };
+                bord = cote < 0 ? { x: p.x - d, y: p.y } : { x: p.x, y: p.y + d };
+              }
+              for (const sens of [-1, 1]) {
+                const q = { x: bord.x + sens * normale.x * px, y: bord.y + sens * normale.y * px };
+                if (horsChaises(q)) contour.push({ cote, sens, q });
+              }
+            }
+          }
+          expect(new Set(contour.map(({ cote, sens }) => `${cote}${sens}`)).size, forme).toBe(4);
+          const fort = jeton('--couleur-contour-fort');
+          for (const { q } of contour) expect(pixel(ecran(q.x, q.y)), `${forme} : contour en ${q.x}, ${q.y}`).toSatisfy((c) => pixelDe(c, fort));
+
+          // Le sol autour : à plus de 3 px du bord du plateau, hors du
+          // disque de la pastille, à moins de 20 cm de son centre.
+          const dehors = (q) =>
+            forme === 'ronde'
+              ? Math.hypot(q.x - centre.x, q.y - centre.y) > demiTaille + 3 * px
+              : Math.max(Math.abs(q.x - centre.x), Math.abs(q.y - centre.y)) > demiTaille + 3 * px;
+          const sol = [];
+          for (const d of [16.5, 18, 19.5]) {
+            for (let degres = 0; degres < 360; degres += 10) {
+              const a = (degres * Math.PI) / 180;
+              const q = { x: p.x + d * Math.cos(a), y: p.y + d * Math.sin(a) };
+              if (dehors(q) && horsChaises(q)) sol.push(q);
+            }
+          }
+          expect(sol.length, forme).toBeGreaterThan(10);
+          const teinteSol = jeton('--couleur-sol');
+          for (const q of sol) expect(pixel(ecran(q.x, q.y)), `${forme} : sol en ${q.x}, ${q.y}`).toSatisfy((c) => pixelDe(c, teinteSol));
+          demonterTout();
+        }
+      });
+    });
+  }
 });
 
 // --- Les trois sortes de conflit (§ 7.5, § 7.6, § 12.7) ---------------------------

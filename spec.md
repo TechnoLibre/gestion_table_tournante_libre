@@ -2303,10 +2303,16 @@ la diagonale qui monte vers la droite, sauf quand une chaise y toucherait la
 pastille — elle prend alors le milieu de l'intervalle entre deux chaises
 voisines le plus proche de cette diagonale, celui du haut quand deux le sont
 autant. Elle ne couvre ainsi aucune chaise, ni la marque de gel, ni le numéro
-de la table, qui tient le centre (§ 7.7) — jusqu'à deux chiffres sur la plus
-petite table. Sur une table signalée, un socle du fond du plateau, sous la
-pastille comme sous le numéro, les sépare des trames : l'une et l'autre se
-lisent contre le fond du plateau (§ 14.5), et la trame reste peinte autour.
+de la table, qui tient le centre et dont le corps se réduit pour rester à
+l'écart d'elle (§ 7.7). Sur une table signalée, un socle du fond du plateau,
+sous la pastille comme sous le numéro, les sépare des trames : l'une et l'autre
+se lisent contre le fond du plateau (§ 14.5), et la trame reste peinte autour.
+**Le socle de la pastille est rogné au plateau** : la pastille déborde du bord,
+son socle non, et rien du fond du plateau ne se peint sur le sol ni sur
+l'emprise. **Le contour épaissi**, l'un des trois signaux, **se peint
+par-dessus les trames et les socles**, de toute son épaisseur, tout autour du
+plateau et de part et d'autre de la pastille, où seul son disque le couvre ;
+les chaises, posées sur le bord, se peignent par-dessus lui.
 
 **Chaque règle a sa trame, d'une forme et d'une teinte propres** — hachures
 descendantes pour « séparer les appartenances », hachures montantes pour
@@ -2378,11 +2384,35 @@ corps des listes de noms ; il reste donc affiché au zoom où les listes
 disparaissent, d'autant plus grand que la table l'est. Il s'écrit de l'encre des listes, en gras,
 et, sur une table signalée, un socle et un halo du fond du plateau le détachent
 des trames (§ 7.5). Il est transparent au pointeur, et caché aux technologies
-d'assistance : le nom accessible de la table le porte déjà. La géométrie rend
-aussi sa place quand un libellé le suit dessous : il monte alors au-dessus du
-centre, dans la bande qui va du bas de la marque de gel au centre du plateau,
-au corps de cette bande, plafonné au sien et jamais sous celui des listes, sans
-passer sur la marque de gel ; le plan n'affiche aucun libellé de table.
+d'assistance : le nom accessible de la table le porte déjà.
+
+**Le corps du numéro suit aussi ses chiffres**, que les numéros, jamais
+réutilisés, portent au-delà de 99. Quand son encre, à 40 % de la largeur,
+passerait à moins de 1,5 cm de la pastille, du bas de la marque de gel ou du
+bord du plateau, il prend le plus grand corps qui l'en tient à cette
+distance, au même centre. Jusqu'à deux chiffres, aucune table ne le réduit ;
+trois chiffres le réduisent sur les rondes de une à quatre places, quatre sur
+celles de une à six, cinq et plus sur toute table. La géométrie borne l'encre
+par la chasse et la hauteur des chiffres de la police, et par le demi-centimètre
+dont le moteur de rendu peut décaler leur ligne de base ; une épreuve du
+navigateur vérifie ces bornes sur la police chargée. **Le corps ne descend
+jamais sous celui des listes** : à ce corps, au centre, l'encre d'un numéro
+reste à l'écart de la pastille et de la marque de gel, quel que soit son nombre
+de chiffres ; un numéro que ce corps ne tient pas à l'écart du bord — sept
+chiffres sur les plus petites tables — le garde, et peut déborder du plateau.
+La place et le corps ne dépendent ni de la présence de la pastille ni du gel :
+un conflit ou le gel d'une table ne déplace pas son numéro et n'en change pas
+le corps.
+
+La géométrie rend aussi sa place quand un libellé le suit dessous : il monte
+alors au-dessus du centre, dans la bande qui va du bas de la marque de gel au
+centre du plateau, au corps de cette bande, plafonné au sien et jamais sous
+celui des listes, sans passer sur la marque de gel, et réduit selon ses
+chiffres de la même façon. Sur les plus petites tables, rondes ou carrées de
+une à quatre places, la bande est plus étroite que le corps des listes : le
+numéro y prend ce corps quel que soit son nombre de chiffres. Sur ces rondes, à
+trois chiffres ou plus, son encre peut alors toucher la pastille. Le plan
+n'affiche aucun libellé de table.
 
 **Le bloc de noms d'une table se pose à droite de son emprise** — le plateau et
 ses chaises —, à 36 cm d'elle : l'écart laisse passer le contour de focus de la

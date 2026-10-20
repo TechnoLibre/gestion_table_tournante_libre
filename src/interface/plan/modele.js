@@ -22,10 +22,18 @@ export const LARGEUR_ECHELLE_PX = 120;
 export { RAYON_PASTILLE };
 /** Rayon du socle de la pastille, en cm de dessin : un disque du fond du
  *  plateau, centré sous la pastille sur le bord d'une table signalée, qui la
- *  sépare de la trame (§ 14.5). Plus petit que le plateau le plus petit, de
- *  rayon PLANCHER_DIAMETRE / 2 : il n'en couvre qu'un bord, et la trame reste
+ *  sépare de la trame (§ 14.5). Le dessin le rogne au plateau : il ne peint
+ *  rien hors de lui. Plus petit que le plateau le plus petit, de rayon
+ *  PLANCHER_DIAMETRE / 2 : il n'en couvre qu'un bord, et la trame reste
  *  peinte sur le reste. */
 export const RAYON_SOCLE_PASTILLE = 20;
+/** Distance entre le centre de la pastille et chaque bout du retracé du
+ *  contour épaissi, en cm de dessin. Plus courte que RAYON_PASTILLE : les
+ *  coins des bouts du trait, coupés droits, restent sous le disque tant que
+ *  le demi-trait, 2 px d'écran, fait moins de 7 cm, soit à tout zoom où le
+ *  disque dépasse 9 px de diamètre. Le centre de la pastille reste hors du
+ *  trait. */
+export const ARRET_RETRACE = 12;
 /** Corps du chiffre de la pastille, en cm de dessin. */
 export const TAILLE_TEXTE_PASTILLE_CM = 18;
 /** Épaisseur du halo du numéro d'une table, en part de son corps : un trait
@@ -68,9 +76,16 @@ export const TRACE_GEL = 'M0,-8 L7,-4 L7,4 L0,8 L-7,4 L-7,-4 Z';
  * Les formes d'une table en attributs SVG, en cm : plateau et emprise —
  * disques d'une ronde ({cx, cy, r}), carrés aux côtés parallèles aux axes
  * d'une carrée ({x, y, width, height}) —, la place du numéro, au centre du
- * plateau ({x, y, corps}, placeNumero sans libellé), le centre de la
- * pastille, sur le bord du plateau en haut à droite (placePastille), et
- * celui de la marque de gel, dans le plateau, RETRAIT_GEL sous son haut.
+ * plateau, au corps que permettent sa largeur et les chiffres du numéro
+ * ({x, y, corps}, placeNumero sans libellé), le centre de la
+ * pastille, sur le bord du plateau en haut à droite (placePastille),
+ * celui de la marque de gel, dans le plateau, RETRAIT_GEL sous son haut, et
+ * le retracé du contour (retrace, l'attribut d d'un <path> ouvert) : le bord
+ * du plateau, interrompu sous le disque de la pastille, de ARRET_RETRACE de
+ * part et d'autre de son centre. Celui d'une ronde part de la pastille dans
+ * le sens des angles croissants et la rejoint par le grand arc ; celui
+ * d'une carrée, dont la pastille tient le coin haut droit, descend le côté
+ * droit et fait le tour jusqu'au côté haut.
  *
  * @param {import('../../geometrie/tables.js').GeometrieTable} geometrie
  */
@@ -79,14 +94,32 @@ export function formesTable(geometrie) {
   const ronde = forme === 'ronde';
   const dessiner = (demi) =>
     ronde ? { cx: centre.x, cy: centre.y, r: demi } : { x: centre.x - demi, y: centre.y - demi, width: 2 * demi, height: 2 * demi };
+  const pastille = placePastille(geometrie);
   return {
     ronde,
     plateau: dessiner(demiTaille),
     emprise: dessiner(rayonEmprise),
     numero: placeNumero(geometrie),
-    pastille: placePastille(geometrie),
+    pastille,
     gel: placeGel(geometrie),
+    retrace: ronde ? retraceRonde(centre, demiTaille, pastille) : retraceCarree(centre, demiTaille),
   };
+}
+
+// Le bord d'une ronde, de l'angle de la pastille plus l'angle que sous-tend
+// une corde de ARRET_RETRACE, jusqu'à l'angle de la pastille moins le même :
+// le grand arc, angles croissants.
+function retraceRonde(centre, demiTaille, pastille) {
+  const angle = Math.atan2(pastille.y - centre.y, pastille.x - centre.x);
+  const ouverture = 2 * Math.asin(ARRET_RETRACE / (2 * demiTaille));
+  const auBord = (a) => `${centre.x + demiTaille * Math.cos(a)},${centre.y + demiTaille * Math.sin(a)}`;
+  return `M${auBord(angle + ouverture)} A${demiTaille},${demiTaille} 0 1 1 ${auBord(angle - ouverture)}`;
+}
+
+// Le bord d'une carrée, du côté droit sous le coin haut droit jusqu'au côté
+// haut à gauche de ce coin.
+function retraceCarree({ x, y }, demi) {
+  return `M${x + demi},${y - demi + ARRET_RETRACE} V${y + demi} H${x - demi} V${y - demi} H${x + demi - ARRET_RETRACE}`;
 }
 
 /**

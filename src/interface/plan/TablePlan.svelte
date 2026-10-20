@@ -31,16 +31,26 @@
   // centré sous la pastille, la sépare de leurs traits : la pastille se
   // mesure contre le fond du plateau (§ 14.5), et les trames restent peintes
   // autour. Le socle précède la marque de gel et les chaises, qui se peignent
-  // sur lui.
+  // sur lui. Un <clipPath> de la forme du plateau, dans les <defs> du groupe,
+  // le rogne au plateau : hors de lui, le socle ne peint rien. Son
+  // identifiant, <prefixe>-plateau-<table>, est unique dans le document,
+  // comme ceux des motifs. Les trames et les socles couvrent la moitié
+  // intérieure du contour épaissi ; un retracé (.retrace), le bord du
+  // plateau ouvert sous le disque de la pastille (formesTable), sans
+  // remplissage ni marque, le repeint par-dessus eux, à toute son
+  // épaisseur, avant la marque de gel et les chaises. Le centre de la
+  // pastille reste sur son socle, hors du trait. Le plateau seul porte la
+  // marque contourConflit, que lisent les aides.
   //
   // Le numéro de la table [data-numero-table] se pose au centre du plateau,
-  // au corps que la géométrie tire de sa largeur (§ 7.7), à tout zoom et sur
-  // le papier. Il suit les trames, les socles et la marque de gel : sur une
-  // table signalée, un socle [data-socle-numero] du fond du plateau, centré
-  // sous lui, et un halo du même fond, son trait peint sous le chiffre, le
-  // détachent des trames, et il se mesure contre le fond du plateau
-  // (§ 14.5). Transparent au pointeur, caché aux technologies d'assistance
-  // — le nom accessible du groupe porte déjà le numéro.
+  // au corps que la géométrie tire de sa largeur et de ses chiffres (§ 7.7),
+  // à tout zoom et sur le papier. Il suit les trames, les socles et la
+  // marque de gel : sur une table signalée, un socle [data-socle-numero] du
+  // fond du plateau, centré sous lui, et un halo du même fond, son trait
+  // peint sous le chiffre, le détachent des trames, et il se mesure contre
+  // le fond du plateau (§ 14.5). Transparent au pointeur, caché aux
+  // technologies d'assistance — le nom accessible du groupe porte déjà le
+  // numéro.
   //
   // Le groupe de la table porte id="table-<id>", celui d'une chaise
   // id="siege-<table>-<siège>" : la racine du plan, seul arrêt de tabulation,
@@ -87,6 +97,8 @@
   const poignee = $derived(table.geometrie.poignee);
   const signal = $derived(signaler && table.conflit);
   const hachure = $derived(`url(#${prefixe}-hachure)`);
+  // L'identifiant de la forme du plateau qui rogne le socle de la pastille.
+  const rognure = $derived(`${prefixe}-plateau-${table.id}`);
   // Les marques de désignation de la table, autour de l'emprise.
   const autour = $derived(formesTable({ ...table.geometrie, rayonEmprise: table.geometrie.rayonEmprise + ECART_DESIGNATION }));
   const cadreFocus = $derived(carreAutour(table.geometrie.centre, table.geometrie.rayonEmprise + ECART_FOCUS));
@@ -123,8 +135,18 @@
         <rect class="trame" data-marque={trame.marque} fill="url(#{prefixe}-trame-{trame.regle})" {...formes.plateau} />
       {/if}
     {/each}
-    <circle class="socle" data-socle cx={formes.pastille.x} cy={formes.pastille.y} r={RAYON_SOCLE_PASTILLE} />
+    <defs>
+      <clipPath id={rognure}>
+        {#if formes.ronde}
+          <circle {...formes.plateau} />
+        {:else}
+          <rect {...formes.plateau} />
+        {/if}
+      </clipPath>
+    </defs>
+    <circle class="socle" data-socle clip-path="url(#{rognure})" cx={formes.pastille.x} cy={formes.pastille.y} r={RAYON_SOCLE_PASTILLE} />
     <circle class="socle" data-socle-numero cx={formes.numero.x} cy={formes.numero.y} r={formes.numero.corps * SOCLE_NUMERO} />
+    <path class="plateau conflit retrace" d={formes.retrace} />
   {/if}
   {#if table.gelee}
     <path class="gel" data-marque="gel" d={TRACE_GEL} transform="translate({formes.gel.x},{formes.gel.y})" />
@@ -231,6 +253,12 @@
     stroke-width: 4;
   }
 
+  /* Le retracé du contour épaissi : son trait seul, transparent au pointeur. */
+  .plateau.retrace {
+    fill: none;
+    pointer-events: none;
+  }
+
   .trame {
     stroke: none;
     pointer-events: none;
@@ -248,7 +276,9 @@
   }
 
   /* Le numéro de la table : l'encre des listes, sur un halo du fond du
-     plateau que paint-order peint avant le chiffre. */
+     plateau que paint-order peint avant le chiffre. geometricPrecision
+     garde aux chiffres leur chasse exacte à tout corps, sans l'arrondir au
+     px : la largeur du numéro est celle que la géométrie borne (plateau.js). */
   .numero {
     fill: var(--couleur-liste-texte);
     stroke: var(--couleur-table-fond);
@@ -256,6 +286,7 @@
     paint-order: stroke;
     font-family: var(--police-interface);
     font-weight: 700;
+    text-rendering: geometricPrecision;
     pointer-events: none;
   }
 
