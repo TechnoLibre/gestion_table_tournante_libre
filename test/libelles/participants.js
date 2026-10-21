@@ -19,6 +19,8 @@ export const EXEMPLES = [
   ['ETIQUETTE_INVALIDE', { valeur: 'ressources\u{0009}humaines', raison: 'controle', remede: null }],
   ['ETIQUETTES_EN_TROP', { nombre: 21, remede: null }],
   ['ORTHOGRAPHE_RETENUE', { saisie: 'Finance', retenue: 'finance' }],
+  ['ORGANISATION_INCONNUE', { organisation: 'Atelier Pivoine', remede: null }],
+  ['CONFLIT_PROPRE_ORGANISATION', { personne: 'Iris Ombrelle', organisation: 'Club des Merles', remede: null }],
   // Libellés figés du journal
   ['ENTREE_AJOUTER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
   ['ENTREE_MODIFIER_PARTICIPANT', { personne: 'Iris Ombrelle', champs: ['courriel'], devenu: null }],
@@ -26,6 +28,8 @@ export const EXEMPLES = [
   ['ENTREE_REINTEGRER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
   ['ENTREE_SUPPRIMER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
   ['ENTREE_CHANGER_ETIQUETTES', { personne: 'Iris Ombrelle', ajoutees: ['Montréal', 'finance'], retirees: ['bénévole'] }],
+  ['ENTREE_AJOUTER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }],
+  ['ENTREE_RETIRER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }],
   ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
   // La présence par tour
   ['RESERVATIONS_SUSPENDUES_AUX_TOURS', { participant: 1, personne: 'Iris Ombrelle', reservations: 2, tours: [3, 4], titres: 1 }],
@@ -96,6 +100,39 @@ export const TEXTES = [
   ['ENTREE_EXCLURE_PARTICIPANT', { personne: 'Iris Ombrelle', ajuste: true }, 'Exclu Iris Ombrelle ; placement retenu ajusté'],
   ['ENTREE_REINTEGRER_PARTICIPANT', { personne: 'Iris Ombrelle', ajuste: true }, 'Réintégré Iris Ombrelle ; placement retenu ajusté'],
   ['ENTREE_SUPPRIMER_PARTICIPANT', { personne: 'Iris Ombrelle', ajuste: true }, 'Supprimé Iris Ombrelle ; placement retenu ajusté'],
+  [
+    'ENTREE_SUPPRIMER_PARTICIPANT',
+    { personne: 'Iris Ombrelle', ajuste: false, conflits: { renommee: null, retirees: ['Club des Merles'], propres: 0 } },
+    'Supprimé Iris Ombrelle ; « Club des Merles » quitte les conflits',
+  ],
+  [
+    'ENTREE_MODIFIER_PARTICIPANT',
+    {
+      personne: 'Iris Ombrelle',
+      champs: ['organisation'],
+      devenu: null,
+      conflits: { renommee: { de: 'Club des Merles', vers: 'Club des Mésanges' }, retirees: [], propres: 1 },
+    },
+    'Modifié Iris Ombrelle : organisation ; « Club des Merles » devient « Club des Mésanges » dans les conflits ; ' +
+      '1 conflit avec sa propre organisation retiré',
+  ],
+  [
+    'ENTREE_IMPORTER_PARTICIPANTS',
+    { mode: 'remplacer', ajoutes: 3, misAJour: 0, retires: 4, conflits: { renommee: null, retirees: ['Club des Merles', 'Société Alpha'], propres: 0 } },
+    'Remplacé la liste par import : 4 retirés, 3 ajoutés ; « Club des Merles » et « Société Alpha » quittent les conflits',
+  ],
+  ['ENTREE_AJOUTER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }, 'Conflits de Iris Ombrelle : ajouté « Société Alpha »'],
+  ['ENTREE_RETIRER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }, 'Conflits de Iris Ombrelle : retiré « Société Alpha »'],
+  [
+    'ORGANISATION_INCONNUE',
+    { organisation: 'Atelier Pivoine', remede: null },
+    "L'organisation « Atelier Pivoine » n'existe pas : aucune personne de l'événement ne la porte.",
+  ],
+  [
+    'CONFLIT_PROPRE_ORGANISATION',
+    { personne: 'Iris Ombrelle', organisation: 'Club des Merles', remede: null },
+    "Iris Ombrelle appartient à « Club des Merles » : une organisation n'est pas en conflit avec elle-même.",
+  ],
   [
     'ENTREE_IMPORTER_PARTICIPANTS',
     { mode: 'mettreAJour', ajoutes: 1, misAJour: 2, retires: 0, ajuste: true },

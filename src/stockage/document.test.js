@@ -1431,8 +1431,8 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
       ],
     );
     assert.deepEqual(
-      PARTICIPANT.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
-      [['exclu', false], ['etiquettes', true], ['presence', true]],
+      PARTICIPANT.champs.slice(-4).map(([cle, regle]) => [cle, regle.optionnel]),
+      [['exclu', false], ['etiquettes', true], ['presence', true], ['conflits', true]],
     );
     assert.deepEqual(
       TABLE.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
@@ -1847,6 +1847,7 @@ describe('configurationDepuisCharge : étiquettes, objectifs, mode et cases (con
 // poids 1 : une liste neuve.
 const prioritesParDefaut = () =>
   [
+    'conflitsOrganisation',
     'excedentCollisions',
     'rencontresRepetees',
     'collisionsCumulees',
@@ -1905,7 +1906,7 @@ describe('l’ordre des priorités : un réglage facultatif, absent à son défa
     trois.splice(trois.findIndex(([{ critere }]) => critere === 'collisionsCumulees'), 1);
     trois[1].splice(1, 0, { critere: 'collisionsCumulees', poids: 2 });
     const animateursDAbord = prioritesParDefaut();
-    animateursDAbord.splice(1, 0, ...animateursDAbord.splice(5, 1));
+    animateursDAbord.splice(1, 0, ...animateursDAbord.splice(6, 1));
     const seuls = prioritesParDefaut().reverse();
     seuls.push(...seuls.splice(seuls.findIndex(([{ critere }]) => critere === 'ecartAuPlafondAPrioriMax'), 1));
     const variantes = [
@@ -2025,8 +2026,12 @@ describe('priorites : le lecteur de l’ordre des priorités (§ 5.7, § 8.9)', 
     // l'excédent, et non après les rencontres répétées qui les précèdent
     // dans l'ordre du registre.
     charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'animateursNonRencontres');
-    const [ecart, partage, cumulees, repetees, animateurs, redondance] = prioritesReglees();
-    assert.deepEqual(priorites(charge), [ecart, partage, animateurs, cumulees, repetees, redondance]);
+    const [ecart, partage, cumulees, repetees, animateurs, redondance, conflits] = prioritesReglees();
+    assert.deepEqual(priorites(charge), [ecart, partage, animateurs, cumulees, repetees, redondance, conflits]);
+    // Le conflit d'organisation, premier de l'ordre par défaut, se place en
+    // tête.
+    charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'conflitsOrganisation');
+    assert.deepEqual(priorites(charge), [conflits, ecart, partage, cumulees, repetees, animateurs, redondance]);
   });
 });
 
@@ -2138,7 +2143,7 @@ describe('la présence par tour : participant.presence et les absents d’un pla
 
   test('presence est facultative et vient après etiquettes ; absents est facultatif et vient après reserve', () => {
     const PARTICIPANT = regleDuChamp(CHARGE_SCHEMA, 'participants').element;
-    assert.deepEqual(PARTICIPANT.champs.at(-1)[0], 'presence');
+    assert.deepEqual(PARTICIPANT.champs.at(-2)[0], 'presence');
     assert.deepEqual(TOUR.champs.map(([cle, regle]) => [cle, regle.optionnel]), [['sieges', false], ['reserve', false], ['absents', true]]);
   });
 
@@ -2524,5 +2529,65 @@ describe('le parcours de forme sans chemin : la même faute que le parcours qui 
     const entree = entreeDeCourse();
     entree.course.releves[1].placement[0]['a b'] = 1;
     assert.equal(premiereFaute(entree, ENTREE_DE_COURSE), 'course.releves[1].placement[0]["a b"]');
+  });
+});
+
+describe('les conflits d’organisation : participant.conflits, facultatif (§ 4, § 8.9)', () => {
+  const VALLON = 'Chorale du Vallon';
+  const GAMMA = 'Cercle Gamma';
+  // Le document valide, où le participant de rang rang nomme conflits.
+  const avecConflits = (rang, conflits) => abime((d) => { d.charge.participants[rang].conflits = conflits; });
+
+  test('absent, rien ne s’écrit ; présent, la liste se lit telle qu’écrite et s’écrit rangée par unités de code, en dernier', () => {
+    const lu = analyser(avecConflits(3, [VALLON]));
+    assert.deepEqual(lu.charge.participants[3].conflits, [VALLON]);
+    // Une personne sans organisation nomme deux organisations, hors de
+    // l'ordre des unités de code : « C » (0x43) avant « C » suivi de « h ».
+    const desordre = analyser(avecConflits(2, [VALLON, GAMMA]));
+    const ecrit = serialiser(desordre.charge, desordre.entete);
+    assert.ok(ecrit.includes(`"exclu":true,"conflits":["${GAMMA}","${VALLON}"]}`), ecrit);
+    assert.deepEqual(analyser(ecrit).charge.participants[2].conflits, [GAMMA, VALLON]);
+    const sans = analyser(abime(() => {}));
+    assert.ok(!serialiser(sans.charge, sans.entete).includes('"conflits"'));
+  });
+
+  test('une liste vide, répétée, d’autre chose que des textes non vides : FORME, nommée par son chemin', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['une liste vide', avecConflits(3, []), 'FORME', 'charge.participants[3].conflits'],
+      ['un doublon', avecConflits(3, [VALLON, VALLON]), 'FORME', 'charge.participants[3].conflits'],
+      ['un texte vide', avecConflits(3, [VALLON, '']), 'FORME', 'charge.participants[3].conflits[1]'],
+      ['un nombre', avecConflits(3, [7]), 'FORME', 'charge.participants[3].conflits[0]'],
+      ['null', avecConflits(3, null), 'FORME', 'charge.participants[3].conflits'],
+      ['un texte au lieu d’une liste', avecConflits(3, VALLON), 'FORME', 'charge.participants[3].conflits'],
+    ]), []);
+  });
+
+  test('sa propre organisation : FORME au rang qui la nomme ; une organisation que nul ne porte : REFERENCE', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['la sienne', avecConflits(1, [GAMMA, VALLON]), 'FORME', 'charge.participants[1].conflits[1]'],
+      ['inconnue', avecConflits(0, [GAMMA, 'Cercle Gama']), 'REFERENCE', 'charge.participants[0].conflits[1]'],
+      // L'égalité de chaînes décide : une autre casse n'est pas la même
+      // organisation.
+      ['une autre casse', avecConflits(3, ['chorale du vallon']), 'REFERENCE', 'charge.participants[3].conflits[0]'],
+    ]), []);
+    // L'organisation d'une personne exclue existe ; la personne sans
+    // organisation, exclue, peut nommer celle des autres.
+    const exclue = abime((d) => {
+      d.charge.participants[2].organisation = 'Atelier Pivoine';
+      d.charge.participants[3].conflits = ['Atelier Pivoine'];
+    });
+    assert.deepEqual(analyser(exclue).charge.participants[3].conflits, ['Atelier Pivoine']);
+  });
+
+  test('configurationDepuisCharge en porte une copie ; absente, la configuration ne la porte pas', () => {
+    const { charge } = analyser(avecConflits(3, [VALLON]));
+    geler(charge);
+    const configuration = configurationDepuisCharge(charge);
+    assert.deepEqual(configuration.participants[3].conflits, [VALLON]);
+    assert.ok(!Object.hasOwn(configuration.participants[0], 'conflits'));
+    configuration.participants[3].conflits.push(GAMMA);
+    assert.deepEqual(charge.participants[3].conflits, [VALLON]);
+    // Le moteur relie les deux organisations.
+    assert.equal(normaliser(configuration).pairesEnConflit > 0, true);
   });
 });

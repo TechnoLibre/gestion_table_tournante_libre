@@ -4,15 +4,16 @@
 <script>
   // Le plan de salle et sa vue (§ 7.2, § 7.3, § 7.5, § 7.7, § 8.4, § 8.5) :
   // la barre de vue, la légende des conflits quand elle est ouverte — les
-  // règles actives des réglages (legendeConflits) —, puis la surface
-  // [data-surface] qui porte le bandeau du plan, le <svg data-plan> et
-  // l'échelle graphique. Ouvrir la légende change la taille du cadre, que le
-  // ResizeObserver relit comme tout autre changement. Le <svg> racine n'a ni
-  // viewBox, ni bordure, ni remplissage : son unité est le pixel CSS, et le
-  // dessin vit dans un seul groupe <g data-vue>, dont l'attribut transform
-  // est la vue, {k, tx, ty}. Un zoom n'écrit que cet attribut sous la
-  // racine ; l'échelle et le bandeau, hors du <svg>, gardent leur taille à
-  // l'écran.
+  // règles que les réglages cochent, et le conflit d'organisation quand la
+  // table d'évaluation le dit avec un objet (legendeConflits) —, puis la
+  // surface [data-surface] qui porte le bandeau du plan, le <svg data-plan>
+  // et l'échelle graphique. Ouvrir la légende change la taille du cadre, que
+  // le ResizeObserver relit comme tout autre changement. Le <svg> racine n'a
+  // ni viewBox, ni bordure, ni remplissage : son unité est le pixel CSS, et
+  // le dessin vit dans un seul groupe <g data-vue>, dont l'attribut
+  // transform est la vue, {k, tx, ty}. Un zoom n'écrit que cet attribut sous
+  // la racine ; l'échelle et le bandeau, hors du <svg>, gardent leur taille
+  // à l'écran.
   //
   // Le composant est le seul à calculer le modèle de dessin (modele.js), de
   // l'état des places du tour montré, au k de sa vue. La vue est null tant
@@ -94,6 +95,7 @@
   import { controlerCapacite } from '../../application/capacite.js';
   import { constante } from '../../geometrie/constantes.js';
   import { ajuster as vueAjustee, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
+  import { evaluation } from '../propositions/modele.js';
   import { effetDe } from '../raccourcis.js';
   import BandeauPlan from './BandeauPlan.svelte';
   import BarreVue from './BarreVue.svelte';
@@ -168,8 +170,10 @@
   const englobantPlan = $derived(englobantDuTour(etat));
   const nomDe = $derived(nomDeCharge(charge));
   const organisationDe = $derived(organisationDeCharge(charge));
-  // Les règles actives des réglages, que la légende montre.
-  const legende = $derived(legendeConflits(charge.reglages));
+  // Les règles actives, que la légende montre : celles que les réglages
+  // cochent, et le conflit d'organisation quand la table d'évaluation de la
+  // charge le dit avec un objet.
+  const legende = $derived(legendeConflits(charge.reglages, evaluation(charge).table?.criteres ?? []));
   const selection = $derived($ui.selection);
   const pose = $derived($ui.pose);
   // Le placement que le plan montre, que la barre de vue nomme.

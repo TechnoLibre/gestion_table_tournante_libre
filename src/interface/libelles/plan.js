@@ -143,6 +143,7 @@ export const TABLE = new Map([
   // de violations.
   ['plan.infobulle.table', ({ numero }) => `Table ${numero}`],
   ['plan.infobulle.nombre', ({ nombre }) => ` : ${compte(nombre, 'conflit', 'conflits')}`],
+  ['plan.infobulle.conflitsOrganisation', "Conflit d'organisation : "],
   ['plan.infobulle.separerOrganisations', 'Même organisation ('],
   ['plan.infobulle.finOrganisation', ') : '],
   ['plan.infobulle.nouveauxVoisins', 'Voisins revus : '],
@@ -156,9 +157,11 @@ export const TABLE = new Map([
   // le chiffre que porte son échantillon.
   ['plan.legende.ouvrir', 'Légende'],
   ['plan.legende.titre', 'Légende des conflits'],
+  ['plan.legende.conflitsOrganisation', "Conflits d'organisation : organisations en conflit à la table"],
   ['plan.legende.separerOrganisations', 'Séparer les organisations : même organisation à la table'],
   ['plan.legende.nouveauxVoisins', 'Nouveaux voisins à chaque tour : voisins revus'],
   ['plan.legende.nouvelleTable', 'Nouvelle table à chaque tour : table revue'],
+  ['plan.legende.forme.hachuresHorizontales', '(hachures horizontales)'],
   ['plan.legende.forme.hachuresDescendantes', '(hachures descendantes)'],
   ['plan.legende.forme.hachuresMontantes', '(hachures montantes)'],
   ['plan.legende.forme.points', '(points)'],

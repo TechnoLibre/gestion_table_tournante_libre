@@ -90,7 +90,7 @@ describe('conflitsDesGroupes : les conflits de chaque groupe, de tout niveau', (
 
 describe('reglesParPersonne et lignesDeConflit', () => {
   test('les règles de chaque personne en conflit, sans doublon, dans l’ordre de REGLES', () => {
-    assert.deepEqual(REGLES, ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable']);
+    assert.deepEqual(REGLES, ['conflitsOrganisation', 'separerOrganisations', 'nouveauxVoisins', 'nouvelleTable']);
     const regles = reglesParPersonne([C2, C1, conflit(2, 1, 4, 'nouveauxVoisins', [1, 2]), C3]);
     assert.deepEqual(
       [...regles].sort(([a], [b]) => a - b),

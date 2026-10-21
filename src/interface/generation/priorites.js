@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le modèle de l'éditeur de l'ordre des priorités (§ 5.3, § 5.7, A11, A12),
-// pur : Priorites.svelte le câble. Une liste de priorités range les sept
+// pur : Priorites.svelte le câble. Une liste de priorités range les huit
 // critères en paliers, du premier au dernier : [[{critere, poids}, …], …].
 //
 // Les faits du registre des critères (contrainte 35) se lisent par

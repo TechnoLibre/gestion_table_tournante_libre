@@ -1840,6 +1840,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       await uneEntree(r, 'le poids 3');
     });
     const reglee = [
+      [{ critere: 'conflitsOrganisation', poids: 1 }],
       [{ critere: 'excedentCollisions', poids: 1 }, { critere: 'toursHorsObjectif', poids: 3 }],
       [{ critere: 'rencontresRepetees', poids: 1 }],
       [{ critere: 'collisionsCumulees', poids: 1 }],
@@ -1872,16 +1873,17 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(appliques).toEqual(reglee.map((palier) => palier.filter(({ critere }) => compte.has(critere))).filter((palier) => palier.length > 0));
     memoire.paliersRegles = appliques;
 
-    // L'image montre le numéro du palier partagé, le premier, ses deux
-    // critères et leurs poids, et la ligne des animateurs qui dit
-    // « décoché » ; le choix du mode, au-dessus, et « Rétablir l'ordre par
-    // défaut », au-dessous, n'entrent pas dans la même fenêtre qu'eux.
+    // L'image montre le numéro du palier partagé, le deuxième, sous celui du
+    // conflit d'organisation, ses deux critères et leurs poids, et la ligne
+    // des animateurs qui dit « décoché » ; le choix du mode, au-dessus, et
+    // « Rétablir l'ordre par défaut », au-dessous, n'entrent pas dans la
+    // même fenêtre qu'eux.
     document.activeElement?.blur();
-    const numero = editeur().querySelector(':scope > [data-palier="0"] > p');
+    const numero = editeur().querySelector(':scope > [data-palier="1"] > p');
     await cadrerDansLaSurface([numero, critere('animateursNonRencontres').querySelector('.etat')]);
     await photographier(m, '10a-ordre-priorites', {
       condition: [
-        '[data-priorites] > [data-palier="0"] > p',
+        '[data-priorites] > [data-palier="1"] > p',
         '[data-priorites] [data-priorite="excedentCollisions"]',
         '[data-priorites] input[data-champ="poids.excedentCollisions"]',
         '[data-priorites] [data-priorite="toursHorsObjectif"]',

@@ -5,11 +5,12 @@
 
 <script>
   // Les motifs du plan (§ 7.5, § 7.6) : la hachure d'une place à pourvoir —
-  // des traits --couleur-hachure sur le fond de la chaise — et les trois
+  // des traits --couleur-hachure sur le fond de la chaise — et les quatre
   // trames de conflit, une par règle (CONFLITS, marques.js), chacune d'une
-  // forme et d'une teinte : hachures descendantes pour séparer les
-  // organisations, hachures montantes pour nouveaux voisins, points pour
-  // nouvelle table. L'identifiant d'une trame est <prefixe>-trame-<règle>.
+  // forme et d'une teinte : hachures horizontales pour le conflit
+  // d'organisation, hachures descendantes pour séparer les organisations,
+  // hachures montantes pour nouveaux voisins, points pour nouvelle table.
+  // L'identifiant d'une trame est <prefixe>-trame-<règle>.
   //
   // La hachure peint son fond, opaque, puis ses traits. Une trame de conflit
   // ne peint pas de fond : elle se pose sur le plateau, et une table qui
@@ -35,6 +36,11 @@
   <pattern id="{prefixe}-hachure" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
     <rect class="fond-chaise" width="8" height="8" />
     <line class="trait-hachure" x1="4" y1="0" x2="4" y2="8" />
+  </pattern>
+  <!-- Le conflit d'organisation : un trait horizontal par carreau. -->
+  <pattern id="{prefixe}-trame-conflitsOrganisation" patternUnits="userSpaceOnUse" width="12" height="12">
+    <line class="halo" x1="0" y1="6" x2="12" y2="6" />
+    <line class="trait evitement-conflit" x1="0" y1="6" x2="12" y2="6" />
   </pattern>
   <!-- Séparer les organisations : un trait du carreau, tourné de −45°, descend vers la droite. -->
   <pattern
@@ -82,6 +88,10 @@
 
   .trait {
     stroke-width: 4;
+  }
+
+  .trait.evitement-conflit {
+    stroke: var(--couleur-conflit-evitement);
   }
 
   .trait.organisation-conflit {

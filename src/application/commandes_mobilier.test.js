@@ -1635,11 +1635,13 @@ const HORS = 'toursHorsObjectif';
 const REPETEES = 'rencontresRepetees';
 const ANIMATEURS = 'animateursNonRencontres';
 const REDONDANCE = 'redondance';
+const CONFLITS = 'conflitsOrganisation';
 
-// Une liste de priorités : chaque palier, un nom seul au poids 1, ou une
-// liste de [nom, poids].
+// Une liste de priorités : le conflit d'organisation seul au premier palier,
+// comme dans l'ordre par défaut, puis chaque palier donné, un nom seul au
+// poids 1, ou une liste de [nom, poids].
 const ordre = (...paliers) =>
-  paliers.map((palier) =>
+  [CONFLITS, ...paliers].map((palier) =>
     typeof palier === 'string' ? [{ critere: palier, poids: 1 }] : palier.map(([critere, poids]) => ({ critere, poids })),
   );
 // L'ordre par défaut, écrit en clair.
@@ -1657,14 +1659,14 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
     const melange = ordre([[CUMULEES, 3], [EXCEDENT, 2]], REPETEES, ECART, HORS, ANIMATEURS, REDONDANCE);
     const regle = accepter('changerPriorites', charge, { paliers: melange });
     assert.deepEqual(regle.charge.reglages.priorites, COLLISIONS_JOINTES);
-    assert.equal(regle.libelle, 'Ordre des priorités : « collisions cumulées » au palier 1 sur 6, avec « excédent de collisions »');
+    assert.equal(regle.libelle, 'Ordre des priorités : « collisions cumulées » au palier 2 sur 7, avec « excédent de collisions »');
     assert.deepEqual(regle.avertissements, []);
     assert.equal(texteDe(accepter('changerPriorites', charge, { paliers: COLLISIONS_JOINTES }).charge), texteDe(regle.charge));
 
     const defaut = accepter('changerPriorites', regle.charge, { paliers: DEFAUT });
     assert.equal(Object.hasOwn(defaut.charge.reglages, 'priorites'), false);
     assert.equal(texteDe(defaut.charge), texteDe(charge));
-    assert.equal(defaut.libelle, 'Ordre des priorités : « collisions cumulées » au palier 3 sur 7');
+    assert.equal(defaut.libelle, 'Ordre des priorités : « collisions cumulées » au palier 4 sur 8');
 
     refuse(() => COMMANDES.get('changerPriorites')(charge, { paliers: DEFAUT }), 'SANS_EFFET', { commande: 'changerPriorites', remede: null });
     refuse(() => COMMANDES.get('changerPriorites')(regle.charge, { paliers: melange }), 'SANS_EFFET');
@@ -1677,33 +1679,33 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
     // passe ne l'est pas.
     assert.equal(
       libelleDe(charge, ordre(EXCEDENT, REPETEES, CUMULEES, HORS, ECART, ANIMATEURS, REDONDANCE)),
-      'Ordre des priorités : « tours hors objectif » au palier 4 sur 7',
+      'Ordre des priorités : « tours hors objectif » au palier 5 sur 8',
     );
     // Un palier porté d'un bout à l'autre.
     assert.equal(
       libelleDe(charge, ordre(REDONDANCE, EXCEDENT, REPETEES, CUMULEES, ECART, HORS, ANIMATEURS)),
-      "Ordre des priorités : « redondance d'organisation » au palier 1 sur 7",
+      "Ordre des priorités : « redondance d'organisation » au palier 2 sur 8",
     );
     assert.equal(
       libelleDe(charge, ordre(EXCEDENT, REPETEES, CUMULEES, ECART, HORS, REDONDANCE, ANIMATEURS)),
-      "Ordre des priorités : « redondance d'organisation » au palier 6 sur 7",
+      "Ordre des priorités : « redondance d'organisation » au palier 7 sur 8",
     );
     const jointe = accepter('changerPriorites', charge, { paliers: COLLISIONS_JOINTES }).charge;
     // Le poids d'un critère d'un palier partagé.
     assert.equal(
       libelleDe(jointe, ordre([[EXCEDENT, 2], [CUMULEES, 5]], REPETEES, ECART, HORS, ANIMATEURS, REDONDANCE)),
-      'Ordre des priorités : « collisions cumulées » au poids 5, palier 1 sur 6',
+      'Ordre des priorités : « collisions cumulées » au poids 5, palier 2 sur 7',
     );
     // Un palier partagé, déplacé entier : ses critères sont nommés ensemble.
     assert.equal(
       libelleDe(jointe, ordre(REPETEES, ECART, HORS, [[EXCEDENT, 2], [CUMULEES, 3]], ANIMATEURS, REDONDANCE)),
-      'Ordre des priorités : « excédent de collisions » et « collisions cumulées » au palier 4 sur 6',
+      'Ordre des priorités : « excédent de collisions » et « collisions cumulées » au palier 5 sur 7',
     );
     // Joindre un palier partagé : le critère seul qui le rejoint est nommé,
     // avec ceux qu'il rejoint.
     assert.equal(
       libelleDe(jointe, ordre([[EXCEDENT, 2], [CUMULEES, 3], [HORS, 1]], REPETEES, ECART, ANIMATEURS, REDONDANCE)),
-      'Ordre des priorités : « tours hors objectif » au palier 1 sur 5, avec « excédent de collisions » et « collisions cumulées »',
+      'Ordre des priorités : « tours hors objectif » au palier 2 sur 6, avec « excédent de collisions » et « collisions cumulées »',
     );
   });
 
@@ -1723,11 +1725,11 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
   test('une liste invalide est PRIORITES_INVALIDES {faute, critere, palier}, remède null : écart joint, rencontres répétées jointes, critère absent, répété, inconnu, palier vide', () => {
     const charge = figer(chargeEtiquetee());
     const cas = [
-      [ordre([[ECART, 1], [EXCEDENT, 1]], CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE), { faute: 'seulASonPalier', critere: ECART, palier: 0 }],
-      [ordre(ECART, EXCEDENT, CUMULEES, HORS, [[REPETEES, 1], [REDONDANCE, 4]], ANIMATEURS), { faute: 'seulASonPalier', critere: REPETEES, palier: 4 }],
+      [ordre([[ECART, 1], [EXCEDENT, 1]], CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE), { faute: 'seulASonPalier', critere: ECART, palier: 1 }],
+      [ordre(ECART, EXCEDENT, CUMULEES, HORS, [[REPETEES, 1], [REDONDANCE, 4]], ANIMATEURS), { faute: 'seulASonPalier', critere: REPETEES, palier: 5 }],
       [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS), { faute: 'critereAbsent', critere: REDONDANCE }],
-      [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE, EXCEDENT), { faute: 'critereRepete', critere: EXCEDENT, palier: 7 }],
-      [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE, 'constructor'), { faute: 'critereInconnu', critere: 'constructor', palier: 7 }],
+      [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE, EXCEDENT), { faute: 'critereRepete', critere: EXCEDENT, palier: 8 }],
+      [ordre(ECART, EXCEDENT, CUMULEES, HORS, REPETEES, ANIMATEURS, REDONDANCE, 'constructor'), { faute: 'critereInconnu', critere: 'constructor', palier: 8 }],
       [[...DEFAUT.slice(0, 3), [], ...DEFAUT.slice(3)], { faute: 'palierVide', palier: 3 }],
     ];
     for (const [paliers, details] of cas) {
@@ -1744,10 +1746,10 @@ describe("mobilier : l'ordre des priorités (§ 5.7, § 5.9, A11, A12, D19)", ()
       const charge = chargeEtiquetee();
       charge.reglages.modeObjectifs = mode;
       const erreur = refuse(() => COMMANDES.get('changerPriorites')(figer(charge), { paliers: HORS_JOINTS }), 'PRIORITES_INVALIDES');
-      assert.deepEqual(erreur.details, { faute: 'seulASonPalier', critere: HORS, palier: 1, remede: null }, mode);
+      assert.deepEqual(erreur.details, { faute: 'seulASonPalier', critere: HORS, palier: 2, remede: null }, mode);
       // Seuls, ils se déplacent.
       const monte = accepter('changerPriorites', charge, { paliers: ordre(EXCEDENT, REPETEES, CUMULEES, HORS, ECART, ANIMATEURS, REDONDANCE) });
-      assert.equal(monte.libelle, 'Ordre des priorités : « tours hors objectif » au palier 4 sur 7');
+      assert.equal(monte.libelle, 'Ordre des priorités : « tours hors objectif » au palier 5 sur 8');
     }
   });
 
@@ -1829,7 +1831,7 @@ describe('mobilier : le mode des objectifs (§ 5.3, § 8.9, A8, A12, D23)', () =
     figer(charge);
     for (const mode of ['chacun', 'minimum']) {
       const erreur = refuse(() => COMMANDES.get('modifierReglage')(charge, { cle: 'modeObjectifs', valeur: mode }), 'OBJECTIFS_PALIER_PARTAGE');
-      assert.deepEqual(erreur.details, { mode, palier: 1, remede: null });
+      assert.deepEqual(erreur.details, { mode, palier: 2, remede: null });
     }
     assert.equal(modeObjectifs(charge), 'places');
     assert.deepEqual(priorites(charge), HORS_JOINTS);
@@ -1839,7 +1841,7 @@ describe('mobilier : le mode des objectifs (§ 5.3, § 8.9, A8, A12, D23)', () =
     figer(chargeLoin);
     for (const mode of ['chacun', 'minimum']) {
       const erreur = refuse(() => COMMANDES.get('modifierReglage')(chargeLoin, { cle: 'modeObjectifs', valeur: mode }), 'OBJECTIFS_PALIER_PARTAGE');
-      assert.deepEqual(erreur.details, { mode, palier: 4, remede: null });
+      assert.deepEqual(erreur.details, { mode, palier: 5, remede: null });
     }
     assert.equal(modeObjectifs(chargeLoin), 'places');
     assert.deepEqual(priorites(chargeLoin), loin);

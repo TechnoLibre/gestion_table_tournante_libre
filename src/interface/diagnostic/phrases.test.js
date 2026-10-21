@@ -30,9 +30,11 @@ const chargeDemo = (cle) => analyser(texteLivre(cle)).charge;
  * Une charge construite : une personne par organisation donnée (null : sans
  * organisation), d'identifiants 1 à N ; une table par capacité, d'identifiant
  * 1 à T et de numéro numeros[rang] (rang + 1 par défaut) ; les réservations
- * de portée « tous les tours », sans siège, données en [participant, table].
+ * de portée « tous les tours », sans siège, données en [participant, table] ;
+ * conflits[rang], quand il est donné, la liste des conflits de la personne
+ * rang + 1.
  */
-function chargeDe({ organisations, capacites, tours = 4, ancres = [], separer = true, numeros = null }) {
+function chargeDe({ organisations, capacites, tours = 4, ancres = [], separer = true, numeros = null, conflits = [] }) {
   const charge = creerCharge({ id: 'evt-diagnostic', nom: 'Soirée des Merles', siegesParDefaut: 3, tours });
   charge.participants = organisations.map((organisation, rang) => ({
     id: rang + 1,
@@ -43,6 +45,7 @@ function chargeDe({ organisations, capacites, tours = 4, ancres = [], separer = 
     titrePressenti: null,
     notes: null,
     exclu: false,
+    ...(conflits[rang] ? { conflits: conflits[rang] } : {}),
   }));
   charge.tables = capacites.map((sieges, rang) => ({
     id: rang + 1,
@@ -130,6 +133,15 @@ const CONFIGURATIONS = {
     chargeDe({
       organisations: Array.from({ length: 12 }, (_, p) => (p % 2 === 0 ? 'Club des Merles' : 'Cercle des Hérons')),
       capacites: fois(4, 3),
+    }),
+  // Le Club des Merles nomme le Cercle des Hérons ; un membre de chacun est
+  // réservé à la table 1 pour la soirée : un conflit imposé à chaque tour.
+  conflitsImposes: () =>
+    chargeDe({
+      organisations: ['Club des Merles', 'Cercle des Hérons', ...fois(4, null)],
+      capacites: [3, 3],
+      ancres: [[1, 1], [2, 1]],
+      conflits: [['Cercle des Hérons']],
     }),
   // Douze personnes d'une seule organisation, séparation active.
   uneSeule: () => chargeDe({ organisations: fois(12, 'Club des Merles'), capacites: fois(4, 3) }),
@@ -301,6 +313,19 @@ const CHAMPS = [
           ]
         : [],
   },
+  {
+    champ: 'conflitsImposes',
+    attendus: (d) =>
+      d.conflitsImposes > 0
+        ? [
+            {
+              cle: 'diagnostic.conflitsImposes',
+              details: { conflits: d.conflitsImposes },
+              remede: { cle: 'diagnostic.remede.conflitsImposes', details: {} },
+            },
+          ]
+        : [],
+  },
 ];
 
 describe('enonces : chaque champ a son énoncé', () => {
@@ -351,6 +376,18 @@ describe('enonces : chaque champ a son énoncé', () => {
 });
 
 describe('enonces : les phrases du § 5.6', () => {
+  test("conflits imposés : un par tour, l'énoncé les compte et dit le remède ; sans liste, aucun", () => {
+    const { diagnostic, liste } = lire(CONFIGURATIONS.conflitsImposes());
+    assert.equal(diagnostic.conflitsImposes, 4);
+    const [enonce] = avecCle(liste, 'diagnostic.conflitsImposes');
+    assert.equal(texte(enonce), "4 conflits d'organisation imposés par les réservations");
+    assert.match(texte(enonce.remede), /déplacer ou retirer/);
+    assert.equal(cles(liste).at(-1), 'diagnostic.conflitsImposes');
+    const sansListe = CONFIGURATIONS.conflitsImposes();
+    delete sansListe.participants[0].conflits;
+    assert.deepEqual(avecCle(lire(sansListe).liste, 'diagnostic.conflitsImposes'), []);
+  });
+
   test('collisions : la petite au conflit inévitable, le groupe de 5, ses deux planchers et leurs unités', () => {
     const charge = CONFIGURATIONS.petiteConflit();
     const { diagnostic, liste } = lire(charge);

@@ -23,6 +23,13 @@ const TOUTES = Object.freeze({
 
 const MERLES = 'Club des Merles';
 
+const SANS_CASE = Object.freeze({
+  separerOrganisations: false,
+  nouveauxVoisins: false,
+  nouvelleTable: false,
+  varierOrganisations: false,
+});
+
 const tous = (participant, table) => ({ participant, table, portee: 'tous' });
 const auTour = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
 
@@ -44,11 +51,13 @@ function preparer({
   tours,
   reservations = [],
   contraintes = TOUTES,
+  conflits = [],
 }) {
   const participants = organisation.map((libelle, i) => ({
     id: ids[i],
     nom: `P${ids[i]}`,
     organisation: libelle,
+    ...(conflits[i] ? { conflits: conflits[i] } : {}),
   }));
   const tables = (idsTables ?? tours[0].map((_, i) => i + 1)).map((id, i) => ({
     id,
@@ -81,6 +90,54 @@ const SIX = [MERLES, MERLES, null, null, null, null];
 const TOUR_1 = [[3, 4], [1, 2], [5, 6]];
 
 describe('conflitsParTable', () => {
+  test("conflit d'organisation : sans case, ses paires en tête des règles ; leur somme égale la mesure", () => {
+    // 1, 2 et 4 du Club des Merles, 3 de la Sittelle, qu'il nomme ; 5 et 6
+    // sans organisation. Seule « séparer les organisations » est cochée.
+    // Tour 1 : la table 1 réunit 1 et 4, collègues. Tour 2 : la table 1
+    // réunit 1 et 3, en conflit ; la table 2, 2 et 4, collègues ; la table
+    // 3, 5 et 6.
+    const description = {
+      organisation: [MERLES, MERLES, 'Sittelle', MERLES, null, null],
+      conflits: [null, null, [MERLES]],
+      capacite: 2,
+      tours: [[[1, 4], [2, 5], [3, 6]], [[1, 3], [2, 4], [5, 6]]],
+      contraintes: { ...SANS_CASE, separerOrganisations: true },
+    };
+    assert.deepEqual(conflits(description), [
+      [
+        { table: 1, nombre: 1, regles: [{ regle: 'separerOrganisations', paires: [[1, 4]] }] },
+        sansConflit(2),
+        sansConflit(3),
+      ],
+      [
+        { table: 1, nombre: 1, regles: [{ regle: 'conflitsOrganisation', paires: [[1, 3]] }] },
+        { table: 2, nombre: 1, regles: [{ regle: 'separerOrganisations', paires: [[2, 4]] }] },
+        sansConflit(3),
+      ],
+    ]);
+    assert.equal(mesures(description).conflitsOrganisation, 1);
+    // Une même table qui viole les deux règles : la règle des conflits
+    // vient d'abord. Tour 2 : la table 1 réunit 1, 3 et 4 — (1, 3) et (3, 4)
+    // en conflit, (1, 4) collègues.
+    const troisParTable = { ...description, capacite: 3, tours: [[[1, 2, 5], [3, 4, 6]], [[1, 3, 4], [2, 5, 6]]] };
+    assert.deepEqual(conflits(troisParTable)[1][0], {
+      table: 1,
+      nombre: 3,
+      regles: [
+        { regle: 'conflitsOrganisation', paires: [[1, 3], [3, 4]] },
+        { regle: 'separerOrganisations', paires: [[1, 4]] },
+      ],
+    });
+    // Au tour 1, la table 2 réunit déjà 3 et 4 : trois conflits en tout.
+    assert.equal(mesures(troisParTable).conflitsOrganisation, 3);
+    // Sans liste, aucune règle des conflits ; la case décochée n'y change
+    // rien.
+    assert.deepEqual(conflits({ ...description, conflits: [] })[1][0], sansConflit(1));
+    assert.deepEqual(conflits({ ...description, contraintes: SANS_CASE })[1][0], {
+      table: 1, nombre: 1, regles: [{ regle: 'conflitsOrganisation', paires: [[1, 3]] }],
+    });
+  });
+
   test('séparer : la table 2 réunit 1 et 2 au tour 1, une violation ; aucune autre table, à aucun tour', () => {
     // Au tour 2, (2, 6), (3, 5) et (1, 4) se rencontrent pour la première
     // fois, et chacun change de table.

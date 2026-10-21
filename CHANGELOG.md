@@ -391,6 +391,15 @@
   réglé son ordre le garde. L'ordre d'avant — écart, excédent, cumulées, tours
   hors objectif, rencontres répétées et retours, animateurs, redondance —,
   réglé, rend les propositions d'avant.
+- Une personne peut nommer des **organisations en conflit** : son
+  organisation entière ne doit en croiser aucun membre à une table, et
+  réciproquement. Le conflit d'organisation ouvre l'ordre des priorités par
+  défaut et s'y déplace comme les autres critères ; la recherche vise zéro,
+  sans jamais l'interdire. Le tableau des propositions et la page de qualité
+  en comptent les occurrences, le plan signale chaque table concernée par des
+  hachures horizontales, et le diagnostic compte ceux que les réservations
+  imposent. Sans conflit nommé, une graine donne les mêmes propositions
+  qu'avant.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
@@ -399,11 +408,12 @@ proposition dérivée y porte aussi son départ et ses tours figés, `depart` et
 `toursFiges`, absents de toute autre proposition. La présence d'une personne,
 `presence`, est absente quand elle vaut tous les tours, et chaque tour d'un
 placement nomme ses absents, `absents`, seulement quand il en a. Le libellé
-d'une table, `libelle`, est absent quand elle n'en porte pas. Un fichier
-de format 1 ou 2, écrit par une version de développement, est refusé : il ne
-s'ouvre pas, ne s'importe pas, et l'application dit que son format, trop
-ancien, n'est plus pris en charge, sans rien écrire par-dessus.
-La course de la recherche ne va ni dans le fichier de l'événement ni dans son
-historique : elle a son propre fichier, `<nom>.gtt-courses.json`.
+d'une table, `libelle`, est absent quand elle n'en porte pas ; les conflits
+d'organisation d'une personne, `conflits`, quand elle n'en nomme aucun. Un
+fichier de format 1 ou 2, écrit par une version de développement, est refusé :
+il ne s'ouvre pas, ne s'importe pas, et l'application dit que son format, trop
+ancien, n'est plus pris en charge, sans rien écrire par-dessus. La course de
+la recherche ne va ni dans le fichier de l'événement ni dans son historique :
+elle a son propre fichier, `<nom>.gtt-courses.json`.
 
 **En remplaçant** : rien à faire, c'est la première version.

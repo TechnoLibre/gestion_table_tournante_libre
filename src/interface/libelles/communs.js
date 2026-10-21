@@ -112,6 +112,8 @@ export const TABLE = new Map([
   ['communs.remede.changerTours', 'Changer le nombre de tours'],
   ['communs.remede.modifierReglage', 'Modifier le réglage'],
   ['communs.remede.changerEtiquettes', 'Changer les étiquettes'],
+  ['communs.remede.ajouterConflit', 'Ajouter le conflit'],
+  ['communs.remede.retirerConflit', 'Retirer le conflit'],
   ['communs.remede.poserObjectif', "Poser l'objectif"],
   ['communs.remede.retirerObjectif', "Retirer l'objectif"],
   ['communs.remede.changerRegleObjectifs', 'Changer la règle par défaut des objectifs'],

@@ -35,7 +35,8 @@
         "toursHorsObjectif",
         "rencontresRepetees",
         "animateursNonRencontres",
-        "redondance"
+        "redondance",
+        "conflitsOrganisation"
       ]
     }
   },

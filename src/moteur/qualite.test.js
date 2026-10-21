@@ -730,6 +730,7 @@ const duDiagnostic = ({ configuration, instance, tableDe }, plafondsAPriori, pla
 
 // Les sept tuiles qui peuvent porter un plancher, chacune sans plancher.
 const SANS_PLANCHER = {
+  conflitsOrganisation: null,
   collisionsCumulees: null,
   pairesDistinctes: null,
   excedentCollisions: null,
@@ -1527,6 +1528,9 @@ function bornesDeReference(instance, { mesures, plafondsRealises, aMax, profil, 
   const plancher = (valeur, mesure) => (valeur > 0 ? { plancher: valeur, atteint: mesure === valeur } : null);
   const planchers = { ...SANS_PLANCHER };
   if (planchersValides) {
+    if (instance.pairesEnConflit > 0) {
+      planchers.conflitsOrganisation = plancher(diagnostic.conflitsImposes, mesures.conflitsOrganisation);
+    }
     for (const [colonne, champ] of COLLISIONS_DE_REFERENCE) {
       planchers[colonne] = plancher(somme(diagnostic.collisions.map((ligne) => ligne[champ] ?? 0)), mesures[colonne]);
     }
@@ -1791,6 +1795,7 @@ describe('planchersDesColonnes (§ 12.2, § 5.6, D84)', () => {
   test('rouge : la somme des planchers de collisions du diagnostic, 0 quand il se tait ; l’écart d’itinéraire, null sans plancher a priori', () => {
     const memes = preparer({ ...CINQ_MEMBRES, plan: MEMES_TABLES });
     assert.deepEqual(planchersDesColonnes(memes.instance, diagnostiquer(memes.configuration)), {
+      conflitsOrganisation: null,
       collisionsCumulees: 12,
       pairesDistinctes: 4,
       excedentCollisions: 2,
@@ -1850,6 +1855,7 @@ describe('planchersAtteints (§ 12.2, B11)', () => {
   // un écart d'itinéraire maximal de 2 ; 6 tours hors objectif, 1 personne
   // jamais servie, 2 tours hors objectif au plus pour une personne.
   const planchers = {
+    conflitsOrganisation: null,
     collisionsCumulees: 12,
     pairesDistinctes: 0,
     excedentCollisions: 2,
@@ -1868,6 +1874,7 @@ describe('planchersAtteints (§ 12.2, B11)', () => {
 
   test('rouge : par colonne {plancher, atteint}, atteint quand la mesure l’égale ; null pour un plancher nul ou absent', () => {
     assert.deepEqual(planchersAtteints(planchers, { mesures, troisChiffres: chiffres, planchersValides: true }), {
+      conflitsOrganisation: null,
       collisionsCumulees: { plancher: 12, atteint: true },
       pairesDistinctes: null,
       excedentCollisions: { plancher: 2, atteint: false },
@@ -1881,6 +1888,30 @@ describe('planchersAtteints (§ 12.2, B11)', () => {
   test('rouge : hors du domaine des planchers, tous null ; une ligne sans écart d’itinéraire, aucun pour lui', () => {
     assert.deepEqual(planchersAtteints(planchers, { mesures, troisChiffres: chiffres, planchersValides: false }), SANS_PLANCHER);
     assert.equal(planchersAtteints(planchers, { mesures, troisChiffres: { ecartItineraireMax: null }, planchersValides: true }).ecartItineraireMax, null);
+  });
+
+  test("rouge : le conflit d'organisation porte les conflits que les réservations imposent, quand il a un objet ; atteint quand la mesure les égale", () => {
+    const etatAvec = (sansObjet) => ({
+      etatCriteres: [
+        { nom: 'toursHorsObjectif', coche: true, sansObjet: true, valeurs: ['toursHorsObjectif'] },
+        { nom: 'conflitsOrganisation', coche: true, sansObjet, valeurs: ['conflitsOrganisation'] },
+      ],
+    });
+    const diagnostic = { collisions: [], ecartItineraire: null, objectifsInevitables: null, conflitsImposes: 2 };
+    assert.equal(planchersDesColonnes(etatAvec(false), diagnostic).conflitsOrganisation, 2);
+    assert.equal(planchersDesColonnes(etatAvec(true), diagnostic).conflitsOrganisation, null);
+    const lus = (conflitsOrganisation, planchersValides = true) =>
+      planchersAtteints({ ...planchers, conflitsOrganisation: 2 }, {
+        mesures: { ...mesures, conflitsOrganisation }, troisChiffres: chiffres, planchersValides,
+      }).conflitsOrganisation;
+    assert.deepEqual(lus(2), { plancher: 2, atteint: true });
+    assert.deepEqual(lus(5), { plancher: 2, atteint: false });
+    assert.equal(lus(2, false), null);
+    // Un plancher nul ne s'écrit pas.
+    const nul = planchersAtteints({ ...planchers, conflitsOrganisation: 0 }, {
+      mesures: { ...mesures, conflitsOrganisation: 0 }, troisChiffres: chiffres, planchersValides: true,
+    });
+    assert.equal(nul.conflitsOrganisation, null);
   });
 
   test('des objectifs sans plancher ne lisent pas les mesures des objectifs, absentes sans personne concernée', () => {

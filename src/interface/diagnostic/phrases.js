@@ -18,8 +18,8 @@
 // L'ordre est celui du § 5.6 — collisions et excédent, redondance,
 // animateurs, ancrage, écart d'itinéraire, manque de places, objectifs hors
 // d'atteinte —, précédé de ce qui vide la séparation de son sens (§ 15.4,
-// § 7.5) et suivi du plafond a priori (§ 5.5) et des retours imposés
-// (§ 5.4). Un plancher ne s'énonce que strictement positif : un plancher nul
+// § 7.5) et suivi du plafond a priori (§ 5.5), des retours imposés (§ 5.4)
+// et des conflits d'organisation que les réservations imposent. Un plancher ne s'énonce que strictement positif : un plancher nul
 // laisserait croire qu'un plancher a été calculé là où il n'y en a pas.
 //
 // La présence par tour : quand une personne au moins manque un tour,
@@ -221,6 +221,14 @@ function imposes({ retoursImposes, ancragesImposantRetours }) {
   ];
 }
 
+// Les conflits d'organisation que les réservations imposent : des personnes
+// en conflit réservées à une même table d'un tour, qu'aucune recherche ne
+// sépare.
+function conflitsImposes({ conflitsImposes: conflits }) {
+  if (conflits === 0) return [];
+  return [{ cle: 'diagnostic.conflitsImposes', details: { conflits }, remede: remede('diagnostic.remede.conflitsImposes') }];
+}
+
 /**
  * Les énoncés d'un diagnostic, dans l'ordre décrit en tête. Ne modifie pas
  * le diagnostic.
@@ -250,6 +258,7 @@ export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes =
     ...objectifs(diagnostic, criteres),
     ...plafond(diagnostic),
     ...imposes(diagnostic),
+    ...conflitsImposes(diagnostic),
   ];
 }
 

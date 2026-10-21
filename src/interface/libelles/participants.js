@@ -53,6 +53,7 @@ const dejaReunis = (deja) =>
 
 // Le texte court de chaque règle dans la marque d'une personne en conflit.
 const REGLES_COURTES = new Map([
+  ['conflitsOrganisation', "conflit d'organisation"],
   ['separerOrganisations', 'même organisation'],
   ['nouveauxVoisins', 'se revoient'],
   ['nouvelleTable', 'revient à une table'],
@@ -135,6 +136,7 @@ export const TABLE = new Map([
   ['participants.conflit.personne', ({ regles }) => `en conflit : ${regles.map((regle) => REGLES_COURTES.get(regle)).join(', ')}`],
   ['participants.conflit.lieu', ({ tour, numero }) => `Tour ${tour}, table ${numero} :`],
   ['participants.conflit.et', 'et'],
+  ['participants.conflit.raison.conflitsOrganisation', "\u{2014} conflit d'organisation"],
   ['participants.conflit.raison.separerOrganisations', '\u{2014} même organisation'],
   [
     'participants.conflit.raison.nouveauxVoisins',

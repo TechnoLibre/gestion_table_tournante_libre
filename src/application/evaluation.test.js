@@ -891,6 +891,7 @@ const ORDRE_REGLE = [
   [e('rencontresRepetees')],
   [e('animateursNonRencontres')],
   [e('redondance')],
+  [e('conflitsOrganisation')],
 ];
 
 // Les noms des valeurs d'un point de relevé : le minimum brut, puis chaque
@@ -1346,6 +1347,30 @@ describe('detaillerQualite : la garde à quatre paramètres (§ 12.3, D31, D42)'
       return diagnostic;
     };
     assert.deepEqual(detaillerQualite(charge, 1, { diagnostiquer: atteints }).refusDessin, []);
+  });
+
+  test("des conflits d'organisation sous ceux que les réservations imposent : RESTE_CONFLITS_NEGATIF, et rien quand le critère est sans objet", () => {
+    // Le premier affilié nomme la première autre organisation : le critère a
+    // un objet.
+    const avecListe = structuredClone(chargeDemo('petite-conflit'));
+    const nommant = avecListe.participants.find(({ organisation }) => organisation !== null);
+    const autre = avecListe.participants.find(({ organisation }) => organisation !== null && organisation !== nommant.organisation);
+    nommant.conflits = [autre.organisation];
+    const releve = (de) => (configuration) => ({ ...diagnostiquer(configuration), conflitsImposes: de });
+    const { charge } = genereeAvecCourses(avecListe, { graine: 3, nombre: 1, arret: 300 });
+    figer(charge);
+    const mesure = evaluer(charge).propositions[0].mesures.conflitsOrganisation;
+    assert.equal(typeof mesure, 'number');
+    const codes = (detail) => detail.refusDessin.map(({ code }) => code);
+    assert.equal(detaillerQualite(charge, 1).collisions.planchersValides, true);
+    assert.deepEqual(codes(detaillerQualite(charge, 1, { diagnostiquer: releve(mesure + 1) })), ['RESTE_CONFLITS_NEGATIF']);
+    assert.deepEqual(codes(detaillerQualite(charge, 1, { diagnostiquer: releve(mesure) })), []);
+    // Sans liste, le même plancher relevé ne se lit pas : la mesure vaut
+    // null, le critère est sans objet.
+    const sansListe = genereeAvecCourses(chargeDemo('petite-conflit'), { graine: 3, nombre: 1, arret: 300 }).charge;
+    figer(sansListe);
+    assert.equal(evaluer(sansListe).propositions[0].mesures.conflitsOrganisation, null);
+    assert.deepEqual(codes(detaillerQualite(sansListe, 1, { diagnostiquer: releve(1000) })), []);
   });
 });
 

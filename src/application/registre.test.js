@@ -70,6 +70,11 @@ const DEMONSTRATIONS = LIVREES.map(({ cle, texte }) => ({
 // --- Lectures de la charge ---------------------------------------------------
 
 const participantDe = (charge, id) => charge.participants.find((personne) => personne.id === id);
+// La première organisation de la charge, dans l'ordre des personnes, qui
+// n'est pas celle de la personne id.
+const autreOrganisation = (charge, id) =>
+  charge.participants.find(({ organisation }) => organisation !== null && organisation !== participantDe(charge, id).organisation)
+    .organisation;
 const tableDe = (charge, id) => charge.tables.find((table) => table.id === id);
 const derniereTable = (charge) => Math.max(...charge.tables.map(({ id }) => id));
 const croissant = (a, b) => a - b;
@@ -126,6 +131,8 @@ const REMEDE_NUL_ADMIS = new Map([
   ['OBJECTIF_SANS_ETIQUETTE', "sur un couple sans objectif, rien à retirer : la saisie se corrige dans le champ même"],
   ['TABLE_DISPARUE', 'une table supprimée entre-temps : aucun geste ne la rend'],
   ['PRIORITES_INVALIDES', "l'éditeur n'offre que des listes valides : le texte nomme le palier et le critère en cause"],
+  ['ORGANISATION_INCONNUE', "une organisation que plus personne ne porte : aucun geste ne la rend, et la liste n'offre que celles qui existent"],
+  ['CONFLIT_PROPRE_ORGANISATION', "l'organisation se choisit dans le champ même, parmi celles des autres"],
   ['POIDS_HORS_DOMAINE', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
   [
     'PRESENCE_VIDE',
@@ -155,6 +162,7 @@ const IMPORTER_FINANCE_A_LA_TABLE_2 = (charge) => ({
 const PRIORITES_DEFAUT = PRIORITES_PAR_DEFAUT.map((palier) => palier.map((entree) => ({ ...entree })));
 const seul = (critere) => [{ critere, poids: 1 }];
 const COLLISIONS_JOINTES = [
+  seul('conflitsOrganisation'),
   seul('rencontresRepetees'),
   [{ critere: 'excedentCollisions', poids: 2 }, { critere: 'collisionsCumulees', poids: 3 }],
   seul('ecartAuPlafondAPrioriMax'),
@@ -166,6 +174,7 @@ const JOINDRE_LES_TOURS_HORS_OBJECTIF = [
   'changerPriorites',
   {
     paliers: [
+      seul('conflitsOrganisation'),
       seul('rencontresRepetees'),
       [{ critere: 'excedentCollisions', poids: 1 }, { critere: 'toursHorsObjectif', poids: 3 }],
       seul('collisionsCumulees'),
@@ -449,6 +458,34 @@ const EXEMPLES = new Map([
         remede: null,
       },
       sansEffet: { args: { cle: 'attribuerSieges', valeur: false } },
+    },
+  ],
+  [
+    'ajouterConflit',
+    {
+      accepte: { args: (charge) => ({ id: 2, organisation: autreOrganisation(charge, 2) }) },
+      personne: () => 2,
+      refuse: {
+        args: (charge) => ({ id: 2, organisation: participantDe(charge, 2).organisation }),
+        code: 'CONFLIT_PROPRE_ORGANISATION',
+        remede: null,
+      },
+      sansEffet: {
+        avant: [['ajouterConflit', (charge) => ({ id: 2, organisation: autreOrganisation(charge, 2) })]],
+        args: (charge) => ({ id: 2, organisation: autreOrganisation(charge, 2) }),
+      },
+    },
+  ],
+  [
+    'retirerConflit',
+    {
+      accepte: {
+        avant: [['ajouterConflit', (charge) => ({ id: 2, organisation: autreOrganisation(charge, 2) })]],
+        args: (charge) => ({ id: 2, organisation: autreOrganisation(charge, 2) }),
+      },
+      personne: () => 2,
+      refuse: { args: { id: 999, organisation: 'Atelier Pivoine' }, code: 'PARTICIPANT_INCONNU' },
+      sansEffet: { args: (charge) => ({ id: 2, organisation: autreOrganisation(charge, 2) }) },
     },
   ],
   [

@@ -121,6 +121,7 @@ describe('qualite/modele : le détail gardé par charge et par identifiant (§ 1
       [{ critere: 'toursHorsObjectif', poids: 1 }],
       [{ critere: 'rencontresRepetees', poids: 1 }],
       [{ critere: 'animateursNonRencontres', poids: 1 }],
+      [{ critere: 'conflitsOrganisation', poids: 1 }],
     ];
     const reglee = figer(appliquerCommande('changerPriorites', charge, { paliers }).charge);
     const { appels, options } = seanceSur(reglee, courses);

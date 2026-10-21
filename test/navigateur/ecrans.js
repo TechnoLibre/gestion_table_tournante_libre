@@ -1013,10 +1013,17 @@ export const ECRANS = Object.freeze([
     mode: 'ecriture',
     async atteindre(contexte) {
       // La petite démonstration en conflit et la proposition TROIS_CONFLITS,
-      // écrite à la main, montrée au tour 3, choisi au clavier : la table 1
-      // viole les trois règles et superpose leurs trames, la table 2 est
-      // saine ; puis la légende des conflits, ouverte par la barre de vue.
+      // écrite à la main, montrée au tour 3, choisi au clavier, où la
+      // personne 4, sans organisation, nomme celle de la personne 5 : la
+      // table 1, qui les réunit, viole les quatre règles et superpose leurs
+      // trames, la table 2 est saine ; puis la légende des conflits, ouverte
+      // par la barre de vue. Sans organisation, la personne 4 n'engage
+      // qu'elle : une organisation entière en conflit réunirait ses membres
+      // et ceux de l'autre à chaque table, et le plan, toutes les tables en
+      // conflit, cesserait de signaler (§ 7.5).
       const charge = avecTours(demonstration('petite-conflit'), TROIS_CONFLITS);
+      const personneDe = (id) => charge.participants.find((personne) => personne.id === id);
+      Object.assign(personneDe(4), { organisation: null, conflits: [personneDe(5).organisation] });
       const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'plan' });
       const choix = await element(m, '[data-champ="tour"]');
       choix.focus();
@@ -1024,7 +1031,9 @@ export const ECRANS = Object.freeze([
         await touche('ArrowDown');
         flushSync();
       }
-      for (const marque of ['trameOrganisation', 'trameVoisins', 'trameTable']) await element(m, `[data-table="1"] [data-marque="${marque}"]`);
+      for (const marque of ['trameEvitement', 'trameOrganisation', 'trameVoisins', 'trameTable']) {
+        await element(m, `[data-table="1"] [data-marque="${marque}"]`);
+      }
       await cliquer(m, '[data-commande="legende"]');
       await element(m, '[data-legende] [data-legende-regle="nouvelleTable"]');
       return m.racine;

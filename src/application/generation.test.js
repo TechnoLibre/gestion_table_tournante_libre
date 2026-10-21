@@ -1518,6 +1518,7 @@ describe('génération : objectifs, mode et ordre réglé, par la séance (§ 5.
         [e('collisionsCumulees')],
         [e('rencontresRepetees')],
         [e('animateursNonRencontres')],
+        [e('conflitsOrganisation')],
       ];
     }
     return charge;

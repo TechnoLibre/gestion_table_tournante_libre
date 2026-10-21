@@ -36,8 +36,16 @@ const V1 = VERSION.affichee;
 // Six personnes inventées, deux organisations, deux tables de trois places,
 // trois tours ; les finance premières portent « finance », que la première
 // table attend pour la soirée quand objectifs est vrai ; reservees : les
-// deux dernières réservées ensemble à la seconde table pour la soirée.
-function chargeSix({ objectifs = false, organisations = true, reglages = {}, finance = 3, reservees = false } = {}) {
+// deux dernières réservées ensemble à la seconde table pour la soirée ;
+// conflits : la première, de la Coopérative Aubier, nomme l'Atelier Ressac.
+function chargeSix({
+  objectifs = false,
+  organisations = true,
+  reglages = {},
+  finance = 3,
+  reservees = false,
+  conflits = false,
+} = {}) {
   const charge = creerCharge({ id: 'evt-entete', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 3 });
   const noms = [
     ['Ombrelle', 'Iris', 'Coopérative Aubier'],
@@ -57,6 +65,7 @@ function chargeSix({ objectifs = false, organisations = true, reglages = {}, fin
     notes: null,
     exclu: false,
     ...(objectifs && rang < finance ? { etiquettes: ['finance'] } : {}),
+    ...(conflits && rang === 0 ? { conflits: ['Atelier Ressac'] } : {}),
   }));
   if (reservees) charge.reservations = [5, 6].map((participant) => ({ participant, table: 2, siege: null, portee: 'tous', tour: null }));
   charge.tables = [1, 2].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 300 * id, y: 0 } }));
@@ -92,6 +101,7 @@ const valeur = (pourcent) => t('qualite.pourcentage.valeur', { pourcent });
 
 // Les tuiles qui portent un plancher quand le diagnostic en prouve un.
 const TUILES_A_PLANCHER = [
+  'conflitsOrganisation',
   'collisionsCumulees',
   'pairesDistinctes',
   'excedentCollisions',
@@ -313,7 +323,7 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
   });
 
   test('rouge : chaque tuile au plancher prouvé l’écrit sous son chiffre, « atteint » quand il l’est ; aucune autre', () => {
-    const vue = vueDe(generee(chargeSix({ objectifs: true })));
+    const vue = vueDe(generee(chargeSix({ objectifs: true, conflits: true })));
     assert.deepEqual(Object.keys(vue.detail.bornes.planchers).sort(), [...TUILES_A_PLANCHER].sort());
     for (const nom of TUILES_A_PLANCHER) {
       for (const atteint of [false, true]) {

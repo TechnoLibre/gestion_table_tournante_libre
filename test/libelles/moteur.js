@@ -56,6 +56,7 @@ export const EXEMPLES = [
   ['HORS_OBJECTIF_MAX', {}],
   ['RESTE_NEGATIF', { groupe: 1, organisation: 'Atelier Ressac' }],
   ['RESTE_OBJECTIFS_NEGATIF', { tour: 2 }],
+  ['RESTE_CONFLITS_NEGATIF', {}],
   ['DIVERSITE_RENCONTRES', { index: 4, participant: 9 }],
   ['DIVERSITE_AFFILIES', { index: 4, participant: 9 }],
   ['AFFILIES_PLAFOND', { index: 4, participant: 9 }],

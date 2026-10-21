@@ -39,18 +39,21 @@ function organisations(N, groupes) {
 // i + 1 porte organisation[i] ; les tables portent les identifiants 1..T,
 // toutes de la capacité donnée ; tours[r][i] liste les participants assis à
 // la table i + 1 au tour r + 1, et reserves[r] ceux qui n'y sont assis nulle
-// part.
+// part. conflits[i], quand il est donné et non null, est la liste des
+// conflits du participant i + 1.
 function preparer({
   organisation,
   capacite,
   tours,
   reserves = tours.map(() => []),
   reservations = [],
+  conflits = [],
 }) {
   const participants = organisation.map((libelle, i) => ({
     id: i + 1,
     nom: `P${i + 1}`,
     organisation: libelle,
+    ...(conflits[i] ? { conflits: conflits[i] } : {}),
   }));
   const tables = tours[0].map((_, i) => ({ id: i + 1, numero: i + 1, capacite }));
   const instance = normaliser({
@@ -152,6 +155,7 @@ describe('mesurer', () => {
       collisionsCumulees: 0,
       pairesDistinctes: 0,
       excedentCollisions: 0,
+      conflitsOrganisation: null,
       rencontresRepetees: { choisies: 0, imposees: 0 },
       maxRencontresPaire: 1,
       totalRetoursChoisis: 0,
@@ -639,6 +643,7 @@ describe('mesurer', () => {
       collisionsCumulees: 0,
       pairesDistinctes: 0,
       excedentCollisions: 0,
+      conflitsOrganisation: null,
       rencontresRepetees: { choisies: 0, imposees: 0 },
       maxRencontresPaire: 0,
       totalRetoursChoisis: 0,
@@ -708,6 +713,50 @@ const PARCOURS = {
   reserves: [[], [], [4]],
 };
 
+// Six personnes, deux tables de trois, deux tours : 1 et 2 du Rameau, 3 et 4
+// du Tilleul, 5 sans organisation, 6 du Saule. 1 nomme le Tilleul, 3 le
+// Rameau — le même lien, dans l'autre sens —, 5 le Saule ; 6 nomme sa propre
+// organisation et 2 une organisation que personne ne porte, ce qui ne relie
+// rien.
+const CONFLITS = {
+  organisation: ['Rameau', 'Rameau', 'Tilleul', 'Tilleul', null, 'Saule'],
+  conflits: [['Tilleul'], ['Inconnue'], ['Rameau'], null, ['Saule'], ['Saule']],
+  capacite: 3,
+  tours: [
+    [[1, 3, 5], [2, 4, 6]],
+    [[2, 5, 6], [1, 3, 4]],
+  ],
+};
+
+describe('mesurer : les conflits d’organisation (§ 5.4)', () => {
+  test("chaque paire en conflit assise à une même table compte à chaque tour, sur toute l'organisation, dans les deux sens", () => {
+    // Tour 1 : (1, 3), Rameau et Tilleul ; (2, 4), Rameau et Tilleul, bien
+    // que 2 n'ait rien nommé. Tour 2 : (5, 6), la personne sans organisation
+    // et le Saule qu'elle nomme ; (1, 3) et (1, 4) ; (3, 4) sont collègues,
+    // non en conflit. 5 conflits, que le lien posé deux fois ne double pas.
+    const { instance, tableDe } = preparer(CONFLITS);
+    assert.equal(mesurer(instance, tableDe).conflitsOrganisation, 5);
+    assert.deepEqual(
+      parcourirTours(instance, tableDe).parTour.map((tables) => tables.map(({ enConflit }) => enConflit)),
+      [[[[0, 2]], [[1, 3]]], [[[4, 5]], [[0, 2], [0, 3]]]],
+    );
+    // Les collisions de même organisation se comptent à part : (3, 4) au tour 2.
+    assert.equal(mesurer(instance, tableDe).collisionsCumulees, 1);
+  });
+
+  test("sans liste, ou des listes qui ne relient aucun présent : la mesure null, jamais 0, le critère sans objet", () => {
+    const sansListe = preparer({ ...CONFLITS, conflits: [] });
+    const sansLien = preparer({ ...CONFLITS, conflits: [['Inconnue'], null, ['Tilleul'], null, null, ['Saule']] });
+    for (const { instance, tableDe } of [sansListe, sansLien]) {
+      assert.equal(mesurer(instance, tableDe).conflitsOrganisation, null);
+      assert.equal(instance.pairesEnConflit, 0);
+      assert.equal(instance.etatCriteres.find(({ nom }) => nom === 'conflitsOrganisation').sansObjet, true);
+    }
+    const { instance } = preparer(CONFLITS);
+    assert.equal(instance.etatCriteres.find(({ nom }) => nom === 'conflitsOrganisation').sansObjet, false);
+  });
+});
+
 describe('parcourirTours', () => {
   test('chaque table de chaque tour : collègues, paires revues, personnes revenues, en index croissants', () => {
     // Tour 1 : (0, 1) collègues, rien de revu, personne ne revient. Tour 2 :
@@ -717,15 +766,15 @@ describe('parcourirTours', () => {
     // découvre la table d'index 1. Réunies une première fois : (0, 1),
     // (0, 2) et (1, 2) au tour 1, (2, 3) au tour 2.
     const { instance, tableDe } = preparer(PARCOURS);
-    const vide = { collegues: [], revues: [], revenus: [] };
+    const vide = { collegues: [], enConflit: [], revues: [], revenus: [] };
     assert.deepEqual(parcourirTours(instance, tableDe), {
       parTour: [
-        [{ collegues: [[0, 1]], revues: [], revenus: [] }, vide],
+        [{ collegues: [[0, 1]], enConflit: [], revues: [], revenus: [] }, vide],
         [
-          { collegues: [[0, 1]], revues: [[0, 1]], revenus: [0, 1] },
-          { collegues: [], revues: [], revenus: [3] },
+          { collegues: [[0, 1]], enConflit: [], revues: [[0, 1]], revenus: [0, 1] },
+          { collegues: [], enConflit: [], revues: [], revenus: [3] },
         ],
-        [{ collegues: [], revues: [[0, 2]], revenus: [0, 2] }, vide],
+        [{ collegues: [], enConflit: [], revues: [[0, 2]], revenus: [0, 2] }, vide],
       ],
       parPaire: Uint16Array.of(2, 2, 0, 1, 0, 1),
       reunies: [0, 1, 0, 2, 1, 2, 2, 3],
@@ -752,8 +801,8 @@ describe('parcourirTours', () => {
       reservations: [auTour(1, 1, 1), auTour(2, 1, 1), auTour(1, 1, 2), auTour(2, 1, 2)],
     });
     const { parTour, parPaire, retours } = parcourirTours(instance, tableDe);
-    assert.deepEqual(parTour[1][0], { collegues: [[0, 1]], revues: [], revenus: [] });
-    assert.deepEqual(parTour[2][0], { collegues: [], revues: [[0, 2]], revenus: [0, 2] });
+    assert.deepEqual(parTour[1][0], { collegues: [[0, 1]], enConflit: [], revues: [], revenus: [] });
+    assert.deepEqual(parTour[2][0], { collegues: [], enConflit: [], revues: [[0, 2]], revenus: [0, 2] });
     assert.deepEqual(Array.from(parPaire), [2, 2, 0, 1, 0, 1]);
     assert.deepEqual(retours, [2, 1, 1, 1]);
   });
@@ -766,7 +815,7 @@ describe('parcourirTours', () => {
       reservations: [],
       contraintes: SANS_CONTRAINTE,
     });
-    const vide = { collegues: [], revues: [], revenus: [] };
+    const vide = { collegues: [], enConflit: [], revues: [], revenus: [] };
     assert.deepEqual(parcourirTours(instance, new Int32Array(0)), {
       parTour: [[vide], [vide]],
       parPaire: new Uint16Array(0),

@@ -141,6 +141,12 @@ export const TABLE = new Map([
       `${compte(retoursImposes, 'retour imposé', 'retours imposés')} par ${compte(ancragesImposantRetours, 'ancrage', 'ancrages')}`,
   ],
 
+  [
+    'diagnostic.conflitsImposes',
+    ({ conflits }) =>
+      `${compte(conflits, "conflit d'organisation imposé", "conflits d'organisation imposés")} par les réservations`,
+  ],
+
   // --- Les remèdes -----------------------------------------------------------
   ['diagnostic.remede.separation', 'désactiver la séparation des organisations'],
   [
@@ -176,4 +182,8 @@ export const TABLE = new Map([
     "ajouter des places aux tables qui portent un objectif, ou donner un objectif à d'autres tables, abaisse ce plancher",
   ],
   ['diagnostic.remede.imposes', 'les réservations les imposent : ils ne comptent pas parmi les retours que choisit le moteur'],
+  [
+    'diagnostic.remede.conflitsImposes',
+    'des personnes en conflit sont réservées à une même table : déplacer ou retirer l’une de ces réservations les sépare',
+  ],
 ]);

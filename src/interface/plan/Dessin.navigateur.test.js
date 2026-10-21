@@ -1285,7 +1285,8 @@ function formeDe(motif) {
   const dy = trait.y2.baseVal.value - trait.y1.baseVal.value;
   const m = motif.patternTransform.baseVal.consolidate()?.matrix ?? new DOMMatrix();
   const [ex, ey] = [m.a * dx + m.c * dy, m.b * dx + m.d * dy];
-  if (Math.abs(ex) < 1e-6 || Math.abs(ey) < 1e-6) return 'traits droits';
+  if (Math.abs(ey) < 1e-6) return 'hachuresHorizontales';
+  if (Math.abs(ex) < 1e-6) return 'traits verticaux';
   return ex * ey > 0 ? 'hachuresDescendantes' : 'hachuresMontantes';
 }
 
@@ -1295,18 +1296,24 @@ const couleursEnTexte = (couleurs) => couleurs.map((c) => c.slice(0, 3).join(','
 // La petite démonstration en conflit, une proposition de rechercher, graine
 // 23 : son tour 2 signale les trois sortes, une table saine, une table qui
 // viole les trois règles et deux qui en violent deux.
-function troisSortes() {
+function quatreSortes() {
   const charge = analyser(texteLivre('petite-conflit')).charge;
   const configuration = configurationDepuisCharge(charge);
   const [proposition] = rechercher(configuration, { graine: 23, nombre: 1, arret: 300, historique: 1000 });
-  return avecProposition(charge, versFichier(proposition, configuration, { produitVersion: 'epreuve', attribuerSieges: false, decalage: 0 }));
+  const generee = avecProposition(charge, versFichier(proposition, configuration, { produitVersion: 'epreuve', attribuerSieges: false, decalage: 0 }));
+  // Après la génération, la personne 2, sans organisation, nomme celle de la
+  // personne 1 : le conflit d'organisation paraît à leurs tables communes,
+  // sans réunir deux organisations entières à chaque table.
+  const personneDe = (id) => generee.participants.find((personne) => personne.id === id);
+  Object.assign(personneDe(2), { organisation: null, conflits: [personneDe(1).organisation] });
+  return generee;
 }
 
-describe('les trois sortes de conflit : une forme et une teinte par règle (§ 7.5, § 7.6, § 12.7)', () => {
+describe('les quatre sortes de conflit : une forme et une teinte par règle (§ 7.5, § 7.6, § 12.7)', () => {
   for (const theme of ['clair', 'sombre']) {
     test(`thème ${theme} : chaque règle dessine sa forme dans sa teinte, sur le fond du plateau ; une table qui en viole plusieurs les superpose, dans l\u{2019}ordre du moteur`, async () => {
       await sousTheme(theme, async () => {
-        const charge = troisSortes();
+        const charge = quatreSortes();
         const fond = couleursEnTexte([jeton('--couleur-table-fond')]);
         const formes = new Map();
         let superposees = 0;
@@ -1340,7 +1347,7 @@ describe('les trois sortes de conflit : une forme et une teinte par règle (§ 7
           demonterTout();
         }
         expect(Object.fromEntries(formes)).toEqual(Object.fromEntries(CONFLITS.map(({ regle, forme }) => [regle, forme])));
-        expect(new Set(formes.values()).size).toBe(3);
+        expect(new Set(formes.values()).size).toBe(4);
         expect(superposees).toBeGreaterThan(0);
       });
     });
@@ -1353,8 +1360,8 @@ describe('la légende des conflits (§ 7.5, § 14.5)', () => {
   for (const theme of ['clair', 'sombre']) {
     test(`thème ${theme} : un échantillon par règle active, de la forme et de la teinte du plan, et son nom ; la pastille et ce qu\u{2019}elle compte ; texte à 4,5:1`, async () => {
       await sousTheme(theme, async () => {
-        const entrees = legendeConflits(REGLAGES);
-        expect(entrees.length).toBe(3);
+        const entrees = legendeConflits(REGLAGES, [{ nom: 'conflitsOrganisation', coche: true, sansObjet: false }]);
+        expect(entrees.length).toBe(4);
         const conteneur = monterHtml(Legende, { entrees });
         const legende = conteneur.querySelector('[data-legende]');
         expect(visible(legende.querySelector('h3, h2, p, span'))).toBe(true);

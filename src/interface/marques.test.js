@@ -42,7 +42,7 @@ const THEMES = ['clair', 'sombre'];
 
 const NOMS_MARQUES = [
   'cadenasFerme', 'cadenasOuvert', 'anneau', 'hachure', 'remplissagePlein',
-  'contourConflit', 'trameOrganisation', 'trameVoisins', 'trameTable', 'pastille', 'poignee', 'gel', 'miseEnEvidence',
+  'contourConflit', 'trameEvitement', 'trameOrganisation', 'trameVoisins', 'trameTable', 'pastille', 'poignee', 'gel', 'miseEnEvidence',
   'selection', 'focus',
   'contourTable', 'contourChaise', 'echelle', 'fantome', 'chargement', 'filigrane', 'retrait',
 ];
@@ -65,7 +65,7 @@ const FONDS_REQUIS = {
 const parNom = (registre, nom) => registre.find((e) => e.nom === nom);
 
 describe('registre des marques', () => {
-  test('les trente-quatre marques du contrat — les vingt-deux du plan et des écrans, puis les douze de la famille « graphique » —, noms uniques, seuil 3, au moins un fond chacune', () => {
+  test('les trente-cinq marques du contrat — les vingt-trois du plan et des écrans, puis les douze de la famille « graphique » —, noms uniques, seuil 3, au moins un fond chacune', () => {
     const noms = [...NOMS_MARQUES, ...NOMS_MARQUES_GRAPHIQUE];
     assert.equal(MARQUES.length, noms.length);
     assert.deepEqual(MARQUES.map((m) => m.nom), noms);
@@ -139,11 +139,12 @@ describe('le filigrane BROUILLON sur le papier (§ 11.7, § 14.5)', () => {
   });
 });
 
-describe('les trois sortes de conflit (§ 7.5, § 12.7)', () => {
+describe('les quatre sortes de conflit (§ 7.5, § 12.7)', () => {
   test('une par règle localisable, dans l’ordre du moteur : sa règle, la marque de sa trame, le jeton de sa teinte, la forme de son motif', () => {
     assert.deepEqual(
       CONFLITS.map((c) => [c.regle, c.marque, c.jeton, c.forme]),
       [
+        ['conflitsOrganisation', 'trameEvitement', '--couleur-conflit-evitement', 'hachuresHorizontales'],
         ['separerOrganisations', 'trameOrganisation', '--couleur-conflit-organisation', 'hachuresDescendantes'],
         ['nouveauxVoisins', 'trameVoisins', '--couleur-conflit-voisins', 'hachuresMontantes'],
         ['nouvelleTable', 'trameTable', '--couleur-conflit-table', 'points'],
@@ -325,8 +326,8 @@ describe('palette de jetons.css validée par calcul (§ 12.7, § 14.5)', () => {
     ...new Set(MARQUES.filter((m) => !JETONS_CONFLIT.includes(m.jeton) && m.fonds.some((f) => FONDS_DU_PLAN.has(f))).map((m) => m.jeton)),
   ];
 
-  test(`les trois teintes de conflit se séparent deux à deux de ${SEPARATIONS.entreConflits} au moins (OKLab × 100), dans les deux thèmes, en couleurs d’origine et sous les trois simulations`, () => {
-    assert.equal(JETONS_CONFLIT.length, 3);
+  test(`les quatre teintes de conflit se séparent deux à deux de ${SEPARATIONS.entreConflits} au moins (OKLab × 100), dans les deux thèmes, en couleurs d’origine et sous les trois simulations`, () => {
+    assert.equal(JETONS_CONFLIT.length, 4);
     assert.deepEqual(verifierSeparation(JETONS, JETONS_CONFLIT, [], SEPARATIONS.entreConflits), []);
   });
 

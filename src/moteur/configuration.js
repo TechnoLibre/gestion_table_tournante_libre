@@ -7,7 +7,9 @@
 //
 // L'instance porte aussi la présence de chacun à chaque tour, en masque, avec
 // ses comptes et la co-présence que lit le plafond ; les étiquettes de
-// chacun, en index, que lit la diversité par animateur ; et ce que les
+// chacun, en index, que lit la diversité par animateur ; la relation des
+// conflits d'organisation, par unités, que lit le critère des conflits ; et
+// ce que les
 // critères des objectifs et des animateurs lisent, calculé une fois par
 // configuration : l'objectif en vigueur à chaque table et chaque tour, la
 // correspondance de chaque personne à chaque objectif distinct, ses couples
@@ -42,7 +44,8 @@
 //   booléen, une portée ni « tous » ni « tour », des contraintes qui ne sont
 //   pas un objet de quatre booléens, ou dont une case facultative présente
 //   n'est pas booléenne, une liste qui n'est pas un tableau, des étiquettes
-//   qui ne sont pas une liste de chaînes, une règle d'objectif ni « ou » ni
+//   ou des conflits qui ne sont pas une liste de chaînes, une règle
+//   d'objectif ni « ou » ni
 //   « et », un mode des objectifs inconnu, des tours animés qui ne croissent
 //   pas strictement, une présence qui n'est pas une liste strictement
 //   croissante. Ces formes sont les seules que normaliser contrôle par
@@ -212,6 +215,70 @@ function numeroterGroupes(presents) {
     groupe[p] = numeroDe.get(organisation);
   }
   return { groupe, groupes };
+}
+
+// Les conflits d'organisation des présents (§ 4, § 5.3), par unités. L'unité
+// d'un affilié est son groupe g, celle d'une personne sans organisation est
+// G + p, elle seule. Chaque nom de la liste d'une personne qui désigne le
+// groupe d'un présent relie son unité à ce groupe ; un nom qu'aucun présent
+// ne porte, et celui de son propre groupe, ne relient rien. La relation est
+// symétrique : si un membre de A nomme X, chaque membre de A est en conflit
+// avec chaque membre de X, et chaque membre de X avec chaque membre de A.
+// La liste d'un exclu lie encore son organisation, dont il reste membre :
+// son unité est le groupe de ses collègues présents ; un exclu sans
+// organisation, ou d'une organisation qu'aucun présent ne porte, n'est
+// l'unité d'aucun présent et ne relie rien.
+// Les unités reliées se numérotent de 0 à K − 1 par unité croissante ;
+// uniteConflit[p] porte le rang de celle de p, −1 quand aucune liste ne la
+// relie, et conflitEntre[u × K + v] vaut 1 quand u et v sont reliées.
+// pairesEnConflit compte les paires de présents en conflit, la somme, sur
+// les liens distincts, du produit des effectifs des deux unités. La Map ne
+// sert qu'à retrouver un groupe par son libellé ; les liens se lisent dans
+// l'ordre des présents, puis des exclus, puis de leur liste.
+function relierConflits(presents, exclus, groupe, groupes) {
+  const N = presents.length;
+  const G = groupes.length;
+  const numeroDe = new Map(groupes.map((libelle, g) => [libelle, g]));
+  const uniteDe = (p) => (groupe[p] === SANS_GROUPE ? G + p : groupe[p]);
+  const liens = [];
+  const lier = (unite, noms) => {
+    for (const nom of noms ?? []) {
+      const g = numeroDe.get(nom);
+      if (g !== undefined && g !== unite) liens.push(unite, g);
+    }
+  };
+  for (let p = 0; p < N; p += 1) lier(uniteDe(p), presents[p].conflits);
+  for (const { organisation, conflits } of exclus) {
+    const g = organisation === null ? undefined : numeroDe.get(organisation);
+    if (g !== undefined) lier(g, conflits);
+  }
+  // rang[u] vaut 0 pour une unité reliée, −1 sinon, puis le rang de chaque
+  // unité reliée, chacune lue une fois par unité croissante.
+  const rang = new Int32Array(G + N).fill(-1);
+  for (const u of liens) rang[u] = 0;
+  let K = 0;
+  for (let u = 0; u < G + N; u += 1) {
+    if (rang[u] !== 0) continue;
+    rang[u] = K;
+    K += 1;
+  }
+  const conflitEntre = new Uint8Array(K * K);
+  const effectif = new Int32Array(K);
+  const uniteConflit = new Int32Array(N);
+  for (let p = 0; p < N; p += 1) {
+    uniteConflit[p] = rang[uniteDe(p)];
+    if (uniteConflit[p] >= 0) effectif[uniteConflit[p]] += 1;
+  }
+  let pairesEnConflit = 0;
+  for (let i = 0; i < liens.length; i += 2) {
+    const u = rang[liens[i]];
+    const v = rang[liens[i + 1]];
+    if (conflitEntre[u * K + v] === 1) continue;
+    conflitEntre[u * K + v] = 1;
+    conflitEntre[v * K + u] = 1;
+    pairesEnConflit += effectif[u] * effectif[v];
+  }
+  return { uniteConflit, unitesConflit: K, conflitEntre, pairesEnConflit };
 }
 
 // Les étiquettes des présents en index (D39). libellesEtiquettes porte les
@@ -692,11 +759,13 @@ function lirePriorites(priorites, mode) {
 
 // L'état de chaque critère, dans l'ordre de CRITERES (§ 5.3, D10) : coché
 // selon ses cases, sans objet quand l'événement ne lui donne rien à mesurer —
+// aucune paire de présents en conflit pour les conflits d'organisation,
 // aucun couple possible pour les tours hors objectif, aucune borne des
 // animateurs non nulle pour les animateurs non rencontrés —, et les valeurs
 // qu'il classe sous ces contraintes et ce mode.
-function etatDesCriteres(contraintes, mode, possibles, borne) {
+function etatDesCriteres(contraintes, mode, { possibles, borne, pairesEnConflit }) {
   const sansObjet = {
+    conflitsOrganisation: pairesEnConflit === 0,
     toursHorsObjectif: possibles.every((n) => n === 0),
     animateursNonRencontres: borne.every((b) => b === 0),
   };
@@ -744,20 +813,24 @@ function etatDesCriteres(contraintes, mode, possibles, borne) {
  *
  * Lève TypeError sur les seules formes qu'énumère l'en-tête du module :
  * identifiants de participant et de table, organisation, exclu, portée,
- * contraintes, listes, étiquettes, règle d'un objectif, mode, ordre des
- * tours animés, présence qui n'est pas une liste strictement croissante. Une
- * capacité, un nombre de tours, un tour désigné, le tour d'un objectif, un
- * tour animé ou un tour de présence hors de leur forme lèvent CAPACITE,
- * TOURS, RESERVATION_TOUR, OBJECTIF_TOUR, ANIMATION_NON_FIXEE ou
- * PRESENCE_TOUR ; une réservation ou
- * un objectif qui désignent un participant ou une table absents de la
- * configuration lèvent RESERVATION_INCONNUE ou OBJECTIF_INCONNU, quelle que
- * soit la forme de la valeur qui les désigne.
+ * contraintes, listes, étiquettes, conflits, règle d'un objectif, mode,
+ * ordre des tours animés, présence qui n'est pas une liste strictement
+ * croissante. Une capacité, un nombre de tours, un tour désigné, le tour
+ * d'un objectif, un tour animé ou un tour de présence hors de leur forme
+ * lèvent CAPACITE, TOURS, RESERVATION_TOUR, OBJECTIF_TOUR,
+ * ANIMATION_NON_FIXEE ou PRESENCE_TOUR ; une réservation ou un objectif qui
+ * désignent un participant ou une table absents de la configuration lèvent
+ * RESERVATION_INCONNUE ou OBJECTIF_INCONNU, quelle que soit la forme de la
+ * valeur qui les désigne. Un conflit qui nomme une organisation qu'aucun
+ * présent ne porte, ou celle de la personne, n'est pas refusé : il ne relie
+ * rien (relierConflits). La liste d'un exclu relie son organisation, quand
+ * des présents la portent.
  *
- * Les champs facultatifs absents prennent leur défaut : aucun objectif, aucune
- * étiquette, personne n'anime, le mode « places », l'ordre par défaut ; les
- * deux cases facultatives restent absentes de instance.contraintes, où
- * estCoche (criteres.js) leur donne leur valeur par défaut.
+ * Les champs facultatifs absents prennent leur défaut : aucun objectif,
+ * aucune étiquette, aucun conflit, personne n'anime, le mode « places »,
+ * l'ordre par défaut ; les deux cases facultatives restent absentes de
+ * instance.contraintes, où estCoche (criteres.js) leur donne leur valeur par
+ * défaut.
  *
  * Une configuration passée par figerConfiguration ne se normalise qu'une
  * fois : les appels suivants rendent la même instance, que l'appelant lit
@@ -797,8 +870,8 @@ function figerObjet(valeur) {
 
 /**
  * Fige ce que normaliser lit de la configuration et la rend : l'objet, ses
- * participants avec leurs étiquettes, leurs tours animés et leur présence,
- * ses tables, ses
+ * participants avec leurs étiquettes, leurs conflits, leurs tours animés et
+ * leur présence, ses tables, ses
  * réservations, ses contraintes, ses objectifs avec leurs étiquettes, ses
  * priorités, palier par palier. normaliser ne la calcule alors plus qu'une
  * fois, et chaque appel suivant rend la même instance : un appelant qui la
@@ -815,6 +888,7 @@ export function figerConfiguration(configuration) {
   figerListe(configuration.participants, (participant) => {
     figerObjet(participant);
     figerListe(participant?.etiquettes, figerObjet);
+    figerListe(participant?.conflits, figerObjet);
     figerListe(participant?.anime, figerObjet);
     figerListe(participant?.presence, figerObjet);
   });
@@ -844,7 +918,7 @@ function instanceDe(configuration) {
   // doublon, et la réservation d'un exclu n'est pas inconnue.
   const connus = new Set();
   const presents = [];
-  const exclus = [];
+  const membresExclus = [];
   for (const participant of participants) {
     exigerIdentifiant(participant.id, 'participant');
     if (connus.has(participant.id)) {
@@ -853,11 +927,13 @@ function instanceDe(configuration) {
     connus.add(participant.id);
     exigerOrganisation(participant);
     if (participant.etiquettes !== undefined) exigerEtiquettes(participant.etiquettes, `participant ${participant.id}, étiquettes`);
-    if (estExclu(participant)) exclus.push(participant.id);
+    if (participant.conflits !== undefined) exigerEtiquettes(participant.conflits, `participant ${participant.id}, conflits`);
+    if (estExclu(participant)) membresExclus.push(participant);
     else presents.push(participant);
   }
   presents.sort((a, b) => a.id - b.id);
-  exclus.sort((a, b) => a - b);
+  membresExclus.sort((a, b) => a.id - b.id);
+  const exclus = membresExclus.map(({ id }) => id);
 
   const T = tables.length;
   const idsTables = [];
@@ -882,6 +958,7 @@ function instanceDe(configuration) {
   const ids = presents.map((participant) => participant.id);
   const indexDe = new Map(ids.map((id, p) => [id, p]));
   const { groupe, groupes } = numeroterGroupes(presents);
+  const conflits = relierConflits(presents, membresExclus, groupe, groupes);
   const { debutEtiquettes, etiquettes, libellesEtiquettes } = indexerEtiquettes(presents);
   const presence = masquerPresences(presents, N, R);
   const { present } = presence;
@@ -907,6 +984,10 @@ function instanceDe(configuration) {
     capacite,
     groupe,
     groupes,
+    uniteConflit: conflits.uniteConflit,
+    unitesConflit: conflits.unitesConflit,
+    conflitEntre: conflits.conflitEntre,
+    pairesEnConflit: conflits.pairesEnConflit,
     debutEtiquettes,
     etiquettes,
     libellesEtiquettes,
@@ -935,7 +1016,11 @@ function instanceDe(configuration) {
     debutAnimes: animation.debutAnimes,
     animes: animation.animes,
     borneAnimateurs,
-    etatCriteres: etatDesCriteres(contraintes, modeObjectifs, objectifs.possibles, borneAnimateurs),
+    etatCriteres: etatDesCriteres(contraintes, modeObjectifs, {
+      possibles: objectifs.possibles,
+      borne: borneAnimateurs,
+      pairesEnConflit: conflits.pairesEnConflit,
+    }),
     priorites,
   };
 }

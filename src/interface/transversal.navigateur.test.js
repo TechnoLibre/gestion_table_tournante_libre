@@ -1864,7 +1864,7 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     aucuneFaute([...new Set(fautes)], 'atténuations');
   });
 
-  test('jamais la seule couleur : table saine et en conflit, les trois sortes de conflit, place libre, réservée et à titre non pourvu, portée tour et tous, mode en lecture, en écriture et bloqué, sans trait autour de la surface', () => {
+  test('jamais la seule couleur : table saine et en conflit, les quatre sortes de conflit, place libre, réservée et à titre non pourvu, portée tour et tous, mode en lecture, en écriture et bloqué, sans trait autour de la surface', () => {
     const plan = atteints().find((r) => r.nom === 'evenement.plan.ecriture');
     expect(plan, 'le plan en écriture relevé').toBeDefined();
     const e = plan.etats;
@@ -1875,11 +1875,15 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
       ...fautesPaire('place réservée / titre non pourvu', e.reservee, e.nonPourvu),
       ...fautesPaire('portée tour / tous', e.tour, e.tous),
     ];
-    // Les trois sortes de conflit, sur le plan qui les montre ensemble.
-    const trois = atteints().find((r) => r.nom === 'plan.troisConflits');
-    expect(trois, 'le plan des trois sortes de conflit relevé').toBeDefined();
-    const [a, b, c] = CONFLITS.map(({ marque }) => trois.etats.trames[marque]);
-    fautes.push(...fautesPaire('trame organisation / voisins', a, b), ...fautesPaire('trame organisation / table', a, c), ...fautesPaire('trame voisins / table', b, c));
+    // Les quatre sortes de conflit, sur le plan qui les montre ensemble :
+    // chaque paire de trames.
+    const toutes = atteints().find((r) => r.nom === 'plan.troisConflits');
+    expect(toutes, 'le plan des sortes de conflit relevé').toBeDefined();
+    CONFLITS.forEach(({ marque }, i) => {
+      for (const { marque: autre } of CONFLITS.slice(i + 1)) {
+        fautes.push(...fautesPaire(`trame ${marque} / ${autre}`, toutes.etats.trames[marque], toutes.etats.trames[autre]));
+      }
+    });
     const modes = ['lecture', 'ecriture', 'bloque'].map((mode) => {
       const r = atteints().find((x) => x.nom === `evenement.plan.${mode}`);
       return { ou: `mode ${mode}`, sig: r?.signatureMode?.sig ?? null, trait: r?.signatureMode?.trait ?? null };

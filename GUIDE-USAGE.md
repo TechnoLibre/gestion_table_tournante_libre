@@ -408,7 +408,7 @@ pas garde son rang, mais ne compte nulle part.
 ![L’ordre des priorités : un palier de deux critères et leurs poids, les animateurs décochés](doc/captures/10a-ordre-priorites.png)
 
 *Ici, l’excédent de collisions et les tours hors objectif partagent le
-palier 1, aux poids 1 et 3 : le classement y compare l’excédent plus trois
+palier 2, aux poids 1 et 3 : le classement y compare l’excédent plus trois
 fois les tours hors objectif. « Animateurs non rencontrés » est marqué
 « décoché » : la case « Rencontrer le plus d’animateurs différents » ne l’est
 pas. Au-dessus de la liste, hors de l’image, le choix « Objectifs des
@@ -1084,7 +1084,7 @@ réglage du poste, pour la séance, automatique par défaut (étape 9).
 | Rencontrer le plus d'animateurs différents | Génération | décochée |
 | Attribuer les sièges | Génération | décochée |
 | Objectifs des tables : chercher d'abord | Génération | le plus de places servies |
-| Ordre des priorités | Génération | excédent de collisions, puis rencontres répétées et retours, puis collisions cumulées, puis écart au plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis redondance d'organisation |
+| Ordre des priorités | Génération | conflits d'organisation, puis excédent de collisions, puis rencontres répétées et retours, puis collisions cumulées, puis écart au plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis redondance d'organisation |
 
 <!-- engendre:fin reglages -->
 
@@ -1137,6 +1137,8 @@ l’historique ; les noms des exemples sont inventés.
 | `ajouterParticipant` | Ajouté Iris Ombrelle |
 | `modifierParticipant` | Modifié Ondine Lacasse : courriel |
 | `changerEtiquettes` | Étiquettes de Iris Ombrelle : ajouté « finance » |
+| `ajouterConflit` | Conflits de Iris Ombrelle : ajouté « Atelier Ressac » |
+| `retirerConflit` | Conflits de Iris Ombrelle : retiré « Atelier Ressac » |
 | `exclureParticipant` | Exclu Théo Pervenche |
 | `reintegrerParticipant` | Réintégré Théo Pervenche |
 | `supprimerParticipant` | Supprimé Ondine Lacasse |

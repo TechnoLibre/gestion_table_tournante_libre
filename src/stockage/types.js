@@ -173,6 +173,15 @@
  *                                          tous ; absent, présente à tous
  *                                          les tours. Une exclue la garde,
  *                                          suspendue (§ 4.4)
+ * @property {string[]} [conflits]         facultatif : les organisations
+ *                                          que la personne et son
+ *                                          organisation ne doivent pas
+ *                                          croiser à une table (§ 4), au
+ *                                          moins une, chacune l'organisation
+ *                                          d'un participant de l'événement,
+ *                                          jamais la sienne, sans doublon,
+ *                                          rangées par unités UTF-16 ;
+ *                                          absent, aucune
  *
  * @typedef {Object} Table
  * @property {number} id            identifiant, unique

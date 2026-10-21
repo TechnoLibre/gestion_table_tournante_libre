@@ -232,7 +232,7 @@ describe('l’habillage des réglages', () => {
 
 // --- L'éditeur des priorités et le choix du mode, dans l'application ----------
 
-const [ECART, EXCEDENT, CUMULEES, HORS_OBJECTIF, REPETEES, ANIMATEURS, REDONDANCE] = CRITERES;
+const [ECART, EXCEDENT, CUMULEES, HORS_OBJECTIF, REPETEES, ANIMATEURS, REDONDANCE, CONFLITS] = CRITERES;
 
 // Les montages de l'application, démontés après l'épreuve ; le collecteur
 // d'erreurs n'a rien reçu pendant elle.
@@ -298,14 +298,14 @@ async function presser(m, cle) {
 }
 
 describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
-  test('au défaut : une liste ordonnée de sept paliers numérotés en texte, chaque critère sous son nom complet, son état lu dans la table d’évaluation, aucun poids', async () => {
+  test('au défaut : une liste ordonnée de huit paliers numérotés en texte, chaque critère sous son nom complet, son état lu dans la table d’évaluation, aucun poids', async () => {
     const m = await demonstration();
     expect(liste(m).tagName).toBe('OL');
     const paliers = [...liste(m).querySelectorAll(':scope > li[data-palier]')];
-    expect(paliers).toHaveLength(7);
+    expect(paliers).toHaveLength(8);
     paliers.forEach((palier, rang) => {
       expect(palier.dataset.palier).toBe(String(rang));
-      expect(palier.textContent).toContain(t('generation.priorites.palier', { palier: rang + 1, paliers: 7 }));
+      expect(palier.textContent).toContain(t('generation.priorites.palier', { palier: rang + 1, paliers: 8 }));
     });
     const etats = etatsDesCriteres(charge(m));
     for (const nom of CRITERES) {
@@ -319,6 +319,10 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     // animateurs est décochée.
     expect(etatAffiche(etats.get(HORS_OBJECTIF))).toBe('sansObjet');
     expect(etatAffiche(etats.get(ANIMATEURS))).toBe('decoche');
+    // Ni liste de conflits : le conflit d'organisation, en tête, est sans
+    // objet.
+    expect(etatAffiche(etats.get(CONFLITS))).toBe('sansObjet');
+    expect(paliers[0].contains(critereDe(m, CONFLITS))).toBe(true);
     expect(editeur(m).querySelector('input[data-champ^="poids."]')).toBeNull();
     expect(editeur(m).textContent).toContain(t('generation.priorites.parDefaut'));
     expect(annonce(m)).toBe('');
@@ -328,9 +332,10 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     const m = await demonstration();
     const admet = admissionSous(charge(m).reglages);
     for (const nom of CRITERES) expect(offerts(m, nom), nom).toEqual(gestesOfferts(ordreDe(m), nom, admet));
-    for (const nom of [ECART, EXCEDENT, CUMULEES, REPETEES, HORS_OBJECTIF]) expect(offerts(m, nom), nom).not.toContain('joindrePalier');
+    for (const nom of [CONFLITS, ECART, EXCEDENT, CUMULEES, REPETEES, HORS_OBJECTIF]) expect(offerts(m, nom), nom).not.toContain('joindrePalier');
     for (const nom of CRITERES) expect(offerts(m, nom), nom).not.toContain('separerPalier');
-    expect(offerts(m, EXCEDENT)).toEqual(['descendreCritere']);
+    expect(offerts(m, CONFLITS)).toEqual(['descendreCritere']);
+    expect(offerts(m, EXCEDENT)).toEqual(['monterCritere', 'descendreCritere']);
     expect(offerts(m, REPETEES)).toEqual(['monterCritere', 'descendreCritere']);
     expect(offerts(m, ECART)).toEqual(['monterCritere', 'descendreCritere']);
     expect(offerts(m, REDONDANCE)).toEqual(['monterCritere', 'joindrePalier']);
@@ -370,8 +375,8 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(revision(m)).toBe(r0 + 1);
     expect(journal(m)).toBe(e0 + 1);
     expect(charge(m).reglages.priorites).toEqual(attendue);
-    expect(liste(m).querySelectorAll(':scope > li[data-palier]')).toHaveLength(6);
-    expect(annonce(m)).toBe(t('generation.priorites.annonce', { critere: REDONDANCE, palier: 6, paliers: 6, avec: [ANIMATEURS] }));
+    expect(liste(m).querySelectorAll(':scope > li[data-palier]')).toHaveLength(7);
+    expect(annonce(m)).toBe(t('generation.priorites.annonce', { critere: REDONDANCE, palier: 7, paliers: 7, avec: [ANIMATEURS] }));
     expect(critereDe(m, REDONDANCE).contains(document.activeElement)).toBe(true);
     expect(editeur(m).textContent).toContain(t('generation.priorites.regle'));
     const poids = [...editeur(m).querySelectorAll('input[data-champ^="poids."]')].map((e) => e.dataset.champ);
@@ -393,7 +398,7 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(charge(m).reglages.priorites).toBeUndefined();
     expect(journal(m)).toBe(e0 + 2);
     expect(document.activeElement).toBe(bouton(m, CUMULEES, 'descendreCritere'));
-    expect(annonce(m)).toBe(t('generation.priorites.annonce', { critere: CUMULEES, palier: 3, paliers: 7, avec: [] }));
+    expect(annonce(m)).toBe(t('generation.priorites.annonce', { critere: CUMULEES, palier: 4, paliers: 8, avec: [] }));
   });
 
   test('le poids d’un critère d’un palier partagé : un champ nombre étroit de 1 à 100 ; 0 refusé contre son champ, rien d’écrit ; 5 écrit, une entrée', async () => {
@@ -438,7 +443,7 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(document.querySelector('dialog[open]')).toBeNull();
     expect(Object.hasOwn(charge(m).reglages, 'priorites')).toBe(false);
     expect(journal(m)).toBe(e0 + 1);
-    expect(liste(m).querySelectorAll(':scope > li[data-palier]')).toHaveLength(7);
+    expect(liste(m).querySelectorAll(':scope > li[data-palier]')).toHaveLength(8);
     expect(annonce(m)).toBe(t('generation.priorites.annonceRetablie'));
   });
 
@@ -529,7 +534,7 @@ describe('le mode des objectifs (§ 5.3, A8, A12, D22, D23)', () => {
     await cliquer(m, radio(m, 'minimum'));
     const refus = groupe(m).querySelector('[data-refus="OBJECTIFS_PALIER_PARTAGE"]');
     expect(refus).not.toBeNull();
-    expect(refus.querySelector(':scope > p').textContent).toBe(t('OBJECTIFS_PALIER_PARTAGE', { mode: 'minimum', palier: 4 }));
+    expect(refus.querySelector(':scope > p').textContent).toBe(t('OBJECTIFS_PALIER_PARTAGE', { mode: 'minimum', palier: 5 }));
     // Chaque bouton radio est décrit par le refus, en plus de son
     // explication ; le focus reste dans le groupe.
     expect(refus.id).not.toBe('');

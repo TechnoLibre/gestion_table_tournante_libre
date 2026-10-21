@@ -575,10 +575,17 @@ const ECART_CUMULEES_RELATIF_MAX = 0.15;
 
 describe("intégration : l'ordre réglé ne défait pas les collisions (A21)", () => {
   test("grande à objectifs, cinq graines : l'excédent et les cumulées sous les objectifs au deuxième palier restent près de ceux de l'ordre par défaut", () => {
-    // L'ordre par défaut, les tours hors objectif montés au deuxième palier.
+    // L'ordre par défaut, les tours hors objectif montés juste après
+    // l'excédent : au deuxième palier qui compte, le conflit d'organisation,
+    // sans liste, étant sans objet.
     const e = (critere) => ({ critere, poids: 1 });
-    const [premier, ...suite] = ORDRE_PAR_DEFAUT;
-    const deplace = [[e(premier)], [e('toursHorsObjectif')], ...suite.filter((nom) => nom !== 'toursHorsObjectif').map((nom) => [e(nom)])];
+    const [conflits, excedent, ...suite] = ORDRE_PAR_DEFAUT;
+    const deplace = [
+      [e(conflits)],
+      [e(excedent)],
+      [e('toursHorsObjectif')],
+      ...suite.filter((nom) => nom !== 'toursHorsObjectif').map((nom) => [e(nom)]),
+    ];
     const sommes = [undefined, deplace].map((priorites) => {
       const configuration = grandeAObjectifs(priorites);
       const instance = normaliser(configuration);

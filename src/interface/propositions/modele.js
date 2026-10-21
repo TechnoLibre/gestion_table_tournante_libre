@@ -24,7 +24,9 @@
 // groupe de colonnes, présentes chacune quand son critère compte — coché et
 // avec un objet, tel que l'état des critères de la table le dit — : le
 // tableau ne recalcule ni « sans objet » ni le mode, qu'il lit dans les
-// valeurs que le critère des objectifs classe.
+// valeurs que le critère des objectifs classe. Les conflits d'organisation
+// ouvrent le groupe des collisions, sous la même condition : sans paire de
+// présents en conflit, la colonne n'y est pas.
 //
 // Une cellule vaut { colonne, valeur, cle, decimales } : cle null, la valeur
 // est un nombre que format.nombre écrit avec decimales chiffres après la
@@ -46,6 +48,7 @@ const LECTURES = new Map([
   ['rencontresTous', (l) => l.mesures.aggRencontres.tous.min],
   ['rencontresMobiles', (l) => l.mesures.aggRencontres.mobiles.min],
   ['rencontresAncres', (l) => l.mesures.aggRencontres.ancres.min],
+  ['conflitsOrganisation', (l) => l.mesures.conflitsOrganisation],
   ['collisionsCumulees', (l) => l.mesures.collisionsCumulees],
   ['pairesDistinctes', (l) => l.mesures.pairesDistinctes],
   ['excedentCollisions', (l) => l.mesures.excedentCollisions],
@@ -70,11 +73,13 @@ const LECTURES = new Map([
 
 // Les colonnes que le tableau ne porte que sous une condition : [critère,
 // valeur], la colonne présente quand le critère compte et, valeur non
-// null, quand il classe cette valeur — les personnes jamais servies sous
-// « chacun au moins une fois », le plus de tours hors objectif d'une
+// null, quand il classe cette valeur — les conflits d'organisation dès
+// qu'une paire de présents est en conflit, les personnes jamais servies
+// sous « chacun au moins une fois », le plus de tours hors objectif d'une
 // personne sous le troisième mode. Toute autre colonne est toujours là. La
 // Map ne sert qu'à retrouver la condition d'une colonne.
 const SOUS_CONDITION = new Map([
+  ['conflitsOrganisation', ['conflitsOrganisation', 'conflitsOrganisation']],
   ['jamaisServies', ['toursHorsObjectif', 'jamaisServies']],
   ['horsObjectifMax', ['toursHorsObjectif', 'horsObjectifMax']],
   ['toursHorsObjectif', ['toursHorsObjectif', 'toursHorsObjectif']],
@@ -109,11 +114,15 @@ export const COLONNES = Object.freeze(
   ),
 );
 
+// La colonne des conflits d'organisation, qui ouvre le groupe des
+// collisions : son nom est celui de son critère.
+const COLONNE_DES_CONFLITS = 'conflitsOrganisation';
+
 // Les groupes d'en-têtes : chacun nomme des colonnes de mesure voisines dans
 // COLONNES, sous la clé propositions.groupe.<nom>.
 const GROUPES = [
   ['rencontres', ['rencontresTous', 'rencontresMobiles', 'rencontresAncres']],
-  ['collisions', ['collisionsCumulees', 'pairesDistinctes', 'excedentCollisions']],
+  ['collisions', [COLONNE_DES_CONFLITS, 'collisionsCumulees', 'pairesDistinctes', 'excedentCollisions']],
   ['repetitions', ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis']],
   ['diversite', ['organisationsVues', 'totalRedondance', 'diversite']],
   ['manque', ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori']],
@@ -286,6 +295,7 @@ function ligneDe(ligne, table, idRetenu, portees, rang = null) {
 // colonne des propositions. La Map ne sert qu'à retrouver la colonne d'une
 // valeur ; la phrase suit l'ordre que le classement rend.
 const COLONNE_DE_VALEUR = new Map([
+  ['conflitsOrganisation', 'conflitsOrganisation'],
   ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
   ['excedentCollisions', 'excedentCollisions'],
   ['collisionsCumulees', 'collisionsCumulees'],

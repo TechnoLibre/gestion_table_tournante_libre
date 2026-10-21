@@ -32,7 +32,7 @@ import {
   placeDe,
 } from './priorites.js';
 
-const [ECART, EXCEDENT, CUMULEES, HORS_OBJECTIF, REPETEES, ANIMATEURS, REDONDANCE] = CRITERES;
+const [ECART, EXCEDENT, CUMULEES, HORS_OBJECTIF, REPETEES, ANIMATEURS, REDONDANCE, CONFLITS] = CRITERES;
 
 // Une liste écrite palier par palier : chaque palier, ses critères et leurs
 // poids, [nom, poids] ou nom seul au poids 1.
@@ -72,7 +72,10 @@ function atteintes(mode, profondeur) {
 describe('l’ordre du registre et l’ordre par défaut, lus par l’application (§ 5.7, D11)', () => {
   test('les critères dans l’ordre du registre, et l’ordre par défaut : chacun seul à son palier, au poids 1, figés', () => {
     assert.deepEqual([...CRITERES_DU_REGISTRE], [...CRITERES]);
-    assert.deepEqual(LISTE_PAR_DEFAUT, liste([EXCEDENT], [REPETEES], [CUMULEES], [ECART], [HORS_OBJECTIF], [ANIMATEURS], [REDONDANCE]));
+    assert.deepEqual(
+      LISTE_PAR_DEFAUT,
+      liste([CONFLITS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [HORS_OBJECTIF], [ANIMATEURS], [REDONDANCE]),
+    );
     assert.deepEqual(LISTE_PAR_DEFAUT, structuredClone(PRIORITES_PAR_DEFAUT));
     assert.deepEqual(LISTE_PAR_DEFAUT, priorites({ reglages: {} }));
     assert.ok(Object.isFrozen(CRITERES_DU_REGISTRE) && Object.isFrozen(LISTE_PAR_DEFAUT));
@@ -104,10 +107,10 @@ describe('les quatre gestes : la liste que chacun écrit (§ 5.7, A12)', () => {
 
   test('joindre : le critère rejoint le palier du dessus, rangé dans l’ordre du registre, au poids 1 ; un palier vidé disparaît', () => {
     const l = parDefaut();
-    // La redondance rejoint les animateurs : six paliers, le dernier rangé.
+    // La redondance rejoint les animateurs : sept paliers, le dernier rangé.
     assert.deepEqual(
       listeApres(l, 'joindrePalier', REDONDANCE),
-      liste([EXCEDENT], [REPETEES], [CUMULEES], [ECART], [HORS_OBJECTIF], [ANIMATEURS, REDONDANCE]),
+      liste([CONFLITS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [HORS_OBJECTIF], [ANIMATEURS, REDONDANCE]),
     );
     // Un critère d'un palier partagé le quitte seul ; son ancien compagnon,
     // seul désormais, revient au poids 1.
@@ -122,7 +125,7 @@ describe('les quatre gestes : la liste que chacun écrit (§ 5.7, A12)', () => {
       listeApres(liste([ECART], [REPETEES], [REDONDANCE], [EXCEDENT], [CUMULEES], [HORS_OBJECTIF], [ANIMATEURS]), 'joindrePalier', EXCEDENT),
       liste([ECART], [REPETEES], [EXCEDENT, REDONDANCE], [CUMULEES], [HORS_OBJECTIF], [ANIMATEURS]),
     );
-    assert.equal(listeApres(l, 'joindrePalier', EXCEDENT), null);
+    assert.equal(listeApres(l, 'joindrePalier', CONFLITS), null);
   });
 
   test('séparer : le critère quitte son palier partagé pour un palier à lui, juste dessous ; seul, aucun geste', () => {
@@ -131,18 +134,18 @@ describe('les quatre gestes : la liste que chacun écrit (§ 5.7, A12)', () => {
       listeApres(partage, 'separerPalier', CUMULEES),
       liste([ECART], [[EXCEDENT, 2], [HORS_OBJECTIF, 9]], [CUMULEES], [REPETEES], [ANIMATEURS], [REDONDANCE]),
     );
-    const deux = liste([EXCEDENT], [REPETEES], [CUMULEES], [ECART], [[HORS_OBJECTIF, 2], [ANIMATEURS, 5]], [REDONDANCE]);
+    const deux = liste([CONFLITS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [[HORS_OBJECTIF, 2], [ANIMATEURS, 5]], [REDONDANCE]);
     assert.deepEqual(listeApres(deux, 'separerPalier', ANIMATEURS), parDefaut());
     // Séparé, le premier passe sous son ancien compagnon.
     assert.deepEqual(
       listeApres(deux, 'separerPalier', HORS_OBJECTIF),
-      liste([EXCEDENT], [REPETEES], [CUMULEES], [ECART], [ANIMATEURS], [HORS_OBJECTIF], [REDONDANCE]),
+      liste([CONFLITS], [EXCEDENT], [REPETEES], [CUMULEES], [ECART], [ANIMATEURS], [HORS_OBJECTIF], [REDONDANCE]),
     );
     assert.equal(listeApres(parDefaut(), 'separerPalier', EXCEDENT), null);
   });
 
   test('chaque liste écrite range chaque palier dans l’ordre du registre, poids 1 pour un critère seul ; la liste reçue ne change pas', () => {
-    const partage = liste([ECART], [[REDONDANCE, 6], [EXCEDENT, 2]], [CUMULEES], [HORS_OBJECTIF], [REPETEES], [ANIMATEURS]);
+    const partage = liste([ECART], [[REDONDANCE, 6], [EXCEDENT, 2]], [CUMULEES], [HORS_OBJECTIF], [REPETEES], [ANIMATEURS], [CONFLITS]);
     const avant = structuredClone(partage);
     for (const critere of CRITERES) {
       for (const geste of GESTES) {
@@ -185,11 +188,16 @@ describe('les gestes offerts (§ 5.7, A12, D8, D23)', () => {
       assert.ok(!gestesOfferts(l, HORS_OBJECTIF, admiseSous(mode)).includes('joindrePalier'), mode);
       // La redondance suit les animateurs, qui partagent leur palier.
       assert.ok(gestesOfferts(l, REDONDANCE, admiseSous(mode)).includes('joindrePalier'), mode);
+      // Le conflit d'organisation est seul à son palier, et l'excédent le
+      // suit : ni l'un ni l'autre ne se joint.
+      assert.ok(!gestesOfferts(l, CONFLITS, admiseSous(mode)).includes('joindrePalier'), mode);
+      assert.ok(!gestesOfferts(l, EXCEDENT, admiseSous(mode)).includes('joindrePalier'), mode);
+      assert.ok(gestesOfferts(l, CONFLITS, admiseSous(mode)).includes('descendreCritere'), mode);
     }
   });
 
   test('rouge : « joindre » n’est pas offert aux tours hors objectif sous « chacun » et « minimum », ni au critère qui les suit ; sous « places », il l’est', () => {
-    const l = liste([ECART], [EXCEDENT], [CUMULEES], [HORS_OBJECTIF], [ANIMATEURS], [REPETEES], [REDONDANCE]);
+    const l = liste([ECART], [EXCEDENT], [CUMULEES], [HORS_OBJECTIF], [ANIMATEURS], [REPETEES], [REDONDANCE], [CONFLITS]);
     for (const mode of ['chacun', 'minimum']) {
       assert.ok(!gestesOfferts(l, HORS_OBJECTIF, admiseSous(mode)).includes('joindrePalier'), mode);
       assert.ok(!gestesOfferts(l, ANIMATEURS, admiseSous(mode)).includes('joindrePalier'), mode);

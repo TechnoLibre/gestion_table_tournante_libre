@@ -442,6 +442,29 @@ toute la soirée.
 qui se connaissent déjà ; l'étiquette dit à quelle table une personne est
 attendue. Une personne en porte de zéro à vingt.
 
+**Conflit d'organisation** — une organisation qu'une personne nomme, et que
+son organisation entière ne doit croiser à aucune table : si un membre de
+l'organisation A nomme X, chaque membre de A évite chaque membre de X, et
+chaque membre de X chaque membre de A, à chaque tour. Une personne sans
+organisation qui nomme X évite X seule. Une personne porte une liste de
+conflits, vide par défaut ; chaque organisation nommée est celle d'un
+participant de l'événement, exclus compris, et jamais la sienne. Le conflit
+est un critère de la recherche (§ 5.3, § 5.7), jamais une interdiction : la
+recherche vise zéro et dit combien il en reste. L'exclusion suspend une
+personne, pas son organisation : la liste d'un membre exclu de A relie encore
+A à X, et ses collègues présents évitent X. Une personne exclue sans
+organisation ne relie personne, et une organisation que seuls des exclus
+portent n'est évitée de personne : comme toute statistique, le conflit ne
+compte que des paires de présents.
+
+Les listes suivent les organisations. Quand la dernière personne d'une
+organisation en change, la référence suit ce renommage dans chaque liste,
+dans la même entrée d'historique ; quand une organisation disparaît — sa
+dernière personne supprimée, sans organisation, ou retirée par un import —,
+elle quitte chaque liste dans la même entrée ; et une personne qui prend
+l'organisation qu'elle nommait la retire de sa liste. Le libellé de l'entrée
+le dit (§ 8.2).
+
 **Objectif de table** — une liste d'étiquettes attachée à une table, sous une
 règle : *au moins une* de ces étiquettes, ou *toutes*. Il vaut pour la soirée,
 ou pour un tour désigné. Il ne fixe personne : c'est un critère de la recherche
@@ -766,6 +789,16 @@ aucune case : il montre l'état que donnent les cases de ce tableau.
 | rencontres répétées et retours | « Nouveaux voisins » **ou** « Nouvelle table » est cochée ; décoché quand aucune des deux ne l'est |
 | animateurs non rencontrés | « Rencontrer le plus d'animateurs différents » est cochée et a un objet |
 | redondance d'organisation | « Varier les organisations rencontrées » est cochée |
+| conflits d'organisation | toujours, sans case, quand il a un objet |
+
+**Le conflit d'organisation n'a pas de case.** Il compte dès qu'une paire de
+personnes présentes est en conflit (§ 4) : une liste, d'une personne
+présente ou d'un membre exclu d'une organisation qui compte des présents,
+qui nomme l'organisation d'une personne présente. Sans liste, ou quand
+aucune liste ne relie ainsi deux présents, il est sans objet — il ne compte
+nulle part, et l'éditeur de l'ordre le marque « sans objet ». Un événement qui
+ne porte aucune liste se génère donc exactement comme avant que le critère
+existe : mêmes plans à graine égale, même classement, même phrase.
 
 **« Attribuer les sièges » change les animateurs.** Sans sièges attribués, une
 réservation sans siège à une table titrée peut pourvoir un titre de cette
@@ -847,6 +880,7 @@ une lecture et non un jugement :
 | **collisions cumulées** | occurrences (paire, tour) où deux personnes d'une même organisation partagent une table — l'unité dans laquelle les planchers du § 5.6 se démontrent |
 | **paires de même organisation** | **paires distinctes** réunies au moins une fois ; jamais la même unité que la ligne précédente |
 | **excédent de collisions** | collisions cumulées − paires distinctes : le nombre de **retrouvailles au-delà de la première** entre deux personnes d'une même organisation. Nul quand aucune paire de collègues n'est réunie deux fois |
+| **conflits d'organisation** | occurrences (paire, tour) où deux personnes en conflit d'organisation (§ 4) partagent une table, dans la même unité que les collisions cumulées ; « — » quand aucune paire de présents n'est en conflit |
 | **rencontres répétées** | paires réunies plus d'une fois |
 | **nombre maximal de rencontres d'une même paire** | |
 | **retours à une table déjà occupée** | *voir ci-dessous* |
@@ -1255,7 +1289,18 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   que le logiciel ne calcule pas. Sur dix personnes « finance », une table
   « finance » de huit places et quatre tours, les planchers valent huit tours
   hors objectif, zéro personne jamais servie et un tour hors objectif pour une
-  personne ; sur quarante personnes, 128, huit et quatre.
+  personne ; sur quarante personnes, 128, huit et quatre ;
+- **les conflits d'organisation imposés** : deux personnes en conflit (§ 4)
+  que des réservations assoient à une même table d'un tour s'y rencontrent
+  dans tout plan qui honore les réservations. Le diagnostic les compte, en
+  occurrences (paire, tour), sur le plan des seules réservations — le même
+  que mesure tout placement à ces tours —, et l'écrit quand ce compte est
+  strictement positif : « 4 conflits d'organisation imposés par les
+  réservations », avec pour remède de déplacer ou de retirer l'une de ces
+  réservations. C'est le plancher des conflits de tout plan qui honore les
+  réservations ; la page de qualité l'écrit sous la tuile des conflits
+  (§ 12.2). Une réservation qui réunit deux personnes en conflit n'est pas
+  refusée : elle est signalée.
 
 L'objectif auquel aucune personne présente ne correspond est signalé à
 l'objectif même (§ 5.9).
@@ -1562,10 +1607,13 @@ entier ≥ 0, et la plus faible est la meilleure.
 | rencontres répétées et retours | les rencontres répétées choisies sous « nouveaux voisins » ; sinon, sous « nouvelle table » seule, les retours choisis | Σ_paires max(0, M − 1) sous « nouveaux voisins », plus les retours choisis sous « nouvelle table » | contrainte |
 | animateurs non rencontrés | Σ (B(p) − m(p)) (§ 5.4) | la même | raffinement |
 | redondance d'organisation | Σ r(p) | la même | raffinement |
+| conflits d'organisation | les conflits d'organisation (§ 5.4) | la même | contrainte |
 
-**La liste est complète** : chaque critère y figure une fois, coché ou non. Deux
-critères y sont **seuls à leur palier** : ils se déplacent, ils ne partagent pas
-leur palier. L'écart au plafond a priori, parce que sa valeur nulle est le
+**La liste est complète** : chaque critère y figure une fois, coché ou non.
+Trois critères y sont **seuls à leur palier** : ils se déplacent, ils ne
+partagent pas leur palier. Le conflit d'organisation, parce qu'il dit ce que
+la soirée promet de ne jamais faire : une somme pondérée l'échangerait contre
+quelques collisions ou quelques retours. L'écart au plafond a priori, parce que sa valeur nulle est le
 certificat du § 5.5 et qu'une somme pondérée le noierait dans d'autres unités.
 Les rencontres répétées et les retours, parce que leurs deux valeurs ne
 s'échangent pas au même taux contre un autre critère : une paire réunie trois
@@ -1591,25 +1639,30 @@ de même effet que l'ordre par défaut s'y lit, et se réécrit présente (§ 8.
 Un critère qui rejoint un palier y entre au poids 1. Changer de mode réécrit la
 liste ainsi rangée, sans qu'aucun critère change de palier.
 
-**Ordre par défaut** : excédent de collisions, puis rencontres répétées et
-retours, puis collisions cumulées, puis écart au plafond a priori, puis tours
-hors objectif, puis animateurs non rencontrés, puis redondance d'organisation,
-chacun seul à son palier, sous le mode « le plus de places servies ». Il n'est
-pas l'ordre du tableau ci-dessus, qui reste celui des critères dans un palier.
-L'**ordre fixe de référence** est la liste excédent, rencontres répétées,
-cumulées, écart, redondance, chacun seul à son palier : l'ordre par défaut sans
-les deux critères des objectifs et des animateurs. Une liste écrite garde son
-ordre : seul l'événement qui ne règle rien suit l'ordre par défaut. Sous l'ordre
-par défaut, sans objectif de table et sans la case des animateurs, quel que soit
-le mode : sous toute combinaison des cases du § 5.3, les plans à graine égale
-sont ceux de l'ordre fixe de référence ; sous les quatre cases cochées, le
-classement et sa phrase le sont aussi. Une case décochée retire son critère du
+**Ordre par défaut** : conflits d'organisation, puis excédent de collisions,
+puis rencontres répétées et retours, puis collisions cumulées, puis écart au
+plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis
+redondance d'organisation, chacun seul à son palier, sous le mode « le plus de
+places servies ». Il n'est pas l'ordre du tableau ci-dessus, qui reste celui des
+critères dans un palier. L'**ordre fixe de référence** est la liste excédent,
+rencontres répétées, cumulées, écart, redondance, chacun seul à son palier :
+l'ordre par défaut sans les trois critères des conflits, des objectifs et des
+animateurs. Une liste écrite garde son ordre : seul l'événement qui ne règle
+rien suit l'ordre par défaut. Sous l'ordre par défaut, sans liste de conflits,
+sans objectif de table et sans la case des animateurs, quel que soit le mode :
+sous toute combinaison des cases du § 5.3, les plans à graine égale sont ceux
+de l'ordre fixe de référence ; sous les quatre cases cochées, le classement et
+sa phrase le sont aussi. Une case décochée retire son critère du
 classement et de la phrase (§ 5.3) ; « nouvelle table » cochée seule y fait
 classer les retours choisis. Un événement qui ne règle rien n'écrit rien
 (§ 8.9) ; « Rétablir l'ordre par défaut » retire le réglage.
 
-**L'ordre par défaut met d'abord ce que la soirée promet à chacun.** Ne pas
-passer la soirée avec ses collègues, ne pas revoir à une table une personne déjà
+**L'ordre par défaut met d'abord ce que la soirée promet à chacun.** Ne jamais
+asseoir ensemble deux organisations en conflit vient avant tout : c'est le
+seul critère que l'opérateur nomme personne par personne, et il le fait pour
+qu'il tienne. Le conflit d'organisation ouvre donc l'ordre par défaut ; il se
+déplace comme les autres, et l'opérateur qui le range plus bas l'accepte
+moins tenu. Ne pas passer la soirée avec ses collègues, ne pas revoir à une table une personne déjà
 rencontrée, ne pas revenir à une table déjà visitée : ce sont les promesses que
 l'opérateur fait à la salle, et un plan qui en manque une se voit. L'excédent de
 collisions vient en tête, puis les rencontres répétées et retours, puis les
@@ -1678,9 +1731,10 @@ gardant leur ordre : elle peut perdre une rencontre le temps de défaire une
 collision, puis la reprendre. L'écart en tête, une meilleure affectation garde
 un écart nul, et la bascule est acquise ; rangé après d'autres paliers, il peut
 redevenir non nul sur une meilleure affectation, et la recherche revient alors
-à l'ordre du score. Sous l'ordre par défaut, cela compare excédent, rencontres
-répétées et retours, cumulées, tours hors objectif, l'écart, animateurs,
-redondance : sans objectif, l'ordre des paliers ne change pas. Le classement,
+à l'ordre du score. Sous l'ordre par défaut, cela compare conflits,
+excédent, rencontres répétées et retours, cumulées, tours hors objectif,
+l'écart, animateurs, redondance : sans objectif, l'ordre des paliers ne change
+pas. Le classement,
 lui, suit toujours l'ordre réglé.
 
 **Tant que l'écart n'est pas annulé, la somme des carrés précède tous les
@@ -1690,8 +1744,9 @@ lieu : un palier rangé après l'écart ne départage que des affectations de m�
 somme des carrés, et pèse dans la recherche à peine plus qu'un départage. Un
 critère rangé après l'écart ne coûte donc aucune rencontre à personne ; pour
 qu'il pèse sur une soirée tendue, l'opérateur le range devant l'écart, et
-accepte de perdre des rencontres pour lui. L'ordre par défaut le fait pour
-l'excédent, les rencontres répétées et retours et les collisions cumulées.
+accepte de perdre des rencontres pour lui. L'ordre par défaut le fait pour les
+conflits d'organisation, l'excédent, les rencontres répétées et retours et les
+collisions cumulées.
 
 **Un critère décoché ou sans objet** (§ 5.3) sort de la recherche comme du
 classement ; un palier dont aucun critère ne compte disparaît, et les autres
@@ -1717,8 +1772,9 @@ le palier applique : « rencontres répétées », ou « retours » sous « nouv
 table » seule ; un critère qui en classe deux les nomme l'une après l'autre,
 séparées par « puis » comme deux paliers — « personnes jamais servies, puis
 tours hors objectif ». L'éditeur, lui, écrit le nom complet du critère. Sous
-l'ordre par défaut, sans objectif et sans la case des animateurs, les quatre
-cases cochées, elle est mot pour mot celle de l'ordre fixe de référence.
+l'ordre par défaut, sans liste de conflits, sans objectif et sans la case des
+animateurs, les quatre cases cochées, elle est mot pour mot celle de l'ordre
+fixe de référence.
 
 **Les paires distinctes ne sont pas une clé de tri** ; elles restent une colonne
 affichée, et se retrouvent de toute façon par soustraction. Trois clés pour deux
@@ -1745,6 +1801,10 @@ l'objectif, précédés des personnes jamais servies sous « chacun au moins une
 fois » et du plus de tours hors objectif d'une personne sous « l'équité
 d'abord » ; pour le second, le minimum des animateurs rencontrés et les
 animateurs non rencontrés ; chacune présente quand son critère compte (§ 5.3).
+Le groupe des collisions d'organisation s'ouvre, quand le conflit
+d'organisation a un objet, sur la colonne des conflits d'organisation, en
+occurrences (paire, tour) ; sans paire de présents en conflit, elle n'y est
+pas.
 Chacun de ces deux minimums porte sur tous les concernés, sans ses lignes
 secondaires (§ 5.4). Le regroupement ne change l'en-tête ni l'explication
 d'aucune colonne ; ses nombres s'alignent à droite en chiffres tabulaires. La
@@ -2476,22 +2536,36 @@ plateau et de part et d'autre de la pastille, où seul son disque le couvre ;
 les chaises, posées sur le bord, se peignent par-dessus lui.
 
 **Chaque règle a sa trame, d'une forme et d'une teinte propres** — hachures
-descendantes pour « séparer les organisations », hachures montantes pour
-« nouveaux voisins », points pour « nouvelle table ». La forme suffit sans la
-couleur ; la teinte la redit. Une table qui viole plusieurs règles superpose
-leurs trames — les deux hachures se croisent en quadrillage — sous un même
-contour épaissi, commun aux trois règles ; la pastille compte toutes ses
-violations.
+horizontales pour le conflit d'organisation, hachures descendantes pour
+« séparer les organisations », hachures montantes pour « nouveaux voisins »,
+points pour « nouvelle table ». La forme suffit sans la couleur ; la teinte la
+redit. Les teintes libres à trente degrés des autres jetons sont rares : celle
+du conflit d'organisation est un brun presque noir dans le thème clair, un
+vert-jaune vif dans le sombre. Une table qui viole plusieurs règles superpose
+leurs trames — les deux hachures obliques se croisent en quadrillage, les
+horizontales les traversent — sous un même contour épaissi, commun aux quatre
+règles ; la pastille compte toutes ses violations, une paire en conflit
+d'organisation pour une.
+
+**Le conflit d'organisation se signale à la table, il ne se refuse pas.** Sa
+règle, sans case, est active dès que le critère a un objet (§ 5.3), et ses
+paires sont celles de la mesure : la somme des paires de chaque table, sur la
+soirée, égale les conflits d'organisation du placement. Un placement retouché
+à la main, ou une réservation, qui réunit deux personnes en conflit est
+signalé ainsi, jamais refusé.
 
 **Une légende des conflits reste accessible depuis le plan**, par la barre de
 vue : pour chaque règle active, un échantillon de sa trame — la forme et la
 teinte que le plan peint — et son nom ; elle dit aussi ce que compte la
-pastille. Une règle inactive n'y paraît pas.
+pastille. Une règle inactive n'y paraît pas ; le conflit d'organisation y
+paraît, en tête, quand son critère a un objet, tel que la table d'évaluation
+le dit.
 
 Le détail d'une table en conflit nomme les personnes de chaque violation ;
 pour « séparer les organisations », il nomme aussi **l'organisation qui les
 réunit**, telle que la liste la porte : « Même organisation (Club des Merles) :
-Iris Ombrelle et Théo Pervenche ».
+Iris Ombrelle et Théo Pervenche ». Pour le conflit d'organisation, il nomme
+chaque paire : « Conflit d'organisation : Iris Ombrelle et Théo Pervenche ».
 
 **Quand toutes les tables sont en conflit, le plan cesse de signaler quoi que ce
 soit** — cas que le diagnostic sait prédire. La pastille chiffrée garde sa
@@ -3458,7 +3532,7 @@ lisent, et s'écrivent rangés.
 | `respecterObjectifs` | réglages | coché | booléen ; présent seulement à faux |
 | `modeObjectifs` | réglages | le plus de places servies | `chacun` (chacun au moins une fois) ou `minimum` (l'équité d'abord) ; présent seulement hors du défaut |
 | `rencontrerAnimateurs` | réglages | décoché | booléen ; présent seulement à vrai |
-| `priorites` | réglages | l'ordre par défaut (§ 5.7) | liste de paliers, chacun une liste non vide de `{critere, poids}` ; chaque critère du § 5.7 une fois ; l'écart au plafond a priori et les rencontres répétées et retours seuls à leur palier, au poids 1 ; sous `modeObjectifs` présent, les tours hors objectif aussi ; poids entiers de 1 à 100, un critère seul à son palier hors de ceux-là gardant le poids écrit (§ 5.7) ; chaque palier écrit dans l'ordre du tableau du § 5.7 ; absent quand il égale le défaut, chaque critère seul à son palier au poids 1 |
+| `priorites` | réglages | l'ordre par défaut (§ 5.7) | liste de paliers, chacun une liste non vide de `{critere, poids}` ; chaque critère du § 5.7 une fois ; l'écart au plafond a priori, les rencontres répétées et retours et les conflits d'organisation seuls à leur palier, au poids 1 ; sous `modeObjectifs` présent, les tours hors objectif aussi ; poids entiers de 1 à 100, un critère seul à son palier hors de ceux-là gardant le poids écrit (§ 5.7) ; chaque palier écrit dans l'ordre du tableau du § 5.7 ; absent quand il égale le défaut, chaque critère seul à son palier au poids 1 |
 
 La liste `priorites` est complète : une liste qui ne nomme pas un critère est
 une faute de forme. Le lecteur de l'ordre sait compléter une liste qui ne
@@ -3524,6 +3598,29 @@ longueur admise ; le même libellé n'écrit rien. Un correctif du journal le po
 et le retire comme tout champ. Le moteur ne le lit pas : la configuration
 qu'il reçoit, les empreintes et les raisons de dérive restent les mêmes. Le
 champ fait partie du format 3.
+
+#### Un champ facultatif : les conflits d'organisation
+
+Les conflits d'organisation d'une personne (§ 4) s'écrivent dans un champ
+facultatif, absent quand elle n'en nomme aucun :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `conflits` | chaque participant, en dernier, après `presence` | aucun conflit | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
+
+Une liste vide, un doublon, une valeur qui n'est pas un texte non vide sont
+des fautes de forme ; la propre organisation de la personne aussi, nommée par
+le rang qui la porte ; une organisation que nul participant ne porte est une
+faute de référence (§ 8.8). Le champ se pose et se retire par deux commandes,
+`ajouterConflit` et `retirerConflit` — une entrée d'historique chacune,
+refusées en lecture et sur un plan bloqué — : la première reçoit une
+organisation que porte un participant, mise en NFC et ses blancs de bord
+retirés, refuse la propre organisation de la personne et une organisation
+inconnue, et rend la liste rangée ; la seconde retire le champ quand la liste
+se vide. Modifier, supprimer ou importer des participants fait suivre les
+listes dans la même entrée (§ 4). La configuration du moteur en porte une
+copie : sans liste, elle est celle d'avant le champ, et les empreintes avec
+elle. Le champ fait partie du format 3.
 
 #### Deux champs facultatifs : la présence
 
@@ -4931,8 +5028,9 @@ l'ordre des colonnes, chacune avec sa population. Le minimum brut porte le
 (§ 5.4), le suivent, chacune sa tuile. Le minimum se lit sur la population
 entière : la personne qui en a le moins est souvent une présence partielle, et
 l'infobulle de la tuile le dit alors — « Prénom Nom, au rang 1, est présente
-aux tours 1 et 2. ». Puis les collisions cumulées, les paires
-distinctes et l'excédent ; les rencontres répétées choisies, les imposées
+aux tours 1 et 2. ». Puis, quand le conflit d'organisation a un objet, les
+conflits d'organisation ; puis les collisions cumulées, les paires distinctes
+et l'excédent ; les rencontres répétées choisies, les imposées
 énoncées à part ; le plus grand nombre de rencontres d'une paire ; les retours
 choisis, les imposés à part ; le minimum de A(p), avec la borne de diversité de
 la personne au rang 1 du même tri sur A(p) (§ 5.5) — une phrase dit à sa place
@@ -4955,9 +5053,10 @@ atteint », ou « atteignabilité inconnue », suit les tuiles (§ 5.5).
 et là seulement, en dernière ligne, sous son chiffre : « plancher 4 », ou
 « plancher 4, le meilleur atteint » quand la mesure que la tuile écrit l'égale.
 Ces deux lignes ne parlent que de cette mesure, jamais du placement entier, et
-ne nomment personne. Sept tuiles peuvent en porter un : les collisions cumulées,
-les paires distinctes et l'excédent, chacun la somme des planchers de ses
-organisations en collision ; l'écart d'itinéraire maximal, aucun quand le
+ne nomment personne. Huit tuiles peuvent en porter un : les conflits
+d'organisation, ceux que les réservations imposent (§ 5.6), quand le critère a
+un objet ; les collisions cumulées, les paires distinctes et l'excédent, chacun
+la somme des planchers de ses organisations en collision ; l'écart d'itinéraire maximal, aucun quand le
 plafond a priori est inconnu ou qu'une personne est absente à un tour (§ 5.6),
 sa tuile écrivant alors, sous son chiffre, « Plancher non prouvé : une personne
 au moins est absente à un tour. » ; les personnes jamais servies, le plus de
@@ -6586,6 +6685,24 @@ suite déterministe d'échanges, avec comparaison terme à terme de A(p) et de |
 à jour qui oublie de décrémenter un compteur sur la table quittée. **Le nombre de
 mouvements est l'exigence du test** : un test à dix mouvements est le test qui ne
 peut pas échouer du § 14.2. Cette épreuve est dans la série `node:long`.
+
+**Les conflits d'organisation tenus coup par coup égalent leur recalcul.** Sur
+une soirée inventée où chaque critère compte, conflits compris — un membre
+d'une organisation en nomme une autre, une personne sans organisation en nomme
+une troisième —, sous chaque mode, l'ordre par défaut et un ordre déplacé, le
+n-uplet tenu à jour égale le recalcul et une énumération directe des paires à
+1, 10, 100, 1 000 et 10 000 mouvements, et revient au départ une fois les
+mouvements défaits. L'énumération lit la relation sur la configuration, sans
+le moteur : un conflit compté d'un seul sens, sur la seule personne qui nomme,
+ou sur une organisation que seuls des exclus portent, la fait tomber. Il
+refuse la mise à jour qui oublie une paire en conflit à l'arrivée ou au départ
+d'une table.
+
+**Sans liste de conflits, le critère ne change aucun plan.** Le conflit
+d'organisation, en tête de l'ordre par défaut, est sans objet sans liste : les
+empreintes de référence se relèvent identiques, plans, combinaisons, bascule
+et classements, octet pour octet ; seul le nom du critère s'ajoute à la liste
+écrite de l'ordre du registre que la section de la bascule porte.
 
 **L'ordre par défaut rend les plans de l'ordre fixe de référence.** Des
 **empreintes de référence**, fichier d'épreuve versionné

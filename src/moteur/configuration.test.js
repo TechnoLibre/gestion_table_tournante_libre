@@ -552,6 +552,8 @@ describe('normaliser : refus (§ 5.9, § 6.2)', () => {
       ['tables en objet', { tables: {} }],
       ['réservations absentes', { reservations: undefined }],
       ['réservations en objet', { reservations: {} }],
+      ['conflits en texte', { participants: [{ id: 1, nom: 'P1', organisation: null, conflits: 'Rameau' }] }],
+      ['un conflit numérique', { participants: [{ id: 1, nom: 'P1', organisation: null, conflits: ['Rameau', 3] }] }],
     ];
     const ecarts = [];
     for (const [libelle, modification] of cas) {
@@ -1323,11 +1325,107 @@ describe('normaliser : les étiquettes des personnes, en index (§ 4.5, D39)', (
   });
 });
 
+describe('normaliser : les conflits d’organisation, par unités (§ 4, § 5.3)', () => {
+  // Une personne d'organisation donnée, qui nomme conflits quand ils sont
+  // donnés.
+  const membre = (id, organisation, conflits) => ({ id, nom: `P${id}`, organisation, ...(conflits ? { conflits } : {}) });
+  const unites = (instance) => Array.from(instance.uniteConflit);
+  const relation = (instance) => Array.from(instance.conflitEntre);
+
+  test("un lien relie deux organisations entières, dans les deux sens ; une personne sans organisation est sa propre unité", () => {
+    // Groupes, par identifiant croissant : Rameau (0), Tilleul (1), Saule
+    // (2). 1 nomme le Tilleul et 4 le Rameau, le même lien ; 5, sans
+    // organisation, nomme le Saule ; 6, sans organisation, ne nomme rien.
+    const instance = normaliser(configuration({
+      participants: [
+        membre(1, 'Rameau', ['Tilleul']),
+        membre(2, 'Rameau'),
+        membre(3, 'Tilleul'),
+        membre(4, 'Tilleul', ['Rameau']),
+        membre(5, null, ['Saule']),
+        membre(6, null),
+        membre(7, 'Saule'),
+      ],
+      tables: tablesDe([11, 12], 4),
+      tours: 1,
+    }));
+    // Unités reliées, par unité croissante : Rameau 0, Tilleul 1, Saule 2,
+    // la personne 5 (unité G + 4) 3.
+    assert.equal(instance.unitesConflit, 4);
+    assert.deepEqual(unites(instance), [0, 0, 1, 1, 3, -1, 2]);
+    assert.deepEqual(relation(instance), [
+      0, 1, 0, 0,
+      1, 0, 0, 0,
+      0, 0, 0, 1,
+      0, 0, 1, 0,
+    ]);
+    // 2 × 2 paires Rameau–Tilleul, et la paire (5, 7).
+    assert.equal(instance.pairesEnConflit, 5);
+  });
+
+  test("sa propre organisation, une organisation qu'aucun présent ne porte, une liste vide : rien n'est relié", () => {
+    const instance = normaliser(configuration({
+      participants: [
+        membre(1, 'Rameau', ['Rameau']),
+        membre(2, null, ['Tilleul', 'Inconnue']),
+        { ...membre(3, 'Tilleul'), exclu: true },
+        membre(4, 'Saule', []),
+      ],
+      tables: tablesDe([11], 4),
+      tours: 1,
+    }));
+    assert.equal(instance.unitesConflit, 0);
+    assert.deepEqual(unites(instance), [-1, -1, -1]);
+    assert.equal(instance.pairesEnConflit, 0);
+    assert.equal(instance.etatCriteres.find(({ nom }) => nom === 'conflitsOrganisation').sansObjet, true);
+  });
+
+  test("la liste d'un membre exclu relie encore son organisation ; seules les paires de présents comptent", () => {
+    // 1, exclue, est du Rameau et nomme le Tilleul : 2 et 3, du Rameau,
+    // évitent 4 et 5, du Tilleul. 6, exclue et sans organisation, nomme le
+    // Saule, et 8, exclue du Chêne, que seuls des exclus portent, nomme le
+    // Saule et le Rameau : ni l'une ni l'autre n'est l'unité d'un présent, et
+    // elles ne relient rien.
+    const participants = [
+      { ...membre(1, 'Rameau', ['Tilleul']), exclu: true },
+      membre(2, 'Rameau'),
+      membre(3, 'Rameau'),
+      membre(4, 'Tilleul'),
+      membre(5, 'Tilleul'),
+      { ...membre(6, null, ['Saule']), exclu: true },
+      membre(7, 'Saule'),
+      { ...membre(8, 'Chêne', ['Saule', 'Rameau']), exclu: true },
+    ];
+    const instance = normaliser(configuration({ participants, tables: tablesDe([11, 12], 4), tours: 1 }));
+    assert.equal(instance.unitesConflit, 2);
+    assert.deepEqual(unites(instance), [0, 0, 1, 1, -1]);
+    assert.deepEqual(relation(instance), [0, 1, 1, 0]);
+    assert.equal(instance.pairesEnConflit, 4);
+    assert.equal(instance.etatCriteres.find(({ nom }) => nom === 'conflitsOrganisation').sansObjet, false);
+    // Présente, la même personne compte avec ses collègues : 3 × 2 paires.
+    const presente = normaliser(configuration({
+      participants: participants.map((p) => (p.id === 1 ? { ...p, exclu: false } : p)),
+      tables: tablesDe([11, 12], 4),
+      tours: 1,
+    }));
+    assert.equal(presente.pairesEnConflit, 6);
+  });
+
+  test("figerConfiguration fige aussi la liste des conflits d'une personne", () => {
+    const figee = figerConfiguration(configuration({
+      participants: [membre(1, 'Rameau', ['Tilleul']), membre(2, 'Tilleul')],
+      tables: tablesDe([11], 2),
+      tours: 1,
+    }));
+    assert.ok(Object.isFrozen(figee.participants[0].conflits));
+  });
+});
+
 describe('normaliser : refus des objectifs, du mode et des priorités (A12, A16)', () => {
   const base = configuration({ participants: personnes([1, 2, 3]), tables: tablesDe([11, 12], 2), tours: 2 });
   const avec = (modification) => () => normaliser({ ...base, ...modification });
   const ordre = (...paliers) => paliers.map((palier) => palier.map((critere) => ({ critere, poids: 1 })));
-  const [ecart, excedent, collisions, horsObjectif, repetees, animateurs, redondance] = CRITERES;
+  const [ecart, excedent, collisions, horsObjectif, repetees, animateurs, redondance, conflits] = CRITERES;
 
   test('chaque code, sur un cas', () => {
     assert.deepEqual(ecartsDeRefus([
@@ -1361,11 +1459,14 @@ describe('normaliser : refus des objectifs, du mode et des priorités (A12, A16)
   test('une liste incomplète se complète par l’ordre par défaut avant d’être jugée', () => {
     const instance = normaliser({ ...base, priorites: ordre([redondance], [ecart]) });
     // Chaque critère manquant suit celui qui le précède dans l'ordre par
-    // défaut ; l'excédent, qui l'ouvre, va en tête.
-    assert.deepEqual(instance.priorites, ordre([excedent], [repetees], [collisions], [redondance], [ecart], [horsObjectif], [animateurs]));
+    // défaut ; le conflit d'organisation, qui l'ouvre, va en tête.
+    assert.deepEqual(
+      instance.priorites,
+      ordre([conflits], [excedent], [repetees], [collisions], [redondance], [ecart], [horsObjectif], [animateurs]),
+    );
     assert.equal(verifierPriorites(instance.priorites, 'places'), null);
     // Le même partage, sous le mode par défaut, est reçu.
-    const partage = ordre([ecart], [excedent], [collisions, horsObjectif], [repetees], [animateurs], [redondance]);
+    const partage = ordre([ecart], [excedent], [collisions, horsObjectif], [repetees], [animateurs], [redondance], [conflits]);
     assert.deepEqual(normaliser({ ...base, priorites: partage }).priorites, partage);
   });
 
@@ -1415,6 +1516,9 @@ describe('normaliser : état des critères (§ 5.3, A8, D10)', () => {
     });
     assert.deepEqual(etat(instance, 'ecartAuPlafondAPrioriMax'), {
       nom: 'ecartAuPlafondAPrioriMax', coche: true, sansObjet: false, valeurs: ['ecartAuPlafondAPrioriMax'],
+    });
+    assert.deepEqual(etat(instance, 'conflitsOrganisation'), {
+      nom: 'conflitsOrganisation', coche: true, sansObjet: true, valeurs: ['conflitsOrganisation'],
     });
   });
 

@@ -132,8 +132,9 @@ function objetsDe(valeur) {
 const CSV_DEUX = 'nom;prenom;organisation\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, changerEtiquettes, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, les deux des conflits, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
+      'ajouterConflit',
       'ajouterParticipant',
       'changerEtat',
       'changerPresence',
@@ -155,12 +156,13 @@ describe('commandes : le registre (§ 8.2)', () => {
       'reintegrerParticipant',
       'reserver',
       'retenirProposition',
+      'retirerConflit',
       'retirerDuTour',
       'retirerReservation',
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 25);
+    assert.equal(attendues.length, 27);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     assert.deepEqual([...COMMANDES_PRESENCE.keys()], ['changerPresence']);
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
@@ -1503,6 +1505,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
     [{ critere: 'rencontresRepetees', poids: 1 }],
     [{ critere: 'animateursNonRencontres', poids: 1 }],
     [{ critere: 'redondance', poids: 1 }],
+    [{ critere: 'conflitsOrganisation', poids: 1 }],
   ];
 
   // La charge que reçoit chaque commande : la charge riche, sauf debloquer,
@@ -1510,7 +1513,8 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
   // de plus, de quoi effacer au-delà de la première et de la retenue ;
   // convertirEnTous, qui y trouve Théo réservé à la table 2 à chaque tour, en
   // portée « tour » ; deplacerDansRetenu, qui y trouve l'autre personne du
-  // tour 1 retirée dans la réserve.
+  // tour 1 retirée dans la réserve ; retirerConflit, qui y trouve Ondine en
+  // conflit avec le Club des Merles.
   function recues(charge) {
     const { autre } = auTour1(charge);
     const reservee = structuredClone(charge);
@@ -1524,6 +1528,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['deplacerDansRetenu', executer('retirerDuTour', charge, { tour: 1, participant: autre }).charge],
       ['retirerObjectif', executer('poserObjectif', charge, { table: 2, tour: null, etiquettes: 'finance', regle: null }).charge],
       ['retablirPriorites', executer('changerPriorites', charge, { paliers: PRIORITES_REGLEES }).charge],
+      ['retirerConflit', executer('ajouterConflit', charge, { id: 4, organisation: 'Club des Merles' }).charge],
       ['garderMeilleures', executer('enregistrerGeneration', charge, generer(charge, 2, 5)).charge],
     ]);
   }
@@ -1565,6 +1570,8 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['changerTours', { tours: 3 }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['changerEtiquettes', { id: 3, ajouter: 'finance' }],
+      ['ajouterConflit', { id: 4, organisation: 'Club des Merles' }],
+      ['retirerConflit', { id: 4, organisation: 'Club des Merles' }],
       ['changerPresence', { id: 3, tours: [2] }],
       ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
       ['retirerObjectif', { table: 2, tour: null }],
@@ -1847,8 +1854,8 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
-    assert.equal(COMMANDES.size, 14 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les deux des conflits, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
+    assert.equal(COMMANDES.size, 16 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
     assert.ok(COMMANDES_PRESENCE instanceof Map);

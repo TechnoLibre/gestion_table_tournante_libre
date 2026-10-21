@@ -1076,11 +1076,13 @@ describe('verifierIndicateurs : les objectifs et les animateurs (§ 5.4, A9)', (
 describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3, § 14.12, D42)', () => {
   // Quatre personnes, trois rencontres chacune ; deux organisations, de
   // collisions cumulées 2 et 1 sur des planchers 1 et 1 ; deux tours, hors
-  // objectif 2 puis 0 sur des planchers 1 et 0. A(p) 2, 2, 1, 2 ; |F(p)| 3,
-  // 2, 2, 3 ; Φ_aff 3, 3, 2, 3 ; A_max 2, 2, 2, 3. Chaque inégalité y tient,
-  // et seule la personne de rang 2 n'y est pas à l'égalité de A_max.
+  // objectif 2 puis 0 sur des planchers 1 et 0 ; deux conflits
+  // d'organisation sur un plancher de 1. A(p) 2, 2, 1, 2 ; |F(p)| 3, 2, 2,
+  // 3 ; Φ_aff 3, 3, 2, 3 ; A_max 2, 2, 2, 3. Chaque inégalité y tient, et
+  // seule la personne de rang 2 n'y est pas à l'égalité de A_max.
   const base = () => ({
     rencontres: [3, 3, 3, 3],
+    conflitsOrganisation: 2,
     affilies: [3, 2, 2, 3],
     organisationsVues: [2, 2, 1, 2],
     parGroupe: [
@@ -1092,6 +1094,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
     planchersValides: true,
     planchersCollisions: [1, 1],
     objectifsParTour: [{ hors: 2, plancher: 1 }, { hors: 0, plancher: 0 }],
+    plancherConflits: 1,
     phiAffilies: [3, 3, 2, 3],
     aMax: [2, 2, 2, 3],
   });
@@ -1112,6 +1115,8 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
       [{ code: 'RESTE_NEGATIF', groupe: 1 }]],
     ['hors objectif 0 sous le plancher 1 du tour 1', (m, c) => { c.objectifsParTour[0].hors = 0; },
       [{ code: 'RESTE_OBJECTIFS_NEGATIF', tour: 1 }]],
+    ['conflits 0 sous le plancher 1 des réservations', (m) => { m.conflitsOrganisation = 0; },
+      [{ code: 'RESTE_CONFLITS_NEGATIF' }]],
     ['A(p) 2 au-delà de rencontres 1', (m) => { m.rencontres[0] = 1; },
       [{ code: 'DIVERSITE_RENCONTRES', index: 0 }]],
     ['A(p) 2 au-delà de |F(p)| 1', (m) => { m.affilies[1] = 1; },
@@ -1131,6 +1136,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
       c.phiAffilies = [3, 3, 3, 3];
       c.aMax = [3, 3, 3, 3];
       c.objectifsParTour[0].hors = 1;
+      m.conflitsOrganisation = 1;
     });
     assert.deepEqual(verifier(egalite), []);
   });
@@ -1140,7 +1146,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
     assert.deepEqual(ecarts(cas), []);
   });
 
-  test('sans compléments, aucun des six codes ne tombe : la sortie est celle des trois paramètres', () => {
+  test('sans compléments, aucun des sept codes ne tombe : la sortie est celle des trois paramètres', () => {
     // Chaque mesure forgée, puis toutes à la fois, avec une DEPASSEMENT :
     // sans compléments, null ou absents, seule la ligne est éprouvée.
     const toutes = avec((m, c) => {
@@ -1158,11 +1164,12 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
     assert.deepEqual(verifierIndicateurs(toutes.mesures, plafonds(), plafonds()), [{ code: 'DEPASSEMENT', index: 2 }]);
   });
 
-  test('les deux restes ne s’éprouvent que sur un plan où les planchers valent', () => {
+  test('les trois restes ne s’éprouvent que sur un plan où les planchers valent', () => {
     const horsDomaine = avec((m, c) => {
       c.planchersValides = false;
       m.parGroupe[1].collisionsCumulees = 0;
       c.objectifsParTour[0].hors = 0;
+      m.conflitsOrganisation = 0;
     });
     assert.deepEqual(verifier(horsDomaine), []);
     // La diversité s'éprouve, elle, hors du domaine des planchers.
@@ -1174,6 +1181,8 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
     const cas = [
       ['planchersCollisions null', (m, c) => { m.parGroupe[1].collisionsCumulees = 0; c.planchersCollisions = null; }],
       ['objectifsParTour null', (m, c) => { c.objectifsParTour[0].hors = 0; c.objectifsParTour = null; }],
+      ['plancherConflits null', (m, c) => { m.conflitsOrganisation = 0; c.plancherConflits = null; }],
+      ['plancherConflits absent', (m, c) => { m.conflitsOrganisation = 0; delete c.plancherConflits; }],
       ['phiAffilies null', (m, c) => { c.phiAffilies[3] = 2; c.phiAffilies = null; }],
       ['aMax null', (m, c) => { c.aMax[1] = 1; c.aMax = null; }],
       ['parGroupe absent, planchersCollisions null', (m, c) => { delete m.parGroupe; c.planchersCollisions = null; }],
@@ -1224,6 +1233,7 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
       { code: 'RESTE_NEGATIF', groupe: 1 },
       { code: 'RESTE_OBJECTIFS_NEGATIF', tour: 1 },
       { code: 'RESTE_OBJECTIFS_NEGATIF', tour: 2 },
+      { code: 'RESTE_CONFLITS_NEGATIF' },
     ]);
   });
 

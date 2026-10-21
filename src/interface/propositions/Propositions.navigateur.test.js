@@ -1531,6 +1531,7 @@ describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => 
       [e('toursHorsObjectif')],
       [e('rencontresRepetees')],
       [e('animateursNonRencontres')],
+      [e('conflitsOrganisation')],
     ];
     const m = await ouvrir(chargeLue);
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(

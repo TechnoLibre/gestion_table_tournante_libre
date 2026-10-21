@@ -39,19 +39,21 @@ const texte = (nom, jeton, fonds) => entree(nom, jeton, fonds, 4.5);
 
 // Les sortes de conflit : règle, marque de la trame, jeton court, forme.
 const SORTES_CONFLIT = [
+  ['conflitsOrganisation', 'trameEvitement', 'conflit-evitement', 'hachuresHorizontales'],
   ['separerOrganisations', 'trameOrganisation', 'conflit-organisation', 'hachuresDescendantes'],
   ['nouveauxVoisins', 'trameVoisins', 'conflit-voisins', 'hachuresMontantes'],
   ['nouvelleTable', 'trameTable', 'conflit-table', 'points'],
 ];
 
-/** Les trois sortes de conflit qu'une table porte (§ 7.5, § 12.7), une par
+/** Les quatre sortes de conflit qu'une table porte (§ 7.5, § 12.7), une par
  *  règle que le moteur localise (conflitsParTable), dans son ordre — l'ordre
  *  du dessin, de la légende et de l'infobulle : { regle, marque, jeton,
  *  forme } — la règle du moteur, la marque data-marque de sa trame, le jeton
  *  de sa teinte, réservée à cette trame, et la forme de son motif
  *  (Motifs.svelte), qui la distingue sans la couleur. Deux règles violées à
  *  une même table superposent leurs trames : les hachures descendantes et
- *  montantes se croisent en quadrillage, les points se posent par-dessus. */
+ *  montantes se croisent en quadrillage, les hachures horizontales du
+ *  conflit d'organisation les traversent, les points se posent par-dessus. */
 export const CONFLITS = Object.freeze(
   SORTES_CONFLIT.map(([regle, trame, jeton, forme]) => Object.freeze({ regle, marque: trame, jeton: c(jeton), forme })),
 );

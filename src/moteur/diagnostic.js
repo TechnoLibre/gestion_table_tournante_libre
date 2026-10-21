@@ -69,6 +69,9 @@
  * @property {number} retoursImposes
  * @property {number} ancragesImposantRetours   personnes dont les réservations
  *           imposent un retour
+ * @property {number} conflitsImposes   occurrences (paire, tour) de deux
+ *           personnes en conflit d'organisation que les réservations assoient
+ *           à une même table : tout plan qui les honore les porte
  * @property {{plancher: number, mobilesAuMoins: number}|null} ecartItineraire
  * @property {{horsObjectif: number, jamaisServies: number, horsObjectifMax: number,
  *             parTour: number[]}} objectifsInevitables
@@ -531,6 +534,10 @@ function etendue(valeurs) {
  *   compte max(0, f − 1) retours pour f tours réservés à une même table, ce
  *   que mesure tout plan qui honore les réservations (§ 5.4) ;
  *   ancragesImposantRetours, les personnes qui en portent un au moins.
+ * - conflitsImposes : les conflits d'organisation de ce même plan, les
+ *   paires en conflit que les réservations réunissent à une même table d'un
+ *   tour ; le plancher des conflits de tout plan qui honore les
+ *   réservations, nul sans liste de conflits.
  * - ecartItineraire : plancher de l'écart d'itinéraire maximal, ou null ;
  *   null dès qu'une absence existe, et planchersRetires le nomme alors.
  * - presence : le nombre d'absences et les présents de chaque tour, lus
@@ -573,6 +580,7 @@ export function diagnostiquer(configuration, { planchersCollisions: chiffrer = p
     ancrage: ancrage(instance),
     retoursImposes: imposes.totalRetoursImposes,
     ancragesImposantRetours: imposes.retoursImposes.filter((retours) => retours > 0).length,
+    conflitsImposes: imposes.conflitsOrganisation ?? 0,
     ecartItineraire: ecartItineraire(configuration, instance, aPriori),
     objectifsInevitables: objectifsInevitables(instance),
     placesManquantesParTour: placesManquantesParTour(instance),

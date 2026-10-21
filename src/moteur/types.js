@@ -32,6 +32,12 @@
  *                                   vide ; absent = chacun des R tours, que
  *                                   lit toursDePresence (presence.js) ; une
  *                                   liste qui couvre 1..R vaut le champ absent
+ * @property {string[]} [conflits]   organisations que la personne ne doit
+ *                                   pas croiser à une table (§ 4) ; absent =
+ *                                   aucune. L'égalité de chaînes les
+ *                                   rapporte aux organisations des présents ;
+ *                                   un nom qu'aucun présent ne porte, ou celui
+ *                                   de sa propre organisation, ne pose rien
  *
  * @typedef {Object} Table
  * @property {number} id             entier ≥ 1, unique
@@ -90,6 +96,18 @@
  *                                   sans organisation
  * @property {string[]} groupes      index de groupe → libellé ; ordre de première
  *                                   apparition en parcourant les ids croissants
+ * @property {Int32Array} uniteConflit  par index participant : le rang de son
+ *                                   unité de conflit, de 0 à unitesConflit − 1,
+ *                                   ou −1 quand personne ne lui est opposé.
+ *                                   L'unité d'un affilié est son organisation,
+ *                                   celle d'une personne sans organisation,
+ *                                   elle-même
+ * @property {number} unitesConflit  unités de conflit, K
+ * @property {Uint8Array} conflitEntre  [u * K + v] → 1 quand les unités u et v
+ *                                   sont en conflit ; symétrique, diagonale
+ *                                   nulle
+ * @property {number} pairesEnConflit   paires de présents en conflit ; 0 rend
+ *                                   le critère des conflits sans objet
  * @property {Int32Array} debutEtiquettes N + 1 cases : les étiquettes de la
  *                                   personne p vont, dans etiquettes, de
  *                                   debutEtiquettes[p] à debutEtiquettes[p + 1] ;

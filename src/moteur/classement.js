@@ -12,9 +12,9 @@
 // identifiant croissant (§ 15.5, point 4), jamais par l'ordre reçu.
 //
 // Sans compilation, classer applique l'ordre fixe de référence : l'ordre par
-// défaut sous les quatre cases cochées, sans objectif ni case des
-// animateurs, que le registre compile en cinq paliers — excédent, rencontres
-// répétées, cumulées, écart, redondance (A11).
+// défaut sous les quatre cases cochées, sans conflit d'organisation, sans
+// objectif ni case des animateurs, que le registre compile en cinq paliers —
+// excédent, rencontres répétées, cumulées, écart, redondance (A11).
 //
 // L'excédent de collisions précède les collisions cumulées dans l'ordre par
 // défaut : un plan qui répartit six collisions sur six paires passe devant
@@ -46,15 +46,20 @@ const CASES_DE_REFERENCE = Object.freeze({
   rencontrerAnimateurs: false,
 });
 
+// Le critère qu'aucune case ne règle et que l'ordre fixe de référence ne
+// compte pas : sans liste de conflits, il est sans objet (D10).
+const CRITERE_DES_CONFLITS = 'conflitsOrganisation';
+
 // La compilation de l'ordre fixe de référence, l'état des critères construit
-// comme normaliser le construit (configuration.js).
+// comme normaliser le construit (configuration.js), le conflit
+// d'organisation sans objet comme sans aucune liste.
 const REFERENCE = compilationDe({
   priorites: PRIORITES_PAR_DEFAUT,
   modeObjectifs: 'places',
   etatCriteres: REGISTRE.map((nom) => ({
     nom,
     coche: estCoche(nom, CASES_DE_REFERENCE),
-    sansObjet: false,
+    sansObjet: nom === CRITERE_DES_CONFLITS,
     valeurs: valeursQuiClassent(nom, CASES_DE_REFERENCE, 'places'),
   })),
 });
@@ -80,6 +85,7 @@ function plusGrand(valeurs) {
 // objectif sont le horsObjectif de la mesure. La Map ne sert qu'à retrouver
 // une valeur par son nom ; la compilation en fixe l'ordre.
 const VALEUR = new Map([
+  ['conflitsOrganisation', ({ mesures }) => mesures.conflitsOrganisation],
   ['ecartAuPlafondAPrioriMax', ({ ecarts }) => plusGrand(ecarts)],
   ['excedentCollisions', ({ mesures }) => mesures.excedentCollisions],
   ['collisionsCumulees', ({ mesures }) => mesures.collisionsCumulees],

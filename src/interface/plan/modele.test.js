@@ -1060,8 +1060,9 @@ describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3
     const table = {
       numero: 7,
       conflits: {
-        nombre: 6,
+        nombre: 7,
         regles: [
+          { regle: 'conflitsOrganisation', paires: [[1, 4]] },
           { regle: 'separerOrganisations', paires: [[1, 3], [1, 5], [2, 4], [3, 5]] },
           { regle: 'nouveauxVoisins', paires: [[1, 2]] },
           { regle: 'nouvelleTable', personnes: [4] },
@@ -1072,8 +1073,11 @@ describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3
     assert.deepEqual(detail, {
       numero: 7,
       libelle: null,
-      nombre: 6,
+      nombre: 7,
       lignes: [
+        // Le conflit d'organisation : une ligne, sa paire nommée, sans
+        // organisation commune.
+        { regle: 'conflitsOrganisation', cle: 'plan.infobulle.conflitsOrganisation', organisation: null, groupes: [['Iris Ombrelle', 'Grisaille']] },
         {
           regle: 'separerOrganisations',
           cle: 'plan.infobulle.separerOrganisations',
@@ -1151,7 +1155,7 @@ describe('legendeConflits : les règles actives, leur marque et leur libellé (�
     return { regle, marque, jeton, forme, cle: `plan.legende.${regle}`, cleForme: `plan.legende.forme.${forme}` };
   };
 
-  test('les trois règles actives, dans l’ordre du moteur', () => {
+  test('les trois règles de case actives, dans l’ordre du moteur', () => {
     assert.deepEqual(legendeConflits(reglages(['nouvelleTable', 'separerOrganisations', 'nouveauxVoisins'])), [
       entree('separerOrganisations'),
       entree('nouveauxVoisins'),
@@ -1163,6 +1167,18 @@ describe('legendeConflits : les règles actives, leur marque et leur libellé (�
     assert.deepEqual(legendeConflits(reglages(['separerOrganisations', 'nouvelleTable'])), [entree('separerOrganisations'), entree('nouvelleTable')]);
     assert.deepEqual(legendeConflits(reglages(['nouveauxVoisins'])), [entree('nouveauxVoisins')]);
     assert.deepEqual(legendeConflits(reglages([])), []);
+  });
+
+  test("le conflit d'organisation, sans case, paraît en tête quand l'état de son critère le dit coché et avec un objet", () => {
+    const etat = (sansObjet) => [
+      { nom: 'separerOrganisations', coche: true, sansObjet: false },
+      { nom: 'conflitsOrganisation', coche: true, sansObjet },
+    ];
+    assert.deepEqual(legendeConflits(reglages(['nouvelleTable']), etat(false)), [entree('conflitsOrganisation'), entree('nouvelleTable')]);
+    assert.deepEqual(legendeConflits(reglages(['nouvelleTable']), etat(true)), [entree('nouvelleTable')]);
+    // Sans état des critères — aucune table d'évaluation —, il n'y paraît
+    // pas ; une clé du même nom dans les réglages n'y change rien.
+    assert.deepEqual(legendeConflits({ ...reglages([]), conflitsOrganisation: true }), []);
   });
 
   test('chaque libellé de la légende existe', () => {

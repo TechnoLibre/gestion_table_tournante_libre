@@ -507,8 +507,9 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
         for (const nom of REGISTRE) for (const valeur of valeursQuiClassent(nom, contraintes, mode)) valeurs.add(valeur);
       }
     }
-    assert.equal(valeurs.size, 10);
+    assert.equal(valeurs.size, 11);
     for (const valeur of valeurs) assert.ok(noms.has(colonneDeValeur(valeur)), valeur);
+    assert.equal(colonneDeValeur('conflitsOrganisation'), 'conflitsOrganisation');
     assert.equal(colonneDeValeur('rencontresRepeteesChoisies'), 'rencontresRepetees');
     assert.equal(colonneDeValeur('retoursChoisis'), 'retoursChoisis');
     assert.equal(colonneDeValeur('redondance'), 'totalRedondance');
@@ -804,8 +805,39 @@ describe('tableau : le sixième groupe, les objectifs des tables et les animateu
       vue.groupes.filter(({ cle }) => cle !== null).map(({ cle }) => cle),
       ['rencontres', 'collisions', 'repetitions', 'diversite', 'manque'].map((nom) => `propositions.groupe.${nom}`),
     );
-    assert.deepEqual(vue.groupes, GROUPES_COLONNES.filter(({ colonnes }) => !SIXIEME.includes(colonnes[0])));
+    // Sans liste de conflits, le groupe des collisions perd sa première
+    // colonne, celle des conflits d'organisation.
+    const sansConflits = ({ cle, etendue, colonnes }) =>
+      colonnes.includes('conflitsOrganisation')
+        ? { cle, etendue: etendue - 1, colonnes: colonnes.filter((nom) => nom !== 'conflitsOrganisation') }
+        : { cle, etendue, colonnes: [...colonnes] };
+    assert.deepEqual(
+      vue.groupes.map(sansConflits),
+      GROUPES_COLONNES.filter(({ colonnes }) => !SIXIEME.includes(colonnes[0])).map(sansConflits),
+    );
     assert.equal(vue.etendueRaisons, 18);
+    exigerCellulesAlignees(vue);
+  });
+
+  test("une liste de conflits : la colonne des conflits d'organisation ouvre le groupe des collisions, et classe en premier", () => {
+    const charge = structuredClone(chargeDemo('petite-conflit'));
+    const [premiere] = charge.participants;
+    premiere.conflits = [charge.participants.find(({ organisation }) => organisation !== premiere.organisation).organisation];
+    const table = evaluer(generee(charge, { graine: 3, nombre: 2, arret: 200 }));
+    const vue = tableau(table);
+    const colonnes = noms(vue);
+    assert.equal(colonnes[colonnes.indexOf('rencontresAncres') + 1], 'conflitsOrganisation');
+    assert.deepEqual(vue.groupes.find(({ cle }) => cle === 'propositions.groupe.collisions').colonnes, [
+      'conflitsOrganisation', 'collisionsCumulees', 'pairesDistinctes', 'excedentCollisions',
+    ]);
+    for (const ligne of vue.lignes) {
+      const cellule = ligne.cellules.find(({ colonne }) => colonne === 'conflitsOrganisation');
+      const mesure = table.propositions.find(({ id }) => id === ligne.id).mesures.conflitsOrganisation;
+      assert.equal(typeof mesure, 'number');
+      assert.deepEqual(cellule, { colonne: 'conflitsOrganisation', valeur: mesure, cle: null, decimales: 0 });
+    }
+    const [premierDesignant] = vue.ordre.flat().filter(({ colonne }) => colonne !== null);
+    assert.equal(premierDesignant.valeur, 'conflitsOrganisation');
     exigerCellulesAlignees(vue);
   });
 
@@ -1370,6 +1402,7 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
     ['rencontresTous', 'grand'],
     ['rencontresMobiles', 'grand'],
     ['rencontresAncres', 'grand'],
+    ['conflitsOrganisation', 'bas'],
     ['collisionsCumulees', 'bas'],
     ['pairesDistinctes', null],
     ['excedentCollisions', 'bas'],
@@ -1402,7 +1435,7 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
   const phrases = (texte) => texte.split(/(?<=\.)\s+(?=[\p{Lu}\u{00AB}])/u);
 
   test('chaque colonne de COLONNES, sans exception, porte la clé de son explication : elle existe, compte une à trois phrases, et diffère de l’en-tête et des autres explications', () => {
-    assert.equal(COLONNES.length, 27);
+    assert.equal(COLONNES.length, 28);
     assert.deepEqual(COLONNES.map(({ nom }) => nom), [...SENS.keys()]);
     const textes = new Set();
     for (const { nom, cle, explication } of COLONNES) {
@@ -1432,9 +1465,10 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
 
   test('chaque valeur qui classe, et l’identifiant croissant, partage l’explication de la colonne qu’elle désigne ; seule l’explication d’une valeur qui classe la dit critère du classement', () => {
     const valeurs = ['ecartAuPlafondAPrioriMax', 'excedentCollisions', 'collisionsCumulees', 'jamaisServies', 'horsObjectifMax']
-      .concat(['toursHorsObjectif', 'rencontresRepeteesChoisies', 'retoursChoisis', 'animateursNonRencontres', 'redondance']);
+      .concat(['toursHorsObjectif', 'rencontresRepeteesChoisies', 'retoursChoisis', 'animateursNonRencontres', 'redondance'])
+      .concat(['conflitsOrganisation']);
     const criteres = new Set(valeurs.map(colonneDeValeur));
-    assert.equal(criteres.size, 10);
+    assert.equal(criteres.size, 11);
     for (const { nom } of COLONNES) {
       const texte = t(explicationDeColonne(nom));
       if (criteres.has(nom)) assert.match(texte, /critère du classement/i, nom);
@@ -1459,7 +1493,7 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
         for (const nom of REGISTRE) for (const valeur of valeursQuiClassent(nom, { nouveauxVoisins }, mode)) valeurs.add(valeur);
       }
     }
-    assert.equal(valeurs.size, 10);
+    assert.equal(valeurs.size, 11);
     for (const valeur of valeurs) {
       const texte = t(explicationDeColonne(colonneDeValeur(valeur)));
       assert.doesNotMatch(texte, /critère du classement (?:après|avant)|(?:premier|dernier) critère/i, valeur);
@@ -1514,7 +1548,7 @@ describe('GROUPES_COLONNES : les en-têtes groupés du tableau', () => {
       groupes.map(({ colonnes }) => colonnes),
       [
         ['rencontresTous', 'rencontresMobiles', 'rencontresAncres'],
-        ['collisionsCumulees', 'pairesDistinctes', 'excedentCollisions'],
+        ['conflitsOrganisation', 'collisionsCumulees', 'pairesDistinctes', 'excedentCollisions'],
         ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis'],
         ['organisationsVues', 'totalRedondance', 'diversite'],
         ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori'],

@@ -34,6 +34,11 @@
 // supprimer et importer des participants l'ajustent dans leur entrée, par
 // retenuAuxPresences (presence.js), pour les seules personnes dont la
 // présence par tour change ; leur libellé le dit quand il change.
+//
+// Les listes de conflits suivent les organisations (§ 4) : modifier,
+// supprimer et importer des participants les ramènent, dans leur entrée,
+// aux organisations que la charge porte encore (suivreOrganisations) ; leur
+// libellé dit ce qui a suivi.
 import { ErreurCsv } from '../csv/erreurs.js';
 import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { appliquerImportObjectifs } from '../csv/objectifs.js';
@@ -56,6 +61,7 @@ import {
   versFichier,
 } from '../stockage/placements.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
+import { organisationsDe, rienASuivre, suivreOrganisations } from './conflits_organisation.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
 import { departAdapte, recopierPlacement, recopierToursFiges, siegesDesArrivantes, tourFigeDifferent } from './depart.js';
 import { ErreurCommande, refus } from './erreurs.js';
@@ -221,10 +227,18 @@ function ajouterParticipant(charge, { champs, presence = null }) {
   };
 }
 
+// Ce que le libellé d'un geste dit des conflits qui ont suivi, null quand
+// rien n'a suivi.
+const conflitsSuivis = (suivi) => (rienASuivre(suivi) ? null : suivi);
+
 /**
  * modifierParticipant {id, champs} : les champs de texte donnés ; l'exclusion
  * a ses deux commandes. Le libellé nomme la personne d'avant et chaque champ
- * changé, puis le nouveau nom quand il change.
+ * changé, puis le nouveau nom quand il change. Une organisation changée
+ * fait suivre les listes de conflits (suivreOrganisations) : quand la
+ * personne était la dernière de son organisation et en prend une autre, la
+ * référence suit ce renommage ; sans organisation, l'ancienne quitte les
+ * listes. Le libellé le dit.
  */
 function modifierParticipant(charge, { id, champs }) {
   exigerModifiable(charge);
@@ -234,13 +248,85 @@ function modifierParticipant(charge, { id, champs }) {
   const changes = CHAMPS_DE_SAISIE.filter((champ) => apres[champ] !== avant[champ]);
   if (changes.length === 0) throw refus('SANS_EFFET', { commande: 'modifierParticipant' });
   const renomme = apres.nom !== avant.nom || apres.prenom !== avant.prenom;
+  const suivante = avecParticipant(charge, id, () => apres);
+  const renommage =
+    avant.organisation !== null && apres.organisation !== null && avant.organisation !== apres.organisation
+      ? { de: avant.organisation, vers: apres.organisation }
+      : null;
+  const suivi = suivreOrganisations(charge, suivante, renommage);
   return {
-    charge: avecParticipant(charge, id, () => apres),
+    charge: suivante,
     libelle: libelle('ENTREE_MODIFIER_PARTICIPANT', {
       personne: nomAffiche(avant),
       champs: changes,
       devenu: renomme ? nomAffiche(apres) : null,
+      conflits: conflitsSuivis(suivi),
     }),
+    avertissements: [],
+  };
+}
+
+// L'organisation saisie d'un conflit (§ 4) : une chaîne en NFC, ses blancs
+// de bord retirés, qui doit être celle d'un participant de la charge,
+// comparée chaîne à chaîne, sinon ORGANISATION_INCONNUE {organisation},
+// remède null ; une autre valeur qu'une chaîne est une faute du code.
+function organisationDuConflit(charge, organisation) {
+  if (typeof organisation !== 'string') {
+    throw new TypeError(`organisation : chaîne attendue, reçu ${JSON.stringify(organisation)}`);
+  }
+  const lue = saisie(organisation, 'organisation') ?? '';
+  if (!organisationsDe(charge).has(lue)) throw refus('ORGANISATION_INCONNUE', { organisation: lue });
+  return lue;
+}
+
+/**
+ * ajouterConflit {id, organisation} (§ 4, § 5.3) : la personne et son
+ * organisation entière évitent désormais organisation, en conflit des deux
+ * côtés. organisation est celle d'un participant (organisationDuConflit).
+ * Refus : CONFLIT_PROPRE_ORGANISATION {personne, organisation}, remède
+ * null, pour sa propre organisation ; SANS_EFFET quand sa liste la nomme
+ * déjà. La liste s'écrit rangée par unités de code. Une entrée d'historique,
+ * qui nomme la personne et l'organisation.
+ */
+function ajouterConflit(charge, { id, organisation } = {}) {
+  exigerModifiable(charge);
+  const participant = participantDe(charge, id);
+  const nom = organisationDuConflit(charge, organisation);
+  if (nom === participant.organisation) {
+    throw refus('CONFLIT_PROPRE_ORGANISATION', { personne: nomAffiche(participant), organisation: nom });
+  }
+  const avant = participant.conflits ?? [];
+  if (avant.includes(nom)) throw refus('SANS_EFFET', { commande: 'ajouterConflit' });
+  const conflits = etiquettesRangees([...avant, nom]);
+  return {
+    charge: avecParticipant(charge, id, (copie) => ({ ...copie, conflits })),
+    libelle: libelle('ENTREE_AJOUTER_CONFLIT', { personne: nomAffiche(participant), organisation: nom }),
+    avertissements: [],
+  };
+}
+
+/**
+ * retirerConflit {id, organisation} (§ 4) : la liste de la personne ne nomme
+ * plus organisation, comparée chaîne à chaîne ; le champ se retire quand
+ * elle se vide. SANS_EFFET quand elle ne la nomme pas ; une autre valeur
+ * qu'une chaîne est une faute du code. Une entrée d'historique.
+ */
+function retirerConflit(charge, { id, organisation } = {}) {
+  exigerModifiable(charge);
+  if (typeof organisation !== 'string') {
+    throw new TypeError(`organisation : chaîne attendue, reçu ${JSON.stringify(organisation)}`);
+  }
+  const participant = participantDe(charge, id);
+  const avant = participant.conflits ?? [];
+  if (!avant.includes(organisation)) throw refus('SANS_EFFET', { commande: 'retirerConflit' });
+  const conflits = avant.filter((nom) => nom !== organisation);
+  return {
+    charge: avecParticipant(charge, id, (copie) => {
+      const reste = { ...copie };
+      delete reste.conflits;
+      return conflits.length === 0 ? reste : { ...reste, conflits };
+    }),
+    libelle: libelle('ENTREE_RETIRER_CONFLIT', { personne: nomAffiche(participant), organisation }),
     avertissements: [],
   };
 }
@@ -367,7 +453,8 @@ function reintegrerParticipant(charge, { id }) {
  * même entrée ; les titres restent à leurs places, les propositions restent,
  * en dérive (§ 9) ; le compteur ne recule pas. Elle quitte le retenu à
  * chaque tour, et RENCONTRES_RETIREES_DU_RETENU nomme les tours où elle y
- * était assise.
+ * était assise. La dernière personne d'une organisation emporte celle-ci de
+ * chaque liste de conflits (suivreOrganisations), et le libellé le dit.
  */
 function supprimerParticipant(charge, { id }) {
   exigerModifiable(charge);
@@ -382,10 +469,15 @@ function supprimerParticipant(charge, { id }) {
     reservations,
     titres: titresPourvus(charge) - titresPourvus(suivante),
   };
+  const suivi = suivreOrganisations(charge, suivante);
   const { retires, ajuste } = ajusterLeRetenu(charge, suivante);
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_SUPPRIMER_PARTICIPANT', { personne: details.personne, ajuste }),
+    libelle: libelle('ENTREE_SUPPRIMER_PARTICIPANT', {
+      personne: details.personne,
+      ajuste,
+      conflits: conflitsSuivis(suivi),
+    }),
     avertissements: [
       ...(reservations > 0 ? [avertissement('RESERVATIONS_RETIREES', details)] : []),
       ...rencontresRetirees(charge, participant, retires),
@@ -427,7 +519,9 @@ function avertissementsDExclusion(avant, suivante) {
  * rendue, réintégration — se contrôle comme changerPresence
  * (controlerPresence) : un refus refuse l'import entier, sous son code et
  * ses détails, remède null, puisque le fichier se corrige. Le retenu suit
- * les présences qui changent (retenuAuxPresences), et le libellé le dit.
+ * les présences qui changent (retenuAuxPresences), et le libellé le dit ;
+ * les listes de conflits suivent les organisations que l'import laisse
+ * (suivreOrganisations), et le libellé le dit aussi.
  *
  * Un import dont la charge ne change pas, mais qui refuse des lignes, n'est
  * pas sans effet : ses refus sont à lire et à réexporter. Il rend la charge
@@ -451,10 +545,18 @@ function importerParticipants(charge, { apercu, mode }) {
   const etendues = resultat.charge.participants.filter(({ id }) => existantes.has(id)).map(({ id }) => id);
   const [premier, ...autres] = controlerPresence(charge, resultat.charge, etendues);
   if (premier !== undefined) throw new ErreurCommande(premier.code, { ...premier.details, remede: null, autres });
+  const suivi = suivreOrganisations(charge, resultat.charge);
   const { ajuste } = ajusterLeRetenu(charge, resultat.charge);
   return {
     charge: resultat.charge,
-    libelle: libelle('ENTREE_IMPORTER_PARTICIPANTS', { mode, ajoutes, misAJour, retires, ajuste }),
+    libelle: libelle('ENTREE_IMPORTER_PARTICIPANTS', {
+      mode,
+      ajoutes,
+      misAJour,
+      retires,
+      ajuste,
+      conflits: conflitsSuivis(suivi),
+    }),
     avertissements: [
       ...(derive ? [avertissement('IMPORT_EN_RETENU', {})] : []),
       ...avertissementsDExclusion(charge, resultat.charge),
@@ -869,6 +971,8 @@ export const COMMANDES = reunirCommandes(
     ['ajouterParticipant', ajouterParticipant],
     ['modifierParticipant', modifierParticipant],
     ['changerEtiquettes', changerEtiquettes],
+    ['ajouterConflit', ajouterConflit],
+    ['retirerConflit', retirerConflit],
     ['exclureParticipant', exclureParticipant],
     ['reintegrerParticipant', reintegrerParticipant],
     ['supprimerParticipant', supprimerParticipant],

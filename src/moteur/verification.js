@@ -32,6 +32,8 @@ import { LIBRE, decrire } from './configuration.js';
  *           objectifsParTour  un élément par tour ; un tour sans couple
  *           possible porte hors et plancher tous deux null, et la garde ne
  *           le lit pas
+ * @property {number|null} plancherConflits  les conflits d'organisation que
+ *           les réservations imposent (diagnostiquer, conflitsImposes)
  * @property {ArrayLike<number>|null} phiAffilies  Φ_aff(p), borneDiversite
  * @property {ArrayLike<number>|null} aMax         A_max(p), borneDiversite
  */
@@ -288,7 +290,7 @@ function verifierDiversite(p, rencontres, mesures, complements, violations) {
 function lireComplements(complements, mesures, N) {
   if (complements === null) return null;
   if (typeof complements !== 'object') throw new TypeError('complements : objet ou null attendu');
-  const { planchersValides, planchersCollisions = null, objectifsParTour = null } = complements;
+  const { planchersValides, planchersCollisions = null, objectifsParTour = null, plancherConflits = null } = complements;
   const { phiAffilies = null, aMax = null } = complements;
   if (typeof planchersValides !== 'boolean') throw new TypeError('complements.planchersValides : booléen attendu');
   exigerLongueur(mesures.organisationsVues, N, 'organisationsVues', 'liste');
@@ -311,17 +313,18 @@ function lireComplements(complements, mesures, N) {
       }
     });
   }
-  return { planchersValides, planchersCollisions, objectifsParTour, phiAffilies, aMax };
+  return { planchersValides, planchersCollisions, objectifsParTour, plancherConflits, phiAffilies, aMax };
 }
 
 // Les restes négatifs, ajoutés à violations, sur un plan où les planchers
 // valent : collisions cumulées sous leur plancher, organisation par
-// organisation, puis hors objectif sous leur plancher, tour par tour. Un
-// tour dont hors et plancher sont tous deux null est sans objet et passe ;
-// un seul des deux null fait tomber l'inégalité, comme toute non-valeur.
-function verifierRestes(complements, parGroupe, violations) {
+// organisation, puis hors objectif sous leur plancher, tour par tour, puis
+// conflits d'organisation sous ceux que les réservations imposent. Un tour
+// dont hors et plancher sont tous deux null est sans objet et passe ; un
+// seul des deux null fait tomber l'inégalité, comme toute non-valeur.
+function verifierRestes(complements, { parGroupe, conflitsOrganisation }, violations) {
   if (complements === null || !complements.planchersValides) return;
-  const { planchersCollisions, objectifsParTour } = complements;
+  const { planchersCollisions, objectifsParTour, plancherConflits } = complements;
   if (planchersCollisions !== null) {
     for (let g = 0; g < planchersCollisions.length; g += 1) {
       if (!tient(parGroupe[g].collisionsCumulees, planchersCollisions[g])) {
@@ -335,6 +338,9 @@ function verifierRestes(complements, parGroupe, violations) {
       if (hors === null && plancher === null) continue;
       if (!tient(hors, plancher)) violations.push({ code: 'RESTE_OBJECTIFS_NEGATIF', tour: r + 1 });
     }
+  }
+  if (plancherConflits !== null && !tient(conflitsOrganisation, plancherConflits)) {
+    violations.push({ code: 'RESTE_CONFLITS_NEGATIF' });
   }
 }
 
@@ -378,7 +384,9 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * cumulées de chaque organisation, mesures.parGroupe, au moins son plancher
  * (RESTE_NEGATIF, groupe), et les tours hors objectif de chaque tour au moins
  * le sien (RESTE_OBJECTIFS_NEGATIF, tour), un tour sans couple possible,
- * hors et plancher null, n'étant pas lu. Un complément null n'est pas lu.
+ * hors et plancher null, n'étant pas lu, et les conflits d'organisation au
+ * moins ceux que les réservations imposent (RESTE_CONFLITS_NEGATIF), lus
+ * dans mesures.conflitsOrganisation. Un complément null n'est pas lu.
  * Sans compléments, null ou absents, la sortie est celle des trois premiers
  * paramètres seuls.
  *
@@ -396,7 +404,8 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * que instance.ids[index] traduit. Les violations se rangent par index
  * croissant, puis de gauche à droite sur la ligne, suivie des dépassements
  * de la personne, puis de sa diversité ; les deux violations des totaux
- * viennent ensuite, et les restes en dernier, organisations puis tours.
+ * viennent ensuite, et les restes en dernier, organisations, tours, puis
+ * conflits.
  *
  * Lève RangeError quand une liste de plafonds, ou une liste par personne des
  * objectifs, des animateurs ou des tours assis, n'a pas N cases : elle décrit
@@ -450,6 +459,6 @@ export function verifierIndicateurs(mesures, plafondsAPriori, plafondsRealises, 
     const plusDePossibles = Array.prototype.reduce.call(possibles, (plus, n) => Math.max(plus, n), 0);
     if (!tient(plusDePossibles, horsObjectifMax)) violations.push({ code: 'HORS_OBJECTIF_MAX' });
   }
-  verifierRestes(lus, mesures.parGroupe, violations);
+  verifierRestes(lus, mesures, violations);
   return violations;
 }

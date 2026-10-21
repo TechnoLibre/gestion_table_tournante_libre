@@ -887,7 +887,7 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
         for (const critere of CRITERES_DU_REGISTRE) for (const valeur of valeursQuiClassent(critere, contraintes, mode)) valeurs.add(valeur);
       }
     }
-    assert.equal(valeurs.size, 10);
+    assert.equal(valeurs.size, 11);
     const textes = [...valeurs].map((valeur) => libelle(`moteur.valeur.${valeur}`));
     for (const texte of textes) {
       assert.ok(texte.length > 0);
@@ -1095,7 +1095,7 @@ describe('libellés : les étiquettes et les objectifs des tables (§ 4.5, § 5.
 
 describe("libellés : l'ordre des priorités et le mode des objectifs (§ 5.7, § 5.9, § 8.2, A11, A12, D22)", () => {
   test('chaque critère du registre a son nom complet mobilier.critere.<nom>, deux à deux distincts', () => {
-    assert.equal(CRITERES_DU_REGISTRE.length, 7);
+    assert.equal(CRITERES_DU_REGISTRE.length, 8);
     const noms = CRITERES_DU_REGISTRE.map((critere) => libelle(`mobilier.critere.${critere}`));
     for (const nom of noms) {
       assert.ok(nom.length > 0);

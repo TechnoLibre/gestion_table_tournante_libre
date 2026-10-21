@@ -131,13 +131,15 @@ const e = (critere, poids = 1) => ({ critere, poids });
 // 2 au tour 1 : deux places réservées qui servent (D5), l'une sous « ou »,
 // l'autre sous « et ». 10 anime à la table 1 à chaque tour ; 11 et 12
 // tiennent les deux titres de la table 3 au seul tour 2 ; 13 est réservé
-// sans animer.
+// sans animer. Les conflits d'organisation relient A et B, et la personne 4
+// à C.
 function soireeAObjectifs(mode, priorites) {
   const etiquettes = [
     ['finance'], ['finance'], ['finance'], ['Montréal', 'finance'], ['Montréal', 'finance'],
     ['Montréal'], ['Montréal'], ['bénévole'], ['bénévole'],
   ];
   const anime = new Map([[10, [1, 2, 3, 4]], [11, [2]], [12, [2]]]);
+  const conflits = new Map([[1, ['B']], [4, ['C']]]);
   const auTour = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
   return {
     participants: Array.from({ length: 14 }, (_, rang) => ({
@@ -145,6 +147,7 @@ function soireeAObjectifs(mode, priorites) {
       organisation: ['A', 'B', 'C', null][rang % 4],
       ...(rang < etiquettes.length ? { etiquettes: etiquettes[rang] } : {}),
       ...(anime.has(rang + 1) ? { anime: anime.get(rang + 1) } : {}),
+      ...(conflits.has(rang + 1) ? { conflits: conflits.get(rang + 1) } : {}),
     })),
     tables: [1, 2, 3, 4].map((id) => ({ id, capacite: 4 })),
     tours: 4,
@@ -173,13 +176,15 @@ function soireeAObjectifs(mode, priorites) {
 }
 
 // Les ordres déplacés : sous places, le palier { excédent × 1, tours hors
-// objectif × 3 } en deuxième ; sous les deux autres modes, les tours hors
-// objectif seuls en deuxième.
+// objectif × 3 } en deuxième, le conflit d'organisation en quatrième ; sous
+// les deux autres modes, les tours hors objectif seuls en deuxième, le
+// conflit d'organisation en dernier.
 const ORDRES_DEPLACES = {
   places: [
     [e('ecartAuPlafondAPrioriMax')],
     [e('excedentCollisions'), e('toursHorsObjectif', 3)],
     [e('collisionsCumulees')],
+    [e('conflitsOrganisation')],
     [e('rencontresRepetees')],
     [e('animateursNonRencontres', 2)],
     [e('redondance')],
@@ -191,6 +196,7 @@ const ORDRES_DEPLACES = {
     [e('collisionsCumulees')],
     [e('rencontresRepetees')],
     [e('animateursNonRencontres'), e('redondance', 4)],
+    [e('conflitsOrganisation')],
   ],
 };
 

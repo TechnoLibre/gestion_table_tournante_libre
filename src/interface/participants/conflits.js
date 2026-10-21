@@ -10,7 +10,7 @@
 import { nomAffiche } from '../../application/personnes.js';
 
 /** Les règles qui se localisent à une table, dans l'ordre de conflitsParTable. */
-export const REGLES = Object.freeze(['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable']);
+export const REGLES = Object.freeze(['conflitsOrganisation', 'separerOrganisations', 'nouveauxVoisins', 'nouvelleTable']);
 
 const CLES_RAISONS = new Map(REGLES.map((regle) => [regle, `participants.conflit.raison.${regle}`]));
 

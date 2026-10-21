@@ -19,8 +19,8 @@
 // 0 : le taux de diversité de qui ne rencontre aucun affilié, le minimum et la
 // moyenne d'une population sans membre.
 //
-// Une seule lecture du plan décide qu'une paire est réunie, collègue ou revue,
-// qu'une personne revient, qu'elle est servie par l'objectif de sa table et
+// Une seule lecture du plan décide qu'une paire est réunie, collègue, en
+// conflit d'organisation ou revue, qu'une personne revient, qu'elle est servie par l'objectif de sa table et
 // quels animateurs elle rencontre : parcourirTours. mesurer en tire chacun de
 // ses chiffres, conflitsParTable (conflits.js) le détail par table, si
 // bien que la somme des violations par table égale le compte de la mesure
@@ -95,6 +95,11 @@ import {
  * @property {number} collisionsCumulees    Σ paires de même groupe × tours ensemble
  * @property {number} pairesDistinctes      paires de même groupe réunies ≥ 1 fois
  * @property {number} excedentCollisions    cumulées − distinctes
+ * @property {number|null} conflitsOrganisation  occurrences (paire, tour) où
+ *           deux personnes en conflit d'organisation partagent une table
+ *           (§ 5.4) ; null quand aucune paire de présents n'est en conflit
+ *           (instance.pairesEnConflit nul), comme les objectifs sans
+ *           personne concernée
  * @property {{choisies: number, imposees: number}} rencontresRepetees
  *           paires réunies ≥ 2 fois ; « imposée » quand chaque rencontre de la
  *           paire a lieu à une table où les deux sont réservés ce tour-là ;
@@ -119,13 +124,15 @@ const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
 
 /**
  * Le plan lu tour par tour, puis table par table, par index croissants : le
- * seul code qui décide qu'une paire est réunie, de même organisation ou
- * revue, et qu'une personne revient. mesurer en tire chacun de ses chiffres,
+ * seul code qui décide qu'une paire est réunie, de même organisation, en
+ * conflit d'organisation ou revue, et qu'une personne revient. mesurer en tire chacun de ses chiffres,
  * conflitsParTable (conflits.js) le détail par table.
  *
  * parTour[r][t], en index de personnes, chaque paire [a, b] avec a < b,
  * chaque liste croissante — paires dans l'ordre de a, puis de b :
  * - collegues : paires de même organisation assises à t au tour r ;
+ * - enConflit : paires en conflit d'organisation assises à t au tour r,
+ *   celles dont les unités sont reliées (instance.conflitEntre) ;
  * - revues : paires assises à t au tour r et réunies à un tour antérieur,
  *   sauf quand chacune de leurs rencontres jusqu'à r a lieu à une table où
  *   les deux sont réservés ce tour-là ;
@@ -157,7 +164,7 @@ const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
  *
  * @param {import('./types.js').Instance} instance
  * @param {ArrayLike<number>} tableDe
- * @returns {{parTour: Array<Array<{collegues: number[][], revues: number[][], revenus: number[]}>>,
+ * @returns {{parTour: Array<Array<{collegues: number[][], enConflit: number[][], revues: number[][], revenus: number[]}>>,
  *            parPaire: Uint16Array|Uint32Array, reunies: number[], toursAssis: number[], retours: number[],
  *            servis: number[], rencontresAnimateurs: number[], servisParTour: number[],
  *            possiblesParTour: number[], assisSansCoupleParTour: number[]}}
@@ -165,6 +172,7 @@ const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
 export function parcourirTours(instance, tableDe) {
   exigerPlanIndexe(instance, tableDe);
   const { N, T, R, fixe, groupe, siegesLibres, O, objectifDe, correspond, possible } = instance;
+  const { uniteConflit, unitesConflit: K, conflitEntre } = instance;
   const { A, rangAnimateur, animateurs, debutAnimes, animes } = instance;
 
   // Personne par personne, ses tours dans l'ordre : visites[t] compte ses
@@ -252,6 +260,7 @@ export function parcourirTours(instance, tableDe) {
     for (let t = 0; t < T; t += 1) {
       const liste = assis[t];
       const collegues = [];
+      const enConflit = [];
       const revues = [];
       const revenus = [];
       for (let i = 0; i < liste.length; i += 1) {
@@ -259,6 +268,7 @@ export function parcourirTours(instance, tableDe) {
         if (revenu[a * R + r] === 1) revenus.push(a);
         const aReserve = fixe[a * R + r] === t;
         const g = groupe[a];
+        const u = uniteConflit[a];
         for (let j = i + 1; j < liste.length; j += 1) {
           const b = liste[j];
           const k = rangPaire(N, a, b);
@@ -266,10 +276,11 @@ export function parcourirTours(instance, tableDe) {
           if (parPaire[k] === 1) reunies.push(a, b);
           if (!aReserve || fixe[b * R + r] !== t) libre[k] = 1;
           if (g !== SANS_GROUPE && g === groupe[b]) collegues.push([a, b]);
+          if (u >= 0 && uniteConflit[b] >= 0 && conflitEntre[u * K + uniteConflit[b]] === 1) enConflit.push([a, b]);
           if (parPaire[k] >= 2 && libre[k] === 1) revues.push([a, b]);
         }
       }
-      tables.push({ collegues, revues, revenus });
+      tables.push({ collegues, enConflit, revues, revenus });
     }
     parTour.push(tables);
   }
@@ -330,9 +341,10 @@ function lirePaires({ N, groupe, groupes }, parPaire, reunies) {
 
 // Lecture des listes de parcourirTours. Une paire de collègues réunie n fois
 // porte n collisions cumulées et compte une fois parmi les paires
-// distinctes de son groupe ; une paire revue compte une fois parmi les
-// rencontres répétées choisies, à quelque tour qu'elle le soit ; chaque
-// occurrence d'une personne revenue est un retour choisi.
+// distinctes de son groupe ; une paire en conflit réunie n fois porte n
+// conflits ; une paire revue compte une fois parmi les rencontres répétées
+// choisies, à quelque tour qu'elle le soit ; chaque occurrence d'une
+// personne revenue est un retour choisi.
 function lireTours({ N, groupe, groupes }, parTour) {
   const nombrePaires = (N * (N - 1)) / 2;
   const collisions = new Array(groupes.length).fill(0);
@@ -341,8 +353,10 @@ function lireTours({ N, groupe, groupes }, parTour) {
   const revueVue = new Uint8Array(nombrePaires);
   const retoursChoisis = new Array(N).fill(0);
   let choisies = 0;
+  let conflits = 0;
   for (const tables of parTour) {
-    for (const { collegues, revues, revenus } of tables) {
+    for (const { collegues, enConflit, revues, revenus } of tables) {
+      conflits += enConflit.length;
       for (const [a, b] of collegues) {
         const g = groupe[a];
         const k = rangPaire(N, a, b);
@@ -362,7 +376,7 @@ function lireTours({ N, groupe, groupes }, parTour) {
       for (const p of revenus) retoursChoisis[p] += 1;
     }
   }
-  return { collisions, distinctes, choisies, retoursChoisis };
+  return { collisions, distinctes, choisies, conflits, retoursChoisis };
 }
 
 // Population sans membre. min reste null tant qu'aucune valeur n'y entre :
@@ -483,10 +497,10 @@ function lireAnimateurs({ N, borneAnimateurs, statut }, rencontres) {
  * @returns {Mesures}
  */
 export function mesurer(instance, tableDe) {
-  const { N, groupe, groupes, statut } = instance;
+  const { N, groupe, groupes, statut, pairesEnConflit } = instance;
   const { parTour, parPaire, reunies, toursAssis, retours, servis, rencontresAnimateurs } = parcourirTours(instance, tableDe);
   const paires = lirePaires(instance, parPaire, reunies);
-  const { collisions, distinctes, choisies, retoursChoisis } = lireTours(instance, parTour);
+  const { collisions, distinctes, choisies, conflits, retoursChoisis } = lireTours(instance, parTour);
 
   const rencontres = Array.from(paires.rencontres);
   const affilies = Array.from(paires.affilies);
@@ -526,6 +540,7 @@ export function mesurer(instance, tableDe) {
     collisionsCumulees,
     pairesDistinctes,
     excedentCollisions: collisionsCumulees - pairesDistinctes,
+    conflitsOrganisation: pairesEnConflit === 0 ? null : conflits,
     rencontresRepetees: { choisies, imposees: paires.repetees - choisies },
     maxRencontresPaire: paires.maxRencontresPaire,
     totalRetoursChoisis: somme(retoursChoisis),

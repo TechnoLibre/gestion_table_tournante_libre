@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes des commandes de la liste des participants, de leurs
-// étiquettes, de leur présence par tour et de l'import des participants
-// (§ 4.4, § 4.5, § 5.8, § 10.2, § 14.6) : leurs refus, leurs avertissements
+// étiquettes, de leurs conflits d'organisation, de leur présence par tour et
+// de l'import des participants (§ 4, § 4.4, § 4.5, § 5.8, § 10.2, § 14.6) : leurs refus, leurs avertissements
 // et leurs libellés figés. Une personne s'y dit au féminin ; les tours se
 // nomment par toursNommes et auxToursNommes (aides.js). Cette
 // table ne porte que des codes. Un champ ou une raison inconnus lèvent
@@ -36,6 +36,23 @@ const etiquettesCitees = (etiquettes) => enumeration(etiquettes.map(cite));
 
 // Ce qu'un libellé du journal ajoute quand le geste a ajusté le retenu.
 const ajusteTexte = (ajuste) => (ajuste === true ? ' ; placement retenu ajusté' : '');
+
+// Ce qu'un libellé du journal ajoute quand les listes de conflits ont suivi
+// le geste (suivreOrganisations) : l'organisation renommée, celles qui ont
+// disparu, les propres organisations ôtées ; rien sans suivi.
+function conflitsTexte(conflits) {
+  if (conflits === null || conflits === undefined) return '';
+  const { renommee, retirees, propres } = conflits;
+  const parties = [];
+  if (renommee !== null) parties.push(`${cite(renommee.de)} devient ${cite(renommee.vers)} dans les conflits`);
+  if (retirees.length > 0) {
+    parties.push(`${enumeration(retirees.map(cite))} ${retirees.length === 1 ? 'quitte' : 'quittent'} les conflits`);
+  }
+  if (propres > 0) {
+    parties.push(`${compte(propres, 'conflit avec sa propre organisation retiré', 'conflits avec leur propre organisation retirés')}`);
+  }
+  return parties.map((partie) => ` ; ${partie}`).join('');
+}
 
 // Des tours nommés après « au lieu » : « de tous les tours », « du tour 2 »,
 // « des tours 1 et 3 ».
@@ -99,6 +116,15 @@ export const TABLE = new Map([
       `${cite(saisie)} est enregistrée sous l'orthographe que l'événement porte déjà : ${cite(retenue)}.`,
   ],
   [
+    'ORGANISATION_INCONNUE',
+    ({ organisation }) => `L'organisation ${cite(organisation)} n'existe pas : aucune personne de l'événement ne la porte.`,
+  ],
+  [
+    'CONFLIT_PROPRE_ORGANISATION',
+    ({ personne, organisation }) =>
+      `${personne} appartient à ${cite(organisation)} : une organisation n'est pas en conflit avec elle-même.`,
+  ],
+  [
     'IMPORT_EN_RETENU',
     () =>
       "L'import change la liste après le choix d'un placement : le placement retenu suit la présence de chacun, " +
@@ -140,14 +166,17 @@ export const TABLE = new Map([
   ['ENTREE_AJOUTER_PARTICIPANT', ({ personne, ajuste }) => `Ajouté ${personne}${ajusteTexte(ajuste)}`],
   [
     'ENTREE_MODIFIER_PARTICIPANT',
-    ({ personne, champs, devenu }) => {
+    ({ personne, champs, devenu, conflits }) => {
       const nouveau = devenu === null || devenu === undefined ? '' : ` (désormais ${devenu})`;
-      return `Modifié ${personne} : ${champs.map(nomChamp).join(', ')}${nouveau}`;
+      return `Modifié ${personne} : ${champs.map(nomChamp).join(', ')}${nouveau}${conflitsTexte(conflits)}`;
     },
   ],
   ['ENTREE_EXCLURE_PARTICIPANT', ({ personne, ajuste }) => `Exclu ${personne}${ajusteTexte(ajuste)}`],
   ['ENTREE_REINTEGRER_PARTICIPANT', ({ personne, ajuste }) => `Réintégré ${personne}${ajusteTexte(ajuste)}`],
-  ['ENTREE_SUPPRIMER_PARTICIPANT', ({ personne, ajuste }) => `Supprimé ${personne}${ajusteTexte(ajuste)}`],
+  [
+    'ENTREE_SUPPRIMER_PARTICIPANT',
+    ({ personne, ajuste, conflits }) => `Supprimé ${personne}${ajusteTexte(ajuste)}${conflitsTexte(conflits)}`,
+  ],
   [
     'ENTREE_CHANGER_ETIQUETTES',
     ({ personne, ajoutees, retirees }) => {
@@ -157,11 +186,13 @@ export const TABLE = new Map([
       return `Étiquettes de ${personne} : ${parties.join(' ; ')}`;
     },
   ],
+  ['ENTREE_AJOUTER_CONFLIT', ({ personne, organisation }) => `Conflits de ${personne} : ajouté ${cite(organisation)}`],
+  ['ENTREE_RETIRER_CONFLIT', ({ personne, organisation }) => `Conflits de ${personne} : retiré ${cite(organisation)}`],
   [
     'ENTREE_IMPORTER_PARTICIPANTS',
-    ({ mode, ajoutes, misAJour, retires, ajuste }) => {
+    ({ mode, ajoutes, misAJour, retires, ajuste, conflits }) => {
       const ajoutesTexte = compte(ajoutes, 'ajouté', 'ajoutés');
-      const suite = ajusteTexte(ajuste);
+      const suite = `${ajusteTexte(ajuste)}${conflitsTexte(conflits)}`;
       if (mode === 'ajouter') return `Importé ${compte(ajoutes, 'participant', 'participants')}${suite}`;
       if (mode === 'mettreAJour') {
         return `Mis à jour la liste par import : ${ajoutesTexte}, ${compte(misAJour, 'modifié', 'modifiés')}${suite}`;

@@ -279,6 +279,11 @@ export const TABLE = new Map([
       `Au tour ${tour}, les tours hors objectif passent sous la part prouvée inévitable : le reste est négatif, le calcul est faux.`,
   ],
   [
+    'RESTE_CONFLITS_NEGATIF',
+    () =>
+      "Les conflits d'organisation passent sous ceux que les réservations imposent : le reste est négatif, le calcul est faux.",
+  ],
+  [
     'DIVERSITE_RENCONTRES',
     (details) => `Les organisations rencontrées par ${personneDe(details)} dépassent ses rencontres : le calcul est faux.`,
   ],
@@ -305,6 +310,7 @@ export const TABLE = new Map([
   ['moteur.critere.rencontresRepetees', 'rencontres répétées'],
   ['moteur.critere.animateursNonRencontres', 'animateurs non rencontrés'],
   ['moteur.critere.redondance', "redondance d'organisation"],
+  ['moteur.critere.conflitsOrganisation', "conflits d'organisation"],
 
   // --- Les valeurs qui classent (§ 5.7, A11, D9, D20) ------------------------------
   ['moteur.valeur.ecartAuPlafondAPrioriMax', 'écart au plafond a priori'],
@@ -317,6 +323,7 @@ export const TABLE = new Map([
   ['moteur.valeur.retoursChoisis', 'retours'],
   ['moteur.valeur.animateursNonRencontres', 'animateurs non rencontrés'],
   ['moteur.valeur.redondance', "redondance d'organisation"],
+  ['moteur.valeur.conflitsOrganisation', "conflits d'organisation"],
 
   // --- Un palier partagé (§ 5.7, A11) : « ensemble, », puis chaque critère
   // suivi de son poids.

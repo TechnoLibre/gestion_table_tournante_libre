@@ -668,6 +668,22 @@ describe('l’infobulle nomme l’organisation d’une paire réunie ; la légen
     ]);
   });
 
+  test('une liste de conflits qui relie deux présents ouvre la légende sur le conflit d’organisation, avant les règles des réglages', async () => {
+    // Capucine Arrosoir, du cercle des Hérons, nomme le Club des Merles :
+    // le critère a un objet, sans qu'aucune table du plan n'en soit en
+    // conflit. Sans liste, l'épreuve suivante attend la légende sans lui.
+    const charge = deuxOrganisations({ nouvelleTable: false });
+    charge.participants.find(({ id }) => id === 6).conflits = ['Club des Merles'];
+    const m = await ouvrir(charge);
+    await cliquer(dans(m, '[data-commande="legende"]'));
+    await attendre(() => expect(dans(m, '[data-legende]')).not.toBeNull());
+    expect(tous(m, '[data-legende] [data-legende-regle]').map((e) => e.dataset.legendeRegle)).toEqual([
+      'conflitsOrganisation',
+      'separerOrganisations',
+      'nouveauxVoisins',
+    ]);
+  });
+
   for (const mode of ['ecriture', 'lecture']) {
     test(`mode ${mode} : le bouton « Légende » de la barre de vue ouvre la légende des seules règles actives, et la referme ; rien ne s’écrit`, async () => {
       const m = await ouvrir(deuxOrganisations({ nouvelleTable: false }), { mode });

@@ -19,17 +19,20 @@
    les trois dichromaties. Aucun jeton de texte ou de marque n'a de canal
    alpha : la couleur relue dans le style calculé est alors la couleur peinte.
 
-   Trois teintes sont réservées aux conflits (§ 7.5, § 12.7), une par règle
-   que le plan localise : --couleur-conflit-organisation (séparer les
+   Quatre teintes sont réservées aux conflits (§ 7.5, § 12.7), une par règle
+   que le plan localise : --couleur-conflit-evitement (conflit
+   d'organisation), --couleur-conflit-organisation (séparer les
    organisations), --couleur-conflit-voisins (nouveaux voisins) et
    --couleur-conflit-table (nouvelle table). Chacune ne peint que la trame de
    sa règle ; tout autre jeton chromatique se tient à 30° au moins de chacune,
    sauf le rouge du retrait, et aucun ne porte la valeur de l'une. Elles se
    distinguent entre elles et des autres marques du plan sous les trois
    dichromaties (SEPARATIONS, marques.js), et tiennent 3:1 sur le fond du
-   plateau, qui borde leurs traits. Le contour épaissi d'une table en
-   conflit, commun aux trois, est de l'encre forte du plan,
-   --couleur-contour-fort.
+   plateau, qui borde leurs traits. Les teintes libres à 30° des autres
+   jetons sont rares : celle du conflit d'organisation est un brun presque
+   noir dans le thème clair, un vert-jaune vif dans le sombre, et sa forme
+   la distingue dans les deux. Le contour épaissi d'une table en conflit,
+   commun aux quatre, est de l'encre forte du plan, --couleur-contour-fort.
 
    Le rouge du retrait, --couleur-retrait, peint la croix cerclée d'une
    commande qui retire (Commande, variante retrait), sur la carte et son
@@ -315,6 +318,7 @@ textarea {
   --couleur-hachure: #1f1f1f;
   --couleur-marque: #767676;
   --couleur-contour-fort: #2b2f36;
+  --couleur-conflit-evitement: #200008;
   --couleur-conflit-organisation: #8f1d14;
   --couleur-conflit-voisins: #c0189f;
   --couleur-conflit-table: #6a9400;
@@ -439,6 +443,7 @@ textarea {
   --couleur-hachure: #ededed;
   --couleur-marque: #7a7a7a;
   --couleur-contour-fort: #e6e8eb;
+  --couleur-conflit-evitement: #acfc10;
   --couleur-conflit-organisation: #fc9890;
   --couleur-conflit-voisins: #c0689c;
   --couleur-conflit-table: #549c00;

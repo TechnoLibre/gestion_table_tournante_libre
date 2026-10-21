@@ -391,9 +391,14 @@ const CHAMPS_DES_OBJECTIFS = [
   ['toursHorsObjectif', 'horsObjectif'],
 ];
 
-// Les sept colonnes qui peuvent porter un plancher, chacune sans plancher,
+// Le nom du critère des conflits d'organisation dans instance.etatCriteres,
+// qui est aussi celui de sa colonne et de sa mesure.
+const CRITERE_DES_CONFLITS = 'conflitsOrganisation';
+
+// Les huit colonnes qui peuvent porter un plancher, chacune sans plancher,
 // dans l'ordre où le détail et les colonnes les rendent.
 const aucunPlancher = () => ({
+  conflitsOrganisation: null,
   collisionsCumulees: null,
   pairesDistinctes: null,
   excedentCollisions: null,
@@ -408,6 +413,9 @@ const aucunPlancher = () => ({
  * les placements d'une configuration : lus dans son diagnostic, une fois,
  * avant d'être confrontés aux mesures de chaque placement
  * (planchersAtteints). Sous le nom de chaque colonne (§ 5.7) :
+ * - conflitsOrganisation : les conflits que les réservations imposent
+ *   (conflitsImposes), quand le critère des conflits a un objet ; null
+ *   sinon ;
  * - collisionsCumulees, pairesDistinctes, excedentCollisions : la somme des
  *   planchers de chaque organisation en collision ; chaque mesure somme
  *   celles des organisations, et chaque plancher minore la sienne ; 0 quand
@@ -425,13 +433,14 @@ const aucunPlancher = () => ({
  * @param {import('./types.js').Instance} instance  etatCriteres est lu
  * @param {import('./diagnostic.js').Diagnostic} diagnostic  celui de la
  *        configuration
- * @returns {{collisionsCumulees: number, pairesDistinctes: number, excedentCollisions: number,
+ * @returns {{conflitsOrganisation: number|null, collisionsCumulees: number, pairesDistinctes: number, excedentCollisions: number,
  *            ecartItineraireMax: number|null, jamaisServies: number|null,
  *            horsObjectifMax: number|null, toursHorsObjectif: number|null}}
  */
 export function planchersDesColonnes({ etatCriteres }, diagnostic) {
-  const { collisions, ecartItineraire, objectifsInevitables } = diagnostic;
+  const { collisions, ecartItineraire, objectifsInevitables, conflitsImposes } = diagnostic;
   const planchers = aucunPlancher();
+  if (!etatCriteres.find(({ nom }) => nom === CRITERE_DES_CONFLITS).sansObjet) planchers.conflitsOrganisation = conflitsImposes;
   for (const [colonne, champ] of COLONNES_DE_COLLISIONS) planchers[colonne] = sommeDe(collisions, champ);
   if (ecartItineraire !== null) planchers.ecartItineraireMax = ecartItineraire.plancher;
   const critere = etatCriteres.find(({ nom }) => nom === CRITERE_DES_OBJECTIFS);
@@ -454,18 +463,22 @@ export function planchersDesColonnes({ etatCriteres }, diagnostic) {
  * écrit « inconnu ». Hors du domaine des planchers — un placement qui laisse
  * quelqu'un en réserve ou ne tient pas une réservation —, aucun ne tient :
  * tous null. Une colonne des objectifs sans plancher ne lit pas
- * mesures.objectifs, null sans personne concernée.
+ * mesures.objectifs, null sans personne concernée ; celle des conflits sans
+ * plancher ne lit pas leur mesure.
  *
  * @param {ReturnType<typeof planchersDesColonnes>} planchers
  * @param {{mesures: import('./indicateurs.js').Mesures,
  *          troisChiffres: import('./manque.js').TroisChiffres,
  *          planchersValides: boolean}} lus
  * @returns {Record<string, {plancher: number, atteint: boolean}|null>}
- *          les sept colonnes de planchersDesColonnes, dans son ordre
+ *          les huit colonnes de planchersDesColonnes, dans son ordre
  */
 export function planchersAtteints(planchers, { mesures, troisChiffres, planchersValides }) {
   const atteints = aucunPlancher();
   if (!planchersValides) return atteints;
+  if (planchers.conflitsOrganisation !== null) {
+    atteints.conflitsOrganisation = plancherDe(planchers.conflitsOrganisation, mesures.conflitsOrganisation);
+  }
   for (const [colonne] of COLONNES_DE_COLLISIONS) atteints[colonne] = plancherDe(planchers[colonne], mesures[colonne]);
   const { ecartItineraireMax } = troisChiffres;
   if (ecartItineraireMax !== null) atteints.ecartItineraireMax = plancherDe(planchers.ecartItineraireMax, ecartItineraireMax.tous);

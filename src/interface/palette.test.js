@@ -500,8 +500,13 @@ describe('jetons.css', () => {
     }
   });
 
-  test('les trois teintes de conflit sont réservées (§ 12.7) : chromatiques, chacune sa valeur, à 30° de tout autre jeton chromatique', () => {
-    assert.deepEqual(JETONS_CONFLIT, ['--couleur-conflit-organisation', '--couleur-conflit-voisins', '--couleur-conflit-table']);
+  test('les quatre teintes de conflit sont réservées (§ 12.7) : chromatiques, chacune sa valeur, à 30° de tout autre jeton chromatique', () => {
+    assert.deepEqual(JETONS_CONFLIT, [
+      '--couleur-conflit-evitement',
+      '--couleur-conflit-organisation',
+      '--couleur-conflit-voisins',
+      '--couleur-conflit-table',
+    ]);
     for (const theme of ['clair', 'sombre']) {
       const jetons = lireJetons(JETONS, theme);
       for (const nom of JETONS_CONFLIT) {

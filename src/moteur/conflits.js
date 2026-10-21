@@ -4,12 +4,18 @@
 // Conflits par table (§ 7.5) : les violations des règles actives, table par
 // table et tour par tour, que le plan lit sans rien recalculer. Elles se
 // lisent dans parcourirTours (indicateurs.js), le passage dont mesurer tire
-// ses chiffres : la somme des paires séparer d'un plan égale ses collisions
+// ses chiffres : la somme des paires du conflit d'organisation d'un plan
+// égale ses conflits d'organisation, celle des paires séparer ses collisions
 // cumulées, celle des personnes nouvelle table ses retours choisis, et les
 // paires distinctes nouveaux voisins ses rencontres répétées choisies
 // (§ 13.2). La pastille d'une table compte des occurrences de violation —
-// une paire en collision, une paire revue, une personne revenue —, et chaque
-// règle porte les siennes dans son unité (§ 5.4).
+// une paire en conflit, une paire en collision, une paire revue, une
+// personne revenue —, et chaque règle porte les siennes dans son unité
+// (§ 5.4).
+//
+// Le conflit d'organisation n'a pas de case : il est actif dès qu'une paire
+// de présents est en conflit (instance.pairesEnConflit), et ses paires ne
+// paraissent qu'alors.
 //
 // « Varier les organisations » ne se localise pas à une table : aucune
 // violation n'en sort.
@@ -19,7 +25,7 @@ import { parcourirTours } from './indicateurs.js';
  * @typedef {Object} ConflitsTable
  * @property {number} table    identifiant
  * @property {number} nombre   violations des règles actives à ce tour, toutes règles
- * @property {Array<{regle: 'separerOrganisations'|'nouveauxVoisins', paires: number[][]}
+ * @property {Array<{regle: 'conflitsOrganisation'|'separerOrganisations'|'nouveauxVoisins', paires: number[][]}
  *                  |{regle: 'nouvelleTable', personnes: number[]}>} regles
  *           identifiants croissants, règles dans cet ordre ; une règle inactive
  *           ou sans violation est omise
@@ -27,7 +33,8 @@ import { parcourirTours } from './indicateurs.js';
 
 /**
  * Violations des règles actives (§ 7.5), lues dans parcourirTours et rendues
- * en identifiants : séparer les organisations — les collègues réunis ;
+ * en identifiants : le conflit d'organisation — les paires en conflit
+ * réunies ; séparer les organisations — les collègues réunis ;
  * nouveaux voisins — les paires revues ; nouvelle table — les personnes
  * revenues. Une paire revue se signale à chaque rencontre répétée, sauf quand
  * toutes ses rencontres jusque-là ont eu lieu à une table où les deux étaient
@@ -44,11 +51,14 @@ import { parcourirTours } from './indicateurs.js';
  * @returns {ConflitsTable[][]}   [tour][index de table], tables dans l'ordre de l'instance
  */
 export function conflitsParTable(instance, tableDe) {
-  const { ids, idsTables, contraintes } = instance;
+  const { ids, idsTables, contraintes, pairesEnConflit } = instance;
   const enIds = (paires) => paires.map(([a, b]) => [ids[a], ids[b]]);
   return parcourirTours(instance, tableDe).parTour.map((tables) =>
-    tables.map(({ collegues, revues, revenus }, t) => {
+    tables.map(({ collegues, enConflit, revues, revenus }, t) => {
       const regles = [];
+      if (pairesEnConflit > 0 && enConflit.length > 0) {
+        regles.push({ regle: 'conflitsOrganisation', paires: enIds(enConflit) });
+      }
       if (contraintes.separerOrganisations && collegues.length > 0) {
         regles.push({ regle: 'separerOrganisations', paires: enIds(collegues) });
       }

@@ -541,9 +541,9 @@ export function modeleDessin(
  * ligne par organisation, dans l'ordre de sa première paire, qui nomme
  * l'organisation qu'ont en commun les deux personnes de chacune de ses
  * paires — le moteur ne réunit que des personnes de même organisation non
- * nulle, la chaîne même que la liste porte — ; nouveaux voisins et nouvelle
- * table, une ligne chacune, organisation null, une paire de noms ou un nom
- * seul par groupe. Les noms et l'organisation sont des données :
+ * nulle, la chaîne même que la liste porte — ; le conflit d'organisation,
+ * nouveaux voisins et nouvelle table, une ligne chacune, organisation null,
+ * une paire de noms ou un nom seul par groupe. Les noms et l'organisation sont des données :
  * l'infobulle pose chacun dans son nœud. null quand les conflits ne
  * s'évaluent pas ou qu'il n'y en a aucun.
  *
@@ -576,18 +576,32 @@ export function detailConflits({ numero, libelle = null, conflits }, nomDe, orga
   return { numero, libelle, nombre: conflits.nombre, lignes };
 }
 
+// Les règles qu'aucune case ne règle : chacune est active quand son
+// critère compte, coché et avec un objet, tel que l'état des critères le
+// dit.
+const SANS_CASE = new Set(['conflitsOrganisation']);
+
 /**
  * La légende des conflits (§ 7.5) : la sorte de conflit (CONFLITS) de
- * chaque règle active des réglages, dans l'ordre du moteur, avec la clé de
- * son nom, plan.legende.<règle>, et celle de sa forme,
- * plan.legende.forme.<forme>. Une règle inactive n'y paraît pas ; varier
+ * chaque règle active, dans l'ordre du moteur, avec la clé de son nom,
+ * plan.legende.<règle>, et celle de sa forme, plan.legende.forme.<forme>.
+ * Une règle de case est active quand les réglages la cochent ; le conflit
+ * d'organisation, sans case, quand l'état de son critère, lu dans criteres
+ * (la table d'évaluation de la charge), le dit coché et avec un objet — une
+ * paire de présents en conflit. Une règle inactive n'y paraît pas ; varier
  * les organisations, qui ne se localise pas à une table, n'a pas de sorte.
  *
  * @param {{separerOrganisations: boolean, nouveauxVoisins: boolean, nouvelleTable: boolean}} reglages
+ * @param {Array<{nom: string, coche: boolean, sansObjet: boolean}>} [criteres]  l'état des critères,
+ *        aucun quand la charge n'a pas de table d'évaluation
  * @returns {Array<{regle: string, marque: string, jeton: string, forme: string, cle: string, cleForme: string}>}
  */
-export function legendeConflits(reglages) {
-  return CONFLITS.filter(({ regle }) => reglages[regle] === true).map((sorte) => ({
+export function legendeConflits(reglages, criteres = []) {
+  const active = (regle) =>
+    SANS_CASE.has(regle)
+      ? criteres.some(({ nom, coche, sansObjet }) => nom === regle && coche && !sansObjet)
+      : reglages[regle] === true;
+  return CONFLITS.filter(({ regle }) => active(regle)).map((sorte) => ({
     ...sorte,
     cle: `plan.legende.${sorte.regle}`,
     cleForme: `plan.legende.forme.${sorte.forme}`,

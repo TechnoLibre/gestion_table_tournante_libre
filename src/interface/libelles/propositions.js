@@ -99,6 +99,7 @@ export const TABLE = new Map([
   ['propositions.colonne.rencontresTous', 'Personnes distinctes rencontrées, minimum : tous'],
   ['propositions.colonne.rencontresMobiles', 'Personnes distinctes rencontrées, minimum : mobiles'],
   ['propositions.colonne.rencontresAncres', 'Personnes distinctes rencontrées, minimum : ancrés'],
+  ['propositions.colonne.conflitsOrganisation', "Conflits d'organisation (paire et tour)"],
   ['propositions.colonne.collisionsCumulees', 'Collisions cumulées (paire et tour)'],
   ['propositions.colonne.pairesDistinctes', 'Paires distinctes de même organisation'],
   ['propositions.colonne.excedentCollisions', 'Excédent de collisions (retrouvailles au-delà de la première)'],
@@ -168,6 +169,13 @@ export const TABLE = new Map([
     'propositions.explication.rencontresAncres',
     "Le même minimum, sur les seules personnes ancrées, celles qu'une réservation assied à la même table à chaque tour ; " +
       "« \u{2014} » s'il n'y en a aucune. Plus il est grand, mieux c'est.",
+  ],
+  [
+    'propositions.explication.conflitsOrganisation',
+    "Chaque fois que deux personnes en conflit d'organisation partagent une table, compté une fois par paire et par tour : " +
+      "quand une personne nomme une organisation, chacun de ses collègues évite chacun des membres de celle-ci. Critère du " +
+      "classement à la place que lui donne l'ordre écrit au-dessus du tableau ; l'ordre par défaut le lit en premier. " +
+      "Plus il est bas, mieux c'est.",
   ],
   [
     'propositions.explication.collisionsCumulees',

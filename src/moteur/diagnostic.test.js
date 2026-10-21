@@ -48,6 +48,7 @@ function salle({
   reservations = [],
   exclus = [],
   contraintes = SANS_CONTRAINTE,
+  conflits = [],
 }) {
   return {
     participants: organisations.map((organisation, j) => ({
@@ -55,6 +56,7 @@ function salle({
       nom: `P${j + 1}`,
       organisation,
       exclu: exclus.includes(j + 1),
+      ...(conflits[j] ? { conflits: conflits[j] } : {}),
     })),
     tables: tables.map(([id, capacite], i) => ({ id, numero: i + 1, capacite })),
     tours,
@@ -1117,6 +1119,32 @@ describe('diagnostic : ancrage et retours imposés (§ 5.4, § 5.6)', () => {
     assert.ok(plans > 0, 'aucun plan énuméré');
     assert.deepEqual([...mesures], [retoursImposes]);
   });
+
+  // 1, de X, nomme Y. 1 et 4 sont réservés à la table 10 au tour 1, 2 et 5 à
+  // la table 20 aux tours 1 et 2 : trois conflits que les réservations
+  // imposent. Chaque plan qui les honore en porte au moins autant, et l'un
+  // n'en porte pas davantage.
+  test("les conflits d'organisation imposés : le plancher de tout plan qui honore les réservations, atteint", () => {
+    const configuration = salle({
+      tables: [[10, 2], [20, 2], [30, 2]],
+      organisations: ['X', 'X', 'X', 'Y', 'Y', null],
+      conflits: [['Y']],
+      tours: 2,
+      reservations: [fixer(1, 10, 1), fixer(4, 10, 1), fixer(2, 20, 1), fixer(5, 20, 1), fixer(2, 20, 2), fixer(5, 20, 2)],
+    });
+    const { conflitsImposes } = diagnostiquer(configuration);
+    assert.equal(conflitsImposes, 3);
+    const instance = normaliser(configuration);
+    const mesures = new Set();
+    const plans = enumererPlans(instance, (tableDe) => {
+      mesures.add(mesurer(instance, tableDe).conflitsOrganisation);
+    });
+    assert.ok(plans > 0, 'aucun plan énuméré');
+    assert.ok([...mesures].every((conflits) => conflits >= conflitsImposes), [...mesures].join(', '));
+    assert.ok(mesures.has(conflitsImposes));
+    // Sans liste, rien d'imposé.
+    assert.equal(diagnostiquer({ ...configuration, participants: configuration.participants.map(({ conflits, ...reste }) => reste) }).conflitsImposes, 0);
+  });
 });
 
 describe('diagnostic : population vide, forme, refus', () => {
@@ -1137,6 +1165,7 @@ describe('diagnostic : population vide, forme, refus', () => {
       ancrage: [{ table: 10, ancres: 0, capacite: 4, gelee: false, moitie: false }],
       retoursImposes: 0,
       ancragesImposantRetours: 0,
+      conflitsImposes: 0,
       ecartItineraire: null,
       objectifsInevitables: { horsObjectif: 0, jamaisServies: 0, horsObjectifMax: 0, parTour: [0, 0] },
       placesManquantesParTour: [0, 0],

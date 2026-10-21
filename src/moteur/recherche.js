@@ -55,15 +55,18 @@
 // max(0, M − 1), M les rencontres de la paire, sous nouveauxVoisins, plus les
 // retours choisis sous nouvelleTable. Un critère décoché ou sans objet ne
 // pose aucune composante (§ 5.7, D10) : sous l'ordre par défaut, sans
-// objectif ni case des animateurs, le n-uplet est celui de l'ordre fixe de
-// référence, ses composantes toujours nulles en moins, ce qui ne change
-// aucune comparaison. Aucune n'est négative, et le n-uplet nul ne s'améliore
+// conflit d'organisation, sans objectif ni case des animateurs, le n-uplet
+// est celui de l'ordre fixe de référence, ses composantes toujours nulles en
+// moins, ce qui ne change aucune comparaison. Aucune n'est négative, et le n-uplet nul ne s'améliore
 // plus.
 //
 // Incrémental. L'état tient à jour ce dont le score dépend : la matrice des
 // rencontres par paire ; rencontres(p) ; l'histogramme des écarts au plafond
 // a priori, d'où leur maximum, et la somme de leurs carrés ; les collisions
-// cumulées de même organisation et leur excédent ; Σ_paires max(0, M − 1) ;
+// cumulées de même organisation et leur excédent ; les conflits
+// d'organisation, que la personne déplacée ajoute ou retire avec chaque
+// occupant de la table qu'elle quitte ou rejoint dont l'unité est reliée à
+// la sienne (instance.conflitEntre) ; Σ_paires max(0, M − 1) ;
 // les visites par (personne, table), d'où les retours choisis ; par
 // personne, le nombre d'affiliés rencontrés de chaque organisation, d'où
 // |F(p)|, A(p) et Σ r(p). Un échange ne touche que les paires des deux tables
@@ -117,10 +120,10 @@
 // affectation dans l'ordre du score garde un écart nul, et l'ordre des
 // contraintes reste acquis ; rangé après d'autres paliers, l'écart d'une
 // meilleure affectation peut redevenir non nul, et l'acceptation revient à
-// l'ordre du score. Sous l'ordre par défaut, les rencontres répétées,
-// l'excédent et les cumulées précèdent déjà l'écart : seules les composantes
-// des tours hors objectif passent devant lui, et sans objectif les deux
-// ordres comparent les composantes dans le même ordre. Une instance dont
+// l'ordre du score. Sous l'ordre par défaut, les conflits, l'excédent, les
+// rencontres répétées et les cumulées précèdent déjà l'écart : seules les
+// composantes des tours hors objectif passent devant lui, et sans objectif
+// les deux ordres comparent les composantes dans le même ordre. Une instance dont
 // aucun plan n'annule tous les écarts garde l'ordre du score de bout en
 // bout.
 //
@@ -260,6 +263,8 @@ import { plafondsAPriori } from './plafond.js';
  * @property {Int32Array} organisationsVues  A(p)
  * @property {number} collisionsCumulees
  * @property {number} excedentCollisions     collisions cumulées − paires distinctes
+ * @property {number} conflitsOrganisation   occurrences (paire, tour) de
+ *           deux personnes en conflit d'organisation à une même table
  * @property {number} totalRetoursChoisis
  * @property {number} totalRedondance        Σ_p r(p)
  * @property {Int32Array} servis             s(p), tours servis
@@ -312,11 +317,13 @@ const EXCEDENT_PAIRES = 8;
 const RETOURS = 9;
 const ANIMATEURS = 10;
 const REDONDANCE = 11;
+const CONFLITS = 12;
 
 // Le code de chaque grandeur que composantesDe nomme (criteres.js), les
 // rencontres répétées mises à part : leur valeur dépend des cases. La Map ne
 // sert qu'à retrouver un code par son nom.
 const CODE_DE = new Map([
+  ['conflitsOrganisation', CONFLITS],
   ['ecartAuPlafondAPrioriMax', ECART],
   ['carresEcartsAuPlafondAPriori', CARRES],
   ['excedentCollisions', EXCEDENT],
@@ -344,6 +351,7 @@ function lire(q, code) {
     case EXCEDENT_PAIRES: return q.excedentPaires;
     case RETOURS: return q.totalRetoursChoisis;
     case ANIMATEURS: return q.animateursNonRencontres;
+    case CONFLITS: return q.conflitsOrganisation;
     default: return q.totalRedondance;
   }
 }
@@ -658,8 +666,26 @@ function changerVisite(etat, p, t, sens) {
   etat.totalRetoursChoisis += Math.max(0, apres - seuil) - Math.max(0, avant - seuil);
 }
 
+// Ajoute sens aux conflits d'organisation de la personne d'unité u avec
+// chaque occupant de la table t au tour dont les sièges commencent à base,
+// le siège exclu mis à part : un occupant dont l'unité est reliée à u
+// (instance.conflitEntre) en ajoute ou en retire un.
+function changerConflits(etat, u, base, t, exclu, sens) {
+  const { siege, debut, uniteConflit, conflitEntre, K } = etat;
+  for (let s = debut[t], fin = debut[t + 1]; s < fin; s += 1) {
+    if (s === exclu) continue;
+    const q = siege[base + s];
+    if (q === FANTOME) continue;
+    const v = uniteConflit[q];
+    if (v >= 0 && conflitEntre[u * K + v] === 1) etat.conflitsOrganisation += sens;
+  }
+}
+
 // Ajoute sens aux rencontres de p avec chaque occupant de la table t au tour
-// dont les sièges commencent à base, le siège exclu mis à part.
+// dont les sièges commencent à base, le siège exclu mis à part ; puis, quand
+// une liste relie l'unité de p, à ses conflits avec eux. Sans conflit, la
+// boucle des paires ne lit rien de plus : une seule lecture par personne
+// déplacée.
 function voisiner(etat, p, base, t, exclu, sens) {
   const { siege, debut } = etat;
   for (let s = debut[t], fin = debut[t + 1]; s < fin; s += 1) {
@@ -667,6 +693,8 @@ function voisiner(etat, p, base, t, exclu, sens) {
     const q = siege[base + s];
     if (q !== FANTOME) modifierPaire(etat, p, q, sens);
   }
+  const u = etat.uniteConflit[p];
+  if (u >= 0) changerConflits(etat, u, base, t, exclu, sens);
 }
 
 // Échange les occupants des sièges a et b, de deux tables différentes, au
@@ -705,7 +733,8 @@ function echanger(etat, r, a, b) {
 // l'ordre des sièges mobiles ; une case du plan indexé sans siège, celle d'un
 // absent, vaut RESERVE. Les compteurs partent de zéro et suivent chaque paire,
 // chaque visite et chaque rencontre d'animateur par les mêmes fonctions que
-// les mouvements ; les écarts partent du plafond a priori, aucune rencontre
+// les mouvements, les conflits d'organisation paire par paire, sur la même
+// relation ; les écarts partent du plafond a priori, aucune rencontre
 // n'étant encore comptée, et les animateurs non rencontrés de Σ B(p),
 // quand l'état les tient (suitAnimateurs de la composition). Les
 // tours servis se comptent siège par siège, puis l'histogramme des
@@ -736,6 +765,10 @@ function etatInitial(structure, rng, remplir = null) {
     // le lanceur d'épreuves, chaque lecture d'une valeur importée passe par
     // un accesseur, que la boucle de recherche paierait à chaque paire.
     porteOrganisation: Uint8Array.from(instance.groupe, (g) => (g === SANS_GROUPE ? 0 : 1)),
+    // Les unités de conflit de chacun et leur relation, de l'instance.
+    uniteConflit: instance.uniteConflit,
+    K: instance.unitesConflit,
+    conflitEntre: instance.conflitEntre,
     N,
     T,
     R,
@@ -760,6 +793,7 @@ function etatInitial(structure, rng, remplir = null) {
     carresEcartsAuPlafondAPriori: 0,
     collisionsCumulees: 0,
     excedentCollisions: 0,
+    conflitsOrganisation: 0,
     excedentPaires: 0,
     totalRetoursChoisis: 0,
     totalRedondance: 0,
@@ -815,6 +849,14 @@ function etatInitial(structure, rng, remplir = null) {
       for (let voisin = debut[t]; voisin < s; voisin += 1) {
         const q = siege[base + voisin];
         if (q !== FANTOME) modifierPaire(etat, p, q, 1);
+      }
+      // Les conflits de p avec les occupants des sièges qui précèdent le
+      // sien : chaque paire une fois, comme ses rencontres.
+      const u = etat.uniteConflit[p];
+      for (let voisin = debut[t]; u >= 0 && voisin < s; voisin += 1) {
+        const q = siege[base + voisin];
+        const v = q === FANTOME ? -1 : etat.uniteConflit[q];
+        if (v >= 0 && etat.conflitEntre[u * etat.K + v] === 1) etat.conflitsOrganisation += 1;
       }
       if (fixe[p * R + r] === LIBRE && siegesLibres[t * R + r] === 0) continue;
       if (etat.O > 0) etat.servis[p] += sert(etat, p, t, r);
@@ -1655,11 +1697,12 @@ export function scoreIncremental(etat) {
  * Le même n-uplet, recalculé de zéro sur etat.tableDe à partir de la mesure
  * qui fait foi, dont chaque grandeur se lit au lieu de se refaire : les
  * écarts au plafond a priori par ecartsAuPlafondAPriori (manque.js), sur les
- * plafonds de plafondsAPriori ; l'excédent de collisions, les collisions
- * cumulées, les retours choisis, Σ r(p), les quatre valeurs des objectifs et
- * les animateurs non rencontrés par mesurer — nulles quand la mesure n'a
- * personne de concerné. Une redéfinition de l'une d'elles dans son module
- * change donc ce score, et son accord avec le score tenu à jour tombe.
+ * plafonds de plafondsAPriori ; les conflits d'organisation, l'excédent de
+ * collisions, les collisions cumulées, les retours choisis, Σ r(p), les
+ * quatre valeurs des objectifs et les animateurs non rencontrés par mesurer
+ * — nulles quand la mesure n'a personne de concerné, ni paire en conflit.
+ * Une redéfinition de l'une d'elles dans son module change donc ce score,
+ * et son accord avec le score tenu à jour tombe.
  *
  * Seule Σ_paires max(0, M − 1), que la mesure ne rend pas, se calcule ici :
  * elle vaut Σ_paires M − Σ_paires min(M, 1). Le premier terme compte les
@@ -1695,6 +1738,7 @@ export function scoreComplet(etat) {
   const grandeurs = {
     ecartAuPlafondAPrioriMax,
     carresEcartsAuPlafondAPriori,
+    conflitsOrganisation: mesures.conflitsOrganisation ?? 0,
     excedentCollisions: mesures.excedentCollisions,
     collisionsCumulees: mesures.collisionsCumulees,
     excedentPaires: reunions - sommeRencontres / 2,

@@ -486,15 +486,16 @@ const CHAMPS_DE_MESURE = [
   'course',
 ];
 
-// La lecture de chaque valeur d'un point de relevé dans mesurer : le
-// minimum brut, puis les grandeurs que les critères classent, sous les noms
-// que le classement leur donne (valeursQuiClassent, criteres.js), chacune
-// lue comme classer la lit. L'écart au plafond a priori se lit comme
-// ligneDe le lit, null sous un a priori inconnu ; une grandeur que les
-// mesures ne portent pas — objectifs ou animateurs sans personne
-// concernée — vaut null. La Map ne sert qu'à retrouver une lecture.
+// La lecture de chaque valeur d'un point de relevé dans mesurer : le minimum
+// brut, puis les grandeurs que les critères classent, sous les noms que le
+// classement leur donne (valeursQuiClassent, criteres.js), chacune lue comme
+// classer la lit. L'écart au plafond a priori se lit comme ligneDe le lit,
+// null sous un a priori inconnu ; une grandeur que les mesures ne portent pas
+// — objectifs ou animateurs sans personne concernée, conflits sans paire en
+// conflit — vaut null. La Map ne sert qu'à retrouver une lecture.
 const LECTURES_DES_VALEURS = new Map([
   ['minimumBrut', (mesures) => mesures.aggRencontres.tous.min],
+  ['conflitsOrganisation', (mesures) => mesures.conflitsOrganisation],
   ['ecartAuPlafondAPrioriMax', (mesures, aPriori) => plusGrand(ecartsAuPlafondAPriori(mesures, aPriori))],
   ['excedentCollisions', (mesures) => mesures.excedentCollisions],
   ['collisionsCumulees', (mesures) => mesures.collisionsCumulees],
@@ -838,6 +839,7 @@ export function detaillerQualite(charge, id, options = {}) {
     planchersValides,
     planchersCollisions: planchersParGroupe(instance, diagnostic.collisions),
     objectifsParTour: brut.objectifs === null ? null : brut.objectifs.parTour.map(({ hors, plancher }) => ({ hors, plancher })),
+    plancherConflits: instance.pairesEnConflit > 0 ? diagnostic.conflitsImposes : null,
     phiAffilies,
     aMax,
   }).map((violation) => violationNommee(instance, violation));

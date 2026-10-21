@@ -287,6 +287,28 @@ function animateursRencontres(configuration, instance, tableDe) {
     animes.filter(({ f, tours }) => f !== p && tours.some((tour) => tableDe[f * R + tour - 1] === tableDe[p * R + tour - 1])).length);
 }
 
+// La relation des conflits d'organisation, lue directement sur la
+// configuration : enConflit(a, b) est vrai quand une personne de l'unité de
+// l'un — son organisation, tous ses membres, exclus compris, ou elle seule
+// sans organisation — nomme l'organisation de l'autre, autre que la sienne
+// (§ 4).
+// Une personne que la configuration ne porte pas n'est en conflit avec
+// personne.
+function conflitsDirects(configuration, { ids }) {
+  const personneDe = new Map(configuration.participants.map((personne) => [personne.id, personne]));
+  const nomme = (x, y) => {
+    const px = personneDe.get(ids[x]);
+    const py = personneDe.get(ids[y]);
+    if (px === undefined || py === undefined) return false;
+    const ox = px.organisation;
+    const oy = py.organisation;
+    if (oy === null || oy === ox) return false;
+    const unite = ox === null ? [px] : configuration.participants.filter((q) => q.organisation === ox);
+    return unite.some(({ conflits = [] }) => conflits.includes(oy));
+  };
+  return (a, b) => nomme(a, b) || nomme(b, a);
+}
+
 // Les grandeurs brutes d'un plan indexé, chacune sous son nom, recalculées
 // par énumération directe des paires, des tours servis et des animateurs
 // rencontrés, sans mesurer ni le module éprouvé ; les plafonds a priori et
@@ -310,11 +332,14 @@ function grandeursBrutes(configuration, instance, tableDe, aPriori) {
   let cumulees = 0;
   let distinctes = 0;
   let excedentPaires = 0;
+  let conflits = 0;
+  const enConflit = conflitsDirects(configuration, instance);
   for (let a = 0; a < N; a += 1) {
     for (let b = a + 1; b < N; b += 1) {
       const m = M[a * N + b];
       if (m === 0) continue;
       excedentPaires += m - 1;
+      if (enConflit(a, b)) conflits += m;
       for (const [p, q] of [[a, b], [b, a]]) {
         rencontres[p] += 1;
         if (groupe[q] !== SANS_GROUPE) {
@@ -350,6 +375,7 @@ function grandeursBrutes(configuration, instance, tableDe, aPriori) {
   const horsObjectifMax = Math.max(0, ...hors);
   const m = animateursRencontres(configuration, instance, tableDe);
   return {
+    conflitsOrganisation: conflits,
     ecartAuPlafondAPrioriMax: Math.max(...ecarts),
     carresEcartsAuPlafondAPriori: ecarts.reduce((somme, ecart) => somme + ecart * ecart, 0),
     excedentCollisions: cumulees - distinctes,
@@ -1352,13 +1378,15 @@ const e = (critere, poids = 1) => ({ critere, poids });
 const canonique = () => CRITERES.map((nom) => [e(nom)]);
 
 // Les ordres déplacés de l'épreuve : sous places, le palier { excédent × 1,
-// tours hors objectif × 3 } en deuxième ; sous les deux autres modes, les
-// tours hors objectif seuls en deuxième.
+// tours hors objectif × 3 } en deuxième, le conflit d'organisation en
+// quatrième ; sous les deux autres modes, les tours hors objectif seuls en
+// deuxième, le conflit d'organisation en dernier.
 const ORDRE_DEPLACE = {
   places: [
     [e('ecartAuPlafondAPrioriMax')],
     [e('excedentCollisions'), e('toursHorsObjectif', 3)],
     [e('collisionsCumulees')],
+    [e('conflitsOrganisation')],
     [e('rencontresRepetees')],
     [e('animateursNonRencontres', 2)],
     [e('redondance')],
@@ -1370,6 +1398,7 @@ const ORDRE_DEPLACE = {
     [e('collisionsCumulees')],
     [e('rencontresRepetees')],
     [e('animateursNonRencontres'), e('redondance', 4)],
+    [e('conflitsOrganisation')],
   ],
 };
 const ordreDeplace = (mode) => (mode === 'places' ? ORDRE_DEPLACE.places : ORDRE_DEPLACE.deuxValeurs);
@@ -1385,13 +1414,15 @@ const ordreDeplace = (mode) => (mode === 'places' ? ORDRE_DEPLACE.places : ORDRE
 // « Montréal », à la table 2 au tour 1 : deux places réservées qui servent
 // (D5), l'une sous « ou », l'autre sous « et ». Animateurs : 10, à la table 1
 // à chaque tour ; 11 et 12, deux titres de la table 3 au seul tour 2 ; 13,
-// réservé sans animer.
+// réservé sans animer. Conflits : 1, de A, nomme B ; 4, sans organisation,
+// nomme C ; 15, exclue, de C, nomme B : sa liste relie encore C et B.
 function soireeAObjectifs({ mode = 'places', priorites } = {}) {
   const etiquettes = [
     ['finance'], ['finance'], ['finance'], ['Montréal', 'finance'], ['Montréal', 'finance'],
     ['Montréal'], ['Montréal'], ['bénévole'], ['bénévole'],
   ];
   const anime = new Map([[10, [1, 2, 3, 4]], [11, [2]], [12, [2]]]);
+  const conflits = new Map([[1, ['B']], [4, ['C']]]);
   return {
     participants: Array.from({ length: 14 }, (_, rang) => ({
       id: rang + 1,
@@ -1400,7 +1431,8 @@ function soireeAObjectifs({ mode = 'places', priorites } = {}) {
       exclu: false,
       ...(rang < etiquettes.length ? { etiquettes: etiquettes[rang] } : {}),
       ...(anime.has(rang + 1) ? { anime: anime.get(rang + 1) } : {}),
-    })),
+      ...(conflits.has(rang + 1) ? { conflits: conflits.get(rang + 1) } : {}),
+    })).concat([{ id: 15, nom: 'P15', organisation: 'C', exclu: true, conflits: ['B'] }]),
     tables: [1, 2, 3, 4].map((id) => ({ id, numero: id, capacite: 4 })),
     tours: 4,
     reservations: [tous(10, 1), auTour(11, 3, 2), auTour(12, 3, 2), auTour(6, 1, 1), auTour(1, 4, 4), auTour(13, 2, 3), auTour(2, 1, 3), auTour(4, 2, 1)],
@@ -1457,7 +1489,7 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
         const { nUplet, brutes } = scoreOracle(instance, etat.tableDe, aPriori, configuration);
         assert.deepStrictEqual(scoreComplet(etat), nUplet, `${nom}, ${etiquette} : scoreComplet`);
         assert.deepStrictEqual(scoreIncremental(etat), nUplet, `${nom}, ${etiquette} : scoreIncremental`);
-        for (const grandeur of ['toursHorsObjectif', 'jamaisServies', 'horsObjectifMax', 'personnesAuMax', 'animateursNonRencontres']) {
+        for (const grandeur of ['toursHorsObjectif', 'jamaisServies', 'horsObjectifMax', 'personnesAuMax', 'animateursNonRencontres', 'conflitsOrganisation']) {
           if (brutes[grandeur] > 0) nonNulles.add(grandeur);
         }
       };
@@ -1470,7 +1502,7 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
         if (PALIERS.includes(appliques.length)) confronter(`${appliques.length} mouvements`);
       }
       assert.equal(appliques.length, PALIERS.at(-1), nom);
-      assert.equal(nonNulles.size, 5, `${nom} : grandeurs des objectifs et des animateurs non nulles ${[...nonNulles]}`);
+      assert.equal(nonNulles.size, 6, `${nom} : grandeurs des objectifs, des animateurs et des conflits non nulles ${[...nonNulles]}`);
       for (const mouvement of appliques.reverse()) defaire(etat, mouvement);
       assert.deepStrictEqual(scoreIncremental(etat), depart, nom);
     }
@@ -1478,7 +1510,7 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
 
   test('chaque composante a la place que la compilation lui donne : un mode à deux et trois valeurs, un palier pondéré, une somme de poids', () => {
     const tailles = JEUX_A_OBJECTIFS.map(({ configuration }) => scoreIncremental(creerEtat(normaliser(configuration), creerPcg32(1, FLUX.RECHERCHE))).length);
-    assert.deepEqual(tailles, [8, 7, 9, 8, 10, 9]);
+    assert.deepEqual(tailles, [9, 8, 10, 9, 11, 10]);
   });
 
   test("l'état tient les grandeurs des objectifs et des animateurs sous les noms de la mesure : tours servis, tours hors objectif, jamais servies, le plus d'une personne et leur nombre, animateurs rencontrés", () => {
@@ -1536,6 +1568,74 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
     assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
     const reglages = { graine: 9, arret: 3_000, nombre: 2 };
     assert.deepEqual(rechercher(decochee, reglages), rechercher(sansAnimateur, reglages));
+  });
+});
+
+describe("score : les conflits d'organisation, tenus coup par coup (en-tête de recherche.js)", () => {
+  test("après chaque mouvement appliqué puis chaque mouvement défait, l'état tient les conflits que mesurer recompte et que l'énumération directe compte", () => {
+    const configuration = soireeAObjectifs();
+    const instance = normaliser(configuration);
+    assert.ok(instance.pairesEnConflit > 0);
+    const enConflit = conflitsDirects(configuration, instance);
+    // Les conflits d'un plan indexé, par énumération directe des paires.
+    const directs = (tableDe) => {
+      let total = 0;
+      for (let r = 0; r < instance.R; r += 1) {
+        for (let a = 0; a < instance.N; a += 1) {
+          for (let b = a + 1; b < instance.N; b += 1) {
+            const t = tableDe[a * instance.R + r];
+            if (t !== RESERVE && t === tableDe[b * instance.R + r] && enConflit(a, b)) total += 1;
+          }
+        }
+      }
+      return total;
+    };
+    const rng = creerPcg32(23, FLUX.RECHERCHE);
+    const etat = creerEtat(instance, rng);
+    const valeurs = new Set();
+    const ecarts = [];
+    const confronter = (etiquette) => {
+      const mesure = mesurer(instance, etat.tableDe).conflitsOrganisation;
+      valeurs.add(mesure);
+      if (etat.conflitsOrganisation !== mesure || mesure !== directs(etat.tableDe)) {
+        ecarts.push(`${etiquette} : état ${etat.conflitsOrganisation}, mesure ${mesure}`);
+      }
+    };
+    confronter('départ');
+    const appliques = [];
+    for (let essai = 0; appliques.length < 600; essai += 1) {
+      const mouvement = proposerEtAppliquer(etat, rng);
+      if (mouvement === null) continue;
+      appliques.push(mouvement);
+      confronter(`mouvement ${appliques.length}`);
+    }
+    for (const mouvement of appliques.reverse()) {
+      defaire(etat, mouvement);
+      confronter('défait');
+    }
+    assert.deepEqual(ecarts.slice(0, 3), []);
+    assert.ok(valeurs.size >= 3, `valeurs prises : ${[...valeurs]}`);
+  });
+
+  test("sous l'ordre par défaut, la recherche annule les conflits de la petite démonstration où la première personne nomme la deuxième organisation, au prix de collisions", () => {
+    // Trois organisations de quatre, quatre tables de trois : sans mêler
+    // les deux organisations en conflit, une table ne porte que deux
+    // organisations, et des collisions sont forcées. Le conflit, en tête,
+    // passe avant elles.
+    const base = demo('petite');
+    const organisations = [...new Set(base.participants.map(({ organisation }) => organisation))];
+    const configuration = {
+      ...base,
+      participants: base.participants.map((personne, rang) => (rang === 0 ? { ...personne, conflits: [organisations[1]] } : personne)),
+    };
+    const instance = normaliser(configuration);
+    assert.equal(instance.pairesEnConflit, 16);
+    for (const graine of [1, 2, 3]) {
+      const [{ plan }] = rechercher(configuration, { graine, arret: 20_000, nombre: 1 });
+      const mesures = mesurer(instance, indexerPlan(instance, plan));
+      assert.equal(mesures.conflitsOrganisation, 0, `graine ${graine}`);
+      assert.ok(mesures.collisionsCumulees > 0, `graine ${graine}`);
+    }
   });
 });
 
@@ -3256,13 +3356,15 @@ describe('repartir : le départ ajusté à la présence (§ 5.7)', () => {
 // trois tours, objectifs et animateurs cochés. Au tour 2, les deux places de
 // la table 1 sont réservées à 2 et à 3, et 4, réservée à la table 3, y anime.
 // 3 l'est aussi à la table 1 au tour 1. La table 1 porte l'objectif « x »
-// pour la soirée, que 7 porte.
+// pour la soirée, que 7 porte. 2, de B, nomme A : les deux organisations
+// sont en conflit.
 const soireeAReservesImposees = () => ({
   participants: Array.from({ length: 8 }, (_, rang) => ({
     id: rang + 1,
     organisation: ['A', 'B', null, 'A'][rang % 4],
     ...(rang + 1 === 7 ? { etiquettes: ['x'] } : {}),
     ...(rang + 1 === 4 ? { anime: [2] } : {}),
+    ...(rang + 1 === 2 ? { conflits: ['A'] } : {}),
   })),
   tables: [
     { id: 1, numero: 1, capacite: 2 },
