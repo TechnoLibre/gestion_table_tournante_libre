@@ -21,12 +21,16 @@ import { SEPARATEURS_ETIQUETTES, lireEtiquettes } from '../stockage/etiquettes.j
 import { VALEURS_EXCLU, apercevoir } from './apercu.js';
 import { CHAMPS } from './colonnes.js';
 import { decoder } from './encodage.js';
-import { JOINTURE_ETIQUETTES, SEPARATEUR, ecrireCsv, exporterParticipants, modeleParticipants } from './export.js';
+import { JOINTURE_CONFLITS, JOINTURE_ETIQUETTES, SEPARATEUR, ecrireCsv, exporterParticipants, modeleParticipants } from './export.js';
 import { appliquerImport } from './import.js';
 import { decouper } from './lecture.js';
 import { JOINTURE_PRESENCE } from './presence.js';
 
 const FIXTURES = new URL('../../test/fixtures/csv/', import.meta.url);
+
+// L'en-tête d'une liste où personne ne nomme de conflit : CHAMPS sans la
+// colonne des conflits d'organisation, que l'export n'écrit alors pas.
+const ENTETE = CHAMPS.filter((champ) => champ !== 'conflit_organisation').join(';');
 const EXEMPLES = new URL('../../exemples/', import.meta.url);
 
 const MARQUE = '\u{FEFF}';
@@ -44,7 +48,7 @@ const personne = (id, nom, autres = {}) => ({
 
 // Champs d'un participant, dans l'ordre du fichier d'état.
 const CHAMPS_DU_PARTICIPANT = [
-  'id', 'nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu', 'etiquettes', 'presence',
+  'id', 'nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu', 'etiquettes', 'presence', 'conflits',
 ];
 
 // Participants qu'un import crée, en ajoutant, sur une charge neuve de tours
@@ -91,17 +95,18 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
     );
   });
 
-  test("les en-têtes sont les champs de l'import, CHAMPS, et le séparateur « ; »", () => {
+  test("les en-têtes sont les champs de l'import, CHAMPS, sans les conflits quand personne n'en nomme, et le séparateur « ; »", () => {
     assert.equal(SEPARATEUR, ';');
-    assert.equal(CHAMPS.join(';'), 'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence');
-    assert.equal(texteDe(exporterParticipants([])), `${MARQUE}${CHAMPS.join(SEPARATEUR)}\r\n`);
+    assert.equal(CHAMPS.join(';'), 'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation');
+    assert.equal(ENTETE, 'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence');
+    assert.equal(texteDe(exporterParticipants([])), `${MARQUE}${ENTETE}\r\n`);
   });
 
   test("exclu s'écrit oui ou non, deux valeurs que la liste fermée de l'import relit", () => {
     assert.equal(VALEURS_EXCLU.get('oui'), true);
     assert.equal(VALEURS_EXCLU.get('non'), false);
     const texte = texteDe(exporterParticipants([personne(1, 'Ombrelle', { exclu: true }), personne(2, 'Pervenche')]));
-    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;oui;;;', 'Pervenche;;;;;non;;;'));
+    assert.equal(texte, MARQUE + csv(ENTETE, 'Ombrelle;;;;;oui;;;', 'Pervenche;;;;;non;;;'));
   });
 
   test('un champ qui porte « ; », un guillemet ou une fin de ligne s\'écrit cité, ses guillemets doublés', () => {
@@ -114,7 +119,7 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
       texteDe(octets),
       MARQUE +
         csv(
-          CHAMPS.join(';'),
+          ENTETE,
           'Ombrelle;;"Club ""Les Merles"" ; nord";;;non;"premier\r\nsecond";;',
           '"""Pervenche""";;;"theo\r@exemple.test";;non;"a\nb";;',
           'Sarcelle;;;;;non;virgule, tabulation\tseules;;',
@@ -124,7 +129,7 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
 
   test("les lignes suivent l'ordre de la liste reçue", () => {
     const texte = texteDe(exporterParticipants([personne(7, 'Sarcelle'), personne(2, 'Ombrelle')]));
-    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Sarcelle;;;;;non;;;', 'Ombrelle;;;;;non;;;'));
+    assert.equal(texte, MARQUE + csv(ENTETE, 'Sarcelle;;;;;non;;;', 'Ombrelle;;;;;non;;;'));
   });
 
   test("exporterParticipants ne modifie pas la liste reçue", () => {
@@ -166,7 +171,7 @@ describe("exporterParticipants : la colonne des étiquettes (§ 10.2, A18)", () 
     ]));
     assert.equal(
       texte,
-      MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;non;;Montréal, finance;', 'Pervenche;;;;;non;;;', 'Lacasse;;;;;non;;bénévole;'),
+      MARQUE + csv(ENTETE, 'Ombrelle;;;;;non;;Montréal, finance;', 'Pervenche;;;;;non;;;', 'Lacasse;;;;;non;;bénévole;'),
     );
   });
 
@@ -178,7 +183,7 @@ describe("exporterParticipants : la colonne des étiquettes (§ 10.2, A18)", () 
 
   test("une étiquette qui commence par « = » s'exporte telle quelle : aucune neutralisation de formule", () => {
     const texte = texteDe(exporterParticipants([personne(1, 'Ombrelle', { etiquettes: ['=SOMME(A1)', '+33', '@arobase'] })]));
-    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;non;;=SOMME(A1), +33, @arobase;'));
+    assert.equal(texte, MARQUE + csv(ENTETE, 'Ombrelle;;;;;non;;=SOMME(A1), +33, @arobase;'));
     const [personneRelue] = importer(new TextEncoder().encode(texte), 'formule');
     assert.deepEqual(personneRelue.etiquettes, ['+33', '=SOMME(A1)', '@arobase']);
   });
@@ -238,9 +243,9 @@ describe("exporterParticipants : l'aller-retour, champ par champ (§ 10.2)", () 
 });
 
 describe('exporterParticipants : la colonne de la présence (§ 10.2)', () => {
-  test('la neuvième et dernière, toujours écrite : vide sans champ, chaque suite d’au moins trois tours en « a-b », les autres tours joints par « , »', () => {
+  test('la neuvième, toujours écrite : vide sans champ, chaque suite d’au moins trois tours en « a-b », les autres tours joints par « , »', () => {
     assert.equal(JOINTURE_PRESENCE, ', ');
-    assert.equal(CHAMPS.at(-1), 'presence');
+    assert.equal(CHAMPS.at(-2), 'presence');
     const texte = texteDe(exporterParticipants([
       personne(1, 'Ombrelle', { presence: [1, 2, 3, 5] }),
       personne(2, 'Pervenche'),
@@ -249,7 +254,7 @@ describe('exporterParticipants : la colonne de la présence (§ 10.2)', () => {
     ]));
     assert.equal(
       texte,
-      MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;non;;;1-3, 5', 'Pervenche;;;;;non;;;', 'Lacasse;;;;;non;;finance;2, 3', 'Sarcelle;;;;;non;;;4'),
+      MARQUE + csv(ENTETE, 'Ombrelle;;;;;non;;;1-3, 5', 'Pervenche;;;;;non;;;', 'Lacasse;;;;;non;;finance;2, 3', 'Sarcelle;;;;;non;;;4'),
     );
   });
 
@@ -292,19 +297,112 @@ describe("ecrireCsv : l'écriture d'un CSV, qu'une découpe relit telle quelle",
   });
 });
 
+describe("exporterParticipants : la colonne des conflits d'organisation (§ 10.2)", () => {
+  // La cellule des conflits de chaque ligne d'un export.
+  const conflitsEcrits = (octets) => {
+    const [entete, ...lignes] = decouper(decoder(octets).texte, SEPARATEUR).enregistrements.filter((l) => l.length > 1);
+    return { entete, cellules: lignes.map((ligne) => ligne[entete.indexOf('conflit_organisation')]) };
+  };
+
+  test('écrite en dernier, après la présence, dès qu\u{2019}une personne nomme un conflit ; absente sinon', () => {
+    const avec = conflitsEcrits(exporterParticipants([
+      personne(1, 'Ombrelle', { organisation: 'Club des Merles' }),
+      personne(2, 'Pervenche', { conflits: ['Atelier Ressac', 'Club des Merles'] }),
+      personne(3, 'Lacasse', { organisation: 'Atelier Ressac', presence: [2] }),
+    ]));
+    assert.deepEqual(avec.entete, [...CHAMPS]);
+    assert.equal(avec.entete.at(-1), 'conflit_organisation');
+    assert.deepEqual(avec.cellules, ['', 'Atelier Ressac; Club des Merles', '']);
+    assert.equal(decoder(exporterParticipants([personne(2, 'Pervenche', { conflits: ['A', 'B'] })])).texte.split('\r\n')[1], 'Pervenche;;;;;non;;;;"A; B"');
+    const sans = conflitsEcrits(exporterParticipants([personne(1, 'Ombrelle', { organisation: 'Club des Merles' })]));
+    assert.deepEqual(sans.entete, ENTETE.split(';'));
+  });
+
+  test('la jointure « ; », privée de ses blancs, est un séparateur que la découpe de l\u{2019}import lit ; la virgule reste dans le nom', () => {
+    assert.equal(JOINTURE_CONFLITS, '; ');
+    const { cellules } = conflitsEcrits(exporterParticipants([
+      personne(1, 'Ombrelle', { conflits: ['Atelier Ressac', 'Club des Merles', 'Société Alpha, Beta'] }),
+      personne(2, 'Sarcelle', { conflits: ['Club des Merles'] }),
+    ]));
+    assert.deepEqual(cellules, ['Atelier Ressac; Club des Merles; Société Alpha, Beta', 'Club des Merles']);
+  });
+
+  test("l'aller-retour export → import (ajouter) rend les mêmes conflits, un nom qui porte une virgule compris", () => {
+    const participants = [
+      personne(1, 'Ombrelle', { organisation: 'Club des Merles' }),
+      personne(2, 'Pervenche', { organisation: 'Atelier Ressac' }),
+      personne(3, 'Lacasse', { organisation: 'Société Alpha, Beta' }),
+      personne(4, 'Sarcelle', { conflits: ['Atelier Ressac', 'Club des Merles', 'Société Alpha, Beta'] }),
+      personne(5, 'Houle', { organisation: 'Club des Merles', conflits: ['Société Alpha, Beta'] }),
+      personne(6, 'Galet', { exclu: true, conflits: ['Atelier Ressac', 'Club des Merles'] }),
+    ];
+    memesParticipants(importer(exporterParticipants(participants), 'conflits'), participants, 'conflits');
+  });
+
+  test("un nom d'organisation qui porte « ; » ou « | » fait l'aller-retour, sous chaque mode ; la cellule se relit telle qu'écrite", () => {
+    const participants = [
+      personne(1, 'Ombrelle', { organisation: 'Tilleul; frères' }),
+      personne(2, 'Pervenche', { organisation: 'Atelier | Ressac' }),
+      personne(3, 'Lacasse', { organisation: 'Tilleul' }),
+      personne(4, 'Sarcelle', { conflits: ['Atelier | Ressac', 'Tilleul', 'Tilleul; frères'] }),
+      personne(5, 'Houle', { organisation: 'Tilleul', conflits: ['Tilleul; frères'] }),
+    ];
+    const octets = exporterParticipants(participants);
+    assert.deepEqual(conflitsEcrits(octets).cellules, ['', '', '', 'Atelier | Ressac; Tilleul; Tilleul; frères', 'Tilleul; frères']);
+    memesParticipants(importer(octets, 'séparateurs dans un nom'), participants, 'séparateurs dans un nom');
+    const charge = creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours: 4 });
+    charge.participants = structuredClone(participants);
+    charge.prochainsIds.participant = 6;
+    for (const mode of ['remplacer', 'mettreAJour']) {
+      const apercu = apercevoir(decoder(octets).texte, { participants: charge.participants, mode, tours: 4 });
+      assert.equal(apercu.refusGlobal, null, mode);
+      const relus = appliquerImport(charge, apercu, mode).charge.participants;
+      assert.deepEqual(relus.map(({ conflits }) => conflits), participants.map(({ conflits }) => conflits), mode);
+    }
+  });
+
+  test("quand « ; » relirait deux organisations en une que l'événement porte, la cellule se joint par « | », puis par une fin de ligne ; sans jointure qui se relise, « ; » reste", () => {
+    const participants = [
+      personne(1, 'Ombrelle', { organisation: 'Alpha' }),
+      personne(2, 'Pervenche', { organisation: 'Beta' }),
+      personne(3, 'Lacasse', { organisation: 'Alpha; Beta' }),
+      personne(4, 'Sarcelle', { conflits: ['Alpha', 'Beta'] }),
+      personne(5, 'Houle', { conflits: ['Alpha; Beta'] }),
+    ];
+    const octets = exporterParticipants(participants);
+    assert.deepEqual(conflitsEcrits(octets).cellules, ['', '', '', 'Alpha | Beta', 'Alpha; Beta']);
+    memesParticipants(importer(octets, 'jointure par la barre'), participants, 'jointure par la barre');
+    // La barre relue d'un seul nom, puis la fin de ligne aussi : « ; » reste,
+    // faute d'une jointure qui se relise en la même liste.
+    const sansIssue = exporterParticipants([
+      personne(1, 'Ombrelle', { organisation: 'Alpha | Beta' }),
+      personne(2, 'Pervenche', { organisation: 'Alpha\nBeta' }),
+      personne(3, 'Lacasse', { organisation: 'Alpha; Beta' }),
+      personne(4, 'Sarcelle', { conflits: ['Alpha', 'Beta'] }),
+    ]);
+    assert.equal(conflitsEcrits(sansIssue).cellules[3], 'Alpha; Beta');
+    const parLaFinDeLigne = exporterParticipants([
+      personne(1, 'Ombrelle', { organisation: 'Alpha | Beta' }),
+      personne(3, 'Lacasse', { organisation: 'Alpha; Beta' }),
+      personne(4, 'Sarcelle', { conflits: ['Alpha', 'Beta'] }),
+    ]);
+    assert.equal(conflitsEcrits(parLaFinDeLigne).cellules[2], 'Alpha\nBeta');
+  });
+});
+
 describe("modeleParticipants : le modèle à télécharger, dans la forme de l'export (§ 10.1)", () => {
   // Le modèle sous quatre tours : la plage « 1-3 », la liste « 2, 3 ».
   const ATTENDU = csv(
-    'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence',
-    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal;',
-    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines;2, 3',
-    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;;',
-    'Tourteau;Basile;;;;non;;bénévole;1-3',
+    'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation',
+    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal;;',
+    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines;2, 3;',
+    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;;;',
+    'Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac',
   );
 
   // Les cellules de présence du modèle, rang à rang, sous tours tours.
   const presencesDuModele = (tours) =>
-    decouper(decoder(modeleParticipants({ tours })).texte, SEPARATEUR).enregistrements.slice(1).map((ligne) => ligne.at(-1));
+    decouper(decoder(modeleParticipants({ tours })).texte, SEPARATEUR).enregistrements.slice(1).map((ligne) => ligne[CHAMPS.indexOf('presence')]);
 
   test("marque UTF-8, « ; », CRLF, l'en-tête de l'export puis quatre personnes inventées", () => {
     const octets = modeleParticipants({ tours: 4 });
@@ -361,7 +459,7 @@ describe("modeleParticipants : le modèle à télécharger, dans la forme de l'e
         prenom: 'Ondine', organisation: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé',
         exclu: true,
       }),
-      personne(4, 'Tourteau', { prenom: 'Basile', etiquettes: ['bénévole'], presence: [1, 2, 3] }),
+      personne(4, 'Tourteau', { prenom: 'Basile', etiquettes: ['bénévole'], presence: [1, 2, 3], conflits: ['Atelier Ressac'] }),
     ], 'modèle');
     const apercu = apercevoir(decoder(modeleParticipants({ tours: 4 })).texte, { tours: 4 });
     assert.deepEqual([apercu.doublons, apercu.multilignes], [[], []]);

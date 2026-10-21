@@ -4,18 +4,19 @@
 <script>
   // La fiche d'une personne à l'écran (§ 4, § 4.2, § 4.5, § 7.4, § 10.2) :
   // nom, prénom, organisation, courriel, titre pressenti, notes, statut
-  // calculé, ses étiquettes, sa présence par tour, ses réservations, et sa
-  // table et son siège à chaque tour du retenu, ou son absence à ce tour ;
-  // un tour que le retenu ne porte pas se dit hors du retenu. La fiche replie, ne tronque jamais : un nom de deux cents
-  // caractères s'y lit entier, sur autant de lignes qu'il en faut. Chaque
-  // donnée occupe son propre nœud de texte, et rien n'y est interprété
-  // comme du balisage.
+  // calculé, ses étiquettes, ses conflits d'organisation, sa présence par
+  // tour, ses réservations, et sa table et son siège à chaque tour du
+  // retenu, ou son absence à ce tour ; un tour que le retenu ne porte pas se
+  // dit hors du retenu. La fiche replie, ne tronque jamais : un nom de deux
+  // cents caractères s'y lit entier, sur autant de lignes qu'il en faut.
+  // Chaque donnée occupe son propre nœud de texte, et rien n'y est
+  // interprété comme du balisage.
   //
   // Le statut est celui de statuts (src/application/places.js), lu dans
   // l'instance du moteur ; l'itinéraire, celui d'itineraire (grille.js), lu
   // tour par tour dans etatPlaces : la fiche ne recalcule ni l'un ni
-  // l'autre. Ses contrôles de saisie sont le champ des étiquettes et les
-  // cases de la présence.
+  // l'autre. Ses contrôles de saisie sont le champ des étiquettes, les cases
+  // des conflits et celles de la présence.
   //
   // Les étiquettes (etiquettes.js) : une pastille neutre à icône par
   // étiquette, dans l'ordre de la charge — la teinte d'organisation ne sert
@@ -43,7 +44,21 @@
   // place de la sienne — la suivante, sinon la précédente (ligneVoisine) —,
   // ou au champ quand il n'en reste aucune.
   //
-  // La rubrique « Présence » (data-presence-fiche), entre les étiquettes et
+  // La rubrique « Conflits d'organisation » (data-conflits-fiche), entre les
+  // étiquettes et la présence : chaque organisation que la personne nomme, en
+  // pastille neutre à l'icône « interdit », ou une phrase qui dit qu'elle
+  // n'en nomme aucune ; puis le choix multiple de la grille (ChoixMultiple),
+  // une case par organisation de l'événement hors la sienne (choixDeConflits,
+  // liste_conflits.js), et « Appliquer ». Cocher et décocher n'écrivent
+  // rien : le brouillon vit dans une machine de champ.js, comme celui de la
+  // présence, et tient le geste ouvert. « Appliquer », ou Entrée dans les
+  // cases, exécute changerConflits de la liste entière (commandeDeConflits),
+  // une seule entrée pour le geste ; Échap rend la liste enregistrée. Un
+  // refus — séance en lecture, plan bloqué — se pose sous les cases, avec son
+  // remède, le brouillon gardé ; une écriture venue d'ailleurs arrive par
+  // recevoir, et une autre personne repart de sa liste.
+  //
+  // La rubrique « Présence » (data-presence-fiche), entre les conflits et
   // les réservations : la présence enregistrée, « tous » ou ses tours
   // nommés (affichagePresence, presence.js), puis une case par tour
   // (CasesPresence), « Tous les tours » et « Appliquer ». Cocher, décocher et
@@ -91,9 +106,13 @@
   import { creerGeste } from '../primitives/geste.js';
   import { rubriqueRencontres } from '../qualite/paires.js';
   import { effetDe } from '../raccourcis.js';
+  import { organisationsDe } from '../../application/conflits_organisation.js';
+  import { cleNormalisee } from '../../application/csv.js';
   import CasesPresence from './CasesPresence.svelte';
+  import ChoixMultiple from './ChoixMultiple.svelte';
   import { ajoutEtiquettes, etiquettesDeLaFiche, retraitEtiquette, saisieApresAjout, signauxOrthographe } from './etiquettes.js';
   import { cleDeColonne, cleDeStatut, commandeDeCellule, itineraire, ligneVoisine, reservationsDe } from './grille.js';
+  import { choixDeConflits, commandeDeConflits, lectureConflits, saisieApresBasculeConflit, saisieConflitsEnregistree } from './liste_conflits.js';
   import { affichagePresence, casesDeSaisie, lecturePresence, saisieApresBascule, saisieEnregistree, saisiePleine } from './presence.js';
 
   let { participant, charge } = $props();
@@ -189,8 +208,42 @@
     });
   });
 
+  // Les conflits : l'enregistrée, et le brouillon des cases, tenu par une
+  // machine de champ.js propre à la personne ; le refus posé sous les cases,
+  // et l'envoi en cours.
+  const conflitsEnregistres = $derived(saisieConflitsEnregistree(participant));
+  const organisations = $derived(organisationsDe(charge));
+  let machineConflits = untrack(() => creerMachineChamp({ stockee: conflitsEnregistres, lire: lectureConflits }));
+  let saisieConflits = $state(untrack(() => machineConflits.saisie));
+  let brouillonConflits = $state(false);
+  let refusConflits = $state.raw(null);
+  let envoiConflits = $state(false);
+  const idRefusConflits = `${uid}-refus-conflits`;
+
+  function suivreConflits() {
+    saisieConflits = machineConflits.saisie;
+    brouillonConflits = machineConflits.enCours;
+  }
+
+  // Une autre personne : une machine neuve, sans refus. La même : la liste
+  // enregistrée, venue d'ailleurs, est reçue.
+  let conflitsDe = untrack(() => participant.id);
+  $effect.pre(() => {
+    const id = participant.id;
+    const enregistree = conflitsEnregistres;
+    untrack(() => {
+      if (id === conflitsDe) machineConflits.recevoir(enregistree);
+      else {
+        conflitsDe = id;
+        machineConflits = creerMachineChamp({ stockee: enregistree, lire: lectureConflits });
+        refusConflits = null;
+      }
+      suivreConflits();
+    });
+  });
+
   $effect(() => {
-    geste.tenir(texte !== '' || brouillonPresence);
+    geste.tenir(texte !== '' || brouillonPresence || brouillonConflits);
   });
 
   // Le refus d'un geste, ou une erreur sans code, qui remonte.
@@ -291,6 +344,54 @@
     }
   }
 
+  function basculerConflit(organisation, coche) {
+    machineConflits.saisir(saisieApresBasculeConflit(machineConflits.saisie, organisation, coche));
+    refusConflits = null;
+    suivreConflits();
+  }
+
+  // Exécute la liste saisie, quand elle diffère de l'enregistrée : une
+  // seule commande, une entrée, pour le geste entier. Un refus la rend au
+  // brouillon et se pose sous les cases, tant que la machine est la même.
+  // L'envoi n'est pas ré-entrant.
+  async function appliquerConflits(evenement) {
+    evenement.preventDefault();
+    if (envoiConflits) return;
+    const enCours = machineConflits;
+    const id = participant.id;
+    refusConflits = null;
+    const rendu = enCours.valider();
+    suivreConflits();
+    if (rendu.action !== 'executer') return;
+    envoiConflits = true;
+    try {
+      const { nom, args } = commandeDeConflits(id, rendu.valeur);
+      await seance.executer(nom, args);
+    } catch (erreur) {
+      const refus = refusDe(erreur);
+      if (machineConflits === enCours) {
+        enCours.echec(refus);
+        suivreConflits();
+        refusConflits = refus;
+      }
+    } finally {
+      envoiConflits = false;
+    }
+  }
+
+  // Dans les cases des conflits : Entrée applique, Échap rend la liste
+  // enregistrée.
+  function surToucheConflits(evenement) {
+    const effet = effetDe('champ', evenement.key);
+    if (effet === 'valider') appliquerConflits(evenement);
+    else if (effet === 'rendre') {
+      evenement.preventDefault();
+      machineConflits.abandonner();
+      refusConflits = null;
+      suivreConflits();
+    }
+  }
+
   // Fait défiler l'élément monté jusque dans la fenêtre, au plus court.
   function montrer(cible) {
     cible.scrollIntoView({ block: 'nearest' });
@@ -370,6 +471,44 @@
               <p>{t(signal.code, signal.details)}</p>
             {/each}
           </div>
+        </div>
+      {/if}
+    </form>
+  </section>
+
+  <section class="conflits" data-conflits-fiche aria-labelledby={`${uid}-titre-conflits`}>
+    <h4 id={`${uid}-titre-conflits`}>{t('participants.fiche.conflits')}</h4>
+    {#if participant.conflits === undefined}
+      <p class="resume" data-conflits-resume>{t('participants.fiche.aucunConflit')}</p>
+    {:else}
+      <ul class="resume" data-conflits-resume>
+        {#each participant.conflits as organisation (organisation)}
+          <li><Pastille sorte="statut" valeur="neutre" icone="interdit" libelle={organisation} /></li>
+        {/each}
+      </ul>
+    {/if}
+    <form novalidate onsubmit={appliquerConflits}>
+      <ChoixMultiple
+        choix={choixDeConflits(saisieConflits, organisations, participant.organisation, cleNormalisee)}
+        nom={t('participants.conflits.editeur', { nom: nomAffiche(participant) })}
+        legende={t('participants.conflits.legende')}
+        vide={t('participants.conflits.aucuneAutre')}
+        invalide={refusConflits !== null}
+        decrit={refusConflits === null ? undefined : idRefusConflits}
+        basculer={basculerConflit}
+        toucher={surToucheConflits}
+      />
+      <div class="boutons">
+        <button
+          type="submit"
+          data-commande="appliquerConflits"
+          aria-busy={envoiConflits ? 'true' : undefined}
+          aria-disabled={envoiConflits ? 'true' : undefined}>{t('participants.conflits.appliquer')}</button
+        >
+      </div>
+      {#if refusConflits !== null}
+        <div class="refus" {@attach montrer}>
+          <Refus id={idRefusConflits} refus={refusConflits} lever={() => (refusConflits = null)} />
         </div>
       {/if}
     </form>
@@ -612,13 +751,14 @@
     color: var(--couleur-page-texte-secondaire);
   }
 
-  /* Les étiquettes et la présence : l'intitulé en petites capitales, puis,
-     pour les étiquettes, les pastilles en rangée qui se replie, chacune
-     suivie, en écriture, de sa croix de retrait ; puis le champ d'ajout et
-     son bouton sur une ligne, le refus ou le signal dessous ; pour la
-     présence, son résumé de l'encre de la page, les cases, leurs deux
-     boutons sur une ligne, le refus dessous. */
+  /* Les étiquettes, les conflits et la présence : l'intitulé en petites
+     capitales, puis, pour les étiquettes, les pastilles en rangée qui se
+     replie, chacune suivie, en écriture, de sa croix de retrait ; puis le
+     champ d'ajout et son bouton sur une ligne, le refus ou le signal
+     dessous ; pour les conflits et la présence, leur résumé de l'encre de
+     la page, les cases, leurs boutons sur une ligne, le refus dessous. */
   .etiquettes,
+  .conflits,
   .presence {
     display: flex;
     flex-direction: column;
@@ -648,10 +788,12 @@
   }
 
   .etiquettes p,
+  .conflits p,
   .presence p {
     margin: 0;
   }
 
+  .conflits .resume,
   .presence .resume {
     color: var(--couleur-page-texte);
   }

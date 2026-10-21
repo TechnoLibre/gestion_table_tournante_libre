@@ -78,6 +78,7 @@ const CLES_DES_CHAMPS = new Map([
   ['notes', 'import.champ.notes'],
   ['etiquettes', 'import.champ.etiquettes'],
   ['presence', 'import.champ.presence'],
+  ['conflit_organisation', 'import.champ.conflits'],
   ['table', 'import.champ.table'],
   ['tour', 'import.champ.tour'],
   ['objectif', 'import.champ.objectif'],
@@ -99,7 +100,14 @@ const CLES_D_EXCLU = new Map([
 ]);
 
 // Le nom de chaque champ dans ChampsLus, celui de l'aperçu de src/csv.
-const CHAMPS_LUS = new Map([['titre_pressenti', 'titrePressenti']]);
+const CHAMPS_LUS = new Map([
+  ['titre_pressenti', 'titrePressenti'],
+  ['conflit_organisation', 'conflits'],
+]);
+
+// Les champs dont la cellule est une liste de noms, chacun sa pastille : les
+// étiquettes, et les organisations en conflit.
+const CHAMPS_EN_LISTE = new Set(['etiquettes', 'conflit_organisation']);
 
 // Des modes et la clé de leur nom, figés.
 const modes = (paires) => Object.freeze(paires.map(([mode, cle]) => Object.freeze({ mode, cle })));
@@ -276,7 +284,8 @@ const REFUS_DE_DECODER = new Set(['UTF16_SANS_MARQUE', 'UTF16_INVALIDE', 'UTF8_I
 
 // La clé du remède de chaque refus global de l'aperçu des participants. Un
 // caractère nul n'y arrive que d'un texte collé : celui d'un fichier,
-// decoder le refuse.
+// decoder le refuse. Un conflit fautif refuse le fichier entier : son
+// remède invite à le corriger, puis à l'importer de nouveau.
 const REMEDES_DE_L_APERCU = new Map([
   ['CARACTERE_NUL', 'import.remede.caractereNulCollage'],
   ['AUCUN_ENTETE', 'import.remede.aucunEntete'],
@@ -284,6 +293,8 @@ const REMEDES_DE_L_APERCU = new Map([
   ['AUCUNE_LIGNE_VALIDE', 'import.remede.aucuneLigneValide'],
   ['GUILLEMET_OUVERT', 'import.remede.guillemetOuvert'],
   ['SEPARATEUR_INTROUVABLE', 'import.remede.separateurIntrouvable'],
+  ['CONFLIT_ORGANISATION_INCONNUE', 'import.remede.conflitOrganisation'],
+  ['CONFLIT_ORGANISATION_PROPRE', 'import.remede.conflitPropre'],
 ]);
 
 // La clé du remède de chaque refus global de l'aperçu des objectifs (§ 10.4) :
@@ -312,6 +323,13 @@ const REMEDES_DE_LA_GRILLE = new Map([
   ['SEPARATEUR_INTROUVABLE', 'import.remede.separateurIntrouvableCollage'],
 ]);
 
+// Le remède d'un conflit fautif dans un texte collé : le corriger, puis le
+// coller de nouveau, là où celui d'un fichier dit de le réimporter.
+const REMEDES_DU_COLLAGE = new Map([
+  ['CONFLIT_ORGANISATION_INCONNUE', 'import.remede.conflitOrganisationCollage'],
+  ['CONFLIT_ORGANISATION_PROPRE', 'import.remede.conflitPropreCollage'],
+]);
+
 // La valeur d'une table de clés, ou RangeError qui nomme ce qui manque :
 // jamais une clé devinée.
 function dans(table, valeur, quoi) {
@@ -336,19 +354,25 @@ function globalDeDecoder({ code, details }) {
 }
 
 // Le refus global d'un aperçu, null sans refus. Un collage auquel l'aperçu
-// offre l'ordre de la grille prend le remède qui le nomme. Un refus que son
-// texte remédie déjà porte le seul geste qui y mène.
+// offre l'ordre de la grille prend le remède qui le nomme, un conflit
+// fautif collé celui qui dit de coller de nouveau. Un refus que son texte
+// remédie déjà porte le seul geste qui y mène. Les détails portent le rang
+// que l'aperçu nomme, et l'organisation d'un conflit fautif.
 function globalDeLApercu(apercu, collage, nature) {
   const code = apercu.refusGlobal;
   if (code === null) return null;
   const rang = apercu.refusGlobalLigne;
-  const details = rang === null ? {} : { ligne: rang };
+  const organisation = apercu.refusGlobalOrganisation ?? null;
+  const details = { ...(rang === null ? {} : { ligne: rang }), ...(organisation === null ? {} : { organisation }) };
   if (nature === 'objectifs') {
     const remede = dans(REMEDES_DES_OBJECTIFS, code, 'refus global des objectifs');
     const geste = GESTES_DES_OBJECTIFS.get(code) ?? null;
     return { cle: code, details, remede: { cle: remede, details, dansLaCause: remede === null, geste } };
   }
-  const remede = collage && offreLaGrille(apercu) ? REMEDES_DE_LA_GRILLE.get(code) : dans(REMEDES_DE_L_APERCU, code, 'refus global');
+  const remede =
+    collage && offreLaGrille(apercu)
+      ? REMEDES_DE_LA_GRILLE.get(code)
+      : (collage && REMEDES_DU_COLLAGE.get(code)) || dans(REMEDES_DE_L_APERCU, code, 'refus global');
   return { cle: code, details, remede: { cle: remede, details, dansLaCause: false, geste: null } };
 }
 
@@ -380,7 +404,8 @@ function colonnesDe({ entetes, association }, champs) {
 }
 
 // Une cellule de l'aperçu : un texte lu, une clé de libellé et ses détails,
-// ou une liste d'étiquettes, chacune une pastille ; les autres null.
+// ou une liste de noms — des étiquettes, des organisations en conflit —,
+// chacun une pastille, sous etiquettes ; les autres null.
 const cellule = (champ, { texte = null, cle = null, etiquettes = null, details = null }) => ({
   champ, texte, cle, etiquettes, details,
 });
@@ -398,10 +423,11 @@ function celluleDePresence(presence, { tours, inchangee }) {
 
 // Chaque ligne valide des participants : son rang, puis une cellule par
 // champ, dans l'ordre de CHAMPS : le texte lu, ou la clé de la valeur
-// d'« exclu » ; les étiquettes une à une, aucune pour une cellule vide ; la
-// présence par celluleDePresence, sous le nombre de tours : « inchangée »
-// seulement quand la colonne existe et que la ligne désigne une personne
-// existante (designees, que l'aperçu ne remplit qu'en mise à jour).
+// d'« exclu » ; les étiquettes une à une, et de même les organisations en
+// conflit, aucune pour une cellule vide ; la présence par celluleDePresence,
+// sous le nombre de tours : « inchangée » seulement quand la colonne existe
+// et que la ligne désigne une personne existante (designees, que l'aperçu ne
+// remplit qu'en mise à jour).
 function lignesDesParticipants({ lignes, tours, association, designees }) {
   const colonne = association.colonnes.presence !== undefined;
   const designee = new Set(designees);
@@ -410,7 +436,7 @@ function lignesDesParticipants({ lignes, tours, association, designees }) {
     cellules: CHAMPS.map((champ) => {
       const valeur = champs[CHAMPS_LUS.get(champ) ?? champ];
       if (champ === 'exclu') return cellule(champ, { cle: valeur === null ? null : CLES_D_EXCLU.get(valeur) });
-      if (champ === 'etiquettes') return cellule(champ, { etiquettes: valeur ?? [] });
+      if (CHAMPS_EN_LISTE.has(champ)) return cellule(champ, { etiquettes: valeur ?? [] });
       if (champ === 'presence') return celluleDePresence(valeur, { tours, inchangee: colonne && designee.has(ligne) });
       return cellule(champ, { texte: valeur });
     }),
@@ -505,7 +531,8 @@ const RIEN = Object.freeze({
  * organisations, ni doublons, ni homonymes : ces listes y sont vides.
  *
  * La cause est le code du refus, sa propre clé ; ses détails sont ceux de
- * decoder, ou { ligne } quand l'aperçu nomme un rang. Le remède d'un refus
+ * decoder, ou { ligne } quand l'aperçu nomme un rang, et { organisation }
+ * sous un conflit fautif. Le remède d'un refus
  * de decoder est le code de details.remede, que le texte de la cause compose
  * déjà : remede.dansLaCause le dit, et l'écran ne le répète pas. remede.geste
  * est le remède du contrat (commande.js) qui y mène, null sans geste.
@@ -581,7 +608,7 @@ export function modeleApercu({ nature = 'participants', encodage = null, apercu 
 /**
  * Le texte relu dans l'ordre de la grille, sous la nature des participants
  * seule : précédé d'une ligne d'en-têtes —
- * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de neuf —,
+ * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de dix —,
  * joints par le séparateur de l'aperçu. Sous AUCUN_ENTETE d'un texte non
  * blanc, largeur vaut apercu.entetes.length ; sous SEPARATEUR_INTROUVABLE
  * sans candidat (refusGlobalLigne null : une seule colonne), largeur vaut 1

@@ -31,9 +31,22 @@
   // texte. Entrée, Tab ou la sortie du groupe valident une fois, en une
   // entrée : Tab valide puis mène à la cellule voisine, et la sortie d'une
   // case vers une autre case du groupe ne valide pas. Échap rend la présence
-  // enregistrée. Cocher puis décocher un tour, puis valider, n'écrit rien. Un refus se pose dans la cellule où le geste a eu
-  // lieu, avec son remède : celui de la séance, lu dans etat().refus avant
-  // d'ouvrir l'édition, ou celui de la commande, la saisie gardée.
+  // enregistrée. Cocher puis décocher un tour, puis valider, n'écrit rien.
+  //
+  // Les conflits d'organisation (§ 4, § 10.2) s'affichent en pastilles
+  // neutres à l'icône « interdit », une par organisation nommée — la teinte
+  // d'organisation reste à la colonne de l'organisation —, la cellule vide
+  // sans conflit. Entrée ou F2 les ouvre en choix multiple (ChoixMultiple,
+  // compact), une case par organisation de l'événement hors la sienne
+  // (choixDeConflits, liste_conflits.js), le focus sur la première ; les
+  // mêmes touches que la présence y valent, sur la même machine : la saisie
+  // est la liste canonique, et la validation exécute changerConflits de la
+  // liste entière (commandeDeCellule), une seule entrée pour le geste. Sans
+  // autre organisation, le groupe le dit, et prend le focus.
+  //
+  // Un refus se pose dans la cellule où le geste a eu lieu, avec son
+  // remède : celui de la séance, lu dans etat().refus avant d'ouvrir
+  // l'édition, ou celui de la commande, la saisie gardée.
   //
   // « Voir sur le plan » met la personne en évidence et ouvre le plan, au
   // tour montré (§ 7.1, § 8.4) : un geste de regard, qui n'écrit rien.
@@ -77,6 +90,8 @@
   // règles. Aucune couleur ne les distingue : la teinte de conflit reste au
   // plan.
   import { getContext, onDestroy, tick } from 'svelte';
+  import { organisationsDe } from '../../application/conflits_organisation.js';
+  import { cleNormalisee } from '../../application/csv.js';
   import { nomAffiche } from '../../application/personnes.js';
   import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
@@ -85,6 +100,7 @@
   import Refus from '../primitives/Refus.svelte';
   import { effetDe } from '../raccourcis.js';
   import CasesPresence from './CasesPresence.svelte';
+  import ChoixMultiple from './ChoixMultiple.svelte';
   import { cleDeRaison } from './conflits.js';
   import {
     COLONNES,
@@ -98,6 +114,7 @@
     lignesVisibles,
     ligneVoisine,
   } from './grille.js';
+  import { choixDeConflits, lectureConflits, saisieApresBasculeConflit, saisieConflitsEnregistree } from './liste_conflits.js';
   import { affichagesPresence, casesDeSaisie, lecturePresence, saisieApresBascule, saisieEnregistree } from './presence.js';
 
   let {
@@ -133,8 +150,13 @@
   let machine = null;
   let tableau;
   let entree = $state(null);
-  // Le groupe des cases de la présence en édition (CasesPresence).
+  // Le groupe des cases en édition : celles de la présence (CasesPresence),
+  // ou celles des conflits (ChoixMultiple).
   let editeur = $state(null);
+
+  // Les organisations de l'événement, exclus compris : celles qu'un conflit
+  // peut nommer. La grille ne reçoit que ses lignes, que le filtre réduit.
+  const organisations = $derived($seance.charge === null ? new Set() : organisationsDe($seance.charge));
 
   // Les lignes que la grille montre, dans leur ordre, et le rang de chacune
   // parmi elles, par identifiant.
@@ -157,13 +179,18 @@
   const texteDe = (valeur) => (valeur === null ? '' : valeur);
   const lire = (texte) => ({ valeur: texte.normalize('NFC').trim() });
 
+  // Les colonnes qui s'éditent en cases, dans un groupe.
+  const EN_CASES = new Set(['presence', 'conflits']);
+
   // Le contrôle de la cellule en édition — le groupe des cases de la
-  // présence, le champ de texte sinon —, vrai quand le focus est en lui, et
-  // le focus qui y revient : la case active, ou le champ.
-  const controleEnEdition = () => (edition?.colonne === 'presence' ? editeur : entree);
+  // présence ou des conflits, le champ de texte sinon —, vrai quand le
+  // focus est en lui, et le focus qui y revient : la case active, le groupe
+  // des conflits quand il n'en porte aucune, ou le champ.
+  const controleEnEdition = () => (EN_CASES.has(edition?.colonne) ? editeur : entree);
   const focusDans = (controle) => controle !== null && controle.contains(document.activeElement);
   function focaliserEdition() {
     if (edition?.colonne === 'presence') editeur?.querySelector('[data-presence-tour][tabindex="0"]')?.focus();
+    else if (edition?.colonne === 'conflits') (editeur?.querySelector('[data-choix][tabindex="0"]') ?? editeur)?.focus();
     else entree?.focus();
   }
 
@@ -199,15 +226,14 @@
       return;
     }
     refusCellule = null;
-    machine =
-      colonne === 'presence'
-        ? creerMachineChamp({ stockee: saisieEnregistree(personne, tours), lire: lecturePresence(tours) })
-        : creerMachineChamp({ stockee: texteDe(personne[colonne]), lire });
+    if (colonne === 'presence') machine = creerMachineChamp({ stockee: saisieEnregistree(personne, tours), lire: lecturePresence(tours) });
+    else if (colonne === 'conflits') machine = creerMachineChamp({ stockee: saisieConflitsEnregistree(personne), lire: lectureConflits });
+    else machine = creerMachineChamp({ stockee: texteDe(personne[colonne]), lire });
     saisie = machine.saisie;
     edition = { id: personne.id, colonne };
     await tick();
     focaliserEdition();
-    if (colonne !== 'presence') entree?.setSelectionRange(saisie.length, saisie.length);
+    if (!EN_CASES.has(colonne)) entree?.setSelectionRange(saisie.length, saisie.length);
   }
 
   // Ferme l'édition et rend le focus à sa cellule quand il était dans le
@@ -306,9 +332,16 @@
     geste.tenir(machine.enCours);
   }
 
-  // La bascule d'une case de la présence : la saisie suit, rien ne s'écrit.
+  // La bascule d'une case de la présence ou des conflits : la saisie suit,
+  // rien ne s'écrit.
   function surBascule(tour, coche) {
     machine.saisir(saisieApresBascule(machine.saisie, tour, coche));
+    saisie = machine.saisie;
+    refusCellule = null;
+    geste.tenir(machine.enCours);
+  }
+  function surBasculeConflit(organisation, coche) {
+    machine.saisir(saisieApresBasculeConflit(machine.saisie, organisation, coche));
     saisie = machine.saisie;
     refusCellule = null;
     geste.tenir(machine.enCours);
@@ -374,8 +407,8 @@
   }
 
   // La sortie du groupe des cases valide ; le focus passé d'une case à une
-  // autre du groupe ne sort pas.
-  function surSortiePresence(evenement) {
+  // autre du groupe, ou au groupe lui-même, ne sort pas.
+  function surSortieGroupe(evenement) {
     if (editeur?.contains(evenement.relatedTarget)) return;
     surSortie();
   }
@@ -467,7 +500,20 @@
             bind:conteneur={editeur}
             basculer={surBascule}
             toucher={(evenement) => surToucheEntree(evenement, rang)}
-            sortir={surSortiePresence}
+            sortir={surSortieGroupe}
+          />
+        {:else if enEdition(personne.id, colonne) && colonne === 'conflits'}
+          <ChoixMultiple
+            compact
+            choix={choixDeConflits(saisie, organisations, personne.organisation, cleNormalisee)}
+            nom={t('participants.conflits.editeur', { nom: nomAffiche(personne) })}
+            vide={t('participants.conflits.aucuneAutre')}
+            invalide={refus !== null}
+            decrit={refus === null ? undefined : idRefus(personne.id, colonne)}
+            bind:conteneur={editeur}
+            basculer={surBasculeConflit}
+            toucher={(evenement) => surToucheEntree(evenement, rang)}
+            sortir={surSortieGroupe}
           />
         {:else if enEdition(personne.id, colonne)}
           <input
@@ -495,6 +541,16 @@
             <Pastille sorte="statut" valeur="neutre" icone="croix" libelle={t('participants.grille.exclue')} />
           {:else}
             <span class="presente">{t('participants.grille.presente')}</span>
+          {/if}
+        {:else if colonne === 'conflits'}
+          {#if personne.conflits !== undefined}
+            <ul class="liste-conflits" data-conflits-personne>
+              {#each personne.conflits as organisation (organisation)}
+                <li class="donnee-pastille">
+                  <Pastille sorte="statut" valeur="neutre" icone="interdit" libelle={organisation} />
+                </li>
+              {/each}
+            </ul>
           {/if}
         {:else if colonne === 'organisation' && personne.organisation !== null}
           <span class="donnee-pastille">
@@ -673,11 +729,33 @@
     padding-right: var(--espace-5);
   }
 
+  /* Un en-tête se replie entre ses mots quand la place manque : celui des
+     conflits d'organisation, le plus long, sur deux lignes. */
   thead th {
     border-top: 1px solid var(--couleur-carte-filet);
     border-bottom-color: var(--couleur-page-filet);
     background-color: var(--couleur-carte-fond-sourd);
-    white-space: nowrap;
+  }
+
+  /* Dans une fenêtre étroite, les cellules se serrent, les bords de la
+     ligne aussi : les neuf colonnes et les actions tiennent dans la carte
+     pleine largeur d'une fenêtre de 1024 px, sans défiler. */
+  @media (max-width: 80rem) {
+    th,
+    td {
+      padding-right: var(--espace-2);
+      padding-left: var(--espace-2);
+    }
+
+    th:first-child,
+    td:first-child {
+      padding-left: var(--espace-3);
+    }
+
+    th:last-child,
+    td:last-child {
+      padding-right: var(--espace-3);
+    }
   }
 
   td {
@@ -690,7 +768,7 @@
   }
 
   /* L'exclusion et la présence, qui disent qui vient, en mots courts ou en
-     pastille : un retrait plus étroit leur suffit, et les huit colonnes
+     pastille : un retrait plus étroit leur suffit, et les neuf colonnes
      tiennent dans la carte pleine largeur d'une fenêtre de 1024 px. */
   th.etroite,
   td[data-champ='exclu'],
@@ -716,6 +794,18 @@
 
   .donnee-pastille :global(.libelle) {
     white-space: pre-wrap;
+  }
+
+  /* Les conflits d'organisation d'une personne : une pastille par
+     organisation nommée, qui passent à la ligne quand la cellule est
+     étroite. */
+  .liste-conflits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
   .presente,
@@ -844,6 +934,13 @@
     color: var(--couleur-page-texte);
     font: inherit;
     cursor: pointer;
+  }
+
+  @media (max-width: 80rem) {
+    .commandes > button {
+      padding-right: var(--espace-2);
+      padding-left: var(--espace-2);
+    }
   }
 
   .commandes > button:hover {

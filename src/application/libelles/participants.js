@@ -189,6 +189,15 @@ export const TABLE = new Map([
   ['ENTREE_AJOUTER_CONFLIT', ({ personne, organisation }) => `Conflits de ${personne} : ajouté ${cite(organisation)}`],
   ['ENTREE_RETIRER_CONFLIT', ({ personne, organisation }) => `Conflits de ${personne} : retiré ${cite(organisation)}`],
   [
+    'ENTREE_CHANGER_CONFLITS',
+    ({ personne, ajoutees, retirees }) => {
+      const parties = [];
+      if (ajoutees.length > 0) parties.push(`ajouté ${etiquettesCitees(ajoutees)}`);
+      if (retirees.length > 0) parties.push(`retiré ${etiquettesCitees(retirees)}`);
+      return `Conflits de ${personne} : ${parties.join(' ; ')}`;
+    },
+  ],
+  [
     'ENTREE_IMPORTER_PARTICIPANTS',
     ({ mode, ajoutes, misAJour, retires, ajuste, conflits }) => {
       const ajoutesTexte = compte(ajoutes, 'ajouté', 'ajoutés');

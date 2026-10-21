@@ -27,7 +27,10 @@
 // — « tous », ou les tours nommés par toursNommes —, puis les cases d'une
 // saisie, leur groupe et ses commandes ; participants.fiche.presence* la
 // rubrique de la fiche, et participants.fiche.absente l'étape d'un tour
-// d'absence dans l'itinéraire.
+// d'absence dans l'itinéraire. participants.conflits.* porte la saisie des
+// conflits d'organisation (participants/liste_conflits.js) : le groupe de
+// ses cases, sa légende, le groupe sans choix et sa commande ;
+// participants.fiche.conflits* la rubrique de la fiche.
 
 import { toursNommes } from '../../application/libelles/aides.js';
 
@@ -64,6 +67,7 @@ export const TABLE = new Map([
   ['participants.colonne.nom', 'Nom'],
   ['participants.colonne.prenom', 'Prénom'],
   ['participants.colonne.organisation', 'Organisation'],
+  ['participants.colonne.conflits', "Conflit d'organisation"],
   ['participants.colonne.courriel', 'Courriel'],
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
   ['participants.colonne.exclu', 'Exclusion'],
@@ -116,6 +120,12 @@ export const TABLE = new Map([
   ['participants.presence.caseCourte', ({ tour }) => String(tour)],
   ['participants.presence.tousLesTours', 'Tous les tours'],
   ['participants.presence.appliquer', 'Appliquer'],
+
+  // --- Les conflits d'organisation : le choix multiple d'une saisie --------
+  ['participants.conflits.editeur', ({ nom }) => `Conflits d'organisation de ${nom}, une case par organisation`],
+  ['participants.conflits.legende', 'Organisations à éviter'],
+  ['participants.conflits.aucuneAutre', "Aucune autre organisation dans l'événement."],
+  ['participants.conflits.appliquer', 'Appliquer'],
 
   // --- La liste groupée par une colonne ou plusieurs ------------------------
   ['participants.groupe.grouperPar', 'Grouper par'],
@@ -188,6 +198,8 @@ export const TABLE = new Map([
   ['participants.fiche.aucuneEtiquette', 'Aucune étiquette.'],
   ['participants.fiche.presence', 'Présence'],
   ['participants.fiche.presenceLegende', 'Présente aux tours'],
+  ['participants.fiche.conflits', "Conflits d'organisation"],
+  ['participants.fiche.aucunConflit', "Aucun conflit d'organisation."],
   ['participants.fiche.absente', 'absente'],
 
   // --- La rubrique « Rencontres » de la fiche (§ 12.5, D33) -----------------

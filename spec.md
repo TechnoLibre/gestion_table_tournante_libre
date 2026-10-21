@@ -1804,7 +1804,9 @@ animateurs non rencontrés ; chacune présente quand son critère compte (§ 5.3
 Le groupe des collisions d'organisation s'ouvre, quand le conflit
 d'organisation a un objet, sur la colonne des conflits d'organisation, en
 occurrences (paire, tour) ; sans paire de présents en conflit, elle n'y est
-pas.
+pas. Une ligne qui en laisse — la recherche les vise à zéro sans les
+interdire — le dit aussi sous son numéro, après ses violations : « 2 conflits
+restants », « 1 conflit restant » ; à zéro, la phrase manque.
 Chacun de ces deux minimums porte sur tous les concernés, sans ses lignes
 secondaires (§ 5.4). Le regroupement ne change l'en-tête ni l'explication
 d'aucune colonne ; ses nombres s'alignent à droite en chiffres tabulaires. La
@@ -1957,6 +1959,10 @@ dans l'outil.
   (§ 4.4), avec les mêmes remèdes. La réintégration ne contrôle que les tours de
   présence de la personne. Un import qui étend ainsi une présence est refusé
   entier.
+- Un import dont la colonne des conflits nomme une organisation qu'aucun
+  participant ne porterait, ou la propre organisation de la personne : refusé
+  entier, la cause nommant l'organisation et sa ligne, le remède invitant à
+  corriger le fichier puis à l'importer de nouveau (§ 10.1).
 - Déposer quelqu'un sur une place réservée à un autre, ou l'échanger avec elle.
   **Déplacer la réservation** est une commande séparée et explicite.
 - Une saisie d'étiquettes vide — des blancs ou des séparateurs seuls —, une
@@ -1987,7 +1993,11 @@ dans l'outil.
   titre —, signalé contre l'objectif ; une étiquette d'objectif qu'aucune
   personne ne porte, exclues comprises, signalée avec l'orthographe voisine
   quand il en existe une ; un critère coché sans objet (§ 5.3), marqué « sans
-  objet » dans l'ordre des priorités.
+  objet » dans l'ordre des priorités ; une réservation, ou un placement
+  retouché à la main dans le retenu, qui réunit à une table deux personnes en
+  conflit d'organisation (§ 4) : la commande écrit, la table porte la trame
+  du conflit (§ 7.5), et son panneau nomme chaque paire sous « Conflits
+  d'organisation à ce tour ».
 
 Un refus **nomme sa cause et propose le geste qui le lève**, et se manifeste
 **sur la place concernée**, pas dans une boîte de dialogue. Seul un geste qui
@@ -3608,19 +3618,21 @@ facultatif, absent quand elle n'en nomme aucun :
 |---|---|---|---|
 | `conflits` | chaque participant, en dernier, après `presence` | aucun conflit | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
 
-Une liste vide, un doublon, une valeur qui n'est pas un texte non vide sont
-des fautes de forme ; la propre organisation de la personne aussi, nommée par
-le rang qui la porte ; une organisation que nul participant ne porte est une
-faute de référence (§ 8.8). Le champ se pose et se retire par deux commandes,
-`ajouterConflit` et `retirerConflit` — une entrée d'historique chacune,
-refusées en lecture et sur un plan bloqué — : la première reçoit une
-organisation que porte un participant, mise en NFC et ses blancs de bord
-retirés, refuse la propre organisation de la personne et une organisation
-inconnue, et rend la liste rangée ; la seconde retire le champ quand la liste
-se vide. Modifier, supprimer ou importer des participants fait suivre les
-listes dans la même entrée (§ 4). La configuration du moteur en porte une
-copie : sans liste, elle est celle d'avant le champ, et les empreintes avec
-elle. Le champ fait partie du format 3.
+Une liste vide, un doublon, une valeur qui n'est pas un texte non vide sont des
+fautes de forme ; la propre organisation de la personne aussi, nommée par le
+rang qui la porte ; une organisation que nul participant ne porte est une faute
+de référence (§ 8.8). Le champ se pose et se retire par trois commandes,
+`ajouterConflit`, `retirerConflit` et `changerConflits` — une entrée
+d'historique chacune, refusées en lecture et sur un plan bloqué — : la première
+reçoit une organisation que porte un participant, mise en NFC et ses blancs de
+bord retirés, refuse la propre organisation de la personne et une organisation
+inconnue, et rend la liste rangée ; la deuxième retire le champ quand la liste
+se vide ; la troisième pose la liste entière d'un geste, ajouts et retraits
+ensemble, chaque nom nouveau jugé comme par la première, sans effet quand la
+liste garde les mêmes noms. Modifier, supprimer ou importer des participants
+fait suivre les listes dans la même entrée (§ 4). La configuration du moteur en
+porte une copie : sans liste, elle est celle d'avant le champ, et les
+empreintes avec elle. Le champ fait partie du format 3.
 
 #### Deux champs facultatifs : la présence
 
@@ -3951,6 +3963,7 @@ organisations sans rien signaler.
 | `notes` | non | texte libre, jamais interprété |
 | `etiquettes` | non | plusieurs par cellule, séparées par `,`, `;`, `\|` ou une fin de ligne (§ 4.5) ; synonymes : `étiquette`, `mots-clés` |
 | `presence` | non | les tours de présence : des tours et des plages — « 1-3 », « 2, 3 », « tours 1 et 2 » ; `tous` ou `tous les tours` valent tous les tours ; vide, voir plus bas ; synonymes : `présence`, `tours de présence` |
+| `conflit_organisation` | non | les organisations que la personne nomme en conflit (§ 4), plusieurs par cellule, séparées par `;`, `\|` ou une fin de ligne — une virgule reste dans le nom ; voir plus bas ; synonymes : `conflits`, `conflit d'organisation` sous ses deux apostrophes |
 
 Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents ni
 des espaces**. **Deux colonnes reconnues sous le même nom** ne se départagent
@@ -3986,6 +3999,38 @@ nombre de tours ne s'applique pas** (`APERCU_TOURS_CHANGES`) : sa lecture des
 tours n'est plus celle de la soirée, et relire le fichier refait l'aperçu. Un
 import qui étend la présence d'une personne existante à un tour où sa
 réservation ferait déborder une table est refusé entier (§ 5.9).
+
+**La valeur de `conflit_organisation` se lit avant de valider quoi que ce
+soit**, contre toutes les organisations que l'import laisse : celles des
+participants existants, exclus compris, hors du mode « remplacer », qui les
+retire, et celles des lignes valides du fichier que l'import pose — une
+organisation que le fichier crée compte, même nommée plus haut que la ligne qui
+la porte ; en mise à jour, celle d'une ligne que la mise à jour refuse
+(`PLUSIEURS_CORRESPONDENT`, `DEJA_DESIGNE`) ne compte pas, puisque personne ne
+la portera. La cellule se découpe sur ses séparateurs ; puis, de gauche à
+droite, chaque nom est le plus long assemblage de morceaux consécutifs, rejoints
+par les séparateurs que la cellule porte entre eux, dont la clé normalisée est
+celle d'une de ces organisations, ou le morceau seul quand aucun ne l'est : un
+nom d'organisation qui porte lui-même « ; » ou « | » se relit ainsi entier.
+Chaque nom se met en NFC sans ses blancs de bord, les noms vides s'écartent, et
+deux noms de même clé normalisée n'en font qu'un. Chaque nom s'apparie par la
+clé de la réconciliation des organisations (plus bas) et se range sous
+l'orthographe que l'événement emploie déjà, sinon sous la première que le
+fichier écrit. **Un nom qu'aucune organisation ne porte refuse le fichier
+entier** (`CONFLIT_ORGANISATION_INCONNUE`) — « L'organisation « Société Gamma »
+n'existe pas (ligne 4, colonne des conflits). Rien n'est importé. » —, comme la
+propre organisation de la personne (`CONFLIT_ORGANISATION_PROPRE`), comparée par
+la même clé : celle de sa ligne, ou, en mise à jour sous une cellule
+d'organisation vide, celle de la seule personne que la ligne désigne. La
+première faute dans l'ordre du fichier, puis de la cellule, est nommée, avec le
+nom tel que la cellule l'écrit et le rang de sa ligne ; l'aperçu ne montre alors
+aucune ligne, et son remède invite à corriger la cellule — ou à ajouter au
+fichier une personne de l'organisation — puis à importer le fichier de nouveau ;
+sous un texte collé, il dit de corriger le texte et de le coller de nouveau.
+Importer le reste ferait d'un conflit mal écrit un conflit perdu, sans que rien
+ne le dise. À la création, une cellule vide ne nomme aucun conflit ; en mise à
+jour, elle garde la liste de la personne, et une cellule non vide la remplace,
+la comparaison se faisant sur la liste rangée.
 
 **L'encodage se tranche en quatre temps, dans cet ordre :** marque d'ordre
 d'octets UTF-8 ; marque UTF-16 ; **un octet nul dans les quatre premiers
@@ -4069,11 +4114,12 @@ numéro de l'enregistrement, en-tête compris : celui qu'un tableur affiche, un
 champ cité sur plusieurs lignes du texte n'y comptant qu'une fois. Sur 260
 lignes, un refus global coûterait l'import entier pour une faute en ligne 213.
 
-Hors de l'encodage et du séparateur, quatre cas restent des refus **globaux** :
+Hors de l'encodage et du séparateur, cinq cas restent des refus **globaux** :
 aucun en-tête reconnaissable, aucune colonne associée à `nom`, zéro ligne
-valide, et **un guillemet resté ouvert** jusqu'à la fin du texte
+valide, **un guillemet resté ouvert** jusqu'à la fin du texte
 (`GUILLEMET_OUVERT`, avec l'enregistrement où il s'ouvre) — tout ce qui le suit
-tiendrait dans un seul champ, et deux personnes se fondraient en une.
+tiendrait dans un seul champ, et deux personnes se fondraient en une —, et
+**un conflit d'organisation fautif**, vu plus haut.
 
 **L'import entier est une seule entrée d'historique.**
 
@@ -4103,11 +4149,13 @@ CRLF, les en-têtes de l'import — et **s'importe tel quel sans refuser aucune
 ligne**. Celui des participants, `modele-participants.csv`, est réglé par le
 nombre de tours de l'événement pour sa seule colonne `presence` : quatre
 personnes inventées, dont les cellules remplissent chaque colonne du tableau
-ci-dessus, `exclu` sous ses deux valeurs, une cellule à deux étiquettes, et
-deux présences, l'une de 1 à l'avant-dernier tour, l'autre aux tours 2 et 3 :
-« 1-3 » et « 2, 3 » à quatre tours, « 1, 2 » et « 2, 3 » à trois, « 1 » et « 2 »
-à deux ; à un tour, la colonne reste vide. Il s'importe tel quel sous tout
-nombre de tours.
+ci-dessus, `exclu` sous ses deux valeurs, une cellule à deux étiquettes, un
+conflit, que la personne sans organisation nomme envers l'organisation de
+l'exclue — une organisation existe aussi par ses exclus —, et deux présences,
+l'une de 1 à l'avant-dernier tour, l'autre aux tours 2 et 3 : « 1-3 » et
+« 2, 3 » à quatre tours, « 1, 2 » et « 2, 3 » à trois, « 1 » et « 2 » à deux ;
+à un tour, la colonne reste vide. Il s'importe tel quel sous tout nombre de
+tours.
 Celui des objectifs suit l'événement (§ 10.4).
 
 ### 10.2 La saisie
@@ -4162,18 +4210,57 @@ sur un plan bloqué, le refus posé dans la cellule ou sous les cases, avec son
 remède. La grille trie la colonne « tous » en tête, puis par la liste des
 tours, et se groupe par présence.
 
+**Les conflits d'organisation se saisissent dans la grille et dans la fiche.**
+La colonne « Conflit d'organisation » de la grille suit celle de
+l'organisation ; elle écrit chaque organisation que la personne nomme, en
+pastille neutre à l'icône « interdit » — la teinte d'organisation reste à
+l'organisation (§ 12.7) —, et rien sans conflit. Entrée ou F2 l'ouvre en
+**choix multiple** : une case par organisation de l'événement, exclus compris,
+hors la sienne, rangées par clé normalisée, chacune nommée par l'organisation,
+dans un groupe nommé « Conflits d'organisation de Prénom Nom, une case par
+organisation » ; un nom que la liste porte et que l'événement n'a plus y reste,
+coché, pour qu'il se décoche. Les touches sont celles des cases de la
+présence : ← et → passent d'une case à l'autre, Début et Fin aux bouts, sans
+boucler, l'espace coche ou décoche sans rien écrire, Entrée, Tab ou la sortie
+du groupe valident, Échap rend la liste enregistrée ; au-delà de quelques
+lignes, le groupe défile, la case reçue amenée dans sa vue. Sans autre
+organisation, le groupe le dit et prend lui-même le focus. **Valider écrit le
+geste entier en une commande** — `changerConflits` de la liste saisie, ajouts
+et retraits ensemble, une seule entrée d'historique (§ 8.2), que « Défaire »
+reprend d'un coup —, et rien quand la saisie revient à la liste enregistrée. La
+fiche porte une rubrique « Conflits d'organisation », entre les étiquettes et
+la présence : un résumé — les organisations en pastilles, ou « Aucun conflit
+d'organisation. » —, le même choix multiple sous la légende « Organisations à
+éviter », et « Appliquer », qui écrit de même ; Entrée dans les cases applique,
+Échap rend la liste enregistrée. Un refus — séance en lecture, plan bloqué — se
+pose dans la cellule ou sous les cases, avec son remède, la saisie gardée. La
+grille trie la colonne sur la liste rangée de ses clés normalisées, une
+personne sans conflit après toutes les autres ; elle ne se groupe ni ne se
+filtre par elle : une personne y porte plusieurs noms. Dans une fenêtre de
+moins de 80 rem de large, les cellules et les actions de la grille se serrent,
+et ses neuf colonnes tiennent dans la carte pleine largeur d'une fenêtre de
+1024 px.
+
 **La liste s'exporte en CSV dans la forme exacte qu'il importe.** L'aller-retour
 est éprouvé par un test qui importe, exporte et compare champ par champ : il
 fait du fichier une sauvegarde, et de l'export le gabarit que personne n'a
 besoin de documenter.
 
 L'export écrit toujours la colonne `etiquettes`, puis la colonne `presence`,
-en dernières positions, les étiquettes jointes par une virgule suivie d'une
-espace (`, `) ; la présence s'écrit vide pour tous les tours, sinon chaque
-suite d'au moins trois tours consécutifs en plage `a-b`, les autres tours un à
-un, joints par `, ` — « 1-3 », « 2, 3 », « 1-3, 5 ». Le collage en bloc suit le
+les étiquettes jointes par une virgule suivie d'une espace (`, `) ; la
+présence s'écrit vide pour tous les tours, sinon chaque suite d'au moins trois
+tours consécutifs en plage `a-b`, les autres tours un à un, joints par `, ` —
+« 1-3 », « 2, 3 », « 1-3, 5 ». Dès qu'une personne de la liste nomme un
+conflit, la colonne `conflit_organisation` suit, en dernière position, ses
+noms joints par un point-virgule suivi d'une espace (`; `), vide pour une
+personne sans conflit. Quand une organisation de la liste porte elle-même
+« ; » et que la cellule se relirait ainsi en d'autres noms — « Alpha; Beta »
+lu comme une seule organisation de ce nom —, les noms se joignent par ` | `,
+puis par une fin de ligne : la première jointure que la lecture de l'import
+rend en la même liste. Sans conflit dans la liste, la colonne manque, et son
+réimport en mise à jour ne touche aucune liste. Le collage en bloc suit le
 même ordre de colonnes, la huitième étant celle des étiquettes, la neuvième
-celle de la présence. Les
+celle de la présence, la dixième celle des conflits. Les
 objectifs des tables s'exportent par leur propre CSV, dans la forme exacte qu'il
 importe (§ 10.4).
 

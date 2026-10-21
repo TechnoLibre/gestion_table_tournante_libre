@@ -426,6 +426,26 @@ describe('retenir, voir sur le plan', () => {
     expect(ids(m)).toEqual(vue.lignes.map(({ id }) => id));
   });
 
+  test("« N conflits restants » sous l'identifiant d'une ligne qui laisse des conflits d'organisation, le retenu compris ; rien sous une ligne qui n'en laisse aucun", async () => {
+    // Ondine Lacasse, sans organisation, nomme le Club des Merles ; le
+    // quatrième plan ne la réunit jamais à ses deux membres.
+    const base = chargeSix();
+    base.participants[2].conflits = ['Club des Merles'];
+    base.propositions.push(propositionDe(base, 4, [[[1, 2, 4], [3, 5, 6]], [[1, 2, 5], [3, 4, 6]], [[1, 2, 6], [3, 4, 5]], [[1, 2, 4], [3, 5, 6]]]));
+    base.prochainsIds.proposition = 5;
+    const m = await ouvrir(executer(base, 'retenirProposition', { id: 1 }));
+    const vue = tableau(evaluation(charge(m)).table);
+    const avec = vue.lignes.filter(({ conflitsRestants }) => conflitsRestants !== null);
+    expect(avec.map(({ id }) => id).sort()).toEqual([1, 2, 3]);
+    for (const { id, conflitsRestants } of vue.lignes) {
+      const noeud = ligne(m, id).querySelector('td[data-colonne="proposition"] [data-conflits-restants]');
+      if (conflitsRestants === null) expect(noeud, String(id)).toBeNull();
+      else expect(texteDe(noeud), String(id)).toBe(t(conflitsRestants.cle, conflitsRestants.details));
+    }
+    expect(texteDe(ligne(m, 1).querySelector('[data-conflits-restants]'))).toBe('2 conflits restants');
+    expect(texteDe(ligneRetenu(m).querySelector('[data-conflits-restants]'))).toBe('2 conflits restants');
+  });
+
   test('à 1 366 px, la cellule de la ligne du retenu tient son numéro et « Tel que la proposition n° 3. » en trois lignes au plus', async () => {
     const m = await ouvrir(executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 }));
     const cellule = await attendre(() => {

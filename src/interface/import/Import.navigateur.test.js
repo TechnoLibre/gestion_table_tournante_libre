@@ -451,6 +451,50 @@ describe('les refus globaux (§ 10.1)', () => {
   });
 });
 
+describe("un conflit d'organisation fautif refuse le fichier entier (§ 10.1)", () => {
+  test("une organisation inconnue : cause, ligne et invitation à réimporter, rien d'écrit ; corrigé, le fichier s'importe", async () => {
+    // Aucune ligne ni commande d'import sous le refus ; l'organisation que
+    // le fichier corrigé crée compte.
+    const e = await ouvrir({ participants: [personne(1, 'Houle', null, { organisation: 'Club des Merles' })] });
+    const avant = ecritures(e);
+    await choisir(e, 'conflits.csv', enUtf8('nom;organisation;conflit organisation\r\nOmbrelle;Atelier Ressac;club des merles\r\nPervenche;;Société Gamma\r\n'));
+    const pose = dans(e, '[data-apercu] [data-refus="CONFLIT_ORGANISATION_INCONNUE"]');
+    expect(pose).not.toBeNull();
+    expect(vu(pose)).toBe(true);
+    const textes = [...pose.querySelectorAll('p')].map(texteDe);
+    expect(textes).toContain("L'organisation « Société Gamma » n'existe pas (ligne 3, colonne des conflits). Rien n'est importé.");
+    expect(textes).toContain(t('import.remede.conflitOrganisation', { ligne: 3 }));
+    expect(t('import.remede.conflitOrganisation', { ligne: 3 })).toMatch(/importez le fichier de nouveau/);
+    expect(dans(e, '[data-apercu] [data-lignes]')).toBeNull();
+    expect(commande(e, 'importer')).toBeNull();
+    expect(ecritures(e)).toBe(avant);
+
+    await choisir(e, 'conflits-corrige.csv', enUtf8('nom;organisation;conflit organisation\r\nOmbrelle;Atelier Ressac;club des merles\r\nPervenche;;Société Gamma | Atelier Ressac\r\nLacasse;Société Gamma;\r\n'));
+    expect(dans(e, '[data-apercu] [data-refus]')).toBeNull();
+    const pastilles = [...dans(e, '[data-lignes] [data-ligne="3"] [data-cellule="conflit_organisation"]').querySelectorAll('li')].map(texteDe);
+    expect(pastilles).toEqual(['Société Gamma', 'Atelier Ressac']);
+    expect(cellule(section(e), 2, 'conflit_organisation')).toBe('Club des Merles');
+    const { rendu, refus } = await importer(e);
+    expect(refus).toBeNull();
+    expect(rendu.resume.ajoutes).toBe(3);
+    expect(participantsDe(e).map(({ conflits }) => conflits)).toEqual([undefined, ['Club des Merles'], ['Atelier Ressac', 'Société Gamma'], undefined]);
+    // Le premier geste pose le journal, son entrée de reprise et la sienne.
+    expect(lireJournal(e.m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`)).entrees.at(-1).libelle).toBe('Mis à jour la liste par import : 3 ajoutés, 0 modifié');
+  });
+
+  test('sa propre organisation : la cause et son propre remède, rien d’écrit', async () => {
+    const e = await ouvrir();
+    const avant = ecritures(e);
+    await choisir(e, 'propre.csv', enUtf8('nom;organisation;conflits\r\nOmbrelle;Atelier Ressac;ATELIER RESSAC\r\n'));
+    const pose = dans(e, '[data-apercu] [data-refus="CONFLIT_ORGANISATION_PROPRE"]');
+    expect(pose).not.toBeNull();
+    expect(texteDe(pose)).toContain(t('import.remede.conflitPropre', { ligne: 2 }));
+    expect(texteDe(pose)).toContain("L'organisation « ATELIER RESSAC » est celle de la personne (ligne 2");
+    expect(commande(e, 'importer')).toBeNull();
+    expect(ecritures(e)).toBe(avant);
+  });
+});
+
 describe('une ligne fausse n’arrête pas le reste (§ 10.1, § 2.1)', () => {
   test('la grande démonstration, « peut-être » à l’enregistrement 213 : 259 lignes valides, la ligne 213 et sa valeur ; l’import en ajoute 259', async () => {
     const e = await ouvrir();
@@ -1497,15 +1541,16 @@ describe('le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4)',
 });
 
 describe('la colonne de la présence (§ 10.1)', () => {
-  test('le modèle téléchargé porte la neuvième colonne, « presence » ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
+  test('le modèle téléchargé porte la neuvième colonne, « presence », puis les conflits ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
     const e = await ouvrir({ tours: 4 });
     commande(e, 'telechargerModele').click();
     await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
     const octets = e.enregistres[0].octets;
     expect([...octets]).toEqual([...modeleParticipants({ tours: 4 })]);
     const [entete] = decouper(decoder(octets).texte, ';').enregistrements;
-    expect(entete.length).toBe(9);
+    expect(entete.length).toBe(10);
     expect(entete[8]).toBe('presence');
+    expect(entete[9]).toBe('conflit_organisation');
     await choisir(e, 'modele-participants.csv', octets);
     const apercu = dans(e, '[data-apercu]');
     expect(new Map(association(apercu)).get('presence')).toBe(t('import.champ.presence'));
@@ -1513,6 +1558,7 @@ describe('la colonne de la présence (§ 10.1)', () => {
     expect(tous(e, '[data-apercu] [data-refusees] [data-ligne]')).toEqual([]);
     await importer(e);
     expect(participantsDe(e).map(({ presence }) => presence)).toEqual([undefined, [2, 3], undefined, [1, 2, 3]]);
+    expect(participantsDe(e).map(({ conflits }) => conflits)).toEqual([undefined, undefined, undefined, ['Atelier Ressac']]);
   });
 
   test('l’aperçu montre « tours 2 à 4 » et « tous les tours » ; une ligne refusée porte son motif, à son rang', async () => {

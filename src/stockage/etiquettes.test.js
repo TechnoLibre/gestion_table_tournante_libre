@@ -525,6 +525,11 @@ const DECOUPES_ADMISES = Object.freeze([
     source: '^(?:\\s*(?:,|;|et)\\s*|\\s+)',
     raison: 'la grammaire d’une cellule de présence, où « , », « ; », « et » et les blancs séparent les tours',
   },
+  {
+    chemin: 'src/csv/apercu.js',
+    source: '\\r\\n|\\r|\\n|;|\\|',
+    raison: 'la cellule des conflits d’organisation, où « ; », « | » et la fin de ligne séparent des noms qui peuvent porter une virgule',
+  },
 ]);
 
 /**

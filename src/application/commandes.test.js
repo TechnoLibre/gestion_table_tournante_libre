@@ -132,10 +132,11 @@ function objetsDe(valeur) {
 const CSV_DEUX = 'nom;prenom;organisation\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, changerEtiquettes, les deux des conflits, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
       'ajouterConflit',
       'ajouterParticipant',
+      'changerConflits',
       'changerEtat',
       'changerPresence',
       'changerEtiquettes',
@@ -162,7 +163,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 27);
+    assert.equal(attendues.length, 28);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     assert.deepEqual([...COMMANDES_PRESENCE.keys()], ['changerPresence']);
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
@@ -1572,6 +1573,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['changerEtiquettes', { id: 3, ajouter: 'finance' }],
       ['ajouterConflit', { id: 4, organisation: 'Club des Merles' }],
       ['retirerConflit', { id: 4, organisation: 'Club des Merles' }],
+      ['changerConflits', { id: 4, organisations: ['Club des Merles'] }],
       ['changerPresence', { id: 3, tours: [2] }],
       ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
       ['retirerObjectif', { table: 2, tour: null }],
@@ -1854,8 +1856,8 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les deux des conflits, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
-    assert.equal(COMMANDES.size, 16 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les trois des conflits, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
+    assert.equal(COMMANDES.size, 17 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
     assert.ok(COMMANDES_PRESENCE instanceof Map);

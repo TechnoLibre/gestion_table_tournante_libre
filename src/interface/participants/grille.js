@@ -9,34 +9,45 @@
 // que laissent voir les groupes repliés, l'orthographe d'organisation à
 // reprendre, l'itinéraire d'une personne dans le retenu et ses
 // réservations. La présence par tour se lit par presenceSaisie
-// (src/application/places.js) et se range par clePresence (presence.js).
+// (src/application/places.js) et se range par clePresence (presence.js) ;
+// les conflits d'organisation se rangent par cleTriConflits
+// (liste_conflits.js).
 // Aucune fonction ne modifie ce qu'elle reçoit ; la clé normalisée vient de
 // l'appelant, qui la tient de src/application/csv.js.
 
 import { presenceSaisie } from '../../application/places.js';
 import { effetDe } from '../raccourcis.js';
+import { cleTriConflits, commandeDeConflits } from './liste_conflits.js';
 import { affichagePresence, clePresence } from './presence.js';
 
 /** Les colonnes de la grille, propriétés d'un participant. Elles s'associent
  *  à l'export par leur champ (CHAMP_DE_COLONNE), non par leur rang : la
- *  grille ne montre pas les étiquettes, et la présence y suit l'exclusion.
- *  Le collage en bloc suit l'ordre des champs de l'export, non celui-ci. */
-export const COLONNES = Object.freeze(['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+ *  grille ne montre pas les étiquettes, les conflits d'organisation y
+ *  suivent l'organisation, et la présence, l'exclusion. Le collage en bloc
+ *  suit l'ordre des champs de l'export, non celui-ci. */
+export const COLONNES = Object.freeze(['nom', 'prenom', 'organisation', 'conflits', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+
+// Le champ de l'export d'une colonne dont le nom diffère du sien.
+const CHAMPS_RENOMMES = new Map([
+  ['titrePressenti', 'titre_pressenti'],
+  ['conflits', 'conflit_organisation'],
+]);
 
 /** Le champ de l'export CSV (CHAMPS, src/application/csv.js) de chaque
  *  colonne, dans l'ordre de COLONNES : l'en-tête sous lequel l'export écrit
  *  sa cellule. */
-export const CHAMP_DE_COLONNE = new Map(COLONNES.map((colonne) => [colonne, colonne === 'titrePressenti' ? 'titre_pressenti' : colonne]));
+export const CHAMP_DE_COLONNE = new Map(COLONNES.map((colonne) => [colonne, CHAMPS_RENOMMES.get(colonne) ?? colonne]));
 
-// Les colonnes de texte : toutes, hors de l'exclusion et de la présence,
-// qui ne sont pas des textes saisis : le filtre ne les lit pas.
-const TEXTES = COLONNES.filter((colonne) => colonne !== 'exclu' && colonne !== 'presence');
+// Les colonnes de texte : toutes, hors des conflits, de l'exclusion et de
+// la présence, qui ne sont pas des textes saisis : le filtre ne les lit pas.
+const TEXTES = COLONNES.filter((colonne) => colonne !== 'conflits' && colonne !== 'exclu' && colonne !== 'presence');
 
 // La clé du libellé de chaque colonne, et celle de chaque statut calculé.
 const CLES_COLONNES = new Map([
   ['nom', 'participants.colonne.nom'],
   ['prenom', 'participants.colonne.prenom'],
   ['organisation', 'participants.colonne.organisation'],
+  ['conflits', 'participants.colonne.conflits'],
   ['courriel', 'participants.colonne.courriel'],
   ['titrePressenti', 'participants.colonne.titrePressenti'],
   ['exclu', 'participants.colonne.exclu'],
@@ -87,10 +98,11 @@ const SENS = new Map([
 /**
  * Les lignes affichées : une ligne reste quand la clé normalisée d'un de ses
  * champs texte non null contient celle du filtre — un champ null n'est
- * jamais passé à cleNormalisee, qui lève sur lui ; l'exclusion et la
- * présence ne sont pas lues —, puis tri par colonne, croissant ou
- * décroissant, sur la clé normalisée (exclu : faux avant vrai ; presence :
- * clePresence, « tous » en tête dans le sens croissant), un champ null
+ * jamais passé à cleNormalisee, qui lève sur lui ; les conflits,
+ * l'exclusion et la présence ne sont pas lus —, puis tri par colonne,
+ * croissant ou décroissant, sur la clé normalisée (exclu : faux avant
+ * vrai ; presence : clePresence, « tous » en tête dans le sens croissant ;
+ * conflits : cleTriConflits), un champ null ou une personne sans conflit
  * après toute valeur dans les deux sens, départagé par
  * identifiant croissant. Sans tri, l'ordre est celui des identifiants
  * croissants ; un filtre dont la clé est vide garde tout.
@@ -118,6 +130,7 @@ export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
     if (colonne === null) return null;
     if (colonne === 'exclu') return p.exclu ? 1 : 0;
     if (colonne === 'presence') return clePresence(presenceSaisie(p));
+    if (colonne === 'conflits') return cleTriConflits(p.conflits, cleNormalisee);
     return p[colonne] === null ? null : cleNormalisee(p[colonne]);
   };
   const valeurs = new Map(retenues.map((p) => [p, valeurDe(p)]));
@@ -136,22 +149,26 @@ export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
 }
 
 /** Les colonnes par lesquelles la liste se groupe : celles de la grille,
- *  dans leur ordre, puis le statut calculé (§ 4.2), qui n'est pas une
- *  colonne. */
-export const GROUPEMENTS = Object.freeze([...COLONNES, 'statut']);
+ *  dans leur ordre, hors des conflits — une liste, dont une personne porte
+ *  plusieurs noms, ne range pas chacune dans un seul groupe —, puis le
+ *  statut calculé (§ 4.2), qui n'est pas une colonne. */
+export const GROUPEMENTS = Object.freeze([...COLONNES.filter((colonne) => colonne !== 'conflits'), 'statut']);
 
 /**
  * La commande qu'exécute la validation d'une cellule de la grille : celle de
- * la présence, changerPresence de ses tours (null pour tous) ; toute autre,
- * modifierParticipant sur ce seul champ.
+ * la présence, changerPresence de ses tours (null pour tous) ; celle des
+ * conflits, changerConflits de la liste saisie (commandeDeConflits,
+ * liste_conflits.js) ; toute autre, modifierParticipant sur ce seul champ.
  *
- * @param {string} colonne   une colonne de COLONNES, hors exclu, qui se bascule
+ * @param {string} colonne   une colonne de COLONNES, hors exclu, qui se
+ *   bascule
  * @param {number} id
  * @param {unknown} valeur   la valeur lue de la saisie
  * @returns {{nom: string, args: Object}}
  */
 export function commandeDeCellule(colonne, id, valeur) {
   if (colonne === 'presence') return { nom: 'changerPresence', args: { id, tours: valeur } };
+  if (colonne === 'conflits') return commandeDeConflits(id, valeur);
   return { nom: 'modifierParticipant', args: { id, champs: { [colonne]: valeur } } };
 }
 

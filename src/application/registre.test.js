@@ -489,6 +489,19 @@ const EXEMPLES = new Map([
     },
   ],
   [
+    'changerConflits',
+    {
+      accepte: { args: (charge) => ({ id: 2, organisations: [autreOrganisation(charge, 2)] }) },
+      personne: () => 2,
+      refuse: {
+        args: (charge) => ({ id: 2, organisations: [participantDe(charge, 2).organisation] }),
+        code: 'CONFLIT_PROPRE_ORGANISATION',
+        remede: null,
+      },
+      sansEffet: { args: { id: 2, organisations: [] } },
+    },
+  ],
+  [
     'changerEtiquettes',
     {
       accepte: { args: { id: 2, ajouter: 'finance, Montréal' } },

@@ -11,7 +11,11 @@
 // rien et tient le geste ouvert, « Appliquer » en une entrée et l'étape
 // « absente » de l'itinéraire, Entrée et Échap dans les cases, le brouillon
 // et le refus vidés au passage à une autre personne, le refus sous les
-// cases, et l'écriture venue d'ailleurs. Chaque épreuve
+// cases, et l'écriture venue d'ailleurs. Puis la rubrique « Conflits
+// d'organisation » (§ 4, § 10.2) : son résumé et son choix multiple, un
+// brouillon qui n'écrit rien, « Appliquer » en une entrée par organisation
+// qui change, le clavier, le refus sous les cases et l'écriture venue
+// d'ailleurs. Chaque épreuve
 // monte App par monterApp, au cadre de 1 366 × 700, ouvre la section des
 // participants et la fiche, et lit le rendu par le texte et les attributs
 // data-…, jamais par une classe ; la dernière monte la fiche seule, sur
@@ -539,5 +543,139 @@ describe('la rubrique « Présence » de la fiche (§ 10.2)', () => {
     await m.seance.defaire();
     await attendre(() => expect(texteDe(resume(fiche))).toBe('tous'));
     expect(coches(fiche)).toEqual([true, true, true, true, true, true]);
+  });
+});
+
+describe("la rubrique « Conflits d'organisation » de la fiche (§ 4, § 10.2)", () => {
+  const rubriqueConflits = (fiche) => fiche.querySelector('[data-conflits-fiche]');
+  const cases = (fiche) => [...rubriqueConflits(fiche).querySelectorAll('[data-choix]')];
+  const noms = (fiche) => cases(fiche).map((c) => texteDe(c.closest('label')));
+  const coches = (fiche) => cases(fiche).map((c) => c.checked);
+  const appliquer = (fiche) => rubriqueConflits(fiche).querySelector('[data-commande="appliquerConflits"]');
+  const resume = (fiche) => [...rubriqueConflits(fiche).querySelectorAll('[data-conflits-resume] li')].map(texteDe);
+  // Les entrées de conflits du journal, une par geste validé.
+  const libelles = (m) => {
+    const texte = m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`);
+    const tous = texte === null ? [] : lireJournal(texte).entrees.map(({ libelle }) => libelle);
+    return tous.filter((libelle) => libelle.startsWith('Conflits de '));
+  };
+  const conflitsDe = (m, id) => m.seance.etat().charge.participants.find((p) => p.id === id).conflits;
+
+  // Douze personnes, trois organisations : la douzième passe au Club des
+  // Merles.
+  function chargeTrois() {
+    const charge = chargeDouze();
+    charge.participants[11].organisation = 'Club des Merles';
+    return charge;
+  }
+
+  async function basculer(fiche, rang) {
+    cases(fiche)[rang].click();
+    flushSync();
+    await tick();
+  }
+
+  test("entre les étiquettes et la présence : son titre, « Aucun conflit d'organisation. », une case par organisation hors la sienne, rangée, dans un groupe nommé par la personne ; « Appliquer »", async () => {
+    const { fiche } = await ouvrirFiche(chargeTrois(), 3);
+    const section = rubriqueConflits(fiche);
+    expect(section).not.toBeNull();
+    expect(texteDe(section.querySelector('h4'))).toBe(t('participants.fiche.conflits'));
+    expect(fiche.querySelector('[data-etiquettes]').compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(section.compareDocumentPosition(fiche.querySelector('[data-presence-fiche]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(texteDe(section.querySelector('[data-conflits-resume]'))).toBe("Aucun conflit d'organisation.");
+    // Ondine Lacasse, de la Coopérative Aubier : les deux autres.
+    expect(noms(fiche)).toEqual(['Atelier Ressac', 'Club des Merles']);
+    expect(coches(fiche)).toEqual([false, false]);
+    expect(cases(fiche).map((c) => c.tabIndex)).toEqual([0, -1]);
+    const groupe = section.querySelector('fieldset');
+    expect(groupe.getAttribute('aria-label')).toBe("Conflits d'organisation de Ondine Lacasse, une case par organisation");
+    expect(texteDe(groupe.querySelector('legend'))).toBe(t('participants.conflits.legende'));
+    expect(texteDe(appliquer(fiche))).toBe(t('participants.conflits.appliquer'));
+  });
+
+  test('cocher et décocher n’écrivent rien ; « Appliquer » écrit le geste entier en une entrée, qu’un seul Défaire reprend, et le résumé les nomme', async () => {
+    const charge = chargeTrois();
+    charge.participants[2].conflits = ['Club des Merles'];
+    const { m, fiche } = await ouvrirFiche(charge, 3);
+    expect(resume(fiche)).toEqual(['Club des Merles']);
+    expect(coches(fiche)).toEqual([false, true]);
+    const trace = m.trace.length;
+    await basculer(fiche, 0);
+    await basculer(fiche, 1);
+    expect(coches(fiche)).toEqual([true, false]);
+    expect(m.seance.gesteEnCours).toBe(true);
+    expect(m.trace.length).toBe(trace);
+    const avant = libelles(m).length;
+    appliquer(fiche).click();
+    await attendre(() => expect(conflitsDe(m, 3)).toEqual(['Atelier Ressac']));
+    await attendre(() => expect(libelles(m)).toHaveLength(avant + 1));
+    expect(libelles(m).at(-1)).toBe('Conflits de Ondine Lacasse : ajouté « Atelier Ressac » ; retiré « Club des Merles »');
+    const apres = m.racine.querySelector('[data-fiche="3"]');
+    await attendre(() => expect(resume(apres)).toEqual(['Atelier Ressac']));
+    expect(coches(apres)).toEqual([true, false]);
+    expect(m.seance.gesteEnCours).toBe(false);
+    // Cocher puis décocher : « Appliquer » n'exécute rien.
+    const executer = vi.spyOn(m.seance, 'executer');
+    await basculer(apres, 1);
+    await basculer(apres, 1);
+    appliquer(apres).click();
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    expect(executer).not.toHaveBeenCalled();
+    await m.seance.defaire();
+    await attendre(() => expect(conflitsDe(m, 3)).toEqual(['Club des Merles']));
+    await attendre(() => expect(resume(m.racine.querySelector('[data-fiche="3"]'))).toEqual(['Club des Merles']));
+  });
+
+  test('au clavier : → et Fin passent d’une case à l’autre, l’espace coche, Échap rend la liste enregistrée sans rien écrire, Entrée applique', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeTrois(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    cases(fiche)[0].focus();
+    await touche('End');
+    expect(document.activeElement).toBe(cases(fiche)[1]);
+    await touche(' ');
+    await attendre(() => expect(coches(fiche)).toEqual([false, true]));
+    await touche('Escape');
+    await attendre(() => expect(coches(fiche)).toEqual([false, false]));
+    expect(executer).not.toHaveBeenCalled();
+    await touche('Home');
+    expect(document.activeElement).toBe(cases(fiche)[0]);
+    await touche(' ');
+    await touche('Enter');
+    await attendre(() => expect(conflitsDe(m, 3)).toEqual(['Atelier Ressac']));
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('changerConflits', { id: 3, organisations: ['Atelier Ressac'] });
+  });
+
+  test('un refus se pose sous les cases, qu’il décrit, le brouillon gardé : sur un plan bloqué, ouvert en lecture, le refus de la séance et son remède', async () => {
+    const lue = generee(chargeTrois());
+    const retenue = executer(lue, 'retenirProposition', { id: lue.propositions[0].id });
+    const { m, fiche } = await ouvrirFiche(executer(retenue, 'changerEtat', { etat: 'bloque' }), 3, { mode: 'lecture' });
+    const trace = m.trace.length;
+    await basculer(fiche, 1);
+    appliquer(fiche).click();
+    const refus = await attendre(() => {
+      const trouve = rubriqueConflits(fiche).querySelector('[data-refus]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(refus.dataset.refus).toBe(m.seance.etat().refus.code);
+    expect(refus.querySelector('button')).not.toBeNull();
+    expect(coches(fiche)).toEqual([false, true]);
+    expect(document.getElementById(rubriqueConflits(fiche).querySelector('fieldset').getAttribute('aria-describedby'))).toBe(refus);
+    for (const c of cases(fiche)) expect(c.getAttribute('aria-invalid')).toBe('true');
+    expect(m.trace.length).toBe(trace);
+    // Une bascule retire le refus.
+    await basculer(fiche, 0);
+    expect(rubriqueConflits(fiche).querySelector('[data-refus]')).toBeNull();
+  });
+
+  test('une écriture venue d’ailleurs — une commande, puis Défaire — met le résumé et les cases à jour', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeTrois(), 3);
+    await m.seance.executer('ajouterConflit', { id: 3, organisation: 'Club des Merles' });
+    await attendre(() => expect(resume(fiche)).toEqual(['Club des Merles']));
+    expect(coches(fiche)).toEqual([false, true]);
+    await m.seance.defaire();
+    await attendre(() => expect(texteDe(rubriqueConflits(fiche).querySelector('[data-conflits-resume]'))).toBe("Aucun conflit d'organisation."));
+    expect(coches(fiche)).toEqual([false, false]);
   });
 });

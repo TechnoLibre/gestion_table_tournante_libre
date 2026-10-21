@@ -33,6 +33,8 @@ export const EXEMPLES = [
   ['DEJA_DESIGNE', { ligne: 9, valeur: null, participants: [3], premiereLigne: 4 }],
   ['PLAN_BLOQUE', { remede: { geste: 'debloquer' } }],
   ['AMBIGUITE', { champs: ['organisation', 'courriel'] }],
+  ['CONFLIT_ORGANISATION_INCONNUE', { ligne: 4, organisation: 'Société Gamma' }],
+  ['CONFLIT_ORGANISATION_PROPRE', { ligne: 5, organisation: 'Club des Merles' }],
   // Le CSV des objectifs de table (§ 10.4)
   ['TABLE_NON_ASSOCIEE', {}],
   ['OBJECTIF_NON_ASSOCIE', {}],
@@ -52,6 +54,17 @@ export const EXEMPLES = [
 ];
 
 export const TEXTES = [
+  [
+    'CONFLIT_ORGANISATION_INCONNUE',
+    { ligne: 4, organisation: 'Société Gamma' },
+    "L'organisation « Société Gamma » n'existe pas (ligne 4, colonne des conflits). Rien n'est importé.",
+  ],
+  [
+    'CONFLIT_ORGANISATION_PROPRE',
+    { ligne: 5, organisation: 'Club des Merles' },
+    "L'organisation « Club des Merles » est celle de la personne (ligne 5, colonne des conflits) : " +
+      "une personne ne nomme pas la sienne en conflit. Rien n'est importé.",
+  ],
   [
     'PRESENCE_ILLISIBLE',
     { ligne: 6, valeur: 'deux', raison: 'syntaxe' },

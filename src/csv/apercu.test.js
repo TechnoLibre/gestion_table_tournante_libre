@@ -50,8 +50,8 @@ const existant = (id, nom, prenom, organisation) => ({
 // Champs d'une ligne valide, dans l'ordre de l'aperçu ; un champ omis vaut null.
 const champs = ({
   nom, prenom = null, organisation = null, courriel = null, titrePressenti = null, notes = null, exclu = null,
-  etiquettes = null, presence = null,
-}) => ({ nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence });
+  etiquettes = null, presence = null, conflits = null,
+}) => ({ nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits });
 
 // Aperçu d'un texte refusé en entier : ce que la lecture a établi avant le
 // refus, aucune ligne.
@@ -75,6 +75,7 @@ const refusGlobal = (
   multilignes: [],
   refusGlobal: code,
   refusGlobalLigne: ligne,
+  refusGlobalOrganisation: null,
 });
 
 // Octets d'une donnée d'épreuve.
@@ -140,6 +141,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       multilignes: [],
       refusGlobal: null,
       refusGlobalLigne: null,
+      refusGlobalOrganisation: null,
     });
   });
 
@@ -150,7 +152,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
     assert.equal(
       JSON.stringify(ligne.champs),
       '{"nom":"Ombrelle","prenom":"p","organisation":"a","courriel":"c@exemple.test","titrePressenti":"t","notes":"n",' +
-        '"exclu":true,"etiquettes":["e"],"presence":null}',
+        '"exclu":true,"etiquettes":["e"],"presence":null,"conflits":null}',
     );
   });
 
@@ -1671,5 +1673,155 @@ describe('apercevoir : la colonne de la présence, lue sous le nombre de tours (
     for (const tours of [0, TOURS_MAX + 1, 2.5, '4', null]) {
       assert.throws(() => apercevoir(csv('nom', 'Ombrelle'), { tours }), TypeError, String(tours));
     }
+  });
+});
+
+describe("apercevoir : la colonne des conflits d'organisation, lue avant de valider (§ 10.1)", () => {
+  // Les conflits de chaque ligne valide : [ligne, conflits].
+  const conflitsDe = (apercu) => apercu.lignes.map(({ ligne, champs: lus }) => [ligne, lus.conflits]);
+
+  test('la cellule se découpe sur « ; », « | » et la fin de ligne ; la virgule reste dans le nom ; morceaux blancs écartés, une clé une fois', () => {
+    const texte = csv(
+      'nom;organisation;conflit organisation',
+      'Ombrelle;Club des Merles;"Société Alpha, Beta | Atelier Ressac\nSociété alpha, beta;; "',
+      'Pervenche;Société Alpha, Beta;',
+      'Lacasse;Atelier Ressac;Club des Merles',
+      'Sarcelle;;" ; | "',
+    );
+    const apercu = apercevoir(texte);
+    assert.equal(apercu.refusGlobal, null);
+    assert.deepEqual(conflitsDe(apercu), [
+      [2, ['Société Alpha, Beta', 'Atelier Ressac']],
+      [3, null],
+      [4, ['Club des Merles']],
+      [5, null],
+    ]);
+  });
+
+  test('un nom se range sous la graphie que l\u{2019}événement emploie déjà, par la clé normalisée ; une organisation que crée le même fichier compte, même plus bas', () => {
+    const existants = [existant(1, 'Houle', null, 'Club des Merles')];
+    const texte = csv('nom;organisation;conflits', 'Ombrelle;;CLUB DES  merles | cercle des herons', 'Pervenche;Cercle des Hérons;');
+    for (const mode of ['ajouter', 'mettreAJour']) {
+      const apercu = apercevoir(texte, { participants: existants, mode });
+      assert.equal(apercu.refusGlobal, null, mode);
+      assert.deepEqual(conflitsDe(apercu), [[2, ['Club des Merles', 'Cercle des Hérons']], [3, null]], mode);
+    }
+  });
+
+  test('sans colonne, ou sous une cellule vide, conflits vaut null', () => {
+    assert.deepEqual(conflitsDe(apercevoir(csv('nom;organisation', 'Ombrelle;Club des Merles'))), [[2, null]]);
+    assert.deepEqual(conflitsDe(apercevoir(csv('nom;organisation;conflits', 'Ombrelle;Club des Merles;'))), [[2, null]]);
+  });
+
+  test("une organisation que nul ne porte refuse le texte entier : CONFLIT_ORGANISATION_INCONNUE, son rang et le nom tel qu'écrit, aucune ligne", () => {
+    const texte = csv(
+      'nom;organisation;conflits',
+      'Ombrelle;Club des Merles;',
+      'Pervenche;Atelier Ressac;" Club des Merles | Société  Gamma "',
+      'Lacasse;;Société Delta',
+    );
+    const apercu = apercevoir(texte);
+    assert.deepEqual(
+      [apercu.refusGlobal, apercu.refusGlobalLigne, apercu.refusGlobalOrganisation],
+      ['CONFLIT_ORGANISATION_INCONNUE', 3, 'Société  Gamma'],
+    );
+    assert.deepEqual([apercu.lignes, apercu.refusees, apercu.fusions, apercu.doublons, apercu.designees], [[], [], [], [], []]);
+    assert.deepEqual(apercu.entetes, ['nom', 'organisation', 'conflits']);
+    assert.equal(apercu.association.colonnes.conflit_organisation, 2);
+  });
+
+  test('sa propre organisation, par la clé normalisée, refuse le texte entier : CONFLIT_ORGANISATION_PROPRE', () => {
+    const apercu = apercevoir(csv('nom;organisation;conflits', 'Ombrelle;Club des Merles;Atelier Ressac', 'Pervenche;Atelier Ressac;atelier  RESSAC'));
+    assert.deepEqual(
+      [apercu.refusGlobal, apercu.refusGlobalLigne, apercu.refusGlobalOrganisation],
+      ['CONFLIT_ORGANISATION_PROPRE', 3, 'atelier  RESSAC'],
+    );
+  });
+
+  test('la première faute dans l\u{2019}ordre du texte décide, quel que soit son motif', () => {
+    const texte = csv('nom;organisation;conflits', 'Ombrelle;Club des Merles;Club des Merles', 'Pervenche;;Société Gamma');
+    assert.deepEqual([apercevoir(texte).refusGlobal, apercevoir(texte).refusGlobalLigne], ['CONFLIT_ORGANISATION_PROPRE', 2]);
+    const inverse = csv('nom;organisation;conflits', 'Pervenche;;Société Gamma', 'Ombrelle;Club des Merles;Club des Merles');
+    assert.deepEqual([apercevoir(inverse).refusGlobal, apercevoir(inverse).refusGlobalLigne], ['CONFLIT_ORGANISATION_INCONNUE', 2]);
+  });
+
+  test("l'organisation d'une ligne refusée ne compte pas ; celle d'une ligne exclue, si : elle existe", () => {
+    const refusee = apercevoir(csv('nom;organisation;exclu;conflits', ';Atelier Ressac;;', 'Ombrelle;;;Atelier Ressac'));
+    assert.deepEqual([refusee.refusGlobal, refusee.refusGlobalLigne], ['CONFLIT_ORGANISATION_INCONNUE', 3]);
+    const exclue = apercevoir(csv('nom;organisation;exclu;conflits', 'Lacasse;Atelier Ressac;oui;', 'Ombrelle;;;Atelier Ressac'));
+    assert.equal(exclue.refusGlobal, null);
+    assert.deepEqual(conflitsDe(exclue), [[2, null], [3, ['Atelier Ressac']]]);
+  });
+
+  test('remplacer retire chaque existant : leurs organisations ne comptent plus ; ajouter et mettre à jour les comptent', () => {
+    const existants = [existant(1, 'Houle', null, 'Club des Merles')];
+    const texte = csv('nom;organisation;conflits', 'Ombrelle;;Club des Merles');
+    assert.equal(apercevoir(texte, { participants: existants, mode: 'remplacer' }).refusGlobal, 'CONFLIT_ORGANISATION_INCONNUE');
+    for (const mode of ['ajouter', 'mettreAJour']) assert.equal(apercevoir(texte, { participants: existants, mode }).refusGlobal, null, mode);
+  });
+
+  test("en mise à jour, une ligne sans organisation qui désigne une personne seule lit l'organisation de cette personne : la nommer est refusé", () => {
+    const existants = [existant(1, 'Houle', 'Iris', 'Club des Merles'), existant(2, 'Galet', null, 'Atelier Ressac')];
+    const texte = csv('nom;prenom;organisation;conflits', 'Houle;Iris;;club des merles');
+    const apercu = apercevoir(texte, { participants: existants, mode: 'mettreAJour' });
+    assert.deepEqual([apercu.refusGlobal, apercu.refusGlobalLigne, apercu.refusGlobalOrganisation], ['CONFLIT_ORGANISATION_PROPRE', 2, 'club des merles']);
+    // Ajoutée, la même ligne crée une personne sans organisation, qui peut
+    // nommer le club.
+    assert.equal(apercevoir(texte, { participants: existants, mode: 'ajouter' }).refusGlobal, null);
+    const autre = apercevoir(csv('nom;prenom;organisation;conflits', 'Houle;Iris;;Atelier Ressac'), { participants: existants, mode: 'mettreAJour' });
+    assert.equal(autre.refusGlobal, null);
+  });
+
+  test("en mise à jour, l'organisation d'une ligne que la mise à jour refuse ne compte pas : DEJA_DESIGNE, PLUSIEURS_CORRESPONDENT", () => {
+    const existants = [existant(1, 'Houle', null, null), existant(2, 'Galet', null, null), existant(3, 'Galet', null, null)];
+    const deja = csv('nom;organisation;conflits', 'Houle;;', 'Houle;Clos Neuf;', 'Ombrelle;;Clos Neuf');
+    const plusieurs = csv('nom;organisation;conflits', 'Galet;Clos Neuf;', 'Ombrelle;;Clos Neuf');
+    for (const [texte, ligne] of [[deja, 4], [plusieurs, 3]]) {
+      const apercu = apercevoir(texte, { participants: existants, mode: 'mettreAJour' });
+      assert.deepEqual(
+        [apercu.refusGlobal, apercu.refusGlobalLigne, apercu.refusGlobalOrganisation],
+        ['CONFLIT_ORGANISATION_INCONNUE', ligne, 'Clos Neuf'],
+      );
+      // Ajoutée, chaque ligne crée une personne : l'organisation existe.
+      assert.equal(apercevoir(texte, { participants: existants, mode: 'ajouter' }).refusGlobal, null);
+    }
+    // La première ligne qui désigne une personne seule la met à jour : son
+    // organisation compte.
+    const premiere = csv('nom;organisation;conflits', 'Houle;Clos Neuf;', 'Houle;;', 'Ombrelle;;Clos Neuf');
+    const apercu = apercevoir(premiere, { participants: existants, mode: 'mettreAJour' });
+    assert.equal(apercu.refusGlobal, null);
+    assert.deepEqual(conflitsDe(apercu).at(-1), [4, ['Clos Neuf']]);
+  });
+
+  test("un nom d'organisation qui porte « ; » ou « | » se relit entier : de gauche à droite, le plus long assemblage de morceaux que l'import connaît", () => {
+    const existants = [
+      existant(1, 'Houle', null, 'Tilleul; frères'),
+      existant(2, 'Galet', null, 'Tilleul'),
+      existant(3, 'Ronce', null, 'Tilleul; frères; fils'),
+    ];
+    const texte = csv(
+      'nom;organisation;conflits',
+      'Ombrelle;Atelier | Ressac;"TILLEUL;  frères|Club des Merles"',
+      'Pervenche;Club des Merles;"Tilleul; Atelier | Ressac; Tilleul; frères"',
+      'Sarcelle;;"Tilleul; frères; fils|Tilleul"',
+    );
+    for (const mode of ['ajouter', 'mettreAJour']) {
+      const apercu = apercevoir(texte, { participants: existants, mode });
+      assert.equal(apercu.refusGlobal, null, mode);
+      assert.deepEqual(conflitsDe(apercu), [
+        [2, ['Tilleul; frères', 'Club des Merles']],
+        [3, ['Tilleul', 'Atelier | Ressac', 'Tilleul; frères']],
+        [4, ['Tilleul; frères; fils', 'Tilleul']],
+      ], mode);
+    }
+    // Un assemblage que nul ne porte se lit morceau par morceau : le
+    // premier morceau inconnu refuse le texte.
+    const inconnu = apercevoir(csv('nom;conflits', 'Ombrelle;"Tilleul; sœurs"'), { participants: existants });
+    assert.deepEqual([inconnu.refusGlobal, inconnu.refusGlobalOrganisation], ['CONFLIT_ORGANISATION_INCONNUE', 'sœurs']);
+  });
+
+  test('sans faute, refusGlobalOrganisation vaut null ; un refus global d\u{2019}une autre sorte aussi', () => {
+    assert.equal(apercevoir(csv('nom;conflits', 'Ombrelle;')).refusGlobalOrganisation, null);
+    assert.deepEqual(apercevoir(''), { ...refusGlobal('AUCUN_ENTETE') });
   });
 });

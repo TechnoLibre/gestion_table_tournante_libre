@@ -12,8 +12,13 @@
   // puis, dans un bloc à part, celles d'étiquettes, les doublons, les
   // homonymes d'une mise à jour, les cellules sur plusieurs lignes. Le
   // rapport le reprend pour l'aperçu appliqué, ses refus remplacés par ceux
-  // du résumé. Une cellule d'étiquettes montre chacune en pastille ; une
-  // cellule à clé se traduit avec ses détails, les tours de la présence.
+  // du résumé. Une cellule d'étiquettes montre chacune en pastille, à
+  // l'icône des étiquettes ; une cellule de conflits, chaque organisation
+  // nommée en pastille, à l'icône « interdit » ; une cellule à clé se
+  // traduit avec ses détails, les tours de la présence. Un conflit fautif
+  // refuse le fichier entier : l'aperçu ne montre alors aucune ligne, et le
+  // refus global nomme l'organisation, la ligne, et la correction à faire
+  // avant de réimporter.
   //
   // modele : le modèle ; source : { origine: 'fichier'|'collage', nom } ;
   // participants : ceux de la charge, qui nomment les personnes désignées ;
@@ -143,7 +148,9 @@
                     {#if etiquettes.length > 0}
                       <ul class="etiquettes">
                         {#each etiquettes as motCle (motCle)}
-                          <li><Pastille sorte="statut" valeur="neutre" icone="etiquettes" libelle={motCle} /></li>
+                          <li>
+                            <Pastille sorte="statut" valeur="neutre" icone={champ === 'etiquettes' ? 'etiquettes' : 'interdit'} libelle={motCle} />
+                          </li>
                         {/each}
                       </ul>
                     {/if}

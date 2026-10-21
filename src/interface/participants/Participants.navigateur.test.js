@@ -4,7 +4,8 @@
 // La liste des participants dans un vrai moteur de rendu (§ 4, § 4.2, § 4.4,
 // § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'organisation
 // collante, la grille au clavier, le tri, le filtre et le compte,
-// l'exclusion, la présence par tour saisie en cases dans la grille, le
+// l'exclusion, la présence par tour saisie en cases dans la grille, les
+// conflits d'organisation saisis par un choix multiple, le
 // manque de places à l'ajout et à la réintégration, la fiche
 // et l'itinéraire, les étiquettes de la fiche et leur légende, l'export, le
 // collage, et la liste groupée par une colonne ou plusieurs, ses groupes
@@ -991,6 +992,189 @@ describe('la présence par tour dans la grille (§ 7.3, § 10.2)', () => {
     expect(idsAffiches(m)).toEqual(['Ombrelle', 'Lacasse', 'Pervenche', 'Grisaille'].map((nom) => idDe(m, nom)));
     expect(trier.closest('th').getAttribute('aria-sort')).toBe('descending');
     expect(m.trace.length).toBe(trace);
+  });
+});
+
+describe("les conflits d'organisation dans la grille (§ 4, § 10.2)", () => {
+  // Quatre personnes, trois organisations ; Grisaille n'en porte aucune.
+  const QUATRE = [
+    { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB },
+    { nom: 'Pervenche', prenom: 'Théo', organisation: 'Atelier Ressac' },
+    { nom: 'Lacasse', prenom: 'Ondine', organisation: 'cercle des Hérons' },
+    { nom: 'Grisaille' },
+  ];
+
+  const editeurDe = (m, id) => cellule(m, id, 'conflits').querySelector('[data-editeur-choix]');
+  const casesDe = (m, id) => [...cellule(m, id, 'conflits').querySelectorAll('[data-choix]')];
+  const nomsDe = (m, id) => casesDe(m, id).map((c) => c.closest('label').textContent.trim());
+  const coches = (m, id) => casesDe(m, id).map((c) => c.checked);
+  const conflitsDe = (m, id) => participants(m).find((p) => p.id === id).conflits;
+  const pastilles = (m, id) => [...cellule(m, id, 'conflits').querySelectorAll('[data-conflits-personne] li')].map((li) => li.textContent.trim());
+
+  async function ouvrir(m, id) {
+    cellule(m, id, 'conflits').focus();
+    await touche('Enter');
+    await rendu();
+  }
+
+  test("la colonne « Conflit d'organisation » suit l'organisation ; au repos, une pastille par organisation nommée, vide sans conflit", async () => {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    await m.seance.executer('ajouterConflit', { id: idDe(m, 'Grisaille'), organisation: 'Atelier Ressac' });
+    await m.seance.executer('ajouterConflit', { id: idDe(m, 'Grisaille'), organisation: CLUB });
+    await attendreSeance(m);
+    expect(COLONNES.indexOf('conflits')).toBe(COLONNES.indexOf('organisation') + 1);
+    const entetes = [...grille(m).querySelectorAll('[data-commande="trier"]')].map((b) => b.dataset.cible);
+    expect(entetes.indexOf('conflits')).toBe(entetes.indexOf('organisation') + 1);
+    expect(section(m).querySelector('[data-commande="trier"][data-cible="conflits"]').textContent).toContain("Conflit d'organisation");
+    expect(pastilles(m, idDe(m, 'Grisaille'))).toEqual(['Atelier Ressac', CLUB]);
+    expect(cellule(m, idDe(m, 'Grisaille'), 'conflits').querySelector('svg')).not.toBeNull();
+    expect(cellule(m, idDe(m, 'Ombrelle'), 'conflits').textContent.trim()).toBe('');
+  });
+
+  test('Entrée ouvre une case par organisation de l’événement hors la sienne, rangée, nommée par l’organisation, dans un groupe nommé par la personne ; le focus sur la première', async () => {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    const id = idDe(m, 'Ombrelle');
+    await ouvrir(m, id);
+    const editeur = editeurDe(m, id);
+    expect(editeur).not.toBeNull();
+    expect(editeur.getAttribute('role')).toBe('group');
+    expect(editeur.getAttribute('aria-label')).toBe("Conflits d'organisation de Iris Ombrelle, une case par organisation");
+    expect(nomsDe(m, id)).toEqual(['Atelier Ressac', 'cercle des Hérons']);
+    expect(casesDe(m, id).map((c) => c.type)).toEqual(['checkbox', 'checkbox']);
+    expect(coches(m, id)).toEqual([false, false]);
+    expect(document.activeElement).toBe(casesDe(m, id)[0]);
+    expect(casesDe(m, id).map((c) => c.tabIndex)).toEqual([0, -1]);
+  });
+
+  test('→, Fin, ← et Début passent d’une case à l’autre sans boucler ; l’espace coche sans rien écrire ; Entrée écrit le geste entier en une entrée, qu’un seul Défaire reprend, et rend le focus à la cellule', async () => {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    const id = idDe(m, 'Grisaille');
+    const avant = entrees(m).length;
+    const trace = m.trace.length;
+    await ouvrir(m, id);
+    const cases = casesDe(m, id);
+    expect(nomsDe(m, id)).toEqual(['Atelier Ressac', 'cercle des Hérons', CLUB]);
+    const parcours = [];
+    for (const cle of ['ArrowRight', 'End', 'ArrowRight', 'ArrowLeft', 'Home', 'ArrowLeft']) {
+      await touche(cle);
+      await rendu();
+      parcours.push(cases.indexOf(document.activeElement) + 1);
+    }
+    expect(parcours).toEqual([2, 3, 3, 2, 1, 1]);
+    expect(m.seance.gesteEnCours).toBe(false);
+    await touche(' ');
+    await touche('End');
+    await touche(' ');
+    await rendu();
+    expect(coches(m, id)).toEqual([true, false, true]);
+    expect(m.seance.gesteEnCours).toBe(true);
+    await attendreSeance(m);
+    expect(m.trace.length).toBe(trace);
+
+    await touche('Enter');
+    await attendreSeance(m);
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(entrees(m).at(-1).libelle).toBe(`Conflits de Grisaille : ajouté « Atelier Ressac » et « ${CLUB} »`);
+    expect(conflitsDe(m, id)).toEqual(['Atelier Ressac', CLUB]);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(pastilles(m, id)).toEqual(['Atelier Ressac', CLUB]);
+    expect(document.activeElement).toBe(cellule(m, id, 'conflits'));
+    expect(m.seance.gesteEnCours).toBe(false);
+    await m.seance.defaire();
+    await attendreSeance(m);
+    expect(conflitsDe(m, id)).toBeUndefined();
+    expect(pastilles(m, id)).toEqual([]);
+  });
+
+  test('Échap rend la liste enregistrée sans rien écrire ; cocher puis décocher, puis Entrée, n’exécute rien ; Tab valide une fois et mène au courriel', async () => {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    const id = idDe(m, 'Pervenche');
+    await m.seance.executer('ajouterConflit', { id, organisation: CLUB });
+    await attendreSeance(m);
+    const avant = entrees(m).length;
+    const executer = vi.spyOn(m.seance, 'executer');
+
+    await ouvrir(m, id);
+    expect(coches(m, id)).toEqual([false, true]);
+    await touche(' ');
+    await rendu();
+    expect(coches(m, id)).toEqual([true, true]);
+    await touche('Escape');
+    await attendreSeance(m);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(document.activeElement).toBe(cellule(m, id, 'conflits'));
+    expect(conflitsDe(m, id)).toEqual([CLUB]);
+
+    await ouvrir(m, id);
+    await touche(' ');
+    await touche(' ');
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(executer).not.toHaveBeenCalled();
+    expect(entrees(m)).toHaveLength(avant);
+
+    await ouvrir(m, id);
+    await touche('End');
+    await touche(' ');
+    await rendu();
+    await touche('Tab');
+    await attendreSeance(m);
+    await attendreSeance(m);
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('changerConflits', { id, organisations: [] });
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(conflitsDe(m, id)).toBeUndefined();
+    expect(document.activeElement).toBe(cellule(m, id, 'courriel'));
+  });
+
+  test('sans autre organisation, le groupe le dit et prend le focus ; Échap le referme', async () => {
+    const m = await evenementOuvert({ personnes: [{ nom: 'Ombrelle', organisation: CLUB }, { nom: 'Pervenche', organisation: CLUB }] });
+    const id = idDe(m, 'Ombrelle');
+    await ouvrir(m, id);
+    const editeur = editeurDe(m, id);
+    expect(casesDe(m, id)).toEqual([]);
+    expect(editeur.textContent.trim()).toBe(t('participants.conflits.aucuneAutre'));
+    expect(document.activeElement).toBe(editeur);
+    await touche('Escape');
+    await rendu();
+    expect(editeurDe(m, id)).toBeNull();
+    expect(document.activeElement).toBe(cellule(m, id, 'conflits'));
+  });
+
+  test('une commande refusée pose son refus dans la cellule, la saisie gardée, les cases marquées et décrites ; en lecture, Entrée pose le refus de la séance sans ouvrir les cases', async () => {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    const id = idDe(m, 'Lacasse');
+    const trace = m.trace.length;
+    // La séance refuse la commande comme sur un plan bloqué.
+    vi.spyOn(m.seance, 'executer').mockImplementation(() =>
+      Promise.reject(Object.assign(new Error('PLAN_BLOQUE'), { code: 'PLAN_BLOQUE', details: { remede: { geste: 'debloquer' } } })),
+    );
+    await ouvrir(m, id);
+    await touche(' ');
+    await touche('Enter');
+    await attendreSeance(m);
+    const refus = cellule(m, id, 'conflits').querySelector('[data-refus="PLAN_BLOQUE"]');
+    expect(refus).not.toBeNull();
+    expect(editeurDe(m, id)).not.toBeNull();
+    expect(coches(m, id)).toEqual([true, false]);
+    for (const c of casesDe(m, id)) expect(c.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(editeurDe(m, id).getAttribute('aria-describedby'))).toBe(refus);
+    expect(m.trace.length).toBe(trace);
+    await touche('Escape');
+    await rendu();
+    vi.restoreAllMocks();
+
+    await m.seance.passerEnLecture();
+    await rendu();
+    const autre = idDe(m, 'Ombrelle');
+    cellule(m, autre, 'conflits').focus();
+    await touche('Enter');
+    await rendu();
+    expect(editeurDe(m, autre)).toBeNull();
+    const refusSeance = cellule(m, autre, 'conflits').querySelector('[data-refus]');
+    expect(refusSeance.dataset.refus).toBe(m.seance.etat().refus.code);
+    expect(refusSeance.querySelector('button')).not.toBeNull();
   });
 });
 
@@ -2501,10 +2685,14 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
   }
 
   for (const largeur of [1366, 1024]) {
-    test(`à ${largeur} × 700 : la page ne défile pas en largeur, la carte tient dans la fenêtre, la grille dans la carte, la pastille « tours 1 à 3 et 5 » comprise`, async () => {
+    test(`à ${largeur} × 700 : la page ne défile pas en largeur, la carte tient dans la fenêtre, la grille dans la carte, la pastille « tours 1 à 3 et 5 » et quatre conflits compris`, async () => {
       await dansLeCadre(largeur, 700, async () => {
         const m = await evenementOuvert({ personnes: SEPT, tours: 5 });
         await m.seance.executer('changerPresence', { id: idDe(m, 'Calvaille'), tours: [1, 2, 3, 5] });
+        // Quatre conflits : leurs pastilles passent à la ligne dans leur
+        // cellule, sans élargir la grille.
+        const conflits = ['Étang des Sarcelles', 'Grange des Mulots', 'Forge des Martres', 'Dune des Hérons'];
+        await m.seance.executer('changerConflits', { id: idDe(m, 'Quenouillet'), organisations: conflits });
         m.ui.ouvrirFiche(idDe(m, 'Calvaille'));
         await attendreSeance(m);
         // La pastille de la présence la plus longue tient dans sa cellule.
@@ -2513,6 +2701,8 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
         const pastille = presence.querySelector('[data-presence="partielle"] > *').getBoundingClientRect();
         expect(pastille.right).toBeLessThanOrEqual(presence.getBoundingClientRect().right);
         expect(pastille.left).toBeGreaterThanOrEqual(presence.getBoundingClientRect().left);
+        const conflit = cellule(m, idDe(m, 'Quenouillet'), 'conflits');
+        expect(conflit.querySelectorAll('[data-conflits-personne] li')).toHaveLength(conflits.length);
         expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
         const region = carte(m).getBoundingClientRect();
         expect(region.right).toBeLessThanOrEqual(innerWidth);

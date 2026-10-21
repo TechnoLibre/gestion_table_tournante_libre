@@ -28,12 +28,19 @@
 //      retire chaque existant, avec ceux du fichier seuls. Leurs étiquettes
 //      se réconcilient avec celles des existants, hors du mode remplacer, et
 //      avec celles des objectifs de table dans chaque mode : les objectifs
-//      appartiennent aux tables, que remplacer garde ;
+//      appartiennent aux tables, que remplacer garde. Les conflits
+//      d'organisation se lisent alors contre les organisations que l'import
+//      laisse à un participant : celles des existants, et celles que le
+//      fichier crée, hors des lignes que la mise à jour refuse. Un nom
+//      inconnu, ou la propre organisation de la personne, refuse le texte
+//      entier, au rang de sa ligne ;
 //   8. en mode mettreAJour, les lignes ajoutées à côté d'un existant de même
 //      nom se nomment ; dans chaque mode, les cellules qui s'étendent sur
 //      plusieurs lignes du texte et portent le séparateur.
 // Une ligne refusée ne refuse pas le texte : le reste s'importe, et la ligne
-// revient dans le CSV des refus (§ 10.1).
+// revient dans le CSV des refus (§ 10.1). Un conflit fautif, lui, refuse le
+// texte entier : importer le reste ferait d'un conflit mal écrit un conflit
+// perdu, sans que rien ne le dise.
 
 import { TOURS_MAX } from '../stockage/document.js';
 import { ETIQUETTES_MAX, lireEtiquettes } from '../stockage/etiquettes.js';
@@ -98,6 +105,13 @@ export const VALEURS_EXCLU = new Map([
  *           null pour une colonne absente ou une cellule vide ou blanche :
  *           vide vaut tous les tours pour une personne créée, et laisse la
  *           présence d'une personne mise à jour
+ * @property {string[]|null} conflits      les organisations que la cellule
+ *           nomme (lireConflits), dans l'ordre de la cellule, chacune sous
+ *           l'orthographe affichée de son groupe d'organisations — celle que
+ *           l'événement emploie déjà, sinon la première que le fichier écrit
+ *           —, une seule par clé normalisée ; null pour une colonne absente
+ *           ou une cellule qui n'en nomme aucune, qui laisse la liste d'une
+ *           personne mise à jour
  *
  * @typedef {Object} Apercu
  * @property {'ajouter'|'mettreAJour'|'remplacer'} mode   le mode pour lequel
@@ -174,7 +188,8 @@ export const VALEURS_EXCLU = new Map([
  *           deux personnes se fondent en une. Une note écrite sur plusieurs
  *           lignes a la même forme, et l'export l'écrit ainsi (§ 10.2) :
  *           l'aperçu la nomme sans refuser la ligne
- * @property {null|'CARACTERE_NUL'|'AUCUN_ENTETE'|'SEPARATEUR_INTROUVABLE'|'GUILLEMET_OUVERT'|'NOM_NON_ASSOCIE'|'AUCUNE_LIGNE_VALIDE'} refusGlobal
+ * @property {null|'CARACTERE_NUL'|'AUCUN_ENTETE'|'SEPARATEUR_INTROUVABLE'|'GUILLEMET_OUVERT'|'NOM_NON_ASSOCIE'|'AUCUNE_LIGNE_VALIDE'
+ *             |'CONFLIT_ORGANISATION_INCONNUE'|'CONFLIT_ORGANISATION_PROPRE'} refusGlobal
  *           sous un refus global, lignes, fusions, fusionsEtiquettes,
  *           doublons, homonymes, designees et multilignes sont vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les lignes
  *           refusées sont la cause
@@ -182,16 +197,24 @@ export const VALEURS_EXCLU = new Map([
  *           l'enregistrement où le guillemet s'ouvre ; sous
  *           SEPARATEUR_INTROUVABLE, celui de l'enregistrement dont le nombre
  *           de champs écarte le séparateur, quand choisirSeparateur le nomme ;
- *           null sinon
+ *           sous CONFLIT_ORGANISATION_INCONNUE et CONFLIT_ORGANISATION_PROPRE,
+ *           celui de la ligne qui nomme l'organisation ; null sinon
+ * @property {string|null} refusGlobalOrganisation   sous
+ *           CONFLIT_ORGANISATION_INCONNUE, l'organisation qu'aucun participant
+ *           ne porterait, telle que la cellule l'écrit, en NFC sans ses blancs
+ *           de bord ; sous CONFLIT_ORGANISATION_PROPRE, la propre organisation
+ *           de la personne, telle que la cellule l'écrit ; null sinon
  */
 
 // Aperçu d'un texte refusé en entier : son mode et son nombre de tours, ce
-// que la lecture a établi avant le refus, aucune ligne.
+// que la lecture a établi avant le refus, aucune ligne ; le rang et
+// l'organisation que le refus nomme, null quand il n'en nomme pas.
 function refuserEn(
   { mode, tours },
   code,
   { separateur = null, entetes = [], association = { colonnes: {}, ambigus: [], nonReconnues: [] } } = {},
   ligne = null,
+  organisation = null,
 ) {
   return {
     mode,
@@ -209,6 +232,7 @@ function refuserEn(
     multilignes: [],
     refusGlobal: code,
     refusGlobalLigne: ligne,
+    refusGlobalOrganisation: organisation,
   };
 }
 
@@ -269,15 +293,90 @@ function presenceDe(cellule, tours) {
   return { refus: { code: 'PRESENCE_ILLISIBLE', valeur, raison } };
 }
 
+// Ce qui sépare les organisations d'une cellule de conflits (§ 10.1) : le
+// point-virgule, la barre verticale et la fin de ligne, sous ses trois
+// formes. La virgule n'en est pas : un nom d'organisation peut en porter une.
+const SEPARATEURS_CONFLITS = /\r\n|\r|\n|;|\|/;
+
+// Le nombre de séparateurs de conflits qu'un texte porte.
+const separateursDe = (texte) => texte.split(SEPARATEURS_CONFLITS).length - 1;
+
+/**
+ * Les organisations contre lesquelles une cellule de conflits se lit
+ * (lireConflits) : porte(texte), vrai quand un nom donné a la clé
+ * normalisée du texte, et le plus grand nombre de séparateurs de conflits
+ * qu'un nom donné porte.
+ *
+ * @typedef {{porte: (texte: string) => boolean, separateursMax: number}} OrganisationsConnues
+ *
+ * @param {Iterable<string>} noms
+ * @returns {OrganisationsConnues}
+ */
+export function organisationsConnues(noms) {
+  const cles = new Set();
+  let separateursMax = 0;
+  for (const nom of noms) {
+    cles.add(cleNormalisee(nom));
+    separateursMax = Math.max(separateursMax, separateursDe(nom));
+  }
+  return { porte: (texte) => cles.has(cleNormalisee(texte)), separateursMax };
+}
+
+/**
+ * Les organisations qu'une cellule de conflits nomme (§ 10.1, § 10.2). La
+ * cellule se découpe sur « ; », « | » et la fin de ligne ; puis, de gauche à
+ * droite, chaque nom est le plus long assemblage de morceaux consécutifs,
+ * rejoints par les séparateurs que la cellule porte entre eux, dont
+ * connues porte la clé, ou le morceau seul quand aucun ne l'est : un nom
+ * d'organisation qui porte « ; » ou « | » se relit tel que l'export
+ * l'écrit. Un assemblage ne compte pas plus de séparateurs que
+ * connues.separateursMax. Chaque nom en NFC, sans ses blancs de bord ; ceux
+ * dont la clé normalisée est vide écartés, un seul par clé, le premier, dans
+ * l'ordre de la cellule ; null quand il n'en reste aucun. Rien ne se refuse
+ * ici : un nom inconnu se rend tel quel.
+ *
+ * @param {string|undefined} cellule  undefined quand le champ n'a pas de
+ *   colonne ou que l'enregistrement s'arrête avant elle
+ * @param {OrganisationsConnues} connues
+ * @returns {string[]|null}
+ */
+export function lireConflits(cellule, { porte, separateursMax }) {
+  if (cellule === undefined) return null;
+  // Morceaux aux rangs pairs, séparateurs aux rangs impairs.
+  const morceaux = [];
+  let reste = cellule;
+  for (let trouve = SEPARATEURS_CONFLITS.exec(reste); trouve !== null; trouve = SEPARATEURS_CONFLITS.exec(reste)) {
+    morceaux.push(reste.slice(0, trouve.index), trouve[0]);
+    reste = reste.slice(trouve.index + trouve[0].length);
+  }
+  morceaux.push(reste);
+  const parCle = new Map();
+  for (let debut = 0; debut < morceaux.length; ) {
+    let fin = debut;
+    let assemblage = morceaux[debut];
+    for (let essai = debut + 2; essai < morceaux.length && (essai - debut) / 2 <= separateursMax; essai += 2) {
+      assemblage += morceaux[essai - 1] + morceaux[essai];
+      if (porte(assemblage)) fin = essai;
+    }
+    const nom = morceaux.slice(debut, fin + 1).join('').normalize('NFC').trim();
+    const cle = cleNormalisee(nom);
+    if (cle !== '' && !parCle.has(cle)) parCle.set(cle, nom);
+    debut = fin + 2;
+  }
+  return parCle.size === 0 ? null : [...parCle.values()];
+}
+
 // Lit un enregistrement de données selon les colonnes associées, largeur
 // étant le nombre d'en-têtes et tours celui de l'aperçu. Rend { champs },
 // l'organisation telle qu'écrite ou null quand elle n'en nomme aucune, les
-// étiquettes telles que découpées, ou le motif du refus { code, valeur },
-// avec raison, nombre, tour ou tours selon le code, un seul, dans cet
-// ordre : un champ non vide au-delà de l'en-tête, qui dit une ligne décalée
-// dont aucune valeur n'est sûre ; un nom vide ; une valeur d'« exclu » hors
-// de la liste fermée ; une étiquette mal formée ; trop d'étiquettes ; une
-// présence illisible ou hors de la soirée.
+// étiquettes telles que découpées, la cellule des conflits telle quelle,
+// undefined sans elle — lireConflits la lit contre les organisations de
+// tout le texte —, ou le motif du refus { code, valeur }, avec raison,
+// nombre, tour ou tours selon le code, un seul, dans cet ordre : un champ
+// non vide au-delà de l'en-tête, qui dit une ligne décalée dont aucune
+// valeur n'est sûre ; un nom vide ; une valeur d'« exclu » hors de la liste
+// fermée ; une étiquette mal formée ; trop d'étiquettes ; une présence
+// illisible ou hors de la soirée.
 function lireLigne(brut, largeur, colonnes, tours) {
   if (!enregistrementVide(brut.slice(largeur))) return { code: 'CHAMPS_EN_TROP', valeur: null };
   const lire = (champ) => valeurDe(brut, colonnes[champ]);
@@ -302,6 +401,7 @@ function lireLigne(brut, largeur, colonnes, tours) {
       exclu,
       etiquettes,
       presence: lue.presence,
+      conflits: colonnes.conflit_organisation === undefined ? undefined : brut[colonnes.conflit_organisation],
     },
   };
 }
@@ -354,7 +454,46 @@ function reconcilier(existants, valides) {
     .filter((groupe) => groupe.orthographes.length > 1 && groupe.lignes.length > 0)
     .sort((a, b) => a.lignes[0] - b.lignes[0])
     .map(({ affichee, orthographes }) => ({ affichee, orthographes }));
-  return { afficheeDe: (texte) => groupes.get(cleNormalisee(texte)).affichee, fusions };
+  return {
+    afficheeDe: (texte) => groupes.get(cleNormalisee(texte)).affichee,
+    fusions,
+  };
+}
+
+// La première faute de conflit des lignes valides (§ 10.1), dans l'ordre du
+// texte puis de la cellule, ou null : { code, ligne, organisation }, le nom
+// tel que la cellule l'écrit. conflits : les noms de chaque ligne
+// (lireConflits), rang à rang de valides. Un nom de même clé normalisée que
+// la propre organisation de la personne — celle de la ligne ; en mise à
+// jour, sous une cellule vide, celle du seul participant que la ligne
+// désigne (organisationPropre) — est CONFLIT_ORGANISATION_PROPRE ; un nom
+// que porte n'admet pas, CONFLIT_ORGANISATION_INCONNUE.
+function fauteDeConflit(valides, conflits, porte, organisationPropre) {
+  for (const [rang, { ligne, champs }] of valides.entries()) {
+    if (conflits[rang] === null) continue;
+    const propre = organisationPropre(champs);
+    for (const organisation of conflits[rang]) {
+      if (propre !== null && cleNormalisee(propre) === cleNormalisee(organisation)) {
+        return { code: 'CONFLIT_ORGANISATION_PROPRE', ligne, organisation };
+      }
+      if (!porte(organisation)) return { code: 'CONFLIT_ORGANISATION_INCONNUE', ligne, organisation };
+    }
+  }
+  return null;
+}
+
+// La propre organisation d'une ligne : celle qu'elle porte ; en mode
+// mettreAJour, sans organisation sur la ligne, celle du seul participant
+// qu'elle désigne (designer), contre les participants d'avant l'import —
+// la mise à jour la lui laisse ; null sinon.
+function organisationsPropres(participants, mode) {
+  const index = mode === 'mettreAJour' ? indexerParNom(participants) : null;
+  const parId = new Map(participants.map((participant) => [participant.id, participant]));
+  return (champs) => {
+    if (champs.organisation !== null || index === null) return champs.organisation;
+    const { candidats } = designer(champs, index);
+    return candidats.length === 1 ? parId.get(candidats[0]).organisation : null;
+  };
 }
 
 // Clé de doublon : le triplet (nom, prénom, organisation), chacun par sa clé
@@ -437,6 +576,39 @@ export function designer(champs, index) {
       ),
     ),
   };
+}
+
+/**
+ * Ce que la mise à jour fait de chaque ligne (§ 10.1), seule règle, que
+ * l'aperçu et l'import lisent tous deux. Chaque ligne désigne par designer,
+ * contre l'index des participants d'avant l'import : { id: null } pour une
+ * ligne qui ne désigne personne, à ajouter ; { id } pour la première ligne,
+ * dans l'ordre du texte, qui désigne un participant seul, et le met à jour ;
+ * sinon { refus }, PLUSIEURS_CORRESPONDENT { participants } pour une ligne
+ * qui en désigne plusieurs, DEJA_DESIGNE { participants: [id],
+ * premiereLigne } pour une ligne qui désigne seul un participant qu'une
+ * ligne précédente désigne déjà.
+ *
+ * @param {Array<{id: number, nom: string, prenom: string|null, organisation: string|null}>} participants
+ * @param {Array<{ligne: number, champs: {nom: string, prenom: string|null, organisation: string|null}}>} lignes
+ *   dans l'ordre du texte
+ * @returns {Array<{id: number|null}|{refus: {code: string, participants: number[], premiereLigne?: number}}>}
+ *   rang à rang de lignes
+ */
+export function issuesDeMiseAJour(participants, lignes) {
+  const index = indexerParNom(participants);
+  const designes = new Map();
+  return lignes.map(({ ligne, champs }) => {
+    const { candidats } = designer(champs, index);
+    if (candidats.length === 0) return { id: null };
+    if (candidats.length > 1) return { refus: { code: 'PLUSIEURS_CORRESPONDENT', participants: candidats } };
+    const [id] = candidats;
+    if (designes.has(id)) {
+      return { refus: { code: 'DEJA_DESIGNE', participants: [id], premiereLigne: designes.get(id) } };
+    }
+    designes.set(id, ligne);
+    return { id };
+  });
 }
 
 // Homonymes d'une mise à jour : chaque ligne valide que designer ne fait
@@ -560,6 +732,19 @@ export function apercevoir(
 
   const existants = mode === 'remplacer' ? [] : [...participants].sort((a, b) => a.id - b.id);
   const { afficheeDe, fusions } = reconcilier(existants, valides);
+  // Les organisations que l'import laisse à un participant : celles des
+  // existants, puis celles des lignes que l'import pose — en mise à jour,
+  // une ligne qu'il refuse ne crée rien.
+  const issues = mode === 'mettreAJour' ? issuesDeMiseAJour(participants, valides) : null;
+  const posees = issues === null ? valides : valides.filter((_, rang) => issues[rang].refus === undefined);
+  const connues = organisationsConnues(
+    [...existants, ...posees.map(({ champs }) => champs)].flatMap(({ organisation }) =>
+      organisationNommee(organisation) ? [organisation] : [],
+    ),
+  );
+  const conflits = valides.map(({ champs }) => lireConflits(champs.conflits, connues));
+  const faute = fauteDeConflit(valides, conflits, connues.porte, organisationsPropres(participants, mode));
+  if (faute !== null) return refuser(faute.code, lu, faute.ligne, faute.organisation);
   const { listes, fusions: fusionsEtiquettes } = reconcilierEtiquettes(
     etiquettesExistantes(existants, tables),
     valides.map(({ champs }) => champs.etiquettes),
@@ -570,6 +755,7 @@ export function apercevoir(
       ...champs,
       organisation: champs.organisation === null ? null : afficheeDe(champs.organisation),
       etiquettes: listes[rang],
+      conflits: conflits[rang] === null ? null : conflits[rang].map(afficheeDe),
     },
     brut,
   }));
@@ -587,5 +773,6 @@ export function apercevoir(
     multilignes: multilignesDe(lignes, separateur),
     refusGlobal: null,
     refusGlobalLigne: null,
+    refusGlobalOrganisation: null,
   };
 }

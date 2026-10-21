@@ -25,15 +25,15 @@
 
 import { estPresentAuTour, presenceCanonique } from '../moteur/presence.js';
 import { copieDeTravail } from '../stockage/gel.js';
-import { MODES, designer, indexerParNom } from './apercu.js';
+import { MODES, issuesDeMiseAJour } from './apercu.js';
 import { ErreurCsv } from './erreurs.js';
 import { SEPARATEUR, ecrireCsv } from './export.js';
 import { enregistrementVide } from './lecture.js';
 
 // Champs d'une ligne de l'aperçu, dans l'ordre du participant : ceux que
 // porte une personne créée, et que pose une mise à jour quand la cellule
-// n'est pas vide. Les étiquettes et la présence, des listes, se posent à
-// part (poser).
+// n'est pas vide. Les étiquettes, la présence et les conflits, des listes,
+// se posent à part (poser).
 const CHAMPS_LUS = Object.freeze(['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu']);
 
 // En-têtes des deux colonnes qu'ajoute le CSV des refus, inconnues de
@@ -244,14 +244,14 @@ export function bilanRemplacement(charge) {
   };
 }
 
-// Les étiquettes d'une ligne telles que le fichier d'état les range : une
-// copie, triée par unités de code (§ 8.9), qui ne partage rien avec
-// l'aperçu.
-const rangees = (etiquettes) => [...etiquettes].sort(comparerTextes);
+// Les étiquettes ou les conflits d'une ligne tels que le fichier d'état les
+// range : une copie, triée par unités de code (§ 8.9), qui ne partage rien
+// avec l'aperçu.
+const rangees = (textes) => [...textes].sort(comparerTextes);
 
-// Vrai quand deux listes d'étiquettes rangées portent les mêmes chaînes, rang
-// à rang : deux listes distinctes de même contenu sont égales.
-const memesEtiquettes = (a, b) => a.length === b.length && a.every((motCle, rang) => motCle === b[rang]);
+// Vrai quand deux listes rangées portent les mêmes chaînes, rang à rang :
+// deux listes distinctes de même contenu sont égales.
+const memesListes = (a, b) => a.length === b.length && a.every((texte, rang) => texte === b[rang]);
 
 // Vrai quand deux présences canoniques sont la même : undefined (tous les
 // tours) des deux côtés, ou les mêmes tours rang à rang.
@@ -260,14 +260,17 @@ const memePresence = (a, b) =>
 
 // Participant créé d'une ligne de l'aperçu, sous tours tours, ses clés dans
 // l'ordre du fichier d'état : un exclu vide vaut non ; les étiquettes,
-// rangées, puis la présence canonique, en dernier, chaque clé absente quand
-// la ligne n'en porte pas (§ 8.9). Une présence vide ou qui nomme chaque
-// tour laisse le champ absent : la personne vient à tous les tours.
-function creer(id, { nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence }, tours) {
+// rangées, la présence canonique, puis les conflits, rangés, en dernier,
+// chaque clé absente quand la ligne n'en porte pas (§ 8.9). Une présence
+// vide ou qui nomme chaque tour laisse le champ absent : la personne vient à
+// tous les tours.
+function creer(id, champs, tours) {
+  const { nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits } = champs;
   const participant = { id, nom, prenom, organisation, courriel, titrePressenti, notes, exclu: exclu ?? false };
   if (etiquettes !== null) participant.etiquettes = rangees(etiquettes);
   const canonique = presence === null ? undefined : presenceCanonique(presence, tours);
   if (canonique !== undefined) participant.presence = canonique;
+  if (conflits !== null) participant.conflits = rangees(conflits);
   return participant;
 }
 
@@ -276,9 +279,11 @@ function creer(id, { nom, prenom, organisation, courriel, titrePressenti, notes,
 // non vide remplace la liste entière, une cellule vide la garde : un CSV
 // n'efface pas les étiquettes. De même, une cellule de présence non vide
 // remplace la présence, une cellule vide la garde, et « tous » retire le
-// champ. Les listes se comparent élément par élément, les étiquettes une
-// fois rangées, la présence sous sa forme canonique : un fichier réimporté
-// ne compte aucun modifié. Rend vrai quand une valeur a changé.
+// champ ; une cellule de conflits non vide remplace la liste, une cellule
+// vide la garde. Les listes se comparent élément par élément, les
+// étiquettes et les conflits une fois rangés, la présence sous sa forme
+// canonique : un fichier réimporté ne compte aucun modifié. Rend vrai quand
+// une valeur a changé.
 function poser(participant, champs, tours) {
   let change = false;
   for (const champ of CHAMPS_LUS) {
@@ -289,7 +294,7 @@ function poser(participant, champs, tours) {
   }
   if (champs.etiquettes !== null) {
     const etiquettes = rangees(champs.etiquettes);
-    if (!memesEtiquettes(etiquettes, participant.etiquettes ?? [])) {
+    if (!memesListes(etiquettes, participant.etiquettes ?? [])) {
       participant.etiquettes = etiquettes;
       change = true;
     }
@@ -302,51 +307,42 @@ function poser(participant, champs, tours) {
       change = true;
     }
   }
+  if (champs.conflits !== null) {
+    const conflits = rangees(champs.conflits);
+    if (!memesListes(conflits, participant.conflits ?? [])) {
+      participant.conflits = conflits;
+      change = true;
+    }
+  }
   return change;
 }
 
 // Met à jour, en place, les participants que désignent les lignes, et rend
-// les lignes à ajouter, les refus et les comptes. Chaque ligne désigne par
-// designer, contre l'index des participants d'avant l'import : un
-// participant ajouté par une ligne n'est désigné par aucune autre, et le
-// prénom ou l'organisation qu'une ligne pose n'écarte pas ce participant des
-// candidats d'une suivante. Une ligne qui ne désigne personne est à ajouter.
-// Une ligne qui en désigne plusieurs est refusée PLUSIEURS_CORRESPONDENT,
-// jamais ajoutée. Le participant qu'une ligne désigne seule est mis à jour
-// par la première de ces lignes, dans l'ordre du fichier ; chaque suivante
-// est refusée DEJA_DESIGNE : deux lignes ne se fondent pas en silence dans
-// une même personne. tours est celui de l'événement, sous lequel la
-// présence d'une ligne se met en forme.
+// les lignes à ajouter, les refus et les comptes, selon ce que
+// issuesDeMiseAJour fait de chaque ligne, contre les participants d'avant
+// l'import : un participant ajouté par une ligne n'est désigné par aucune
+// autre, et le prénom ou l'organisation qu'une ligne pose n'écarte pas ce
+// participant des candidats d'une suivante. Une ligne qui ne désigne
+// personne est à ajouter ; une ligne refusée, PLUSIEURS_CORRESPONDENT ou
+// DEJA_DESIGNE, n'est jamais ajoutée : deux lignes ne se fondent pas en
+// silence dans une même personne. tours est celui de l'événement, sous
+// lequel la présence d'une ligne se met en forme.
 function mettreAJour(participants, lignes, tours) {
-  const index = indexerParNom(participants);
+  const issues = issuesDeMiseAJour(participants, lignes);
   const parId = new Map(participants.map((participant) => [participant.id, participant]));
-  const designes = new Map();
   const nouvelles = [];
   const refusees = [];
   let misAJour = 0;
   let inchanges = 0;
-  for (const { ligne, champs, brut } of lignes) {
-    const { candidats } = designer(champs, index);
-    if (candidats.length === 0) {
-      nouvelles.push({ champs });
-      continue;
-    }
-    if (candidats.length > 1) {
-      refusees.push({ ligne, code: 'PLUSIEURS_CORRESPONDENT', valeur: null, participants: candidats, brut: [...brut] });
-      continue;
-    }
-    const [id] = candidats;
-    if (designes.has(id)) {
-      refusees.push({
-        ligne, code: 'DEJA_DESIGNE', valeur: null, participants: [id], premiereLigne: designes.get(id),
-        brut: [...brut],
-      });
-      continue;
-    }
-    designes.set(id, ligne);
-    if (poser(parId.get(id), champs, tours)) misAJour += 1;
+  lignes.forEach(({ ligne, champs, brut }, rang) => {
+    const { id, refus } = issues[rang];
+    if (refus !== undefined) {
+      const { code, ...details } = refus;
+      refusees.push({ ligne, code, valeur: null, ...details, brut: [...brut] });
+    } else if (id === null) nouvelles.push({ champs });
+    else if (poser(parId.get(id), champs, tours)) misAJour += 1;
     else inchanges += 1;
-  }
+  });
   return { nouvelles, refusees, misAJour, inchanges };
 }
 
@@ -354,20 +350,20 @@ function mettreAJour(participants, lignes, tours) {
  * Applique un aperçu à une charge (§ 10.1), selon le mode :
  * - 'ajouter' : chaque ligne valide devient un participant ; un doublon ne se
  *   fusionne jamais ;
- * - 'mettreAJour' : une ligne désigne, par designer, les participants
- *   d'avant l'import de même nom normalisé ; le prénom et l'organisation
- *   n'en écartent un que lorsque la ligne et lui en portent tous deux un,
- *   de clés normalisées différentes, selon leurs valeurs d'avant l'import.
- *   Une ligne ajoutée à côté d'un participant de même nom est celle que
- *   l'aperçu nomme dans homonymes. Désigné seul, le participant prend chaque champ non vide de
- *   la ligne, nom, prénom et organisation compris, et garde la valeur d'un
+ * - 'mettreAJour' : une ligne désigne, par designer, les participants d'avant
+ *   l'import de même nom normalisé ; le prénom et l'organisation n'en
+ *   écartent un que lorsque la ligne et lui en portent tous deux un, de clés
+ *   normalisées différentes, selon leurs valeurs d'avant l'import. Une ligne
+ *   ajoutée à côté d'un participant de même nom est celle que l'aperçu nomme
+ *   dans homonymes. Désigné seul, le participant prend chaque champ non vide
+ *   de la ligne, nom, prénom et organisation compris, et garde la valeur d'un
  *   champ vide ; exclu vide le garde ; une cellule d'étiquettes non vide
  *   remplace la liste, vide la garde ; une cellule de présence non vide
- *   remplace la présence, vide la garde, et « tous » la retire. Une ligne
- *   qui ne désigne personne est
- *   ajoutée ; qui en désigne plusieurs, refusée PLUSIEURS_CORRESPONDENT ; qui
- *   désigne un participant qu'une ligne précédente désigne déjà, refusée
- *   DEJA_DESIGNE ;
+ *   remplace la présence, vide la garde, et « tous » la retire ; une cellule
+ *   de conflits non vide remplace la liste, vide la garde. Une ligne qui ne
+ *   désigne personne est ajoutée ; qui en désigne plusieurs, refusée
+ *   PLUSIEURS_CORRESPONDENT ; qui désigne un participant qu'une ligne
+ *   précédente désigne déjà, refusée DEJA_DESIGNE ;
  * - 'remplacer' : les participants et leurs réservations sont retirés,
  *   puis chaque ligne valide ajoutée. Tables, titres, propositions et retenu
  *   restent (bilanRemplacement).
@@ -400,7 +396,8 @@ function mettreAJour(participants, lignes, tours) {
  *   autre nombre de tours que l'événement — le nombre a changé depuis
  *   l'aperçu, par un Défaire par exemple : c'est un état de la séance, et
  *   relire le fichier refait l'aperçu ; le refus global de l'aperçu, son
- *   code, détails { ligne }, le rang que nomme l'aperçu ou null ;
+ *   code, détails { ligne }, le rang que nomme l'aperçu ou null, plus
+ *   { organisation } quand l'aperçu en nomme une — un conflit fautif ;
  *   AMBIGUITE, détails { champs }, les champs
  *   que l'en-tête laisse ambigus, tant que le choix ne les tranche pas
  * @throws {TypeError} pour un mode inconnu, et pour un aperçu calculé pour un
@@ -415,7 +412,11 @@ export function appliquerImport(charge, apercu, mode) {
   if (apercu.association.colonnes.presence !== undefined && apercu.tours !== tours) {
     throw new ErreurCsv('APERCU_TOURS_CHANGES', { tours, toursApercu: apercu.tours });
   }
-  if (apercu.refusGlobal !== null) throw new ErreurCsv(apercu.refusGlobal, { ligne: apercu.refusGlobalLigne });
+  if (apercu.refusGlobal !== null) {
+    const organisation = apercu.refusGlobalOrganisation ?? null;
+    const details = { ligne: apercu.refusGlobalLigne, ...(organisation === null ? {} : { organisation }) };
+    throw new ErreurCsv(apercu.refusGlobal, details);
+  }
   const { ambigus } = apercu.association;
   if (ambigus.length > 0) throw new ErreurCsv('AMBIGUITE', { champs: ambigus.map(({ champ }) => champ) });
 

@@ -94,6 +94,24 @@ describe('lignesGrille : tri et filtre (§ 10.2)', () => {
     }
   });
 
+  test('conflits : par la clé de la liste rangée, une personne sans liste après toute liste, dans les deux sens', () => {
+    const liste = [
+      personne(1, 'Ombrelle', { conflits: ['Société Alpha'] }),
+      personne(2, 'Pervenche'),
+      personne(3, 'Lacasse', { conflits: ['club des Merles', 'Société Alpha'] }),
+      personne(4, 'Grisaille', { conflits: ['Atelier Ressac'] }),
+    ];
+    const croissant = lignesGrille(liste, { tri: { colonne: 'conflits', sens: 'croissant' }, filtre: '' }, cleNormalisee);
+    assert.deepEqual(ids(croissant), [4, 3, 1, 2]);
+    const decroissant = lignesGrille(liste, { tri: { colonne: 'conflits', sens: 'decroissant' }, filtre: '' }, cleNormalisee);
+    assert.deepEqual(ids(decroissant), [1, 3, 4, 2]);
+  });
+
+  test('le filtre ne lit pas les conflits : une organisation nommée en conflit ne retient pas la personne', () => {
+    const liste = [personne(1, 'Ombrelle', { conflits: ['Club des Merles'] }), personne(2, 'Pervenche', { organisation: 'Club des Merles' })];
+    assert.deepEqual(ids(lignesGrille(liste, { tri: null, filtre: 'merles' }, cleNormalisee)), [2]);
+  });
+
   test('le filtre lit chaque champ texte : prénom, courriel, titre pressenti, notes', () => {
     const liste = [
       personne(1, 'Ombrelle', { courriel: 'iris@exemple.test' }),
@@ -219,8 +237,12 @@ describe('la colonne de la présence : filtre, tri, groupes, commande', () => {
     assert.deepEqual(groupe.sousGroupes.map(({ cle }) => cle), ['exclu:non/presence:tous', 'exclu:non/presence:001,002', 'exclu:non/presence:001,003', 'exclu:non/presence:002']);
   });
 
-  test('commandeDeCellule : changerPresence pour la présence, modifierParticipant sur ce seul champ sinon', () => {
+  test('commandeDeCellule : changerPresence pour la présence, changerConflits pour les conflits, modifierParticipant sur ce seul champ sinon', () => {
     assert.deepEqual(commandeDeCellule('presence', 4, [1, 3]), { nom: 'changerPresence', args: { id: 4, tours: [1, 3] } });
+    assert.deepEqual(commandeDeCellule('conflits', 4, ['Club des Merles', 'Atelier Ressac']), {
+      nom: 'changerConflits',
+      args: { id: 4, organisations: ['Club des Merles', 'Atelier Ressac'] },
+    });
     assert.deepEqual(commandeDeCellule('presence', 4, null), { nom: 'changerPresence', args: { id: 4, tours: null } });
     assert.deepEqual(commandeDeCellule('courriel', 2, 'iris@exemple.test'), {
       nom: 'modifierParticipant',
@@ -403,12 +425,13 @@ describe('reservationsDe : les réservations d’une personne, pour la fiche (§
 });
 
 describe("les colonnes de la grille s'associent à l'export par leur champ (§ 10.2)", () => {
-  test('huit colonnes, la présence juste après l’exclusion ; chacune a son champ d’export, sous son en-tête', () => {
-    assert.deepEqual(COLONNES, ['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+  test('neuf colonnes, les conflits juste après l’organisation, la présence juste après l’exclusion ; chacune a son champ d’export, sous son en-tête', () => {
+    assert.deepEqual(COLONNES, ['nom', 'prenom', 'organisation', 'conflits', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
     assert.ok(Object.isFrozen(COLONNES));
     assert.deepEqual([...CHAMP_DE_COLONNE.keys()], COLONNES);
     assert.equal(CHAMP_DE_COLONNE.get('titrePressenti'), 'titre_pressenti');
-    for (const colonne of COLONNES.filter((c) => c !== 'titrePressenti')) assert.equal(CHAMP_DE_COLONNE.get(colonne), colonne);
+    assert.equal(CHAMP_DE_COLONNE.get('conflits'), 'conflit_organisation');
+    for (const colonne of COLONNES.filter((c) => c !== 'titrePressenti' && c !== 'conflits')) assert.equal(CHAMP_DE_COLONNE.get(colonne), colonne);
   });
 
   test('la cellule exportée sous l’en-tête du champ de chaque colonne égale celle de la grille : exclu écrit « non », la présence écrite par ecrirePresence', () => {
@@ -422,6 +445,7 @@ describe("les colonnes de la grille s'associent à l'export par leur champ (§ 1
       notes: 'arrive à neuf heures',
       exclu: false,
       etiquettes: ['Montréal', 'finance'],
+      conflits: ['Atelier Ressac'],
     };
     for (const presence of [[2, 3], [1, 2, 3, 5], undefined]) {
       const p = presence === undefined ? base : { ...base, presence };
@@ -432,7 +456,8 @@ describe("les colonnes de la grille s'associent à l'export par leur champ (§ 1
       for (const colonne of COLONNES) {
         const rang = colonnesExport.indexOf(CHAMP_DE_COLONNE.get(colonne));
         assert.ok(rang >= 0, colonne);
-        const attendue = colonne === 'exclu' ? 'non' : colonne === 'presence' ? ecrirePresence(p.presence) : p[colonne];
+        const attendues = new Map([['exclu', 'non'], ['presence', ecrirePresence(p.presence)], ['conflits', 'Atelier Ressac']]);
+        const attendue = attendues.has(colonne) ? attendues.get(colonne) : p[colonne];
         assert.equal(cellules[rang], attendue, `${colonne} ${JSON.stringify(presence)}`);
       }
     }
@@ -440,7 +465,7 @@ describe("les colonnes de la grille s'associent à l'export par leur champ (§ 1
     assert.equal(ecrirePresence(undefined), '');
   });
 
-  test('l’export compte une colonne de plus que la grille, les étiquettes, qu’elle ne montre pas ; la présence l’y suit, en dernier', () => {
+  test('l’export compte les étiquettes, que la grille ne montre pas ; la présence l’y suit, puis les conflits, absents de l’export quand personne n’en nomme', () => {
     const p = {
       id: 1,
       nom: 'Ombrelle',
@@ -456,10 +481,13 @@ describe("les colonnes de la grille s'associent à l'export par leur champ (§ 1
     const { texte } = decoder(exporterParticipants([p]));
     const [entete, ligne] = texte.split('\r\n');
     const cellules = ligne.split(';');
-    assert.equal(cellules.length, COLONNES.length + 1);
+    assert.equal(cellules.length, COLONNES.length);
     assert.deepEqual(entete.split(';').slice(-2), ['etiquettes', 'presence']);
     assert.deepEqual(cellules.slice(-2), ['Montréal, finance', '2, 3']);
     assert.ok(!COLONNES.includes('etiquettes'));
+    const avec = decoder(exporterParticipants([{ ...p, conflits: ['Atelier Ressac'] }])).texte.split('\r\n');
+    assert.deepEqual(avec[0].split(';').slice(-3), ['etiquettes', 'presence', 'conflit_organisation']);
+    assert.equal(avec[1].split(';').length, COLONNES.length + 1);
   });
 
   test('le nom proposé à l’enregistrement : ‹base›-participants.csv', () => {
@@ -510,8 +538,9 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
     personne(1, 'Pervenche', { organisation: 'CLUB DES MERLES' }),
   ];
 
-  test('les colonnes groupables : celles de la grille, puis le statut calculé, chacune avec sa clé de libellé', () => {
-    assert.deepEqual(GROUPEMENTS, [...COLONNES, 'statut']);
+  test('les colonnes groupables : celles de la grille hors des conflits, une liste, puis le statut calculé, chacune avec sa clé de libellé', () => {
+    assert.deepEqual(GROUPEMENTS, [...COLONNES.filter((colonne) => colonne !== 'conflits'), 'statut']);
+    assert.throws(() => groupesGrille([], ['conflits'], { tri: null, cleNormalisee, statuts: null }), RangeError);
     assert.ok(GROUPEMENTS.length > 0);
     for (const colonne of COLONNES) assert.equal(cleDeGroupement(colonne), cleDeColonne(colonne), colonne);
     assert.equal(cleDeGroupement('statut'), 'participants.groupe.statut');
@@ -583,7 +612,7 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
   });
 
   test('chaque colonne de texte groupe par sa clé normalisée, le vide après toute valeur, dans les deux sens', () => {
-    const textes = COLONNES.filter((colonne) => !['exclu', 'presence', 'nom'].includes(colonne));
+    const textes = COLONNES.filter((colonne) => !['conflits', 'exclu', 'presence', 'nom'].includes(colonne));
     assert.ok(textes.length > 0);
     for (const colonne of textes) {
       const liste = [

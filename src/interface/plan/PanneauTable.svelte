@@ -4,16 +4,20 @@
 <script>
   // Le panneau de la table sélectionnée (§ 7.3, § 2.1 étape 6, § 5.9) :
   // ouvert quand l'état de navigation sélectionne une table sans siège,
-  // {table} — un clic sur une table, ou l'entrée du clavier sur une table
-  // en régime table, où les chaises ne sont plus des cibles. Il nomme la
-  // table, son libellé dans son propre nœud quand elle en porte un, compte
-  // ses titres et ceux qu'une réservation « tous les tours »
-  // pourvoit (comptesTitres, A5), dit son gel, et liste ses sièges, chacun
-  // un bouton [data-choix-siege] qui sélectionne la place : le siège se
-  // choisit dans le panneau. Le premier reçoit le focus quand le clavier
+  // {table} — un clic sur une table, ou l'entrée du clavier sur une table en
+  // régime table, où les chaises ne sont plus des cibles. Il nomme la table,
+  // son libellé dans son propre nœud quand elle en porte un, compte ses
+  // titres et ceux qu'une réservation « tous les tours » pourvoit
+  // (comptesTitres, A5), dit son gel, nomme chaque paire en conflit
+  // d'organisation qu'elle réunit au tour montré — les paires de l'état des
+  // places, celles que le plan signale par sa trame (detailConflits,
+  // modele.js) : une réservation ou un placement à la main qui en réunit une
+  // est signalé ici, jamais refusé (§ 5.9, § 7.5) —, et liste ses sièges,
+  // chacun un bouton [data-choix-siege] qui sélectionne la place : le siège
+  // se choisit dans le panneau. Le premier reçoit le focus quand le clavier
   // ouvre le panneau ([data-focus-initial]). Le siège choisi remplace ce
-  // panneau par celui de la place, qui reçoit le focus : il ne tombe pas
-  // sur le corps du document avec le bouton détruit.
+  // panneau par celui de la place, qui reçoit le focus : il ne tombe pas sur
+  // le corps du document avec le bouton détruit.
   //
   // Il offre aussi « Donner un titre » et « Désigner », sur la personne
   // choisie, au niveau de la table : sous des sièges non attribués, aucun
@@ -31,8 +35,8 @@
   import Commande from '../primitives/Commande.svelte';
   import { effetDe } from '../raccourcis.js';
   import { libellePlace } from './gestes.js';
-  import { executerSurPlace, ligneListe, partiesLigne, textesLigne } from './modele.js';
-  import { nomDeCharge } from './vue_plan.js';
+  import { detailConflits, executerSurPlace, ligneListe, partiesLigne, textesLigne } from './modele.js';
+  import { nomDeCharge, organisationDeCharge } from './vue_plan.js';
 
   let { etatTour } = $props();
 
@@ -48,6 +52,14 @@
   const etatTable = $derived(etat === null ? undefined : etat.tables.find(({ id }) => id === table));
   const nomDe = $derived(charge === null ? null : nomDeCharge(charge));
   const comptes = $derived(etatTable === undefined ? null : comptesTitres(charge, table));
+  // Les paires en conflit d'organisation de la table au tour montré, chacune
+  // ses deux noms ; aucune quand ses conflits ne s'évaluent pas.
+  const pairesEnConflit = $derived.by(() => {
+    if (etatTable === undefined) return [];
+    const detail = detailConflits(etatTable, nomDe, organisationDeCharge(charge));
+    if (detail === null) return [];
+    return detail.lignes.filter(({ regle }) => regle === 'conflitsOrganisation').flatMap(({ groupes }) => groupes);
+  });
   const nommee = $derived(etatTable === undefined ? null : libellePlace({ numero: etatTable.numero, siege: null }));
   const lignes = $derived(
     etatTable === undefined ? [] : etatTable.chaises.map((chaise) => partiesLigne(textesLigne(ligneListe(chaise, nomDe), t))),
@@ -133,6 +145,16 @@
       <p>{t('plan.panneauTable.titres', comptes)}</p>
       {#if etatTable.gelee}
         <p class="gel">{t('plan.liste.gelee')}</p>
+      {/if}
+      {#if pairesEnConflit.length > 0}
+        <h4 id="{uid}-conflits">{t('plan.panneauTable.conflits')}</h4>
+        <ul class="conflits" aria-labelledby="{uid}-conflits" data-conflits-table>
+          {#each pairesEnConflit as paire, rang (rang)}
+            <li data-conflit-organisation>
+              {#each paire as nom, i (i)}{#if i > 0}<span>{t('plan.infobulle.et')}</span>{/if}<span class="donnee">{nom}</span>{/each}
+            </li>
+          {/each}
+        </ul>
       {/if}
       <h4 id="{uid}-sieges">{t('plan.panneauTable.sieges')}</h4>
       <ul class="sieges" aria-labelledby="{uid}-sieges">
@@ -227,6 +249,22 @@
 
   .gel {
     font-weight: 700;
+  }
+
+  /* Les paires en conflit d'organisation : une par ligne, au trait épais
+     de la marque de conflit, la forme se lisant sans la couleur. */
+  .conflits {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .conflits li {
+    padding-left: var(--espace-2);
+    border-left: 3px solid var(--couleur-page-texte);
   }
 
   .sieges {

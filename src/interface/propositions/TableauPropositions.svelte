@@ -9,7 +9,10 @@
   // avec leurs raisons et les personnes qu'elles nomment. Chaque cellule
   // s'écrit par texteCellule (modele.js) ; aucune valeur ne se calcule ici.
   // Les violations d'une ligne comparable — retenu compris — se lisent sous
-  // son identifiant.
+  // son identifiant, puis « N conflits restants » quand elle laisse des
+  // conflits d'organisation (conflitsRestants, modele.js), dans un nœud
+  // data-conflits-restants : la recherche les vise à zéro sans les
+  // interdire, et la ligne le dit.
   //
   // vue : ce que rend tableau(), libellés et étendues compris — ses colonnes
   // et ses groupes, ceux que porte la table, le sixième groupe selon les
@@ -204,6 +207,9 @@
     {#each ligne.violations as violation, rang (rang)}
       <p>{t(violation.cle, violation.details)}</p>
     {/each}
+    {#if ligne.conflitsRestants !== null}
+      <p data-conflits-restants>{t(ligne.conflitsRestants.cle, ligne.conflitsRestants.details)}</p>
+    {/if}
   {/if}
 {/snippet}
 

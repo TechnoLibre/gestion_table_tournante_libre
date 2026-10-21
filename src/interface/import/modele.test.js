@@ -8,7 +8,10 @@
 // des titres pourvus, la nature du fichier reçue et jamais devinée, les
 // objectifs de table et les étiquettes fondues, à part des organisations ;
 // la cellule de la présence, lue sous le nombre de tours de l'événement ;
-// le modèle à télécharger de chaque nature, son nom et son nom accessible.
+// la cellule des conflits d'organisation, et le refus entier qu'un conflit
+// fautif cause, avec l'organisation et la ligne, et son invitation à
+// réimporter ; le modèle à télécharger de chaque nature, son nom et son nom
+// accessible.
 // Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
@@ -99,25 +102,27 @@ describe('avecEntetesDeLaGrille : un collage sans en-tête lu dans l’ordre de 
     assert.deepEqual(nomsLus(lu), ['Ombrelle', 'Pervenche']);
   });
 
-  test('onze colonnes : les neuf champs de l’export, la huitième celle des étiquettes, la neuvième celle de la présence, puis deux en-têtes vides, listés non reconnus', () => {
-    const rangee = (nom) =>
-      [nom, 'Iris', 'Grisaille', 'iris@exemple.test', 'animation', 'non', 'note', 'finance|Montréal', 'tours 2 et 3', 'x1', 'x2'].join(TAB);
-    const texte = lignes(rangee('Ombrelle'), rangee('Lacasse'));
+  test('douze colonnes : les dix champs de l’export, la huitième celle des étiquettes, la neuvième celle de la présence, la dixième celle des conflits, puis deux en-têtes vides, listés non reconnus', () => {
+    const rangee = (nom, organisation, conflits) =>
+      [nom, 'Iris', organisation, 'iris@exemple.test', 'animation', 'non', 'note', 'finance|Montréal', 'tours 2 et 3', conflits, 'x1', 'x2'].join(TAB);
+    const texte = lignes(rangee('Ombrelle', 'Grisaille', 'Brumeval'), rangee('Lacasse', 'Brumeval', ''));
     const sans = apercevoir(texte);
     assert.equal(sans.refusGlobal, 'AUCUN_ENTETE');
-    assert.equal(sans.entetes.length, 11);
+    assert.equal(sans.entetes.length, 12);
     const avec = avecEntetesDeLaGrille(texte, sans);
     assert.equal(avec.split('\n')[0], [...CHAMPS, '', ''].join(TAB));
     const lu = apercevoir(avec, { tours: 4 });
     assert.equal(lu.refusGlobal, null);
-    assert.equal(CHAMPS.length, 9);
+    assert.equal(CHAMPS.length, 10);
     assert.equal(CHAMPS[7], 'etiquettes');
     assert.equal(CHAMPS[8], 'presence');
+    assert.equal(CHAMPS[9], 'conflit_organisation');
     assert.deepEqual(lu.association.colonnes, Object.fromEntries(CHAMPS.map((champ, rang) => [champ, rang])));
-    assert.deepEqual(lu.association.nonReconnues, [9, 10]);
+    assert.deepEqual(lu.association.nonReconnues, [10, 11]);
     assert.deepEqual(nomsLus(lu), ['Ombrelle', 'Lacasse']);
     assert.deepEqual(lu.lignes.map(({ champs }) => champs.etiquettes), [['finance', 'Montréal'], ['finance', 'Montréal']]);
     assert.deepEqual(lu.lignes.map(({ champs }) => champs.presence), [[2, 3], [2, 3]]);
+    assert.deepEqual(lu.lignes.map(({ champs }) => champs.conflits), [['Brumeval'], null]);
   });
 
   test('une liste de noms d’une colonne, « Lacasse, Ondine » compris : SEPARATEUR_INTROUVABLE sans rang, puis une colonne, la ligne entière en nom', () => {
@@ -179,13 +184,33 @@ const REFUS = [
     { encodage: null, apercu: apercevoir(lignes('Ombrelle', 'Lacasse, Ondine')) },
     'import.remede.separateurIntrouvableCollage',
   ],
+  [
+    'CONFLIT_ORGANISATION_INCONNUE',
+    { encodage: 'utf-8', apercu: apercevoir(lignes('nom;organisation;conflits', 'Ombrelle;Club des Merles;', 'Pervenche;;Société Gamma')) },
+    'import.remede.conflitOrganisation',
+  ],
+  [
+    'CONFLIT_ORGANISATION_PROPRE',
+    { encodage: 'utf-8', apercu: apercevoir(lignes('nom;organisation;conflits', 'Ombrelle;Club des Merles;club des merles')) },
+    'import.remede.conflitPropre',
+  ],
+  [
+    'CONFLIT_ORGANISATION_INCONNUE',
+    { encodage: null, apercu: apercevoir(lignes('nom;organisation;conflits', 'Ombrelle;Club des Merles;', 'Pervenche;;Société Gamma')) },
+    'import.remede.conflitOrganisationCollage',
+  ],
+  [
+    'CONFLIT_ORGANISATION_PROPRE',
+    { encodage: null, apercu: apercevoir(lignes('nom;organisation;conflits', 'Ombrelle;Club des Merles;club des merles')) },
+    'import.remede.conflitPropreCollage',
+  ],
 ];
 
 describe('modeleApercu : la cause et le remède de chaque refus global (§ 10.1)', () => {
   test('chaque refus de la table des décisions rend la clé de sa cause, le code, et celle de son remède, toutes deux traduites', () => {
     const codes = new Set(REFUS.map(([code]) => code));
-    assert.equal(codes.size, 9);
-    assert.equal(REFUS.length, 13);
+    assert.equal(codes.size, 11);
+    assert.equal(REFUS.length, 17);
     for (const [code, entree, remede] of REFUS) {
       if (entree.apercu !== undefined) assert.equal(entree.apercu.refusGlobal, code, code);
       if (entree.refusDecodage !== undefined) assert.equal(entree.refusDecodage.code, code, code);
@@ -217,6 +242,40 @@ describe('modeleApercu : la cause et le remède de chaque refus global (§ 10.1)
     const separateur = modeleApercu(REFUS[11][1]).global;
     assert.deepEqual(separateur.details, { ligne: 2 });
     assert.match(t(separateur.cle, separateur.details), /ligne 2/);
+  });
+
+  test("un conflit fautif refuse le fichier entier : la cause nomme l'organisation telle qu'écrite et sa ligne, le remède invite à réimporter après correction", () => {
+    const inconnue = modeleApercu(REFUS[13][1]).global;
+    assert.deepEqual(inconnue.details, { ligne: 3, organisation: 'Société Gamma' });
+    assert.equal(t(inconnue.cle, inconnue.details), "L'organisation « Société Gamma » n'existe pas (ligne 3, colonne des conflits). Rien n'est importé.");
+    assert.equal(
+      t(inconnue.remede.cle, inconnue.remede.details),
+      "Corrigez la colonne des conflits à la ligne 3 — ou ajoutez au fichier une personne de cette organisation —, puis importez le fichier de nouveau.",
+    );
+    assert.equal(inconnue.remede.dansLaCause, false);
+    assert.equal(inconnue.remede.geste, null);
+    const propre = modeleApercu(REFUS[14][1]).global;
+    assert.deepEqual(propre.details, { ligne: 2, organisation: 'club des merles' });
+    assert.match(t(propre.cle, propre.details), /^L'organisation « club des merles » est celle de la personne \(ligne 2/);
+    assert.equal(
+      t(propre.remede.cle, propre.remede.details),
+      "Retirez de la colonne des conflits, à la ligne 2, l'organisation de la personne, puis importez le fichier de nouveau.",
+    );
+    // Collé, le même refus dit de corriger le texte et de le coller de
+    // nouveau, jamais de réimporter un fichier qui n'existe pas.
+    const inconnueCollee = modeleApercu(REFUS[15][1]).global;
+    assert.deepEqual(inconnueCollee.details, { ligne: 3, organisation: 'Société Gamma' });
+    assert.equal(
+      t(inconnueCollee.remede.cle, inconnueCollee.remede.details),
+      'Corrigez la colonne des conflits à la ligne 3 — ou ajoutez au texte une personne de cette organisation —, puis collez-le de nouveau.',
+    );
+    const propreCollee = modeleApercu(REFUS[16][1]).global;
+    assert.equal(
+      t(propreCollee.remede.cle, propreCollee.remede.details),
+      "Retirez de la colonne des conflits, à la ligne 2, l'organisation de la personne, puis collez le texte de nouveau.",
+    );
+    // Sous le refus, aucune ligne ne se montre : rien ne s'importe.
+    assert.deepEqual(modeleApercu(REFUS[13][1]).lignes, []);
   });
 
   test('un code de refus que la table ne connaît pas lève, jamais un remède muet', () => {
@@ -262,7 +321,8 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
   test('un séparateur que la lecture n’a pas établi n’est pas nommé « une seule colonne »', () => {
     for (const [code, entree] of REFUS.slice(4)) {
       const { separateur } = modeleApercu(entree);
-      const etabli = ['AUCUN_ENTETE', 'NOM_NON_ASSOCIE', 'AUCUNE_LIGNE_VALIDE', 'GUILLEMET_OUVERT'].includes(code) &&
+      const etablis = ['AUCUN_ENTETE', 'NOM_NON_ASSOCIE', 'AUCUNE_LIGNE_VALIDE', 'GUILLEMET_OUVERT', 'CONFLIT_ORGANISATION_INCONNUE', 'CONFLIT_ORGANISATION_PROPRE'];
+      const etabli = etablis.includes(code) &&
         entree.apercu.entetes.length > 0;
       if (etabli) assert.equal(separateur, SEPARATEURS.get(entree.apercu.separateur), code);
       else assert.equal(separateur, null, code);
@@ -293,9 +353,13 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
   });
 
   test('chaque champ de CHAMPS a sa clé, qui se traduit', () => {
-    const texte = lignes(CHAMPS.join(';'), ['Ombrelle', 'Iris', 'Grisaille', 'i@exemple.test', 'x', 'non', 'n', 'finance', 'tous'].join(';'));
+    const texte = lignes(
+      CHAMPS.join(';'),
+      ['Ombrelle', 'Iris', 'Grisaille', 'i@exemple.test', 'x', 'non', 'n', 'finance', 'tous', ''].join(';'),
+    );
     const { colonnes } = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte) });
-    assert.equal(colonnes.length, 9);
+    assert.equal(colonnes.length, 10);
+    assert.equal(colonnes[9].cle, 'import.champ.conflits');
     for (const { cle } of colonnes) {
       assert.match(cle, /^import\.champ\./);
       assert.ok(t(cle).length > 0, cle);
@@ -337,7 +401,7 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
 });
 
 describe('les lignes, les refus de la mise à jour, les personnes désignées, le mode proposé (§ 10.1)', () => {
-  test('chaque ligne valide montre ses neuf champs dans l’ordre de CHAMPS ; exclu par sa clé, vide sans valeur ; les étiquettes une à une, chacune sa pastille', () => {
+  test('chaque ligne valide montre ses dix champs dans l’ordre de CHAMPS ; exclu par sa clé, vide sans valeur ; les étiquettes et les conflits un à un, chacun sa pastille', () => {
     const texte = lignes(
       'notes;exclu;nom;prenom;mots-clés',
       'arrive tard;Oui;Ombrelle;Iris;',
@@ -351,11 +415,20 @@ describe('les lignes, les refus de la mise à jour, les personnes désignées, l
     assert.deepEqual(COLONNES_DES_LIGNES.map(({ champ }) => champ), [...CHAMPS]);
     for (const { cle } of COLONNES_DES_LIGNES) assert.ok(t(cle).length > 0, cle);
     const [premiere, deuxieme, troisieme] = lues;
-    assert.deepEqual(premiere.cellules.map(({ texte: valeur }) => valeur), ['Ombrelle', 'Iris', null, null, null, null, 'arrive tard', null, null]);
-    assert.deepEqual(deuxieme.cellules.at(-2), { champ: 'etiquettes', texte: null, cle: null, etiquettes: ['finance', 'Montréal'], details: null });
-    assert.deepEqual(premiere.cellules.at(-2), { champ: 'etiquettes', texte: null, cle: null, etiquettes: [], details: null });
-    assert.deepEqual(premiere.cellules.at(-1), { champ: 'presence', texte: null, cle: null, etiquettes: null, details: null });
-    for (const { champ, etiquettes } of premiere.cellules.filter(({ champ: nom }) => nom !== 'etiquettes')) assert.equal(etiquettes, null, champ);
+    assert.deepEqual(premiere.cellules.map(({ texte: valeur }) => valeur), ['Ombrelle', 'Iris', null, null, null, null, 'arrive tard', null, null, null]);
+    assert.deepEqual(deuxieme.cellules.at(-3), { champ: 'etiquettes', texte: null, cle: null, etiquettes: ['finance', 'Montréal'], details: null });
+    assert.deepEqual(premiere.cellules.at(-3), { champ: 'etiquettes', texte: null, cle: null, etiquettes: [], details: null });
+    assert.deepEqual(premiere.cellules.at(-2), { champ: 'presence', texte: null, cle: null, etiquettes: null, details: null });
+    assert.deepEqual(premiere.cellules.at(-1), { champ: 'conflit_organisation', texte: null, cle: null, etiquettes: [], details: null });
+    const listes = new Set(['etiquettes', 'conflit_organisation']);
+    for (const { champ, etiquettes } of premiere.cellules.filter(({ champ: nom }) => !listes.has(nom))) assert.equal(etiquettes, null, champ);
+    const avecConflits = modeleApercu({
+      encodage: 'utf-8',
+      apercu: apercevoir(lignes('nom;organisation;conflit_organisation', 'Ombrelle;;"club des merles | Atelier Ressac"', 'Lacasse;Club des Merles;', 'Pervenche;Atelier Ressac;')),
+    });
+    assert.deepEqual(avecConflits.lignes[0].cellules.at(-1), {
+      champ: 'conflit_organisation', texte: null, cle: null, etiquettes: ['Club des Merles', 'Atelier Ressac'], details: null,
+    });
     assert.equal(premiere.cellules[5].cle, 'import.exclu.oui');
     assert.equal(deuxieme.cellules[5].cle, null);
     assert.equal(troisieme.cellules[5].cle, 'import.exclu.non');
@@ -783,7 +856,7 @@ describe('le modèle à télécharger de chaque nature (§ 10.1, § 10.4)', () =
     const deQuatre = modeleATelecharger('participants', { base: 'soiree', charge: quatre }).octets;
     assert.deepEqual(deQuatre, modeleParticipants(quatre));
     assert.notDeepEqual(deQuatre, octets);
-    assert.match(decoder(deQuatre).texte, /;1-3\r$/m);
+    assert.match(decoder(deQuatre).texte, /;1-3;Atelier Ressac\r$/m);
   });
 
   test('Objectifs de table : le modèle de l’événement ouvert, sous ‹base›-modele-objectifs.csv', () => {

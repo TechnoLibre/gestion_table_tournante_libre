@@ -30,6 +30,7 @@ export const EXEMPLES = [
   ['ENTREE_CHANGER_ETIQUETTES', { personne: 'Iris Ombrelle', ajoutees: ['Montréal', 'finance'], retirees: ['bénévole'] }],
   ['ENTREE_AJOUTER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }],
   ['ENTREE_RETIRER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }],
+  ['ENTREE_CHANGER_CONFLITS', { personne: 'Iris Ombrelle', ajoutees: ['Société Alpha', 'Société Beta'], retirees: ['Club des Merles'] }],
   ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
   // La présence par tour
   ['RESERVATIONS_SUSPENDUES_AUX_TOURS', { participant: 1, personne: 'Iris Ombrelle', reservations: 2, tours: [3, 4], titres: 1 }],
@@ -123,6 +124,12 @@ export const TEXTES = [
   ],
   ['ENTREE_AJOUTER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }, 'Conflits de Iris Ombrelle : ajouté « Société Alpha »'],
   ['ENTREE_RETIRER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }, 'Conflits de Iris Ombrelle : retiré « Société Alpha »'],
+  [
+    'ENTREE_CHANGER_CONFLITS',
+    { personne: 'Iris Ombrelle', ajoutees: ['Société Alpha', 'Société Beta'], retirees: ['Club des Merles'] },
+    'Conflits de Iris Ombrelle : ajouté « Société Alpha » et « Société Beta » ; retiré « Club des Merles »',
+  ],
+  ['ENTREE_CHANGER_CONFLITS', { personne: 'Iris Ombrelle', ajoutees: [], retirees: ['Club des Merles'] }, 'Conflits de Iris Ombrelle : retiré « Club des Merles »'],
   [
     'ORGANISATION_INCONNUE',
     { organisation: 'Atelier Pivoine', remede: null },

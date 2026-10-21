@@ -331,6 +331,55 @@ function retirerConflit(charge, { id, organisation } = {}) {
   };
 }
 
+/**
+ * changerConflits {id, organisations} (§ 4, § 8.2) : la liste de la personne
+ * devient organisations, en un geste et une entrée d'historique, quel que
+ * soit le nombre de noms qui changent. Chaque nom se met en NFC sans ses
+ * blancs de bord ; un nom que la liste porte déjà se garde ; un nom nouveau
+ * se juge comme dans ajouterConflit : celui d'un participant
+ * (organisationDuConflit), sinon ORGANISATION_INCONNUE, jamais la propre
+ * organisation de la personne, CONFLIT_PROPRE_ORGANISATION ; le premier
+ * fautif, dans l'ordre reçu, refuse le geste entier. Deux noms égaux n'en
+ * font qu'un. Une liste qui garde les mêmes noms, dans n'importe quel ordre,
+ * est SANS_EFFET. La liste s'écrit rangée par unités de code, et le champ se
+ * retire quand elle se vide. Le libellé nomme la personne, les
+ * organisations ajoutées et les retirées, rangées. organisations qui n'est
+ * pas une liste de chaînes est une faute du code.
+ */
+function changerConflits(charge, { id, organisations } = {}) {
+  exigerModifiable(charge);
+  if (!Array.isArray(organisations)) {
+    throw new TypeError(`organisations : liste attendue, reçu ${JSON.stringify(organisations)}`);
+  }
+  const participant = participantDe(charge, id);
+  const avant = participant.conflits ?? [];
+  const noms = new Set();
+  for (const organisation of organisations) {
+    if (typeof organisation !== 'string') {
+      throw new TypeError(`organisation : chaîne attendue, reçu ${JSON.stringify(organisation)}`);
+    }
+    const lue = saisie(organisation, 'organisation') ?? '';
+    const nom = avant.includes(lue) ? lue : organisationDuConflit(charge, lue);
+    if (nom === participant.organisation) {
+      throw refus('CONFLIT_PROPRE_ORGANISATION', { personne: nomAffiche(participant), organisation: nom });
+    }
+    noms.add(nom);
+  }
+  const conflits = etiquettesRangees(noms);
+  const ajoutees = conflits.filter((nom) => !avant.includes(nom));
+  const retirees = etiquettesRangees(avant.filter((nom) => !noms.has(nom)));
+  if (ajoutees.length === 0 && retirees.length === 0) throw refus('SANS_EFFET', { commande: 'changerConflits' });
+  return {
+    charge: avecParticipant(charge, id, (copie) => {
+      const reste = { ...copie };
+      delete reste.conflits;
+      return conflits.length === 0 ? reste : { ...reste, conflits };
+    }),
+    libelle: libelle('ENTREE_CHANGER_CONFLITS', { personne: nomAffiche(participant), ajoutees, retirees }),
+    avertissements: [],
+  };
+}
+
 // Une chaîne, ou undefined pour un argument absent ; une autre valeur est une
 // faute du code.
 function texteOuAbsent(valeur, nom) {
@@ -973,6 +1022,7 @@ export const COMMANDES = reunirCommandes(
     ['changerEtiquettes', changerEtiquettes],
     ['ajouterConflit', ajouterConflit],
     ['retirerConflit', retirerConflit],
+    ['changerConflits', changerConflits],
     ['exclureParticipant', exclureParticipant],
     ['reintegrerParticipant', reintegrerParticipant],
     ['supprimerParticipant', supprimerParticipant],

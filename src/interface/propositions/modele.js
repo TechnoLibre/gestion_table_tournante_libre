@@ -256,6 +256,12 @@ const imposes = (ligne, { retours, ancrages }) => [
 // Un code et ses détails : une raison de dérive, une faute, une violation.
 const codeDe = (raison) => ({ cle: raison.code, details: raison });
 
+// La phrase des conflits d'organisation qu'une ligne laisse (§ 5.3, § 5.7) :
+// « N conflits restants », quand sa mesure en compte ; null à zéro, et
+// quand le critère est sans objet — la mesure vaut alors null.
+const conflitsRestants = ({ mesures }) =>
+  mesures.conflitsOrganisation > 0 ? { cle: 'propositions.conflitsRestants', details: { nombre: mesures.conflitsOrganisation } } : null;
+
 // Une raison de dérive : son code, ses détails, et la personne qu'elle nomme,
 // null quand elle n'en nomme aucune.
 const raisonDe = (raison) => ({ ...codeDe(raison), participant: raison.participant ?? null });
@@ -287,6 +293,7 @@ function ligneDe(ligne, table, idRetenu, portees, rang = null) {
     cellules: cellules(ligne, portees),
     imposes: imposes(ligne, table.imposes),
     violations: ligne.violations.map(codeDe),
+    conflitsRestants: conflitsRestants(ligne),
   };
 }
 
@@ -417,7 +424,9 @@ function ordre(classement) {
  *   animateurs selon l'état des critères de la table ; groupes : les
  *   segments de la rangée des groupes sur ces colonnes ; lignes : les
  *   comparables dans l'ordre du classement, chacune { id, rang, retenue, comparable: true,
- *   sertDeDepart, cellules, imposes, violations } ;
+ *   sertDeDepart, cellules, imposes, violations, conflitsRestants } —
+ *   conflitsRestants, la phrase { cle, details } des conflits
+ *   d'organisation que la ligne laisse, null quand elle n'en laisse aucun ;
  *   horsClassement : les autres par identifiant, { id, rang: null, retenue,
  *   comparable: false, sertDeDepart, statut, raisons } — sertDeDepart vrai
  *   pour une ligne en dérive par ses seuls participants, que « Repartir

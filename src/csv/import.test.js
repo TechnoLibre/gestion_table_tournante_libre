@@ -827,6 +827,67 @@ describe("appliquerImport : selon l'état du plan (§ 9, § 10.1)", () => {
   });
 });
 
+describe("appliquerImport : la colonne des conflits d'organisation (§ 10.1)", () => {
+  test('une personne créée porte ses conflits rangés par unités de code, en dernière clé, sous la graphie de l\u{2019}événement ; sans conflit, la clé est absente', () => {
+    const charge = chargeDe({ participants: [personne(1, 'Houle', null, 'Club des Merles')] });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv('nom;organisation;presence;conflit_organisation', 'Ombrelle;;1;Société Alpha | club des merles', 'Pervenche;Société Alpha;;', 'Lacasse;;;'),
+      'ajouter',
+    );
+    assert.deepEqual(apres.participants.slice(1), [
+      personne(2, 'Ombrelle', null, null, { presence: [1], conflits: ['Club des Merles', 'Société Alpha'] }),
+      personne(3, 'Pervenche', null, 'Société Alpha'),
+      personne(4, 'Lacasse'),
+    ]);
+    assert.equal(Object.keys(apres.participants[1]).at(-1), 'conflits');
+    assert.ok(!Object.hasOwn(apres.participants[3], 'conflits'));
+    assert.equal(resume.ajoutes, 3);
+    assert.deepEqual(analyser(serialiser(apres, { revision: 1, produitVersion: VERSION.affichee })).charge, apres);
+  });
+
+  test('en mise à jour, une cellule non vide remplace la liste, une cellule vide la garde ; la même liste ne compte pas la personne modifiée', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', null, { conflits: ['Club des Merles'] }),
+        personne(2, 'Pervenche', 'Théo', null, { conflits: ['Société Alpha'] }),
+        personne(3, 'Lacasse', 'Ondine', null, { conflits: ['Club des Merles', 'Société Alpha'] }),
+        personne(4, 'Houle', null, 'Club des Merles'),
+        personne(5, 'Galet', null, 'Société Alpha'),
+      ],
+    });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv('nom;prenom;conflits', 'Ombrelle;Iris;société alpha', 'Pervenche;Théo;', 'Lacasse;Ondine;"Société Alpha ; Club des Merles"'),
+      'mettreAJour',
+    );
+    assert.deepEqual(apres.participants.slice(0, 3).map(({ conflits }) => conflits), [
+      ['Société Alpha'],
+      ['Société Alpha'],
+      ['Club des Merles', 'Société Alpha'],
+    ]);
+    assert.deepEqual([resume.misAJour, resume.inchanges], [1, 2]);
+  });
+
+  test("un aperçu refusé pour un conflit refuse l'import : son code, son rang et l'organisation dans les détails ; la charge reste", () => {
+    for (const mode of MODES) {
+      const charge = chargeDe({ participants: [personne(1, 'Houle', null, 'Club des Merles')] });
+      const avant = structuredClone(charge);
+      assert.throws(
+        () => importer(charge, csv('nom;organisation;conflits', 'Ombrelle;;Société Gamma'), mode),
+        refus('CONFLIT_ORGANISATION_INCONNUE', { ligne: 2, organisation: 'Société Gamma' }),
+        mode,
+      );
+      assert.throws(
+        () => importer(charge, csv('nom;organisation;conflits', 'Ombrelle;Atelier Ressac;ATELIER RESSAC'), mode),
+        refus('CONFLIT_ORGANISATION_PROPRE', { ligne: 2, organisation: 'ATELIER RESSAC' }),
+        mode,
+      );
+      assert.deepEqual(charge, avant, mode);
+    }
+  });
+});
+
 describe('appliquerImport : les refus globaux (§ 10.1)', () => {
   test("le refus global de l'aperçu, son rang dans les détails", () => {
     const charge = chargeDe();

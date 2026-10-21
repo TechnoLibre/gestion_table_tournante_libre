@@ -453,6 +453,19 @@ function avecTours(charge, tours) {
   return suivante;
 }
 
+// La petite démonstration en conflit et la proposition TROIS_CONFLITS, où la
+// personne 4, sans organisation, nomme celle de la personne 5 : la table 1
+// les réunit au tour 3. Sans organisation, la personne 4 n'engage qu'elle :
+// une organisation entière en conflit réunirait ses membres et ceux de
+// l'autre à chaque table, et le plan, toutes les tables en conflit,
+// cesserait de signaler (§ 7.5).
+function chargeTroisConflits() {
+  const charge = avecTours(demonstration('petite-conflit'), TROIS_CONFLITS);
+  const personneDe = (id) => charge.participants.find((personne) => personne.id === id);
+  Object.assign(personneDe(4), { organisation: null, conflits: [personneDe(5).organisation] });
+  return charge;
+}
+
 /** La principale, sa proposition retenue, puis le plan bloqué. */
 export function chargeBloquee() {
   const principale = chargePrincipale();
@@ -1012,19 +1025,12 @@ export const ECRANS = Object.freeze([
     nom: 'plan.troisConflits',
     mode: 'ecriture',
     async atteindre(contexte) {
-      // La petite démonstration en conflit et la proposition TROIS_CONFLITS,
-      // écrite à la main, montrée au tour 3, choisi au clavier, où la
-      // personne 4, sans organisation, nomme celle de la personne 5 : la
-      // table 1, qui les réunit, viole les quatre règles et superpose leurs
+      // La proposition TROIS_CONFLITS (chargeTroisConflits), écrite à la
+      // main, montrée au tour 3, choisi au clavier : la table 1, qui réunit
+      // les personnes 4 et 5, viole les quatre règles et superpose leurs
       // trames, la table 2 est saine ; puis la légende des conflits, ouverte
-      // par la barre de vue. Sans organisation, la personne 4 n'engage
-      // qu'elle : une organisation entière en conflit réunirait ses membres
-      // et ceux de l'autre à chaque table, et le plan, toutes les tables en
-      // conflit, cesserait de signaler (§ 7.5).
-      const charge = avecTours(demonstration('petite-conflit'), TROIS_CONFLITS);
-      const personneDe = (id) => charge.participants.find((personne) => personne.id === id);
-      Object.assign(personneDe(4), { organisation: null, conflits: [personneDe(5).organisation] });
-      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'plan' });
+      // par la barre de vue.
+      const m = await ouvrirEvenement(contexte, chargeTroisConflits(), { ecriture: true, section: 'plan' });
       const choix = await element(m, '[data-champ="tour"]');
       choix.focus();
       for (let essai = 0; essai < choix.options.length && choix.value !== '3'; essai += 1) {
@@ -1036,6 +1042,27 @@ export const ECRANS = Object.freeze([
       }
       await cliquer(m, '[data-commande="legende"]');
       await element(m, '[data-legende] [data-legende-regle="nouvelleTable"]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'plan.conflitsTable',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // La petite démonstration en conflit, sans proposition, où la personne
+      // 4, sans organisation, nomme celle de la personne 5 : une réservation
+      // de chacune à la table 1 pour la soirée, acceptée, la table signalée ;
+      // puis le panneau de la table, ouvert d'un clic, qui nomme la paire.
+      let charge = demonstration('petite-conflit');
+      const personneDe = (id) => charge.participants.find((personne) => personne.id === id);
+      Object.assign(personneDe(4), { organisation: null, conflits: [personneDe(5).organisation] });
+      for (const participant of [4, 5]) {
+        charge = executer(charge, 'reserver', { participant, table: 1, siege: null, portee: 'tous', tour: null });
+      }
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'plan' });
+      await element(m, '[data-table="1"] [data-marque="trameEvitement"]');
+      await cliquerPointeur(plateau(m, 1));
+      await element(m, '[data-panneau="table"] [data-conflits-table] [data-conflit-organisation]');
       return m.racine;
     },
   },
@@ -1102,6 +1129,34 @@ export const ECRANS = Object.freeze([
       }
       await attendre('les tours 3 et 4 décochés', () =>
         [...m.racine.querySelectorAll('[data-participant="1"] [data-presence-tour]')].map((c) => c.checked).join() === 'true,true,false,false',
+      );
+      return m.racine;
+    },
+  },
+  {
+    nom: 'participants.conflitsOrganisation',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // Les conflits d'organisation dans la grille : la personne 2 nomme une
+      // organisation, en pastille dans sa cellule ; puis les cases de la
+      // personne 1 ouvertes au clavier, la première et la dernière cochées,
+      // la saisie en cours.
+      let charge = chargePrincipale();
+      const propre = charge.participants.find(({ id }) => id === 2).organisation;
+      const autre = charge.participants.find(({ organisation }) => organisation !== null && organisation !== propre).organisation;
+      charge = executer(charge, 'ajouterConflit', { id: 2, organisation: autre });
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'participants' });
+      await element(m, '[data-participant="2"] [data-champ="conflits"] [data-conflits-personne]');
+      const cellule = await element(m, '[data-section="participants"] [data-participant="1"] [data-champ="conflits"]');
+      cellule.focus();
+      await touche('Enter');
+      await element(m, '[data-participant="1"] [data-editeur-choix]');
+      for (const cle of [' ', 'End', ' ']) {
+        await touche(cle);
+        flushSync();
+      }
+      await attendre('deux organisations cochées', () =>
+        [...m.racine.querySelectorAll('[data-participant="1"] [data-choix]')].filter((c) => c.checked).length === 2,
       );
       return m.racine;
     },
@@ -1309,6 +1364,18 @@ export const ECRANS = Object.freeze([
         await cliquerPointeur(await element(m, '[data-proposition="4"] [data-menu-actions]'));
         await attendre('le menu ouvert, le focus sur sa première action', () => document.activeElement?.matches('[data-proposition="4"] [role="menu"] [role="menuitem"]:first-child'));
       });
+      return m.racine;
+    },
+  },
+  {
+    nom: 'propositions.conflitsRestants',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // La proposition TROIS_CONFLITS (chargeTroisConflits), qui réunit une
+      // personne et l'organisation qu'elle nomme : « N conflits restants »
+      // sous son identifiant.
+      const m = await ouvrirEvenement(contexte, chargeTroisConflits(), { section: 'propositions' });
+      await element(m, '[data-section="propositions"] [data-proposition="1"] [data-conflits-restants]');
       return m.racine;
     },
   },

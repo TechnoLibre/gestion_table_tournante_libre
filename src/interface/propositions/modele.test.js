@@ -841,6 +841,26 @@ describe('tableau : le sixième groupe, les objectifs des tables et les animateu
     exigerCellulesAlignees(vue);
   });
 
+  test("« N conflits restants » sous l'identifiant d'une ligne dont les conflits d'organisation ne sont pas nuls, le retenu compris ; rien à zéro, ni sans liste", () => {
+    // Ondine Lacasse, sans organisation, nomme le Club des Merles : au
+    // premier plan, elle partage la table 1 avec ses deux membres au tour 1 ;
+    // au second, jamais.
+    const charge = chargeSix();
+    charge.participants[2].conflits = ['Club des Merles'];
+    const separes = [[[1, 2, 4], [3, 5, 6]], [[1, 2, 5], [3, 4, 6]], [[1, 2, 6], [3, 4, 5]], [[1, 2, 4], [3, 5, 6]]];
+    const avecRetenu = executer(avecPlans(charge, [{ tours: DEUX_COLLEGUES }, { tours: separes }]), 'retenirProposition', { id: 1 });
+    const vue = tableau(evaluer(avecRetenu));
+    const restants = new Map(vue.lignes.map(({ id, conflitsRestants }) => [id, conflitsRestants]));
+    assert.deepEqual(restants.get(1), { cle: 'propositions.conflitsRestants', details: { nombre: 2 } });
+    assert.equal(restants.get(2), null);
+    assert.deepEqual(vue.retenu.conflitsRestants, { cle: 'propositions.conflitsRestants', details: { nombre: 2 } });
+    assert.equal(t('propositions.conflitsRestants', { nombre: 2 }), '2 conflits restants');
+    assert.equal(t('propositions.conflitsRestants', { nombre: 1 }), '1 conflit restant');
+    // Sans liste, la mesure est sans objet : aucune ligne ne le dit.
+    const sansListe = tableau(evaluer(avecPlans(chargeSix(), [{ tours: DEUX_COLLEGUES }])));
+    assert.deepEqual(sansListe.lignes.map(({ conflitsRestants }) => conflitsRestants), [null]);
+  });
+
   test('« le plus de places servies » : les tours hors objectif et le minimum des tours selon l’objectif, après le manque et avant le certificat ; ni les personnes jamais servies ni le plus de tours hors objectif d’une personne', () => {
     let charge = generee(petiteAObjectifs(), { graine: 3, nombre: 2, arret: 200 });
     charge = executer(charge, 'retenirProposition', { id: 2 });

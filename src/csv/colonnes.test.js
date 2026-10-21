@@ -13,9 +13,10 @@ import { CHAMPS, ENTETES_DES_CHAMPS, associer, associerSelon, reconnaitre, recon
 import { cleEntete } from './normalisation.js';
 
 describe('CHAMPS', () => {
-  test('les neuf champs du § 10.1, dans leur ordre, etiquettes puis presence en dernier, figés', () => {
+  test('les dix champs du § 10.1, dans leur ordre, etiquettes, presence puis conflit_organisation en dernier, figés', () => {
     assert.deepEqual(CHAMPS, [
       'nom', 'prenom', 'organisation', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes', 'presence',
+      'conflit_organisation',
     ]);
     assert.ok(Object.isFrozen(CHAMPS));
   });
@@ -35,6 +36,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
         ['notes', ['notes']],
         ['etiquettes', ['etiquettes', 'étiquette', 'mots-clés']],
         ['presence', ['presence', 'présence', 'tours de présence']],
+        ['conflit_organisation', ['conflit_organisation', 'conflits', "conflit d'organisation", 'conflit d\u{2019}organisation']],
       ],
     );
     assert.deepEqual(ENTETES_DES_CHAMPS.map(([champ]) => champ), [...CHAMPS]);
@@ -54,7 +56,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
 
   test('chaque en-tête de la table est reconnu sous son champ : la reconnaissance la lit', () => {
     const paires = ENTETES_DES_CHAMPS.flatMap(([champ, entetes]) => entetes.map((entete) => [entete, champ]));
-    assert.equal(paires.length, 18);
+    assert.equal(paires.length, 22);
     for (const [entete, champ] of paires) assert.equal(reconnaitre(entete), champ, entete);
   });
 
@@ -68,7 +70,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
       }
     }
     // « presence » et « présence » partagent leur clé, sous le même champ.
-    assert.equal(champDeCle.size, 17);
+    assert.equal(champDeCle.size, 21);
   });
 });
 
@@ -109,6 +111,16 @@ describe('reconnaitre (§ 10.1)', () => {
       ['presence', 'presence', 'presence', 'presence', 'presence', 'presence'],
     );
     assert.deepEqual(['tours', 'présences', 'tour', 'présent'].map((entete) => reconnaitre(entete)), [null, null, null, null]);
+  });
+
+  test('Conflit organisation, Conflits et « conflit d’organisation » sous ses deux apostrophes désignent les conflits ; « conflit » et « organisations » restent inconnus', () => {
+    assert.deepEqual(
+      ['Conflit organisation', 'CONFLIT_ORGANISATION', 'conflit-organisation', 'Conflits', "Conflit d'organisation", 'conflit d\u{2019}Organisation'].map(
+        (entete) => reconnaitre(entete),
+      ),
+      Array.from({ length: 6 }, () => 'conflit_organisation'),
+    );
+    assert.deepEqual(['conflit', 'organisations', 'conflits 2'].map((entete) => reconnaitre(entete)), [null, null, null]);
   });
 
   test('sans égard à la casse, aux accents ni aux espaces', () => {

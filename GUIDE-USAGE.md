@@ -137,6 +137,23 @@ Un tour que la soirée n’a pas, ou une cellule qu’un tableur a changée en
 date, refuse sa ligne avec son motif ; mettez la colonne en texte dans le
 tableur.*
 
+Une colonne « Conflit organisation » nomme, pour chaque personne, les
+organisations que la sienne entière doit éviter à table (étape 3) ; plusieurs
+noms se séparent par « ; », « | » ou un retour à la ligne dans la cellule, et
+une virgule reste dans le nom. Le fichier se lit en entier avant que rien ne
+s’importe : une organisation qu’une autre ligne du même fichier apporte se
+nomme sans difficulté, et un nom écrit autrement que l’événement — casse,
+accents, blancs — prend l’orthographe que l’événement emploie déjà. Mais un nom
+qu’aucune personne ne porte, ou la propre organisation de la personne, **refuse
+le fichier entier** : l’aperçu dit, par exemple, « L’organisation « Société
+Gamma » n’existe pas (ligne 4, colonne des conflits). Rien n’est importé. »,
+puis invite à corriger la ligne et à importer le fichier de nouveau. Un nom
+d’organisation qui porte lui-même « ; » ou « | » se lit entier, pourvu qu’il
+soit écrit comme l’organisation que porte une personne. En mise à jour, une
+organisation que seule apporterait une ligne refusée — elle désigne plusieurs
+personnes, ou une personne qu’une ligne plus haut désigne déjà — n’existe
+pas pour les conflits.
+
 Un import est refusé sur un plan bloqué ; le message nomme la commande qui
 débloque. Un aperçu ouvert avant un changement du nombre de tours ne
 s’importe pas : rechoisissez le fichier pour refaire l’aperçu.
@@ -214,6 +231,20 @@ réservation ne vaut qu’aux tours de présence de sa personne : ailleurs, elle
 est suspendue, sa place rendue aux autres, et le logiciel le dit. Étendre une
 présence à un tour où sa réservation ferait déborder une table, ou prendrait
 un siège réservé à une autre, est refusé.
+
+Une personne peut aussi nommer des **organisations en conflit** : deux
+entreprises concurrentes, deux familles brouillées. Si une personne de
+l’organisation A nomme X, aucun membre de A ne devrait partager une table avec
+un membre de X, à aucun tour, et réciproquement ; une personne sans
+organisation qui nomme X évite X seule. La colonne « Conflit d’organisation »,
+juste après l’organisation, écrit chaque organisation nommée. Entrée ou F2 sur
+sa cellule l’ouvre en cases, une par organisation de l’événement, la sienne
+exceptée ; les touches sont celles des cases de la présence, et Entrée
+enregistre ajouts et retraits en un seul geste, que « Défaire » reprend d’un
+coup. La fiche porte les mêmes cases, sous « Conflits
+d’organisation », avec « Appliquer ». Ce n’est pas une interdiction : la
+recherche les évite autant qu’elle peut (étape 9), et un placement qui en garde
+le dit.
 
 ## Étape 4 — Préparer les tables
 
@@ -353,6 +384,12 @@ réservation. Aucune fenêtre ne s’ouvre, rien ne s’écrit.*
 
 Déplacer une réservation est un geste à part : « Déplacer sa réservation »,
 dans le menu de la personne.
+
+Réserver une place à côté d’une personne avec qui l’on est en conflit
+d’organisation n’est pas refusé : c’est votre décision. La table le signale par
+des hachures horizontales, sa pastille compte la paire, et le panneau de la
+table, ouvert d’un clic, la nomme sous « Conflits d’organisation à ce tour ».
+Il en va de même d’un placement retouché à la main (étape 11).
 
 ## Étape 8 — Lire le diagnostic
 
@@ -522,9 +559,11 @@ classement ; les colonnes du **manque** — « Plus grand manque », « Personne
 qui il en manque », « Écart d’itinéraire maximal » — permettent de comparer deux
 propositions même quand des tables sont incomplètes (voir « Comment le logiciel
 cherche », plus bas). « Imposé par les réservations » sépare ce que vos
-réservations imposent de ce que la recherche a choisi. Pour deux placements
-précis, la vue « Comparaison » de la page « Qualité », plus bas, les met côte
-à côte.
+réservations imposent de ce que la recherche a choisi. Quand des personnes
+nomment des organisations en conflit, une colonne compte les conflits
+d’organisation de chaque proposition, et une ligne qui en garde le dit sous son
+numéro : « 2 conflits restants ». Pour deux placements précis, la vue
+« Comparaison » de la page « Qualité », plus bas, les met côte à côte.
 
 Les commandes d’une ligne sont dans son menu : cliquez « Actions », au bout de
 la ligne, puis la commande ; au clavier, Entrée ou les flèches ouvrent le menu.
@@ -1107,6 +1146,7 @@ majuscules ni aux accents.
 | `notes` | — |
 | `etiquettes` | `étiquette`, `mots-clés` |
 | `presence` | `présence`, `tours de présence` |
+| `conflit_organisation` | `conflits`, `conflit d'organisation`, `conflit d’organisation` |
 
 <!-- engendre:fin colonnes-csv -->
 
@@ -1139,6 +1179,7 @@ l’historique ; les noms des exemples sont inventés.
 | `changerEtiquettes` | Étiquettes de Iris Ombrelle : ajouté « finance » |
 | `ajouterConflit` | Conflits de Iris Ombrelle : ajouté « Atelier Ressac » |
 | `retirerConflit` | Conflits de Iris Ombrelle : retiré « Atelier Ressac » |
+| `changerConflits` | Conflits de Iris Ombrelle : ajouté « Atelier Ressac » et « Club des Merles » |
 | `exclureParticipant` | Exclu Théo Pervenche |
 | `reintegrerParticipant` | Réintégré Théo Pervenche |
 | `supprimerParticipant` | Supprimé Ondine Lacasse |

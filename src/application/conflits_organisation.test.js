@@ -137,6 +137,54 @@ describe('ajouterConflit et retirerConflit (§ 4, § 8.2)', () => {
   });
 });
 
+describe('changerConflits : la liste entière, en un geste (§ 4, § 8.2)', () => {
+  test("ajouts et retraits en une entrée, qui les nomme ; la liste se range, et la charge se relit", () => {
+    const { charge, libelle, avertissements } = executer('changerConflits', chargeConflits(), {
+      id: 6,
+      organisations: [TILLEUL, ` ${RAMEAU} `, TILLEUL],
+    });
+    assert.deepEqual(conflitsDe(charge, 6), [RAMEAU, TILLEUL]);
+    assert.equal(libelle, `Conflits de Chèvrefeuille : ajouté « ${TILLEUL} » ; retiré « ${SAULE} »`);
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual(conflitsDe(relue(charge), 6), [RAMEAU, TILLEUL]);
+    const deux = executer('changerConflits', chargeConflits(), { id: 3, organisations: [SAULE, RAMEAU] });
+    assert.deepEqual(conflitsDe(deux.charge, 3), [RAMEAU, SAULE]);
+    assert.equal(deux.libelle, `Conflits de Mousse : ajouté « ${RAMEAU} » et « ${SAULE} »`);
+  });
+
+  test('la liste vide retire le champ ; la même liste, dans un autre ordre, est SANS_EFFET', () => {
+    const { charge, libelle } = executer('changerConflits', chargeConflits(), { id: 6, organisations: [] });
+    assert.ok(!Object.hasOwn(charge.participants[5], 'conflits'));
+    assert.equal(libelle, `Conflits de Chèvrefeuille : retiré « ${RAMEAU} » et « ${SAULE} »`);
+    refuse(() => executer('changerConflits', chargeConflits(), { id: 6, organisations: [SAULE, RAMEAU, SAULE] }), 'SANS_EFFET', {
+      commande: 'changerConflits',
+      remede: null,
+    });
+    refuse(() => executer('changerConflits', chargeConflits(), { id: 2, organisations: [] }), 'SANS_EFFET');
+  });
+
+  test("un nom nouveau se juge comme ajouterConflit : inconnu, ou sa propre organisation, refuse le geste entier ; la charge reste", () => {
+    const charge = chargeConflits();
+    const avant = structuredClone(charge);
+    refuse(() => executer('changerConflits', charge, { id: 2, organisations: [SAULE, RAMEAU] }), 'CONFLIT_PROPRE_ORGANISATION', {
+      personne: 'Lierre',
+      organisation: RAMEAU,
+      remede: null,
+    });
+    refuse(() => executer('changerConflits', charge, { id: 2, organisations: [SAULE, 'atelier pivoine'] }), 'ORGANISATION_INCONNUE', {
+      organisation: 'atelier pivoine',
+      remede: null,
+    });
+    refuse(() => executer('changerConflits', charge, { id: 99, organisations: [] }), 'PARTICIPANT_INCONNU');
+    assert.throws(() => executer('changerConflits', charge, { id: 2, organisations: SAULE }), TypeError);
+    assert.throws(() => executer('changerConflits', charge, { id: 2, organisations: [SAULE, 7] }), TypeError);
+    charge.evenement.etat = 'bloque';
+    refuse(() => executer('changerConflits', charge, { id: 3, organisations: [SAULE] }), 'PLAN_BLOQUE');
+    charge.evenement.etat = avant.evenement.etat;
+    assert.deepEqual(charge, avant);
+  });
+});
+
 describe('les listes suivent les organisations (§ 4, § 8.9)', () => {
   test("la dernière personne d'une organisation qui en change : la référence suit le renommage, dans la même entrée", () => {
     // Le Saule n'a qu'une personne, 5 : elle passe à la Ferme des Saules.
@@ -230,5 +278,54 @@ describe('les listes suivent les organisations (§ 4, § 8.9)', () => {
     assert.equal(rienASuivre(suivi), false);
     assert.equal(suivante.participants[1], intacte);
     assert.equal(rienASuivre(suivreOrganisations(avant, structuredClone(avant))), true);
+  });
+});
+
+describe("l'import pose les conflits de la colonne conflit_organisation (§ 10.1)", () => {
+  test("une organisation que le même fichier crée se nomme : les listes s'écrivent rangées, dans l'entrée de l'import, et la charge se relit", () => {
+    const charge = chargeConflits();
+    const texte = `nom;organisation;conflits\nGenêt;Clos des Ajoncs;${RAMEAU.toUpperCase()} | ferme du saule\nAjonc;;Clos des Ajoncs\n`;
+    const apercu = apercevoir(texte, { participants: charge.participants, mode: 'ajouter' });
+    const { charge: suivante, libelle } = appliquerCommande('importerParticipants', charge, { apercu, mode: 'ajouter' });
+    assert.deepEqual(conflitsDe(suivante, 7), [RAMEAU, SAULE]);
+    assert.deepEqual(conflitsDe(suivante, 8), ['Clos des Ajoncs']);
+    assert.equal(libelle, 'Importé 2 participants');
+    assert.deepEqual(relue(suivante).participants, suivante.participants);
+  });
+
+  test("une organisation que nul ne porte, ou la sienne, refuse l'import entier : le code, la ligne et l'organisation, sans remède ; la charge reste", () => {
+    const charge = chargeConflits();
+    const avant = structuredClone(charge);
+    for (const [texte, code, details] of [
+      [`nom;conflits\nGenêt;${RAMEAU}\nAjonc;Clos des Ajoncs\n`, 'CONFLIT_ORGANISATION_INCONNUE', { ligne: 3, organisation: 'Clos des Ajoncs' }],
+      [`nom;organisation;conflits\nGenêt;${SAULE};${SAULE}\n`, 'CONFLIT_ORGANISATION_PROPRE', { ligne: 2, organisation: SAULE }],
+    ]) {
+      const apercu = apercevoir(texte, { participants: charge.participants, mode: 'ajouter' });
+      refuse(() => appliquerCommande('importerParticipants', charge, { apercu, mode: 'ajouter' }), code, { ...details, remede: null });
+    }
+    assert.deepEqual(charge, avant);
+  });
+
+  test("en mise à jour, une organisation que seule porte une ligne refusée DEJA_DESIGNE ou PLUSIEURS_CORRESPONDENT refuse l'import ; portée par une ligne posée, la charge se relit", () => {
+    const charge = chargeConflits();
+    charge.participants.push(personne(7, 'Ortie'), personne(8, 'Ortie'));
+    charge.prochainsIds.participant = 9;
+    const avant = structuredClone(charge);
+    for (const [texte, ligne] of [
+      ['nom;organisation;conflits\nChèvrefeuille;;\nChèvrefeuille;Clos Neuf;\nGenêt;;Clos Neuf\n', 4],
+      ['nom;organisation;conflits\nOrtie;Clos Neuf;\nGenêt;;Clos Neuf\n', 3],
+    ]) {
+      const apercu = apercevoir(texte, { participants: charge.participants, mode: 'mettreAJour' });
+      refuse(() => appliquerCommande('importerParticipants', charge, { apercu, mode: 'mettreAJour' }), 'CONFLIT_ORGANISATION_INCONNUE', {
+        ligne, organisation: 'Clos Neuf', remede: null,
+      });
+    }
+    assert.deepEqual(charge, avant);
+    const texte = 'nom;organisation;conflits\nChèvrefeuille;Clos Neuf;\nChèvrefeuille;;\nGenêt;;Clos Neuf\n';
+    const apercu = apercevoir(texte, { participants: charge.participants, mode: 'mettreAJour' });
+    const { charge: suivante, resume } = appliquerCommande('importerParticipants', charge, { apercu, mode: 'mettreAJour' });
+    assert.deepEqual(resume.refusees.map(({ ligne, code }) => [ligne, code]), [[3, 'DEJA_DESIGNE']]);
+    assert.deepEqual(conflitsDe(suivante, 9), ['Clos Neuf']);
+    assert.deepEqual(relue(suivante).participants, suivante.participants);
   });
 });

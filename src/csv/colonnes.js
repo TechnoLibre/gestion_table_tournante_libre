@@ -35,9 +35,13 @@ export const ENTETES_DES_CHAMPS = Object.freeze([
   // En dernier : l'export écrit les étiquettes après les sept premiers
   // champs, puis la présence, et le collage en bloc les lit à la huitième et
   // à la neuvième colonne (§ 10.2). « presence » et « présence » partagent
-  // leur clé d'en-tête, sous le même champ.
+  // leur clé d'en-tête, sous le même champ. Les conflits d'organisation
+  // viennent après elles, à la dixième : ils ne décalent pas les deux
+  // colonnes que lit le collage. La clé d'en-tête garde l'apostrophe, d'où
+  // ses deux graphies.
   champ('etiquettes', ['etiquettes', 'étiquette', 'mots-clés']),
   champ('presence', ['presence', 'présence', 'tours de présence']),
+  champ('conflit_organisation', ['conflit_organisation', 'conflits', "conflit d'organisation", 'conflit d\u{2019}organisation']),
 ]);
 
 /** Champs d'un participant que porte un CSV, dans l'ordre de l'export. */

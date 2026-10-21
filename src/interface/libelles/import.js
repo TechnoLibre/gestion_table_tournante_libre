@@ -80,6 +80,7 @@ export const TABLE = new Map([
   ['import.champ.notes', 'notes'],
   ['import.champ.etiquettes', 'étiquettes'],
   ['import.champ.presence', 'présence'],
+  ['import.champ.conflits', "conflits d'organisation"],
   ['import.champ.table', 'table'],
   ['import.champ.tour', 'tour'],
   ['import.champ.objectif', 'objectif'],
@@ -137,6 +138,30 @@ export const TABLE = new Map([
   [
     'import.remede.separateurIntrouvable',
     'Séparez les colonnes par « ; », « , » ou une tabulation, en même nombre à chaque ligne.',
+  ],
+  [
+    'import.remede.conflitOrganisation',
+    ({ ligne }) =>
+      `Corrigez la colonne des conflits à la ligne ${ligne} \u{2014} ou ajoutez au fichier une personne de cette ` +
+      'organisation \u{2014}, puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.conflitPropre',
+    ({ ligne }) =>
+      `Retirez de la colonne des conflits, à la ligne ${ligne}, l'organisation de la personne, ` +
+      'puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.conflitOrganisationCollage',
+    ({ ligne }) =>
+      `Corrigez la colonne des conflits à la ligne ${ligne} \u{2014} ou ajoutez au texte une personne de cette ` +
+      'organisation \u{2014}, puis collez-le de nouveau.',
+  ],
+  [
+    'import.remede.conflitPropreCollage',
+    ({ ligne }) =>
+      `Retirez de la colonne des conflits, à la ligne ${ligne}, l'organisation de la personne, ` +
+      'puis collez le texte de nouveau.',
   ],
   [
     'import.remede.separateurIntrouvableCollage',

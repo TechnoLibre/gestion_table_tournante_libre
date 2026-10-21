@@ -202,6 +202,7 @@ export const TABLE = new Map([
   ['plan.titre.etiquette', 'Libellé du titre'],
 
   // --- Le panneau d'une table (§ 7.3, § 2.1 étape 6) -------------------------
+  ['plan.panneauTable.conflits', "Conflits d'organisation à ce tour"],
   ['plan.panneauTable.sieges', 'Sièges'],
   [
     'plan.panneauTable.titres',

@@ -399,7 +399,19 @@
   en comptent les occurrences, le plan signale chaque table concernée par des
   hachures horizontales, et le diagnostic compte ceux que les réservations
   imposent. Sans conflit nommé, une graine donne les mêmes propositions
-  qu'avant.
+  qu'avant. Les conflits se saisissent dans la colonne « Conflit
+  d'organisation » de la grille des participants et dans la fiche, une case
+  par organisation, au clavier comme à la souris, et une saisie qui en coche
+  ou décoche plusieurs ne fait qu'une entrée d'historique ; ils s'importent
+  et s'exportent par la colonne `conflit_organisation` du CSV, après la
+  présence, plusieurs noms séparés par « ; », « | » ou un retour à la ligne,
+  un nom d'organisation qui porte lui-même l'un de ces signes se relisant
+  entier. Une organisation qu'aucune personne ne porte, ou la sienne, refuse
+  l'import entier, la ligne et l'organisation nommées, jusqu'à ce que le
+  fichier corrigé soit réimporté. Une proposition qui garde des conflits le
+  dit sous son numéro, « 2 conflits restants », et une réservation ou un
+  placement à la main qui en crée un est accepté, la table signalée et son
+  panneau nommant la paire.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

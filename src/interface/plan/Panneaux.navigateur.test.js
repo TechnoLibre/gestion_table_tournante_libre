@@ -896,6 +896,73 @@ describe('assigner, par le choix en attente (§ 7.1, § 5.8)', () => {
   });
 });
 
+describe("un conflit d'organisation se signale à la table, il ne se refuse pas (§ 5.9, § 7.5)", () => {
+  // Les paires que le panneau de la table nomme, chacune « A et B ».
+  const pairesDuPanneau = (m) => [...panneau(m, 'table').querySelectorAll('[data-conflits-table] [data-conflit-organisation]')].map(texteDe);
+  const trameEvitement = (m, table) => tableEl(m, table).querySelector('[data-marque="trameEvitement"]');
+
+  test("une réservation qui réunit deux personnes en conflit : acceptée en une entrée ; la table porte la trame du conflit, et son panneau nomme la paire", async () => {
+    // Iris Ombrelle, du Club des Merles, réservée à la table 4 ; Théo
+    // Pervenche, sans organisation, nomme le Club des Merles.
+    const base = sansProposition();
+    base.participants[IRIS - 1].organisation = 'Club des Merles';
+    base.participants[THEO - 1].conflits = ['Club des Merles'];
+    base.reservations = [{ participant: IRIS, table: 4, siege: 1, portee: 'tous', tour: null }];
+    const m = await ouvrir(base);
+    expect(trameEvitement(m, 4)).toBeNull();
+    const commandes = releverCommandes(m);
+    const r = fichiers(m).revision;
+    await choisirDansLaReserve(m, THEO);
+    await cliquerChaise(m, 4, 3);
+    await cliquer(actionPlace(m, 'assigner'));
+    await uneEntree(m, r);
+    expect(commandes).toEqual([{ nom: 'reserver', args: { participant: THEO, table: 4, siege: 3, portee: 'tour', tour: 1 } }]);
+    expect(dans(m, '[data-refus]')).toBeNull();
+    await attendre(() => expect(trameEvitement(m, 4)).not.toBeNull());
+    expect(etatMontre(m).tables.find(({ id }) => id === 4).conflits.regles.map(({ regle }) => regle)).toContain('conflitsOrganisation');
+    m.ui.selectionner({ table: 4 });
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    expect(texteDe(panneau(m, 'table').querySelector('[data-conflits-table]').previousElementSibling)).toBe(t('plan.panneauTable.conflits'));
+    expect(pairesDuPanneau(m)).toEqual([`Iris Ombrelle${t('plan.infobulle.et')}Théo Pervenche`.replace(/\s+/g, ' ')]);
+    // Une table sans conflit d'organisation : ni liste ni intertitre.
+    m.ui.selectionner({ table: 2 });
+    await attendre(() => expect(panneau(m, 'table')?.dataset.tablePanneau).toBe('2'));
+    expect(panneau(m, 'table').querySelector('[data-conflits-table]')).toBeNull();
+  });
+
+  test("sur un retenu, un placement à la main qui réunit deux personnes en conflit : deplacerDansRetenu en une entrée, la table signalée", async () => {
+    const base = executer(huitRetenue(), 'retirerDuTour', { tour: 2, participant: ONDINE });
+    // Ondine Lacasse nomme l'organisation d'une personne assise, au tour 2,
+    // à une table où une chaise reste libre, qu'elle rejoint.
+    const cible = etatPlaces(base, { tour: 2 }).tables.find(
+      ({ chaises }) => chaises.some(({ occupant }) => occupant === null) && chaises.some(({ occupant }) => occupant !== null),
+    );
+    const table = cible.id;
+    const assise = cible.chaises.find(({ occupant }) => occupant !== null).occupant;
+    const libre = cible.chaises.find(({ occupant }) => occupant === null).siege;
+    base.participants.find(({ id }) => id === assise).organisation = 'Atelier Ressac';
+    base.participants.find(({ id }) => id === ONDINE).organisation = null;
+    base.participants.find(({ id }) => id === ONDINE).conflits = ['Atelier Ressac'];
+    const m = await ouvrir(base);
+    m.ui.montrerTour(2);
+    flushSync();
+    await images(2);
+    expect(trameEvitement(m, table)).toBeNull();
+    const commandes = releverCommandes(m);
+    const r = fichiers(m).revision;
+    await choisirDansLaReserve(m, ONDINE);
+    await cliquerChaise(m, table, libre);
+    await cliquer(actionPlace(m, 'assigner'));
+    await uneEntree(m, r);
+    expect(commandes.at(-1)).toEqual({ nom: 'deplacerDansRetenu', args: { tour: 2, participant: ONDINE, table, siege: libre } });
+    await attendre(() => expect(trameEvitement(m, table)).not.toBeNull());
+    m.ui.selectionner({ table });
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    expect(pairesDuPanneau(m)).toHaveLength(1);
+    expect(pairesDuPanneau(m)[0]).toContain(nomAffiche(charge(m).participants.find(({ id }) => id === ONDINE)));
+  });
+});
+
 describe('Échap oublie le choix en attente (§ 7.1, § 7.3)', () => {
   test('choisie dans la réserve, puis dans les pressentis : Échap sur son bouton l’oublie ; sur le plan, Échap d’un siège remonte à sa table et garde le choix, Échap sur la table l’oublie', async () => {
     const base = sansProposition();

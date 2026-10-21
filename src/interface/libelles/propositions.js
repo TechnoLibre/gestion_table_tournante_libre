@@ -350,6 +350,8 @@ export const TABLE = new Map([
 
   // --- Les lignes (§ 5.7, § 9, § 12.6) -----------------------------------------
   ['propositions.marque.retenue', 'retenue'],
+  // Les conflits d'organisation qu'une ligne laisse, sous son identifiant.
+  ['propositions.conflitsRestants', ({ nombre }) => compte(nombre, 'conflit restant', 'conflits restants')],
   ['propositions.retenu.titre', 'Placement retenu'],
   ['propositions.retenu.origine', ({ proposition }) => `Tel que la proposition n° ${proposition}.`],
   [
