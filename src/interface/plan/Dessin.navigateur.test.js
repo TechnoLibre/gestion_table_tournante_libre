@@ -1293,12 +1293,12 @@ function formeDe(motif) {
 const couleursEnTexte = (couleurs) => couleurs.map((c) => c.slice(0, 3).join(',')).sort();
 
 // La petite démonstration en conflit, une proposition de rechercher, graine
-// 3 : son tour 3 signale les trois sortes, une table saine, une table qui
-// viole les trois règles et une qui en viole deux.
+// 23 : son tour 2 signale les trois sortes, une table saine, une table qui
+// viole les trois règles et deux qui en violent deux.
 function troisSortes() {
   const charge = analyser(texteLivre('petite-conflit')).charge;
   const configuration = configurationDepuisCharge(charge);
-  const [proposition] = rechercher(configuration, { graine: 3, nombre: 1, arret: 300, historique: 1000 });
+  const [proposition] = rechercher(configuration, { graine: 23, nombre: 1, arret: 300, historique: 1000 });
   return avecProposition(charge, versFichier(proposition, configuration, { produitVersion: 'epreuve', attribuerSieges: false, decalage: 0 }));
 }
 

@@ -498,7 +498,7 @@ const REGLAGES = Object.freeze({
 // chemin ordinaire — moteur, commande sans dérivation, sérialiseur —, que
 // cette empreinte refuse. Elle ne change qu'avec ce chemin, quand il change à
 // dessein.
-const EMPREINTE_ORDINAIRE = '84f91d6d9f9135f5387b6f1b2544cc48ad96c0074126dee486227f1d478695a5';
+const EMPREINTE_ORDINAIRE = '607a24e9033d4f0c09125927445f3851c3df81fade4436773a1507c49bbf5a6f';
 
 // Les départs des deux générations dérivées : n° 1, tour 1 figé ; puis n° 3,
 // une dérivée de la génération précédente, tours 1 et 2 figés.

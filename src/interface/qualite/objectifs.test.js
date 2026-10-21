@@ -241,10 +241,10 @@ describe('objectifs : les barres par tour (§ 12.12, B21, D36)', () => {
     const { detail } = detailDe();
     const { pireTour, parTour } = detail.objectifs;
     const { reste, hors } = parTour[pireTour];
-    assert.deepEqual([pireTour, reste, hors], [0, 1, 5]);
+    assert.deepEqual([pireTour, reste, hors], [1, 1, 5]);
     const synthese = modeleObjectifs(detail, t).barres.synthese;
-    assert.equal(synthese, t('qualite.objectifs.synthese', { tour: 1, reste, hors }));
-    assert.equal(synthese, 'En tête, le tour 1, au plus grand reste : 1 au-delà de son plancher, sur 5 tours hors objectif.');
+    assert.equal(synthese, t('qualite.objectifs.synthese', { tour: 2, reste, hors }));
+    assert.equal(synthese, 'En tête, le tour 2, au plus grand reste : 1 au-delà de son plancher, sur 5 tours hors objectif.');
   });
 
   test('hors du domaine des planchers, la phrase de synthèse ne parle plus de reste', () => {

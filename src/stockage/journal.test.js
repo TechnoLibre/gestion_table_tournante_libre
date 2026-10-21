@@ -2038,7 +2038,7 @@ describe('la restitution sur une seule copie, et l’entrée qui rend sa copie c
 // ordre des clés compris, une révision par ligne. Les deux versions se
 // remplacent par des marqueurs avant l'empreinte : une livraison, qui change
 // la version, ne la change pas.
-const EMPREINTE_RESTITUTION = '0136acdc67c6a9d11baf19c2c3a5ecfb6371740ffa353a5d1b0150a116f8eda9';
+const EMPREINTE_RESTITUTION = '2a58e77a247141224f5611a5a84db21dbd113d9e2b0b1cca926e108f74f12675';
 
 describe('caractérisation : la restitution de chaque instant, octet pour octet (§ 8.3, § 14.2)', () => {
   test("reconstruire(journal, r) s'écrit en JSON comme la chaîne d'appliquer refaite d'entrée en entrée, pour chacune des 120 révisions, et leur empreinte est celle de la référence", () => {

@@ -54,8 +54,8 @@ const V = VERSION.affichee;
 
 // L'empreinte repliée des relevés de la séance, et celle des propositions
 // que le moteur rend à la génération.
-const EMPREINTE_SEANCE = '176423a77b97583fb45da66d365fa0ba9056e578e837f78c31167ae10da5b6f6';
-const EMPREINTE_GENERATION = 'a14f93bd4b0ac9543abb51fdcfa8fb33822225cb4abde28efa1e70ce8098ffff';
+const EMPREINTE_SEANCE = 'b0828a0e06deb32d098459d79717542caa6fd07923f300d488f33fa04ec992d0';
+const EMPREINTE_GENERATION = '379fe7f22846577a9c6c5c131797be4f0adcc8f02035ea050d37a727d4ed653c';
 
 // Le nombre de relevés de la séance : une séance qui s'arrêterait en chemin
 // ne se compare pas à la référence (§ 14.2).

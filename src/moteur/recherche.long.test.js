@@ -1,9 +1,9 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Épreuves lourdes de la recherche (§ 5.10, § 14.10, § 15.3). Sur chacune
-// des quatre démonstrations, une suite déterministe de mouvements, acceptés
-// ou défaits, confronte l'état tenu à jour au recalcul complet à 1, 10, 100,
+// Épreuves lourdes de la recherche (§ 5.10, § 14.10, § 15.3). Sur chacune des
+// quatre démonstrations, une suite déterministe de mouvements, acceptés ou
+// défaits, confronte l'état tenu à jour au recalcul complet à 1, 10, 100,
 // 1 000 et 10 000 mouvements appliqués, et non au seul terme : une dérive qui
 // se compense passe inaperçue à la fin, et le palier où un désaccord affleure
 // est le chiffre que l'épreuve rend. Le relevé liste chaque désaccord, palier
@@ -11,23 +11,25 @@
 // configuration inventée qui porte des objectifs de table — de soirée et de
 // tour, des personnes aux tours possibles inégaux — et des animateurs — l'un
 // d'un seul tour, une table à deux titres —, les deux critères cochés, sous
-// chacun des trois modes et sous un ordre déplacé (A13). La petite démonstration et sa
-// variante conflit atteignent ensuite leur optimum sur vingt graines, trois
-// propositions chacune ; une recherche longue sur la grande démonstration
-// rend des plans que jugent verifierInvariants et verifierIndicateurs, et
-// chaque point de relevé de sa course égale le plan que regenerer rend à son
-// compte. Une dérivée sur la grande démonstration, deux tours figés, rend de
-// même chaque point de relevé par regenerer sous son départ, chacun portant
-// les tours figés du départ, liste pour liste. Sur la grande démonstration où
-// une personne sur sept est absente à un tour, l'état tenu à jour s'accorde
-// au recalcul à chaque palier, et une recherche longue n'assied aucune
-// absente, assied chaque présente une fois par tour, et tient la chaîne des
-// plafonds jusqu'aux co-présents.
+// chacun des trois modes et sous un ordre déplacé (A13). La petite
+// démonstration et sa variante conflit atteignent ensuite leur optimum sur
+// vingt graines, trois propositions chacune, sous l'ordre du registre ; une
+// recherche longue sur la grande démonstration rend des plans que jugent
+// verifierInvariants et verifierIndicateurs, et chaque point de relevé de sa
+// course égale le plan que regenerer rend à son compte. Une dérivée sur la
+// grande démonstration, deux tours figés, rend de même chaque point de relevé
+// par regenerer sous son départ, chacun portant les tours figés du départ,
+// liste pour liste. Sur la grande démonstration où une personne sur sept est
+// absente à un tour, l'état tenu à jour s'accorde au recalcul à chaque
+// palier, et une recherche longue n'assied aucune absente, assied chaque
+// présente une fois par tour, et tient la chaîne des plafonds jusqu'aux
+// co-présents.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { FLUX, creerPcg32 } from '../demo/prng.js';
 import { indexerPlan, normaliser } from './configuration.js';
+import { CRITERES } from './criteres.js';
 import { mesurer } from './indicateurs.js';
 import { plafondsAPriori, plafondsRealises } from './plafond.js';
 import {
@@ -224,13 +226,23 @@ describe('recherche : incrémental contre recalcul complet (§ 5.10, § 14.10)',
 // pourrait servir par hasard.
 const GRAINES = 20;
 
-describe('recherche : la petite démonstration et sa variante, sur vingt graines (§ 15.3)', () => {
+describe('recherche : la petite démonstration et sa variante, sur vingt graines, l’ordre du registre (§ 5.7, § 15.3)', () => {
   // Plancher de collisions cumulées : aucune dans la petite démonstration ;
   // une par tour dans la variante, dont le groupe de cinq ne se répartit pas
   // sur quatre tables, chacune d'une paire différente au mieux.
+  //
+  // L'ordre du registre, chaque critère seul à son palier : l'écart au
+  // plafond a priori en tête, puis l'excédent, les collisions cumulées, les
+  // tours hors objectif et seulement ensuite les rencontres répétées. La
+  // recherche annule d'abord l'écart, puis la bascule passe les contraintes
+  // devant lui, les collisions avant les rencontres répétées. C'est l'ordre
+  // où chaque proposition atteint l'optimum ; l'ordre par défaut, qui range
+  // l'excédent, les rencontres répétées et les collisions cumulées devant
+  // l'écart, s'éprouve à part, sur des planchers.
+  const ORDRE_DU_REGISTRE = CRITERES.map((critere) => [{ critere, poids: 1 }]);
   for (const [cle, plancher] of [['petite', 0], ['petite-conflit', 4]]) {
     test(`${cle} : chaque proposition rencontre 8 pour les douze, sans répétition, ${plancher} collisions sur ${plancher} paires`, () => {
-      const configuration = CATALOGUE.find((entree) => entree.cle === cle).construire();
+      const configuration = { ...CATALOGUE.find((entree) => entree.cle === cle).construire(), priorites: ORDRE_DU_REGISTRE };
       const instance = normaliser(configuration);
       const manquees = [];
       let examinees = 0;

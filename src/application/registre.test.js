@@ -37,7 +37,7 @@ import { apercevoirObjectifs } from '../csv/objectifs.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { LIVREES } from '../demo/livrees.js';
 import { normaliser } from '../moteur/configuration.js';
-import { CRITERES } from '../moteur/criteres.js';
+import { PRIORITES_PAR_DEFAUT } from '../moteur/criteres.js';
 import { rechercher } from '../moteur/recherche.js';
 import { verifierInvariants } from '../moteur/verification.js';
 import { serialiserCharge } from '../stockage/canonique.js';
@@ -152,20 +152,26 @@ const IMPORTER_FINANCE_A_LA_TABLE_2 = (charge) => ({
 // ordre réglé, où l'excédent et les collisions cumulées partagent le
 // deuxième palier ; et le geste qui joint les tours hors objectif à
 // l'excédent.
-const PRIORITES_DEFAUT = CRITERES.map((critere) => [{ critere, poids: 1 }]);
+const PRIORITES_DEFAUT = PRIORITES_PAR_DEFAUT.map((palier) => palier.map((entree) => ({ ...entree })));
+const seul = (critere) => [{ critere, poids: 1 }];
 const COLLISIONS_JOINTES = [
-  PRIORITES_DEFAUT[0],
-  [{ critere: CRITERES[1], poids: 2 }, { critere: CRITERES[2], poids: 3 }],
-  ...PRIORITES_DEFAUT.slice(3),
+  seul('rencontresRepetees'),
+  [{ critere: 'excedentCollisions', poids: 2 }, { critere: 'collisionsCumulees', poids: 3 }],
+  seul('ecartAuPlafondAPrioriMax'),
+  seul('toursHorsObjectif'),
+  seul('animateursNonRencontres'),
+  seul('redondance'),
 ];
 const JOINDRE_LES_TOURS_HORS_OBJECTIF = [
   'changerPriorites',
   {
     paliers: [
-      PRIORITES_DEFAUT[0],
-      [{ critere: CRITERES[1], poids: 1 }, { critere: CRITERES[3], poids: 3 }],
-      PRIORITES_DEFAUT[2],
-      ...PRIORITES_DEFAUT.slice(4),
+      seul('rencontresRepetees'),
+      [{ critere: 'excedentCollisions', poids: 1 }, { critere: 'toursHorsObjectif', poids: 3 }],
+      seul('collisionsCumulees'),
+      seul('ecartAuPlafondAPrioriMax'),
+      seul('animateursNonRencontres'),
+      seul('redondance'),
     ],
   },
 ];

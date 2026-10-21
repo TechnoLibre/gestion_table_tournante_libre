@@ -916,10 +916,10 @@ describe('en lecture et sur un plan bloqué', () => {
 // Chaque nom de la phrase et la colonne qu'il désigne, dans l'ordre de la
 // phrase : les cinq critères, puis l'identifiant croissant.
 const COLONNE_DESIGNEE = [
-  ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
   ['excedentCollisions', 'excedentCollisions'],
-  ['collisionsCumulees', 'collisionsCumulees'],
   ['rencontresRepetees', 'rencontresRepetees'],
+  ['collisionsCumulees', 'collisionsCumulees'],
+  ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
   ['redondance', 'totalRedondance'],
   ['identifiant', 'proposition'],
 ];
@@ -1084,8 +1084,8 @@ describe('la phrase de l’ordre désigne les colonnes (§ 5.7)', () => {
     // morceaux.
     expect(section(m).querySelectorAll('[data-ordre] p').length).toBe(1);
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
-      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
-        "puis collisions cumulées, puis rencontres répétées, puis redondance d'organisation, puis l'identifiant croissant.",
+      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, puis rencontres répétées, " +
+        "puis collisions cumulées, puis écart au plafond a priori, puis redondance d'organisation, puis l'identifiant croissant.",
     );
     const cible = colonne(m, 'excedentCollisions');
     const avant = cible.map((cellule) => [getComputedStyle(cellule).color, getComputedStyle(cellule).backgroundColor]);
@@ -1481,8 +1481,8 @@ describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => 
     }
     expect(cellules(ligneRetenu(m)).has('toursHorsObjectif')).toBe(true);
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
-      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
-        'puis collisions cumulées, puis personnes jamais servies, puis tours hors objectif, puis rencontres répétées, ' +
+      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, puis rencontres répétées, " +
+        'puis collisions cumulées, puis écart au plafond a priori, puis personnes jamais servies, puis tours hors objectif, ' +
         "puis redondance d'organisation, puis l'identifiant croissant.",
     );
   });
@@ -1510,7 +1510,7 @@ describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => 
     for (const cle of ['separerOrganisations', 'nouveauxVoisins', 'varierOrganisations']) chargeLue.reglages[cle] = false;
     const m = await ouvrir(chargeLue);
     expect(texteDe(section(m).querySelector('[data-ordre]'))).toBe(
-      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis retours, puis l'identifiant croissant.",
+      "Ordre du classement, chaque critère au plus faible d'abord : retours, puis écart au plafond a priori, puis l'identifiant croissant.",
     );
     const nom = section(m).querySelector('[data-ordre] [data-critere="rencontresRepetees"]');
     expect(texteDe(nom)).toBe('retours');

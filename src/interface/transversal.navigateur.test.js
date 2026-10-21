@@ -2362,8 +2362,14 @@ describe('balisage littéral (§ 13.1)', () => {
         return l.length > 0 && l;
       });
       expect(listes.some((l) => l.textContent.includes(INJECTION))).toBe(true);
-      const plateau = m.racine.querySelector('[data-table="1"] [data-marque="contourConflit"]');
-      expect(plateau, 'la table 1 en conflit').not.toBeNull();
+      // Une table du tour 1 qui réunit deux personnes de l'organisation : elle
+      // est en conflit, et son infobulle les nomme.
+      const [{ placement, tables }] = charge.propositions;
+      const membres = new Set(charge.participants.filter((p) => p.organisation === organisation).map(({ id }) => id));
+      const rang = placement[0].sieges.findIndex((liste) => liste.filter((id) => membres.has(id)).length >= 2);
+      expect(rang, 'une table qui réunit deux personnes de l’organisation').toBeGreaterThanOrEqual(0);
+      const plateau = m.racine.querySelector(`[data-table="${tables[rang]}"] [data-marque="contourConflit"]`);
+      expect(plateau, 'sa table en conflit').not.toBeNull();
       const { x, y } = await centre(plateau);
       await pointer('bouger', x, y);
       const infobulle = await attendre('l’infobulle', () => {

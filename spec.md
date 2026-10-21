@@ -906,7 +906,17 @@ cumulées — passer la soirée avec le même collègue est pire que croiser six
 collègues une fois. Ni les collisions cumulées ni les paires distinctes, prises
 seules, ne rendent cet ordre : **les deux classent le premier plan en tête**,
 c'est-à-dire exactement à l'envers. L'excédent le rend, et c'est pour cela que
-l'ordre par défaut du § 5.7 le range devant les collisions cumulées.
+l'ordre par défaut du § 5.7 le range en tête, devant les collisions cumulées.
+
+**Les rencontres répétées ne le rendent pas non plus : elles comptent des
+paires.** Une paire réunie deux fois ou plus compte pour une rencontre
+répétée, quel que soit le nombre de ses retrouvailles ; les paires de
+collègues revues en font une, deux et aucune dans les trois plans. Classer
+d'abord sur elles mettrait le troisième en tête, mais **le premier devant le
+deuxième** : le plan qui garde un collègue toute la soirée passerait devant
+celui qui ramène deux collègues deux fois chacun. L'ordre par défaut range
+donc l'excédent devant les rencontres répétées aussi, et classe les trois
+plans du dernier au premier.
 
 Les trois restent **affichés** : ce sont trois conflits, et aucun ne se cache
 derrière la grandeur qui ordonne.
@@ -1581,34 +1591,65 @@ de même effet que l'ordre par défaut s'y lit, et se réécrit présente (§ 8.
 Un critère qui rejoint un palier y entre au poids 1. Changer de mode réécrit la
 liste ainsi rangée, sans qu'aucun critère change de palier.
 
-**Ordre par défaut** : écart au plafond a priori, puis excédent de collisions,
-puis collisions cumulées, puis tours hors objectif, puis rencontres répétées et
-retours, puis animateurs non rencontrés, puis redondance d'organisation, chacun
-seul à son palier, sous le mode « le plus de places servies ». L'**ordre fixe de
-référence** est la liste écart, excédent, cumulées, rencontres répétées,
-redondance, chacun seul à son palier : l'ordre par défaut sans les deux critères
-des objectifs et des animateurs. Sous l'ordre par défaut, sans objectif de table
-et sans la case des animateurs, quel que soit le mode : sous toute combinaison
-des cases du § 5.3, les plans à graine égale sont ceux de l'ordre fixe de
-référence ; sous les quatre cases cochées, le classement et sa phrase le sont
-aussi. Une case décochée retire son critère du classement et de la phrase
-(§ 5.3) ; « nouvelle table » cochée seule y fait classer les retours choisis. Un
-événement qui ne règle rien n'écrit rien (§ 8.9) ; « Rétablir l'ordre par
-défaut » retire le réglage.
+**Ordre par défaut** : excédent de collisions, puis rencontres répétées et
+retours, puis collisions cumulées, puis écart au plafond a priori, puis tours
+hors objectif, puis animateurs non rencontrés, puis redondance d'organisation,
+chacun seul à son palier, sous le mode « le plus de places servies ». Il n'est
+pas l'ordre du tableau ci-dessus, qui reste celui des critères dans un palier.
+L'**ordre fixe de référence** est la liste excédent, rencontres répétées,
+cumulées, écart, redondance, chacun seul à son palier : l'ordre par défaut sans
+les deux critères des objectifs et des animateurs. Une liste écrite garde son
+ordre : seul l'événement qui ne règle rien suit l'ordre par défaut. Sous l'ordre
+par défaut, sans objectif de table et sans la case des animateurs, quel que soit
+le mode : sous toute combinaison des cases du § 5.3, les plans à graine égale
+sont ceux de l'ordre fixe de référence ; sous les quatre cases cochées, le
+classement et sa phrase le sont aussi. Une case décochée retire son critère du
+classement et de la phrase (§ 5.3) ; « nouvelle table » cochée seule y fait
+classer les retours choisis. Un événement qui ne règle rien n'écrit rien
+(§ 8.9) ; « Rétablir l'ordre par défaut » retire le réglage.
 
-**L'ordre par défaut se justifie par l'asymétrie des gains.** Il met l'écart au
-plafond a priori en tête : rencontrer une personne de plus est un gain certain,
-rencontrer une organisation de plus, ou un animateur de plus, un raffinement.
-Mettre la diversité au-dessus ferait **refuser un contact neuf** parce que
-l'organisation du voisin est déjà croisée. Il met l'excédent de collisions
-devant les collisions cumulées : le § 5.4 le démontre en trois plans, classer
-d'abord sur les collisions cumulées — comme classer d'abord sur les paires
-distinctes — met en tête le plan qui fait passer toute la soirée aux deux mêmes
-collègues, parce qu'il en porte le moins. L'excédent d'abord, le volume
-ensuite : un plan qui répartit six collisions sur six paires passe devant un
-plan qui en concentre quatre sur une seule. L'opérateur qui inverse ces deux
-paliers remet ce plan en tête ; l'éditeur le permet, l'ordre par défaut ne le
-fait pas.
+**L'ordre par défaut met d'abord ce que la soirée promet à chacun.** Ne pas
+passer la soirée avec ses collègues, ne pas revoir à une table une personne déjà
+rencontrée, ne pas revenir à une table déjà visitée : ce sont les promesses que
+l'opérateur fait à la salle, et un plan qui en manque une se voit. L'excédent de
+collisions vient en tête, puis les rencontres répétées et retours, puis les
+collisions cumulées, puis l'écart au plafond a priori. Mettre la diversité
+au-dessus de l'écart ferait encore **refuser un contact neuf** parce que
+l'organisation du voisin est déjà croisée : la redondance reste en dernier.
+
+**Ce placement de l'écart a un prix, en rencontres.** Rangées devant lui, les
+répétitions et les collisions passent avant le nombre de personnes distinctes
+que chacun rencontre : la recherche accepte qu'une personne en rencontre moins
+pour éviter une paire revue ou une collision, et le classement met en tête le
+plan sans répétition même quand un autre fait rencontrer davantage au plus mal
+servi. Sous l'écart en tête, le plan qui annule l'écart passerait devant, et ses
+répétitions avec lui. La recherche paie aussi : l'écart ne guide plus la
+descente vers les plans parfaits, et sur une petite salle où tous peuvent
+atteindre leur plafond sans répétition ni collision, une descente s'arrête plus
+souvent sur un plan sans excédent mais aux collisions cumulées au-dessus du
+plancher, parfois avec une paire revue, qu'elle ne défait plus sans faire perdre
+une rencontre à quelqu'un. Plusieurs propositions et un compte plus long en
+atténuent l'effet sans l'annuler. Monter l'écart seul en tête ne change pas les
+contraintes de la recherche : une fois l'écart annulé, la bascule compare les
+paliers dans le même ordre que sous l'ordre par défaut, les rencontres répétées
+devant les collisions cumulées. L'ordre du tableau ci-dessus — écart, excédent,
+cumulées, tours hors objectif, rencontres répétées et retours, animateurs,
+redondance — range les collisions devant les rencontres répétées, et c'est sous
+lui que chaque proposition de la petite démonstration et de sa variante atteint
+son optimum (§ 15.3) ; l'opérateur qui préfère les rencontres le règle, et
+l'éditeur le permet.
+
+**L'excédent de collisions précède les rencontres répétées et les collisions
+cumulées.** Le § 5.4 le démontre en trois plans. Classer d'abord sur les
+collisions cumulées — comme classer d'abord sur les paires distinctes — met en
+tête le plan qui fait passer toute la soirée aux deux mêmes collègues, parce
+qu'il en porte le moins. Classer d'abord sur les rencontres répétées, qui
+comptent des paires et non des retrouvailles, met ce plan devant celui qui
+ramène deux collègues deux fois chacun. L'excédent d'abord, le reste ensuite :
+un plan qui répartit six collisions sur six paires passe devant un plan qui
+en concentre quatre sur deux paires, qui passe devant un plan qui les
+concentre sur une seule. L'opérateur qui range les rencontres répétées devant
+l'excédent accepte l'inverse pour ces deux derniers ; l'éditeur le permet.
 
 **La recherche et le classement compilent la même liste.** La recherche descend
 un n-uplet, une composante par palier — deux pour l'écart au plafond a priori,
@@ -1629,14 +1670,18 @@ l'ordre.
 **Une fois l'écart au plafond a priori annulé, la recherche passe les
 contraintes devant.** Un palier est de la famille « raffinement » quand tous ses
 critères le sont ; un seul critère d'une autre famille en fait un palier
-« contrainte », sauf le palier de l'écart, seul de la famille « rencontres ». Dès
+« contrainte », sauf le palier de l'écart, seul de la famille « rencontres ». Tant
 que sa meilleure affectation porte un plus grand écart nul, la recherche compare
 les paliers dans l'ordre où le palier de l'écart descend juste avant le premier
 palier « raffinement » qui le suit — à la fin s'il n'y en a pas —, les autres
 gardant leur ordre : elle peut perdre une rencontre le temps de défaire une
-collision, puis la reprendre. Sous l'ordre par défaut, cela compare excédent,
-cumulées, tours hors objectif, rencontres répétées et retours, l'écart,
-animateurs, redondance. Le classement, lui, suit toujours l'ordre réglé.
+collision, puis la reprendre. L'écart en tête, une meilleure affectation garde
+un écart nul, et la bascule est acquise ; rangé après d'autres paliers, il peut
+redevenir non nul sur une meilleure affectation, et la recherche revient alors
+à l'ordre du score. Sous l'ordre par défaut, cela compare excédent, rencontres
+répétées et retours, cumulées, tours hors objectif, l'écart, animateurs,
+redondance : sans objectif, l'ordre des paliers ne change pas. Le classement,
+lui, suit toujours l'ordre réglé.
 
 **Tant que l'écart n'est pas annulé, la somme des carrés précède tous les
 paliers qui suivent l'écart.** Là où le plus grand écart ne peut pas descendre à
@@ -1645,7 +1690,8 @@ lieu : un palier rangé après l'écart ne départage que des affectations de m�
 somme des carrés, et pèse dans la recherche à peine plus qu'un départage. Un
 critère rangé après l'écart ne coûte donc aucune rencontre à personne ; pour
 qu'il pèse sur une soirée tendue, l'opérateur le range devant l'écart, et
-accepte de perdre des rencontres pour lui.
+accepte de perdre des rencontres pour lui. L'ordre par défaut le fait pour
+l'excédent, les rencontres répétées et retours et les collisions cumulées.
 
 **Un critère décoché ou sans objet** (§ 5.3) sort de la recherche comme du
 classement ; un palier dont aucun critère ne compte disparaît, et les autres
@@ -6549,12 +6595,16 @@ choisies, retours choisis, redondance, plus grand écart — de la petite
 démonstration, de sa variante « conflit inévitable », de la grande et de la
 variante sans exception, sous trois graines et un compte réduit ; de la petite
 sous chacune des seize combinaisons des quatre cases ; de la petite et de sa
-variante sous un compte plus long, où l'acceptation bascule ; et le classement
-de douze propositions de la variante et de la grande, plafond a priori connu et
-inconnu. Elles ne se régénèrent que par un geste conscient, comme l'empreinte
-des démonstrations (§ 15.5, point 5). Il refuse la compilation qui place mal une
-composante nulle, déplace un tirage, ou fait basculer l'acceptation sur un autre
-rang que celui de l'écart.
+variante sous un compte plus long et sous l'ordre du registre, l'écart en
+tête, où l'acceptation bascule et passe les contraintes devant lui ; et le
+classement de douze propositions de la variante et de la grande, plafond a
+priori connu et inconnu. Elles ne se régénèrent que par un geste conscient,
+comme l'empreinte des démonstrations (§ 15.5, point 5). Un changement de
+l'ordre par défaut réécrit celles que l'ordre touche, et se prouve : relevées
+sur le code d'avant, le nouvel ordre donné en liste réglée, elles rendent le
+même fichier, octet pour octet. Il refuse la compilation qui place mal une
+composante nulle, déplace un tirage, ou range mal les paliers que
+l'acceptation compare après la bascule.
 
 **Le classement par défaut est celui de l'ordre fixe de référence sous les
 quatre cases cochées, et une case décochée n'en retire que son critère.** Sous
@@ -6926,11 +6976,25 @@ la main (§ 15.2).
 participant, zéro table, une graine dont aucun tour témoin ne se construit, un
 compte de groupes dépassant le réservoir de noms.
 
-**La petite démonstration atteint 8 pour les douze participants, zéro paire
-répétée, zéro collision**, et le logiciel écrit « minimum atteint ». Le test mesure
-d'abord le plan écrit au § 15.3 — il éprouve les indicateurs contre un oracle —
-puis lance la recherche et affirme qu'elle **atteint le même plafond**, sans jamais
-comparer le plan obtenu au plan écrit (§ 15.5, point 6).
+**Le plan écrit de la petite démonstration atteint 8 pour les douze participants,
+zéro paire répétée, zéro collision**, et le logiciel écrit « minimum atteint ». Le
+test mesure d'abord ce plan (§ 15.3) — il éprouve les indicateurs contre un
+oracle — puis lance la recherche **sous l'ordre du registre, écrit en liste
+réglée**, et affirme qu'elle **atteint le même plafond**, sans collision, et que la
+première proposition du classement porte « minimum atteint », sans jamais comparer
+le plan obtenu au plan écrit (§ 15.5, point 6). Sous cet ordre, l'épreuve lourde
+exige l'optimum de **chaque** proposition, sur vingt graines de trois
+propositions, dans la petite démonstration comme dans sa variante.
+
+**Sous l'ordre par défaut, la recherche sur ces deux salles se tient par des
+planchers, et non par l'optimum de chaque proposition.** C'est l'ordre que reçoit
+l'événement qui ne règle rien, et une descente peut s'y arrêter avant l'optimum
+(§ 5.7). L'épreuve lourde lance la recherche sans priorités réglées, sur les
+mêmes vingt graines de trois propositions, et compte celles qui atteignent
+l'optimum, et les graines dont une proposition au moins l'atteint : au moins
+**40 sur 60 et 18 sur 20** dans la petite démonstration, **29 sur 60 et 19 sur
+20** dans sa variante. Une recherche qui dégrade l'ordre par défaut sur une petite
+salle passe sous l'un d'eux.
 
 **La variante 5, 4, 3 annonce au moins quatre collisions cumulées, et au moins une
 paire distincte.** Les deux chiffres sont différents et le test les sépare : cinq
@@ -8557,9 +8621,9 @@ questions et s'arrête.
 
 1. **Le problème, en une phrase** : asseoir chaque personne présente à chacun
    de ses tours de sorte que le plus mal servi rencontre le plus de monde
-   possible. C'est l'objectif de
-   l'ordre par défaut ; la section dit en une phrase que l'opérateur peut en
-   ranger d'autres devant (§ 5.7).
+   possible. L'ordre par défaut le poursuit après les rencontres répétées et
+   les collisions ; la section le dit en une phrase, et que l'opérateur peut
+   le ranger devant elles (§ 5.7).
 2. **Pourquoi il n'a pas de réponse évidente**, par un compte, pas par un mot
    savant. Douze personnes se répartissent sur quatre tables **numérotées** de
    trois de **369 600 façons pour un seul tour** — 12! divisé par 6 quatre fois —

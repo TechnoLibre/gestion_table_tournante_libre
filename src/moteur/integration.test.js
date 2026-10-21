@@ -15,6 +15,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { CRITERES, classer } from './classement.js';
 import { indexerPlan, normaliser } from './configuration.js';
+import { CRITERES as REGISTRE } from './criteres.js';
 import { diagnostiquer } from './diagnostic.js';
 import { mesurer } from './indicateurs.js';
 import { minimumAtteint } from './manque.js';
@@ -23,7 +24,12 @@ import { rechercher } from './recherche.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
 
 // Réglages de la génération : une graine fixée, écrite ici (§ 15.5, point 2).
-// À 100 000 mouvements, avec cette graine, les trois propositions de chaque
+// La recherche descend sous l'ordre du registre, écrit en liste réglée
+// (ORDRE_DU_REGISTRE) : il range les collisions devant les rencontres
+// répétées une fois l'écart annulé, et chaque descente y atteint l'optimum
+// d'une petite salle ; la qualité de l'ordre par défaut sur ces deux
+// démonstrations se garde dans recherche_defaut.long.test.js. À 100 000
+// mouvements, avec cette graine, les trois propositions de chaque
 // démonstration rencontrent 8 pour les douze, sans rencontre répétée, et ne
 // portent que les collisions que le diagnostic impose : aucune dans la
 // petite démonstration, 4 dans sa variante. Une proposition de la variante
@@ -32,12 +38,16 @@ import { verifierIndicateurs, verifierInvariants } from './verification.js';
 // de 1,25 ; en deçà, les trois propositions de la petite démonstration
 // gardent des retours choisis. La marge est celle de cette graine : sur les
 // graines 1 à 64, les assertions tiennent pour 43 à 100 000, pour toutes à
-// 200 000.
+// 200 000. Le classement, lui, suit l'ordre fixe de référence : il ne lit
+// pas les priorités de la configuration.
 //
 // Le compte pèse sur la relance sous surveillance (§ 14.14) : toute
 // modification du moteur, ou du générateur que lit le catalogue, rejoue ce
 // fichier.
 const REGLAGES = Object.freeze({ graine: 314_159, arret: 100_000, nombre: 3 });
+
+// L'ordre du registre, chaque critère seul à son palier, au poids 1.
+const ORDRE_DU_REGISTRE = REGISTRE.map((critere) => [{ critere, poids: 1 }]);
 
 // La même génération, arrêtée au premier mouvement. Aucune de ses
 // propositions n'atteint son plafond a priori : avec cette graine, leurs
@@ -45,8 +55,12 @@ const REGLAGES = Object.freeze({ graine: 314_159, arret: 100_000, nombre: 3 });
 // 1 à 64, aucune proposition brève ne l'atteint non plus.
 const REGLAGES_BREVES = Object.freeze({ ...REGLAGES, arret: 1 });
 
-// Configuration neuve d'une démonstration du catalogue.
-const demo = (cle) => CATALOGUE.find((entree) => entree.cle === cle).construire();
+// Configuration neuve d'une démonstration du catalogue, sous l'ordre du
+// registre.
+const demo = (cle) => ({
+  ...CATALOGUE.find((entree) => entree.cle === cle).construire(),
+  priorites: ORDRE_DU_REGISTRE,
+});
 
 // Génère les propositions d'une configuration et les fait traverser la
 // chaîne. Chaque plan est jugé par verifierInvariants avant d'être indexé :
@@ -213,9 +227,9 @@ describe('intégration : de la configuration au classement (§ 5.5, § 5.7, § 1
     for (const { id, mesures } of breve.propositions) {
       assert.equal(minimumAtteint(mesures, breve.aPriori), false, `proposition ${id}`);
     }
-    // Le premier critère renvoie les brèves derrière les longues ; les
-    // longues, égales sur les cinq, se départagent par identifiant croissant
-    // (§ 15.5, point 4).
+    // Les longues, au minimum de chacun des cinq critères, passent devant
+    // les brèves ; égales sur les cinq, elles se départagent par identifiant
+    // croissant (§ 15.5, point 4).
     const { classement } = classerPropositions({
       aPriori: longue.aPriori,
       propositions: [...breve.propositions, ...longue.propositions],

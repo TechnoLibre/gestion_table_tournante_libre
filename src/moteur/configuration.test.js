@@ -1360,7 +1360,9 @@ describe('normaliser : refus des objectifs, du mode et des priorités (A12, A16)
 
   test('une liste incomplète se complète par l’ordre par défaut avant d’être jugée', () => {
     const instance = normaliser({ ...base, priorites: ordre([redondance], [ecart]) });
-    assert.deepEqual(instance.priorites, ordre([redondance], [ecart], [excedent], [collisions], [horsObjectif], [repetees], [animateurs]));
+    // Chaque critère manquant suit celui qui le précède dans l'ordre par
+    // défaut ; l'excédent, qui l'ouvre, va en tête.
+    assert.deepEqual(instance.priorites, ordre([excedent], [repetees], [collisions], [redondance], [ecart], [horsObjectif], [animateurs]));
     assert.equal(verifierPriorites(instance.priorites, 'places'), null);
     // Le même partage, sous le mode par défaut, est reçu.
     const partage = ordre([ecart], [excedent], [collisions, horsObjectif], [repetees], [animateurs], [redondance]);

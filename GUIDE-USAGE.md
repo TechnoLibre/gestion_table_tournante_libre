@@ -408,7 +408,7 @@ pas garde son rang, mais ne compte nulle part.
 ![L’ordre des priorités : un palier de deux critères et leurs poids, les animateurs décochés](doc/captures/10a-ordre-priorites.png)
 
 *Ici, l’excédent de collisions et les tours hors objectif partagent le
-palier 2, aux poids 1 et 3 : le classement y compare l’excédent plus trois
+palier 1, aux poids 1 et 3 : le classement y compare l’excédent plus trois
 fois les tours hors objectif. « Animateurs non rencontrés » est marqué
 « décoché » : la case « Rencontrer le plus d’animateurs différents » ne l’est
 pas. Au-dessus de la liste, hors de l’image, le choix « Objectifs des
@@ -418,9 +418,9 @@ servies ».*
 ![Les propositions classées, l’ordre du classement écrit au-dessus, le tableau défilé jusqu’aux colonnes des objectifs](doc/captures/11-propositions.png)
 
 *Le tableau range les propositions selon l’ordre écrit au-dessus de lui,
-celui des priorités réglé plus haut : d’abord l’écart au plafond a priori,
-puis, ensemble, l’excédent de collisions et les tours hors objectif avec
-leurs poids, et ainsi de suite, chaque critère au plus faible d’abord. Plus
+celui des priorités réglé plus haut : d’abord, ensemble, l’excédent de
+collisions et les tours hors objectif avec leurs poids, puis les rencontres
+répétées, et ainsi de suite, chaque critère au plus faible d’abord. Plus
 large que l’écran, le tableau défile de côté ; il est montré ici défilé vers
 la droite : la diversité des organisations rencontrées, le manque et le
 plafond a priori, puis, en dernier groupe, les objectifs des tables — les
@@ -451,23 +451,23 @@ réservation lui fixe est refusé lui aussi : décocher ce tour suffit.
 
 Les deux écrans qui suivent viennent de la grande démonstration sans
 exception, générée avec la graine 4242 et un compte d’arrêt de 2 000 ; sa
-proposition n° 1, première du classement, sert de départ, son tour 1 figé,
-à une génération faite avec la graine 4258.
+proposition n° 4, première du classement, sert de départ, son tour 1 figé,
+à une génération faite avec la graine 389.
 
-![La carte du départ : la proposition n° 1, son tour 1 figé, et « Générer depuis n° 1 »](doc/captures/11a-depart-derive.png)
+![La carte du départ : la proposition n° 4, son tour 1 figé, et « Générer depuis n° 4 »](doc/captures/11a-depart-derive.png)
 
-*La proposition n° 1 choisie pour départ par « Repartir d’elle », dans le
+*La proposition n° 4 choisie pour départ par « Repartir d’elle », dans le
 menu « Actions » de sa ligne. Sa carte
 offre « Repartir de zéro » et une case par tour, le tour 1 coché ; la note
-dessous rappelle ce qu’un tour figé devient. « Générer depuis n° 1 » lance
+dessous rappelle ce qu’un tour figé devient. « Générer depuis n° 4 » lance
 la génération ; jusque-là, rien ne s’est écrit.*
 
 Les propositions ainsi obtenues sont des **dérivées**. Elles entrent au même
 classement que les autres, et chacune porte, sous son numéro, la proposition
 dont elle part et ses tours figés. L’historique nomme la génération :
-« Généré 5 propositions dérivées de n° 1 (n° 6 à 10), tour 1 figé ». À la fin
+« Généré 5 propositions dérivées de n° 4 (n° 6 à 10), tour 1 figé ». À la fin
 du calcul, la section dit la place de la meilleure dérivée et celle du
-départ, et offre « Comparer n° 9 à n° 1 », qui ouvre la vue de comparaison
+départ, et offre « Comparer n° 6 à n° 4 », qui ouvre la vue de comparaison
 de la page « Qualité » (étape 10). Une dérivée identique à son départ, ou à
 une autre proposition, est écartée ; quand toutes égalent leur départ, la
 section dit que le départ n’avait rien à reprendre. Le départ reste choisi après la
@@ -475,10 +475,10 @@ génération : une génération ordinaire passe par « Repartir de zéro ».
 
 ![Une dérivée et son départ dans le tableau classé, la filiation sous le numéro de la dérivée](doc/captures/11b-propositions-derivees.png)
 
-*Après la génération dérivée : la proposition n° 10, troisième du
-classement, porte « Dérivée de n° 1, tour 1 figé. » sous son numéro ; son
-départ, n° 1, la suit au quatrième rang du même classement. Chaque dérivée
-reprend le tour 1 de n° 1, table par table. Le menu « Actions » de chaque
+*Après la génération dérivée : la proposition n° 7, cinquième du
+classement, porte « Dérivée de n° 4, tour 1 figé. » sous son numéro ; son
+départ, n° 4, la suit au sixième rang du même classement. Chaque dérivée
+reprend le tour 1 de n° 4, table par table. Le menu « Actions » de chaque
 ligne, à droite, est hors de l’image.*
 
 **Un changement de participants ne demande pas de repartir de zéro.** Une
@@ -591,22 +591,22 @@ pourcentages. La vue ne fait que regarder : elle n’écrit rien.
 
 ![Les chiffres de deux propositions en deux colonnes côte à côte, « Tous les indicateurs » replié](doc/captures/17a-comparaison-colonnes.png)
 
-*Les colonnes de la meilleure dérivée, n° 9, sa filiation sous son nom, et de
-son départ, n° 1, sur la grande démonstration sans exception. Le minimum brut
-s’écrit 89 % et 85 %, chacun avec le compte du pire dessous, « minimum 25 sur
-28 » et « minimum 24 sur 28 » ; suivent le plus grand manque, 3 et 4, les
-personnes à qui il en manque, 152 et 147, et l’écart d’itinéraire, 3 des deux
+*Les colonnes de la meilleure dérivée, n° 6, sa filiation sous son nom, et de
+son départ, n° 4, sur la grande démonstration sans exception. Le minimum brut
+s’écrit 88 % et 85 %, chacun avec le compte du pire dessous, « minimum 24 sur
+27 » et « minimum 23 sur 27 » ; suivent le plus grand manque, 3 et 4, les
+personnes à qui il en manque, 143 et 141, et l’écart d’itinéraire, 3 des deux
 côtés. Aucun écart n’est calculé entre les deux colonnes, et aucune n’est mise
 en évidence. « Tous les indicateurs », replié dessous, garde les autres
 chiffres. La question de la vue, juste au-dessus, est hors de l’image.*
 
 ![Le manque de deux propositions superposé sur un même axe : les courbes se croisent](doc/captures/17-comparaison-manque.png)
 
-*La meilleure dérivée, n° 9, en trait plein, contre son départ, n° 1, en
+*La meilleure dérivée, n° 6, en trait plein, contre son départ, n° 4, en
 tirets : la même vue, sous ses colonnes de l’image précédente. Le zéro de
-l’axe se lit « rien à reprendre à ce placement ». N° 1 laisse une
-personne à quatre rencontres de son plafond réalisé, n° 9 personne au-delà
-de trois ; les courbes se croisent au rang 148, d’où n° 1 sert mieux. Les
+l’axe se lit « rien à reprendre à ce placement ». N° 4 laisse trois
+personnes à quatre rencontres de son plafond réalisé, n° 6 personne au-delà
+de trois ; les courbes se croisent au rang 142, d’où n° 4 sert mieux. Les
 phrases le disent en comptes de rangs.*
 
 ![L’escalier du manque des deux propositions, ouvert sous la vue](doc/captures/18-comparaison-escalier.png)
@@ -932,12 +932,12 @@ même plan diffèrent, et pourquoi relancer aide parfois, et parfois jamais.
 ### Le problème
 
 Asseoir chaque personne présente, à chacun de ses tours, de sorte que la
-personne la plus mal servie rencontre le plus de monde possible. C’est
-l’objectif de l’ordre par défaut ; vous pouvez en ranger d’autres devant, dans
-l’ordre des priorités de la section « Génération ». Le profil trié de la page
-« Qualité » range les personnes de la moins servie à la mieux servie
-([le profil trié](doc/captures/12-qualite-profil.png)) : la plus mal servie est
-au premier rang.
+personne la plus mal servie rencontre le plus de monde possible. L’ordre par
+défaut le poursuit après les rencontres répétées et les collisions ; vous pouvez
+le ranger devant elles, dans l’ordre des priorités de la section « Génération ».
+Le profil trié de la page « Qualité » range les personnes de la moins servie à
+la mieux servie ([le profil trié](doc/captures/12-qualite-profil.png)) : la plus
+mal servie est au premier rang.
 
 ### Pourquoi il n’a pas de réponse évidente
 
@@ -1084,7 +1084,7 @@ réglage du poste, pour la séance, automatique par défaut (étape 9).
 | Rencontrer le plus d'animateurs différents | Génération | décochée |
 | Attribuer les sièges | Génération | décochée |
 | Objectifs des tables : chercher d'abord | Génération | le plus de places servies |
-| Ordre des priorités | Génération | écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, puis tours hors objectif, puis rencontres répétées et retours, puis animateurs non rencontrés, puis redondance d'organisation |
+| Ordre des priorités | Génération | excédent de collisions, puis rencontres répétées et retours, puis collisions cumulées, puis écart au plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis redondance d'organisation |
 
 <!-- engendre:fin reglages -->
 

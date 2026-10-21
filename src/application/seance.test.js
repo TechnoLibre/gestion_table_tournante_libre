@@ -17,6 +17,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { lirePolices } from '../../test/polices.js';
 import { apercevoir } from '../csv/apercu.js';
 import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
+import { CRITERES } from '../moteur/criteres.js';
 import { rechercher } from '../moteur/recherche.js';
 import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot, ouvrir as ouvrirDansLeDepot } from '../stockage/depot.js';
@@ -4207,9 +4208,12 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
   });
 
   // Douze personnes, la sixième seule du Club des Merles, trois tables de
-  // quatre, trois tours.
+  // quatre, trois tours, sous l'ordre du registre réglé, chaque critère seul
+  // à son palier.
   function chargeDouze() {
     const charge = creerCharge({ id: 'evt-lucioles', nom: BASE, siegesParDefaut: 4, tours: 3 });
+    const ordreDuRegistre = CRITERES.map((critere) => [{ critere, poids: 1 }]);
+    charge.reglages.priorites = ordreDuRegistre;
     const prenoms = ['Iris', 'Théo', 'Ondine', 'Basile', 'Clémence', 'Gaspard', 'Lison', 'Marius', 'Nora', 'Octave', 'Perle', 'Rémi'];
     charge.participants = prenoms.map((prenom, i) => personne(i + 1, 'Lucane', prenom, i === 5 ? 'Club des Merles' : null));
     charge.tables = [1, 2, 3].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 250 * (id - 1), y: 0 } }));

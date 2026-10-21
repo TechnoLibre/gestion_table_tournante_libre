@@ -73,9 +73,7 @@
   reçoit un poids entier de 1 à 100 ; « Rétablir l'ordre par défaut » revient
   au départ. La recherche poursuit l'ordre réglé et le classement l'applique ;
   la phrase au-dessus du tableau nomme les paliers dans l'ordre. Un critère
-  décoché garde son rang et ne compte nulle part. Sans objectif, sans la case
-  des animateurs et sous l'ordre par défaut, une graine donne les mêmes
-  propositions qu'avant.
+  décoché garde son rang et ne compte nulle part.
 - Le tableau des propositions ajoute le groupe de colonnes des objectifs des
   tables et des animateurs, quand l'un de ces critères compte ; le diagnostic
   dit combien de tours hors objectif la configuration impose au moins, pour
@@ -385,6 +383,14 @@
   les listes de noms paraissent et sur le plan imprimé. Le panneau de la
   table, son infobulle, son nom pour les lecteurs d'écran et le titre de sa
   feuille imprimée le portent aussi. Il ne change aucun placement.
+- L'**ordre des priorités par défaut** commence par l'excédent de collisions,
+  puis les rencontres répétées et retours, les collisions cumulées et l'écart
+  au plafond a priori : ne pas réunir des collègues ni faire revoir une
+  personne passe avant les rencontres de la personne la plus mal servie, et
+  une petite salle atteint moins souvent le plan parfait. Un événement qui a
+  réglé son ordre le garde. L'ordre d'avant — écart, excédent, cumulées, tours
+  hors objectif, rencontres répétées et retours, animateurs, redondance —,
+  réglé, rend les propositions d'avant.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

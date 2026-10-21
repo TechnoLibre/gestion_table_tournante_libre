@@ -6,11 +6,11 @@
 // par faute sous chaque mode, son complément, les valeurs qui classent, la
 // compilation, celle d'une instance, et la garde de la contrainte 35 : hors
 // du registre, aucune source ne recopie une liste des noms de critères ni un
-// ordre de comparaison. La compilation de l'ordre par défaut se compare, sous les
-// seize combinaisons des quatre cases, au n-uplet que la recherche descend
-// sans le registre : six composantes, celles d'un critère décoché nulles,
-// comparées dans l'ordre du score [0..5] puis, l'écart annulé, dans celui
-// des contraintes [2, 3, 4, 0, 1, 5].
+// ordre de comparaison. La compilation de l'ordre par défaut se compare, sous
+// les seize combinaisons des quatre cases, à un n-uplet écrit en clair : six
+// composantes, celles d'un critère décoché retirées, comparées dans le même
+// ordre avant et après l'annulation de l'écart, qu'aucun palier « contrainte »
+// ne suit alors.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
@@ -20,6 +20,7 @@ import {
   CRITERES,
   FAMILLE,
   MODES_OBJECTIFS,
+  ORDRE_PAR_DEFAUT,
   POIDS_MAX,
   PRIORITES_PAR_DEFAUT,
   VALEURS_DES_MODES,
@@ -45,8 +46,21 @@ const TOUTES_COCHEES = contraintesDu(0b1111);
 // Une entrée de palier.
 const e = (critere, poids = 1) => ({ critere, poids });
 
-// La liste par défaut, palier par palier, en entrées fraîches.
-const parDefaut = () => CRITERES.map((nom) => [e(nom)]);
+// La liste canonique : chaque critère seul à son palier, dans l'ordre de
+// CRITERES, en entrées fraîches. Elle sert de liste valide quelconque.
+const canonique = () => CRITERES.map((nom) => [e(nom)]);
+
+// L'ordre par défaut, écrit en clair, palier par palier, en entrées fraîches.
+const parDefaut = () =>
+  [
+    'excedentCollisions',
+    'rencontresRepetees',
+    'collisionsCumulees',
+    'ecartAuPlafondAPrioriMax',
+    'toursHorsObjectif',
+    'animateursNonRencontres',
+    'redondance',
+  ].map((nom) => [e(nom)]);
 
 // La liste dont le palier d'index i est remplacé par les paliers donnés
 // (aucun : le palier est retiré).
@@ -85,27 +99,29 @@ function ordresNommes(compilation, mode) {
   };
 }
 
-// Le n-uplet de la recherche sans le registre : six composantes nommées, et
-// leurs deux ordres de comparaison.
-const COMPOSANTES_SANS_REGISTRE = [
+// Le n-uplet de l'ordre par défaut sous les quatre cases, sans objectif ni
+// case des animateurs : six composantes nommées, et leurs deux ordres de
+// comparaison. Les composantes de l'écart ne sont suivies que de la
+// redondance, un raffinement : la bascule ne les déplace pas.
+const COMPOSANTES_DU_DEFAUT = [
+  'excedentCollisions',
+  'rencontresRepetees',
+  'collisionsCumulees',
   'ecartAuPlafondAPrioriMax',
   'carresEcartsAuPlafondAPriori',
-  'excedentCollisions',
-  'collisionsCumulees',
-  'rencontresRepetees',
   'redondance',
 ];
-const SCORE_SANS_REGISTRE = [0, 1, 2, 3, 4, 5];
-const CONTRAINTES_SANS_REGISTRE = [2, 3, 4, 0, 1, 5];
+const SCORE_DU_DEFAUT = [0, 1, 2, 3, 4, 5];
+const CONTRAINTES_DU_DEFAUT = [0, 1, 2, 3, 4, 5];
 
-// Les composantes que la recherche sans registre tient nulles sous ces
-// contraintes, par rang.
-const nullesSansRegistre = (c) => [
-  false,
-  false,
-  !c.separerOrganisations,
+// Les composantes que ces contraintes retirent du n-uplet de l'ordre par
+// défaut, par rang : celles d'un critère décoché.
+const retireesDuDefaut = (c) => [
   !c.separerOrganisations,
   !c.nouveauxVoisins && !c.nouvelleTable,
+  !c.separerOrganisations,
+  false,
+  false,
   !c.varierOrganisations,
 ];
 
@@ -144,7 +160,15 @@ describe('criteres : le registre (contrat de données, § 5.7)', () => {
     assert.ok(Object.isFrozen(CASES) && CRITERES.every((nom) => Object.isFrozen(CASES[nom])));
   });
 
-  test("l'ordre par défaut : chaque critère seul à son palier, au poids 1 ; le poids au plus 100", () => {
+  test("l'ordre par défaut : excédent, rencontres répétées, cumulées, écart, puis objectifs, animateurs, redondance", () => {
+    assert.deepEqual(ORDRE_PAR_DEFAUT, parDefaut().map(([{ critere }]) => critere));
+    assert.ok(Object.isFrozen(ORDRE_PAR_DEFAUT));
+    // Une permutation du registre, qui garde son ordre canonique à part.
+    assert.deepEqual([...ORDRE_PAR_DEFAUT].sort(), [...CRITERES].sort());
+    assert.notDeepEqual(ORDRE_PAR_DEFAUT, CRITERES);
+  });
+
+  test("les priorités par défaut : chaque critère seul à son palier, au poids 1, dans l'ordre par défaut ; le poids au plus 100", () => {
     assert.deepEqual(PRIORITES_PAR_DEFAUT, parDefaut());
     assert.ok(Object.isFrozen(PRIORITES_PAR_DEFAUT));
     assert.ok(PRIORITES_PAR_DEFAUT.every((palier) => Object.isFrozen(palier) && Object.isFrozen(palier[0])));
@@ -200,8 +224,8 @@ describe('criteres : le registre (contrat de données, § 5.7)', () => {
       assert.throws(() => seulsASonPalier(mode), RangeError, String(mode));
       assert.throws(() => composantesDe('redondance', mode), RangeError, String(mode));
       assert.throws(() => valeursQuiClassent('redondance', TOUTES_COCHEES, mode), RangeError, String(mode));
-      assert.throws(() => verifierPriorites(parDefaut(), mode), RangeError, String(mode));
-      assert.throws(() => compiler(parDefaut(), () => true, mode), RangeError, String(mode));
+      assert.throws(() => verifierPriorites(canonique(), mode), RangeError, String(mode));
+      assert.throws(() => compiler(canonique(), () => true, mode), RangeError, String(mode));
     }
   });
 });
@@ -229,8 +253,11 @@ describe('criteres : les cases (§ 5.3, A8)', () => {
 });
 
 describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
-  test("l'ordre par défaut est valide sous chaque mode ; le mode par défaut est places", () => {
-    for (const mode of MODES_OBJECTIFS) assert.equal(verifierPriorites(parDefaut(), mode), null, mode);
+  test("l'ordre par défaut et la liste canonique sont valides sous chaque mode ; le mode par défaut est places", () => {
+    for (const mode of MODES_OBJECTIFS) {
+      assert.equal(verifierPriorites(parDefaut(), mode), null, mode);
+      assert.equal(verifierPriorites(canonique(), mode), null, mode);
+    }
     assert.equal(verifierPriorites(PRIORITES_PAR_DEFAUT), null);
   });
 
@@ -247,13 +274,13 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
 
   test("forme : dans un palier, les critères hors de l'ordre du tableau du § 5.7 (A16)", () => {
     for (const mode of MODES_OBJECTIFS) {
-      const inverses = remplacer(remplacer(parDefaut(), 2), 1, [e('collisionsCumulees', 3), e('excedentCollisions', 100)]);
+      const inverses = remplacer(remplacer(canonique(), 2), 1, [e('collisionsCumulees', 3), e('excedentCollisions', 100)]);
       assert.deepEqual(verifierPriorites(inverses, mode), {
         faute: 'forme', critere: 'excedentCollisions', palier: 1,
       }, mode);
       // Le premier critère rangé avant celui qui le précède est nommé, même
       // quand les deux autres suivent l'ordre.
-      const troisieme = remplacer(remplacer(remplacer(parDefaut(), 6), 5), 2, [
+      const troisieme = remplacer(remplacer(remplacer(canonique(), 6), 5), 2, [
         e('collisionsCumulees'), e('redondance'), e('animateursNonRencontres'),
       ]);
       assert.deepEqual(verifierPriorites(troisieme, mode), {
@@ -266,7 +293,7 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
     }
     // Sous places, où les tours hors objectif partagent un palier, un
     // raffinement rangé devant eux fait une faute de forme.
-    const raffinementEnTete = remplacer(remplacer(parDefaut(), 6), 3, [e('redondance'), e('toursHorsObjectif', 2)]);
+    const raffinementEnTete = remplacer(remplacer(canonique(), 6), 3, [e('redondance'), e('toursHorsObjectif', 2)]);
     assert.deepEqual(verifierPriorites(raffinementEnTete, 'places'), {
       faute: 'forme', critere: 'toursHorsObjectif', palier: 3,
     });
@@ -278,7 +305,7 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
         assert.deepEqual(verifierPriorites(liste, mode), { faute: 'forme' }, `${mode} ${String(liste)}`);
       }
       for (const palier of [null, e('redondance'), 'redondance']) {
-        assert.deepEqual(verifierPriorites(remplacer(parDefaut(), 6, palier), mode), { faute: 'forme', palier: 6 });
+        assert.deepEqual(verifierPriorites(remplacer(canonique(), 6, palier), mode), { faute: 'forme', palier: 6 });
       }
       const entrees = [
         null,
@@ -290,14 +317,14 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
         Object.create({ critere: 'collisionsCumulees', poids: 1 }),
       ];
       for (const entree of entrees) {
-        assert.deepEqual(verifierPriorites(remplacer(parDefaut(), 2, [entree]), mode), { faute: 'forme', palier: 2 });
+        assert.deepEqual(verifierPriorites(remplacer(canonique(), 2, [entree]), mode), { faute: 'forme', palier: 2 });
       }
     }
   });
 
   test('palierVide : un palier sans critère', () => {
     for (const mode of MODES_OBJECTIFS) {
-      const liste = [...parDefaut().slice(0, 3), [], ...parDefaut().slice(3)];
+      const liste = [...canonique().slice(0, 3), [], ...canonique().slice(3)];
       assert.deepEqual(verifierPriorites(liste, mode), { faute: 'palierVide', palier: 3 });
     }
   });
@@ -305,7 +332,7 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
   test("critereInconnu : un nom hors du registre, même hérité d'Object", () => {
     for (const mode of MODES_OBJECTIFS) {
       for (const nom of ['ecart', 'Redondance', '__proto__', 'constructor', 'hasOwnProperty', '']) {
-        const liste = [...parDefaut(), [e(nom)]];
+        const liste = [...canonique(), [e(nom)]];
         assert.deepEqual(verifierPriorites(liste, mode), { faute: 'critereInconnu', critere: nom, palier: 7 });
       }
     }
@@ -313,10 +340,10 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
 
   test('critereRepete : un critère nommé deux fois, dans deux paliers ou dans le même', () => {
     for (const mode of MODES_OBJECTIFS) {
-      assert.deepEqual(verifierPriorites([...parDefaut(), [e('redondance')]], mode), {
+      assert.deepEqual(verifierPriorites([...canonique(), [e('redondance')]], mode), {
         faute: 'critereRepete', critere: 'redondance', palier: 7,
       });
-      assert.deepEqual(verifierPriorites(remplacer(parDefaut(), 6, [e('redondance'), e('redondance', 2)]), mode), {
+      assert.deepEqual(verifierPriorites(remplacer(canonique(), 6, [e('redondance'), e('redondance', 2)]), mode), {
         faute: 'critereRepete', critere: 'redondance', palier: 6,
       });
     }
@@ -324,10 +351,10 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
 
   test("critereAbsent : la liste est complète ; le premier absent dans l'ordre du registre est nommé", () => {
     for (const mode of MODES_OBJECTIFS) {
-      assert.deepEqual(verifierPriorites(remplacer(parDefaut(), 5), mode), {
+      assert.deepEqual(verifierPriorites(remplacer(canonique(), 5), mode), {
         faute: 'critereAbsent', critere: 'animateursNonRencontres',
       });
-      assert.deepEqual(verifierPriorites(remplacer(remplacer(parDefaut(), 5), 1), mode), {
+      assert.deepEqual(verifierPriorites(remplacer(remplacer(canonique(), 5), 1), mode), {
         faute: 'critereAbsent', critere: 'excedentCollisions',
       });
       assert.deepEqual(verifierPriorites([], mode), { faute: 'critereAbsent', critere: 'ecartAuPlafondAPrioriMax' });
@@ -337,22 +364,22 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
   test("poids : hors de 1 à 100, non entier ou non nombre ; différent de 1 pour l'écart et les rencontres répétées", () => {
     for (const mode of MODES_OBJECTIFS) {
       for (const poids of [0, -1, 101, 1.5, Number.NaN, Infinity, '2', null, undefined]) {
-        assert.deepEqual(verifierPriorites(remplacer(parDefaut(), 6, [{ critere: 'redondance', poids }]), mode), {
+        assert.deepEqual(verifierPriorites(remplacer(canonique(), 6, [{ critere: 'redondance', poids }]), mode), {
           faute: 'poids', critere: 'redondance', palier: 6,
         }, `${mode} ${String(poids)}`);
       }
       for (const [rang, nom] of [[0, 'ecartAuPlafondAPrioriMax'], [4, 'rencontresRepetees']]) {
-        assert.deepEqual(verifierPriorites(remplacer(parDefaut(), rang, [e(nom, 2)]), mode), {
+        assert.deepEqual(verifierPriorites(remplacer(canonique(), rang, [e(nom, 2)]), mode), {
           faute: 'poids', critere: nom, palier: rang,
         });
       }
-      assert.equal(verifierPriorites(remplacer(parDefaut(), 6, [e('redondance', 100)]), mode), null);
+      assert.equal(verifierPriorites(remplacer(canonique(), 6, [e('redondance', 100)]), mode), null);
     }
   });
 
   test('poids : les tours hors objectif seuls à leur palier au poids 1 sous chacun et minimum, de 1 à 100 sous places (A16, D8)', () => {
     for (const poids of [2, 7, 100]) {
-      const liste = remplacer(parDefaut(), 3, [e('toursHorsObjectif', poids)]);
+      const liste = remplacer(canonique(), 3, [e('toursHorsObjectif', poids)]);
       assert.equal(verifierPriorites(liste, 'places'), null, String(poids));
       for (const mode of ['chacun', 'minimum']) {
         assert.deepEqual(verifierPriorites(liste, mode), {
@@ -366,19 +393,19 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
   test('un critère seul à son palier, joint et pondéré : le partage se juge avant le poids 1 et avant l’ordre, sous chaque mode', () => {
     for (const mode of MODES_OBJECTIFS) {
       // Rangé après l'excédent, contre l'ordre du tableau : le partage prime.
-      const ecartJoint = remplacer(remplacer(parDefaut(), 1), 0, [e('excedentCollisions'), e('ecartAuPlafondAPrioriMax', 2)]);
+      const ecartJoint = remplacer(remplacer(canonique(), 1), 0, [e('excedentCollisions'), e('ecartAuPlafondAPrioriMax', 2)]);
       assert.deepEqual(verifierPriorites(ecartJoint, mode), {
         faute: 'seulASonPalier', critere: 'ecartAuPlafondAPrioriMax', palier: 0,
       }, mode);
       // Un poids hors du domaine se relève à la lecture de l'entrée, avant le
       // partage du palier.
-      const horsDomaine = remplacer(remplacer(parDefaut(), 1), 0, [e('ecartAuPlafondAPrioriMax', 101), e('excedentCollisions')]);
+      const horsDomaine = remplacer(remplacer(canonique(), 1), 0, [e('ecartAuPlafondAPrioriMax', 101), e('excedentCollisions')]);
       assert.deepEqual(verifierPriorites(horsDomaine, mode), {
         faute: 'poids', critere: 'ecartAuPlafondAPrioriMax', palier: 0,
       }, mode);
     }
     for (const mode of ['chacun', 'minimum']) {
-      const toursJoints = remplacer(remplacer(parDefaut(), 3), 1, [e('excedentCollisions', 5), e('toursHorsObjectif', 9)]);
+      const toursJoints = remplacer(remplacer(canonique(), 3), 1, [e('excedentCollisions', 5), e('toursHorsObjectif', 9)]);
       assert.deepEqual(verifierPriorites(toursJoints, mode), {
         faute: 'seulASonPalier', critere: 'toursHorsObjectif', palier: 1,
       }, mode);
@@ -387,16 +414,16 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
 
   test('seulASonPalier : écart ou rencontres répétées joints à un autre critère, sous chaque mode', () => {
     for (const mode of MODES_OBJECTIFS) {
-      const ecartJoint = remplacer(remplacer(parDefaut(), 1), 0, [e('ecartAuPlafondAPrioriMax'), e('excedentCollisions')]);
+      const ecartJoint = remplacer(remplacer(canonique(), 1), 0, [e('ecartAuPlafondAPrioriMax'), e('excedentCollisions')]);
       assert.deepEqual(verifierPriorites(ecartJoint, mode), {
         faute: 'seulASonPalier', critere: 'ecartAuPlafondAPrioriMax', palier: 0,
       });
-      const repeteesJointes = remplacer(remplacer(parDefaut(), 6), 4, [e('rencontresRepetees'), e('redondance')]);
+      const repeteesJointes = remplacer(remplacer(canonique(), 6), 4, [e('rencontresRepetees'), e('redondance')]);
       assert.deepEqual(verifierPriorites(repeteesJointes, mode), {
         faute: 'seulASonPalier', critere: 'rencontresRepetees', palier: 4,
       });
       // Joint par un critère rangé avant lui dans le palier.
-      const repeteesApres = remplacer(remplacer(parDefaut(), 4), 2, [e('collisionsCumulees'), e('rencontresRepetees')]);
+      const repeteesApres = remplacer(remplacer(canonique(), 4), 2, [e('collisionsCumulees'), e('rencontresRepetees')]);
       assert.deepEqual(verifierPriorites(repeteesApres, mode), {
         faute: 'seulASonPalier', critere: 'rencontresRepetees', palier: 2,
       });
@@ -404,8 +431,8 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
   });
 
   test('seulASonPalier : tours hors objectif joints, refusés sous chacun et minimum, admis sous places (D23)', () => {
-    const joints = remplacer(remplacer(parDefaut(), 3), 1, [e('excedentCollisions'), e('toursHorsObjectif', 2)]);
-    const enTete = remplacer(remplacer(parDefaut(), 6), 3, [e('toursHorsObjectif', 2), e('redondance')]);
+    const joints = remplacer(remplacer(canonique(), 3), 1, [e('excedentCollisions'), e('toursHorsObjectif', 2)]);
+    const enTete = remplacer(remplacer(canonique(), 6), 3, [e('toursHorsObjectif', 2), e('redondance')]);
     assert.equal(verifierPriorites(joints, 'places'), null);
     assert.equal(verifierPriorites(enTete, 'places'), null);
     for (const mode of ['chacun', 'minimum']) {
@@ -415,14 +442,14 @@ describe('criteres : verifierPriorites, faute par faute (D8, A12, A16)', () => {
   });
 
   test("la première faute dans l'ordre de la liste est rendue", () => {
-    const liste = [[e('inconnu')], [], ...parDefaut()];
+    const liste = [[e('inconnu')], [], ...canonique()];
     assert.deepEqual(verifierPriorites(liste), { faute: 'critereInconnu', critere: 'inconnu', palier: 0 });
   });
 });
 
 describe('criteres : completerPriorites (A16)', () => {
   test('une liste complète se rend égale, en copie', () => {
-    const liste = [[e('excedentCollisions', 4), e('collisionsCumulees', 3)], ...remplacer(remplacer(parDefaut(), 2), 1)];
+    const liste = [[e('excedentCollisions', 4), e('collisionsCumulees', 3)], ...remplacer(remplacer(canonique(), 2), 1)];
     const complete = completerPriorites(liste);
     assert.deepEqual(complete, liste);
     assert.notEqual(complete, liste);
@@ -437,25 +464,27 @@ describe('criteres : completerPriorites (A16)', () => {
       [e('collisionsCumulees', 2), e('redondance', 5)],
       [e('rencontresRepetees')],
     ];
+    // Les tours hors objectif suivent l'écart, qui les précède dans l'ordre
+    // par défaut ; les animateurs suivent les tours hors objectif.
     assert.deepEqual(completerPriorites(Object.freeze(ancienne.map((p) => Object.freeze(p)))), [
       [e('excedentCollisions')],
       [e('ecartAuPlafondAPrioriMax')],
-      [e('collisionsCumulees', 2), e('redondance', 5)],
       [e('toursHorsObjectif')],
-      [e('rencontresRepetees')],
       [e('animateursNonRencontres')],
+      [e('collisionsCumulees', 2), e('redondance', 5)],
+      [e('rencontresRepetees')],
     ]);
     assert.equal(verifierPriorites(completerPriorites(ancienne)), null);
   });
 
-  test("le premier critère absent se place en tête ; une liste vide devient l'ordre par défaut", () => {
-    assert.deepEqual(completerPriorites([[e('redondance')], [e('excedentCollisions')]]), [
-      [e('ecartAuPlafondAPrioriMax')],
-      [e('redondance')],
+  test("le premier critère de l'ordre par défaut, absent, se place en tête ; une liste vide devient l'ordre par défaut", () => {
+    assert.deepEqual(completerPriorites([[e('redondance')], [e('rencontresRepetees')]]), [
       [e('excedentCollisions')],
-      [e('collisionsCumulees')],
-      [e('toursHorsObjectif')],
+      [e('redondance')],
       [e('rencontresRepetees')],
+      [e('collisionsCumulees')],
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('toursHorsObjectif')],
       [e('animateursNonRencontres')],
     ]);
     assert.deepEqual(completerPriorites([]), parDefaut());
@@ -494,35 +523,36 @@ describe('criteres : valeursQuiClassent (D9, D20)', () => {
   });
 });
 
-describe('criteres : compiler, le défaut contre la recherche sans registre (D11, contrainte 33)', () => {
-  test('sous les seize combinaisons et chaque mode, composantes et ordres égalent [0..5] et [2, 3, 4, 0, 1, 5] à la composante nulle près', () => {
+describe("criteres : compiler, l'ordre par défaut sous les seize combinaisons des cases (D11)", () => {
+  test("sous les seize combinaisons et chaque mode, composantes et ordres égalent [0..5] et [0..5] aux composantes retirées près ; l'écart suit les contraintes cochées", () => {
     for (let masque = 0; masque < 16; masque += 1) {
       const c = contraintesDu(masque);
-      const nulles = nullesSansRegistre(c);
-      const attendus = (ordre) => ordre.filter((k) => !nulles[k]).map((k) => COMPOSANTES_SANS_REGISTRE[k]);
+      const retirees = retireesDuDefaut(c);
+      const attendus = (ordre) => ordre.filter((k) => !retirees[k]).map((k) => COMPOSANTES_DU_DEFAUT[k]);
       for (const mode of MODES_OBJECTIFS) {
         const compilation = compiler(PRIORITES_PAR_DEFAUT, compteDesCases(c), mode);
         const { score, contraintes } = ordresNommes(compilation, mode);
         const message = `masque ${masque.toString(2).padStart(4, '0')}, ${mode}`;
-        assert.deepEqual(score, attendus(SCORE_SANS_REGISTRE), message);
-        assert.deepEqual(contraintes, attendus(CONTRAINTES_SANS_REGISTRE), message);
+        assert.deepEqual(score, attendus(SCORE_DU_DEFAUT), message);
+        assert.deepEqual(contraintes, attendus(CONTRAINTES_DU_DEFAUT), message);
         assert.equal(compilation.taille, score.length, message);
         assert.deepEqual(compilation.ordreScore, [...Array(compilation.taille).keys()], message);
-        assert.equal(compilation.rangEcart, 0, message);
+        assert.equal(compilation.rangEcart, retirees.slice(0, 3).filter((retiree) => !retiree).length, message);
       }
     }
   });
 
   test("sous les quatre cases cochées : cinq paliers d'un critère, de poids 1, dans l'ordre fixe de référence", () => {
-    const { paliers, taille } = compiler(PRIORITES_PAR_DEFAUT, compteDesCases(TOUTES_COCHEES), 'places');
+    const { paliers, taille, rangEcart } = compiler(PRIORITES_PAR_DEFAUT, compteDesCases(TOUTES_COCHEES), 'places');
     assert.deepEqual(paliers, [
-      { famille: 'rencontres', criteres: [{ nom: 'ecartAuPlafondAPrioriMax', poids: 1 }], composantes: [0, 1] },
-      { famille: 'contrainte', criteres: [{ nom: 'excedentCollisions', poids: 1 }], composantes: [2] },
-      { famille: 'contrainte', criteres: [{ nom: 'collisionsCumulees', poids: 1 }], composantes: [3] },
-      { famille: 'contrainte', criteres: [{ nom: 'rencontresRepetees', poids: 1 }], composantes: [4] },
+      { famille: 'contrainte', criteres: [{ nom: 'excedentCollisions', poids: 1 }], composantes: [0] },
+      { famille: 'contrainte', criteres: [{ nom: 'rencontresRepetees', poids: 1 }], composantes: [1] },
+      { famille: 'contrainte', criteres: [{ nom: 'collisionsCumulees', poids: 1 }], composantes: [2] },
+      { famille: 'rencontres', criteres: [{ nom: 'ecartAuPlafondAPrioriMax', poids: 1 }], composantes: [3, 4] },
       { famille: 'raffinement', criteres: [{ nom: 'redondance', poids: 1 }], composantes: [5] },
     ]);
     assert.equal(taille, 6);
+    assert.equal(rangEcart, 3);
   });
 
   test('sans objectif, les trois modes compilent la même chose, sous chaque combinaison des cases', () => {
@@ -584,7 +614,7 @@ describe('criteres : compiler, les paliers et la bascule (A11, D15)', () => {
   });
 
   test("l'écart en dernier : les deux ordres sont ceux du score", () => {
-    const liste = [...parDefaut().slice(1), [e('ecartAuPlafondAPrioriMax')]];
+    const liste = [...canonique().slice(1), [e('ecartAuPlafondAPrioriMax')]];
     const compilation = compiler(liste, () => true);
     assert.equal(compilation.rangEcart, 6);
     assert.deepEqual(compilation.ordreContraintes, compilation.ordreScore);
@@ -609,7 +639,7 @@ describe('criteres : compiler, les paliers et la bascule (A11, D15)', () => {
   });
 
   test('palier mixte { tours hors objectif × 2, redondance × 1 } : contrainte, une composante', () => {
-    const liste = remplacer(remplacer(parDefaut(), 6), 3, [e('toursHorsObjectif', 2), e('redondance')]);
+    const liste = remplacer(remplacer(canonique(), 6), 3, [e('toursHorsObjectif', 2), e('redondance')]);
     const compilation = compiler(liste, () => true, 'places');
     assert.deepEqual(compilation.paliers[3], {
       famille: 'contrainte',
@@ -627,7 +657,7 @@ describe('criteres : compiler, les paliers et la bascule (A11, D15)', () => {
   });
 
   test("palier de deux raffinements : raffinement, une composante, où la bascule s'arrête", () => {
-    const liste = remplacer(remplacer(parDefaut(), 6), 5, [e('animateursNonRencontres', 3), e('redondance', 2)]);
+    const liste = remplacer(remplacer(canonique(), 6), 5, [e('animateursNonRencontres', 3), e('redondance', 2)]);
     const compilation = compiler(liste, () => true);
     assert.deepEqual(compilation.paliers.at(-1), {
       famille: 'raffinement',
@@ -639,21 +669,41 @@ describe('criteres : compiler, les paliers et la bascule (A11, D15)', () => {
 
   test("objectifs et animateurs comptés : un palier chacun, aux rangs de l'ordre par défaut", () => {
     const compilation = compiler(PRIORITES_PAR_DEFAUT, () => true, 'places');
+    // L'écart annulé, les tours hors objectif, une contrainte, passent devant
+    // lui : la bascule le range avant les animateurs.
     assert.deepEqual(ordresNommes(compilation), {
       score: [
-        'ecartAuPlafondAPrioriMax', 'carresEcartsAuPlafondAPriori', 'excedentCollisions', 'collisionsCumulees',
-        'toursHorsObjectif', 'rencontresRepetees', 'animateursNonRencontres', 'redondance',
+        'excedentCollisions', 'rencontresRepetees', 'collisionsCumulees', 'ecartAuPlafondAPrioriMax',
+        'carresEcartsAuPlafondAPriori', 'toursHorsObjectif', 'animateursNonRencontres', 'redondance',
       ],
       contraintes: [
-        'excedentCollisions', 'collisionsCumulees', 'toursHorsObjectif', 'rencontresRepetees',
+        'excedentCollisions', 'rencontresRepetees', 'collisionsCumulees', 'toursHorsObjectif',
         'ecartAuPlafondAPrioriMax', 'carresEcartsAuPlafondAPriori', 'animateursNonRencontres', 'redondance',
       ],
     });
     assert.equal(compilation.taille, 8);
+    assert.equal(compilation.rangEcart, 3);
+  });
+
+  test("l'écart seul monté en tête de l'ordre par défaut : la bascule rend les contraintes du défaut ; le registre les range autrement", () => {
+    const ecartEnTete = [
+      [e('ecartAuPlafondAPrioriMax')],
+      ...PRIORITES_PAR_DEFAUT.filter(([{ critere }]) => critere !== 'ecartAuPlafondAPrioriMax'),
+    ];
+    const defaut = ordresNommes(compiler(PRIORITES_PAR_DEFAUT, () => true));
+    const monte = ordresNommes(compiler(ecartEnTete, () => true));
+    assert.notDeepEqual(monte.score, defaut.score);
+    assert.deepEqual(monte.contraintes, defaut.contraintes);
+    // Sous l'ordre du registre, les collisions et les tours hors objectif
+    // passent devant les rencontres répétées après la bascule.
+    assert.deepEqual(ordresNommes(compiler(canonique(), () => true)).contraintes, [
+      'excedentCollisions', 'collisionsCumulees', 'toursHorsObjectif', 'rencontresRepetees',
+      'ecartAuPlafondAPrioriMax', 'carresEcartsAuPlafondAPriori', 'animateursNonRencontres', 'redondance',
+    ]);
   });
 
   test('un palier dont aucun critère ne compte disparaît ; un critère qui ne compte pas sort de son palier', () => {
-    const liste = remplacer(remplacer(parDefaut(), 6), 5, [e('animateursNonRencontres', 3), e('redondance', 2)]);
+    const liste = remplacer(remplacer(canonique(), 6), 5, [e('animateursNonRencontres', 3), e('redondance', 2)]);
     const compilation = compiler(liste, comptant('ecartAuPlafondAPrioriMax', 'collisionsCumulees', 'redondance'));
     assert.deepEqual(compilation.paliers, [
       { famille: 'rencontres', criteres: [{ nom: 'ecartAuPlafondAPrioriMax', poids: 1 }], composantes: [0, 1] },
@@ -664,7 +714,7 @@ describe('criteres : compiler, les paliers et la bascule (A11, D15)', () => {
   });
 
   test('un palier mixte dont seul le raffinement compte devient raffinement', () => {
-    const liste = remplacer(remplacer(parDefaut(), 6), 3, [e('toursHorsObjectif', 2), e('redondance')]);
+    const liste = remplacer(remplacer(canonique(), 6), 3, [e('toursHorsObjectif', 2), e('redondance')]);
     const compilation = compiler(liste, (nom) => nom !== 'toursHorsObjectif');
     assert.deepEqual(compilation.paliers[3], {
       famille: 'raffinement', criteres: [{ nom: 'redondance', poids: 1 }], composantes: [4],
@@ -678,7 +728,14 @@ describe('criteres : compiler, les paliers et la bascule (A11, D15)', () => {
     assert.deepEqual(compilation.ordreContraintes, compilation.ordreScore);
     // Deux listes distinctes : permuter l'une ne touche pas l'autre.
     assert.notEqual(compilation.ordreContraintes, compilation.ordreScore);
-    assert.equal(compilation.paliers[0].criteres[0].nom, 'excedentCollisions');
+    assert.deepEqual(compilation.paliers.map(({ criteres: [{ nom }] }) => nom), [
+      'excedentCollisions',
+      'rencontresRepetees',
+      'collisionsCumulees',
+      'toursHorsObjectif',
+      'animateursNonRencontres',
+      'redondance',
+    ]);
   });
 
   test('aucun critère qui compte : un n-uplet vide', () => {
@@ -690,12 +747,12 @@ describe('criteres : compiler, les paliers et la bascule (A11, D15)', () => {
   test('compte est lu une fois par critère, par son nom, dans l’ordre de la liste', () => {
     const lus = [];
     compiler(PRIORITES_PAR_DEFAUT, (nom) => { lus.push(nom); return true; });
-    assert.deepEqual(lus, CRITERES);
+    assert.deepEqual(lus, parDefaut().map(([{ critere }]) => critere));
   });
 
   test('une liste invalide lève RangeError, qui nomme la faute', () => {
     assert.throws(() => compiler([], () => true), (erreur) => erreur instanceof RangeError && /critereAbsent/.test(erreur.message));
-    const joints = remplacer(remplacer(parDefaut(), 3), 1, [e('excedentCollisions'), e('toursHorsObjectif')]);
+    const joints = remplacer(remplacer(canonique(), 3), 1, [e('excedentCollisions'), e('toursHorsObjectif')]);
     assert.throws(() => compiler(joints, () => true, 'chacun'), (erreur) => erreur instanceof RangeError && /seulASonPalier/.test(erreur.message));
     assert.equal(compiler(joints, () => true, 'places').taille, 7);
   });
@@ -709,15 +766,17 @@ describe('criteres : compiler, les composantes des tours hors objectif selon le 
       minimum: ['horsObjectifMax', 'personnesAuMax', 'toursHorsObjectif'],
     };
     for (const mode of MODES_OBJECTIFS) {
+      // Sous l'ordre par défaut, les tours hors objectif suivent l'écart, au
+      // cinquième palier ; la bascule les passe devant lui.
       const compilation = compiler(PRIORITES_PAR_DEFAUT, () => true, mode);
       const largeur = attendues[mode].length;
-      assert.deepEqual(compilation.paliers[3].composantes, [...Array(largeur).keys()].map((k) => 4 + k), mode);
+      assert.deepEqual(compilation.paliers[4].composantes, [...Array(largeur).keys()].map((k) => 5 + k), mode);
       assert.equal(compilation.taille, 7 + largeur, mode);
       const { score, contraintes } = ordresNommes(compilation, mode);
-      assert.deepEqual(score.slice(4, 4 + largeur), attendues[mode], mode);
-      assert.deepEqual(contraintes.slice(2, 2 + largeur), attendues[mode], mode);
+      assert.deepEqual(score.slice(5, 5 + largeur), attendues[mode], mode);
+      assert.deepEqual(contraintes.slice(3, 3 + largeur), attendues[mode], mode);
       assert.deepEqual(
-        contraintes.slice(2 + largeur + 1, 2 + largeur + 3),
+        contraintes.slice(3 + largeur, 3 + largeur + 2),
         ['ecartAuPlafondAPrioriMax', 'carresEcartsAuPlafondAPriori'],
         mode,
       );
@@ -765,10 +824,10 @@ describe('criteres : compilationDe, la compilation d’une instance (D10, contra
       modeObjectifs: 'places',
     });
     assert.deepEqual(compilation.paliers.map(({ criteres }) => criteres), [
-      [{ nom: 'ecartAuPlafondAPrioriMax', poids: 1, valeurs: ['ecartAuPlafondAPrioriMax'] }],
       [{ nom: 'excedentCollisions', poids: 1, valeurs: ['excedentCollisions'] }],
-      [{ nom: 'collisionsCumulees', poids: 1, valeurs: ['collisionsCumulees'] }],
       [{ nom: 'rencontresRepetees', poids: 1, valeurs: ['rencontresRepeteesChoisies'] }],
+      [{ nom: 'collisionsCumulees', poids: 1, valeurs: ['collisionsCumulees'] }],
+      [{ nom: 'ecartAuPlafondAPrioriMax', poids: 1, valeurs: ['ecartAuPlafondAPrioriMax'] }],
       [{ nom: 'redondance', poids: 1, valeurs: ['redondance'] }],
     ]);
     const { paliers, ...reste } = compiler(PRIORITES_PAR_DEFAUT, compteDesCases(TOUTES_COCHEES), 'places');
@@ -783,9 +842,9 @@ describe('criteres : compilationDe, la compilation d’une instance (D10, contra
       modeObjectifs: 'chacun',
     });
     assert.deepEqual(compilation.paliers.map(({ criteres }) => criteres.map(({ nom, valeurs }) => [nom, valeurs])), [
+      [['rencontresRepetees', ['retoursChoisis']]],
       [['ecartAuPlafondAPrioriMax', ['ecartAuPlafondAPrioriMax']]],
       [['toursHorsObjectif', ['jamaisServies', 'toursHorsObjectif']]],
-      [['rencontresRepetees', ['retoursChoisis']]],
     ]);
     assert.equal(compilation.taille, 5);
   });
@@ -803,7 +862,7 @@ describe('criteres : compilationDe, la compilation d’une instance (D10, contra
     });
     for (const compilation of [decoche, sansObjet]) {
       const noms = compilation.paliers.flatMap(({ criteres }) => criteres.map(({ nom }) => nom));
-      assert.deepEqual(noms, ['ecartAuPlafondAPrioriMax', 'excedentCollisions', 'collisionsCumulees', 'rencontresRepetees', 'redondance']);
+      assert.deepEqual(noms, ['excedentCollisions', 'rencontresRepetees', 'collisionsCumulees', 'ecartAuPlafondAPrioriMax', 'redondance']);
     }
   });
 

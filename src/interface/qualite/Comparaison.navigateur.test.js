@@ -108,7 +108,7 @@ function generee(charge, reglages) {
 }
 
 // Douze personnes, trois tables de quatre, trois tours, quatre propositions
-// classées [4, 2, 1, 3] : 1 contre son défaut, 4, prend quatre valeurs de
+// classées [1, 3, 4, 2] : 1 contre son défaut, 3, prend quatre valeurs de
 // manque, et se trace.
 const aTracer = () => generee(chargeDe({ n: 12, tables: 3, sieges: 4, tours: 3 }), { graine: 5, arret: 30, nombre: 4 });
 // Six personnes, deux tables de trois, deux tours, trois propositions : deux
@@ -299,18 +299,18 @@ describe('les deux placements, la liste « Comparer à : », le tracé (§ 12.10
 
   test('B qui disparaît — devenu la source, retiré par un retour, effacé par « Garder les N meilleures » — : la vue revient au défaut et nomme toujours les deux', async () => {
     const m = await ouvrir(aTracer());
-    m.ui.montrerProposition(4);
+    m.ui.montrerProposition(3);
     await amener(m);
     // Devenu la source : le défaut de la nouvelle source.
-    m.ui.comparerA(3);
-    await attendre(() => expect(liste(m).value).toBe('3'));
-    m.ui.montrerProposition(3);
-    await attendre(() => exigerRendu(m, attendu(m, 3)));
-    expect(attendu(m, 3).choisi).not.toBe(3);
+    m.ui.comparerA(4);
+    await attendre(() => expect(liste(m).value).toBe('4'));
+    m.ui.montrerProposition(4);
+    await attendre(() => exigerRendu(m, attendu(m, 4)));
+    expect(attendu(m, 4).choisi).not.toBe(4);
 
     // Retiré par un retour : une génération ajoute 5 à 8, B devient 7, le
     // retour la retire.
-    m.ui.montrerProposition(4);
+    m.ui.montrerProposition(3);
     const lue = charge(m);
     const configuration = configurationDepuisCharge(lue);
     await m.seance.executer('enregistrerGeneration', {
@@ -320,22 +320,22 @@ describe('les deux placements, la liste « Comparer à : », le tracé (§ 12.10
     });
     await attendre(() => expect([...liste(m).options].map((option) => option.value)).toContain('7'));
     m.ui.comparerA(7);
-    await attendre(() => exigerRendu(m, attendu(m, 4)));
+    await attendre(() => exigerRendu(m, attendu(m, 3)));
     expect(liste(m).value).toBe('7');
     await m.seance.defaire();
     await attendre(() => expect(charge(m).propositions.map(({ id }) => id)).toEqual([1, 2, 3, 4]));
-    await attendre(() => exigerRendu(m, attendu(m, 4)));
+    await attendre(() => exigerRendu(m, attendu(m, 3)));
     expect(liste(m).value).not.toBe('7');
     expect(m.ui.etat().comparee).toBeNull();
 
-    // Effacé : « Garder les 2 meilleures » emporte 3, la vue revient au
-    // défaut de 4.
-    m.ui.comparerA(3);
-    await attendre(() => expect(liste(m).value).toBe('3'));
+    // Effacé : « Garder les 2 meilleures » emporte 4, la vue revient au
+    // défaut de 3.
+    m.ui.comparerA(4);
+    await attendre(() => expect(liste(m).value).toBe('4'));
     await m.seance.executer('garderMeilleures', { n: 2 });
     await attendre(() => expect(charge(m).propositions).toHaveLength(2));
-    await attendre(() => exigerRendu(m, attendu(m, 4)));
-    expect(liste(m).value).not.toBe('3');
+    await attendre(() => exigerRendu(m, attendu(m, 3)));
+    expect(liste(m).value).not.toBe('4');
   });
 
   test('une génération qui ajoute des propositions sous la vue ouverte : la liste les porte, B reste', async () => {

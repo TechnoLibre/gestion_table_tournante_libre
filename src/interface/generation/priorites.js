@@ -8,8 +8,9 @@
 // Les faits du registre des critères (contrainte 35) se lisent par
 // l'application, que l'interface atteint seule : l'ordre du registre dans la
 // table d'évaluation d'un événement neuf, qui porte l'état de chaque critère
-// dans cet ordre ; la validité d'une liste sous le mode de l'événement dans
-// la commande changerPriorites, qui la juge par le registre. Aucune règle du
+// dans cet ordre ; l'ordre par défaut, que l'application réexporte ; la
+// validité d'une liste sous le mode de l'événement dans la commande
+// changerPriorites, qui la juge par le registre. Aucune règle du
 // registre ne se récrit ici : un geste s'offre quand la commande admettrait
 // sa liste, et l'écart au plafond a priori, les rencontres répétées, ou les
 // tours hors objectif sous « chacun » et « minimum », ne partagent ainsi
@@ -35,7 +36,7 @@
 // (evaluation, propositions/modele.js) : l'éditeur ne mesure rien de
 // nouveau (§ 13.3).
 import { appliquerCommande, chargeNeuve } from '../../application/commandes.js';
-import { evaluer } from '../../application/evaluation.js';
+import { PRIORITES_PAR_DEFAUT, evaluer } from '../../application/evaluation.js';
 import { SIEGES_PAR_DEFAUT, TOURS_PAR_DEFAUT } from '../../application/evenements.js';
 import { evaluation, figeePartout } from '../propositions/modele.js';
 
@@ -53,9 +54,12 @@ const TEMOIN = chargeNeuve(
 export const CRITERES_DU_REGISTRE = Object.freeze(evaluer(TEMOIN).criteres.map(({ nom }) => nom));
 
 /** L'ordre par défaut (§ 5.7) : chaque critère seul à son palier, au poids
- *  1, dans l'ordre du registre. */
+ *  1, dans l'ordre par défaut du registre, que l'application réexporte, et
+ *  non dans l'ordre du registre. */
 export const LISTE_PAR_DEFAUT = Object.freeze(
-  CRITERES_DU_REGISTRE.map((critere) => Object.freeze([Object.freeze({ critere, poids: 1 })])),
+  PRIORITES_PAR_DEFAUT.map((palier) =>
+    Object.freeze(palier.map(({ critere, poids }) => Object.freeze({ critere, poids }))),
+  ),
 );
 
 /** Les gestes de l'éditeur, dans l'ordre de leurs boutons ; chacun est

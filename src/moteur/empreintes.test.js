@@ -29,6 +29,7 @@ import {
   ecrireEmpreintes,
   empreinteDe,
   empreinteDuPlan,
+  empreintesDeLaBascule,
   empreintesDesCombinaisons,
   empreintesDesPlans,
   lireEmpreintes,
@@ -62,7 +63,7 @@ describe('empreintes de référence : la petite démonstration et sa variante (�
 
   for (const cle of BASCULE.cles) {
     test(`${cle} : à ${BASCULE.arret} mouvements, où la meilleure affectation s’améliore après la bascule, les plans sont ceux de la référence`, () => {
-      const calcule = empreintesDesPlans(cle, BASCULE.arret);
+      const calcule = empreintesDeLaBascule(cle);
       assert.deepEqual(differences(`${cle} (bascule)`, calcule, REFERENCE.bascule[cle]), []);
       assert.deepEqual(calcule, REFERENCE.bascule[cle], cle);
     });

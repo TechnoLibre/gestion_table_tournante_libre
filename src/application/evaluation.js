@@ -112,10 +112,11 @@ import { configurationDe } from './configuration.js';
 import { derivationDe, ecartAuRetenu } from './depart.js';
 import { nomAffiche } from './personnes.js';
 
-// Les modes des objectifs, le défaut en tête, et les cases qui font compter
-// chaque critère, tels que le registre les tient (contrainte 35) :
-// l'interface, qui n'importe pas le moteur, les lit ici.
-export { CASES, MODES_OBJECTIFS } from '../moteur/criteres.js';
+// Les modes des objectifs, le défaut en tête, les cases qui font compter
+// chaque critère et la liste de priorités par défaut, tels que le registre
+// les tient (contrainte 35) : l'interface, qui n'importe pas le moteur, les
+// lit ici.
+export { CASES, MODES_OBJECTIFS, PRIORITES_PAR_DEFAUT } from '../moteur/criteres.js';
 
 /**
  * @typedef {Object} LigneEvaluation

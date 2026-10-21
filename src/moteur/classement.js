@@ -13,8 +13,8 @@
 //
 // Sans compilation, classer applique l'ordre fixe de référence : l'ordre par
 // défaut sous les quatre cases cochées, sans objectif ni case des
-// animateurs, que le registre compile en cinq paliers — écart, excédent,
-// cumulées, rencontres répétées, redondance (A11).
+// animateurs, que le registre compile en cinq paliers — excédent, rencontres
+// répétées, cumulées, écart, redondance (A11).
 //
 // L'excédent de collisions précède les collisions cumulées dans l'ordre par
 // défaut : un plan qui répartit six collisions sur six paires passe devant

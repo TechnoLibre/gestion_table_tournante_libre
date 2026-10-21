@@ -80,6 +80,7 @@ import { verifierInvariants } from './verification.js';
 import {
   BASCULE,
   differences,
+  empreintesDeLaBascule,
   empreintesDesCombinaisons,
   empreintesDesPlans,
   exigerVerification,
@@ -110,6 +111,17 @@ const HISTORIQUE_PAR_DEFAUT = 1_000;
 
 // Configuration neuve d'une démonstration du catalogue.
 const demo = (cle) => CATALOGUE.find((entree) => entree.cle === cle).construire();
+
+// L'ordre du registre, chaque critère seul à son palier, au poids 1 : l'écart
+// au plafond a priori l'ouvre, et la bascule y passe les contraintes devant
+// lui. Sous l'ordre par défaut, sans objectif ni animateurs, l'écart ne
+// précède que la redondance, et la bascule ne change pas l'ordre
+// d'acceptation.
+const ordreDuRegistre = CRITERES.map((critere) => [{ critere, poids: 1 }]);
+
+// La même configuration sous l'ordre du registre : les épreuves de la
+// bascule, de la relance et des tirages s'y règlent.
+const sousLOrdreDuRegistre = (configuration) => ({ ...configuration, priorites: ordreDuRegistre });
 
 const tous = (participant, table) => ({ participant, table, portee: 'tous' });
 const auTour = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
@@ -413,15 +425,16 @@ function comparerDans(ordre, a, b) {
 // évalués, ou sur le n-uplet nul.
 //
 // Sans bascule, l'ordre d'acceptation reste celui du score : c'est
-// l'acceptation tardive seule, à la lettre (§ 5.10). Avec, il devient l'ordre des contraintes dès que la
-// meilleure affectation porte un écart maximal nul, lu au rang que la
-// compilation donne au plus grand écart ; dans cet ordre, un score courant
-// inchangé pendant PATIENCE × L itérations fait repartir la descente d'un
-// placement neuf, tiré du même générateur, l'historique à son score (en-tête
-// de recherche.js). Rend le plan et quatre comptes : bascules, relances,
-// meilleures affectations trouvées après une relance, et meilleures
-// affectations qu'un mouvement trouve après la dernière relance (zéro sans
-// relance).
+// l'acceptation tardive seule, à la lettre (§ 5.10). Avec, il est l'ordre des
+// contraintes tant que la meilleure affectation porte un écart maximal nul,
+// lu au rang que la compilation donne au plus grand écart, celui du score
+// sinon ; dans l'ordre des contraintes, un score courant inchangé pendant
+// PATIENCE × L itérations fait repartir la descente d'un placement neuf, tiré
+// du même générateur, l'historique à son score (en-tête de recherche.js).
+// Rend le plan et quatre comptes : bascules, les passages à l'ordre des
+// contraintes ; relances ; meilleures affectations trouvées après une
+// relance ; et meilleures affectations qu'un mouvement trouve après la
+// dernière relance (zéro sans relance).
 //
 // rng, le générateur des mouvements, est par défaut celui de la graine
 // dérivée ; partir() construit l'état du début et de chaque relance,
@@ -444,9 +457,10 @@ function descendreALaLettre(instance, graineDerivee, arret, L, {
   let immobile = 0;
   const comptes = { bascules: 0, relances: 0, apresRelance: 0, apresDerniere: 0 };
   const basculer = () => {
-    if (!bascule || ordre === ORDRE_DES_CONTRAINTES || rangEcart === null || meilleur[rangEcart] !== 0) return;
-    ordre = ORDRE_DES_CONTRAINTES;
-    comptes.bascules += 1;
+    if (!bascule || rangEcart === null) return;
+    const suivant = meilleur[rangEcart] === 0 ? ORDRE_DES_CONTRAINTES : ORDRE_DU_SCORE;
+    if (suivant !== ordre && suivant === ORDRE_DES_CONTRAINTES) comptes.bascules += 1;
+    ordre = suivant;
   };
   const retenir = (parMouvement) => {
     if (comparerDans(ORDRE_DU_SCORE, courant, meilleur) >= 0) return;
@@ -736,7 +750,7 @@ describe('regenerer : une proposition depuis ses seuls champs (§ 5.7, § 8.9)',
     let conflit = null;
     for (const [nom, construire] of [
       ['salleReservee', salleReservee],
-      ['petite-conflit', () => demo('petite-conflit')],
+      ['petite-conflit', () => sousLOrdreDuRegistre(demo('petite-conflit'))],
     ]) {
       const configuration = construire();
       const propositions = rechercher(configuration, reglages);
@@ -760,11 +774,11 @@ describe('regenerer : une proposition depuis ses seuls champs (§ 5.7, § 8.9)',
       conflit = propositions;
     }
     assert.equal(regenerees, 6);
-    // Dans la variante conflit, chaque descente atteint un écart nul,
-    // bascule, puis relance : la réplique littérale rend les mêmes plans, et
-    // compte bascules et relances. La régénération rejoue donc aussi le
-    // placement neuf qu'une relance tire.
-    const repliques = descentesALaLettre(demo('petite-conflit'), reglages, { bascule: true });
+    // Dans la variante conflit, sous l'ordre du registre, chaque descente
+    // atteint un écart nul, bascule, puis relance : la réplique littérale
+    // rend les mêmes plans, et compte bascules et relances. La régénération
+    // rejoue donc aussi le placement neuf qu'une relance tire.
+    const repliques = descentesALaLettre(sousLOrdreDuRegistre(demo('petite-conflit')), reglages, { bascule: true });
     assert.deepStrictEqual(repliques.map(({ plan }) => plan), conflit.map(({ plan }) => plan));
     assert.deepEqual(
       repliques.map(({ bascules, relances }) => [bascules, relances > 0]),
@@ -1301,16 +1315,16 @@ describe("rechercher : la descente par acceptation tardive, à la lettre (§ 5.1
 });
 
 describe('rechercher : bascule et relance, à la lettre (en-tête de recherche.js)', () => {
-  test('petite démonstration en conflit, historique 100, arret 20 000 : les plans de la réplique', () => {
+  test('petite démonstration en conflit, sous l’ordre du registre, historique 100, arret 20 000 : les plans de la réplique', () => {
     // Chaque descente y atteint un écart maximal nul et bascule ; à
     // historique 100, la patience vaut 1 000 itérations, et des relances
     // suivent la bascule puis trouvent de meilleures affectations. Les
     // comptes de la réplique l'exigent : sans eux, l'épreuve passerait aussi
     // sur des descentes qui ne basculent ni ne relancent.
     const reglages = { graine: 0, arret: 20_000, nombre: 3, historique: 100 };
-    const repliques = descentesALaLettre(demo('petite-conflit'), reglages, { bascule: true });
+    const repliques = descentesALaLettre(sousLOrdreDuRegistre(demo('petite-conflit')), reglages, { bascule: true });
     assert.deepStrictEqual(
-      rechercher(demo('petite-conflit'), reglages).map(({ plan }) => plan),
+      rechercher(sousLOrdreDuRegistre(demo('petite-conflit')), reglages).map(({ plan }) => plan),
       repliques.map(({ plan }) => plan),
     );
     assert.deepEqual(
@@ -1333,8 +1347,9 @@ describe('rechercher : bascule et relance, à la lettre (en-tête de recherche.j
 const QUATRE_CASES = { ...TOUTES_CONTRAINTES };
 // Une entrée de palier.
 const e = (critere, poids = 1) => ({ critere, poids });
-// L'ordre par défaut, chaque critère seul à son palier.
-const parDefaut = () => CRITERES.map((nom) => [e(nom)]);
+// La liste canonique, chaque critère seul à son palier dans l'ordre du
+// registre, l'écart en tête : une liste valide, que les épreuves découpent.
+const canonique = () => CRITERES.map((nom) => [e(nom)]);
 
 // Les ordres déplacés de l'épreuve : sous places, le palier { excédent × 1,
 // tours hors objectif × 3 } en deuxième ; sous les deux autres modes, les
@@ -1692,7 +1707,7 @@ describe("rechercher : la bascule suit l'ordre réglé (A11, A21)", () => {
       [e('excedentCollisions')],
       [e('collisionsCumulees')],
       [e('ecartAuPlafondAPrioriMax')],
-      ...parDefaut().slice(3),
+      ...canonique().slice(3),
     ];
     const configuration = () => ({ ...demo('petite-conflit'), priorites });
     const instance = normaliser(configuration());
@@ -1829,7 +1844,7 @@ describe('rechercher : chaque mode descend jusqu’aux planchers du diagnostic (
     // temps d'un mouvement.
     for (const mode of ['minimum', 'chacun']) {
       const configuration = {
-        priorites: [[e('toursHorsObjectif')], [e('ecartAuPlafondAPrioriMax')], ...parDefaut().slice(1).filter(([{ critere }]) => critere !== 'toursHorsObjectif')],
+        priorites: [[e('toursHorsObjectif')], [e('ecartAuPlafondAPrioriMax')], ...canonique().slice(1).filter(([{ critere }]) => critere !== 'toursHorsObjectif')],
         participants: Array.from({ length: 6 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, organisation: null, exclu: false, etiquettes: ['finance'] })),
         tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 6 }],
         tours: 1,
@@ -1848,7 +1863,7 @@ describe('rechercher : chaque mode descend jusqu’aux planchers du diagnostic (
   });
 
   test('un mode qui compare deux valeurs garde son palier : les tours hors objectif joints à un autre critère refusent PRIORITES', () => {
-    const priorites = [[e('ecartAuPlafondAPrioriMax')], [e('excedentCollisions'), e('toursHorsObjectif')], ...parDefaut().slice(2).filter(([{ critere }]) => critere !== 'toursHorsObjectif')];
+    const priorites = [[e('ecartAuPlafondAPrioriMax')], [e('excedentCollisions'), e('toursHorsObjectif')], ...canonique().slice(2).filter(([{ critere }]) => critere !== 'toursHorsObjectif')];
     for (const mode of ['chacun', 'minimum']) {
       assert.throws(
         () => rechercher(soireeAObjectifs({ mode, priorites }), { graine: 1, arret: 10, nombre: 1 }),
@@ -1869,7 +1884,8 @@ describe('rechercher : le mode ne touche pas au défaut, sans objectif (A21, con
       }
       assert.deepEqual(differences(`petite, ${mode}`, empreintesDesCombinaisons(mode), REFERENCE.combinaisons), []);
       for (const cle of BASCULE.cles) {
-        assert.deepEqual(differences(`${cle} (bascule), ${mode}`, empreintesDesPlans(cle, BASCULE.arret, mode), REFERENCE.bascule[cle]), []);
+        const calcule = empreintesDeLaBascule(cle, mode);
+        assert.deepEqual(differences(`${cle} (bascule), ${mode}`, calcule, REFERENCE.bascule[cle]), []);
       }
     });
   }
@@ -1916,7 +1932,7 @@ function confronterCourse(configuration, proposition, nom) {
 // initial assied deux personnes à la première table, et la descente
 // s'arrête sur le n-uplet nul, toutes à la seconde, avant son compte.
 const soireeQuiSAnnule = () => ({
-  priorites: [[e('toursHorsObjectif')], [e('ecartAuPlafondAPrioriMax')], ...parDefaut().slice(1).filter(([{ critere }]) => critere !== 'toursHorsObjectif')],
+  priorites: [[e('toursHorsObjectif')], [e('ecartAuPlafondAPrioriMax')], ...canonique().slice(1).filter(([{ critere }]) => critere !== 'toursHorsObjectif')],
   participants: Array.from({ length: 6 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, organisation: null, exclu: false, etiquettes: ['finance'] })),
   tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 6 }],
   tours: 1,
@@ -1937,15 +1953,15 @@ describe('rechercher : la course de la recherche (§ 5.10, B6, D40)', () => {
   });
 
   test("arrêt au compte : le point de relevé k égale regenerer au compte k (1, 10, 100, 1 000), et le plan rendu celui du compte entier — salle réservée, variante conflit avec bascule et relance, historique 37", () => {
-    // Dans la variante conflit, chaque descente bascule puis relance avant
-    // 5 000 mouvements (épreuve de regenerer plus haut) : un point copié
-    // pendant l'ordre des contraintes, ou juste après une relance, doit
-    // encore égaler la régénération à son compte.
+    // Dans la variante conflit, sous l'ordre du registre, chaque descente
+    // bascule puis relance avant 5 000 mouvements (épreuve de regenerer plus
+    // haut) : un point copié pendant l'ordre des contraintes, ou juste après
+    // une relance, doit encore égaler la régénération à son compte.
     const reglages = { graine: 5, arret: 5_000, nombre: 3, historique: 37 };
     let points = 0;
     for (const [nom, construire] of [
       ['salleReservee', salleReservee],
-      ['petite-conflit', () => demo('petite-conflit')],
+      ['petite-conflit', () => sousLOrdreDuRegistre(demo('petite-conflit'))],
     ]) {
       const configuration = construire();
       for (const proposition of rechercher(configuration, reglages)) {
@@ -2049,7 +2065,8 @@ describe('rechercher : le chemin ordinaire ne tire pas un nombre de plus (§ 5.1
   // éprouvé : les sorties de 32 bits d'une descente sans départ, un appel de
   // borne par tour tiré et par siège, sans rejet sur ces instances, plus
   // n − 1 par mélange de n éléments, un mélange par tour et par placement
-  // tiré.
+  // tiré. La petite démonstration y porte l'ordre du registre
+  // (sousLOrdreDuRegistre).
   //
   // La réplique, qui tire comme rechercher, produit exactement ces sorties ;
   // le plan de rechercher égale le sien. Ce plan ne voit un tirage de plus
@@ -2069,7 +2086,7 @@ describe('rechercher : le chemin ordinaire ne tire pas un nombre de plus (§ 5.1
   ];
   for (const { graine, arret, historique, sorties, relances } of CAS) {
     test(`petite, graine ${graine}, arret ${arret}, historique ${historique} : ${sorties} sorties, ${relances} relance(s), le plan de rechercher`, () => {
-      const configuration = demo('petite');
+      const configuration = sousLOrdreDuRegistre(demo('petite'));
       const instance = normaliser(configuration);
       const graines = creerPcg32(graine, FLUX.GRAINES);
       const graineDerivee = graines.suivant();
@@ -2098,7 +2115,7 @@ describe('rechercher : le chemin ordinaire ne tire pas un nombre de plus (§ 5.1
     { graine: 1, historique: 5, sorties: 6_132, relances: 2 },
   ]) {
     test(`réplique, petite, graine ${graine}, arret 2000, historique ${historique} : ${sorties} sorties, ${relances} relance(s)`, () => {
-      const instance = normaliser(demo('petite'));
+      const instance = normaliser(sousLOrdreDuRegistre(demo('petite')));
       const graineDerivee = creerPcg32(graine, FLUX.GRAINES).suivant();
       const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
       const replique = descendreALaLettre(instance, graineDerivee, 2_000, historique, { bascule: true, rng });

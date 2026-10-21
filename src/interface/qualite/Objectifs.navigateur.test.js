@@ -77,16 +77,17 @@ function chargeObjectifs({ tours = 3, toursObjectif = [1, 2], respecter = true, 
   return charge;
 }
 
-// La charge, une génération enregistrée de plus.
-function generee(charge) {
+// La charge, une génération enregistrée de plus, sous la graine donnée.
+function generee(charge, graine = 7) {
   const configuration = configurationDe(charge);
-  const propositions = rechercher(configuration, { graine: 7, nombre: 2, arret: 200 });
+  const propositions = rechercher(configuration, { graine, nombre: 2, arret: 200 });
   return appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
 }
 
-// Le détail de la première proposition d'une génération.
-function detailDe(options) {
-  const charge = generee(chargeObjectifs(options));
+// Le détail de la première proposition d'une génération, sous la graine
+// donnée.
+function detailDe(options, graine = 7) {
+  const charge = generee(chargeObjectifs(options), graine);
   return detaillerQualite(charge, charge.propositions[0].id);
 }
 
@@ -214,9 +215,9 @@ describe('objectifs : la vue rendue (§ 12.12, B21, D36)', () => {
   });
 
   test('chaque ligne écrit ses assis sans table possible ; un tour sans couple écrit « — », sans barre ni pourcentage', async () => {
-    // L'objectif aux tours 2 et 3 : le tour 2 est en tête, et l'ordre des
-    // barres, [2, 1, 3], n'est pas celui des tours.
-    const detail = detailDe({ toursObjectif: [2, 3] });
+    // L'objectif aux tours 2 et 3, sous la graine 1 : le tour 2 est en tête,
+    // et l'ordre des barres, [2, 1, 3], n'est pas celui des tours.
+    const detail = detailDe({ toursObjectif: [2, 3] }, 1);
     expect(detail.objectifs.pireTour).toBe(1);
     const vue = await monter(detail);
     expect(lignesDuGraphique(vue).map((ligne) => ligne.dataset.ligneGraphique)).toEqual(['2', '1', '3']);

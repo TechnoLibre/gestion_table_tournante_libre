@@ -114,42 +114,43 @@ describe('la meilleure proposition (§ 5.4, § 5.7)', () => {
     assert.equal(typeof rendu.cellule.valeur, 'number');
   });
 
-  test('le rang, ni le plus petit identifiant ni le moins de collisions : la 2, à écart au plafond nul, passe devant la 1, qui sépare les collègues', () => {
-    // Séparer les deux collègues leur retire une rencontre : la 1 porte un
-    // écart au plafond a priori de 1, la 2 aucun ; le premier critère du
-    // classement met la 2 en tête, avec ses 4 collisions cumulées.
+  test('le rang, ni le plus petit identifiant ni le plus petit écart au plafond : la 2, qui sépare les collègues, passe devant la 1, à écart au plafond nul', () => {
+    // Séparer les deux collègues leur retire une rencontre : la 2 porte un
+    // écart au plafond a priori de 1, la 1 aucun. L'excédent de collisions,
+    // premier critère du classement, met pourtant la 2 en tête : la 1 réunit
+    // les collègues aux quatre tours, 4 collisions cumulées sur une paire.
     const charge = chargeSix();
-    charge.propositions = [propositionDe(charge, 1, SEPARES), propositionDe(charge, 2, ENSEMBLE)];
+    charge.propositions = [propositionDe(charge, 1, ENSEMBLE), propositionDe(charge, 2, SEPARES)];
     charge.prochainsIds.proposition = 3;
     const lignes = evaluer(charge).propositions;
     assert.deepEqual(
       lignes.map((ligne) => [ligne.id, ligne.statut, ligne.ecartAuPlafondAPrioriMax, ligne.mesures.collisionsCumulees]),
       [
-        [2, 'comparable', 0, 4],
-        [1, 'comparable', 1, 0],
+        [2, 'comparable', 1, 0],
+        [1, 'comparable', 0, 4],
       ],
     );
     const rendu = meilleureProposition(charge);
     assert.equal(rendu.id, 2);
-    assert.equal(rendu.cellule.valeur, 4);
+    assert.equal(rendu.cellule.valeur, 0);
     assert.deepEqual(rendu, rangUn(charge));
   });
 
   test('le retenu ne change pas le rang 1 : la 1 retenue reste derrière la 2 ; seule à se classer, elle l’est', () => {
     const charge = chargeSix();
-    charge.propositions = [propositionDe(charge, 1, SEPARES), propositionDe(charge, 2, ENSEMBLE)];
+    charge.propositions = [propositionDe(charge, 1, ENSEMBLE), propositionDe(charge, 2, SEPARES)];
     charge.prochainsIds.proposition = 3;
     const retenue = executer(charge, 'retenirProposition', { id: 1 });
     assert.equal(retenue.retenu.proposition, 1);
     const rendu = meilleureProposition(retenue);
     assert.equal(rendu.id, 2);
-    assert.equal(rendu.cellule.valeur, 4);
+    assert.equal(rendu.cellule.valeur, 0);
     assert.deepEqual(rendu, rangUn(retenue));
     // Effacer les propositions garde la retenue, seule au classement.
     const seule = executer(retenue, 'effacerPropositions', {});
     assert.deepEqual(seule.propositions.map(({ id }) => id), [1]);
     assert.deepEqual(meilleureProposition(seule), { ...rangUn(seule), id: 1 });
-    assert.equal(meilleureProposition(seule).cellule.valeur, 0);
+    assert.equal(meilleureProposition(seule).cellule.valeur, 4);
   });
 
   test('une configuration que la mesure refuse : null, sans lever, là où l’évaluation rend son refus', () => {

@@ -1843,14 +1843,24 @@ describe('configurationDepuisCharge : étiquettes, objectifs, mode et cases (con
   });
 });
 
-// L'ordre par défaut, chaque critère seul à son palier, au poids 1 : une
-// liste neuve.
-const prioritesParDefaut = () => CRITERES.map((critere) => [{ critere, poids: 1 }]);
+// L'ordre par défaut, écrit en clair, chaque critère seul à son palier, au
+// poids 1 : une liste neuve.
+const prioritesParDefaut = () =>
+  [
+    'excedentCollisions',
+    'rencontresRepetees',
+    'collisionsCumulees',
+    'ecartAuPlafondAPrioriMax',
+    'toursHorsObjectif',
+    'animateursNonRencontres',
+    'redondance',
+  ].map((critere) => [{ critere, poids: 1 }]);
 
-// L'ordre par défaut où second rejoint le palier de premier, rangé dans
-// l'ordre du registre, chacun à son poids : une liste neuve.
+// L'ordre du registre, l'écart en tête, où second rejoint le palier de
+// premier, rangé dans l'ordre du registre, chacun à son poids : une liste
+// neuve, qui n'est pas l'ordre par défaut.
 function avecPalierPartage(premier, second, [poidsPremier, poidsSecond] = [1, 3]) {
-  const liste = prioritesParDefaut().filter(([{ critere }]) => critere !== second);
+  const liste = CRITERES.map((critere) => [{ critere, poids: 1 }]).filter(([{ critere }]) => critere !== second);
   const palier = liste.find(([{ critere }]) => critere === premier);
   palier[0].poids = poidsPremier;
   palier.push({ critere: second, poids: poidsSecond });
@@ -1858,8 +1868,10 @@ function avecPalierPartage(premier, second, [poidsPremier, poidsSecond] = [1, 3]
   return liste;
 }
 
-// L'ordre réglé des épreuves : l'excédent de collisions × 1 et les tours
-// hors objectif × 3 au deuxième palier, les autres critères seuls.
+// L'ordre réglé des épreuves : l'écart au premier palier, l'excédent de
+// collisions × 1 et les tours hors objectif × 3 au deuxième, les collisions
+// cumulées, les rencontres répétées, les animateurs et la redondance seuls
+// à leur palier, dans cet ordre.
 const prioritesReglees = () => avecPalierPartage('excedentCollisions', 'toursHorsObjectif');
 
 describe('l’ordre des priorités : un réglage facultatif, absent à son défaut (§ 8.9, A16)', () => {
@@ -2006,8 +2018,15 @@ describe('priorites : le lecteur de l’ordre des priorités (§ 5.7, § 8.9)', 
 
   test('une liste qui ne nomme pas un critère le reçoit à sa place de l’ordre par défaut, seul, au poids 1 (A16)', () => {
     const { charge } = documentValide();
-    charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'animateursNonRencontres');
+    charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'redondance');
     assert.deepEqual(priorites(charge), prioritesReglees());
+    // Les animateurs suivent, dans l'ordre par défaut, les tours hors
+    // objectif : ils se placent juste après leur palier, partagé avec
+    // l'excédent, et non après les rencontres répétées qui les précèdent
+    // dans l'ordre du registre.
+    charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'animateursNonRencontres');
+    const [ecart, partage, cumulees, repetees, animateurs, redondance] = prioritesReglees();
+    assert.deepEqual(priorites(charge), [ecart, partage, animateurs, cumulees, repetees, redondance]);
   });
 });
 

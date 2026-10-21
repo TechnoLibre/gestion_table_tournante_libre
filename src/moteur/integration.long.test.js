@@ -40,7 +40,7 @@ import {
   scoreIncremental,
 } from './recherche.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
-import { CRITERES } from './criteres.js';
+import { ORDRE_PAR_DEFAUT } from './criteres.js';
 import { classer } from './classement.js';
 
 // Compte d'arrêt choisi par la mesure. À 1 000 000 mouvements, chacune des
@@ -475,7 +475,7 @@ const PLANCHERS = Object.freeze([
   ["avec plancher d'excédent", 'plancherExcedent', 10], // 15
   ["avec plancher d'écart d'itinéraire", 'plancherEcartItineraire', 35], // 50
   ['marches au dernier palier', 'marches', 400], // 460, une par proposition
-  ["propositions qui basculent dans l'ordre des contraintes", 'bascules', 60], // 86
+  ["propositions qui basculent dans l'ordre des contraintes", 'bascules', 40], // 53
 ]);
 
 describe('intégration : grille de propriétés sur des configurations tirées (§ 14.12)', () => {
@@ -565,9 +565,9 @@ function grandeAObjectifs(priorites) {
 }
 
 // Mesure, graines 1 à 5, 100 000 mouvements : sous l'ordre par défaut,
-// excédent 3, 0, 1, 0, 0 (somme 4) et cumulées 64, 57, 60, 60, 46 (somme
-// 287) ; les objectifs au deuxième palier, excédent 0, 0, 2, 0, 1 (somme 3)
-// et cumulées 52, 52, 70, 57, 46 (somme 277). Les bornes laissent la marge
+// excédent 0 à chaque graine et cumulées 64, 59, 46, 61, 50 (somme 280) ;
+// les objectifs au deuxième palier, excédent 0 à chaque graine et cumulées
+// 55, 67, 57, 48, 50 (somme 277). Les bornes laissent la marge
 // d'une graine à l'autre, que les sommes ne lissent pas : 5 sur l'excédent,
 // 15 % des cumulées de l'ordre par défaut.
 const ECART_EXCEDENT_MAX = 5;
@@ -575,12 +575,10 @@ const ECART_CUMULEES_RELATIF_MAX = 0.15;
 
 describe("intégration : l'ordre réglé ne défait pas les collisions (A21)", () => {
   test("grande à objectifs, cinq graines : l'excédent et les cumulées sous les objectifs au deuxième palier restent près de ceux de l'ordre par défaut", () => {
+    // L'ordre par défaut, les tours hors objectif montés au deuxième palier.
     const e = (critere) => ({ critere, poids: 1 });
-    const deplace = [
-      [e('ecartAuPlafondAPrioriMax')],
-      [e('toursHorsObjectif')],
-      ...CRITERES.filter((nom) => nom !== 'ecartAuPlafondAPrioriMax' && nom !== 'toursHorsObjectif').map((nom) => [e(nom)]),
-    ];
+    const [premier, ...suite] = ORDRE_PAR_DEFAUT;
+    const deplace = [[e(premier)], [e('toursHorsObjectif')], ...suite.filter((nom) => nom !== 'toursHorsObjectif').map((nom) => [e(nom)])];
     const sommes = [undefined, deplace].map((priorites) => {
       const configuration = grandeAObjectifs(priorites);
       const instance = normaliser(configuration);

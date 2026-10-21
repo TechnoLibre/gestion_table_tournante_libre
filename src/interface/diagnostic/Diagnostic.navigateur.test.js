@@ -544,11 +544,12 @@ describe('le bandeau du plan énonce le diagnostic (§ 7.5)', () => {
   });
 
   test('une table rendue saine au tour montré : ni phrase ni plancher', async () => {
-    // La personne 8, à la table 1 du tour 1 avec 4 et 7, prend une troisième
-    // organisation : la table 1 réunit trois organisations à ce tour.
+    // La personne 4, à la table 2 du tour 1 avec 1 et 2, prend une
+    // troisième organisation : la table 2 réunit trois organisations à ce
+    // tour.
     const lue = analyser(TEXTE_TOUTES_EN_CONFLIT).charge;
-    lue.participants.find(({ id }) => id === 8).organisation = 'Grisaille';
-    expect(lue.propositions[0].placement[0].sieges[0]).toEqual([4, 7, 8]);
+    lue.participants.find(({ id }) => id === 4).organisation = 'Grisaille';
+    expect(lue.propositions[0].placement[0].sieges[1]).toEqual([1, 2, 4]);
     const m = await ouvrirCharge(lue);
     m.ui.montrerProposition(1);
     await attendre(() => expect(m.racine.querySelectorAll('[data-plan] [data-table]').length).toBe(4));

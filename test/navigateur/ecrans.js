@@ -295,7 +295,7 @@ export function chargeComparaisonObjectifs() {
  *  de la seconde prennent quatre valeurs, se tracent, et se croisent une
  *  fois : la vue de comparaison de la première écrit sa bascule. */
 export function chargeComparaison() {
-  return deuxPropositions(8);
+  return deuxPropositions(1);
 }
 
 // Douze personnes, trois tables de quatre, trois tours ; une génération de
@@ -305,12 +305,12 @@ function deuxPropositions(graine) {
   return generee(charge, { graine, nombre: 2, arret: 60 }).charge;
 }
 
-/** La forme de chargeComparaison, sous la graine 10 : les profils de manque
- *  des deux propositions réunis ne prennent que deux valeurs, sous le seuil
- *  du tracé ; la vue de la première écrit ses effectifs en une phrase, et
- *  sa dominance. */
+/** La forme de chargeComparaison, sous la graine 764 : les profils de
+ *  manque des deux propositions réunis ne prennent que deux valeurs, sous
+ *  le seuil du tracé ; la vue de la première écrit ses effectifs en une
+ *  phrase, et sa dominance. */
 export function chargeComparaisonPhrase() {
-  return deuxPropositions(10);
+  return deuxPropositions(764);
 }
 
 /** chargeComparaison, sa proposition 1 retenue, puis le retenu ajusté : au
@@ -961,8 +961,10 @@ export const ECRANS = Object.freeze([
     nom: 'plan.infobulle',
     mode: 'ecriture',
     async atteindre(contexte) {
+      // Le survol de la première table signalée du tour : l'infobulle ne
+      // s'ouvre que sur une table en conflit.
       const m = await planEnEcriture(contexte);
-      const { x, y } = await centre(plateau(m, 1));
+      const { x, y } = await centre(m.racine.querySelector('[data-table] [data-marque="contourConflit"]'));
       await pointer('bouger', x, y);
       await attendre('l’infobulle', () => {
         const infobulle = m.racine.querySelector('[role="tooltip"]');
@@ -1227,10 +1229,12 @@ export const ECRANS = Object.freeze([
     nom: 'generation.priorites',
     mode: 'ecriture',
     async atteindre(contexte) {
-      // L'éditeur des priorités sur un ordre réglé — l'excédent et les
-      // collisions cumulées au même palier, chacun son poids —, puis la
-      // redondance jointe aux animateurs : l'annonce du geste paraît.
-      const paliers = listeApres(LISTE_PAR_DEFAUT, 'joindrePalier', 'collisionsCumulees');
+      // L'éditeur des priorités sur un ordre réglé — les collisions
+      // cumulées montées au-dessus des rencontres répétées, puis jointes à
+      // l'excédent, chacun son poids —, puis la redondance jointe aux
+      // animateurs : l'annonce du geste paraît.
+      const montees = listeApres(LISTE_PAR_DEFAUT, 'monterCritere', 'collisionsCumulees');
+      const paliers = listeApres(montees, 'joindrePalier', 'collisionsCumulees');
       const charge = executer(chargePrincipale(), 'changerPriorites', { paliers });
       const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'generation' });
       await cliquer(m, '[data-section="generation"] [data-priorite="redondance"] [data-commande="joindrePalier"]');
@@ -1245,9 +1249,10 @@ export const ECRANS = Object.freeze([
     nom: 'generation.modeObjectifs',
     mode: 'ecriture',
     async atteindre(contexte) {
-      // Les tours hors objectif partagent un palier : choisir « l'équité
-      // d'abord » se refuse contre le groupe du mode, le choix revenu.
-      const paliers = listeApres(LISTE_PAR_DEFAUT, 'joindrePalier', 'toursHorsObjectif');
+      // Les tours hors objectif partagent un palier avec les animateurs :
+      // choisir « l'équité d'abord » se refuse contre le groupe du mode, le
+      // choix revenu.
+      const paliers = listeApres(LISTE_PAR_DEFAUT, 'joindrePalier', 'animateursNonRencontres');
       const charge = executer(chargePrincipale(), 'changerPriorites', { paliers });
       const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'generation' });
       await cliquer(m, '[data-section="generation"] [data-mode-objectifs] input[value="minimum"]');

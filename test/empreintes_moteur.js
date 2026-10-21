@@ -26,11 +26,13 @@
 // - combinaisons : la petite démonstration sous chacune des seize
 //   combinaisons des quatre cases, graine 1, mêmes réglages ;
 // - bascule : les configurations de BASCULE sous chaque graine de GRAINES, à
-//   BASCULE.arret mouvements, assez pour que la meilleure affectation
-//   s'améliore encore après la bascule vers l'ordre des contraintes : à
-//   ARRET, sur ces configurations, elle ne change plus une fois l'écart
-//   annulé, et l'ordre des composantes après la bascule ne laisse aucune
-//   trace dans les plans ;
+//   BASCULE.arret mouvements, sous l'ordre BASCULE.ordre, chaque critère
+//   seul à son palier. Cet ordre, celui du registre, met l'écart en tête :
+//   une fois l'écart annulé, la bascule passe les contraintes devant lui, et
+//   le compte laisse à la meilleure affectation le temps de s'améliorer
+//   encore. Le plan garde ainsi la trace de l'ordre que la bascule adopte.
+//   Sous l'ordre par défaut, sans objectif ni animateurs, l'écart ne précède
+//   que la redondance, et la bascule ne change pas l'ordre d'acceptation ;
 // - classements : pour chaque charge de CLASSEMENT.cles, le classement
 //   qu'evaluer rend sous les quatre cases cochées, plafond a priori calculé
 //   (connu) puis inconnu, et les grandeurs nommées de chaque proposition.
@@ -56,7 +58,7 @@ import { evaluer } from '../src/application/evaluation.js';
 import { CATALOGUE } from '../src/demo/catalogue.js';
 import { texteLivre } from '../src/demo/livrees.js';
 import { indexerPlan, normaliser } from '../src/moteur/configuration.js';
-import { MODES_OBJECTIFS } from '../src/moteur/criteres.js';
+import { CRITERES, MODES_OBJECTIFS } from '../src/moteur/criteres.js';
 import { mesurer } from '../src/moteur/indicateurs.js';
 import { ecartsAuPlafondAPriori } from '../src/moteur/manque.js';
 import { plafondsAPriori } from '../src/moteur/plafond.js';
@@ -74,12 +76,14 @@ export const GRAINES = Object.freeze([1, 2, 3]);
 export const ARRET = 20_000;
 
 /**
- * Les plans de la section bascule (en-tête du module) : les configurations
- * et le compte d'arrêt, les graines étant celles de GRAINES.
+ * Les plans de la section bascule (en-tête du module) : les configurations,
+ * le compte d'arrêt et l'ordre des priorités, celui du registre, les graines
+ * étant celles de GRAINES.
  */
 export const BASCULE = Object.freeze({
   cles: Object.freeze(['petite', 'petite-conflit']),
   arret: 50_000,
+  ordre: CRITERES,
 });
 
 /** Les quatre cases du § 5.3, dans l'ordre où une combinaison les nomme. */
@@ -103,7 +107,7 @@ export const CASES = Object.freeze([
  */
 export const CLASSEMENT = Object.freeze({
   cles: Object.freeze(['petite-conflit', 'grande']),
-  graine: 7,
+  graine: 17,
   arret: 1_000,
   nombre: 12,
 });
@@ -231,6 +235,14 @@ function empreinteRecherchee(configuration, graine, arret = ARRET) {
   return empreinteDuPlan(instance, plan);
 }
 
+// Les empreintes des plans d'une configuration, une par graine de GRAINES,
+// sous la clé de la graine, à arret mouvements.
+function empreintesParGraine(configuration, arret) {
+  return Object.fromEntries(
+    GRAINES.map((graine) => [String(graine), empreinteRecherchee(configuration, graine, arret)]),
+  );
+}
+
 /**
  * Les empreintes des plans d'une configuration du catalogue, une par graine
  * de GRAINES, sous la clé de la graine, à arret mouvements, sous ce mode des
@@ -242,10 +254,22 @@ function empreinteRecherchee(configuration, graine, arret = ARRET) {
  * @returns {Record<string, {empreinte: string, grandeurs: object}>}
  */
 export function empreintesDesPlans(cle, arret = ARRET, mode = 'places') {
-  const configuration = sousLeMode(configurationDuCatalogue(cle), mode);
-  return Object.fromEntries(
-    GRAINES.map((graine) => [String(graine), empreinteRecherchee(configuration, graine, arret)]),
-  );
+  return empreintesParGraine(sousLeMode(configurationDuCatalogue(cle), mode), arret);
+}
+
+/**
+ * Les empreintes de la section bascule pour une configuration de
+ * BASCULE.cles : ses plans sous BASCULE.ordre, chaque critère seul à son
+ * palier au poids 1, une par graine de GRAINES, à BASCULE.arret mouvements,
+ * sous ce mode des objectifs.
+ *
+ * @param {string} cle
+ * @param {'places'|'chacun'|'minimum'} [mode='places']
+ * @returns {Record<string, {empreinte: string, grandeurs: object}>}
+ */
+export function empreintesDeLaBascule(cle, mode = 'places') {
+  const priorites = BASCULE.ordre.map((critere) => [{ critere, poids: 1 }]);
+  return empreintesParGraine(sousLeMode({ ...configurationDuCatalogue(cle), priorites }, mode), BASCULE.arret);
 }
 
 /**
@@ -371,7 +395,7 @@ export function calculerEmpreintes() {
     },
     plans: Object.fromEntries(CATALOGUE.map(({ cle }) => [cle, empreintesDesPlans(cle)])),
     combinaisons: empreintesDesCombinaisons(),
-    bascule: Object.fromEntries(BASCULE.cles.map((cle) => [cle, empreintesDesPlans(cle, BASCULE.arret)])),
+    bascule: Object.fromEntries(BASCULE.cles.map((cle) => [cle, empreintesDeLaBascule(cle)])),
     classements: Object.fromEntries(CLASSEMENT.cles.map((cle) => [cle, empreintesDuClassement(cle)])),
   };
 }

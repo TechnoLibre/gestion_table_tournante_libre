@@ -324,13 +324,15 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(annonce(m)).toBe('');
   });
 
-  test('rouge : les gestes offerts sont ceux du modèle sous l’admission de la commande ; ni « joindre » ni « séparer » pour l’écart et les rencontres répétées, ni « joindre » pour le critère qui les suit', async () => {
+  test('rouge : les gestes offerts sont ceux du modèle sous l’admission de la commande ; ni « joindre » ni « séparer » pour l’écart et les rencontres répétées, ni « joindre » pour le critère qui suit l’un ou l’autre', async () => {
     const m = await demonstration();
     const admet = admissionSous(charge(m).reglages);
     for (const nom of CRITERES) expect(offerts(m, nom), nom).toEqual(gestesOfferts(ordreDe(m), nom, admet));
-    for (const nom of [ECART, EXCEDENT, REPETEES, ANIMATEURS]) expect(offerts(m, nom), nom).not.toContain('joindrePalier');
+    for (const nom of [ECART, EXCEDENT, CUMULEES, REPETEES, HORS_OBJECTIF]) expect(offerts(m, nom), nom).not.toContain('joindrePalier');
     for (const nom of CRITERES) expect(offerts(m, nom), nom).not.toContain('separerPalier');
-    expect(offerts(m, ECART)).toEqual(['descendreCritere']);
+    expect(offerts(m, EXCEDENT)).toEqual(['descendreCritere']);
+    expect(offerts(m, REPETEES)).toEqual(['monterCritere', 'descendreCritere']);
+    expect(offerts(m, ECART)).toEqual(['monterCritere', 'descendreCritere']);
     expect(offerts(m, REDONDANCE)).toEqual(['monterCritere', 'joindrePalier']);
     // Aucun bouton ne nomme une touche.
     for (const b of editeur(m).querySelectorAll('button')) expect(b.textContent).not.toMatch(/Alt|Ctrl|Maj|↑|↓|Entrée/);
@@ -374,7 +376,9 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(editeur(m).textContent).toContain(t('generation.priorites.regle'));
     const poids = [...editeur(m).querySelectorAll('input[data-champ^="poids."]')].map((e) => e.dataset.champ);
     expect(poids).toEqual([`poids.${ANIMATEURS}`, `poids.${REDONDANCE}`]);
-    expect(offerts(m, REDONDANCE)).toEqual(['monterCritere', 'separerPalier']);
+    // Le palier du dessus, celui des tours hors objectif, se partage sous le
+    // mode par défaut.
+    expect(offerts(m, REDONDANCE)).toEqual(['monterCritere', 'joindrePalier', 'separerPalier']);
   });
 
   test('au clavier : Entrée sur « Monter », Espace sur « Descendre » ; chaque geste une entrée ; le focus reste sur le bouton du critère déplacé', async () => {
@@ -512,18 +516,20 @@ describe('le mode des objectifs (§ 5.3, A8, A12, D22, D23)', () => {
     expect(Object.hasOwn(charge(m).reglages, 'modeObjectifs')).toBe(false);
   });
 
-  test('rouge : sous « chacun », pas de « joindre » aux tours hors objectif ; joints, « l’équité d’abord » refusé contre le groupe, le choix revenu', async () => {
+  test('rouge : sous « chacun », pas de « joindre » au palier des tours hors objectif ; joints, « l’équité d’abord » refusé contre le groupe, le choix revenu', async () => {
     const m = await demonstration();
+    // Les animateurs suivent les tours hors objectif : les joindre partage
+    // leur palier.
     await cliquer(m, radio(m, 'chacun'));
-    expect(offerts(m, HORS_OBJECTIF)).not.toContain('joindrePalier');
+    expect(offerts(m, ANIMATEURS)).not.toContain('joindrePalier');
     await cliquer(m, radio(m, 'places'));
-    expect(offerts(m, HORS_OBJECTIF)).toContain('joindrePalier');
-    await cliquer(m, bouton(m, HORS_OBJECTIF, 'joindrePalier'));
+    expect(offerts(m, ANIMATEURS)).toContain('joindrePalier');
+    await cliquer(m, bouton(m, ANIMATEURS, 'joindrePalier'));
     const e0 = journal(m);
     await cliquer(m, radio(m, 'minimum'));
     const refus = groupe(m).querySelector('[data-refus="OBJECTIFS_PALIER_PARTAGE"]');
     expect(refus).not.toBeNull();
-    expect(refus.querySelector(':scope > p').textContent).toBe(t('OBJECTIFS_PALIER_PARTAGE', { mode: 'minimum', palier: 2 }));
+    expect(refus.querySelector(':scope > p').textContent).toBe(t('OBJECTIFS_PALIER_PARTAGE', { mode: 'minimum', palier: 4 }));
     // Chaque bouton radio est décrit par le refus, en plus de son
     // explication ; le focus reste dans le groupe.
     expect(refus.id).not.toBe('');
@@ -564,7 +570,7 @@ describe('le contraste de l’éditeur et du choix du mode (§ 14.5)', () => {
   test('chaque texte, poids et refus compris, à 4,5:1 au moins dans les deux thèmes, mesuré au rendu', async () => {
     const m = await demonstration();
     // Un palier partagé, ses poids, et un refus contre le groupe du mode.
-    await cliquer(m, bouton(m, HORS_OBJECTIF, 'joindrePalier'));
+    await cliquer(m, bouton(m, ANIMATEURS, 'joindrePalier'));
     await cliquer(m, radio(m, 'minimum'));
     expect(groupe(m).querySelector('[data-refus]')).not.toBeNull();
     expect(editeur(m).querySelectorAll('input[data-champ^="poids."]')).toHaveLength(2);

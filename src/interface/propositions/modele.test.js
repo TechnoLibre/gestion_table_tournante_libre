@@ -184,7 +184,9 @@ function petiteAObjectifs(reglages = {}) {
 
 // Trois plans de la petite démonstration au conflit inévitable, nommés par
 // leurs collisions (cumulées, distinctes), au même plus grand écart au
-// plafond a priori : ceux de l'épreuve de la table d'évaluation.
+// plafond a priori : ceux de l'épreuve de la table d'évaluation. Leurs
+// excédents valent 3, 2 et 0, leurs rencontres répétées choisies 11, 12 et
+// 9.
 const PLANS_CONFLIT = [
   {
     nom: '(4, 1)',
@@ -458,8 +460,8 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     const phrase = phraseDe(vue.ordre[0]);
     assert.equal(
       phrase,
-      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
-        "puis collisions cumulées, puis rencontres répétées, puis redondance d'organisation, puis l'identifiant croissant.",
+      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, puis rencontres répétées, " +
+        "puis collisions cumulées, puis écart au plafond a priori, puis redondance d'organisation, puis l'identifiant croissant.",
     );
     assert.equal(phrase, t('propositions.ordre.criteres', { criteres: [...CRITERES] }));
     const positions = CRITERES.map((nom) => phrase.indexOf(t(`moteur.critere.${nom}`)));
@@ -471,10 +473,10 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
   test('chaque nom de critère, et l’identifiant croissant, désigne sa colonne du tableau, dans l’ordre de la phrase', () => {
     const vue = tableau(evaluer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT)));
     assert.deepEqual(designes(vue.ordre[0]), [
-      ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
       ['excedentCollisions', 'excedentCollisions'],
-      ['collisionsCumulees', 'collisionsCumulees'],
       ['rencontresRepetees', 'rencontresRepetees'],
+      ['collisionsCumulees', 'collisionsCumulees'],
+      ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
       ['redondance', 'totalRedondance'],
       ['identifiant', 'proposition'],
     ]);
@@ -515,14 +517,14 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.throws(() => colonneDeValeur('rencontresRepetees'), TypeError);
   });
 
-  test('a priori inconnu : la phrase nomme le critère sauté et « excédent de collisions » appliqué à sa place ; les critères appliqués désignent toujours leur colonne', () => {
+  test('a priori inconnu : la phrase nomme le critère sauté et « redondance d’organisation » appliquée à sa place ; les critères appliqués désignent toujours leur colonne', () => {
     const charge = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
     const vue = tableau(evaluer(charge, { plafondsAPriori: null }));
     assert.equal(vue.ordre.length, 2);
     assert.deepEqual(vue.ordre[0], [
       {
         cle: 'propositions.ordre.saute',
-        details: { saute: 'ecartAuPlafondAPrioriMax', applique: [{ nom: 'excedentCollisions', poids: 1, valeurs: ['excedentCollisions'] }] },
+        details: { saute: 'ecartAuPlafondAPrioriMax', applique: [{ nom: 'redondance', poids: 1, valeurs: ['redondance'] }] },
         critere: null,
         valeur: null,
         colonne: null,
@@ -531,17 +533,17 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.equal(
       phraseDe(vue.ordre[0]),
       'Critère sauté, faute de plafond a priori par personne : écart au plafond a priori. ' +
-        'Appliqué à sa place : excédent de collisions.',
+        "Appliqué à sa place : redondance d'organisation.",
     );
     assert.equal(
       phraseDe(vue.ordre[1]),
-      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, " +
-        "puis collisions cumulées, puis rencontres répétées, puis redondance d'organisation, puis l'identifiant croissant.",
+      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, puis rencontres répétées, " +
+        "puis collisions cumulées, puis redondance d'organisation, puis l'identifiant croissant.",
     );
     assert.deepEqual(designes(vue.ordre[1]), [
       ['excedentCollisions', 'excedentCollisions'],
-      ['collisionsCumulees', 'collisionsCumulees'],
       ['rencontresRepetees', 'rencontresRepetees'],
+      ['collisionsCumulees', 'collisionsCumulees'],
       ['redondance', 'totalRedondance'],
       ['identifiant', 'proposition'],
     ]);
@@ -580,8 +582,8 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     const phrase = phraseDe(tableau(evaluer(charge)).ordre[0]);
     assert.equal(
       phrase,
-      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
-        "puis collisions cumulées, puis rencontres répétées, puis l'identifiant croissant.",
+      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, puis rencontres répétées, " +
+        "puis collisions cumulées, puis écart au plafond a priori, puis l'identifiant croissant.",
     );
   });
 
@@ -589,8 +591,8 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     const vue = tableau(evaluer(generee(aObjectifs(), { graine: 3, nombre: 2, arret: 200 })));
     assert.equal(
       phraseDe(vue.ordre[0]),
-      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
-        "puis collisions cumulées, puis tours hors objectif, puis rencontres répétées, puis redondance d'organisation, " +
+      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, puis rencontres répétées, " +
+        "puis collisions cumulées, puis écart au plafond a priori, puis tours hors objectif, puis redondance d'organisation, " +
         "puis l'identifiant croissant.",
     );
     const horsObjectif = vue.ordre[0].find(({ critere }) => critere === 'toursHorsObjectif');
@@ -646,18 +648,28 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
     const charge = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
     for (const cle of ['separerOrganisations', 'nouveauxVoisins', 'varierOrganisations']) charge.reglages[cle] = false;
     const vue = tableau(evaluer(charge));
-    assert.equal(phraseDe(vue.ordre[0]), `${DEBUT}écart au plafond a priori, puis retours, puis l'identifiant croissant.`);
+    assert.equal(phraseDe(vue.ordre[0]), `${DEBUT}retours, puis écart au plafond a priori, puis l'identifiant croissant.`);
     assert.deepEqual(designes(vue.ordre[0]), [
-      ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
       ['rencontresRepetees', 'retoursChoisis', 'retoursChoisis'],
+      ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
       ['identifiant', 'identifiant', 'proposition'],
     ]);
   });
 
   test('a priori inconnu, le critère sauté : le palier appliqué à sa place se nomme par ses valeurs — « retours » sous « nouvelle table » seule, les deux valeurs sous « chacun au moins une fois »', () => {
     const PHRASE = 'Critère sauté, faute de plafond a priori par personne : écart au plafond a priori. Appliqué à sa place : ';
+    // L'écart en tête : le palier des rencontres répétées le suit.
     const seule = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
     for (const cle of ['separerOrganisations', 'nouveauxVoisins', 'varierOrganisations']) seule.reglages[cle] = false;
+    seule.reglages.priorites = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('excedentCollisions')],
+      [e('collisionsCumulees')],
+      [e('toursHorsObjectif')],
+      [e('rencontresRepetees')],
+      [e('animateursNonRencontres')],
+      [e('redondance')],
+    ];
     const [saute] = tableau(evaluer(seule, { plafondsAPriori: null })).ordre[0];
     assert.equal(t(saute.cle, saute.details), `${PHRASE}retours.`);
     const priorites = [
@@ -678,8 +690,8 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
     const vue = tableau(evaluer(generee(petiteAObjectifs({ modeObjectifs: 'chacun' }), { graine: 3, nombre: 2, arret: 200 })));
     assert.equal(
       phraseDe(vue.ordre[0]),
-      `${DEBUT}écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, ` +
-        "puis personnes jamais servies, puis tours hors objectif, puis rencontres répétées, puis redondance d'organisation, " +
+      `${DEBUT}excédent de collisions, puis rencontres répétées, puis collisions cumulées, puis écart au plafond a priori, ` +
+        "puis personnes jamais servies, puis tours hors objectif, puis redondance d'organisation, " +
         "puis l'identifiant croissant.",
     );
     assert.deepEqual(
@@ -694,7 +706,7 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
   test('« l’équité d’abord » : « plus de tours hors objectif d’une personne, puis tours hors objectif », chacun sa colonne', () => {
     const vue = tableau(evaluer(generee(petiteAObjectifs({ modeObjectifs: 'minimum' }), { graine: 3, nombre: 2, arret: 200 })));
     assert.ok(
-      phraseDe(vue.ordre[0]).includes("puis collisions cumulées, puis plus de tours hors objectif d'une personne, puis tours hors objectif, puis rencontres répétées"),
+      phraseDe(vue.ordre[0]).includes("puis écart au plafond a priori, puis plus de tours hors objectif d'une personne, puis tours hors objectif, puis redondance"),
       phraseDe(vue.ordre[0]),
     );
     assert.deepEqual(
@@ -736,7 +748,7 @@ describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7
     const charge = structuredClone(chargeDemo('grande'));
     charge.reglages.rencontrerAnimateurs = true;
     const vue = tableau(evaluer(generee(charge, { graine: 1, nombre: 1, arret: 2000 })));
-    assert.ok(phraseDe(vue.ordre[0]).includes("puis rencontres répétées, puis animateurs non rencontrés, puis redondance d'organisation"), phraseDe(vue.ordre[0]));
+    assert.ok(phraseDe(vue.ordre[0]).includes("puis écart au plafond a priori, puis animateurs non rencontrés, puis redondance d'organisation"), phraseDe(vue.ordre[0]));
     assert.deepEqual(
       designes(vue.ordre[0]).filter(([critere]) => critere === 'animateursNonRencontres'),
       [['animateursNonRencontres', 'animateursNonRencontres', 'animateursNonRencontres']],
@@ -1224,6 +1236,8 @@ describe('garder les meilleures (§ 5.7) : la saisie, la fenêtre, l’annonce, 
     assert.equal(demandeNettoyage({ refus: null, charge }, 3), null);
     assert.equal(demandeNettoyage({ refus: null, charge }, 12), null);
     assert.equal(demandeNettoyage({ refus: null, charge: null }, 1), null);
+    // La retenue vient de la troisième du classement : les deux premières et
+    // elle restent, rien ne s'efface.
     const retenue = figee(executer(conflit(), 'retenirProposition', { id: 1 }));
     assert.equal(demandeNettoyage({ refus: null, charge: retenue }, 2), null);
     const surreservee = structuredClone(conflit());

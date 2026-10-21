@@ -732,6 +732,12 @@ function dansLeCadre(element) {
 // La marge, en px, que le libellé du fantôme garde au bord droit du plan.
 const MARGE_FANTOME_PX = 24;
 
+// Le glissement de la vue vers la droite qui précède la mesure du libellé
+// du fantôme : il porte la chaise d'arrivée assez près du bord droit du plan
+// pour que le libellé déborde, quelle que soit la place de cette chaise
+// autour de sa table.
+const POUSSEE_VERS_LE_BORD_PX = 120;
+
 // Fait glisser la vue de dx px, par un appui sur le sol du plan : un point
 // de la bande haute du cadre où le pointeur n'atteint ni table, ni chaise,
 // ni poignée.
@@ -1815,12 +1821,18 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     });
     for (const cle of ['rencontrerAnimateurs', 'respecterObjectifs', 'modeObjectifs']) expect(Object.hasOwn(charge().reglages, cle), cle).toBe(false);
 
+    // Les tours hors objectif montent trois fois, au-dessus de l'écart, des
+    // collisions cumulées puis des rencontres répétées, et rejoignent
+    // l'excédent.
     const critere = (nom) => editeur().querySelector(`[data-priorite="${nom}"]`);
     await sansFenetre('changerPriorites', async () => {
+      for (const fois of ['une première fois', 'une deuxième fois', 'une troisième fois']) {
+        const avant = revision();
+        const monter = critere('toursHorsObjectif').querySelector('[data-commande="monterCritere"]');
+        await appuyer(monter, `monter les tours hors objectif ${fois}`);
+        await uneEntree(avant, `monter les tours hors objectif ${fois}`);
+      }
       let r = revision();
-      await appuyer(critere('toursHorsObjectif').querySelector('[data-commande="monterCritere"]'), 'monter les tours hors objectif');
-      await uneEntree(r, 'monter les tours hors objectif');
-      r = revision();
       await appuyer(critere('toursHorsObjectif').querySelector('[data-commande="joindrePalier"]'), 'joindre au palier du dessus');
       await uneEntree(r, 'joindre au palier du dessus');
       r = revision();
@@ -1828,10 +1840,10 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       await uneEntree(r, 'le poids 3');
     });
     const reglee = [
-      [{ critere: 'ecartAuPlafondAPrioriMax', poids: 1 }],
       [{ critere: 'excedentCollisions', poids: 1 }, { critere: 'toursHorsObjectif', poids: 3 }],
-      [{ critere: 'collisionsCumulees', poids: 1 }],
       [{ critere: 'rencontresRepetees', poids: 1 }],
+      [{ critere: 'collisionsCumulees', poids: 1 }],
+      [{ critere: 'ecartAuPlafondAPrioriMax', poids: 1 }],
       [{ critere: 'animateursNonRencontres', poids: 1 }],
       [{ critere: 'redondance', poids: 1 }],
     ];
@@ -1860,15 +1872,16 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(appliques).toEqual(reglee.map((palier) => palier.filter(({ critere }) => compte.has(critere))).filter((palier) => palier.length > 0));
     memoire.paliersRegles = appliques;
 
-    // L'image montre le numéro du palier partagé, ses deux critères et leurs
-    // poids, et la ligne des animateurs qui dit « décoché » ; le choix du
-    // mode, au-dessus, le premier palier et « Rétablir l'ordre par
+    // L'image montre le numéro du palier partagé, le premier, ses deux
+    // critères et leurs poids, et la ligne des animateurs qui dit
+    // « décoché » ; le choix du mode, au-dessus, et « Rétablir l'ordre par
     // défaut », au-dessous, n'entrent pas dans la même fenêtre qu'eux.
     document.activeElement?.blur();
-    await cadrerDansLaSurface([critere('excedentCollisions'), critere('animateursNonRencontres')]);
+    const numero = editeur().querySelector(':scope > [data-palier="0"] > p');
+    await cadrerDansLaSurface([numero, critere('animateursNonRencontres').querySelector('.etat')]);
     await photographier(m, '10a-ordre-priorites', {
       condition: [
-        '[data-priorites] > [data-palier="1"] > p',
+        '[data-priorites] > [data-palier="0"] > p',
         '[data-priorites] [data-priorite="excedentCollisions"]',
         '[data-priorites] input[data-champ="poids.excedentCollisions"]',
         '[data-priorites] [data-priorite="toursHorsObjectif"]',
@@ -1985,7 +1998,12 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await ouvrirPlan();
     memoire.avantAjustement = serialiserCharge(charge());
     const [t1, t2] = charge().tables.map(({ id }) => id);
-    const depuis = chaiseOccupee(t1);
+    // La chaise occupée de t1 dont l'occupant porte le nom le plus long : le
+    // libellé du fantôme le plus large.
+    const occupees = chaisesMontrees().filter((c) => c.table === t1 && c.occupant !== null && c.reservation === null);
+    expect(occupees.length).toBeGreaterThan(0);
+    const longueur = (c) => nomAffiche(charge().participants.find(({ id }) => id === c.occupant)).length;
+    const depuis = occupees.reduce((a, b) => (longueur(b) > longueur(a) ? b : a));
     // La chaise libre de t2 la plus à gauche : la plus proche de t1.
     const libres = chaisesMontrees().filter((c) => c.table === t2 && c.occupant === null && c.reservation === null && c.titre === null);
     expect(libres.length).toBeGreaterThan(0);
@@ -1995,10 +2013,12 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     const libelleEtat = () => dans('[data-fantome] [data-partie="etat"]');
 
     // Le libellé du fantôme se pose à droite du pointeur, et le panneau du
-    // diagnostic borne le plan à droite. Un premier glissement, ramené à sa
+    // diagnostic borne le plan à droite. La vue glisse d'abord vers la
+    // droite, de POUSSEE_VERS_LE_BORD_PX ; un premier glissement, ramené à sa
     // chaise de départ, mesure ce que le libellé déborde du plan ; la vue
     // glisse ensuite par le sol, vers la gauche, d'autant et d'une marge,
     // pour que l'image le montre entier.
+    await glisserLaVue(POUSSEE_VERS_LE_BORD_PX);
     const r = revision();
     await glisser();
     const deborde = (await attendre('le libellé mesuré', libelleEtat)).getBoundingClientRect().right - dans('[data-plan]').getBoundingClientRect().right;
@@ -2051,17 +2071,19 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     const avant = fichiers();
     const [t1, t2] = charge().tables.map(({ id }) => id);
 
-    await glisserVers(await centre(chaise(t1, chaiseOccupee(t1).siege)), await centre(chaise(t2, chaiseLibre(t2).siege)));
+    // Le dépôt de 19 a rempli t2 au tour montré : la personne glissée et la
+    // chaise visée sont de t2 vers t1.
+    await glisserVers(await centre(chaise(t2, chaiseOccupee(t2).siege)), await centre(chaise(t1, chaiseLibre(t1).siege)));
     const table = await centre(plateau(t2));
     await glisserVers(table, { x: table.x + 40, y: table.y + 30 });
     const poignee = await centre(dans(`[data-poignee="${t1}"]`));
     await glisserVers(poignee, { x: poignee.x + 40, y: poignee.y + 40 });
     const poseAvant = m.ui.etat().pose;
     await choisir('[data-liste-travail="pressentis"]');
-    const visee = chaiseLibre(t2);
-    await cliquerPointeur(chaise(t2, visee.siege));
+    const visee = chaiseLibre(t1);
+    await cliquerPointeur(chaise(t1, visee.siege));
     await appuyer(actionPlace('reserver'), 'réserver en lecture');
-    await refusSurLePlan(poseAvant, { table: t2, siege: visee.siege }, 'MODE_LECTURE', 'modifier', 'réserver en lecture');
+    await refusSurLePlan(poseAvant, { table: t1, siege: visee.siege }, 'MODE_LECTURE', 'modifier', 'réserver en lecture');
     await oublierChoix();
 
     expect(serialiserCharge(charge())).toBe(empreinte);
@@ -2589,7 +2611,11 @@ describe('les fenêtres : seul un geste qui détruit en ouvre une', { timeout: D
     await images(2);
     await regimeSieges();
     r = revision();
-    const depuis = chaiseVue((c) => c.occupant !== null && c.reservation === null);
+    // Une personne qu'aucune réservation ne tient, ni à sa chaise ni
+    // ailleurs : son déplacement s'écrit sans déplacer de réservation.
+    const sansReservation = (participant) =>
+      !charge().reservations.some((reservation) => reservation.participant === participant);
+    const depuis = chaiseVue((c) => c.occupant !== null && c.reservation === null && sansReservation(c.occupant));
     const vers = chaiseVue((c) => c.table !== depuis.table && c.occupant === null && c.reservation === null && c.titre === null);
     await glisserVers(await centre(chaise(depuis.table, depuis.siege)), await centre(chaise(vers.table, vers.siege)));
     await uneEntree(r, 'ajuster le retenu');
@@ -3936,13 +3962,13 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
 // le plus souvent son départ : une paire qui se croise ne s'obtient pas de
 // n'importe quelle graine.
 const DERIVATION = Object.freeze({
-  graine: 4258,
-  depart: 1,
+  graine: 389,
+  depart: 4,
   tour: 1,
   ajoutees: Object.freeze([6, 7, 8, 9, 10]),
-  meilleure: 9,
-  placeDepart: 4,
-  bascule: 148,
+  meilleure: 6,
+  placeDepart: 6,
+  bascule: 142,
 });
 
 // Les captures de la dérivée et de la comparaison : les dernières du
@@ -4042,7 +4068,7 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
     });
   });
 
-  test('11b « Générer depuis » : cinq dérivées, chacune « Dérivée de n° 1, tour 1 figé. », son tour 1 celui du départ', async () => {
+  test('11b « Générer depuis » : cinq dérivées, chacune « Dérivée de n° 4, tour 1 figé. », son tour 1 celui du départ', async () => {
     const { depart, tour, ajoutees, meilleure, placeDepart } = DERIVATION;
     const r = revision();
     const debut = performance.now();

@@ -30,7 +30,7 @@ import { constante } from '../geometrie/constantes.js';
 import { classer } from '../moteur/classement.js';
 import { premierPalierQuiDepartage } from '../moteur/classement.js';
 import { SANS_GROUPE, STATUT, indexerPlan, normaliser } from '../moteur/configuration.js';
-import { compilationDe } from '../moteur/criteres.js';
+import { CRITERES, compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
 import * as DIVERSITE from '../moteur/diversite.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
@@ -127,7 +127,8 @@ function nombres(valeur, trouves = []) {
 // collisions (cumulées, distinctes). Les trois premiers ont le même plus
 // grand écart au plafond a priori, 3 ; le quatrième garde ensemble, aux
 // quatre tours, les personnes 1, 2 et 3, d'organisations distinctes, et ses
-// quatre collisions tombent sur quatre paires.
+// quatre collisions tombent sur quatre paires. Leurs excédents valent 3, 2,
+// 0 et 0, leurs rencontres répétées choisies 11, 12, 9 et 15.
 const PLANS_CONFLIT = [
   {
     nom: '(4, 1)',
@@ -199,7 +200,7 @@ describe("évaluation : la mesure qui fait foi (§ 5.10, § 13.2)", () => {
     assert.equal(table.retenu, null);
   });
 
-  test("trois plans au même premier critère se rangent par l'excédent, puis les cumulées ; le trio vient en dernier", () => {
+  test("quatre plans se rangent par l'excédent, le premier critère : (6, 6), puis le trio, par les rencontres répétées, puis (4, 2) et (4, 1)", () => {
     const charge = structuredClone(chargeDemo('petite-conflit'));
     charge.propositions = PLANS_CONFLIT.map(({ tours }, rang) => propositionDe(charge, rang + 1, tours));
     charge.prochainsIds.proposition = 5;
@@ -212,8 +213,13 @@ describe("évaluation : la mesure qui fait foi (§ 5.10, § 13.2)", () => {
     });
     assert.deepEqual([1, 2, 3].map((id) => parId.get(id).ecartAuPlafondAPrioriMax), [3, 3, 3]);
     assert.ok(parId.get(4).ecartAuPlafondAPrioriMax > 3);
-    assert.deepEqual(table.classement.ordre, [3, 2, 1, 4]);
-    assert.deepEqual(table.classement.criteresAppliques[0].criteres.map(({ nom }) => nom), ['ecartAuPlafondAPrioriMax']);
+    assert.deepEqual([1, 2, 3, 4].map((id) => parId.get(id).mesures.excedentCollisions), [3, 2, 0, 0]);
+    assert.deepEqual(
+      [1, 2, 3, 4].map((id) => parId.get(id).mesures.rencontresRepetees.choisies),
+      [11, 12, 9, 15],
+    );
+    assert.deepEqual(table.classement.ordre, [3, 4, 2, 1]);
+    assert.deepEqual(table.classement.criteresAppliques[0].criteres.map(({ nom }) => nom), ['excedentCollisions']);
     for (const ligne of table.propositions) {
       const ecarts = ecartsAuPlafondAPriori(ligne.mesures, plafondsAPriori(normaliser(configurationDe(charge))));
       assert.equal(ligne.ecartAuPlafondAPrioriMax, Math.max(...ecarts));
@@ -421,11 +427,14 @@ describe('évaluation : chaque placement se valide une fois (§ 8.9)', () => {
 });
 
 describe('évaluation : le plafond a priori inconnu (§ 17, point 4)', () => {
-  test("plafondsAPriori null : le premier critère est sauté et nommé ; écart d'itinéraire et certificat inconnus", () => {
+  test("plafondsAPriori null : l'écart au plafond a priori est sauté et nommé ; écart d'itinéraire et certificat inconnus", () => {
     const charge = figer(generee(chargeDemo('petite-conflit'), { graine: 5, nombre: 2, arret: 300 }));
     const table = evaluer(charge, { plafondsAPriori: null });
     assert.equal(table.classement.critereSaute, 'ecartAuPlafondAPrioriMax');
-    assert.deepEqual(table.classement.criteresAppliques[0].criteres.map(({ nom }) => nom), ['excedentCollisions']);
+    assert.deepEqual(
+      table.classement.criteresAppliques.map(({ criteres }) => criteres.map(({ nom }) => nom)),
+      [['excedentCollisions'], ['rencontresRepetees'], ['collisionsCumulees'], ['redondance']],
+    );
     for (const ligne of table.propositions) {
       assert.equal(ligne.troisChiffres.ecartItineraireMax, null);
       assert.equal(ligne.minimumAtteint, null);
@@ -578,14 +587,14 @@ describe('resumeDuRetenu : les collisions cumulées et les rencontres répétée
 
 describe('resumeDuMeilleur : la proposition au rang 1 que lit la liste des événements (§ 5.4, § 5.7, § 8.1)', () => {
   test('le rang 1 du classement, ni le plus petit identifiant ni le moins de collisions : son seul identifiant', () => {
-    // Le classement range les plans écrits à la main 3, 2, 1, 4 : la 3 vient
+    // Le classement range les plans écrits à la main 3, 4, 2, 1 : la 3 vient
     // en tête avec 6 collisions cumulées, quand la 1 n'en porte que 4.
     const charge = structuredClone(chargeDemo('petite-conflit'));
     charge.propositions = PLANS_CONFLIT.map(({ tours }, rang) => propositionDe(charge, rang + 1, tours));
     charge.prochainsIds.proposition = 5;
     figer(charge);
     const table = evaluer(charge);
-    assert.deepEqual(table.classement.ordre, [3, 2, 1, 4]);
+    assert.deepEqual(table.classement.ordre, [3, 4, 2, 1]);
     assert.deepEqual(resumeDuMeilleur(charge), { id: 3 });
     assert.equal(premiereDuClassement(table), table.propositions[0]);
     assert.equal(premiereDuClassement(table).mesures.collisionsCumulees, 6);
@@ -643,7 +652,7 @@ describe('resumeDuMeilleur : la proposition au rang 1 que lit la liste des évé
 });
 
 describe('nettoyage : les n premières du tableau, et la proposition du retenu (§ 5.7)', () => {
-  // Les plans écrits à la main, que le classement range 3, 2, 1, 4.
+  // Les plans écrits à la main, que le classement range 3, 4, 2, 1.
   function chargeConflit() {
     const charge = structuredClone(chargeDemo('petite-conflit'));
     charge.propositions = PLANS_CONFLIT.map(({ tours }, rang) => propositionDe(charge, rang + 1, tours));
@@ -654,21 +663,21 @@ describe('nettoyage : les n premières du tableau, et la proposition du retenu (
 
   test("garde les n premières dans l'ordre de la table, efface les suivantes ; sans retenu, rien de plus", () => {
     const table = evaluer(figer(chargeConflit()));
-    assert.deepEqual(table.propositions.map(({ id }) => id), [3, 2, 1, 4]);
-    assert.deepEqual(nettoyage(table, 2), { gardees: [3, 2], effacees: [1, 4], origineEnPlus: null });
-    assert.deepEqual(nettoyage(table, 1), { gardees: [3], effacees: [2, 1, 4], origineEnPlus: null });
-    assert.deepEqual(nettoyage(table, 4), { gardees: [3, 2, 1, 4], effacees: [], origineEnPlus: null });
-    assert.deepEqual(nettoyage(table, 10), { gardees: [3, 2, 1, 4], effacees: [], origineEnPlus: null });
+    assert.deepEqual(table.propositions.map(({ id }) => id), [3, 4, 2, 1]);
+    assert.deepEqual(nettoyage(table, 2), { gardees: [3, 4], effacees: [2, 1], origineEnPlus: null });
+    assert.deepEqual(nettoyage(table, 1), { gardees: [3], effacees: [4, 2, 1], origineEnPlus: null });
+    assert.deepEqual(nettoyage(table, 4), { gardees: [3, 4, 2, 1], effacees: [], origineEnPlus: null });
+    assert.deepEqual(nettoyage(table, 10), { gardees: [3, 4, 2, 1], effacees: [], origineEnPlus: null });
   });
 
   test("la proposition du retenu, après les n premières, est gardée en plus ; parmi elles, rien de plus", () => {
-    const charge = executer(chargeConflit(), 'retenirProposition', { id: 4 });
+    const charge = executer(chargeConflit(), 'retenirProposition', { id: 1 });
     const table = evaluer(figer(charge));
-    assert.equal(table.retenu.id, 4);
-    assert.deepEqual(nettoyage(table, 2), { gardees: [3, 2, 4], effacees: [1], origineEnPlus: 4 });
-    assert.deepEqual(nettoyage(table, 3), { gardees: [3, 2, 1, 4], effacees: [], origineEnPlus: 4 });
-    const parmi = evaluer(figer(executer(chargeConflit(), 'retenirProposition', { id: 2 })));
-    assert.deepEqual(nettoyage(parmi, 2), { gardees: [3, 2], effacees: [1, 4], origineEnPlus: null });
+    assert.equal(table.retenu.id, 1);
+    assert.deepEqual(nettoyage(table, 2), { gardees: [3, 4, 1], effacees: [2], origineEnPlus: 1 });
+    assert.deepEqual(nettoyage(table, 3), { gardees: [3, 4, 2, 1], effacees: [], origineEnPlus: 1 });
+    const parmi = evaluer(figer(executer(chargeConflit(), 'retenirProposition', { id: 4 })));
+    assert.deepEqual(nettoyage(parmi, 2), { gardees: [3, 4], effacees: [2, 1], origineEnPlus: null });
   });
 
   test("un retenu dont la proposition n'est plus dans la liste ne garde rien de plus", () => {
@@ -676,7 +685,7 @@ describe('nettoyage : les n premières du tableau, et la proposition du retenu (
     charge.propositions = charge.propositions.filter(({ id }) => id !== 1);
     const table = evaluer(figer(charge));
     assert.equal(table.retenu.id, 1);
-    assert.deepEqual(nettoyage(table, 1), { gardees: [3], effacees: [2, 4], origineEnPlus: null });
+    assert.deepEqual(nettoyage(table, 1), { gardees: [3], effacees: [4, 2], origineEnPlus: null });
   });
 
   test('les hors classement viennent après les classées, par identifiant, comme au tableau', () => {
@@ -790,14 +799,16 @@ describe("évaluation : le classement suit l'ordre et le mode de la charge (A11,
 describe('évaluation : sous les seize combinaisons des cases, la clé de référence privée des critères retirés (A21, contrainte 33)', () => {
   const REFERENCE = lireEmpreintes();
   // La clé de référence privée des critères que les cases décochées
-  // retirent, en grandeurs nommées du fichier : l'écart toujours ;
-  // l'excédent et les cumulées sous « séparer » ; les rencontres répétées
+  // retirent, en grandeurs nommées du fichier, dans l'ordre fixe de
+  // référence : l'excédent sous « séparer » ; les rencontres répétées
   // choisies sous « nouveaux voisins », sinon les retours choisis sous
-  // « nouvelle table » seule ; la redondance sous « varier ».
+  // « nouvelle table » seule ; les cumulées sous « séparer » ; l'écart
+  // toujours ; la redondance sous « varier ».
   const cleSous = (cases) => [
-    'ecartAuPlafondAPrioriMax',
-    ...(cases.separerOrganisations ? ['excedentCollisions', 'collisionsCumulees'] : []),
+    ...(cases.separerOrganisations ? ['excedentCollisions'] : []),
     ...(cases.nouveauxVoisins ? ['rencontresRepeteesChoisies'] : cases.nouvelleTable ? ['retoursChoisis'] : []),
+    ...(cases.separerOrganisations ? ['collisionsCumulees'] : []),
+    'ecartAuPlafondAPrioriMax',
     ...(cases.varierOrganisations ? ['redondance'] : []),
   ];
   // Le nom du critère appliqué qui classe chaque grandeur de la clé.
@@ -1492,14 +1503,22 @@ describe('detaillerQualite : la course de la recherche (§ 5.10, § 12.14, D40, 
   });
 
   test("chaque lecture des valeurs, sous les modes chacun et minimum, sans « nouveaux voisins » et les animateurs comptés : chaque point est mesuré par mesurer", () => {
-    const TETE = ['minimumBrut', 'ecartAuPlafondAPrioriMax', 'excedentCollisions', 'collisionsCumulees'];
+    // L'ordre par défaut : l'excédent, la valeur des rencontres répétées,
+    // les cumulées et l'écart, puis les objectifs ou les animateurs.
+    const tete = (rencontres) => [
+      'minimumBrut',
+      'excedentCollisions',
+      rencontres,
+      'collisionsCumulees',
+      'ecartAuPlafondAPrioriMax',
+    ];
     const sansVoisins = structuredClone(chargeDemo('petite-conflit'));
     sansVoisins.reglages.nouveauxVoisins = false;
     const cas = [
-      ['chacun', chargeAObjectifs({ mode: 'chacun' }), [...TETE, 'jamaisServies', 'toursHorsObjectif', 'rencontresRepeteesChoisies', 'redondance']],
-      ['minimum', chargeAObjectifs({ mode: 'minimum' }), [...TETE, 'horsObjectifMax', 'toursHorsObjectif', 'rencontresRepeteesChoisies', 'redondance']],
-      ['sans nouveaux voisins', sansVoisins, [...TETE, 'retoursChoisis', 'redondance']],
-      ['animateurs', chargeAAnimateurs(), [...TETE, 'rencontresRepeteesChoisies', 'animateursNonRencontres', 'redondance']],
+      ['chacun', chargeAObjectifs({ mode: 'chacun' }), [...tete('rencontresRepeteesChoisies'), 'jamaisServies', 'toursHorsObjectif', 'redondance']],
+      ['minimum', chargeAObjectifs({ mode: 'minimum' }), [...tete('rencontresRepeteesChoisies'), 'horsObjectifMax', 'toursHorsObjectif', 'redondance']],
+      ['sans nouveaux voisins', sansVoisins, [...tete('retoursChoisis'), 'redondance']],
+      ['animateurs', chargeAAnimateurs(), [...tete('rencontresRepeteesChoisies'), 'animateursNonRencontres', 'redondance']],
     ];
     // La grandeur que chaque cas lit seul, et une voisine qu'une lecture
     // fautive pourrait rendre à sa place : elles diffèrent à un point au
@@ -1746,11 +1765,17 @@ describe('rencontresDePersonne : la ligne de la fiche (§ 12.5, D33)', () => {
 
 // --- La comparaison de deux placements (§ 12.10.6, D56 à D67, D83 à D85) ----
 
-// La petite démonstration, quatre propositions générées et classées
-// [4, 1, 2, 3] : 1 et 4 ont le même profil de manque, 1 et 3 basculent une
-// fois, 4 sert mieux que 2 à tous les rangs, et le rang 1 du profil des
-// rencontres n'est pas la même personne pour 4 et pour 3.
-const chargeComparee = () => generee(chargeDemo('petite'), { graine: 2, nombre: 4, arret: 60 });
+// La petite démonstration, sous l'ordre du registre réglé, chaque critère
+// seul à son palier, quatre propositions générées et classées [4, 1, 2, 3] :
+// 1 et 4 ont le même profil de manque, 1 et 3 basculent une fois, 4 sert
+// mieux que 2 à tous les rangs, et le rang 1 du profil des rencontres n'est
+// pas la même personne pour 4 et pour 3.
+function chargeComparee() {
+  const charge = structuredClone(chargeDemo('petite'));
+  const ordreDuRegistre = CRITERES.map((critere) => [{ critere, poids: 1 }]);
+  charge.reglages.priorites = ordreDuRegistre;
+  return generee(charge, { graine: 2, nombre: 4, arret: 60 });
+}
 
 // La charge dont la proposition id est devenue une dérivée de depart, ses
 // tours figés donnés, comme versFichier l'écrit.

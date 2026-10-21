@@ -1,10 +1,11 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le registre des critères (§ 5.3, § 5.7) : leurs noms, leurs familles, les
-// cases qui les font compter, l'ordre des priorités par défaut, les critères
-// seuls à leur palier, les trois modes des objectifs et leurs valeurs, la
-// validation, le complément et la compilation d'une liste de priorités.
+// Le registre des critères (§ 5.3, § 5.7) : leurs noms dans leur ordre
+// canonique, leurs familles, les cases qui les font compter, l'ordre des
+// priorités par défaut, les critères seuls à leur palier, les trois modes des
+// objectifs et leurs valeurs, la validation, le complément et la compilation
+// d'une liste de priorités.
 // Ces faits n'existent que là : la recherche, le classement, le schéma, les
 // commandes et l'écran les lisent.
 //
@@ -20,8 +21,9 @@
 // « __proto__ ») est inconnu, et ne lit rien dans les tables du registre.
 
 /**
- * Les sept critères, dans l'ordre du tableau du § 5.7, qui est aussi l'ordre
- * par défaut (D11).
+ * Les sept critères, dans l'ordre canonique du tableau du § 5.7 : celui des
+ * critères dans un palier (A16), de l'état des critères et des listes que le
+ * registre rend. L'ordre par défaut des paliers est ORDRE_PAR_DEFAUT.
  */
 export const CRITERES = Object.freeze([
   'ecartAuPlafondAPrioriMax',
@@ -63,9 +65,29 @@ export const CASES = Object.freeze({
 // toujours présentes dans une configuration normalisée.
 const CASES_ABSENTES = Object.freeze({ respecterObjectifs: true, rencontrerAnimateurs: false });
 
-/** L'ordre par défaut (D11) : chaque critère seul à son palier, au poids 1. */
+/**
+ * L'ordre par défaut des critères (§ 5.7, D11), du premier palier au
+ * dernier : l'excédent de collisions, les rencontres répétées et les
+ * retours, les collisions cumulées, l'écart au plafond a priori, puis les
+ * tours hors objectif, les animateurs non rencontrés et la redondance. Une
+ * permutation de CRITERES, qui garde son ordre canonique.
+ */
+export const ORDRE_PAR_DEFAUT = Object.freeze([
+  'excedentCollisions',
+  'rencontresRepetees',
+  'collisionsCumulees',
+  'ecartAuPlafondAPrioriMax',
+  'toursHorsObjectif',
+  'animateursNonRencontres',
+  'redondance',
+]);
+
+/**
+ * La liste de priorités par défaut : chaque critère seul à son palier, au
+ * poids 1, dans l'ordre de ORDRE_PAR_DEFAUT.
+ */
 export const PRIORITES_PAR_DEFAUT = Object.freeze(
-  CRITERES.map((critere) => Object.freeze([Object.freeze({ critere, poids: 1 })])),
+  ORDRE_PAR_DEFAUT.map((critere) => Object.freeze([Object.freeze({ critere, poids: 1 })])),
 );
 
 /** Le plus grand poids d'un critère ; le plus petit est 1. */
@@ -273,11 +295,11 @@ export function verifierPriorites(liste, mode = 'places') {
 /**
  * La liste où chaque critère qu'elle ne nomme pas prend sa place de l'ordre
  * par défaut, seul à son palier, au poids 1 (A16) : juste après le palier
- * du critère qui le précède dans CRITERES, en tête pour le premier. Les
- * critères manquants se placent dans l'ordre de CRITERES, chacun après le
- * précédent déjà placé. Une liste complète se rend égale. Rend une liste
- * neuve, paliers et entrées copiés ; ne modifie pas celle qu'elle reçoit,
- * dont les entrées ont la forme {critere, poids}.
+ * du critère qui le précède dans ORDRE_PAR_DEFAUT, en tête pour le premier.
+ * Les critères manquants se placent dans l'ordre de ORDRE_PAR_DEFAUT, chacun
+ * après le précédent déjà placé. Une liste complète se rend égale. Rend une
+ * liste neuve, paliers et entrées copiés ; ne modifie pas celle qu'elle
+ * reçoit, dont les entrées ont la forme {critere, poids}.
  *
  * @param {Array<Array<{critere: string, poids: number}>>} liste
  * @returns {Array<Array<{critere: string, poids: number}>>}
@@ -285,9 +307,9 @@ export function verifierPriorites(liste, mode = 'places') {
 export function completerPriorites(liste) {
   const complete = liste.map((palier) => palier.map(({ critere, poids }) => ({ critere, poids })));
   const palierDe = (nom) => complete.findIndex((palier) => palier.some(({ critere }) => critere === nom));
-  CRITERES.forEach((nom, rang) => {
+  ORDRE_PAR_DEFAUT.forEach((nom, rang) => {
     if (palierDe(nom) >= 0) return;
-    const place = rang === 0 ? 0 : palierDe(CRITERES[rang - 1]) + 1;
+    const place = rang === 0 ? 0 : palierDe(ORDRE_PAR_DEFAUT[rang - 1]) + 1;
     complete.splice(place, 0, [{ critere: nom, poids: 1 }]);
   });
   return complete;

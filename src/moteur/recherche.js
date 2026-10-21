@@ -105,20 +105,24 @@
 // score, celui des paliers. Quand la meilleure affectation porte un écart
 // maximal nul — lu au rang que la compilation donne au plus grand écart —,
 // chacun atteint son plafond a priori : les composantes de l'écart sont à
-// leur minimum prouvé (§ 5.5), et une meilleure affectation ne peut plus
-// différer que sur les autres. L'acceptation compare alors dans l'ordre des
+// leur minimum prouvé (§ 5.5). L'acceptation compare alors dans l'ordre des
 // contraintes de la compilation, où le palier de l'écart descend juste avant
 // le premier palier « raffinement » qui le suit ; l'historique garde son
-// contenu. Sous l'ordre par défaut, les composantes de l'excédent, des
-// cumulées, des tours hors objectif et des rencontres répétées y passent
-// devant celles de l'écart. L'ordre des contraintes laisse perdre une
-// rencontre le temps de défaire une collision. L'ordre du score le refuse
-// dès que l'historique ne porte plus que des scores à écart nul : collisions,
-// voisins et tables n'y progressent plus que par les rares échanges qui
-// conservent toutes les rencontres, et s'arrêtent loin de leur minimum. La
-// meilleure affectation, jugée dans l'ordre du score, ne retient que des
-// affectations à écart nul. Une instance dont aucun plan n'annule tous les
-// écarts garde l'ordre du score de bout en bout.
+// contenu. L'ordre des contraintes laisse perdre une rencontre le temps de
+// défaire une collision. L'ordre du score le refuse dès que l'historique ne
+// porte plus que des scores à écart nul : collisions, voisins et tables n'y
+// progressent plus que par les rares échanges qui conservent toutes les
+// rencontres, et s'arrêtent loin de leur minimum. L'ordre d'acceptation suit
+// la meilleure affectation : quand l'écart ouvre la liste, une meilleure
+// affectation dans l'ordre du score garde un écart nul, et l'ordre des
+// contraintes reste acquis ; rangé après d'autres paliers, l'écart d'une
+// meilleure affectation peut redevenir non nul, et l'acceptation revient à
+// l'ordre du score. Sous l'ordre par défaut, les rencontres répétées,
+// l'excédent et les cumulées précèdent déjà l'écart : seules les composantes
+// des tours hors objectif passent devant lui, et sans objectif les deux
+// ordres comparent les composantes dans le même ordre. Une instance dont
+// aucun plan n'annule tous les écarts garde l'ordre du score de bout en
+// bout.
 //
 // Relance. Dans l'ordre des contraintes, un score courant inchangé pendant
 // PATIENCE × L itérations fait relancer la descente : le reste du compte
@@ -857,10 +861,11 @@ function comparer(ordre, a, ia, b, ib) {
 }
 
 // Ordre d'acceptation que fixe la meilleure affectation : celui des
-// contraintes dès que son écart maximal, au rang que la composition donne au
-// plus grand écart, est nul (en-tête du module) ; celui du score quand
-// l'écart ne compte pas. Cet écart ne fait que baisser d'une meilleure
-// affectation à la suivante : une fois nul, il le reste.
+// contraintes quand son écart maximal, au rang que la composition donne au
+// plus grand écart, est nul (en-tête du module) ; celui du score sinon, et
+// quand l'écart ne compte pas. Quand l'écart ouvre la composition, il ne
+// fait que baisser d'une meilleure affectation à la suivante : une fois nul,
+// il le reste. Rangé après d'autres composantes, il peut remonter.
 const ordreAccepte = ({ rangEcart, ordreScore, ordreContraintes }, meilleurScore) =>
   rangEcart !== null && meilleurScore[rangEcart] === 0 ? ordreContraintes : ordreScore;
 

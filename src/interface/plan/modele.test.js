@@ -415,7 +415,7 @@ describe('ligneListe : la réservation d\u{2019}une autre personne que l\u{2019}
   test('petite démonstration, une réservation posée après la proposition : la ligne nomme sa titulaire, puis l\u{2019}occupant', () => {
     const charge = petite();
     const configuration = configurationDepuisCharge(charge);
-    const [proposition] = rechercher(configuration, { graine: 7, nombre: 1, arret: 1000 });
+    const [proposition] = rechercher(configuration, { graine: 8, nombre: 1, arret: 1000 });
     charge.propositions = [versFichier(proposition, configuration, { produitVersion: 'epreuve', attribuerSieges: false, decalage: 0 })];
     charge.prochainsIds.proposition = 2;
     charge.evenement.etat = 'propose';
