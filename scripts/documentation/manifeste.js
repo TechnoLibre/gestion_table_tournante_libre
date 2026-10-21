@@ -104,7 +104,7 @@ export const CAPTURES = Object.freeze([
   capture('12a-qualite-sans-placement', '10', 'petite-conflit'),
   capture('12b-qualite-une-table', '10', 'construite-une-table'),
   capture('12c-qualite-un-tour', '10', 'construite-un-tour'),
-  capture('12d-qualite-une-appartenance', '10', 'construite-une-organisation'),
+  capture('12d-qualite-une-organisation', '10', 'construite-une-organisation'),
   capture('12e-qualite-sans-collision', '10', 'construite-sans-collision'),
   capture('12f-qualite-reserve', '10', 'petite-conflit'),
   capture('12g-qualite-plafond-nul', '10', 'construite-plafond-nul'),

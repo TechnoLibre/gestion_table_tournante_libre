@@ -767,7 +767,7 @@ collisions se dessinent plus haut, hors de l’image ; la vue des tables, son
 sélecteur sur « organisations par siège », n’a qu’une colonne, et aucune
 paire ne peut se revoir.*
 
-![Une seule organisation : le profil à une seule série](doc/captures/12d-qualite-une-appartenance.png)
+![Une seule organisation : le profil à une seule série](doc/captures/12d-qualite-une-organisation.png)
 
 *Douze personnes d’une même organisation : le profil n’a qu’une série, les
 rencontres, sans borne de diversité, et sa phrase le dit. Les collisions et

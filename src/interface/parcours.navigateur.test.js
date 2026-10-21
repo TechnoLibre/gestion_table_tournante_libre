@@ -3726,7 +3726,7 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     expect(graphique('tables')).not.toBeNull();
     expect(axesVides()).toEqual([]);
     await cadrerDansLaSurface([phrase, comptes]);
-    await photographier(m, '12d-qualite-une-appartenance', {
+    await photographier(m, '12d-qualite-une-organisation', {
       condition: ['[data-vue-qualite="profil"] [data-phrase-qualite="uneOrganisation"]', '[data-vue-qualite="profil"] svg[data-graphique="profilComptes"]'],
       graine: GRAINE,
     });
