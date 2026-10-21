@@ -39,14 +39,15 @@ import { creerCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { pointer, touche } from '../../../test/navigateur/entrees.js';
+import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { composantes, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, rangeesDeTexte, visible } from '../../../test/navigateur/rendu.js';
 import urlCasLimites from '../../../exemples/participants_cas_limites.csv?url';
 import urlCasLimites1252 from '../../../exemples/participants_cas_limites_cp1252.csv?url';
 import urlGrande from '../../../exemples/participants_demo_grande.csv?url';
 import urlObjectifs from '../../../exemples/objectifs_cas_limites.csv?url';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { traceIcone } from '../primitives/icones.js';
 import { ENCODAGES, SEPARATEURS } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -1402,6 +1403,31 @@ describe('importer des objectifs de table (§ 10.4)', () => {
   });
 });
 
+describe('l’icône des pastilles de l’aperçu (§ 10.1, § 10.4)', () => {
+  // Les tracés de l'icône d'une pastille de cellule, ceux de traceIcone.
+  const tracesDe = (li) => [...li.querySelectorAll('svg path')].map((trace) => trace.getAttribute('d'));
+  const pastillesDe = (e, ligne, champ) => tous(e, `[data-lignes] [data-ligne="${ligne}"] [data-cellule="${champ}"] li`);
+
+  test('étiquette et objectif à l’icône des étiquettes, conflit seul à « interdit »', async () => {
+    const e = await ouvrir({ participants: [personne(1, 'Houle', null, { organisation: 'Club des Merles' })] });
+    await choisir(e, 'conflits.csv', enUtf8('nom;organisation;etiquettes;conflit organisation\r\nOmbrelle;Atelier Ressac;finance;club des merles\r\n'));
+    const [etiquette] = pastillesDe(e, 2, 'etiquettes');
+    const [conflit] = pastillesDe(e, 2, 'conflit_organisation');
+    expect(texteDe(etiquette)).toBe('finance');
+    expect(texteDe(conflit)).toBe('Club des Merles');
+    expect(tracesDe(etiquette)).toEqual(traceIcone('etiquettes'));
+    expect(tracesDe(conflit)).toEqual(traceIcone('interdit'));
+
+    const objectifs = await ouvrir({ tables: NEUF_TABLES() });
+    choisirNature(objectifs, 'objectifs');
+    await choisir(objectifs, 'objectifs.csv', enUtf8('table;objectif\r\n1;finance|bénévole\r\n'));
+    const portes = pastillesDe(objectifs, 2, 'objectif');
+    expect(portes.map(texteDe)).toEqual(['finance', 'bénévole']);
+    for (const li of portes) expect(tracesDe(li), texteDe(li)).toEqual(traceIcone('etiquettes'));
+    expect(traceIcone('etiquettes')).not.toEqual(traceIcone('interdit'));
+  });
+});
+
 describe('les étiquettes des participants dans l’aperçu (§ 10.1, A17)', () => {
   test('les cas limites : chaque cellule d’étiquettes en pastilles, sous l’orthographe retenue ; le bloc des étiquettes fondues présent, à part des organisations, dans l’aperçu puis le rapport', async () => {
     const e = await ouvrir();
@@ -1585,5 +1611,32 @@ describe('la colonne de la présence (§ 10.1)', () => {
     expect(cellule(apercu, 4, 'presence')).toBe('');
     await importer(e);
     expect(participantsDe(e).map(({ presence }) => presence)).toEqual([[1, 2], undefined, undefined]);
+  });
+});
+
+describe('l’aperçu dans une fenêtre de 1 366 × 700 (§ 10.1)', () => {
+  test('le modèle de quatre tours : le tableau tient dans sa carte, les tours nommés d’un tenant', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+    try {
+      const e = await ouvrir({ tours: 4, participants: [personne(1, 'Houle', 'Agathe', { organisation: 'Atelier Ressac' })] });
+      const modele = new TextDecoder().decode(modeleParticipants({ tours: 4 }));
+      await choisir(e, 'modele.csv', new TextEncoder().encode(`${modele}Houle;Agathe;;;;;;;;\r\n`));
+      const tableau = dans(e, '[data-apercu] [data-lignes]');
+      const entetes = [...tableau.tHead.rows[0].cells];
+      expect(entetes.at(-1).textContent).toBe(t('import.champ.conflits'));
+      // Aucune colonne ne se cache au-delà du bord du conteneur qui défile :
+      // il ne défile pas en largeur, et chaque en-tête tient dans sa cellule.
+      const defile = tableau.parentElement;
+      expect(defile.scrollWidth, 'le tableau défile en largeur dans son conteneur').toBeLessThanOrEqual(defile.clientWidth);
+      expect(defile.getBoundingClientRect().right).toBeLessThanOrEqual(section(e).getBoundingClientRect().right);
+      for (const entete of entetes) expect(entete.scrollWidth, entete.textContent).toBeLessThanOrEqual(entete.clientWidth);
+      // Les tours nommés, en plage et en liste, chacun sur une ligne.
+      const lues = [...tableau.querySelectorAll('[data-cellule="presence"]')].filter((c) => /^tours /.test(texteDe(c)));
+      expect(lues.map(texteDe).sort()).toEqual(['tours 1 à 3', 'tours 2 et 3']);
+      for (const presence of lues) expect(rangeesDeTexte(presence), texteDe(presence)).toBe(1);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
   });
 });

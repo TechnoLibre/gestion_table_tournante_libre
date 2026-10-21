@@ -12,13 +12,14 @@
   // puis, dans un bloc à part, celles d'étiquettes, les doublons, les
   // homonymes d'une mise à jour, les cellules sur plusieurs lignes. Le
   // rapport le reprend pour l'aperçu appliqué, ses refus remplacés par ceux
-  // du résumé. Une cellule d'étiquettes montre chacune en pastille, à
-  // l'icône des étiquettes ; une cellule de conflits, chaque organisation
-  // nommée en pastille, à l'icône « interdit » ; une cellule à clé se
-  // traduit avec ses détails, les tours de la présence. Un conflit fautif
-  // refuse le fichier entier : l'aperçu ne montre alors aucune ligne, et le
-  // refus global nomme l'organisation, la ligne, et la correction à faire
-  // avant de réimporter.
+  // du résumé. Une cellule d'étiquettes, celles d'une personne ou l'objectif
+  // d'une table, montre chacune en pastille, à l'icône des étiquettes ;
+  // seule une cellule de conflits, chaque organisation nommée en pastille,
+  // prend l'icône « interdit » ; une cellule à clé se traduit avec ses
+  // détails, les tours de la présence. Un conflit fautif refuse le fichier
+  // entier : l'aperçu ne montre alors aucune ligne, et le refus global
+  // nomme l'organisation, la ligne, et la correction à faire avant de
+  // réimporter.
   //
   // modele : le modèle ; source : { origine: 'fichier'|'collage', nom } ;
   // participants : ceux de la charge, qui nomment les personnes désignées ;
@@ -149,7 +150,7 @@
                       <ul class="etiquettes">
                         {#each etiquettes as motCle (motCle)}
                           <li>
-                            <Pastille sorte="statut" valeur="neutre" icone={champ === 'etiquettes' ? 'etiquettes' : 'interdit'} libelle={motCle} />
+                            <Pastille sorte="statut" valeur="neutre" icone={champ === 'conflit_organisation' ? 'interdit' : 'etiquettes'} libelle={motCle} />
                           </li>
                         {/each}
                       </ul>
@@ -364,11 +365,14 @@
     white-space: pre-wrap;
   }
 
+  /* Un en-tête se replie entre ses mots quand la place manque, plutôt que
+     d'élargir le tableau au-delà de sa carte : à 1 366 px, le tableau d'un
+     fichier de participants qui porte chaque colonne y tient sans
+     défiler. */
   thead th {
     border-top: 1px solid var(--couleur-carte-filet);
     border-bottom-color: var(--couleur-page-filet);
     background-color: var(--couleur-carte-fond-sourd);
-    white-space: nowrap;
   }
 
   tbody th {

@@ -359,11 +359,15 @@ titre seul, que personne n’occupe encore.
 ![Un animateur désigné, un titre non pourvu, et les deux listes de travail](doc/captures/08-animateurs-designes.png)
 
 *À la table 1, le siège 1 porte un cadenas fermé et un anneau : réservé à tous
-les tours, à l’animateur. À la table 2, le siège 1 est hachuré avec un cadenas
-ouvert : un titre « animation » attend son titulaire. La liste des sièges
-énonce les deux en toutes lettres. À droite, les « Listes de travail » montrent
-ce qui reste à faire : les titres de place non pourvus, et les personnes au
-titre pressenti qui ne sont réservées nulle part.*
+les tours, à l’animateur, et la liste des sièges l’énonce en toutes lettres,
+« (réservée, tous les tours) », avec son nom et son titre. À la table 2, le
+siège 1 est hachuré avec un cadenas ouvert : un titre « animation » attend son
+titulaire ; le siège voisin, au cadenas fermé sans anneau, est réservé pour ce
+tour. La liste de la table 2, que le bord du plan coupe ici, les énonce de
+même. À droite, le panneau s’ouvre sur le diagnostic ; plus bas dans le même
+panneau, les « Listes de travail » montrent ce qui reste à faire : les titres
+de place non pourvus, et les personnes au titre pressenti qui ne sont
+réservées nulle part.*
 
 Une table peut avoir zéro, un ou plusieurs animateurs, mais jamais plus
 d’animateurs que de sièges. Une table dont tous les sièges sont réservés est
@@ -671,10 +675,11 @@ secondaire.*
 « organisations par siège » : une ligne par table, une colonne par tour, et
 chaque case écrit le nombre de sièges qui n’apportent aucune organisation
 nouvelle à leur table ; sa couleur fonce avec lui. La pire table vient en
-tête, une table qui n’en a aucun à aucun tour, en dernier. Les deux autres
-positions comptent les personnes assises, puis les doublons parmi les
-personnes d’une organisation ; le choix tient le temps de la séance, et
-n’écrit rien.*
+tête : ici la table 2, qui en compte un à chaque tour, et la phrase sous la
+grille la nomme. Aucune case ne dépasse 1 : la grille n’a que deux teintes,
+celle de 0 et celle de 1. Les deux autres positions comptent les personnes
+assises, puis les doublons parmi les personnes d’une organisation ; le choix
+tient le temps de la séance, et n’écrit rien.*
 
 ![Le tableau des paires répétées d’une soirée où se revoir est forcé](doc/captures/14-qualite-paires.png)
 
@@ -705,9 +710,8 @@ aucune ici —, puis la soirée en texte, sa part des tours possibles servis
 et, dessous, le compte des jamais servies ; puis une barre par tour, le tour
 au plus grand reste en tête, chacune avec ses assis sans table possible en
 encre secondaire ; enfin chaque tour, son pourcentage et ses deux comptes.
-En haut à droite, un avertissement rappelle que le placement retenu et les
-propositions d’avant le changement ne décrivent plus la soirée : ils sont
-gardés.*
+Aucun avertissement ne s’affiche : aucun placement de la soirée ne contredit
+sa liste.*
 
 ![Les animateurs rencontrés sous la borne des animateurs, puis la diversité par animateur](doc/captures/15b-qualite-animateurs.png)
 
@@ -939,10 +943,12 @@ Viennent ensuite les planches, quatre badges A6 par feuille A4 :
 
 ![La première planche : quatre badges A6 et leurs traits de coupe](doc/captures/25-badges-planche.png)
 
-*Chaque badge porte le nom, l’organisation et la table de chaque tour ; en
-pied, le nom de l’événement et l’instant du placement. Les traits fins
-marquent la coupe : un vertical au milieu de la feuille, un horizontal sous
-chaque rangée de badges.*
+*Chaque badge porte le nom, l’organisation et la table de chaque tour ; une
+personne assise à la même table à chaque tour lit une seule ligne, comme
+« Toute la soirée — table 1 » sur le quatrième badge. En pied, le nom de
+l’événement et l’instant du placement. Les traits fins marquent la coupe :
+un vertical au milieu de la feuille, un horizontal sous chaque rangée de
+badges.*
 
 Une personne absente à un tour garde la ligne de ce tour sur son badge, qui
 dit « absente » au lieu d’une table :

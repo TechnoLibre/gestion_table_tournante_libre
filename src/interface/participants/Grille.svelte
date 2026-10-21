@@ -691,9 +691,12 @@
 </div>
 
 <style>
+  /* Le conteneur du tableau est aussi celui des requêtes de largeur : la
+     tenue suit la place que la carte lui laisse, pas la fenêtre. */
   .defilement {
     max-width: 100%;
     overflow-x: auto;
+    container-type: inline-size;
   }
 
   /* Le tableau d'une carte : en-tête sur le fond sourd, lignes séparées
@@ -729,7 +732,7 @@
     padding-right: var(--espace-5);
   }
 
-  /* Un en-tête se replie entre ses mots quand la place manque : celui des
+  /* Sous 80rem de place, un en-tête se replie entre ses mots : celui des
      conflits d'organisation, le plus long, sur deux lignes. */
   thead th {
     border-top: 1px solid var(--couleur-carte-filet);
@@ -737,10 +740,11 @@
     background-color: var(--couleur-carte-fond-sourd);
   }
 
-  /* Dans une fenêtre étroite, les cellules se serrent, les bords de la
-     ligne aussi : les neuf colonnes et les actions tiennent dans la carte
-     pleine largeur d'une fenêtre de 1024 px, sans défiler. */
-  @media (max-width: 80rem) {
+  /* Sous 86rem de place, les cellules se serrent, les bords de la ligne
+     aussi : les neuf colonnes et les actions tiennent dans la carte pleine
+     largeur d'une fenêtre de 1024 px, sans défiler, et dans celle d'une
+     fenêtre de 1 366 px avec leurs en-têtes sur une ligne. */
+  @container (max-width: 86rem) {
     th,
     td {
       padding-right: var(--espace-2);
@@ -936,7 +940,7 @@
     cursor: pointer;
   }
 
-  @media (max-width: 80rem) {
+  @container (max-width: 86rem) {
     .commandes > button {
       padding-right: var(--espace-2);
       padding-left: var(--espace-2);
@@ -971,5 +975,45 @@
   table:focus-visible {
     outline: 2px solid var(--couleur-focus);
     outline-offset: -2px;
+  }
+
+  /* À partir de 80rem de place, celle de la carte d'une fenêtre de
+     1 366 px, chaque en-tête tient sur une ligne, les quatre actions d'une
+     ligne vont sur deux rangées de deux, en colonnes alignées d'une ligne à
+     l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés
+     de la présence ne se coupent pas. En deçà, les en-têtes se replient
+     entre leurs mots, et les actions passent à la ligne quand leur colonne
+     est étroite. */
+  @container (min-width: 80rem) {
+    thead th {
+      white-space: nowrap;
+    }
+
+    .commandes {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(max-content, 1fr));
+      justify-items: start;
+    }
+
+    /* Une action refusée prend les deux colonnes, son refus toute leur
+       largeur : sans largeur propre, il se replie dans la cellule, et sa
+       phrase n'élargit ni la colonne ni la grille. */
+    .commandes > :global(.commande:has(.refus)) {
+      grid-column: 1 / -1;
+      justify-self: stretch;
+    }
+
+    .commandes :global(.refus) {
+      flex-basis: 100%;
+      contain: inline-size;
+    }
+
+    td[data-champ='prenom'] {
+      overflow-wrap: break-word;
+    }
+
+    td[data-champ='presence'] .donnee-pastille :global(.libelle) {
+      white-space: nowrap;
+    }
   }
 </style>

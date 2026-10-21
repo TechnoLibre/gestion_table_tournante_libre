@@ -36,7 +36,7 @@ import { VERSION } from '../../version.genere.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { actionDe, boutonActions } from '../../../test/navigateur/menus.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
-import { composantes, sousTheme, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, rangeesDeTexte, sousTheme, visible } from '../../../test/navigateur/rendu.js';
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
 import { RANGS_ORGANISATION, teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -2727,6 +2727,161 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
       });
     });
   }
+
+  test('à 1 366 × 700, les cas limites triés : en-têtes d’une ligne, actions sur deux rangées, prénoms et présence d’un tenant', async () => {
+    await dansLeCadre(1366, 700, async () => {
+      const m = await evenementOuvert({ tours: 4, tables: 1 });
+      const octets = await octetsLivres(CAS_LIMITES);
+      await m.seance.executer('importerParticipants', { apercu: apercuPour(m, decoder(octets).texte), mode: 'ajouter' });
+      await attendreSeance(m);
+      await m.seance.executer('changerPresence', { id: idDe(m, 'Pommerel'), tours: [3, 4] });
+      await m.seance.executer('changerConflits', { id: idDe(m, 'Marbrelle'), organisations: ['Société des Hérons'] });
+      await attendreSeance(m);
+      const tri = section(m).querySelector('[data-commande="trier"][data-cible="nom"]');
+      await cliquer(tri);
+      await cliquer(tri);
+      expect(tri.closest('th').getAttribute('aria-sort')).toBe('descending');
+      expect(participants(m).some((p) => p.exclu)).toBe(true);
+
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
+      const defilement = grille(m).parentElement;
+      expect(defilement.scrollWidth, 'le tableau défile en largeur dans son conteneur').toBeLessThanOrEqual(defilement.clientWidth);
+      // L'en-tête garde la hauteur d'une ligne : aucun intitulé ne se
+      // replie, celui des conflits d'organisation compris.
+      const entetes = [...grille(m).tHead.rows[0].cells];
+      expect(entetes.map(texteDe)).toContain(t('participants.colonne.conflits'));
+      for (const entete of entetes) expect(rangeesDeTexte(entete), texteDe(entete)).toBe(1);
+      // Les quatre actions de chaque ligne, sur deux rangées au plus, chacune
+      // sur une ligne ; « Réintégrer » sur celle de la personne exclue.
+      for (const rangee of lignes(m)) {
+        const boutons = [...rangee.lastElementChild.querySelectorAll('button')];
+        expect(boutons, rangee.dataset.participant).toHaveLength(4);
+        const hauts = new Set(boutons.map((bouton) => Math.round(bouton.getBoundingClientRect().top)));
+        expect(hauts.size, `${rangee.dataset.participant} : rangées d’actions`).toBeLessThanOrEqual(2);
+        for (const bouton of boutons) expect(rangeesDeTexte(bouton), bouton.textContent.trim()).toBe(1);
+      }
+      // Un prénom d'un mot tient sur une ligne : il ne se coupe pas entre
+      // deux lettres.
+      for (const p of participants(m).filter(({ prenom }) => prenom !== null)) {
+        expect(p.prenom.split(' '), p.prenom).toHaveLength(1);
+        expect(rangeesDeTexte(cellule(m, p.id, 'prenom')), p.prenom).toBe(1);
+      }
+      // Les actions forment deux colonnes alignées d'une ligne à l'autre :
+      // « Voir sur le plan » et « Supprimer » partagent un même bord gauche.
+      const gauche = (id, nom) => Math.round(commandeDeLigne(m, id, nom).getBoundingClientRect().left);
+      const gauches = new Set(idsAffiches(m).flatMap((id) => [gauche(id, 'voirSurLePlan'), gauche(id, 'supprimerParticipant')]));
+      expect(gauches.size).toBe(1);
+      // La pastille des tours nommés tient sur une ligne, dans sa cellule.
+      const presence = cellule(m, idDe(m, 'Pommerel'), 'presence');
+      const pastille = presence.querySelector('[data-presence="partielle"]');
+      expect(texteDe(pastille)).toBe('tours 3 et 4');
+      expect(rangeesDeTexte(pastille)).toBe(1);
+      expect(pastille.getBoundingClientRect().right).toBeLessThanOrEqual(presence.getBoundingClientRect().right);
+    });
+  });
+
+  test('à 1 366 × 700, le refus d’une action de ligne se replie dans sa cellule : la grille ne s’élargit pas', async () => {
+    await dansLeCadre(1366, 700, async () => {
+      const m = await evenementOuvert({ personnes: SEPT, tours: 3 });
+      const id = idDe(m, 'Calvaille');
+      await m.seance.executer('exclureParticipant', { id });
+      await attendreSeance(m);
+      const defilement = grille(m).parentElement;
+      const avant = defilement.clientWidth;
+      // La séance refuse la réintégration, comme sous une place réservée.
+      vi.spyOn(m.seance, 'executer').mockImplementation(() =>
+        Promise.reject(
+          Object.assign(new Error('PLACE_RESERVEE'), { code: 'PLACE_RESERVEE', details: { siege: 1, tour: 3, portee: 'tour' } }),
+        ),
+      );
+      await cliquer(commandeDeLigne(m, id, 'reintegrerParticipant'));
+      await attendreSeance(m);
+      vi.restoreAllMocks();
+      const refus = ligne(m, id).lastElementChild.querySelector('[data-refus="PLACE_RESERVEE"]');
+      expect(refus).not.toBeNull();
+      expect(defilement.clientWidth).toBe(avant);
+      expect(defilement.scrollWidth, 'le tableau défile en largeur dans son conteneur').toBeLessThanOrEqual(defilement.clientWidth);
+      expect(refus.getBoundingClientRect().right).toBeLessThanOrEqual(ligne(m, id).lastElementChild.getBoundingClientRect().right);
+      // Le refus prend la largeur des deux colonnes d'actions, de « Fiche »
+      // à « Voir sur le plan » au moins : sa phrase reste lisible.
+      expect(Math.round(refus.getBoundingClientRect().left)).toBe(Math.round(commandeDeLigne(m, id, 'fiche').getBoundingClientRect().left));
+      expect(refus.getBoundingClientRect().right).toBeGreaterThanOrEqual(commandeDeLigne(m, id, 'voirSurLePlan').getBoundingClientRect().right);
+    });
+  });
+
+  // La largeur en pixels d'un jeton d'espacement, résolue dans la section.
+  function espace(m, jeton) {
+    const sonde = document.createElement('div');
+    sonde.style.width = `var(${jeton})`;
+    section(m).append(sonde);
+    const largeur = sonde.getBoundingClientRect().width;
+    sonde.remove();
+    return largeur;
+  }
+
+  test('la tenue suit la place de la carte, non la fenêtre : carte sous 86 rem, cellules serrées ; carte sous 80 rem, en-têtes repliables et actions en ligne', async () => {
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    // Une fenêtre de plus de 86 rem dont la carte en a moins : les cellules
+    // et les bords de la ligne se serrent, les en-têtes restent d'une ligne.
+    await dansLeCadre(1400, 700, async () => {
+      const m = await evenementOuvert({ personnes: SEPT });
+      const defilement = grille(m).parentElement;
+      expect(innerWidth).toBeGreaterThan(86 * rem);
+      expect(defilement.clientWidth).toBeLessThan(86 * rem);
+      const id = idDe(m, 'Calvaille');
+      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingRight)).toBe(espace(m, '--espace-2'));
+      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingLeft)).toBe(espace(m, '--espace-2'));
+      expect(parseFloat(getComputedStyle(ligne(m, id).firstElementChild).paddingLeft)).toBe(espace(m, '--espace-3'));
+      for (const entete of grille(m).tHead.rows[0].cells) expect(getComputedStyle(entete).whiteSpace, texteDe(entete)).toBe('nowrap');
+    });
+    // Une fenêtre de plus de 80 rem dont la carte en a moins : les en-têtes
+    // se replient entre leurs mots, les actions ne forment pas de grille.
+    await dansLeCadre(1300, 700, async () => {
+      const m = await evenementOuvert({ personnes: SEPT });
+      const defilement = grille(m).parentElement;
+      expect(innerWidth).toBeGreaterThan(80 * rem);
+      expect(defilement.clientWidth).toBeLessThan(80 * rem);
+      for (const entete of grille(m).tHead.rows[0].cells) expect(getComputedStyle(entete).whiteSpace, texteDe(entete)).not.toBe('nowrap');
+      const commandes = commandeDeLigne(m, idDe(m, 'Calvaille'), 'fiche').parentElement;
+      expect(getComputedStyle(commandes).display).not.toBe('grid');
+    });
+  });
+
+  test('à 1 366 × 700, les cas limites triés sous l’avertissement des places manquantes : la grille en haut, le « Réintégrer » de la personne exclue se voit et répond au point', async () => {
+    await dansLeCadre(1366, 700, async () => {
+      const m = await evenementOuvert({ tours: 4, tables: 1 });
+      const octets = await octetsLivres(CAS_LIMITES);
+      await m.seance.executer('importerParticipants', { apercu: apercuPour(m, decoder(octets).texte), mode: 'ajouter' });
+      // Exclure puis réintégrer une personne laisse, dans la zone des
+      // annonces à côté de la tête, l'avertissement des places manquantes,
+      // qui abaisse la carte de la grille de la hauteur de sa boîte.
+      const cible = participants(m).find((p) => !p.exclu && p.courriel === null);
+      await m.seance.executer('exclureParticipant', { id: cible.id });
+      await m.seance.executer('reintegrerParticipant', { id: cible.id });
+      await attendreSeance(m);
+      expect(m.racine.querySelector('[data-annonces] [data-avertissement="PLACES_MANQUANTES"]')).not.toBeNull();
+      const tri = section(m).querySelector('[data-commande="trier"][data-cible="nom"]');
+      await cliquer(tri);
+      await cliquer(tri);
+      expect(tri.closest('th').getAttribute('aria-sort')).toBe('descending');
+      // Sans focus, la grille et ses ancêtres ramenés en haut : la ligne de
+      // la personne exclue tient dans la hauteur de la fenêtre, et le point
+      // du centre de son « Réintégrer » atteint ce bouton, rien ne le couvre.
+      document.activeElement?.blur();
+      for (let ancetre = grille(m).parentElement; ancetre !== null; ancetre = ancetre.parentElement) {
+        if (ancetre.scrollHeight > ancetre.clientHeight) ancetre.scrollTop = 0;
+      }
+      await rendu();
+      const exclue = participants(m).find((p) => p.exclu);
+      expect(exclue).toBeDefined();
+      const reintegrer = commandeDeLigne(m, exclue.id, 'reintegrerParticipant');
+      const boite = reintegrer.getBoundingClientRect();
+      expect(boite.top, 'le haut de « Réintégrer » sous le haut de la grille').toBeGreaterThanOrEqual(grille(m).getBoundingClientRect().top);
+      expect(boite.bottom, 'le bas de « Réintégrer » dans la fenêtre').toBeLessThanOrEqual(innerHeight);
+      const atteint = document.elementFromPoint(boite.left + boite.width / 2, boite.top + boite.height / 2);
+      expect(reintegrer.contains(atteint), 'le centre de « Réintégrer » atteint le bouton').toBe(true);
+    });
+  });
 
   test('dans une fenêtre basse, le signal d’orthographe et le refus du nom viennent dans la fenêtre, à côté de leur champ', async () => {
     await dansLeCadre(1024, 420, async () => {

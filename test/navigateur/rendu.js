@@ -563,6 +563,16 @@ function peintAuPoint(n, centre) {
   );
 }
 
+/** Le nombre de lignes du texte d'un élément : les hauts de ses boîtes de
+ *  texte, rangés, se groupent en lignes ; deux hauts à moins de 4 px l'un de
+ *  l'autre, ceux d'un gras et d'un maigre côte à côte, en sont une. */
+export function rangeesDeTexte(element) {
+  const etendue = document.createRange();
+  etendue.selectNodeContents(element);
+  const hauts = [...etendue.getClientRects()].filter((r) => r.width > 0).map((r) => r.top).sort((a, b) => a - b);
+  return hauts.filter((haut, rang) => rang === 0 || haut - hauts[rang - 1] >= 4).length;
+}
+
 /** true quand la cible se voit dans la fenêtre, sinon la raison, en texte.
  *  Un élément : checkVisibility (display, visibility, opacité nulle,
  *  content-visibility), une boîte non vide qui tient dans la fenêtre, puis
