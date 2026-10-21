@@ -29,6 +29,8 @@ import {
   dossierCorbeille,
   longueurRelativeMax,
   nomControle,
+  nomCsvBadges,
+  nomCsvBadgesExigeListe,
   nomPlanche,
   nomPlancheExigeListe,
 } from './noms.js';
@@ -1448,5 +1450,66 @@ describe('nomPlanche et nomControle : les deux fichiers d’Avery 5392 (§ 11.6,
       }
       assert.equal(nomPlancheExigeListe(base, options), true);
     }
+  });
+});
+
+describe('nomCsvBadges : le nom de la liste des badges en CSV (§ 11.6, § 8.6)', () => {
+  const BASE = 'Soir\u{E9}e des Lucioles';
+  const HORODATAGE = '2031-05-17T20:15:07-04:00';
+  const reeditionDe = (k) => ({ ids: Array.from({ length: k }, (_, i) => i + 1) });
+  const LISTE = { horodatage: HORODATAGE, reedition: null, proposition: null, ordre: 'alphabetique', brouillon: false };
+
+  test('« .badges », la date et l’heure du placement, puis « .csv » ; ni papier, ni imposition, ni modèle', () => {
+    assert.equal(nomCsvBadges(BASE, LISTE), `${BASE}.badges_2031-05-17_20-15-07.csv`);
+    assert.equal(nomCsvBadges(BASE, { horodatage: HORODATAGE }), `${BASE}.badges_2031-05-17_20-15-07.csv`);
+  });
+
+  test('la proposition, la réédition et l’ordre par table se marquent comme dans le nom de la planche ; BROUILLON avant la date', () => {
+    assert.equal(
+      nomCsvBadges(BASE, { ...LISTE, horodatage: null, reedition: reeditionDe(2), proposition: 4, ordre: 'table', brouillon: true }),
+      `${BASE}.badges-p4-2_table_BROUILLON_horodatage-inconnu.csv`,
+    );
+    assert.equal(nomCsvBadges(BASE, { ...LISTE, brouillon: true }), `${BASE}.badges_BROUILLON_2031-05-17_20-15-07.csv`);
+    // Le nom de la liste ne se confond jamais avec celui d'une planche.
+    assert.notEqual(nomCsvBadges(BASE, LISTE), nomPlanche(BASE, { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE }));
+  });
+
+  test('une réédition prend le premier rang libre du dossier, sans égard à la casse ; une liste entière garde son nom', () => {
+    const sous = (options, existants) => ({ ...options, dossier: { ...DOSSIERS[0], existants } });
+    const entiere = nomCsvBadges(BASE, sous(LISTE, []));
+    assert.equal(nomCsvBadges(BASE, sous(LISTE, [entiere])), entiere);
+    assert.equal(nomCsvBadgesExigeListe(BASE, sous(LISTE, [])), false);
+    const reedition = { ...LISTE, reedition: reeditionDe(3) };
+    const premiere = nomCsvBadges(BASE, sous(reedition, []));
+    assert.equal(nomCsvBadgesExigeListe(BASE, sous(reedition, [])), true);
+    assert.equal(nomCsvBadges(BASE, sous(reedition, [premiere.toUpperCase()])), premiere.replace(/\.csv$/, '_2.csv'));
+    assert.equal(nomCsvBadgesExigeListe(BASE, reedition), false);
+  });
+
+  test('la borne du chemin : le plus long suffixe sans marque compte 46 unités, sous les 51 de la planche ; à côté d’une base à la borne, le nom marqué se raccourcit', () => {
+    const plusLong = nomCsvBadges('b', { ...LISTE, reedition: reeditionDe(9999), brouillon: true }).slice(1);
+    assert.equal(plusLong, '.badges-9999_BROUILLON_2031-05-17_20-15-07.csv');
+    assert.equal(plusLong.length, 46);
+    for (const dossier of DOSSIERS) {
+      const base = deriverBase(lettres(400), { ...dossier, existantes: [] });
+      const options = { ...LISTE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table', brouillon: true, dossier: { ...dossier, existants: [] } };
+      const nom = nomCsvBadges(base, options);
+      assert.ok(nom.slice(0, nom.indexOf('.badges-')).endsWith('.'), nom);
+      assert.ok(`${dossier.racine}${dossier.separateur}${nom}.ecriture`.length <= LONGUEUR_CHEMIN_MAX, nom);
+    }
+  });
+
+  test('un domaine hors contrat lève TypeError ou RangeError, comme nomPlanche', () => {
+    for (const options of [
+      { ...LISTE, horodatage: '17 mai' },
+      { ...LISTE, proposition: 0 },
+      { ...LISTE, ordre: 'nom' },
+      { ...LISTE, brouillon: 'oui' },
+      { ...LISTE, dossier: { racine: 'C:' } },
+    ]) {
+      assert.throws(() => nomCsvBadges(BASE, options), TypeError, JSON.stringify(options));
+    }
+    assert.throws(() => nomCsvBadges('', LISTE), TypeError);
+    assert.throws(() => nomCsvBadges(BASE, { ...LISTE, reedition: { ids: [] } }), RangeError);
   });
 });

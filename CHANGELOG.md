@@ -28,6 +28,19 @@
   la raison.
 - Un badge perdu se réédite seul : la réédition produit une planche des seuls
   badges choisis, identiques aux premiers tant que le placement n'a pas bougé.
+- « Produire la liste (CSV) » dépose à côté de la planche la liste des mêmes
+  badges, pour un tableur : nom, prénom, organisation et, dans une seule
+  cellule, les lignes de tour du badge, une par ligne. Elle se tire du
+  placement retenu ou d'une proposition, dont le nom de fichier porte alors
+  « BROUILLON », et se produit même quand un nom trop long empêche la
+  planche.
+- La ligne de tour d'un badge porte le libellé de la table entre parenthèses
+  après son numéro : « Tour 1 — table 5 (Terrasse), siège 3 — animation ». Un
+  libellé trop long pour la carte s'abrège ; le numéro et le siège, jamais.
+- « Enregistrer sous… » des cartes Avery 5392 affiche les deux chemins
+  choisis, et une feuille de contrôle qui ne s'écrit pas le dit en nommant le
+  fichier, les cartes déjà déposées. Un modèle de badge que le poste ne peut
+  pas retenir s'annonce sous les réglages de la section.
 - « Imprimer… » ouvre un aperçu de la page imprimée : le plan, découpé en pages
   repérées quand il ne se lit plus sur une seule ; la liste d'accueil ; la
   feuille par table, une pour la soirée ou une par tour. Les listes imprimées

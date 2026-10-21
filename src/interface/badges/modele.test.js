@@ -29,6 +29,7 @@ import {
   cleSource,
   filtrerPersonnes,
   libelleSource,
+  listeBloquee,
   memesReglages,
   modeleImposeSonPapier,
   personnesReeditables,
@@ -214,6 +215,25 @@ describe('les phrases de l’annonce (§ 11.2, § 11.5, § 11.8)', () => {
     for (const code of ['PLANCHE_SANS_PLACEMENT', 'RETENU_FAUTIF', 'PROPOSITION_FAUTIVE', 'PLANCHE_DERIVE', 'PLANCHE_TROP_DE_TOURS', 'PLANCHE_NOM_TROP_LONG']) {
       assert.equal(produireBloque({ ...vide, refus: { code, details: {} } }), true, code);
     }
+  });
+
+  test('la liste en CSV n’est bloquée que par un refus du placement, jamais par un refus de la mise en page', async () => {
+    const vide = { papier: 'A4', comptes: null, planches: null, homonymes: [], absents: [], brouillon: true, nom: null };
+    assert.equal(listeBloquee(null), false);
+    assert.equal(listeBloquee({ ...vide, refus: null }), false);
+    for (const code of ['PLANCHE_SANS_PLACEMENT', 'RETENU_FAUTIF', 'PROPOSITION_FAUTIVE', 'PLANCHE_DERIVE']) {
+      assert.equal(listeBloquee({ ...vide, refus: { code, details: {} } }), true, code);
+    }
+    // Un refus de la mise en page vient avec le modèle : ses comptes.
+    const comptes = { participants: 4, exclus: 0, produits: 4 };
+    for (const code of ['PLANCHE_TROP_DE_TOURS', 'PLANCHE_NOM_TROP_LONG']) {
+      assert.equal(listeBloquee({ ...vide, comptes, refus: { code, details: {} } }), false, code);
+    }
+    const long = retenue();
+    long.participants[1].nom = `Pervenche${'w'.repeat(1990)}`;
+    const annonce = await annoncer(long, 'A4');
+    assert.equal(annonce.refus.code, 'PLANCHE_NOM_TROP_LONG');
+    assert.deepEqual([produireBloque(annonce), listeBloquee(annonce)], [true, false]);
   });
 
   test('un papier absent : Lettre, sans refus, marqué parmi les planches des deux papiers, et le fichier le nomme', async () => {

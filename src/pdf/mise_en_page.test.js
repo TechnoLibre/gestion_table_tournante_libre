@@ -14,7 +14,8 @@ import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { lirePolices } from '../../test/polices.js';
 import { describe, test } from '../../test/lanceur.js';
 import { constante } from '../geometrie/constantes.js';
-import { BADGE } from '../geometrie/papiers.js';
+import { BADGE, MODELES_BADGE } from '../geometrie/papiers.js';
+import { LIBELLE_TABLE_MAX } from '../stockage/document.js';
 import { cadreUtile } from './imposition.js';
 import { mettreEnPage, metriquesDe } from './mise_en_page.js';
 
@@ -88,6 +89,36 @@ const NOMS_COMPOSES = [
   'Théa-Iris Lamontagne-Desrochers de Grandpré',
   'Iris Lacasse-Pervenche-Grisaille de Théo',
 ];
+
+// Une ligne de tour faite de morceaux : des textes fixes, et des textes
+// libres, { libre }, que la ligne abrège au plancher. Rend la ligne et les
+// positions de ses textes libres, comme le modèle de la planche les donne.
+function composee(...parts) {
+  let ligne = '';
+  const morceaux = [];
+  for (const part of parts) {
+    if (typeof part === 'string') {
+      ligne += part;
+      continue;
+    }
+    morceaux.push({ debut: ligne.length, fin: ligne.length + part.libre.length });
+    ligne += part.libre;
+  }
+  return { ligne, morceaux };
+}
+// Une ligne sans texte libre.
+const simple = (ligne) => ({ ligne, morceaux: [] });
+// Une ligne titrée : la place, le séparateur, puis le titre, libre.
+const titree = (place, titre) => composee(`${place} ${TIRET} `, { libre: titre });
+// Une ligne au libellé de table : « Tour r — table t (libellé), siège s »,
+// suivie du titre quand il est donné.
+const auLibelle = (r, t, libelle, s, titre = null) =>
+  composee(`Tour ${r} ${TIRET} table ${t} (`, { libre: libelle }, `), siège ${s}`, ...(titre === null ? [] : [` ${TIRET} `, { libre: titre }]));
+// Les textes d'un badge aux lignes composées.
+const textesComposes = (lignes, champs = {}) =>
+  textes({ lignes: lignes.map(({ ligne }) => ligne), abregeables: lignes.map(({ morceaux }) => morceaux), ...champs });
+// Un libellé de table au plus long que la saisie admet.
+const LIBELLE_LONG = 'Verrière du jardin d’hiver, près des grandes baies, côté sud';
 
 // Des lignes de tour sous sièges attribués, numérotées comme tours(n).
 const toursAuxSieges = (n) => tours(n).map((ligne, i) => `${ligne}, siège ${i + 1}`);
@@ -500,9 +531,8 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
     });
 
     test(`${jeu} : une ligne trop large pour la colonne s’abrège à la fin, au corps plancher ; les autres restent entières`, () => {
-      const titre = `${tour(2, 5)} ${TIRET} ${repete('Animatrice de la table d’honneur ', 120)}`;
-      const lignes = [tour(1, 3), titre, tour(3, 7)];
-      const page = mettreEnPage(textes({ lignes }), metriques);
+      const titre = titree(tour(2, 5), repete('Animatrice de la table d’honneur ', 120));
+      const page = mettreEnPage(textesComposes([simple(tour(1, 3)), titre, simple(tour(3, 7))]), metriques);
       assert.equal(page.colonnesTours, 1);
       const blocs = page.blocs.filter((b) => b.texte.startsWith('Tour '));
       assert.equal(blocs.length, 3);
@@ -520,9 +550,10 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
       let n = 1;
       while (n < 60 && mettreEnPage(textes({ nom, lignes: tours(n) }), metriques).colonnesTours !== 2) n += 1;
       assert.ok(n < 60);
-      const lignes = tours(n);
-      lignes[0] = `${tour(1, 3)} ${TIRET} ${repete('Animatrice de la table d’honneur ', 60)}`;
-      const page = mettreEnPage(textes({ nom, lignes }), metriques);
+      const composees = tours(n).map(simple);
+      composees[0] = titree(tour(1, 3), repete('Animatrice de la table d’honneur ', 60));
+      const lignes = composees.map(({ ligne }) => ligne);
+      const page = mettreEnPage(textesComposes(composees, { nom }), metriques);
       assert.equal(page.colonnesTours, 2, `${n} : ${JSON.stringify(page.refus)}`);
       const blocs = page.blocs.filter((b) => b.texte.startsWith('Tour '));
       assert.equal(blocs.length, n);
@@ -544,8 +575,8 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
       // sans titre, puis suivie d'un titre.
       const large = tour(1, '9'.repeat(80));
       assert.ok(metriques.largeur(large, constante('CORPS_TOURS_PLANCHER_PT'), false) > CADRE.largeur);
-      for (const ligne of [large, `${large} ${TIRET} Animatrice`]) {
-        assert.deepEqual(mettreEnPage(textes({ lignes: [ligne] }), metriques), {
+      for (const ligne of [simple(large), titree(large, 'Animatrice')]) {
+        assert.deepEqual(mettreEnPage(textesComposes([ligne]), metriques), {
           refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 1 } },
         });
       }
@@ -557,8 +588,9 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
       const demi = (CADRE.largeur - constante('CORPS_TOURS_PLANCHER_PT') * MM_PAR_PT) / 2;
       assert.ok(lignes.slice(-10).every((l) => metriques.largeur(l, constante('CORPS_TOURS_PLANCHER_PT'), false) > demi));
       const place = lignes[0];
-      lignes[0] = `${place} ${TIRET} Animatrice de la table d’honneur`;
-      const page = mettreEnPage(textes({ nom, lignes }), metriques);
+      const composees = lignes.map(simple);
+      composees[0] = titree(place, 'Animatrice de la table d’honneur');
+      const page = mettreEnPage(textesComposes(composees, { nom }), metriques);
       if ('refus' in page) {
         assert.equal(page.refus.code, 'PLANCHE_TROP_DE_TOURS');
         return;
@@ -566,6 +598,63 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
       const tout = textesDe(page);
       assert.ok(lignes.slice(1).every((l) => tout.includes(l)), JSON.stringify(tout.filter((t) => t.endsWith(MARQUE))));
       assert.ok(tout.some((t) => t.startsWith(place)));
+    });
+  }
+
+  for (const [jeu, metriques] of JEUX) {
+    for (const modele of ['a6', 'avery5392']) {
+      const plancher = constante('CORPS_TOURS_PLANCHER_PT');
+      const { largeur: L } = cadreUtile({ x: 0, y: 0, ...(modele === 'a6' ? BADGE : MODELES_BADGE.avery5392) }, modele);
+      const blocTour = (page, debut) => page.blocs.find((b) => b.texte.startsWith(debut));
+
+      test(`${jeu}, ${modele} : un libellé de ${LIBELLE_TABLE_MAX} caractères s’abrège au plancher, entre ses parenthèses ; numéro, siège et titre restent entiers`, () => {
+        assert.equal([...LIBELLE_LONG].length, LIBELLE_TABLE_MAX);
+        const longue = auLibelle(1, 13, LIBELLE_LONG, 8, 'animation');
+        assert.ok(metriques.largeur(longue.ligne, plancher, false) > L, 'la ligne entière déborde au plancher');
+        const page = mettreEnPage(textesComposes([longue, simple(tour(2, 5)), simple(tour(3, 7))]), metriques, modele);
+        assert.ok(!('refus' in page), JSON.stringify(page));
+        const bloc = blocTour(page, `Tour 1 ${TIRET} table 13 (`);
+        assert.equal(bloc.corps, plancher);
+        const [, libelle] = /^Tour 1 — table 13 \((.*)\), siège 8 — animation$/u.exec(bloc.texte) ?? [];
+        assert.ok(libelle !== undefined && libelle.endsWith(MARQUE), bloc.texte);
+        assert.ok(LIBELLE_LONG.startsWith(libelle.slice(0, -MARQUE.length)) && libelle.length > MARQUE.length, bloc.texte);
+        // Le plus long préfixe qui tient : une grappe de plus déborde.
+        const garde = libelle.slice(0, -MARQUE.length);
+        const plus = LIBELLE_LONG.slice(0, garde.length + 1).trimEnd();
+        if (plus.length > garde.length) {
+          assert.ok(metriques.largeur(`Tour 1 ${TIRET} table 13 (${plus}${MARQUE}), siège 8 ${TIRET} animation`, plancher, false) > L);
+        }
+        assert.ok([tour(2, 5), tour(3, 7)].every((t) => textesDe(page).includes(t)));
+        assert.deepEqual(chevauchements(page, metriques), []);
+        assert.ok(page.blocs.every((b) => b.x >= -TOLERANCE && b.x + metriques.largeur(b.texte, b.corps, b.gras) <= L + TOLERANCE));
+      });
+
+      test(`${jeu}, ${modele} : le libellé s’abrège avant le titre ; le titre ne s’abrège que le libellé réduit à sa première grappe`, () => {
+        const titre = repete('Animatrice de la table d’honneur ', 80);
+        const page = mettreEnPage(textesComposes([auLibelle(1, 13, LIBELLE_LONG, 8, titre)]), metriques, modele);
+        assert.ok(!('refus' in page), JSON.stringify(page));
+        const bloc = blocTour(page, 'Tour 1');
+        assert.ok(bloc.texte.startsWith(`Tour 1 ${TIRET} table 13 (V${MARQUE}), siège 8 ${TIRET} A`), bloc.texte);
+        assert.ok(bloc.texte.endsWith(MARQUE), bloc.texte);
+        // Un titre court reste entier, le libellé seul abrégé.
+        const court = mettreEnPage(textesComposes([auLibelle(1, 13, LIBELLE_LONG, 8, 'animation')]), metriques, modele);
+        assert.match(blocTour(court, 'Tour 1').texte, /…\), siège 8 — animation$/u);
+      });
+
+      test(`${jeu}, ${modele} : au-dessus du plancher, un libellé ne s’abrège pas ; une ligne qui tient entière n’est pas touchée`, () => {
+        const court = auLibelle(1, 13, 'Terrasse', 8, 'animation');
+        const page = mettreEnPage(textesComposes([court]), metriques, modele);
+        const bloc = blocTour(page, 'Tour 1');
+        assert.equal(bloc.texte, court.ligne);
+        assert.ok(metriques.largeur(court.ligne, bloc.corps, false) <= L + TOLERANCE);
+      });
+    }
+
+    test(`${jeu} : des morceaux mal formés lèvent TypeError`, () => {
+      const ligne = tour(1, 3);
+      for (const abregeables of [[], [[{ debut: 0, fin: 99 }]], [[{ debut: 2, fin: 2 }]], [[{ debut: 0, fin: 3 }, { debut: 2, fin: 5 }]], [null], [[{ debut: -1, fin: 2 }]]]) {
+        assert.throws(() => mettreEnPage(textes({ lignes: [ligne], abregeables }), metriques), TypeError, JSON.stringify(abregeables));
+      }
     });
   }
 
@@ -582,7 +671,7 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
         FACTICES.largeur(`${place()} ${TIRET} A${MARQUE}`, plancher, false) > CADRE.largeur)
     ) chiffres += 1;
     assert.ok(chiffres < 400);
-    const page = mettreEnPage(textes({ lignes: [`${place()} ${TIRET} Animatrice`] }), FACTICES);
+    const page = mettreEnPage(textesComposes([titree(place(), 'Animatrice')]), FACTICES);
     if ('refus' in page) return;
     const abregees = textesDe(page).filter((t) => t.startsWith('Tour ') && t.endsWith(MARQUE));
     assert.ok(
@@ -740,7 +829,7 @@ describe('mise en page : propriétés sur des noms engendrés', () => {
 // planchers de lisibilité que l'A6.
 describe('mise en page : la carte Avery 5392', () => {
   const AVERY = 'avery5392';
-  const CARTE = cadreUtile({ x: 0, y: 0, largeur: 101.6, hauteur: 76.2 }, AVERY);
+  const CARTE = cadreUtile({ x: 0, y: 0, ...MODELES_BADGE[AVERY] }, AVERY);
   const sortDeLaCarte = (page, metriques) =>
     page.blocs.filter((bloc) => {
       const b = boite(bloc, metriques);

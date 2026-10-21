@@ -2373,7 +2373,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     });
   });
 
-  test('25 la première feuille de cartes : six cartes Avery 5392, sans filet de coupe, les six premiers noms dans l’ordre alphabétique', async () => {
+  test('25 la première feuille de cartes : six cartes Avery 5392, sans filet de coupe, les six premiers noms, le libellé de table après son numéro', async () => {
     expect(memoire.planche, 'la planche de 24').toBeInstanceOf(Uint8Array);
     const presents = charge().participants.filter(({ exclu }) => !exclu);
     expect(presents.length).toBeGreaterThanOrEqual(CARTES_PAR_FEUILLE);
@@ -2389,6 +2389,10 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       expect(lue.segments).toEqual([]);
       const texte = texteDePage(lue);
       for (const nomBadge of premiers) expect(texte, nomBadge).toContain(plat(nomBadge));
+      // La table libellée se lit avec son libellé, entre parenthèses après
+      // son numéro (§ 11.4).
+      const libellee = charge().tables.find(({ libelle: texteLibelle }) => texteLibelle === LIBELLE_TABLE);
+      expect(texte).toContain(plat(`table ${libellee.numero} (${LIBELLE_TABLE})`));
       expect(texte).not.toContain(libelle('planche.brouillon'));
     });
   });

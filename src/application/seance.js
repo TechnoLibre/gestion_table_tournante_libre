@@ -1735,15 +1735,27 @@ export function creerSeance({
     preparerPlanche: (demande) => enFile(async () => planches.preparer(await lecturePlanche(), demande)),
     /**
      * Produit la planche et dépose son PDF à côté des fichiers d'événement,
-     * ou le télécharge sous web : {chemin, nom}. Admis dans tout mode ;
-     * l'état et le journal ne s'écrivent pas.
+     * ou le télécharge sous web : {chemin, nom, controle}. Admis dans tout
+     * mode ; l'état et le journal ne s'écrivent pas.
      */
     produirePlanche: (demande) => enFile(async () => planches.produire(await lecturePlanche(), demande)),
     /**
-     * Produit la planche et la confie au dialogue d'enregistrement : le
-     * chemin choisi, null quand l'opérateur annule.
+     * Produit la planche et la confie au dialogue d'enregistrement :
+     * {chemin, controle}, les chemins choisis, null quand l'opérateur
+     * annule.
      */
     enregistrerPlancheSous: (demande) => enFile(async () => planches.enregistrerSous(await lecturePlanche(), demande)),
+    /**
+     * Produit la liste des badges en CSV et la dépose à côté des fichiers
+     * d'événement, ou la télécharge sous web : {chemin, nom}. Admis dans
+     * tout mode ; l'état et le journal ne s'écrivent pas.
+     */
+    produireListeBadges: (demande) => enFile(async () => planches.produireListe(await lecturePlanche(), demande)),
+    /**
+     * Produit la liste des badges et la confie au dialogue d'enregistrement :
+     * le chemin choisi, null quand l'opérateur annule.
+     */
+    enregistrerListeBadgesSous: (demande) => enFile(async () => planches.enregistrerListeSous(await lecturePlanche(), demande)),
     /**
      * Une promesse résolue quand les appels déjà en file ont fini, réussis
      * ou refusés : ce qu'un lecteur de etat() lit ensuite porte leurs

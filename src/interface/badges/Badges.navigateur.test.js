@@ -22,10 +22,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { appliquerCommande } from '../../application/commandes.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
+import { listeBadges, modelePlanche } from '../../application/planche.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
+import { ErreurStockage } from '../../stockage/erreurs.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { FICHIER_REGLAGES } from '../../stockage/reglages_locaux.js';
+import { VERSION } from '../../version.genere.js';
 import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { composantes, contraste } from '../../../test/navigateur/rendu.js';
@@ -61,12 +64,15 @@ const section = (m) => dans(m, '[data-section="badges"]');
 const annonce = (m) => dans(m, '[data-section="badges"] [data-annonce-planche]');
 const question = (m) => dans(m, '[data-section="badges"] [data-papier="question"]');
 const produire = (m) => dans(m, '[data-section="badges"] [data-commande="produirePlanche"]');
+const produireListe = (m) => dans(m, '[data-section="badges"] [data-commande="produireListe"]');
 
 // Les écritures relevées depuis le rang donné : celles qui touchent l'état,
 // le journal ou la version précédente d'un événement, et toutes les autres.
 const ecrituresEvenement = (m, depuis) =>
   m.trace.slice(depuis).filter(([, , chemin]) => [SUFFIXES.etat, SUFFIXES.journal, SUFFIXES.precedent].some((suffixe) => chemin.endsWith(suffixe)));
 const planchesEcrites = (m, depuis) => m.trace.slice(depuis).filter(([primitive]) => primitive === 'ecrireOctetsAtomique');
+// Le texte d'un fichier du dossier de travail, marque d'ordre d'octets gardée.
+const texteFichier = (m, nom) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(m.fs.octets('documents', nom));
 
 // La principale, sa proposition retenue, sur un plan retenu.
 function chargeRetenue() {
@@ -565,7 +571,7 @@ describe('l’habillage de la section des badges', () => {
     const planche = carteDe(dans(m, '[data-section="badges"] [data-champ="imposition"]'));
     expect(planche, 'carte de la planche').not.toBeNull();
     expect(section(m).contains(planche)).toBe(true);
-    for (const selecteur of ['[data-champ="ordre"]', '[data-papier="choisi"]', '[data-commande="preparerPlanche"]', '[data-commande="produirePlanche"]', '[data-annonce-planche]']) {
+    for (const selecteur of ['[data-champ="ordre"]', '[data-papier="choisi"]', '[data-commande="preparerPlanche"]', '[data-commande="produirePlanche"]', '[data-commande="produireListe"]', '[data-annonce-planche]']) {
       expect(planche.contains(dans(m, `[data-section="badges"] ${selecteur}`)), selecteur).toBe(true);
     }
     const reedition = carteDe(dans(m, '[data-section="badges"] [data-champ="reedition"]'));
@@ -622,6 +628,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
     await attendre('l’imposition et le papier', () => champ(m, 'imposition') && dans(m, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
     expect(m.seance.etat().modeleBadge).toBe('a6');
     expect(annonce(m)).toBeNull();
+    expect(dans(m, '[data-section="badges"] [data-avertissement="modeleNonRetenu"]')).toBeNull();
     const depuis = m.trace.length;
     await cliquerProduire(m, 'la planche A6', () => planchesEcrites(m, depuis).length === 1);
     expect(planchesEcrites(m, depuis)[0][2]).toMatch(/_A4_feuille_/);
@@ -644,5 +651,194 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
     expect(telechargees).toHaveLength(2);
     expect(texte(dans(m, '[data-chemin-planche]'))).toBe(plat(t('badges.produite.telechargee', { nom: telechargees[0] })));
     expect(texte(dans(m, '[data-chemin-controle]'))).toBe(plat(t('badges.produite.controleTelechargee', { nom: telechargees[1] })));
+  });
+});
+
+describe('le modèle de badge que le poste ne retient pas (§ 8.5)', () => {
+  test('l’écriture des réglages refusée : le choix vaut pour la séance, et une annonce le dit près du sélecteur, dans un rôle d’état ; un choix retenu ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(dans(m, '[data-section="badges"] [data-avertissement="modeleNonRetenu"]')).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    choisirReglage(m, 'modeleBadge', 'a6');
+    const avis = await attendre('l’annonce du choix non retenu', () => dans(m, '[data-section="badges"] [data-avertissement="modeleNonRetenu"]'), IMAGES);
+    expect(m.seance.etat().modeleBadge).toBe('a6');
+    expect(texte(avis)).toBe(plat(t('badges.modele.nonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const reglage = dans(m, '[data-section="badges"] [data-champ="modeleBadge"]').closest('.reglages');
+    expect(reglage.parentElement.contains(avis)).toBe(true);
+    // Un choix que le poste retient retire l'annonce : la séance le dit
+    // retenu, l'écriture refusée mise à part.
+    const originale = m.seance.choisirModeleBadge;
+    m.seance.choisirModeleBadge = async (modele) => ({ ...(await originale(modele)), retenu: true });
+    choisirReglage(m, 'modeleBadge', 'avery5392');
+    await attendre('l’annonce retirée', () => dans(m, '[data-section="badges"] [data-avertissement="modeleNonRetenu"]') === null, IMAGES);
+  });
+});
+
+describe('« Enregistrer sous… » d’Avery 5392 : les deux chemins (§ 11.6)', () => {
+  test('les cartes refusées d’écriture : le remède ouvre deux dialogues, et la section nomme les deux chemins choisis', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    m.fs.pannes.ecriture('documents');
+    const proposes = [];
+    m.fs.enregistrerSous = async (nom) => {
+      proposes.push(nom);
+      return `D:\\ailleurs\\${nom}`;
+    };
+    await cliquerProduire(m, 'le refus d’écriture', () => dans(m, '[data-section="badges"] [data-refus="PLANCHE_NON_ECRITE"]'));
+    dans(m, '[data-refus="PLANCHE_NON_ECRITE"] [data-commande="enregistrerSous"]').click();
+    await attendre('les deux chemins', () => dans(m, '[data-chemin-planche]') && dans(m, '[data-chemin-controle]'), IMAGES);
+    expect(proposes).toHaveLength(2);
+    expect(proposes[0]).toMatch(/\.badges_avery5392_.*\.pdf$/);
+    expect(proposes[1]).toMatch(/\.controle_avery5392_.*\.pdf$/);
+    expect(texte(dans(m, '[data-chemin-planche]'))).toBe(`D:\\ailleurs\\${proposes[0]}`);
+    expect(texte(dans(m, '[data-chemin-controle]'))).toBe(`D:\\ailleurs\\${proposes[1]}`);
+  });
+
+  test('la feuille de contrôle refusée d’écriture au second dialogue : le refus nomme la feuille de contrôle, et le chemin des cartes écrites reste montré', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    m.fs.pannes.ecriture('documents');
+    const proposes = [];
+    m.fs.enregistrerSous = async (nom) => {
+      proposes.push(nom);
+      if (proposes.length === 2) throw new ErreurStockage('ECRITURE', { chemin: 'D:\\ailleurs\\feuille.pdf', dossier: 'D:\\ailleurs', cause: 'ENOSPC' });
+      return `D:\\ailleurs\\${nom}`;
+    };
+    await cliquerProduire(m, 'le refus d’écriture', () => dans(m, '[data-section="badges"] [data-refus="PLANCHE_NON_ECRITE"]'));
+    dans(m, '[data-refus="PLANCHE_NON_ECRITE"] [data-commande="enregistrerSous"]').click();
+    const refusDuRemede = await attendre('le refus du remède', () => dans(m, '[data-refus="PLANCHE_NON_ECRITE"] [data-refus="PLANCHE_NON_ECRITE"]'), IMAGES);
+    expect(proposes).toHaveLength(2);
+    const cartes = `D:\\ailleurs\\${proposes[0]}`;
+    const lu = texte(refusDuRemede);
+    expect(lu).toContain('La feuille de contrôle');
+    expect(lu).toContain('D:\\ailleurs\\feuille.pdf');
+    expect(lu).toContain(cartes);
+    expect(texte(dans(m, '[data-chemin-planche]'))).toBe(cartes);
+    expect(dans(m, '[data-chemin-controle]')).toBeNull();
+  });
+
+  test('la feuille de contrôle seule refusée à « Produire » : le refus la nomme, et le chemin des cartes écrites se montre', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const ecrire = m.fs.ecrireOctetsAtomique.bind(m.fs);
+    m.fs.ecrireOctetsAtomique = async (racine, chemin, octets) => {
+      if (/\.controle_/.test(chemin)) throw new ErreurStockage('ECRITURE', { chemin, dossier: 'D:\\documents', cause: 'ENOSPC' });
+      return ecrire(racine, chemin, octets);
+    };
+    await cliquerProduire(m, 'le refus d’écriture', () => dans(m, '[data-section="badges"] [data-refus="PLANCHE_NON_ECRITE"]'));
+    const lu = texte(dans(m, '[data-section="badges"] [data-refus="PLANCHE_NON_ECRITE"]'));
+    expect(lu).toContain('La feuille de contrôle');
+    const cartes = await attendre('le chemin des cartes', () => dans(m, '[data-chemin-planche]'), IMAGES);
+    expect(texte(cartes)).toMatch(/\.badges_avery5392_.*\.pdf$/);
+    expect(lu).toContain(texte(cartes));
+    expect(dans(m, '[data-chemin-controle]')).toBeNull();
+  });
+});
+
+describe('la liste des badges en CSV (§ 11.6)', () => {
+  // La principale bloquée, sa première table libellée.
+  function chargeLibellee() {
+    const charge = structuredClone(chargeBloquee());
+    charge.tables[0].libelle = 'Terrasse';
+    return charge;
+  }
+
+  test('« Produire la liste (CSV) » dépose la liste à côté de l’événement, en lecture, et nomme son chemin ; ni l’état ni le journal ne s’écrivent', async () => {
+    const charge = chargeLibellee();
+    const m = await ouvrirBadges(charge);
+    expect(m.seance.mode).toBe('lecture');
+    expect(texte(produireListe(m))).toBe(plat(t('badges.commande.produireListe')));
+    expect(texte(produire(m))).toBe(plat(t('badges.commande.produire')));
+    const depuis = m.trace.length;
+    produireListe(m).click();
+    await attendre('la liste', () => dans(m, '[data-chemin-liste]'), IMAGES);
+    const ecrites = planchesEcrites(m, depuis).map(([, , nom]) => nom);
+    expect(ecrites).toHaveLength(1);
+    // Un plan bloqué : la liste ne porte pas BROUILLON.
+    expect(ecrites[0]).toMatch(/\.badges_[^.]+\.csv$/);
+    expect(ecrites[0]).not.toContain('BROUILLON');
+    expect(texte(dans(m, '[data-chemin-liste]'))).toBe(await cheminDocuments(m, ecrites[0]));
+    const contenu = texteFichier(m, ecrites[0]);
+    expect(contenu.startsWith('\u{FEFF}Nom;Prénom;Organisation;Tours\r\n')).toBe(true);
+    expect(contenu).toContain(`table ${charge.tables[0].numero} (Terrasse)`);
+    const presents = charge.participants.filter(({ exclu }) => !exclu).length;
+    expect(contenu.split('\r\n').filter((ligne) => /^[^"]*;/.test(ligne)).length).toBeGreaterThanOrEqual(presents);
+    expect(ecrituresEvenement(m, depuis)).toEqual([]);
+    expect(dans(m, '[data-chemin-planche]')).toBeNull();
+  });
+
+  test('la liste suit les réglages de la section : la proposition montrée au plan et l’ordre par table, dans le nom — « -p<k> », « _table », « _BROUILLON » — et dans l’ordre des lignes', async () => {
+    const m = await ouvrirBadges(chargePrincipale());
+    const charge = m.seance.etat().charge;
+    expect(charge.retenu).toBeNull();
+    const k = charge.propositions[0].id;
+    m.ui.montrerProposition(k);
+    await attendre('une image', () => true);
+    choisirReglage(m, 'ordre', 'table');
+    const depuis = m.trace.length;
+    produireListe(m).click();
+    await attendre('la liste ou un refus', () => dans(m, '[data-chemin-liste]') ?? dans(m, '[data-section="badges"] [data-refus]'), IMAGES);
+    expect(dans(m, '[data-section="badges"] [data-refus]')).toBeNull();
+    const ecrites = planchesEcrites(m, depuis).map(([, , nom]) => nom);
+    expect(ecrites).toHaveLength(1);
+    expect(ecrites[0]).toContain(`.badges-p${k}_table_BROUILLON_`);
+    // Les lignes : celles de la proposition dans l'ordre par table, qui
+    // n'est pas l'ordre alphabétique pour cette charge.
+    const attendue = (ordre) =>
+      new TextDecoder('utf-8', { ignoreBOM: true }).decode(
+        listeBadges(modelePlanche(charge, { source: 'proposition', proposition: k, ordre, provenance: 'épreuve', version: VERSION.affichee }), charge),
+      );
+    expect(attendue('table')).not.toBe(attendue('alphabetique'));
+    expect(texteFichier(m, ecrites[0])).toBe(attendue('table'));
+  });
+
+  test('une dérive annoncée bloque la liste comme la planche, expliqué ; un nom trop long pour son badge ne bloque que la planche', async () => {
+    const enDerive = await ouvrirBadges(chargeEnDerive().charge);
+    dans(enDerive, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('le refus de dérive', () => dans(enDerive, '[data-annonce-planche] [data-refus="PLANCHE_DERIVE"]'), IMAGES);
+    expect(produireListe(enDerive).getAttribute('aria-disabled')).toBe('true');
+    const explication = dans(enDerive, `#${produireListe(enDerive).getAttribute('aria-describedby')}`);
+    expect(texte(explication)).toBe(plat(t('badges.liste.bloquee')));
+
+    const charge = structuredClone(chargeBloquee());
+    charge.participants[0].nom = `Ombrelle${'w'.repeat(1990)}`;
+    const m = await ouvrirBadges(charge);
+    await cliquerProduire(m, 'le refus du nom', () => dans(m, '[data-annonce-planche] [data-refus="PLANCHE_NOM_TROP_LONG"]'));
+    expect(produire(m).getAttribute('aria-disabled')).toBe('true');
+    expect(produireListe(m).getAttribute('aria-disabled')).toBeNull();
+    const depuis = m.trace.length;
+    produireListe(m).click();
+    await attendre('la liste', () => dans(m, '[data-chemin-liste]'), IMAGES);
+    expect(planchesEcrites(m, depuis)).toHaveLength(1);
+  });
+
+  test('une écriture refusée : PLANCHE_NON_ECRITE nomme la liste à côté de sa commande, remède « Enregistrer sous… », dont le chemin choisi s’affiche', async () => {
+    const m = await ouvrirBadges(chargeLibellee());
+    m.fs.pannes.ecriture('documents');
+    const proposes = [];
+    m.fs.enregistrerSous = async (nom, octets) => {
+      proposes.push({ nom, debut: new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets).slice(0, 4) });
+      return 'D:\\ailleurs\\liste.csv';
+    };
+    produireListe(m).click();
+    const refus = await attendre('le refus d’écriture', () => dans(m, '[data-section="badges"] [data-refus="PLANCHE_NON_ECRITE"]'), IMAGES);
+    expect(texte(refus)).toContain('La liste des badges');
+    dans(m, '[data-refus="PLANCHE_NON_ECRITE"] [data-commande="enregistrerSous"]').click();
+    const chemin = await attendre('le chemin choisi', () => dans(m, '[data-chemin-liste]'), IMAGES);
+    expect(texte(chemin)).toBe('D:\\ailleurs\\liste.csv');
+    expect(proposes).toEqual([{ nom: expect.stringMatching(/\.csv$/), debut: '\u{FEFF}Nom' }]);
+    expect(dans(m, '[data-chemin-planche]')).toBeNull();
+  });
+
+  test('sous web, la liste se télécharge et se nomme', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { options: { systeme: { nature: 'web' } } });
+    const telechargees = [];
+    m.fs.enregistrerSous = async (nom) => {
+      telechargees.push(nom);
+      return null;
+    };
+    produireListe(m).click();
+    await attendre('la liste téléchargée', () => dans(m, '[data-chemin-liste]'), IMAGES);
+    expect(telechargees).toHaveLength(1);
+    expect(telechargees[0]).toMatch(/\.csv$/);
+    expect(texte(dans(m, '[data-chemin-liste]'))).toBe(plat(t('badges.produite.listeTelechargee', { nom: telechargees[0] })));
   });
 });

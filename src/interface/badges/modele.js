@@ -15,6 +15,10 @@
 // la section l'offre, Avery 5392 d'abord. Un modèle qui impose son papier
 // n'offre ni imposition ni papier.
 //
+// La liste des badges en CSV se tire du même placement que la planche : un
+// refus du placement la bloque comme la planche, un refus de la mise en
+// page non (listeBloquee).
+//
 // L'annonce que rend seance.preparerPlanche se dit en phrases : chacune une
 // clé de libelles/badges.js et ses détails, données comprises — le nom du
 // fichier, les noms des homonymes, les caractères absents de la police —,
@@ -142,6 +146,18 @@ export function memesReglages(a, b) {
  */
 export function produireBloque(annonce) {
   return annonce !== null && annonce.refus !== null;
+}
+
+/**
+ * Vrai quand l'annonce porte un refus du placement, qui empêche aussi la
+ * liste en CSV : une annonce refusée sans modèle, donc sans comptes. Un
+ * refus de la mise en page, qui ne touche pas la liste, vient avec le
+ * modèle et ses comptes. Faux sans annonce.
+ *
+ * @param {import('../../application/planche_seance.js').Annonce|null} annonce
+ */
+export function listeBloquee(annonce) {
+  return annonce !== null && annonce.refus !== null && annonce.comptes === null;
 }
 
 // Le point de code d'un caractère, écrit U+XXXX, quatre chiffres au moins,

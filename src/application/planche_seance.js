@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La planche de badges dans la séance (§ 11.2, § 11.6, § 11.8) : préparer
-// l'annonce, produire le PDF et le déposer, l'enregistrer ailleurs. Sortir
-// n'est pas modifier (§ 8.4, § 9) : rien ici n'écrit le fichier d'état ni le
-// journal, ne prend de verrou ni ne lit le mode de la séance ; la seule
-// écriture est celle du PDF — des deux PDF pour Avery 5392, les feuilles de
-// cartes puis la feuille de contrôle à part —, à côté des fichiers
-// d'événement, ou leur téléchargement sous web, où le dossier de travail est
-// invisible à l'opérateur (décision 13). Une écriture du PDF refusée se dit
-// PLANCHE_NON_ECRITE, remède « Enregistrer sous… », sans toucher au support
-// de l'événement.
+// l'annonce, produire le PDF et le déposer, l'enregistrer ailleurs ; produire
+// de même la liste des badges en CSV. Sortir n'est pas modifier (§ 8.4,
+// § 9) : rien ici n'écrit le fichier d'état ni le journal, ne prend de
+// verrou ni ne lit le mode de la séance ; la seule écriture est celle du
+// PDF — des deux PDF pour Avery 5392, les feuilles de cartes puis la
+// feuille de contrôle à part — ou du CSV, à côté des fichiers d'événement,
+// ou leur téléchargement sous web, où le dossier de travail est invisible à
+// l'opérateur (décision 13). Une écriture refusée se dit PLANCHE_NON_ECRITE,
+// qui nomme le fichier en cause, remède « Enregistrer sous… », sans toucher
+// au support de l'événement.
 //
 // La production vit dans src/pdf, chargé par un seul import() différé : le
 // paquet n'embarque pdf-lib qu'au premier besoin, et cette couche ne voit
@@ -30,6 +31,10 @@
 // soit l'imposition demandée. L'A6 prend le papier de la machine, Lettre
 // tant qu'aucun n'est choisi, sans l'écrire.
 //
+// La liste en CSV se tire du même modèle que la planche (listeBadges) :
+// elle subit les refus du placement, jamais ceux de la mise en page, et ne
+// charge ni la police ni pdf-lib.
+//
 // Le nom du fichier (nomPlanche) porte tout ce qui change la pile : la
 // source, l'imposition, l'ordre, le placement. Une réédition, une base qui
 // finit par un point, ou une planche dont la borne du chemin raccourcit la
@@ -42,10 +47,19 @@
 import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js';
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
-import { nomControle, nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
+import { nomControle, nomCsvBadges, nomCsvBadgesExigeListe, nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
-import { IMPOSITIONS, ORDRES, modelePlanche, papierDesBadges, refusPlanche, refusProduction, textesControle } from './planche.js';
+import {
+  IMPOSITIONS,
+  ORDRES,
+  listeBadges,
+  modelePlanche,
+  papierDesBadges,
+  refusPlanche,
+  refusProduction,
+  textesControle,
+} from './planche.js';
 import { estBrouillon } from './sorties.js';
 
 // La production du PDF, chargée au premier appel ; le module se garde en
@@ -130,8 +144,12 @@ const aCartes = (modeleBadge) => MODELES_BADGE[modeleBadge].grille !== null;
  * @param {string|null} parametres.provenance   le mode de construction
  * @param {string} parametres.version           la version affichée
  * @returns {{preparer: (lecture: LecturePlanche, demande?: DemandePlanche) => Promise<Annonce>,
- *   produire: (lecture: LecturePlanche, demande?: DemandePlanche) => Promise<{chemin: string|null, nom: string}>,
- *   enregistrerSous: (lecture: LecturePlanche, demande?: DemandePlanche) => Promise<string|null>}}
+ *   produire: (lecture: LecturePlanche, demande?: DemandePlanche) =>
+ *     Promise<{chemin: string|null, nom: string, controle: null|{chemin: string|null, nom: string}}>,
+ *   enregistrerSous: (lecture: LecturePlanche, demande?: DemandePlanche) =>
+ *     Promise<null|{chemin: string, controle: string|null}>,
+ *   produireListe: (lecture: LecturePlanche, demande?: DemandePlanche) => Promise<{chemin: string|null, nom: string}>,
+ *   enregistrerListeSous: (lecture: LecturePlanche, demande?: DemandePlanche) => Promise<string|null>}}
  */
 export function creerPlanches({ polices, provenance, version }) {
   let octetsPolices = null;
@@ -196,25 +214,83 @@ export function creerPlanches({ polices, provenance, version }) {
   // donné (nomControle) ; null pour l'A6.
   const nomControleDe = (base, etude, dossier) => (aCartes(etude.modeleBadge) ? nomControle(base, optionsDe(etude, dossier)) : null);
 
-  // Le dossier où la planche d'une étude se dépose, tel que nomPlanche le
-  // lit : sa racine, son séparateur et, quand le nom se choisit parmi elles
-  // (nomPlancheExigeListe), les noms qu'il porte ; null sous web, où la
-  // planche se télécharge. Un dossier qui ne se liste pas lève
-  // l'ErreurStockage de la liste.
-  async function dossierDe({ fs, racine, base }, etude) {
+  // Le dossier où un fichier se dépose, tel que nomPlanche ou nomCsvBadges
+  // le lit : sa racine, son séparateur et, quand exigeListe le dit sous ce
+  // dossier, les noms qu'il porte ; null sous web, où le fichier se
+  // télécharge. Un dossier qui ne se liste pas lève l'ErreurStockage de la
+  // liste.
+  async function dossierSelon({ fs, racine }, exigeListe) {
     if (fs.nature === 'web') return null;
     const { separateur } = await fs.emplacements();
     const sansListe = { racine: racine.chemin, separateur, existants: [] };
-    if (!nomPlancheExigeListe(base, optionsDe(etude, sansListe))) return sansListe;
+    if (!exigeListe(sansListe)) return sansListe;
     const existants = (await fs.lister(racine, '')).map(({ nom }) => nom);
     return { ...sansListe, existants };
   }
 
-  // Le refus d'une planche qui ne se dépose pas : le nom, le dossier, la
-  // cause, remède « Enregistrer sous… ». Le support de l'événement n'en est
-  // pas rompu.
-  const nonEcrite = ({ chemin, dossier, cause }) =>
-    refus('PLANCHE_NON_ECRITE', { chemin, dossier, cause: cause ?? null }, { geste: 'enregistrerSous' });
+  // Le dossier où la planche d'une étude se dépose (nomPlancheExigeListe).
+  const dossierDe = (lecture, etude) => dossierSelon(lecture, (dossier) => nomPlancheExigeListe(lecture.base, optionsDe(etude, dossier)));
+
+  // Le refus d'un fichier qui ne se dépose pas : le nom, le dossier, la
+  // cause, le fichier en cause — planche, controle ou liste — et, pour la
+  // feuille de contrôle, le chemin des cartes déjà déposées ; remède
+  // « Enregistrer sous… ». Le support de l'événement n'en est pas rompu.
+  const nonEcrite = ({ chemin, dossier, cause }, fichier, deposee = null) =>
+    refus(
+      'PLANCHE_NON_ECRITE',
+      { chemin, dossier, cause: cause ?? null, fichier, ...(deposee === null ? {} : { deposee }) },
+      { geste: 'enregistrerSous' },
+    );
+
+  // Dépose un fichier à côté de l'événement et rend son chemin, ou le
+  // télécharge sous web et rend null. Une écriture refusée lève
+  // PLANCHE_NON_ECRITE pour ce fichier.
+  async function deposer({ fs, racine }, nomFichier, octetsFichier, fichier, deposee = null) {
+    if (fs.nature === 'web') {
+      await fs.enregistrerSous(nomFichier, octetsFichier);
+      return null;
+    }
+    try {
+      await fs.ecrireOctetsAtomique(racine, nomFichier, octetsFichier);
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage && erreur.code === 'ECRITURE')) throw erreur;
+      throw nonEcrite(erreur.details, fichier, deposee);
+    }
+    const { separateur } = await fs.emplacements();
+    const tete = racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur;
+    return tete + nomFichier;
+  }
+
+  // Les octets de la liste d'une demande et son nom, sous le dossier de la
+  // lecture quand avecDossier est vrai, sans dossier sinon. Le refus du
+  // placement lève, ErreurCommande, avant que rien ne se produise ; une
+  // liste refusée du dossier lève PLANCHE_NON_ECRITE sans rien écrire.
+  async function listeDe(lecture, demande, { avecDossier }) {
+    const { charge, base } = lecture;
+    const { source, proposition, ordre, selection } = demandeLue(demande);
+    const rejet = refusPlanche(charge, { source, proposition });
+    if (rejet !== null) throw new ErreurCommande(rejet.code, rejet.details);
+    if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
+    const modele = modelePlanche(charge, { source, proposition, ordre, selection, provenance, version });
+    const options = {
+      horodatage: modele.horodatage,
+      reedition: modele.reedition,
+      proposition: modele.proposition,
+      ordre,
+      brouillon: modele.brouillon,
+    };
+    let dossier = null;
+    if (avecDossier) {
+      try {
+        dossier = await dossierSelon(lecture, (sous) => nomCsvBadgesExigeListe(base, { ...options, dossier: sous }));
+      } catch (erreur) {
+        if (!(erreur instanceof ErreurStockage)) throw erreur;
+        const cause = erreur.details?.cause ?? erreur.code;
+        throw nonEcrite({ chemin: nomCsvBadges(base, options), dossier: lecture.racine.chemin, cause }, 'liste');
+      }
+    }
+    return { octets: listeBadges(modele, charge), nom: nomCsvBadges(base, { ...options, dossier }) };
+  }
 
   // Les octets de la planche d'une demande, et son nom : sous le dossier de
   // la lecture quand avecDossier est vrai, sans dossier sinon ; controle,
@@ -232,7 +308,7 @@ export function creerPlanches({ polices, provenance, version }) {
       } catch (erreur) {
         if (!(erreur instanceof ErreurStockage)) throw erreur;
         const cause = erreur.details?.cause ?? erreur.code;
-        throw nonEcrite({ chemin: nomDe(lecture.base, etude, null), dossier: lecture.racine.chemin, cause });
+        throw nonEcrite({ chemin: nomDe(lecture.base, etude, null), dossier: lecture.racine.chemin, cause }, 'planche');
       }
     }
     const nom = nomDe(lecture.base, etude, dossier);
@@ -315,53 +391,80 @@ export function creerPlanches({ polices, provenance, version }) {
      * enregistrerSous, le téléchargement, et chemin null. Pour Avery 5392,
      * la feuille de contrôle à part se dépose ensuite de la même façon, et
      * controle rend son chemin et son nom ; null pour l'A6. Le refus de
-     * l'annonce lève, sans rien écrire. Une écriture refusée par le support,
-     * ou un dossier qui ne se liste pas quand le nom se choisit parmi ses
-     * entrées, lève
-     * PLANCHE_NON_ECRITE {chemin, dossier, cause}, remède
-     * « Enregistrer sous… » : le support de l'événement n'en est pas rompu.
+     * l'annonce lève, sans rien écrire. Une écriture refusée par le
+     * support, ou un dossier qui ne se liste pas quand le nom se choisit
+     * parmi ses entrées, lève PLANCHE_NON_ECRITE {chemin, dossier, cause,
+     * fichier}, remède « Enregistrer sous… » : le support de l'événement
+     * n'en est pas rompu. fichier dit lequel manque : 'planche', ou
+     * 'controle' quand la feuille de contrôle se refuse après les cartes,
+     * deposee portant alors le chemin des cartes, déjà écrites.
      *
      * @throws {ErreurCommande} le refus de l'annonce ; PLANCHE_NON_ECRITE
      */
     async produire(lecture, demande) {
       const { octets, nom, controle } = await octetsDe(lecture, demande, { avecDossier: true });
-      const { fs, racine } = lecture;
-      // Dépose un fichier et rend son chemin, null sous web.
-      async function deposer(nomFichier, octetsFichier) {
-        if (fs.nature === 'web') {
-          await fs.enregistrerSous(nomFichier, octetsFichier);
-          return null;
-        }
-        try {
-          await fs.ecrireOctetsAtomique(racine, nomFichier, octetsFichier);
-        } catch (erreur) {
-          if (!(erreur instanceof ErreurStockage && erreur.code === 'ECRITURE')) throw erreur;
-          throw nonEcrite(erreur.details);
-        }
-        const { separateur } = await fs.emplacements();
-        const tete = racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur;
-        return tete + nomFichier;
-      }
-      const chemin = await deposer(nom, octets);
+      const chemin = await deposer(lecture, nom, octets, 'planche');
       if (controle === null) return { chemin, nom, controle: null };
-      return { chemin, nom, controle: { chemin: await deposer(controle.nom, controle.octets), nom: controle.nom } };
+      const cheminControle = await deposer(lecture, controle.nom, controle.octets, 'controle', chemin);
+      return { chemin, nom, controle: { chemin: cheminControle, nom: controle.nom } };
     },
 
     /**
      * Produit la planche et la confie au dialogue d'enregistrement de la
      * plateforme, sous le nom de la planche sans rang ni coupe, que
      * l'opérateur garde ou change avec le dossier : le remède d'une écriture
-     * refusée. Rend le chemin choisi, null quand l'opérateur annule. Pour
-     * Avery 5392, un second dialogue suit pour la feuille de contrôle à
-     * part, sous son propre nom, sauf quand l'opérateur a annulé le premier.
+     * refusée. Pour Avery 5392, un second dialogue suit pour la feuille de
+     * contrôle à part, sous son propre nom, sauf quand l'opérateur a annulé
+     * le premier. Rend null quand l'opérateur annule le premier dialogue ;
+     * sinon {chemin, controle} : le chemin choisi pour la planche, et celui
+     * de la feuille de contrôle, null pour l'A6 ou quand le second dialogue
+     * est annulé. La feuille de contrôle refusée d'écriture après les
+     * cartes lève PLANCHE_NON_ECRITE, fichier 'controle', deposee portant
+     * le chemin des cartes, déjà écrites ; un refus des cartes remonte tel
+     * que le support le lève, rien n'étant écrit.
      *
-     * @throws {ErreurCommande} le refus de l'annonce
+     * @throws {ErreurCommande} le refus de l'annonce ; PLANCHE_NON_ECRITE
      */
     async enregistrerSous(lecture, demande) {
       const { octets, nom, controle } = await octetsDe(lecture, demande, { avecDossier: false });
       const chemin = await lecture.fs.enregistrerSous(nom, octets);
-      if (chemin !== null && controle !== null) await lecture.fs.enregistrerSous(controle.nom, controle.octets);
-      return chemin;
+      if (chemin === null) return null;
+      if (controle === null) return { chemin, controle: null };
+      try {
+        return { chemin, controle: await lecture.fs.enregistrerSous(controle.nom, controle.octets) };
+      } catch (erreur) {
+        if (!(erreur instanceof ErreurStockage && erreur.code === 'ECRITURE')) throw erreur;
+        throw nonEcrite(erreur.details, 'controle', chemin);
+      }
+    },
+
+    /**
+     * Produit la liste des badges en CSV (listeBadges) et la dépose comme la
+     * planche : à côté des fichiers d'événement, sous le nom de
+     * nomCsvBadges, et rend {chemin, nom} ; sous web, téléchargée, chemin
+     * null. La demande est celle de la planche — source, ordre, sélection ;
+     * l'imposition n'y change rien. Seuls les refus du placement la gardent
+     * (refusPlanche) ; une écriture refusée lève PLANCHE_NON_ECRITE, fichier
+     * 'liste', remède « Enregistrer sous… ».
+     *
+     * @throws {ErreurCommande} le refus du placement ; PLANCHE_NON_ECRITE ;
+     *         PROPOSITION_INCONNUE, PARTICIPANT_INCONNU, PERSONNE_EXCLUE
+     */
+    async produireListe(lecture, demande) {
+      const { octets, nom } = await listeDe(lecture, demande, { avecDossier: true });
+      return { chemin: await deposer(lecture, nom, octets, 'liste'), nom };
+    },
+
+    /**
+     * Produit la liste des badges et la confie au dialogue d'enregistrement,
+     * sous son nom sans rang ni coupe : le remède d'une écriture refusée.
+     * Rend le chemin choisi, null quand l'opérateur annule.
+     *
+     * @throws {ErreurCommande} le refus du placement
+     */
+    async enregistrerListeSous(lecture, demande) {
+      const { octets, nom } = await listeDe(lecture, demande, { avecDossier: false });
+      return lecture.fs.enregistrerSous(nom, octets);
     },
   };
 }

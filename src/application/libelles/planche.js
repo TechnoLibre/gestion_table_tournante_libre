@@ -3,11 +3,12 @@
 
 // Les textes de la planche de badges (§ 11.3 à § 11.8, contrainte 25) : les
 // refus qui la gardent avant de produire, ce qu'un badge imprime — ses lignes
-// de tour, son pied — et les lignes de la feuille de contrôle. Le papier les
-// lit par libelle, jamais décorés par la langue témoin : un texte imprimé est
-// une donnée. Un horodatage et une date se mettent en mots à partir de leur
-// seule forme, sans horloge ni langue du système. Le nom d'un papier arrive
-// dans les détails : cette table n'en écrit aucun.
+// de tour, son pied —, les lignes de la feuille de contrôle et les en-têtes
+// de la liste des badges en CSV. Le papier et le CSV les lisent par libelle,
+// jamais décorés par la langue témoin : un texte imprimé est une donnée. Un
+// horodatage et une date se mettent en mots à partir de leur seule forme,
+// sans horloge ni langue du système. Le nom d'un papier arrive dans les
+// détails : cette table n'en écrit aucun.
 import { lireHorodatage } from '../format.js';
 import { compte, enumeration, nomDans, ouEcrire, phraseDeRaison } from './aides.js';
 
@@ -40,15 +41,26 @@ function dateEnLettres(date, texte) {
 // identifiant sinon.
 const laPersonne = ({ participant, personne }) => personne ?? `la personne n° ${participant}`;
 
-// Où la personne s'assied à une ligne : la table, puis le siège sous sièges
-// attribués, puis le titre dont une réservation la fait titulaire ; « pas de
-// table » quand elle est en réserve.
-function place({ table, siege, titre }, texte) {
+// Où la personne s'assied à une ligne : la table, son libellé quand elle en
+// porte un, puis le siège sous sièges attribués, puis le titre dont une
+// réservation la fait titulaire ; « pas de table » quand elle est en
+// réserve.
+function place({ table, libelleTable, siege, titre }, texte) {
   if (table === null) return texte('planche.pasDeTable');
+  const avecLibelle = libelleTable === undefined ? '' : texte('planche.libelleTable', { libelleTable });
   const auSiege = siege === null ? '' : texte('planche.siege', { siege });
   const avecTitre = titre === null ? '' : texte('planche.titre', { titre });
-  return `table ${table}${auSiege}${avecTitre}`;
+  return `table ${table}${avecLibelle}${auSiege}${avecTitre}`;
 }
+
+// Les fichiers d'une planche qu'une écriture refusée nomme : la planche —
+// les cartes pour Avery 5392 —, la feuille de contrôle à part, la liste en
+// CSV.
+const LES_FICHIERS = new Map([
+  ['planche', 'La planche'],
+  ['controle', 'La feuille de contrôle'],
+  ['liste', 'La liste des badges'],
+]);
 
 export const TABLE = new Map([
   // --- Les refus de la planche (§ 11.5, § 11.8, Q3) --------------------------
@@ -82,10 +94,19 @@ export const TABLE = new Map([
   ],
 
   // --- Les refus de la production (§ 8.5, § 11.6, décision 13) -------------
+  // fichier : celui qui ne s'est pas écrit ; deposee, le chemin des cartes
+  // déjà déposées quand c'est la feuille de contrôle qui manque.
   [
     'PLANCHE_NON_ECRITE',
-    (details, texte) =>
-      `La planche n'a pas pu s'écrire : ${ouEcrire(details, texte)}. « Enregistrer sous… » la dépose ailleurs.`,
+    (details, texte) => {
+      const { fichier, deposee = null } = details;
+      const lesCartes = deposee === null ? '' : ` Les cartes, elles, sont déposées : ${deposee}.`;
+      const ailleurs = fichier === 'controle' ? 'dépose les deux fichiers ailleurs' : 'la dépose ailleurs';
+      return (
+        `${nomDans(LES_FICHIERS, fichier, 'fichier')} n'a pas pu s'écrire : ${ouEcrire(details, texte)}.` +
+        `${lesCartes} « Enregistrer sous… » ${ailleurs}.`
+      );
+    },
   ],
 
   // --- Les lignes de tour d'un badge (§ 11.4, § 11.5) ------------------------
@@ -98,10 +119,17 @@ export const TABLE = new Map([
     (ligne, texte) => `Tour ${ligne.tour} — ${ligne.absente ? texte('planche.absente') : place(ligne, texte)}`,
   ],
   ['planche.touteLaSoiree', (ligne, texte) => `Toute la soirée — ${place(ligne, texte)}`],
+  ['planche.libelleTable', ({ libelleTable }) => ` (${libelleTable})`],
   ['planche.pasDeTable', 'pas de table'],
   ['planche.absente', 'absente'],
   ['planche.siege', ({ siege }) => `, siège ${siege}`],
   ['planche.titre', ({ titre }) => ` — ${titre}`],
+
+  // --- Les en-têtes de la liste des badges en CSV (§ 11.6) ----------------
+  ['planche.liste.nom', 'Nom'],
+  ['planche.liste.prenom', 'Prénom'],
+  ['planche.liste.organisation', 'Organisation'],
+  ['planche.liste.tours', 'Tours'],
 
   // --- Le pied d'un badge, et la marque du brouillon (§ 11.4, § 11.7) -------
   // L'événement et sa date ; la date seule, quand le nom de l'événement

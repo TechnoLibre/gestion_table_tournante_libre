@@ -57,8 +57,10 @@ import { mettreEnPage, metriquesDe } from './mise_en_page.js';
  * src/application/planche.js, que src/pdf n'importe pas.
  *
  * @typedef {Object} ModelePlanche
- * @property {Array<{textes: {nom: string, lignes: string[], organisation: string|null,
- *            pied: string[], piedReduit: string[]}}>} badges   dans l'ordre de la pile
+ * @property {Array<{textes: {nom: string, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
+ *            organisation: string|null, pied: string[], piedReduit: string[]}}>} badges
+ *           dans l'ordre de la pile ; abregeables, les textes libres de chaque
+ *           ligne de tour, que la mise en page abrège au plancher
  * @property {string|null} horodatage   l'horodatage du placement ; null : inconnu
  * @property {boolean} brouillon
  */

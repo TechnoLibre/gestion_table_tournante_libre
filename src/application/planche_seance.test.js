@@ -9,15 +9,18 @@
 // d'épreuve ne porte que le .pdf ; un refus n'écrit rien ; l'écriture du PDF
 // refusée se dit PLANCHE_NON_ECRITE, sans rompre le support de l'événement.
 //
+// La liste des badges en CSV, dernière série, se dépose et se refuse de
+// même ; elle ne produit aucun PDF, et la borne qui suit ne la compte pas.
+//
 // La série surveillée borne le coût (§ 14.4, contrainte 31) : douze
 // productions de l'A6 au plus dans ce fichier, sur une soirée de quatre
 // personnes — trois pour les trois modes, deux pour la stabilité des
 // octets, une réédition, deux refus d'écriture et l'enregistrement sous,
-// une sous web, deux propositions de la même génération —, et six
+// une sous web, deux propositions de la même génération —, et neuf
 // d'Avery 5392, de deux documents chacune — une déposée, une de sept
-// badges en pile demandée, une refusée et ses deux enregistrements sous,
-// une sous web. Les épreuves de l'A6
-// choisissent ce modèle ; celles d'Avery 5392 n'en choisissent aucun,
+// badges en pile demandée, une au libellé de table le plus long, deux
+// refusées et trois enregistrements sous, une sous web. Les épreuves de
+// l'A6 choisissent ce modèle ; celles d'Avery 5392 n'en choisissent aucun,
 // comme une machine neuve. L'imposition et
 // l'ordre se lisent dans la place de chaque nom, et le papier, l'imposition
 // et le nombre de planches dans la feuille de contrôle : la première
@@ -39,8 +42,8 @@ import { cellules } from '../pdf/imposition.js';
 import { serialiser } from '../stockage/canonique.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
-import { FORMAT } from '../stockage/document.js';
-import { SUFFIXES, deriverBase, nomControle, nomPlanche } from '../stockage/noms.js';
+import { FORMAT, LIBELLE_TABLE_MAX } from '../stockage/document.js';
+import { SUFFIXES, deriverBase, nomControle, nomCsvBadges, nomPlanche } from '../stockage/noms.js';
 import { VERSION } from '../version.genere.js';
 import { libelle } from './libelles.js';
 import { creerSeance } from './seance.js';
@@ -492,6 +495,7 @@ describe('planche dans la séance : un nom par pile (§ 11.6)', () => {
       chemin: nom,
       dossier: DOCUMENTS,
       cause: 'EACCES',
+      fichier: 'planche',
       remede: { geste: 'enregistrerSous' },
     });
     assert.deepEqual(trace, []);
@@ -525,6 +529,7 @@ describe('planche dans la séance : un nom par pile (§ 11.6)', () => {
       chemin: nomPlanche(base, options),
       dossier: DOCUMENTS,
       cause: 'EACCES',
+      fichier: 'planche',
       remede: { geste: 'enregistrerSous' },
     });
     fs.lister = lister;
@@ -537,7 +542,7 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
   test('un renommage refusé : PLANCHE_NON_ECRITE nomme le fichier, le dossier et la cause, offre « Enregistrer sous… », et le support de l’événement reste intact', async () => {
     const { fs, seance, trace } = await monter();
     fs.pannes.renommage('documents');
-    const details = { chemin: nomDe(), dossier: DOCUMENTS, cause: 'EBUSY', remede: { geste: 'enregistrerSous' } };
+    const details = { chemin: nomDe(), dossier: DOCUMENTS, cause: 'EBUSY', fichier: 'planche', remede: { geste: 'enregistrerSous' } };
     await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', details);
     assert.equal(seance.supportRompu, false);
     assert.equal(fs.octets('documents', nomDe()), null);
@@ -559,6 +564,7 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
       chemin: nomDe(),
       dossier: DOCUMENTS,
       cause: 'EROFS',
+      fichier: 'planche',
       remede: { geste: 'enregistrerSous' },
     });
     assert.deepEqual(seance.refusSupport, refusSupport);
@@ -568,7 +574,7 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
       recus.push([nom, octets]);
       return 'E:\\Copies\\planche.pdf';
     };
-    assert.equal(await seance.enregistrerPlancheSous(), 'E:\\Copies\\planche.pdf');
+    assert.deepEqual(await seance.enregistrerPlancheSous(), { chemin: 'E:\\Copies\\planche.pdf', controle: null });
     assert.deepEqual(recus.map(([nom]) => nom), [nomDe()]);
     assert.ok(recus[0][1] instanceof Uint8Array);
     assert.equal(new TextDecoder().decode(recus[0][1].subarray(0, 5)), '%PDF-');
@@ -682,26 +688,45 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     assert.deepEqual(lu.pages.map(parCarte), [affiches.slice(0, 6), [affiches[6], null, null, null, null, null]]);
   });
 
-  test('une feuille de contrôle refusée d’écriture : PLANCHE_NON_ECRITE la nomme, remède « Enregistrer sous… », qui ouvre deux dialogues', async () => {
+  test('une feuille de contrôle refusée d’écriture après les cartes : PLANCHE_NON_ECRITE nomme la feuille et les cartes déposées, remède « Enregistrer sous… », qui ouvre deux dialogues et rend les deux chemins', async () => {
     const { fs, seance } = await monter(chargeLucioles(), { modeleBadge: null });
     const ecrire = fs.ecrireOctetsAtomique;
     fs.ecrireOctetsAtomique = async (racine, nom, octets) => {
       if (nom === nomFeuille) throw new ErreurStockage('ECRITURE', { chemin: nom, dossier: DOCUMENTS, cause: 'ENOSPC' });
       return ecrire(racine, nom, octets);
     };
-    await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', {
+    const details = {
       chemin: nomFeuille,
       dossier: DOCUMENTS,
       cause: 'ENOSPC',
+      fichier: 'controle',
+      deposee: `${DOCUMENTS}\\${nomCartes}`,
       remede: { geste: 'enregistrerSous' },
-    });
+    };
+    await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', details);
+    assert.notEqual(fs.octets('documents', nomCartes), null);
+    const texte = libelle('PLANCHE_NON_ECRITE', details);
+    assert.ok(texte.startsWith('La feuille de contrôle') && texte.includes(nomFeuille) && texte.includes(`${DOCUMENTS}\\${nomCartes}`), texte);
+    // Les cartes refusées : la planche se nomme, rien n'est déposé.
+    fs.ecrireOctetsAtomique = async (racine, nom) => {
+      throw new ErreurStockage('ECRITURE', { chemin: nom, dossier: DOCUMENTS, cause: 'ENOSPC' });
+    };
+    const { deposee: _deposee, ...sansCartes } = details;
+    await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', { ...sansCartes, chemin: nomCartes, fichier: 'planche' });
     const recus = [];
     fs.enregistrerSous = async (nom) => {
       recus.push(nom);
       return `E:\\Copies\\${nom}`;
     };
-    assert.equal(await seance.enregistrerPlancheSous(), `E:\\Copies\\${nomCartes}`);
+    assert.deepEqual(await seance.enregistrerPlancheSous(), { chemin: `E:\\Copies\\${nomCartes}`, controle: `E:\\Copies\\${nomFeuille}` });
     assert.deepEqual(recus, [nomCartes, nomFeuille]);
+    // Le second dialogue annulé : le chemin des cartes seul.
+    recus.length = 0;
+    fs.enregistrerSous = async (nom) => {
+      recus.push(nom);
+      return nom === nomCartes ? 'E:\\Copies\\cartes.pdf' : null;
+    };
+    assert.deepEqual(await seance.enregistrerPlancheSous(), { chemin: 'E:\\Copies\\cartes.pdf', controle: null });
     // Le premier dialogue annulé : le second ne s'ouvre pas.
     recus.length = 0;
     fs.enregistrerSous = async (nom) => {
@@ -710,6 +735,54 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     };
     assert.equal(await seance.enregistrerPlancheSous(), null);
     assert.deepEqual(recus, [nomCartes]);
+  });
+
+  test('« Enregistrer sous… » : la feuille de contrôle refusée d’écriture après les cartes lève PLANCHE_NON_ECRITE, qui nomme la feuille et le chemin des cartes écrites', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { modeleBadge: null });
+    const recus = [];
+    fs.enregistrerSous = async (nom) => {
+      recus.push(nom);
+      if (nom === nomFeuille) throw new ErreurStockage('ECRITURE', { chemin: 'E:\\Copies\\x.pdf', dossier: 'E:\\Copies', cause: 'ENOSPC' });
+      return `E:\\Copies\\${nom}`;
+    };
+    const details = {
+      chemin: 'E:\\Copies\\x.pdf',
+      dossier: 'E:\\Copies',
+      cause: 'ENOSPC',
+      fichier: 'controle',
+      deposee: `E:\\Copies\\${nomCartes}`,
+      remede: { geste: 'enregistrerSous' },
+    };
+    await refusee(seance.enregistrerPlancheSous(), 'PLANCHE_NON_ECRITE', details);
+    assert.deepEqual(recus, [nomCartes, nomFeuille]);
+    const texte = libelle('PLANCHE_NON_ECRITE', details);
+    assert.ok(texte.startsWith('La feuille de contrôle') && texte.includes('E:\\Copies\\x.pdf') && texte.includes(`E:\\Copies\\${nomCartes}`), texte);
+    // Les cartes refusées au premier dialogue : l'erreur du support remonte
+    // telle quelle, et le second dialogue ne s'ouvre pas.
+    recus.length = 0;
+    fs.enregistrerSous = async (nom) => {
+      recus.push(nom);
+      throw new ErreurStockage('ECRITURE', { chemin: 'E:\\Copies\\y.pdf', dossier: 'E:\\Copies', cause: 'ENOSPC' });
+    };
+    await assert.rejects(seance.enregistrerPlancheSous(), (erreur) => erreur instanceof ErreurStockage && erreur.code === 'ECRITURE');
+    assert.deepEqual(recus, [nomCartes]);
+  });
+
+  test('un libellé de table au plus long que la saisie admet s’abrège sur la carte, entre ses parenthèses ; la liste en CSV le garde entier', async () => {
+    const libelle = 'Verrière du jardin d’hiver, près des grandes baies, côté sud';
+    assert.equal([...libelle].length, LIBELLE_TABLE_MAX);
+    const charge = chargeLucioles();
+    charge.tables[0].libelle = libelle;
+    const { fs, seance } = await monter(charge, { modeleBadge: null });
+    const { nom } = await seance.produirePlanche();
+    const textes = textesDe((await lirePdf(fs.octets('documents', nom))).pages[0]);
+    // Iris Ombrelle, à la table 1 aux deux tours : sa ligne unique.
+    const ligne = textes.find((texte) => texte.startsWith('Toute la soirée — table 1 ('));
+    assert.ok(ligne !== undefined, textes.join(' | '));
+    assert.match(ligne, /^Toute la soirée — table 1 \(Verri[^)]*…\)$/u);
+    const liste = await seance.produireListeBadges();
+    const texte = new TextDecoder().decode(fs.octets('documents', liste.nom));
+    assert.ok(texte.includes(`Toute la soirée — table 1 (${libelle})`), texte);
   });
 
   test('sous web, les deux fichiers se téléchargent, les cartes d’abord, rien dans le dossier', async () => {
@@ -722,6 +795,111 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     };
     assert.deepEqual(await seance.produirePlanche(), { chemin: null, nom: nomCartes, controle: { chemin: null, nom: nomFeuille } });
     assert.deepEqual(recus, [nomCartes, nomFeuille]);
+    assert.deepEqual(trace, []);
+  });
+});
+
+describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () => {
+  // La soirée d'essai, la table 1 libellée.
+  const libellee = () => {
+    const charge = chargeLucioles();
+    charge.tables[0].libelle = 'Terrasse';
+    return charge;
+  };
+  const NOM_LISTE = nomCsvBadges(BASE, { horodatage: H_RETENU });
+  const LISTE =
+    '\u{FEFF}Nom;Prénom;Organisation;Tours\r\n' +
+    'Grisaille;;;Toute la soirée — table 2\r\n' +
+    'Lacasse;Ondine;;"Tour 1 — table 2\nTour 2 — table 1 (Terrasse)"\r\n' +
+    'Ombrelle;Iris;Club des Merles;Toute la soirée — table 1 (Terrasse)\r\n' +
+    'Pervenche;Théo;;"Tour 1 — table 1 (Terrasse)\nTour 2 — table 2"\r\n';
+  const texteDe = (octets) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets);
+
+  test('en lecture, la liste se dépose à côté de l’événement, seule écriture, et rend son chemin et son nom ; deux productions, mêmes octets', async () => {
+    const { fs, seance, trace } = await monter(libellee(), { modeleBadge: null, papier: null });
+    assert.equal(seance.mode, 'lecture');
+    const rendu = await seance.produireListeBadges();
+    assert.deepEqual(rendu, { chemin: `${DOCUMENTS}\\${NOM_LISTE}`, nom: NOM_LISTE });
+    assert.deepEqual(trace, [['ecrireOctetsAtomique', NOM_LISTE]]);
+    const premiers = fs.octets('documents', NOM_LISTE);
+    assert.equal(texteDe(premiers), LISTE);
+    await seance.produireListeBadges();
+    assert.deepEqual(fs.octets('documents', NOM_LISTE), premiers);
+  });
+
+  test('l’ordre par table, une réédition et une proposition passent à la liste ; la proposition porte BROUILLON dans le nom', async () => {
+    const { fs, seance } = await monter(libellee());
+    const { nom: parTable } = await seance.produireListeBadges({ ordre: 'table' });
+    assert.equal(parTable, nomCsvBadges(BASE, { horodatage: H_RETENU, ordre: 'table' }));
+    const lignes = (nom) => texteDe(fs.octets('documents', nom)).split('\r\n').slice(1, -1).map((l) => l.split(';')[0]);
+    assert.deepEqual(lignes(parTable), ['Ombrelle', 'Pervenche', 'Grisaille', 'Lacasse']);
+    const { nom: reedition } = await seance.produireListeBadges({ selection: [3, 1] });
+    assert.match(reedition, /\.badges-2_2031-05-17_20-15-07\.csv$/);
+    assert.deepEqual(lignes(reedition), ['Lacasse', 'Ombrelle']);
+    const { nom: brouillon } = await seance.produireListeBadges({ source: 'proposition', proposition: 2 });
+    assert.equal(brouillon, nomCsvBadges(BASE, { horodatage: H_PROPOSITION, proposition: 2, brouillon: true }));
+    assert.match(brouillon, /\.badges-p2_BROUILLON_/);
+  });
+
+  test('les refus du placement la gardent, sans rien écrire ; pas ceux de la mise en page : un nom trop long pour son badge a sa ligne', async () => {
+    const sans = chargeLucioles({ plan: null, etat: 'propose' });
+    const premier = await monter(sans);
+    await refusee(premier.seance.produireListeBadges(), 'PLANCHE_SANS_PLACEMENT');
+    assert.deepEqual(premier.trace, []);
+    const long = `Pervenche${'w'.repeat(1990)}`;
+    const charge = chargeLucioles();
+    charge.participants[1].nom = long;
+    const { fs, seance } = await monter(charge);
+    await refusee(seance.produirePlanche(), 'PLANCHE_NOM_TROP_LONG');
+    const { nom } = await seance.produireListeBadges();
+    assert.ok(texteDe(fs.octets('documents', nom)).includes(`${long};Théo;`));
+  });
+
+  test('une écriture refusée : PLANCHE_NON_ECRITE nomme la liste, remède « Enregistrer sous… », qui la confie au dialogue sous son nom', async () => {
+    const { fs, seance } = await monter(libellee());
+    fs.pannes.ecriture('documents');
+    const details = { chemin: NOM_LISTE, dossier: DOCUMENTS, cause: 'EROFS', fichier: 'liste', remede: { geste: 'enregistrerSous' } };
+    await refusee(seance.produireListeBadges(), 'PLANCHE_NON_ECRITE', details);
+    assert.ok(libelle('PLANCHE_NON_ECRITE', details).startsWith('La liste des badges'));
+    const recus = [];
+    fs.enregistrerSous = async (nom, octets) => {
+      recus.push([nom, texteDe(octets)]);
+      return 'E:\\Copies\\liste.csv';
+    };
+    assert.equal(await seance.enregistrerListeBadgesSous(), 'E:\\Copies\\liste.csv');
+    assert.deepEqual(recus, [[NOM_LISTE, LISTE]]);
+  });
+
+  test('une réédition dont le dossier ne se liste pas : PLANCHE_NON_ECRITE nomme la liste, avant d’écrire ; listé, le premier rang libre', async () => {
+    const { fs, seance, trace } = await monter(libellee());
+    const lister = fs.lister;
+    fs.lister = async () => {
+      throw new ErreurStockage('LECTURE', { chemin: '', dossier: DOCUMENTS, cause: 'EACCES' });
+    };
+    const nom = nomCsvBadges(BASE, { horodatage: H_RETENU, reedition: { ids: [2] } });
+    await refusee(seance.produireListeBadges({ selection: [2] }), 'PLANCHE_NON_ECRITE', {
+      chemin: nom,
+      dossier: DOCUMENTS,
+      cause: 'EACCES',
+      fichier: 'liste',
+      remede: { geste: 'enregistrerSous' },
+    });
+    assert.deepEqual(trace, []);
+    fs.lister = lister;
+    assert.equal((await seance.produireListeBadges({ selection: [2] })).nom, nom);
+    assert.equal((await seance.produireListeBadges({ selection: [2] })).nom, nom.replace(/\.csv$/, '_2.csv'));
+  });
+
+  test('sous web, la liste se télécharge : chemin null, rien dans le dossier', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS, nature: 'web' });
+    const { seance, trace } = await monter(libellee(), { fs });
+    const recus = [];
+    fs.enregistrerSous = async (nom) => {
+      recus.push(nom);
+      return null;
+    };
+    assert.deepEqual(await seance.produireListeBadges(), { chemin: null, nom: NOM_LISTE });
+    assert.deepEqual(recus, [NOM_LISTE]);
     assert.deepEqual(trace, []);
   });
 });

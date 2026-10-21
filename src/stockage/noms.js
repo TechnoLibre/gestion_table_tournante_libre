@@ -3,11 +3,11 @@
 
 // Les noms des fichiers d'un événement (§ 8.6, § 8.7) : leurs suffixes, la
 // base que le nom de l'événement donne dans un dossier de travail, le
-// dossier daté de la corbeille, et le nom de la planche de badges que
-// l'événement produit à côté de ses fichiers (§ 11.6). Le module est pur :
-// il ne touche aucun fichier, ne lit ni horloge ni aléa, et ne dépend
-// d'aucune langue — la casse se compare par toUpperCase ou toLowerCase,
-// jamais par une comparaison localisée.
+// dossier daté de la corbeille, et les noms de la planche de badges et de
+// sa liste en CSV que l'événement produit à côté de ses fichiers (§ 11.6).
+// Le module est pur : il ne touche aucun fichier, ne lit ni horloge ni
+// aléa, et ne dépend d'aucune langue — la casse se compare par toUpperCase
+// ou toLowerCase, jamais par une comparaison localisée.
 //
 // Les longueurs se comptent en unités UTF-16, comme MAX_PATH de Windows, et
 // une coupe ne sépare jamais une paire de substitution. Le chemin complet
@@ -20,9 +20,10 @@
 // racine du dossier de travail, tient sous la même borne : son plus long
 // suffixe sans marque, prolongé de SUFFIXE_ECRITURE, ne dépasse pas la partie
 // fixe de longueurRelativeMax, et un nom marqué raccourcit sa base dans le
-// dossier qui le reçoit, suivie d'un point. Un nom qui peut se confondre
-// avec un autre — base raccourcie, ou base lue sur le disque qui finit par
-// un point — se choisit parmi les entrées du dossier.
+// dossier qui le reçoit, suivie d'un point ; le nom de la liste, plus
+// court, suit la même règle. Un nom qui peut se confondre avec un autre —
+// base raccourcie, ou base lue sur le disque qui finit par un point — se
+// choisit parmi les entrées du dossier.
 import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 
@@ -358,18 +359,42 @@ function dossierLu(dossier) {
 // la feuille de contrôle à part d'un modèle à cartes prédécoupées.
 const FICHIERS_PLANCHE = Object.freeze({ badges: '.badges', controle: '.controle' });
 
+// Ce que les noms d'une planche et de sa liste en CSV partagent, contrôlé
+// au nom de la fonction `qui` : la base, le dossier lu, et les marques de la
+// pile — la source « -p<id> », le compte « -<k> » d'une réédition, l'ordre
+// « _table » — et la date du placement. Lève comme nomPlanche.
+function communes(qui, base, { horodatage, reedition = null, proposition = null, ordre = 'alphabetique', dossier = null }) {
+  if (typeof base !== 'string' || base === '') throw new TypeError(`${qui} : base attendue, reçu ${JSON.stringify(base)}`);
+  if (proposition !== null && !(Number.isSafeInteger(proposition) && proposition >= 1)) {
+    throw new TypeError(`${qui} : identifiant de proposition attendu, reçu ${JSON.stringify(proposition)}`);
+  }
+  if (!ORDRES.includes(ordre)) throw new TypeError(`${qui} : ordre inconnu ${JSON.stringify(ordre)}`);
+  const leDossier = dossierLu(dossier);
+  const date = horodatage === null ? HORODATAGE_INCONNU : jourEtHeure(horodatage);
+  let compte = '';
+  if (reedition !== null) {
+    if (!Array.isArray(reedition?.ids)) throw new TypeError(`${qui} : réédition sans tableau ids`);
+    const k = reedition.ids.length;
+    if (k < 1 || k > REEDITION_MAX) throw new RangeError(`${qui} : réédition de ${k} badges, de 1 à ${REEDITION_MAX} admis`);
+    compte = `-${k}`;
+  }
+  return {
+    leDossier,
+    reedition: reedition !== null,
+    source: proposition === null ? '' : `-p${proposition}`,
+    compte,
+    marqueOrdre: ordre === 'table' ? '_table' : '',
+    date,
+  };
+}
+
 // Les options de nomPlanche contrôlées, et ce qu'il en tire : le dossier lu,
 // les noms de rang donné — [badges], et [badges, controle] pour un modèle à
 // cartes prédécoupées —, et si les noms se choisissent parmi les entrées du
-// dossier — une réédition, une base qui finit par MARQUE_COUPE, ou une base
-// que la borne raccourcit dès le premier rang. Les noms d'un même rang
-// partagent leur tête : la coupe se règle sur le plus long suffixe.
-// Lève comme nomPlanche.
-function composer(
-  base,
-  { papier, imposition, horodatage, reedition = null, proposition = null, ordre = 'alphabetique', dossier = null, modeleBadge = 'a6' } = {},
-) {
-  if (typeof base !== 'string' || base === '') throw new TypeError(`nomPlanche : base attendue, reçu ${JSON.stringify(base)}`);
+// dossier (rangeable). Lève comme nomPlanche.
+function composer(base, options = {}) {
+  const { papier, imposition, modeleBadge = 'a6' } = options;
+  const { leDossier, reedition, source, compte, marqueOrdre, date } = communes('nomPlanche', base, options);
   if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
     throw new TypeError(`nomPlanche : papier inconnu ${JSON.stringify(papier)}`);
   }
@@ -379,27 +404,36 @@ function composer(
     throw new TypeError(`nomPlanche : le modèle ${modeleBadge} se pose sur ${MODELES_BADGE[modeleBadge].papier}, reçu ${papier}`);
   }
   if (!IMPOSITIONS.includes(imposition)) throw new TypeError(`nomPlanche : imposition inconnue ${JSON.stringify(imposition)}`);
-  if (proposition !== null && !(Number.isSafeInteger(proposition) && proposition >= 1)) {
-    throw new TypeError(`nomPlanche : identifiant de proposition attendu, reçu ${JSON.stringify(proposition)}`);
-  }
-  if (!ORDRES.includes(ordre)) throw new TypeError(`nomPlanche : ordre inconnu ${JSON.stringify(ordre)}`);
-  const leDossier = dossierLu(dossier);
-  const date = horodatage === null ? HORODATAGE_INCONNU : jourEtHeure(horodatage);
-  let compte = '';
-  if (reedition !== null) {
-    if (!Array.isArray(reedition?.ids)) throw new TypeError('nomPlanche : réédition sans tableau ids');
-    const k = reedition.ids.length;
-    if (k < 1 || k > REEDITION_MAX) throw new RangeError(`nomPlanche : réédition de ${k} badges, de 1 à ${REEDITION_MAX} admis`);
-    compte = `-${k}`;
-  }
-  const source = proposition === null ? '' : `-p${proposition}`;
-  const marqueOrdre = ordre === 'table' ? '_table' : '';
   // L'A6 nomme son papier et son imposition ; un modèle à cartes
   // prédécoupées, qui impose l'un et n'offre pas l'autre, se nomme lui-même.
   const support = cartes ? `_${modeleBadge}` : `_${papier}_${imposition}`;
   const ouvertures = cartes ? [FICHIERS_PLANCHE.badges, FICHIERS_PLANCHE.controle] : [FICHIERS_PLANCHE.badges];
   const suffixes = (rang) =>
     ouvertures.map((ouverture) => `${ouverture}${source}${compte}${support}${marqueOrdre}_${date}${rang === 1 ? '' : `_${rang}`}.pdf`);
+  return rangeable(base, leDossier, suffixes, reedition);
+}
+
+// La marque d'une liste en CSV tirée d'un placement qui n'est pas retenu :
+// le CSV n'a pas de filigrane, son nom le dit.
+const MARQUE_BROUILLON = '_BROUILLON';
+
+// Les options de nomCsvBadges contrôlées, et ce qu'il en tire, comme
+// composer : un seul nom par rang, [liste]. Lève comme nomCsvBadges.
+function composerCsv(base, options = {}) {
+  const { brouillon = false } = options;
+  const { leDossier, reedition, source, compte, marqueOrdre, date } = communes('nomCsvBadges', base, options);
+  if (typeof brouillon !== 'boolean') throw new TypeError(`nomCsvBadges : brouillon booléen attendu, reçu ${JSON.stringify(brouillon)}`);
+  const marque = brouillon ? MARQUE_BROUILLON : '';
+  const suffixes = (rang) => [`${FICHIERS_PLANCHE.badges}${source}${compte}${marqueOrdre}${marque}_${date}${rang === 1 ? '' : `_${rang}`}.csv`];
+  return rangeable(base, leDossier, suffixes, reedition);
+}
+
+// Les noms de rang donné sous le dossier lu, de suffixes(rang), et si ces
+// noms se choisissent parmi les entrées du dossier — une réédition, une
+// base qui finit par MARQUE_COUPE, ou une base que la borne raccourcit dès
+// le premier rang. Les noms d'un même rang partagent leur tête : la coupe
+// se règle sur le plus long suffixe.
+function rangeable(base, leDossier, suffixes, reedition) {
   const entiers = (rang) => suffixes(rang).map((fin) => base + fin);
   if (leDossier === null) return { leDossier, nomsDeRang: entiers, exigeListe: false };
 
@@ -417,15 +451,14 @@ function composer(
     const debut = tete === null ? base : tete + MARQUE_COUPE;
     return fins.map((fin) => debut + fin);
   };
-  const exigeListe = reedition !== null || base.endsWith(MARQUE_COUPE) || nomsDeRang(1)[0] !== entiers(1)[0];
+  const exigeListe = reedition || base.endsWith(MARQUE_COUPE) || nomsDeRang(1)[0] !== entiers(1)[0];
   return { leDossier, nomsDeRang, exigeListe };
 }
 
-// Les noms de la planche, [badges] ou [badges, controle], au premier rang
-// où aucun n'est pris dans le dossier quand ils se choisissent parmi ses
-// entrées, au rang 1 sinon.
-function nomsPlanche(base, options) {
-  const { leDossier, nomsDeRang, exigeListe } = composer(base, options);
+// Les noms qu'une composition donne, au premier rang où aucun n'est pris
+// dans le dossier quand ils se choisissent parmi ses entrées, au rang 1
+// sinon.
+function nomsLibres({ leDossier, nomsDeRang, exigeListe }) {
   if (!exigeListe) return nomsDeRang(1);
   const pris = new Set(Array.from(leDossier.existants, cle));
   let rang = 1;
@@ -436,6 +469,9 @@ function nomsPlanche(base, options) {
   }
   return candidats;
 }
+
+// Les noms de la planche, [badges] ou [badges, controle] (nomsLibres).
+const nomsPlanche = (base, options) => nomsLibres(composer(base, options));
 
 /**
  * Nom du fichier de la planche de badges (§ 11.6), posé à la racine du
@@ -547,4 +583,50 @@ export function nomControle(base, options) {
  */
 export function nomPlancheExigeListe(base, options) {
   return composer(base, options).exigeListe;
+}
+
+/**
+ * Nom du fichier de la liste des badges en CSV (§ 11.6), posé à la racine du
+ * dossier de travail à côté de la planche :
+ * <base>.badges[-p<id>][-<k>][_table][_BROUILLON]_<date>[_<n>].csv
+ * — les marques de la planche (nomPlanche), sans papier, imposition ni
+ * modèle, qui ne changent pas la liste ; « _BROUILLON » quand le placement
+ * n'est pas retenu, le CSV n'ayant pas de filigrane : toujours pour une
+ * proposition. Le rang et la coupe suivent les règles de nomPlanche : une
+ * réédition, une base qui finit par un point ou une base que la borne
+ * raccourcit se choisit parmi les entrées du dossier, et ne remplace jamais
+ * un fichier ; sans dossier, ni rang ni coupe. Le plus long suffixe sans
+ * marque, .badges-9999_BROUILLON_<date>.csv, compte 46 unités, sous les 51
+ * de la planche : la borne du chemin (§ 8.6) le tient.
+ *
+ * @param {string} base
+ * @param {Object} options
+ * @param {string|null} options.horodatage  AAAA-MM-JJTHH:MM:SS±HH:MM, ou null
+ * @param {null|{ids: number[]}} [options.reedition]
+ * @param {number|null} [options.proposition]
+ * @param {'alphabetique'|'table'} [options.ordre]
+ * @param {boolean} [options.brouillon]   faux par défaut
+ * @param {null|{racine: string, separateur: '\\'|'/', existants: Iterable<string>}} [options.dossier]
+ * @returns {string}
+ * @throws {TypeError} une base vide, un horodatage d'une autre forme, une
+ *         réédition sans tableau ids, une proposition qui n'est pas un
+ *         entier ≥ 1, un ordre inconnu, un brouillon qui n'est pas un
+ *         booléen, un dossier d'une autre forme
+ * @throws {RangeError} une réédition de 0 badge ou de plus de 9 999
+ */
+export function nomCsvBadges(base, options) {
+  return nomsLibres(composerCsv(base, options))[0];
+}
+
+/**
+ * Vrai quand le nom de la liste (nomCsvBadges), sous le dossier donné, se
+ * choisit parmi les entrées du dossier, comme nomPlancheExigeListe.
+ *
+ * @param {string} base
+ * @param {Object} options  celles de nomCsvBadges
+ * @returns {boolean}
+ * @throws {TypeError|RangeError} comme nomCsvBadges
+ */
+export function nomCsvBadgesExigeListe(base, options) {
+  return composerCsv(base, options).exigeListe;
 }

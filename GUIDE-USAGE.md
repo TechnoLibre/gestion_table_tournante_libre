@@ -922,20 +922,23 @@ Revenu au placement retenu, l’aperçu sort sans filigrane :
 porte l’instant de ce placement. C’est cette page qui part à l’imprimante pour
 le montage de la salle.*
 
-La planche se produit dans la section « Badges » de l’événement. On y choisit
-le **modèle de badge** — Avery 5392, ou A6 à découper —, que le poste garde
-d’une fois à l’autre, et l’ordre des badges, alphabétique ou par table du
-premier tour. Avec l’A6 seulement, la section montre aussi le papier — Lettre
-tant que le poste n’en a pas choisi d’autre, « Changer » le remplace — et
-l’imposition — feuille par feuille, ou en pile pour un massicot qui tranche
-toute la rame. « Préparer » annonce ce qui
-sortira : le nombre de badges et de feuilles, les homonymes, les caractères que
-la police ne dessine pas, le nom des fichiers. « Produire la planche » écrit le
-PDF à côté des fichiers de l’événement et en affiche le chemin ; dans un
-navigateur, le PDF se télécharge. Avec l’A6, la feuille de contrôle est la
-première page de la planche ; avec Avery 5392, elle est un **second PDF**, écrit
-à côté du premier, à imprimer sur papier ordinaire pour ne pas gâcher une
-feuille de cartes :
+La planche se produit dans la section « Badges » de l’événement. On y choisit le
+**modèle de badge** — Avery 5392, ou A6 à découper —, que le poste garde d’une
+fois à l’autre, et l’ordre des badges, alphabétique ou par table du premier
+tour. Avec l’A6 seulement, la section montre aussi le papier — Lettre tant que
+le poste n’en a pas choisi d’autre, « Changer » le remplace — et l’imposition —
+feuille par feuille, ou en pile pour un massicot qui tranche toute la rame.
+« Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
+homonymes, les caractères que la police ne dessine pas, le nom des fichiers.
+« Produire la planche (PDF) » écrit le PDF à côté des fichiers de l’événement et
+en affiche le chemin ; dans un navigateur, le PDF se télécharge. « Produire la
+liste (CSV) » écrit au même endroit la liste des mêmes badges, pour un tableur :
+une ligne par personne, avec son nom, son prénom, son organisation et, dans une
+seule cellule, ses lignes de tour telles que le badge les compose, jamais
+abrégées ; tirée d’une proposition, son nom de fichier porte « BROUILLON ». Avec
+l’A6, la feuille de contrôle est la première page de la planche ; avec Avery
+5392, elle est un **second PDF**, écrit à côté du premier, à imprimer sur papier
+ordinaire pour ne pas gâcher une feuille de cartes :
 
 ![La feuille de contrôle de la planche : la règle de 100 mm, puis les comptes de la soirée](doc/captures/24-badges-controle.png)
 
@@ -951,9 +954,10 @@ Vient ensuite la planche, six cartes par feuille :
 
 ![La première feuille de cartes : six badges Avery 5392](doc/captures/25-badges-planche.png)
 
-*Chaque badge porte le nom, l’organisation et la table de chaque tour ; une
-personne assise à la même table à chaque tour lit une seule ligne, comme
-« Toute la soirée — table 1 » sur le quatrième badge. En pied, le nom de
+*Chaque badge porte le nom, l’organisation et la table de chaque tour, son
+libellé entre parenthèses quand elle en a un ; une personne assise à la même
+table à chaque tour lit une seule ligne, comme « Toute la soirée — table 1
+(Table d’honneur) » sur le quatrième badge. En pied, le nom de
 l’événement et l’instant du placement. Les cartes étant prédécoupées, la
 feuille ne porte aucun trait de coupe ; avec l’A6, des traits fins marquent la
 coupe.*

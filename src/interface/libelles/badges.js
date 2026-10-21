@@ -4,19 +4,20 @@
 // Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8,
 // Q3) : ses réglages — modèle de badge, source, imposition, ordre —, ses
 // commandes, les phrases de l'annonce que rend phrasesAnnonce
-// (badges/modele.js), la planche produite et la réédition. Chaque clé
-// commence par « badges. ». Les refus de la planche sont des textes de
-// l'application (application/libelles/planche.js), le nom d'un papier un
-// libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit par texte.
-// Le chemin de la planche produite est une donnée : l'écran le pose dans son
-// propre nœud, à côté de son intitulé.
+// (badges/modele.js), la planche et la liste produites, et la réédition.
+// Chaque clé commence par « badges. ». Les refus de la planche sont des
+// textes de l'application (application/libelles/planche.js), le nom d'un
+// papier un libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit
+// par texte. Le chemin d'un fichier produit est une donnée : l'écran le pose
+// dans son propre nœud, à côté de son intitulé.
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
   [
     'badges.introduction',
     'Un badge par personne présente, sur des cartes Avery 5392 prédécoupées ou en A6 à découper, ' +
-      'avec une feuille de contrôle à mesurer avant d\u{2019}imprimer.',
+      'avec une feuille de contrôle à mesurer avant d\u{2019}imprimer ; ' +
+      'les mêmes badges se tirent aussi en liste CSV, pour un tableur.',
   ],
 
   // --- Les réglages de la planche (§ 11.6, Q3) ------------------------------
@@ -24,6 +25,10 @@ export const TABLE = new Map([
   ['badges.modele.titre', 'Modèle de badge'],
   ['badges.modele.avery5392', 'Avery 5392 (six cartes prédécoupées par feuille Lettre)'],
   ['badges.modele.a6', 'A6 à découper (sur A4 ou Lettre)'],
+  [
+    'badges.modele.nonRetenu',
+    'Le modèle choisi vaut pour cette séance, sans être retenu sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
   ['badges.source.titre', 'Placement imprimé'],
   ['badges.source.retenu', 'Le placement retenu'],
   ['badges.source.proposition', ({ id }) => `La proposition n° ${id}`],
@@ -36,9 +41,11 @@ export const TABLE = new Map([
 
   // --- Les commandes ----------------------------------------------------------
   ['badges.commande.preparer', 'Préparer'],
-  ['badges.commande.produire', 'Produire la planche'],
+  ['badges.commande.produire', 'Produire la planche (PDF)'],
+  ['badges.commande.produireListe', 'Produire la liste (CSV)'],
   ['badges.commande.ouvrirDossier', 'Ouvrir le dossier'],
   ['badges.produire.bloque', 'La planche ne se produit pas tant que le refus de l\u{2019}annonce tient.'],
+  ['badges.liste.bloquee', 'La liste ne se produit pas tant que le refus du placement tient.'],
 
   // --- L'annonce, avant de produire (§ 11.2, § 11.5, § 11.8) ------------------
   ['badges.annonce.titre', 'Avant de produire'],
@@ -102,6 +109,8 @@ export const TABLE = new Map([
   ['badges.produite.telechargee', ({ nom }) => `Planche téléchargée sous le nom ${nom}.`],
   ['badges.produite.controle', 'Feuille de contrôle déposée :'],
   ['badges.produite.controleTelechargee', ({ nom }) => `Feuille de contrôle téléchargée sous le nom ${nom}.`],
+  ['badges.produite.liste', 'Liste déposée :'],
+  ['badges.produite.listeTelechargee', ({ nom }) => `Liste téléchargée sous le nom ${nom}.`],
 
   // --- La réédition (§ 11.8) --------------------------------------------------
   ['badges.reedition.titre', 'Rééditer des badges'],

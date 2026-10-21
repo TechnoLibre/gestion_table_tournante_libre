@@ -3,18 +3,22 @@
 
 <script>
   // La section des badges (§ 2.1 étape 12, § 11.2, § 11.6, § 11.8, Q1, Q3) :
-  // la planche de badges, un PDF à imprimer et à couper. Produire n'est pas
-  // modifier (§ 8.4, § 11.6) : la section vit en lecture comme sur un plan
-  // bloqué, et la séance n'écrit que le PDF et, pour le papier,
+  // la planche de badges, un PDF à imprimer et à couper, et la liste des
+  // mêmes badges en CSV. Produire n'est pas modifier (§ 8.4, § 11.6) : la
+  // section vit en lecture comme sur un plan bloqué, et la séance n'écrit
+  // que le PDF, le CSV et, pour le papier et le modèle,
   // reglages_locaux.json — ni l'état ni le journal.
   //
   // Le modèle de badge est un réglage de la machine (EtatSeance.modeleBadge,
   // seance.choisirModeleBadge), Avery 5392 tant que l'opérateur n'en a pas
-  // choisi. Un modèle qui impose son papier — Avery 5392, sur Lettre — ne
-  // montre ni l'imposition ni le papier ; l'A6 montre les deux. Aucune
-  // production ne pose la question du papier : l'A6 prend celui de la
-  // machine, Lettre tant qu'elle n'en a pas (PAPIER_BADGES_DEFAUT), montré
-  // comme un papier choisi, que « Changer » remplace pour la machine.
+  // choisi. Un modèle que la machine ne retient pas — les réglages locaux
+  // ne s'écrivent pas — vaut pour la séance, et une annonce le dit sous les
+  // réglages tant qu'il est celui de la séance. Un modèle qui impose son
+  // papier — Avery 5392, sur Lettre — ne montre ni l'imposition ni le
+  // papier ; l'A6 montre les deux. Aucune production ne pose la question du
+  // papier : l'A6 prend celui de la machine, Lettre tant qu'elle n'en a pas
+  // (PAPIER_BADGES_DEFAUT), montré comme un papier choisi, que « Changer »
+  // remplace pour la machine.
   //
   // Les réglages d'une demande : la source — le retenu s'il existe, sinon la
   // proposition demandée au plan depuis les propositions, choisie quand les
@@ -40,22 +44,32 @@
   // façade le dossier de travail, où la planche se dépose, et jamais le
   // chemin choisi par « Enregistrer sous… ». Une écriture refusée se dit
   // PLANCHE_NON_ECRITE, remède « Enregistrer sous… » (enregistrerPlancheSous),
-  // dont le chemin choisi remplace celui de la planche.
+  // dont les chemins choisis — pour Avery 5392, celui de la feuille de
+  // contrôle aussi — remplacent ceux de la planche.
+  //
+  // « Produire la liste (CSV) » dépose la liste de la demande courante
+  // (produireListeBadges) et nomme son chemin, ou son nom sous web. Elle ne
+  // prépare pas l'annonce : seuls les refus du placement la gardent, levés
+  // par la séance à côté de la commande ; quand l'annonce montrée en porte
+  // un, la commande est désactivée et expliquée (listeBloquee). Une écriture
+  // refusée offre « Enregistrer sous… » (enregistrerListeBadgesSous), dont
+  // le chemin choisi remplace celui de la liste.
   //
   // La réédition (Reedition.svelte) passe par la même production, sa
   // sélection dans la demande.
   //
   // Préparer, produire et « Enregistrer sous… » passent par l'indicateur
-  // d'activité (activite.js) : l'annonce et la planche se calculent sur le
-  // fil du rendu.
+  // d'activité (activite.js) : l'annonce, la planche et la liste se
+  // calculent sur le fil du rendu.
   //
-  // Habillage : les réglages, le papier, les commandes, l'annonce et la
-  // planche produite vivent dans la carte de la planche ; « Produire la
-  // planche » en est l'action principale. L'annonce se pose sur le fond
-  // sourd de la carte, la planche produite sur le fond de l'information. La
-  // réédition est une carte à elle.
+  // Habillage : les réglages, le papier, les commandes, l'annonce et les
+  // fichiers produits vivent dans la carte de la planche ; « Produire la
+  // planche (PDF) » en est l'action principale. L'annonce se pose sur le
+  // fond sourd de la carte, les fichiers produits sur le fond de
+  // l'information. La réédition est une carte à elle.
   import { getContext } from 'svelte';
   import { PAPIER_BADGES_DEFAUT } from '../../geometrie/papiers.js';
+  import Message from '../accueil/Message.svelte';
   import { suivre } from '../activite.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -72,6 +86,7 @@
     cleOrdre,
     cleSource,
     libelleSource,
+    listeBloquee,
     memesReglages,
     modeleImposeSonPapier,
     phrasesAnnonce,
@@ -116,6 +131,7 @@
   );
   const phrases = $derived(montree === null ? [] : phrasesAnnonce(montree.annonce, montree.demande));
   const bloque = $derived(montree !== null && produireBloque(montree.annonce));
+  const listeEnRefus = $derived(montree !== null && listeBloquee(montree.annonce));
 
   // La planche produite : {chemin, nom, controle}, chemin null sous web ;
   // controle, la feuille de contrôle à part, {chemin, nom}, ou null.
@@ -125,6 +141,12 @@
   // Le refus de l'annonce préparée de nouveau après le choix du papier, que
   // nulle commande ne porte.
   let refusRepris = $state(null);
+  // La liste produite : {chemin, nom}, chemin null sous web ; et la demande
+  // de la dernière, que son « Enregistrer sous… » reprend.
+  let liste = $state(null);
+  let derniereListe = null;
+  // Le dernier modèle choisi que la machine n'a pas retenu, ou null.
+  let modeleNonRetenu = $state(null);
 
   async function preparer(selection) {
     const demande = demandeDe(selection);
@@ -142,7 +164,20 @@
     const { annonce, demande } = await preparer(selection);
     if (produireBloque(annonce)) return;
     derniere = demande;
-    produite = await suivre(() => seance.produirePlanche(demande));
+    try {
+      produite = await suivre(() => seance.produirePlanche(demande));
+    } catch (erreur) {
+      montrerCartesDeposees(erreur);
+      throw erreur;
+    }
+  }
+
+  // La feuille de contrôle refusée après les cartes : le chemin des cartes
+  // écrites (deposee) se montre comme celui d'une planche produite, et le
+  // refus remonte ensuite à son remède.
+  function montrerCartesDeposees(erreur) {
+    const deposee = erreur?.code === 'PLANCHE_NON_ECRITE' ? (erreur.details?.deposee ?? null) : null;
+    if (deposee !== null) produite = { chemin: deposee, nom: null, controle: null };
   }
 
   // Le papier choisi par la question de la section : l'annonce montrée se
@@ -158,12 +193,40 @@
   }
 
   // Le remède que la section exécute : l'enregistrement ailleurs de la
-  // dernière planche demandée. Le chemin choisi remplace celui de la
-  // planche ; null quand l'opérateur annule.
+  // dernière planche demandée. Les chemins choisis remplacent ceux de la
+  // planche et de sa feuille de contrôle à part ; null quand l'opérateur
+  // annule.
   const gestes = {
     enregistrerSous: async () => {
-      const chemin = await suivre(() => seance.enregistrerPlancheSous(derniere));
-      if (chemin !== null) produite = { chemin, nom: null, controle: null };
+      let choisis;
+      try {
+        choisis = await suivre(() => seance.enregistrerPlancheSous(derniere));
+      } catch (erreur) {
+        montrerCartesDeposees(erreur);
+        throw erreur;
+      }
+      if (choisis === null) return null;
+      const controle = choisis.controle === null ? null : { chemin: choisis.controle, nom: null };
+      produite = { chemin: choisis.chemin, nom: null, controle };
+      return choisis.chemin;
+    },
+  };
+
+  // La liste des réglages courants, toute la soirée. Une nouvelle
+  // production efface la liste montrée.
+  async function produireLaListe() {
+    liste = null;
+    const demande = demandeDe(null);
+    derniereListe = demande;
+    liste = await suivre(() => seance.produireListeBadges(demande));
+  }
+
+  // Le remède d'une liste refusée d'écriture : son enregistrement ailleurs,
+  // dont le chemin choisi remplace celui de la liste.
+  const gestesListe = {
+    enregistrerSous: async () => {
+      const chemin = await suivre(() => seance.enregistrerListeBadgesSous(derniereListe));
+      if (chemin !== null) liste = { chemin, nom: null };
       return chemin;
     },
   };
@@ -171,9 +234,12 @@
   const explorateur = facade.explorateur();
 
   // Le modèle choisi s'écrit sur la machine ; l'état de la séance le porte
-  // aussitôt, et l'avertissement d'une écriture refusée, que la séance rend,
-  // ne bloque pas le choix.
-  const choisirModele = (modele) => seance.choisirModeleBadge(modele);
+  // aussitôt. Un choix que la machine ne retient pas s'annonce, sans
+  // bloquer le choix.
+  async function choisirModele(modele) {
+    const { retenu } = await seance.choisirModeleBadge(modele);
+    modeleNonRetenu = retenu ? null : modele;
+  }
 </script>
 
 <section data-section="badges">
@@ -221,6 +287,11 @@
             </select>
           </label>
         </div>
+        <div role="status">
+          {#if modeleNonRetenu !== null && modeleNonRetenu === modeleBadge}
+            <Message ton="avis"><p data-avertissement="modeleNonRetenu">{t('badges.modele.nonRetenu')}</p></Message>
+          {/if}
+        </div>
 
         {#if !cartes}
           <Papier defaut={PAPIER_BADGES_DEFAUT} onChoisi={papierChoisi} />
@@ -235,12 +306,22 @@
           {:else}
             <Commande cle="badges.commande.produire" nom="produirePlanche" variante="principale" executer={() => produire(null)} {gestes} />
           {/if}
+          {#if listeEnRefus}
+            <button type="button" data-commande="produireListe" aria-disabled="true" aria-describedby={`${uid}-liste`}
+              >{t('badges.commande.produireListe')}</button
+            >
+          {:else}
+            <Commande cle="badges.commande.produireListe" nom="produireListe" executer={produireLaListe} gestes={gestesListe} />
+          {/if}
           {#if explorateur.disponible}
             <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => facade.ouvrirExplorateur()} />
           {/if}
         </div>
         {#if bloque}
           <p class="explication" id={`${uid}-bloque`}>{t('badges.produire.bloque')}</p>
+        {/if}
+        {#if listeEnRefus}
+          <p class="explication" id={`${uid}-liste`}>{t('badges.liste.bloquee')}</p>
         {/if}
         {#if refusRepris !== null}
           <Refus refus={refusRepris} lever={() => (refusRepris = null)} {gestes} />
@@ -278,6 +359,19 @@
               {#if produite.controle !== null}
                 <p data-chemin-controle>{t('badges.produite.controleTelechargee', { nom: produite.controle.nom })}</p>
               {/if}
+            {/if}
+          </div>
+        {/if}
+
+        {#if liste !== null}
+          <div class="produite">
+            {#if liste.chemin !== null}
+              <p>
+                <span>{t('badges.produite.liste')}</span>
+                <span class="chemin" data-chemin-liste>{liste.chemin}</span>
+              </p>
+            {:else}
+              <p data-chemin-liste>{t('badges.produite.listeTelechargee', { nom: liste.nom })}</p>
             {/if}
           </div>
         {/if}

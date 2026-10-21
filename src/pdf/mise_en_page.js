@@ -50,12 +50,9 @@ const TYPOGRAPHIES = Object.freeze({
 /** Le point typographique en millimètres. */
 const MM_PAR_PT = 25.4 / 72;
 
-/** La marque d'abrègement d'une organisation ou d'un titre. */
+/** La marque d'abrègement d'une organisation ou d'un texte libre d'une
+ *  ligne de tour. */
 const MARQUE = '\u{2026}';
-
-/** Le séparateur que les libellés d'une ligne de tour posent devant la
- *  place, puis devant le titre : « Tour 2 — table 5, siège 3 — titre ». */
-const SEPARATEUR = ' \u{2014} ';
 
 /** La tolérance d'une comparaison de cotes, en millimètres : une somme de
  *  hauteurs égale à la hauteur utile tient, malgré l'arrondi flottant. */
@@ -152,6 +149,34 @@ function paliers(depart, plancher) {
   return corps;
 }
 
+// Les textes libres de chaque ligne de tour, contrôlés : textes.abregeables,
+// ou aucun pour chaque ligne quand il manque. Chaque ligne en a une liste de
+// { debut, fin }, entiers, 0 ≤ debut < fin ≤ sa longueur, croissants et
+// disjoints, un caractère au moins chacun ; TypeError sinon.
+function morceauxLus({ lignes, abregeables }) {
+  if (abregeables === undefined) return lignes.map(() => []);
+  if (!Array.isArray(abregeables) || abregeables.length !== lignes.length) {
+    throw new TypeError('mettreEnPage : abregeables, une liste par ligne de tour, attendus');
+  }
+  abregeables.forEach((morceaux, rang) => {
+    let fin = 0;
+    const bien =
+      Array.isArray(morceaux) &&
+      morceaux.every((morceau) => {
+        const forme =
+          Number.isSafeInteger(morceau?.debut) &&
+          Number.isSafeInteger(morceau?.fin) &&
+          morceau.debut >= fin &&
+          morceau.debut < morceau.fin &&
+          morceau.fin <= lignes[rang].length;
+        fin = forme ? morceau.fin : fin;
+        return forme;
+      });
+    if (!bien) throw new TypeError(`mettreEnPage : textes libres de la ligne ${rang + 1} mal désignés, reçu ${JSON.stringify(morceaux)}`);
+  });
+  return abregeables;
+}
+
 /**
  * La mise en page d'un badge, ou le refus qui dit pourquoi il ne tient pas.
  *
@@ -174,8 +199,13 @@ function paliers(depart, plancher) {
  * Tours : une colonne, du corps des tours à leur plancher, puis deux
  * colonnes, la première rangée de haut en bas d'abord, séparées d'un
  * cadratin. Chaque ligne est entière, sauf au plancher : une ligne trop
- * large pour sa colonne y abrège son titre, jamais sa place ; une ligne sans
- * titre trop large ne se pose pas. Aucun corps ne dépasse celui du nom.
+ * large pour sa colonne y abrège ses textes libres — le libellé de la
+ * table, puis le titre, ceux que textes.abregeables désigne —, chacun à son
+ * plus long préfixe suivi de « … », une grappe au moins, le suivant ne
+ * s'abrégeant que le précédent réduit à sa première grappe ; jamais le
+ * reste de la ligne, tour, table et siège. Une ligne sans texte libre, ou
+ * que même ses textes libres réduits ne font pas tenir, ne se pose pas.
+ * Aucun corps ne dépasse celui du nom.
  *
  * Refus : PLANCHE_NOM_TROP_LONG quand le nom dépasse trois lignes et que
  * rien ne tient, PLANCHE_TROP_DE_TOURS {tours} sinon, tours étant le nombre
@@ -185,17 +215,22 @@ function paliers(depart, plancher) {
  * Le modèle de badge donne le cadre utile et les corps de départ : l'A6,
  * 89 × 132 mm ; la carte Avery 5392, 91,6 × 66,2 mm.
  *
- * @param {{nom: string, lignes: string[], organisation: string|null,
- *          pied: string[], piedReduit: string[]}} textes
+ * @param {{nom: string, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
+ *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
+ *        abregeables : pour chaque ligne de tour, ses textes libres, par
+ *        leurs positions en unités UTF-16, croissants et disjoints ; absent,
+ *        aucune ligne n'en porte
  * @param {Metriques} metriques
  * @param {import('../geometrie/papiers.js').ModeleBadge} [modeleBadge]   'a6' par défaut
  * @returns {{blocs: Array<{texte: string, corps: number, gras: boolean, x: number, y: number}>,
  *            colonnesTours: 1|2}
  *          | {refus: {code: string, details: object}}}
- * @throws {TypeError} un modèle de badge inconnu
+ * @throws {TypeError} un modèle de badge inconnu, des textes libres mal
+ *         désignés
  */
 export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
   if (!estModeleBadge(modeleBadge)) throw new TypeError(`mettreEnPage : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
+  const morceauxDesLignes = morceauxLus(textes);
   const badge = MODELES_BADGE[modeleBadge];
   const typographie = TYPOGRAPHIES[modeleBadge];
   const { largeur: L, hauteur: H } = cadreUtile({ x: 0, y: 0, largeur: badge.largeur, hauteur: badge.hauteur }, modeleBadge);
@@ -252,47 +287,65 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
     return lignes;
   }
 
-  // Le texte entier s'il tient, sinon son plus long préfixe, espaces finales
-  // retirées, suivi de la marque ; null si la marque seule déborde. Les
-  // avances sont positives ou nulles : la largeur d'un préfixe croît avec
-  // son nombre de grappes, une dichotomie trouve le plus long qui tient seul,
-  // et aucun préfixe plus long ne tient avec la marque. De là, le premier qui
-  // tient avec elle, en descendant.
-  function abreger(texte, corps, gras, largeurMax) {
-    if (tient(texte, corps, gras, largeurMax)) return texte;
-    const grappes = texte.match(GRAPPE);
+  // Le texte, entre avant et apres, entier si l'ensemble tient ; sinon son
+  // plus long préfixe d'au moins `minimum` grappes, espaces finales
+  // retirées, suivi de la marque — la marque seule pour un minimum nul ;
+  // null quand aucun ne tient. Les avances sont positives ou nulles : la
+  // largeur croît avec le nombre de grappes du préfixe, une dichotomie
+  // trouve le plus long qui tient sans la marque, et aucun plus long ne
+  // tient avec elle. De là, le premier qui tient avec elle, en descendant.
+  function abregerEntre(avant, texte, apres, corps, gras, largeurMax, minimum) {
+    const tientAvec = (milieu) => tient(`${avant}${milieu}${apres}`, corps, gras, largeurMax);
+    if (tientAvec(texte)) return `${avant}${texte}${apres}`;
+    if (!tientAvec('')) return null;
+    const grappes = texte.match(GRAPPE) ?? [];
     const prefixe = (nombre) => grappes.slice(0, nombre).join('');
     // Le préfixe vide tient, le texte entier non.
     let bas = 0;
     let haut = grappes.length - 1;
     while (bas < haut) {
       const milieu = Math.ceil((bas + haut) / 2);
-      if (tient(prefixe(milieu), corps, gras, largeurMax)) bas = milieu;
+      if (tientAvec(prefixe(milieu))) bas = milieu;
       else haut = milieu - 1;
     }
-    for (let nombre = bas; nombre > 0; nombre -= 1) {
-      const candidat = `${prefixe(nombre).replace(/ +$/u, '')}${MARQUE}`;
-      if (tient(candidat, corps, gras, largeurMax)) return candidat;
+    for (let nombre = bas; nombre >= minimum; nombre -= 1) {
+      const garde = prefixe(nombre).replace(/ +$/u, '');
+      if (garde === '' && minimum > 0) continue;
+      if (tientAvec(`${garde}${MARQUE}`)) return `${avant}${garde}${MARQUE}${apres}`;
     }
-    return tient(MARQUE, corps, gras, largeurMax) ? MARQUE : null;
+    return null;
   }
 
-  // Une ligne de tour dans la largeur : entière si elle tient ; sinon
-  // abrégée dans son titre, qui suit le second séparateur, sa place (tour,
-  // table, siège) gardée entière et au moins une grappe du titre ; null pour
-  // une ligne sans titre, ou dont la place et une grappe, suivies de la
-  // marque, débordent. Le plus long préfixe qu'abreger rend ne couvre pas
-  // la place : aucun autre ne la couvre.
-  function abregerTitre(ligne, corps, largeurMax) {
+  // Une organisation dans la largeur : entière, ou abrégée, la marque seule
+  // au pis ; null si la marque seule déborde.
+  const abreger = (texte, corps, gras, largeurMax) => abregerEntre('', texte, '', corps, gras, largeurMax, 0);
+
+  // Une ligne de tour dans la largeur : entière si elle tient ; sinon ses
+  // textes libres s'abrègent l'un après l'autre, dans l'ordre de la ligne,
+  // une grappe au moins chacun : le premier à son plus long préfixe qui fait
+  // tenir la ligne, les suivants entiers ; à défaut, réduit à sa première
+  // grappe, et le suivant s'abrège. null quand la ligne n'en a pas, ou que
+  // tous réduits ne la font pas tenir. Le reste de la ligne ne s'abrège
+  // jamais.
+  function abregerLigne(ligne, morceaux, corps, largeurMax) {
     if (tient(ligne, corps, false, largeurMax)) return ligne;
-    const premier = ligne.indexOf(SEPARATEUR);
-    const finDeLaPlace = premier < 0 ? -1 : ligne.indexOf(SEPARATEUR, premier + SEPARATEUR.length);
-    if (finDeLaPlace < 0) return null;
-    const abregee = abreger(ligne, corps, false, largeurMax);
-    // Au moins une grappe du titre reste : la place suivie du seul séparateur
-    // et de la marque se lirait comme une place abrégée.
-    const titreGarde = abregee !== null && abregee.length - MARQUE.length > finDeLaPlace + SEPARATEUR.trimEnd().length;
-    return titreGarde ? abregee : null;
+    // Les morceaux de la ligne : textes fixes et textes libres alternés,
+    // chaque libre ensuite remplacé par sa forme réduite.
+    const parts = [];
+    let curseur = 0;
+    for (const { debut, fin } of morceaux) {
+      parts.push(ligne.slice(curseur, debut), ligne.slice(debut, fin));
+      curseur = fin;
+    }
+    parts.push(ligne.slice(curseur));
+    for (let rang = 1; rang < parts.length; rang += 2) {
+      const avant = parts.slice(0, rang).join('');
+      const apres = parts.slice(rang + 1).join('');
+      const abregee = abregerEntre(avant, parts[rang], apres, corps, false, largeurMax, 1);
+      if (abregee !== null) return abregee;
+      parts[rang] = `${parts[rang].match(GRAPPE)[0]}${MARQUE}`;
+    }
+    return null;
   }
 
   // Les formes du nom, dans l'ordre où le badge les essaie, chacune
@@ -358,16 +411,19 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
     if (pied === null) return null;
 
     // Les lignes de tour d'une disposition, avec leur abscisse et leur rang ;
-    // null quand l'une ne tient pas dans sa colonne.
+    // null quand l'une ne tient pas dans sa colonne. Une colonne reçoit les
+    // lignes et leurs textes libres, { ligne, morceaux }.
     function disposerTours({ colonnes, corps }) {
-      const poser = (ligne, largeurMax) =>
-        corps === plancherTours ? abregerTitre(ligne, corps, largeurMax) : tient(ligne, corps, false, largeurMax) ? ligne : null;
+      const poser = ({ ligne, morceaux }, largeurMax) => {
+        if (corps === plancherTours) return abregerLigne(ligne, morceaux, corps, largeurMax);
+        return tient(ligne, corps, false, largeurMax) ? ligne : null;
+      };
       const poserColonne = (colonne, largeurMax) => {
         const posees = colonne.map((ligne) => poser(ligne, largeurMax));
         return posees.includes(null) ? null : posees;
       };
       const largeurColonne = (colonne) => Math.max(0, ...colonne.map((t) => largeur(t, corps, false)));
-      const lignes = textes.lignes;
+      const lignes = textes.lignes.map((ligne, rang) => ({ ligne, morceaux: morceauxDesLignes[rang] }));
       if (colonnes === 1) {
         const posees = poserColonne(lignes, L);
         if (posees === null) return null;
@@ -382,7 +438,8 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
       const gouttiere = corps * MM_PAR_PT;
       const demi = (L - gouttiere) / 2;
       const droiteEntiere = lignes.slice(rangees);
-      const gauche = poserColonne(lignes.slice(0, rangees), L - gouttiere - Math.min(largeurColonne(droiteEntiere), demi));
+      const largeurDroite = largeurColonne(droiteEntiere.map(({ ligne }) => ligne));
+      const gauche = poserColonne(lignes.slice(0, rangees), L - gouttiere - Math.min(largeurDroite, demi));
       if (gauche === null) return null;
       const droite = poserColonne(droiteEntiere, L - gouttiere - largeurColonne(gauche));
       if (droite === null) return null;

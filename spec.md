@@ -3093,7 +3093,8 @@ le choisit, dans tout mode, par la même file, et se relit comme la taille du
 texte : au lancement, puis à chaque changement de dossier de travail, celui
 que le fichier porte, à défaut celui de la séance. Un fichier que la lecture
 ne prend pas, ou un dossier qui refuse de l'écrire, ne bloque pas le choix : le
-modèle vaut pour la séance.
+modèle vaut pour la séance, et la section dit, sous ses réglages, qu'il n'est
+pas retenu sur ce poste.
 
 **La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
 (§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
@@ -4429,8 +4430,10 @@ qui ouvre la section des tables.
 Le logiciel produit **un seul document PDF** : la planche de badges,
 distribués à l'accueil et portés autour du cou — avec, pour les cartes Avery
 5392 prédécoupées, sa feuille de contrôle en un second PDF, à imprimer sur
-papier ordinaire (§ 11.3). Toute autre sortie se lit à l'écran et s'imprime
-par le navigateur ou par l'hôte `electron` (§ 11.7).
+papier ordinaire (§ 11.3). Les mêmes badges se tirent aussi en **liste CSV**,
+pour un tableur ou une imprimante d'étiquettes (§ 11.6) : un fichier de
+données, pas une page. Toute autre sortie se lit à l'écran et s'imprime par
+le navigateur ou par l'hôte `electron` (§ 11.7).
 
 **Il le produit en mémoire, par une bibliothèque embarquée** — `pdf-lib`, sa
 police lue par `fontkit` (§ 17, point 2). L'argument est
@@ -4692,7 +4695,7 @@ cherche à qui il parle.
 | rang | contenu | pourquoi |
 |---|---|---|
 | 1 | **prénom et nom**, le plus grand corps de la planche | c'est l'identité, et c'est ce que lit l'hôte à un mètre |
-| 2 | **une ligne par tour** : « Tour 1 — table 12 », et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
+| 2 | **une ligne par tour** : « Tour 1 — table 12 », le libellé de la table entre parenthèses après son numéro quand elle en porte un (§ 4) — « Tour 1 — table 5 (Terrasse), siège 3 — animation » —, et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
 | 3 | **organisation**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
@@ -4705,7 +4708,8 @@ ne sert à aucun diagnostic au cou d'un invité et dont la place est comptée.
 **Un itinéraire constant s'écrit en une ligne.** Quand une personne, présente
 aux R tours, occupe la même table à chacun d'eux, R ≥ 2 — au même siège sous
 attribution, sous le même titre —, le cas de tout participant ancré (§ 4.2), le
-badge écrit « Toute la soirée — table 7 » plutôt que R lignes identiques. Le
+badge écrit « Toute la soirée — table 7 » plutôt que R lignes identiques ; deux
+tables de même numéro et de libellés différents ne font pas une même table. Le
 rang 2 ne perd rien : la question « où vais-je au tour 3 » reçoit la même
 réponse, et la place gagnée revient au nom.
 
@@ -4791,10 +4795,16 @@ un débordement.
   troncature silencieuse, pas un comportement attendu. Sur la carte Avery 5392,
   sous un nom court et son organisation, vingt lignes de tour sans titre tiennent
   sur deux colonnes, et la vingt et unième se refuse.
-- **Un titre long sur une ligne de tour.** Une ligne de tour s'écrit entière ; au
-  corps plancher seulement, une ligne trop large pour sa colonne **abrège son
-  titre** avec une marque. La table et le siège ne s'abrègent jamais : c'est la
-  réponse que le badge porte.
+- **Un titre long, ou un long libellé de table, sur une ligne de tour.** Une
+  ligne de tour s'écrit entière ; au corps plancher seulement, une ligne trop
+  large pour sa colonne **abrège d'abord le libellé de la table**, entre ses
+  parenthèses, puis, le libellé réduit à sa première lettre, **son titre** —
+  chacun avec une marque, une lettre au moins. Le numéro de la table et le
+  siège ne s'abrègent jamais : c'est la réponse que le badge porte, et le
+  libellé n'en est qu'un repère. Un libellé de soixante caractères, le plus
+  long que la saisie admet (§ 4), tient ainsi sur la carte Avery 5392
+  comme sur l'A6 ; une ligne sans titre ni libellé qui ne tient pas se
+  refuse.
 - **Un caractère que la police n'a pas** — un nom écrit hors de l'alphabet latin,
   par exemple. La police le dessinerait comme une case vide, et l'opérateur ne le
   verrait qu'au cou de l'invité. Le logiciel nomme ces caractères dans l'annonce,
@@ -4922,11 +4932,14 @@ la racine du dossier qui le reçoit. Quand même un caractère de la base ne tie
 pas, le nom garde sa base, l'écriture refusée se dit, et « Enregistrer sous… »
 dépose la planche ailleurs.
 
-**Sous `electron`, le fichier se dépose à côté des fichiers d'événement** (§ 8.6),
-par une écriture atomique, et le logiciel en nomme le chemin — les cartes
-d'abord, puis la feuille de contrôle à part, chacune nommée ; une écriture
-refusée se dit et offre « Enregistrer sous… », qui ouvre un dialogue par
-fichier. La section des badges offre **en
+**Sous `electron`, le fichier se dépose à côté des fichiers d'événement**
+(§ 8.6), par une écriture atomique, et le logiciel en nomme le chemin — les
+cartes d'abord, puis la feuille de contrôle à part, chacune nommée ; une
+écriture refusée se dit en nommant le fichier en cause — une feuille de contrôle
+refusée après les cartes dit aussi que les cartes, elles, sont déposées, et où —
+et offre « Enregistrer sous… », qui ouvre un dialogue par fichier et nomme
+chaque chemin choisi ; une feuille de contrôle refusée au second dialogue se dit
+de même, le chemin des cartes écrites montré. La section des badges offre **en
 tout temps « Ouvrir le dossier »**, parmi ses commandes, avant toute production
 comme après : la commande montre dans l'explorateur du système le dossier de
 travail, où la planche se dépose, et jamais l'emplacement choisi par
@@ -4944,12 +4957,44 @@ proposition qui se contredit se refuse aussi, et renvoie aux propositions : la
 version précédente du fichier, le remède d'un retenu qui se contredit, ne se
 reprend pas pour elle, puisque le retenu est sain.
 
+**La liste des badges, en CSV.** La section des badges offre, à côté de
+« Produire la planche (PDF) », **« Produire la liste (CSV) »**, sans réglage à
+garder : la liste se tire de la même source et dans le même ordre que la
+planche, pour toute la soirée ; une réédition ne produit que la planche. Un
+enregistrement par badge, sous l'en-tête `Nom;Prénom;Organisation;Tours` : le
+nom et le prénom de la personne — le prénom vide quand elle n'en a pas —,
+l'organisation telle que le badge l'imprime, vide sans elle, et, dans une seule
+cellule, les lignes de tour du badge, **texte pour texte**, une par ligne —
+« Toute la soirée — table 13 — animation », « Tour 1 — table 5 (Terrasse) » —,
+jamais abrégées. Les personnes exclues n'y figurent pas. Le fichier est celui de
+l'export des participants (§ 10.3) : UTF-8 avec marque d'ordre d'octets, `;`,
+CRLF entre les enregistrements, un saut de ligne dans la cellule des tours, qui
+s'écrit alors entre guillemets (RFC 4180). Mêmes entrées, mêmes octets. Il se
+dépose à côté des fichiers d'événement, comme la planche, et « Ouvrir le
+dossier » le montre ; sous `web`, il se télécharge. Son nom suit le gabarit de
+la planche, sans papier, imposition ni modèle, qui ne changent pas la liste :
+
+```
+<base>.badges[-p<id>][-<k>][_table][_BROUILLON]_<AAAA-MM-JJ_HH-MM-SS>[_<n>].csv
+```
+
+— `_BROUILLON` quand la source n'est pas le placement retenu d'un plan retenu
+ou bloqué, toujours pour une proposition : la liste n'a pas de filigrane, son
+nom le porte. Son plus long suffixe sans marque compte 46 unités, sous les 51
+de la planche : la même borne le tient, et les mêmes règles de rang et de
+coupe s'y appliquent. La liste subit les refus du **placement** — sans
+placement, placement qui se contredit ou qui ne décrit plus la soirée —, et
+la commande se désactive, expliquée, tant que l'annonce montrée en porte un ;
+jamais ceux de la **mise en page** : un nom trop long pour son badge ou des
+tours trop nombreux n'empêchent pas une ligne de tableur. Une écriture
+refusée nomme la liste et offre « Enregistrer sous… ».
+
 **Produire la planche n'est pas une modification.** Elle n'écrit aucun fichier
 d'événement et n'ajoute aucune entrée d'historique (§ 8.2), donc elle reste
 disponible en **mode lecture** et sur un plan **bloqué**, où la lecture et
-l'impression restent ouvertes (§ 9). Ses seules écritures sont ses PDF et, au
-premier choix, le papier ou le modèle de badge dans les réglages locaux
-(§ 8.5).
+l'impression restent ouvertes (§ 9). Ses seules écritures sont ses PDF, sa
+liste CSV et, au premier choix, le papier ou le modèle de badge dans les
+réglages locaux (§ 8.5).
 
 ### 11.7 Les autres sorties, et ce que porte toute page imprimée
 
@@ -8596,7 +8641,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
 | `21-historique.png` | idem | le panneau d'historique ouvert à côté du plan : la liste, la plus récente en haut, chaque ligne sa date et son heure ; un geste défait au clavier, sa ligne « Défait (Ctrl+Z) : … », qui n'est pas abandonnée, et sous elle le geste défait, sur un fil abandonné, en encre secondaire et marqué ; en tête, l'instant courant, nommé « Avant l'accueil » par le champ du panneau (§ 8.2, § 8.3) | au moins un fil abandonné est présent et marqué comme tel ; le libellé du retour nomme la touche ; le jalon est sur l'instant courant, et le nommer ne change pas la révision |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
-| `24-badges-controle.png` / `25-badges-planche.png` | idem, sur une machine qui n'a pas choisi de modèle de badge : Avery 5392 | la **feuille de contrôle à part**, avec son échelle de 100 mm, le contour des six cartes et ses comptes, puis la première **feuille de cartes**, six cartes Avery 5392 sans filet, les six premiers noms de l'ordre alphabétique ; une personne assise à la même table à chaque tour lit une seule ligne, « Toute la soirée — table 1 » (§ 11.4) | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle et pose sur une feuille de cartes avant d'engager les cartes, et une feuille de cartes seule ne le montre pas ; produire n'écrit que les deux PDF |
+| `24-badges-controle.png` / `25-badges-planche.png` | idem, sur une machine qui n'a pas choisi de modèle de badge : Avery 5392 | la **feuille de contrôle à part**, avec son échelle de 100 mm, le contour des six cartes et ses comptes, puis la première **feuille de cartes**, six cartes Avery 5392 sans filet, les six premiers noms de l'ordre alphabétique ; une personne assise à la même table à chaque tour lit une seule ligne, « Toute la soirée — table 1 (Table d’honneur) », le libellé de la table après son numéro (§ 11.4) | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle et pose sur une feuille de cartes avant d'engager les cartes, et une feuille de cartes seule ne le montre pas ; produire n'écrit que les deux PDF |
 | `25a-badge-absente.png` | idem que `02c`, la meilleure dérivée retenue | la feuille de cartes de la réédition des badges de la partante et de l'arrivée : « Tour 3 — absente » sur l'un, « Tour 1 — absente » sur l'autre (§ 11.5) | « Retenir » n'ouvre aucune fenêtre, le retenu n'étant ajusté qu'aux participants ; seuls la planche et sa feuille de contrôle s'écrivent ; tramée du PDF comme `24` et `25` (§ 19.6) |
 
 Une image montre ce que tient la surface défilante d'un cadre de 1 366 × 700
