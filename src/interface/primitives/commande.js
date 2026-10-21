@@ -25,8 +25,8 @@
 // effet. Un second clic pendant une écriture lente ne relance rien.
 //
 // Un remède (contrat « Refus et avertissements ») est null, une commande
-// exécutable telle quelle, { commande, arguments }, ou un geste,
-// { geste, … }. Son libellé est la clé communs.remede.<commande>, ou
+// exécutable telle quelle, { commande, arguments }, ou un geste, { geste, …
+// }. Son libellé est la clé communs.remede.<commande>, ou
 // communs.remede.<geste>, suivie de .<variante> quand le geste a plusieurs
 // libellés selon ses arguments : la source d'ouvrirSecours, la racine
 // d'ecrireAilleurs — documents quand elle est donnée, choisi quand
@@ -34,9 +34,8 @@
 // la séance, par l'état de navigation pour ce qui ne fait que montrer ou
 // régler un choix de la navigation — le départ d'une génération dérivée —, ou
 // par un geste que l'écran fournit : choisirPlace se choisit sur le plan,
-// enregistrerSous reprend la planche que l'écran a demandée, choisirPapier
-// pose la question du papier. renommer ferme l'événement : la liste des
-// événements porte « Renommer » sur chacun.
+// enregistrerSous reprend la planche que l'écran a demandée. renommer ferme
+// l'événement : la liste des événements porte « Renommer » sur chacun.
 
 import { COMMANDES } from '../../application/commandes.js';
 import { suivre } from '../activite.js';
@@ -83,7 +82,6 @@ export const GESTES = Object.freeze([
   'ouvrirSecours',
   'ecrireAilleurs',
   'enregistrerSous',
-  'choisirPapier',
   'repartirDeZero',
   'libererTour',
   'renommer',
@@ -221,17 +219,17 @@ function executionDuGeste(remede, seance, ui) {
 /**
  * L'action qu'offre un remède : de quoi poser une Commande à côté du refus.
  * Un geste que gestes fournit passe par lui, avant tout autre chemin ;
- * choisirPlace, enregistrerSous et choisirPapier n'en ont pas d'autre. Un
- * remède de commande s'exécute par seance.executer, tel quel ; modifier,
- * debloquer, ouvrirSecours et ecrireAilleurs par la méthode de la séance de
- * même nom — passerEnEcriture pour modifier, la base de l'événement ouvert
- * pour ouvrirSecours, l'indicateur d'activité pour ecrireAilleurs, qui
- * recopie l'événement (activite.js) ; renommer par seance.fermer, qui rend la liste des
- * événements, où chacun se renomme ;
- * afficherTour et ouvrirSection par l'état de navigation, ui, comme les deux
- * gestes d'un départ refusé : repartirDeZero retire le départ
- * (ui.retirerDepart), libererTour décoche son tour des tours figés du
- * départ (ui.reglerToursFiges), et ne change rien sans départ.
+ * choisirPlace et enregistrerSous n'en ont pas d'autre. Un remède de commande
+ * s'exécute par seance.executer, tel quel ; modifier, debloquer,
+ * ouvrirSecours et ecrireAilleurs par la méthode de la séance de même nom —
+ * passerEnEcriture pour modifier, la base de l'événement ouvert pour
+ * ouvrirSecours, l'indicateur d'activité pour ecrireAilleurs, qui recopie
+ * l'événement (activite.js) ; renommer par seance.fermer, qui rend la liste
+ * des événements, où chacun se renomme ; afficherTour et ouvrirSection par
+ * l'état de navigation, ui, comme les deux gestes d'un départ refusé :
+ * repartirDeZero retire le départ (ui.retirerDepart), libererTour décoche son
+ * tour des tours figés du départ (ui.reglerToursFiges), et ne change rien
+ * sans départ.
  *
  * @param {Object|null} remede
  * @param {{seance: Object, ui?: Object|null, gestes?: Object<string, (remede: Object) => unknown>}} dependances

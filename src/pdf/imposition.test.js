@@ -229,3 +229,64 @@ describe('imposition : le cadre utile (§ 11.3)', () => {
     assert.deepEqual([aPlat.largeur, aPlat.hauteur], [132, 89]);
   });
 });
+
+describe('imposition : le modèle Avery 5392 (§ 11.2, § 11.3)', () => {
+  const AVERY = 'avery5392';
+
+  test('six cartes de 101,6 × 76,2 aux cotes du gabarit, à 0,01 mm : 2 colonnes depuis x = 6,35, 3 rangées depuis y = 25,4, sans gouttière, à plat sans rotation', () => {
+    const attendues = [];
+    for (const y of [25.4, 101.6, 177.8]) {
+      for (const x of [6.35, 107.95]) attendues.push({ x, y, largeur: 101.6, hauteur: 76.2, aPlat: false });
+    }
+    assert.deepEqual(cellules('Lettre', AVERY), attendues);
+    const toutes = cellules('Lettre', AVERY);
+    const { largeur, hauteur } = PAPIERS.Lettre;
+    assert.ok(proche(largeur - (toutes[5].x + toutes[5].largeur), 6.35) && proche(hauteur - (toutes[5].y + toutes[5].hauteur), 25.4));
+  });
+
+  test('Avery 5392 ne se pose que sur Lettre : A4, ou un papier inconnu, lève TypeError ; un modèle inconnu aussi', () => {
+    for (const papier of ['A4', 'A5', null]) {
+      assert.throws(() => cellules(papier, AVERY), TypeError, String(papier));
+      assert.throws(() => parPlanche(papier, AVERY), TypeError, String(papier));
+    }
+    for (const modele of ['A6', 'avery', '', null, 'toString']) {
+      assert.throws(() => cellules('Lettre', modele), TypeError, String(modele));
+      assert.throws(() => cadreUtile(cellules('Lettre')[0], modele), TypeError, String(modele));
+    }
+  });
+
+  test('pagination : 6 cartes par feuille ; n = 0, 1, 6, 7, 257 donnent 0, 1, 1, 2, 43 feuilles', () => {
+    assert.equal(parPlanche('Lettre', AVERY), 6);
+    assert.deepEqual([0, 1, 6, 7, 257].map((n) => nombrePlanches(n, 'Lettre', AVERY)), [0, 1, 1, 2, 43]);
+  });
+
+  test('l’ordre suit la pile carte après carte, sept badges : la première feuille pleine, la seconde porte le septième', () => {
+    assert.deepEqual(imposer(7, 'Lettre', 'feuille', AVERY), [
+      [0, 1, 2, 3, 4, 5],
+      [6, null, null, null, null, null],
+    ]);
+  });
+
+  test('des cartes prédécoupées ne portent aucun filet de coupe, planche pleine ou partielle', () => {
+    assert.deepEqual(filets('Lettre', [true, true, true, true, true, true], AVERY), []);
+    assert.deepEqual(filets('Lettre', [true, false, false, false, false, false], AVERY), []);
+    assert.throws(() => filets('Lettre', [true], AVERY), RangeError);
+  });
+
+  test('le cadre utile d’une carte retire ZONE_SILENCE_CARTE_MM de chaque bord : 91,6 × 66,2', () => {
+    assert.equal(constante('ZONE_SILENCE_CARTE_MM'), 5);
+    const cadre = cadreUtile(cellules('Lettre', AVERY)[5], AVERY);
+    assert.ok(proche(cadre.x, 112.95) && proche(cadre.y, 182.8), JSON.stringify(cadre));
+    assert.ok(proche(cadre.largeur, 91.6) && proche(cadre.hauteur, 66.2), JSON.stringify(cadre));
+  });
+
+  test('l’A6 reste le modèle quand aucun n’est donné : mêmes cellules, mêmes filets, même cadre', () => {
+    for (const papier of NOMS_PAPIERS) {
+      assert.deepEqual(cellules(papier, 'a6'), cellules(papier));
+      assert.equal(parPlanche(papier, 'a6'), parPlanche(papier));
+      const pleine = cellules(papier).map(() => true);
+      assert.deepEqual(filets(papier, pleine, 'a6'), filets(papier, pleine));
+      assert.deepEqual(cadreUtile(cellules(papier)[0], 'a6'), cadreUtile(cellules(papier)[0]));
+    }
+  });
+});

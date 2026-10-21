@@ -16,7 +16,7 @@ import { cleNormalisee } from '../csv/normalisation.js';
 import { VERSION } from '../version.genere.js';
 import { ErreurCommande } from './erreurs.js';
 import { libelle } from './libelles.js';
-import { comparerPointsDeCode, homonymesDe, modelePlanche, refusPlanche, refusProduction, textesControle } from './planche.js';
+import { comparerPointsDeCode, homonymesDe, modelePlanche, papierDesBadges, refusPlanche, refusProduction, textesControle } from './planche.js';
 import { MARQUE_TEMOIN } from './traduction.js';
 
 const PROVENANCE = 'developpement';
@@ -792,6 +792,33 @@ describe('planche : la feuille de contrôle (§ 11.3, § 11.5, § 11.8)', () => 
     assert.ok(!textesControle(m, { papier: 'A4', imposition: 'feuille', planches: 1 }).some((ligne) => ligne.startsWith('Caractères absents')));
   });
 
+  test('Avery 5392 : la carte et ses cotes, six par feuille, le papier Lettre, aucune imposition ; la consigne de la feuille à part', () => {
+    const m = modele(chargeTemoin());
+    const options = { papier: 'Lettre', imposition: 'feuille', planches: 43, modeleBadge: 'avery5392' };
+    const lignes = sansInsecable(textesControle(m, options));
+    for (const attendue of [
+      'Badge : 101,6 × 76,2 mm (Avery 5392, six cartes prédécoupées par feuille)',
+      'Papier : Lettre, 215,9 × 279,4 mm',
+      'Planches : 43',
+      'Imprimer en recto seul, à 100 %',
+      'Imprimer cette feuille sur papier ordinaire : posée sur une feuille Avery 5392, le contour des six cartes tombe sur leurs prédécoupes',
+    ]) {
+      assert.ok(lignes.includes(attendue), `« ${attendue} » absente de ${JSON.stringify(lignes)}`);
+    }
+    assert.ok(!lignes.some((ligne) => ligne.startsWith('Imposition')), JSON.stringify(lignes));
+    assert.ok(!lignes.some((ligne) => ligne.includes('(A6)')), JSON.stringify(lignes));
+    // L'A6 garde ses lignes, le modèle donné ou non.
+    const a6 = { papier: 'A4', imposition: 'feuille', planches: 65 };
+    assert.deepEqual(textesControle(m, { ...a6, modeleBadge: 'a6' }), textesControle(m, a6));
+  });
+
+  test('Avery 5392 ne se pose que sur Lettre ; un modèle inconnu lève TypeError', () => {
+    const m = modele(aReserve());
+    for (const mauvais of [{ papier: 'A4', modeleBadge: 'avery5392' }, { modeleBadge: 'A6' }, { modeleBadge: null }]) {
+      assert.throws(() => textesControle(m, { papier: 'Lettre', imposition: 'feuille', planches: 1, ...mauvais }), TypeError, JSON.stringify(mauvais));
+    }
+  });
+
   test('un papier, une imposition, un nombre de planches ou des absents hors de leur domaine lèvent TypeError', () => {
     const m = modele(aReserve());
     const bon = { papier: 'A4', imposition: 'feuille', planches: 2 };
@@ -830,5 +857,13 @@ describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8
     assert.match(derive, /Ondine Grisaille/);
     assert.match(derive, /de 3 à 4/);
     assert.ok(libelle('PLANCHE_SANS_PLACEMENT', { remede: VERS_PROPOSITIONS }).length > 0);
+  });
+});
+
+describe('planche : le papier des badges (§ 11.2)', () => {
+  test('Avery 5392 impose Lettre, quel que soit le papier de la machine ; l’A6 prend celui de la machine, Lettre sans choix ; un modèle inconnu lève TypeError', () => {
+    for (const papier of [null, 'A4', 'Lettre']) assert.equal(papierDesBadges('avery5392', papier), 'Lettre');
+    assert.deepEqual([null, 'A4', 'Lettre'].map((papier) => papierDesBadges('a6', papier)), ['Lettre', 'A4', 'Lettre']);
+    for (const modele of ['A6', null, 'toString']) assert.throws(() => papierDesBadges(modele, 'A4'), TypeError, String(modele));
   });
 });

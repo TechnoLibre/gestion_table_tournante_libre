@@ -20,9 +20,11 @@
 // D17), 19, 20, 21, la vue d'historique — un geste défait au clavier, le fil
 // abandonné, l'instant nommé par le panneau —, puis 22 et 23, l'aperçu avant
 // impression d'une proposition et du retenu, puis 24 et 25, la feuille de
-// contrôle et la première planche du PDF que la section Badges produit,
-// tramées sous node (§ 19.6) —, ces sorties en lecture puis sur un plan
-// bloqué, qui n'écrivent que la planche et reglages_locaux.json (§ 11.6), puis
+// contrôle à part et la première feuille de cartes Avery 5392, les deux PDF
+// que la section Badges produit sur une machine qui n'a pas choisi de
+// modèle, tramées sous node (§ 19.6) —, ces sorties en lecture puis sur un
+// plan bloqué, qui n'écrivent que la planche, sa feuille de contrôle et
+// reglages_locaux.json (§ 11.6), puis
 // l'ordre de lecture du § 2.1 sur l'événement retenu, les fenêtres — aucune
 // pendant un geste non destructeur, une qui nomme ce qui part pour chaque
 // geste qui détruit —, puis chaque famille de geste modifiant en lecture puis
@@ -894,10 +896,14 @@ function barreHorsDeLImage() {
 
 // --- La planche de badges photographiée (§ 19.6) --------------------------------------
 
-// Les images de la planche (§ 19.3, § 19.6) : la feuille de contrôle, page 1
-// du PDF, et la première planche, page 2.
+// Les images de la planche (§ 19.3, § 19.6) : la feuille de contrôle à part
+// d'Avery 5392, page 1 de son PDF, et la première feuille de cartes, page 1
+// du PDF des cartes.
 const PAGE_CONTROLE = Object.freeze({ page: 1, fichier: '24-badges-controle' });
-const PAGE_PLANCHE = Object.freeze({ page: 2, fichier: '25-badges-planche' });
+const PAGE_PLANCHE = Object.freeze({ page: 1, fichier: '25-badges-planche' });
+
+// Les cartes d'une feuille Avery 5392, par feuille.
+const CARTES_PAR_FEUILLE = 6;
 
 // Les images que la production de la planche attend au plus : la police et
 // pdf-lib se chargent à la première production.
@@ -1014,8 +1020,9 @@ async function photographierPdf(octets, { page, fichier }, conditions) {
 
 // Les sorties d'un événement ouvert : l'aperçu de chaque vue, envoyé à
 // l'imprimante d'épreuve ; le papier de la machine changé, puis rendu ;
-// la planche de badges produite par la section Badges. Le parcours
-// reprend sur le plan. Rend le nom du PDF écrit.
+// la planche de badges produite par la section Badges, ses cartes Avery
+// 5392 et sa feuille de contrôle à part. Le parcours reprend sur le plan.
+// Rend les noms des deux PDF écrits.
 async function sortir() {
   const impressions = m.imprimante.appels().length;
   const rang = m.trace.length;
@@ -1038,28 +1045,30 @@ async function sortir() {
   await attendre('l’événement, de retour', () => dans('[data-ecran="evenement"]'));
   await ouvrirSection('badges');
   await cliquer('[data-section="badges"] [data-commande="produirePlanche"]');
-  await attendre('la planche produite', () => dans('[data-section="badges"] [data-chemin-planche]'), IMAGES_PLANCHE);
+  await attendre('la planche produite', () => dans('[data-section="badges"] [data-chemin-controle]'), IMAGES_PLANCHE);
   const planches = cheminsEcrits(rang).filter((chemin) => chemin.endsWith('.pdf'));
-  expect(planches, 'une planche écrite').toHaveLength(1);
+  expect(planches, 'les cartes et leur feuille de contrôle écrites').toHaveLength(2);
   await ouvrirSection('plan');
-  return planches[0];
+  return planches;
 }
 
-// « Regarder n'écrit jamais » (§ 8.2, § 8.4, § 11.6) : les deux écritures
-// que regarder et sortir admettent — reglages_locaux.json, où s'écrivent
-// le cadrage différé et le papier de la machine, et la planche de
-// l'événement, <base>.badges…pdf. Rien d'autre.
+// « Regarder n'écrit jamais » (§ 8.2, § 8.4, § 11.6) : les écritures que
+// regarder et sortir admettent — reglages_locaux.json, où s'écrivent le
+// cadrage différé et le papier de la machine, et la planche de
+// l'événement, <base>.badges…pdf, avec sa feuille de contrôle à part,
+// <base>.controle…pdf. Rien d'autre.
 const ecritureAdmise = (chemin) =>
-  chemin === 'reglages_locaux.json' || (chemin.startsWith(`${base()}.badges`) && chemin.endsWith('.pdf'));
+  chemin === 'reglages_locaux.json' ||
+  ((chemin.startsWith(`${base()}.badges`) || chemin.startsWith(`${base()}.controle`)) && chemin.endsWith('.pdf'));
 
-// Sort, puis affirme que seules les deux écritures admises ont eu lieu,
-// chacune au moins une fois : rien de l'événement.
+// Sort, puis affirme que seules les écritures admises ont eu lieu, chacune
+// au moins une fois : rien de l'événement.
 async function sortirSansEcrire(avant, empreinte, geste) {
   const rang = m.trace.length;
-  const planche = await sortir();
+  const planches = await sortir();
   const interdites = m.trace.slice(rang).filter(([, , chemin]) => chemin !== '' && !ecritureAdmise(chemin));
   expect(interdites, geste).toEqual([]);
-  expect(cheminsEcrits(rang).sort(), geste).toEqual([planche, 'reglages_locaux.json'].sort());
+  expect(cheminsEcrits(rang).sort(), geste).toEqual([...planches, 'reglages_locaux.json'].sort());
   expect(serialiserCharge(charge())).toBe(empreinte);
   await rienEcrit(avant, geste);
 }
@@ -2289,12 +2298,13 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await photographier(m, '23-plan-retenu', { condition: CONDITIONS_FEUILLE, graine: GRAINE });
   });
 
-  // La planche du retenu, produite par la section Badges sur le papier que
-  // 22 a choisi, puis tramée sous node (§ 19.6) : la feuille de contrôle,
-  // puis la première planche. Produire n'écrit que le PDF ; deux
-  // productions sous l'horloge pilotée donnent les mêmes octets, que
-  // l'empreinte du manifeste suit.
-  test('24 la planche du retenu par la section Badges : seul le PDF s’écrit, deux productions identiques ; la feuille de contrôle', async () => {
+  // La planche du retenu, produite par la section Badges sous Avery 5392, le
+  // modèle d'une machine qui n'en a pas choisi, sur Lettre quel que soit le
+  // papier que 22 a choisi, puis tramée sous node (§ 19.6) : la feuille de
+  // contrôle à part, puis la première feuille de cartes. Produire n'écrit
+  // que les deux PDF ; deux productions sous l'horloge pilotée donnent les
+  // mêmes octets, que l'empreinte du manifeste suit.
+  test('24 la planche du retenu par la section Badges : seuls les deux PDF s’écrivent, deux productions identiques ; la feuille de contrôle à part', async () => {
     // L'aperçu de 23 se ferme : le plan revient, en haut.
     await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
     await attendre('le plan, de retour', () => dans('[data-ecran="evenement"] [data-section="plan"]'));
@@ -2302,20 +2312,23 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await images(2);
     expect(charge().evenement.etat).toBe('retenu');
     expect(etat().papier).toBe('A4');
+    expect(etat().modeleBadge).toBe('avery5392');
     const avant = fichiers();
     let rang = m.trace.length;
     await ouvrirSection('badges');
     await cliquer('[data-section="badges"] [data-commande="produirePlanche"]');
-    const affiche = await attendre('la planche produite', () => dans('[data-section="badges"] [data-chemin-planche]'), IMAGES_PLANCHE);
+    await attendre('la planche produite', () => dans('[data-section="badges"] [data-chemin-controle]'), IMAGES_PLANCHE);
     const ecrits = cheminsEcrits(rang);
-    expect(ecrits).toHaveLength(1);
-    const [nom] = ecrits;
-    expect(nom.startsWith(`${base()}.badges_A4_feuille_`), nom).toBe(true);
-    expect(nom.endsWith('.pdf'), nom).toBe(true);
+    expect(ecrits).toHaveLength(2);
+    const [nom, nomControle] = ecrits;
+    expect(nom.startsWith(`${base()}.badges_avery5392_`), nom).toBe(true);
+    expect(nomControle).toBe(nom.replace('.badges_', '.controle_'));
     const { separateur } = await m.fs.emplacements();
-    expect(texteDe(affiche)).toBe(`${etat().racine.chemin}${separateur}${nom}`);
+    expect(texteDe(dans('[data-section="badges"] [data-chemin-planche]'))).toBe(`${etat().racine.chemin}${separateur}${nom}`);
+    expect(texteDe(dans('[data-section="badges"] [data-chemin-controle]'))).toBe(`${etat().racine.chemin}${separateur}${nomControle}`);
     const premiere = m.fs.octets('documents', nom);
-    expect(new TextDecoder().decode(premiere.slice(0, 5))).toBe('%PDF-');
+    const premierControle = m.fs.octets('documents', nomControle);
+    for (const octets of [premiere, premierControle]) expect(new TextDecoder().decode(octets.slice(0, 5))).toBe('%PDF-');
 
     // Une seconde production, l'horloge avancée : le même fichier, les
     // mêmes octets. L'avance échoit aussi l'écriture différée du cadrage
@@ -2330,47 +2343,50 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       () => cheminsEcrits(rang).length > 0 && dans('[data-section="badges"] [data-chemin-planche]'),
       IMAGES_PLANCHE,
     );
-    expect(cheminsEcrits(rang)).toEqual([nom]);
+    expect(cheminsEcrits(rang)).toEqual([nom, nomControle]);
     const seconde = m.fs.octets('documents', nom);
+    const secondControle = m.fs.octets('documents', nomControle);
     expect(await empreinte(seconde)).toBe(await empreinte(premiere));
+    expect(await empreinte(secondControle)).toBe(await empreinte(premierControle));
     await rienEcrit(avant, 'la production de la planche');
     memoire.planche = seconde;
 
-    // La feuille de contrôle : la règle de 100 mm, les comptes de la
-    // soirée, la marque de provenance à la place de la version, aucun
-    // BROUILLON sur le retenu.
+    // La feuille de contrôle à part : la règle de 100 mm, le contour des
+    // six cartes, les comptes de la soirée, la marque de provenance à la
+    // place de la version, aucun BROUILLON sur le retenu.
     const participants = charge().participants.length;
     const exclus = charge().participants.filter(({ exclu }) => exclu).length;
     const produits = participants - exclus;
     const version = versionVisible('documentation', VERSION.affichee, libelle);
-    await photographierPdf(seconde, PAGE_CONTROLE, (lue) => {
+    await photographierPdf(secondControle, PAGE_CONTROLE, (lue) => {
       const texte = texteDePage(lue);
-      expect(axesDe(lue).longueurs).toContain(100);
+      const axes = axesDe(lue);
+      expect(axes.longueurs).toContain(100);
+      expect(axes.x).toEqual(expect.arrayContaining([6.35, 107.95, 209.55]));
+      expect(axes.y).toEqual(expect.arrayContaining([25.4, 101.6, 177.8, 254]));
       expect(texte).toContain(plat(libelle('planche.controle.comptes', { produits, participants, exclus })));
-      expect(texte).toContain(plat(libelle('planche.controle.planches', { planches: Math.ceil(produits / 4) })));
+      expect(texte).toContain(plat(libelle('planche.controle.planches', { planches: Math.ceil(produits / CARTES_PAR_FEUILLE) })));
+      expect(texte).toContain(plat(libelle('planche.controle.cartes', { modeleBadge: 'avery5392' })));
       expect(texte).toContain(plat(libelle('planche.controle.version', { version })));
       expect(texte).not.toContain(VERSION.affichee);
       expect(texte).not.toContain(libelle('planche.brouillon'));
     });
   });
 
-  test('25 la première planche : quatre A6, ses trois filets de coupe, les quatre premiers noms dans l’ordre alphabétique', async () => {
+  test('25 la première feuille de cartes : six cartes Avery 5392, sans filet de coupe, les six premiers noms dans l’ordre alphabétique', async () => {
     expect(memoire.planche, 'la planche de 24').toBeInstanceOf(Uint8Array);
     const presents = charge().participants.filter(({ exclu }) => !exclu);
-    expect(presents.length).toBeGreaterThanOrEqual(4);
+    expect(presents.length).toBeGreaterThanOrEqual(CARTES_PAR_FEUILLE);
     // L'ordre alphabétique de la planche : le nom, puis le prénom, leurs
     // clés normalisées comparées par points de code, puis l'identifiant.
     const cle = (texte) => cleNormalisee(texte ?? '');
     const premiers = [...presents]
       .sort((a, b) => parPointsDeCode(cle(a.nom), cle(b.nom)) || parPointsDeCode(cle(a.prenom), cle(b.prenom)) || a.id - b.id)
-      .slice(0, 4)
+      .slice(0, CARTES_PAR_FEUILLE)
       .map((personne) => nomAffiche(personne).normalize('NFC'));
     await photographierPdf(memoire.planche, PAGE_PLANCHE, (lue) => {
-      // A4, planche pleine : la coupe verticale au milieu, les deux
-      // horizontales sous chaque rangée de badges (§ 11.6).
-      const { x, y } = axesDe(lue);
-      expect(x).toEqual([105]);
-      expect(y).toEqual([148, 296]);
+      // Des cartes prédécoupées : aucun trait sur la feuille (§ 11.3).
+      expect(lue.segments).toEqual([]);
       const texte = texteDePage(lue);
       for (const nomBadge of premiers) expect(texte, nomBadge).toContain(plat(nomBadge));
       expect(texte).not.toContain(libelle('planche.brouillon'));
@@ -2378,9 +2394,10 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
   });
 
   // Les sorties vivent en lecture et sur un plan bloqué, et n'écrivent que
-  // la planche et le papier de la machine (§ 11.6, § 8.4, § 9) ; le plan
-  // débloqué, le parcours reprend sur le retenu, en écriture.
-  test('lecture, puis bloqué : aperçu, impression, papier et planche ; seuls le PDF et reglages_locaux.json s’écrivent', async () => {
+  // la planche, sa feuille de contrôle et le papier de la machine (§ 11.6,
+  // § 8.4, § 9) ; le plan débloqué, le parcours reprend sur le retenu, en
+  // écriture.
+  test('lecture, puis bloqué : aperçu, impression, papier et planche ; seuls les deux PDF et reglages_locaux.json s’écrivent', async () => {
     // Le parcours reprend sur le plan, comme 23 l'a laissé.
     await ouvrirSection('plan');
     expect(charge().evenement.etat).toBe('retenu');
@@ -4810,7 +4827,8 @@ describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
     });
     expect(vues, 'aucune fenêtre').toEqual([]);
     expect(charge().retenu.proposition).toBe(meilleure);
-    // Le papier, choisi au premier aperçu de la machine, n'est pas redemandé.
+    // Le papier, choisi au premier aperçu de la machine, n'est pas redemandé ;
+    // les cartes Avery 5392 ne le lisent pas.
     expect(etat().papier).toBe('A4');
     const avant = fichiers();
     await ouvrirSection('badges');
@@ -4821,15 +4839,16 @@ describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
     expect(texteDe(reediter)).toBe(plat(t('badges.reedition.produire', { n: 2 })));
     const rang = m.trace.length;
     await appuyer(reediter, 'rééditer');
-    await attendre('la réédition', () => cheminsEcrits(rang).length > 0 && dans('[data-section="badges"] [data-chemin-planche]'), IMAGES_PLANCHE);
+    await attendre('la réédition', () => cheminsEcrits(rang).length > 1 && dans('[data-section="badges"] [data-chemin-controle]'), IMAGES_PLANCHE);
     const ecrits = cheminsEcrits(rang);
-    expect(ecrits).toHaveLength(1);
-    const [nom] = ecrits;
-    expect(nom).toMatch(/\.badges-2_A4_feuille_/);
+    expect(ecrits).toHaveLength(2);
+    const [nom, nomControle] = ecrits;
+    expect(nom).toMatch(/\.badges-2_avery5392_/);
+    expect(nomControle).toMatch(/\.controle-2_avery5392_/);
     await rienEcrit(avant, 'la réédition');
     const octets = m.fs.octets('documents', nom);
     const premierAbsent = (presence) => Array.from({ length: charge().evenement.tours }, (_, n) => n + 1).find((n) => !presence.includes(n));
-    await photographierPdf(octets, { page: 2, fichier: '25a-badge-absente' }, (lue) => {
+    await photographierPdf(octets, { page: 1, fichier: '25a-badge-absente' }, (lue) => {
       const texte = texteDePage(lue);
       for (const [id, presence] of [
         [partante, toursPartante],

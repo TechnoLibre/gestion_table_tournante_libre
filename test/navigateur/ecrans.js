@@ -499,11 +499,12 @@ export const fichierEtat = (charge, base = BASE) => ({
 });
 
 /** Les réglages locaux de la machine, posés dans les Documents, le
- *  dossier de travail des épreuves : le papier choisi, aucun cadrage. */
-export const fichierReglages = (papier) => ({
+ *  dossier de travail des épreuves : le papier choisi, aucun cadrage, et
+ *  le modèle de badge quand il est donné. */
+export const fichierReglages = (papier, { modeleBadge = null } = {}) => ({
   racine: 'documents',
   chemin: FICHIER_REGLAGES,
-  texte: serialiserReglages({ format: 1, papier, cadrages: [] }),
+  texte: serialiserReglages({ format: 1, papier, cadrages: [], ...(modeleBadge === null ? {} : { modele_badge: modeleBadge }) }),
 });
 
 /** Les octets du CSV des cas limites, tels que le fichier les porte. */

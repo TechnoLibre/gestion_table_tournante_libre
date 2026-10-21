@@ -28,6 +28,7 @@ import {
   deriverBase,
   dossierCorbeille,
   longueurRelativeMax,
+  nomControle,
   nomPlanche,
   nomPlancheExigeListe,
 } from './noms.js';
@@ -1385,5 +1386,67 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
       assert.throws(() => nomPlanche(base, options), type, `${JSON.stringify(base)} ${JSON.stringify(options).slice(0, 120)}`);
     }
     assert.throws(() => nomPlanche(BASE), TypeError);
+  });
+});
+
+describe('nomPlanche et nomControle : les deux fichiers d’Avery 5392 (§ 11.6, § 8.6)', () => {
+  const BASE = 'Soir\u{E9}e des Lucioles';
+  const HORODATAGE = '2031-05-17T20:15:07-04:00';
+  const reeditionDe = (k) => ({ ids: Array.from({ length: k }, (_, i) => i + 1) });
+  const AVERY = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: null, modeleBadge: 'avery5392' };
+
+  test('les cartes : « .badges », le modèle à la place du papier et de l’imposition ; la feuille de contrôle : « .controle », le reste à l’identique', () => {
+    assert.equal(nomPlanche(BASE, AVERY), `${BASE}.badges_avery5392_2031-05-17_20-15-07.pdf`);
+    assert.equal(nomControle(BASE, AVERY), `${BASE}.controle_avery5392_2031-05-17_20-15-07.pdf`);
+    const marque = { ...AVERY, horodatage: null, reedition: reeditionDe(2), proposition: 4, ordre: 'table' };
+    assert.equal(nomPlanche(BASE, marque), `${BASE}.badges-p4-2_avery5392_table_horodatage-inconnu.pdf`);
+    assert.equal(nomControle(BASE, marque), `${BASE}.controle-p4-2_avery5392_table_horodatage-inconnu.pdf`);
+  });
+
+  test('l’A6 garde son nom, le modèle donné ou non ; nomControle n’existe que pour un modèle à cartes prédécoupées', () => {
+    const a6 = { papier: 'A4', imposition: 'pile', horodatage: HORODATAGE, reedition: null };
+    assert.equal(nomPlanche(BASE, { ...a6, modeleBadge: 'a6' }), nomPlanche(BASE, a6));
+    assert.throws(() => nomControle(BASE, a6), TypeError);
+    assert.throws(() => nomControle(BASE, { ...a6, modeleBadge: 'a6' }), TypeError);
+  });
+
+  test('Avery 5392 sur un autre papier que Lettre, ou un modèle inconnu : TypeError', () => {
+    assert.throws(() => nomPlanche(BASE, { ...AVERY, papier: 'A4' }), TypeError);
+    assert.throws(() => nomControle(BASE, { ...AVERY, papier: 'A4' }), TypeError);
+    for (const modeleBadge of ['A6', 'Avery5392', null, 'toString']) {
+      assert.throws(() => nomPlanche(BASE, { ...AVERY, modeleBadge }), TypeError, String(modeleBadge));
+    }
+  });
+
+  test('les deux noms partagent leur rang : le premier où ni l’un ni l’autre n’est pris', () => {
+    const options = { ...AVERY, reedition: reeditionDe(3) };
+    const sous = (existants) => ({ ...options, dossier: { ...DOSSIERS[0], existants } });
+    const cartes = nomPlanche(BASE, sous([]));
+    const controle = nomControle(BASE, sous([]));
+    const rang = (nom, n) => nom.replace(/\.pdf$/, `_${n}.pdf`);
+    // Le contrôle seul pris pousse aussi les cartes au rang 2.
+    for (const pris of [[cartes], [controle], [controle.toUpperCase()]]) {
+      assert.deepEqual([nomPlanche(BASE, sous(pris)), nomControle(BASE, sous(pris))], [rang(cartes, 2), rang(controle, 2)], pris[0]);
+    }
+    assert.deepEqual([nomPlanche(BASE, sous([cartes, rang(controle, 2)])), nomControle(BASE, sous([cartes, rang(controle, 2)]))], [rang(cartes, 3), rang(controle, 3)]);
+  });
+
+  test('la borne du chemin : le plus long suffixe Avery tient sous celui de l’A6 ; à côté d’une base à la borne, les deux noms marqués se raccourcissent en une même tête', () => {
+    const plusLongAvery = nomControle('b', { ...AVERY, reedition: reeditionDe(9999) }).slice(1);
+    assert.equal(plusLongAvery, '.controle-9999_avery5392_2031-05-17_20-15-07.pdf');
+    assert.ok(plusLongAvery.length <= 51, String(plusLongAvery.length));
+    for (const dossier of DOSSIERS) {
+      const base = deriverBase(lettres(400), { ...dossier, existantes: [] });
+      const options = { ...AVERY, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table', dossier: { ...dossier, existants: [] } };
+      const cartes = nomPlanche(base, options);
+      const controle = nomControle(base, options);
+      const teteDe = (nom, marque) => nom.slice(0, nom.indexOf(marque));
+      assert.equal(teteDe(cartes, '.badges-'), teteDe(controle, '.controle-'));
+      assert.ok(teteDe(cartes, '.badges-').endsWith('.'), cartes);
+      for (const nom of [cartes, controle]) {
+        assert.ok(`${dossier.racine}${dossier.separateur}${nom}.ecriture`.length <= LONGUEUR_CHEMIN_MAX, nom);
+      }
+      assert.equal(nomPlancheExigeListe(base, options), true);
+    }
   });
 });

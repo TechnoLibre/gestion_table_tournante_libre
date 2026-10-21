@@ -17,7 +17,7 @@
 // produire (§ 11.8).
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { cleNormalisee } from '../csv/normalisation.js';
-import { BADGE, PAPIERS } from '../geometrie/papiers.js';
+import { MODELES_BADGE, PAPIERS, PAPIER_BADGES_DEFAUT, estModeleBadge } from '../geometrie/papiers.js';
 import { derive, fautes } from '../stockage/placements.js';
 import { raisonsNommees } from './avertissements.js';
 import { formeNommeeDe } from './commandes.js';
@@ -68,6 +68,22 @@ export const SOURCES_PLANCHE = Object.freeze(['retenu', 'proposition']);
 export const ORDRES = Object.freeze(['alphabetique', 'table']);
 /** Les impositions de la planche (§ 11.6). */
 export const IMPOSITIONS = Object.freeze(['feuille', 'pile']);
+
+/**
+ * Le papier des badges d'un modèle (§ 11.2) : celui qu'il impose — Lettre
+ * pour Avery 5392 —, sinon celui de la machine, PAPIER_BADGES_DEFAUT tant
+ * qu'aucun n'est choisi. Le défaut ne vaut que pour les badges : il ne
+ * devient pas le papier de la machine, que l'aperçu d'impression demande.
+ *
+ * @param {import('../geometrie/papiers.js').ModeleBadge} modeleBadge
+ * @param {null|import('../geometrie/papiers.js').Papier} papier   celui de la machine
+ * @returns {import('../geometrie/papiers.js').Papier}
+ * @throws {TypeError} un modèle hors de MODELES_BADGE
+ */
+export function papierDesBadges(modeleBadge, papier) {
+  if (!estModeleBadge(modeleBadge)) throw new TypeError(`modeleBadge : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
+  return MODELES_BADGE[modeleBadge].papier ?? papier ?? PAPIER_BADGES_DEFAUT;
+}
 
 // Les refus de la mise en page, que la production relaie (refusProduction).
 const TROP_DE_TOURS = 'PLANCHE_TROP_DE_TOURS';
@@ -413,15 +429,17 @@ const pointDeCode = (caractere) => `U+${caractere.codePointAt(0).toString(16).to
 const sansAbsents = (texte, absents) => [...texte].map((c) => (absents.has(c) ? pointDeCode(c) : c)).join('');
 
 /**
- * Les lignes de la feuille de contrôle (§ 11.3, § 11.5, § 11.8), page 1 de
- * la planche : les cotes du badge, le papier et ses cotes, l'imposition, le
- * nombre de planches, le compte produit et le compte attendu, l'événement
- * et sa date, la source — le placement retenu, ou la proposition par son
- * numéro —, l'horodatage du placement, la version, la consigne
- * d'impression ; BROUILLON s'il y a lieu ; pour une réédition, son compte
- * puis les noms réédités dans l'ordre de la pile ; les caractères absents
- * de la police, quand il y en a, par leur point de code. Dans toutes les
- * lignes, un caractère absent s'écrit « U+674E », jamais tel quel.
+ * Les lignes de la feuille de contrôle (§ 11.3, § 11.5, § 11.8), page 1 de la
+ * planche de l'A6, document à part pour Avery 5392 : les cotes du badge et
+ * son modèle, le papier et ses cotes, l'imposition — l'A6 seulement, les
+ * cartes suivant la pile —, le nombre de planches, le compte produit et le
+ * compte attendu, l'événement et sa date, la source — le placement retenu, ou
+ * la proposition par son numéro —, l'horodatage du placement, la version, la
+ * consigne d'impression, puis, pour Avery 5392, celle de la feuille à part,
+ * sur papier ordinaire ; BROUILLON s'il y a lieu ; pour une réédition, son
+ * compte puis les noms réédités dans l'ordre de la pile ; les caractères
+ * absents de la police, quand il y en a, par leur point de code. Dans toutes
+ * les lignes, un caractère absent s'écrit « U+674E », jamais tel quel.
  *
  * @param {ModelePlanche} modele
  * @param {Object} options
@@ -429,14 +447,21 @@ const sansAbsents = (texte, absents) => [...texte].map((c) => (absents.has(c) ? 
  * @param {Imposition} options.imposition
  * @param {number} options.planches        entier ≥ 0
  * @param {string[]} [options.absents]     un caractère chacun, doublons admis
+ * @param {import('../geometrie/papiers.js').ModeleBadge} [options.modeleBadge]   'a6' par défaut
  * @returns {string[]}
- * @throws {TypeError} une option hors de son domaine, une source du modèle
- *         hors de la sienne
+ * @throws {TypeError} une option hors de son domaine, un papier que le
+ *         modèle de badge n'admet pas, une source du modèle hors de la sienne
  */
-export function textesControle(modele, { papier, imposition, planches, absents = [] }) {
+export function textesControle(modele, { papier, imposition, planches, absents = [], modeleBadge = 'a6' }) {
   if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
     throw new TypeError(`papier : clé de PAPIERS attendue, reçu ${JSON.stringify(papier)}`);
   }
+  if (!estModeleBadge(modeleBadge)) throw new TypeError(`modeleBadge : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
+  const badgeDuModele = MODELES_BADGE[modeleBadge];
+  if (badgeDuModele.papier !== null && badgeDuModele.papier !== papier) {
+    throw new TypeError(`papier : le modèle ${modeleBadge} se pose sur ${badgeDuModele.papier}, reçu ${papier}`);
+  }
+  const cartes = badgeDuModele.grille !== null;
   if (!IMPOSITIONS.includes(imposition)) {
     throw new TypeError(`imposition : ${IMPOSITIONS.join(' ou ')} attendue, reçu ${JSON.stringify(imposition)}`);
   }
@@ -453,10 +478,11 @@ export function textesControle(modele, { papier, imposition, planches, absents =
   if (!sourceBienFormee) {
     throw new TypeError(`modele : source et proposition attendues, reçu ${JSON.stringify({ source, proposition })}`);
   }
+  const { largeur, hauteur } = badgeDuModele;
   const lignes = [
-    libelle('planche.controle.badge', BADGE),
+    libelle('planche.controle.badge', { largeur, hauteur, modeleBadge }),
     libelle('planche.controle.papier', { papier, ...PAPIERS[papier] }),
-    libelle('planche.controle.imposition', { imposition }),
+    ...(cartes ? [] : [libelle('planche.controle.imposition', { imposition })]),
     libelle('planche.controle.planches', { planches }),
     libelle('planche.controle.comptes', comptes),
     libelle('planche.controle.evenement', evenement),
@@ -464,6 +490,7 @@ export function textesControle(modele, { papier, imposition, planches, absents =
     horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage }),
     libelle('planche.controle.version', { version }),
     libelle('planche.controle.consigne'),
+    ...(cartes ? [libelle('planche.controle.cartes', { modeleBadge })] : []),
   ];
   if (brouillon) lignes.push(libelle('planche.brouillon'));
   if (reedition !== null) {

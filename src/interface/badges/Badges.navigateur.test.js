@@ -1,17 +1,17 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// La section des badges dans un vrai moteur de rendu (§ 2.1 étape 12,
-// § 11.2, § 11.6, § 11.8, § 8.4, § 8.5, § 14.6, Q1, Q3) : la question du
-// papier à la première production, et jamais ensuite, sur cette machine ;
-// l'annonce avant de produire — planches des deux papiers, dérive nommée,
-// « Produire » désactivé et expliqué tant que le refus tient ; la
-// production en lecture et sur un plan bloqué sans écriture de l'état ni du
-// journal ; le chemin produit, « Ouvrir le dossier » avant comme après la
-// production, la réédition ; le refus d'écriture et son remède
+// La section des badges dans un vrai moteur de rendu (§ 2.1 étape 12, § 11.2,
+// § 11.6, § 11.8, § 8.4, § 8.5, § 14.6, Q1, Q3) : le papier des badges,
+// Lettre tant que la machine n'en a pas, sans question, et « Changer » qui le
+// choisit pour la machine ; l'annonce avant de produire — planches des deux
+// papiers, dérive nommée, « Produire » désactivé et expliqué tant que le
+// refus tient ; la production en lecture et sur un plan bloqué sans écriture
+// de l'état ni du journal ; le chemin produit, « Ouvrir le dossier » avant
+// comme après la production, la réédition ; le refus d'écriture et son remède
 // « Enregistrer sous… » ; le choix de la source, de l'imposition et de
-// l'ordre, et le retrait de l'annonce quand un réglage ou le papier
-// change ; le téléchargement sous web ; la langue témoin.
+// l'ordre, et le retrait de l'annonce quand un réglage ou le papier change ;
+// le téléchargement sous web ; la langue témoin.
 //
 // App est montée par test/navigateur/ecrans.js sur le système de fichiers
 // simulé ; le texte attendu vient de la même traduction que celle de
@@ -86,10 +86,14 @@ function chargeEnDerive() {
   return { charge, ajoutee };
 }
 
-// Ouvre l'événement de la charge sur la section des badges, le papier de
-// la machine posé dans les réglages locaux ; null n'en pose aucun.
-function ouvrirBadges(charge, { papier = 'A4', ecriture = false, options = {} } = {}) {
-  const fichiers = [...(papier === null ? [] : [fichierReglages(papier)]), ...(options.fichiers ?? [])];
+// Ouvre l'événement de la charge sur la section des badges, le papier et le
+// modèle de badge de la machine posés dans les réglages locaux — l'A6 par
+// défaut, le modèle que la plupart de ces épreuves éprouvent ; papier null
+// n'en pose aucun, et modeleBadge null, avec lui, aucun réglage : une
+// machine neuve, sur Avery 5392.
+function ouvrirBadges(charge, { papier = 'A4', modeleBadge = 'a6', ecriture = false, options = {} } = {}) {
+  const reglages = papier === null && modeleBadge === null ? [] : [fichierReglages(papier, { modeleBadge })];
+  const fichiers = [...reglages, ...(options.fichiers ?? [])];
   return ouvrirEvenement(contexte, charge, { ecriture, section: 'badges', options: { ...options, fichiers } });
 }
 
@@ -118,7 +122,7 @@ async function cliquerProduire(m, quoi, condition) {
   return attendre(quoi, condition, IMAGES);
 }
 
-// Le texte attendu des planches sur chaque papier, le papier choisi marqué.
+// Le texte attendu des planches sur chaque papier, le papier utilisé marqué.
 const textePlanches = (planches, choisi) =>
   t('badges.annonce.planches', {
     parPapier: Object.keys(PAPIERS).map((papier) => ({ papier, nom: clesPapier(papier).nom, planches: planches[papier], choisi: papier === choisi })),
@@ -143,76 +147,69 @@ async function cheminDocuments(m, nom) {
   return `${racine.chemin}${separateur}${nom}`;
 }
 
-describe('la question du papier : à la première production, jamais ensuite (§ 8.5, § 11.2, Q1)', () => {
-  test('le témoin : « Produire » sans papier annonce 65 planches A4 et 129 Lettre et pose la question ; le choix fait, la planche se produit', async () => {
+describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 11.2)', () => {
+  // Le papier que la section des badges montre.
+  const papierMontre = (m) => dans(m, '[data-section="badges"] [data-papier="choisi"]');
+
+  test('le témoin sans papier choisi : Lettre montré ; « Produire » annonce 65 A4 et 129 Lettre, produit sur Lettre, ne retient rien', async () => {
     const m = await ouvrirBadges(chargeTemoin(), { papier: null });
-    // Avant toute production, la section ne pose pas la question.
-    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
-    await cliquerProduire(m, 'la question du papier', () => question(m));
-    const lue = texte(annonce(m));
+    expect(texte(papierMontre(m))).toContain(t('impression.papier.nom.lettre'));
+    expect(question(m)).toBeNull();
+    const reglages = m.fs.contenu('documents', FICHIER_REGLAGES);
+    const depuis = m.trace.length;
+    const chemin = await cliquerProduire(m, 'la planche produite', () => dans(m, '[data-chemin-planche]'));
     const { planchesA4: A4, planchesLettre } = FORME_TEMOIN;
     const planches = Object.fromEntries(Object.keys(PAPIERS).map((papier, rang) => [papier, [A4, planchesLettre][rang]]));
-    expect(lue).toContain(plat(textePlanches(planches, null)));
+    const lue = texte(annonce(m));
+    expect(lue).toContain(plat(textePlanches(planches, 'Lettre')));
     expect(lue).toContain(plat(t('badges.annonce.comptes', { produits: FORME_TEMOIN.produits, participants: FORME_TEMOIN.participants, exclus: FORME_TEMOIN.exclus })));
-    expect(dans(m, '[data-annonce-planche] [data-refus="PAPIER_REQUIS"]')).not.toBeNull();
-    expect(planchesEcrites(m, 0)).toEqual([]);
-    const depuis = m.trace.length;
-    dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
-    const chemin = await attendre('la planche produite', () => dans(m, '[data-chemin-planche]'), IMAGES);
-    expect(m.seance.etat().papier).toBe('A4');
-    const ecrites = planchesEcrites(m, depuis);
-    expect(ecrites).toHaveLength(1);
-    expect(ecrites[0][2]).toMatch(/_A4_feuille_/);
-    expect(texte(chemin)).toBe(await cheminDocuments(m, ecrites[0][2]));
+    expect(dans(m, '[data-annonce-planche] [data-refus]')).toBeNull();
     expect(question(m)).toBeNull();
-    expect(texte(annonce(m))).toContain(plat(textePlanches(planches, 'A4')));
+    // Seul le PDF s'écrit : le papier par défaut ne devient pas celui de la
+    // machine, que l'aperçu d'impression demande encore.
+    expect(m.trace.slice(depuis).map(([primitive]) => primitive)).toEqual(['ecrireOctetsAtomique']);
+    const ecrites = planchesEcrites(m, depuis);
+    expect(ecrites[0][2]).toMatch(/_Lettre_feuille_/);
+    expect(texte(chemin)).toBe(await cheminDocuments(m, ecrites[0][2]));
+    expect(m.seance.etat().papier).toBeNull();
+    expect(m.fs.contenu('documents', FICHIER_REGLAGES)).toBe(reglages);
   });
 
-  test('une seconde production, puis un nouvel événement, puis App remontée sur le même système : jamais redemandée ; « Changer » la modifie', async () => {
+  test('« Changer » pose la question ; le papier choisi s’écrit et vaut ensuite, nouvel événement et App remontée compris', async () => {
     const m = await ouvrirBadges(chargeBloquee(), { papier: null });
-    await cliquerProduire(m, 'la question du papier', () => question(m));
+    dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
+    await attendre('la question du papier', () => question(m), IMAGES);
     dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
-    await attendre('la première planche', () => dans(m, '[data-chemin-planche]'), IMAGES);
+    await attendre('le papier choisi', () => m.seance.etat().papier === 'A4' && papierMontre(m), IMAGES);
     // Les réglages locaux portent le papier : la seule écriture hors du PDF.
     expect(JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).papier).toBe('A4');
-
-    // Une seconde production : aucune question, la planche se réécrit.
+    expect(texte(papierMontre(m))).toContain(t('impression.papier.nom.a4'));
     const depuis = m.trace.length;
-    await cliquerProduire(m, 'la seconde planche', () => planchesEcrites(m, depuis).length === 1);
+    await cliquerProduire(m, 'la planche A4', () => planchesEcrites(m, depuis).length === 1);
+    expect(planchesEcrites(m, depuis)[0][2]).toMatch(/_A4_feuille_/);
     expect(question(m)).toBeNull();
-    expect(texte(dans(m, '[data-papier="choisi"]'))).toContain(t('impression.papier.nom.a4'));
 
     // Un nouvel événement, sans placement : la section montre le papier, et
     // « Produire » dit le refus du placement, jamais la question.
     await m.seance.fermer();
     await m.seance.creer({ nom: 'Bal des Pervenches', date: null, siegesParDefaut: 8, tours: 2 });
     m.ui.allerA('badges');
-    await attendre('la section du nouvel événement', () => section(m) && dans(m, '[data-papier="choisi"]'), IMAGES);
+    await attendre('la section du nouvel événement', () => section(m) && papierMontre(m), IMAGES);
+    expect(texte(papierMontre(m))).toContain(t('impression.papier.nom.a4'));
     await cliquerProduire(m, 'le refus du placement', () => dans(m, '[data-annonce-planche] [data-refus="PLANCHE_SANS_PLACEMENT"]'));
     expect(question(m)).toBeNull();
 
-    // App remontée sur le même disque : le papier se relit, la question ne
-    // vient pas, la planche se produit.
+    // App remontée sur le même disque : le papier se relit, et la planche
+    // le porte.
     const second = await contexte.monter({ systeme: { disque: m.disque } });
     await cliquer(second, `[data-evenement="${BASE}"] [data-commande="ouvrir"]`);
     await cliquer(second, '[data-commande="section"][data-cible="badges"]');
-    await attendre('le papier relu', () => dans(second, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
+    await attendre('le papier relu', () => second.seance.etat().papier === 'A4' && dans(second, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
     const avant = second.trace.length;
     await cliquerProduire(second, 'la planche du second montage', () => dans(second, '[data-chemin-planche]'));
     expect(question(second)).toBeNull();
     expect(planchesEcrites(second, avant)).toHaveLength(1);
-
-    // « Changer » rouvre la question ; le nouveau papier s'écrit, et la
-    // planche suivante le porte.
-    dans(second, '[data-papier="choisi"] [data-commande="changerPapier"]').click();
-    await attendre('la question rouverte', () => question(second), IMAGES);
-    const lettre = Object.keys(PAPIERS)[1];
-    dans(second, `[data-papier="question"] [data-cible="${lettre}"] [data-commande="choisirPapier"]`).click();
-    await attendre('le papier changé', () => second.seance.etat().papier === lettre, IMAGES);
-    expect(JSON.parse(second.fs.contenu('documents', FICHIER_REGLAGES)).papier).toBe(lettre);
-    const ensuite = second.trace.length;
-    await cliquerProduire(second, 'la planche sur le nouveau papier', () => planchesEcrites(second, ensuite).length === 1);
-    expect(planchesEcrites(second, ensuite)[0][2]).toContain(`_${lettre}_`);
+    expect(planchesEcrites(second, avant)[0][2]).toMatch(/_A4_feuille_/);
   });
 });
 
@@ -229,10 +226,11 @@ describe('sortir n’est pas modifier (§ 8.4, § 11.6, contrainte 24)', () => {
     const lue = texte(annonce(m));
     expect(lue).toContain(plat(t('badges.annonce.source.proposition', { id: charge.propositions[0].id })));
     expect(lue).toContain(plat(t('badges.annonce.brouillon.proposition')));
-    dans(m, '[data-annonce-planche] [data-refus="PAPIER_REQUIS"] [data-commande="choisirPapier"]').click();
+    expect(dans(m, '[data-annonce-planche] [data-refus]')).toBeNull();
+    dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
     await attendre('la question du papier', () => question(m), IMAGES);
     dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
-    await attendre('l’annonce sans refus', () => annonce(m) && dans(m, '[data-annonce-planche] [data-refus]') === null, IMAGES);
+    await attendre('l’annonce sur A4', () => annonce(m) && m.seance.etat().papier === 'A4', IMAGES);
     await cliquerProduire(m, 'la planche', () => dans(m, '[data-chemin-planche]'));
     expect(ecrituresEvenement(m, depuis)).toEqual([]);
     expect(m.trace.slice(depuis).map(([primitive, , chemin]) => [primitive, chemin.endsWith('.pdf') ? 'pdf' : chemin])).toEqual([
@@ -499,11 +497,14 @@ describe('la langue témoin (§ 14.6)', () => {
     const temoin = creerContexte({ langue: 'temoin' });
     try {
       const charge = chargeBloquee();
-      const m = await ouvrirEvenement(temoin, charge, { section: 'badges' });
+      // L'A6, seul modèle qui montre le papier ; « Changer », après la
+      // production, ouvre la question à côté de l'annonce et de la planche.
+      const reglages = [fichierReglages(null, { modeleBadge: 'a6' })];
+      const m = await ouvrirEvenement(temoin, charge, { section: 'badges', options: { fichiers: reglages } });
       produire(m).click();
-      await attendre('la question et l’annonce', () => question(m) && annonce(m), IMAGES);
-      dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
-      await attendre('la planche', () => dans(m, '[data-chemin-planche]'), IMAGES);
+      await attendre('la planche et l’annonce', () => dans(m, '[data-chemin-planche]') && annonce(m), IMAGES);
+      dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
+      await attendre('la question', () => question(m), IMAGES);
       const racine = m.seance.etat().racine.chemin;
       const noms = new Set([...personnesReeditables(charge).flatMap(({ nom, organisation }) => [nom, organisation]), charge.evenement.nom]);
       const { ouverture, fermeture } = MARQUE_TEMOIN;
@@ -519,6 +520,22 @@ describe('la langue témoin (§ 14.6)', () => {
       }
       expect(lus).toBeGreaterThan(10);
       expect(fautes).toEqual([]);
+
+      // Avery 5392, revenu d'un choix : l'annonce des cartes et des deux
+      // fichiers, et les deux fichiers déposés, marqués eux aussi.
+      choisirReglage(m, 'modeleBadge', 'avery5392');
+      await attendre('le modèle Avery 5392', () => m.seance.etat().modeleBadge === 'avery5392', IMAGES);
+      produire(m).click();
+      await attendre('les deux fichiers', () => dans(m, '[data-chemin-controle]') && annonce(m), IMAGES);
+      const fautesAvery = [];
+      const marchantAvery = document.createTreeWalker(section(m), NodeFilter.SHOW_TEXT);
+      for (let noeud = marchantAvery.nextNode(); noeud !== null; noeud = marchantAvery.nextNode()) {
+        const lu = plat(noeud.textContent);
+        if (lu === '') continue;
+        const marque = lu.startsWith(ouverture) && lu.endsWith(fermeture);
+        if (!marque && !noms.has(lu) && !lu.startsWith(racine)) fautesAvery.push(lu);
+      }
+      expect(fautesAvery).toEqual([]);
     } finally {
       const erreurs = temoin.erreurs();
       await temoin.defaire();
@@ -567,5 +584,65 @@ describe('l’habillage de la section des badges', () => {
     expect(fond.join()).toBe(couleurDeJeton('--couleur-action-fond').join());
     expect(contraste(composantes(style.color), fond)).toBeGreaterThanOrEqual(4.5);
     expect(produire(m).getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  });
+});
+
+describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5, § 11.2, § 11.3)', () => {
+  const champ = (m, nom) => dans(m, `[data-section="badges"] [data-champ="${nom}"]`);
+
+  test('une machine neuve : Avery 5392 choisi, ni imposition ni question du papier ; « Produire » dépose les cartes et la feuille de contrôle, et nomme les deux chemins', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    expect(champ(m, 'modeleBadge').value).toBe('avery5392');
+    expect(champ(m, 'imposition')).toBeNull();
+    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    const depuis = m.trace.length;
+    await cliquerProduire(m, 'les deux fichiers', () => dans(m, '[data-chemin-controle]'));
+    const ecrites = planchesEcrites(m, depuis).map(([, , nom]) => nom);
+    expect(ecrites).toHaveLength(2);
+    expect(ecrites[0]).toMatch(/\.badges_avery5392_.*\.pdf$/);
+    expect(ecrites[1]).toMatch(/\.controle_avery5392_.*\.pdf$/);
+    expect(texte(dans(m, '[data-chemin-planche]'))).toBe(await cheminDocuments(m, ecrites[0]));
+    expect(texte(dans(m, '[data-chemin-controle]'))).toBe(await cheminDocuments(m, ecrites[1]));
+    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    expect(m.seance.etat().papier).toBeNull();
+    const lue = texte(annonce(m));
+    // Six cartes par feuille.
+    const presents = m.seance.etat().charge.participants.filter(({ exclu }) => !exclu).length;
+    expect(lue).toContain(plat(t('badges.annonce.cartes', { planches: Math.ceil(presents / 6) })));
+    expect(lue).toContain(plat(t('badges.annonce.fichiers', { nom: ecrites[0], nomControle: ecrites[1] })));
+    expect(ecrituresEvenement(m, depuis)).toEqual([]);
+  });
+
+  test('choisir l’A6 l’écrit sur la machine, montre l’imposition et le papier, retire l’annonce ; revenir à Avery 5392 les cache', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce Avery', () => annonce(m), IMAGES);
+    choisirReglage(m, 'modeleBadge', 'a6');
+    await attendre('le modèle écrit', () => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).modele_badge === 'a6', IMAGES);
+    await attendre('l’imposition et le papier', () => champ(m, 'imposition') && dans(m, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
+    expect(m.seance.etat().modeleBadge).toBe('a6');
+    expect(annonce(m)).toBeNull();
+    const depuis = m.trace.length;
+    await cliquerProduire(m, 'la planche A6', () => planchesEcrites(m, depuis).length === 1);
+    expect(planchesEcrites(m, depuis)[0][2]).toMatch(/_A4_feuille_/);
+    expect(dans(m, '[data-chemin-controle]')).toBeNull();
+
+    choisirReglage(m, 'modeleBadge', 'avery5392');
+    await attendre('l’imposition cachée', () => champ(m, 'imposition') === null, IMAGES);
+    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    expect(JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).papier).toBe('A4');
+  });
+
+  test('sous web, les deux fichiers se téléchargent et se nomment', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null, options: { systeme: { nature: 'web' } } });
+    const telechargees = [];
+    m.fs.enregistrerSous = async (nom) => {
+      telechargees.push(nom);
+      return null;
+    };
+    await cliquerProduire(m, 'les deux téléchargements', () => dans(m, '[data-chemin-controle]'));
+    expect(telechargees).toHaveLength(2);
+    expect(texte(dans(m, '[data-chemin-planche]'))).toBe(plat(t('badges.produite.telechargee', { nom: telechargees[0] })));
+    expect(texte(dans(m, '[data-chemin-controle]'))).toBe(plat(t('badges.produite.controleTelechargee', { nom: telechargees[1] })));
   });
 });

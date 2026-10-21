@@ -42,6 +42,7 @@ const ENTREES = [
   ['data-chargement', 'accueil : le signe d’un calcul en cours', ['']],
   ['data-chargement-liste', 'accueil : l’annonce du calcul des colonnes de la liste', ['']],
   ['data-chargement-section', 'événement : l’attente d’une section chargée à part, par son nom', null],
+  ['data-chemin-controle', 'badges : le chemin de la feuille de contrôle à part d’Avery 5392, ou son nom téléchargé', ['']],
   ['data-chemin-planche', 'badges : le chemin de la planche produite, ou son nom téléchargé', ['']],
   ['data-choix', 'participants : une case d’un choix multiple, par son rang à partir de 1', null],
   ['data-choix-siege', 'plan : un siège offert par le panneau d’une table, par son rang', null],

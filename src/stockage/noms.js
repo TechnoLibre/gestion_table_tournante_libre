@@ -23,7 +23,7 @@
 // dossier qui le reçoit, suivie d'un point. Un nom qui peut se confondre
 // avec un autre — base raccourcie, ou base lue sur le disque qui finit par
 // un point — se choisit parmi les entrées du dossier.
-import { PAPIERS } from '../geometrie/papiers.js';
+import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 
 // Suffixes des fichiers d'un événement, que précède la base de son nom :
@@ -354,18 +354,29 @@ function dossierLu(dossier) {
   return dossier;
 }
 
+// Ce qui ouvre le suffixe de chaque fichier d'une planche : ses badges, et
+// la feuille de contrôle à part d'un modèle à cartes prédécoupées.
+const FICHIERS_PLANCHE = Object.freeze({ badges: '.badges', controle: '.controle' });
+
 // Les options de nomPlanche contrôlées, et ce qu'il en tire : le dossier lu,
-// le nom de rang donné, et si le nom se choisit parmi les entrées du dossier
-// — une réédition, une base qui finit par MARQUE_COUPE, ou une base que la
-// borne raccourcit dès le premier rang.
+// les noms de rang donné — [badges], et [badges, controle] pour un modèle à
+// cartes prédécoupées —, et si les noms se choisissent parmi les entrées du
+// dossier — une réédition, une base qui finit par MARQUE_COUPE, ou une base
+// que la borne raccourcit dès le premier rang. Les noms d'un même rang
+// partagent leur tête : la coupe se règle sur le plus long suffixe.
 // Lève comme nomPlanche.
 function composer(
   base,
-  { papier, imposition, horodatage, reedition = null, proposition = null, ordre = 'alphabetique', dossier = null } = {},
+  { papier, imposition, horodatage, reedition = null, proposition = null, ordre = 'alphabetique', dossier = null, modeleBadge = 'a6' } = {},
 ) {
   if (typeof base !== 'string' || base === '') throw new TypeError(`nomPlanche : base attendue, reçu ${JSON.stringify(base)}`);
   if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
     throw new TypeError(`nomPlanche : papier inconnu ${JSON.stringify(papier)}`);
+  }
+  if (!estModeleBadge(modeleBadge)) throw new TypeError(`nomPlanche : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
+  const cartes = MODELES_BADGE[modeleBadge].grille !== null;
+  if (cartes && papier !== MODELES_BADGE[modeleBadge].papier) {
+    throw new TypeError(`nomPlanche : le modèle ${modeleBadge} se pose sur ${MODELES_BADGE[modeleBadge].papier}, reçu ${papier}`);
   }
   if (!IMPOSITIONS.includes(imposition)) throw new TypeError(`nomPlanche : imposition inconnue ${JSON.stringify(imposition)}`);
   if (proposition !== null && !(Number.isSafeInteger(proposition) && proposition >= 1)) {
@@ -383,31 +394,57 @@ function composer(
   }
   const source = proposition === null ? '' : `-p${proposition}`;
   const marqueOrdre = ordre === 'table' ? '_table' : '';
-  const suffixe = (rang) =>
-    `.badges${source}${compte}_${papier}_${imposition}${marqueOrdre}_${date}${rang === 1 ? '' : `_${rang}`}.pdf`;
-  if (leDossier === null) return { leDossier, nomDeRang: (rang) => base + suffixe(rang), exigeListe: false };
+  // L'A6 nomme son papier et son imposition ; un modèle à cartes
+  // prédécoupées, qui impose l'un et n'offre pas l'autre, se nomme lui-même.
+  const support = cartes ? `_${modeleBadge}` : `_${papier}_${imposition}`;
+  const ouvertures = cartes ? [FICHIERS_PLANCHE.badges, FICHIERS_PLANCHE.controle] : [FICHIERS_PLANCHE.badges];
+  const suffixes = (rang) =>
+    ouvertures.map((ouverture) => `${ouverture}${source}${compte}${support}${marqueOrdre}_${date}${rang === 1 ? '' : `_${rang}`}.pdf`);
+  const entiers = (rang) => suffixes(rang).map((fin) => base + fin);
+  if (leDossier === null) return { leDossier, nomsDeRang: entiers, exigeListe: false };
 
-  // Le nom de rang donné : la base entière quand le chemin complet, en
-  // écriture atomique, tient sous la borne ; sinon la plus longue tête de la
-  // base que tenir rend, suivie de MARQUE_COUPE ; la base entière quand même
-  // un caractère n'y tient pas.
+  // Les noms de rang donné : la base entière quand le chemin complet du plus
+  // long, en écriture atomique, tient sous la borne ; sinon la plus longue
+  // tête de la base que tenir rend, suivie de MARQUE_COUPE ; la base entière
+  // quand même un caractère n'y tient pas.
   const { racine, separateur } = leDossier;
   const unitesRacine = racine.endsWith(separateur) ? racine.length - 1 : racine.length;
-  const nomDeRang = (rang) => {
-    const fin = suffixe(rang);
-    const libres = LONGUEUR_CHEMIN_MAX - (unitesRacine + 1) - SUFFIXE_ECRITURE.length - fin.length;
-    if (base.length <= libres) return base + fin;
-    const tete = tenir(base, libres - MARQUE_COUPE.length);
-    return tete === null ? base + fin : tete + MARQUE_COUPE + fin;
+  const nomsDeRang = (rang) => {
+    const fins = suffixes(rang);
+    const plusLongue = Math.max(...fins.map((fin) => fin.length));
+    const libres = LONGUEUR_CHEMIN_MAX - (unitesRacine + 1) - SUFFIXE_ECRITURE.length - plusLongue;
+    const tete = base.length <= libres ? null : tenir(base, libres - MARQUE_COUPE.length);
+    const debut = tete === null ? base : tete + MARQUE_COUPE;
+    return fins.map((fin) => debut + fin);
   };
-  const exigeListe = reedition !== null || base.endsWith(MARQUE_COUPE) || nomDeRang(1) !== base + suffixe(1);
-  return { leDossier, nomDeRang, exigeListe };
+  const exigeListe = reedition !== null || base.endsWith(MARQUE_COUPE) || nomsDeRang(1)[0] !== entiers(1)[0];
+  return { leDossier, nomsDeRang, exigeListe };
+}
+
+// Les noms de la planche, [badges] ou [badges, controle], au premier rang
+// où aucun n'est pris dans le dossier quand ils se choisissent parmi ses
+// entrées, au rang 1 sinon.
+function nomsPlanche(base, options) {
+  const { leDossier, nomsDeRang, exigeListe } = composer(base, options);
+  if (!exigeListe) return nomsDeRang(1);
+  const pris = new Set(Array.from(leDossier.existants, cle));
+  let rang = 1;
+  let candidats = nomsDeRang(rang);
+  while (candidats.some((nom) => pris.has(cle(nom)))) {
+    rang += 1;
+    candidats = nomsDeRang(rang);
+  }
+  return candidats;
 }
 
 /**
  * Nom du fichier de la planche de badges (§ 11.6), posé à la racine du
  * dossier de travail :
- * <base>.badges[-p<id>][-<k>]_<papier>_<imposition>[_table]_<date>[_<n>].pdf,
+ * <base>.badges[-p<id>][-<k>]_<papier>_<imposition>[_table]_<date>[_<n>].pdf
+ * pour l'A6, <base>.badges[-p<id>][-<k>]_avery5392[_table]_<date>[_<n>].pdf
+ * pour Avery 5392, dont la feuille de contrôle à part (nomControle) prend
+ * le même nom, « .controle » à la place de « .badges » : les deux se
+ * choisissent ensemble, au même rang et sous la même tête,
  * où id est l'identifiant de la proposition imprimée — rien pour le
  * retenu —, k le nombre de badges d'une réédition, papier une clé de
  * PAPIERS, imposition feuille ou pile, « _table » l'ordre par table — rien
@@ -459,6 +496,7 @@ function composer(
  * @param {number|null} [options.proposition]  l'identifiant de la
  *        proposition imprimée ; null ou absent pour le retenu
  * @param {'alphabetique'|'table'} [options.ordre]  'alphabetique' par défaut
+ * @param {import('../geometrie/papiers.js').ModeleBadge} [options.modeleBadge]  'a6' par défaut
  * @param {null|{racine: string, separateur: '\\'|'/', existants: Iterable<string>}} [options.dossier]
  *        le dossier de travail : sa racine, son séparateur, et les noms des
  *        entrées qu'il porte déjà à sa racine
@@ -467,20 +505,32 @@ function composer(
  *         hors de PAPIERS, une imposition hors de feuille et pile, un
  *         horodatage d'une autre forme, une réédition sans tableau ids, une
  *         proposition qui n'est pas un entier ≥ 1, un ordre inconnu, un
- *         dossier d'une autre forme
+ *         dossier d'une autre forme, un modèle de badge inconnu ou posé sur
+ *         un papier qu'il n'admet pas
  * @throws {RangeError} une réédition de 0 badge ou de plus de 9 999
  */
 export function nomPlanche(base, options) {
-  const { leDossier, nomDeRang, exigeListe } = composer(base, options);
-  if (!exigeListe) return nomDeRang(1);
-  const pris = new Set(Array.from(leDossier.existants, cle));
-  let rang = 1;
-  let candidat = nomDeRang(rang);
-  while (pris.has(cle(candidat))) {
-    rang += 1;
-    candidat = nomDeRang(rang);
-  }
-  return candidat;
+  return nomsPlanche(base, options)[0];
+}
+
+/**
+ * Nom du fichier de la feuille de contrôle à part d'un modèle à cartes
+ * prédécoupées (§ 11.3, § 11.6) : celui de nomPlanche aux mêmes options,
+ * « .controle » à la place de « .badges », au même rang et sous la même
+ * tête. Le plus long, .controle-9999_avery5392_<date>.pdf, compte 48 unités,
+ * sous les 51 du plus long suffixe de l'A6.
+ *
+ * @param {string} base
+ * @param {Object} options  celles de nomPlanche
+ * @returns {string}
+ * @throws {TypeError|RangeError} comme nomPlanche, et un modèle de badge
+ *         sans cartes prédécoupées, dont la feuille de contrôle est la
+ *         page 1 de la planche
+ */
+export function nomControle(base, options) {
+  const [, controle] = nomsPlanche(base, options);
+  if (controle === undefined) throw new TypeError('nomControle : un modèle de badge à cartes prédécoupées attendu');
+  return controle;
 }
 
 /**

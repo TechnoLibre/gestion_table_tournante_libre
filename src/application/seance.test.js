@@ -3457,12 +3457,14 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     });
   const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
 
-  test('des réglages illisibles : le papier choisi vaut pour la séance, en mémoire, le fichier intact octet pour octet, et la planche se prépare sans PAPIER_REQUIS', async () => {
+  test('des réglages illisibles : le papier choisi vaut pour la séance, en mémoire, le fichier intact octet pour octet, et la planche le prend', async () => {
     for (const [raison, texte] of ILLISIBLES) {
       const fs = creerFichiersSimules();
       fs.deposerDossier('documents');
       fs.deposer('documents', FICHIER_REGLAGES, texte);
       const { seance } = await ouvertSur(chargeRetenue(), { fs, ...avecPlanche });
+      // L'A6, seul modèle qui lise le papier de la machine.
+      await seance.choisirModeleBadge('a6');
       const avant = fs.compteurs.ecritures;
       const textes = evenementSurDisque(fs);
       const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison } };
@@ -3487,7 +3489,8 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     fs.deposerDossier('documents');
     fs.deposer('documents', FICHIER_REGLAGES, texte);
     const { seance } = await ouvertSur(chargeRetenue(), { fs, ...avecPlanche });
-    await refus(seance.produirePlanche(), 'PAPIER_REQUIS');
+    await seance.choisirModeleBadge('a6');
+    assert.deepEqual(await seance.preparerPlanche().then(({ refus: rejet, papier }) => [rejet, papier]), [null, 'Lettre']);
     await seance.choisirPapier('A4');
     const textes = evenementSurDisque(fs);
     const { nom } = await seance.produirePlanche();
@@ -3573,11 +3576,12 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   // l'ouverture : les réglages s'y lisent, ils ne s'y écrivent pas.
   const avisNonEcrits = { code: 'REGLAGES_NON_ECRITS', details: { chemin: FICHIER_REGLAGES, dossier: DOCUMENTS, cause: 'EROFS' } };
 
-  test("un dossier qui refuse l'écriture des réglages : le papier choisi vaut pour la séance, un avis le dit, et la planche se prépare sans PAPIER_REQUIS", async () => {
+  test("un dossier qui refuse l'écriture des réglages : le papier choisi vaut pour la séance, un avis le dit, et la planche le prend", async () => {
     const fs = creerFichiersSimules();
     fs.deposerDossier('documents');
     fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null}\n');
     const { seance } = await ouvertSur(chargeRetenue(), { fs, ...avecPlanche });
+    await seance.choisirModeleBadge('a6');
     fs.pannes.ecriture('documents');
     const textes = evenementSurDisque(fs);
     const reglages = fs.contenu('documents', FICHIER_REGLAGES);
@@ -3602,7 +3606,9 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     fs.deposerDossier('documents');
     const { seance } = await ouvertSur(chargeRetenue(), { fs, ...avecPlanche });
     fs.pannes.ecriture('documents');
-    await refus(seance.produirePlanche(), 'PAPIER_REQUIS');
+    // L'A6, refusé d'écriture comme le papier, vaut pour la séance.
+    await seance.choisirModeleBadge('a6');
+    assert.match((await refus(seance.produirePlanche(), 'PLANCHE_NON_ECRITE')).details.chemin, /_Lettre_/);
     const textes = evenementSurDisque(fs);
     await seance.choisirPapier('A4');
     const erreur = await refus(seance.produirePlanche(), 'PLANCHE_NON_ECRITE');
@@ -4028,6 +4034,7 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
       return lirePolices();
     };
     const { seance } = monter({ fs, polices, provenance: 'production' });
+    await seance.choisirModeleBadge('a6');
     await seance.choisirPapier('A4');
     await seance.ouvrir(BASE);
     await seance.passerEnEcriture();
@@ -4046,6 +4053,7 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
     const fs = creerFichiersSimules();
     await deposerEssai(fs, chargeRetenue());
     const { seance } = monter({ fs, polices: async () => lirePolices(), provenance: 'production' });
+    await seance.choisirModeleBadge('a6');
     await seance.ouvrir(BASE);
     const choix = seance.choisirPapier('Lettre');
     const annonce = await seance.preparerPlanche();
@@ -4070,10 +4078,11 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
       return lirePolices();
     };
     const { seance } = monter({ fs, prefixe: 'reessai', polices, provenance: 'production' });
+    await seance.choisirModeleBadge('a6');
     await seance.ouvrir(BASE);
     await assert.rejects(seance.preparerPlanche(), /police illisible/);
     const annonce = await seance.preparerPlanche();
-    assert.equal(annonce.refus.code, 'PAPIER_REQUIS');
+    assert.deepEqual([annonce.refus, annonce.papier], [null, 'Lettre']);
     assert.equal(essais, 2);
   });
 });
@@ -4313,5 +4322,130 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
   test("la séance sans événement n'a aucune course", () => {
     const { seance } = monter();
     assert.equal(seance.courseDe(1), null);
+  });
+});
+
+describe('séance : le modèle de badge (§ 8.5, § 11.2)', () => {
+  const modeleLu = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).modele_badge;
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Iris', 'Ombrelle'), personneBadge(2, 'Théo', 'Pervenche')],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+  const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
+
+  test('Avery 5392 au départ ; choisirModeleBadge écrit les seuls réglages, dans tout mode, et l’état le porte ; une séance neuve le relit', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.equal(seance.etat().modeleBadge, 'avery5392');
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirModeleBadge('a6'), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual([modeleLu(fs), seance.etat().modeleBadge], ['a6', 'a6']);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().modeleBadge, 'a6');
+  });
+
+  test('un modèle inconnu est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of ['A6', 'Avery5392', '', null, undefined, 'toString']) {
+      await assert.rejects(seance.choisirModeleBadge(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().modeleBadge, 'avery5392');
+  });
+
+  test('des réglages illisibles : le modèle vaut pour la séance, non retenu, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirModeleBadge('a6'), { retenu: false, avertissements: [avis] });
+    assert.equal(seance.etat().modeleBadge, 'a6');
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('l’écriture garde le papier, la taille du texte et les clés inconnues ; choisir le papier garde le modèle', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4","taille_texte":115,"zeta":true}\n');
+    const { seance } = monter({ fs });
+    await seance.attendre();
+    await seance.choisirModeleBadge('a6');
+    await seance.choisirPapier('Lettre');
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"format":1,"modele_badge":"a6","papier":"Lettre","taille_texte":115,"zeta":true}\n');
+  });
+
+  test('au changement de racine : le modèle que les réglages portent, à défaut celui de la séance — une racine sans modèle, illisible ou sans réglages le garde', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"modele_badge":"a6","papier":null}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().modeleBadge, 'a6');
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().modeleBadge, 'a6', 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4"}\n');
+    await seance.changerRacine(DOC);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().modeleBadge, 'a6', 'des réglages sans modèle');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().modeleBadge, 'a6', 'des réglages illisibles');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"modele_badge":"avery5392","papier":null}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().modeleBadge, 'avery5392', 'un modèle écrit sur la racine l’emporte');
+  });
+
+  test('une relecture des réglages partie avant un choix de modèle ne l’écrase pas, ni dans l’état ni dans le fichier', async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"modele_badge":"avery5392","papier":null}\n');
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(prise, true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirModeleBadge('a6');
+    await laisser();
+    liberer();
+    await changement;
+    assert.equal(seance.etat().modeleBadge, 'a6');
+    assert.deepEqual(await choix, { retenu: true, avertissements: [] });
+    await seance.attendre();
+    assert.deepEqual([modeleLu(fs, PORTABLE.id), seance.etat().modeleBadge], ['a6', 'a6']);
+  });
+
+  test('la planche suit le modèle : Avery 5392 sur Lettre sans papier choisi ; l’A6 sans papier choisi sur Lettre, sans refus, le papier de la machine toujours à choisir', async () => {
+    const { seance } = await ouvertSur(chargeRetenue(), avecPlanche);
+    assert.equal(seance.etat().papier, null);
+    const avery = await seance.preparerPlanche();
+    assert.deepEqual([avery.refus, avery.modeleBadge, avery.papier, avery.planches], [null, 'avery5392', 'Lettre', { Lettre: 1 }]);
+    assert.match(avery.nom, /\.badges_avery5392_/);
+    assert.match(avery.nomControle, /\.controle_avery5392_/);
+    await seance.choisirModeleBadge('a6');
+    const a6 = await seance.preparerPlanche();
+    assert.deepEqual([a6.refus, a6.modeleBadge, a6.papier, a6.nomControle], [null, 'a6', 'Lettre', null]);
+    assert.match(a6.nom, /\.badges_Lettre_feuille_/);
+    assert.equal(seance.etat().papier, null);
   });
 });

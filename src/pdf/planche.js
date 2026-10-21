@@ -9,8 +9,12 @@
 // le mot du filigrane lui arrivent composés ; il n'écrit de lui-même que les
 // nombres de la graduation.
 //
-// Le document : page 1, la feuille de contrôle, qui ne se découpe pas ;
-// puis une page par planche, dans l'ordre d'imposer. Les cotes se posent en
+// Le document de l'A6 : page 1, la feuille de contrôle, qui ne se découpe
+// pas ; puis une page par planche, dans l'ordre d'imposer. Celui d'un
+// modèle à cartes prédécoupées — Avery 5392 — ne porte que ses feuilles de
+// cartes, sans filet : sa feuille de contrôle est un second document
+// (produireControle), à imprimer sur papier ordinaire, qui trace aussi le
+// contour des cartes à leur place exacte. Les cotes se posent en
 // millimètres, origine en haut à gauche de la feuille, et se convertissent
 // en points au seul moment d'écrire : aucune matrice d'échelle (cm) n'entre
 // dans le flux, ni CropBox, ni UserUnit — une transformation posée dans le
@@ -44,7 +48,7 @@ import {
   showText,
 } from 'pdf-lib';
 import { constante } from '../geometrie/constantes.js';
-import { BADGE, PAPIERS } from '../geometrie/papiers.js';
+import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js';
 import { cadreUtile, cellules, filets, imposer } from './imposition.js';
 import { mettreEnPage, metriquesDe } from './mise_en_page.js';
 
@@ -66,6 +70,7 @@ const PT_PAR_MM = 72 / 25.4;
 const IMPOSITIONS = new Set(['feuille', 'pile']);
 
 // Le trait des filets de coupe : fin, d'une encre neutre, continu (§ 11.3).
+// Le contour des cartes de la feuille de contrôle se trace du même trait.
 const FILET = Object.freeze({ epaisseurPt: 0.25, gris: 0.5 });
 
 // Le contour du filigrane : un texte au trait, gris, qui laisse lire ce
@@ -121,12 +126,31 @@ function datePdf(horodatage) {
 }
 
 // Les entrées communes, contrôlées : un modèle qui porte des badges, deux
-// polices en octets.
-function controlerModeleEtPolices(modele, polices) {
+// polices en octets, un modèle de badge connu.
+function controlerModeleEtPolices(modele, polices, modeleBadge) {
   if (!Array.isArray(modele?.badges)) throw new TypeError('modele : un modèle de planche attendu');
   if (!(polices?.regulier instanceof Uint8Array) || !(polices?.gras instanceof Uint8Array)) {
     throw new TypeError('polices : {regulier, gras} en Uint8Array attendus');
   }
+  if (!estModeleBadge(modeleBadge)) throw new TypeError(`modeleBadge : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
+}
+
+// Les entrées d'un document, contrôlées, et sa date PDF, null pour un
+// horodatage inconnu : le papier, que le modèle de badge admet ; les lignes
+// de contrôle ; le mot du filigrane d'un brouillon.
+function controlerDocument({ modele, papier, polices, controle, filigrane, modeleBadge }) {
+  controlerModeleEtPolices(modele, polices, modeleBadge);
+  if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) throw new TypeError(`papier inconnu : ${JSON.stringify(papier)}`);
+  const impose = MODELES_BADGE[modeleBadge].papier;
+  if (impose !== null && papier !== impose) throw new TypeError(`le modèle ${modeleBadge} se pose sur ${impose}, reçu ${papier}`);
+  if (!Array.isArray(controle) || !controle.every((ligne) => typeof ligne === 'string')) {
+    throw new TypeError('controle : les lignes de la feuille de contrôle, des chaînes, attendues');
+  }
+  if (typeof modele.brouillon !== 'boolean') throw new TypeError('modele.brouillon : booléen attendu');
+  if (modele.brouillon && (typeof filigrane !== 'string' || filigrane.trim() === '')) {
+    throw new TypeError("filigrane : le mot du filigrane d'un brouillon attendu");
+  }
+  return modele.horodatage === null ? null : datePdf(modele.horodatage);
 }
 
 // Un document neuf, les deux graisses embarquées en sous-ensemble, chacune
@@ -157,23 +181,25 @@ const textesDuBadge = ({ textes }) => [
  * @param {Object} entrees
  * @param {ModelePlanche} entrees.modele
  * @param {{regulier: Uint8Array, gras: Uint8Array}} entrees.polices
+ * @param {import('../geometrie/papiers.js').ModeleBadge} [entrees.modeleBadge]   'a6' par défaut
  * @returns {Promise<{refus: null | {code: string, details: object, rang: number}, absents: string[]}>}
  *   refus : le premier badge que la mise en page refuse, rang étant son
  *   indice dans modele.badges ; src/pdf ne connaît pas la personne, et
  *   l'appelant complète les détails. absents : les caractères sans glyphe
  *   de tous les textes des badges, une fois chacun, dans l'ordre de
  *   première rencontre.
- * @throws {TypeError} un modèle sans badges, des polices qui ne sont pas des octets
+ * @throws {TypeError} un modèle sans badges, des polices qui ne sont pas des
+ *         octets, un modèle de badge inconnu
  */
-export async function analyserPlanche({ modele, polices }) {
-  controlerModeleEtPolices(modele, polices);
+export async function analyserPlanche({ modele, polices, modeleBadge = 'a6' }) {
+  controlerModeleEtPolices(modele, polices, modeleBadge);
   const { metriques } = await documentAvecPolices(polices);
   let refus = null;
   const absents = [];
   const vus = new Set();
   modele.badges.forEach((badge, rang) => {
     if (refus === null) {
-      const page = mettreEnPage(badge.textes, metriques);
+      const page = mettreEnPage(badge.textes, metriques, modeleBadge);
       if (page.refus !== undefined) refus = { ...page.refus, rang };
     }
     for (const caractere of metriques.absents(textesDuBadge(badge).join(''))) {
@@ -336,26 +362,50 @@ function poserRegle(page, { regulier, metriques }, hauteurPage) {
   return ligne;
 }
 
+// Le contour d'une grille de cartes jointives : chaque abscisse et chaque
+// ordonnée d'un bord de carte, d'un seul segment qui court d'un bout à
+// l'autre de la grille, les verticaux d'abord, de gauche à droite, puis les
+// horizontaux, de haut en bas. Les cotes se réunissent au centième de
+// millimètre, où elles sont exactes.
+function contourDes(cartes) {
+  const centiemes = (mm) => Math.round(mm * 100);
+  const valeurs = (bords) => [...new Set(cartes.flatMap(bords).map(centiemes))].sort((a, b) => a - b).map((c) => c / 100);
+  const xs = valeurs(({ x, largeur }) => [x, x + largeur]);
+  const ys = valeurs(({ y, hauteur }) => [y, y + hauteur]);
+  const [gauche, droite, haut, bas] = [xs[0], xs.at(-1), ys[0], ys.at(-1)];
+  return [
+    ...xs.map((x) => ({ x1: x, y1: haut, x2: x, y2: bas })),
+    ...ys.map((y) => ({ x1: gauche, y1: y, x2: droite, y2: y })),
+  ];
+}
+
 // La feuille de contrôle (§ 11.3) : la règle, puis les lignes de contrôle
 // repliées dans la largeur utile, et le filigrane d'un brouillon dans le
 // cadre sous la règle. Des lignes qui débordent la page continuent sur une
 // page suivante, sans règle, qui porte elle aussi le filigrane : la feuille
 // ne se découpe pas, ses pages non plus.
-function poserControle(pdf, { controle, papier, polices, metriques, filigrane }) {
+//
+// cartes : null pour l'A6 ; pour un modèle à cartes prédécoupées, ses
+// cellules, dont la première page trace le contour du trait des filets —
+// les axes de la grille, chacun d'un seul segment. Les lignes de contrôle
+// se replient alors dans la colonne de gauche des cartes, en deçà de la
+// marge de page de part et d'autre, sans croiser le contour du milieu.
+function poserControle(pdf, { controle, papier, polices, metriques, filigrane, cartes = null }) {
   const { largeur: W, hauteur: H } = PAPIERS[papier];
   const marge = constante('MARGE_PAGE_MM');
-  const largeurUtile = W - 2 * marge;
+  const largeurUtile = cartes === null ? W - 2 * marge : cartes[0].x + cartes[0].largeur - 2 * marge;
   const { ascendante, descendante } = metriques.hauteurs(CORPS_CONTROLE_PT);
   const mesurer = (texte) => metriques.largeur(texte, CORPS_CONTROLE_PT, false);
   const lignes = controle.flatMap((ligne) => replier(ligne, largeurUtile, mesurer));
 
   const nouvellePage = (avecRegle) => {
     const page = pdf.addPage([W * PT_PAR_MM, H * PT_PAR_MM]);
+    if (avecRegle && cartes !== null) for (const segment of contourDes(cartes)) poserSegment(page, segment, H, FILET);
     const haut = avecRegle ? poserRegle(page, { ...polices, metriques }, H) + REGLE.degagementMm : marge;
     if (filigrane !== null) {
       // Le cadre du filigrane, en mm dans le repère droit de la page : sous
       // la règle, dans les marges.
-      const cadre = { x: marge, y: marge, largeur: largeurUtile, hauteur: H - marge - haut };
+      const cadre = { x: marge, y: marge, largeur: W - 2 * marge, hauteur: H - marge - haut };
       poserFiligrane(page, { ...filigrane, metriques }, cadre, REPERE_DROIT);
     }
     return { page, curseur: haut };
@@ -371,12 +421,16 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane })
 /**
  * La planche de badges, en octets PDF (§ 11.1 à § 11.4).
  *
- * Page 1 : la feuille de contrôle — la règle de 100 mm repérée tous les
- * 10 mm, les lignes de controle, et le filigrane d'un brouillon, une fois,
- * hors de la règle ; aucun filet de coupe. Puis une page par planche : les
- * filets des cellules occupées, et dans chacune, le badge que la mise en
+ * A6 — page 1 : la feuille de contrôle — la règle de 100 mm repérée tous
+ * les 10 mm, les lignes de controle, et le filigrane d'un brouillon, une
+ * fois, hors de la règle ; aucun filet de coupe. Puis une page par planche :
+ * les filets des cellules occupées, et dans chacune, le badge que la mise en
  * page pose dans son cadre utile, et le filigrane d'un brouillon, une fois,
  * inscrit dans ce cadre. Une cellule vide ne porte rien.
+ *
+ * Avery 5392 : une page par feuille de cartes, sans feuille de contrôle ni
+ * filet ; chaque carte porte son badge et son filigrane comme une cellule
+ * de l'A6. Les lignes de contrôle reçues vont à produireControle.
  *
  * La boîte de média est celle du papier ; ni CropBox ni UserUnit. /Info ne
  * porte que CreationDate, la date de l'horodatage du placement, décalage
@@ -384,59 +438,84 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane })
  *
  * @param {Object} entrees
  * @param {ModelePlanche} entrees.modele
- * @param {import('../geometrie/papiers.js').Papier} entrees.papier
+ * @param {import('../geometrie/papiers.js').Papier} entrees.papier   celui
+ *        qu'impose le modèle de badge, quand il en impose un
  * @param {'feuille'|'pile'} entrees.imposition
  * @param {{regulier: Uint8Array, gras: Uint8Array}} entrees.polices
  * @param {string[]} entrees.controle      les lignes de textesControle
  * @param {string} [entrees.filigrane]     le mot du filigrane, composé par
  *        libelle ; exigé quand modele.brouillon est vrai, ignoré sinon
+ * @param {import('../geometrie/papiers.js').ModeleBadge} [entrees.modeleBadge]   'a6' par défaut
  * @returns {Promise<Uint8Array>}
- * @throws {TypeError} une entrée hors de son domaine, un horodatage d'une
- *         autre forme, un brouillon sans le mot de son filigrane
+ * @throws {TypeError} une entrée hors de son domaine, un papier que le
+ *         modèle de badge n'admet pas, un horodatage d'une autre forme, un
+ *         brouillon sans le mot de son filigrane
  * @throws {RangeError} un badge que la mise en page refuse : analyserPlanche
  *         le dit avant de produire
  */
-export async function produirePlanche({ modele, papier, imposition, polices, controle, filigrane = null }) {
-  controlerModeleEtPolices(modele, polices);
-  if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) throw new TypeError(`papier inconnu : ${JSON.stringify(papier)}`);
+export async function produirePlanche({ modele, papier, imposition, polices, controle, filigrane = null, modeleBadge = 'a6' }) {
+  const date = controlerDocument({ modele, papier, polices, controle, filigrane, modeleBadge });
   if (!IMPOSITIONS.has(imposition)) throw new TypeError(`imposition inconnue : ${JSON.stringify(imposition)}`);
-  if (!Array.isArray(controle) || !controle.every((ligne) => typeof ligne === 'string')) {
-    throw new TypeError('controle : les lignes de la feuille de contrôle, des chaînes, attendues');
-  }
-  if (typeof modele.brouillon !== 'boolean') throw new TypeError('modele.brouillon : booléen attendu');
-  if (modele.brouillon && (typeof filigrane !== 'string' || filigrane.trim() === '')) {
-    throw new TypeError("filigrane : le mot du filigrane d'un brouillon attendu");
-  }
-  const date = modele.horodatage === null ? null : datePdf(modele.horodatage);
 
   const { pdf, regulier, gras, metriques } = await documentAvecPolices(polices);
   const mises = modele.badges.map((badge, rang) => {
-    const mise = mettreEnPage(badge.textes, metriques);
+    const mise = mettreEnPage(badge.textes, metriques, modeleBadge);
     if (mise.refus !== undefined) throw new RangeError(`badge ${rang} refusé par la mise en page : ${mise.refus.code}`);
     return mise;
   });
   if (date !== null) pdf.getInfoDict().set(PDFName.of('CreationDate'), PDFString.of(date));
 
   const marque = modele.brouillon ? { mot: filigrane, police: gras } : null;
-  poserControle(pdf, { controle, papier, polices: { regulier, gras }, metriques, filigrane: marque });
+  const badge = MODELES_BADGE[modeleBadge];
+  if (badge.grille === null) poserControle(pdf, { controle, papier, polices: { regulier, gras }, metriques, filigrane: marque });
 
   const { largeur: W, hauteur: H } = PAPIERS[papier];
-  const lesCellules = cellules(papier);
-  const cadreBadge = cadreUtile({ x: 0, y: 0, largeur: BADGE.largeur, hauteur: BADGE.hauteur });
+  const lesCellules = cellules(papier, modeleBadge);
+  const cadreBadge = cadreUtile({ x: 0, y: 0, largeur: badge.largeur, hauteur: badge.hauteur }, modeleBadge);
   // Le cadre utile dans le repère droit du badge, y vers le haut.
-  const cadreDroit = { ...cadreBadge, y: BADGE.hauteur - cadreBadge.y - cadreBadge.hauteur };
-  for (const planche of imposer(modele.badges.length, papier, imposition)) {
+  const cadreDroit = { ...cadreBadge, y: badge.hauteur - cadreBadge.y - cadreBadge.hauteur };
+  for (const planche of imposer(modele.badges.length, papier, imposition, modeleBadge)) {
     const page = pdf.addPage([W * PT_PAR_MM, H * PT_PAR_MM]);
-    for (const segment of filets(papier, planche.map((indice) => indice !== null))) poserSegment(page, segment, H, FILET);
+    const occupees = planche.map((indice) => indice !== null);
+    for (const segment of filets(papier, occupees, modeleBadge)) poserSegment(page, segment, H, FILET);
     planche.forEach((indice, rang) => {
       if (indice === null) return;
       const repere = repereDuBadge(lesCellules[rang], H);
       for (const { texte, corps, gras: enGras, x, y } of mises[indice].blocs) {
-        const position = { x: cadreBadge.x + x, y: BADGE.hauteur - (cadreBadge.y + y) };
+        const position = { x: cadreBadge.x + x, y: badge.hauteur - (cadreBadge.y + y) };
         poserTexte(page, texte, { ...position, corps, police: enGras ? gras : regulier }, repere);
       }
       if (marque !== null) poserFiligrane(page, { ...marque, metriques }, cadreDroit, repere);
     });
   }
+  return pdf.save();
+}
+
+/**
+ * La feuille de contrôle d'un modèle à cartes prédécoupées, en octets PDF,
+ * à part de ses feuilles de cartes (§ 11.3) : à imprimer sur papier
+ * ordinaire. Sa première page porte la règle de 100 mm, le contour des
+ * cartes à leur place exacte sur la feuille — posée sur une feuille de
+ * cartes, il tombe sur les prédécoupes —, les lignes de contrôle et le
+ * filigrane d'un brouillon ; des lignes qui débordent continuent sur une
+ * page suivante, comme la feuille de contrôle de l'A6. Boîtes, /Info et
+ * octets suivent les règles de produirePlanche.
+ *
+ * @param {Object} entrees   celles de produirePlanche, sans l'imposition
+ * @returns {Promise<Uint8Array>}
+ * @throws {TypeError} comme produirePlanche, et un modèle de badge sans
+ *         cartes prédécoupées, dont la feuille de contrôle est la page 1
+ *         de la planche
+ */
+export async function produireControle({ modele, papier, polices, controle, filigrane = null, modeleBadge = 'a6' }) {
+  const date = controlerDocument({ modele, papier, polices, controle, filigrane, modeleBadge });
+  if (MODELES_BADGE[modeleBadge].grille === null) {
+    throw new TypeError(`produireControle : le modèle ${modeleBadge} porte sa feuille de contrôle en page 1 de la planche`);
+  }
+  const { pdf, regulier, gras, metriques } = await documentAvecPolices(polices);
+  if (date !== null) pdf.getInfoDict().set(PDFName.of('CreationDate'), PDFString.of(date));
+  const marque = modele.brouillon ? { mot: filigrane, police: gras } : null;
+  const cartes = cellules(papier, modeleBadge);
+  poserControle(pdf, { controle, papier, polices: { regulier, gras }, metriques, filigrane: marque, cartes });
   return pdf.save();
 }

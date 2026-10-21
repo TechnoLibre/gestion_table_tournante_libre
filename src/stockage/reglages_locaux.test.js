@@ -16,12 +16,14 @@ import { ErreurStockage } from './erreurs.js';
 import {
   FICHIER_REGLAGES,
   avecCadrage,
+  avecModeleBadge,
   avecPapier,
   avecTailleTexte,
   cadrageDe,
   creerEcrivainDiffere,
   ecrireReglages,
   lireReglages,
+  modeleBadgeDe,
   serialiserReglages,
   tailleTexteDe,
 } from './reglages_locaux.js';
@@ -499,5 +501,45 @@ describe('réglages locaux : l’écriture différée (§ 8.2, § 8.5)', () => {
     ];
     for (const [nom, parametres] of refus) assert.throws(() => creerEcrivainDiffere(parametres), TypeError, nom);
     assert.equal(typeof creerEcrivainDiffere({ ...valides, signaler: null }).demander, 'function');
+  });
+});
+
+describe('réglages locaux : le modèle de badge (§ 8.5, § 11.2)', () => {
+  test('modele_badge se lit tel quel ; absent, il vaut Avery 5392 sans que la clé s’ajoute aux réglages lus', async () => {
+    for (const modele of ['a6', 'avery5392']) {
+      const { reglages, avertissement } = await lireReglages(disque(`{"cadrages":[],"format":1,"modele_badge":"${modele}","papier":"A4"}\n`), DOC);
+      assert.equal(avertissement, null);
+      assert.deepEqual(reglages, { format: 1, papier: 'A4', cadrages: [], modele_badge: modele });
+      assert.equal(modeleBadgeDe(reglages), modele);
+    }
+    const absent = await lireReglages(disque(), DOC);
+    assert.equal(Object.hasOwn(absent.reglages, 'modele_badge'), false);
+    assert.equal(modeleBadgeDe(absent.reglages), 'avery5392');
+    assert.equal(modeleBadgeDe((await lireReglages(disque('{"cadrages":[],"format":1,"papier":null}\n'), DOC)).reglages), 'avery5392');
+  });
+
+  test('un modèle inconnu rend le fichier fautif comme un papier inconnu : les défauts et REGLAGES_ILLISIBLES, raison FORME', async () => {
+    for (const valeur of ['"A6"', '"Avery5392"', '""', 'null', '5392', '"toString"']) {
+      const fs = disque(`{"cadrages":[],"format":1,"modele_badge":${valeur},"papier":null}\n`);
+      assert.deepEqual(await lireReglages(fs, DOC), { reglages: DEFAUTS, avertissement: illisibles('FORME') }, valeur);
+      assert.equal(fs.compteurs.ecritures, 0, valeur);
+    }
+  });
+
+  test('avecModeleBadge pose la clé sans toucher au reste ; un modèle inconnu lève TypeError ; le texte canonique la range à son rang', () => {
+    const reglages = { ...DEFAUTS, papier: 'A4', theme: 'sombre' };
+    const avec = avecModeleBadge(reglages, 'a6');
+    assert.deepEqual(avec, { ...reglages, modele_badge: 'a6' });
+    assert.equal(Object.hasOwn(reglages, 'modele_badge'), false);
+    assert.equal(serialiserReglages(avec), '{"cadrages":[],"format":1,"modele_badge":"a6","papier":"A4","theme":"sombre"}\n');
+    for (const mauvais of ['A6', null, undefined, 'toString']) assert.throws(() => avecModeleBadge(reglages, mauvais), TypeError, String(mauvais));
+    assert.throws(() => serialiserReglages({ ...DEFAUTS, modele_badge: 'A6' }), TypeError);
+  });
+
+  test('un fichier qui porte le modèle, relu puis réécrit avec un autre papier, le garde', async () => {
+    const fs = disque('{"cadrages":[],"format":1,"modele_badge":"a6","papier":null}\n');
+    const { reglages } = await lireReglages(fs, DOC);
+    await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"format":1,"modele_badge":"a6","papier":"Lettre"}\n');
   });
 });

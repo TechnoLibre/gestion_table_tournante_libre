@@ -20,13 +20,17 @@ import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
   IMPOSITIONS_OFFERTES,
+  MODELES_OFFERTS,
   ORDRES_OFFERTS,
+  annonceDeLaMachine,
   cleImposition,
+  cleModele,
   cleOrdre,
   cleSource,
   filtrerPersonnes,
   libelleSource,
   memesReglages,
+  modeleImposeSonPapier,
   personnesReeditables,
   phrasesAnnonce,
   produireBloque,
@@ -161,7 +165,7 @@ describe('les phrases de l’annonce (§ 11.2, § 11.5, § 11.8)', () => {
       planches: annonce.planches[papier],
       choisi: papier === 'A4',
     })));
-    assert.equal(planchesLues, 'Planches : 1 planche en A4 (papier choisi) et 2 planches en Lettre.');
+    assert.equal(planchesLues, 'Planches : 1 planche en A4 (papier utilisé) et 2 planches en Lettre.');
     assert.ok(fichier.endsWith(annonce.nom), fichier);
     assert.equal(produireBloque(annonce), false);
   });
@@ -203,24 +207,23 @@ describe('les phrases de l’annonce (§ 11.2, § 11.5, § 11.8)', () => {
     assert.equal(produireBloque(annonce), true);
   });
 
-  test('sans placement, ou sous tout refus du placement ou de la mise en page, « Produire » est bloqué ; sans papier, non', () => {
-    const vide = { papier: null, comptes: null, planches: null, homonymes: [], absents: [], brouillon: true, nom: null };
+  test('sans placement, ou sous tout refus du placement ou de la mise en page, « Produire » est bloqué ; sans refus, non', () => {
+    const vide = { papier: 'A4', comptes: null, planches: null, homonymes: [], absents: [], brouillon: true, nom: null };
     assert.equal(produireBloque(null), false);
     assert.equal(produireBloque({ ...vide, refus: null }), false);
-    assert.equal(produireBloque({ ...vide, refus: { code: 'PAPIER_REQUIS', details: {} } }), false);
     for (const code of ['PLANCHE_SANS_PLACEMENT', 'RETENU_FAUTIF', 'PROPOSITION_FAUTIVE', 'PLANCHE_DERIVE', 'PLANCHE_TROP_DE_TOURS', 'PLANCHE_NOM_TROP_LONG']) {
       assert.equal(produireBloque({ ...vide, refus: { code, details: {} } }), true, code);
     }
   });
 
-  test('un papier absent : PAPIER_REQUIS, remède « Choisir le papier », les planches des deux papiers sans papier choisi, aucun fichier', async () => {
+  test('un papier absent : Lettre, sans refus, marqué parmi les planches des deux papiers, et le fichier le nomme', async () => {
     const annonce = await annoncer(retenue(), null);
-    assert.equal(annonce.refus.code, 'PAPIER_REQUIS');
-    assert.deepEqual(annonce.refus.details.remede, { geste: 'choisirPapier' });
+    assert.deepEqual([annonce.refus, annonce.papier], [null, 'Lettre']);
+    assert.match(annonce.nom, /_Lettre_feuille_/);
     const phrases = phrasesAnnonce(annonce, { source: 'retenu', proposition: null, selection: null });
-    assert.deepEqual(cles(phrases), ['badges.annonce.source.retenu', 'badges.annonce.comptes', 'badges.annonce.planches']);
-    assert.ok(phrases[2].details.parPapier.every(({ choisi }) => choisi === false));
-    assert.equal(composer(phrases)[2], 'Planches : 1 planche en A4 et 2 planches en Lettre.');
+    assert.deepEqual(cles(phrases), ['badges.annonce.source.retenu', 'badges.annonce.comptes', 'badges.annonce.planches', 'badges.annonce.fichier']);
+    assert.deepEqual(phrases[2].details.parPapier.map(({ choisi }) => choisi), [false, true]);
+    assert.equal(composer(phrases)[2], 'Planches : 1 planche en A4 et 2 planches en Lettre (papier utilisé).');
   });
 
   test('des homonymes : chaque groupe nommé, avec les identifiants que le badge imprime', async () => {
@@ -298,5 +301,49 @@ describe('la réédition (§ 11.8)', () => {
     assert.deepEqual(selectionRetenue([2, 5, 1], personnes), [1, 2]);
     assert.equal(selectionRetenue([5], personnes), null);
     assert.equal(selectionRetenue([], personnes), null);
+  });
+});
+
+describe('le modèle de badge (§ 8.5, § 11.2)', () => {
+  // L'annonce de la séance sur la soirée retenue, sous Avery 5392.
+  const annoncerAvery = (charge, papier, demande = {}) =>
+    planches.preparer(
+      { charge, base: 'lucioles', fs: fsVide, racine: { id: 'documents', chemin: '/d' }, papier, modeleBadge: 'avery5392' },
+      demande,
+    );
+
+  test('la section offre Avery 5392 puis l’A6, chacun son libellé ; seul Avery 5392 impose son papier', () => {
+    assert.deepEqual(MODELES_OFFERTS, ['avery5392', 'a6']);
+    assert.deepEqual(MODELES_OFFERTS.map(cleModele), ['badges.modele.avery5392', 'badges.modele.a6']);
+    composer(MODELES_OFFERTS.map((modele) => ({ cle: cleModele(modele), details: {} })));
+    assert.deepEqual(MODELES_OFFERTS.map(modeleImposeSonPapier), [true, false]);
+    for (const inconnu of ['A6', null, 'toString']) {
+      assert.throws(() => cleModele(inconnu), RangeError, String(inconnu));
+      assert.throws(() => modeleImposeSonPapier(inconnu), RangeError, String(inconnu));
+    }
+  });
+
+  test('une annonce est celle de la machine quand son modèle et son papier sont ceux que la machine donne ; sans modèle, elle est de l’A6', async () => {
+    const avery = await annoncerAvery(retenue(), null);
+    assert.equal(annonceDeLaMachine(avery, { modeleBadge: 'avery5392', papier: null }), true);
+    assert.equal(annonceDeLaMachine(avery, { modeleBadge: 'avery5392', papier: 'A4' }), true);
+    assert.equal(annonceDeLaMachine(avery, { modeleBadge: 'a6', papier: 'Lettre' }), false);
+    const a6 = await annoncer(retenue(), 'A4');
+    assert.equal(annonceDeLaMachine(a6, { modeleBadge: 'a6', papier: 'A4' }), true);
+    assert.equal(annonceDeLaMachine(a6, { modeleBadge: 'a6', papier: 'Lettre' }), false);
+    assert.equal(annonceDeLaMachine(a6, { modeleBadge: 'avery5392', papier: 'A4' }), false);
+    const { modeleBadge: _modele, ...sansModele } = a6;
+    assert.equal(annonceDeLaMachine(sansModele, { modeleBadge: 'a6', papier: 'A4' }), true);
+  });
+
+  test('Avery 5392 : les feuilles de cartes à la place des planches par papier, et les deux fichiers à la place d’un seul', async () => {
+    const annonce = await annoncerAvery(retenue(), null);
+    const phrases = phrasesAnnonce(annonce, { source: 'retenu' });
+    assert.ok(cles(phrases).includes('badges.annonce.cartes'), JSON.stringify(cles(phrases)));
+    assert.ok(!cles(phrases).includes('badges.annonce.planches'));
+    assert.ok(!cles(phrases).includes('badges.annonce.fichier'));
+    const textes = composer(phrases);
+    assert.ok(textes.includes('Planches : 1 feuille de six cartes Avery 5392, sur Lettre.'), JSON.stringify(textes));
+    assert.ok(textes.includes(`Fichiers : ${annonce.nom}, puis la feuille de contrôle ${annonce.nomControle}, à imprimer sur papier ordinaire.`));
   });
 });

@@ -69,15 +69,15 @@
 // hors du fichier, dans reglages_locaux.json, par un écrivain différé
 // (§ 8.5) : regarder n'écrit jamais l'événement. Le papier des planches, de
 // la machine et non du plan, s'y range aussi, dans tout mode, avec ou sans
-// événement (§ 8.5, § 11.2), et de même la taille du texte de l'écran
-// (§ 18.6) ; une seule file y écrit, que le cadrage, le papier et la taille
-// partagent. Des réglages que la lecture ne prend pas ne s'écrasent
-// jamais : le cadrage attend, et le papier choisi vaut pour la séance, en
-// mémoire, sans être retenu sur la machine. Il en va de même du papier d'une
-// écriture que le dossier refuse : ni des réglages illisibles ni un dossier
-// en lecture seule ne bloquent le choix du papier, et les sorties écrivent
-// là où le dossier l'accepte — un dossier qui refuse l'écriture refuse aussi
-// le PDF des planches.
+// événement (§ 8.5, § 11.2), et de même le modèle des badges et la taille du
+// texte de l'écran (§ 18.6) ; une seule file y écrit, que le cadrage, le
+// papier, le modèle et la taille partagent. Des réglages que la lecture ne
+// prend pas ne s'écrasent jamais : le cadrage attend, et le papier choisi
+// vaut pour la séance, en mémoire, sans être retenu sur la machine. Il en va
+// de même du papier d'une écriture que le dossier refuse : ni des réglages
+// illisibles ni un dossier en lecture seule ne bloquent le choix du papier,
+// et les sorties écrivent là où le dossier l'accepte — un dossier qui refuse
+// l'écriture refuse aussi le PDF des planches.
 //
 // Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
 // date aussi le placement qu'il change (§ 8.9, § 11.8).
@@ -100,6 +100,7 @@
 // dans l'ordre de leur appel : chacun part de l'Ouvert que le précédent a
 // laissé. L'horloge et les minuteries entrent en paramètre : la séance ne lit
 // ni l'heure ni un aléa, et n'arme aucune minuterie elle-même.
+import { MODELE_BADGE_DEFAUT } from '../geometrie/papiers.js';
 import { TAILLE_TEXTE_DEFAUT } from '../geometrie/taille_texte.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { avecCourses, courseDe } from '../stockage/courses.js';
@@ -121,12 +122,14 @@ import { SUFFIXES } from '../stockage/noms.js';
 import {
   FICHIER_REGLAGES,
   avecCadrage,
+  avecModeleBadge,
   avecPapier,
   avecTailleTexte,
   cadrageDe,
   creerEcrivainDiffere,
   ecrireReglages,
   lireReglages,
+  modeleBadgeDe,
   tailleTexteDe,
 } from '../stockage/reglages_locaux.js';
 import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
@@ -318,7 +321,9 @@ export function creerSeance({
   // écriture des réglages, null sans racine ou sans choix ; tailleTexte : la
   // taille du texte de l'écran, celle que les réglages de la racine portent,
   // relue à chaque changement de racine, ou la dernière choisie,
-  // TAILLE_TEXTE_DEFAUT tant que ni l'une ni l'autre n'est venue.
+  // TAILLE_TEXTE_DEFAUT tant que ni l'une ni l'autre n'est venue ;
+  // modeleBadge : le modèle des badges, lu et choisi comme la taille du
+  // texte, MODELE_BADGE_DEFAUT tant que ni l'un ni l'autre n'est venu.
   const etat = {
     racine,
     ouvert: null,
@@ -338,6 +343,7 @@ export function creerSeance({
     cadrage: null,
     papier: null,
     tailleTexte: TAILLE_TEXTE_DEFAUT,
+    modeleBadge: MODELE_BADGE_DEFAUT,
   };
 
   // --- L'observation ------------------------------------------------------------
@@ -409,6 +415,7 @@ export function creerSeance({
       verrouAutre: etat.verrouAutre,
       papier: etat.papier,
       tailleTexte: etat.tailleTexte,
+      modeleBadge: etat.modeleBadge,
     });
     return figer({
       racine: petit.racine,
@@ -425,6 +432,7 @@ export function creerSeance({
       verrouAutre: petit.verrouAutre,
       papier: petit.papier,
       tailleTexte: petit.tailleTexte,
+      modeleBadge: petit.modeleBadge,
     });
   }
 
@@ -449,7 +457,7 @@ export function creerSeance({
     for (const fonction of [...annulations]) fonction();
   }
 
-  // --- Les réglages locaux : le cadrage, le papier, la taille du texte (§ 8.5) ---
+  // --- Les réglages locaux : cadrage, papier, modèle de badge, taille (§ 8.5) ---
 
   // La file unique des accès à reglages_locaux.json, écritures et relectures
   // du papier : chacun part quand le précédent a fini, réussi ou non. Deux
@@ -564,9 +572,11 @@ export function creerSeance({
     });
   }
 
-  // Le rang du dernier choix de la taille du texte : une relecture des
-  // réglages partie avant un choix ne pose pas sa taille, plus ancienne.
+  // Le rang du dernier choix de la taille du texte, et celui du modèle de
+  // badge : une relecture des réglages partie avant un choix ne pose pas sa
+  // valeur, plus ancienne.
   let choixTaille = 0;
+  let choixModele = 0;
 
   // À son tour dans la file des réglages, lit une fois les réglages de
   // dossier et pose dans l'état ce que la machine y garde, quand dossier est
@@ -576,10 +586,12 @@ export function creerSeance({
   // null sans dossier. La taille du texte : celle que les réglages portent,
   // à défaut celle de la séance — sans taille, pour des réglages que la
   // lecture ne prend pas, sans dossier, et quand un choix a suivi le départ
-  // de la relecture. Ne lève jamais ; ne publie pas : l'appelant est un
-  // travail de la file des appels, qui publie en finissant.
+  // de la relecture. Le modèle de badge, de même. Ne lève jamais ; ne publie
+  // pas : l'appelant est un travail de la file des appels, qui publie en
+  // finissant.
   function relireReglagesMachine(dossier) {
     const rang = choixTaille;
+    const rangModele = choixModele;
     return enFileReglages(async () => {
       let lus = null;
       if (dossier !== null) {
@@ -594,6 +606,7 @@ export function creerSeance({
       if (!memeRacine(dossier, etat.racine)) return;
       etat.papier = papier;
       if (lus !== null && Object.hasOwn(lus, 'taille_texte') && rang === choixTaille) etat.tailleTexte = tailleTexteDe(lus);
+      if (lus !== null && Object.hasOwn(lus, 'modele_badge') && rangModele === choixModele) etat.modeleBadge = modeleBadgeDe(lus);
     });
   }
 
@@ -1412,15 +1425,42 @@ export function creerSeance({
     }
   }
 
+  // Écrit dans les réglages de la racine ce que transformer y pose, par la
+  // file des réglages (ecrireReglagesLocaux). Rend {ecrit, avertissements} :
+  // ecrit vrai quand le fichier l'a reçu. Sans dossier de travail, rien ne
+  // s'écrit ni ne s'avertit ; des réglages que la lecture ne prend pas ne
+  // s'écrasent pas, REGLAGES_ILLISIBLES {chemin, raison}, et une écriture
+  // que le dossier refuse laisse le fichier intact, REGLAGES_NON_ECRITS
+  // {chemin, dossier, cause}. L'avis se rend sans rejoindre
+  // EtatSeance.avertissements ; une autre erreur remonte.
+  async function retenirSurLaMachine(transformer) {
+    const dossier = etat.racine;
+    if (dossier === null) return { ecrit: false, avertissements: [] };
+    try {
+      await ecrireReglagesLocaux(dossier, transformer);
+      return { ecrit: true, avertissements: [] };
+    } catch (erreur) {
+      if (erreur instanceof ErreurSeance) {
+        // L'avis porte les détails de la lecture, sans le remède qu'y
+        // ajoute ErreurSeance.
+        const { remede: _remede, ...details } = erreur.details;
+        return { ecrit: false, avertissements: [avertissement(erreur.code, details)] };
+      }
+      if (!(erreur instanceof ErreurStockage)) throw erreur;
+      const details = { chemin: FICHIER_REGLAGES, dossier: dossier.chemin, cause: erreur.details?.cause ?? null };
+      return { ecrit: false, avertissements: [avertissement('REGLAGES_NON_ECRITS', details)] };
+    }
+  }
+
   // Ce que la planche lit de l'événement ouvert, à son tour dans la file des
   // appels, une fois faites les écritures de réglages déjà demandées : le
-  // papier qu'un choix vient de poser compte. AUCUN_EVENEMENT sans
-  // événement.
+  // papier et le modèle de badge qu'un choix vient de poser comptent.
+  // AUCUN_EVENEMENT sans événement.
   async function lecturePlanche() {
     exigerOuvert();
     await fileReglages;
     const { charge, base, fs: systeme, racine: dossier } = exigerOuvert();
-    return { charge, base, fs: systeme, racine: dossier, papier: etat.papier };
+    return { charge, base, fs: systeme, racine: dossier, papier: etat.papier, modeleBadge: etat.modeleBadge };
   }
 
   // Le papier de la racine reçue se lit à son tour dans la file des appels,
@@ -1553,22 +1593,30 @@ export function creerSeance({
       choixTaille += 1;
       etat.tailleTexte = taille;
       publier();
-      const dossier = etat.racine;
-      if (dossier === null) return { retenue: false, avertissements: [] };
-      try {
-        await ecrireReglagesLocaux(dossier, (reglages) => avecTailleTexte(reglages, taille));
-        return { retenue: true, avertissements: [] };
-      } catch (erreur) {
-        if (erreur instanceof ErreurSeance) {
-          // L'avis porte les détails de la lecture, sans le remède qu'y
-          // ajoute ErreurSeance.
-          const { remede: _remede, ...details } = erreur.details;
-          return { retenue: false, avertissements: [avertissement(erreur.code, details)] };
-        }
-        if (!(erreur instanceof ErreurStockage)) throw erreur;
-        const details = { chemin: FICHIER_REGLAGES, dossier: dossier.chemin, cause: erreur.details?.cause ?? null };
-        return { retenue: false, avertissements: [avertissement('REGLAGES_NON_ECRITS', details)] };
-      }
+      const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecTailleTexte(reglages, taille));
+      return { retenue: ecrit, avertissements };
+    },
+    /**
+     * Choisit le modèle des badges, une clé de MODELES_BADGE (§ 8.5,
+     * § 11.2) : EtatSeance.modeleBadge le porte aussitôt, et le choix
+     * s'écrit dans reglages_locaux.json de la racine sous modele_badge,
+     * comme la taille du texte, dans tout mode, avec ou sans événement.
+     *
+     * Rend {retenu, avertissements}, aux règles de choisirTailleTexte : sans
+     * dossier, des réglages que la lecture ne prend pas, ou une écriture que
+     * le dossier refuse, le modèle vaut pour la séance, en mémoire.
+     *
+     * @param {import('../geometrie/papiers.js').ModeleBadge} modele
+     * @returns {Promise<{retenu: boolean, avertissements: Array<{code: string, details: Object}>}>}
+     * @throws {TypeError} un modèle hors de MODELES_BADGE, sans rien lire ni écrire
+     */
+    async choisirModeleBadge(modele) {
+      avecModeleBadge({ format: 1, papier: null, cadrages: [] }, modele);
+      choixModele += 1;
+      etat.modeleBadge = modele;
+      publier();
+      const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecModeleBadge(reglages, modele));
+      return { retenu: ecrit, avertissements };
     },
     /**
      * Choisit le papier des planches de la machine (§ 8.5, § 11.2) :

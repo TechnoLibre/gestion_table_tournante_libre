@@ -125,6 +125,22 @@ describe('la question du papier (§ 8.5, § 11.2)', () => {
     expect(texte(conteneur.querySelector('[data-papier="choisi"]'))).toContain(t('impression.papier.nom.lettre'));
   });
 
+  test('avec un défaut et sans papier : le défaut se montre, sans question ; « Changer » rouvre la question, et le choix se demande ; un papier de la machine l’emporte', async () => {
+    const seance = seanceDEpreuve(null);
+    const onChoisi = vi.fn();
+    const conteneur = monter(seance, { defaut: 'Lettre', onChoisi });
+    expect(conteneur.querySelector('[data-papier="question"]')).toBeNull();
+    expect(texte(conteneur.querySelector('[data-papier="choisi"]'))).toContain(t('impression.papier.nom.lettre'));
+    expect(seance.demandes).toEqual([]);
+    conteneur.querySelector('[data-papier="choisi"] [data-commande="changerPapier"]').click();
+    await attendre('la question ouverte', () => conteneur.querySelector('[data-papier="question"]'));
+    choix(conteneur, 'A4').click();
+    await attendre('onChoisi appelé', () => onChoisi.mock.calls.length > 0);
+    expect(seance.demandes).toEqual(['A4']);
+    expect(onChoisi).toHaveBeenCalledWith('A4');
+    expect(texte(conteneur.querySelector('[data-papier="choisi"]'))).toContain(t('impression.papier.nom.a4'));
+  });
+
   test('un choix refusé : le refus s’affiche sur le choix, la question reste, onChoisi n’est pas appelé', async () => {
     const refus = { code: 'REGLAGES_ILLISIBLES', details: { chemin: 'reglages_locaux.json', raison: 'JSON' } };
     const seance = seanceDEpreuve(null, { refus });

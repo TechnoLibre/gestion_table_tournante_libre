@@ -32,7 +32,7 @@ import { PAPIERS } from '../geometrie/papiers.js';
 import { VERSION } from '../version.genere.js';
 import { cellules, filets, imposer, nombrePlanches } from './imposition.js';
 import { metriquesDe } from './mise_en_page.js';
-import { analyserPlanche, produirePlanche } from './planche.js';
+import { analyserPlanche, produireControle, produirePlanche } from './planche.js';
 
 const TOLERANCE = 1e-6;
 const ZONE = constante('ZONE_SILENCE_MM');
@@ -587,5 +587,118 @@ describe('produirePlanche : les entrées hors de leur domaine', () => {
     await assert.rejects(produirePlanche({ ...entrees(MODELE_A4, 'A4', 'feuille'), filigrane: '' }), TypeError);
     const horsForme = { ...MODELE_LETTRE, horodatage: '2026-10-09 19:00' };
     await assert.rejects(produirePlanche({ ...entrees(MODELE_LETTRE, 'Lettre', 'pile'), modele: horsForme }), TypeError);
+  });
+});
+
+// Le modèle Avery 5392 (§ 11.2, § 11.3) : sept badges, deux feuilles de
+// cartes sans feuille de contrôle ni filet ; la feuille de contrôle en un
+// second document, la règle et le contour des six cartes.
+const AVERY = 'avery5392';
+const ZONE_CARTE = constante('ZONE_SILENCE_CARTE_MM');
+const NOMS_AVERY = ['Aube Sarcelle', 'Côme Pervenche', 'Iris Ombrelle', 'Merle Bleuet', 'Ondine Lacasse', 'Théo Grisaille', 'Ysée Lacasse'];
+const MODELE_AVERY = modele(
+  NOMS_AVERY.map((nom, i) => badge(i + 20, nom, { organisation: i % 3 === 0 ? 'Club des Merles' : null })),
+  { brouillon: true, proposition: 4 },
+);
+const controleAvery = (m) =>
+  textesControle(m, { papier: 'Lettre', imposition: 'feuille', planches: nombrePlanches(m.badges.length, 'Lettre', AVERY), modeleBadge: AVERY });
+const entreesAvery = (m) => ({ ...entrees(m, 'Lettre', 'feuille'), controle: controleAvery(m), modeleBadge: AVERY });
+const octets = await produirePlanche(entreesAvery(MODELE_AVERY));
+const octetsBis = await produirePlanche(entreesAvery(MODELE_AVERY));
+const lu = await lirePdf(octets);
+const octetsControle = await produireControle(entreesAvery(MODELE_AVERY));
+const controle = await lirePdf(octetsControle);
+const cartes = cellules('Lettre', AVERY);
+
+describe('produirePlanche et produireControle : le modèle Avery 5392', () => {
+  test('deux pages, une par feuille de cartes, sans feuille de contrôle : chaque boîte mesure 215,9 × 279,4', () => {
+    assert.equal(lu.pages.length, 2);
+    for (const page of lu.pages) {
+      assert.ok(Math.abs(page.boite.largeur - 215.9) < 0.1 && Math.abs(page.boite.hauteur - 279.4) < 0.1, JSON.stringify(page.boite));
+      assert.equal(page.cropBox, null);
+    }
+    assert.ok(!lu.pages.some((page) => page.textes.some(({ texte }) => texte === '100')), 'aucune règle');
+  });
+
+  test('aucun filet de coupe : les cartes sont prédécoupées', () => {
+    for (const page of lu.pages) assert.deepEqual(page.segments, []);
+  });
+
+  test('les noms tombent dans les cartes, carte après carte, dans l’ordre de la pile', () => {
+    const lus = lu.pages.map((page) =>
+      cartes.map((carte) => page.textes.find((t) => NOMS_AVERY.includes(t.texte) && dans(centre(t), carte))?.texte ?? null),
+    );
+    assert.deepEqual(lus, [NOMS_AVERY.slice(0, 6), [NOMS_AVERY[6], null, null, null, null, null]]);
+  });
+
+  test('aucun texte, filigrane compris, à moins de ZONE_SILENCE_CARTE_MM du bord de sa carte ; le texte se lit droit', () => {
+    for (const page of lu.pages) {
+      for (const t of page.textes) {
+        const carte = cartes.find((c) => dans(centre(t), c));
+        assert.ok(carte !== undefined, t.texte);
+        const ecart = Math.min(t.x - carte.x, t.y - carte.y, carte.x + carte.largeur - (t.x + t.l), carte.y + carte.hauteur - (t.y + t.h));
+        assert.ok(ecart >= ZONE_CARTE - 0.01, `${t.texte} : ${ecart}`);
+      }
+      const nom = page.textes.find(({ texte }) => NOMS_AVERY.includes(texte));
+      assert.ok(nom.l > nom.h, 'un nom droit est plus large que haut');
+    }
+  });
+
+  test('BROUILLON, une fois dans chaque carte occupée ; les mêmes octets d’un export à l’autre', () => {
+    const filigranes = lu.pages.map((page) => page.textes.filter(({ texte }) => texte === FILIGRANE).length);
+    assert.deepEqual(filigranes, [6, 1]);
+    assert.deepEqual(octetsBis, octets);
+  });
+
+  test('la feuille de contrôle à part : une page Lettre, la règle de 100 mm, les lignes de contrôle, le filigrane', async () => {
+    assert.equal(controle.pages.length, 1);
+    const [page] = controle.pages;
+    assert.ok(Math.abs(page.boite.largeur - 215.9) < 0.1 && Math.abs(page.boite.hauteur - 279.4) < 0.1);
+    const regles = page.segments.filter(({ x1, x2, y1, y2 }) => Math.abs(y1 - y2) < TOLERANCE && Math.abs(Math.abs(x2 - x1) - 100) < 0.01);
+    assert.equal(regles.length, 1);
+    const texte = page.textes.map(({ texte: t }) => t).join(' ');
+    for (const ligne of [libelle('planche.controle.planches', { planches: 2 }), libelle('planche.controle.source', { source: 'proposition', proposition: 4 })]) {
+      assert.ok(texte.includes(ligne), ligne);
+    }
+    assert.equal(page.textes.filter(({ texte: t, h }) => t === FILIGRANE && h > 20).length, 1);
+    assert.deepEqual(await produireControle(entreesAvery(MODELE_AVERY)), octetsControle);
+  });
+
+  test('la feuille de contrôle trace le contour des six cartes à leur place exacte, à 0,01 mm : trois verticales, quatre horizontales', () => {
+    const [page] = controle.pages;
+    const contour = normaliser(page.segments.filter(({ x1, x2, y1, y2 }) => Math.abs(Math.abs(x2 - x1) - 100) >= 0.01 || Math.abs(y1 - y2) >= TOLERANCE))
+      .filter(([x1, y1, x2, y2]) => Math.max(x2 - x1, y2 - y1) > 50);
+    assert.deepEqual(contour, normaliser([
+      ...[6.35, 107.95, 209.55].map((x) => ({ x1: x, y1: 25.4, x2: x, y2: 254 })),
+      ...[25.4, 101.6, 177.8, 254].map((y) => ({ x1: 6.35, y1: y, x2: 209.55, y2: y })),
+    ]));
+  });
+
+  test('les lignes de contrôle se replient dans la colonne de gauche des cartes : aucune ne croise le contour du milieu', () => {
+    const [page] = controle.pages;
+    // Les chiffres de la règle se lisent au-dessus du contour, hors des cartes.
+    const sousLaRegle = page.textes.filter(({ y, h }) => h < 20 && y > cartes[0].y);
+    assert.ok(sousLaRegle.length >= controleAvery(MODELE_AVERY).length);
+    assert.ok(page.textes.every(({ y, h, texte }) => h >= 20 || y > cartes[0].y || ['0', '50', '100'].includes(texte)));
+    for (const t of sousLaRegle) {
+      assert.ok(t.x >= MARGE - 0.01 && t.x + t.l <= 107.95 - MARGE + 0.01, `${t.texte} : ${t.x} + ${t.l}`);
+    }
+  });
+
+  test('analyserPlanche met en page sur la carte : 21 tours refusés sur Avery 5392, tenus sur l’A6', async () => {
+    const m = modele([badge(1, 'Iris Ombrelle', { tours: 21 })]);
+    assert.deepEqual((await analyserPlanche({ modele: m, polices, modeleBadge: AVERY })).refus, {
+      code: 'PLANCHE_TROP_DE_TOURS',
+      details: { tours: 21 },
+      rang: 0,
+    });
+    assert.equal((await analyserPlanche({ modele: m, polices })).refus, null);
+  });
+
+  test('Avery 5392 sur A4, un modèle inconnu, ou la feuille de contrôle à part d’un A6 : TypeError', async () => {
+    await assert.rejects(produirePlanche({ ...entreesAvery(MODELE_AVERY), papier: 'A4' }), TypeError);
+    await assert.rejects(produirePlanche({ ...entreesAvery(MODELE_AVERY), modeleBadge: 'A6' }), TypeError);
+    await assert.rejects(produireControle({ ...entreesAvery(MODELE_AVERY), papier: 'A4' }), TypeError);
+    await assert.rejects(produireControle({ ...entrees(MODELE_A4, 'A4', 'feuille'), modeleBadge: 'a6' }), TypeError);
   });
 });

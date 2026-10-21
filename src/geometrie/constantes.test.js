@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du registre des constantes mesurées (§ 14.1, § 19.10) : les
-// vingt et une entrées du contrat de données, chacune complète et de statut
+// vingt-six entrées du contrat de données, chacune complète et de statut
 // épinglé, la vérification qui nomme l'entrée et le champ d'une faute, et
 // l'accord du registre avec le relevé committé du banc : le banc écrit un
 // relevé, jamais le registre, et une constante du banc déclarée mesurée
@@ -36,6 +36,11 @@ const CONTRAT = [
   ['CORPS_TOURS_PLANCHER_PT', 10, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_ORGANISATION_PT', 12, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_PIED_PT', 8, 'pt', 'manuel', 'defautDeTravail'],
+  ['ZONE_SILENCE_CARTE_MM', 5, 'mm', 'manuel', 'defautDeTravail'],
+  ['HAUTEUR_CAPITALE_NOM_MAX_CARTE_MM', 7, 'mm', 'manuel', 'defautDeTravail'],
+  ['CORPS_TOURS_CARTE_PT', 12, 'pt', 'manuel', 'defautDeTravail'],
+  ['CORPS_ORGANISATION_CARTE_PT', 10, 'pt', 'manuel', 'defautDeTravail'],
+  ['CORPS_PIED_CARTE_PT', 7, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_MIN_IMPRESSION_MM', 2.5, 'mm', 'manuel', 'defautDeTravail'],
   ['MARGE_PAGE_MM', 10, 'mm', 'manuel', 'defautDeTravail'],
   ['HAUTEUR_BANDE_IMPRESSION', null, 'mm', 'execution', 'mesuree'],
@@ -53,8 +58,8 @@ const ADOPTEES = ['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN', 'SEUIL_MAT
 const copie = () => CONSTANTES.map((entree) => ({ ...entree }));
 
 describe('constantes : le registre (§ 14.1, § 19.10)', () => {
-  test('le registre porte les vingt et une entrées du contrat, dans son ordre, chacune complète', () => {
-    assert.equal(CONSTANTES.length, 21);
+  test('le registre porte les vingt-six entrées du contrat, dans son ordre, chacune complète', () => {
+    assert.equal(CONSTANTES.length, 26);
     assert.deepEqual(
       CONSTANTES.map(({ nom, valeur, unite, proprietaire, statut }) => [nom, valeur, unite, proprietaire, statut]),
       CONTRAT,
@@ -76,6 +81,7 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
     const entree = (nom) => CONSTANTES.find((c) => c.nom === nom);
     assert.match(entree('ZONE_SILENCE_MM').raison, /bord de coupe/);
     assert.match(entree('ZONE_SILENCE_MM').raison, /bord de feuille/);
+    assert.match(entree('ZONE_SILENCE_CARTE_MM').raison, /prédécoup/);
     assert.match(entree('K_LISTES').protocole, /n'a pas écrit le logiciel/);
     assert.match(entree('TOLERANCE_CHAINE_TEMOIN').protocole, /repli/);
   });

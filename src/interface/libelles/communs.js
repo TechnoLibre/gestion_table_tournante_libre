@@ -62,7 +62,6 @@ export const TABLE = new Map([
   ['communs.remede.libererTour', ({ tour }) => `Ne plus figer le tour ${tour}`],
   ['communs.remede.choisirPlace', 'Choisir une place'],
   ['communs.remede.enregistrerSous', 'Enregistrer sous\u{2026}'],
-  ['communs.remede.choisirPapier', 'Choisir le papier'],
   // Le remède d'un nom d'événement trop long pour s'imprimer (§ 11.7).
   ['communs.remede.renommer', 'Renommer'],
   ['communs.remede.ouvrirSecours.precedent', meme('communs.commande.ouvrirPrecedent')],

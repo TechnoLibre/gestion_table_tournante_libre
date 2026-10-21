@@ -11,6 +11,10 @@
 // première. Sans source offerte, la demande désigne le retenu, et la séance
 // la refuse PLANCHE_SANS_PLACEMENT, remède vers les propositions.
 //
+// Le modèle de badge est un réglage de la machine (EtatSeance.modeleBadge) :
+// la section l'offre, Avery 5392 d'abord. Un modèle qui impose son papier
+// n'offre ni imposition ni papier.
+//
 // L'annonce que rend seance.preparerPlanche se dit en phrases : chacune une
 // clé de libelles/badges.js et ses détails, données comprises — le nom du
 // fichier, les noms des homonymes, les caractères absents de la police —,
@@ -19,8 +23,8 @@
 // que des clés, des détails et des données.
 import { cleNormalisee } from '../../application/csv.js';
 import { nomAffiche } from '../../application/personnes.js';
-import { IMPOSITIONS, ORDRES, comparerPointsDeCode } from '../../application/planche.js';
-import { PAPIERS } from '../../geometrie/papiers.js';
+import { IMPOSITIONS, ORDRES, comparerPointsDeCode, papierDesBadges } from '../../application/planche.js';
+import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../../geometrie/papiers.js';
 import { clesPapier } from '../impression/modele.js';
 
 /** Les impositions que la section offre, la première par défaut (§ 11.6). */
@@ -29,10 +33,38 @@ export const IMPOSITIONS_OFFERTES = IMPOSITIONS;
 /** Les ordres de la pile que la section offre, le premier par défaut. */
 export const ORDRES_OFFERTS = ORDRES;
 
-// Le refus qui ne bloque pas « Produire » : le papier se choisit sur place,
-// et la production reprend.
-const PAPIER_REQUIS = 'PAPIER_REQUIS';
+/** Les modèles de badge que la section offre, le défaut en tête (§ 11.2). */
+export const MODELES_OFFERTS = Object.freeze(Object.keys(MODELES_BADGE));
 
+/** La clé du libellé d'un modèle ; RangeError hors de MODELES_BADGE. */
+export function cleModele(modele) {
+  if (!estModeleBadge(modele)) throw new RangeError(`modèle de badge inconnu : ${JSON.stringify(modele)}`);
+  return `badges.modele.${modele}`;
+}
+
+/**
+ * Vrai pour un modèle qui impose son papier, et dont les cartes suivent la
+ * pile : la section n'offre alors ni imposition ni papier.
+ *
+ * @throws {RangeError} hors de MODELES_BADGE
+ */
+export function modeleImposeSonPapier(modele) {
+  cleModele(modele);
+  return MODELES_BADGE[modele].papier !== null;
+}
+
+/**
+ * Vrai quand l'annonce reçue est celle du modèle et du papier de la
+ * machine : son modèle est celui de la séance, son papier celui que ce
+ * modèle prend (papierDesBadges). Une annonce sans modèle est celle de l'A6.
+ *
+ * @param {import('../../application/planche_seance.js').Annonce} annonce
+ * @param {{modeleBadge: string, papier: string|null}} machine   EtatSeance
+ */
+export function annonceDeLaMachine(annonce, { modeleBadge, papier }) {
+  const modele = annonce.modeleBadge ?? 'a6';
+  return modele === modeleBadge && annonce.papier === papierDesBadges(modeleBadge, papier);
+}
 /** La source que désigne une demande sans source offerte : le retenu, que
  *  la séance refuse alors PLANCHE_SANS_PLACEMENT. */
 const SOURCE_PAR_DEFAUT = Object.freeze({ source: 'retenu', proposition: null });
@@ -103,14 +135,13 @@ export function memesReglages(a, b) {
 }
 
 /**
- * Vrai quand l'annonce porte un refus qui empêche toute production : celui
- * du placement ou de la mise en page. PAPIER_REQUIS ne bloque pas : la
- * production pose la question du papier, puis reprend. Faux sans annonce.
+ * Vrai quand l'annonce porte un refus, qui empêche toute production : celui
+ * du placement ou de la mise en page. Faux sans annonce.
  *
  * @param {import('../../application/planche_seance.js').Annonce|null} annonce
  */
 export function produireBloque(annonce) {
-  return annonce !== null && annonce.refus !== null && annonce.refus.code !== PAPIER_REQUIS;
+  return annonce !== null && annonce.refus !== null;
 }
 
 // Le point de code d'un caractère, écrit U+XXXX, quatre chiffres au moins,
@@ -118,14 +149,16 @@ export function produireBloque(annonce) {
 const pointDeCode = (caractere) => `U+${caractere.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
 
 /**
- * Les phrases de l'annonce d'une planche (§ 11.2, § 11.5, § 11.8,
- * décision 12), dans cet ordre : la source ; les comptes de la soirée, ou
- * celui d'une réédition ; le nombre de planches sur chaque papier de
- * PAPIERS, le papier choisi marqué ; chaque groupe d'homonymes ; les
- * caractères absents de la police avec leur point de code ; la mention
- * BROUILLON, de la source ; le nom du fichier. Sous un refus du placement,
- * seule la source se dit : comptes, planches et nom manquent à l'annonce.
- * L'annonce reçue n'est pas modifiée.
+ * Les phrases de l'annonce d'une planche (§ 11.2, § 11.5, § 11.8, décision
+ * 12), dans cet ordre : la source ; les comptes de la soirée, ou celui d'une
+ * réédition ; le nombre de planches sur chaque papier de PAPIERS, le papier
+ * utilisé marqué — pour Avery 5392, le nombre de feuilles de cartes ; chaque
+ * groupe d'homonymes ; les caractères absents de la police avec leur point de
+ * code ; la mention BROUILLON, de la source ; le nom du fichier — pour Avery
+ * 5392, ceux des cartes et de la feuille de contrôle à part. Une annonce sans
+ * modèle est celle de l'A6. Sous un refus du placement, seule la source se
+ * dit : comptes, planches et nom manquent à l'annonce. L'annonce reçue n'est
+ * pas modifiée.
  *
  * @param {import('../../application/planche_seance.js').Annonce} annonce
  * @param {{source?: 'retenu'|'proposition', proposition?: number|null, selection?: number[]|null}} [demande]
@@ -141,7 +174,10 @@ export function phrasesAnnonce(annonce, { source = 'retenu', proposition = null,
         : { cle: 'badges.annonce.reedition', details: { n: annonce.comptes.produits } },
     );
   }
-  if (annonce.planches !== null) {
+  const cartes = modeleImposeSonPapier(annonce.modeleBadge ?? 'a6');
+  if (annonce.planches !== null && cartes) {
+    phrases.push({ cle: 'badges.annonce.cartes', details: { planches: annonce.planches[annonce.papier] } });
+  } else if (annonce.planches !== null) {
     const parPapier = Object.keys(PAPIERS).map((papier) => ({
       papier,
       nom: clesPapier(papier).nom,
@@ -158,7 +194,11 @@ export function phrasesAnnonce(annonce, { source = 'retenu', proposition = null,
   if (annonce.comptes !== null && annonce.brouillon) {
     phrases.push({ cle: `badges.annonce.brouillon.${source === 'proposition' ? 'proposition' : 'retenu'}`, details: {} });
   }
-  if (annonce.nom !== null) phrases.push({ cle: 'badges.annonce.fichier', details: { nom: annonce.nom } });
+  if (annonce.nom !== null && cartes) {
+    phrases.push({ cle: 'badges.annonce.fichiers', details: { nom: annonce.nom, nomControle: annonce.nomControle } });
+  } else if (annonce.nom !== null) {
+    phrases.push({ cle: 'badges.annonce.fichier', details: { nom: annonce.nom } });
+  }
   return phrases;
 }
 

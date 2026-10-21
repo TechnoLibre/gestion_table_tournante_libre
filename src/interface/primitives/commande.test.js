@@ -191,7 +191,7 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
   test('chaque geste du contrat, chaque variante comprise, a son libellé', () => {
     assert.deepEqual([...GESTES], [
       'modifier', 'debloquer', 'afficherTour', 'ouvrirSection', 'choisirPlace', 'ouvrirSecours', 'ecrireAilleurs',
-      'enregistrerSous', 'choisirPapier', 'repartirDeZero', 'libererTour', 'renommer',
+      'enregistrerSous', 'repartirDeZero', 'libererTour', 'renommer',
     ]);
     assert.deepEqual([...SOURCES_SECOURS], ['precedent', 'journal']);
     assert.deepEqual([...SECTIONS_REMEDE], ['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions']);
@@ -205,12 +205,11 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
       { geste: 'ecrireAilleurs', racine: RACINE },
       { geste: 'ecrireAilleurs', racine: null },
       { geste: 'enregistrerSous' },
-      { geste: 'choisirPapier' },
       { geste: 'repartirDeZero' },
       { geste: 'libererTour', tour: 3 },
       { geste: 'renommer' },
     ];
-    assert.equal(remedes.length, 20);
+    assert.equal(remedes.length, 19);
     const textes = remedes.map((remede) => {
       const { cle, details } = libelleRemede(remede);
       return t(cle, details);
@@ -220,11 +219,9 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
     assert.equal(new Set(textes).size, textes.length, 'deux variantes ne se confondent pas');
   });
 
-  test('les remèdes de la planche : enregistrerSous et choisirPapier ont leur clé, sans variante', () => {
+  test('le remède de la planche : enregistrerSous a sa clé, sans variante', () => {
     assert.deepEqual(libelleRemede({ geste: 'enregistrerSous' }), { cle: 'communs.remede.enregistrerSous', details: {} });
-    assert.deepEqual(libelleRemede({ geste: 'choisirPapier' }), { cle: 'communs.remede.choisirPapier', details: {} });
     assert.equal(t('communs.remede.enregistrerSous'), 'Enregistrer sous\u{2026}');
-    assert.equal(t('communs.remede.choisirPapier'), 'Choisir le papier');
   });
 
   test('les remèdes du départ : repartirDeZero sans détail, libererTour porte son tour comme afficherTour', () => {
@@ -258,7 +255,6 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
       libelleRemede({ geste: 'ecrireAilleurs', racine: RACINE }).cle,
       libelleRemede({ geste: 'ecrireAilleurs', racine: null }).cle,
       libelleRemede({ geste: 'enregistrerSous' }).cle,
-      libelleRemede({ geste: 'choisirPapier' }).cle,
       libelleRemede({ geste: 'repartirDeZero' }).cle,
       libelleRemede({ geste: 'libererTour', tour: 1 }).cle,
       libelleRemede({ geste: 'renommer' }).cle,
@@ -383,16 +379,15 @@ describe('commande : l’action d’un remède', () => {
     assert.deepEqual(seance.appels, [['fermer']]);
   });
 
-  test('enregistrerSous et choisirPapier passent par les gestes de l’écran, qui sait la planche et le papier ; sans eux, aucune action', () => {
+  test('enregistrerSous passe par les gestes de l’écran, qui sait la planche ; sans eux, aucune action', () => {
     const seance = seanceEnregistreuse();
     const recus = [];
-    for (const geste of ['enregistrerSous', 'choisirPapier']) {
-      assert.equal(actionRemede({ geste }, { seance, ui: uiEnregistreur() }), null, geste);
-      const action = actionRemede({ geste }, { seance, gestes: { [geste]: (remede) => recus.push(remede) } });
-      assert.deepEqual([action.nom, action.cle, action.confirmer], [geste, `communs.remede.${geste}`, null]);
-      action.executer();
-    }
-    assert.deepEqual(recus, [{ geste: 'enregistrerSous' }, { geste: 'choisirPapier' }]);
+    const geste = 'enregistrerSous';
+    assert.equal(actionRemede({ geste }, { seance, ui: uiEnregistreur() }), null, geste);
+    const action = actionRemede({ geste }, { seance, gestes: { [geste]: (remede) => recus.push(remede) } });
+    assert.deepEqual([action.nom, action.cle, action.confirmer], [geste, `communs.remede.${geste}`, null]);
+    action.executer();
+    assert.deepEqual(recus, [{ geste: 'enregistrerSous' }]);
     assert.deepEqual(seance.appels, []);
   });
 

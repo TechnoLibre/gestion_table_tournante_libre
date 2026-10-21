@@ -22,9 +22,30 @@
 // Le nom au plancher, le badge se dépouille dans l'ordre de sacrifice
 // (décision 8). Retirer un texte ne vient qu'après avoir réduit tout ce qui
 // se réduit.
+//
+// Chaque modèle de badge a son cadre utile (cadreUtile) et ses corps de
+// départ, lus au registre des constantes (TYPOGRAPHIES) ; les planchers du
+// nom et des tours sont ceux de la lisibilité, communs aux modèles.
 import { constante } from '../geometrie/constantes.js';
-import { BADGE } from '../geometrie/papiers.js';
+import { MODELES_BADGE, estModeleBadge } from '../geometrie/papiers.js';
 import { cadreUtile } from './imposition.js';
+
+// Les noms au registre des corps de départ de chaque modèle : la capitale
+// maximale du nom, les corps des tours, de l'organisation et du pied.
+const TYPOGRAPHIES = Object.freeze({
+  a6: Object.freeze({
+    nomMax: 'HAUTEUR_CAPITALE_NOM_MAX_MM',
+    tours: 'CORPS_TOURS_PT',
+    organisation: 'CORPS_ORGANISATION_PT',
+    pied: 'CORPS_PIED_PT',
+  }),
+  avery5392: Object.freeze({
+    nomMax: 'HAUTEUR_CAPITALE_NOM_MAX_CARTE_MM',
+    tours: 'CORPS_TOURS_CARTE_PT',
+    organisation: 'CORPS_ORGANISATION_CARTE_PT',
+    pied: 'CORPS_PIED_CARTE_PT',
+  }),
+});
 
 /** Le point typographique en millimètres. */
 const MM_PAR_PT = 25.4 / 72;
@@ -161,15 +182,23 @@ function paliers(depart, plancher) {
  * de lignes de tour. src/pdf ne connaît pas la personne : l'appelant
  * complète les détails.
  *
+ * Le modèle de badge donne le cadre utile et les corps de départ : l'A6,
+ * 89 × 132 mm ; la carte Avery 5392, 91,6 × 66,2 mm.
+ *
  * @param {{nom: string, lignes: string[], organisation: string|null,
  *          pied: string[], piedReduit: string[]}} textes
  * @param {Metriques} metriques
+ * @param {import('../geometrie/papiers.js').ModeleBadge} [modeleBadge]   'a6' par défaut
  * @returns {{blocs: Array<{texte: string, corps: number, gras: boolean, x: number, y: number}>,
  *            colonnesTours: 1|2}
  *          | {refus: {code: string, details: object}}}
+ * @throws {TypeError} un modèle de badge inconnu
  */
-export function mettreEnPage(textes, metriques) {
-  const { largeur: L, hauteur: H } = cadreUtile({ x: 0, y: 0, largeur: BADGE.largeur, hauteur: BADGE.hauteur });
+export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
+  if (!estModeleBadge(modeleBadge)) throw new TypeError(`mettreEnPage : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
+  const badge = MODELES_BADGE[modeleBadge];
+  const typographie = TYPOGRAPHIES[modeleBadge];
+  const { largeur: L, hauteur: H } = cadreUtile({ x: 0, y: 0, largeur: badge.largeur, hauteur: badge.hauteur }, modeleBadge);
   const memoire = new Map();
   const largeur = (texte, corps, gras) => {
     const cle = `${gras ? 'g' : 'r'}${corps}\u{0}${texte}`;
@@ -275,7 +304,7 @@ export function mettreEnPage(textes, metriques) {
   // le plancher, sur autant de lignes qu'il en faut, bornées par ce que la
   // hauteur utile empile.
   const capitaleParPt = metriques.hauteurs(1).capitale;
-  const corpsNomMax = constante('HAUTEUR_CAPITALE_NOM_MAX_MM') / capitaleParPt;
+  const corpsNomMax = constante(typographie.nomMax) / capitaleParPt;
   const corpsNomPlancher = constante('HAUTEUR_CAPITALE_NOM_PLANCHER_MM') / capitaleParPt;
   const paliersNom = paliers(corpsNomMax, corpsNomPlancher);
   function choisirNom() {
@@ -316,9 +345,9 @@ export function mettreEnPage(textes, metriques) {
   // l'organisation ; null quand aucune disposition des tours n'y tient.
   function composer(forme, { evenement, avecOrganisation }) {
     const auPlusNom = (corps) => Math.min(corps, forme.corps);
-    const corpsOrganisation = auPlusNom(constante('CORPS_ORGANISATION_PT'));
-    const corpsPied = auPlusNom(constante('CORPS_PIED_PT'));
-    const corpsTours = paliers(auPlusNom(constante('CORPS_TOURS_PT')), auPlusNom(constante('CORPS_TOURS_PLANCHER_PT')));
+    const corpsOrganisation = auPlusNom(constante(typographie.organisation));
+    const corpsPied = auPlusNom(constante(typographie.pied));
+    const corpsTours = paliers(auPlusNom(constante(typographie.tours)), auPlusNom(constante('CORPS_TOURS_PLANCHER_PT')));
     const plancherTours = corpsTours.at(-1);
 
     const organisation =

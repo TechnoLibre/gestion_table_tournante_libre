@@ -734,3 +734,110 @@ describe('mise en page : propriétés sur des noms engendrés', () => {
     });
   }
 });
+
+// La carte Avery 5392 (§ 11.2, § 11.5) : 101,6 × 76,2 à plat, son cadre
+// utile en retrait de ZONE_SILENCE_CARTE_MM, ses corps propres, les mêmes
+// planchers de lisibilité que l'A6.
+describe('mise en page : la carte Avery 5392', () => {
+  const AVERY = 'avery5392';
+  const CARTE = cadreUtile({ x: 0, y: 0, largeur: 101.6, hauteur: 76.2 }, AVERY);
+  const sortDeLaCarte = (page, metriques) =>
+    page.blocs.filter((bloc) => {
+      const b = boite(bloc, metriques);
+      return b.gauche < -TOLERANCE || b.haut < -TOLERANCE || b.droite > CARTE.largeur + TOLERANCE || b.bas > CARTE.hauteur + TOLERANCE;
+    });
+  const corpsNomMaxCarte = (metriques) => constante('HAUTEUR_CAPITALE_NOM_MAX_CARTE_MM') / capParPt(metriques);
+  // Quatre tours titrés sous sièges attribués, le cas le plus large que la
+  // spécification promet de tenir.
+  const titres = (n) => Array.from({ length: n }, (_, i) => `${tour(i + 1, i + 10)}, siège ${i + 5} ${TIRET} animation`);
+  const LIGNE_TYPE = `Toute la soirée ${TIRET} table 13 ${TIRET} animation`;
+
+  test('le cadre utile d’une carte mesure 91,6 × 66,2 mm', () => {
+    assert.ok(Math.abs(CARTE.largeur - 91.6) < 1e-9 && Math.abs(CARTE.hauteur - 66.2) < 1e-9, JSON.stringify(CARTE));
+  });
+
+  for (const [jeu, metriques] of JEUX) {
+    test(`${jeu} : un nom court au corps maximal de la carte, sur une ligne, tout dans le cadre, rien ne se chevauche`, () => {
+      const page = mettreEnPage(textes(), metriques, AVERY);
+      const nom = blocsNom(page);
+      assert.equal(nom.length, 1);
+      assert.ok(Math.abs(nom[0].corps - corpsNomMaxCarte(metriques)) < 1e-9, String(nom[0].corps));
+      assert.deepEqual(sortDeLaCarte(page, metriques), []);
+      assert.deepEqual(chevauchements(page, metriques), []);
+    });
+
+    test(`${jeu} : rien ne dépasse les corps de la carte — tours, organisation, pied`, () => {
+      const page = mettreEnPage(textes(), metriques, AVERY);
+      const corpsDe = (texte) => page.blocs.find((b) => b.texte === texte).corps;
+      assert.equal(corpsDe(tour(1, 3)), constante('CORPS_TOURS_CARTE_PT'));
+      assert.equal(corpsDe('Club des Merles'), constante('CORPS_ORGANISATION_CARTE_PT'));
+      assert.equal(corpsDe(HORODATAGE), constante('CORPS_PIED_CARTE_PT'));
+    });
+  }
+
+  test('Noto Sans : un nom qui ne tient sur une ligne à aucun corps se replie sur deux, au plus grand corps qui y tient ; quatre tours titrés, l’organisation et le pied entier tiennent avec lui', () => {
+    const nom = 'Ondine-Théa Lacasse-Pervenche de la Grisaille';
+    const plancher = constante('HAUTEUR_CAPITALE_NOM_PLANCHER_MM') / capParPt(NOTO);
+    assert.ok(NOTO.largeur(nom, plancher, true) > CARTE.largeur, 'le nom ne tient sur une ligne à aucun corps');
+    const lignes = titres(4);
+    const page = mettreEnPage(textes({ nom, lignes }), NOTO, AVERY);
+    assert.ok(!('refus' in page), JSON.stringify(page));
+    const blocs = blocsNom(page);
+    assert.equal(blocs.length, 2);
+    assert.ok(rejoint(blocs.map((b) => b.texte), nom));
+    // Le plus grand corps qui tient sur deux lignes : un point de plus déborde.
+    const corps = blocs[0].corps;
+    if (corps < corpsNomMaxCarte(NOTO) - 1e-9) {
+      assert.ok(NOTO.largeur(nom, corps + 1, true) > 2 * CARTE.largeur || blocs.some((b) => NOTO.largeur(b.texte, corps + 1, true) > CARTE.largeur));
+    }
+    const tout = textesDe(page);
+    assert.ok(lignes.every((l) => tout.includes(l)), JSON.stringify(tout));
+    assert.ok(tout.includes('Club des Merles') && PIED.every((ligne) => tout.includes(ligne)), JSON.stringify(tout));
+    assert.equal(page.colonnesTours, 1);
+    assert.deepEqual(sortDeLaCarte(page, NOTO), []);
+    assert.deepEqual(chevauchements(page, NOTO), []);
+  });
+
+  test('Noto Sans : quatre tours titrés sous un nom d’une ligne au corps maximal tiennent au corps des tours de la carte', () => {
+    const lignes = titres(4);
+    const page = mettreEnPage(textes({ lignes }), NOTO, AVERY);
+    const blocs = blocsNom(page);
+    assert.ok(blocs.length === 1 && Math.abs(blocs[0].corps - corpsNomMaxCarte(NOTO)) < 1e-9);
+    const blocsTours = page.blocs.filter((b) => lignes.includes(b.texte));
+    assert.equal(blocsTours.length, 4);
+    assert.ok(blocsTours.every((b) => b.corps === constante('CORPS_TOURS_CARTE_PT')));
+    assert.ok(textesDe(page).includes(PIED[0]));
+    assert.deepEqual(sortDeLaCarte(page, NOTO), []);
+  });
+
+  test('Noto Sans : la ligne type « Toute la soirée — table 13 — animation » tient entière sur une ligne au plancher des tours', () => {
+    const plancher = constante('CORPS_TOURS_PLANCHER_PT');
+    assert.ok(NOTO.largeur(LIGNE_TYPE, plancher, false) <= CARTE.largeur);
+    // Huit lignes poussent les tours au plancher, en une colonne.
+    const lignes = [LIGNE_TYPE, ...tours(7)];
+    const page = mettreEnPage(textes({ lignes }), NOTO, AVERY);
+    const ligne = page.blocs.find((b) => b.texte.startsWith('Toute la soirée'));
+    assert.deepEqual([ligne.texte, ligne.corps, page.colonnesTours], [LIGNE_TYPE, plancher, 1]);
+    assert.deepEqual(sortDeLaCarte(page, NOTO), []);
+    assert.deepEqual(chevauchements(page, NOTO), []);
+  });
+
+  test('Noto Sans : le refus des tours tombe à son seuil sur la carte — 20 tours tiennent sur deux colonnes, 21 sont refusés', () => {
+    const page = mettreEnPage(textes({ lignes: tours(20) }), NOTO, AVERY);
+    assert.ok(!('refus' in page), 'vingt tours');
+    assert.equal(page.colonnesTours, 2);
+    assert.ok(tours(20).every((l) => textesDe(page).includes(l)));
+    assert.deepEqual(sortDeLaCarte(page, NOTO), []);
+    assert.deepEqual(chevauchements(page, NOTO), []);
+    assert.deepEqual(mettreEnPage(textes({ lignes: tours(21) }), NOTO, AVERY), {
+      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 21 } },
+    });
+  });
+
+  test('l’A6 reste le modèle quand aucun n’est donné, et un modèle inconnu lève TypeError', () => {
+    for (const [, metriques] of JEUX) {
+      assert.deepEqual(mettreEnPage(textes(), metriques, 'a6'), mettreEnPage(textes(), metriques));
+    }
+    assert.throws(() => mettreEnPage(textes(), NOTO, 'A6'), TypeError);
+  });
+});

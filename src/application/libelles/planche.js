@@ -18,6 +18,12 @@ const NOMS_DES_IMPOSITIONS = new Map([
   ['pile', 'en pile'],
 ]);
 
+// Les modèles de badge, comme la feuille de contrôle les nomme.
+const NOMS_DES_MODELES = new Map([
+  ['a6', 'A6'],
+  ['avery5392', 'Avery 5392'],
+]);
+
 // Une cote en millimètres, la virgule pour décimale.
 const cote = (mm) => String(mm).replace('.', ',');
 
@@ -81,7 +87,6 @@ export const TABLE = new Map([
     (details, texte) =>
       `La planche n'a pas pu s'écrire : ${ouEcrire(details, texte)}. « Enregistrer sous… » la dépose ailleurs.`,
   ],
-  ['PAPIER_REQUIS', () => "Choisissez le papier de l'imprimante avant de produire la planche : l'imposition en dépend."],
 
   // --- Les lignes de tour d'un badge (§ 11.4, § 11.5) ------------------------
   // Une ligne : le tour, ou « Toute la soirée » pour un itinéraire constant,
@@ -121,7 +126,14 @@ export const TABLE = new Map([
   ['planche.brouillon', 'BROUILLON'],
 
   // --- La feuille de contrôle (§ 11.3, § 11.5, § 11.8) ----------------------
-  ['planche.controle.badge', ({ largeur, hauteur }) => `Badge : ${cote(largeur)} × ${cote(hauteur)} mm (A6)`],
+  // Le badge et son modèle : l'A6 à découper, ou les cartes prédécoupées
+  // d'une feuille Avery 5392.
+  [
+    'planche.controle.badge',
+    ({ largeur, hauteur, modeleBadge }) =>
+      `Badge : ${cote(largeur)} × ${cote(hauteur)} mm (${nomDans(NOMS_DES_MODELES, modeleBadge, 'modèle de badge')}` +
+      `${modeleBadge === 'avery5392' ? ', six cartes prédécoupées par feuille' : ''})`,
+  ],
   [
     'planche.controle.papier',
     ({ papier, largeur, hauteur }) => `Papier : ${papier}, ${cote(largeur)} × ${cote(hauteur)} mm`,
@@ -150,6 +162,13 @@ export const TABLE = new Map([
   ],
   ['planche.controle.version', ({ version }) => `Version : ${version}`],
   ['planche.controle.consigne', 'Imprimer en recto seul, à 100 %'],
+  // La feuille de contrôle à part d'un modèle à cartes prédécoupées.
+  [
+    'planche.controle.cartes',
+    ({ modeleBadge }) =>
+      `Imprimer cette feuille sur papier ordinaire : posée sur une feuille ${nomDans(NOMS_DES_MODELES, modeleBadge, 'modèle de badge')}, ` +
+      'le contour des six cartes tombe sur leurs prédécoupes',
+  ],
   ['planche.controle.reedition', ({ n }) => `Réédition : ${compte(n, 'badge', 'badges')}`],
   [
     'planche.controle.absents',

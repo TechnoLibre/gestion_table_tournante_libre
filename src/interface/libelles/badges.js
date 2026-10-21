@@ -2,21 +2,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8,
-// Q3) : ses réglages — source, imposition, ordre —, ses commandes, les
-// phrases de l'annonce que rend phrasesAnnonce (badges/modele.js), la
-// planche produite et la réédition. Chaque clé commence par « badges. ».
-// Les refus de la planche sont des textes de l'application
-// (application/libelles/planche.js), le nom d'un papier un libellé de
-// l'aperçu (impression.papier.nom.*), que l'annonce lit par texte. Le
-// chemin de la planche produite est une donnée : l'écran le pose dans son
+// Q3) : ses réglages — modèle de badge, source, imposition, ordre —, ses
+// commandes, les phrases de l'annonce que rend phrasesAnnonce
+// (badges/modele.js), la planche produite et la réédition. Chaque clé
+// commence par « badges. ». Les refus de la planche sont des textes de
+// l'application (application/libelles/planche.js), le nom d'un papier un
+// libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit par texte.
+// Le chemin de la planche produite est une donnée : l'écran le pose dans son
 // propre nœud, à côté de son intitulé.
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
-  ['badges.introduction', "Un badge A6 par personne présente, imposé sur le papier de l'imprimante, précédé d'une feuille de contrôle."],
+  [
+    'badges.introduction',
+    'Un badge par personne présente, sur des cartes Avery 5392 prédécoupées ou en A6 à découper, ' +
+      'avec une feuille de contrôle à mesurer avant d\u{2019}imprimer.',
+  ],
 
   // --- Les réglages de la planche (§ 11.6, Q3) ------------------------------
   ['badges.planche.titre', 'Planche de badges'],
+  ['badges.modele.titre', 'Modèle de badge'],
+  ['badges.modele.avery5392', 'Avery 5392 (six cartes prédécoupées par feuille Lettre)'],
+  ['badges.modele.a6', 'A6 à découper (sur A4 ou Lettre)'],
   ['badges.source.titre', 'Placement imprimé'],
   ['badges.source.retenu', 'Le placement retenu'],
   ['badges.source.proposition', ({ id }) => `La proposition n° ${id}`],
@@ -57,10 +64,12 @@ export const TABLE = new Map([
     ({ parPapier }, texte) =>
       `Planches : ${enumeration(
         parPapier.map(
-          ({ nom, planches, choisi }) => `${compte(planches, 'planche', 'planches')} en ${texte(nom)}${choisi ? ' (papier choisi)' : ''}`,
+          ({ nom, planches, choisi }) => `${compte(planches, 'planche', 'planches')} en ${texte(nom)}${choisi ? ' (papier utilisé)' : ''}`,
         ),
       )}.`,
   ],
+  // Avery 5392 : les feuilles de cartes, sur le seul papier qu'il admet.
+  ['badges.annonce.cartes', ({ planches }) => `Planches : ${compte(planches, 'feuille', 'feuilles')} de six cartes Avery 5392, sur Lettre.`],
   [
     'badges.annonce.homonymes',
     ({ nom, ids }) =>
@@ -83,10 +92,16 @@ export const TABLE = new Map([
     'Chaque badge portera la mention BROUILLON : une proposition n\u{2019}est pas le placement retenu.',
   ],
   ['badges.annonce.fichier', ({ nom }) => `Fichier : ${nom}`],
+  [
+    'badges.annonce.fichiers',
+    ({ nom, nomControle }) => `Fichiers : ${nom}, puis la feuille de contrôle ${nomControle}, à imprimer sur papier ordinaire.`,
+  ],
 
   // --- La planche produite (§ 11.6, décision 13) -----------------------------
   ['badges.produite.chemin', 'Planche déposée :'],
   ['badges.produite.telechargee', ({ nom }) => `Planche téléchargée sous le nom ${nom}.`],
+  ['badges.produite.controle', 'Feuille de contrôle déposée :'],
+  ['badges.produite.controleTelechargee', ({ nom }) => `Feuille de contrôle téléchargée sous le nom ${nom}.`],
 
   // --- La réédition (§ 11.8) --------------------------------------------------
   ['badges.reedition.titre', 'Rééditer des badges'],

@@ -8,6 +8,14 @@
   // bloqué, et la séance n'écrit que le PDF et, pour le papier,
   // reglages_locaux.json — ni l'état ni le journal.
   //
+  // Le modèle de badge est un réglage de la machine (EtatSeance.modeleBadge,
+  // seance.choisirModeleBadge), Avery 5392 tant que l'opérateur n'en a pas
+  // choisi. Un modèle qui impose son papier — Avery 5392, sur Lettre — ne
+  // montre ni l'imposition ni le papier ; l'A6 montre les deux. Aucune
+  // production ne pose la question du papier : l'A6 prend celui de la
+  // machine, Lettre tant qu'elle n'en a pas (PAPIER_BADGES_DEFAUT), montré
+  // comme un papier choisi, que « Changer » remplace pour la machine.
+  //
   // Les réglages d'une demande : la source — le retenu s'il existe, sinon la
   // proposition demandée au plan depuis les propositions, choisie quand les
   // deux sont offertes (sourcesOffertes) —, l'imposition, feuille par
@@ -16,18 +24,17 @@
   //
   // « Préparer » demande l'annonce à la séance (preparerPlanche) et la
   // montre, phrase par phrase (phrasesAnnonce), avec son refus et le remède
-  // de celui-ci. L'annonce montrée est celle des réglages, du papier et de la
-  // charge courants : qu'un des trois change, elle se retire, et la suivante
-  // se prépare. « Produire » prépare d'abord : une dérive, et tout refus du
-  // placement ou de la mise en page, se nomme avant toute production
-  // (§ 11.8), et « Produire » reste désactivé, expliqué, tant que
-  // l'annonce montrée le porte. Sans papier — PAPIER_REQUIS —, la production
-  // pose la question du papier (Papier.svelte), une fois par machine (§ 8.5,
-  // Q1), et reprend au choix ; le remède « Choisir le papier » de l'annonce
-  // pose la même question. Le papier choisi se montre et se change.
+  // de celui-ci. L'annonce montrée est celle des réglages, du modèle, du
+  // papier et de la charge courants : qu'un d'eux change, elle se retire, et
+  // la suivante se prépare. « Produire » prépare d'abord : une dérive, et
+  // tout refus du placement ou de la mise en page, se nomme avant toute
+  // production (§ 11.8), et « Produire » reste désactivé, expliqué, tant que
+  // l'annonce montrée le porte. Un papier choisi par « Changer »
+  // (Papier.svelte) prépare de nouveau l'annonce montrée.
   //
   // La planche produite nomme son chemin — à côté des fichiers d'événement
-  // —, ou, sous web, où elle se télécharge, son nom. « Ouvrir le dossier »
+  // —, ou, sous web, où elle se télécharge, son nom ; pour Avery 5392, ceux
+  // de la feuille de contrôle à part suivent. « Ouvrir le dossier »
   // se tient parmi les commandes en tout temps, avant comme après une
   // production, quand la plateforme a un explorateur : il montre par la
   // façade le dossier de travail, où la planche se dépose, et jamais le
@@ -48,6 +55,7 @@
   // sourd de la carte, la planche produite sur le fond de l'information. La
   // réédition est une carte à elle.
   import { getContext } from 'svelte';
+  import { PAPIER_BADGES_DEFAUT } from '../../geometrie/papiers.js';
   import { suivre } from '../activite.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -56,12 +64,16 @@
   import Reedition from './Reedition.svelte';
   import {
     IMPOSITIONS_OFFERTES,
+    MODELES_OFFERTS,
     ORDRES_OFFERTS,
+    annonceDeLaMachine,
     cleImposition,
+    cleModele,
     cleOrdre,
     cleSource,
     libelleSource,
     memesReglages,
+    modeleImposeSonPapier,
     phrasesAnnonce,
     produireBloque,
     sourceChoisie,
@@ -75,6 +87,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
+  const modeleBadge = $derived($seance.modeleBadge);
+  const cartes = $derived(modeleImposeSonPapier(modeleBadge));
   const offertes = $derived(charge === null ? [] : sourcesOffertes(charge, $ui.proposition));
 
   // La clé de la source que l'opérateur a choisie, null avant tout choix.
@@ -88,14 +102,14 @@
   const demandeDe = (selection) => ({ source: source.source, proposition: source.proposition, imposition, ordre, selection });
 
   // La dernière annonce préparée : {annonce, demande, charge}, la charge lue
-  // au départ de la préparation. Montrée tant que réglages, papier et
-  // charge sont ceux qu'elle a lus. Gardée telle quelle, sans mandataire
+  // au départ de la préparation. Montrée tant que réglages, modèle, papier
+  // et charge sont ceux qu'elle a lus. Gardée telle quelle, sans mandataire
   // réactif : la charge se compare par identité à celle de la séance.
   let preparee = $state.raw(null);
   const montree = $derived(
     preparee !== null &&
       preparee.charge === charge &&
-      preparee.annonce.papier === $seance.papier &&
+      annonceDeLaMachine(preparee.annonce, $seance) &&
       memesReglages(preparee.demande, demandeDe(null))
       ? preparee
       : null,
@@ -103,15 +117,13 @@
   const phrases = $derived(montree === null ? [] : phrasesAnnonce(montree.annonce, montree.demande));
   const bloque = $derived(montree !== null && produireBloque(montree.annonce));
 
-  // La production qui attend le papier : {selection}, et vrai pour reprendre
-  // la production au choix ; null sans question posée par la section.
-  let attente = $state(null);
-  // La planche produite : {chemin, nom}, chemin null sous web.
+  // La planche produite : {chemin, nom, controle}, chemin null sous web ;
+  // controle, la feuille de contrôle à part, {chemin, nom}, ou null.
   let produite = $state(null);
   // La demande de la dernière production, que « Enregistrer sous… » reprend.
   let derniere = null;
-  // Le refus d'une production reprise après le choix du papier, que nulle
-  // commande ne porte.
+  // Le refus de l'annonce préparée de nouveau après le choix du papier, que
+  // nulle commande ne porte.
   let refusRepris = $state(null);
 
   async function preparer(selection) {
@@ -129,45 +141,39 @@
     produite = null;
     const { annonce, demande } = await preparer(selection);
     if (produireBloque(annonce)) return;
-    if (annonce.refus !== null) {
-      attente = { selection, reprendre: true };
-      return;
-    }
     derniere = demande;
     produite = await suivre(() => seance.produirePlanche(demande));
   }
 
-  // Le papier choisi par la question de la section : la production qui
-  // l'attendait reprend ; sinon, l'annonce montrée se prépare de nouveau.
-  // Un refus de la reprise se pose sous les commandes.
+  // Le papier choisi par la question de la section : l'annonce montrée se
+  // prépare de nouveau. Un refus de cette préparation se pose sous les
+  // commandes.
   async function papierChoisi() {
-    const reprise = attente;
-    attente = null;
     try {
-      if (reprise?.reprendre) await produire(reprise.selection);
-      else if (preparee !== null) await preparer(preparee.demande.selection);
+      if (preparee !== null) await preparer(preparee.demande.selection);
     } catch (erreur) {
       if (typeof erreur?.code !== 'string') throw erreur;
       refusRepris = { code: erreur.code, details: erreur.details ?? {} };
     }
   }
 
-  // Les remèdes que la section exécute : la question du papier, et
-  // l'enregistrement ailleurs de la dernière planche demandée. Le chemin
-  // choisi remplace celui de la planche ; null quand l'opérateur annule.
+  // Le remède que la section exécute : l'enregistrement ailleurs de la
+  // dernière planche demandée. Le chemin choisi remplace celui de la
+  // planche ; null quand l'opérateur annule.
   const gestes = {
-    choisirPapier: () => {
-      attente = { selection: preparee?.demande.selection ?? null, reprendre: false };
-      return true;
-    },
     enregistrerSous: async () => {
       const chemin = await suivre(() => seance.enregistrerPlancheSous(derniere));
-      if (chemin !== null) produite = { chemin, nom: null };
+      if (chemin !== null) produite = { chemin, nom: null, controle: null };
       return chemin;
     },
   };
 
   const explorateur = facade.explorateur();
+
+  // Le modèle choisi s'écrit sur la machine ; l'état de la séance le porte
+  // aussitôt, et l'avertissement d'une écriture refusée, que la séance rend,
+  // ne bloque pas le choix.
+  const choisirModele = (modele) => seance.choisirModeleBadge(modele);
 </script>
 
 <section data-section="badges">
@@ -178,6 +184,14 @@
     <Carte titre={t('badges.planche.titre')} niveau={3}>
       <div class="planche">
         <div class="reglages">
+          <label class="reglage">
+            <span>{t('badges.modele.titre')}</span>
+            <select data-champ="modeleBadge" value={modeleBadge} onchange={(evenement) => choisirModele(evenement.currentTarget.value)}>
+              {#each MODELES_OFFERTS as valeur (valeur)}
+                <option value={valeur}>{t(cleModele(valeur))}</option>
+              {/each}
+            </select>
+          </label>
           {#if offertes.length > 1}
             <label class="reglage">
               <span>{t('badges.source.titre')}</span>
@@ -188,14 +202,16 @@
               </select>
             </label>
           {/if}
-          <label class="reglage">
-            <span>{t('badges.imposition.titre')}</span>
-            <select data-champ="imposition" value={imposition} onchange={(evenement) => (imposition = evenement.currentTarget.value)}>
-              {#each IMPOSITIONS_OFFERTES as valeur (valeur)}
-                <option value={valeur}>{t(cleImposition(valeur))}</option>
-              {/each}
-            </select>
-          </label>
+          {#if !cartes}
+            <label class="reglage">
+              <span>{t('badges.imposition.titre')}</span>
+              <select data-champ="imposition" value={imposition} onchange={(evenement) => (imposition = evenement.currentTarget.value)}>
+                {#each IMPOSITIONS_OFFERTES as valeur (valeur)}
+                  <option value={valeur}>{t(cleImposition(valeur))}</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
           <label class="reglage">
             <span>{t('badges.ordre.titre')}</span>
             <select data-champ="ordre" value={ordre} onchange={(evenement) => (ordre = evenement.currentTarget.value)}>
@@ -206,8 +222,8 @@
           </label>
         </div>
 
-        {#if $seance.papier !== null || attente !== null}
-          <Papier onChoisi={papierChoisi} />
+        {#if !cartes}
+          <Papier defaut={PAPIER_BADGES_DEFAUT} onChoisi={papierChoisi} />
         {/if}
 
         <div class="commandes">
@@ -251,8 +267,17 @@
                 <span>{t('badges.produite.chemin')}</span>
                 <span class="chemin" data-chemin-planche>{produite.chemin}</span>
               </p>
+              {#if produite.controle !== null}
+                <p>
+                  <span>{t('badges.produite.controle')}</span>
+                  <span class="chemin" data-chemin-controle>{produite.controle.chemin}</span>
+                </p>
+              {/if}
             {:else}
               <p data-chemin-planche>{t('badges.produite.telechargee', { nom: produite.nom })}</p>
+              {#if produite.controle !== null}
+                <p data-chemin-controle>{t('badges.produite.controleTelechargee', { nom: produite.controle.nom })}</p>
+              {/if}
             {/if}
           </div>
         {/if}

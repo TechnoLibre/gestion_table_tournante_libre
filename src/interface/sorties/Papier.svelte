@@ -5,10 +5,13 @@
   // La question du papier (§ 8.5, § 11.2), que l'aperçu avant impression et
   // la section des badges partagent : le papier est un réglage de la
   // machine, retenu dans reglages_locaux.json, demandé à la première sortie
-  // et jamais ensuite. Sans papier — EtatSeance.papier null —, le composant
-  // pose la question, un choix par papier de PAPIERS, chacun décrit ; avec
-  // un papier, il le montre, « Papier : A4 », et offre « Changer », qui
-  // rouvre la question. Aucun papier n'est choisi pour l'opérateur.
+  // et jamais ensuite. Sans papier — EtatSeance.papier null — ni défaut, le
+  // composant pose la question, un choix par papier de PAPIERS, chacun
+  // décrit ; avec un papier, il le montre, « Papier : A4 », et offre
+  // « Changer », qui rouvre la question. Le défaut, quand l'écran en donne
+  // un, se montre comme un papier tant que la machine n'en a pas : il ne
+  // s'écrit pas, et seul un choix de la question devient le papier de la
+  // machine. Sans défaut, aucun papier n'est choisi pour l'opérateur.
   //
   // Un choix passe par seance.choisirPapier, vivant dans tout mode, sur un
   // plan bloqué comme en lecture. Des réglages illisibles ou une écriture
@@ -27,14 +30,16 @@
   import Pastille from '../primitives/Pastille.svelte';
   import { PAPIERS_OFFERTS, clesPapier } from '../impression/modele.js';
 
-  let { onChoisi = null } = $props();
+  // defaut : le papier montré tant que la machine n'en a pas, null pour
+  // poser la question.
+  let { defaut = null, onChoisi = null } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
 
   // Vrai après « Changer », jusqu'au choix suivant.
   let changer = $state(false);
-  const papier = $derived($seance.papier);
+  const papier = $derived($seance.papier ?? defaut);
   const question = $derived(papier === null || changer);
 
   async function choisir(choix) {

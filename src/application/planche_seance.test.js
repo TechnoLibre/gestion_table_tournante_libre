@@ -10,10 +10,15 @@
 // refusée se dit PLANCHE_NON_ECRITE, sans rompre le support de l'événement.
 //
 // La série surveillée borne le coût (§ 14.4, contrainte 31) : douze
-// productions de PDF au plus dans ce fichier, sur une soirée de quatre
+// productions de l'A6 au plus dans ce fichier, sur une soirée de quatre
 // personnes — trois pour les trois modes, deux pour la stabilité des
 // octets, une réédition, deux refus d'écriture et l'enregistrement sous,
-// une sous web, deux propositions de la même génération. L'imposition et
+// une sous web, deux propositions de la même génération —, et six
+// d'Avery 5392, de deux documents chacune — une déposée, une de sept
+// badges en pile demandée, une refusée et ses deux enregistrements sous,
+// une sous web. Les épreuves de l'A6
+// choisissent ce modèle ; celles d'Avery 5392 n'en choisissent aucun,
+// comme une machine neuve. L'imposition et
 // l'ordre se lisent dans la place de chaque nom, et le papier, l'imposition
 // et le nombre de planches dans la feuille de contrôle : la première
 // production, sous la demande par défaut, en A4 — l'ordre alphabétique ; la
@@ -35,7 +40,7 @@ import { serialiser } from '../stockage/canonique.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { FORMAT } from '../stockage/document.js';
-import { SUFFIXES, deriverBase, nomPlanche } from '../stockage/noms.js';
+import { SUFFIXES, deriverBase, nomControle, nomPlanche } from '../stockage/noms.js';
 import { VERSION } from '../version.genere.js';
 import { libelle } from './libelles.js';
 import { creerSeance } from './seance.js';
@@ -130,9 +135,14 @@ async function deposer(fs, charge, { format = FORMAT } = {}) {
   fs.deposer('documents', `${BASE}${SUFFIXES.etat}`, texte.replace(`"format":${FORMAT}`, `"format":${format}`));
 }
 
-// Une séance sur l'événement de la charge, ouvert en lecture, le papier
-// choisi quand il est donné ; la trace part ensuite, vide.
-async function monter(charge = chargeLucioles(), { papier = 'A4', fs = creerFichiersSimules({ documents: DOCUMENTS }), format, base = BASE } = {}) {
+// Une séance sur l'événement de la charge, ouvert en lecture, le modèle de
+// badge et le papier choisis quand ils sont donnés — l'A6 par défaut, le
+// modèle que ces épreuves éprouvent ; null garde Avery 5392, celui d'une
+// machine qui n'a rien choisi ; la trace part ensuite, vide.
+async function monter(
+  charge = chargeLucioles(),
+  { papier = 'A4', modeleBadge = 'a6', fs = creerFichiersSimules({ documents: DOCUMENTS }), format, base = BASE } = {},
+) {
   await deposer(fs, charge, { format });
   let tirage = 0;
   const seance = creerSeance({
@@ -149,6 +159,7 @@ async function monter(charge = chargeLucioles(), { papier = 'A4', fs = creerFich
     polices: async () => POLICES,
     provenance: 'production',
   });
+  if (modeleBadge !== null) await seance.choisirModeleBadge(modeleBadge);
   if (papier !== null) await seance.choisirPapier(papier);
   await seance.ouvrir(base);
   const trace = tracer(fs);
@@ -211,6 +222,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
         annonce,
         {
           refus: null,
+          modeleBadge: 'a6',
           papier: 'A4',
           comptes: { participants: 4, exclus: 0, produits: 4 },
           planches: { A4: 1, Lettre: 2 },
@@ -218,12 +230,13 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           absents: [],
           brouillon: false,
           nom: attendu,
+          nomControle: null,
         },
         nom,
       );
       assert.deepEqual(trace, [], `${nom} : préparer écrit`);
       const rendu = await seance.produirePlanche();
-      assert.deepEqual(rendu, { chemin: `${DOCUMENTS}\\${attendu}`, nom: attendu }, nom);
+      assert.deepEqual(rendu, { chemin: `${DOCUMENTS}\\${attendu}`, nom: attendu, controle: null }, nom);
       assert.deepEqual(trace, [['ecrireOctetsAtomique', attendu]], nom);
       assert.equal(seance.mode, 'lecture', nom);
       assert.equal(seance.etat().evenement.revision, revision, nom);
@@ -243,19 +256,21 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
     assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4'), ['Grisaille', 'Ondine Lacasse', 'Iris Ombrelle', 'Théo Pervenche']);
   });
 
-  test('sans papier choisi : PAPIER_REQUIS avant toute écriture ; choisi, le nom et l’annonce le portent, et une autre séance de la racine ne le redemande pas', async () => {
+  test('sans papier choisi : Lettre, sans refus, et le papier de la machine reste à choisir ; choisi, il l’emporte, et une autre séance de la racine le relit', async () => {
     const { fs, seance, trace } = await monter(chargeLucioles(), { papier: null });
-    const requis = { code: 'PAPIER_REQUIS', details: { remede: { geste: 'choisirPapier' } } };
     const annonce = await seance.preparerPlanche();
-    assert.deepEqual([annonce.refus, annonce.papier, annonce.nom], [requis, null, null]);
+    const nom = nomDe({ papier: 'Lettre' });
+    assert.deepEqual([annonce.refus, annonce.papier, annonce.nom], [null, 'Lettre', nom]);
     assert.deepEqual(annonce.planches, { A4: 1, Lettre: 2 });
-    await refusee(seance.produirePlanche(), 'PAPIER_REQUIS', requis.details);
-    assert.deepEqual(trace, []);
+    assert.deepEqual(await seance.produirePlanche(), { chemin: `${DOCUMENTS}\\${nom}`, nom, controle: null });
+    // Seul le PDF s'écrit : le papier par défaut ne se retient pas.
+    assert.deepEqual(trace, [['ecrireOctetsAtomique', nom]]);
+    assert.equal(seance.etat().papier, null);
 
-    await seance.choisirPapier('Lettre');
+    await seance.choisirPapier('A4');
     trace.length = 0;
-    const lettre = await seance.preparerPlanche({ imposition: 'pile' });
-    assert.deepEqual([lettre.refus, lettre.papier, lettre.nom], [null, 'Lettre', nomDe({ papier: 'Lettre', imposition: 'pile' })]);
+    const a4 = await seance.preparerPlanche({ imposition: 'pile' });
+    assert.deepEqual([a4.refus, a4.papier, a4.nom], [null, 'A4', nomDe({ papier: 'A4', imposition: 'pile' })]);
     const autre = creerSeance({
       fs,
       racine: DOC,
@@ -268,7 +283,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
       provenance: 'production',
     });
     await autre.ouvrir(BASE);
-    assert.equal((await autre.preparerPlanche()).papier, 'Lettre');
+    assert.equal((await autre.preparerPlanche()).papier, 'A4');
     assert.deepEqual(trace, []);
   });
 
@@ -324,6 +339,7 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
     const annonce = await sans.seance.preparerPlanche();
     assert.deepEqual(annonce, {
       refus: { code: 'PLANCHE_SANS_PLACEMENT', details: { remede: { geste: 'ouvrirSection', section: 'propositions' } } },
+      modeleBadge: 'a6',
       papier: 'A4',
       comptes: null,
       planches: null,
@@ -331,6 +347,7 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       absents: [],
       brouillon: true,
       nom: null,
+      nomControle: null,
     });
     await refusee(sans.seance.produirePlanche(), 'PLANCHE_SANS_PLACEMENT');
     await assert.rejects(sans.seance.preparerPlanche({ ordre: 'hasard' }), TypeError);
@@ -568,7 +585,7 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
     };
     const attendu = nomDe({ papier: 'Lettre', imposition: 'pile', ordre: 'table' });
     const rendu = await seance.produirePlanche({ imposition: 'pile', ordre: 'table' });
-    assert.deepEqual(rendu, { chemin: null, nom: attendu });
+    assert.deepEqual(rendu, { chemin: null, nom: attendu, controle: null });
     assert.match(attendu, /_Lettre_pile_table_/);
     assert.deepEqual(trace, []);
     assert.equal(recus.length, 1);
@@ -588,5 +605,123 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
         ['Théo Pervenche', 'Ondine Lacasse'],
       ],
     );
+  });
+});
+
+describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2, § 11.3)', () => {
+  const AVERY = { papier: 'Lettre', imposition: 'feuille', horodatage: H_RETENU, reedition: null, modeleBadge: 'avery5392' };
+  const nomCartes = nomPlanche(BASE, AVERY);
+  const nomFeuille = nomControle(BASE, AVERY);
+  const nomsParCarte = (page) =>
+    cellules('Lettre', 'avery5392').map(({ x, y, largeur, hauteur }) =>
+      page.textes.find((t) => NOMS.includes(t.texte) && t.x + t.l / 2 > x && t.x + t.l / 2 < x + largeur && t.y + t.h / 2 > y && t.y + t.h / 2 < y + hauteur)?.texte ?? null,
+    );
+
+  test('une machine sans choix : Avery 5392 sur Lettre, sans demander le papier ; deux fichiers annoncés, les cartes puis la feuille de contrôle', async () => {
+    const { seance, trace } = await monter(chargeLucioles(), { papier: null, modeleBadge: null });
+    assert.equal(seance.etat().papier, null);
+    const annonce = await seance.preparerPlanche({ imposition: 'pile' });
+    assert.deepEqual(annonce, {
+      refus: null,
+      modeleBadge: 'avery5392',
+      papier: 'Lettre',
+      comptes: { participants: 4, exclus: 0, produits: 4 },
+      planches: { Lettre: 1 },
+      homonymes: [],
+      absents: [],
+      brouillon: false,
+      nom: nomCartes,
+      nomControle: nomFeuille,
+    });
+    assert.match(nomCartes, /\.badges_avery5392_/);
+    assert.deepEqual(trace, []);
+  });
+
+  test('produire dépose les cartes puis la feuille de contrôle : une page de cartes sans contrôle, carte après carte quelle que soit l’imposition demandée ; une page de contrôle à part', async () => {
+    const { fs, seance, trace } = await monter(chargeLucioles(), { papier: 'A4', modeleBadge: null });
+    const rendu = await seance.produirePlanche({ imposition: 'pile' });
+    assert.deepEqual(rendu, {
+      chemin: `${DOCUMENTS}\\${nomCartes}`,
+      nom: nomCartes,
+      controle: { chemin: `${DOCUMENTS}\\${nomFeuille}`, nom: nomFeuille },
+    });
+    assert.deepEqual(trace, [
+      ['ecrireOctetsAtomique', nomCartes],
+      ['ecrireOctetsAtomique', nomFeuille],
+    ]);
+    const cartes = await lirePdf(fs.octets('documents', nomCartes));
+    assert.equal(cartes.pages.length, 1);
+    assert.deepEqual(nomsParCarte(cartes.pages[0]), ['Grisaille', 'Ondine Lacasse', 'Iris Ombrelle', 'Théo Pervenche', null, null]);
+    assert.deepEqual(cartes.pages[0].segments, []);
+    const feuille = await lirePdf(fs.octets('documents', nomFeuille));
+    assert.equal(feuille.pages.length, 1);
+    const lignes = textesDe(feuille.pages[0]).join(' ');
+    assert.ok(lignes.includes(libelle('planche.controle.planches', { planches: 1 })), lignes);
+    assert.ok(lignes.includes('Avery 5392'), lignes);
+    assert.ok(!lignes.includes(libelle('planche.controle.imposition', { imposition: 'pile' })), lignes);
+  });
+
+  test('sept badges et l’imposition « en pile » demandée : les cartes suivent quand même la pile, feuille par feuille — le septième ouvre la seconde feuille', async () => {
+    const noms = ['Aube', 'Côme', 'Iris', 'Merle', 'Ondine', 'Théo', 'Ysée'];
+    const PLAN_SEPT = [{ sieges: [[1, 2, 3, 4], [5, 6, 7]] }];
+    const charge = soiree({
+      personnes: noms.map((prenom, i) => personne(i + 1, prenom, 'Sarcelle')),
+      tables: [table(1, 1, 4), table(2, 2, 4)],
+      plan: PLAN_SEPT,
+      propositions: [[1, PLAN_SEPT]],
+    });
+    const { fs, seance } = await monter(charge, { modeleBadge: null });
+    const { nom } = await seance.produirePlanche({ imposition: 'pile' });
+    const lu = await lirePdf(fs.octets('documents', nom));
+    const affiches = noms.map((prenom) => `${prenom} Sarcelle`);
+    const parCarte = (page) =>
+      cellules('Lettre', 'avery5392').map(
+        ({ x, y, largeur, hauteur }) =>
+          page.textes.find((t) => affiches.includes(t.texte) && t.x + t.l / 2 > x && t.x + t.l / 2 < x + largeur && t.y + t.h / 2 > y && t.y + t.h / 2 < y + hauteur)?.texte ?? null,
+      );
+    assert.deepEqual(lu.pages.map(parCarte), [affiches.slice(0, 6), [affiches[6], null, null, null, null, null]]);
+  });
+
+  test('une feuille de contrôle refusée d’écriture : PLANCHE_NON_ECRITE la nomme, remède « Enregistrer sous… », qui ouvre deux dialogues', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { modeleBadge: null });
+    const ecrire = fs.ecrireOctetsAtomique;
+    fs.ecrireOctetsAtomique = async (racine, nom, octets) => {
+      if (nom === nomFeuille) throw new ErreurStockage('ECRITURE', { chemin: nom, dossier: DOCUMENTS, cause: 'ENOSPC' });
+      return ecrire(racine, nom, octets);
+    };
+    await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', {
+      chemin: nomFeuille,
+      dossier: DOCUMENTS,
+      cause: 'ENOSPC',
+      remede: { geste: 'enregistrerSous' },
+    });
+    const recus = [];
+    fs.enregistrerSous = async (nom) => {
+      recus.push(nom);
+      return `E:\\Copies\\${nom}`;
+    };
+    assert.equal(await seance.enregistrerPlancheSous(), `E:\\Copies\\${nomCartes}`);
+    assert.deepEqual(recus, [nomCartes, nomFeuille]);
+    // Le premier dialogue annulé : le second ne s'ouvre pas.
+    recus.length = 0;
+    fs.enregistrerSous = async (nom) => {
+      recus.push(nom);
+      return null;
+    };
+    assert.equal(await seance.enregistrerPlancheSous(), null);
+    assert.deepEqual(recus, [nomCartes]);
+  });
+
+  test('sous web, les deux fichiers se téléchargent, les cartes d’abord, rien dans le dossier', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS, nature: 'web' });
+    const { seance, trace } = await monter(chargeLucioles(), { fs, modeleBadge: null });
+    const recus = [];
+    fs.enregistrerSous = async (nom) => {
+      recus.push(nom);
+      return nom;
+    };
+    assert.deepEqual(await seance.produirePlanche(), { chemin: null, nom: nomCartes, controle: { chemin: null, nom: nomFeuille } });
+    assert.deepEqual(recus, [nomCartes, nomFeuille]);
+    assert.deepEqual(trace, []);
   });
 });

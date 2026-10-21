@@ -6,6 +6,9 @@
 // impositions, relue dans l'ordre des noms de la couche de texte ; la
 // planche Lettre pleine, ses badges à plat dans leur zone de silence ; le
 // témoin de 257 badges ; une feuille de contrôle plus longue qu'une page.
+// Pour Avery 5392 : la pagination aux comptes qui séparent les arrondis, la
+// feuille pleine dans les zones de silence de ses cartes, et sa feuille de
+// contrôle à part plus longue qu'une page.
 // Chaque production se chronomètre : la durée de la planche entière est un
 // coût que le rapport de la tâche relève, jamais une donnée écrite.
 import assert from 'node:assert/strict';
@@ -19,7 +22,7 @@ import { constante } from '../geometrie/constantes.js';
 import { PAPIERS } from '../geometrie/papiers.js';
 import { VERSION } from '../version.genere.js';
 import { cadreUtile, cellules, filets, imposer, nombrePlanches } from './imposition.js';
-import { produirePlanche } from './planche.js';
+import { produireControle, produirePlanche } from './planche.js';
 
 const ZONE = constante('ZONE_SILENCE_MM');
 const MARGE = constante('MARGE_PAGE_MM');
@@ -188,6 +191,81 @@ describe('produirePlanche : une feuille de contrôle plus longue qu\u{2019}une p
     });
     const attendu = imposer(150, 'A4', 'feuille').map((planche) => planche.map((i) => (i === null ? null : nomTemoin(i))));
     assert.deepEqual(nomsLus(lu.pages.slice(pagesControle), 'A4'), attendu);
+  });
+});
+
+
+describe('produirePlanche et produireControle : Avery 5392 (§ 11.2, § 11.3)', () => {
+  const AVERY = 'avery5392';
+  const ZONE_CARTE = constante('ZONE_SILENCE_CARTE_MM');
+  const entrees = (m) => ({
+    modele: m,
+    papier: 'Lettre',
+    imposition: 'feuille',
+    polices,
+    controle: textesControle(m, { papier: 'Lettre', imposition: 'feuille', planches: nombrePlanches(m.badges.length, 'Lettre', AVERY), modeleBadge: AVERY }),
+    filigrane: FILIGRANE,
+    modeleBadge: AVERY,
+  });
+  async function produireAvery(m) {
+    const debut = performance.now();
+    const octets = await produirePlanche(entrees(m));
+    durees.push({ cas: `Avery 5392 n = ${m.badges.length}`, ms: performance.now() - debut });
+    return lirePdf(octets);
+  }
+  const nomsDesCartes = (pages) =>
+    pages.map((page) =>
+      cellules('Lettre', AVERY).map((carte) => page.textes.find((t) => t.texte.startsWith('Témoin ') && dans(centre(t), carte))?.texte ?? null),
+    );
+
+  for (const n of [1, 6, 7, 257]) {
+    test(`n = ${n} : ${nombrePlanches(n, 'Lettre', AVERY)} feuille(s) de cartes, sans page de contrôle, les noms dans l’ordre de la pile`, async () => {
+      const lu = await produireAvery(modele(n));
+      assert.equal(lu.pages.length, [1, 1, 2, 43][[1, 6, 7, 257].indexOf(n)]);
+      const attendu = imposer(n, 'Lettre', 'feuille', AVERY).map((planche) => planche.map((i) => (i === null ? null : nomTemoin(i))));
+      assert.deepEqual(nomsDesCartes(lu.pages), attendu);
+    });
+  }
+
+  test('feuille pleine, brouillon : chaque texte dans le cadre utile de sa carte, hors de sa zone de silence ; aucun trait', async () => {
+    const lu = await produireAvery(modele(6, { brouillon: true }));
+    const [feuille] = lu.pages;
+    assert.deepEqual(feuille.segments, []);
+    for (const fragment of feuille.textes) {
+      const carte = cellules('Lettre', AVERY).find((c) => dans(centre(fragment), c));
+      assert.ok(carte !== undefined, JSON.stringify(fragment));
+      const cadre = cadreUtile(carte, AVERY);
+      const dedans =
+        fragment.x >= cadre.x - TOLERANCE &&
+        fragment.y >= cadre.y - TOLERANCE &&
+        fragment.x + fragment.l <= cadre.x + cadre.largeur + TOLERANCE &&
+        fragment.y + fragment.h <= cadre.y + cadre.hauteur + TOLERANCE;
+      assert.ok(dedans, `« ${fragment.texte} » ${JSON.stringify(fragment)} hors de ${JSON.stringify(cadre)}`);
+      assert.ok(cadre.x - carte.x >= ZONE_CARTE - TOLERANCE);
+    }
+    assert.equal(feuille.textes.filter(({ texte }) => texte === FILIGRANE).length, 6);
+  });
+
+  test('une feuille de contrôle à part plus longue qu’une page : le contour sur la première seule, chaque ligne une fois, dans la colonne de gauche des cartes', async () => {
+    const m = modele(150, { brouillon: true, reedition: true });
+    const lu = await lirePdf(await produireControle(entrees(m)));
+    assert.ok(lu.pages.length >= 2, `${lu.pages.length} page(s)`);
+    const estFiligrane = ({ texte, h }) => texte === FILIGRANE && h > 20;
+    const lues = lu.pages.flatMap(({ textes }) => textes.filter((t) => !estFiligrane(t)).map(({ texte }) => texte));
+    // Les lignes se replient dans la colonne : leurs fragments, blancs
+    // retirés, redonnent les lignes, dans l'ordre, chacune une fois.
+    assert.deepEqual(lues.slice(0, 3), ['0', '50', '100']);
+    const sansBlancs = (textes) => textes.join('').replace(/\s/gu, '');
+    assert.equal(sansBlancs(lues.slice(3)), sansBlancs(entrees(m).controle));
+    assert.ok(lues.length > 3 + entrees(m).controle.length, 'des lignes repliées');
+    assert.ok(lu.pages[0].segments.length > 0);
+    for (const page of lu.pages.slice(1)) assert.deepEqual(page.segments, []);
+    const milieu = cellules('Lettre', AVERY)[1].x;
+    for (const page of lu.pages) {
+      for (const { texte, x, l, y } of page.textes.filter((t) => !estFiligrane(t) && !['0', '50', '100'].includes(t.texte))) {
+        assert.ok(x >= MARGE - TOLERANCE && x + l <= milieu - MARGE + TOLERANCE, `« ${texte} » ${x} + ${l} en ${y}`);
+      }
+    }
   });
 });
 

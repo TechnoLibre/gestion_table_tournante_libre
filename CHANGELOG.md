@@ -5,16 +5,23 @@
 **Ce qui change pour vous**
 - L'application s'ouvre et affiche sa version dans un bandeau permanent et dans
   le titre de sa fenêtre.
-- La section « Badges » produit la planche de badges en PDF : quatre badges A6
-  par feuille A4, ou deux à plat par feuille Lettre, précédés d'une feuille de
-  contrôle à mesurer sous une règle avant d'imprimer la rame. Les badges se
-  rangent dans l'ordre alphabétique ou par table, feuille par feuille ou en pile
-  pour le massicot. Sous Windows, la planche se dépose à côté des fichiers de
-  l'événement et l'application en affiche le chemin ; « Ouvrir le dossier »,
+- La section « Badges » produit la planche de badges en PDF, sur deux modèles
+  au choix, que la machine retient : par défaut, des cartes Avery 5392
+  prédécoupées, six par feuille Lettre, sans rien à couper, leur feuille de
+  contrôle en un second PDF à imprimer sur papier ordinaire, qui montre aussi
+  le contour des six cartes pour vérifier l'alignement sur une feuille de
+  cartes ; ou des badges A6 à découper, quatre par feuille A4 ou deux à plat
+  par feuille Lettre, précédés de leur feuille de contrôle. Chaque feuille de
+  contrôle se mesure sous une règle avant d'imprimer. Les badges se rangent
+  dans l'ordre alphabétique ou par table, et les A6 feuille par feuille ou en
+  pile pour le massicot. Sous Windows, la planche se dépose à côté des fichiers
+  de l'événement et l'application en affiche le chemin ; « Ouvrir le dossier »,
   offert en tout temps dans la section, avant comme après la production, montre
   ce dossier dans l'explorateur.
-- Le format de papier se demande une seule fois, à la première planche ou au
-  premier aperçu, puis la machine le retient ; il se change d'un clic.
+- Le format de papier se demande une seule fois, au premier aperçu, puis la
+  machine le retient ; il se change d'un clic. Les badges ne le demandent
+  pas : les cartes Avery 5392 n'existent qu'en Lettre, et les badges A6
+  partent sur Lettre tant qu'un autre papier n'est pas choisi.
 - Avant de produire, l'application annonce le nombre de badges et de feuilles,
   nomme les homonymes que rien ne distingue et les caractères que la police ne
   sait pas dessiner ; un placement qui ne décrit plus la soirée est refusé, avec

@@ -22,7 +22,6 @@ export const EXEMPLES = [
   ['PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }],
   ['PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } }],
   ['PLANCHE_NON_ECRITE', { chemin: 'Soirée des Lucioles.badges_A4_feuille_2031-05-17_20-15-07.pdf', dossier: 'E:\\data', cause: 'EROFS', remede: { geste: 'enregistrerSous' } }],
-  ['PAPIER_REQUIS', { remede: { geste: 'choisirPapier' } }],
 ];
 
 export const TEXTES = [
@@ -32,4 +31,17 @@ export const TEXTES = [
   ['planche.tour', { tour: 2, table: null, siege: null, titre: null, absente: true }, 'Tour 2 \u{2014} absente'],
   ['planche.tour', { tour: 2, table: null, siege: null, titre: null, absente: false }, 'Tour 2 \u{2014} pas de table'],
   ['planche.tour', { tour: 3, table: 7, siege: 2, titre: 'animatrice', absente: false }, 'Tour 3 \u{2014} table 7, siège 2 \u{2014} animatrice'],
+  // Le badge de la feuille de contrôle, par modèle ; la consigne de la
+  // feuille à part d'Avery 5392.
+  ['planche.controle.badge', { largeur: 105, hauteur: 148, modeleBadge: 'a6' }, 'Badge : 105 × 148 mm (A6)'],
+  [
+    'planche.controle.badge',
+    { largeur: 101.6, hauteur: 76.2, modeleBadge: 'avery5392' },
+    'Badge : 101,6 × 76,2 mm (Avery 5392, six cartes prédécoupées par feuille)',
+  ],
+  [
+    'planche.controle.cartes',
+    { modeleBadge: 'avery5392' },
+    'Imprimer cette feuille sur papier ordinaire : posée sur une feuille Avery 5392, le contour des six cartes tombe sur leurs prédécoupes',
+  ],
 ];

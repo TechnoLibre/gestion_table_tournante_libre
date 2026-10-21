@@ -889,12 +889,13 @@ porte son repère et ses voisines. Au premier aperçu, le logiciel demande le
 format du papier, A4 ou Lettre, puis le garde pour ce poste ; il se change
 ensuite à tout moment.
 
-La **planche de badges** est le seul document produit en PDF : quatre badges
-par feuille A4, deux par feuille Lettre, avec leurs traits de coupe. Sa
-première page est une **feuille de contrôle** : mesurez son échelle sous une
-règle avant d’imprimer toute la rame, pour vérifier que l’imprimante n’a pas
-réduit la page. Les badges se tirent du placement retenu, ou d’une proposition
-choisie.
+La **planche de badges** est le seul document produit en PDF. Par défaut, elle
+s’imprime sur des **cartes Avery 5392** prédécoupées, six par feuille Lettre,
+sans rien à découper ; le modèle **A6 à découper** reste offert, quatre badges
+par feuille A4 ou deux par feuille Lettre, avec leurs traits de coupe. Une
+**feuille de contrôle** l’accompagne : mesurez son échelle sous une règle avant
+d’imprimer, pour vérifier que l’imprimante n’a pas réduit la page. Les badges
+se tirent du placement retenu, ou d’une proposition choisie.
 
 Imprimer et produire la planche ne modifient pas l’événement : ces commandes
 restent disponibles en lecture et sur un plan bloqué. Le logiciel n’interdit
@@ -922,33 +923,40 @@ porte l’instant de ce placement. C’est cette page qui part à l’imprimante
 le montage de la salle.*
 
 La planche se produit dans la section « Badges » de l’événement. On y choisit
+le **modèle de badge** — Avery 5392, ou A6 à découper —, que le poste garde
+d’une fois à l’autre, et l’ordre des badges, alphabétique ou par table du
+premier tour. Avec l’A6 seulement, la section montre aussi le papier — Lettre
+tant que le poste n’en a pas choisi d’autre, « Changer » le remplace — et
 l’imposition — feuille par feuille, ou en pile pour un massicot qui tranche
-toute la rame — et l’ordre des badges, alphabétique ou par table du premier
-tour. « Préparer » annonce ce qui sortira : le nombre de badges et de planches,
-les homonymes, les caractères que la police ne dessine pas. « Produire la
-planche » écrit le PDF à côté des fichiers de l’événement et en affiche le
-chemin ; dans un navigateur, le PDF se télécharge. Sa première page est la
-feuille de contrôle :
+toute la rame. « Préparer » annonce ce qui
+sortira : le nombre de badges et de feuilles, les homonymes, les caractères que
+la police ne dessine pas, le nom des fichiers. « Produire la planche » écrit le
+PDF à côté des fichiers de l’événement et en affiche le chemin ; dans un
+navigateur, le PDF se télécharge. Avec l’A6, la feuille de contrôle est la
+première page de la planche ; avec Avery 5392, elle est un **second PDF**, écrit
+à côté du premier, à imprimer sur papier ordinaire pour ne pas gâcher une
+feuille de cartes :
 
 ![La feuille de contrôle de la planche : la règle de 100 mm, puis les comptes de la soirée](doc/captures/24-badges-controle.png)
 
 *La règle du haut mesure 100 mm sur le papier : posez-y une vraie règle. Si les
-deux ne coïncident pas, l’imprimante a mis la page à l’échelle, et les badges
-ne tomberont pas sur les traits de coupe. Suivent le format du badge et du
-papier, l’imposition, le nombre de planches, les comptes de la soirée — un
-badge par personne présente, les exclus comptés à part —, l’instant du
-placement et la version du logiciel.*
+deux ne coïncident pas, l’imprimante a mis la page à l’échelle. Le contour des
+six cartes est à leur place exacte : posée sur une feuille Avery 5392, devant
+une fenêtre, la feuille imprimée doit le montrer sur les prédécoupes. Suivent
+le format du badge et du papier, le nombre de feuilles, les comptes de la
+soirée — un badge par personne présente, les exclus comptés à part —, l’instant
+du placement et la version du logiciel.*
 
-Viennent ensuite les planches, quatre badges A6 par feuille A4 :
+Vient ensuite la planche, six cartes par feuille :
 
-![La première planche : quatre badges A6 et leurs traits de coupe](doc/captures/25-badges-planche.png)
+![La première feuille de cartes : six badges Avery 5392](doc/captures/25-badges-planche.png)
 
 *Chaque badge porte le nom, l’organisation et la table de chaque tour ; une
 personne assise à la même table à chaque tour lit une seule ligne, comme
 « Toute la soirée — table 1 » sur le quatrième badge. En pied, le nom de
-l’événement et l’instant du placement. Les traits fins marquent la coupe :
-un vertical au milieu de la feuille, un horizontal sous chaque rangée de
-badges.*
+l’événement et l’instant du placement. Les cartes étant prédécoupées, la
+feuille ne porte aucun trait de coupe ; avec l’A6, des traits fins marquent la
+coupe.*
 
 Une personne absente à un tour garde la ligne de ce tour sur son badge, qui
 dit « absente » au lieu d’une table :

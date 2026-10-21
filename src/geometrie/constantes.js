@@ -220,6 +220,79 @@ export const CONSTANTES = Object.freeze(
         'le corps retenu, écrit dans ce registre',
     },
     {
+      nom: 'ZONE_SILENCE_CARTE_MM',
+      valeur: 5,
+      unite: 'mm',
+      mesure: "distance en deçà de laquelle aucun texte ne s'approche du bord d'une carte Avery 5392",
+      raison:
+        "une carte prédécoupée ne connaît pas d'erreur de coupe : sa zone couvre le seul décalage de " +
+        "l'imprimante, qui déplace l'impression par rapport aux prédécoupes, et laisse au texte la surface " +
+        "qu'une carte de 101,6 × 76,2 mm compte (§ 11.3)",
+      configuration: 'imprimantes visées, feuilles Avery 5392',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        'sur chaque imprimante visée : la feuille de contrôle posée sur une feuille Avery 5392, le plus grand ' +
+        "écart entre le contour imprimé et les prédécoupes, mesuré à la règle sur dix feuilles ; cet écart " +
+        "plus 2 mm, arrondi au millimètre supérieur, écrit dans ce registre",
+    },
+    {
+      nom: 'HAUTEUR_CAPITALE_NOM_MAX_CARTE_MM',
+      valeur: 7,
+      unite: 'mm',
+      mesure: "hauteur de capitale du nom sur une carte Avery 5392, au plus grand corps que la mise en page lui donne",
+      raison:
+        "le nom se lit à un mètre (§ 11.4) ; sur 66,2 mm de hauteur utile, deux lignes du nom à ce corps " +
+        "laissent la place de quatre tours titrés, de l'organisation et du pied",
+      configuration: 'carte Avery 5392 imprimée, police embarquée, lecture à un mètre',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une feuille de cartes ; lecture à un mètre par une personne qui n'a pas écrit le " +
+        'logiciel ; la hauteur retenue, écrite dans ce registre',
+    },
+    {
+      nom: 'CORPS_TOURS_CARTE_PT',
+      valeur: 12,
+      unite: 'pt',
+      mesure: 'corps des lignes de tour sur une carte Avery 5392',
+      raison:
+        'la table et le siège de chaque tour se lisent en main (§ 11.4) ; quatre tours titrés tiennent à ce ' +
+        'corps sous un nom de deux lignes au plus grand corps',
+      configuration: 'carte Avery 5392 imprimée, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une feuille de cartes ; lecture en main par une personne qui n'a pas écrit le " +
+        'logiciel ; le corps retenu, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_ORGANISATION_CARTE_PT',
+      valeur: 10,
+      unite: 'pt',
+      mesure: "corps de la ligne d'organisation sur une carte Avery 5392",
+      raison: "l'organisation se lit en main, sous le nom, sans prendre la place des tours (§ 11.4)",
+      configuration: 'carte Avery 5392 imprimée, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une feuille de cartes ; lecture en main par une personne qui n'a pas écrit le " +
+        'logiciel ; le corps retenu, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_PIED_CARTE_PT',
+      valeur: 7,
+      unite: 'pt',
+      mesure: "corps du pied d'une carte Avery 5392 : nom et date de l'événement, horodatage du placement",
+      raison: "le pied se lit en main, à l'accueil, et ne prend pas la place du nom ni des tours (§ 11.4)",
+      configuration: 'carte Avery 5392 imprimée, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une feuille de cartes ; lecture en main par une personne qui n'a pas écrit le " +
+        'logiciel ; le corps retenu, écrit dans ce registre',
+    },
+    {
       nom: 'CORPS_MIN_IMPRESSION_MM',
       valeur: 2.5,
       unite: 'mm',

@@ -3048,29 +3048,31 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **trois choses, et trois seulement** :
+Ce fichier porte **quatre choses, et quatre seulement** :
 
 | réglage | portée |
 |---|---|
 | le **cadrage** | indexé par identifiant d'événement |
 | le **format de papier** (§ 11.2) | global à la machine |
+| le **modèle de badge** (§ 11.2), clé `modele_badge` | global à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
 le fichier d'événement ferait voyager le bac d'un bureau avec le plan. Le
-logiciel le demande à la première sortie qui en a besoin — la première
-production d'une planche, ou le premier aperçu d'impression — et ne le redemande
-plus ; la section des badges et l'aperçu le montrent, et il se change d'un
-geste. La question offre chaque papier comme un choix distinct, d'un geste. Le
-redemander chaque fois apprend à cliquer sans lire (§ 5.9). Le choix s'écrit
-dans tout mode, en lecture et sur un plan bloqué : c'est un réglage de la
-machine, pas une modification de l'événement. En mode portable (§ 8.6), ce
-fichier suit la clé avec les événements.
+logiciel le demande au premier aperçu d'impression et ne le redemande plus ; les
+badges ne le demandent jamais, et partent sur Lettre tant qu'aucun papier n'est
+choisi, sans le retenir (§ 11.2). La section des badges, pour l'A6, et l'aperçu
+le montrent, et il se change d'un geste. La question offre chaque papier comme
+un choix distinct, d'un geste. Le redemander chaque fois apprend à cliquer sans
+lire (§ 5.9). Le choix s'écrit dans tout mode, en lecture et sur un plan
+bloqué : c'est un réglage de la machine, pas une modification de l'événement. En
+mode portable (§ 8.6), ce fichier suit la clé avec les événements.
 
 **Le cadrage s'écrit en différé**, et échappe nommément à la règle « fin du
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
-cadrage, le papier et la taille du texte passent par une même file, qui relit le
+cadrage, le papier, le modèle de badge et la taille du texte passent par une
+même file, qui relit le
 fichier avant chaque écriture : deux écrivains qui le liraient chacun avant que
 l'autre l'ait écrit perdraient le réglage de l'un. Un fichier que la lecture ne
 prend pas ne s'écrase pas. Ni lui, ni un dossier qui refuse de l'écrire, ne
@@ -3078,6 +3080,20 @@ bloque le choix du papier : le papier choisi vaut pour la séance sur ce dossier
 de travail, sans être retenu sur la machine, et un avertissement nomme le
 fichier et dit que le choix n'est pas retenu ; la première écriture des réglages
 qui y réussit le retient, et l'avertissement se retire. Le cadrage attend.
+
+**Le modèle de badge** décrit le support que la machine garnit — des cartes
+Avery 5392 prédécoupées, ou des A6 à découper (§ 11.2) —, pas le plan. Le
+fichier ne le porte que choisi ; sans lui, les badges partent sur Avery 5392,
+qui impose le papier Lettre, sans rien demander : le papier choisi pour
+l'aperçu ne change pas pour autant, et il reste partagé avec les badges A6.
+Une valeur présente hors des deux modèles rend le fichier illisible, comme un
+papier inconnu, et une construction qui ne connaît pas la clé la garde telle
+quelle. Le modèle se choisit dans la section des badges, s'écrit au geste qui
+le choisit, dans tout mode, par la même file, et se relit comme la taille du
+texte : au lancement, puis à chaque changement de dossier de travail, celui
+que le fichier porte, à défaut celui de la séance. Un fichier que la lecture
+ne prend pas, ou un dossier qui refuse de l'écrire, ne bloque pas le choix : le
+modèle vaut pour la séance.
 
 **La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
 (§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
@@ -4410,9 +4426,11 @@ qui ouvre la section des tables.
 
 ### 11.1 Une seule sortie PDF : la planche de badges
 
-Le logiciel produit **un seul document PDF** : la planche de badges à découper,
-distribués à l'accueil et portés autour du cou. Toute autre sortie se lit à
-l'écran et s'imprime par le navigateur ou par l'hôte `electron` (§ 11.7).
+Le logiciel produit **un seul document PDF** : la planche de badges,
+distribués à l'accueil et portés autour du cou — avec, pour les cartes Avery
+5392 prédécoupées, sa feuille de contrôle en un second PDF, à imprimer sur
+papier ordinaire (§ 11.3). Toute autre sortie se lit à l'écran et s'imprime
+par le navigateur ou par l'hôte `electron` (§ 11.7).
 
 **Il le produit en mémoire, par une bibliothèque embarquée** — `pdf-lib`, sa
 police lue par `fontkit` (§ 17, point 2). L'argument est
@@ -4420,9 +4438,10 @@ celui du § 14.4, et il est le seul qui tienne : une bibliothèque embarquée
 s'exécute sous `node`, donc **dans le cycle « à chaque modification »**. Un test
 de quelques secondes affirme que la boîte de page mesure 210 × 297 mm à moins de
 0,1 mm près, que la planche porte quatre cellules de 105 × 148 mm, que les
-filets de coupe tombent à 105, 148 et 296 mm, que l'ordre des badges est celui
-qu'annonce l'imposition choisie, et que les caractères accentués se retrouvent
-**dans la couche de texte** — pas dans une image.
+filets de coupe tombent à 105, 148 et 296 mm, que les six cartes Avery 5392
+tombent aux cotes de leur gabarit, sans un filet, que l'ordre des badges est
+celui qu'annonce l'imposition choisie, et que les caractères accentués se
+retrouvent **dans la couche de texte** — pas dans une image.
 
 Le chemin d'impression, lui, exige de démarrer l'application et un moteur de
 rendu : il appartient au niveau « navigateur », éprouvé **avant chaque
@@ -4475,10 +4494,38 @@ Conséquences à tenir :
   pas, et le mesurer là introduirait la seconde arithmétique que le § 13.2
   interdit.
 
-### 11.2 La planche : deux impositions, A4 et Lettre
+### 11.2 La planche : Avery 5392, ou l'A6 sur A4 et Lettre
 
-**Le logiciel sait produire sur les deux papiers, et aucun des deux n'est un cas
-de repli.** Le badge est un A6 exact — 105 × 148 mm — dans les deux cas ; ce qui
+**Le badge a deux modèles, et le modèle est distinct du papier.** Le modèle
+par défaut est **Avery 5392** : des cartes prédécoupées de 4 po × 3 po, six par
+feuille Lettre, qui n'ont besoin d'aucune coupe. Le second est **l'A6 à
+découper**, sur A4 ou sur Lettre. Le modèle est un réglage local de la
+machine (§ 8.5), choisi dans la section des badges, qui ne voyage pas avec
+l'événement. Avery 5392 impose son papier, le Lettre : la section ne montre
+alors ni l'imposition ni le papier. L'A6 prend le papier de la machine, que
+l'aperçu d'impression partage, et le Lettre tant qu'aucun n'est choisi : les
+badges ne posent jamais la question du papier.
+
+#### Avery 5392 : six cartes prédécoupées, sur Lettre
+
+La feuille est un Lettre portrait de six cartes de **101,6 × 76,2 mm** (4 po ×
+3 po), **à plat**, en **deux colonnes et trois rangées, sans gouttière**, à
+**6,35 mm** (0,25 po) des bords latéraux et **25,4 mm** (1 po) des bords haut et
+bas : 2 × 6,35 + 2 × 101,6 = 215,9 et 2 × 25,4 + 3 × 76,2 = 279,4, les cotes
+du Lettre. Ces cotes ont une seule définition dans le code, à côté de l'A6, et
+la planche les reprend à 0,01 mm près, sans calcul ni centrage. Le texte de
+chaque carte se lit droit, sans rotation.
+
+Les cartes étant prédécoupées, la planche **ne porte aucun filet de coupe**, et
+la section **n'offre pas d'imposition** : les cartes suivent l'ordre de la
+pile, carte après carte, feuille après feuille — la feuille par feuille du
+§ 11.6. La pagination s'éprouve sur `n = 1, 6, 7, 257` : 1, 1, 2 et **43
+feuilles**, `7` séparant la troncature de l'arrondi par excès.
+
+#### L'A6 : deux impositions, A4 et Lettre
+
+**L'A6 se produit sur les deux papiers, et aucun des deux n'est un cas de
+repli.** Le badge est un A6 exact — 105 × 148 mm — dans les deux cas ; ce qui
 change est le nombre de cellules par feuille et le tracé de coupe.
 
 | papier | format | badges par feuille | axes de coupe | pour 257 badges |
@@ -4486,19 +4533,23 @@ change est le nombre de cellules par feuille et le tracé de coupe.
 | **A4** | 210 × 297 mm | **4**, deux colonnes de 105 et deux rangées de 148 | **3** : une verticale, deux horizontales | **65 planches** |
 | **Lettre** | 215,9 × 279,4 mm | **2**, à plat, 148 de large et 105 de haut | **5** : un encadrement complet | **129 planches** |
 
-**Le logiciel demande le format à la première sortie et ne le redemande plus**
-(§ 8.5) : à la première production d'une planche, ou au premier aperçu
-d'impression, puis jamais ; le format retenu reste affiché, et se change d'un
-geste. Il n'en impose aucun par défaut : choisir pour l'opérateur, c'est
-produire soixante-cinq feuilles inutilisables quand le bac contient l'autre
-papier. Le format retenu est écrit sur la feuille de contrôle et dans le nom du
-fichier (§ 11.3, § 11.6), parce que c'est la seule chose qui survit à l'envoi de
-la planche à quelqu'un d'autre.
+**Les badges partent sur Lettre sans rien demander** (§ 8.5) : Avery 5392, dont
+la feuille de cartes n'existe qu'en Lettre, l'impose ; l'A6 le prend tant que la
+machine n'a pas de papier, sans l'écrire dans les réglages locaux, et le papier
+qu'on y choisit d'un geste, « Changer », devient celui de la machine. Le défaut
+ne choisit pas en silence : la section montre le papier à côté du modèle, et
+l'annonce nomme le papier et le nombre de feuilles avant toute production
+(§ 11.8). L'aperçu d'impression, lui, demande le format à sa première ouverture,
+puis jamais ; le format retenu reste affiché, et se change d'un geste. Le format
+retenu est écrit sur la feuille de contrôle et dans le nom du fichier (§ 11.3,
+§ 11.6), parce que c'est la seule chose qui survit à l'envoi de la planche à
+quelqu'un d'autre.
 
-**Les deux impositions sont éprouvées à égalité** (§ 14.4) : la pagination sur
-`n = 1, 4, 5, 259, 261` en A4 et `n = 1, 2, 3, 257` en Lettre, et la géométrie —
-cellules, filets, zone de silence — sur chacune. Une branche qui ne serait
-éprouvée que « au cas où » est une branche qui sort fausse le jour où elle sert.
+**Les deux impositions de l'A6 et la feuille Avery sont éprouvées à égalité**
+(§ 14.4) : la pagination sur `n = 1, 4, 5, 259, 261` en A4, `n = 1, 2, 3, 257`
+en Lettre et `n = 1, 6, 7, 257` pour Avery 5392, et la géométrie — cellules,
+filets, zone de silence — sur chacune. Une branche qui ne serait éprouvée que
+« au cas où » est une branche qui sort fausse le jour où elle sert.
 
 #### L'A4 : quatre cellules, un millimètre perdu
 
@@ -4556,11 +4607,15 @@ table à aucun tour, son badge serait vide, et c'est ce cas qui fait passer de 6
 pages à 65 avec une case blanche, ou à 64, selon l'implémentation. Le témoin de
 257 badges donne **65 planches A4** et **129 planches Lettre**.
 
-**Le format de papier est un réglage local de la machine** (§ 8.5), retenu d'une
-séance à l'autre, jamais écrit dans le fichier d'événement : il décrit le bac de
-l'imprimante, pas le plan.
+**Le format de papier et le modèle de badge sont des réglages locaux de la
+machine** (§ 8.5), retenus d'une séance à l'autre, jamais écrits dans le fichier
+d'événement : ils décrivent le bac de l'imprimante et le support qu'on y pose,
+pas le plan.
 
 ### 11.3 Le découpage, et la feuille de contrôle
+
+Ce qui suit sur les filets et la coupe vaut pour l'A6 ; les cartes Avery 5392,
+prédécoupées, n'en portent aucun.
 
 **Les filets de coupe sont fins, d'une encre neutre, continus**, tracés sur les
 **trois** axes de coupe. Ils tombent sur le bord du badge, dans la zone de
@@ -4581,7 +4636,11 @@ dit, sans quoi la prochaine main la « corrigera » par le calcul :
   biais d'entraînement du papier, qui n'ont rien à voir avec la coupe.
 
 **8 mm est aujourd'hui un défaut de travail, non une constante mesurée au sens du
-§ 14.1**, et la constante le déclare. La mesure appartient au **niveau manuel**
+§ 14.1**, et la constante le déclare. Une carte Avery 5392 n'a pas d'erreur de
+coupe : sa zone de silence, une constante à elle, ne couvre que le décalage de
+l'imprimante par rapport aux prédécoupes, et vaut **5 mm**, un défaut de
+travail lui aussi, que la feuille de contrôle posée sur une feuille de cartes
+permet de relever. La mesure appartient au **niveau manuel**
 du § 14.4 : elle se fait sur les imprimantes visées, avant la livraison, parce
 qu'un banc de navigateur ne mesure ni un décalage d'imprimante ni une erreur de
 main. Une zone calculée au plus juste fait couper dans un patronyme.
@@ -4594,22 +4653,31 @@ bande perdue pourrait être répartie et la troisième coupe disparaître — ma
 planche cesserait alors de pouvoir s'annoncer A6, et **une sortie qui ment sur son
 format est pire qu'une sortie qui coûte une coupe**.
 
-**La feuille de contrôle est la page 1 du document**, et les pages qui la
-suivent quand ses lignes — la liste des noms d'une réédition — ne tiennent pas
-sur une page ; **elle ne se découpe pas**, ses pages de suite non plus. Elle
-porte une **échelle graphique de 100 mm, repérée tous les 10 mm**, sur sa
-première page, les dimensions annoncées du badge, le format de papier,
-l'imposition retenue, le nombre de planches, le compte de badges produits et le
-compte attendu, le nom et la date de l'événement, la source — le placement
-retenu, ou la proposition imprimée par son numéro, que l'horodatage ne
-distingue pas des autres propositions de sa génération —, l'horodatage du
-placement, la version (§ 18.6), la consigne d'impression — recto seul, à 100 % —, les
+**La feuille de contrôle de l'A6 est la page 1 du document**, et les pages qui
+la suivent quand ses lignes — la liste des noms d'une réédition — ne tiennent
+pas sur une page ; **elle ne se découpe pas**, ses pages de suite non plus.
+**Celle d'Avery 5392 est un second PDF**, écrit à côté du premier sous le même
+nom, `.controle` à la place de `.badges` (§ 11.6) : une feuille de cartes gâchée
+pour une règle coûterait six badges, et la feuille de contrôle s'imprime sur
+papier ordinaire. Elle porte en plus, sur sa première page, le **contour des six
+cartes à leur place exacte**, du trait fin des filets : posée sur une feuille
+Avery 5392, il tombe sur les prédécoupes, ce qui vérifie l'alignement de
+l'imprimante avant d'engager les cartes ; ses lignes de contrôle se replient
+alors dans la colonne de gauche des cartes, sans croiser le contour du milieu,
+et une ligne de plus dit de l'imprimer sur papier ordinaire. Chacune porte une
+**échelle graphique de 100 mm, repérée tous les 10 mm**, sur sa première page,
+les dimensions annoncées du badge et son modèle — « (A6) », ou « (Avery 5392,
+six cartes prédécoupées par feuille) » —, le format de papier, l'imposition
+retenue — l'A6 seulement —, le nombre de planches, le compte de badges produits
+et le compte attendu, le nom et la date de l'événement, la source — le placement
+retenu, ou la proposition imprimée par son numéro, que l'horodatage ne distingue
+pas des autres propositions de sa génération —, l'horodatage du placement, la
+version (§ 18.6), la consigne d'impression — recto seul, à 100 % —, les
 caractères que la police n'a pas, par leur point de code (§ 11.5), et le
 filigrane BROUILLON s'il y a lieu, sur chacune de ses pages. L'opérateur la
-mesure sous une règle avant d'engager la
-rame : si la planche est sortie « ajustée à la page », la graduation ne fait plus
-100 mm et le défaut se découvre sur la première feuille au lieu de la
-soixante-cinquième.
+mesure sous une règle avant d'engager la rame : si la planche est sortie
+« ajustée à la page », la graduation ne fait plus 100 mm et le défaut se
+découvre sur la première feuille au lieu de la soixante-cinquième.
 
 **L'impression est recto seul.** Un verso aligné dépend d'un retournement dont le
 décalage se cumule avec celui du recto, et un badge dont le dos appartient à
@@ -4680,8 +4748,17 @@ porte l'identifiant en pied des seuls badges concernés.**
 
 ### 11.5 Les cas qui cassent la mise en page
 
-Le badge est un cadre utile de **89 × 132 mm** — 105 et 148 moins deux fois la
-zone de silence. Ce qu'on y met est variable. Le logiciel fixe donc un **ordre de
+Le badge A6 est un cadre utile de **89 × 132 mm** — 105 et 148 moins deux fois
+la zone de silence ; la carte Avery 5392, de **91,6 × 66,2 mm** — 101,6 et 76,2
+moins deux fois la sienne. Chaque modèle a ses corps de départ, au registre des
+constantes : sur la carte, la capitale du nom part de 7 mm, les tours de
+12 pt, l'organisation de 10 pt, le pied de 7 pt ; les planchers de
+lisibilité — la capitale du nom à 4 mm, les tours à 10 pt — sont communs aux
+deux modèles. Mesuré sur la police embarquée, un nom qui demande deux lignes,
+quatre tours titrés sous sièges attribués, l'organisation et le pied entier
+tiennent ensemble sur la carte ; la ligne « Toute la soirée — table 13 —
+animation » mesure 65,3 mm au plancher des tours, et tient sur une ligne. Ce
+qu'on y met est variable. Le logiciel fixe donc un **ordre de
 sacrifice**, écrit une fois, et ne laisse jamais la mise en page se résoudre par
 un débordement.
 
@@ -4711,7 +4788,9 @@ un débordement.
   pas à deux colonnes au corps plancher, le logiciel **refuse de produire la
   planche** et nomme le nombre de tours en cause. Le gabarit tient largement les
   deux à six tours d'une soirée ordinaire ; ce refus est une garde contre la
-  troncature silencieuse, pas un comportement attendu.
+  troncature silencieuse, pas un comportement attendu. Sur la carte Avery 5392,
+  sous un nom court et son organisation, vingt lignes de tour sans titre tiennent
+  sur deux colonnes, et la vingt et unième se refuse.
 - **Un titre long sur une ligne de tour.** Une ligne de tour s'écrit entière ; au
   corps plancher seulement, une ligne trop large pour sa colonne **abrège son
   titre** avec une marque. La table et le siège ne s'abrègent jamais : c'est la
@@ -4763,8 +4842,10 @@ réserve au premier tour viennent après les tables, puis celles qui y sont
 absentes.
 
 **L'ordre sur la feuille dépend de la façon de couper, et le logiciel le
-demande.** C'est la différence entre une pile prête à l'emploi et des centaines de
-cartons à intercaler à la main.
+demande** pour l'A6 ; les cartes Avery 5392, qui ne se coupent pas, suivent
+toujours la feuille par feuille, et la question ne se pose pas. C'est la
+différence entre une pile prête à l'emploi et des centaines de cartons à
+intercaler à la main.
 
 | imposition | ce que le logiciel écrit sur la planche *i* (sur *S* planches, *P* cellules par planche) | pour qui |
 |---|---|---|
@@ -4786,7 +4867,17 @@ quelqu'un d'autre. Le nom suit un gabarit fixe :
 
 ```
 <base>.badges[-p<id>][-<k>]_<A4|Lettre>_<feuille|pile>[_table]_<AAAA-MM-JJ_HH-MM-SS>[_<n>].pdf
+<base>.badges[-p<id>][-<k>]_avery5392[_table]_<AAAA-MM-JJ_HH-MM-SS>[_<n>].pdf
+<base>.controle[-p<id>][-<k>]_avery5392[_table]_<AAAA-MM-JJ_HH-MM-SS>[_<n>].pdf
 ```
+
+— la première ligne pour l'A6, les deux suivantes pour les cartes Avery 5392
+et leur feuille de contrôle à part, où le modèle tient la place du papier et de
+l'imposition, qu'il fixe. Les deux noms d'Avery se choisissent ensemble : même
+rang, le premier où ni l'un ni l'autre n'est pris, et même tête quand la base
+se raccourcit, réglée sur le plus long des deux. Le plus long nom d'Avery sans
+marque, `.controle-9999_avery5392_<date>.pdf`, compte 48 unités, sous les 51
+du plus long de l'A6.
 
 — la base des fichiers de l'événement (§ 8.6), raccourcie et suivie d'un point
 quand le chemin dépasserait la borne (ci-dessous) ; l'identifiant de la proposition
@@ -4832,14 +4923,16 @@ pas, le nom garde sa base, l'écriture refusée se dit, et « Enregistrer sous�
 dépose la planche ailleurs.
 
 **Sous `electron`, le fichier se dépose à côté des fichiers d'événement** (§ 8.6),
-par une écriture atomique, et le logiciel en nomme le chemin ; une écriture
-refusée se dit et offre « Enregistrer sous… ». La section des badges offre **en
+par une écriture atomique, et le logiciel en nomme le chemin — les cartes
+d'abord, puis la feuille de contrôle à part, chacune nommée ; une écriture
+refusée se dit et offre « Enregistrer sous… », qui ouvre un dialogue par
+fichier. La section des badges offre **en
 tout temps « Ouvrir le dossier »**, parmi ses commandes, avant toute production
 comme après : la commande montre dans l'explorateur du système le dossier de
 travail, où la planche se dépose, et jamais l'emplacement choisi par
 « Enregistrer sous… ». **Sous `web`, la planche se télécharge** : le dossier de
-travail y est invisible à l'opérateur, la section nomme le fichier, sans chemin,
-et n'offre pas « Ouvrir le dossier ».
+travail y est invisible à l'opérateur, la section nomme le fichier — les deux
+fichiers d'Avery 5392 —, sans chemin, et n'offre pas « Ouvrir le dossier ».
 
 **La planche se produit depuis le retenu, ou depuis une proposition choisie**
 (§ 2.1, étape 12). La section des badges offre le retenu quand il existe, et la
@@ -4854,8 +4947,9 @@ reprend pas pour elle, puisque le retenu est sain.
 **Produire la planche n'est pas une modification.** Elle n'écrit aucun fichier
 d'événement et n'ajoute aucune entrée d'historique (§ 8.2), donc elle reste
 disponible en **mode lecture** et sur un plan **bloqué**, où la lecture et
-l'impression restent ouvertes (§ 9). Ses seules écritures sont le PDF lui-même
-et, au premier choix, le papier dans les réglages locaux (§ 8.5).
+l'impression restent ouvertes (§ 9). Ses seules écritures sont ses PDF et, au
+premier choix, le papier ou le modèle de badge dans les réglages locaux
+(§ 8.5).
 
 ### 11.7 Les autres sorties, et ce que porte toute page imprimée
 
@@ -6508,9 +6602,9 @@ suivante ; une règle qui fait échouer la construction tient.
 | niveau | ce qu'il couvre | quand |
 |---|---|---|
 | **`node`, série surveillée** | moteur, géométrie, CSV, indicateurs et plafonds — des fonctions pures ; l'application et les modules purs de l'interface, sur le système de fichiers simulé et l'horloge pilotée ; cohérence des versions (§ 18.5) ; appariement captures/manifeste (§ 19.7) ; aller-retour et canonicité du stockage sur la petite démonstration ; quelques productions de la planche de badges, sur de petits modèles et en nombre compté par fichier, avec contrôle de géométrie et de couche de texte ; grille de propriétés sur petites instances | **à chaque modification**, quelques secondes (§ 14.14) |
-| **`node:long`** | accord de l'incrémental à 1, 10, 100, 1 000 et 10 000 mouvements ; rejeu du générateur et empreinte ; pagination des badges sur ses cinq comptes A4, ses quatre comptes Lettre et ses deux impositions ; reconstruction de tous les instants du journal ; aller-retour sur la grande démonstration ; coût d'enregistrement ; sonde d'écriture sur système de fichiers réel ; grande grille de propriétés | avant un commit, et à la construction |
+| **`node:long`** | accord de l'incrémental à 1, 10, 100, 1 000 et 10 000 mouvements ; rejeu du générateur et empreinte ; pagination des badges sur ses cinq comptes A4, ses quatre comptes Lettre et ses deux impositions, et sur ses quatre comptes Avery 5392 ; reconstruction de tous les instants du journal ; aller-retour sur la grande démonstration ; coût d'enregistrement ; sonde d'écriture sur système de fichiers réel ; grande grille de propriétés | avant un commit, et à la construction |
 | **navigateur** | ce que l'interface dessine, ce que les gestes produisent, les coordonnées ; le scénario de pilotage (§ 19.3) ; les épreuves de style calculé | avant chaque livraison |
-| **manuel** | une soirée complète, de la saisie à l'impression ; l'impression réelle sur chaque papier ; le décalage des imprimantes et leur marge non imprimable (§ 11.3) ; les corps du badge et le corps minimal du plan imprimé, la lisibilité des listes de noms, la largeur du bloc de noms, le seuil du glisser, la durée de la pression longue (§ 19.10) ; `pointercancel` et `touch-action` (§ 7.3) | avant chaque livraison au client |
+| **manuel** | une soirée complète, de la saisie à l'impression ; l'impression réelle sur chaque papier, et sur une feuille Avery 5392 ; le décalage des imprimantes et leur marge non imprimable (§ 11.3), et l'écart du contour de la feuille de contrôle aux prédécoupes ; les corps du badge et le corps minimal du plan imprimé, la lisibilité des listes de noms, la largeur du bloc de noms, le seuil du glisser, la durée de la pression longue (§ 19.10) ; `pointercancel` et `touch-action` (§ 7.3) | avant chaque livraison au client |
 | **sa propre commande** | le banc de mesure (§ 19.10), `make banc` ; l'audit par mutation (§ 14.13), `make mutation` | avant une livraison, sous aucun budget |
 
 **La commande surveillée ne lance que le projet `node`.** Le lanceur en porte
@@ -7234,11 +7328,17 @@ qui retire la bande perdue —, et aucun contenu de badge à moins de la zone de
 silence d'un axe de coupe ou d'un bord de feuille. Ce ne sont pas deux médianes :
 148 n'est pas la médiane de 297.
 
+**La feuille Avery 5392 s'affirme aux cotes du gabarit** : six cartes de 101,6 ×
+76,2 mm, deux colonnes et trois rangées, la première à 6,35 mm du bord gauche et
+25,4 mm du haut, à 0,01 mm près, et **aucun filet** : les cartes sont
+prédécoupées. Sa feuille de contrôle, un PDF à part, porte le contour des six
+cartes aux mêmes cotes.
+
 **La pagination s'éprouve sur les comptes qui séparent les deux arrondis, et sur
 les deux impositions** : `n = 1, 4, 5, 259, 261` en A4 — jamais 260, où `260 / 4`
-tombe juste et où un calcul qui tronque rend la même valeur — et
-`n = 1, 2, 3, 257` en Lettre. Le compte est celui des **participants non exclus**.
-Série `node:long`.
+tombe juste et où un calcul qui tronque rend la même valeur — et `n = 1, 2, 3,
+257` en Lettre, et `n = 1, 6, 7, 257` sur la feuille Avery 5392. Le compte est
+celui des **participants non exclus**. Série `node:long`.
 
 **Deux exports du même placement produisent la même couche de texte.** Il refuse
 l'horodatage d'export glissé dans le pied de page à la place de celui du placement.
@@ -8496,8 +8596,8 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
 | `21-historique.png` | idem | le panneau d'historique ouvert à côté du plan : la liste, la plus récente en haut, chaque ligne sa date et son heure ; un geste défait au clavier, sa ligne « Défait (Ctrl+Z) : … », qui n'est pas abandonnée, et sous elle le geste défait, sur un fil abandonné, en encre secondaire et marqué ; en tête, l'instant courant, nommé « Avant l'accueil » par le champ du panneau (§ 8.2, § 8.3) | au moins un fil abandonné est présent et marqué comme tel ; le libellé du retour nomme la touche ; le jalon est sur l'instant courant, et le nommer ne change pas la révision |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
-| `24-badges-controle.png` / `25-badges-planche.png` | idem | la **feuille de contrôle** avec son échelle de 100 mm et ses comptes, puis une **planche** de quatre A6 et ses trois filets de coupe ; trois badges écrivent la table de chaque tour, le quatrième une seule ligne, « Toute la soirée — table 1 » (§ 11.4) | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle avant d'engager la rame, et une planche seule ne le montre pas |
-| `25a-badge-absente.png` | idem que `02c`, la meilleure dérivée retenue | la page de la réédition des badges de la partante et de l'arrivée : « Tour 3 — absente » sur l'un, « Tour 1 — absente » sur l'autre (§ 11.5) | « Retenir » n'ouvre aucune fenêtre, le retenu n'étant ajusté qu'aux participants ; seule la planche s'écrit ; tramée du PDF comme `24` et `25` (§ 19.6) |
+| `24-badges-controle.png` / `25-badges-planche.png` | idem, sur une machine qui n'a pas choisi de modèle de badge : Avery 5392 | la **feuille de contrôle à part**, avec son échelle de 100 mm, le contour des six cartes et ses comptes, puis la première **feuille de cartes**, six cartes Avery 5392 sans filet, les six premiers noms de l'ordre alphabétique ; une personne assise à la même table à chaque tour lit une seule ligne, « Toute la soirée — table 1 » (§ 11.4) | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle et pose sur une feuille de cartes avant d'engager les cartes, et une feuille de cartes seule ne le montre pas ; produire n'écrit que les deux PDF |
+| `25a-badge-absente.png` | idem que `02c`, la meilleure dérivée retenue | la feuille de cartes de la réédition des badges de la partante et de l'arrivée : « Tour 3 — absente » sur l'un, « Tour 1 — absente » sur l'autre (§ 11.5) | « Retenir » n'ouvre aucune fenêtre, le retenu n'étant ajusté qu'aux participants ; seuls la planche et sa feuille de contrôle s'écrivent ; tramée du PDF comme `24` et `25` (§ 19.6) |
 
 Une image montre ce que tient la surface défilante d'un cadre de 1 366 × 700
 (§ 19.4), soit 482 px de haut sous la barre du plan ; ce que la ligne du tableau
@@ -8705,7 +8805,8 @@ de fusion sur le texte et sur les marques porteuses d'information.
 
 ### 19.6 Les images qui ne viennent pas du navigateur
 
-**La planche de badges est le seul PDF** (§ 11.1), et le logiciel la construit
+**La planche de badges est le seul PDF** (§ 11.1) — avec, pour Avery 5392, sa
+feuille de contrôle à part —, et le logiciel la construit
 depuis le modèle par une bibliothèque embarquée, jamais par le moteur de rendu. Une
 capture d'écran d'un aperçu, pour la montrer, exigerait une **seconde
 implémentation de la mise en page** — la double arithmétique que le § 13.2
@@ -8720,13 +8821,14 @@ l'**empreinte canonique du PDF produit**, que l'horloge contrôlée du § 19.4 r
 stable, et non sur les pixels tramés.
 
 Le PDF tramé est celui que la section des badges vient de produire dans le
-parcours, et non une seconde production : la page le passe aux commandes du
-lanceur, sous `node`, qui le lisent par `pdfjs-dist` — sa couche de texte, ses
-traits, la taille de ses pages — et, sous `make captures` seulement, le trament
-à 96 ppp par le canevas natif que `pdfjs-dist` charge. **Seul `make captures`
-exige ce canevas** : en vérification, le parcours lit le PDF sans le tramer, et
-le contrôle porte sur son empreinte ; sans canevas, le tramage se refuse en le
-nommant, et l'étape échoue sans rien publier.
+parcours — la feuille de contrôle à part pour `24`, la première feuille de
+cartes pour `25` et `25a` —, et non une seconde production : la page le passe
+aux commandes du lanceur, sous `node`, qui le lisent par `pdfjs-dist` — sa
+couche de texte, ses traits, la taille de ses pages — et, sous `make captures`
+seulement, le trament à 96 ppp par le canevas natif que `pdfjs-dist` charge.
+**Seul `make captures` exige ce canevas** : en vérification, le parcours lit le
+PDF sans le tramer, et le contrôle porte sur son empreinte ; sans canevas, le
+tramage se refuse en le nommant, et l'étape échoue sans rien publier.
 
 **Le plan, lui, n'est plus un PDF** : ses deux images viennent du navigateur, sur
 la **vue d'aperçu d'impression** du § 11.7, qui applique au document vivant la
