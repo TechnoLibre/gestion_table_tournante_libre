@@ -317,7 +317,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PRO-01` | Produire la planche de badges en PDF, sur A4 ou Lettre | § 11.1, § 11.2 |
 | `PRO-02` | Vérifier le découpage par la feuille de contrôle | § 11.3 |
 | `PRO-03` | Ordonner les badges pour l'accueil | § 11.6 |
-| `PRO-04` | Ouvrir le dossier où la planche se dépose | § 11.6 |
+| `PRO-04` | Ouvrir le dossier de l'événement, où la planche se dépose | § 11.6 |
 | `PRO-05` | Imprimer la liste d'accueil | § 11.7 |
 | `PRO-06` | Imprimer une feuille par table | § 11.7 |
 | `PRO-07` | Imprimer le plan de salle, tour par tour | § 11.7 |
@@ -5077,25 +5077,35 @@ retire de la fin d'un nom et que la dérivation retire donc aussi (§ 8.6) : un
 nom raccourci ne se confond avec aucun nom entier. Une base lue sur le disque
 peut finir par un point ; son nom se choisit alors parmi les entrées du
 dossier, si bien que la planche entière d'une base qui tient ne remplace jamais
-une planche raccourcie. Le nom raccourci dépend de
-la racine du dossier qui le reçoit. Quand même un caractère de la base ne tient
-pas, le nom garde sa base, l'écriture refusée se dit, et « Enregistrer sous… »
-dépose la planche ailleurs.
+une planche raccourcie. Le nom raccourci dépend du chemin du dossier qui le
+reçoit, celui de l'événement — la racine, un séparateur, le dossier — : la
+borne compte le nom de l'événement deux fois, dans le dossier et dans la base,
+si bien qu'un nom d'événement long raccourcit plus tôt une planche marquée.
+Quand même un caractère de la base ne tient pas, le nom garde sa base,
+l'écriture refusée se dit, et « Enregistrer sous… » dépose la planche ailleurs.
 
-**Sous `electron`, le fichier se dépose à côté des fichiers d'événement**
-(§ 8.6), par une écriture atomique, et le logiciel en nomme le chemin — les
-cartes d'abord, puis la feuille de contrôle à part, chacune nommée ; une
-écriture refusée se dit en nommant le fichier en cause — une feuille de contrôle
-refusée après les cartes dit aussi que les cartes, elles, sont déposées, et où —
-et offre « Enregistrer sous… », qui ouvre un dialogue par fichier et nomme
-chaque chemin choisi ; une feuille de contrôle refusée au second dialogue se dit
-de même, le chemin des cartes écrites montré. La section des badges offre **en
-tout temps « Ouvrir le dossier »**, parmi ses commandes, avant toute production
-comme après : la commande montre dans l'explorateur du système le dossier de
-travail, où la planche se dépose, et jamais l'emplacement choisi par
-« Enregistrer sous… ». **Sous `web`, la planche se télécharge** : le dossier de
-travail y est invisible à l'opérateur, la section nomme le fichier — les deux
-fichiers d'Avery 5392 —, sans chemin, et n'offre pas « Ouvrir le dossier ».
+**Sous `electron`, le fichier se dépose dans le dossier de l'événement**
+(§ 8.6), `<racine>\<dossier>\<nom>`, par une écriture atomique ; les noms déjà
+pris se lisent dans ce dossier, et le logiciel nomme le chemin de chaque
+fichier — les cartes d'abord, puis la feuille de contrôle à part, chacune
+nommée ; une écriture refusée se dit en nommant le fichier en cause et le
+dossier — une feuille de contrôle refusée après les cartes dit aussi que les
+cartes, elles, sont déposées, et où — et offre « Enregistrer sous… », qui ouvre
+un dialogue par fichier et nomme chaque chemin choisi ; une feuille de contrôle
+refusée au second dialogue se dit de même, le chemin des cartes écrites montré.
+Un dossier d'événement qui disparaît pendant la séance — déplacé, renommé ou
+retiré hors de l'application — ne se recrée pas (§ 8.6) : la production se
+refuse en disant le dossier introuvable, et « Enregistrer sous… » reste offert.
+La section des badges offre **en tout temps « Ouvrir le dossier »**, parmi ses
+commandes, avant toute production comme après : la commande montre dans
+l'explorateur du système le dossier de l'événement, où la planche se dépose,
+sous la racine où l'événement est ouvert — la nouvelle, après l'écriture
+ailleurs (§ 8.6) —, et jamais l'emplacement choisi par « Enregistrer sous… » ;
+un dossier disparu s'y refuse de même, nommé. L'accueil garde « Ouvrir dans
+l’explorateur », qui montre le dossier de travail (§ 8.6). **Sous `web`, la
+planche se télécharge** : le dossier de travail y est invisible à l'opérateur,
+la section nomme le fichier — les deux fichiers d'Avery 5392 —, sans chemin, et
+n'offre pas « Ouvrir le dossier ».
 
 **La planche se produit depuis le retenu, ou depuis une proposition choisie**
 (§ 2.1, étape 12). La section des badges offre le retenu quand il existe, et la
@@ -5120,7 +5130,7 @@ jamais abrégées. Les personnes exclues n'y figurent pas. Le fichier est celui 
 l'export des participants (§ 10.3) : UTF-8 avec marque d'ordre d'octets, `;`,
 CRLF entre les enregistrements, un saut de ligne dans la cellule des tours, qui
 s'écrit alors entre guillemets (RFC 4180). Mêmes entrées, mêmes octets. Il se
-dépose à côté des fichiers d'événement, comme la planche, et « Ouvrir le
+dépose dans le dossier de l'événement, comme la planche, et « Ouvrir le
 dossier » le montre ; sous `web`, il se télécharge. Son nom suit le gabarit de
 la planche, sans papier, imposition ni modèle, qui ne changent pas la liste :
 

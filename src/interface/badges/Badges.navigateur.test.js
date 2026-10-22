@@ -26,7 +26,7 @@ import { listeBadges, modelePlanche } from '../../application/planche.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
 import { ErreurStockage } from '../../stockage/erreurs.js';
-import { SUFFIXES } from '../../stockage/noms.js';
+import { SUFFIXES, decouperCle } from '../../stockage/noms.js';
 import { FICHIER_REGLAGES } from '../../stockage/reglages_locaux.js';
 import { VERSION } from '../../version.genere.js';
 import { couleurDeJeton } from '../../../test/navigateur/captures.js';
@@ -70,9 +70,26 @@ const produireListe = (m) => dans(m, '[data-section="badges"] [data-commande="pr
 // le journal ou la version précédente d'un événement, et toutes les autres.
 const ecrituresEvenement = (m, depuis) =>
   m.trace.slice(depuis).filter(([, , chemin]) => [SUFFIXES.etat, SUFFIXES.journal, SUFFIXES.precedent].some((suffixe) => chemin.endsWith(suffixe)));
-const planchesEcrites = (m, depuis) => m.trace.slice(depuis).filter(([primitive]) => primitive === 'ecrireOctetsAtomique');
-// Le texte d'un fichier du dossier de travail, marque d'ordre d'octets gardée.
-const texteFichier = (m, nom) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(m.fs.octets('documents', nom));
+// Le dossier de l'événement ouvert, relatif à la racine.
+const dossierOuvert = (m) => decouperCle(m.seance.etat().evenement.cle).dossier;
+// Les dépôts de la planche et de la liste relevés depuis le rang donné,
+// [primitive, racine, nom] : chacun se fait dans le dossier de l'événement,
+// que l'épreuve exige, et le nom y est relatif.
+const planchesEcrites = (m, depuis) => {
+  const tete = `${dossierOuvert(m)}/`;
+  return m.trace
+    .slice(depuis)
+    .filter(([primitive]) => primitive === 'ecrireOctetsAtomique')
+    .map(([primitive, racine, chemin]) => {
+      expect(chemin.startsWith(tete), `${chemin} hors du dossier de l'événement`).toBe(true);
+      return [primitive, racine, chemin.slice(tete.length)];
+    });
+};
+// Les octets d'un fichier du dossier de l'événement.
+const octetsDepose = (m, nom) => m.fs.octets('documents', `${dossierOuvert(m)}/${nom}`);
+// Le texte d'un fichier du dossier de l'événement, marque d'ordre d'octets
+// gardée.
+const texteFichier = (m, nom) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(octetsDepose(m, nom));
 
 // La principale, sa proposition retenue, sur un plan retenu.
 function chargeRetenue() {
@@ -134,23 +151,27 @@ const textePlanches = (planches, choisi) =>
     parPapier: Object.keys(PAPIERS).map((papier) => ({ papier, nom: clesPapier(papier).nom, planches: planches[papier], choisi: papier === choisi })),
   });
 
-// Relève chaque racine que la section passe à l'explorateur du système de
-// fichiers, et la transmet telle quelle.
+// Relève chaque dossier que la section montre par l'explorateur du système
+// de fichiers, {id de la racine, chemin}, et le transmet tel quel.
 function releverExplorateur(m) {
   const ouvertes = [];
   const originale = m.fs.ouvrirDansExplorateur;
-  m.fs.ouvrirDansExplorateur = async (racine) => {
-    ouvertes.push(racine);
-    return originale(racine);
+  m.fs.ouvrirDansExplorateur = async (racine, chemin) => {
+    ouvertes.push({ id: racine.id, chemin });
+    return originale(racine, chemin);
   };
   return ouvertes;
 }
 
-// Le chemin attendu d'un fichier du dossier de travail des épreuves.
+// Le dossier de l'événement ouvert, comme l'explorateur le reçoit.
+const dossierMontre = (m) => ({ id: m.seance.etat().racine.id, chemin: dossierOuvert(m) });
+
+// Le chemin attendu d'un fichier du dossier de l'événement : racine,
+// dossier, nom.
 async function cheminDocuments(m, nom) {
   const { separateur } = await m.fs.emplacements();
   const racine = m.seance.etat().racine;
-  return `${racine.chemin}${separateur}${nom}`;
+  return `${racine.chemin}${separateur}${dossierOuvert(m)}${separateur}${nom}`;
 }
 
 describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 11.2)', () => {
@@ -288,8 +309,8 @@ describe('la dérive, nommée avant toute production (§ 11.8)', () => {
 });
 
 describe('la planche produite, le dossier, la réédition (§ 11.6, § 11.8)', () => {
-  test('« Ouvrir le dossier » s’offre avant toute production, sans papier retenu comme sous une dérive qui bloque « Produire », et appelle la façade sur le dossier de travail, sans rien écrire', async () => {
-    // La commande active ouvre la racine de travail, sans rien écrire.
+  test('« Ouvrir le dossier » s’offre avant toute production, sans papier retenu comme sous une dérive qui bloque « Produire », et montre par la séance le dossier de l’événement, sans rien écrire', async () => {
+    // La commande active montre le dossier de l'événement, sans rien écrire.
     const ouvreLeDossier = async (m) => {
       const commande = dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]');
       expect(commande).not.toBeNull();
@@ -298,7 +319,7 @@ describe('la planche produite, le dossier, la réédition (§ 11.6, § 11.8)', (
       const depuis = m.trace.length;
       commande.click();
       await attendre('l’explorateur appelé', () => ouvertes.length === 1, IMAGES);
-      expect(ouvertes[0].id).toBe(m.seance.etat().racine.id);
+      expect(ouvertes[0]).toEqual(dossierMontre(m));
       expect(planchesEcrites(m, depuis)).toEqual([]);
       expect(ecrituresEvenement(m, depuis)).toEqual([]);
     };
@@ -320,19 +341,20 @@ describe('la planche produite, le dossier, la réédition (§ 11.6, § 11.8)', (
     expect(dans(enDerive, '[data-chemin-planche]')).toBeNull();
   });
 
-  test('le chemin s’affiche ; « Ouvrir le dossier » appelle la façade sur le dossier de travail ; trois badges se rééditent', async () => {
+  test('le chemin, dans le dossier de l’événement, s’affiche ; « Ouvrir le dossier » montre ce dossier ; trois badges se rééditent', async () => {
     const charge = chargeBloquee();
     const m = await ouvrirBadges(charge);
     const depuis = m.trace.length;
     await cliquerProduire(m, 'la planche', () => dans(m, '[data-chemin-planche]'));
     const [[, , nom]] = planchesEcrites(m, depuis);
     expect(texte(dans(m, '[data-chemin-planche]'))).toBe(await cheminDocuments(m, nom));
-    expect(new TextDecoder().decode(m.fs.octets('documents', nom).slice(0, 5))).toBe('%PDF-');
+    expect(new TextDecoder().decode(octetsDepose(m, nom).slice(0, 5))).toBe('%PDF-');
+    expect(m.fs.octets('documents', nom)).toBeNull();
 
     const ouvertes = releverExplorateur(m);
     dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]').click();
     await attendre('l’explorateur appelé', () => ouvertes.length === 1, IMAGES);
-    expect(ouvertes[0].id).toBe(m.seance.etat().racine.id);
+    expect(ouvertes[0]).toEqual(dossierMontre(m));
 
     // Trois personnes cochées, dans le désordre de la liste.
     const personnes = personnesReeditables(charge);
@@ -436,7 +458,7 @@ describe('sous web, la planche se télécharge (§ 11.6)', () => {
 });
 
 describe('une écriture refusée, et son remède (§ 8.5, § 11.6)', () => {
-  test('PLANCHE_NON_ECRITE s’affiche à côté de « Produire », remède « Enregistrer sous… », dont le chemin choisi s’affiche ; « Ouvrir le dossier » montre le dossier de travail', async () => {
+  test('PLANCHE_NON_ECRITE s’affiche à côté de « Produire », remède « Enregistrer sous… », dont le chemin choisi s’affiche ; « Ouvrir le dossier » montre le dossier de l’événement', async () => {
     const m = await ouvrirBadges(chargeBloquee());
     m.fs.pannes.ecriture('documents');
     const proposes = [];
@@ -454,12 +476,36 @@ describe('une écriture refusée, et son remède (§ 8.5, § 11.6)', () => {
     expect(proposes[0].nom).toMatch(/_A4_feuille_.*\.pdf$/);
     expect(proposes[0].debut).toBe('%PDF-');
     // Le refus levé ; « Ouvrir le dossier » demeure, et montre le dossier de
-    // travail, pas celui choisi ailleurs.
+    // l'événement, pas celui choisi ailleurs.
     expect(dans(m, '[data-refus="PLANCHE_NON_ECRITE"]')).toBeNull();
     const ouvertes = releverExplorateur(m);
     dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]').click();
     await attendre('l’explorateur appelé', () => ouvertes.length === 1, IMAGES);
-    expect(ouvertes[0].id).toBe(m.seance.etat().racine.id);
+    expect(ouvertes[0]).toEqual(dossierMontre(m));
+  });
+
+  test('un dossier d’événement disparu pendant la séance : « Ouvrir le dossier » se refuse DOSSIER_EVENEMENT_ABSENT, « Produire » se refuse PLANCHE_NON_ECRITE qui le nomme, et rien ne se recrée', async () => {
+    const m = await ouvrirBadges(chargeBloquee());
+    const racine = m.seance.etat().racine;
+    const dossier = dossierOuvert(m);
+    for (const { nom } of await m.fs.lister(racine, dossier)) await m.fs.supprimer(racine, `${dossier}/${nom}`);
+    await m.fs.supprimerDossier(racine, dossier);
+    const { separateur } = await m.fs.emplacements();
+    const chemin = `${racine.chemin}${separateur}${dossier}`;
+
+    dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]').click();
+    const absent = '[data-section="badges"] [data-refus="DOSSIER_EVENEMENT_ABSENT"]';
+    const refusOuvrir = await attendre('le refus de l’ouverture', () => dans(m, absent), IMAGES);
+    expect(texte(refusOuvrir)).toContain(plat(t('DOSSIER_EVENEMENT_ABSENT', { dossier: chemin })));
+
+    const depuis = m.trace.length;
+    const nonEcrite = '[data-section="badges"] [data-refus="PLANCHE_NON_ECRITE"]';
+    const refus = await cliquerProduire(m, 'le refus d’écriture', () => dans(m, nonEcrite));
+    expect(texte(refus)).toContain(chemin);
+    expect(texte(refus)).toContain('introuvable');
+    expect(refus.querySelector('[data-commande="enregistrerSous"]')).not.toBeNull();
+    expect(m.trace.slice(depuis).filter(([primitive]) => primitive === 'creerDossier')).toEqual([]);
+    expect((await m.fs.lister(racine, '')).map(({ nom }) => nom)).not.toContain(dossier);
   });
 
   test('une production refusée après une réussie ne montre plus le chemin de la précédente', async () => {
@@ -741,7 +787,7 @@ describe('la liste des badges en CSV (§ 11.6)', () => {
     return charge;
   }
 
-  test('« Produire la liste (CSV) » dépose la liste à côté de l’événement, en lecture, et nomme son chemin ; ni l’état ni le journal ne s’écrivent', async () => {
+  test('« Produire la liste (CSV) » dépose la liste dans le dossier de l’événement, en lecture, et nomme son chemin ; ni l’état ni le journal ne s’écrivent', async () => {
     const charge = chargeLibellee();
     const m = await ouvrirBadges(charge);
     expect(m.seance.mode).toBe('lecture');
@@ -861,13 +907,13 @@ describe('le pied TechnoLibre : une case gardée sur le poste (§ 8.5, § 11.4)'
     expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(t('badges.technolibre.case')));
     let depuis = m.trace.length;
     await cliquerProduire(m, 'les cartes avec le pied', () => dans(m, '[data-chemin-controle]'));
-    const [avec, controleAvec] = planchesEcrites(m, depuis).map(([, , nom]) => m.fs.octets('documents', nom));
+    const [avec, controleAvec] = planchesEcrites(m, depuis).map(([, , nom]) => octetsDepose(m, nom));
 
     cocher(m, false);
     await attendre('la case écrite', () => caseEcrite(m) === false, IMAGES);
     depuis = m.trace.length;
     await cliquerProduire(m, 'les cartes sans le pied', () => planchesEcrites(m, depuis).length === 2);
-    const [sans, controleSans] = planchesEcrites(m, depuis).map(([, , nom]) => m.fs.octets('documents', nom));
+    const [sans, controleSans] = planchesEcrites(m, depuis).map(([, , nom]) => octetsDepose(m, nom));
     expect(avec.length).toBeGreaterThan(sans.length);
     // La feuille de contrôle ne porte pas le pied TechnoLibre.
     expect(controleAvec).toEqual(controleSans);

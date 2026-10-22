@@ -3535,7 +3535,9 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     const textes = evenementSurDisque(fs);
     const { nom } = await seance.produirePlanche();
     assert.match(nom, /_A4_/);
-    assert.ok(fs.octets('documents', nom).length > 0);
+    // La planche se dépose dans le dossier de l'événement, jamais à la racine.
+    assert.ok(fs.octets('documents', `${BASE}/${nom}`).length > 0);
+    assert.equal(fs.octets('documents', nom), null);
     assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
     assert.deepEqual(evenementSurDisque(fs), textes);
   });

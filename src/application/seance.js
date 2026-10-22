@@ -135,6 +135,7 @@ import {
   piedTechnolibreDe,
   tailleTexteDe,
 } from '../stockage/reglages_locaux.js';
+import { cheminAffiche } from '../stockage/systeme_fichiers.js';
 import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
 import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 import { libelle } from './libelles.js';
@@ -1488,21 +1489,37 @@ export function creerSeance({
   // appels, une fois faites les écritures de réglages déjà demandées : le
   // papier, le modèle de badge et la case du pied TechnoLibre qu'un choix
   // vient de poser comptent. AUCUN_EVENEMENT sans événement. Le système de
-  // fichiers est celui de la séance, la racine celle de l'événement : la
-  // planche se pose à la racine, à côté du dossier de l'événement.
+  // fichiers est la vue du dossier de l'événement, sous la racine de
+  // l'Ouvert : la planche se pose dans ce dossier.
   async function lecturePlanche() {
     exigerOuvert();
     await fileReglages;
-    const { charge, base, systeme, racine: dossier } = exigerOuvert();
+    const { charge, base, fs: vue, racine, dossier } = exigerOuvert();
     return {
       charge,
       base,
-      fs: systeme,
-      racine: dossier,
+      fs: vue,
+      racine,
+      dossier,
       papier: etat.papier,
       modeleBadge: etat.modeleBadge,
       piedTechnolibre: etat.piedTechnolibre,
     };
+  }
+
+  // Montre dans l'explorateur le dossier de l'événement ouvert, sous la
+  // racine de l'Ouvert, celle où la planche se dépose, écriture ailleurs
+  // comprise. Un dossier qui ne se trouve plus lève DOSSIER_EVENEMENT_ABSENT,
+  // son chemin nommé : rien ne le recrée (§ 8.6).
+  async function ouvrirDossierEvenement() {
+    const { fs: vue, racine, dossier } = exigerOuvert();
+    try {
+      await vue.ouvrirDansExplorateur(racine);
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage && erreur.code === 'ABSENT')) throw erreur;
+      const { separateur } = await vue.emplacements();
+      throw new ErreurSeance('DOSSIER_EVENEMENT_ABSENT', { dossier: cheminAffiche(racine, separateur, dossier) });
+    }
   }
 
   // Le papier de la racine reçue se lit à son tour dans la file des appels,
@@ -1800,7 +1817,7 @@ export function creerSeance({
      */
     preparerPlanche: (demande) => enFile(async () => planches.preparer(await lecturePlanche(), demande)),
     /**
-     * Produit la planche et dépose son PDF à côté des fichiers d'événement,
+     * Produit la planche et dépose son PDF dans le dossier de l'événement,
      * ou le télécharge sous web : {chemin, nom, controle}. Admis dans tout
      * mode ; l'état et le journal ne s'écrivent pas.
      */
@@ -1812,8 +1829,8 @@ export function creerSeance({
      */
     enregistrerPlancheSous: (demande) => enFile(async () => planches.enregistrerSous(await lecturePlanche(), demande)),
     /**
-     * Produit la liste des badges en CSV et la dépose à côté des fichiers
-     * d'événement, ou la télécharge sous web : {chemin, nom}. Admis dans
+     * Produit la liste des badges en CSV et la dépose dans le dossier de
+     * l'événement, ou la télécharge sous web : {chemin, nom}. Admis dans
      * tout mode ; l'état et le journal ne s'écrivent pas.
      */
     produireListeBadges: (demande) => enFile(async () => planches.produireListe(await lecturePlanche(), demande)),
@@ -1822,6 +1839,14 @@ export function creerSeance({
      * le chemin choisi, null quand l'opérateur annule.
      */
     enregistrerListeBadgesSous: (demande) => enFile(async () => planches.enregistrerListeSous(await lecturePlanche(), demande)),
+    /**
+     * Montre dans l'explorateur du système le dossier de l'événement ouvert,
+     * où la planche et la liste se déposent (§ 11.6) : celui de la racine
+     * de l'Ouvert, jamais l'emplacement d'un « Enregistrer sous… ». Rien ne
+     * s'écrit. AUCUN_EVENEMENT sans événement ; DOSSIER_EVENEMENT_ABSENT
+     * {dossier} quand le dossier ne se trouve plus ; NON_DISPONIBLE sous web.
+     */
+    ouvrirDossierEvenement: () => enFile(() => ouvrirDossierEvenement()),
     /**
      * Une promesse résolue quand les appels déjà en file ont fini, réussis
      * ou refusés : ce qu'un lecteur de etat() lit ensuite porte leurs

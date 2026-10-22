@@ -951,8 +951,9 @@ petite taille ne tient pas, ou que le badge a dû perdre le nom de l’événeme
 « Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
 homonymes, les caractères que la police ne dessine pas, les badges d’où le pied
 TechnoLibre se retire, le nom des fichiers.
-« Produire la planche (PDF) » écrit le PDF à côté des fichiers de l’événement et
-en affiche le chemin ; dans un navigateur, le PDF se télécharge. « Produire la
+« Produire la planche (PDF) » écrit le PDF dans le dossier de l’événement et
+en affiche le chemin ; « Ouvrir le dossier » montre ce dossier dans
+l’explorateur ; dans un navigateur, le PDF se télécharge. « Produire la
 liste (CSV) » écrit au même endroit la liste des mêmes badges, pour un tableur :
 une ligne par personne, avec son nom, son prénom, son organisation et, dans une
 seule cellule, ses lignes de tour telles que le badge les compose, jamais

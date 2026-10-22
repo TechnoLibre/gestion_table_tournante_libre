@@ -14,8 +14,8 @@
   par feuille Lettre, précédés de leur feuille de contrôle. Chaque feuille de
   contrôle se mesure sous une règle avant d'imprimer. Les badges se rangent
   dans l'ordre alphabétique ou par table, et les A6 feuille par feuille ou en
-  pile pour le massicot. Sous Windows, la planche se dépose à côté des fichiers
-  de l'événement et l'application en affiche le chemin ; « Ouvrir le dossier »,
+  pile pour le massicot. Sous Windows, la planche se dépose dans le dossier de
+  l'événement et l'application en affiche le chemin ; « Ouvrir le dossier »,
   offert en tout temps dans la section, avant comme après la production, montre
   ce dossier dans l'explorateur.
 - Le format de papier se demande une seule fois, au premier aperçu, puis la
@@ -341,6 +341,14 @@
   corbeille montre aussi les fichiers de ses sous-dossiers. Un dossier qui ne
   se vide pas — un fichier encore ouvert ailleurs — reste sur le disque, et un
   avis le nomme au-dessus de la liste, sans faire échouer l'opération.
+- La planche de badges, sa feuille de contrôle et la liste en CSV s'écrivent
+  dans le dossier de l'événement, et non plus dans le dossier de travail ;
+  « Ouvrir le dossier » de la section « Badges » montre ce dossier, même après
+  que l'événement a été écrit sur un autre emplacement. Le nom d'un événement
+  long raccourcit plus souvent celui d'une planche rééditée ou tirée d'une
+  proposition. Un dossier d'événement déplacé ou supprimé pendant la séance
+  n'est pas recréé : la production le dit introuvable et propose « Enregistrer
+  sous… ».
 - Sous le placement retenu, glisser hors des tables une personne que sa
   réservation tient à la sienne annonce le refus dès le survol, au lieu de
   « retire du tour ».

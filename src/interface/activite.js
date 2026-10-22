@@ -225,6 +225,7 @@ export const APPELS_EN_FILE = Object.freeze([
   'enregistrerPlancheSous',
   'produireListeBadges',
   'enregistrerListeBadgesSous',
+  'ouvrirDossierEvenement',
   'attendre',
 ]);
 const EN_FILE = new Set(APPELS_EN_FILE);

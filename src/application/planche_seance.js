@@ -7,11 +7,14 @@
 // § 9) : rien ici n'écrit le fichier d'état ni le journal, ne prend de
 // verrou ni ne lit le mode de la séance ; la seule écriture est celle du
 // PDF — des deux PDF pour Avery 5392, les feuilles de cartes puis la
-// feuille de contrôle à part — ou du CSV, à côté des fichiers d'événement,
+// feuille de contrôle à part — ou du CSV, dans le dossier de l'événement,
 // ou leur téléchargement sous web, où le dossier de travail est invisible à
 // l'opérateur (décision 13). Une écriture refusée se dit PLANCHE_NON_ECRITE,
-// qui nomme le fichier en cause, remède « Enregistrer sous… », sans toucher
-// au support de l'événement.
+// qui nomme le fichier en cause et le dossier, remède « Enregistrer
+// sous… », sans toucher au support de l'événement. Un dossier d'événement
+// disparu pendant la séance ne se recrée pas (§ 8.6) : l'écriture, que le
+// support refuse sous un dossier absent, se dit PLANCHE_NON_ECRITE de cause
+// DOSSIER_EVENEMENT_ABSENT, que le dossier relu à ce moment établit.
 //
 // La production vit dans src/pdf, chargé par un seul import() différé : le
 // paquet n'embarque pdf-lib qu'au premier besoin, et cette couche ne voit
@@ -46,15 +49,18 @@
 // source, l'imposition, l'ordre, le placement. Une réédition, une base qui
 // finit par un point, ou une planche dont la borne du chemin raccourcit la
 // base (nomPlancheExigeListe), ne remplace jamais un fichier du dossier :
-// son nom prend le premier rang libre parmi les entrées que le dossier
-// porte, listées à chaque préparation et à chaque production. Un dossier
-// qui ne se liste pas laisse à l'annonce le nom sans dossier, et refuse la
-// production PLANCHE_NON_ECRITE avant d'écrire, plutôt que de risquer de
-// remplacer une planche précédente.
+// son nom prend le premier rang libre parmi les entrées que le dossier de
+// l'événement porte, listées à chaque préparation et à chaque production ;
+// la borne du chemin se compte contre ce dossier, racine + séparateur +
+// dossier, si bien qu'un nom d'événement long raccourcit plus tôt la base
+// d'une planche marquée. Un dossier qui ne se liste pas laisse à l'annonce
+// le nom sans dossier, et refuse la production PLANCHE_NON_ECRITE avant
+// d'écrire, plutôt que de risquer de remplacer une planche précédente.
 import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js';
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { nomControle, nomCsvBadges, nomCsvBadgesExigeListe, nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
+import { cheminAffiche } from '../stockage/systeme_fichiers.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 import {
@@ -81,7 +87,12 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {import('../stockage/types.js').Charge} charge
  * @property {string} base       la base des fichiers de l'événement
  * @property {import('../stockage/systeme_fichiers.js').SystemeFichiers} fs
- * @property {import('../stockage/systeme_fichiers.js').Racine} racine   celle des fichiers de l'événement
+ *           la vue du dossier de l'événement (vueDossier) : '' y désigne
+ *           le dossier
+ * @property {import('../stockage/systeme_fichiers.js').Racine} racine
+ *           la racine du dossier de travail, qui porte le dossier de
+ *           l'événement
+ * @property {string} dossier    le dossier de l'événement, relatif à la racine
  * @property {'A4'|'Lettre'|null} papier   celui des réglages locaux, null sans choix
  * @property {import('../geometrie/papiers.js').ModeleBadge} [modeleBadge]   celui des
  *           réglages locaux ; 'a6' quand la lecture ne le porte pas
@@ -269,18 +280,46 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
   // donné (nomControle) ; null pour l'A6.
   const nomControleDe = (base, etude, dossier) => (aCartes(etude.modeleBadge) ? nomControle(base, optionsDe(etude, dossier)) : null);
 
-  // Le dossier où un fichier se dépose, tel que nomPlanche ou nomCsvBadges
-  // le lit : sa racine, son séparateur et, quand exigeListe le dit sous ce
-  // dossier, les noms qu'il porte ; null sous web, où le fichier se
-  // télécharge. Un dossier qui ne se liste pas lève l'ErreurStockage de la
-  // liste.
-  async function dossierSelon({ fs, racine }, exigeListe) {
-    if (fs.nature === 'web') return null;
+  // Le chemin du dossier de l'événement tel que l'opérateur le lit, racine,
+  // séparateur, dossier, et ce séparateur.
+  async function lieuDe({ fs, racine, dossier }) {
     const { separateur } = await fs.emplacements();
-    const sansListe = { racine: racine.chemin, separateur, existants: [] };
+    return { chemin: cheminAffiche(racine, separateur, dossier), separateur };
+  }
+
+  // Le dossier où un fichier se dépose, tel que nomPlanche ou nomCsvBadges
+  // le lit : le chemin du dossier de l'événement, son séparateur et, quand
+  // exigeListe le dit sous ce dossier, les noms qu'il porte ; null sous web,
+  // où le fichier se télécharge. Un dossier qui ne se liste pas lève
+  // l'ErreurStockage de la liste.
+  async function dossierSelon(lecture, exigeListe) {
+    if (lecture.fs.nature === 'web') return null;
+    const { chemin, separateur } = await lieuDe(lecture);
+    const sansListe = { racine: chemin, separateur, existants: [] };
     if (!exigeListe(sansListe)) return sansListe;
-    const existants = (await fs.lister(racine, '')).map(({ nom }) => nom);
+    const existants = (await lecture.fs.lister(lecture.racine, '')).map(({ nom }) => nom);
     return { ...sansListe, existants };
+  }
+
+  // Vrai quand le dossier de l'événement ne se trouve plus : sa liste lève
+  // ABSENT. Toute autre issue de la liste le dit présent.
+  async function dossierAbsent({ fs, racine }) {
+    try {
+      await fs.lister(racine, '');
+      return false;
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage)) throw erreur;
+      return erreur.code === 'ABSENT';
+    }
+  }
+
+  // Le refus d'un fichier dont le dossier ne se liste pas, avant d'écrire :
+  // nom, le nom sans dossier ; la cause, DOSSIER_EVENEMENT_ABSENT pour un
+  // dossier qui ne se trouve plus.
+  async function nonListe(lecture, erreur, nom, fichier) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+    const cause = erreur.code === 'ABSENT' ? 'DOSSIER_EVENEMENT_ABSENT' : (erreur.details?.cause ?? erreur.code);
+    return nonEcrite({ chemin: nom, dossier: (await lieuDe(lecture)).chemin, cause }, fichier);
   }
 
   // Le dossier où la planche d'une étude se dépose (nomPlancheExigeListe).
@@ -297,10 +336,13 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       { geste: 'enregistrerSous' },
     );
 
-  // Dépose un fichier à côté de l'événement et rend son chemin, ou le
-  // télécharge sous web et rend null. Une écriture refusée lève
-  // PLANCHE_NON_ECRITE pour ce fichier.
-  async function deposer({ fs, racine }, nomFichier, octetsFichier, fichier, deposee = null) {
+  // Dépose un fichier dans le dossier de l'événement et rend son chemin,
+  // ou le télécharge sous web et rend null. Une écriture refusée lève
+  // PLANCHE_NON_ECRITE pour ce fichier ; quand le dossier ne se trouve plus,
+  // de cause DOSSIER_EVENEMENT_ABSENT, le dossier nommé, sans deposee : ce
+  // qui s'y était déposé est parti avec lui.
+  async function deposer(lecture, nomFichier, octetsFichier, fichier, deposee = null) {
+    const { fs, racine } = lecture;
     if (fs.nature === 'web') {
       await fs.enregistrerSous(nomFichier, octetsFichier);
       return null;
@@ -309,11 +351,12 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       await fs.ecrireOctetsAtomique(racine, nomFichier, octetsFichier);
     } catch (erreur) {
       if (!(erreur instanceof ErreurStockage && erreur.code === 'ECRITURE')) throw erreur;
-      throw nonEcrite(erreur.details, fichier, deposee);
+      if (!(await dossierAbsent(lecture))) throw nonEcrite(erreur.details, fichier, deposee);
+      const { chemin } = await lieuDe(lecture);
+      throw nonEcrite({ chemin: nomFichier, dossier: chemin, cause: 'DOSSIER_EVENEMENT_ABSENT' }, fichier);
     }
-    const { separateur } = await fs.emplacements();
-    const tete = racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur;
-    return tete + nomFichier;
+    const { chemin, separateur } = await lieuDe(lecture);
+    return chemin + separateur + nomFichier;
   }
 
   // Les octets de la liste d'une demande et son nom, sous le dossier de la
@@ -339,9 +382,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       try {
         dossier = await dossierSelon(lecture, (sous) => nomCsvBadgesExigeListe(base, { ...options, dossier: sous }));
       } catch (erreur) {
-        if (!(erreur instanceof ErreurStockage)) throw erreur;
-        const cause = erreur.details?.cause ?? erreur.code;
-        throw nonEcrite({ chemin: nomCsvBadges(base, options), dossier: lecture.racine.chemin, cause }, 'liste');
+        throw await nonListe(lecture, erreur, nomCsvBadges(base, options), 'liste');
       }
     }
     return { octets: listeBadges(modele, charge), nom: nomCsvBadges(base, { ...options, dossier }) };
@@ -362,9 +403,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       try {
         dossier = await dossierDe(lecture, etude);
       } catch (erreur) {
-        if (!(erreur instanceof ErreurStockage)) throw erreur;
-        const cause = erreur.details?.cause ?? erreur.code;
-        throw nonEcrite({ chemin: nomDe(lecture.base, etude, null), dossier: lecture.racine.chemin, cause }, 'planche');
+        throw await nonListe(lecture, erreur, nomDe(lecture.base, etude, null), 'planche');
       }
     }
     const nom = nomDe(lecture.base, etude, dossier);
@@ -448,19 +487,22 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     },
 
     /**
-     * Produit la planche et la dépose (§ 11.6) : à côté des fichiers
-     * d'événement, par une écriture atomique, sous electron et sur le
-     * système d'épreuve, et rend son chemin en entier ; sous web, par
-     * enregistrerSous, le téléchargement, et chemin null. Pour Avery 5392,
-     * la feuille de contrôle à part se dépose ensuite de la même façon, et
-     * controle rend son chemin et son nom ; null pour l'A6. Le refus de
-     * l'annonce lève, sans rien écrire. Une écriture refusée par le
-     * support, ou un dossier qui ne se liste pas quand le nom se choisit
-     * parmi ses entrées, lève PLANCHE_NON_ECRITE {chemin, dossier, cause,
-     * fichier}, remède « Enregistrer sous… » : le support de l'événement
-     * n'en est pas rompu. fichier dit lequel manque : 'planche', ou
-     * 'controle' quand la feuille de contrôle se refuse après les cartes,
-     * deposee portant alors le chemin des cartes, déjà écrites.
+     * Produit la planche et la dépose (§ 11.6) : dans le dossier de
+     * l'événement, par une écriture atomique, sous electron et sur le
+     * système d'épreuve, et rend son chemin en entier, racine, dossier,
+     * nom ; sous web, par enregistrerSous, le téléchargement, et chemin
+     * null. Pour Avery 5392, la feuille de contrôle à part se dépose
+     * ensuite de la même façon, et controle rend son chemin et son nom ;
+     * null pour l'A6. Le refus de l'annonce lève, sans rien écrire. Une
+     * écriture refusée par le support, ou un dossier qui ne se liste pas
+     * quand le nom se choisit parmi ses entrées, lève PLANCHE_NON_ECRITE
+     * {chemin, dossier, cause, fichier}, remède « Enregistrer sous… » : le
+     * support de l'événement n'en est pas rompu. dossier est le chemin du
+     * dossier de l'événement ; cause vaut DOSSIER_EVENEMENT_ABSENT quand il
+     * ne se trouve plus, et rien ne le recrée. fichier dit lequel manque :
+     * 'planche', ou 'controle' quand la feuille de contrôle se refuse après
+     * les cartes, deposee portant alors le chemin des cartes, déjà écrites,
+     * sauf quand le dossier ne se trouve plus : elles sont parties avec lui.
      *
      * @throws {ErreurCommande} le refus de l'annonce ; PLANCHE_NON_ECRITE
      */
@@ -503,12 +545,12 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
 
     /**
      * Produit la liste des badges en CSV (listeBadges) et la dépose comme la
-     * planche : à côté des fichiers d'événement, sous le nom de
+     * planche : dans le dossier de l'événement, sous le nom de
      * nomCsvBadges, et rend {chemin, nom} ; sous web, téléchargée, chemin
      * null. La demande est celle de la planche — source, ordre, sélection ;
      * l'imposition n'y change rien. Seuls les refus du placement la gardent
      * (refusPlanche) ; une écriture refusée lève PLANCHE_NON_ECRITE, fichier
-     * 'liste', remède « Enregistrer sous… ».
+     * 'liste', remède « Enregistrer sous… », comme pour la planche.
      *
      * @throws {ErreurCommande} le refus du placement ; PLANCHE_NON_ECRITE ;
      *         PROPOSITION_INCONNUE, PARTICIPANT_INCONNU, PERSONNE_EXCLUE

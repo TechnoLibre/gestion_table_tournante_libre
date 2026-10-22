@@ -262,6 +262,13 @@ const A_UN_CHEMIN = [
   'deverrouiller',
 ];
 
+// Le chemin du dossier de chemin relatif dossier tel que l'opérateur le
+// lit : celui de la racine, son séparateur quand il ne le porte pas déjà —
+// la racine d'un volume, « E:\\ » —, puis le dossier.
+export function cheminAffiche(racine, separateur, dossier) {
+  return (racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur) + dossier;
+}
+
 /**
  * La vue de fs sur un dossier de ses racines (§ 8.6) : un SystemeFichiers
  * dont chaque primitive reçoit un chemin relatif au dossier, celui d'un

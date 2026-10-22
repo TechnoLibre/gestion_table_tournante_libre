@@ -108,6 +108,14 @@ export const TABLE = new Map([
       "Faute d'activité, l'événement est revenu seul en lecture ; chaque geste achevé était déjà enregistré. " +
       '« Modifier » permet de reprendre.',
   ],
+  // Le dossier de l'événement ouvert, que la séance ne trouve plus : rien
+  // ne le recrée (§ 8.6).
+  [
+    'DOSSIER_EVENEMENT_ABSENT',
+    ({ dossier }) =>
+      `Le dossier de l'événement ${cite(dossier)} est introuvable : déplacé, renommé ou ` +
+      "retiré hors de l'application, il ne se recrée pas.",
+  ],
 
   // --- Ce qu'un geste fait naître (§ 5.9, § 9, § 14.12) ----------------------
   [

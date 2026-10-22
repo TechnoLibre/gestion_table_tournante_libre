@@ -74,6 +74,18 @@ export const TEXTES = [
     "La liste des badges n'a pas pu s'écrire : « Soirée des Lucioles.badges_2031-05-17_20-15-07.csv » " +
       'dans le dossier « E:\\data ». « Enregistrer sous\u{2026} » la dépose ailleurs.',
   ],
+  // Le dossier de l'événement disparu : la phrase le nomme, sans le fichier.
+  [
+    'PLANCHE_NON_ECRITE',
+    {
+      chemin: 'Soirée des Lucioles.badges_A4_feuille_2031-05-17_20-15-07.pdf',
+      dossier: 'E:\\data\\Soirée des Lucioles',
+      cause: 'DOSSIER_EVENEMENT_ABSENT',
+      fichier: 'planche',
+    },
+    "La planche n'a pas pu s'écrire : le dossier de l'événement « E:\\data\\Soirée des Lucioles » est " +
+      'introuvable, et il ne se recrée pas. « Enregistrer sous\u{2026} » la dépose ailleurs.',
+  ],
   // Le badge de la feuille de contrôle, par modèle ; la consigne de la
   // feuille à part d'Avery 5392.
   ['planche.controle.badge', { largeur: 105, hauteur: 148, modeleBadge: 'a6' }, 'Badge : 105 × 148 mm (A6)'],

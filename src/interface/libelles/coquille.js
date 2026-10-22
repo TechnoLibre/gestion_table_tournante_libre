@@ -186,7 +186,7 @@ export const TABLE = new Map([
   ['coquille.apropos.fonctionnalite.pro01', 'Produire la planche de badges en PDF, sur A4 ou Lettre'],
   ['coquille.apropos.fonctionnalite.pro02', 'Vérifier le découpage par la feuille de contrôle'],
   ['coquille.apropos.fonctionnalite.pro03', 'Ordonner les badges pour l\u{2019}accueil'],
-  ['coquille.apropos.fonctionnalite.pro04', 'Ouvrir le dossier où la planche se dépose'],
+  ['coquille.apropos.fonctionnalite.pro04', 'Ouvrir le dossier de l\u{2019}événement, où la planche se dépose'],
   ['coquille.apropos.fonctionnalite.pro05', 'Imprimer la liste d\u{2019}accueil'],
   ['coquille.apropos.fonctionnalite.pro06', 'Imprimer une feuille par table'],
   ['coquille.apropos.fonctionnalite.pro07', 'Imprimer le plan de salle, tour par tour'],

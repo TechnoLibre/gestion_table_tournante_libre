@@ -42,16 +42,19 @@
   // l'annonce montrée le porte. Un papier choisi par « Changer »
   // (Papier.svelte) prépare de nouveau l'annonce montrée.
   //
-  // La planche produite nomme son chemin — à côté des fichiers d'événement
+  // La planche produite nomme son chemin — dans le dossier de l'événement
   // —, ou, sous web, où elle se télécharge, son nom ; pour Avery 5392, ceux
-  // de la feuille de contrôle à part suivent. « Ouvrir le dossier »
-  // se tient parmi les commandes en tout temps, avant comme après une
-  // production, quand la plateforme a un explorateur : il montre par la
-  // façade le dossier de travail, où la planche se dépose, et jamais le
-  // chemin choisi par « Enregistrer sous… ». Une écriture refusée se dit
-  // PLANCHE_NON_ECRITE, remède « Enregistrer sous… » (enregistrerPlancheSous),
-  // dont les chemins choisis — pour Avery 5392, celui de la feuille de
-  // contrôle aussi — remplacent ceux de la planche.
+  // de la feuille de contrôle à part suivent. « Ouvrir le dossier » se
+  // tient parmi les commandes en tout temps, avant comme après une
+  // production, quand la plateforme a un explorateur (facade.explorateur) :
+  // il montre par la séance (ouvrirDossierEvenement) le dossier de
+  // l'événement, où la planche se dépose, sous la racine de l'événement
+  // ouvert, écriture ailleurs comprise, et jamais le chemin choisi par
+  // « Enregistrer sous… » ; un dossier qui ne se trouve plus se refuse à
+  // côté de la commande. Une écriture refusée se dit PLANCHE_NON_ECRITE,
+  // remède « Enregistrer sous… » (enregistrerPlancheSous), dont les chemins
+  // choisis — pour Avery 5392, celui de la feuille de contrôle aussi —
+  // remplacent ceux de la planche.
   //
   // « Produire la liste (CSV) » dépose la liste de la demande courante
   // (produireListeBadges) et nomme son chemin, ou son nom sous web. Elle ne
@@ -342,7 +345,7 @@
             <Commande cle="badges.commande.produireListe" nom="produireListe" executer={produireLaListe} gestes={gestesListe} />
           {/if}
           {#if explorateur.disponible}
-            <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => facade.ouvrirExplorateur()} />
+            <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => seance.ouvrirDossierEvenement()} />
           {/if}
         </div>
         {#if bloque}

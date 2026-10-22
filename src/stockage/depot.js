@@ -145,7 +145,7 @@ import {
   dossierEvenement,
 } from './noms.js';
 import { examiner } from './placements.js';
-import { vueDossier } from './systeme_fichiers.js';
+import { cheminAffiche, vueDossier } from './systeme_fichiers.js';
 
 /**
  * Un événement ouvert. Chaque fonction qui écrit rend l'Ouvert suivant, et ne
@@ -434,11 +434,9 @@ async function deriver(fs, racine, nom, autres) {
   return deriverBase(nom, { racine: racine.chemin, separateur, existantes });
 }
 
-// Le chemin affichable du dossier de la vue : celui de la racine, son
-// séparateur, puis le dossier.
+// Le chemin affichable du dossier de la vue (cheminAffiche).
 async function cheminDuDossier(vue, racine) {
-  const { separateur } = await vue.emplacements();
-  return (racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur) + vue.dossier;
+  return cheminAffiche(racine, (await vue.emplacements()).separateur, vue.dossier);
 }
 
 // Ce qu'un Ouvert tient de la vue de son dossier : la vue, le système

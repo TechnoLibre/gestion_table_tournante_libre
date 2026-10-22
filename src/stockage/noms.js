@@ -445,8 +445,8 @@ const HORODATAGE_INCONNU = 'horodatage-inconnu';
 // d'une autre.
 const MARQUE_COUPE = '.';
 
-// Le dossier de travail où la planche se dépose, contrôlé : null, ou sa
-// racine, son séparateur et les noms qu'il porte déjà.
+// Le dossier où la planche se dépose, contrôlé : null, ou son chemin, son
+// séparateur et les noms qu'il porte déjà.
 function dossierLu(dossier) {
   if (dossier === null) return null;
   const forme =
@@ -623,8 +623,8 @@ function nomsLibres({ leDossier, nomsDeRang, exigeListe }) {
 const nomsPlanche = (base, options) => nomsLibres(composer(base, options));
 
 /**
- * Nom du fichier de la planche de badges (§ 11.6), posé à la racine du
- * dossier de travail :
+ * Nom du fichier de la planche de badges (§ 11.6), posé dans le dossier de
+ * l'événement :
  * <base>.badges[-p<id>][-<k>]_<papier>_<imposition>[_table]_<date>[_<n>].pdf
  * pour l'A6, <base>.badges[-p<id>][-<k>]_avery5392[_table]_<date>[_<n>].pdf
  * pour Avery 5392, dont la feuille de contrôle à part (nomControle) prend
@@ -656,20 +656,20 @@ const nomsPlanche = (base, options) => nomsLibres(composer(base, options));
  * La borne du chemin (§ 8.6) : le plus long suffixe sans marque, 51 unités,
  * prolongé de SUFFIXE_ECRITURE, fait la partie fixe de longueurRelativeMax,
  * et la base d'un événement, que deriverBase borne, laisse place à sa
- * planche, à la racine du dossier de travail comme dans le dossier de
- * l'événement. Les marques et le rang l'allongent au-delà :
- * quand le dossier est donné, la base du nom se raccourcit, sans couper une
- * paire de substitution, espaces et points finaux retirés, sans laisser un
- * nom réservé, et prend un point à sa suite, jusqu'à ce que racine +
- * séparateur + nom + SUFFIXE_ECRITURE tienne en LONGUEUR_CHEMIN_MAX ; le
- * suffixe reste entier. Aucune base que rend deriverBase ne finit par un
- * point : un nom raccourci ne se confond avec aucun nom entier. Une base lue
- * sur le disque peut finir par un point, et son nom entier être celui qu'une
- * autre base raccourcit : il se choisit parmi les entrées du dossier.
- * Quand même un caractère de base ne tient pas, le nom garde sa base
- * entière : l'écriture refusée par le support se dit, et « Enregistrer
- * sous… » la dépose ailleurs. Sans dossier — sous web, où la planche se
- * télécharge, et pour le dialogue d'enregistrement —, ni rang ni coupe.
+ * planche dans le dossier de l'événement, racine + séparateur + dossier.
+ * Les marques et le rang l'allongent au-delà : quand le dossier est donné,
+ * la base du nom se raccourcit, sans couper une paire de substitution,
+ * espaces et points finaux retirés, sans laisser un nom réservé, et prend
+ * un point à sa suite, jusqu'à ce que racine + séparateur + nom +
+ * SUFFIXE_ECRITURE tienne en LONGUEUR_CHEMIN_MAX ; le suffixe reste entier.
+ * Aucune base que rend deriverBase ne finit par un point : un nom raccourci
+ * ne se confond avec aucun nom entier. Une base lue sur le disque peut finir
+ * par un point, et son nom entier être celui qu'une autre base raccourcit :
+ * il se choisit parmi les entrées du dossier. Quand même un caractère de
+ * base ne tient pas, le nom garde sa base entière : l'écriture refusée par
+ * le support se dit, et « Enregistrer sous… » la dépose ailleurs. Sans
+ * dossier — sous web, où la planche se télécharge, et pour le dialogue
+ * d'enregistrement —, ni rang ni coupe.
  *
  * @param {string} base  celle de l'événement, que rend deriverBase ou que
  *        donne le nom d'un fichier d'état lu sur le disque
@@ -684,8 +684,9 @@ const nomsPlanche = (base, options) => nomsLibres(composer(base, options));
  * @param {'alphabetique'|'table'} [options.ordre]  'alphabetique' par défaut
  * @param {import('../geometrie/papiers.js').ModeleBadge} [options.modeleBadge]  'a6' par défaut
  * @param {null|{racine: string, separateur: '\\'|'/', existants: Iterable<string>}} [options.dossier]
- *        le dossier de travail : sa racine, son séparateur, et les noms des
- *        entrées qu'il porte déjà à sa racine
+ *        le dossier où la planche se dépose : racine, son chemin en entier,
+ *        celui du dossier de l'événement ; son séparateur ; les noms des
+ *        entrées qu'il porte déjà
  * @returns {string}
  * @throws {TypeError} une base vide ou autre chose qu'une chaîne, un papier
  *         hors de PAPIERS, une imposition hors de feuille et pile, un
@@ -736,8 +737,8 @@ export function nomPlancheExigeListe(base, options) {
 }
 
 /**
- * Nom du fichier de la liste des badges en CSV (§ 11.6), posé à la racine du
- * dossier de travail à côté de la planche :
+ * Nom du fichier de la liste des badges en CSV (§ 11.6), posé dans le
+ * dossier de l'événement à côté de la planche :
  * <base>.badges[-p<id>][-<k>][_table][_BROUILLON]_<date>[_<n>].csv
  * — les marques de la planche (nomPlanche), sans papier, imposition ni
  * modèle, qui ne changent pas la liste ; « _BROUILLON » quand le placement

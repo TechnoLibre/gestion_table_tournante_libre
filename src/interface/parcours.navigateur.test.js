@@ -104,7 +104,7 @@ import { rechercher } from '../moteur/recherche.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { configurationDepuisCharge } from '../stockage/document.js';
 import { lireJournal } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, decouperCle } from '../stockage/noms.js';
 import { derive, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import urlCp1252 from '../../exemples/participants_cas_limites_cp1252.csv?url';
@@ -366,6 +366,9 @@ const base = () => etat().evenement.base;
 // La clé de l'événement ouvert : suivie d'un suffixe, le chemin d'un de ses
 // fichiers.
 const cle = () => etat().evenement.cle;
+// Le dossier de l'événement ouvert, relatif à la racine, où la planche se
+// dépose.
+const dossier = () => decouperCle(cle()).dossier;
 const plat = (texte) => texte.replace(/\s+/g, ' ').trim();
 const texteDe = (element) => plat(element.textContent);
 
@@ -1058,11 +1061,15 @@ async function sortir() {
 // « Regarder n'écrit jamais » (§ 8.2, § 8.4, § 11.6) : les écritures que
 // regarder et sortir admettent — reglages_locaux.json, où s'écrivent le
 // cadrage différé et le papier de la machine, et la planche de
-// l'événement, <base>.badges…pdf, avec sa feuille de contrôle à part,
-// <base>.controle…pdf. Rien d'autre.
-const ecritureAdmise = (chemin) =>
-  chemin === 'reglages_locaux.json' ||
-  ((chemin.startsWith(`${base()}.badges`) || chemin.startsWith(`${base()}.controle`)) && chemin.endsWith('.pdf'));
+// l'événement, <dossier>/<base>.badges…pdf, avec sa feuille de contrôle à
+// part, <dossier>/<base>.controle…pdf. Rien d'autre.
+const ecritureAdmise = (chemin) => {
+  const tete = `${dossier()}/${base()}`;
+  return (
+    chemin === 'reglages_locaux.json' ||
+    ((chemin.startsWith(`${tete}.badges`) || chemin.startsWith(`${tete}.controle`)) && chemin.endsWith('.pdf'))
+  );
+};
 
 // Sort, puis affirme que seules les écritures admises ont eu lieu, chacune
 // au moins une fois : rien de l'événement.
@@ -2321,16 +2328,21 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await ouvrirSection('badges');
     await cliquer('[data-section="badges"] [data-commande="produirePlanche"]');
     await attendre('la planche produite', () => dans('[data-section="badges"] [data-chemin-controle]'), IMAGES_PLANCHE);
+    // Les deux PDF se déposent dans le dossier de l'événement, dont la
+    // section nomme le chemin : racine, dossier, nom.
     const ecrits = cheminsEcrits(rang);
     expect(ecrits).toHaveLength(2);
-    const [nom, nomControle] = ecrits;
-    expect(nom.startsWith(`${base()}.badges_avery5392_`), nom).toBe(true);
-    expect(nomControle).toBe(nom.replace('.badges_', '.controle_'));
+    const [chemin, cheminControle] = ecrits;
+    expect(chemin.startsWith(`${dossier()}/${base()}.badges_avery5392_`), chemin).toBe(true);
+    expect(cheminControle).toBe(chemin.replace('.badges_', '.controle_'));
+    const nom = chemin.slice(dossier().length + 1);
+    const nomControle = cheminControle.slice(dossier().length + 1);
     const { separateur } = await m.fs.emplacements();
-    expect(texteDe(dans('[data-section="badges"] [data-chemin-planche]'))).toBe(`${etat().racine.chemin}${separateur}${nom}`);
-    expect(texteDe(dans('[data-section="badges"] [data-chemin-controle]'))).toBe(`${etat().racine.chemin}${separateur}${nomControle}`);
-    const premiere = m.fs.octets('documents', nom);
-    const premierControle = m.fs.octets('documents', nomControle);
+    const leDossier = `${etat().racine.chemin}${separateur}${dossier()}`;
+    expect(texteDe(dans('[data-section="badges"] [data-chemin-planche]'))).toBe(`${leDossier}${separateur}${nom}`);
+    expect(texteDe(dans('[data-section="badges"] [data-chemin-controle]'))).toBe(`${leDossier}${separateur}${nomControle}`);
+    const premiere = m.fs.octets('documents', chemin);
+    const premierControle = m.fs.octets('documents', cheminControle);
     for (const octets of [premiere, premierControle]) expect(new TextDecoder().decode(octets.slice(0, 5))).toBe('%PDF-');
 
     // Une seconde production, l'horloge avancée : le même fichier, les
@@ -2346,9 +2358,9 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       () => cheminsEcrits(rang).length > 0 && dans('[data-section="badges"] [data-chemin-planche]'),
       IMAGES_PLANCHE,
     );
-    expect(cheminsEcrits(rang)).toEqual([nom, nomControle]);
-    const seconde = m.fs.octets('documents', nom);
-    const secondControle = m.fs.octets('documents', nomControle);
+    expect(cheminsEcrits(rang)).toEqual([chemin, cheminControle]);
+    const seconde = m.fs.octets('documents', chemin);
+    const secondControle = m.fs.octets('documents', cheminControle);
     expect(await empreinte(seconde)).toBe(await empreinte(premiere));
     expect(await empreinte(secondControle)).toBe(await empreinte(premierControle));
     await rienEcrit(avant, 'la production de la planche');
@@ -4854,6 +4866,7 @@ describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
     const ecrits = cheminsEcrits(rang);
     expect(ecrits).toHaveLength(2);
     const [nom, nomControle] = ecrits;
+    expect(nom.startsWith(`${dossier()}/`), nom).toBe(true);
     expect(nom).toMatch(/\.badges-2_avery5392_/);
     expect(nomControle).toMatch(/\.controle-2_avery5392_/);
     await rienEcrit(avant, 'la réédition');

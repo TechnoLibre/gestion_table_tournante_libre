@@ -10,7 +10,7 @@
 // partir de leur seule forme, sans horloge ni langue du système. Le nom
 // d'un papier arrive dans les détails : cette table n'en écrit aucun.
 import { lireHorodatage } from '../format.js';
-import { compte, enumeration, nomDans, ouEcrire, phraseDeRaison } from './aides.js';
+import { cite, compte, enumeration, nomDans, ouEcrire, phraseDeRaison } from './aides.js';
 
 // Les impositions de la planche (§ 11.6), comme la feuille de contrôle les
 // nomme.
@@ -95,15 +95,21 @@ export const TABLE = new Map([
 
   // --- Les refus de la production (§ 8.5, § 11.6, décision 13) -------------
   // fichier : celui qui ne s'est pas écrit ; deposee, le chemin des cartes
-  // déjà déposées quand c'est la feuille de contrôle qui manque.
+  // déjà déposées quand c'est la feuille de contrôle qui manque. La cause
+  // DOSSIER_EVENEMENT_ABSENT nomme le dossier de l'événement disparu, sans
+  // le fichier, qu'aucun dossier ne porte.
   [
     'PLANCHE_NON_ECRITE',
     (details, texte) => {
       const { fichier, deposee = null } = details;
       const lesCartes = deposee === null ? '' : ` Les cartes, elles, sont déposées : ${deposee}.`;
       const ailleurs = fichier === 'controle' ? 'dépose les deux fichiers ailleurs' : 'la dépose ailleurs';
+      const pourquoi =
+        details.cause === 'DOSSIER_EVENEMENT_ABSENT'
+          ? `le dossier de l'événement ${cite(details.dossier)} est introuvable, et il ne se recrée pas`
+          : ouEcrire(details, texte);
       return (
-        `${nomDans(LES_FICHIERS, fichier, 'fichier')} n'a pas pu s'écrire : ${ouEcrire(details, texte)}.` +
+        `${nomDans(LES_FICHIERS, fichier, 'fichier')} n'a pas pu s'écrire : ${pourquoi}.` +
         `${lesCartes} « Enregistrer sous… » ${ailleurs}.`
       );
     },

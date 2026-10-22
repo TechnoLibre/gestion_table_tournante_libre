@@ -28,6 +28,7 @@ export const EXEMPLES = [
   ['JALON_NON_ECRIT', { chemin: 'Soirée des Lucioles.gtt-journal.jsonl', dossier: 'E:\\data', cause: 'EROFS' }],
   ['SANS_EFFET', { commande: 'modifierParticipant', remede: null }],
   ['RETOUR_AUTOMATIQUE', {}],
+  ['DOSSIER_EVENEMENT_ABSENT', { dossier: 'E:\\data\\Soirée des Lucioles' }],
   [
     'DERIVE_NOUVELLE',
     {
@@ -60,4 +61,12 @@ export const EXEMPLES = [
   ['ENTREE_REVENIR', { libelle: 'Ajouté Iris Ombrelle' }],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  // Le dossier de l'événement disparu pendant la séance.
+  [
+    'DOSSIER_EVENEMENT_ABSENT',
+    { dossier: 'E:\\data\\Soirée des Lucioles' },
+    "Le dossier de l'événement « E:\\data\\Soirée des Lucioles » est introuvable : déplacé, renommé ou " +
+      "retiré hors de l'application, il ne se recrée pas.",
+  ],
+];

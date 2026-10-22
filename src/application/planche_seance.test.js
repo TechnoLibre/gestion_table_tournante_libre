@@ -2,25 +2,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La planche dans la séance (§ 11.2, § 11.6, § 11.8, § 8.4, § 8.6, § 9) :
-// préparer annonce, produire dépose le PDF à côté des fichiers d'événement
+// préparer annonce, produire dépose le PDF dans le dossier de l'événement
 // — ou le télécharge sous web —, enregistrer sous le confie au dialogue.
 // Sortir n'est pas modifier (contrainte 24) : en lecture, sur un plan
 // bloqué, sous un format plus récent, la trace des écritures du système
 // d'épreuve ne porte que le .pdf ; un refus n'écrit rien ; l'écriture du PDF
 // refusée se dit PLANCHE_NON_ECRITE, sans rompre le support de l'événement.
 //
-// La liste des badges en CSV, dernière série, se dépose et se refuse de
-// même ; elle ne produit aucun PDF, et la borne qui suit ne la compte pas.
+// La liste des badges en CSV se dépose et se refuse de même ; elle ne
+// produit aucun PDF, et la borne qui suit ne la compte pas. La dernière
+// série éprouve le dossier de l'événement : la borne qu'il impose, sa
+// disparition, « Ouvrir le dossier », l'écriture ailleurs.
 //
-// La série surveillée borne le coût (§ 14.4, contrainte 31) : quatorze
+// La série surveillée borne le coût (§ 14.4, contrainte 31) : dix-huit
 // productions de l'A6 au plus dans ce fichier, sur une soirée de quatre
 // personnes — trois pour les trois modes, deux pour la stabilité des octets,
 // une réédition, deux refus d'écriture et l'enregistrement sous, une sous
 // web, deux propositions de la même génération, deux sous le pied
-// TechnoLibre —, et douze d'Avery 5392, de deux documents chacune — une
-// déposée, une de sept badges en pile demandée, une au libellé de table le
-// plus long, deux refusées et trois enregistrements sous, une sous web, trois
-// pour le pied TechnoLibre. Les épreuves de l'A6 choisissent ce modèle ;
+// TechnoLibre, quatre pour le dossier de l'événement —, et douze d'Avery
+// 5392, de deux documents chacune — une déposée, une de sept badges en pile
+// demandée, une au libellé de table le plus long, deux refusées et trois
+// enregistrements sous, une sous web, trois pour le pied TechnoLibre. Les
+// épreuves de l'A6 choisissent ce modèle ;
 // celles d'Avery 5392 n'en choisissent aucun, comme une machine neuve. La
 // case du pied TechnoLibre se décoche au montage, sauf pour les épreuves qui
 // le portent. L'imposition et l'ordre se lisent dans la place de chaque nom,
@@ -45,8 +48,19 @@ import { serialiser } from '../stockage/canonique.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { FORMAT, LIBELLE_TABLE_MAX } from '../stockage/document.js';
-import { SUFFIXES, cleEvenement, deriverBase, nomControle, nomCsvBadges, nomPlanche } from '../stockage/noms.js';
+import {
+  LONGUEUR_CHEMIN_MAX,
+  SUFFIXES,
+  SUFFIXE_ECRITURE,
+  cleEvenement,
+  decouperCle,
+  deriverBase,
+  nomControle,
+  nomCsvBadges,
+  nomPlanche,
+} from '../stockage/noms.js';
 import { VERSION } from '../version.genere.js';
+import { NOM_EVENEMENT_MAX } from './commandes.js';
 import { libelle } from './libelles.js';
 import { creerSeance } from './seance.js';
 
@@ -54,6 +68,10 @@ const V1 = VERSION.affichee;
 const DOCUMENTS = 'D:\\Soirees\\Gestion table tournante Libre';
 const DOC = { id: 'documents', chemin: DOCUMENTS };
 const BASE = 'Soirée des Lucioles';
+// Le dossier de l'événement, tel que l'opérateur le lit, et le chemin d'un
+// fichier de ce dossier relatif à la racine : la tête ICI suivie du nom.
+const DANS = `${DOCUMENTS}\\${BASE}`;
+const ICI = `${BASE}/`;
 const POLICES = lirePolices();
 const LOGO = lireLogo();
 const FILIGRANE = libelle('planche.brouillon');
@@ -125,12 +143,13 @@ function chargeLucioles({ personnes = null, ...champs } = {}) {
 const nomDe = ({ papier = 'A4', imposition = 'feuille', horodatage = H_RETENU, reedition = null, proposition = null, ordre } = {}) =>
   nomPlanche(BASE, { papier, imposition, horodatage, reedition, proposition, ordre });
 
-// Pose l'événement de la charge sur le disque, par le dépôt ; format :
-// celui qu'annonce l'en-tête de l'état, FORMAT par défaut.
-async function deposer(fs, charge, { format = FORMAT } = {}) {
-  fs.deposerDossier('documents');
+// Pose l'événement de la charge sur le disque, par le dépôt, dans la
+// racine donnée, DOC par défaut ; format : celui qu'annonce l'en-tête de
+// l'état, FORMAT par défaut.
+async function deposer(fs, charge, { format = FORMAT, racine = DOC } = {}) {
+  fs.deposerDossier(racine.id);
   if (format === FORMAT) {
-    await creerDansLeDepot(fs, DOC, charge, {
+    await creerDansLeDepot(fs, racine, charge, {
       libelle: libelle('ENTREE_CREATION', { nom: charge.evenement.nom }),
       nomJalon: libelle('JALON_CREATION'),
       horodatage: '2031-05-17T07:00:00-04:00',
@@ -142,12 +161,13 @@ async function deposer(fs, charge, { format = FORMAT } = {}) {
   fs.deposer('documents', `${BASE}/${BASE}${SUFFIXES.etat}`, texte.replace(`"format":${FORMAT}`, `"format":${format}`));
 }
 
-// Une séance sur l'événement de la charge, ouvert en lecture par sa clé, celle
-// de BASE dans son dossier par défaut, le modèle de
-// badge et le papier choisis quand ils sont donnés — l'A6 par défaut, le
-// modèle que ces épreuves éprouvent ; null garde Avery 5392, celui d'une
-// machine qui n'a rien choisi ; la case du pied TechnoLibre décochée, sauf
-// pour les épreuves qui le portent ; la trace part ensuite, vide.
+// Une séance sur l'événement de la charge, posé dans la racine donnée — DOC
+// par défaut —, ouvert en lecture par sa clé, celle de BASE dans son dossier
+// par défaut, le modèle de badge et le papier choisis quand ils sont donnés
+// — l'A6 par défaut, le modèle que ces épreuves éprouvent ; null garde
+// Avery 5392, celui d'une machine qui n'a rien choisi ; la case du pied
+// TechnoLibre décochée, sauf pour les épreuves qui le portent ; la trace
+// part ensuite, vide.
 async function monter(
   charge = chargeLucioles(),
   {
@@ -157,13 +177,14 @@ async function monter(
     fs = creerFichiersSimules({ documents: DOCUMENTS }),
     format,
     cle = cleEvenement(BASE, BASE),
+    racine = DOC,
   } = {},
 ) {
-  await deposer(fs, charge, { format });
+  await deposer(fs, charge, { format, racine });
   let tirage = 0;
   const seance = creerSeance({
     fs,
-    racine: DOC,
+    racine,
     horloge: creerHorloge(),
     identifiant: () => {
       tirage += 1;
@@ -224,7 +245,7 @@ const lignesDeSortie = ({ papier, imposition, planches }) => [
 const sortieLue = (pdf, sortie) => lignesDeSortie(sortie).filter((ligne) => textesDe(pdf.pages[0]).includes(ligne));
 
 describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, § 8.4, § 9)', () => {
-  test('produire en lecture, sur un plan bloqué, sous un format plus récent : la trace ne porte que le .pdf, déposé à côté de l’événement', async () => {
+  test('produire en lecture, sur un plan bloqué, sous un format plus récent : la trace ne porte que le .pdf, déposé dans le dossier de l’événement', async () => {
     const cas = [
       ['lecture', chargeLucioles(), {}],
       ['bloqué', chargeLucioles({ etat: 'bloque' }), {}],
@@ -256,11 +277,11 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
       );
       assert.deepEqual(trace, [], `${nom} : préparer écrit`);
       const rendu = await seance.produirePlanche();
-      assert.deepEqual(rendu, { chemin: `${DOCUMENTS}\\${attendu}`, nom: attendu, controle: null }, nom);
-      assert.deepEqual(trace, [['ecrireOctetsAtomique', attendu]], nom);
+      assert.deepEqual(rendu, { chemin: `${DANS}\\${attendu}`, nom: attendu, controle: null }, nom);
+      assert.deepEqual(trace, [['ecrireOctetsAtomique', ICI + attendu]], nom);
       assert.equal(seance.mode, 'lecture', nom);
       assert.equal(seance.etat().evenement.revision, revision, nom);
-      const octets = fs.octets('documents', attendu);
+      const octets = fs.octets('documents', ICI + attendu);
       assert.equal(new TextDecoder().decode(octets.subarray(0, 5)), '%PDF-', nom);
       retenu ??= octets;
     }
@@ -282,9 +303,9 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
     const nom = nomDe({ papier: 'Lettre' });
     assert.deepEqual([annonce.refus, annonce.papier, annonce.nom], [null, 'Lettre', nom]);
     assert.deepEqual(annonce.planches, { A4: 1, Lettre: 2 });
-    assert.deepEqual(await seance.produirePlanche(), { chemin: `${DOCUMENTS}\\${nom}`, nom, controle: null });
+    assert.deepEqual(await seance.produirePlanche(), { chemin: `${DANS}\\${nom}`, nom, controle: null });
     // Seul le PDF s'écrit : le papier par défaut ne se retient pas.
-    assert.deepEqual(trace, [['ecrireOctetsAtomique', nom]]);
+    assert.deepEqual(trace, [['ecrireOctetsAtomique', ICI + nom]]);
     assert.equal(seance.etat().papier, null);
 
     await seance.choisirPapier('A4');
@@ -405,7 +426,7 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
   test('deux productions du même placement : mêmes octets, même nom ; un geste lancé pendant la seconde attend son tour ; la retouche change le nom ; défaire rend la charge, donc le premier', async () => {
     const { fs, seance, trace } = await monter();
     const premier = await seance.produirePlanche();
-    const octetsPremiers = fs.octets('documents', premier.nom);
+    const octetsPremiers = fs.octets('documents', ICI + premier.nom);
     await seance.passerEnEcriture();
     const chargePremiere = structuredClone(seance.charge);
     trace.length = 0;
@@ -414,9 +435,9 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
     const geste = seance.executer('echangerDansRetenu', { tour: 1, a: 1, b: 3 });
     const [second] = await Promise.all([production, geste]);
     assert.deepEqual(second, premier);
-    assert.deepEqual(fs.octets('documents', second.nom), octetsPremiers);
+    assert.deepEqual(fs.octets('documents', ICI + second.nom), octetsPremiers);
     // Le PDF part d'abord, puis le geste écrit son entrée et son état.
-    assert.deepEqual(trace[0], ['ecrireOctetsAtomique', premier.nom]);
+    assert.deepEqual(trace[0], ['ecrireOctetsAtomique', ICI + premier.nom]);
     assert.deepEqual(trace[1], ['ajouterLigne', `${BASE}/${BASE}${SUFFIXES.journal}`]);
     assert.ok(trace.slice(1).every(([primitive]) => primitive !== 'ecrireOctetsAtomique'));
 
@@ -441,15 +462,15 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
     // la nouvelle prend le rang libre, et la première reste.
     const pris = nomDe({ reedition: { ids: [3, 1, 4] } });
     const anciens = new TextEncoder().encode('%PDF-réédition précédente');
-    fs.deposerOctets('documents', pris, anciens);
+    fs.deposerOctets('documents', ICI + pris, anciens);
     const annonce = await seance.preparerPlanche({ selection: [3, 1, 4] });
     const rendu = await seance.produirePlanche({ selection: [3, 1, 4] });
     assert.equal(rendu.nom, pris.replace(/\.pdf$/, '_2.pdf'));
     assert.equal(annonce.nom, rendu.nom);
     assert.match(rendu.nom, /\.badges-3_A4_feuille_/);
-    assert.deepEqual(fs.octets('documents', pris), anciens);
-    assert.deepEqual(trace, [['ecrireOctetsAtomique', rendu.nom]]);
-    const pdf = await lirePdf(fs.octets('documents', rendu.nom));
+    assert.deepEqual(fs.octets('documents', ICI + pris), anciens);
+    assert.deepEqual(trace, [['ecrireOctetsAtomique', ICI + rendu.nom]]);
+    const pdf = await lirePdf(fs.octets('documents', ICI + rendu.nom));
     assert.ok(textesDe(pdf.pages[0]).includes(libelle('planche.controle.reedition', { n: 3 })), textesDe(pdf.pages[0]).join(' | '));
     assert.ok(textesDe(pdf.pages[0]).includes('Réédition : 3 badges'));
     const absents = libelle('planche.controle.absents', { points: ['U+674E'] });
@@ -462,26 +483,26 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
     assert.equal(charge.propositions[0].horodatage, charge.propositions[1].horodatage);
     const { fs, seance, trace } = await monter(charge, { papier: 'Lettre' });
     const premiere = await seance.produirePlanche({ source: 'proposition', proposition: 1 });
-    const octetsPremiers = fs.octets('documents', premiere.nom);
+    const octetsPremiers = fs.octets('documents', ICI + premiere.nom);
     const rendu = await seance.produirePlanche({ source: 'proposition', proposition: 2 });
     assert.deepEqual(
       [premiere.nom, rendu.nom],
       [1, 2].map((proposition) => nomDe({ papier: 'Lettre', horodatage: H_PROPOSITION, proposition })),
     );
     assert.notEqual(premiere.nom, rendu.nom);
-    assert.deepEqual(fs.octets('documents', premiere.nom), octetsPremiers);
-    assert.notDeepEqual(fs.octets('documents', rendu.nom), octetsPremiers);
-    const pdfs = (await fs.lister(DOC, '')).map(({ nom }) => nom).filter((nom) => nom.endsWith('.pdf'));
+    assert.deepEqual(fs.octets('documents', ICI + premiere.nom), octetsPremiers);
+    assert.notDeepEqual(fs.octets('documents', ICI + rendu.nom), octetsPremiers);
+    const pdfs = (await fs.lister(DOC, BASE)).map(({ nom }) => nom).filter((nom) => nom.endsWith('.pdf'));
     assert.deepEqual(pdfs, [premiere.nom, rendu.nom]);
     assert.deepEqual(trace, [
-      ['ecrireOctetsAtomique', premiere.nom],
-      ['ecrireOctetsAtomique', rendu.nom],
+      ['ecrireOctetsAtomique', ICI + premiere.nom],
+      ['ecrireOctetsAtomique', ICI + rendu.nom],
     ]);
 
     // La seconde : le mot du filigrane au trait, sur ses planches et sa
     // feuille de contrôle, qui la nomme ; en Lettre sous la demande par
     // défaut, feuille par feuille, dans l'ordre alphabétique.
-    const pdf = await lirePdf(fs.octets('documents', rendu.nom));
+    const pdf = await lirePdf(fs.octets('documents', ICI + rendu.nom));
     const source = libelle('planche.controle.source', { source: 'proposition', proposition: 2 });
     assert.ok(textesDe(pdf.pages[0]).includes(source), textesDe(pdf.pages[0]).join(' | '));
     assert.ok(pdf.pages.every((page) => textesDe(page).includes(FILIGRANE)));
@@ -506,13 +527,13 @@ describe('planche dans la séance : un nom par pile (§ 11.6)', () => {
     const { fs, seance, trace } = await monter();
     const lister = fs.lister;
     fs.lister = async () => {
-      throw new ErreurStockage('LECTURE', { chemin: '', dossier: DOCUMENTS, cause: 'EACCES' });
+      throw new ErreurStockage('LECTURE', { chemin: '', dossier: DANS, cause: 'EACCES' });
     };
     const nom = nomDe({ reedition: { ids: [2] } });
     assert.equal((await seance.preparerPlanche({ selection: [2] })).nom, nom);
     await refusee(seance.produirePlanche({ selection: [2] }), 'PLANCHE_NON_ECRITE', {
       chemin: nom,
-      dossier: DOCUMENTS,
+      dossier: DANS,
       cause: 'EACCES',
       fichier: 'planche',
       remede: { geste: 'enregistrerSous' },
@@ -544,29 +565,38 @@ describe('planche dans la séance : un nom par pile (§ 11.6)', () => {
     const { seance, trace } = await monter(chargeLucioles({ nom }), { papier: 'Lettre', fs, cle: cleEvenement(derivee, base) });
     const demande = { source: 'proposition', proposition: 2, ordre: 'table' };
     const options = { papier: 'Lettre', imposition: 'feuille', horodatage: H_PROPOSITION, reedition: null, proposition: 2, ordre: 'table' };
-    const raccourci = nomPlanche(base, { ...options, dossier: { racine: DOCUMENTS, separateur, existants: [] } });
+    // La borne compte le dossier de l'événement, où la planche se dépose.
+    const ailleurs = `${DOCUMENTS}${separateur}${derivee}`;
+    const raccourci = nomPlanche(base, { ...options, dossier: { racine: ailleurs, separateur, existants: [] } });
     assert.notEqual(raccourci, nomPlanche(base, options), 'la base se raccourcit');
+    assert.notEqual(raccourci, nomPlanche(base, { ...options, dossier: { racine: DOCUMENTS, separateur, existants: [] } }));
     assert.equal((await seance.preparerPlanche(demande)).nom, raccourci);
-    // Le fichier d'un autre événement porte déjà ce nom : la planche prend le rang suivant.
-    fs.deposer('documents', raccourci, 'planche d’un autre événement');
-    const auRang2 = nomPlanche(base, { ...options, dossier: { racine: DOCUMENTS, separateur, existants: [raccourci] } });
+    // Un fichier de ce nom posé à la racine n'est pas dans le dossier de
+    // l'événement : il ne compte pas.
+    fs.deposer('documents', raccourci, 'fichier à la racine');
+    assert.equal((await seance.preparerPlanche(demande)).nom, raccourci);
+    // Le fichier d'un autre événement porte déjà ce nom dans le dossier : la
+    // planche prend le rang suivant.
+    fs.deposer('documents', `${derivee}/${raccourci}`, 'planche d’un autre événement');
+    const auRang2 = nomPlanche(base, { ...options, dossier: { racine: ailleurs, separateur, existants: [raccourci] } });
     assert.ok(auRang2.endsWith('_2.pdf'), auRang2);
     assert.equal((await seance.preparerPlanche(demande)).nom, auRang2);
     const lister = fs.lister;
     fs.lister = async () => {
-      throw new ErreurStockage('LECTURE', { chemin: '', dossier: DOCUMENTS, cause: 'EACCES' });
+      throw new ErreurStockage('LECTURE', { chemin: '', dossier: ailleurs, cause: 'EACCES' });
     };
     assert.equal((await seance.preparerPlanche(demande)).nom, nomPlanche(base, options));
     await refusee(seance.produirePlanche(demande), 'PLANCHE_NON_ECRITE', {
       chemin: nomPlanche(base, options),
-      dossier: DOCUMENTS,
+      dossier: ailleurs,
       cause: 'EACCES',
       fichier: 'planche',
       remede: { geste: 'enregistrerSous' },
     });
     fs.lister = lister;
     assert.deepEqual(trace, []);
-    assert.equal(fs.contenu('documents', raccourci), 'planche d’un autre événement');
+    assert.equal(fs.contenu('documents', `${derivee}/${raccourci}`), 'planche d’un autre événement');
+    assert.equal(fs.contenu('documents', raccourci), 'fichier à la racine');
   });
 });
 
@@ -574,11 +604,11 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
   test('un renommage refusé : PLANCHE_NON_ECRITE nomme le fichier, le dossier et la cause, offre « Enregistrer sous… », et le support de l’événement reste intact', async () => {
     const { fs, seance, trace } = await monter();
     fs.pannes.renommage('documents');
-    const details = { chemin: nomDe(), dossier: DOCUMENTS, cause: 'EBUSY', fichier: 'planche', remede: { geste: 'enregistrerSous' } };
+    const details = { chemin: nomDe(), dossier: DANS, cause: 'EBUSY', fichier: 'planche', remede: { geste: 'enregistrerSous' } };
     await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', details);
     assert.equal(seance.supportRompu, false);
-    assert.equal(fs.octets('documents', nomDe()), null);
-    assert.deepEqual(trace, [['ecrireOctetsAtomique', nomDe()]]);
+    assert.equal(fs.octets('documents', ICI + nomDe()), null);
+    assert.deepEqual(trace, [['ecrireOctetsAtomique', ICI + nomDe()]]);
     assert.match(libelle('PLANCHE_NON_ECRITE', details), /Enregistrer sous/);
   });
 
@@ -594,7 +624,7 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
     assert.equal((await seance.preparerPlanche()).refus, null);
     await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', {
       chemin: nomDe(),
-      dossier: DOCUMENTS,
+      dossier: DANS,
       cause: 'EROFS',
       fichier: 'planche',
       remede: { geste: 'enregistrerSous' },
@@ -628,7 +658,7 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
     assert.deepEqual(trace, []);
     assert.equal(recus.length, 1);
     assert.equal(recus[0][0], attendu);
-    assert.equal(fs.octets('documents', attendu), null);
+    assert.equal(fs.octets('documents', ICI + attendu), null);
     // Par table, le tour 1 donne Ombrelle, Pervenche (table 1), puis
     // Grisaille, Lacasse (table 2) ; en pile sur deux planches, la planche p
     // porte les badges p et p + 2 de cet ordre.
@@ -681,19 +711,19 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     const { fs, seance, trace } = await monter(chargeLucioles(), { papier: 'A4', modeleBadge: null });
     const rendu = await seance.produirePlanche({ imposition: 'pile' });
     assert.deepEqual(rendu, {
-      chemin: `${DOCUMENTS}\\${nomCartes}`,
+      chemin: `${DANS}\\${nomCartes}`,
       nom: nomCartes,
-      controle: { chemin: `${DOCUMENTS}\\${nomFeuille}`, nom: nomFeuille },
+      controle: { chemin: `${DANS}\\${nomFeuille}`, nom: nomFeuille },
     });
     assert.deepEqual(trace, [
-      ['ecrireOctetsAtomique', nomCartes],
-      ['ecrireOctetsAtomique', nomFeuille],
+      ['ecrireOctetsAtomique', ICI + nomCartes],
+      ['ecrireOctetsAtomique', ICI + nomFeuille],
     ]);
-    const cartes = await lirePdf(fs.octets('documents', nomCartes));
+    const cartes = await lirePdf(fs.octets('documents', ICI + nomCartes));
     assert.equal(cartes.pages.length, 1);
     assert.deepEqual(nomsParCarte(cartes.pages[0]), ['Grisaille', 'Ondine Lacasse', 'Iris Ombrelle', 'Théo Pervenche', null, null]);
     assert.deepEqual(cartes.pages[0].segments, []);
-    const feuille = await lirePdf(fs.octets('documents', nomFeuille));
+    const feuille = await lirePdf(fs.octets('documents', ICI + nomFeuille));
     assert.equal(feuille.pages.length, 1);
     const lignes = textesDe(feuille.pages[0]).join(' ');
     assert.ok(lignes.includes(libelle('planche.controle.planches', { planches: 1 })), lignes);
@@ -712,7 +742,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     });
     const { fs, seance } = await monter(charge, { modeleBadge: null });
     const { nom } = await seance.produirePlanche({ imposition: 'pile' });
-    const lu = await lirePdf(fs.octets('documents', nom));
+    const lu = await lirePdf(fs.octets('documents', ICI + nom));
     const affiches = noms.map((prenom) => `${prenom} Sarcelle`);
     const parCarte = (page) =>
       cellules('Lettre', 'avery5392').map(
@@ -726,24 +756,24 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     const { fs, seance } = await monter(chargeLucioles(), { modeleBadge: null });
     const ecrire = fs.ecrireOctetsAtomique;
     fs.ecrireOctetsAtomique = async (racine, nom, octets) => {
-      if (nom === nomFeuille) throw new ErreurStockage('ECRITURE', { chemin: nom, dossier: DOCUMENTS, cause: 'ENOSPC' });
+      if (nom === ICI + nomFeuille) throw new ErreurStockage('ECRITURE', { chemin: nom, dossier: DANS, cause: 'ENOSPC' });
       return ecrire(racine, nom, octets);
     };
     const details = {
       chemin: nomFeuille,
-      dossier: DOCUMENTS,
+      dossier: DANS,
       cause: 'ENOSPC',
       fichier: 'controle',
-      deposee: `${DOCUMENTS}\\${nomCartes}`,
+      deposee: `${DANS}\\${nomCartes}`,
       remede: { geste: 'enregistrerSous' },
     };
     await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', details);
-    assert.notEqual(fs.octets('documents', nomCartes), null);
+    assert.notEqual(fs.octets('documents', ICI + nomCartes), null);
     const texte = libelle('PLANCHE_NON_ECRITE', details);
-    assert.ok(texte.startsWith('La feuille de contrôle') && texte.includes(nomFeuille) && texte.includes(`${DOCUMENTS}\\${nomCartes}`), texte);
+    assert.ok(texte.startsWith('La feuille de contrôle') && texte.includes(nomFeuille) && texte.includes(`${DANS}\\${nomCartes}`), texte);
     // Les cartes refusées : la planche se nomme, rien n'est déposé.
     fs.ecrireOctetsAtomique = async (racine, nom) => {
-      throw new ErreurStockage('ECRITURE', { chemin: nom, dossier: DOCUMENTS, cause: 'ENOSPC' });
+      throw new ErreurStockage('ECRITURE', { chemin: nom, dossier: DANS, cause: 'ENOSPC' });
     };
     const { deposee: _deposee, ...sansCartes } = details;
     await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', { ...sansCartes, chemin: nomCartes, fichier: 'planche' });
@@ -809,13 +839,13 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     charge.tables[0].libelle = libelle;
     const { fs, seance } = await monter(charge, { modeleBadge: null });
     const { nom } = await seance.produirePlanche();
-    const textes = textesDe((await lirePdf(fs.octets('documents', nom))).pages[0]);
+    const textes = textesDe((await lirePdf(fs.octets('documents', ICI + nom))).pages[0]);
     // Iris Ombrelle, à la table 1 aux deux tours : sa ligne unique.
     const ligne = textes.find((texte) => texte.startsWith('Toute la soirée — table 1 ('));
     assert.ok(ligne !== undefined, textes.join(' | '));
     assert.match(ligne, /^Toute la soirée — table 1 \(Verri[^)]*…\)$/u);
     const liste = await seance.produireListeBadges();
-    const texte = new TextDecoder().decode(fs.octets('documents', liste.nom));
+    const texte = new TextDecoder().decode(fs.octets('documents', ICI + liste.nom));
     assert.ok(texte.includes(`Toute la soirée — table 1 (${libelle})`), texte);
   });
 
@@ -849,23 +879,23 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
     'Pervenche;Théo;;"Tour 1 — table 1 (Terrasse)\nTour 2 — table 2"\r\n';
   const texteDe = (octets) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets);
 
-  test('en lecture, la liste se dépose à côté de l’événement, seule écriture, et rend son chemin et son nom ; deux productions, mêmes octets', async () => {
+  test('en lecture, la liste se dépose dans le dossier de l’événement, seule écriture, et rend son chemin et son nom ; deux productions, mêmes octets', async () => {
     const { fs, seance, trace } = await monter(libellee(), { modeleBadge: null, papier: null });
     assert.equal(seance.mode, 'lecture');
     const rendu = await seance.produireListeBadges();
-    assert.deepEqual(rendu, { chemin: `${DOCUMENTS}\\${NOM_LISTE}`, nom: NOM_LISTE });
-    assert.deepEqual(trace, [['ecrireOctetsAtomique', NOM_LISTE]]);
-    const premiers = fs.octets('documents', NOM_LISTE);
+    assert.deepEqual(rendu, { chemin: `${DANS}\\${NOM_LISTE}`, nom: NOM_LISTE });
+    assert.deepEqual(trace, [['ecrireOctetsAtomique', ICI + NOM_LISTE]]);
+    const premiers = fs.octets('documents', ICI + NOM_LISTE);
     assert.equal(texteDe(premiers), LISTE);
     await seance.produireListeBadges();
-    assert.deepEqual(fs.octets('documents', NOM_LISTE), premiers);
+    assert.deepEqual(fs.octets('documents', ICI + NOM_LISTE), premiers);
   });
 
   test('l’ordre par table, une réédition et une proposition passent à la liste ; la proposition porte BROUILLON dans le nom', async () => {
     const { fs, seance } = await monter(libellee());
     const { nom: parTable } = await seance.produireListeBadges({ ordre: 'table' });
     assert.equal(parTable, nomCsvBadges(BASE, { horodatage: H_RETENU, ordre: 'table' }));
-    const lignes = (nom) => texteDe(fs.octets('documents', nom)).split('\r\n').slice(1, -1).map((l) => l.split(';')[0]);
+    const lignes = (nom) => texteDe(fs.octets('documents', ICI + nom)).split('\r\n').slice(1, -1).map((l) => l.split(';')[0]);
     assert.deepEqual(lignes(parTable), ['Ombrelle', 'Pervenche', 'Grisaille', 'Lacasse']);
     const { nom: reedition } = await seance.produireListeBadges({ selection: [3, 1] });
     assert.match(reedition, /\.badges-2_2031-05-17_20-15-07\.csv$/);
@@ -886,13 +916,13 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
     const { fs, seance } = await monter(charge);
     await refusee(seance.produirePlanche(), 'PLANCHE_NOM_TROP_LONG');
     const { nom } = await seance.produireListeBadges();
-    assert.ok(texteDe(fs.octets('documents', nom)).includes(`${long};Théo;`));
+    assert.ok(texteDe(fs.octets('documents', ICI + nom)).includes(`${long};Théo;`));
   });
 
   test('une écriture refusée : PLANCHE_NON_ECRITE nomme la liste, remède « Enregistrer sous… », qui la confie au dialogue sous son nom', async () => {
     const { fs, seance } = await monter(libellee());
     fs.pannes.ecriture('documents');
-    const details = { chemin: NOM_LISTE, dossier: DOCUMENTS, cause: 'EROFS', fichier: 'liste', remede: { geste: 'enregistrerSous' } };
+    const details = { chemin: NOM_LISTE, dossier: DANS, cause: 'EROFS', fichier: 'liste', remede: { geste: 'enregistrerSous' } };
     await refusee(seance.produireListeBadges(), 'PLANCHE_NON_ECRITE', details);
     assert.ok(libelle('PLANCHE_NON_ECRITE', details).startsWith('La liste des badges'));
     const recus = [];
@@ -908,12 +938,12 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
     const { fs, seance, trace } = await monter(libellee());
     const lister = fs.lister;
     fs.lister = async () => {
-      throw new ErreurStockage('LECTURE', { chemin: '', dossier: DOCUMENTS, cause: 'EACCES' });
+      throw new ErreurStockage('LECTURE', { chemin: '', dossier: DANS, cause: 'EACCES' });
     };
     const nom = nomCsvBadges(BASE, { horodatage: H_RETENU, reedition: { ids: [2] } });
     await refusee(seance.produireListeBadges({ selection: [2] }), 'PLANCHE_NON_ECRITE', {
       chemin: nom,
-      dossier: DOCUMENTS,
+      dossier: DANS,
       cause: 'EACCES',
       fichier: 'liste',
       remede: { geste: 'enregistrerSous' },
@@ -954,10 +984,10 @@ describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
     const annonce = await seance.preparerPlanche();
     assert.deepEqual([annonce.refus, annonce.piedTechnolibre, annonce.sansTechnolibre], [null, true, 0]);
     const { nom, controle } = await seance.produirePlanche();
-    const cartes = await lirePdf(fs.octets('documents', nom));
+    const cartes = await lirePdf(fs.octets('documents', ICI + nom));
     assert.ok(lu(cartes).includes('https://technolibre.ca'), lu(cartes));
     assert.deepEqual(zones(cartes).map(({ couleur }) => couleur), [0, 1, 2, 3].flatMap(() => COULEURS_LOGO));
-    const feuille = await lirePdf(fs.octets('documents', controle.nom));
+    const feuille = await lirePdf(fs.octets('documents', ICI + controle.nom));
     assert.ok(!lu(feuille).includes('technolibre'), lu(feuille));
     assert.deepEqual(zones(feuille), []);
   });
@@ -965,13 +995,13 @@ describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
   test('l’A6 le porte aussi, debout sur A4 ; les mêmes octets d’une production à l’autre', async () => {
     const { fs, seance } = await monter(chargeLucioles(), { piedTechnolibre: true });
     const { nom } = await seance.produirePlanche();
-    const octets = fs.octets('documents', nom);
+    const octets = fs.octets('documents', ICI + nom);
     const pdf = await lirePdf(octets);
     assert.equal(zones(pdf).length, 3 * 4);
     assert.ok(lu(pdf).replace(/\s+/g, ' ').includes(PROMOTION.split(' ').slice(-4).join(' ')), lu(pdf));
     const autre = await monter(chargeLucioles(), { piedTechnolibre: true });
     const second = await autre.seance.produirePlanche();
-    assert.deepEqual(autre.fs.octets('documents', second.nom), octets);
+    assert.deepEqual(autre.fs.octets('documents', ICI + second.nom), octets);
   });
 
   test('sept tours sur la carte : le pied TechnoLibre se retire des badges où il ne tient pas, que l’annonce compte ; la planche ne porte son logo que sur les autres', async () => {
@@ -985,7 +1015,7 @@ describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
     assert.equal(annonce.refus, null);
     assert.ok(annonce.sansTechnolibre > 0, String(annonce.sansTechnolibre));
     const { nom } = await seance.produirePlanche();
-    const pdf = await lirePdf(fs.octets('documents', nom));
+    const pdf = await lirePdf(fs.octets('documents', ICI + nom));
     assert.equal(zones(pdf).length, 3 * (4 - annonce.sansTechnolibre));
   });
 
@@ -994,7 +1024,7 @@ describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
     const annonce = await seance.preparerPlanche();
     assert.deepEqual([annonce.piedTechnolibre, annonce.sansTechnolibre], [false, null]);
     const { nom } = await seance.produirePlanche();
-    const pdf = await lirePdf(fs.octets('documents', nom));
+    const pdf = await lirePdf(fs.octets('documents', ICI + nom));
     assert.deepEqual(zones(pdf), []);
     assert.ok(!lu(pdf).includes('technolibre'));
   });
@@ -1003,5 +1033,170 @@ describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
     const { seance } = await monter(chargeLucioles({ plan: null, etat: 'propose' }), { piedTechnolibre: true });
     const annonce = await seance.preparerPlanche();
     assert.deepEqual([annonce.refus.code, annonce.piedTechnolibre, annonce.sansTechnolibre], ['PLANCHE_SANS_PLACEMENT', true, null]);
+  });
+});
+
+describe('planche dans la séance : le dossier de l’événement (§ 8.6, § 11.6)', () => {
+  // Retire le dossier de l'événement et ce qu'il porte, comme un geste fait
+  // hors de l'application pendant la séance.
+  async function retirerDossier(fs, racine = DOC, dossier = BASE) {
+    for (const { nom } of await fs.lister(racine, dossier)) await fs.supprimer(racine, `${dossier}/${nom}`);
+    await fs.supprimerDossier(racine, dossier);
+  }
+
+  // Relève chaque appel de l'explorateur, [id de la racine, chemin], et le
+  // transmet tel quel.
+  function releverExplorateur(fs) {
+    const ouverts = [];
+    const ouvrir = fs.ouvrirDansExplorateur;
+    fs.ouvrirDansExplorateur = async (racine, chemin) => {
+      ouverts.push([racine.id, chemin]);
+      return ouvrir(racine, chemin);
+    };
+    return ouverts;
+  }
+
+  test('un nom d’événement de 68 caractères : la borne se compte contre le dossier de l’événement, et raccourcit une planche marquée que la racine seule laisserait entière', async () => {
+    const nom = 'Grand banquet des Hérons cendrés et des Loutres du lac, soir automne';
+    assert.equal(nom.length, NOM_EVENEMENT_MAX);
+    const PROFOND = 'D:\\Associations\\Comité des fêtes des Saules\\Soirées libres';
+    const racine = { id: 'documents', chemin: PROFOND };
+    const fs = creerFichiersSimules({ documents: PROFOND });
+    const { separateur } = await fs.emplacements();
+    // La base garde le nom entier : la borne de la dérivation lui fait place.
+    assert.equal(deriverBase(nom, { racine: PROFOND, separateur, existantes: [] }), nom);
+    const cle = cleEvenement(nom, nom);
+    const { seance, trace } = await monter(chargeLucioles({ nom }), { papier: 'Lettre', fs, racine, cle });
+    const ids = [1, 2, 3];
+    const demande = { source: 'proposition', proposition: 2, ordre: 'table', selection: ids };
+    const options = { papier: 'Lettre', imposition: 'feuille', horodatage: H_PROPOSITION, reedition: { ids } };
+    Object.assign(options, { proposition: 2, ordre: 'table' });
+    const dossier = `${PROFOND}${separateur}${nom}`;
+    // Posée à la racine seule, la planche garderait la base entière.
+    const aLaRacine = nomPlanche(nom, { ...options, dossier: { racine: PROFOND, separateur, existants: [] } });
+    assert.ok(aLaRacine.startsWith(`${nom}.badges`), aLaRacine);
+    const rendu = await seance.produirePlanche(demande);
+    assert.ok(!rendu.nom.startsWith(nom), rendu.nom);
+    assert.equal(rendu.nom, nomPlanche(nom, { ...options, dossier: { racine: dossier, separateur, existants: [] } }));
+    assert.equal(rendu.chemin, `${dossier}${separateur}${rendu.nom}`);
+    assert.ok((rendu.chemin + SUFFIXE_ECRITURE).length <= LONGUEUR_CHEMIN_MAX, String(rendu.chemin.length));
+    assert.deepEqual(trace, [['ecrireOctetsAtomique', `${nom}/${rendu.nom}`]]);
+    assert.equal(new TextDecoder().decode(fs.octets('documents', `${nom}/${rendu.nom}`).subarray(0, 5)), '%PDF-');
+  });
+
+  test('un dossier d’événement disparu pendant la séance : planche, liste et réédition se refusent PLANCHE_NON_ECRITE, la cause le dit, rien ne se recrée, et « Enregistrer sous… » reste offert', async () => {
+    const { fs, seance, trace } = await monter();
+    await retirerDossier(fs);
+    trace.length = 0;
+    const racineAvant = (await fs.lister(DOC, '')).map(({ nom }) => nom);
+    assert.ok(!racineAvant.includes(BASE), racineAvant.join(' | '));
+    const attendu = (chemin, fichier) => ({
+      chemin,
+      dossier: DANS,
+      cause: 'DOSSIER_EVENEMENT_ABSENT',
+      fichier,
+      remede: { geste: 'enregistrerSous' },
+    });
+    const liste = nomCsvBadges(BASE, { horodatage: H_RETENU });
+    await refusee(seance.produirePlanche(), 'PLANCHE_NON_ECRITE', attendu(nomDe(), 'planche'));
+    await refusee(seance.produireListeBadges(), 'PLANCHE_NON_ECRITE', attendu(liste, 'liste'));
+    // La réédition liste le dossier avant de produire : elle se refuse sans
+    // tenter d'écrire.
+    const reedition = nomDe({ reedition: { ids: [2] } });
+    await refusee(seance.produirePlanche({ selection: [2] }), 'PLANCHE_NON_ECRITE', attendu(reedition, 'planche'));
+    assert.deepEqual(trace, [
+      ['ecrireOctetsAtomique', ICI + nomDe()],
+      ['ecrireOctetsAtomique', ICI + liste],
+    ]);
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), racineAvant);
+    const texte = libelle('PLANCHE_NON_ECRITE', attendu(nomDe(), 'planche'));
+    assert.ok(texte.includes(DANS) && /introuvable/.test(texte) && /Enregistrer sous/.test(texte), texte);
+
+    fs.enregistrerSous = async () => 'E:\\Copies\\planche.pdf';
+    assert.deepEqual(await seance.enregistrerPlancheSous(), { chemin: 'E:\\Copies\\planche.pdf', controle: null });
+  });
+
+  test('« Ouvrir le dossier » de la séance montre le dossier de l’événement sous la racine de l’Ouvert, sans rien écrire ; disparu, DOSSIER_EVENEMENT_ABSENT le nomme ; sans événement, AUCUN_EVENEMENT', async () => {
+    const { fs, seance, trace } = await monter();
+    const ouverts = releverExplorateur(fs);
+    await seance.ouvrirDossierEvenement();
+    assert.deepEqual(ouverts, [['documents', BASE]]);
+    assert.deepEqual(trace, []);
+    await retirerDossier(fs);
+    await refusee(seance.ouvrirDossierEvenement(), 'DOSSIER_EVENEMENT_ABSENT', { dossier: DANS, remede: null });
+    assert.ok(libelle('DOSSIER_EVENEMENT_ABSENT', { dossier: DANS }).includes(DANS));
+    await seance.fermer();
+    await refusee(seance.ouvrirDossierEvenement(), 'AUCUN_EVENEMENT');
+  });
+
+  test('après l’écriture ailleurs, la planche se dépose dans le dossier de l’événement sous la racine nouvelle, et « Ouvrir le dossier » le montre', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS, executable: 'E:\\soirees' });
+    fs.deposerDossier('portable');
+    const PORTABLE = { id: 'portable', chemin: 'E:\\soirees\\data' };
+    const { seance } = await monter(chargeLucioles(), { fs });
+    await seance.passerEnEcriture();
+    fs.pannes.ecriture('documents');
+    await assert.rejects(seance.executer('echangerDansRetenu', { tour: 1, a: 1, b: 3 }));
+    await seance.ecrireAilleurs(PORTABLE);
+    const { dossier } = decouperCle(seance.etat().evenement.cle);
+    const ouverts = releverExplorateur(fs);
+    await seance.ouvrirDossierEvenement();
+    assert.deepEqual(ouverts, [['portable', dossier]]);
+    const rendu = await seance.produirePlanche();
+    assert.equal(rendu.chemin, `${PORTABLE.chemin}\\${dossier}\\${rendu.nom}`);
+    assert.equal(new TextDecoder().decode(fs.octets('portable', `${dossier}/${rendu.nom}`).subarray(0, 5)), '%PDF-');
+  });
+
+  test('seule l’absence du dossier se dit DOSSIER_EVENEMENT_ABSENT : un explorateur indisponible, ou une écriture refusée dont le dossier ne se liste pas, garde son propre refus', async () => {
+    const { fs, seance } = await monter();
+    fs.ouvrirDansExplorateur = async () => {
+      throw new ErreurStockage('NON_DISPONIBLE', { cause: 'EACCES' });
+    };
+    await refusee(seance.ouvrirDossierEvenement(), 'NON_DISPONIBLE');
+    fs.pannes.ecriture('documents');
+    const lister = fs.lister;
+    fs.lister = async (racine, dossier) => {
+      if (dossier === BASE) throw new ErreurStockage('LECTURE', { chemin: dossier, dossier: DOCUMENTS, cause: 'EIO' });
+      return lister(racine, dossier);
+    };
+    await assert.rejects(seance.produirePlanche(), (erreur) => {
+      assert.equal(erreur.code, 'PLANCHE_NON_ECRITE');
+      assert.notEqual(erreur.details.cause, 'DOSSIER_EVENEMENT_ABSENT');
+      return true;
+    });
+  });
+
+  test('un dossier disparu entre les cartes et la feuille de contrôle : le refus nomme la feuille, sans dire les cartes déposées, parties avec lui', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { modeleBadge: null });
+    const ecrits = [];
+    const ecrire = fs.ecrireOctetsAtomique;
+    fs.ecrireOctetsAtomique = async (racine, chemin, octets) => {
+      await ecrire(racine, chemin, octets);
+      ecrits.push(chemin);
+      if (ecrits.length === 1) await retirerDossier(fs);
+    };
+    await assert.rejects(seance.produirePlanche(), (erreur) => {
+      assert.equal(erreur.code, 'PLANCHE_NON_ECRITE');
+      const { chemin, ...reste } = erreur.details;
+      assert.deepEqual(reste, {
+        dossier: DANS,
+        cause: 'DOSSIER_EVENEMENT_ABSENT',
+        fichier: 'controle',
+        remede: { geste: 'enregistrerSous' },
+      });
+      assert.notEqual(ICI + chemin, ecrits[0]);
+      return true;
+    });
+    assert.equal(ecrits.length, 1);
+  });
+
+  test('une racine qui porte déjà son séparateur, celle d’un volume, ne le double pas : chemin de la planche et dossier disparu', async () => {
+    const VOLUME = { id: 'documents', chemin: 'E:\\' };
+    const fs = creerFichiersSimules({ documents: VOLUME.chemin });
+    const { seance } = await monter(chargeLucioles(), { fs, racine: VOLUME });
+    const rendu = await seance.produirePlanche();
+    assert.equal(rendu.chemin, `E:\\${BASE}\\${rendu.nom}`);
+    await retirerDossier(fs, VOLUME);
+    await refusee(seance.ouvrirDossierEvenement(), 'DOSSIER_EVENEMENT_ABSENT', { dossier: `E:\\${BASE}`, remede: null });
   });
 });
