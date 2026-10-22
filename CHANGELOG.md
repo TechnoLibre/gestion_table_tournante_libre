@@ -333,6 +333,14 @@
   dossier, ne s'affichent plus, ne s'importent plus de l'autre emplacement, et
   restent intacts. Une version antérieure ne voit pas les événements rangés en
   dossiers.
+- Renommer un événement emporte tout son dossier : les badges et la liste en
+  CSV déjà produits prennent le nouveau nom, leur date gardée, et le reste —
+  fichiers posés à la main, dossier `logo` — suit sous son nom ; l'ancien
+  dossier se retire ensuite. Supprimer range tout le contenu du dossier dans un
+  dossier daté de la corbeille, `logo` compris, puis retire le dossier ; la
+  corbeille montre aussi les fichiers de ses sous-dossiers. Un dossier qui ne
+  se vide pas — un fichier encore ouvert ailleurs — reste sur le disque, et un
+  avis le nomme au-dessus de la liste, sans faire échouer l'opération.
 - Sous le placement retenu, glisser hors des tables une personne que sa
   réservation tient à la sienne annonce le refus dès le survol, au lieu de
   « retire du tour ».

@@ -28,7 +28,10 @@
   // Les avis ne se disent qu'au premier accueil de la séance (premiereAnnonce)
   // : un retour à la liste ne les répète pas. Toute opération qui change le
   // dossier de travail demande ensuite à App de relire la liste, par
-  // relireListe du contexte, et relit la corbeille.
+  // relireListe du contexte, et relit la corbeille. Les avertissements
+  // qu'elle rend — l'ancien dossier d'un renommage, ou celui d'un événement
+  // supprimé, qui reste sur le disque (DOSSIER_NON_RETIRE) — se disent en
+  // avis sous l'en-tête, jusqu'à l'opération suivante.
   //
   // Un état qui ne s'ouvre pas (ETAT_ILLISIBLE) mène à la récupération, qui
   // tient lieu de liste jusqu'à son retour. Chaque refus s'affiche, traduit,
@@ -80,6 +83,8 @@
   let issue = $state.raw(null);
   let racine = $state.raw(seance.etat().racine);
   let corbeille = $state.raw([]);
+  // Les avertissements de la dernière opération, [{ code, details }].
+  let avertissementsOperation = $state.raw([]);
   let importAutre = $state.raw(null);
   // La récupération d'un état illisible : { evenement, chemin, refus },
   // evenement la clé de la ligne.
@@ -161,8 +166,10 @@
     if (refusLecture === null && issue === null) untrack(demander);
   });
 
-  // Après une opération qui change le dossier de travail.
-  function apresOperation() {
+  // Après une opération qui change le dossier de travail, et ses
+  // avertissements, qui remplacent ceux de la précédente.
+  function apresOperation(avertissements = []) {
+    avertissementsOperation = avertissements;
     relireListe();
     lireCorbeille();
   }
@@ -272,6 +279,12 @@
         <p data-refus="accueil">{t(refusLecture.code, refusLecture.details)}</p>
       </Message>
     {/if}
+
+    {#each avertissementsOperation as { code, details }, rang (rang)}
+      <Message ton="avis">
+        <p role="status" data-avertissement={code}>{t(code, details)}</p>
+      </Message>
+    {/each}
 
     {#if issue !== null}
       <MessagesDossier

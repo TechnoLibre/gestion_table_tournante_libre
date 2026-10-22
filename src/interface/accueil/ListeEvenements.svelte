@@ -44,8 +44,8 @@
   // s'annonce une fois pour la liste, et sa fin la vide. vue : { filtre,
   // groupement } de l'accueil ; grouper(groupement) : le geste du choix ;
   // ouvrir(ligne) : le geste de l'accueil ; refusOuverture : { cle, refus }
-  // du dernier échec, ou null ; apresOperation() : à appeler quand une
-  // opération a changé le dossier.
+  // du dernier échec, ou null ; apresOperation(avertissements) : à appeler
+  // quand une opération a changé le dossier, avec ceux qu'elle rend.
   //
   // L'intitulé de chaque mesure du retenu et le titre de la meilleure
   // proposition s'expliquent dans l'infobulle de la liste, une seule

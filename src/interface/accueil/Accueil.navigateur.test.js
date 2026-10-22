@@ -73,6 +73,9 @@ const CORBEILLE_DU_DEPART = 'corbeille/2026-10-06_19-00-00';
 // départ de l'horloge pilotée.
 const ANCIEN_DOSSIER = 'corbeille/2026-01-15_12-00-00';
 const UTF8 = new TextEncoder();
+// La racine documents du système simulé, telle que ses primitives la
+// reçoivent.
+const racineDocuments = { id: 'documents', chemin: DOCUMENTS };
 
 // --- Les fichiers d'épreuve ------------------------------------------------------
 
@@ -823,8 +826,9 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     expect([...m.disque.keys()].some((cle) => cle.includes('(COPIE)'))).toBe(false);
   });
 
-  test('renommer : le nouveau nom et le nouveau chemin dans la liste', async () => {
-    const { disque } = await disqueAvec([{ id: 'evt-pervenches', nom: 'Gala des Pervenches' }]);
+  test('renommer : le nouveau nom et le nouveau chemin dans la liste ; ce que l’ancien dossier portait suit, et il se retire sans rien dire', async () => {
+    const { disque, fs } = await disqueAvec([{ id: 'evt-pervenches', nom: 'Gala des Pervenches' }]);
+    fs.deposer('documents', 'Gala des Pervenches/logo/Alice.png', 'logo');
     const m = await monter({ systeme: { disque } });
     const ligne = ligneDe(m, 'Gala des Pervenches');
     await cliquer(ligne.querySelector('[data-commande="renommer"]'));
@@ -838,6 +842,41 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     expect(colonne(renomme, 'nom')).toBe('Gala des Ombrelles');
     expect(colonne(renomme, 'chemin')).toBe(`${DOCUMENTS}\\Gala des Ombrelles\\Gala des Ombrelles${SUFFIXES.etat}`);
     expect(m.fs.contenu('documents', `Gala des Pervenches/Gala des Pervenches${SUFFIXES.verrou}`)).toBeNull();
+    expect(m.fs.contenu('documents', 'Gala des Ombrelles/logo/Alice.png')).toBe('logo');
+    expect((await m.fs.lister(racineDocuments, '')).map(({ nom }) => nom)).toEqual(['Gala des Ombrelles']);
+    expect(dans(m, '[data-avertissement="DOSSIER_NON_RETIRE"]')).toBeNull();
+  });
+
+  test('renommer quand l’ancien dossier ne se retire pas : la ligne renommée, et un avis qui nomme l’ancien dossier, que l’opération suivante efface', async () => {
+    const { disque } = await disqueAvec([
+      { id: 'evt-pervenches', nom: 'Gala des Pervenches' },
+      { id: 'evt-iris', nom: 'Bal des Iris' },
+    ]);
+    const m = await monter({ systeme: { disque } });
+    m.fs.pannes.dossierNonRetire('documents', 11);
+    const ligne = ligneDe(m, 'Gala des Pervenches');
+    await cliquer(ligne.querySelector('[data-commande="renommer"]'));
+    saisir(ligne.querySelector('[data-champ="nouveauNom"]'), 'Gala des Ombrelles');
+    await cliquer(ligne.querySelector('[data-commande="validerRenommage"]'));
+    const avis = await vi.waitFor(() => {
+      const element = dans(m, '[data-avertissement="DOSSIER_NON_RETIRE"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(ligneDe(m, 'Gala des Ombrelles')).not.toBeNull();
+    expect(avis.textContent).toBe(
+      t('DOSSIER_NON_RETIRE', { dossier: `${DOCUMENTS}\\Gala des Pervenches`, cause: 'NON_VIDE' }),
+    );
+    expect(visible(avis)).toBe(true);
+    expect(atteint(avis)).toBe(true);
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    // Une suppression qui retire son dossier ne dit rien : l'avis d'avant
+    // part.
+    const supprimer = () => ligneDe(m, 'Bal des Iris')?.querySelector('[data-commande="supprimer"]') ?? null;
+    await cliquer(supprimer());
+    await cliquer(supprimer());
+    await vi.waitFor(() => expect(ligneDe(m, 'Bal des Iris')).toBeNull());
+    await vi.waitFor(() => expect(dans(m, '[data-avertissement="DOSSIER_NON_RETIRE"]')).toBeNull());
   });
 
   // Coupe le processus du montage juste après l'écriture réussie de chemin.
@@ -925,6 +964,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     const m = await monter({
       fichiers: [
         fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles')),
+        fichier('bal/logo/Alice.png', 'logo'),
         fichier(`${ANCIEN_DOSSIER}/Ancienne${SUFFIXES.etat}`, texteNeuf({ id: 'evt-cerfs', nom: 'Soirée des Cerfs' })),
         fichier(`${ANCIEN_DOSSIER}/Ancienne${SUFFIXES.journal}`, ''),
       ],
@@ -957,6 +997,12 @@ describe('les opérations de fichiers (§ 8.7)', () => {
       expect(noeudsDeTexte(ancien)).toContain(nom);
     }
     expect(noeudsDeTexte(corbeille)).toContain(`bal${SUFFIXES.etat}`);
+    // Le sous-dossier logo/ garde son niveau, que la corbeille montre au
+    // séparateur du système ; le dossier de l'événement se retire.
+    expect(noeudsDeTexte(corbeille)).toContain('logo\\Alice.png');
+    expect(m.fs.contenu('documents', `${CORBEILLE_DU_DEPART}/logo/Alice.png`)).toBe('logo');
+    expect((await m.fs.lister(racineDocuments, '')).map(({ nom }) => nom)).toEqual(['corbeille']);
+    expect(dans(m, '[data-avertissement="DOSSIER_NON_RETIRE"]')).toBeNull();
     expect(dans(m, '[data-corbeille]').querySelectorAll('button, [data-commande]').length).toBe(0);
     expect(m.fs.contenu('documents', `${ANCIEN_DOSSIER}/Ancienne${SUFFIXES.etat}`)).not.toBeNull();
   });

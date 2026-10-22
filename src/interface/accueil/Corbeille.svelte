@@ -3,10 +3,12 @@
 
 <script>
   // La corbeille du dossier de travail (§ 8.7) : un événement supprimé y est
-  // déplacé avec tous ses fichiers, dans un dossier daté, et le logiciel ne la
-  // vide jamais. Chaque dossier daté montre son chemin en entier et le nom de
-  // chacun de ses fichiers, des données dans leur propre nœud. Une corbeille
-  // vide ne montre rien.
+  // déplacé avec tout le contenu de son dossier, dans un dossier daté, et le
+  // logiciel ne la vide jamais. Chaque dossier daté montre son chemin en
+  // entier et chacun de ses fichiers, à toute profondeur, par son chemin
+  // relatif au dossier daté, au séparateur du système — « logo\‹nom› » pour
+  // un fichier du sous-dossier logo —, des données dans leur propre nœud.
+  // Une corbeille vide ne montre rien.
   //
   // contenu : [{ dossier, chemin, fichiers }] de facade.corbeille().
   //

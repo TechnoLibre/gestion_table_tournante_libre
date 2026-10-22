@@ -21,7 +21,15 @@ import { creer, enregistrer, lister, ouvrir, ouvrirSecours, verrouiller } from '
 import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { lireJournal, reconstruire } from './journal.js';
-import { SUFFIXES, cleEvenement, deriverBase } from './noms.js';
+import {
+  LONGUEUR_CHEMIN_MAX,
+  SUFFIXES,
+  SUFFIXE_ECRITURE,
+  cleEvenement,
+  deriverBase,
+  nomPlanche,
+  nomSortieRenommee,
+} from './noms.js';
 import { vueDossier } from './systeme_fichiers.js';
 import {
   chargerDemonstration,
@@ -30,6 +38,7 @@ import {
   importerDepuis,
   listerCorbeille,
   renommer,
+  retirerDossier,
   supprimer,
 } from './operations.js';
 
@@ -411,6 +420,21 @@ const chargement = (id, n) => ({
 
 describe('opérations : un événement, un dossier (§ 8.6, § 8.7)', () => {
   const NOUVEAU = 'Gala des Saules';
+  // Ce que le dossier de l'événement porte à côté de ses fichiers : la
+  // planche et la liste en CSV qu'il a produites, un fichier posé à la main,
+  // et le dossier logo/ avec son fichier.
+  const PLANCHE = `${BASE}.badges_A4_feuille_2031-05-17_20-15-07.pdf`;
+  const LISTE_CSV = `${BASE}.badges_2031-05-17_20-15-07.csv`;
+  const ETRANGERS = [
+    [PLANCHE, 'planche'],
+    [LISTE_CSV, 'liste'],
+    ['notes.txt', 'à garder'],
+    ['logo/Alice.png', 'logo'],
+  ];
+  // Le chemin d'un fichier d'ETRANGERS une fois passé dans le dossier neuf
+  // du renommage en NOUVEAU : une sortie de la planche sous la nouvelle base,
+  // tout autre sous son nom.
+  const enNeuf = (nom) => `${NOUVEAU}/${nom.startsWith(`${BASE}.`) ? NOUVEAU + nom.slice(BASE.length) : nom}`;
 
   test("copier crée la copie dans son propre dossier, nommé de sa base ; le dossier de l'original ne change pas", async () => {
     const { disque, ouvert } = await deuxRevisions();
@@ -427,9 +451,9 @@ describe('opérations : un événement, un dossier (§ 8.6, § 8.7)', () => {
     );
   });
 
-  test("renommer écrit la nouvelle paire dans un dossier neuf qui porte le nouveau nom, puis efface l'ancienne ; l'ancien dossier reste, avec ce qui n'est pas de l'événement", async () => {
+  test("renommer écrit la nouvelle paire dans un dossier neuf qui porte le nouveau nom, y déplace ce qui n'est pas à l'événement — les sorties de la planche sous la nouvelle base, le reste sous son nom, logo/ compris —, puis efface l'ancienne ; l'ancien dossier, vide, se retire ensuite", async () => {
     const { disque, fs, ouvert } = await deuxRevisions();
-    fs.deposer('documents', `${BASE}/notes.txt`, 'à garder');
+    for (const [nom, texte] of ETRANGERS) fs.deposer('documents', dans(nom), texte);
     const trace = tracer(fs);
     const renomme = await renommer(ouvert, renommage(NOUVEAU, 3));
     assert.deepEqual([renomme.dossier, renomme.base, renomme.revision], [NOUVEAU, NOUVEAU, 3]);
@@ -438,23 +462,216 @@ describe('opérations : un événement, un dossier (§ 8.6, § 8.7)', () => {
       ['ecrireAtomique', `${NOUVEAU}/${NOUVEAU}${SUFFIXES.precedent}`],
       ['ecrireAtomique', `${NOUVEAU}/${NOUVEAU}${SUFFIXES.journal}`],
       ['ecrireAtomique', `${NOUVEAU}/${NOUVEAU}${SUFFIXES.etat}`],
+      ['deplacer', LISTE_CSV, `${NOUVEAU}/${NOUVEAU}${LISTE_CSV.slice(BASE.length)}`],
+      ['deplacer', PLANCHE, `${NOUVEAU}/${NOUVEAU}${PLANCHE.slice(BASE.length)}`],
+      ['creerDossier', `${NOUVEAU}/logo`],
+      ['deplacer', 'logo/Alice.png', `${NOUVEAU}/logo/Alice.png`],
+      ['supprimerDossier', 'logo'],
+      ['deplacer', 'notes.txt', `${NOUVEAU}/notes.txt`],
       ['supprimer', ETAT],
       ['supprimer', PRECEDENT],
       ['supprimer', JOURNAL],
     ]);
     assert.deepEqual(
-      (await arbre(disque, DOC, {}, { complet: true })).map(([chemin]) => chemin),
-      [
-        `${NOUVEAU}/${NOUVEAU}${SUFFIXES.journal}`,
-        `${NOUVEAU}/${NOUVEAU}${SUFFIXES.etat}`,
-        `${NOUVEAU}/${NOUVEAU}${SUFFIXES.precedent}`,
-        `${BASE}/notes.txt`,
-      ],
+      (await arbre(disque, DOC, {}, { complet: true })).filter(([c]) => !c.startsWith(`${NOUVEAU}/${NOUVEAU}.gtt`)),
+      ETRANGERS.map(([nom, texte]) => [enNeuf(nom), texte]).sort(parChemin),
     );
     assert.deepEqual(
       (await lister(creerFichiersSimules({ disque }), DOC)).map(({ cle }) => cle),
       [cleEvenement(NOUVEAU, NOUVEAU)],
     );
+    // L'ancien dossier reste vide jusqu'à son retrait, que la façade demande
+    // une fois le verrou rendu.
+    assert.deepEqual(await fs.lister(DOC, BASE), []);
+    assert.equal(await retirerDossier(fs, DOC, BASE), null);
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), [NOUVEAU]);
+  });
+
+  test("renommer laisse dans l'ancien dossier les fichiers d'un autre événement et les écritures restées de l'ancienne paire : le dossier ne se retire pas, NON_VIDE, et l'autre événement s'y liste encore", async () => {
+    const { disque, fs, ouvert } = await deuxRevisions();
+    const autre = etatTexte(chargeEssai({ id: 'evt-autre', nom: 'Fête des Ifs' }));
+    const restes = [
+      [`Fête des Ifs${SUFFIXES.etat}`, autre],
+      [`Fête des Ifs.badges_A4_feuille_2031-05-17_20-15-07.pdf`, 'planche des Ifs'],
+      [`${ETAT}${SUFFIXE_ECRITURE}`, 'partiel'],
+    ];
+    for (const [nom, texte] of restes) fs.deposer('documents', dans(nom), texte);
+    await renommer(ouvert, renommage(NOUVEAU, 3));
+    assert.deepEqual(
+      (await arbre(disque, DOC, {}, { complet: true })).filter(([chemin]) => chemin.startsWith(`${BASE}/`)),
+      [restes[0], restes[2]].map(([nom, texte]) => [dans(nom), texte]).sort(parChemin),
+    );
+    assert.equal(fs.contenu('documents', `${NOUVEAU}/${restes[1][0]}`), 'planche des Ifs');
+    assert.deepEqual(await retirerDossier(fs, DOC, BASE), { dossier: BASE, cause: 'NON_VIDE' });
+    assert.deepEqual(
+      (await lister(creerFichiersSimules({ disque }), DOC)).map(({ cle }) => cle),
+      [dans('Fête des Ifs'), cleEvenement(NOUVEAU, NOUVEAU)],
+    );
+  });
+
+  // Refuse, par une ECRITURE EBUSY — un fichier qu'un autre programme tient
+  // ouvert —, le geste de fs que nomme refus : [primitive, chemin], le
+  // chemin étant celui que deplacer reçoit en source, ou que creerDossier
+  // reçoit, relatif à la racine.
+  const refuser = (fs, [primitive, cible]) => {
+    const appeler = fs[primitive];
+    fs[primitive] = async (racine, chemin, ...reste) => {
+      if (chemin === cible) throw new ErreurStockage('ECRITURE', { chemin, dossier: DOCUMENTS, cause: 'EBUSY' });
+      return appeler(racine, chemin, ...reste);
+    };
+  };
+
+  test("un déplacement refusé laisse le fichier où il est, sans faire échouer le renommage : l'ancien dossier le garde — un fichier à côté de l'état, un fichier de logo/, ou logo/ entier quand son dossier neuf ne se crée pas", async () => {
+    const cas = [
+      [['deplacer', dans('notes.txt')], 'notes.txt'],
+      [['deplacer', dans('logo/Alice.png')], 'logo/Alice.png'],
+      [['creerDossier', `${NOUVEAU}/logo`], 'logo/Alice.png'],
+    ];
+    for (const [refus, reste] of cas) {
+      const message = refus.join(' ');
+      const { disque, fs, ouvert } = await deuxRevisions();
+      for (const [nom, texte] of ETRANGERS) fs.deposer('documents', dans(nom), texte);
+      refuser(fs, refus);
+      const renomme = await renommer(ouvert, renommage(NOUVEAU, 3));
+      assert.equal(renomme.base, NOUVEAU, message);
+      const apres = await arbre(disque, DOC, {}, { complet: true });
+      assert.deepEqual(
+        apres.filter(([chemin]) => chemin.startsWith(`${BASE}/`)),
+        ETRANGERS.filter(([nom]) => nom === reste).map(([nom, texte]) => [dans(nom), texte]),
+        message,
+      );
+      assert.deepEqual(
+        apres.filter(([chemin]) => !chemin.startsWith(`${BASE}/`) && !chemin.startsWith(`${NOUVEAU}/${NOUVEAU}.gtt`)),
+        ETRANGERS.filter(([nom]) => nom !== reste).map(([nom, texte]) => [enNeuf(nom), texte]).sort(parChemin),
+        message,
+      );
+      assert.deepEqual(
+        (await lister(creerFichiersSimules({ disque }), DOC)).map(({ cle }) => cle),
+        [cleEvenement(NOUVEAU, NOUVEAU)],
+        message,
+      );
+      assert.deepEqual(await retirerDossier(fs, DOC, BASE), { dossier: BASE, cause: 'NON_VIDE' }, message);
+    }
+  });
+
+  test("une nouvelle base plus longue raccourcit le nom d'une sortie déplacée pour que son chemin dans le dossier neuf, en écriture atomique, tienne sous la borne", async () => {
+    const { disque, fs, ouvert } = await deuxRevisions();
+    const longue = 'Grand bal des Grisailles au clair de lune, édition des Saules et Ifs';
+    // Le nom le plus long que la saisie accepte : 68 caractères.
+    assert.equal(longue.length, 68);
+    const reedition = { ids: Array.from({ length: 9999 }, (_, i) => i + 1) };
+    const options = {
+      papier: 'A4',
+      imposition: 'feuille',
+      horodatage: '2031-05-17T20:15:07-04:00',
+      reedition,
+      proposition: 3,
+      ordre: 'table',
+    };
+    const ancien = { racine: `${DOCUMENTS}\\${BASE}`, separateur: '\\', existants: [] };
+    const planche = nomPlanche(BASE, { ...options, dossier: ancien });
+    fs.deposer('documents', dans(planche), 'planche marquée');
+    const renomme = await renommer(ouvert, renommage(longue, 3));
+    assert.deepEqual([renomme.dossier, renomme.base], [longue, longue]);
+    const attendu = nomSortieRenommee(planche, {
+      ancienne: BASE,
+      nouvelle: longue,
+      dossier: { racine: `${DOCUMENTS}\\${longue}`, separateur: '\\' },
+    });
+    // La nouvelle base y est coupée : entière, le nom ne tiendrait pas.
+    assert.ok(!attendu.startsWith(`${longue}.`), attendu);
+    assert.ok(`${DOCUMENTS}\\${longue}\\${attendu}${SUFFIXE_ECRITURE}`.length <= LONGUEUR_CHEMIN_MAX, attendu);
+    const apres = await arbre(disque, DOC, {}, { complet: true });
+    assert.deepEqual(
+      apres.filter(([chemin]) => !chemin.startsWith(`${longue}/${longue}.gtt`)),
+      [[`${longue}/${attendu}`, 'planche marquée']],
+    );
+  });
+
+  test("une coupure à chaque écriture d'un renommage qui déplace ce qui n'est pas à l'événement ne perd ni ne double aucun fichier : chacun reste dans l'ancien dossier ou passe dans le neuf, une fois ; l'événement s'ouvre toujours, sous une clé, ou sous deux signalées doublons tant que l'ancienne paire et la nouvelle sont complètes", async () => {
+    let deuxCles = 0;
+    for (let n = 0; ; n += 1) {
+      const { disque, fs, ouvert } = await deuxRevisions();
+      for (const [nom, texte] of ETRANGERS) fs.deposer('documents', dans(nom), texte);
+      fs.pannes.couperApres(n);
+      let acheve = true;
+      try {
+        await renommer(ouvert, renommage(NOUVEAU, 3));
+      } catch (erreur) {
+        assert.ok(erreur instanceof PanneSimulee, `coupure après ${n} écritures : ${String(erreur)}`);
+        acheve = false;
+      }
+      const message = `coupure après ${n} écritures`;
+      const disqueApres = new Map(await arbre(disque, DOC, {}, { complet: true }));
+      for (const [nom, texte] of ETRANGERS) {
+        const places = [...new Set([dans(nom), enNeuf(nom)])].filter((chemin) => disqueApres.get(chemin) === texte);
+        assert.equal(places.length, 1, `${message} : ${nom} en ${JSON.stringify(places)}`);
+      }
+      const lecteur = creerFichiersSimules({ disque });
+      const lus = await lister(lecteur, DOC);
+      assert.deepEqual(lus.filter(({ illisible }) => illisible !== null), [], message);
+      for (const { cle } of lus) await ouvrir(lecteur, DOC, cle);
+      if (lus.length === 2) {
+        assert.ok(lus.every(({ doublon }) => doublon), message);
+        deuxCles += 1;
+      } else {
+        assert.equal(lus.length, 1, message);
+      }
+      if (acheve) {
+        assert.deepEqual(lus.map(({ cle }) => cle), [cleEvenement(NOUVEAU, NOUVEAU)], message);
+        assert.deepEqual(await lecteur.lister(DOC, BASE), [], message);
+        break;
+      }
+    }
+    assert.ok(deuxCles >= 1, 'aucune coupure ne laisse les deux paires');
+  });
+
+  test("une coupure à chaque écriture d'une suppression ne perd ni ne double aucun fichier : chacun reste dans le dossier de l'événement ou passe dans un dossier daté, une fois ; l'événement se liste, une fois, tant que son état n'est pas parti ; une nouvelle suppression achève, et ne laisse que la corbeille", async () => {
+    for (let n = 0; ; n += 1) {
+      const { disque, fs } = await deuxRevisions();
+      for (const [nom, texte] of ETRANGERS) fs.deposer('documents', dans(nom), texte);
+      const avant = await arbre(disque, DOC, {}, { complet: true });
+      const message = `coupure après ${n} écritures`;
+      // Chaque fichier d'avant, une fois : à sa place, ou dans un dossier
+      // daté de la corbeille, sous son chemin relatif au dossier.
+      const uneFois = async (quand) => {
+        const apres = await arbre(disque, DOC, {}, { complet: true });
+        for (const [chemin, texte] of avant) {
+          const relatif = chemin.slice(BASE.length + 1);
+          const places = apres.filter(
+            ([autre, contenu]) =>
+              contenu === texte && (autre === chemin || autre.replace(/^corbeille\/[^/]+\//u, '') === relatif),
+          );
+          assert.equal(places.length, 1, `${message}, ${quand} : ${chemin} en ${JSON.stringify(places.map(([c]) => c))}`);
+        }
+      };
+      fs.pannes.couperApres(n);
+      let acheve = true;
+      try {
+        await supprimer(fs, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+      } catch (erreur) {
+        assert.ok(erreur instanceof PanneSimulee, `${message} : ${String(erreur)}`);
+        acheve = false;
+      }
+      await uneFois('après la coupure');
+      const reprise = creerFichiersSimules({ disque });
+      const cles = (await lister(reprise, DOC)).map(({ cle }) => cle);
+      assert.deepEqual(cles, reprise.contenu('documents', dans(ETAT)) === null ? [] : [EVT], message);
+      if (cles.length === 1) {
+        await supprimer(reprise, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: 'seance-b' });
+        await uneFois('après la reprise');
+      } else {
+        assert.deepEqual(
+          (await arbre(disque, DOC, {}, { complet: true })).filter(([chemin]) => chemin.startsWith(`${BASE}/`)),
+          [],
+          message,
+        );
+      }
+      if (acheve || cles.length === 1) {
+        assert.deepEqual((await reprise.lister(DOC, '')).map(({ nom }) => nom), ['corbeille'], message);
+      }
+      if (acheve) break;
+    }
   });
 
   test("renommer en ne changeant que la casse réécrit en place : même dossier, même base, un seul geste", async () => {
@@ -490,21 +707,115 @@ describe('opérations : un événement, un dossier (§ 8.6, § 8.7)', () => {
     }
   });
 
-  test("supprimer déplace les fichiers de l'événement de son dossier dans le dossier daté de la corbeille, qui les porte directement ; le dossier de l'événement reste avec ce qui n'est pas à lui", async () => {
+  test("supprimer déplace tout le contenu du dossier de l'événement dans le dossier daté de la corbeille, qui le porte directement — ce qui n'est pas à l'événement d'abord, logo/ à son niveau, puis ses fichiers, l'état en dernier —, puis retire le dossier vide", async () => {
     const { disque, fs } = await deuxRevisions();
-    fs.deposer('documents', `${BASE}/notes.txt`, 'à garder');
+    for (const [nom, texte] of ETRANGERS) fs.deposer('documents', dans(nom), texte);
     const trace = tracer(fs);
-    assert.deepEqual(await supprimer(fs, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    assert.deepEqual(await supprimer(fs, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), {
+      dossier: DATE,
+      nonRetire: null,
+    });
     const deplaces = [VERROU, JOURNAL, PRECEDENT, ETAT];
-    assert.deepEqual(trace.slice(-5), [
+    assert.deepEqual(trace, [
       ['creerDossier', DATE],
+      ['deplacer', LISTE_CSV, `${DATE}/${LISTE_CSV}`],
+      ['deplacer', PLANCHE, `${DATE}/${PLANCHE}`],
+      ['creerDossier', `${DATE}/logo`],
+      ['deplacer', 'logo/Alice.png', `${DATE}/logo/Alice.png`],
+      ['supprimerDossier', 'logo'],
+      ['deplacer', 'notes.txt', `${DATE}/notes.txt`],
       ...deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`]),
+      ['supprimerDossier', BASE],
     ]);
     assert.deepEqual(
       (await arbre(disque, DOC, {}, { complet: true })).map(([chemin]) => chemin),
-      [`${BASE}/notes.txt`, `${DATE}/${VERROU}`, `${DATE}/${JOURNAL}`, `${DATE}/${ETAT}`, `${DATE}/${PRECEDENT}`].sort(),
+      [...ETRANGERS.map(([nom]) => nom), ...deplaces].map((nom) => `${DATE}/${nom}`).sort(),
     );
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), ['corbeille']);
     assert.deepEqual(await lister(fs, DOC), []);
+    assert.deepEqual(await listerCorbeille(fs, DOC), [
+      { dossier: DATE, fichiers: [LISTE_CSV, PLANCHE, JOURNAL, ETAT, PRECEDENT, VERROU, 'logo/Alice.png', 'notes.txt'] },
+    ]);
+
+    // Un sous-dossier illisible du dossier daté s'y nomme seul, sans faire
+    // tomber la corbeille.
+    const listerTout = fs.lister;
+    fs.lister = async (racine, dossier) => {
+      if (dossier === `${DATE}/logo`) {
+        throw new ErreurStockage('LECTURE', { chemin: dossier, dossier: racine.chemin, cause: 'EIO' });
+      }
+      return listerTout(racine, dossier);
+    };
+    assert.deepEqual(await listerCorbeille(fs, DOC), [
+      { dossier: DATE, fichiers: [LISTE_CSV, PLANCHE, JOURNAL, ETAT, PRECEDENT, VERROU, 'logo/', 'notes.txt'] },
+    ]);
+  });
+
+  test("supprimer laisse les fichiers d'un autre événement du dossier, qui s'y liste encore, et dit le dossier non retiré, NON_VIDE ; un dossier qui refuse son retrait reste, de même, sans faire échouer la suppression", async () => {
+    const { disque, fs } = await deuxRevisions();
+    const autre = etatTexte(chargeEssai({ id: 'evt-autre', nom: 'Fête des Ifs' }));
+    fs.deposer('documents', dans(`Fête des Ifs${SUFFIXES.etat}`), autre);
+    fs.deposer('documents', dans('notes.txt'), 'à garder');
+    assert.deepEqual(await supprimer(fs, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), {
+      dossier: DATE,
+      nonRetire: { dossier: BASE, cause: 'NON_VIDE' },
+    });
+    assert.deepEqual(
+      (await arbre(disque, DOC, {}, { complet: true })).filter(([chemin]) => chemin.startsWith(`${BASE}/`)),
+      [[dans(`Fête des Ifs${SUFFIXES.etat}`), autre]],
+    );
+    assert.equal(fs.contenu('documents', `${DATE}/notes.txt`), 'à garder');
+    assert.deepEqual((await lister(fs, DOC)).map(({ cle }) => cle), [dans('Fête des Ifs')]);
+
+    const second = await deuxRevisions();
+    second.fs.pannes.dossierNonRetire('documents', Infinity, 'EBUSY');
+    assert.deepEqual(await supprimer(second.fs, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), {
+      dossier: DATE,
+      nonRetire: { dossier: BASE, cause: 'EBUSY' },
+    });
+    assert.deepEqual(await second.fs.lister(DOC, BASE), []);
+    assert.deepEqual(await lister(second.fs, DOC), []);
+  });
+
+  test("un fichier qui n'est pas à l'événement et refuse son déplacement reste dans le dossier, sans faire échouer la suppression : tout le reste part, l'état compris, et le dossier non retiré se dit, NON_VIDE ; un fichier de l'événement qui refuse le sien la fait échouer, ECRITURE", async () => {
+    const cas = [
+      [['deplacer', dans('notes.txt')], 'notes.txt'],
+      [['deplacer', dans('logo/Alice.png')], 'logo/Alice.png'],
+      [['creerDossier', `${DATE}/logo`], 'logo/Alice.png'],
+    ];
+    for (const [refus, reste] of cas) {
+      const message = refus.join(' ');
+      const { disque, fs } = await deuxRevisions();
+      for (const [nom, texte] of ETRANGERS) fs.deposer('documents', dans(nom), texte);
+      const avant = await arbre(disque, DOC, {}, { complet: true });
+      refuser(fs, refus);
+      assert.deepEqual(
+        await supprimer(fs, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }),
+        { dossier: DATE, nonRetire: { dossier: BASE, cause: 'NON_VIDE' } },
+        message,
+      );
+      // Chaque fichier d'avant dans le dossier daté, sauf celui resté ; le
+      // verrou de la sonde y part aussi.
+      const apres = await arbre(disque, DOC, {}, { complet: true });
+      assert.deepEqual(
+        apres.filter(([chemin]) => chemin !== `${DATE}/${VERROU}`),
+        avant
+          .map(([chemin, texte]) => [chemin === dans(reste) ? chemin : `${DATE}/${dansBase(chemin)}`, texte])
+          .sort(parChemin),
+        message,
+      );
+      assert.ok(apres.some(([chemin]) => chemin === `${DATE}/${VERROU}`), message);
+      assert.deepEqual(await lister(fs, DOC), [], message);
+    }
+
+    // Un fichier de l'événement qui refuse son déplacement fait échouer la
+    // suppression : l'événement reste listé, le verrou de la sonde rendu.
+    const { fs } = await deuxRevisions();
+    refuser(fs, ['deplacer', dans(BASE + SUFFIXES.etat)]);
+    await echec(supprimer(fs, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'ECRITURE');
+    assert.deepEqual((await lister(fs, DOC)).map(({ cle }) => cle), [EVT]);
+    const restes = (await fs.lister(DOC, BASE)).map(({ nom }) => nom);
+    assert.ok(restes.includes(BASE + SUFFIXES.etat) && !restes.includes(VERROU), restes.join());
   });
 
   test("les fichiers d'événement posés à même la racine ne se suppriment, ne s'importent ni ne s'ouvrent : leur clé sans dossier se refuse, et l'autre emplacement n'en lit rien", async () => {
@@ -1453,7 +1764,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
 });
 
 describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
-  test("supprimer déplace l'état, le .precedent, le journal apparié, le verrou et les écritures restées dans un seul dossier daté, créé d'abord, l'état en dernier ; listerCorbeille le montre ; le reste du dossier ne bouge pas", async () => {
+  test("supprimer déplace l'état, le .precedent, le journal apparié, le verrou et les écritures restées dans un seul dossier daté, créé d'abord, l'état en dernier, puis retire le dossier vide ; listerCorbeille le montre ; le reste de la racine ne bouge pas", async () => {
     const { disque, fs, ouvert } = await deuxRevisions();
     await verrouiller(ouvert, 'seance-a', HEURE_SUPPRESSION);
     fs.deposer('documents', dans(`${ETAT}.ecriture`), 'partiel');
@@ -1461,9 +1772,16 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     await creer(fs, DOC, chargeEssai({ id: 'evt-herons', nom: 'Bal des Hérons' }), CREATION);
     const avant = await arbre(disque);
     const trace = tracer(fs);
-    assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), {
+      dossier: DATE,
+      nonRetire: null,
+    });
     const deplaces = [`${JOURNAL}.ecriture`, `${ETAT}.ecriture`, VERROU, JOURNAL, PRECEDENT, ETAT];
-    assert.deepEqual(trace, [['creerDossier', DATE], ...deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`])]);
+    assert.deepEqual(trace, [
+      ['creerDossier', DATE],
+      ...deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`]),
+      ['supprimerDossier', BASE],
+    ]);
     assert.deepEqual(
       await arbre(disque),
       avant.map(([chemin, texte]) => [deplaces.includes(chemin) ? `${DATE}/${chemin}` : chemin, texte]).sort(parChemin),
@@ -1498,7 +1816,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     const c = await supprimer(fs, DOC, cleEvenement('Fête des Ifs', 'Fête des Ifs'), { horodatage: '2031-05-17T08:29:59-04:00', seance: SEANCE });
     assert.deepEqual(
       [a, b, c],
-      [{ dossier: DATE }, { dossier: `${DATE}_2` }, { dossier: 'corbeille/2031-05-17_08-29-59' }],
+      [DATE, `${DATE}_2`, 'corbeille/2031-05-17_08-29-59'].map((dossier) => ({ dossier, nonRetire: null })),
     );
     // La paire, et le verrou que la sonde a pris : il part avec elle.
     const paire = (nom) => [`${nom}${SUFFIXES.journal}`, `${nom}${SUFFIXES.etat}`, `${nom}${SUFFIXES.verrou}`];
@@ -1643,6 +1961,23 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       await arbre(quatrieme.disque),
       grecs.map(([chemin, texte]) => [`${dossierLac}/${chemin}`, texte]).sort(parChemin),
     );
+
+    // Un suffixe d'une autre casse reste celui de l'événement : le fichier
+    // part une fois, avec les siens, et non d'abord comme un étranger.
+    const majuscules = [
+      [ETAT, etat],
+      [`${BASE}${(SUFFIXES.etat + SUFFIXE_ECRITURE).toUpperCase()}`, 'partiel'],
+    ];
+    const cinquieme = disqueAvec(majuscules);
+    const { dossier: dossierMajuscules } = await supprimer(cinquieme.fs, DOC, dans(BASE), {
+      horodatage: HEURE_SUPPRESSION,
+      seance: SEANCE,
+    });
+    // Le verrou de la sonde part avec eux.
+    assert.deepEqual(
+      (await arbre(cinquieme.disque)).filter(([chemin]) => !chemin.endsWith(SUFFIXES.verrou)),
+      majuscules.map(([chemin, texte]) => [`${dossierMajuscules}/${chemin}`, texte]).sort(parChemin),
+    );
   });
 
   test("sur un système de fichiers insensible à la casse, supprimer emporte un fichier d'une autre base exactement quand deriverBase tient cette base pour prise par la sienne : NFD, sigma final, ß et SS ; une base distincte reste", async () => {
@@ -1741,10 +2076,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     }
   });
 
-  test("un dossier de travail qui disparaît pendant la suppression ne renaît pas : à chaque écriture avant laquelle il disparaît, supprimer lève ECRITURE, ENOENT, ou ABSENT pour le fichier qui n'est plus là, ou achève, et le dossier reste absent", async () => {
+  test("un dossier de travail qui disparaît pendant la suppression ne renaît pas : à chaque écriture avant laquelle il disparaît, supprimer lève ECRITURE, ENOENT, ou ABSENT pour le fichier qui n'est plus là — ou achève quand il disparaît avant le retrait du dossier de l'événement, qui n'a plus rien à retirer —, et le dossier reste absent", async () => {
     // Rangs où le dossier a disparu : au moins un par primitive que la
-    // suppression appelle — la création du dossier daté, trois déplacements.
+    // suppression appelle — la création du dossier daté, trois déplacements,
+    // le retrait du dossier de l'événement, le seul qui achève.
     let effacements = 0;
+    let acheves = 0;
     for (let n = 0; ; n += 1) {
       const { disque, fs } = await deuxRevisions();
       const temoin = effacerDocumentsAvant(disque, fs, n);
@@ -1762,10 +2099,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
         break;
       }
       effacements += 1;
-      assert.ok(refus instanceof ErreurStockage, `${message} : ${String(refus)}`);
+      if (refus === null) acheves += 1;
+      else assert.ok(refus instanceof ErreurStockage, `${message} : ${String(refus)}`);
       await echec(creerFichiersSimules({ disque }).lister(DOC, ''), 'ABSENT', message);
     }
-    assert.ok(effacements >= 4, `${effacements} rangs éprouvés, 4 attendus au moins`);
+    assert.ok(effacements >= 5, `${effacements} rangs éprouvés, 5 attendus au moins`);
+    assert.equal(acheves, 1);
   });
 
   test('supprimer lève, sans rien écrire : ABSENT pour un événement sans fichier, TypeError pour un horodatage hors de sa forme, CORBEILLE_SATUREE quand la seconde a ses cent dossiers', async () => {
@@ -1859,7 +2198,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     for (const [nom, poser] of acceptes) {
       const { disque, fs, ouvert } = await deuxRevisions();
       const tenant = await poser(disque, fs, ouvert);
-      assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE }, nom);
+      assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE, nonRetire: null }, nom);
       assert.deepEqual(await listerCorbeille(fs, DOC), [{ dossier: DATE, fichiers: [JOURNAL, ETAT, PRECEDENT, VERROU] }], nom);
       const parti = JSON.parse(fs.contenu('documents', `${DATE}/${VERROU}`));
       assert.deepEqual([parti.seance, parti.depuis], [tenant, HEURE_SUPPRESSION], nom);
@@ -1869,7 +2208,10 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
 
   test("sans verrou disponible, la sonde ne pose rien et rien d'autre ne part ; une séance absente lève TypeError sans rien écrire ; un refus après la sonde rend le verrou qu'elle a pris", async () => {
     const web = await deuxRevisions(chargeEssai(), { verrouDisponible: false });
-    assert.deepEqual(await supprimer(web.fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    assert.deepEqual(await supprimer(web.fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), {
+      dossier: DATE,
+      nonRetire: null,
+    });
     assert.deepEqual(await listerCorbeille(web.fs, DOC), [{ dossier: DATE, fichiers: [JOURNAL, ETAT, PRECEDENT] }]);
 
     const { disque, fs } = await deuxRevisions();
@@ -2234,7 +2576,10 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
     const { disque, fs } = await avecUneCourse();
     fs.deposer('documents', dans(`${COURSES}.ecriture`), 'partiel');
     const trace = tracer(fs);
-    assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), {
+      dossier: DATE,
+      nonRetire: null,
+    });
     const deplaces = [`${COURSES}.ecriture`, VERROU, COURSES, JOURNAL, PRECEDENT, ETAT];
     assert.deepEqual(trace.filter(([primitive]) => primitive === 'deplacer'), deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`]));
     assert.deepEqual(

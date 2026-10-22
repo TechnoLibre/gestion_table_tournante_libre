@@ -22,7 +22,8 @@
 // recopie tel quel après l'état, et l'ouverture le revalide (lireCourses) ;
 // un fichier d'état venu d'ailleurs n'en a pas, et ses courses sont
 // inconnues. Ce module ne fait par lui-même que recopier les octets d'un
-// fichier, le déplacer ou le supprimer en entier.
+// fichier, le déplacer ou le supprimer en entier, et créer un dossier ou en
+// retirer un vide.
 //
 // Un fichier d'un format plus récent que FORMAT ne se réécrit sous aucun nom
 // (§ 8.8) : la charge que l'analyse en lit tait les clés qu'elle ne connaît
@@ -38,11 +39,17 @@
 // ce dossier (vueDossier), celle que porte son Ouvert. Une base se dérive du
 // nom de l'événement (deriverBase), libre parmi les noms des entrées de la
 // racine (basesPrises), comme le dépôt la dérive pour creer, et nomme le
-// dossier neuf de la copie, de l'import, du renommage. Renommer laisse
-// l'ancien dossier, vide de la paire, avec ce qui n'est pas à l'événement ;
-// supprimer en emporte les fichiers de l'événement dans la corbeille de la
-// racine, et laisse le dossier. Un fichier d'événement posé à même la racine
-// n'a pas de clé : rien ici ne le lit, ne le déplace ni ne l'importe.
+// dossier neuf de la copie, de l'import, du renommage. Renommer emporte dans
+// le dossier neuf ce que l'ancien porte et qui n'est d'aucun événement —
+// sorties de la planche, sous la nouvelle base, fichiers posés à la main,
+// sous-dossiers comme logo/ —, puis efface l'ancienne paire ; l'ancien
+// dossier se retire ensuite, vide, par retirerDossier, que la façade appelle
+// une fois le verrou rendu. Supprimer emporte tout le contenu du dossier
+// dans la corbeille de la racine, puis retire le dossier. Ni l'un ni l'autre
+// ne touche aux fichiers d'un autre événement du même dossier, et aucun ne
+// retire un dossier qui porte encore quelque chose : il reste, et le
+// résultat le dit. Un fichier d'événement posé à même la racine n'a pas de
+// clé : rien ici ne le lit, ne le déplace ni ne l'importe.
 import { canoniser } from './canonique.js';
 import { entreesPour } from './courses.js';
 import {
@@ -68,6 +75,7 @@ import {
   deriverBase,
   dossierCorbeille,
   dossierEvenement,
+  nomSortieRenommee,
 } from './noms.js';
 import { vueDossier } from './systeme_fichiers.js';
 
@@ -264,6 +272,83 @@ async function deplacerSiPossible(fs, racine, de, vers) {
   }
 }
 
+// Les suffixes des fichiers d'un événement. Aucun ne finit un autre : un nom
+// en porte un au plus.
+const SUFFIXES_EVENEMENT = [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou, SUFFIXES.courses];
+
+// Vrai quand nom est celui d'un fichier d'événement, du sien ou d'un autre :
+// une base non vide suivie d'un suffixe de SUFFIXES, prolongé ou non de
+// SUFFIXE_ECRITURE, celui d'une écriture atomique restée.
+function estFichierDEvenement(nom) {
+  const sansEcriture = nom.endsWith(SUFFIXE_ECRITURE) ? nom.slice(0, -SUFFIXE_ECRITURE.length) : nom;
+  return SUFFIXES_EVENEMENT.some((suffixe) => sansEcriture.length > suffixe.length && sansEcriture.endsWith(suffixe));
+}
+
+// Les entrées d'un dossier d'événement qui ne sont d'aucun événement :
+// chaque sous-dossier, et chaque fichier qui n'est pas un fichier
+// d'événement — sortie de la planche, fichier posé à la main —, dans l'ordre
+// reçu. Un fichier d'événement, de l'événement ou d'un autre, n'en est pas.
+const etrangeres = (entrees) => entrees.filter(({ nom, type }) => type === 'dossier' || !estFichierDEvenement(nom));
+
+/**
+ * Retire de racine le dossier de chemin relatif dossier, quand il est vide
+ * (§ 8.7) : celui qu'un renommage ou une suppression laisse derrière
+ * l'événement. Un dossier qui porte encore une entrée — un fichier qu'un
+ * autre programme tient ouvert, ou qui est apparu depuis, celui d'un autre
+ * événement, un verrou non rendu — reste tel quel, avec ce qu'il porte, et
+ * se dit sans lever : rien ne se supprime avec son contenu. Un dossier déjà
+ * absent n'est pas une faute.
+ *
+ * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
+ * @param {import('./systeme_fichiers.js').Racine} racine
+ * @param {string} dossier   chemin relatif à la racine
+ * @returns {Promise<null|{dossier: string, cause: string}>}   null quand le
+ *          dossier n'y est plus ; sinon dossier et la cause du refus :
+ *          NON_VIDE, ou la cause système d'une ECRITURE, ou le code d'un
+ *          autre refus
+ * @throws ce qui n'est pas une ErreurStockage, tel quel
+ */
+export async function retirerDossier(fs, racine, dossier) {
+  try {
+    await fs.supprimerDossier(racine, dossier);
+    return null;
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+    return { dossier, cause: erreur.code === 'ECRITURE' ? erreur.details.cause : erreur.code };
+  }
+}
+
+// Déplace le dossier de racine de chemin de, avec ce qu'il porte, vers le
+// chemin vers : vers se crée, puis chaque fichier y passe sous son nom,
+// chaque sous-dossier de même, dans l'ordre des noms, puis de se retire
+// quand il est vide (retirerDossier), sans jamais lever pour lui. Un refus
+// de créer, de lister ou de déplacer par une ErreurStockage laisse l'entrée
+// où elle est, sans lever, et la suite continue : de, qui ne se vide pas,
+// reste. Toute autre erreur remonte.
+async function deplacerDossier(fs, racine, de, vers) {
+  const essayer = async (geste) => {
+    try {
+      await geste();
+      return true;
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage)) throw erreur;
+      return false;
+    }
+  };
+  let entrees = [];
+  const pret =
+    (await essayer(() => fs.creerDossier(racine, vers))) &&
+    (await essayer(async () => {
+      entrees = await entreesDe(fs, racine, de);
+    }));
+  if (!pret) return;
+  for (const { nom, type } of entrees) {
+    if (type === 'dossier') await deplacerDossier(fs, racine, `${de}/${nom}`, `${vers}/${nom}`);
+    else await essayer(() => fs.deplacer(racine, `${de}/${nom}`, `${vers}/${nom}`));
+  }
+  await retirerDossier(fs, racine, de);
+}
+
 // Efface ce que la recopie a écrit dans le dossier neuf de la base avant un
 // refus, par la vue de ce dossier : le journal quand journal le dit, puis le
 // .precedent, et lui seulement une fois le journal parti, puis le dossier,
@@ -331,6 +416,38 @@ async function ecrireNouvellePaire(ouvert, options) {
   }
 }
 
+// Déplace dans le dossier neuf de nouvelle, la paire neuve complète, ce que
+// l'ancien dossier de l'Ouvert porte et qui n'est d'aucun événement
+// (etrangeres), un à un, dans l'ordre des noms : une sortie de la planche de
+// l'ancienne base sous la nouvelle (nomSortieRenommee, bornée par le chemin
+// du dossier neuf), tout autre fichier sous son nom, un sous-dossier avec ce
+// qu'il porte (deplacerDossier). Un refus par une ErreurStockage — liste,
+// création, déplacement, cible déjà prise — laisse l'entrée où elle est, sans
+// lever : le renommage aboutit, et l'ancien dossier, qui ne se vide pas,
+// reste. Toute autre erreur remonte.
+async function deplacerEtrangers(ouvert, nouvelle) {
+  const { systeme, racine, dossier, base } = ouvert;
+  let entrees;
+  try {
+    entrees = await entreesDe(systeme, racine, dossier);
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+    return;
+  }
+  const { separateur } = await systeme.emplacements();
+  const tete = racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur;
+  const neuf = { racine: tete + nouvelle.dossier, separateur };
+  for (const { nom, type } of etrangeres(entrees)) {
+    const de = `${dossier}/${nom}`;
+    if (type === 'dossier') {
+      await deplacerDossier(systeme, racine, de, `${nouvelle.dossier}/${nom}`);
+    } else {
+      const cible = nomSortieRenommee(nom, { ancienne: base, nouvelle: nouvelle.base, dossier: neuf }) ?? nom;
+      await deplacerSiPossible(systeme, racine, de, `${nouvelle.dossier}/${cible}`);
+    }
+  }
+}
+
 // Supprime l'ancienne paire de l'Ouvert, dans son dossier, par sa vue, la
 // nouvelle étant complète : son état d'abord, sans lequel lister ne la montre
 // plus, la nouvelle portant son identifiant ; puis son .precedent, le journal
@@ -375,18 +492,25 @@ async function supprimerAncienne(ouvert, nouvelle) {
  * Sinon, le logiciel écrit d'abord la paire complète dans un dossier neuf
  * qui porte la nouvelle base — l'état d'avant au .precedent, le journal
  * recopié suivi de l'entrée du renommage, puis l'état, puis le compagnon des
- * courses —, puis supprime l'ancienne, dans l'ancien dossier : son état, son
- * .precedent, le journal de l'événement et son compagnon quand il existe,
- * jamais l'inverse ; un compagnon neuf refusé laisse l'ancien se déplacer
- * sous la nouvelle base, dans le dossier neuf. L'ancien dossier reste, avec
- * ce qui n'est pas de la paire. Rien de
+ * courses —, puis y déplace, un à un, ce que l'ancien dossier porte et qui
+ * n'est d'aucun événement (deplacerEtrangers) : les sorties de la planche
+ * sous la nouvelle base, le reste sous son nom, un sous-dossier comme logo/
+ * avec ce qu'il porte ; un déplacement refusé laisse le fichier où il est,
+ * sans lever. Il supprime enfin l'ancienne paire, dans l'ancien dossier :
+ * son état, son .precedent, le journal de l'événement et son compagnon quand
+ * il existe, jamais l'inverse ; un compagnon neuf refusé laisse l'ancien se
+ * déplacer sous la nouvelle base, dans le dossier neuf. Le verrou, les
+ * écritures restées de l'ancienne paire et les fichiers d'un autre événement
+ * restent dans l'ancien dossier, que retirerDossier retire ensuite quand il
+ * est vide : la façade l'appelle une fois le verrou rendu. Rien de
  * l'ancienne paire ne s'écrit, et le .precedent neuf, posé avant le journal
  * neuf, tient ce journal à la nouvelle base : quel que soit le journal de
  * l'ancienne base — le sien, aucun pour un état importé, un illisible, celui
  * d'un autre événement, le sien rangé sous une autre base —, l'ancienne
  * paire, tant qu'elle existe, s'ouvre sous l'ancien nom, à sa révision, ses
  * octets intacts. Une coupure laisse l'ancienne paire, les deux, ou la
- * nouvelle, jamais aucune. Le journal d'un autre événement, que porterait
+ * nouvelle, jamais aucune, et chaque fichier déplacé dans l'un des deux
+ * dossiers, une fois. Le journal d'un autre événement, que porterait
  * l'ancienne base, ne se touche pas ; le verrou non plus, que la séance
  * déplace.
  *
@@ -443,6 +567,7 @@ export async function renommer(ouvert, { nom, libelle, horodatage, produitVersio
   const geste = { apres, libelle, produitVersion };
   const depart = await mettreDeCoteEtatMalEncode(ouvert, horodatage);
   const nouvelle = await ecrireNouvellePaire(depart, { geste, libelleReprise, horodatage });
+  await deplacerEtrangers(depart, nouvelle);
   await supprimerAncienne(depart, nouvelle);
   return nouvelle;
 }
@@ -637,23 +762,33 @@ async function baseDuJournal(fs, racine, cle, insensibleCasse) {
 }
 
 /**
- * Supprime l'événement de clé cle (§ 8.7) : ses fichiers passent de son
- * dossier dans un dossier neuf de la corbeille de la racine, daté de
- * l'horodatage (dossierCorbeille), créé d'abord — _2, _3… quand la seconde a
- * déjà le sien —, qui les porte directement. Le dossier de l'événement
- * reste, avec ce qui n'est pas à l'événement. Partent l'état, le
- * .precedent, le journal de l'événement (baseDuJournal), jamais celui d'un
- * autre, le verrou, le compagnon des courses, et chacun de leurs fichiers
- * d'écriture atomique restés ; ceux-ci d'abord, puis le verrou, le
- * compagnon, le journal, le .precedent, et l'état en dernier. Sur un
- * système de fichiers qui ignore la casse, un fichier se reconnaît à la clé
- * de son nom, la majuscule de sa NFC, comme deriverBase compare les bases,
- * et part sous son nom sur le disque : un journal, un .precedent, un
- * compagnon ou un verrou d'une autre casse est le même fichier. Sur un
- * système sensible à la casse, seul le nom exact compte. Chaque déplacement
- * porte un fichier entier : une coupure laisse
- * chacun à sa place ou dans la corbeille, jamais perdu, et l'événement se
- * liste encore tant que son état n'est pas parti. Rien ne vide la corbeille.
+ * Supprime l'événement de clé cle (§ 8.7) : le contenu de son dossier passe
+ * dans un dossier neuf de la corbeille de la racine, daté de l'horodatage
+ * (dossierCorbeille), créé d'abord — _2, _3… quand la seconde a déjà le
+ * sien —, qui le porte directement, un sous-dossier comme logo/ à son
+ * niveau ; puis le dossier de l'événement, vide, se retire (retirerDossier).
+ * Partent d'abord, dans l'ordre des noms, ce qui n'est d'aucun événement —
+ * sorties de la planche, fichiers posés à la main, sous-dossiers avec ce
+ * qu'ils portent (deplacerDossier) —, puis les fichiers de l'événement :
+ * chacun des fichiers d'écriture atomique restés, le verrou, le compagnon
+ * des courses, le journal de l'événement (baseDuJournal), jamais celui d'un
+ * autre, le .precedent, et l'état en dernier. Une entrée qui n'est d'aucun
+ * événement et dont le déplacement, ou la création de son sous-dossier
+ * daté, est refusé par une ErreurStockage — un fichier qu'un autre
+ * programme tient ouvert — reste où elle est, sans lever : la suite part.
+ * Les fichiers d'un autre événement du dossier restent, et le dossier avec
+ * eux. Sur un système de fichiers qui ignore la casse, un fichier se
+ * reconnaît à la clé de son nom, la majuscule de sa NFC, comme deriverBase
+ * compare les bases, et part sous son nom sur le disque : un journal, un
+ * .precedent, un compagnon ou un verrou d'une autre casse est le même
+ * fichier. Sur un système sensible à la casse, seul le nom exact compte.
+ * Chaque déplacement porte un fichier entier : une coupure laisse chacun à
+ * sa place ou dans la corbeille, jamais perdu, et l'événement se liste
+ * encore tant que son état n'est pas parti ; une nouvelle suppression
+ * emporte le reste dans un autre dossier daté. Un dossier de l'événement qui
+ * ne se vide pas — un fichier d'un autre événement, ou apparu depuis, un
+ * fichier resté par un refus — reste, avec ce qu'il porte, sans faire
+ * échouer la suppression : nonRetire le dit. Rien ne vide la corbeille.
  *
  * Une autre séance qui tient l'événement en écriture y écrit encore : avant
  * tout déplacement, supprimer sonde le verrou en le prenant sous seance, la
@@ -675,15 +810,19 @@ async function baseDuJournal(fs, racine, cle, insensibleCasse) {
  * @param {string} cle   cleEvenement(dossier, base)
  * @param {{horodatage: string, seance: string}} options   horodatage
  *        AAAA-MM-JJTHH:MM:SS±HH:MM ; seance, la séance qui supprime
- * @returns {Promise<{dossier: string}>}   chemin relatif du dossier daté
+ * @returns {Promise<{dossier: string, nonRetire: null|{dossier: string, cause: string}}>}
+ *          dossier : chemin relatif du dossier daté ; nonRetire : null quand
+ *          le dossier de l'événement s'est retiré, sinon ce que rend
+ *          retirerDossier
  * @throws {ErreurStockage} CHEMIN_REFUSE {chemin: cle} d'une clé sans
  *         dossier ou dans la corbeille (decouperCle) ; ABSENT {chemin}, le
  *         chemin de l'état relatif au dossier, quand l'événement n'a aucun
  *         fichier, CORBEILLE_SATUREE, l'un et l'autre sans rien écrire ;
  *         VERROU_PRIS {seance, depuis, vivant}, sans rien déplacer ;
- *         ECRITURE de la création du dossier daté ou d'un déplacement
- *         refusé ; EXISTE ; ABSENT {chemin} d'un fichier qui disparaît
- *         pendant les déplacements
+ *         ECRITURE de la création du dossier daté ou du déplacement
+ *         refusé d'un fichier de l'événement ; EXISTE ; ABSENT {chemin}
+ *         d'un fichier de l'événement qui disparaît pendant les
+ *         déplacements
  * @throws {TypeError} un horodatage hors de sa forme, une séance qui n'est
  *         pas une chaîne non vide, sans rien écrire
  */
@@ -701,44 +840,56 @@ export async function supprimer(fs, racine, cle, { horodatage, seance }) {
     base + SUFFIXES.precedent,
     base + SUFFIXES.etat,
   ];
-  // Les noms des fichiers du dossier de l'événement, triés, aucun quand il
-  // manque ; ceux de l'événement parmi eux, sous leur nom sur le disque,
-  // dans l'ordre de leur départ.
-  const nomsSurDisque = async () =>
-    (await entreesDe(local, racine, ''))
-      .filter(({ type }) => type === 'fichier')
-      .map(({ nom }) => nom);
+  // Les entrées du dossier de l'événement, triées, aucune quand il manque ;
+  // les noms de ses fichiers ; ceux de l'événement parmi eux, sous leur nom
+  // sur le disque, dans l'ordre de leur départ.
+  const entreesDuDossier = () => entreesDe(local, racine, '');
+  const nomsDesFichiers = (entrees) => entrees.filter(({ type }) => type === 'fichier').map(({ nom }) => nom);
   const partantsParmi = (presents) =>
     [...fichiers.map((nom) => nom + SUFFIXE_ECRITURE), ...fichiers]
       .map((nom) => nomSurDisque(presents, nom, insensibleCasse))
       .filter((nom) => nom !== null);
-  let presents = await nomsSurDisque();
-  if (partantsParmi(presents).length === 0) throw new ErreurStockage('ABSENT', { chemin: base + SUFFIXES.etat });
+  let entrees = await entreesDuDossier();
+  if (partantsParmi(nomsDesFichiers(entrees)).length === 0) {
+    throw new ErreurStockage('ABSENT', { chemin: base + SUFFIXES.etat });
+  }
   const existants = (await entreesDe(fs, racine, DOSSIER_CORBEILLE)).map(({ nom }) => nom);
   const dossier = dossierCorbeille(horodatage, existants);
   // La sonde vise le verrou sous son nom sur le disque, celui qui part.
-  const nomDuVerrou = nomSurDisque(presents, verrou, insensibleCasse) ?? verrou;
+  const nomDuVerrou = nomSurDisque(nomsDesFichiers(entrees), verrou, insensibleCasse) ?? verrou;
   const sonde = await local.verrouiller(racine, nomDuVerrou, seance, horodatage);
   if (!sonde.pris && sonde.seance !== seance && sonde.vivant !== false) {
     throw new ErreurStockage('VERROU_PRIS', { seance: sonde.seance, depuis: sonde.depuis, vivant: sonde.vivant });
   }
   try {
-    if (sonde.pris) presents = await nomsSurDisque();
+    if (sonde.pris) entrees = await entreesDuDossier();
     await fs.creerDossier(racine, dossier);
-    for (const nom of partantsParmi(presents)) await fs.deplacer(racine, `${evenement}/${nom}`, `${dossier}/${nom}`);
+    // Un fichier de l'événement dont le suffixe diffère par la casse n'est
+    // pas étranger : il part une fois, avec les siens.
+    const partants = partantsParmi(nomsDesFichiers(entrees));
+    for (const { nom, type } of etrangeres(entrees)) {
+      if (type !== 'dossier' && partants.includes(nom)) continue;
+      if (type === 'dossier') await deplacerDossier(fs, racine, `${evenement}/${nom}`, `${dossier}/${nom}`);
+      else await deplacerSiPossible(fs, racine, `${evenement}/${nom}`, `${dossier}/${nom}`);
+    }
+    for (const nom of partants) {
+      await fs.deplacer(racine, `${evenement}/${nom}`, `${dossier}/${nom}`);
+    }
   } catch (erreur) {
     // Un nettoyage qui échoue ne masque pas l'échec qu'il suit.
     if (sonde.pris) await local.deverrouiller(racine, nomDuVerrou, seance).catch(() => {});
     throw erreur;
   }
-  return { dossier };
+  return { dossier, nonRetire: await retirerDossier(fs, racine, evenement) };
 }
 
 /**
  * Le contenu de la corbeille de racine (§ 8.7), sans rien écrire : un
- * élément par dossier daté, son chemin relatif et les noms de ses fichiers,
- * les dossiers et les fichiers triés par nom. Une corbeille absente est
- * vide ; ce qui n'est pas un dossier daté ne s'y liste pas.
+ * élément par dossier daté, son chemin relatif et ses fichiers à toute
+ * profondeur, chacun par son chemin relatif au dossier daté, joint par « / »
+ * — « logo/<nom> » pour un fichier du sous-dossier logo/ (fichiersSous) —,
+ * les dossiers et les entrées de chacun triés par nom. Une corbeille absente
+ * est vide ; ce qui n'est pas un dossier daté ne s'y liste pas.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -749,11 +900,32 @@ export async function listerCorbeille(fs, racine) {
   for (const { nom, type } of await entreesDe(fs, racine, DOSSIER_CORBEILLE)) {
     if (type !== 'dossier') continue;
     const dossier = `${DOSSIER_CORBEILLE}/${nom}`;
-    const entrees = await entreesDe(fs, racine, dossier);
-    const fichiers = entrees.filter((entree) => entree.type === 'fichier').map((entree) => entree.nom);
-    contenu.push({ dossier, fichiers });
+    contenu.push({ dossier, fichiers: await fichiersSous(fs, racine, dossier) });
   }
   return contenu;
+}
+
+// Les fichiers du dossier de racine, à toute profondeur, par leur chemin
+// relatif à lui, « logo/<nom> » pour un fichier de son sous-dossier logo/ :
+// les entrées de chaque dossier dans l'ordre de leur nom, un sous-dossier à
+// la place de son nom. Un dossier absent n'en porte aucun. Un sous-dossier
+// dont la liste lève une ErreurStockage se nomme seul, « logo/ », sans son
+// contenu ; l'erreur du dossier même remonte.
+async function fichiersSous(fs, racine, dossier, prefixe = '') {
+  const fichiers = [];
+  for (const { nom, type } of await entreesDe(fs, racine, dossier)) {
+    if (type !== 'dossier') {
+      fichiers.push(prefixe + nom);
+      continue;
+    }
+    try {
+      fichiers.push(...(await fichiersSous(fs, racine, `${dossier}/${nom}`, `${prefixe}${nom}/`)));
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage)) throw erreur;
+      fichiers.push(`${prefixe}${nom}/`);
+    }
+  }
+  return fichiers;
 }
 
 /**

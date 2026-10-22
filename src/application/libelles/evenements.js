@@ -5,7 +5,7 @@
 // (§ 8.1, § 9, § 14.6), et ceux de la façade des événements (§ 8.6, § 8.7,
 // § 15) : refus et libellés figés. Un état inconnu lève RangeError, au lieu
 // de se taire.
-import { cite, nomEtat } from './aides.js';
+import { causeEntreParentheses, cite, nomEtat } from './aides.js';
 
 export const TABLE = new Map([
   // --- Les refus de la création, des états et du déblocage (§ 8.1, § 9) -----
@@ -26,6 +26,18 @@ export const TABLE = new Map([
   [
     'QUESTION_EN_ATTENTE',
     () => "Le dossier de travail attend une réponse : la liste des événements s'ouvre une fois la question répondue.",
+  ],
+  // dossier : le chemin affichable du dossier que l'événement a quitté, au
+  // renommage ou à la suppression ; cause : NON_VIDE quand il porte encore
+  // une entrée, sinon la cause du refus de le retirer (§ 8.7).
+  [
+    'DOSSIER_NON_RETIRE',
+    ({ dossier, cause }, texte) =>
+      cause === 'NON_VIDE'
+        ? `L'événement a quitté le dossier ${cite(dossier)}, qui reste sur le disque : ` +
+          "il porte encore un fichier que l'opération n'a pas emporté. Rien ne s'y est perdu."
+        : `L'événement a quitté le dossier ${cite(dossier)}, qui n'a pas pu être retiré` +
+          `${causeEntreParentheses(cause, texte)} : il reste sur le disque.`,
   ],
   [
     'EXPLORATEUR_ABSENT',

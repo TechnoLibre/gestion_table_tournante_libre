@@ -3431,13 +3431,24 @@ figé, je travaille sur une variante ».
 
 **Renommer** change le dossier et les **deux** fichiers : le logiciel écrit
 d'abord la paire complète sous les nouveaux noms, dans un dossier neuf qui
-porte le nouveau nom, puis supprime l'ancienne — jamais l'inverse. Une panne
-laisse alors deux paires, ce qui se voit et se répare, au lieu d'aucune ; une
-écriture refusée avant que la nouvelle paire soit complète en efface ce qui
-s'est écrit, et le dossier neuf resté vide. L'ancien dossier reste, sans la
-paire, avec ce qui n'appartient pas à l'événement. Un nom qui ne change que
-par la casse, ou par un caractère que Windows refuse, se réécrit en place :
-le dossier et les fichiers gardent leur nom.
+porte le nouveau nom, puis y déplace un à un ce que l'ancien dossier porte à
+côté de l'événement, puis supprime l'ancienne paire — jamais l'inverse. Les
+badges et la liste en CSV déjà produits (§ 11.6) **prennent le nouveau nom** :
+l'ancien nom en tête du fichier cède la place au nouveau, et le reste — modèle,
+papier, date, rang — ne change pas ; le nouveau nom se raccourcit, comme à la
+production, quand le chemin dépasserait la borne (§ 8.6). Les autres fichiers,
+et le dossier `logo/` avec ce qu'il porte, gardent leur nom. Une panne laisse
+deux paires, ce qui se voit et se répare, au lieu d'aucune ; une écriture
+refusée avant que la nouvelle paire soit complète en efface ce qui s'est écrit,
+et le dossier neuf resté vide. Une fois le verrou rendu, **l'ancien dossier se
+retire** s'il est vide. S'il ne l'est pas — un fichier qu'un autre programme
+tient ouvert, un fichier apparu entre-temps, un déplacement refusé, les
+fichiers d'un autre événement posés à la main dans ce dossier, une écriture
+interrompue restée de l'ancienne paire —, il reste avec ce qu'il porte, et un
+avertissement le nomme ; le renommage, lui, est fait. Le logiciel ne retire
+jamais un dossier qui porte encore quelque chose. Un nom qui ne change que par
+la casse, ou par un caractère que Windows refuse, se réécrit en place : le
+dossier et les fichiers gardent leur nom.
 
 Le compagnon des courses suit : écrit sous le nouveau nom après l'état, supprimé
 avec l'ancienne paire ; quand l'écriture du nouveau est refusée, l'ancien se
@@ -3455,12 +3466,19 @@ dossier de téléchargements que l'opérateur vide régulièrement. **Importer d
 l'autre emplacement** n'y lit que les dossiers d'événement (§ 8.6) : des
 fichiers d'événement posés à même sa racine ne se copient pas.
 
-**Supprimer** déplace tous les fichiers de l'événement, de son dossier, dans une
-`corbeille/` datée, à la racine du dossier de travail : le dossier daté porte
-directement les fichiers. Le dossier de l'événement reste, avec ce qui ne lui
-appartient pas. Le logiciel ne vide jamais la corbeille de lui-même et affiche
-ce qu'elle contient : un opérateur qui croit avoir supprimé les coordonnées
-d'une personne les a en réalité déplacées.
+**Supprimer** déplace **tout le contenu du dossier** de l'événement — ses
+fichiers, les badges et la liste en CSV produits, le dossier `logo/`, les
+écritures interrompues restées — dans une `corbeille/` datée, à la racine du
+dossier de travail : le dossier daté porte directement ce contenu, `logo/` à son
+niveau. L'état part en dernier, puis le dossier vide se retire. Un fichier qui
+n'est pas à l'événement et refuse son déplacement — qu'un autre programme tient
+ouvert — reste dans le dossier sans faire échouer la suppression : le reste
+part, l'état compris. Un dossier qui ne se vide pas reste ainsi, et un
+avertissement le nomme. Les fichiers d'un autre événement posés à la main dans
+le même dossier ne partent pas, et cet événement reste listé. Le logiciel ne
+vide jamais la corbeille de lui-même et affiche ce qu'elle contient, chaque
+fichier par son chemin dans le dossier daté : un opérateur qui croit avoir
+supprimé les coordonnées d'une personne les a en réalité déplacées.
 
 ### 8.8 Ce qui résiste à une panne
 
@@ -3498,6 +3516,21 @@ plateforme**.
   fichier qui porte une saisie qu'elle ne connaît pas, refuserait sinon comme
   illisible un fichier qu'elle n'a pas écrit, ou le réécrirait sans cette
   saisie.
+- **Renommer et supprimer, interrompus.** Chaque fichier passe d'un dossier à
+  l'autre en entier, par un déplacement : une panne à n'importe quelle étape
+  laisse chacun à sa place ou à la nouvelle, une fois, jamais perdu ni copié.
+  Un **renommage** coupé pendant l'écriture de la nouvelle paire laisse
+  l'ancien événement, seul listé, son journal neuf tu ; coupé entre le nouvel
+  état et l'effacement de l'ancien, les deux, signalés doublons l'un de
+  l'autre ; coupé pendant les déplacements, les fichiers de l'ancien dossier
+  répartis entre les deux ; coupé après l'effacement de l'ancienne paire, le
+  seul événement renommé, et l'ancien dossier, vide ou qui garde le verrou de
+  la séance coupée, qui ne se liste pas mais garde son nom. Une **suppression**
+  coupée laisse l'événement listé et ouvrable tant que son état n'est pas parti,
+  ce qui est déjà parti dans le dossier daté ; la supprimer de nouveau emporte
+  le reste dans un autre dossier daté. Coupée après l'état, elle laisse un
+  dossier vide, qui ne se liste pas. Chacun de ces états s'éprouve par une
+  coupure après chaque écriture.
 - **Une seule séance en écriture**, le verrou se prenant **à l'entrée en mode
   écriture** et non à l'ouverture. Le verrou est un fichier du dossier de
   l'événement, `<nom>.gtt.verrou`, à côté de son état. Il porte l'instant de sa

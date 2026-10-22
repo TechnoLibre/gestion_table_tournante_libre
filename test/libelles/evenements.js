@@ -19,6 +19,7 @@ export const EXEMPLES = [
   ['AUCUN_RETENU', { remede: { geste: 'ouvrirSection', section: 'propositions' } }],
   // Façade des événements
   ['QUESTION_EN_ATTENTE', { question: 'PORTABLE_NON_INSCRIPTIBLE', remede: null }],
+  ['DOSSIER_NON_RETIRE', { dossier: 'E:\\data\\Gala des Saules', cause: 'NON_VIDE' }],
   ['EXPLORATEUR_ABSENT', { remede: null }],
   // Libellés figés du journal
   ['ENTREE_CREATION', { nom: "Soirée d'essai" }],
@@ -29,4 +30,17 @@ export const EXEMPLES = [
   ['ENTREE_DEMONSTRATION', { nom: 'Petite démonstration' }],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  [
+    'DOSSIER_NON_RETIRE',
+    { dossier: 'E:\\data\\Gala des Saules', cause: 'NON_VIDE' },
+    "L'événement a quitté le dossier « E:\\data\\Gala des Saules », qui reste sur le disque : " +
+      "il porte encore un fichier que l'opération n'a pas emporté. Rien ne s'y est perdu.",
+  ],
+  [
+    'DOSSIER_NON_RETIRE',
+    { dossier: 'E:\\data\\Gala des Saules', cause: 'EBUSY' },
+    "L'événement a quitté le dossier « E:\\data\\Gala des Saules », qui n'a pas pu être retiré (EBUSY) : " +
+      'il reste sur le disque.',
+  ],
+];

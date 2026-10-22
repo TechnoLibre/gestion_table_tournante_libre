@@ -69,10 +69,15 @@ refusent en disant la longueur saisie, sans rien couper.
 
 Chaque événement a son propre dossier dans le dossier de travail, à son nom :
 le chemin qu’affiche sa ligne est celui de son fichier d’état, dans ce dossier.
-Créer, copier ou importer un événement crée son dossier ; supprimer en range
-les fichiers dans la corbeille. Des fichiers d’événement posés directement dans
-le dossier de travail, hors d’un dossier, ne s’affichent pas et restent tels
-quels.
+Créer, copier ou importer un événement crée son dossier. Renommer l’événement
+renomme aussi son dossier : tout ce qu’il contient suit, et les badges et la
+liste déjà produits prennent le nouveau nom, leur date gardée. Supprimer range
+tout le dossier dans la corbeille, d’où rien ne s’efface. Quand le dossier ne
+peut pas être retiré, après l’un ou l’autre — un fichier encore ouvert dans un
+autre programme, par exemple —, il reste sur le disque avec ce qu’il contient,
+et un avis le nomme au-dessus de la liste. Des fichiers d’événement posés
+directement dans le dossier de travail, hors d’un dossier, ne s’affichent pas
+et restent tels quels.
 
 ## Étape 1b — Passer en écriture
 

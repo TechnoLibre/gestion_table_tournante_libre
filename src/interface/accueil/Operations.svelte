@@ -6,15 +6,17 @@
   // place : copier, renommer, supprimer. Copier et renommer demandent d'abord
   // un nom (saisieDe) : rien ne s'écrit avant la validation, et un nom vide
   // se refuse contre le champ. Copier ouvre la copie en lecture ; renommer
-  // laisse la liste, que l'accueil relit. Supprimer déplace les fichiers dans
-  // la corbeille et se confirme en place, par un second clic : aucune
-  // fenêtre. Chaque refus s'affiche contre le champ ou à côté de sa
-  // commande, sans remède (surLaListe) ; apresOperation() suit chaque
-  // opération réussie. Une validation en cours ne se relance pas : une
+  // laisse la liste, que l'accueil relit. Supprimer déplace le contenu du
+  // dossier de l'événement dans la corbeille et se confirme en place, par un
+  // second clic : aucune fenêtre. Chaque refus s'affiche contre le champ ou à
+  // côté de sa commande, sans remède (surLaListe) ;
+  // apresOperation(avertissements) suit chaque opération réussie, avec les
+  // avertissements qu'elle rend — ceux d'un renommage ou d'une suppression —,
+  // aucun pour une copie. Une validation en cours ne se relance pas : une
   // seconde soumission pendant l'écriture ne fait rien, et le bouton de
-  // validation se dit occupé ; supprimer passe par la Commande, qui a la
-  // même garde. Dans la cellule des actions du tableau, les trois commandes
-  // sont discrètes, à côté de « Ouvrir » ; la saisie s'ouvre à leur place.
+  // validation se dit occupé ; supprimer passe par la Commande, qui a la même
+  // garde. Dans la cellule des actions du tableau, les trois commandes sont
+  // discrètes, à côté de « Ouvrir » ; la saisie s'ouvre à leur place.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
@@ -56,8 +58,9 @@
     refus = null;
     const { operation, texte } = saisie;
     validationEnCours = true;
+    let rendu;
     try {
-      await surLaListe(() => GESTES[operation](texte));
+      rendu = await surLaListe(() => GESTES[operation](texte));
     } catch (erreur) {
       if (typeof erreur?.code !== 'string') throw erreur;
       refus = erreur;
@@ -66,12 +69,12 @@
       validationEnCours = false;
     }
     fermerSaisie();
-    apresOperation();
+    apresOperation(rendu.avertissements ?? []);
   }
 
   async function supprimer() {
-    await surLaListe(() => facade.supprimer(ligne.cle));
-    apresOperation();
+    const { avertissements } = await surLaListe(() => facade.supprimer(ligne.cle));
+    apresOperation(avertissements);
   }
 </script>
 

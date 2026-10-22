@@ -7,9 +7,9 @@
 // demi-paires isolées, noms réservés, caractères que Windows refuse, composition
 // en NFC, collisions comparées par la majuscule, borne du chemin complet — et
 // le dossier daté de la corbeille, jusqu'à son dernier rang, le dossier d'un
-// événement, et le nom du fichier de la planche de badges (§ 11.6). Chaque
-// épreuve de dérivation se joue sur les deux dossiers de travail possibles du
-// § 8.6.
+// événement, le nom du fichier de la planche de badges (§ 11.6), et celui
+// qu'il prend quand l'événement change de base (§ 8.7). Chaque épreuve de
+// dérivation se joue sur les deux dossiers de travail possibles du § 8.6.
 //
 // La borne s'éprouve contre un oracle écrit ici : chaque chemin qu'un
 // événement écrit se recompose en entier, de la racine au suffixe, avec des
@@ -40,6 +40,7 @@ import {
   nomCsvBadgesExigeListe,
   nomPlanche,
   nomPlancheExigeListe,
+  nomSortieRenommee,
 } from './noms.js';
 import { FICHIER_REGLAGES } from './reglages_locaux.js';
 
@@ -1672,5 +1673,84 @@ describe('nomCsvBadges : le nom de la liste des badges en CSV (§ 11.6, § 8.6)'
     }
     assert.throws(() => nomCsvBadges('', LISTE), TypeError);
     assert.throws(() => nomCsvBadges(BASE, { ...LISTE, reedition: { ids: [] } }), RangeError);
+  });
+});
+
+describe('nomSortieRenommee : une sortie de la planche au renommage (§ 8.7, § 11.6)', () => {
+  const ANCIENNE = 'Gala des Saules';
+  const NOUVELLE = 'Bal des Grisailles';
+  const HORODATAGE = '2031-05-17T20:15:07-04:00';
+  // Le dossier neuf de l'événement renommé, dans le dossier de travail des
+  // Documents.
+  const NEUF = { racine: `${DOSSIERS[0].racine}\\${NOUVELLE}`, separateur: '\\' };
+  const reeditionDe = (k) => ({ ids: Array.from({ length: k }, (_, i) => i + 1) });
+  // Des options de planche et de liste : l'A6, Avery 5392 et sa feuille de
+  // contrôle, une réédition marquée, une liste en brouillon.
+  const A6 = { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE };
+  const AVERY = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, modeleBadge: 'avery5392' };
+  const MARQUEE = { ...A6, reedition: reeditionDe(12), proposition: 3, ordre: 'table' };
+  const LISTE = { horodatage: HORODATAGE, proposition: 2, brouillon: true };
+
+  test("la planche, la feuille de contrôle et la liste de l'ancienne base prennent la nouvelle, le reste du nom gardé", () => {
+    const cas = [
+      [nomPlanche(ANCIENNE, A6), nomPlanche(NOUVELLE, A6)],
+      [nomPlanche(ANCIENNE, AVERY), nomPlanche(NOUVELLE, AVERY)],
+      [nomControle(ANCIENNE, AVERY), nomControle(NOUVELLE, AVERY)],
+      [nomPlanche(ANCIENNE, MARQUEE), nomPlanche(NOUVELLE, MARQUEE)],
+      [nomCsvBadges(ANCIENNE, LISTE), nomCsvBadges(NOUVELLE, LISTE)],
+      [`${ANCIENNE}.badges_A4_feuille_2031-05-17_20-15-07_2.pdf`, `${NOUVELLE}.badges_A4_feuille_2031-05-17_20-15-07_2.pdf`],
+      [`${ANCIENNE}.badges_horodatage-inconnu.csv`, `${NOUVELLE}.badges_horodatage-inconnu.csv`],
+    ];
+    for (const [ancien, attendu] of cas) {
+      assert.equal(nomSortieRenommee(ancien, { ancienne: ANCIENNE, nouvelle: NOUVELLE, dossier: NEUF }), attendu, ancien);
+    }
+  });
+
+  test("un nom que la borne a raccourci, tête de l'ancienne base suivie d'un point, se reconnaît et prend la nouvelle base", () => {
+    const longue = `${'Grande soirée des Saules '.repeat(3)}d'automne`.slice(0, 68).trimEnd();
+    const options = { ...MARQUEE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1 };
+    const ancien = nomPlanche(longue, {
+      ...options,
+      dossier: { racine: `${DOSSIERS[0].racine}\\${longue}`, separateur: '\\', existants: [] },
+    });
+    const tete = ancien.slice(0, ancien.indexOf('..badges'));
+    assert.ok(tete.length > 0 && tete.length < longue.length && longue.startsWith(tete), ancien);
+    assert.equal(
+      nomSortieRenommee(ancien, { ancienne: longue, nouvelle: NOUVELLE, dossier: NEUF }),
+      nomPlanche(NOUVELLE, options),
+    );
+  });
+
+  test('une nouvelle base plus longue se raccourcit, suivie d’un point, pour que le chemin du dossier neuf tienne sous la borne ; un nom court la garde entière', () => {
+    const nouvelle = 'e'.repeat(68);
+    const dossier = { racine: `${DOSSIERS[0].racine}\\${nouvelle}`, separateur: '\\' };
+    const options = { ...MARQUEE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1 };
+    const ancien = nomPlanche(ANCIENNE, options);
+    const nom = nomSortieRenommee(ancien, { ancienne: ANCIENNE, nouvelle, dossier });
+    const reste = ancien.slice(ANCIENNE.length);
+    assert.ok(nom.endsWith(`.${reste}`), nom);
+    const tete = nom.slice(0, nom.length - reste.length - 1);
+    assert.ok(tete.length < nouvelle.length && nouvelle.startsWith(tete), nom);
+    assert.equal(`${dossier.racine}\\${nom}${SUFFIXE_ECRITURE}`.length, LONGUEUR_CHEMIN_MAX);
+    assert.equal(
+      nomSortieRenommee(nomPlanche(ANCIENNE, A6), { ancienne: ANCIENNE, nouvelle, dossier }),
+      nomPlanche(nouvelle, A6),
+    );
+  });
+
+  test("ce qui n'est pas une sortie de l'ancienne base rend null : un autre fichier, la sortie d'une autre base, un fichier de l'événement, une écriture restée", () => {
+    for (const nom of [
+      'notes.txt',
+      'logo',
+      `${NOUVELLE}.badges_A4_feuille_2031-05-17_20-15-07.pdf`,
+      `Gala.badges_A4_feuille_2031-05-17_20-15-07.pdf`,
+      `${ANCIENNE}${SUFFIXES.etat}`,
+      `${ANCIENNE}.badges_A4_feuille_2031-05-17_20-15-07.pdf${SUFFIXE_ECRITURE}`,
+      `${ANCIENNE}.badgesA4.pdf`,
+      `${ANCIENNE}.controle_avery5392.txt`,
+      `${ANCIENNE}.badges`,
+    ]) {
+      assert.equal(nomSortieRenommee(nom, { ancienne: ANCIENNE, nouvelle: NOUVELLE, dossier: NEUF }), null, nom);
+    }
   });
 });

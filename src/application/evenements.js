@@ -31,7 +31,11 @@
 // façade sonde alors celui du disque sous son propre identifiant de séance,
 // tiré une fois à sa création ; une séance vivante, ou dont la vie ne se
 // prouve pas, qui tient l'événement le refuse. Un refus qui suit la fermeture
-// rouvre l'événement, en lecture, tel qu'il était.
+// rouvre l'événement, en lecture, tel qu'il était. Le dossier que
+// l'événement quitte — l'ancien dossier d'un renommage, une fois le verrou
+// rendu, celui d'un événement supprimé — se retire quand il est vide ; un
+// dossier qui ne se vide pas reste, et l'avertissement DOSSIER_NON_RETIRE le
+// dit sans défaire l'opération.
 //
 // Les libellés figés qu'elle écrit au journal — copie, renommage, chargement
 // d'une démonstration, jalon de création, reprise — se composent par
@@ -50,6 +54,7 @@ import {
   libelleDeLInstant,
   listerCorbeille,
   renommer as renommerSurDisque,
+  retirerDossier,
   supprimer as supprimerSurDisque,
 } from '../stockage/operations.js';
 import { lireReglages } from '../stockage/reglages_locaux.js';
@@ -109,6 +114,13 @@ function nomSaisi(nom) {
 function cheminAffiche(racine, separateur, relatif) {
   const tete = racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur;
   return tete + relatif.split('/').join(separateur);
+}
+
+// L'avertissement d'un dossier que l'événement a quitté et qui reste sur le
+// disque, d'après ce que rend retirerDossier : son chemin affichable et la
+// cause du refus de le retirer.
+function dossierNonRetire(racine, separateur, { dossier, cause }) {
+  return { code: 'DOSSIER_NON_RETIRE', details: { dossier: cheminAffiche(racine, separateur, dossier), cause } };
 }
 
 // Un refus de la couche qui le lève : une erreur dont l'interface lit le
@@ -481,13 +493,19 @@ export function creerFacade({
       await rouvrirApresRefus(cle, etaitOuvert, erreur);
       throw erreur;
     }
-    // Le renommage fait, un verrou qui ne se rend pas le dit sans le défaire.
+    // Le renommage fait, un verrou qui ne se rend pas le dit sans le défaire ;
+    // puis l'ancien dossier, quand l'événement l'a quitté, se retire, ou le
+    // dit.
     const avertissements = [];
     try {
       await deverrouiller(cible, seance);
     } catch (erreur) {
       if (!(erreur instanceof ErreurStockage)) throw erreur;
       avertissements.push({ code: 'VERROU_NON_RENDU', details: erreur.details });
+    }
+    if (renomme.dossier !== dossier) {
+      const reste = await retirerDossier(fs, courante, dossier);
+      if (reste !== null) avertissements.push(dossierNonRetire(courante, (await fs.emplacements()).separateur, reste));
     }
     const cleRenomme = cleEvenement(renomme.dossier, renomme.base);
     if (etaitOuvert) await ouvrir(cleRenomme);
@@ -499,7 +517,10 @@ export function creerFacade({
     const etaitOuvert = ouvert() === cle;
     if (etaitOuvert) await fermer();
     try {
-      return await supprimerSurDisque(fs, courante, cle, { horodatage: horloge.horodatage(), seance });
+      const horodatage = horloge.horodatage();
+      const { dossier, nonRetire } = await supprimerSurDisque(fs, courante, cle, { horodatage, seance });
+      const { separateur } = await fs.emplacements();
+      return { dossier, avertissements: nonRetire === null ? [] : [dossierNonRetire(courante, separateur, nonRetire)] };
     } catch (erreur) {
       await rouvrirApresRefus(cle, etaitOuvert, erreur);
       if (erreur instanceof ErreurStockage && erreur.code === 'VERROU_PRIS') {
@@ -515,7 +536,7 @@ export function creerFacade({
     return (await listerCorbeille(fs, courante)).map(({ dossier, fichiers }) => ({
       dossier,
       chemin: cheminAffiche(courante, separateur, dossier),
-      fichiers,
+      fichiers: fichiers.map((fichier) => fichier.split('/').join(separateur)),
     }));
   }
 
@@ -598,12 +619,22 @@ export function creerFacade({
     copier,
     /**
      * Renomme l'événement de clé cle ; ouvert, il se rouvre en lecture sous
-     * sa nouvelle clé → { cle, base, avertissements } (§ 8.7).
+     * sa nouvelle clé → { cle, base, avertissements } (§ 8.7) :
+     * VERROU_NON_RENDU, puis DOSSIER_NON_RETIRE {dossier, cause} quand
+     * l'ancien dossier reste, chacun sans défaire le renommage.
      */
     renommer,
-    /** Déplace les fichiers de l'événement de clé cle dans la corbeille datée (§ 8.7). */
+    /**
+     * Déplace le contenu du dossier de l'événement de clé cle dans la
+     * corbeille datée, puis retire le dossier → { dossier, avertissements },
+     * DOSSIER_NON_RETIRE {dossier, cause} quand il reste (§ 8.7).
+     */
     supprimer,
-    /** Le contenu de la corbeille : [{ dossier, chemin, fichiers }] (§ 8.7). */
+    /**
+     * Le contenu de la corbeille : [{ dossier, chemin, fichiers }], chaque
+     * fichier par son chemin relatif à son dossier daté, au séparateur du
+     * système (§ 8.7).
+     */
     corbeille,
     /** Importe le fichier d'événement que l'opérateur choisit → { cle, base }, ou null (§ 8.7). */
     importerFichier,

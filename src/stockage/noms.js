@@ -3,9 +3,10 @@
 
 // Les noms des fichiers d'un événement (§ 8.6, § 8.7) : leurs suffixes, la
 // base que le nom de l'événement donne dans un dossier de travail, le
-// dossier de l'événement, le dossier daté de la corbeille, et les noms de la
+// dossier de l'événement, le dossier daté de la corbeille, les noms de la
 // planche de badges et de sa liste en CSV que l'événement produit à côté de
-// ses fichiers (§ 11.6). Le module est pur : il ne touche aucun fichier, ne
+// ses fichiers (§ 11.6), et celui qu'elles prennent quand l'événement change
+// de base (§ 8.7). Le module est pur : il ne touche aucun fichier, ne
 // lit ni horloge ni aléa, et ne dépend d'aucune langue — la casse se compare
 // par toUpperCase ou toLowerCase, jamais par une comparaison localisée.
 //
@@ -570,6 +571,19 @@ const LONGUEUR_FIXE = 1 + SUFFIXE_PLUS_LONG + SUFFIXE_ECRITURE.length;
 const LONGUEUR_FIXE_CORBEILLE =
   `${DOSSIER_CORBEILLE}/${MODELE_DATE}${RANG_LE_PLUS_LONG}/`.length + SUFFIXE_PLUS_LONG + SUFFIXE_ECRITURE.length;
 
+// Ce qui précède un suffixe de unites unités dans un nom de la planche posé
+// dans le dossier { racine, separateur } : la base entière quand le chemin
+// complet, en écriture atomique, tient sous la borne ; sinon la plus longue
+// tête de la base que tenir rend, suivie de MARQUE_COUPE ; la base entière
+// quand même un caractère n'y tient pas. Une racine qui finit par le
+// séparateur ne compte pas un séparateur de plus.
+function debutTenu(base, { racine, separateur }, unites) {
+  const unitesRacine = racine.endsWith(separateur) ? racine.length - 1 : racine.length;
+  const libres = LONGUEUR_CHEMIN_MAX - (unitesRacine + 1) - SUFFIXE_ECRITURE.length - unites;
+  const tete = base.length <= libres ? null : tenir(base, libres - MARQUE_COUPE.length);
+  return tete === null ? base : tete + MARQUE_COUPE;
+}
+
 // Les noms de rang donné sous le dossier lu, de suffixes(rang), et si ces
 // noms se choisissent parmi les entrées du dossier — une réédition, une
 // base qui finit par MARQUE_COUPE, ou une base que la borne raccourcit dès
@@ -579,18 +593,11 @@ function rangeable(base, leDossier, suffixes, reedition) {
   const entiers = (rang) => suffixes(rang).map((fin) => base + fin);
   if (leDossier === null) return { leDossier, nomsDeRang: entiers, exigeListe: false };
 
-  // Les noms de rang donné : la base entière quand le chemin complet du plus
-  // long, en écriture atomique, tient sous la borne ; sinon la plus longue
-  // tête de la base que tenir rend, suivie de MARQUE_COUPE ; la base entière
-  // quand même un caractère n'y tient pas.
-  const { racine, separateur } = leDossier;
-  const unitesRacine = racine.endsWith(separateur) ? racine.length - 1 : racine.length;
+  // Les noms de rang donné, sous la tête que debutTenu règle sur le plus
+  // long suffixe.
   const nomsDeRang = (rang) => {
     const fins = suffixes(rang);
-    const plusLongue = Math.max(...fins.map((fin) => fin.length));
-    const libres = LONGUEUR_CHEMIN_MAX - (unitesRacine + 1) - SUFFIXE_ECRITURE.length - plusLongue;
-    const tete = base.length <= libres ? null : tenir(base, libres - MARQUE_COUPE.length);
-    const debut = tete === null ? base : tete + MARQUE_COUPE;
+    const debut = debutTenu(base, leDossier, Math.max(...fins.map((fin) => fin.length)));
     return fins.map((fin) => debut + fin);
   };
   const exigeListe = reedition || base.endsWith(MARQUE_COUPE) || nomsDeRang(1)[0] !== entiers(1)[0];
@@ -772,4 +779,51 @@ export function nomCsvBadges(base, options) {
  */
 export function nomCsvBadgesExigeListe(base, options) {
   return composerCsv(base, options).exigeListe;
+}
+
+// Ce qui suit la base dans le nom d'une sortie de la planche : « .badges » ou
+// « .controle », puis un trait d'union ou un souligné qui ouvre les marques,
+// le support ou la date, et l'extension du PDF ou du CSV.
+const RESTE_DE_SORTIE = /^\.(?:badges|controle)[-_].*\.(?:pdf|csv)$/su;
+
+// Ce qui suit la base ancienne dans nom, une sortie de la planche : après la
+// base entière, ou après une tête plus courte de cette base suivie de
+// MARQUE_COUPE, celle d'un nom que la borne a raccourci ; null quand nom
+// n'est la sortie de la planche d'aucune des deux. La base entière se
+// cherche d'abord, puis les têtes, de la plus longue à la plus courte.
+function resteDeSortie(nom, ancienne) {
+  if (nom.startsWith(ancienne) && RESTE_DE_SORTIE.test(nom.slice(ancienne.length))) return nom.slice(ancienne.length);
+  for (let longueur = ancienne.length - 1; longueur > 0; longueur -= 1) {
+    const debut = ancienne.slice(0, longueur) + MARQUE_COUPE;
+    if (nom.startsWith(debut) && RESTE_DE_SORTIE.test(nom.slice(debut.length))) return nom.slice(debut.length);
+  }
+  return null;
+}
+
+/**
+ * Le nom qu'une sortie de la planche prend quand son événement change de
+ * base (§ 8.7, § 11.6) : la planche, sa feuille de contrôle à part et sa
+ * liste en CSV, dont le nom commence par l'ancienne base, entière ou
+ * raccourcie par la borne (nomPlanche), suivie de « .badges » ou de
+ * « .controle ». La base nouvelle remplace la tête ; le reste du nom —
+ * marques, support, date, rang, extension — reste tel quel. La nouvelle
+ * base se raccourcit, suivie d'un point, comme nomPlanche la raccourcit,
+ * jusqu'à ce que le chemin du dossier neuf, un séparateur, le nom et
+ * SUFFIXE_ECRITURE tiennent en LONGUEUR_CHEMIN_MAX ; elle reste entière
+ * quand même un caractère n'y tient pas. Le nom rendu ne se choisit pas
+ * parmi les entrées du dossier : un nom déjà pris se refuse au déplacement,
+ * qui ne remplace jamais un fichier.
+ *
+ * @param {string} nom   le nom d'un fichier du dossier de l'événement
+ * @param {Object} renommage
+ * @param {string} renommage.ancienne   la base de l'événement avant
+ * @param {string} renommage.nouvelle   sa base après
+ * @param {{racine: string, separateur: '\\'|'/'}} renommage.dossier  le
+ *        chemin du dossier neuf, où la sortie passe, et le séparateur
+ * @returns {string|null}   null quand nom n'est pas une sortie de la planche
+ *          de l'ancienne base
+ */
+export function nomSortieRenommee(nom, { ancienne, nouvelle, dossier }) {
+  const reste = resteDeSortie(nom, ancienne);
+  return reste === null ? null : debutTenu(nouvelle, dossier, reste.length) + reste;
 }

@@ -9,7 +9,7 @@
 // séance s'inscrit au relevé du montage. Les noms d'épreuve sont inventés ; la
 // version vient du module engendré.
 import assert from 'node:assert/strict';
-import { creerFichiersSimules } from '../../test/fichiers_simules.js';
+import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { LIVREES, texteLivre } from '../demo/livrees.js';
@@ -1306,17 +1306,19 @@ describe('copier (§ 8.7)', () => {
 // --- Renommer (§ 8.7, § 8.8) -------------------------------------------------
 
 describe('renommer (§ 8.7, § 8.8)', () => {
-  test('nouveau nom, nouveau chemin, une entrée du renommage, aucun verrou restant', async () => {
+  test('nouveau nom, nouveau chemin, une entrée du renommage, aucun verrou restant, l’ancien dossier retiré', async () => {
     const { fs, facade, appels } = monter();
     await facade.demarrer();
     await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
     const avant = ecritures(fs);
-    const { cle, base } = await facade.renommer(enDossier(LUCIOLES), { nom: CERFS });
+    const { cle, base, avertissements } = await facade.renommer(enDossier(LUCIOLES), { nom: CERFS });
     // La sonde qui prend le verrou ; la nouvelle paire dans son dossier —
     // le dossier, .precedent, journal, état — ; l'effacement de l'ancienne —
-    // état, .precedent, journal — ; le verrou rendu.
-    assert.equal(ecritures(fs), avant + 1 + 4 + 3 + 1);
+    // état, .precedent, journal — ; le verrou rendu ; l'ancien dossier retiré.
+    assert.equal(ecritures(fs), avant + 1 + 4 + 3 + 1 + 1);
     assert.equal(base, CERFS);
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), [CERFS]);
     const lignes = await facade.lister();
     assert.deepEqual(
       lignes.map(({ base: b, nom, chemin }) => [b, nom, chemin]),
@@ -1332,6 +1334,21 @@ describe('renommer (§ 8.7, § 8.8)', () => {
     );
   });
 
+  test('un renommage en place, par la casse seule, ne tente aucun retrait de dossier et ne dit rien', async () => {
+    const { fs, facade } = monter();
+    await facade.demarrer();
+    await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+    const retraits = [];
+    const supprimerDossier = fs.supprimerDossier;
+    fs.supprimerDossier = async (racine, chemin) => {
+      retraits.push(chemin);
+      return supprimerDossier(racine, chemin);
+    };
+    const { cle, avertissements } = await facade.renommer(enDossier(LUCIOLES), { nom: LUCIOLES.toUpperCase() });
+    assert.deepEqual([retraits, avertissements], [[], []]);
+    assert.deepEqual((await facade.lister()).map((ligne) => ligne.cle), [cle]);
+  });
+
   // Coupe le processus dès que l'écriture atomique a posé ce fichier.
   function couperApresEcriture(fs, chemin) {
     const ecrire = fs.ecrireAtomique;
@@ -1340,6 +1357,73 @@ describe('renommer (§ 8.7, § 8.8)', () => {
       if (cible === chemin) fs.pannes.couperApres(0);
     };
   }
+
+  test('ce que l’ancien dossier porte à côté de l’événement suit le renommage — la planche sous le nouveau nom, logo/ à son niveau — ; un ancien dossier qui ne se retire pas reste, et DOSSIER_NON_RETIRE le dit sans défaire le renommage', async () => {
+    for (const refuse of [false, true]) {
+      const { fs, facade } = monter();
+      await facade.demarrer();
+      await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+      fs.deposer('documents', `${LUCIOLES}/${LUCIOLES}.badges_A4_feuille_2031-05-17_20-15-07.pdf`, 'planche');
+      fs.deposer('documents', `${LUCIOLES}/logo/Alice.png`, 'logo');
+      if (refuse) fs.pannes.dossierNonRetire('documents');
+      const { cle, avertissements } = await facade.renommer(enDossier(LUCIOLES), { nom: CERFS });
+      assert.equal(cle, enDossier(CERFS));
+      assert.equal(fs.contenu('documents', `${CERFS}/${CERFS}.badges_A4_feuille_2031-05-17_20-15-07.pdf`), 'planche');
+      assert.equal(fs.contenu('documents', `${CERFS}/logo/Alice.png`), 'logo');
+      if (refuse) {
+        // Le refus tient aussi logo/, qui reste vide dans l'ancien dossier.
+        assert.deepEqual(avertissements, [
+          { code: 'DOSSIER_NON_RETIRE', details: { dossier: `${DOCUMENTS}\\${LUCIOLES}`, cause: 'NON_VIDE' } },
+        ]);
+        assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), [CERFS, LUCIOLES]);
+      } else {
+        assert.deepEqual(avertissements, []);
+        assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), [CERFS]);
+      }
+      assert.deepEqual((await facade.lister()).map(({ cle: une }) => une), [enDossier(CERFS)]);
+    }
+  });
+
+  test('une coupure à chaque écriture du renommage, verrou et retrait de l’ancien dossier compris, laisse l’événement ouvrable, sous une clé ou deux doublons, et chaque fichier une fois ; achevé, le seul dossier neuf', async () => {
+    const planche = '.badges_A4_feuille_2031-05-17_20-15-07.pdf';
+    for (let n = 0; ; n += 1) {
+      const disque = new Map();
+      const fs = creerFichiersSimules({ disque });
+      const { facade } = monter({ fs });
+      await facade.demarrer();
+      await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+      fs.deposer('documents', `${LUCIOLES}/notes.txt`, 'à garder');
+      fs.deposer('documents', `${LUCIOLES}/${LUCIOLES}${planche}`, 'planche');
+      fs.pannes.couperApres(n);
+      let acheve = true;
+      try {
+        await facade.renommer(enDossier(LUCIOLES), { nom: CERFS });
+      } catch (erreur) {
+        // Seule la coupure arrête le renommage : une autre faute remonte.
+        if (!(erreur instanceof PanneSimulee)) throw erreur;
+        acheve = false;
+      }
+      const message = `coupure après ${n} écritures`;
+      const relu = creerFichiersSimules({ disque });
+      for (const [places, texte] of [
+        [[`${LUCIOLES}/notes.txt`, `${CERFS}/notes.txt`], 'à garder'],
+        [[`${LUCIOLES}/${LUCIOLES}${planche}`, `${CERFS}/${CERFS}${planche}`], 'planche'],
+      ]) {
+        const trouvees = places.filter((chemin) => relu.contenu('documents', chemin) === texte);
+        assert.equal(trouvees.length, 1, `${message} : ${texte}`);
+      }
+      const { facade: apres } = monter({ fs: relu });
+      await apres.demarrer();
+      const lignes = await apres.lister();
+      const doublons = lignes.every(({ doublonAvec }) => doublonAvec.length === 1);
+      assert.ok(lignes.length === 1 || (lignes.length === 2 && doublons), message);
+      for (const { illisible, journalSeul } of lignes) assert.deepEqual([illisible, journalSeul], [null, false], message);
+      if (acheve) {
+        assert.deepEqual((await relu.lister(DOC, '')).map(({ nom }) => nom), [CERFS], message);
+        break;
+      }
+    }
+  });
 
   test('une coupure après le nouvel état laisse deux paires, signalées doublons l’une de l’autre', async () => {
     const disque = new Map();
@@ -1524,8 +1608,8 @@ describe('renommer (§ 8.7, § 8.8)', () => {
     const { cle, base } = await facade.renommer(enDossier(LUCIOLES), { nom: CERFS });
     // La sonde refusée, le verrou mort effacé, la sonde qui le prend ; puis
     // le renommage : nouvelle paire dans son dossier, ancienne effacée,
-    // verrou rendu.
-    assert.equal(ecritures(fs), avantReprise + 3 + 4 + 3 + 1);
+    // verrou rendu, ancien dossier retiré.
+    assert.equal(ecritures(fs), avantReprise + 3 + 4 + 3 + 1 + 1);
     assert.equal(base, CERFS);
     assert.equal(fs.contenu('documents', enDossier(LUCIOLES) + SUFFIXES.verrou), null);
   });
@@ -1544,11 +1628,13 @@ describe('supprimer (§ 8.7, § 8.8)', () => {
       return deplacer(...parametres);
     };
     const avant = ecritures(fs);
-    const { dossier } = await facade.supprimer(enDossier(LUCIOLES));
+    const { dossier, avertissements } = await facade.supprimer(enDossier(LUCIOLES));
     // La sonde qui prend le verrou, le dossier daté, puis trois déplacements :
-    // le verrou, le journal, l'état.
-    assert.equal(ecritures(fs), avant + 1 + 1 + 3);
+    // le verrou, le journal, l'état ; enfin le dossier de l'événement retiré.
+    assert.equal(ecritures(fs), avant + 1 + 1 + 3 + 1);
     assert.equal(dossier, CORBEILLE_DU_DEPART);
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), ['corbeille']);
     const fermer = appels.findIndex(([nom]) => nom === 'fermer');
     const premierDeplacement = appels.findIndex(([nom]) => nom === 'deplacer');
     assert.ok(fermer >= 0 && premierDeplacement > fermer);
@@ -1574,8 +1660,8 @@ describe('supprimer (§ 8.7, § 8.8)', () => {
     const avant = ecritures(fs);
     await facade.supprimer(enDossier(LUCIOLES));
     // La sonde, que le verrou mort n'arrête pas, le dossier daté, trois
-    // déplacements.
-    assert.equal(ecritures(fs), avant + 1 + 1 + 3);
+    // déplacements, le retrait du dossier.
+    assert.equal(ecritures(fs), avant + 1 + 1 + 3 + 1);
     const [{ fichiers }] = await facade.corbeille();
     assert.ok(fichiers.includes(LUCIOLES + SUFFIXES.verrou));
     assert.deepEqual(await facade.lister(), []);
@@ -1589,7 +1675,7 @@ describe('supprimer (§ 8.7, § 8.8)', () => {
     assert.equal(Object.keys(original).length, 2);
     const avant = ecritures(fs);
     const { dossier } = await facade.supprimer(enDossier(LUCIOLES));
-    assert.equal(ecritures(fs), avant + 1 + 1 + 3);
+    assert.equal(ecritures(fs), avant + 1 + 1 + 3 + 1);
     assert.equal(dossier, CORBEILLE_DU_DEPART);
     assert.deepEqual(await facade.lister(), []);
     const [{ fichiers }] = await facade.corbeille();
@@ -1598,6 +1684,70 @@ describe('supprimer (§ 8.7, § 8.8)', () => {
     // l'événement.
     for (const [fichier, texte] of Object.entries(original)) {
       assert.equal(fs.contenu('documents', `${CORBEILLE_DU_DEPART}/${fichier.split('/').at(-1)}`), texte);
+    }
+  });
+
+  test('tout le dossier part, logo/ à son niveau, que la corbeille montre au séparateur du système ; un dossier qui ne se retire pas reste, et DOSSIER_NON_RETIRE le dit', async () => {
+    for (const refuse of [false, true]) {
+      const { fs, facade } = monter();
+      await facade.demarrer();
+      await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+      fs.deposer('documents', `${LUCIOLES}/notes.txt`, 'à garder');
+      fs.deposer('documents', `${LUCIOLES}/logo/Alice.png`, 'logo');
+      // Le refus tient aussi logo/, qui reste vide dans le dossier de
+      // l'événement : celui-ci n'est donc pas vide.
+      if (refuse) fs.pannes.dossierNonRetire('documents', Infinity, 'EBUSY');
+      const { dossier, avertissements } = await facade.supprimer(enDossier(LUCIOLES));
+      assert.equal(fs.contenu('documents', `${dossier}/logo/Alice.png`), 'logo');
+      assert.deepEqual(await facade.corbeille(), [
+        {
+          dossier: CORBEILLE_DU_DEPART,
+          chemin: `${DOCUMENTS}\\corbeille\\2026-10-06_19-00-00`,
+          fichiers: [
+            ...[SUFFIXES.journal, SUFFIXES.etat, SUFFIXES.verrou].map((suffixe) => LUCIOLES + suffixe),
+            'logo\\Alice.png',
+            'notes.txt',
+          ],
+        },
+      ]);
+      assert.deepEqual(
+        avertissements,
+        refuse ? [{ code: 'DOSSIER_NON_RETIRE', details: { dossier: `${DOCUMENTS}\\${LUCIOLES}`, cause: 'NON_VIDE' } }] : [],
+      );
+      assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), refuse ? [LUCIOLES, 'corbeille'] : ['corbeille']);
+      assert.deepEqual(await facade.lister(), []);
+    }
+  });
+
+  test('un fichier de logo/ qui refuse son déplacement reste dans l’ancien dossier : renommer et supprimer aboutissent, et DOSSIER_NON_RETIRE le dit', async () => {
+    for (const operation of ['renommer', 'supprimer']) {
+      const { fs, facade } = monter();
+      await facade.demarrer();
+      await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+      fs.deposer('documents', `${LUCIOLES}/logo/Alice.png`, 'logo');
+      // L'image que tient ouverte un autre programme.
+      const deplacer = fs.deplacer;
+      fs.deplacer = async (racine, de, vers) => {
+        if (de === `${LUCIOLES}/logo/Alice.png`) {
+          throw new ErreurStockage('ECRITURE', { chemin: de, dossier: DOCUMENTS, cause: 'EBUSY' });
+        }
+        return deplacer(racine, de, vers);
+      };
+      const { avertissements } =
+        operation === 'renommer'
+          ? await facade.renommer(enDossier(LUCIOLES), { nom: CERFS })
+          : await facade.supprimer(enDossier(LUCIOLES));
+      assert.deepEqual(
+        avertissements,
+        [{ code: 'DOSSIER_NON_RETIRE', details: { dossier: `${DOCUMENTS}\\${LUCIOLES}`, cause: 'NON_VIDE' } }],
+        operation,
+      );
+      assert.equal(fs.contenu('documents', `${LUCIOLES}/logo/Alice.png`), 'logo', operation);
+      assert.deepEqual(
+        (await facade.lister()).map(({ cle }) => cle),
+        operation === 'renommer' ? [enDossier(CERFS)] : [],
+        operation,
+      );
     }
   });
 
