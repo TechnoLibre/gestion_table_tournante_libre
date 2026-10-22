@@ -65,6 +65,7 @@ const ECRITURES = [
   'ecrireOctetsAtomique',
   'ajouterLigne',
   'creerDossier',
+  'supprimerDossier',
   'deplacer',
   'supprimer',
   'verrouiller',

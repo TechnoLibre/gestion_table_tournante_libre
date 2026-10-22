@@ -205,7 +205,7 @@ describe('coquille : processus principal', () => {
     const { canaux, sequence } = journalDeLaCoquille();
     assert.equal(CANAL_IMPRESSION, CANAL_IMPRIMER);
     assert.deepEqual(canaux, [...CANAUX, CANAL_COPIE, CANAL_IMPRIMER]);
-    assert.equal(CANAUX.length, 18);
+    assert.equal(CANAUX.length, 19);
     const charge = sequence.indexOf('loadFile');
     assert.notEqual(charge, -1);
     for (const canal of [...CANAUX, CANAL_COPIE, CANAL_IMPRIMER]) {
@@ -318,6 +318,7 @@ describe('coquille : préchargement', () => {
       ['ajouterLigne', 'soiree.gtt-journal.jsonl'],
       ['lister', ''],
       ['creerDossier', 'corbeille'],
+      ['supprimerDossier', 'Ancien gala'],
       ['deplacer', 'soiree.gtt.json'],
       ['supprimer', 'soiree.gtt.json'],
       ['verrouiller', 'soiree.gtt.verrou'],

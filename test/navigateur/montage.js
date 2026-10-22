@@ -52,6 +52,7 @@ export const PRIMITIVES_TRACEES = Object.freeze([
   'ecrireOctetsAtomique',
   'ajouterLigne',
   'creerDossier',
+  'supprimerDossier',
   'deplacer',
   'supprimer',
   'verrouiller',
@@ -80,10 +81,10 @@ function installerCollecteur() {
   return installation;
 }
 
-/** Enveloppe les neuf primitives d'écriture du système simulé — sonder,
+/** Enveloppe les dix primitives d'écriture du système simulé — sonder,
  *  ecrireAtomique, ecrireOctetsAtomique, ajouterLigne, creerDossier,
- *  deplacer, supprimer, verrouiller, deverrouiller — et rend leur relevé,
- *  dans l'ordre des appels :
+ *  supprimerDossier, deplacer, supprimer, verrouiller, deverrouiller — et
+ *  rend leur relevé, dans l'ordre des appels :
  *  [primitive, racine.id, chemin], '' pour sonder, qui ne prend pas de chemin.
  *  Un appel se relève avant de s'exécuter, refusé ou non. */
 export function tracer(fs) {

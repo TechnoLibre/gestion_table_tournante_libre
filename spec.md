@@ -6561,16 +6561,31 @@ dessin, la désignation d'un siège et le dépôt partagent ses conversions et s
 chaises (§ 7.2, § 7.3).
 
 Les **deux frontières de plateforme** sont le système de fichiers et
-l'impression : une interface unique, deux implémentations — plus, pour le système
-de fichiers, une **troisième implémentation injectée par les épreuves**, qui sait
-simuler l'échec de renommage du § 8.8 et les cinq issues du § 8.6 : le chemin
-publié par le lanceur portable, un dossier de travail sous un emplacement de
-données applicatives, une sonde d'écriture qui échoue, une perte
-d'inscriptibilité **en cours de séance**, et un support amovible. Sans elle, les
-100 % de branches exigés des chemins de reprise (§ 14.13) ne s'écrivent pas, et
-la règle à cinq issues du § 8.6 reste le code le moins éprouvé du logiciel alors
-qu'elle décide de l'endroit où vit la soirée. L'impression a de même sa
-troisième implémentation, simulée, qui rend l'issue que l'épreuve choisit.
+l'impression : une interface unique, deux implémentations — plus, pour le
+système de fichiers, une **troisième implémentation injectée par les épreuves**,
+qui sait simuler l'échec de renommage du § 8.8, le dossier vide que le système
+ne laisse pas retirer, et les cinq issues du § 8.6 : le chemin publié par le
+lanceur portable, un dossier de travail sous un emplacement de données
+applicatives, une sonde d'écriture qui échoue, une perte d'inscriptibilité **en
+cours de séance**, et un support amovible. Sans elle, les 100 % de branches
+exigés des chemins de reprise (§ 14.13) ne s'écrivent pas, et la règle à cinq
+issues du § 8.6 reste le code le moins éprouvé du logiciel alors qu'elle décide
+de l'endroit où vit la soirée. L'impression a de même sa troisième
+implémentation, simulée, qui rend l'issue que l'épreuve choisit.
+
+**Un dossier ne se retire que vide.** Aucune primitive du système de fichiers
+ne retire un dossier avec ce qu'il porte : la seule qui en retire un refuse
+celui qui porte encore une entrée, fût-ce un dossier vide, et le laisse tel,
+contenu compris ; elle ne retire jamais la racine. Un retrait récursif ferait
+d'un chemin mal composé — un nom vide, un dossier oublié dans le chemin — la
+perte du dossier de travail entier ; un retrait qui se refuse ne perd rien.
+Sous `electron`, un fichier effacé qu'un antivirus ou un agent de
+synchronisation tient encore ouvert reste un instant dans son dossier sous
+Windows : le retrait se réessaie comme le renommage de l'écriture atomique
+(§ 8.8), puis se refuse. Sous `web`, l'OPFS retire de même un dossier vide et
+refuse celui qui porte une entrée, fichier d'échange de Chromium compris. La
+commande de l'explorateur (§ 8.6) ouvre la racine ou l'un de ses dossiers,
+confiné à elle comme toute cible.
 
 **Une proposition entrée dans l'événement ouvert ne change plus** : le stockage
 la fige, et tout changement passe par un objet neuf. Les mémoires du stockage
@@ -7245,6 +7260,16 @@ relierait deux rangs en diagonale.
 l'implémentation injectée, ni le test du renommage ni les 100 % de branches du
 § 14.13 ne s'écrivent, et les chemins de reprise restent le code le moins éprouvé
 du logiciel alors qu'ils sont ceux qui perdent une soirée.
+
+**Les trois implémentations du système de fichiers passent la même suite de
+contrat** (§ 13.4) : celle d'épreuve, la coquille devant un vrai dossier, en
+série `node:long`, et l'OPFS de Chromium, en série navigateur. Le retrait d'un
+dossier y passe ses cas : un dossier vide part, puis son parent devenu vide ;
+un absent n'est pas une faute ; un dossier qui porte une entrée se refuse sans
+rien perdre ; la racine se refuse, vide ou non ; un fichier à la place du
+dossier se refuse. Un dossier qui ne porte qu'un dossier vide se refuse aussi,
+et c'est ce cas qui refuse le retrait récursif, lequel les emporterait tous
+deux.
 
 **Deux sérialisations du même état sont identiques octet pour octet**, y compris
 quand l'état a été construit dans deux ordres d'insertion différents, et y compris

@@ -48,6 +48,7 @@ const PRIMITIVES_ECRITURE = [
   'ecrireAtomique',
   'ajouterLigne',
   'creerDossier',
+  'supprimerDossier',
   'deplacer',
   'supprimer',
   'verrouiller',

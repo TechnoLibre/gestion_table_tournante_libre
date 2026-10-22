@@ -25,6 +25,12 @@
 // retire la source ; un échec du retrait retire la copie. verrouiller rend
 // { pris: true } sans rien écrire, et deverrouiller n'efface rien.
 //
+// supprimerDossier demande au dossier qui porte la cible de retirer son
+// entrée, par removeEntry sans l'option recursive : l'OPFS retire alors la
+// poignée d'un dossier vide, et refuse un dossier qui porte une entrée par
+// InvalidModificationError, que le module lève NON_VIDE ; un fichier
+// d'échange .crswap y compte comme toute entrée.
+//
 // L'OPFS compare les noms à la lettre : la casse et la forme de normalisation
 // distinguent deux fichiers, d'où insensibleCasse faux. Il ne date pas un
 // dossier, que lister date de 0. Pendant l'écriture d'un flux, Chromium peut
@@ -56,14 +62,14 @@
 // jamais ABSENT ni EXISTE : rien ne se lit ni ne s'écrit dans le dossier qui
 // le porte, et un fichier présent ne se lit pas absent.
 //
-// Sous web, ni explorateur ni dialogue de dossier : ouvrirDansExplorateur et
-// choisirDossier lèvent NON_DISPONIBLE {primitive}. choisirFichierAImporter
-// passe par un champ de fichier, que le navigateur n'ouvre que dans le
-// prolongement d'un geste de l'opérateur, et qui ne dit du fichier choisi
-// que son nom : l'échec de sa lecture le nomme, dossier null.
-// enregistrerSous passe par un lien de téléchargement : le navigateur range
-// le fichier sans dire où ni si l'opérateur y renonce, et la primitive rend
-// le nom proposé.
+// Sous web, ni explorateur ni dialogue de dossier : ouvrirDansExplorateur,
+// le chemin admis, et choisirDossier lèvent NON_DISPONIBLE {primitive}.
+// choisirFichierAImporter passe par un champ de fichier, que le navigateur
+// n'ouvre que dans le prolongement d'un geste de l'opérateur, et qui ne dit
+// du fichier choisi que son nom : l'échec de sa lecture le nomme, dossier
+// null. enregistrerSous passe par un lien de téléchargement : le navigateur
+// range le fichier sans dire où ni si l'opérateur y renonce, et la
+// primitive rend le nom proposé.
 import { ErreurStockage } from './erreurs.js';
 import { exigerCheminRelatif, exigerDepuis, exigerOctets } from './systeme_fichiers.js';
 
@@ -78,6 +84,10 @@ const TEMOIN = '.gtt-temoin';
 // Cause d'une écriture qui vise un dossier — la racine elle-même, ou un
 // dossier là où un fichier est attendu —, celle que lève l'OPFS.
 const TYPE_DIFFERENT = 'TypeMismatchError';
+
+// L'exception de removeEntry, sans recursive, sur un dossier qui porte une
+// entrée.
+const DOSSIER_NON_VIDE = 'InvalidModificationError';
 
 // Cause d'une sonde dont le témoin relu diffère du texte écrit.
 const RELECTURE_DIFFERENTE = 'RELECTURE_DIFFERENTE';
@@ -229,6 +239,34 @@ async function retirer(dossier, nom) {
     await dossier.removeEntry(nom);
   } catch (erreur) {
     if (erreur?.name !== 'NotFoundError') throw erreur;
+  }
+}
+
+// Retire le dossier vide que désigne loc, sans jamais toucher à ce qu'il
+// porte : sa poignée se demande d'abord comme dossier — un fichier à sa
+// place lève ECRITURE TypeMismatchError, un nom résolu sur le dossier qui le
+// porte NOM_NON_CONVERTI —, puis le dossier qui le porte retire l'entrée
+// sans recursive. Un dossier absent, ou sous un parent absent, ne lève pas ;
+// un dossier qui porte une entrée lève NON_VIDE et reste. removeEntry retire
+// l'entrée du nom quel que soit son genre : un autre onglet qui mettrait un
+// fichier à la place du dossier entre les deux appels le verrait retiré, le
+// web n'ayant pas de verrou entre onglets. Un dossier qu'un autre onglet
+// retire entre les deux appels est absent, et ne lève pas.
+async function retirerDossierVide(loc) {
+  const parent = await dossierExistant(loc.parent);
+  if (parent === null) return;
+  try {
+    await sousDossier(parent, loc.nom);
+  } catch (erreur) {
+    if (erreur?.name === 'NotFoundError') return;
+    throw erreur;
+  }
+  try {
+    await parent.removeEntry(loc.nom);
+  } catch (erreur) {
+    if (erreur?.name === 'NotFoundError') return;
+    if (erreur?.name === DOSSIER_NON_VIDE) throw new ErreurStockage('NON_VIDE', { chemin: loc.chemin });
+    throw erreur;
   }
 }
 
@@ -458,6 +496,13 @@ export function creerFichiersWeb() {
       await ecrire(loc, () => dossierDe(loc.segments, true));
     },
 
+    // '', le dossier du produit lui-même, se refuse avant tout accès.
+    supprimerDossier: async (racine, chemin) => {
+      const loc = localiser(racine, chemin);
+      if (loc.nom === null) throw new ErreurStockage('CHEMIN_REFUSE', { chemin });
+      await ecrire(loc, () => retirerDossierVide(loc));
+    },
+
     // Un échec de la lecture de la source ou de son retrait nomme la source ;
     // un échec de la copie nomme la cible.
     deplacer: async (racine, de, vers) => {
@@ -500,8 +545,8 @@ export function creerFichiersWeb() {
       localiser(racine, chemin);
     },
 
-    ouvrirDansExplorateur: async (racine) => {
-      localiser(racine, '');
+    ouvrirDansExplorateur: async (racine, chemin = '') => {
+      localiser(racine, chemin);
       throw new ErreurStockage('NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' });
     },
 

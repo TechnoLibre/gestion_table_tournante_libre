@@ -82,10 +82,12 @@ function erreurSysteme(code, syscall, chemin) {
  * cible absolue. fs porte les fonctions de node:fs/promises dont la coquille
  * se sert et lève les erreurs du système dans les mêmes cas — ENOENT,
  * ENOTDIR, EISDIR, EEXIST, ELOOP. Un lien se suit partout, sauf en dernier
- * segment de lstat, unlink, rename, mkdir sans recursive et d'une ouverture
- * exclusive (wx). mkdir sans recursive crée un seul dossier, son parent
- * présent ; avec, tous ceux qui manquent. Les noms que rend readdir sortent
- * dans l'ordre inverse de leur création : un tri omis se voit.
+ * segment de lstat, unlink, rmdir, rename, mkdir sans recursive et d'une
+ * ouverture exclusive (wx). mkdir sans recursive crée un seul dossier, son
+ * parent présent ; avec, tous ceux qui manquent. rmdir ne prend aucune
+ * option et ne retire qu'un dossier vide : ENOTEMPTY sinon. Les noms que
+ * rend readdir sortent dans l'ordre inverse de leur création : un tri omis
+ * se voit.
  *
  *   appels   chaque appel, « fonction chemin [drapeaux | cible] », les
  *            écritures d'une poignée comprises (write, sync, close)
@@ -244,6 +246,17 @@ function creerDisque() {
       if (noeud.type === 'dossier') throw erreurSysteme('EISDIR', 'unlink', chemin);
       noeuds.delete(resolu);
     },
+    async rmdir(chemin, options) {
+      appel('rmdir', chemin);
+      assert.equal(options, undefined, 'rmdir aux options inconnues');
+      const { chemin: resolu, noeud } = resoudre(chemin, false, 'rmdir');
+      if (noeud === undefined) throw erreurSysteme('ENOENT', 'rmdir', chemin);
+      if (noeud.type !== 'dossier') throw erreurSysteme('ENOTDIR', 'rmdir', chemin);
+      if ([...noeuds.keys()].some((cle) => cle !== '/' && posix.dirname(cle) === resolu)) {
+        throw erreurSysteme('ENOTEMPTY', 'rmdir', chemin);
+      }
+      noeuds.delete(resolu);
+    },
     async mkdir(chemin, options) {
       appel('mkdir', chemin);
       if (options === undefined) {
@@ -332,8 +345,8 @@ function creerDisque() {
 }
 
 // Appels qui écrivent, dans l'ordre : ouvertures, écritures, vidages,
-// fermetures, renommages, effacements, créations de dossier.
-const ECRITURES = /^(open|write|sync|close|rename|unlink|mkdir) /;
+// fermetures, renommages, effacements, créations et retraits de dossier.
+const ECRITURES = /^(open|write|sync|close|rename|unlink|mkdir|rmdir) /;
 const ecritures = (disque) => disque.appels.filter((ligne) => ECRITURES.test(ligne));
 
 // ---------------------------------------------------------------------------
@@ -472,9 +485,11 @@ const APPELS_A_CHEMIN = [
   ['creerDossier', (fichiers, racine, chemin) => fichiers.creerDossier(racine, chemin)],
   ['deplacer, source', (fichiers, racine, chemin) => fichiers.deplacer(racine, chemin, 'libre.txt')],
   ['deplacer, cible', (fichiers, racine, chemin) => fichiers.deplacer(racine, 'ici.txt', chemin)],
+  ['supprimerDossier', (fichiers, racine, chemin) => fichiers.supprimerDossier(racine, chemin)],
   ['supprimer', (fichiers, racine, chemin) => fichiers.supprimer(racine, chemin)],
   ['verrouiller', (fichiers, racine, chemin) => fichiers.verrouiller(racine, chemin, 'seance-a', PRISE)],
   ['deverrouiller', (fichiers, racine, chemin) => fichiers.deverrouiller(racine, chemin, 'seance-a')],
+  ['ouvrirDansExplorateur', (fichiers, racine, chemin) => fichiers.ouvrirDansExplorateur(racine, chemin)],
 ];
 
 // ---------------------------------------------------------------------------
@@ -739,6 +754,7 @@ describe('coquille, fichiers : confinement aux racines', () => {
       await refuse(fichiers.sonder(racine), 'CHEMIN_REFUSE', { chemin: '' }, JSON.stringify(racine));
       await refuse(fichiers.typeSupport(racine), 'CHEMIN_REFUSE', { chemin: '' }, JSON.stringify(racine));
       await refuse(fichiers.ouvrirDansExplorateur(racine), 'CHEMIN_REFUSE', { chemin: '' }, JSON.stringify(racine));
+      await refuse(fichiers.supprimerDossier(racine, 'x'), 'CHEMIN_REFUSE', { chemin: 'x' }, JSON.stringify(racine));
     }
     assert.deepEqual(disque.appels, []);
   });
@@ -763,6 +779,8 @@ describe('coquille, fichiers : confinement aux racines', () => {
       }
     }
     await refuse(fichiers.lister(DOC, 'dehors'), 'CHEMIN_REFUSE', { chemin: 'dehors' });
+    await refuse(fichiers.supprimerDossier(DOC, 'dehors'), 'CHEMIN_REFUSE', { chemin: 'dehors' });
+    await refuse(fichiers.ouvrirDansExplorateur(DOC, 'dehors'), 'CHEMIN_REFUSE', { chemin: 'dehors' });
     // Par un lien de fichier, et par un lien sans cible, que l'ouverture en
     // ajout suivrait pour créer sa cible au-dehors.
     await refuse(fichiers.lireTexte(DOC, 'secret.txt'), 'CHEMIN_REFUSE', { chemin: 'secret.txt' });
@@ -959,6 +977,69 @@ describe('coquille, fichiers : lecture, liste, dossiers, déplacement, suppressi
     disque.panne('unlink', 'EBUSY');
     await refuse(fichiers.supprimer(DOC, 'tenu.txt'), 'ECRITURE', ecriture('tenu.txt', DOCUMENTS, 'EBUSY'));
   });
+
+  test("supprimerDossier retire un dossier vide par rmdir, sans option ; un absent, ou sous un parent absent ou fichier, n'est pas une faute", async () => {
+    const { disque, fichiers } = preparer();
+    disque.deposerDossier(`${DOCUMENTS}/Gala des Saules/logo`);
+    disque.deposer(`${DOCUMENTS}/note.txt`, 'x');
+    await fichiers.supprimerDossier(DOC, 'Gala des Saules/logo');
+    await fichiers.supprimerDossier(DOC, 'Gala des Saules');
+    await fichiers.supprimerDossier(DOC, 'Gala des Saules');
+    await fichiers.supprimerDossier(DOC, 'absent/sous');
+    await fichiers.supprimerDossier(DOC, 'note.txt/sous');
+    assert.deepEqual(ecritures(disque), [
+      `rmdir ${DOCUMENTS}/Gala des Saules/logo`,
+      `rmdir ${DOCUMENTS}/Gala des Saules`,
+    ]);
+    assert.deepEqual(disque.noms(DOCUMENTS), ['note.txt']);
+  });
+
+  test("supprimerDossier refuse '' sans toucher au disque, et lève ECRITURE ENOTDIR pour un fichier ou un lien, sans rien retirer", async () => {
+    const { disque, fichiers } = preparer();
+    disque.deposer(`${DOCUMENTS}/note.txt`, 'x');
+    disque.deposerDossier(`${DOCUMENTS}/vrai`);
+    disque.deposerLien(`${DOCUMENTS}/alias`, `${DOCUMENTS}/vrai`);
+    await refuse(fichiers.supprimerDossier(DOC, ''), 'CHEMIN_REFUSE', { chemin: '' });
+    await refuse(fichiers.supprimerDossier(PORTABLE, ''), 'CHEMIN_REFUSE', { chemin: '' });
+    assert.deepEqual(disque.appels, []);
+    await refuse(fichiers.supprimerDossier(DOC, 'note.txt'), 'ECRITURE', ecriture('note.txt', DOCUMENTS, 'ENOTDIR'));
+    await refuse(fichiers.supprimerDossier(DOC, 'alias'), 'ECRITURE', ecriture('alias', DOCUMENTS, 'ENOTDIR'));
+    assert.deepEqual(ecritures(disque), []);
+    assert.deepEqual(disque.noms(DOCUMENTS), ['alias', 'note.txt', 'vrai']);
+  });
+
+  test("supprimerDossier d'un dossier non vide lève NON_VIDE {chemin} après les réessais de rmdir, et le dossier garde tout", async () => {
+    const { disque, fichiers, pauses } = preparer();
+    disque.deposer(`${DOCUMENTS}/Gala des Saules/etat.json`, '\u{E9}tat');
+    disque.deposerDossier(`${DOCUMENTS}/Gala des Saules/logo`);
+    await refuse(fichiers.supprimerDossier(DOC, 'Gala des Saules'), 'NON_VIDE', { chemin: 'Gala des Saules' });
+    assert.deepEqual(pauses, [50, 100, 200, 400, 500, 500, 500, 500, 500, 500]);
+    assert.deepEqual(ecritures(disque), Array(REESSAIS_PASSAGERS + 1).fill(`rmdir ${DOCUMENTS}/Gala des Saules`));
+    assert.deepEqual(disque.noms(`${DOCUMENTS}/Gala des Saules`), ['etat.json', 'logo']);
+    assert.equal(disque.contenu(`${DOCUMENTS}/Gala des Saules/etat.json`), '\u{E9}tat');
+  });
+
+  test("supprimerDossier : ENOTEMPTY passager, celui d'un fichier effacé que le système tient encore, se réessaie ; EEXIST, que POSIX admet pour un dossier non vide, lève NON_VIDE", async () => {
+    const { disque, fichiers, pauses } = preparer();
+    disque.deposerDossier(`${DOCUMENTS}/ancien`);
+    disque.deposerDossier(`${DOCUMENTS}/autre`);
+    disque.panne('rmdir', 'ENOTEMPTY', { fois: 2, chemin: `${DOCUMENTS}/ancien` });
+    await fichiers.supprimerDossier(DOC, 'ancien');
+    assert.deepEqual(pauses, [50, 100]);
+    assert.equal(disque.existe(`${DOCUMENTS}/ancien`), false);
+    disque.panne('rmdir', 'EEXIST', { chemin: `${DOCUMENTS}/autre` });
+    await refuse(fichiers.supprimerDossier(DOC, 'autre'), 'NON_VIDE', { chemin: 'autre' });
+    assert.equal(disque.existe(`${DOCUMENTS}/autre`), true);
+  });
+
+  test('supprimerDossier : EEXIST passager se réessaie comme ENOTEMPTY, et le dossier se retire', async () => {
+    const { disque, fichiers, pauses } = preparer();
+    disque.deposerDossier(`${DOCUMENTS}/autre`);
+    disque.panne('rmdir', 'EEXIST', { fois: 1, chemin: `${DOCUMENTS}/autre` });
+    await fichiers.supprimerDossier(DOC, 'autre');
+    assert.deepEqual(pauses, [50]);
+    assert.equal(disque.existe(`${DOCUMENTS}/autre`), false);
+  });
 });
 
 describe('coquille, fichiers : réessais sur une cause passagère (§ 8.8)', () => {
@@ -1007,6 +1088,16 @@ describe('coquille, fichiers : réessais sur une cause passagère (§ 8.8)', () 
       reussi: (disque) => assert.equal(disque.existe(`${DOCUMENTS}/ancienne.gtt.json`), false),
       intact: (disque) => assert.equal(disque.contenu(`${DOCUMENTS}/ancienne.gtt.json`), 'x'),
       refus: ecriture('ancienne.gtt.json', DOCUMENTS, null),
+    },
+    {
+      primitive: 'supprimerDossier',
+      fonction: 'rmdir',
+      chemin: `${DOCUMENTS}/Ancien gala`,
+      poser: (disque) => disque.deposerDossier(`${DOCUMENTS}/Ancien gala`),
+      appeler: (fichiers) => fichiers.supprimerDossier(DOC, 'Ancien gala'),
+      reussi: (disque) => assert.equal(disque.existe(`${DOCUMENTS}/Ancien gala`), false),
+      intact: (disque) => assert.equal(disque.existe(`${DOCUMENTS}/Ancien gala`), true),
+      refus: ecriture('Ancien gala', DOCUMENTS, null),
     },
   ];
   const essais = (disque, { fonction, chemin }) =>
@@ -1082,6 +1173,49 @@ describe('coquille, fichiers : réessais sur une cause passagère (§ 8.8)', () 
     assert.equal(disque.existe(CIBLE), false);
     assert.deepEqual(pauses, [50]);
     assert.equal(disque.appels.filter((ligne) => ligne.startsWith(`unlink ${CIBLE}`)).length, 2);
+  });
+
+  test("supprimerDossier : un dossier qui disparaît pendant les réessais est retiré, sans faute", async () => {
+    const CIBLE = `${DOCUMENTS}/Ancien gala`;
+    const disque = creerDisque();
+    let premier = true;
+    const fs = {
+      ...disque.fs,
+      async rmdir(chemin) {
+        await disque.fs.rmdir(chemin);
+        if (premier && chemin === CIBLE) {
+          premier = false;
+          throw erreurSysteme('EBUSY', 'rmdir', chemin);
+        }
+      },
+    };
+    const { fichiers, pauses } = preparer({ disque, fs });
+    disque.deposerDossier(CIBLE);
+    await fichiers.supprimerDossier(DOC, 'Ancien gala');
+    assert.equal(disque.existe(CIBLE), false);
+    assert.deepEqual(pauses, [50]);
+    assert.equal(disque.appels.filter((ligne) => ligne.startsWith(`rmdir ${CIBLE}`)).length, 2);
+  });
+  test('supprimerDossier : un fichier venu à la place du dossier pendant les réessais lève ECRITURE ENOTDIR, sans rien retirer', async () => {
+    const CIBLE = `${DOCUMENTS}/Ancien gala`;
+    const disque = creerDisque();
+    let premier = true;
+    const fs = {
+      ...disque.fs,
+      async rmdir(chemin) {
+        if (premier && chemin === CIBLE) {
+          premier = false;
+          throw erreurSysteme('EBUSY', 'rmdir', chemin);
+        }
+        if (chemin === CIBLE) throw erreurSysteme('ENOTDIR', 'rmdir', chemin);
+        return disque.fs.rmdir(chemin);
+      },
+    };
+    const { fichiers, pauses } = preparer({ disque, fs });
+    disque.deposerDossier(CIBLE);
+    await refuse(fichiers.supprimerDossier(DOC, 'Ancien gala'), 'ECRITURE', ecriture('Ancien gala', DOCUMENTS, 'ENOTDIR'));
+    assert.deepEqual(pauses, [50]);
+    assert.equal(disque.existe(CIBLE), true);
   });
 });
 
@@ -1613,6 +1747,18 @@ describe('coquille, fichiers : dialogues et explorateur', () => {
     const { fichiers: sansExplorateur } = preparer({ ouvrir: async () => 'Failed to open path' });
     await refuse(sansExplorateur.ouvrirDansExplorateur(DOC), 'NON_DISPONIBLE', { cause: 'Failed to open path' });
   });
+
+  test("ouvrirDansExplorateur ouvre un dossier de la racine ; un dossier absent ou un fichier lève ABSENT {chemin} sans rien ouvrir", async () => {
+    const { disque, fichiers, ouvertures } = preparer();
+    disque.deposerDossier(`${DOCUMENTS}/Gala des Saules/logo`);
+    disque.deposer(`${DOCUMENTS}/note.txt`, 'x');
+    await fichiers.ouvrirDansExplorateur(DOC, 'Gala des Saules/logo');
+    await fichiers.ouvrirDansExplorateur(DOC, '');
+    assert.deepEqual(ouvertures, [`${DOCUMENTS}/Gala des Saules/logo`, DOCUMENTS]);
+    await refuse(fichiers.ouvrirDansExplorateur(DOC, 'Absent'), 'ABSENT', { chemin: 'Absent' });
+    await refuse(fichiers.ouvrirDansExplorateur(DOC, 'note.txt'), 'ABSENT', { chemin: 'note.txt' });
+    assert.equal(ouvertures.length, 2);
+  });
 });
 
 describe('coquille, fichiers : emplacements et racines du système (§ 8.6)', () => {
@@ -1718,7 +1864,8 @@ describe('coquille, fichiers : le service IPC', () => {
       canaux.push(canal);
     });
     assert.deepEqual(canaux, PRIMITIVES.map((primitive) => `gtt:fichiers:${primitive}`));
-    assert.equal(PRIMITIVES.length, 18);
+    assert.equal(PRIMITIVES.length, 19);
+    assert.equal(PRIMITIVES.indexOf('supprimerDossier'), PRIMITIVES.indexOf('creerDossier') + 1);
     assert.equal(PRIMITIVES.indexOf('ecrireOctetsAtomique'), PRIMITIVES.indexOf('ecrireAtomique') + 1);
     assert.ok(Object.isFrozen(PRIMITIVES));
   });
@@ -1839,7 +1986,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
     return { pont, appels };
   }
 
-  test('nature electron, renommage atomique et verrou ; les dix-huit primitives, dans l\u{2019}ordre de la coquille', () => {
+  test('nature electron, renommage atomique et verrou ; les dix-neuf primitives, dans l\u{2019}ordre de la coquille', () => {
     const fs = creerFichiersElectron(pontFactice([]).pont);
     assert.deepEqual(
       { nature: fs.nature, renommageAtomique: fs.renommageAtomique, verrouDisponible: fs.verrouDisponible },
@@ -1865,11 +2012,12 @@ describe('page : src/stockage/fichiers_electron.js', () => {
       ['ajouterLigne', [DOC, 'a.jsonl', 'ligne']],
       ['lister', [DOC, '']],
       ['creerDossier', [DOC, 'corbeille']],
+      ['supprimerDossier', [DOC, 'Ancien gala']],
       ['deplacer', [DOC, 'a.txt', 'b.txt']],
       ['supprimer', [DOC, 'a.txt']],
       ['verrouiller', [DOC, 'a.gtt.verrou', 'seance-a', PRISE]],
       ['deverrouiller', [DOC, 'a.gtt.verrou', 'seance-a']],
-      ['ouvrirDansExplorateur', [DOC]],
+      ['ouvrirDansExplorateur', [DOC, 'Gala des Saules']],
       ['choisirFichierAImporter', []],
       ['enregistrerSous', ['liste.csv', octets]],
     ];
@@ -1879,6 +2027,12 @@ describe('page : src/stockage/fichiers_electron.js', () => {
       assert.equal(await fs[primitive](...parametres, 'argument en trop'), rang, primitive);
     }
     assert.deepEqual(recus, appels.map(([primitive, parametres]) => [primitive, ...parametres]));
+  });
+
+  test("ouvrirDansExplorateur sans chemin passe '' au pont : la racine elle-même", async () => {
+    const { pont, appels } = pontFactice([{ ok: true, valeur: undefined }]);
+    await creerFichiersElectron(pont).ouvrirDansExplorateur(DOC);
+    assert.deepEqual(appels, [['ouvrirDansExplorateur', DOC, '']]);
   });
 
   test("verrouiller refuse, avant le pont, un instant de prise qui n'a pas la forme d'un horodatage : TypeError", async () => {
@@ -1943,12 +2097,15 @@ describe('page : src/stockage/fichiers_electron.js', () => {
     const faute = await rejette(fs.ecrireAtomique(DOC, 'soiree.gtt.json', 42));
     assert.ok(!(faute instanceof ErreurStockage), String(faute));
     assert.match(faute.message, /gtt:fichiers:ecrireAtomique/);
+    const plein = await rejette(fs.supprimerDossier(DOC, ''));
+    assert.deepEqual([plein.code, plein.details], ['CHEMIN_REFUSE', { chemin: '' }]);
     assert.deepEqual(invoques, [
       'gtt:fichiers:ecrireOctetsAtomique',
       'gtt:fichiers:ecrireAtomique',
       'gtt:fichiers:lireTexte',
       'gtt:fichiers:deplacer',
       'gtt:fichiers:ecrireAtomique',
+      'gtt:fichiers:supprimerDossier',
     ]);
   });
 });

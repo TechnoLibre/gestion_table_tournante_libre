@@ -455,8 +455,12 @@
  *                                                    octets, leur copie
  *   EXISTE               {chemin}                    déplacer vers une cible
  *                                                    existante
+ *   NON_VIDE             {chemin}                    retirer un dossier qui
+ *                                                    porte encore une entrée ;
+ *                                                    il reste, et son contenu
  *   CHEMIN_REFUSE        {chemin}                    chemin absolu, .., racine
- *                                                    inconnue
+ *                                                    inconnue, et '' pour
+ *                                                    supprimerDossier
  *   ETAT_ILLISIBLE       DetailsIllisible            un fichier d'état qui ne
  *                                                    se lit pas
  *   CORRECTIF            {rang}                      un correctif qui ne

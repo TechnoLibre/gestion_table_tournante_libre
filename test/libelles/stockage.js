@@ -14,6 +14,7 @@ export const EXEMPLES = [
   ['ECRITURE', { chemin: 'Soirée des Lucioles.gtt.json', dossier: 'E:\\data', cause: 'EROFS' }],
   ['LECTURE', { chemin: 'Soirée des Lucioles.gtt.json', dossier: 'E:\\data', cause: 'EACCES' }],
   ['EXISTE', { chemin: 'Soirée des Lucioles.gtt.json' }],
+  ['NON_VIDE', { chemin: 'Soirée des Lucioles' }],
   ['CHEMIN_REFUSE', { chemin: '../ailleurs.gtt.json' }],
   ['ETAT_ILLISIBLE', { base: 'Soirée des Lucioles', raison: 'JSON', chemin: null, secours: { precedent: 4, journal: 5 } }],
   ['CORRECTIF', { rang: 2 }],
@@ -80,6 +81,11 @@ export const EXEMPLES = [
 ];
 
 export const TEXTES = [
+  [
+    'NON_VIDE',
+    { chemin: 'Soirée des Lucioles' },
+    "Le dossier « Soirée des Lucioles » n'est pas vide : il reste en place, avec tout ce qu'il contient.",
+  ],
   ['PRESENCE_RETIREE', { participant: 6, personne: 'Capucine Ellébore', tours: [3, 4] }, 'Capucine Ellébore est absente aux tours 3 et 4 depuis.'],
   ['PRESENCE_RETIREE', { participant: 6, tours: [2, 3, 4] }, 'La personne n° 6 est absente aux tours 2 à 4 depuis.'],
   ['PRESENCE_AJOUTEE', { participant: 7, personne: 'Dahlia Bourrache', tours: [1] }, 'Dahlia Bourrache est présente au tour 1 depuis.'],

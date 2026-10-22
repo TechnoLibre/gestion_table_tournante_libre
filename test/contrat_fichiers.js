@@ -37,6 +37,7 @@ const PRIMITIVES = [
   'ajouterLigne',
   'lister',
   'creerDossier',
+  'supprimerDossier',
   'deplacer',
   'supprimer',
   'verrouiller',
@@ -84,9 +85,11 @@ const APPELS_A_CHEMIN = [
   ['creerDossier', (fs, racine, chemin) => fs.creerDossier(racine, chemin)],
   ['deplacer, source', (fs, racine, chemin) => fs.deplacer(racine, chemin, 'ailleurs.txt')],
   ['deplacer, cible', (fs, racine, chemin) => fs.deplacer(racine, 'ici.txt', chemin)],
+  ['supprimerDossier', (fs, racine, chemin) => fs.supprimerDossier(racine, chemin)],
   ['supprimer', (fs, racine, chemin) => fs.supprimer(racine, chemin)],
   ['verrouiller', (fs, racine, chemin) => fs.verrouiller(racine, chemin, 'seance-a', DEPUIS)],
   ['deverrouiller', (fs, racine, chemin) => fs.deverrouiller(racine, chemin, 'seance-a')],
+  ['ouvrirDansExplorateur', (fs, racine, chemin) => fs.ouvrirDansExplorateur(racine, chemin)],
 ];
 
 // Vrai pour la description d'une racine : un identifiant et un chemin
@@ -133,7 +136,7 @@ export function eprouverContrat(nom, fabrique, { describe, test, egal, vrai, rej
   }
 
   describe(`contrat du système de fichiers : ${nom}`, () => {
-    test("l'interface porte sa nature, ses deux garanties et ses dix-huit primitives, et décrit ses emplacements et ses racines", async () => {
+    test("l'interface porte sa nature, ses deux garanties et ses dix-neuf primitives, et décrit ses emplacements et ses racines", async () => {
       const { fs, racine } = await fabrique();
       vrai(['electron', 'web', 'epreuve'].includes(fs.nature), `nature ${fs.nature}`);
       egal(typeof fs.renommageAtomique, 'boolean', 'renommageAtomique');
@@ -264,6 +267,44 @@ export function eprouverContrat(nom, fabrique, { describe, test, egal, vrai, rej
       egal(await fs.lister(racine, 'corbeille/2026-01-02_03-04-05'), []);
       await fs.creerDossier(racine, 'corbeille');
       egal(noms(await fs.lister(racine, 'corbeille')), ['2026-01-02_03-04-05']);
+    });
+
+    test("supprimerDossier retire un dossier vide, puis son parent devenu vide ; un dossier absent, ou sous un parent absent, n'est pas une faute", async () => {
+      const { fs, racine } = await fabrique();
+      await fs.creerDossier(racine, 'Gala des Saules/logo');
+      await fs.ecrireAtomique(racine, 'garde.txt', 'garde');
+      await fs.supprimerDossier(racine, 'Gala des Saules/logo');
+      egal(await fs.lister(racine, 'Gala des Saules'), []);
+      await fs.supprimerDossier(racine, 'Gala des Saules');
+      egal(noms(await fs.lister(racine, '')), ['garde.txt']);
+      await fs.supprimerDossier(racine, 'Gala des Saules');
+      await fs.supprimerDossier(racine, 'absent/sous');
+      egal(noms(await fs.lister(racine, '')), ['garde.txt']);
+      egal(await fs.lireTexte(racine, 'garde.txt'), 'garde');
+    });
+
+    test("supprimerDossier refuse un dossier non vide, fût-ce d'un seul sous-dossier vide : NON_VIDE {chemin}, et rien de ce qu'il porte ne part", async () => {
+      const { fs, racine } = await fabrique();
+      await fs.creerDossier(racine, 'Gala des Saules/logo');
+      await fs.ecrireAtomique(racine, 'Gala des Saules/etat.json', '\u{E9}tat');
+      await echoue(fs.supprimerDossier(racine, 'Gala des Saules'), 'NON_VIDE', { chemin: 'Gala des Saules' });
+      egal(noms(await fs.lister(racine, 'Gala des Saules')), ['etat.json', 'logo']);
+      egal(await fs.lireTexte(racine, 'Gala des Saules/etat.json'), '\u{E9}tat');
+      await fs.supprimer(racine, 'Gala des Saules/etat.json');
+      await echoue(fs.supprimerDossier(racine, 'Gala des Saules'), 'NON_VIDE', { chemin: 'Gala des Saules' });
+      egal(noms(await fs.lister(racine, 'Gala des Saules')), ['logo']);
+      egal(await fs.lister(racine, 'Gala des Saules/logo'), []);
+    });
+
+    test("supprimerDossier ne retire jamais la racine : '' lève CHEMIN_REFUSE {chemin: ''}, vide ou non, et un fichier à la place d'un dossier lève ECRITURE et reste", async () => {
+      const { fs, racine } = await fabrique();
+      await echoue(fs.supprimerDossier(racine, ''), 'CHEMIN_REFUSE', { chemin: '' });
+      egal(await fs.lister(racine, ''), []);
+      await fs.ecrireAtomique(racine, 'note.txt', 'note');
+      await echoue(fs.supprimerDossier(racine, ''), 'CHEMIN_REFUSE', { chemin: '' });
+      await refuseEcriture(fs.supprimerDossier(racine, 'note.txt'), 'note.txt');
+      egal(noms(await fs.lister(racine, '')), ['note.txt']);
+      egal(await fs.lireTexte(racine, 'note.txt'), 'note');
     });
 
     test("deplacer porte le fichier sous son nouveau chemin et retire l'ancien", async () => {

@@ -1,7 +1,7 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le système de fichiers de la coquille (§ 8.6, § 8.8, § 13.1) : les dix-huit
+// Le système de fichiers de la coquille (§ 8.6, § 8.8, § 13.1) : les dix-neuf
 // primitives de l'interface de src/stockage/systeme_fichiers.js, exécutées
 // sous Node par le processus principal, et le service qui les offre à la
 // page, un canal IPC par primitive, gtt:fichiers:<primitive>.
@@ -35,7 +35,7 @@
 // {cause}, l'explorateur du système qui ne s'ouvre pas.
 import { execFile } from 'node:child_process';
 import { readFileSync, realpath as realpathRappel, unlinkSync } from 'node:fs';
-import { lstat, mkdir, open, readdir, readFile, rename, stat, unlink } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, readFile, rename, rmdir, stat, unlink } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -53,6 +53,7 @@ export const PRIMITIVES = Object.freeze([
   'ajouterLigne',
   'lister',
   'creerDossier',
+  'supprimerDossier',
   'deplacer',
   'supprimer',
   'verrouiller',
@@ -80,14 +81,21 @@ const TEXTE_TEMOIN = 'T\u{E9}moin d\u{2019}\u{E9}criture de Gestion table tourna
  * refuser sous Windows, tant qu'il tient le fichier ouvert (EPERM, EBUSY,
  * EACCES), se réessaie, après son premier essai, REESSAIS_PASSAGERS fois :
  * le renommage de l'écriture atomique, l'ouverture en ajout d'ajouterLigne,
- * le renommage de deplacer, l'effacement de supprimer. La pause entre deux
- * essais part de PAUSE_INITIALE_MS et double jusqu'à PAUSE_MAX_MS : 3,75 s
- * d'attente au plus avant de renoncer.
+ * le renommage de deplacer, l'effacement de supprimer, le retrait de
+ * supprimerDossier. La pause entre deux essais part de PAUSE_INITIALE_MS et
+ * double jusqu'à PAUSE_MAX_MS : 3,75 s d'attente au plus avant de renoncer.
  */
 export const REESSAIS_PASSAGERS = 10;
 export const PAUSE_INITIALE_MS = 50;
 export const PAUSE_MAX_MS = 500;
 const CAUSES_PASSAGERES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+// Causes d'un rmdir sur un dossier qui porte encore une entrée : ENOTEMPTY,
+// ou EEXIST que POSIX admet aussi. Sous Windows, un fichier effacé que le
+// système tient encore ouvert reste dans son dossier jusqu'à sa fermeture :
+// pour le seul retrait d'un dossier, ces causes sont donc passagères aussi.
+const CAUSES_NON_VIDE = new Set(['ENOTEMPTY', 'EEXIST']);
+const CAUSES_PASSAGERES_DOSSIER = new Set([...CAUSES_PASSAGERES, ...CAUSES_NON_VIDE]);
 
 /** La commande qui lit le type d'un lecteur sous Windows est bornée à 5 s. */
 export const DELAI_SUPPORT_MS = 5000;
@@ -217,6 +225,7 @@ const FS_NODE = Object.freeze({
   open,
   rename,
   unlink,
+  rmdir,
   mkdir,
   readdir,
   readFileSync,
@@ -316,8 +325,8 @@ export function processusVivant(pid, signaler = (cible) => process.kill(cible, 0
  * @param {() => Object|null} [reglages.fenetre]  la fenêtre parente des dialogues
  * Le reste remplace le système, pour l'épreuve :
  * @param {Object} [reglages.fs]  lstat, stat, realpath, readFile, open,
- *        rename, unlink, mkdir, readdir, comme ceux de node:fs/promises, et
- *        readFileSync, unlinkSync, comme ceux de node:fs
+ *        rename, unlink, rmdir, mkdir, readdir, comme ceux de
+ *        node:fs/promises, et readFileSync, unlinkSync, comme ceux de node:fs
  * @param {Object} [reglages.chemins]  node:path, ou l'une de ses variantes
  * @param {string} [reglages.plateforme]  process.platform
  * @param {Function} [reglages.lancer]  (commande, arguments, {variables,
@@ -425,6 +434,17 @@ export function creerFichiers({
     }
   }
 
+  // Retire un dossier vide par rmdir, sans option : le système refuse un
+  // dossier qui porte une entrée. Un dossier disparu n'est pas une faute ;
+  // un fichier venu à sa place lève ENOTDIR.
+  async function retirerDossierVide(absolu) {
+    try {
+      await fs.rmdir(absolu);
+    } catch (erreur) {
+      if (erreur?.code !== 'ENOENT') throw erreur;
+    }
+  }
+
   // Écrit dans une poignée ouverte, la vide sur le disque et la ferme ; un
   // échec la ferme aussi, puis se lève.
   async function ecrireDans(poignee, donnees) {
@@ -479,17 +499,17 @@ export function creerFichiers({
     }
   }
 
-  // Rend ce que rend l'opération, et la réessaie sur une cause passagère,
-  // après une pause qui double ; une autre cause, ou la dernière erreur des
-  // réessais, se lève. L'opération ne doit rien laisser derrière un échec :
-  // elle se rejoue entière.
-  async function reessayer(operation) {
+  // Rend ce que rend l'opération, et la réessaie sur l'une des causes
+  // passagères, après une pause qui double ; une autre cause, ou la dernière
+  // erreur des réessais, se lève. L'opération ne doit rien laisser derrière
+  // un échec : elle se rejoue entière.
+  async function reessayer(operation, passageres = CAUSES_PASSAGERES) {
     let attente = PAUSE_INITIALE_MS;
     for (let essai = 0; ; essai += 1) {
       try {
         return await operation();
       } catch (erreur) {
-        if (essai === REESSAIS_PASSAGERS || !CAUSES_PASSAGERES.has(erreur?.code)) throw erreur;
+        if (essai === REESSAIS_PASSAGERS || !passageres.has(erreur?.code)) throw erreur;
       }
       await attendre(attente);
       attente = Math.min(2 * attente, PAUSE_MAX_MS);
@@ -793,6 +813,28 @@ export function creerFichiers({
       }
     },
 
+    // Un dossier vide, jamais la racine : '' se refuse avant tout accès. Un
+    // dossier absent, ou sous un parent absent, n'est pas une faute ; un
+    // fichier ou un lien à sa place lève ECRITURE ENOTDIR, sans rien
+    // retirer. Le retrait se réessaie, ENOTEMPTY et EEXIST compris, puis un
+    // dossier qui porte encore une entrée lève NON_VIDE et reste tel.
+    async supprimerDossier(racine, chemin) {
+      const loc = localiser(racine, chemin);
+      if (loc.segments.length === 0) throw new RefusFichier('CHEMIN_REFUSE', { chemin });
+      try {
+        await confiner(loc);
+        const etat = await etatDe(loc.absolu);
+        if (etat === null) return;
+        if (!etat.isDirectory()) throw refus(loc, 'ENOTDIR');
+        await reessayer(() => retirerDossierVide(loc.absolu), CAUSES_PASSAGERES_DOSSIER);
+      } catch (erreur) {
+        if (estErreurSysteme(erreur) && CAUSES_NON_VIDE.has(erreur.code)) {
+          throw new RefusFichier('NON_VIDE', { chemin });
+        }
+        throw echecEcriture(loc, erreur);
+      }
+    },
+
     // Un fichier. rename écrase une cible existante sous
     // POSIX : sa présence se contrôle d'abord, comme le système compare les
     // noms, si bien que sans égard à la casse une autre casse du même nom
@@ -924,17 +966,19 @@ export function creerFichiers({
       tenus.clear();
     },
 
-    // shell.openPath rend '' quand l'explorateur s'ouvre, et sinon la raison
-    // de l'échec.
-    async ouvrirDansExplorateur(racine) {
-      const loc = localiser(racine, '');
+    // La racine, ou l'un de ses dossiers, confiné comme toute cible ; un
+    // absent, ou un fichier, lève ABSENT. shell.openPath rend '' quand
+    // l'explorateur s'ouvre, et sinon la raison de l'échec.
+    async ouvrirDansExplorateur(racine, chemin = '') {
+      const loc = localiser(racine, chemin);
       let etat;
       try {
+        await confiner(loc);
         etat = await etatSuivi(loc.absolu);
       } catch (erreur) {
         throw echecLecture(loc, erreur);
       }
-      if (!etat?.isDirectory()) throw new RefusFichier('ABSENT', { chemin: '' });
+      if (!etat?.isDirectory()) throw new RefusFichier('ABSENT', { chemin });
       const raison = await shell.openPath(loc.absolu);
       if (raison !== '') throw new RefusFichier('NON_DISPONIBLE', { cause: raison });
     },

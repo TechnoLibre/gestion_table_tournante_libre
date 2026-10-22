@@ -55,6 +55,7 @@ export function creerFichiersElectron(pont = window.gtt.fichiers) {
     ajouterLigne: (racine, chemin, ligne) => appeler('ajouterLigne', racine, chemin, ligne),
     lister: (racine, dossier) => appeler('lister', racine, dossier),
     creerDossier: (racine, chemin) => appeler('creerDossier', racine, chemin),
+    supprimerDossier: (racine, chemin) => appeler('supprimerDossier', racine, chemin),
     deplacer: (racine, de, vers) => appeler('deplacer', racine, de, vers),
     supprimer: (racine, chemin) => appeler('supprimer', racine, chemin),
     // La forme de l'instant de prise se juge ici, avant le pont : le
@@ -65,7 +66,8 @@ export function creerFichiersElectron(pont = window.gtt.fichiers) {
       return appeler('verrouiller', racine, chemin, seance, depuis);
     },
     deverrouiller: (racine, chemin, seance) => appeler('deverrouiller', racine, chemin, seance),
-    ouvrirDansExplorateur: (racine) => appeler('ouvrirDansExplorateur', racine),
+    // Sans chemin, la racine elle-même : '' traverse le pont tel quel.
+    ouvrirDansExplorateur: (racine, chemin = '') => appeler('ouvrirDansExplorateur', racine, chemin),
     choisirFichierAImporter: () => appeler('choisirFichierAImporter'),
     enregistrerSous: (nomPropose, octets) => appeler('enregistrerSous', nomPropose, octets),
   };

@@ -231,7 +231,7 @@ async function rouvrir(disque, base) {
 // de dossier : [primitive, chemin], ou [primitive, de, vers] pour deplacer.
 function tracer(fs) {
   const trace = [];
-  for (const nom of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'deplacer', 'supprimer']) {
+  for (const nom of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'supprimerDossier', 'deplacer', 'supprimer']) {
     const primitive = fs[nom];
     fs[nom] = (racine, ...reste) => {
       trace.push([nom, ...reste.slice(0, nom === 'deplacer' ? 2 : 1)]);
@@ -251,7 +251,7 @@ function effacerDocumentsAvant(disque, fs, n) {
   const temoin = { efface: false };
   const nom = DOCUMENTS.slice(DOCUMENTS.lastIndexOf('\\') + 1);
   let rang = 0;
-  for (const primitive of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'deplacer', 'supprimer']) {
+  for (const primitive of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'supprimerDossier', 'deplacer', 'supprimer']) {
     const appeler = fs[primitive];
     fs[primitive] = (...parametres) => {
       if (rang === n) {
@@ -1078,7 +1078,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     const avant = await arbre(disque, portable, PORTABLE);
 
     const racines = [];
-    for (const nom of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'deplacer', 'supprimer']) {
+    for (const nom of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'supprimerDossier', 'deplacer', 'supprimer']) {
       const primitive = fs[nom];
       fs[nom] = (racine, ...reste) => {
         racines.push(racine.id);

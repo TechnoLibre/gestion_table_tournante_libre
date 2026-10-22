@@ -258,7 +258,7 @@ async function rouvrir(disque, base) {
 // ou de dossier : [primitive, chemin].
 function tracer(fs) {
   const trace = [];
-  for (const nom of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'deplacer', 'supprimer']) {
+  for (const nom of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'supprimerDossier', 'deplacer', 'supprimer']) {
     const primitive = fs[nom];
     fs[nom] = (racine, chemin, ...reste) => {
       trace.push([nom, chemin]);

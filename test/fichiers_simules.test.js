@@ -212,6 +212,20 @@ describe('fichiers simulés : racines et emplacements', () => {
     await echoue(fs.ouvrirDansExplorateur(PORTABLE), 'CHEMIN_REFUSE', { chemin: '' });
   });
 
+  test("ouvrirDansExplorateur ouvre la racine ou l'un de ses dossiers ; un dossier absent, ou un fichier, lève ABSENT {chemin}, comme dans la coquille", async () => {
+    const fs = preparer();
+    fs.deposerDossier('documents', 'Gala des Saules/logo');
+    fs.deposer('documents', 'note.txt', 'note');
+    assert.equal(await fs.ouvrirDansExplorateur(DOC, ''), undefined);
+    assert.equal(await fs.ouvrirDansExplorateur(DOC, 'Gala des Saules/logo'), undefined);
+    await echoue(fs.ouvrirDansExplorateur(DOC, 'Absent'), 'ABSENT', { chemin: 'Absent' });
+    await echoue(fs.ouvrirDansExplorateur(DOC, 'note.txt'), 'ABSENT', { chemin: 'note.txt' });
+    await echoue(fs.ouvrirDansExplorateur(DOC, '../x'), 'CHEMIN_REFUSE', { chemin: '../x' });
+    const sansRacine = creerFichiersSimules({ executable: 'E:\\soirees' });
+    await echoue(sansRacine.ouvrirDansExplorateur(PORTABLE), 'ABSENT', { chemin: '' });
+    assert.deepEqual(fs.compteurs, { ecritures: 0, lectures: 0 });
+  });
+
   test("dossiersChoisis : choisirDossier rend chacun dans l'ordre, choisi-<n>, puis null ; la racine rendue s'inscrit, et n'existe qu'une fois créée", async () => {
     const SECOURS = 'D:\\Secours';
     const fs = creerFichiersSimules({ dossiersChoisis: [SECOURS, 'F:\\Repli'] });
@@ -356,12 +370,57 @@ describe('fichiers simulés : renommage refusé (§ 8.8, § 14.10)', () => {
   });
 });
 
+describe('fichiers simulés : dossier non retiré', () => {
+  test("par défaut, un dossier vide reste et lève NON_VIDE {chemin}, comme un fichier en attente de suppression que le système tient encore", async () => {
+    const fs = preparer();
+    fs.deposerDossier('documents', 'Gala des Saules');
+    fs.pannes.dossierNonRetire('documents');
+    await echoue(fs.supprimerDossier(DOC, 'Gala des Saules'), 'NON_VIDE', { chemin: 'Gala des Saules' });
+    assert.deepEqual(noms(await fs.lister(DOC, '')), ['Gala des Saules']);
+    assert.deepEqual(await fs.lister(DOC, 'Gala des Saules'), []);
+  });
+
+  test("le retrait se réessaie comme le renommage : dix refus et il passe, onze et il échoue ; une autre cause lève ECRITURE avec elle", async () => {
+    const fs = preparer();
+    fs.deposerDossier('documents', 'premier');
+    fs.deposerDossier('documents', 'second');
+    fs.deposerDossier('documents', 'tenu');
+    fs.pannes.dossierNonRetire('documents', 10);
+    await fs.supprimerDossier(DOC, 'premier');
+    fs.pannes.dossierNonRetire('documents', 11);
+    await echoue(fs.supprimerDossier(DOC, 'second'), 'NON_VIDE', { chemin: 'second' });
+    fs.pannes.dossierNonRetire('documents', Infinity, 'EBUSY');
+    await echoue(fs.supprimerDossier(DOC, 'tenu'), 'ECRITURE', { chemin: 'tenu', dossier: DOCUMENTS, cause: 'EBUSY' });
+    assert.deepEqual(noms(await fs.lister(DOC, '')), ['second', 'tenu']);
+  });
+
+  test("la panne ne touche que sa racine et les dossiers présents : un absent ne la consomme pas, l'autre racine retire les siens", async () => {
+    const fs = preparer({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents', 'ici');
+    fs.deposerDossier('portable', 'la-bas');
+    fs.pannes.dossierNonRetire('documents', 11);
+    await fs.supprimerDossier(PORTABLE, 'la-bas');
+    await fs.supprimerDossier(DOC, 'absent');
+    await echoue(fs.supprimerDossier(DOC, 'ici'), 'NON_VIDE', { chemin: 'ici' });
+    assert.deepEqual(await fs.lister(PORTABLE, ''), []);
+    assert.deepEqual(noms(await fs.lister(DOC, '')), ['ici']);
+  });
+
+  test("dossierNonRetire refuse un compte qui n'est ni un entier positif ou nul ni Infinity", () => {
+    const fs = preparer();
+    for (const n of [-1, 1.5, '3', null]) {
+      assert.throws(() => fs.pannes.dossierNonRetire('documents', n), TypeError, String(n));
+    }
+  });
+});
+
 describe("fichiers simulés : support qui refuse l'écriture", () => {
   test("après pannes.ecriture, chaque primitive d'écriture de la racine lève ECRITURE avec la cause, la sonde échoue, et rien ne change", async () => {
     const fs = preparer({ executable: 'E:\\soirees' });
     fs.deposer('portable', 'soiree.gtt.json', 'état');
     fs.deposer('portable', 'soiree.gtt-journal.jsonl', 'ligne\n');
     fs.deposer('portable', 'soiree.gtt.verrou', '{"seance":"seance-a"}');
+    fs.deposerDossier('portable', 'vide');
     fs.pannes.ecriture('portable');
     const refus = (chemin) => ({ chemin, dossier: DATA, cause: 'EROFS' });
     await echoue(fs.ecrireAtomique(PORTABLE, 'soiree.gtt.json', 'nouveau'), 'ECRITURE', refus('soiree.gtt.json'));
@@ -373,6 +432,7 @@ describe("fichiers simulés : support qui refuse l'écriture", () => {
     await echoue(fs.creerDossier(PORTABLE, 'corbeille'), 'ECRITURE', refus('corbeille'));
     await echoue(fs.deplacer(PORTABLE, 'soiree.gtt.json', 'autre.gtt.json'), 'ECRITURE', refus('soiree.gtt.json'));
     await echoue(fs.supprimer(PORTABLE, 'soiree.gtt.json'), 'ECRITURE', refus('soiree.gtt.json'));
+    await echoue(fs.supprimerDossier(PORTABLE, 'vide'), 'ECRITURE', refus('vide'));
     await echoue(fs.verrouiller(PORTABLE, 'neuf.gtt.verrou', 'seance-b', DEPUIS), 'ECRITURE', refus('neuf.gtt.verrou'));
     await echoue(fs.deverrouiller(PORTABLE, 'soiree.gtt.verrou', 'seance-a'), 'ECRITURE', refus('soiree.gtt.verrou'));
     assert.deepEqual(await fs.sonder(PORTABLE), { inscriptible: false, cause: 'EROFS' });
@@ -381,6 +441,7 @@ describe("fichiers simulés : support qui refuse l'écriture", () => {
       'soiree.gtt-journal.jsonl',
       'soiree.gtt.json',
       'soiree.gtt.verrou',
+      'vide',
     ]);
     assert.equal(await fs.lireTexte(PORTABLE, 'soiree.gtt.json'), 'état');
     assert.equal(await fs.lireTexte(PORTABLE, 'soiree.gtt-journal.jsonl'), 'ligne\n');
@@ -541,6 +602,7 @@ describe('fichiers simulés : compteurs, préparation, horloge', () => {
     await fs.creerDossier(DOC, 'corbeille');
     await fs.deplacer(DOC, 'a.txt', 'corbeille/a.txt');
     await fs.supprimer(DOC, 'corbeille/a.txt');
+    await fs.supprimerDossier(DOC, 'corbeille');
     await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', DEPUIS);
     await fs.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
     await fs.sonder(DOC);
@@ -557,7 +619,7 @@ describe('fichiers simulés : compteurs, préparation, horloge', () => {
     await fs.enregistrerSous('liste.csv', new Uint8Array([0x61]));
     fs.contenu('documents', 'journal.jsonl');
     fs.deposer('documents', 'pose.txt', 'posé');
-    assert.deepEqual(fs.compteurs, { ecritures: 9, lectures: 3 });
+    assert.deepEqual(fs.compteurs, { ecritures: 10, lectures: 3 });
   });
 
   test('deposer et deposerDossier posent sans compter, dossiers parents compris ; contenu lit sans compter et rend null hors d\u{2019}un fichier', async () => {
@@ -672,6 +734,7 @@ describe('fichiers simulés : préconditions et dossiers', () => {
     await echoue(fs.verrouiller(DOC, 'corbeille', 'seance-a', DEPUIS), 'ECRITURE', refus('corbeille', 'EISDIR'));
     await echoue(fs.deplacer(DOC, 'corbeille', 'ailleurs'), 'ECRITURE', refus('corbeille', 'EISDIR'));
     await echoue(fs.supprimer(DOC, 'corbeille'), 'ECRITURE', refus('corbeille', 'EISDIR'));
+    await echoue(fs.supprimerDossier(DOC, 'soiree.gtt.json'), 'ECRITURE', refus('soiree.gtt.json', 'ENOTDIR'));
     await echoue(fs.creerDossier(DOC, 'soiree.gtt.json'), 'ECRITURE', refus('soiree.gtt.json', 'EEXIST'));
     await echoue(
       fs.creerDossier(DOC, 'soiree.gtt.json/sous'),

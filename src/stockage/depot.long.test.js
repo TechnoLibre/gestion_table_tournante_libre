@@ -366,6 +366,7 @@ const ECRITURES = new Set([
   'ecrireOctetsAtomique',
   'ajouterLigne',
   'creerDossier',
+  'supprimerDossier',
   'deplacer',
   'supprimer',
 ]);

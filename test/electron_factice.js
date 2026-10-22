@@ -121,6 +121,7 @@ const ARGUMENTS_DE_LA_PAGE = {
   ajouterLigne: () => [INCONNUE, 'soiree.gtt-journal.jsonl', '{}'],
   lister: () => [INCONNUE, ''],
   creerDossier: () => [INCONNUE, 'corbeille'],
+  supprimerDossier: () => [INCONNUE, 'Ancien gala'],
   deplacer: () => [INCONNUE, 'soiree.gtt.json', 'corbeille/soiree.gtt.json'],
   supprimer: () => [INCONNUE, 'soiree.gtt.json'],
   verrouiller: () => [INCONNUE, 'soiree.gtt.verrou', 'seance-factice', DEPUIS_PAGE],

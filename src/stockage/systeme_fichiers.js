@@ -26,8 +26,12 @@
 //                                            '' —, cause celle que rapporte
 //                                            la plateforme (EBUSY, EROFS…)
 //   EXISTE         {chemin}                  deplacer vers une cible existante
+//   NON_VIDE       {chemin}                  supprimerDossier d'un dossier qui
+//                                            porte encore une entrée ; le
+//                                            dossier et son contenu restent
 //   CHEMIN_REFUSE  {chemin}                  chemin absolu ou remontant, racine
-//                                            inconnue
+//                                            inconnue, et '' pour
+//                                            supprimerDossier
 //   LECTURE        {chemin, dossier, cause}  une lecture refusée autrement que
 //                                            sur un absent ; cause
 //                                            UTF8_INVALIDE pour un fichier dont
@@ -137,6 +141,13 @@ import { estHorodatage } from './journal.js';
  *           racine absente lève ECRITURE, sans rien créer, car un dossier de
  *           travail disparu ne renaît pas en silence (§ 8.6). Un dossier
  *           existant n'est pas une faute
+ * @property {(r: Racine, chemin: string) => Promise<void>} supprimerDossier
+ *           retire un dossier vide, et lui seul : aucune primitive ne retire
+ *           un dossier avec ce qu'il porte. Un dossier qui porte une entrée,
+ *           fût-ce un dossier vide ou un fichier d'échange, lève NON_VIDE et
+ *           reste tel ; un fichier à sa place lève ECRITURE ; un dossier
+ *           absent, ou sous un parent absent, n'est pas une faute. '', la
+ *           racine elle-même, lève CHEMIN_REFUSE avant tout accès
  * @property {(r: Racine, de: string, vers: string) => Promise<void>} deplacer
  *           un fichier ; refuse une cible existante (EXISTE), comparée comme le
  *           système compare les noms, si bien que sans égard à la casse une
@@ -154,7 +165,11 @@ import { estHorodatage } from './journal.js';
  * @property {(r: Racine, chemin: string, seance: string) => Promise<void>} deverrouiller
  *           n'efface que le verrou de cette séance ; un verrou absent n'est
  *           pas une faute
- * @property {(r: Racine) => Promise<void>} ouvrirDansExplorateur
+ * @property {(r: Racine, chemin?: string) => Promise<void>} ouvrirDansExplorateur
+ *           montre dans l'explorateur du système le dossier que désigne
+ *           chemin, '' par défaut : la racine elle-même ; un dossier absent,
+ *           ou un fichier, lève ABSENT ; là où il n'y a pas d'explorateur,
+ *           NON_DISPONIBLE, une fois le chemin admis
  * @property {() => Promise<{nom: string, octets: Uint8Array}|null>} choisirFichierAImporter
  *           null quand l'opérateur annule
  * @property {(nomPropose: string, octets: Uint8Array) => Promise<string|null>} enregistrerSous

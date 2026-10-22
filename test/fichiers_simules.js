@@ -3,12 +3,12 @@
 
 // Système de fichiers d'épreuve (§ 13.4) : la troisième implémentation de
 // l'interface de src/stockage/systeme_fichiers.js, en mémoire, injectée par
-// les épreuves. Elle simule l'échec de renommage du § 8.8 et les cinq issues
-// du § 8.6 — chemin publié par le lanceur portable, dossier sous un
-// emplacement de données applicatives, sonde qui échoue, perte
-// d'inscriptibilité en cours de séance, support amovible —, et compte ses
-// lectures et ses écritures : une épreuve affirme ainsi qu'ouvrir n'écrit
-// rien (§ 8.4).
+// les épreuves. Elle simule l'échec de renommage du § 8.8, le dossier vide
+// que le système ne laisse pas retirer, et les cinq issues du § 8.6 —
+// chemin publié par le lanceur portable, dossier sous un emplacement de
+// données applicatives, sonde qui échoue, perte d'inscriptibilité en cours
+// de séance, support amovible —, et compte ses lectures et ses écritures :
+// une épreuve affirme ainsi qu'ouvrir n'écrit rien (§ 8.4).
 //
 // Une instance est un processus. Le disque, une Map, se partage : une
 // instance créée sur le disque d'une autre est ce processus redémarré, ou un
@@ -42,9 +42,9 @@ PanneSimulee.prototype.name = 'PanneSimulee';
 const SUFFIXE_ECRITURE = '.ecriture';
 const TEMOIN = '.gtt-temoin';
 
-// Réessais d'un renommage refusé après le premier essai, ceux de
-// l'implémentation de la coquille, sans ses pauses.
-const REESSAIS_RENOMMAGE = 10;
+// Réessais d'un renommage, ou du retrait d'un dossier, refusé après le
+// premier essai, ceux de l'implémentation de la coquille, sans ses pauses.
+const REESSAIS_PASSAGERS = 10;
 
 // Horloge d'un disque neuf, en millisecondes depuis l'époque Unix : le
 // 1er janvier 2026 à minuit UTC. Chaque fichier ou dossier qu'écrit une
@@ -165,6 +165,12 @@ const estContenuVerrou = (contenu) =>
  *   - pannes.renommage(racineId, n = Infinity, cause = 'EBUSY') : les n
  *     prochains renommages de la racine sont refusés — chaque essai d'une
  *     écriture atomique, texte ou octets, qui en fait onze, et deplacer ;
+ *   - pannes.dossierNonRetire(racineId, n = Infinity, cause = 'ENOTEMPTY') :
+ *     les n prochains essais de retrait d'un dossier vide de la racine sont
+ *     refusés — supprimerDossier en fait onze, comme la coquille, et un
+ *     dossier absent n'en consomme aucun ; tous refusés, le dossier reste et
+ *     ENOTEMPTY lève NON_VIDE {chemin}, comme le fichier effacé que Windows
+ *     tient encore ouvert, une autre cause ECRITURE de cette cause ;
  *   - pannes.ecriture(racineId, cause = 'EROFS') : dès lors, toute primitive
  *     d'écriture de la racine lève ECRITURE, et sa sonde rend la cause ;
  *   - pannes.couperApres(n) : après n primitives d'écriture réussies —
@@ -173,9 +179,9 @@ const estContenuVerrou = (contenu) =>
  *     l'on rouvre par une nouvelle instance sur le même disque ;
  *   - compteurs.ecritures, compteurs.lectures : les appels des primitives
  *     d'écriture (ecrireAtomique, ecrireOctetsAtomique, ajouterLigne,
- *     creerDossier, deplacer, supprimer, verrouiller, deverrouiller, sonder)
- *     et de lecture (lireTexte,
- *     lister), refusés compris ; les autres ne comptent pas ;
+ *     creerDossier, supprimerDossier, deplacer, supprimer, verrouiller,
+ *     deverrouiller, sonder) et de lecture (lireTexte, lister), refusés
+ *     compris ; les autres ne comptent pas ;
  *   - deposer(racineId, chemin, texte, modifie = l'instant courant) : pose un
  *     fichier, dossiers parents compris, sans compter ni avancer l'horloge ;
  *   - deposerOctets(racineId, chemin, octets, modifie = l'instant courant) :
@@ -230,6 +236,7 @@ export function creerFichiersSimules({
   const refusEcriture = new Map();
   for (const id of racines.keys()) if (Object.hasOwn(sonde, id)) refusEcriture.set(id, sonde[id]);
   const refusRenommage = new Map();
+  const refusRetraitDossier = new Map();
 
   // Écritures réussies que le processus fait encore avant sa coupure ; null
   // tant que couperApres n'est pas appelé. Le processus meurt à zéro.
@@ -338,7 +345,7 @@ export function creerFichiersSimules({
     const ecriture = localiser(racine, chemin + SUFFIXE_ECRITURE);
     poserFichier(ecriture, contenu, avancer());
     let cause = null;
-    for (let essai = 0; essai <= REESSAIS_RENOMMAGE; essai += 1) {
+    for (let essai = 0; essai <= REESSAIS_PASSAGERS; essai += 1) {
       cause = renommageRefuse(cible.racine);
       if (cause === null) {
         renommer(ecriture, cible);
@@ -349,13 +356,22 @@ export function creerFichiersSimules({
     throw refus(cible, cause);
   }
 
-  // Cause du refus du prochain renommage de la racine, ou null ; chaque refus
-  // en consomme un.
-  function renommageRefuse(racineId) {
-    const panne = refusRenommage.get(racineId);
+  // Cause du prochain refus que porte la table de pannes pour la racine, ou
+  // null ; chaque refus en consomme un.
+  function refusSuivant(table, racineId) {
+    const panne = table.get(racineId);
     if (panne === undefined || panne.restants === 0) return null;
     panne.restants -= 1;
     return panne.cause;
+  }
+  const renommageRefuse = (racineId) => refusSuivant(refusRenommage, racineId);
+
+  // Inscrit n refus de la cause donnée dans la table de pannes de la racine.
+  function inscrirePanne(table, quoi, racineId, n, cause) {
+    if (n !== Infinity && !(Number.isInteger(n) && n >= 0)) {
+      throw new TypeError(`pannes.${quoi} : n est un entier positif ou nul, ou Infinity`);
+    }
+    table.set(localiser({ id: racineId }, '').racine, { restants: n, cause });
   }
 
   // Ce que rend verrouiller d'un verrou présent, d'après son texte, null pour
@@ -507,6 +523,32 @@ export function creerFichiersSimules({
       creerDossiers(loc, loc.parties.length, avancer);
     }),
 
+    // Un dossier vide, jamais la racine : '' se refuse avant tout. Un absent
+    // n'est pas une faute ; un fichier lève ECRITURE ENOTDIR ; un dossier qui
+    // porte une entrée, NON_VIDE. Le retrait se réessaie sur les refus de
+    // pannes.dossierNonRetire, comme celui de la coquille.
+    supprimerDossier: primitive('ecritures', (racine, chemin) => {
+      const loc = localiser(racine, chemin);
+      if (chemin === '') throw new ErreurStockage('CHEMIN_REFUSE', { chemin });
+      exigerInscriptible(loc);
+      const noeud = disque.get(loc.cle);
+      if (noeud === undefined) return;
+      if (noeud.type !== 'dossier') throw refus(loc, 'ENOTDIR');
+      for (const autre of disque.values()) {
+        if (autre.parent === loc.cle) throw new ErreurStockage('NON_VIDE', { chemin });
+      }
+      let cause = null;
+      for (let essai = 0; essai <= REESSAIS_PASSAGERS; essai += 1) {
+        cause = refusSuivant(refusRetraitDossier, loc.racine);
+        if (cause === null) {
+          disque.delete(loc.cle);
+          return;
+        }
+      }
+      if (cause === 'ENOTEMPTY') throw new ErreurStockage('NON_VIDE', { chemin });
+      throw refus(loc, cause);
+    }),
+
     // Un dossier absent sous la cible nomme la cible ; une panne nomme la
     // source, que le renommage n'a pas pu porter.
     deplacer: primitive('ecritures', (racine, de, vers) => {
@@ -553,8 +595,10 @@ export function creerFichiersSimules({
       if (present?.type === 'fichier' && verrouPresent(texteDuNoeud(present)).seance === seance) disque.delete(loc.cle);
     }),
 
-    ouvrirDansExplorateur: primitive(null, (racine) => {
-      localiser(racine, '');
+    // Comme la coquille : un dossier absent, ou un fichier, lève ABSENT.
+    ouvrirDansExplorateur: primitive(null, (racine, chemin = '') => {
+      const loc = localiser(racine, chemin);
+      if (disque.get(loc.cle)?.type !== 'dossier') throw new ErreurStockage('ABSENT', { chemin });
     }),
 
     choisirFichierAImporter: primitive(null, () => null),
@@ -563,10 +607,10 @@ export function creerFichiersSimules({
 
     pannes: {
       renommage(racineId, n = Infinity, cause = 'EBUSY') {
-        if (n !== Infinity && !(Number.isInteger(n) && n >= 0)) {
-          throw new TypeError('pannes.renommage : n est un entier positif ou nul, ou Infinity');
-        }
-        refusRenommage.set(localiser({ id: racineId }, '').racine, { restants: n, cause });
+        inscrirePanne(refusRenommage, 'renommage', racineId, n, cause);
+      },
+      dossierNonRetire(racineId, n = Infinity, cause = 'ENOTEMPTY') {
+        inscrirePanne(refusRetraitDossier, 'dossierNonRetire', racineId, n, cause);
       },
       ecriture(racineId, cause = 'EROFS') {
         refusEcriture.set(localiser({ id: racineId }, '').racine, cause);

@@ -182,7 +182,7 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
     expect(await fs.lister(DOCUMENTS, '')).toStrictEqual([]);
   });
 
-  test("sans le dossier du produit : une écriture lève ECRITURE sans le recréer, une lecture ABSENT, supprimer ne fait rien, creerDossier d'un chemin sous lui aussi ; creerDossier de '' le crée", async () => {
+  test("sans le dossier du produit : une écriture lève ECRITURE sans le recréer, une lecture ABSENT, supprimer et supprimerDossier ne font rien, creerDossier d'un chemin sous lui aussi ; creerDossier de '' le crée", async () => {
     const fs = creerFichiersWeb();
     const refus = (chemin, dossier = CHEMIN_DOCUMENTS) => ({ chemin, dossier, cause: 'NotFoundError' });
     await echoue(fs.ecrireAtomique(DOCUMENTS, 'etat.json', 'x'), 'ECRITURE', refus('etat.json'));
@@ -191,6 +191,7 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
     await echoue(fs.lister(DOCUMENTS, ''), 'ABSENT', { chemin: '' });
     await echoue(fs.deplacer(DOCUMENTS, 'etat.json', 'copie.json'), 'ABSENT', { chemin: 'etat.json' });
     await fs.supprimer(DOCUMENTS, 'etat.json');
+    await fs.supprimerDossier(DOCUMENTS, 'corbeille');
     await echoue(
       fs.creerDossier(DOCUMENTS, 'corbeille/2026-01-02_03-04-05'),
       'ECRITURE',
@@ -203,6 +204,53 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
     expect(await fs.lister(DOCUMENTS, '')).toStrictEqual([]);
     await fs.creerDossier(DOCUMENTS, 'corbeille/2026-01-02_03-04-05');
     expect(noms(await fs.lister(DOCUMENTS, 'corbeille'))).toStrictEqual(['2026-01-02_03-04-05']);
+  });
+});
+
+describe("fichiers web : retirer un dossier de l'OPFS", () => {
+  test("supprimerDossier retire la poignée d'un dossier vide par removeEntry, sans recursive, du dossier qui le porte", async () => {
+    const fs = await preparer();
+    await fs.creerDossier(DOCUMENTS, 'Gala des Saules/logo');
+    const retraits = [];
+    const retirer = FileSystemDirectoryHandle.prototype.removeEntry;
+    vi.spyOn(FileSystemDirectoryHandle.prototype, 'removeEntry').mockImplementation(
+      async function removeEntry(...parametres) {
+        retraits.push([this.name, ...parametres]);
+        return retirer.apply(this, parametres);
+      },
+    );
+    await fs.supprimerDossier(DOCUMENTS, 'Gala des Saules/logo');
+    await fs.supprimerDossier(DOCUMENTS, 'Gala des Saules');
+    expect(retraits).toStrictEqual([
+      ['Gala des Saules', 'logo'],
+      [DOSSIER, 'Gala des Saules'],
+    ]);
+    expect(await fs.lister(DOCUMENTS, '')).toStrictEqual([]);
+    expect(await nomsOpfs()).toStrictEqual([DOSSIER]);
+  });
+
+  test("un dossier non vide — un fichier d'échange .crswap de Chromium compris — lève NON_VIDE, que l'OPFS refuse par InvalidModificationError, et rien n'en part", async () => {
+    const fs = await preparer();
+    await fs.creerDossier(DOCUMENTS, 'Gala des Saules');
+    const dossier = await (await dossierProduit()).getDirectoryHandle('Gala des Saules');
+    await dossier.getFileHandle('etat.json.crswap', { create: true });
+    await echoue(fs.supprimerDossier(DOCUMENTS, 'Gala des Saules'), 'NON_VIDE', { chemin: 'Gala des Saules' });
+    expect(await fs.lister(DOCUMENTS, 'Gala des Saules')).toMatchObject([{ nom: 'etat.json.crswap', type: 'fichier' }]);
+  });
+
+  test("un autre refus de removeEntry lève ECRITURE de sa cause, et le dossier reste", async () => {
+    const fs = await preparer();
+    await fs.creerDossier(DOCUMENTS, 'Gala des Saules');
+    vi.spyOn(FileSystemDirectoryHandle.prototype, 'removeEntry').mockRejectedValue(
+      new DOMException('refus', 'NoModificationAllowedError'),
+    );
+    await echoue(fs.supprimerDossier(DOCUMENTS, 'Gala des Saules'), 'ECRITURE', {
+      chemin: 'Gala des Saules',
+      dossier: CHEMIN_DOCUMENTS,
+      cause: 'NoModificationAllowedError',
+    });
+    vi.restoreAllMocks();
+    expect(await fs.lister(DOCUMENTS, '')).toMatchObject([{ nom: 'Gala des Saules', type: 'dossier' }]);
   });
 });
 
@@ -222,6 +270,7 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
     await echoue(fs.ajouterLigne(DOCUMENTS, '', 'x'), 'ECRITURE', refus('', CHEMIN_DOCUMENTS));
     await echoue(fs.supprimer(DOCUMENTS, 'corbeille'), 'ECRITURE', refus('corbeille', CHEMIN_DOCUMENTS));
     await echoue(fs.supprimer(DOCUMENTS, ''), 'ECRITURE', refus('', CHEMIN_DOCUMENTS));
+    await echoue(fs.supprimerDossier(DOCUMENTS, ''), 'CHEMIN_REFUSE', { chemin: '' });
     await echoue(fs.deplacer(DOCUMENTS, 'corbeille', 'ailleurs'), 'ECRITURE', refus('corbeille', CHEMIN_DOCUMENTS));
     await echoue(fs.deplacer(DOCUMENTS, '', 'ailleurs'), 'ECRITURE', refus('', CHEMIN_DOCUMENTS));
     await echoue(fs.deplacer(DOCUMENTS, 'note.txt', 'corbeille'), 'EXISTE', { chemin: 'corbeille' });
@@ -237,6 +286,8 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
     await echoue(fs.creerDossier(DOCUMENTS, 'note.txt/sous'), 'ECRITURE', refus('note.txt/sous', sousNote));
     await echoue(fs.deplacer(DOCUMENTS, 'note.txt', 'note.txt/x.txt'), 'ECRITURE', refus('note.txt/x.txt', sousNote));
     await fs.supprimer(DOCUMENTS, 'note.txt/x.txt');
+    await echoue(fs.supprimerDossier(DOCUMENTS, 'note.txt'), 'ECRITURE', refus('note.txt', CHEMIN_DOCUMENTS));
+    await fs.supprimerDossier(DOCUMENTS, 'note.txt/sous');
 
     expect(await fs.lister(DOCUMENTS, '')).toMatchObject([
       { nom: 'corbeille', type: 'dossier' },
@@ -272,6 +323,7 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
     await echoue(fs.deplacer(DOCUMENTS, 'etat.json', '\u{E9}/neuf.json'), 'ECRITURE', refus('\u{E9}/neuf.json'), 'deplacer vers');
     await echoue(fs.lireTexte(DOCUMENTS, enfant), 'LECTURE', refus(enfant), 'lireTexte');
     await echoue(fs.lister(DOCUMENTS, '\u{E9}'), 'LECTURE', refus('\u{E9}', CHEMIN_DOCUMENTS), 'lister');
+    await echoue(fs.supprimerDossier(DOCUMENTS, '\u{E9}'), 'ECRITURE', refus('\u{E9}', CHEMIN_DOCUMENTS), 'supprimerDossier');
     vi.restoreAllMocks();
     expect(await fs.lister(DOCUMENTS, '')).toMatchObject([{ nom: 'etat.json', type: 'fichier' }]);
     expect(await fs.lireTexte(DOCUMENTS, 'etat.json')).toBe('parent');
@@ -320,6 +372,7 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
     await echoue(fs.supprimer(DOCUMENTS, nom), 'ECRITURE', refus, 'supprimer');
     await echoue(fs.deplacer(DOCUMENTS, nom, 'copie.txt'), 'ECRITURE', refus, 'deplacer depuis');
     await echoue(fs.deplacer(DOCUMENTS, 'source.txt', nom), 'ECRITURE', refus, 'deplacer vers');
+    await echoue(fs.supprimerDossier(DOCUMENTS, nom), 'ECRITURE', refus, 'supprimerDossier');
 
     // Un vrai dossier reste une entrée d'un autre genre : ABSENT à la lecture.
     await fs.creerDossier(DOCUMENTS, 'corbeille');
@@ -526,6 +579,11 @@ describe('fichiers web : ni verrou, ni explorateur, ni dossier choisi (§ 8.8)',
   test("ouvrirDansExplorateur et choisirDossier lèvent NON_DISPONIBLE {primitive} ; une racine inconnue lève d'abord CHEMIN_REFUSE", async () => {
     const fs = await preparer();
     await echoue(fs.ouvrirDansExplorateur(DOCUMENTS), 'NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' });
+    await fs.creerDossier(DOCUMENTS, 'Gala des Saules');
+    await echoue(fs.ouvrirDansExplorateur(DOCUMENTS, 'Gala des Saules'), 'NON_DISPONIBLE', {
+      primitive: 'ouvrirDansExplorateur',
+    });
+    await echoue(fs.ouvrirDansExplorateur(DOCUMENTS, '../x'), 'CHEMIN_REFUSE', { chemin: '../x' });
     await echoue(fs.choisirDossier(), 'NON_DISPONIBLE', { primitive: 'choisirDossier' });
     const inconnue = { id: 'portable', chemin: CHEMIN_DOCUMENTS };
     await echoue(fs.ouvrirDansExplorateur(inconnue), 'CHEMIN_REFUSE', { chemin: '' });

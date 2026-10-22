@@ -89,6 +89,10 @@ export const TABLE = new Map([
   ['ECRITURE', (details, texte) => `L'écriture de ${ouEcrire(details, texte)} a échoué ; le fichier d'avant reste intact.`],
   ['LECTURE', (details, texte) => `La lecture de ${ouEcrire(details, texte)} est refusée.`],
   ['EXISTE', ({ chemin }) => `Un fichier ${cite(chemin)} existe déjà.`],
+  [
+    'NON_VIDE',
+    ({ chemin }) => `Le dossier ${cite(chemin)} n'est pas vide : il reste en place, avec tout ce qu'il contient.`,
+  ],
   ['CHEMIN_REFUSE', ({ chemin }) => `Le chemin ${cite(String(chemin))} est refusé.`],
   [
     'ETAT_ILLISIBLE',

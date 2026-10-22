@@ -32,6 +32,7 @@ const PRIMITIVES = [
   'ajouterLigne',
   'lister',
   'creerDossier',
+  'supprimerDossier',
   'deplacer',
   'supprimer',
   'verrouiller',
