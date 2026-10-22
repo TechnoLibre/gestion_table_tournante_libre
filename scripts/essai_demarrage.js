@@ -24,16 +24,18 @@
 //     qui s'ouvre, revenir à la liste, puis charger la petite
 //     démonstration, qui s'ouvre ;
 //  3. le mode portable : leurs deux .gtt.json sous exe/data, aucun sous home
-//     ni sous temp ; puis « Imprimer… » ouvre l'aperçu, le papier A4
+//     ni sous temp, chacun avec son journal dans le dossier de son
+//     événement, exe/data/<nom>/<nom>.gtt.json, aucun à même exe/data
+//     (§ 8.6) ; puis « Imprimer… » ouvre l'aperçu, le papier A4
 //     choisi, et le processus principal imprime en PDF le plan, puis la
 //     feuille par table (webContents.printToPDF, à la taille de page de la
 //     feuille de style) : une page par feuille de l'aperçu, chacune aux
 //     dimensions de la sienne à TOLERANCE_PAGE_MM près ; l'aperçu se ferme ;
-//  4. « Modifier » prend un verrou sous exe/data ; le compte d'arrêt passe à
-//     2 000 mouvements par son champ, puis « Générer », dans la page chargée
-//     sous file://, fait naître un travailleur et ajoute des propositions,
-//     que le fichier d'état porte, sans refus dans la section ni erreur
-//     recueillie ;
+//  4. « Modifier » prend un verrou dans le dossier de l'événement, sous
+//     exe/data ; le compte d'arrêt passe à 2 000 mouvements par son champ,
+//     puis « Générer », dans la page chargée sous file://, fait naître un
+//     travailleur et ajoute des propositions, que le fichier d'état porte,
+//     sans refus dans la section ni erreur recueillie ;
 //  5. le collecteur est vide ; la fenêtre se ferme, le processus sort, et
 //     aucun .gtt.verrou ne reste sous exe/data.
 //
@@ -264,6 +266,52 @@ export function donneesApplicativesSurExe(env, poste, plateforme, decrire = decr
   return [...new Set(portent)];
 }
 
+/**
+ * Les fautes de la disposition des fichiers d'événement sous data (§ 8.6),
+ * [] quand chacun est dans le dossier de son événement : un chemin relatif
+ * à data, découpé au séparateur de chemins, compte deux segments,
+ * <dossier>/<dossier><suffixe> — à la création, le dossier porte la base
+ * des fichiers. Se nomment, dans l'ordre reçu : un fichier posé à même
+ * data, un fichier plus profond, un fichier nommé autrement que son
+ * dossier.
+ * @param {string[]} relatifs  chemins relatifs à data, ceux de fichiersSous
+ * @param {string} suffixe  le suffixe des fichiers jugés, SUFFIXES.etat…
+ * @param {{sep: string}} [chemins]  path du système, ou path.posix, path.win32
+ * @returns {string[]}
+ */
+export function fautesDeDisposition(relatifs, suffixe, chemins = path) {
+  const fautes = [];
+  for (const relatif of relatifs) {
+    const segments = relatif.split(chemins.sep);
+    if (segments.length === 1) fautes.push(`${relatif} : posé à même data, hors d\u{2019}un dossier d\u{2019}événement`);
+    else if (segments.length > 2) fautes.push(`${relatif} : plus profond que le dossier de son événement`);
+    else if (segments[1] !== segments[0] + suffixe) fautes.push(`${relatif} : nommé autrement que son dossier`);
+  }
+  return fautes;
+}
+
+/**
+ * Les dossiers d'événement qui portent un état sans journal, ou un journal
+ * sans état : le premier segment de chaque chemin relatif à data, comparé
+ * entre les deux listes ; [] quand chaque état a son journal dans son
+ * dossier. Chacun se nomme une fois, dans l'ordre des noms.
+ * @param {string[]} etats  chemins relatifs à data des fichiers d'état
+ * @param {string[]} journaux  chemins relatifs à data des journaux
+ * @param {{sep: string}} [chemins]  path du système, ou path.posix, path.win32
+ * @returns {string[]}
+ */
+export function fautesDAppariement(etats, journaux, chemins = path) {
+  const dossiers = (relatifs) => new Set(relatifs.map((relatif) => relatif.split(chemins.sep)[0]));
+  const avecEtat = dossiers(etats);
+  const avecJournal = dossiers(journaux);
+  const fautes = [];
+  for (const dossier of [...new Set([...avecEtat, ...avecJournal])].sort()) {
+    if (!avecJournal.has(dossier)) fautes.push(`${dossier} : un état sans journal`);
+    else if (!avecEtat.has(dossier)) fautes.push(`${dossier} : un journal sans état`);
+  }
+  return fautes;
+}
+
 // Les fichiers sous dossier, récursivement, dont le nom finit par suffixe,
 // relatifs à dossier et triés ; aucun quand dossier n'existe pas.
 function fichiersSous(dossier, suffixe) {
@@ -362,6 +410,17 @@ async function seance(application, dossiers) {
   constater('deux .gtt.json sous exe/data', etats.length === 2, etats.join(', '));
   const egares = [dossiers.home, dossiers.temp].flatMap((d) => fichiersSous(d, '.gtt.json').map((f) => join(d, f)));
   constater('aucun .gtt.json sous home ni temp', egares.length === 0, egares.join(', ') || 'aucun');
+  const journaux = fichiersSous(data, '.gtt-journal.jsonl');
+  const disposition = [
+    ...fautesDeDisposition(etats, '.gtt.json'),
+    ...fautesDeDisposition(journaux, '.gtt-journal.jsonl'),
+    ...fautesDAppariement(etats, journaux),
+  ];
+  constater(
+    'chaque état et son journal dans le dossier de son événement, exe/data/<nom>/',
+    disposition.length === 0,
+    disposition.length === 0 ? [...etats, ...journaux].join(', ') : disposition.join(' ; '),
+  );
   // L'aperçu, imprimé par le processus principal : le plan, puis la
   // feuille par table.
   await fenetre.locator('[data-ecran="evenement"] [data-commande="apercu"]').click();
@@ -394,6 +453,12 @@ async function seance(application, dossiers) {
     return trouves.length > 0 ? trouves : null;
   });
   constater('« Modifier » prend un verrou sous exe/data', verrous !== null, (verrous ?? []).join(', '));
+  const verrousEgares = fautesDeDisposition(verrous, '.gtt.verrou');
+  constater(
+    'le verrou dans le dossier de son événement',
+    verrousEgares.length === 0,
+    verrousEgares.length === 0 ? verrous.join(', ') : verrousEgares.join(' ; '),
+  );
   const avant = new Set(etats);
   const ouvert = fichiersSous(data, '.gtt.json').find((f) => {
     const etat = lireEtat(join(data, f));

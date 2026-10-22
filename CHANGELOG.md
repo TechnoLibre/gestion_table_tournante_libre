@@ -17,7 +17,8 @@
   pile pour le massicot. Sous Windows, la planche se dépose dans le dossier de
   l'événement et l'application en affiche le chemin ; « Ouvrir le dossier »,
   offert en tout temps dans la section, avant comme après la production, montre
-  ce dossier dans l'explorateur.
+  ce dossier dans l'explorateur, même après que l'événement a été écrit sur un
+  autre emplacement.
 - Le format de papier se demande une seule fois, au premier aperçu, puis la
   machine le retient ; il se change d'un clic. Les badges ne le demandent
   pas : les cartes Avery 5392 n'existent qu'en Lettre, et les badges A6
@@ -311,44 +312,38 @@
   trentaine de tours, ou quelques-uns sous des libellés longs — s'y répartit en
   blocs de tours consécutifs, chacun sur ses pages, sous un en-tête qui nomme
   ses tours (« Tours 1 à 6 ») ; chaque bloc reprend les noms.
-- Le nom d'un événement compte au plus 68 caractères, à la création, à la
-  copie et au renommage : à cette longueur, un nom de caractères ordinaires
-  tient entier dans le dossier de travail des Documents. Un événement dont le fichier porte
-  un nom plus long s'ouvre comme avant ; son aperçu d'impression refuse
-  d'imprimer, au lieu d'échouer, et offre « Renommer », qui ramène à la liste
-  des événements.
-- Sous Windows, quand le logiciel ne travaille pas à côté de l'exécutable, son
-  dossier de travail est `Documents\Gestion table tournante Libre\data` : dans
-  les deux modes, il s'appelle `data`. Les fichiers posés directement dans
-  `Documents\Gestion table tournante Libre` n'y figurent plus, et restent
-  intacts. Un événement ne prend jamais le nom de la corbeille ni celui du
-  fichier des réglages : nommé « Corbeille », il s'enregistre sous
-  « Corbeille (2) ».
-- Chaque événement a son propre dossier dans le dossier de travail, à son nom,
-  qui porte son fichier d'état, son historique et son verrou ; la liste affiche
+- **Un dossier par événement.** Le dossier de travail s'appelle `data` dans les
+  deux modes : à côté de l'exécutable, ou, sous Windows quand le logiciel n'y
+  travaille pas, `Documents\Gestion table tournante Libre\data`. Il porte un
+  dossier par événement, à son nom, la corbeille et le fichier des réglages du
+  poste. Le dossier d'un événement garde son fichier d'état, son historique et
+  son verrou, et reçoit les sorties des badges ; la liste des événements affiche
   le chemin du fichier d'état dans ce dossier. Créer, copier, importer ou
-  charger une démonstration crée le dossier ; renommer écrit l'événement dans
-  un dossier au nouveau nom ; supprimer range ses fichiers dans la corbeille.
-  Les fichiers d'événement posés directement dans le dossier de travail, sans
-  dossier, ne s'affichent plus, ne s'importent plus de l'autre emplacement, et
-  restent intacts. Une version antérieure ne voit pas les événements rangés en
-  dossiers.
-- Renommer un événement emporte tout son dossier : les badges et la liste en
-  CSV déjà produits prennent le nouveau nom, leur date gardée, et le reste —
-  fichiers posés à la main, dossier `logo` — suit sous son nom ; l'ancien
-  dossier se retire ensuite. Supprimer range tout le contenu du dossier dans un
-  dossier daté de la corbeille, `logo` compris, puis retire le dossier ; la
-  corbeille montre aussi les fichiers de ses sous-dossiers. Un dossier qui ne
-  se vide pas — un fichier encore ouvert ailleurs — reste sur le disque, et un
-  avis le nomme au-dessus de la liste, sans faire échouer l'opération.
-- La planche de badges, sa feuille de contrôle et la liste en CSV s'écrivent
-  dans le dossier de l'événement, et non plus dans le dossier de travail ;
-  « Ouvrir le dossier » de la section « Badges » montre ce dossier, même après
-  que l'événement a été écrit sur un autre emplacement. Le nom d'un événement
-  long raccourcit plus souvent celui d'une planche rééditée ou tirée d'une
-  proposition. Un dossier d'événement déplacé ou supprimé pendant la séance
-  n'est pas recréé : la production le dit introuvable et propose « Enregistrer
-  sous… ».
+  charger une démonstration crée le dossier. Un événement ne prend jamais le nom
+  de la corbeille ni celui du fichier des réglages : nommé « Corbeille », il
+  s'enregistre sous « Corbeille (2) ». Son nom compte au plus 68 caractères, à
+  la création, à la copie et au renommage : à cette longueur, un nom de
+  caractères ordinaires tient entier sous le `data` des Documents, où il compte
+  deux fois, au dossier et à ses fichiers ; un nom long raccourcit plus souvent
+  celui d'une planche rééditée ou tirée d'une proposition. Un événement dont le
+  fichier porte un nom plus long s'ouvre comme avant ; son aperçu d'impression
+  refuse d'imprimer, au lieu d'échouer, et offre « Renommer », qui ramène à la
+  liste des événements. Renommer emporte tout le dossier : les badges et la
+  liste en CSV déjà produits prennent le nouveau nom, leur date gardée, le reste
+  — fichiers posés à la main, dossier `logo` — suit sous son nom, et l'ancien
+  dossier se retire. Supprimer range tout le contenu du dossier, `logo` compris,
+  dans un dossier daté de la corbeille qui le porte directement, puis retire le
+  dossier ; la corbeille montre aussi les fichiers de ses sous-dossiers. Un
+  dossier qui ne se vide pas — un fichier encore ouvert ailleurs — reste sur le
+  disque, et un avis le nomme au-dessus de la liste, sans faire échouer
+  l'opération. Un dossier d'événement déplacé ou supprimé pendant la séance
+  n'est pas recréé : la production des badges le dit introuvable et propose «
+  Enregistrer sous… ». Les fichiers d'événement posés à même le dossier de
+  travail, hors d'un dossier, comme ceux posés directement dans
+  `Documents\Gestion table tournante Libre`, ne s'affichent plus, ne s'importent
+  plus de l'autre emplacement et restent intacts : rien ne les déplace. Il n'y a
+  pas de retour arrière : une version antérieure ne voit pas les événements
+  rangés en dossiers.
 - Sous le placement retenu, glisser hors des tables une personne que sa
   réservation tient à la sienne annonce le refus dès le survol, au lieu de
   « retire du tour ».

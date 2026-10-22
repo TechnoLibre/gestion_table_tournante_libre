@@ -16,6 +16,11 @@
 // L'impression de l'aperçu par la coquille (§ 11.7) : une page du PDF par
 // feuille de l'aperçu, chacune aux dimensions de la sienne à la tolérance
 // près ; chaque écart se nomme.
+//
+// La disposition que l'essai relève sous exe/data (§ 8.6) : chaque fichier
+// d'événement dans le dossier de son événement, data/<nom>/<nom><suffixe>,
+// sous le séparateur du système ; un fichier posé à même data, plus profond,
+// ou nommé autrement que son dossier se nomme.
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,6 +36,8 @@ import {
   estLanceDirectement,
   fautesDImpression,
   fautesDePolice,
+  fautesDAppariement,
+  fautesDeDisposition,
 } from './essai_demarrage.js';
 
 const RACINE_ESSAI = join('/', 'racine-essai', 'gtt-essai-demarrage-x');
@@ -296,5 +303,60 @@ describe('essai de démarrage : l’impression de l’aperçu (§ 11.7)', () => 
 
   test('un aperçu sans feuille est une faute, même sans page', () => {
     assert.deepEqual(fautesDImpression([], [], TOLERANCE), ['aucune feuille dans l’aperçu']);
+  });
+});
+
+describe('essai de démarrage : un dossier par événement sous data (§ 8.6)', () => {
+  const ETAT = '.gtt.json';
+
+  test('chaque fichier dans le dossier de son événement : aucune faute, sous les deux séparateurs', () => {
+    const posix = ['Bal des Mésanges/Bal des Mésanges.gtt.json', 'Veillée du Héron/Veillée du Héron.gtt.json'];
+    assert.deepEqual(fautesDeDisposition(posix, ETAT, path.posix), []);
+    const windows = posix.map((relatif) => relatif.replace('/', '\\'));
+    assert.deepEqual(fautesDeDisposition(windows, ETAT, path.win32), []);
+    assert.deepEqual(fautesDeDisposition(['Bal des Mésanges/Bal des Mésanges.gtt.verrou'], '.gtt.verrou', path.posix), []);
+    assert.deepEqual(fautesDeDisposition([], ETAT, path.posix), []);
+    // Sans chemins, le séparateur du système, celui de l'essai réel.
+    assert.deepEqual(fautesDeDisposition([join('Bal des Mésanges', 'Bal des Mésanges.gtt.json')], ETAT), []);
+  });
+
+  test('chaque état a son journal dans son dossier : un état sans journal, un journal sans état se nomment, même à nombre égal', () => {
+    const etats = ['Bal des Mésanges/Bal des Mésanges.gtt.json', 'Veillée du Héron/Veillée du Héron.gtt.json'];
+    const journaux = ['Bal des Mésanges/Bal des Mésanges.gtt-journal.jsonl', 'Fête des Ifs/Fête des Ifs.gtt-journal.jsonl'];
+    assert.deepEqual(fautesDAppariement(etats, journaux.slice(0, 1).concat('Veillée du Héron/Veillée du Héron.gtt-journal.jsonl'), path.posix), []);
+    assert.deepEqual(fautesDAppariement(etats, journaux, path.posix), [
+      'Fête des Ifs : un journal sans état',
+      'Veillée du Héron : un état sans journal',
+    ]);
+    assert.deepEqual(
+      fautesDAppariement(etats.map((relatif) => join(...relatif.split('/'))), [join('Bal des Mésanges', 'x.jsonl')]),
+      ['Veillée du Héron : un état sans journal'],
+    );
+  });
+
+  test('un fichier posé à même data, l’ancienne disposition, se nomme', () => {
+    assert.deepEqual(fautesDeDisposition(['Bal des Mésanges.gtt.json'], ETAT, path.posix), [
+      'Bal des Mésanges.gtt.json : posé à même data, hors d’un dossier d’événement',
+    ]);
+    assert.deepEqual(fautesDeDisposition(['Bal des Mésanges.gtt.json'], ETAT, path.win32), [
+      'Bal des Mésanges.gtt.json : posé à même data, hors d’un dossier d’événement',
+    ]);
+  });
+
+  test('un fichier plus profond, ou nommé autrement que son dossier, se nomme, dans l’ordre reçu', () => {
+    const relatifs = [
+      'Veillée du Héron/Veillée du Héron.gtt.json',
+      'Veillée du Héron/logo/Veillée du Héron.gtt.json',
+      'Bal des Mésanges/Veillée du Héron.gtt.json',
+    ];
+    assert.deepEqual(fautesDeDisposition(relatifs, ETAT, path.posix), [
+      'Veillée du Héron/logo/Veillée du Héron.gtt.json : plus profond que le dossier de son événement',
+      'Bal des Mésanges/Veillée du Héron.gtt.json : nommé autrement que son dossier',
+    ]);
+    // Sous POSIX, une barre oblique inverse est un caractère du nom : le
+    // fichier reste à même data.
+    assert.deepEqual(fautesDeDisposition(['Bal des Mésanges\\Bal des Mésanges.gtt.json'], ETAT, path.posix), [
+      'Bal des Mésanges\\Bal des Mésanges.gtt.json : posé à même data, hors d’un dossier d’événement',
+    ]);
   });
 });

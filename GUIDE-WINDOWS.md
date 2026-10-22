@@ -100,29 +100,38 @@ Ce qui arrive ensuite est réglé aussi :
 - sur une clé ou un disque amovible, le mode portable protège moins bien
   contre une coupure pendant une écriture ; le logiciel l’annonce.
 
-**Ce que contient le dossier.** Chaque événement y tient en deux fichiers
+**Ce que contient le dossier.** Le dossier de travail porte un dossier par
+événement, nommé d’après lui, le dossier `corbeille` et le fichier
+`reglages_locaux.json`. Le dossier d’un événement tient ses deux fichiers
 ordinaires, nommés d’après lui : `<nom>.gtt.json`, son état complet, et
-`<nom>.gtt-journal.jsonl`, son historique. Les deux portent le même identifiant
-interne, et c’est lui qui les apparie, pas leur nom ; renommez un événement par
-la commande « Renommer » de la liste plutôt que dans l’explorateur. Le dossier
-`corbeille` reçoit les événements supprimés, chacun dans un dossier daté ; le
-logiciel ne la vide jamais. Le fichier `reglages_locaux.json` garde les réglages
-de ce poste, comme le format de papier. Les planches de badges produites se
-déposent à côté des fichiers de l’événement.
+`<nom>.gtt-journal.jsonl`, son historique. Il reçoit aussi les planches de
+badges et la liste en CSV produites pour cet événement. Les deux fichiers
+portent le même identifiant interne, et c’est lui qui les apparie, pas leur
+nom ; renommez un événement par la commande « Renommer » de la liste plutôt
+que dans l’explorateur : elle renomme son dossier, et tout ce qu’il contient
+suit. Le dossier `corbeille` reçoit les événements supprimés, chacun dans un
+dossier daté qui porte directement ses fichiers ; le logiciel ne la vide
+jamais. Le fichier `reglages_locaux.json` garde les réglages de ce poste, comme
+le format de papier. Des fichiers d’événement posés à même le dossier de
+travail, hors d’un dossier — ceux d’une version antérieure —, ne s’affichent
+pas, et le logiciel les laisse tels quels.
 
 ## Sauvegarder
 
 Ouvrez le dossier de travail par « Ouvrir dans l’explorateur », puis copiez-le
-en entier sur une clé, un autre disque ou un dossier sauvegardé. En mode
-portable, copiez le dossier qui contient l’exécutable et son dossier `data`.
-Faites la copie logiciel fermé : aucun fichier n’est alors en cours
-d’écriture.
+en entier sur une clé, un autre disque ou un dossier sauvegardé : il porte tous
+vos événements, leur corbeille et les réglages du poste. En mode portable,
+copiez le dossier qui contient l’exécutable et son dossier `data`. Pour un seul
+événement, copiez son dossier. Faites la copie logiciel fermé : aucun fichier
+n’est alors en cours d’écriture.
 
-Pour envoyer un seul événement, joignez ses deux fichiers, `<nom>.gtt.json` et
-`<nom>.gtt-journal.jsonl`. Pour le reprendre, déposez-les dans le dossier de
-travail, ou utilisez « Importer un événement depuis un fichier… » sur la liste
-des événements. Ces fichiers se lisent sans le logiciel : ce sont des fichiers
-texte ordinaires.
+Pour envoyer un seul événement, joignez son dossier, compressé en un fichier ZIP
+par l’explorateur, ou au moins ses deux fichiers, `<nom>.gtt.json` et
+`<nom>.gtt-journal.jsonl`. Pour le reprendre, extrayez le ZIP, puis déposez son
+dossier dans le dossier de travail — des fichiers déposés seuls, hors d’un
+dossier, ne s’affichent pas —, ou utilisez « Importer un événement depuis un
+fichier… » sur la liste des événements, qui lui crée son dossier. Ces fichiers
+se lisent sans le logiciel : ce sont des fichiers texte ordinaires.
 
 Ils contiennent les noms, et parfois les courriels et les notes, des
 participants : traitez-les comme toute liste de personnes, et ne les envoyez
@@ -178,6 +187,6 @@ joignant :
    texte exact du message s’il y en a un ;
 3. une capture d’écran qui montre le bandeau : il porte la version ;
 4. si le problème tient à un événement précis, et seulement avec l’accord des
-   personnes concernées, ses deux fichiers.
+   personnes concernées, son dossier ou ses deux fichiers.
 
 Le logiciel n’envoie rien de lui-même : il ne se connecte à aucun service.

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les réglages locaux (§ 8.5) : le fichier reglages_locaux.json, à la racine
-// du dossier de travail, à côté des fichiers d'événement et hors d'eux. Il
+// du dossier de travail, à côté des dossiers d'événement et hors d'eux. Il
 // porte cinq choses, et cinq seulement : le cadrage de chaque événement,
 // indexé par son identifiant — le zoom k en pixels par centimètre, la
 // translation tx, ty en pixels —, le format de papier des sorties, global

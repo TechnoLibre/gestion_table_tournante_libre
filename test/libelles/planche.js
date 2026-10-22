@@ -59,14 +59,14 @@ export const TEXTES = [
     'PLANCHE_NON_ECRITE',
     {
       chemin: 'Soirée des Lucioles.controle_avery5392_2031-05-17_20-15-07.pdf',
-      dossier: 'E:\\data',
+      dossier: 'E:\\data\\Soirée des Lucioles',
       cause: null,
       fichier: 'controle',
-      deposee: 'E:\\data\\Soirée des Lucioles.badges_avery5392_2031-05-17_20-15-07.pdf',
+      deposee: 'E:\\data\\Soirée des Lucioles\\Soirée des Lucioles.badges_avery5392_2031-05-17_20-15-07.pdf',
     },
     "La feuille de contrôle n'a pas pu s'écrire : « Soirée des Lucioles.controle_avery5392_2031-05-17_20-15-07.pdf » " +
-      'dans le dossier « E:\\data ». Les cartes, elles, sont déposées : ' +
-      'E:\\data\\Soirée des Lucioles.badges_avery5392_2031-05-17_20-15-07.pdf. « Enregistrer sous\u{2026} » dépose les deux fichiers ailleurs.',
+      'dans le dossier « E:\\data\\Soirée des Lucioles ». Les cartes, elles, sont déposées : ' +
+      'E:\\data\\Soirée des Lucioles\\Soirée des Lucioles.badges_avery5392_2031-05-17_20-15-07.pdf. « Enregistrer sous\u{2026} » dépose les deux fichiers ailleurs.',
   ],
   [
     'PLANCHE_NON_ECRITE',
