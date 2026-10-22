@@ -114,11 +114,11 @@ export function cleDEtat(etat) {
  * propre nœud (§ 14.6). ETAT_ILLISIBLE pour un état qui ne s'ouvre pas — un
  * journal sans état compris, de raison ABSENT —, avec la base, la raison et
  * les secours lus par la façade, et aucun nom à part ;
- * accueil.signalement.doublon pour un état dont d'autres bases portent
- * l'identifiant, avec leur nombre, et ces bases pour noms, dans l'ordre de la
- * façade. Un verrou présent ne se signale pas : seule la sonde d'une
- * opération dit si sa séance vit. Les détails, leurs secours compris, et les
- * noms sont des copies.
+ * accueil.signalement.doublon pour un état dont d'autres lignes portent
+ * l'identifiant, avec leur nombre, et leurs clés pour noms — dossier et
+ * base —, dans l'ordre de la façade. Un verrou présent ne se signale pas :
+ * seule la sonde d'une opération dit si sa séance vit. Les détails, leurs
+ * secours compris, et les noms sont des copies.
  *
  * @param {Object} ligne  LigneListe (evenements.js)
  * @returns {Array<{cle: string, details: Object, noms: string[]}>}

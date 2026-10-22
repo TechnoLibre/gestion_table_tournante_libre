@@ -33,9 +33,16 @@
 // corbeille, comme le premier geste (mettreDeCoteEtatMalEncode, du dépôt) ;
 // copier en fait un événement neuf, sans le toucher.
 //
-// Une base se dérive du nom de l'événement (deriverBase), libre parmi les
-// bases que portent les fichiers d'événement à la racine du dossier
-// (basesPrises), comme le dépôt la dérive pour creer.
+// Chaque événement a son dossier sous la racine, que la clé <dossier>/<base>
+// désigne (cleEvenement) ; ses fichiers se lisent et s'écrivent par la vue de
+// ce dossier (vueDossier), celle que porte son Ouvert. Une base se dérive du
+// nom de l'événement (deriverBase), libre parmi les noms des entrées de la
+// racine (basesPrises), comme le dépôt la dérive pour creer, et nomme le
+// dossier neuf de la copie, de l'import, du renommage. Renommer laisse
+// l'ancien dossier, vide de la paire, avec ce qui n'est pas à l'événement ;
+// supprimer en emporte les fichiers de l'événement dans la corbeille de la
+// racine, et laisse le dossier. Un fichier d'événement posé à même la racine
+// n'a pas de clé : rien ici ne le lit, ne le déplace ni ne l'importe.
 import { canoniser } from './canonique.js';
 import { entreesPour } from './courses.js';
 import {
@@ -51,7 +58,18 @@ import {
 import { analyser, etatDeduit } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { decoderJournal } from './journal.js';
-import { DOSSIER_CORBEILLE, SUFFIXES, SUFFIXE_ECRITURE, cleSansCasse, deriverBase, dossierCorbeille } from './noms.js';
+import {
+  DOSSIER_CORBEILLE,
+  SUFFIXES,
+  SUFFIXE_ECRITURE,
+  cleEvenement,
+  cleSansCasse,
+  decouperCle,
+  deriverBase,
+  dossierCorbeille,
+  dossierEvenement,
+} from './noms.js';
+import { vueDossier } from './systeme_fichiers.js';
 
 // Deux chaînes, comparées unité UTF-16 par unité.
 const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -163,7 +181,8 @@ export function libelleDeLInstant({ journal, revision }, libelleReprise) {
  * libellé de son entrée au journal. L'historique ne se copie pas : creer
  * écrit un journal d'une entrée, en instantané, au libellé libelle, et son
  * jalon nomJalon, puis l'état, puis le compagnon des courses que l'Ouvert
- * connaît pour ses propositions, sous l'identifiant de la copie ; sa base se
+ * connaît pour ses propositions, sous l'identifiant de la copie, dans un
+ * dossier neuf que sa base nomme, sous la racine de l'Ouvert ; sa base se
  * dérive du nom. L'original n'est ni lu ni écrit : la copie part de
  * l'Ouvert, en lecture comme en écriture.
  *
@@ -196,7 +215,7 @@ export async function copier(ouvert, { id, nom, libelle, nomJalon, horodatage, p
     filiation: { source: { id: source.id, nom: source.nom }, instant },
   };
   const courses = entreesPour(ouvert.courses, charge.propositions);
-  return creer(ouvert.fs, ouvert.racine, charge, { libelle, nomJalon, horodatage, produitVersion, courses });
+  return creer(ouvert.systeme, ouvert.racine, charge, { libelle, nomJalon, horodatage, produitVersion, courses });
 }
 
 // Vrai quand la base que deriver tire du nom, parmi les autres bases, tombe
@@ -213,6 +232,10 @@ function tombeSur(deriver, autres, base) {
     throw erreur;
   }
 }
+
+// Le chemin, relatif à la racine, du fichier de l'Ouvert au suffixe donné,
+// dans son dossier.
+const cheminDe = ({ dossier, base }, suffixe) => `${dossier}/${base}${suffixe}`;
 
 // Supprime le fichier chemin de racine. Rend vrai quand il n'y est plus, et
 // faux quand le système de fichiers refuse de l'effacer, par une
@@ -241,66 +264,87 @@ async function deplacerSiPossible(fs, racine, de, vers) {
   }
 }
 
-// Efface ce que la recopie a écrit sous base avant un refus : le journal
-// quand journal le dit, puis le .precedent, et lui seulement une fois le
-// journal parti. Un journal resté garde ainsi son .precedent, qui le tient à
-// la nouvelle base : sans lui, l'ancien état pourrait s'apparier ce journal
-// (apparier, dans le dépôt).
-async function effacerRecopie(fs, racine, base, { journal }) {
+// Efface ce que la recopie a écrit dans le dossier neuf de la base avant un
+// refus, par la vue de ce dossier : le journal quand journal le dit, puis le
+// .precedent, et lui seulement une fois le journal parti, puis le dossier,
+// quand il est vide. Un journal resté garde ainsi son .precedent, qui le
+// tient à la nouvelle base : sans lui, l'ancien état pourrait s'apparier ce
+// journal (apparier, dans le dépôt), et le dossier resté réserve son nom. Un
+// dossier qui ne se retire pas reste, sans lever.
+async function effacerRecopie(systeme, racine, base, { journal }) {
+  const fs = vueDossier(systeme, base);
   if (journal && !(await effacerSiPossible(fs, racine, base + SUFFIXES.journal))) return;
-  await effacerSiPossible(fs, racine, base + SUFFIXES.precedent);
+  if (!(await effacerSiPossible(fs, racine, base + SUFFIXES.precedent))) return;
+  try {
+    await systeme.supprimerDossier(racine, base);
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+  }
 }
 
-// La nouvelle paire de l'Ouvert, que le dépôt écrit dans son dossier sous la
-// base que dérive le nom de la charge écrite (enregistrerAilleurs, avec le
-// geste d'options) : l'état d'avant au .precedent, puis le journal entier
-// suivi de l'entrée du geste, puis l'état. Le dossier ne se crée pas : un
-// dossier de travail disparu ne renaît pas (§ 8.6). Le .precedent, écrit
-// avant le journal, fait de la nouvelle base celle de l'événement : le
-// journal neuf ne s'apparie qu'à elle, jamais à l'ancien état, que le journal
-// de l'ancienne base soit le sien ou non, et lister le tait tant que l'ancien
-// état se lit.
+// Le dossier neuf d'une racine que nomme le chemin affichable dossier d'un
+// refus d'écriture : celui d'un fichier écrit dans un dossier de la racine,
+// le chemin de la racine suivi d'un séparateur et d'un seul nom. null pour
+// un refus de la racine elle-même — la création du dossier neuf, dont le
+// dossier est la racine —, ou de tout autre chemin.
+function dossierDuRefus(dossier, racine, separateur) {
+  const tete = racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur;
+  if (typeof dossier !== 'string' || !dossier.startsWith(tete)) return null;
+  const nom = dossier.slice(tete.length);
+  return nom !== '' && !nom.includes(separateur) ? nom : null;
+}
+
+// La nouvelle paire de l'Ouvert, que le dépôt écrit dans un dossier neuf de
+// sa racine, sous la base que dérive le nom de la charge écrite
+// (enregistrerAilleurs, avec le geste d'options) : le dossier, puis l'état
+// d'avant au .precedent, puis le journal entier suivi de l'entrée du geste,
+// puis l'état. La racine ne se crée pas : un dossier de travail disparu ne
+// renaît pas (§ 8.6). Le .precedent, écrit avant le journal, fait de la
+// nouvelle base celle de l'événement, et lister tait le journal neuf tant
+// que l'ancien état, qui porte son identifiant, se lit.
 //
 // Un refus avant l'état laisse l'ancienne paire seule à porter l'événement,
-// et ce que la recopie a écrit avant lui s'efface (effacerRecopie) : sur un
-// journal refusé, que nomme le chemin de l'ECRITURE, le .precedent ; sur un
-// état refusé, le journal, puis le .precedent. L'ECRITURE d'un journal
-// remonte telle quelle ; le refus de l'état remonte en ECRITURE {chemin,
-// dossier, cause}, sans Ouvert : celui de l'appelant décrit encore le disque.
-// Toute autre erreur remonte telle quelle.
+// et ce que la recopie a écrit avant lui s'efface, son dossier compris
+// (effacerRecopie) : sur un .precedent ou un journal refusés, dans le
+// dossier que nomme l'ECRITURE (dossierDuRefus), le .precedent ; sur un état
+// refusé, le journal, puis le .precedent. L'ECRITURE remonte telle quelle ;
+// le refus de l'état remonte en ECRITURE {chemin, dossier, cause}, sans
+// Ouvert : celui de l'appelant décrit encore le disque. Toute autre erreur
+// remonte telle quelle.
 async function ecrireNouvellePaire(ouvert, options) {
-  const { fs, racine } = ouvert;
+  const { systeme, racine } = ouvert;
   try {
     return await enregistrerAilleurs(ouvert, racine, { ...options, existantes: [], creerRacine: false });
   } catch (erreur) {
     if (!(erreur instanceof ErreurStockage)) throw erreur;
     if (erreur.code === 'ETAT_NON_ECRIT') {
       const { chemin, dossier, cause, ouvert: neuve } = erreur.details;
-      await effacerRecopie(fs, racine, neuve.base, { journal: true });
+      await effacerRecopie(systeme, racine, neuve.base, { journal: true });
       throw new ErreurStockage('ECRITURE', { chemin, dossier, cause });
     }
-    const { chemin } = erreur.details;
-    if (erreur.code === 'ECRITURE' && chemin.endsWith(SUFFIXES.journal)) {
-      await effacerRecopie(fs, racine, chemin.slice(0, -SUFFIXES.journal.length), { journal: false });
+    if (erreur.code === 'ECRITURE') {
+      const { separateur } = await systeme.emplacements();
+      const neuf = dossierDuRefus(erreur.details.dossier, racine, separateur);
+      if (neuf !== null) await effacerRecopie(systeme, racine, neuf, { journal: false });
     }
     throw erreur;
   }
 }
 
-// Supprime l'ancienne paire de l'Ouvert, la nouvelle étant complète : son
-// état d'abord, sans lequel lister ne la montre plus, la nouvelle portant
-// son identifiant ; puis son .precedent, le journal de l'événement
-// (baseJournal), jamais celui d'un autre, et son compagnon des courses
-// quand la liste du dossier le porte, sous son nom sur le disque
+// Supprime l'ancienne paire de l'Ouvert, dans son dossier, par sa vue, la
+// nouvelle étant complète : son état d'abord, sans lequel lister ne la montre
+// plus, la nouvelle portant son identifiant ; puis son .precedent, le journal
+// de l'événement (baseJournal), jamais celui d'un autre, et son compagnon des
+// courses quand la liste du dossier le porte, sous son nom sur le disque
 // (nomSurDisque) ; un fichier absent n'est pas une faute, ni un dossier
-// disparu, dont la liste est vide (entreesDe). Quand l'écriture du
-// compagnon neuf a été refusée (nouvelle.compagnon null), l'ancien ne se
-// supprime pas : il se déplace sous la nouvelle base, qui retrouve ainsi
-// ses courses à la réouverture, ou reste où il est quand le déplacement
-// est refusé ; ni l'un ni l'autre ne lève. Une ErreurStockage reçoit
-// dans ses détails ouvert, l'Ouvert de la nouvelle paire, d'où continuer,
-// puis remonte : celui que tient l'appelant décrit l'ancienne, et un geste
-// parti de lui ferait diverger deux paires du même événement.
+// disparu, dont la liste est vide (entreesDe). Quand l'écriture du compagnon
+// neuf a été refusée (nouvelle.compagnon null), l'ancien ne se supprime pas :
+// il se déplace sous la nouvelle base, dans le dossier neuf, qui retrouve
+// ainsi ses courses à la réouverture, ou reste où il est quand le déplacement
+// est refusé ; ni l'un ni l'autre ne lève. Une ErreurStockage reçoit dans ses
+// détails ouvert, l'Ouvert de la nouvelle paire, d'où continuer, puis
+// remonte : celui que tient l'appelant décrit l'ancienne, et un geste parti
+// de lui ferait diverger deux paires du même événement.
 async function supprimerAncienne(ouvert, nouvelle) {
   const { fs, racine, base, baseJournal } = ouvert;
   const chemins = [base + SUFFIXES.etat, base + SUFFIXES.precedent];
@@ -312,7 +356,8 @@ async function supprimerAncienne(ouvert, nouvelle) {
     const compagnon = nomSurDisque(noms, base + SUFFIXES.courses, insensibleCasse);
     if (compagnon !== null && nouvelle.compagnon !== null) await fs.supprimer(racine, compagnon);
     if (compagnon !== null && nouvelle.compagnon === null) {
-      await deplacerSiPossible(fs, racine, compagnon, nouvelle.base + SUFFIXES.courses);
+      const ancien = `${ouvert.dossier}/${compagnon}`;
+      await deplacerSiPossible(ouvert.systeme, racine, ancien, cheminDe(nouvelle, SUFFIXES.courses));
     }
   } catch (erreur) {
     if (erreur instanceof ErreurStockage) erreur.details.ouvert = nouvelle;
@@ -322,16 +367,19 @@ async function supprimerAncienne(ouvert, nouvelle) {
 
 /**
  * Renomme l'événement ouvert (§ 8.7) : nom devient le nom de sa charge, par
- * un geste au libellé libelle. La base du nouveau nom se dérive, libre dans
- * le dossier. Quand elle tomberait sur la base de l'événement, ses fichiers
- * mis à part — un nom qui ne diffère que par un caractère que Windows
- * refuse, ou par la casse —, le renommage est ce seul geste, en place
- * (enregistrer). Sinon, le logiciel écrit d'abord la paire complète sous la
- * nouvelle base — l'état d'avant au .precedent, le journal recopié suivi de
- * l'entrée du renommage, puis l'état, puis le compagnon des courses —, puis
- * supprime l'ancienne : son état, son .precedent, le journal de l'événement
- * et son compagnon quand il existe, jamais l'inverse ; un compagnon neuf
- * refusé laisse l'ancien se déplacer sous la nouvelle base. Rien de
+ * un geste au libellé libelle. La base du nouveau nom se dérive, libre parmi
+ * les noms des entrées de la racine. Quand elle tomberait sur le dossier de
+ * l'événement, son nom mis à part — un nom qui ne diffère que par un
+ * caractère que Windows refuse, ou par la casse —, le renommage est ce seul
+ * geste, en place (enregistrer), dossier et fichiers gardant leur nom.
+ * Sinon, le logiciel écrit d'abord la paire complète dans un dossier neuf
+ * qui porte la nouvelle base — l'état d'avant au .precedent, le journal
+ * recopié suivi de l'entrée du renommage, puis l'état, puis le compagnon des
+ * courses —, puis supprime l'ancienne, dans l'ancien dossier : son état, son
+ * .precedent, le journal de l'événement et son compagnon quand il existe,
+ * jamais l'inverse ; un compagnon neuf refusé laisse l'ancien se déplacer
+ * sous la nouvelle base, dans le dossier neuf. L'ancien dossier reste, avec
+ * ce qui n'est pas de la paire. Rien de
  * l'ancienne paire ne s'écrit, et le .precedent neuf, posé avant le journal
  * neuf, tient ce journal à la nouvelle base : quel que soit le journal de
  * l'ancienne base — le sien, aucun pour un état importé, un illisible, celui
@@ -384,12 +432,12 @@ async function supprimerAncienne(ouvert, nouvelle) {
 export async function renommer(ouvert, { nom, libelle, horodatage, produitVersion, libelleReprise }) {
   exigerFormatCourant(ouvert.formatPlusRecent);
   if (nom.trim() === ouvert.charge.evenement.nom.trim()) return ouvert;
-  const { fs, racine, base } = ouvert;
-  const autres = (await basesPrises(fs, racine)).filter((autre) => autre !== base);
-  const { separateur } = await fs.emplacements();
+  const { systeme, racine, dossier } = ouvert;
+  const autres = (await basesPrises(systeme, racine)).filter((autre) => autre !== dossier);
+  const { separateur } = await systeme.emplacements();
   const deriver = (existantes) => deriverBase(nom, { racine: racine.chemin, separateur, existantes });
   const apres = { ...ouvert.charge, evenement: { ...ouvert.charge.evenement, nom } };
-  if (tombeSur(deriver, autres, base)) {
+  if (tombeSur(deriver, autres, dossier)) {
     return enregistrer(ouvert, apres, { libelle, horodatage, produitVersion, libelleReprise });
   }
   const geste = { apres, libelle, produitVersion };
@@ -416,110 +464,122 @@ function decoder(octets) {
   }
 }
 
-// Écrit dans racine l'événement id, nom : ses fichiers, tels quels, chacun
-// quand il est donné, sous une base libre que nom dérive — le .precedent
-// d'abord, qui tient la base à l'événement (apparier, dans le dépôt), puis
-// le journal, puis l'état, puis le compagnon des courses. Rend cette base.
-// IDENTIFIANT_PRESENT quand lister nomme id dans le dossier, que son état
-// se lise ou non : l'événement y est déjà, et une seconde copie de son
-// identifiant dériverait (§ 8.6). Le refus d'écrire le compagnon, par une
-// ErreurStockage, ne lève pas : l'événement est là, ses courses inconnues.
+// Écrit dans racine l'événement id, nom, dans un dossier neuf que nomme une
+// base libre parmi les noms des entrées de la racine, que nom dérive : le
+// dossier d'abord, puis ses fichiers, tels quels, chacun quand il est
+// donné — le .precedent d'abord, qui tient la base à l'événement (apparier,
+// dans le dépôt), puis le journal, puis l'état, puis le compagnon des
+// courses. Rend { cle, base }. IDENTIFIANT_PRESENT quand lister nomme id
+// dans un dossier de la racine, que son état se lise ou non : l'événement y
+// est déjà, et une seconde copie de son identifiant dériverait (§ 8.6). Le
+// refus d'écrire le compagnon, par une ErreurStockage, ne lève pas :
+// l'événement est là, ses courses inconnues.
 async function deposer(fs, racine, { id, nom, texteEtat, textePrecedent = null, texteJournal, texteCourses = null }) {
   const present = (await lister(fs, racine)).find((resume) => resume.id === id);
-  if (present !== undefined) throw new ErreurStockage('IDENTIFIANT_PRESENT', { id, base: present.base });
+  if (present !== undefined) throw new ErreurStockage('IDENTIFIANT_PRESENT', { id, base: present.base, dossier: present.dossier });
   const { separateur } = await fs.emplacements();
   const existantes = await basesPrises(fs, racine);
   const base = deriverBase(nom, { racine: racine.chemin, separateur, existantes });
-  if (textePrecedent !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.precedent, textePrecedent);
-  if (texteJournal !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.journal, texteJournal);
-  if (texteEtat !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.etat, texteEtat);
+  const dossier = dossierEvenement(base);
+  await fs.creerDossier(racine, dossier);
+  const local = vueDossier(fs, dossier);
+  if (textePrecedent !== null) await local.ecrireAtomique(racine, base + SUFFIXES.precedent, textePrecedent);
+  if (texteJournal !== null) await local.ecrireAtomique(racine, base + SUFFIXES.journal, texteJournal);
+  if (texteEtat !== null) await local.ecrireAtomique(racine, base + SUFFIXES.etat, texteEtat);
   if (texteCourses !== null) {
     try {
-      await fs.ecrireAtomique(racine, base + SUFFIXES.courses, texteCourses);
+      await local.ecrireAtomique(racine, base + SUFFIXES.courses, texteCourses);
     } catch (erreur) {
       if (!(erreur instanceof ErreurStockage)) throw erreur;
     }
   }
-  return base;
+  return { cle: cleEvenement(dossier, base), base };
 }
 
 /**
  * Importe un fichier d'état venu d'ailleurs (§ 8.7) : ses octets, lus en
  * UTF-8, se copient tels quels — marque d'ordre d'octets, fins de ligne et
- * mise en page comprises — sous une base libre que dérive le nom qu'il
- * porte. Aucun journal ne s'écrit, et rien ne se convertit : un fichier d'un
- * format plus récent, que l'analyse lit réduit à ce qu'elle connaît, s'ouvre
- * ensuite en lecture seule.
+ * mise en page comprises — dans un dossier neuf, sous une base libre que
+ * dérive le nom qu'il porte. Aucun journal ne s'écrit, et rien ne se
+ * convertit : un fichier d'un format plus récent, que l'analyse lit réduit à
+ * ce qu'elle connaît, s'ouvre ensuite en lecture seule.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
  * @param {Uint8Array} octets
- * @returns {Promise<{base: string}>}
+ * @returns {Promise<{cle: string, base: string}>}   la clé de l'événement
+ *          importé (cleEvenement) et sa base
  * @throws {ErreurStockage} ETAT_ILLISIBLE {raison, chemin, [format]} de
  *         l'analyse, raison ENCODAGE pour des octets hors UTF-8 ; ni base ni
  *         secours : le fichier n'est pas du dossier. IDENTIFIANT_PRESENT {id,
  *         base} quand lister nomme son identifiant dans le dossier, que
  *         l'état qui le porte se lise ou non ;
- *         CHEMIN_TROP_LONG ; ECRITURE. Rien ne s'écrit avant l'écriture de
- *         l'état
+ *         CHEMIN_TROP_LONG ; ECRITURE. Rien ne s'écrit avant le dossier,
+ *         puis l'état
  * @throws {TypeError} des octets qui ne sont pas un Uint8Array
  */
 export async function importer(fs, racine, octets) {
   const texte = decoder(octets);
   const { id, nom } = analyser(texte).charge.evenement;
-  return { base: await deposer(fs, racine, { id, nom, texteEtat: texte, texteJournal: null }) };
+  return deposer(fs, racine, { id, nom, texteEtat: texte, texteJournal: null });
 }
 
-// Les fichiers de l'événement de base dans depuis, dont l'état ne se lit
-// pas, recopiés tels quels dans vers (deposer) : le .precedent et l'état,
-// chacun quand il existe et que ses octets sont de l'UTF-8, et le journal
-// que le secours source apparie, par ses lignes lisibles
-// (journalSiPresent). Le secours source — 'precedent' ou 'journal'
-// (ouvrirSecours) — donne l'identifiant et le nom. Rend la base dans vers.
-async function importerSecours(fs, depuis, vers, base, source) {
-  const { charge, baseJournal } = await ouvrirSecours(fs, depuis, base, source);
+// Les fichiers de l'événement de clé cle dans depuis, dont l'état ne se lit
+// pas, recopiés tels quels dans vers (deposer), lus dans son dossier par la
+// vue de l'Ouvert du secours : le .precedent et l'état, chacun quand il
+// existe et que ses octets sont de l'UTF-8, et le journal que le secours
+// source apparie, par ses lignes lisibles (journalSiPresent). Le secours
+// source — 'precedent' ou 'journal' (ouvrirSecours) — donne l'identifiant et
+// le nom. Rend la clé dans vers.
+async function importerSecours(fs, depuis, vers, cle, source) {
+  const { charge, baseJournal, base, fs: local } = await ouvrirSecours(fs, depuis, cle, source);
   const { id, nom } = charge.evenement;
-  const lire = (chemin) => texteSiPresent(fs, depuis, chemin);
+  const lire = (chemin) => texteSiPresent(local, depuis, chemin);
   const journal = baseJournal === null ? null : baseJournal + SUFFIXES.journal;
-  return deposer(fs, vers, {
+  const { cle: nouvelle } = await deposer(fs, vers, {
     id,
     nom,
     textePrecedent: await lire(base + SUFFIXES.precedent),
-    texteJournal: journal === null ? null : await journalSiPresent(fs, depuis, journal),
+    texteJournal: journal === null ? null : await journalSiPresent(local, depuis, journal),
     texteEtat: await lire(base + SUFFIXES.etat),
   });
+  return nouvelle;
 }
 
-// Importe l'événement de base de depuis dans vers (importerDepuis) et rend
-// sa base là-bas. Un état lisible s'importe avec son journal et son
+// Importe l'événement de clé cle de depuis dans vers (importerDepuis) et
+// rend sa clé là-bas. Ses fichiers se lisent dans son dossier, par la vue de
+// son Ouvert. Un état lisible s'importe avec son journal et son
 // compagnon des courses, tel quel, quand ses octets se lisent
 // (texteSiLisible) : l'ouverture là-bas le revalide entrée par entrée. Un
 // état illisible qui a un secours lisible s'importe par ses fichiers
 // (importerSecours), le .precedent pour source quand il se lit ; sans
 // secours, son refus remonte.
-async function importerUn(fs, depuis, vers, base) {
+async function importerUn(fs, depuis, vers, cle) {
   let ouvert;
   try {
-    ouvert = await ouvrir(fs, depuis, base);
+    ouvert = await ouvrir(fs, depuis, cle);
   } catch (erreur) {
     if (erreur.code !== 'ETAT_ILLISIBLE') throw erreur;
     const { precedent, journal } = erreur.details.secours;
     if (precedent === null && journal === null) throw erreur;
-    return importerSecours(fs, depuis, vers, base, precedent === null ? 'journal' : 'precedent');
+    return importerSecours(fs, depuis, vers, cle, precedent === null ? 'journal' : 'precedent');
   }
-  const { texteEtat, baseJournal } = ouvert;
+  const { texteEtat, baseJournal, base, fs: local } = ouvert;
   const { id, nom } = analyser(texteEtat).charge.evenement;
-  const texteJournal = baseJournal === null ? null : await journalSiPresent(fs, depuis, baseJournal + SUFFIXES.journal);
-  const texteCourses = await texteSiLisible(fs, depuis, base + SUFFIXES.courses);
-  return deposer(fs, vers, { id, nom, texteEtat, texteJournal, texteCourses });
+  const journal = baseJournal === null ? null : baseJournal + SUFFIXES.journal;
+  const texteJournal = journal === null ? null : await journalSiPresent(local, depuis, journal);
+  const texteCourses = await texteSiLisible(local, depuis, base + SUFFIXES.courses);
+  return (await deposer(fs, vers, { id, nom, texteEtat, texteJournal, texteCourses })).cle;
 }
 
 /**
- * Importe des événements de l'autre emplacement (§ 8.6) : pour chaque base
- * de depuis, dans l'ordre reçu, le journal qu'ouvrir lui apparie, son état,
- * puis son compagnon des courses quand il se lit, se copient tels quels
- * dans vers, sous une base libre que dérive le nom que porte l'état ; le
- * refus d'écrire le compagnon ne refuse pas l'import. Le .precedent ne se
+ * Importe des événements de l'autre emplacement (§ 8.6) : pour chaque clé
+ * de depuis (cleEvenement), dans l'ordre reçu, le journal qu'ouvrir lui
+ * apparie, son état, puis son compagnon des courses quand il se lit, se
+ * copient tels quels dans vers, dans un dossier neuf, sous une base libre
+ * que dérive le nom que porte l'état ; le refus d'écrire le compagnon ne
+ * refuse pas l'import. Une clé sans dossier — un fichier posé à même la
+ * racine — se refuse CHEMIN_REFUSE, sans rien lire. Le .precedent ne se
  * copie pas. Un événement dont l'état ne se lit pas, mais dont le
  * .precedent ou le journal se lisent (§ 8.8), se copie par ses fichiers,
  * tels quels : le .precedent, le journal que son secours apparie, et
@@ -527,58 +587,61 @@ async function importerUn(fs, depuis, vers, base) {
  * secours. Un journal dont une ligne n'est pas de l'UTF-8 se copie par les
  * lignes qui la précèdent, celles que l'ouverture lit (journalSiPresent).
  * Les originaux restent où ils sont, sans qu'aucune écriture ne touche
- * depuis. Une base qui ne s'importe pas se refuse par son code —
+ * depuis. Une clé qui ne s'importe pas se refuse par son code —
  * ETAT_ILLISIBLE sans secours lisible, ABSENT, IDENTIFIANT_PRESENT,
- * ECRITURE… —, sans arrêter les suivantes ; l'écriture refusée d'un
- * fichier laisse dans vers ceux déjà écrits.
+ * ECRITURE, CHEMIN_REFUSE… —, sans arrêter les suivantes ; l'écriture
+ * refusée d'un fichier laisse dans vers ceux déjà écrits.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} depuis
  * @param {import('./systeme_fichiers.js').Racine} vers
- * @param {Iterable<string>} bases   bases de depuis
- * @returns {Promise<{importes: Array<{base: string, nouvelle: string}>, refuses: Array<{base: string, code: string}>}>}
- *          importes : chaque base importée et sa base dans vers ; refuses :
- *          chaque base refusée et le code de son refus ; l'un et l'autre
- *          dans l'ordre des bases reçues. Une erreur qui n'est pas une
+ * @param {Iterable<string>} cles   clés des événements de depuis
+ * @returns {Promise<{importes: Array<{cle: string, nouvelle: string}>, refuses: Array<{cle: string, code: string}>}>}
+ *          importes : chaque clé importée et sa clé dans vers ; refuses :
+ *          chaque clé refusée et le code de son refus ; l'un et l'autre
+ *          dans l'ordre des clés reçues. Une erreur qui n'est pas une
  *          ErreurStockage remonte telle quelle
  */
-export async function importerDepuis(fs, depuis, vers, bases) {
+export async function importerDepuis(fs, depuis, vers, cles) {
   const importes = [];
   const refuses = [];
-  for (const base of bases) {
+  for (const cle of cles) {
     try {
-      importes.push({ base, nouvelle: await importerUn(fs, depuis, vers, base) });
+      importes.push({ cle, nouvelle: await importerUn(fs, depuis, vers, cle) });
     } catch (erreur) {
       if (!(erreur instanceof ErreurStockage)) throw erreur;
-      refuses.push({ base, code: erreur.code });
+      refuses.push({ cle, code: erreur.code });
     }
   }
   return { importes, refuses };
 }
 
-// Base du journal de l'événement de base : celle qu'ouvrir lui apparie quand
-// son état se lit ; sinon celle que lister lui apparie par l'identifiant de
-// son .precedent, ou du journal sans état, le résumé de base se trouvant
-// comme un nom de fichier (nomSurDisque) ; null quand aucun ne lui revient.
-// Le journal d'un autre événement n'est jamais le sien. Sur un système qui
-// ignore la casse, la base rendue peut différer par la casse du nom du
-// journal sur le disque.
-async function baseDuJournal(fs, racine, base, insensibleCasse) {
+// Base du journal de l'événement de clé cle, dans son dossier : celle
+// qu'ouvrir lui apparie quand son état se lit ; sinon celle que lister lui
+// apparie par l'identifiant de son .precedent, ou du journal sans état, le
+// résumé de sa base se trouvant parmi ceux de son dossier comme un nom de
+// fichier (nomSurDisque) ; null quand aucun ne lui revient. Le journal d'un
+// autre événement n'est jamais le sien. Sur un système qui ignore la casse,
+// la base rendue peut différer par la casse du nom du journal sur le disque.
+async function baseDuJournal(fs, racine, cle, insensibleCasse) {
   try {
-    return (await ouvrir(fs, racine, base)).baseJournal;
+    return (await ouvrir(fs, racine, cle)).baseJournal;
   } catch (erreur) {
     if (erreur.code === 'ABSENT') return null;
     if (erreur.code !== 'ETAT_ILLISIBLE') throw erreur;
   }
-  const resumes = await lister(fs, racine);
+  const { dossier, base } = decouperCle(cle);
+  const resumes = (await lister(fs, racine)).filter((resume) => resume.dossier === dossier);
   const trouvee = nomSurDisque(resumes.map((resume) => resume.base), base, insensibleCasse);
   return resumes.find((resume) => resume.base === trouvee)?.journal ?? null;
 }
 
 /**
- * Supprime l'événement de base (§ 8.7) : ses fichiers passent dans un
- * dossier neuf de la corbeille, daté de l'horodatage (dossierCorbeille),
- * créé d'abord — _2, _3… quand la seconde a déjà le sien. Partent l'état, le
+ * Supprime l'événement de clé cle (§ 8.7) : ses fichiers passent de son
+ * dossier dans un dossier neuf de la corbeille de la racine, daté de
+ * l'horodatage (dossierCorbeille), créé d'abord — _2, _3… quand la seconde a
+ * déjà le sien —, qui les porte directement. Le dossier de l'événement
+ * reste, avec ce qui n'est pas à l'événement. Partent l'état, le
  * .precedent, le journal de l'événement (baseDuJournal), jamais celui d'un
  * autre, le verrou, le compagnon des courses, et chacun de leurs fichiers
  * d'écriture atomique restés ; ceux-ci d'abord, puis le verrou, le
@@ -609,11 +672,13 @@ async function baseDuJournal(fs, racine, base, insensibleCasse) {
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
- * @param {string} base
+ * @param {string} cle   cleEvenement(dossier, base)
  * @param {{horodatage: string, seance: string}} options   horodatage
  *        AAAA-MM-JJTHH:MM:SS±HH:MM ; seance, la séance qui supprime
  * @returns {Promise<{dossier: string}>}   chemin relatif du dossier daté
- * @throws {ErreurStockage} ABSENT {chemin} quand l'événement n'a aucun
+ * @throws {ErreurStockage} CHEMIN_REFUSE {chemin: cle} d'une clé sans
+ *         dossier ou dans la corbeille (decouperCle) ; ABSENT {chemin}, le
+ *         chemin de l'état relatif au dossier, quand l'événement n'a aucun
  *         fichier, CORBEILLE_SATUREE, l'un et l'autre sans rien écrire ;
  *         VERROU_PRIS {seance, depuis, vivant}, sans rien déplacer ;
  *         ECRITURE de la création du dossier daté ou d'un déplacement
@@ -622,10 +687,12 @@ async function baseDuJournal(fs, racine, base, insensibleCasse) {
  * @throws {TypeError} un horodatage hors de sa forme, une séance qui n'est
  *         pas une chaîne non vide, sans rien écrire
  */
-export async function supprimer(fs, racine, base, { horodatage, seance }) {
+export async function supprimer(fs, racine, cle, { horodatage, seance }) {
   exigerSeance(seance);
+  const { dossier: evenement, base } = decouperCle(cle);
+  const local = vueDossier(fs, evenement);
   const { insensibleCasse } = await fs.emplacements();
-  const journal = await baseDuJournal(fs, racine, base, insensibleCasse);
+  const journal = await baseDuJournal(fs, racine, cle, insensibleCasse);
   const verrou = base + SUFFIXES.verrou;
   const fichiers = [
     verrou,
@@ -634,13 +701,13 @@ export async function supprimer(fs, racine, base, { horodatage, seance }) {
     base + SUFFIXES.precedent,
     base + SUFFIXES.etat,
   ];
-  // Les noms des fichiers du dossier, triés ; ceux de l'événement parmi eux,
-  // sous leur nom sur le disque, dans l'ordre de leur départ.
+  // Les noms des fichiers du dossier de l'événement, triés, aucun quand il
+  // manque ; ceux de l'événement parmi eux, sous leur nom sur le disque,
+  // dans l'ordre de leur départ.
   const nomsSurDisque = async () =>
-    (await fs.lister(racine, ''))
+    (await entreesDe(local, racine, ''))
       .filter(({ type }) => type === 'fichier')
-      .map(({ nom }) => nom)
-      .sort(comparerTextes);
+      .map(({ nom }) => nom);
   const partantsParmi = (presents) =>
     [...fichiers.map((nom) => nom + SUFFIXE_ECRITURE), ...fichiers]
       .map((nom) => nomSurDisque(presents, nom, insensibleCasse))
@@ -651,17 +718,17 @@ export async function supprimer(fs, racine, base, { horodatage, seance }) {
   const dossier = dossierCorbeille(horodatage, existants);
   // La sonde vise le verrou sous son nom sur le disque, celui qui part.
   const nomDuVerrou = nomSurDisque(presents, verrou, insensibleCasse) ?? verrou;
-  const sonde = await fs.verrouiller(racine, nomDuVerrou, seance, horodatage);
+  const sonde = await local.verrouiller(racine, nomDuVerrou, seance, horodatage);
   if (!sonde.pris && sonde.seance !== seance && sonde.vivant !== false) {
     throw new ErreurStockage('VERROU_PRIS', { seance: sonde.seance, depuis: sonde.depuis, vivant: sonde.vivant });
   }
   try {
     if (sonde.pris) presents = await nomsSurDisque();
     await fs.creerDossier(racine, dossier);
-    for (const nom of partantsParmi(presents)) await fs.deplacer(racine, nom, `${dossier}/${nom}`);
+    for (const nom of partantsParmi(presents)) await fs.deplacer(racine, `${evenement}/${nom}`, `${dossier}/${nom}`);
   } catch (erreur) {
     // Un nettoyage qui échoue ne masque pas l'échec qu'il suit.
-    if (sonde.pris) await fs.deverrouiller(racine, nomDuVerrou, seance).catch(() => {});
+    if (sonde.pris) await local.deverrouiller(racine, nomDuVerrou, seance).catch(() => {});
     throw erreur;
   }
   return { dossier };

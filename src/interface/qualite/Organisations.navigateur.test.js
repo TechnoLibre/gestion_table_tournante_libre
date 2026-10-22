@@ -245,9 +245,9 @@ async function attendre(assertion) {
 // qualité ouverte.
 async function ouvrir(charge, { mode = 'ecriture', proposition = charge.propositions[0]?.id ?? null } = {}) {
   const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }] });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }] });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   if (mode === 'ecriture') await m.seance.passerEnEcriture();
   if (proposition !== null) m.ui.montrerProposition(proposition);
   m.ui.allerA('qualite');
@@ -552,7 +552,7 @@ describe('organisations à chaque table (§ 12.11, B20, D35)', () => {
     m.ui.allerA('qualite');
     await attendre(() => expect(positionCochee(m)).toBe('doublons'));
     await m.seance.fermer();
-    await m.seance.ouvrir(BASE);
+    await m.seance.ouvrir(`${BASE}/${BASE}`);
     m.ui.montrerProposition(1);
     m.ui.allerA('qualite');
     await attendre(() => expect(positionCochee(m)).toBe('sieges'));

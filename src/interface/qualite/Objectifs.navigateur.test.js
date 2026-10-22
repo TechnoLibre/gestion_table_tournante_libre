@@ -328,9 +328,9 @@ describe('objectifs : recoupements dans l’application (§ 12.12, § 5.6)', () 
   test('jamais servies = colonne du tableau des propositions ; possibles − servis de la soirée = tours hors objectif ; Σ planchers des tours = plancher de la section Diagnostic', async () => {
     const lue = generee(chargeObjectifs({ mode: 'chacun' }));
     const texte = serialiser(lue, { revision: 1, produitVersion: V1 });
-    const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree${SUFFIXES.etat}`, texte }] });
+    const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree/soiree${SUFFIXES.etat}`, texte }] });
     montes.push({ defaire: () => m.demonter() });
-    await m.seance.ouvrir('soiree');
+    await m.seance.ouvrir('soiree/soiree');
     const id = lue.propositions[0].id;
     m.ui.montrerProposition(id);
     m.ui.allerA('qualite');

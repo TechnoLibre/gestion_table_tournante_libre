@@ -188,7 +188,7 @@ function executionDuGeste(remede, seance, ui) {
     case 'debloquer':
       return () => seance.debloquer();
     case 'ouvrirSecours':
-      return () => seance.ouvrirSecours(seance.etat().evenement.base, remede.source);
+      return () => seance.ouvrirSecours(seance.etat().evenement.cle, remede.source);
     case 'ecrireAilleurs':
       return () => suivre(() => seance.ecrireAilleurs(remede.racine ?? null));
     case 'renommer':
@@ -222,7 +222,7 @@ function executionDuGeste(remede, seance, ui) {
  * choisirPlace et enregistrerSous n'en ont pas d'autre. Un remède de commande
  * s'exécute par seance.executer, tel quel ; modifier, debloquer,
  * ouvrirSecours et ecrireAilleurs par la méthode de la séance de même nom —
- * passerEnEcriture pour modifier, la base de l'événement ouvert pour
+ * passerEnEcriture pour modifier, la clé de l'événement ouvert pour
  * ouvrirSecours, l'indicateur d'activité pour ecrireAilleurs, qui recopie
  * l'événement (activite.js) ; renommer par seance.fermer, qui rend la liste
  * des événements, où chacun se renomme ; afficherTour et ouvrirSection par

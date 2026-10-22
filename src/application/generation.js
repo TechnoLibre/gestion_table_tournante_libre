@@ -303,18 +303,18 @@ function planRange(proposition, configuration, produitVersion) {
  *          coeurs, reglerCoeurs, subscribe
  */
 export function creerControleurGeneration({ seance, executeur, horloge, produitVersion, constante: lireConstante = constante }) {
-  // graine : la graine proposée ; base : celle de l'événement ouvert, null
-  // sans événement ; mesure : le dernier calcul abouti, null avant lui ;
-  // execution : celle en cours, null hors génération ; enCours vaut vrai du
-  // lancement à la fin de l'enregistrement.
+  // graine : la graine proposée ; cle : la clé de l'événement ouvert
+  // (cleEvenement), null sans événement ; mesure : le dernier calcul abouti,
+  // null avant lui ; execution : celle en cours, null hors génération ;
+  // enCours vaut vrai du lancement à la fin de l'enregistrement.
   // coeurs : le réglage des cœurs de calcul, que l'observable porte —
   // automatique, le nombre saisi (manuel), les disponibles, et nombre, les
   // cœurs réglés.
   // generations : par identifiant d'une proposition ajoutée ici, { graine,
   // arret, historique, resume }, ce qu'elle portait à l'ajout et le résumé
-  // de sa génération ; vidé quand base change.
+  // de sa génération ; vidé quand cle change.
   let graine = 1;
-  let base = null;
+  let cle = null;
   let mesure = null;
   let execution = null;
   const generations = new Map();
@@ -333,15 +333,15 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     for (const fn of [...abonnes]) fn(observable);
   }
 
-  // Une ouverture : l'événement passe de null, ou d'une autre base, à une
-  // base ; la graine proposée repart de 1.
+  // Une ouverture : l'événement passe de null, ou d'une autre clé, à une
+  // clé (cleEvenement) ; la graine proposée repart de 1.
   // Une fermeture, ou l'ouverture d'un autre événement, oublie les
   // générations gardées.
   seance.subscribe((etat) => {
-    const suivante = etat.evenement?.base ?? null;
-    if (suivante !== null && suivante !== base) graine = 1;
-    if (suivante !== base) generations.clear();
-    base = suivante;
+    const suivante = etat.evenement?.cle ?? null;
+    if (suivante !== null && suivante !== cle) graine = 1;
+    if (suivante !== cle) generations.clear();
+    cle = suivante;
   });
 
   // Les réglages de génération de la charge ouverte, ceux d'une charge

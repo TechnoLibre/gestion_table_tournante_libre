@@ -120,9 +120,9 @@ async function attendre(assertion) {
 // participants et la fiche de la personne ouvertes.
 async function ouvrirFiche(charge, personne, { mode = 'ecriture', montrer = null } = {}) {
   const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }] });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }] });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   if (mode === 'ecriture') await m.seance.passerEnEcriture();
   if (montrer !== null) m.ui.montrerProposition(montrer);
   m.ui.allerA('participants');
@@ -334,7 +334,7 @@ describe('la rubrique « Présence » de la fiche (§ 10.2)', () => {
   const resume = (fiche) => presence(fiche).querySelector('[data-presence]');
   // Les libellés des entrées du journal de l'événement ; aucun sans journal.
   const libelles = (m) => {
-    const texte = m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`);
+    const texte = m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`);
     return texte === null ? [] : lireJournal(texte).entrees.map(({ libelle }) => libelle);
   };
   // Les entrées de présence du journal : une par « Appliquer » qui écrit.
@@ -555,7 +555,7 @@ describe("la rubrique « Conflits d'organisation » de la fiche (§ 4, § 10.2)"
   const resume = (fiche) => [...rubriqueConflits(fiche).querySelectorAll('[data-conflits-resume] li')].map(texteDe);
   // Les entrées de conflits du journal, une par geste validé.
   const libelles = (m) => {
-    const texte = m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`);
+    const texte = m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`);
     const tous = texte === null ? [] : lireJournal(texte).entrees.map(({ libelle }) => libelle);
     return tous.filter((libelle) => libelle.startsWith('Conflits de '));
   };

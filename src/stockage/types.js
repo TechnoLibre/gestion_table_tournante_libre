@@ -467,7 +467,7 @@
  *                                                    s'applique pas
  *   CHEMIN_TROP_LONG     {racine}                    aucune base ne tient sous
  *                                                    la borne (§ 8.6)
- *   IDENTIFIANT_PRESENT  {id, base}                  importer un événement dont
+ *   IDENTIFIANT_PRESENT  {id, base, dossier}         importer un événement dont
  *                                                    l'identifiant est déjà
  *                                                    dans le dossier
  *   VERROU_PRIS          {seance, depuis, vivant}    passer en écriture quand

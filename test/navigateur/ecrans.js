@@ -126,26 +126,27 @@ export async function chargerResumes(m) {
 
 /** Suit les résumés que la liste du montage reçoit à partir de cet appel :
  *  chaque flux que l'application lance par m.facade.resumer rapporte, en
- *  plus, chaque base dont il pose le résumé. Rend resumeRecu(base), qui
- *  attend, l'horloge pilotée avancée d'un pas à chaque image, que la liste
- *  ait reçu un résumé de base depuis le suivi, le rendu à jour : un résumé
- *  posé avant le suivi, d'une liste plus ancienne, n'y répond pas. */
+ *  plus, la clé de chaque ligne dont il pose le résumé. Rend
+ *  resumeRecu(base), qui attend, l'horloge pilotée avancée d'un pas à chaque
+ *  image, que la liste ait reçu le résumé de l'événement de base, dans le
+ *  dossier de cette base, depuis le suivi, le rendu à jour : un résumé posé
+ *  avant le suivi, d'une liste plus ancienne, n'y répond pas. */
 export function suivreResumes(m) {
   const recues = new Set();
   const resumer = m.facade.resumer;
   m.facade.resumer = (lues, options) =>
     resumer(lues, {
       ...options,
-      recevoir(base, resume) {
-        options.recevoir(base, resume);
-        recues.add(base);
+      recevoir(cle, resume) {
+        options.recevoir(cle, resume);
+        recues.add(cle);
       },
     });
   return (base) =>
     attendre(
       `le résumé de ${base} reçu par la liste`,
       () => {
-        if (recues.has(base)) return true;
+        if (recues.has(`${base}/${base}`)) return true;
         m.horloge.avancer(0);
         return false;
       },
@@ -409,10 +410,10 @@ export function chargeRefusDessin() {
 }
 
 /** Le compagnon des courses d'une charge, ses entrées données, posé dans
- *  les Documents sous BASE. */
+ *  les Documents sous BASE, dans le dossier de cette base. */
 export const fichierCourses = (charge, entrees, base = BASE) => ({
   racine: 'documents',
-  chemin: `${base}${SUFFIXES.courses}`,
+  chemin: `${base}/${base}${SUFFIXES.courses}`,
   texte: texteDesCourses(charge.evenement.id, entrees),
 });
 
@@ -491,10 +492,11 @@ function chargeGelee() {
   return charge;
 }
 
-/** Le fichier d'état d'une charge, posé dans les Documents sous BASE. */
+/** Le fichier d'état d'une charge, posé dans les Documents sous BASE,
+ *  dans le dossier de cette base. */
 export const fichierEtat = (charge, base = BASE) => ({
   racine: 'documents',
-  chemin: `${base}${SUFFIXES.etat}`,
+  chemin: `${base}/${base}${SUFFIXES.etat}`,
   texte: serialiser(charge, { revision: 1, produitVersion: VERSION.affichee }),
 });
 
@@ -549,7 +551,7 @@ export function executeurSuspendu() {
  */
 export async function ouvrirEvenement(contexte, charge, { ecriture = false, section = 'plan', options = {} } = {}) {
   const m = await contexte.monter({ ...options, fichiers: [fichierEtat(charge), ...(options.fichiers ?? [])] });
-  await cliquer(m, `[data-evenement="${BASE}"] [data-commande="ouvrir"]`);
+  await cliquer(m, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
   await element(m, '[data-ecran="evenement"]');
   if (ecriture) {
     await cliquer(m, '[data-place-fixe] [data-commande="modifier"]');
@@ -804,7 +806,7 @@ export const ECRANS = Object.freeze([
     mode: null,
     async atteindre(contexte) {
       const m = await contexte.monter({ fichiers: [fichierEtat(chargePrincipale()), fichierEtat(chargeGelee(), 'gelee')] });
-      await element(m, `[data-evenement="${BASE}"]`);
+      await element(m, `[data-evenement="${BASE}/${BASE}"]`);
       await chargerResumes(m);
       return m.racine;
     },
@@ -821,7 +823,7 @@ export const ECRANS = Object.freeze([
       // marque « chargement ».
       const m = await contexte.monter({ fichiers: [fichierEtat(chargePrincipale()), fichierEtat(chargeGelee(), 'gelee')] });
       await attendre('le signe du chargement dans chaque valeur de résumé', () =>
-        [BASE, 'gelee'].every((base) => m.racine.querySelectorAll(`[data-evenement="${base}"] [aria-busy="true"] [data-chargement]`).length === 3),
+        [BASE, 'gelee'].every((base) => m.racine.querySelectorAll(`[data-evenement="${base}/${base}"] [aria-busy="true"] [data-chargement]`).length === 3),
       );
       return m.racine;
     },
@@ -838,7 +840,7 @@ export const ECRANS = Object.freeze([
       const principale = chargePrincipale();
       const charge = executer(principale, 'retenirProposition', { id: principale.propositions[0].id });
       const m = await contexte.monter({ fichiers: [fichierEtat(charge)] });
-      const ligne = `[data-evenement="${BASE}"]`;
+      const ligne = `[data-evenement="${BASE}/${BASE}"]`;
       await chargerResumes(m);
       await attendre('les mesures du retenu et la meilleure proposition', () =>
         ['[data-colonne="collisionsCumulees"]', '[data-colonne="rencontresRepetees"]', '[data-meilleure-id]'].every((valeur) =>
@@ -889,9 +891,9 @@ export const ECRANS = Object.freeze([
     async atteindre(contexte) {
       const sain = fichierEtat(chargePrincipale());
       const tronque = { ...sain, texte: sain.texte.slice(0, Math.floor(sain.texte.length / 2)) };
-      const precedent = { ...sain, chemin: `${BASE}${SUFFIXES.precedent}` };
+      const precedent = { ...sain, chemin: `${BASE}/${BASE}${SUFFIXES.precedent}` };
       const m = await contexte.monter({ fichiers: [tronque, precedent] });
-      await cliquer(m, `[data-evenement="${BASE}"] [data-commande="ouvrir"]`);
+      await cliquer(m, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
       await element(m, '[data-ecran="recuperation"]');
       return m.racine;
     },
@@ -1667,7 +1669,7 @@ export const ECRANS = Object.freeze([
       const premier = await ouvrirEvenement(contexte, chargePrincipale(), { ecriture: true, section: 'participants' });
       premier.racine.hidden = true;
       const second = await contexte.monter({ systeme: { disque: premier.disque } });
-      await cliquer(second, `[data-evenement="${BASE}"] [data-commande="ouvrir"]`);
+      await cliquer(second, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
       await element(second, '[data-ecran="evenement"]');
       await cliquer(second, '[data-place-fixe] [data-commande="modifier"]');
       await element(second, '[data-refus="VERROU_PRIS"]');

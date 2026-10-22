@@ -177,9 +177,9 @@ async function images(n = 3) {
 // 'lecture' —, la section du plan ouverte et sa vue posée.
 async function ouvrir(charge, { mode = 'ecriture' } = {}) {
   const texte = serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }] });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }] });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   if (mode === 'ecriture') await m.seance.passerEnEcriture();
   m.ui.allerA('plan');
   flushSync();
@@ -339,14 +339,14 @@ async function cliquer(element) {
 
 function fichiers(m) {
   return {
-    etat: m.fs.contenu('documents', `${BASE}${SUFFIXES.etat}`),
-    journal: m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`),
+    etat: m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.etat}`),
+    journal: m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`),
     revision: m.seance.etat().evenement.revision,
   };
 }
 
 function entreesApres(m, r) {
-  const texte = m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`);
+  const texte = m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`);
   return texte === null ? [] : lireJournal(texte).entrees.filter((entree) => entree.revision > r);
 }
 
@@ -354,7 +354,7 @@ async function uneEntree(m, r) {
   await attendre(() => expect(m.seance.etat().evenement.revision).toBe(r + 1));
   const entrees = entreesApres(m, r);
   expect(entrees).toHaveLength(1);
-  expect(analyser(m.fs.contenu('documents', `${BASE}${SUFFIXES.etat}`)).entete.revision).toBe(r + 1);
+  expect(analyser(m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.etat}`)).entete.revision).toBe(r + 1);
   return entrees[0].libelle;
 }
 

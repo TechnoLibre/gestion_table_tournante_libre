@@ -76,11 +76,12 @@ function preparer(options = {}) {
 // valeur quand rien n'est à demander, à proposer ni à annoncer.
 const dossier = (champs) => ({ raison: null, cause: null, question: null, autre: null, avertissements: [], ...champs });
 
-// Pose un événement sous une base : son état et son journal. La règle compte
-// les fichiers sans les lire : leur contenu n'importe pas.
+// Pose un événement sous une base, dans le dossier qui la porte : son état
+// et son journal. La règle compte les fichiers sans les lire : leur contenu
+// n'importe pas.
 function poserEvenement(fs, racineId, base) {
-  fs.deposer(racineId, `${base}.gtt.json`, '{}\n');
-  fs.deposer(racineId, `${base}.gtt-journal.jsonl`, '{}\n');
+  fs.deposer(racineId, `${base}/${base}.gtt.json`, '{}\n');
+  fs.deposer(racineId, `${base}/${base}.gtt-journal.jsonl`, '{}\n');
 }
 
 // Rejet de la liste d'un dossier qui n'existe pas.
@@ -284,26 +285,35 @@ describe('determinerDossierTravail : ce qui arrive ensuite (§ 8.6)', () => {
     assert.deepEqual(await fs.lister(DOC, ''), []);
   });
 
-  test("un événement compte par ses deux fichiers, à la racine du dossier : un état, un journal, ou les deux sous la même base", async () => {
+  test("un événement compte par ses deux fichiers, dans un dossier de la racine : un état, un journal, ou les deux sous la même base ; rien de ce que porte la racine même ne compte", async () => {
     const { fs } = preparer({ executable: 'E:\\soirees', sonde: { portable: 'EROFS' } });
-    // Trois événements : état et journal, état seul, journal seul.
+    // Quatre événements : état et journal, état seul, journal seul, et la
+    // copie à la main d'un dossier, sous la même base.
     poserEvenement(fs, 'portable', 'gala');
-    fs.deposer('portable', 'souper.gtt.json', '{}\n');
-    fs.deposer('portable', 'tournoi.gtt-journal.jsonl', '{}\n');
-    // Aucun des suivants n'en est un.
-    fs.deposer('portable', 'kermesse.gtt.json.precedent', '{}\n');
-    fs.deposer('portable', 'kermesse.gtt.verrou', '{}\n');
-    fs.deposer('portable', 'kermesse.gtt.json.ecriture', '{}\n');
+    fs.deposer('portable', 'souper/souper.gtt.json', '{}\n');
+    fs.deposer('portable', 'tournoi/tournoi.gtt-journal.jsonl', '{}\n');
+    fs.deposer('portable', 'gala - Copie/gala.gtt.json', '{}\n');
+    // Aucun des suivants n'en est un : des restes dans un dossier, un dossier
+    // vide, un dossier nommé comme un état, la corbeille, et des fichiers
+    // d'événement posés à même la racine.
+    fs.deposer('portable', 'kermesse/kermesse.gtt.json.precedent', '{}\n');
+    fs.deposer('portable', 'kermesse/kermesse.gtt.verrou', '{}\n');
+    fs.deposer('portable', 'kermesse/kermesse.gtt.json.ecriture', '{}\n');
+    fs.deposerDossier('portable', 'vide');
+    fs.deposerDossier('portable', 'gala/archives.gtt.json');
     fs.deposer('portable', 'reglages_locaux.json', '{}\n');
     fs.deposer('portable', 'corbeille/2026-01-02_03-04-05/bazar.gtt.json', '{}\n');
-    fs.deposerDossier('portable', 'archives.gtt.json');
+    fs.deposer('portable', 'corbeille/bazar.gtt.json', '{}\n');
+    fs.deposer('portable', 'ancien.gtt.json', '{}\n');
+    fs.deposer('portable', 'ancien.gtt-journal.jsonl', '{}\n');
     const { question } = await determinerDossierTravail(fs);
-    assert.deepEqual(question, { code: 'PORTABLE_NON_INSCRIPTIBLE', racine: PORTABLE, evenements: 3, cause: 'EROFS' });
+    assert.deepEqual(question, { code: 'PORTABLE_NON_INSCRIPTIBLE', racine: PORTABLE, evenements: 4, cause: 'EROFS' });
   });
 
-  test("data/ qui ne porte que des restes d'événements ne fait rien demander", async () => {
+  test("data/ qui ne porte que des restes d'événements, ou des fichiers d'événement à même sa racine, ne fait rien demander", async () => {
     const { fs } = preparer({ executable: 'E:\\soirees', sonde: { portable: 'EROFS' } });
-    fs.deposer('portable', 'kermesse.gtt.json.precedent', '{}\n');
+    fs.deposer('portable', 'kermesse/kermesse.gtt.json.precedent', '{}\n');
+    fs.deposer('portable', 'ancien.gtt.json', '{}\n');
     fs.deposer('portable', 'corbeille/2026-01-02_03-04-05/bazar.gtt.json', '{}\n');
     const { question, raison } = await determinerDossierTravail(fs);
     assert.deepEqual([question, raison], [null, 'SONDE_ECHOUEE']);
@@ -448,6 +458,50 @@ describe('determinerDossierTravail : ce qui arrive ensuite (§ 8.6)', () => {
         cause: 'EPERM',
         question: { code: 'PORTABLE_NON_INSCRIPTIBLE', racine: PORTABLE, evenements: null, cause: 'EPERM' },
       }),
+    );
+  });
+
+  test("un dossier d'une racine dont la liste est refusée laisse le compte inconnu sans faire rejeter, sur l'une ou l'autre racine ; un dossier au nom refusé ne compte pas", async () => {
+    // Le système d'épreuve dont lister lève erreur sur le seul dossier nom de
+    // la racine racineId.
+    const dossierEnPanne = (fs, racineId, nom, erreur) => ({
+      ...fs,
+      async lister(racine, chemin) {
+        if (racine.id === racineId && chemin === nom) throw erreur;
+        return fs.lister(racine, chemin);
+      },
+    });
+    const VERROUILLE = 'System Volume Information';
+    const illisible = (racine) => new ErreurStockage('LECTURE', { chemin: VERROUILLE, dossier: racine.chemin, cause: 'EPERM' });
+
+    // data/ refuse l'écriture et l'un de ses dossiers sa liste : la règle
+    // demande, compte inconnu.
+    const portable = preparer({ executable: 'E:\\soirees', sonde: { portable: 'EROFS' } });
+    poserEvenement(portable.fs, 'portable', 'gala');
+    portable.fs.deposerDossier('portable', VERROUILLE);
+    assert.deepEqual(
+      (await determinerDossierTravail(dossierEnPanne(portable.fs, 'portable', VERROUILLE, illisible(PORTABLE)))).question,
+      { code: 'PORTABLE_NON_INSCRIPTIBLE', racine: PORTABLE, evenements: null, cause: 'EROFS' },
+    );
+
+    // Le dossier retenu refuse l'écriture et l'un de ses dossiers sa liste :
+    // la règle aboutit, compte inconnu.
+    const documents = preparer({ sonde: { documents: 'EPERM' } });
+    poserEvenement(documents.fs, 'documents', 'gala');
+    documents.fs.deposerDossier('documents', VERROUILLE);
+    assert.deepEqual(
+      (await determinerDossierTravail(dossierEnPanne(documents.fs, 'documents', VERROUILLE, illisible(DOC)))).question,
+      { code: 'DOCUMENTS_NON_INSCRIPTIBLE', racine: DOC, evenements: null, cause: 'EPERM' },
+    );
+
+    // Un dossier dont le système refuse le nom ne porte rien.
+    const refuse = preparer({ executable: 'E:\\soirees', sonde: { portable: 'EROFS' } });
+    poserEvenement(refuse.fs, 'portable', 'gala');
+    poserEvenement(refuse.fs, 'portable', 'tournoi');
+    const nomRefuse = new ErreurStockage('CHEMIN_REFUSE', { chemin: 'tournoi' });
+    assert.deepEqual(
+      (await determinerDossierTravail(dossierEnPanne(refuse.fs, 'portable', 'tournoi', nomRefuse))).question,
+      { code: 'PORTABLE_NON_INSCRIPTIBLE', racine: PORTABLE, evenements: 1, cause: 'EROFS' },
     );
   });
 

@@ -514,9 +514,9 @@ describe('l’en-tête et le profil dans la page (§ 12, § 19.4)', () => {
   test('dans l’application : la page de qualité de la proposition demandée écrit, en tuiles, les cellules de sa ligne au tableau des propositions', async () => {
     const charge = generee(chargeSix({ objectifs: true }));
     const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-    const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree${SUFFIXES.etat}`, texte }] });
+    const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree/soiree${SUFFIXES.etat}`, texte }] });
     apps.push(m);
-    await m.seance.ouvrir('soiree');
+    await m.seance.ouvrir('soiree/soiree');
     const id = charge.propositions[1].id;
     m.ui.allerA('propositions');
     const cellules = await attendre(() => {

@@ -45,7 +45,7 @@ import { serialiser } from '../stockage/canonique.js';
 import { creer } from '../stockage/depot.js';
 import { analyser, configurationDepuisCharge } from '../stockage/document.js';
 import { PLAFOND_ENTREES, estInstantane, ligneEntree, lireJournal } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import { VERSION } from '../version.genere.js';
 import { creerHorlogePilotee } from './horloge.js';
 import { creerSeance } from './seance.js';
@@ -54,7 +54,7 @@ const V = VERSION.affichee;
 
 // L'empreinte repliée des relevés de la séance, et celle des propositions
 // que le moteur rend à la génération.
-const EMPREINTE_SEANCE = '0fe954724953f57002dcdf907c89f58fe54a1ed2ef8cd0371780ff26f757d9e1';
+const EMPREINTE_SEANCE = 'ce907c06a2890b06984e89850c092a3a6beecf07787aaa7e8b4944ac392efd9c';
 const EMPREINTE_GENERATION = '379fe7f22846577a9c6c5c131797be4f0adcc8f02035ea050d37a727d4ed653c';
 
 // Le nombre de relevés de la séance : une séance qui s'arrêterait en chemin
@@ -185,9 +185,11 @@ describe('empreintes dorées : une séance de gestes sur la grande démonstratio
   test('chaque fichier écrit et chaque état publié, pas après pas, sont ceux de la référence', async () => {
     const { disque, fs, racine, horloge, seance: nouvelle } = await monter();
     const releves = [];
-    let base = null;
+    // La clé de l'événement, <dossier>/<base> : suivie d'un suffixe, le
+    // chemin d'un de ses fichiers.
+    let cle = null;
     let seance = null;
-    const contenu = (suffixe) => fs.contenu(racine.id, `${base}${suffixe}`);
+    const contenu = (suffixe) => fs.contenu(racine.id, `${cle}${suffixe}`);
     // Le relevé d'un pas : les quatre fichiers, l'état publié, l'historique,
     // et le texte du refus quand le pas en est un. L'horloge avance ensuite
     // d'une seconde : chaque pas a son instant.
@@ -219,14 +221,15 @@ describe('empreintes dorées : une séance de gestes sur la grande démonstratio
 
     // L'événement : la grande démonstration créée dans le dépôt.
     const demonstration = analyser(texteLivre('grande')).charge;
-    ({ base } = await creer(fs, racine, demonstration, {
+    const cree = await creer(fs, racine, demonstration, {
       libelle: "Création de l'événement",
       nomJalon: 'Création',
       horodatage: horloge.horodatage(),
       produitVersion: V,
-    }));
+    });
+    cle = cleEvenement(cree.dossier, cree.base);
     seance = nouvelle();
-    await geste('ouvrir', () => seance.ouvrir(base));
+    await geste('ouvrir', () => seance.ouvrir(cle));
     await geste('écriture', () => seance.passerEnEcriture());
     const charge = () => seance.etat().charge;
 
@@ -287,11 +290,11 @@ describe('empreintes dorées : une séance de gestes sur la grande démonstratio
     // Le journal comblé jusqu'au plafond, l'état et le .precedent récrits à
     // ses deux dernières révisions ; puis le geste qui l'élague.
     const comblee = comble(contenu(SUFFIXES.journal), contenu(SUFFIXES.etat));
-    fs.deposer(racine.id, `${base}${SUFFIXES.journal}`, comblee.journal);
-    fs.deposer(racine.id, `${base}${SUFFIXES.precedent}`, comblee.precedent);
-    fs.deposer(racine.id, `${base}${SUFFIXES.etat}`, comblee.etat);
+    fs.deposer(racine.id, `${cle}${SUFFIXES.journal}`, comblee.journal);
+    fs.deposer(racine.id, `${cle}${SUFFIXES.precedent}`, comblee.precedent);
+    fs.deposer(racine.id, `${cle}${SUFFIXES.etat}`, comblee.etat);
     assert.equal(lireJournal(comblee.journal).entrees.length, PLAFOND_ENTREES);
-    await geste('rouvrir plein', () => seance.ouvrir(base));
+    await geste('rouvrir plein', () => seance.ouvrir(cle));
     await geste('écriture pleine', () => seance.passerEnEcriture());
     await geste('échange qui élague', () =>
       seance.executer('echangerDansRetenu', echangeDeRang(charge(), ECHANGES + 1)),
@@ -302,7 +305,7 @@ describe('empreintes dorées : une séance de gestes sur la grande démonstratio
 
     // La réouverture, par une séance neuve sur le même disque.
     seance = nouvelle(creerFichiersSimules({ disque }));
-    await geste('réouverture', () => seance.ouvrir(base));
+    await geste('réouverture', () => seance.ouvrir(cle));
     await geste('fermer réouverture', () => seance.fermer());
 
     const liste = releves.join('\n');

@@ -55,7 +55,7 @@ import {
   lireJournal,
   reconstruire,
 } from './journal.js';
-import { SUFFIXES } from './noms.js';
+import { SUFFIXES, cleEvenement } from './noms.js';
 import { examiner, versFichier } from './placements.js';
 
 const V = VERSION.affichee;
@@ -378,18 +378,18 @@ const ECRITURES = new Set([
 // texte etat, une fois chacun, et rien d'autre. Le seuil ne bornant que le
 // calcul, ce décompte refuse une écriture de trop, quelle que soit la charge
 // du disque.
-function affirmerEcritures(ecritures, depuis, base, revision, { journal, etat, precedent }) {
+function affirmerEcritures(ecritures, depuis, cle, revision, { journal, etat, precedent }) {
   const faites = ecritures
     .slice(depuis)
     .map(([primitive, chemin, texte]) =>
-      chemin === base + SUFFIXES.journal ? [primitive, chemin] : [primitive, chemin, texte],
+      chemin === cle + SUFFIXES.journal ? [primitive, chemin] : [primitive, chemin, texte],
     );
   assert.deepEqual(
     faites,
     [
-      [journal, base + SUFFIXES.journal],
-      ['ecrireAtomique', base + SUFFIXES.precedent, precedent],
-      ['ecrireAtomique', base + SUFFIXES.etat, etat],
+      [journal, cle + SUFFIXES.journal],
+      ['ecrireAtomique', cle + SUFFIXES.precedent, precedent],
+      ['ecrireAtomique', cle + SUFFIXES.etat, etat],
     ],
     `écritures de la coquille pour le geste de la révision ${revision}`,
   );
@@ -402,9 +402,12 @@ function affirmerAttente({ duree, coquille }, quoi) {
   assert.ok(coquille > 0 && coquille <= duree, `${quoi} : attente de la coquille ${coquille} ms pour ${duree} ms au mur`);
 }
 
-// Chemin, sur le disque, du fichier de suffixe de l'événement base sous
-// racine.
-const cheminDe = (racine, base, suffixe) => join(racine.chemin, `${base}${suffixe}`);
+// Chemin, sur le disque, du fichier de suffixe de l'événement de clé cle
+// sous racine : la clé, <dossier>/<base>, suivie du suffixe.
+const cheminDe = (racine, cle, suffixe) => join(racine.chemin, `${cle}${suffixe}`);
+
+// La clé de l'événement d'un Ouvert.
+const cleDe = ({ dossier, base }) => cleEvenement(dossier, base);
 
 // Texte du fichier chemin, ou null quand il manque.
 const lireSiPresent = (chemin) => (existsSync(chemin) ? readFileSync(chemin, 'utf8') : null);
@@ -417,10 +420,10 @@ const revisionDe = (texte) => (texte === null ? null : analyser(texte).entete.re
 // d'avant le geste. Les révisions des en-têtes se comparent d'abord, null
 // pour un fichier qui manque : un fichier que le geste n'a pas écrit se
 // nomme par la révision qu'il garde, avant toute différence de deux textes.
-function affirmerEcrits(racine, base, revision, { etat, precedent }) {
+function affirmerEcrits(racine, cle, revision, { etat, precedent }) {
   const ecrits = {
-    etat: lireSiPresent(cheminDe(racine, base, SUFFIXES.etat)),
-    precedent: lireSiPresent(cheminDe(racine, base, SUFFIXES.precedent)),
+    etat: lireSiPresent(cheminDe(racine, cle, SUFFIXES.etat)),
+    precedent: lireSiPresent(cheminDe(racine, cle, SUFFIXES.precedent)),
   };
   assert.deepEqual(
     { etat: revisionDe(ecrits.etat), precedent: revisionDe(ecrits.precedent) },
@@ -531,12 +534,12 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
           `le geste de la révision ${revision} ne garde pas les propositions figées de la charge d'avant`,
         );
         affirmerAttente(releve, `le geste de la révision ${revision}`);
-        affirmerEcritures(ecritures, ecrites, ouvert.base, revision, {
+        affirmerEcritures(ecritures, ecrites, cleDe(ouvert), revision, {
           journal: 'ajouterLigne',
           etat: texteApres,
           precedent: texteEtat,
         });
-        affirmerEcrits(racine, ouvert.base, revision, { etat: texteApres, precedent: texteEtat });
+        affirmerEcrits(racine, cleDe(ouvert), revision, { etat: texteApres, precedent: texteEtat });
         charges.push(apres);
         texteEtat = texteApres;
         return releve;
@@ -547,14 +550,14 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
       // du dernier geste ; l'état sur le disque porte les vingt propositions
       // et le retenu ; le journal porte une entrée par révision.
       const revision = charges.length;
-      const rouvert = await ouvrir(fs, racine, ouvert.base);
+      const rouvert = await ouvrir(fs, racine, cleDe(ouvert));
       assert.deepEqual(rouvert.avertissements, []);
       assert.equal(rouvert.revision, revision);
       assert.deepEqual(rouvert.charge, canoniser(charges.at(-1)));
-      const etat = analyser(readFileSync(cheminDe(racine, ouvert.base, SUFFIXES.etat), 'utf8'));
+      const etat = analyser(readFileSync(cheminDe(racine, cleDe(ouvert), SUFFIXES.etat), 'utf8'));
       const { propositions, retenu } = etat.entete.comptes;
       assert.deepEqual({ propositions, retenu }, { propositions: PROPOSITIONS, retenu: 1 });
-      const journal = lireJournal(readFileSync(cheminDe(racine, ouvert.base, SUFFIXES.journal), 'utf8'));
+      const journal = lireJournal(readFileSync(cheminDe(racine, cleDe(ouvert), SUFFIXES.journal), 'utf8'));
       assert.deepEqual(
         journal.entrees.map((entree) => entree.revision),
         Array.from({ length: revision }, (_, rang) => rang + 1),
@@ -587,8 +590,8 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
     const dossier = mkdtempSync(join(tmpdir(), 'gtt-elagage-'));
     try {
       const { fs, racine, attente, ecritures } = await systemeSur(dossier);
-      const { base } = await creer(fs, racine, chargeMesuree(), CREATION);
-      const chemin = (suffixe) => cheminDe(racine, base, suffixe);
+      const cle = cleDe(await creer(fs, racine, chargeMesuree(), CREATION));
+      const chemin = (suffixe) => cheminDe(racine, cle, suffixe);
       const plein = evenementPlein(readFileSync(chemin(SUFFIXES.journal), 'utf8'), chargeMesuree());
       const poser = () => {
         writeFileSync(chemin(SUFFIXES.journal), plein.journal);
@@ -601,7 +604,7 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
       // enregistrer ne modifie pas l'Ouvert reçu : chaque essai part du même,
       // sur le journal plein reposé, la chauffe comprise.
       poser();
-      const ouvert = await ouvrir(fs, racine, base);
+      const ouvert = await ouvrir(fs, racine, cle);
       assert.deepEqual(
         { avertissements: ouvert.avertissements, revision: ouvert.revision, entrees: ouvert.journal.entrees.length },
         { avertissements: [], revision: PLAFOND_ENTREES, entrees: PLAFOND_ENTREES },
@@ -633,12 +636,12 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
           `le geste de l'essai ${essai} ne garde pas les propositions figées de l'Ouvert`,
         );
         affirmerAttente(releve, `l'essai ${essai}`);
-        affirmerEcritures(ecritures, ecrites, base, revision, {
+        affirmerEcritures(ecritures, ecrites, cle, revision, {
           journal: 'ecrireAtomique',
           etat: texteApres,
           precedent: plein.etat,
         });
-        affirmerEcrits(racine, base, revision, { etat: texteApres, precedent: plein.etat });
+        affirmerEcrits(racine, cle, revision, { etat: texteApres, precedent: plein.etat });
         journal = lireJournal(readFileSync(chemin(SUFFIXES.journal), 'utf8'));
         assert.deepEqual(
           {
@@ -663,7 +666,7 @@ describe("dépôt : le coût d'un enregistrement complet, sur un vrai système d
       // Le journal élagué restitue encore l'instant d'avant le geste, et
       // l'événement se rouvre sur le geste sans rien rattraper ni signaler.
       assert.deepEqual(reconstruire(journal, PLAFOND_ENTREES), canoniser(plein.chargeDe(PLAFOND_ENTREES)));
-      const rouvert = await ouvrir(fs, racine, base);
+      const rouvert = await ouvrir(fs, racine, cle);
       assert.deepEqual(
         { avertissements: rouvert.avertissements, revision: rouvert.revision },
         { avertissements: [], revision },

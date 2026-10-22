@@ -270,7 +270,7 @@ const charge = (m) => m.seance.etat().charge;
 const revision = (m) => m.seance.etat().evenement.revision;
 const journal = (m) => {
   const { base } = m.seance.etat().evenement;
-  return lireJournal(m.fs.contenu('documents', `${base}${SUFFIXES.journal}`)).entrees.length;
+  return lireJournal(m.fs.contenu('documents', `${base}/${base}${SUFFIXES.journal}`)).entrees.length;
 };
 const ordreDe = (m) => charge(m).reglages.priorites ?? structuredClone(LISTE_PAR_DEFAUT);
 

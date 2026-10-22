@@ -22,7 +22,7 @@ import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { FORMAT, analyser, creerCharge } from '../stockage/document.js';
 import { lireJournal } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import { derive, planDepuisFichier, versFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { configurationDe } from './configuration.js';
@@ -217,10 +217,10 @@ async function monter({
     ...(lireConstante === undefined ? {} : { constante: lireConstante }),
   });
   const base = charges[0].evenement.nom;
-  await seance.ouvrir(base);
+  await seance.ouvrir(cleEvenement(base, base));
   if (ecriture) await seance.passerEnEcriture();
-  const journal = () => lireJournal(fs.contenu('documents', `${base}${SUFFIXES.journal}`));
-  const etatDisque = () => fs.contenu('documents', `${base}${SUFFIXES.etat}`);
+  const journal = () => lireJournal(fs.contenu('documents', `${base}/${base}${SUFFIXES.journal}`));
+  const etatDisque = () => fs.contenu('documents', `${base}/${base}${SUFFIXES.etat}`);
   return { fs, seance, horloge, controleur, espion, journal, etatDisque, charge: () => seance.etat().charge };
 }
 
@@ -342,13 +342,13 @@ describe('génération : la graine proposée (§ 5.7)', () => {
     await controleur.generer({ ...COURT, graine: 7 });
     assert.equal(controleur.grainePropose(), 8);
     assert.equal(controleur.reglagesProposes().graine, 8);
-    await seance.ouvrir(AUTRE);
+    await seance.ouvrir(cleEvenement(AUTRE, AUTRE));
     assert.equal(controleur.grainePropose(), 1);
     await seance.passerEnEcriture();
     await controleur.generer({ ...COURT, graine: MAX_GRAINE });
     assert.equal(controleur.grainePropose(), 0);
     await seance.fermer();
-    await seance.ouvrir(AUTRE);
+    await seance.ouvrir(cleEvenement(AUTRE, AUTRE));
     assert.equal(controleur.grainePropose(), 1);
   });
 });
@@ -369,7 +369,7 @@ describe("génération : les refus d'avant lancement (§ 2.1, § 5.9, § 8.4, §
     const fs = creerFichiersSimules();
     fs.deposerDossier('documents');
     const texte = serialiser(chargeDemo('petite'), { revision: 1, produitVersion: V1 });
-    fs.deposer('documents', `${NOM}${SUFFIXES.etat}`, texte.replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`));
+    fs.deposer('documents', `${NOM}/${NOM}${SUFFIXES.etat}`, texte.replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`));
     const montage = await monter({ charges: [chargeDemo('petite')], fs, disque: false, ecriture: false });
     await refuseSansRien(montage, 'LECTURE_SEULE', { raison: 'FORMAT', remede: null });
   });
@@ -1213,7 +1213,7 @@ describe('génération : les cœurs de calcul, un réglage du poste pour la séa
     montage.controleur.reglerCoeurs({ automatique: false });
     montage.controleur.reglerCoeurs({ saisie: '2' });
     await montage.seance.fermer();
-    await montage.seance.ouvrir(AUTRE);
+    await montage.seance.ouvrir(cleEvenement(AUTRE, AUTRE));
     assert.deepEqual(montage.controleur.coeurs(), { automatique: false, manuel: 2, disponibles: 4, nombre: 2 });
   });
 
@@ -1697,14 +1697,33 @@ describe('génération : la course, et la génération gardée pour la séance (
     assert.notEqual(controleur.generationDe(1), null);
     await seance.fermer();
     assert.equal(controleur.generationDe(1), null);
-    await seance.ouvrir(NOM);
+    await seance.ouvrir(cleEvenement(NOM, NOM));
     assert.equal(montage.charge().propositions.length, 3);
     assert.equal(controleur.generationDe(1), null);
     await seance.passerEnEcriture();
     await controleur.generer({ ...PREMIERE, graine: 2 });
     assert.notEqual(controleur.generationDe(4), null);
-    await seance.ouvrir(AUTRE);
+    await seance.ouvrir(cleEvenement(AUTRE, AUTRE));
     assert.equal(controleur.generationDe(4), null);
+  });
+
+  test("ouvrir la copie à la main d'un dossier, sous la même base, ouvre un autre événement : la graine repart de 1, les générations gardées s'oublient", async () => {
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')] });
+    const { fs, seance, controleur } = montage;
+    await controleur.generer({ ...PREMIERE, graine: 7 });
+    assert.equal(controleur.grainePropose(), 8);
+    assert.notEqual(controleur.generationDe(1), null);
+    // La copie porte les fichiers mêmes : mêmes propositions, même
+    // identifiant d'événement, même base ; seul son dossier diffère.
+    const copie = `${NOM} - Copie`;
+    for (const suffixe of [SUFFIXES.etat, SUFFIXES.journal]) {
+      fs.deposer('documents', `${copie}/${NOM}${suffixe}`, fs.contenu('documents', `${NOM}/${NOM}${suffixe}`));
+    }
+    await seance.ouvrir(cleEvenement(copie, NOM));
+    assert.deepEqual([seance.etat().evenement.cle, seance.etat().evenement.base], [cleEvenement(copie, NOM), NOM]);
+    assert.equal(montage.charge().propositions.length, 3);
+    assert.equal(controleur.grainePropose(), 1);
+    assert.equal(controleur.generationDe(1), null);
   });
 
   test("une autre proposition sous le même identifiant, adoptée d'une relecture, n'a pas de génération ; la même, revenue par un retour, garde la sienne", async () => {
@@ -1741,7 +1760,7 @@ describe('génération : la course, et la génération gardée pour la séance (
       await ailleurs.seance.fermer();
       await ici.seance.passerEnLecture();
       for (const suffixe of [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal]) {
-        ici.fs.deposer('documents', `${NOM}${suffixe}`, ailleurs.fs.contenu('documents', `${NOM}${suffixe}`));
+        ici.fs.deposer('documents', `${NOM}/${NOM}${suffixe}`, ailleurs.fs.contenu('documents', `${NOM}/${NOM}${suffixe}`));
       }
       await ici.seance.passerEnEcriture();
       const [relue] = ici.charge().propositions;

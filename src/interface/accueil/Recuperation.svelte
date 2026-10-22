@@ -10,8 +10,9 @@
   // par seance.ouvrirSecours, sans rien écrire. Sans secours lisible, elle
   // le dit, et rien ne s'ouvre ni ne se crée. Le retour rend la liste.
   //
-  // base, chemin : ceux de la ligne ; refus : { code, details } de
-  // l'ouverture refusée ; retour() : rend la liste.
+  // evenement, chemin : la clé de l'événement de la ligne (cleEvenement) et
+  // son chemin ; refus : { code, details } de l'ouverture refusée ;
+  // retour() : rend la liste.
   //
   // Sous le titre de l'écran, une carte : le fichier, la raison, les secours
   // — le premier offert est l'action principale —, puis le retour.
@@ -21,7 +22,7 @@
   import Refus from '../primitives/Refus.svelte';
   import { secoursOfferts, surLaListe } from './modele.js';
 
-  let { base, chemin, refus, retour } = $props();
+  let { evenement, chemin, refus, retour } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -47,7 +48,7 @@
               <Commande
                 {cle}
                 variante={rang === 0 ? 'principale' : 'secondaire'}
-                executer={() => surLaListe(() => seance.ouvrirSecours(base, source))}
+                executer={() => surLaListe(() => seance.ouvrirSecours(evenement, source))}
               />
             </li>
           {/each}

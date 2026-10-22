@@ -208,7 +208,7 @@ describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 1
     // App remontée sur le même disque : le papier se relit, et la planche
     // le porte.
     const second = await contexte.monter({ systeme: { disque: m.disque } });
-    await cliquer(second, `[data-evenement="${BASE}"] [data-commande="ouvrir"]`);
+    await cliquer(second, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
     await cliquer(second, '[data-commande="section"][data-cible="badges"]');
     await attendre('le papier relu', () => second.seance.etat().papier === 'A4' && dans(second, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
     const avant = second.trace.length;

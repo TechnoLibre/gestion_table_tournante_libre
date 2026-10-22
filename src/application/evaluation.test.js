@@ -43,6 +43,7 @@ import * as QUALITE from '../moteur/qualite.js';
 import { rechercher, repartir } from '../moteur/recherche.js';
 import { avecCourses, courseDe } from '../stockage/courses.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
+import { cleEvenement } from '../stockage/noms.js';
 import { analyser, capacite, creerCharge } from '../stockage/document.js';
 import { deriveSansRevalider, fautes, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
@@ -1713,7 +1714,7 @@ describe('detaillerQualite : aller-retour par le compagnon des courses (§ 8.6, 
       });
     };
     const seance = seanceSur('premiere');
-    await seance.ouvrir(charge.evenement.nom);
+    await seance.ouvrir(cleEvenement(charge.evenement.nom, charge.evenement.nom));
     await seance.passerEnEcriture();
     const controleur = creerControleurGeneration({ seance, executeur: creerExecuteurDirect(), horloge, produitVersion: V1 });
     controleur.subscribe(({ fait }) => {
@@ -1731,7 +1732,7 @@ describe('detaillerQualite : aller-retour par le compagnon des courses (§ 8.6, 
     });
 
     const autre = seanceSur('seconde');
-    await autre.ouvrir(charge.evenement.nom);
+    await autre.ouvrir(cleEvenement(charge.evenement.nom, charge.evenement.nom));
     const relue = autre.etat().charge;
     assert.notEqual(relue, seance.etat().charge);
     const autreControleur = creerControleurGeneration({ seance: autre, executeur: creerExecuteurDirect(), horloge, produitVersion: V1 });

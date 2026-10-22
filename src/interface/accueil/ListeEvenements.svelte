@@ -23,17 +23,19 @@
   // valeur. Le nom est l'en-tête de sa ligne ; la date et le chemin le
   // suivent en petite ligne, chacun précédé de son intitulé, que
   // lisent les technologies d'assistance et que l'œil ne voit pas, puis ses
-  // signalements traduits — les bases qu'un doublon nomme suivent son
-  // texte, chacune dans son propre nœud (data-doublon). L'état est une
+  // signalements traduits — les clés des lignes qu'un doublon nomme suivent
+  // son texte, chacune dans son propre nœud (data-doublon). L'état est une
   // pastille. La cellule des actions porte « Ouvrir », qui ouvre la ligne
   // en lecture, ses opérations, et le refus de son ouverture. « Ouvrir » se
   // nomme par aria-labelledby de son propre texte puis du nom de sa ligne :
   // chaque ligne a son « Ouvrir Bal des Grisailles », distinct des autres.
   // Les identifiants viennent du rang du groupe et du rang de la ligne :
-  // une base est un nom de fichier, qui n'est pas un identifiant.
+  // une clé est un chemin, qui n'est pas un identifiant. Chaque ligne se
+  // désigne par la clé de son événement (data-evenement), son dossier et sa
+  // base.
   //
   // lignes : LigneListe[] de la façade ; resumes : les résumés reçus de
-  // facade.resumer, par base — une ligne sans le sien attend, et chacune de
+  // facade.resumer, par clé — une ligne sans le sien attend, et chacune de
   // ses trois valeurs de résumé porte le signe du chargement (Chargement),
   // décoratif, dans une cellule qui se dit occupée (aria-busy), jusqu'à ce
   // qu'il arrive. La région d'état qui suit le tableau
@@ -41,7 +43,7 @@
   // « accueil.chargement » tant qu'une ligne attend : le chargement
   // s'annonce une fois pour la liste, et sa fin la vide. vue : { filtre,
   // groupement } de l'accueil ; grouper(groupement) : le geste du choix ;
-  // ouvrir(ligne) : le geste de l'accueil ; refusOuverture : { base, refus }
+  // ouvrir(ligne) : le geste de l'accueil ; refusOuverture : { cle, refus }
   // du dernier échec, ou null ; apresOperation() : à appeler quand une
   // opération a changé le dossier.
   //
@@ -70,7 +72,7 @@
   const format = getContext('format');
 
   // Une ligne au moins attend son résumé.
-  const enChargement = $derived(lignes.some((ligne) => ligneAffichee(ligne, format, resumes.get(ligne.base)).enAttente));
+  const enChargement = $derived(lignes.some((ligne) => ligneAffichee(ligne, format, resumes.get(ligne.cle)).enAttente));
   const groupes = $derived(groupesDeLaListe(lignes, vue.filtre, vue.groupement));
   // Le nombre de colonnes du tableau, que l'intitulé d'un groupe couvre :
   // les quatre de l'événement, les deux du retenu, celle de la meilleure
@@ -186,11 +188,11 @@
                   >
                 </tr>
               {/if}
-              {#each groupe.lignes as ligne, rangLigne (ligne.base)}
-                {@const affichee = ligneAffichee(ligne, format, resumes.get(ligne.base))}
+              {#each groupe.lignes as ligne, rangLigne (ligne.cle)}
+                {@const affichee = ligneAffichee(ligne, format, resumes.get(ligne.cle))}
                 {@const idLigne = `${uid}-ligne-${rangGroupe}-${rangLigne}`}
                 {@const occupee = affichee.enAttente ? 'true' : undefined}
-                <tr data-evenement={ligne.base}>
+                <tr data-evenement={ligne.cle}>
                   <th scope="row" class="evenement">
                     <span class="nom" id="{idLigne}-nom" data-colonne="nom">{affichee.nom}</span>
                     <span class="sous-ligne"
@@ -240,7 +242,7 @@
                       >
                       <Operations {ligne} {apresOperation} />
                     </div>
-                    {#if refusOuverture !== null && refusOuverture.base === ligne.base}
+                    {#if refusOuverture !== null && refusOuverture.cle === ligne.cle}
                       <Refus refus={refusOuverture.refus} />
                     {/if}
                   </td>

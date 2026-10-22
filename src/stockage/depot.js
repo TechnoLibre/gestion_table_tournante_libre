@@ -8,6 +8,17 @@
 // l'horloge ni un aléa : horodatage et version entrent en paramètre, et les
 // libellés, textes figés, viennent de l'appelant (§ 14.6).
 //
+// Chaque événement a son dossier, un sous-dossier de la racine du dossier de
+// travail que creer nomme de sa base (§ 8.6) ; la clé <dossier>/<base>
+// (cleEvenement) l'identifie. Ce qui se passe dans un dossier passe par sa
+// vue (vueDossier), un système de fichiers dont les chemins partent de lui :
+// l'Ouvert la porte en fs, et ses fichiers s'y nomment <base> suivi d'un
+// suffixe, comme dans une racine. Lister, et dériver la base d'un événement
+// neuf, lisent la racine elle-même : lister lit chaque dossier hors la
+// corbeille, et la base évite le nom de chacune de ses entrées. Un fichier
+// d'événement posé à même la racine n'appartient à aucun dossier : rien ne
+// le lit.
+//
 // Un événement est une paire de fichiers que l'identifiant interne apparie,
 // jamais le nom (§ 8.6) : <base>.gtt.json, l'état, et le journal de la même
 // base quand il porte cet identifiant, sinon le premier du dossier, par nom,
@@ -49,16 +60,16 @@
 // les secours lisibles, sans jamais ouvrir un événement vide.
 //
 // Écrire l'événement ailleurs (§ 8.6) pose une paire alignée, comme un
-// geste : le journal en mémoire, en entier — suivi de l'entrée de reprise
-// quand il finit sur une autre révision que la charge ouverte —, puis l'état
-// que restitue sa dernière entrée, à sa révision. Rouvert là-bas,
-// l'événement rend la charge écrite sans rien rattraper. Avec un geste, la
-// paire porte l'entrée de ce geste à la suite du journal, et sa charge : le
-// renommage (§ 8.7) écrit ainsi la paire complète sous le nouveau nom, dans
-// le dossier même, sans toucher l'ancienne ni créer le dossier. Son
-// .precedent, l'état d'avant le geste, s'écrit avant le journal : la
-// nouvelle base appartient à l'événement dès que son journal existe, et
-// l'ancienne paire ne s'apparie jamais ce journal.
+// geste, dans un dossier neuf : le journal en mémoire, en entier — suivi de
+// l'entrée de reprise quand il finit sur une autre révision que la charge
+// ouverte —, puis l'état que restitue sa dernière entrée, à sa révision.
+// Rouvert là-bas, l'événement rend la charge écrite sans rien rattraper.
+// Avec un geste, la paire porte l'entrée de ce geste à la suite du journal,
+// et sa charge : le renommage (§ 8.7) écrit ainsi la paire complète sous le
+// nouveau nom, dans le dossier de ce nom, sans toucher l'ancienne ni créer
+// la racine. Son .precedent, l'état d'avant le geste, s'écrit avant le
+// journal : la nouvelle base appartient à l'événement dès que son journal
+// existe.
 //
 // Un état ou un journal d'un format plus ancien que FORMAT ne se lit pas,
 // et rien ne le remplace (§ 8.8). L'état se refuse, ETAT_ILLISIBLE raison
@@ -123,16 +134,33 @@ import {
   texteDuJournal,
   versionDe,
 } from './journal.js';
-import { DOSSIER_CORBEILLE, SUFFIXES, cleSansCasse, deriverBase, dossierCorbeille } from './noms.js';
+import {
+  DOSSIER_CORBEILLE,
+  SUFFIXES,
+  cleEvenement,
+  cleSansCasse,
+  decouperCle,
+  deriverBase,
+  dossierCorbeille,
+  dossierEvenement,
+} from './noms.js';
 import { examiner } from './placements.js';
+import { vueDossier } from './systeme_fichiers.js';
 
 /**
  * Un événement ouvert. Chaque fonction qui écrit rend l'Ouvert suivant, et ne
  * modifie pas celui qu'elle reçoit.
  *
  * @typedef {Object} Ouvert
- * @property {import('./systeme_fichiers.js').SystemeFichiers} fs
+ * @property {import('./systeme_fichiers.js').SystemeFichiers} fs   la vue
+ *           du dossier de l'événement (vueDossier), où ses fichiers se
+ *           nomment de leur seul nom
+ * @property {import('./systeme_fichiers.js').SystemeFichiers} systeme   le
+ *           système de fichiers entier, celui que la vue prolonge : ce qui se
+ *           passe hors du dossier — corbeille, autre dossier — passe par lui
  * @property {import('./systeme_fichiers.js').Racine} racine
+ * @property {string} dossier          dossier de l'événement, relatif à la
+ *           racine ; la clé de l'événement est cleEvenement(dossier, base)
  * @property {string} base             base du fichier d'état
  * @property {import('./types.js').Charge} charge   courante, que rend
  *           examiner : propositions fautives écartées, compteur relevé ;
@@ -203,7 +231,7 @@ import { examiner } from './placements.js';
  */
 
 /**
- * Un événement du dossier, tel que lister le résume.
+ * Un événement du dossier de travail, tel que lister le résume.
  *
  * Les champs qui viennent de l'état lu — nom, date, etat, participants —
  * valent null quand il ne se lit pas ou qu'il manque. id est celui de l'état
@@ -213,6 +241,9 @@ import { examiner } from './placements.js';
  * reconnaît ainsi à son id, que son état se lise ou non.
  *
  * @typedef {Object} Resume
+ * @property {string} cle               cleEvenement(dossier, base)
+ * @property {string} dossier           dossier de l'événement, relatif à la
+ *           racine
  * @property {string} base
  * @property {string|null} id
  * @property {string|null} nom
@@ -224,8 +255,8 @@ import { examiner } from './placements.js';
  * @property {string|null} journal       base du journal apparié
  * @property {string|null} illisible     raison d'un état illisible, ABSENT
  *           pour un journal sans état
- * @property {boolean} doublon           un autre état lisible du dossier porte
- *           le même identifiant
+ * @property {boolean} doublon           un autre état lisible, de ce dossier
+ *           ou d'un autre, porte le même identifiant
  */
 
 // Suffixes des fichiers d'un événement, compagnon des courses compris : une
@@ -380,10 +411,10 @@ function formatTropAncienDe(texte) {
 }
 
 /**
- * Bases que portent les fichiers d'événement — état, .precedent, journal,
- * verrou, compagnon des courses — à la racine de racine, dans l'ordre de sa
- * liste, sans rien écrire : une base que l'un d'eux porte n'est pas libre
- * (deriverBase). Une base revient une fois par fichier qui la porte.
+ * Les noms des entrées de la racine de racine, dossiers et fichiers, dans
+ * l'ordre de sa liste, sans rien écrire : le dossier d'un événement neuf
+ * porte sa base, qui ne prend aucun de ces noms (deriverBase). Un dossier
+ * vide, que laisse une création coupée, garde ainsi le sien.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -391,16 +422,35 @@ function formatTropAncienDe(texte) {
  * @throws {ErreurStockage} ABSENT quand la racine n'existe pas
  */
 export async function basesPrises(fs, racine) {
-  return basesDe(await fs.lister(racine, ''));
+  return (await fs.lister(racine, '')).map(({ nom }) => nom);
 }
 
-// Base que prend l'événement nommé nom dans racine (deriverBase) : aucune des
-// bases d'autres, ni de celles que portent les fichiers du dossier, à la casse
-// près.
+// Base que prend l'événement nommé nom dans racine (deriverBase), celle de
+// son dossier : aucune des bases d'autres, ni aucun nom d'une entrée de la
+// racine, à la casse près.
 async function deriver(fs, racine, nom, autres) {
   const { separateur } = await fs.emplacements();
   const existantes = [...autres, ...(await basesPrises(fs, racine))];
   return deriverBase(nom, { racine: racine.chemin, separateur, existantes });
+}
+
+// Le chemin affichable du dossier de la vue : celui de la racine, son
+// séparateur, puis le dossier.
+async function cheminDuDossier(vue, racine) {
+  const { separateur } = await vue.emplacements();
+  return (racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur) + vue.dossier;
+}
+
+// Ce qu'un Ouvert tient de la vue de son dossier : la vue, le système
+// qu'elle prolonge et le dossier.
+const lieuDe = (vue) => ({ fs: vue, systeme: vue.systeme, dossier: vue.dossier });
+
+// { local, base } d'une clé d'événement (decouperCle) : local, la vue de son
+// dossier (vueDossier), et la base de ses fichiers. Une clé ou un dossier
+// refusés lèvent CHEMIN_REFUSE, avant tout accès.
+function dansDossier(fs, cle) {
+  const { dossier, base } = decouperCle(cle);
+  return { local: vueDossier(fs, dossier), base };
 }
 
 // Les fichiers de racine tels qu'une lecture les trouve : la liste du
@@ -685,7 +735,8 @@ export function rattraper(etat, instant) {
 // prochaine écriture (journalAReecrire).
 // texteCourses, le texte du compagnon des courses de la base, null quand il
 // ne se lit pas : les courses qu'il confirme pour la charge examinée
-// (lireCourses) sont celles de l'Ouvert, et compagnon leurs clés.
+// (lireCourses) sont celles de l'Ouvert, et compagnon leurs clés. fs est la
+// vue du dossier de l'événement.
 function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage, texteCourses }) {
   const lu = avecRattrapage ? rattraper(source, instant) : { ...source, rattrape: false };
   const { charge, revision, produitVersion, manquants, rattrape } = lu;
@@ -694,7 +745,7 @@ function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage, 
   const examen = examiner(gelerPropositions(charge));
   const courses = lireCourses(texteCourses, examen.charge);
   return {
-    fs,
+    ...lieuDe(fs),
     racine,
     base,
     charge: examen.charge,
@@ -761,33 +812,16 @@ async function refuser(vue, base, details) {
   return new ErreurStockage('ETAT_ILLISIBLE', { base, ...refus, ...(format === null ? {} : { format }), secours });
 }
 
-/**
- * Événements de racine (§ 8.1, § 8.6), sans rien écrire : un résumé par
- * fichier d'état, lisible ou non, et par journal sans état. Un état
- * s'apparie à son journal par l'identifiant, jamais par le seul nom
- * (apparier) : celui de l'état quand il se lit ; pour un état illisible,
- * celui de son .precedent, ou de son journal quand aucun état lisible ne le
- * porte (identifiantSansEtat). Un journal renommé à la main reste apparié ;
- * le journal d'un original ne s'apparie pas à sa copie faite à la main. Un
- * journal sans état dans sa base se résume quand aucun état ne se l'apparie
- * et qu'aucun état lisible ne porte son identifiant, illisible ABSENT, quel
- * que soit son format : ouvrir dit pourquoi il ne s'ouvre pas ; il ne se
- * montre pas sinon : une copie d'un journal apparié, ou le journal
- * qu'un état illisible s'apparie par son .precedent. Un identifiant que
- * portent deux états lisibles les signale doublon ; le résumé d'un état
- * illisible porte en id celui qui l'apparie, sans le compter en doublon.
- * Résumés triés par nom, les noms inconnus après les autres, puis par base,
- * unités UTF-16 comparées.
- *
- * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
- * @param {import('./systeme_fichiers.js').Racine} racine
- * @returns {Promise<Resume[]>}
- */
-export async function lister(fs, racine) {
-  const vue = vueDe(fs, racine);
+// Les résumés des événements du dossier que lit vue, une vue de lecture
+// (vueDe), chacun sous sa clé dans ce dossier : un par fichier d'état,
+// lisible ou non, et un par journal sans état que nul n'apparie et dont
+// l'événement n'est dans identifiants, ceux des états lisibles de tous les
+// dossiers. doublon : identifiants porte deux fois celui de l'état.
+async function resumesDuDossier(vue, dossier, identifiants) {
   const fichiers = (await vue.entrees()).filter(({ type }) => type === 'fichier');
-  const identifiants = await identifiantsLisibles(vue);
   const sansLecture = (base, id, modifie, journal, illisible) => ({
+    cle: cleEvenement(dossier, base),
+    dossier,
     base,
     id,
     nom: null,
@@ -816,6 +850,8 @@ export async function lister(fs, racine) {
     }
     const { evenement, participants } = lecture.charge;
     resumes.push({
+      cle: cleEvenement(dossier, base),
+      dossier,
       base,
       id: evenement.id,
       nom: evenement.nom,
@@ -835,31 +871,98 @@ export async function lister(fs, racine) {
     const evenement = evenementDe((await vue.journal(nom)).texte);
     if (!identifiants.includes(evenement)) resumes.push(sansLecture(base, evenement, modifie, base, 'ABSENT'));
   }
-  const nomsConnus = (a, b) => (a === null) - (b === null) || comparerTextes(a ?? '', b ?? '');
-  return resumes.sort((a, b) => nomsConnus(a.nom, b.nom) || comparerTextes(a.base, b.base));
+  return resumes;
 }
 
+// La clé de la corbeille, que lister ne lit pas.
+const CLE_CORBEILLE = cleSansCasse(DOSSIER_CORBEILLE);
+
+// Les refus de la liste d'un dossier de la racine qui le laissent sans
+// événement, au lieu de faire tomber la liste : dossier disparu, nom que le
+// système refuse, liste refusée par la plateforme.
+const DOSSIER_SAUTE = new Set(['ABSENT', 'CHEMIN_REFUSE', 'LECTURE']);
+
 /**
- * Ouvre l'événement de base dans racine, sans rien écrire (§ 8.4, § 8.8) :
- * la charge de son état, examinée (examiner), et son journal, apparié par
- * l'identifiant. Un journal en avance d'une entrée donne sa charge, rattrapée
- * en mémoire, JOURNAL_REPRIS ; l'état se réécrira au premier geste. Un journal
- * plus en avance ou en retard laisse la charge de l'état, et le premier geste
- * inscrit une entrée de reprise. Une proposition fautive s'écarte et se
- * nomme ; une périmée se garde et se signale ; un retenu fautif se garde et
- * se signale en premier (§ 8.9). Un format plus récent s'ouvre en lecture
- * seule ; un format plus ancien se refuse, sans secours. Le journal de la
- * base d'un format plus récent ne se lit pas, et garde l'Ouvert en lecture
- * seule, JOURNAL_FORMAT_PLUS_RECENT, même quand une copie au format courant
- * porte l'identifiant ailleurs dans le dossier ; celui d'un format plus
- * ancien ne se lit pas non plus, JOURNAL_ILLISIBLE {raison:
- * 'FORMAT_TROP_ANCIEN', format}, et n'empêche pas d'écrire.
+ * Événements de racine (§ 8.1, § 8.6), sans rien écrire. Chaque dossier de la
+ * racine se lit par sa vue, hors la corbeille, comparée sans égard à la
+ * casse, et hors un nom que le système de fichiers refuse
+ * (exigerCheminRelatif) ; un dossier qui disparaît entre la liste de la
+ * racine et la sienne ne porte rien, ni celui dont la plateforme refuse la
+ * liste (LECTURE), comme un dossier système à la racine d'un volume. Un
+ * fichier posé à même la racine ne se lit jamais. Dans chaque dossier, un
+ * résumé par fichier d'état, lisible ou non, et par journal sans état, sous
+ * sa clé (cleEvenement). Un état s'apparie à son journal dans son dossier,
+ * par l'identifiant, jamais par le seul nom (apparier) : celui de l'état
+ * quand il se lit ; pour un état illisible, celui de son .precedent, ou de
+ * son journal quand aucun état lisible du dossier ne le porte
+ * (identifiantSansEtat). Un journal renommé à la main reste apparié ; le
+ * journal d'un original ne s'apparie pas à sa copie faite à la main. Un
+ * journal sans état dans sa base se résume quand aucun état ne se l'apparie
+ * et qu'aucun état lisible, d'aucun dossier, ne porte son identifiant,
+ * illisible ABSENT, quel que soit son format : ouvrir dit pourquoi il ne
+ * s'ouvre pas ; il ne se montre pas sinon : une copie d'un journal apparié,
+ * le journal qu'un état illisible s'apparie par son .precedent, celui d'un
+ * renommage coupé avant son état. Un identifiant que portent deux états
+ * lisibles, d'un dossier ou de deux, les signale doublon ; le résumé d'un
+ * état illisible porte en id celui qui l'apparie, sans le compter en doublon.
+ * Un dossier qui ne porte ni état ni journal ne se résume pas. Résumés triés
+ * par nom, les noms inconnus après les autres, puis par clé, unités UTF-16
+ * comparées.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
- * @param {string} base
+ * @returns {Promise<Resume[]>}
+ * @throws {ErreurStockage} ABSENT quand la racine n'existe pas ; ce que lève
+ *         une lecture, hors d'un refus de la liste d'un dossier de la
+ *         racine que DOSSIER_SAUTE nomme
+ */
+export async function lister(fs, racine) {
+  const dossiers = [];
+  for (const { nom, type } of await fs.lister(racine, '')) {
+    if (type !== 'dossier' || cleSansCasse(nom) === CLE_CORBEILLE) continue;
+    let vue;
+    try {
+      vue = vueDe(vueDossier(fs, nom), racine);
+      await vue.entrees();
+    } catch (erreur) {
+      if (erreur instanceof ErreurStockage && DOSSIER_SAUTE.has(erreur.code)) continue;
+      throw erreur;
+    }
+    dossiers.push({ dossier: nom, vue });
+  }
+  const identifiants = [];
+  for (const { vue } of dossiers) identifiants.push(...(await identifiantsLisibles(vue)));
+  const resumes = [];
+  for (const { dossier, vue } of dossiers) resumes.push(...(await resumesDuDossier(vue, dossier, identifiants)));
+  const nomsConnus = (a, b) => (a === null) - (b === null) || comparerTextes(a ?? '', b ?? '');
+  return resumes.sort((a, b) => nomsConnus(a.nom, b.nom) || comparerTextes(a.cle, b.cle));
+}
+
+/**
+ * Ouvre l'événement de clé cle dans racine, sans rien écrire (§ 8.4, § 8.8),
+ * dans son dossier, par sa vue : la charge de son état, examinée (examiner),
+ * et son journal, apparié par l'identifiant. Un journal en avance d'une
+ * entrée donne sa charge, rattrapée en mémoire, JOURNAL_REPRIS ; l'état se
+ * réécrira au premier geste. Un journal plus en avance ou en retard laisse la
+ * charge de l'état, et le premier geste inscrit une entrée de reprise. Une
+ * proposition fautive s'écarte et se nomme ; une périmée se garde et se
+ * signale ; un retenu fautif se garde et se signale en premier (§ 8.9). Un
+ * format plus récent s'ouvre en lecture seule ; un format plus ancien se
+ * refuse, sans secours. Le journal de la base d'un format plus récent ne se
+ * lit pas, et garde l'Ouvert en lecture seule, JOURNAL_FORMAT_PLUS_RECENT,
+ * même quand une copie au format courant porte l'identifiant ailleurs dans le
+ * dossier ; celui d'un format plus ancien ne se lit pas non plus,
+ * JOURNAL_ILLISIBLE {raison: 'FORMAT_TROP_ANCIEN', format}, et n'empêche pas
+ * d'écrire.
+ *
+ * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
+ * @param {import('./systeme_fichiers.js').Racine} racine
+ * @param {string} cle   cleEvenement(dossier, base)
  * @returns {Promise<Ouvert>}
- * @throws {ErreurStockage} ETAT_ILLISIBLE {base, raison, chemin, [format],
+ * @throws {ErreurStockage} CHEMIN_REFUSE {chemin: cle} d'une clé sans dossier
+ *         ou dans la corbeille (decouperCle), avant tout accès ; les chemins
+ *         des détails qui suivent sont relatifs au dossier :
+ *         ETAT_ILLISIBLE {base, raison, chemin, [format],
  *         secours} : l'état ne se lit pas — raison ENCODAGE pour des octets
  *         hors UTF-8 —, ou manque à côté de son .precedent ou de son journal,
  *         fût-il aux octets hors UTF-8 (raison ABSENT), ou à côté du journal de
@@ -874,60 +977,64 @@ export async function lister(fs, racine) {
  *         la raison FORMAT_TROP_ANCIEN. ABSENT {chemin} quand aucun fichier de
  *         l'événement n'existe
  */
-export async function ouvrir(fs, racine, base) {
-  const vue = vueDe(fs, racine);
+export async function ouvrir(fs, racine, cle) {
+  const { local, base } = dansDossier(fs, cle);
+  const vue = vueDe(local, racine);
   const etat = await vue.lecture(base + SUFFIXES.etat);
   if (etat.lecture === null) throw await refuser(vue, base, etat.details ?? { raison: 'ABSENT', chemin: null });
   const trouve = await journalDe(vue, base, etat.lecture.charge.evenement.id);
   const source = depuisLecture(etat.lecture, surDisque(etat.texte, etat));
   const texteCourses = await vue.texteSiLisible(base + SUFFIXES.courses);
   const instant = instantDe(trouve.lu);
-  return assembler({ fs, racine, base, source, trouve, instant, avecRattrapage: true, texteCourses });
+  return assembler({ fs: local, racine, base, source, trouve, instant, avecRattrapage: true, texteCourses });
 }
 
 /**
- * Ouvre l'événement de base depuis un secours, sans rien écrire (§ 8.8) :
- * source 'precedent', la charge du .precedent, que le journal de son
- * identifiant suit sans être rattrapé ; source 'journal', le dernier instant
- * restituable du journal, apparié par l'identifiant de l'état quand il se lit,
- * sinon par celui du .precedent, et sans .precedent lisible, le journal de
- * la base quand aucun état lisible du dossier ne porte son identifiant
- * (journalSansEtat) : jamais un journal pris par son seul nom, ni celui d'un
- * autre événement. texteEtat est le texte de l'état quand il se lit : le
- * premier geste le met au .precedent, et ne met jamais un état illisible.
- * L'état sur le disque d'un format plus récent, qu'il se lise ou non, garde
- * le secours en lecture seule, comme un journal de la base d'un format plus
- * récent : aucun geste de ce secours ne remplace l'état ou le journal qu'une
- * construction plus récente a écrits (§ 8.8). Un .precedent d'un format plus
- * récent garde en lecture seule le secours 'precedent', qui le lit, et non le
- * secours 'journal'. Un journal plus récent ne s'ouvre pas en secours, et ne
- * se dit pas absent : il existe, et ce code ne le lit pas ; un journal plus
- * ancien non plus. Un état sur le disque d'un format plus ancien refuse
- * chaque secours : son premier geste écrirait par-dessus lui.
+ * Ouvre l'événement de clé cle depuis un secours, dans son dossier, sans rien
+ * écrire (§ 8.8) : source 'precedent', la charge du .precedent, que le
+ * journal de son identifiant suit sans être rattrapé ; source 'journal', le
+ * dernier instant restituable du journal, apparié par l'identifiant de l'état
+ * quand il se lit, sinon par celui du .precedent, et sans .precedent lisible,
+ * le journal de la base quand aucun état lisible du dossier ne porte son
+ * identifiant (journalSansEtat) : jamais un journal pris par son seul nom, ni
+ * celui d'un autre événement. texteEtat est le texte de l'état quand il se
+ * lit : le premier geste le met au .precedent, et ne met jamais un état
+ * illisible. L'état sur le disque d'un format plus récent, qu'il se lise ou
+ * non, garde le secours en lecture seule, comme un journal de la base d'un
+ * format plus récent : aucun geste de ce secours ne remplace l'état ou le
+ * journal qu'une construction plus récente a écrits (§ 8.8). Un .precedent
+ * d'un format plus récent garde en lecture seule le secours 'precedent', qui
+ * le lit, et non le secours 'journal'. Un journal plus récent ne s'ouvre pas
+ * en secours, et ne se dit pas absent : il existe, et ce code ne le lit pas ;
+ * un journal plus ancien non plus. Un état sur le disque d'un format plus
+ * ancien refuse chaque secours : son premier geste écrirait par-dessus lui.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
- * @param {string} base
+ * @param {string} cle   cleEvenement(dossier, base)
  * @param {'precedent'|'journal'} source
  * @returns {Promise<Ouvert>}
- * @throws {ErreurStockage} ABSENT {chemin} : le .precedent manque, ou aucun
- *         journal ne s'apparie, ou il n'a aucune entrée, chemin nommant alors
- *         le journal de la base ; ETAT_ILLISIBLE {raison, chemin, [format]} :
- *         celui de l'analyse de l'état d'un format plus ancien, raison
- *         FORMAT_TROP_ANCIEN ; celui de l'analyse d'un .precedent illisible,
- *         raison ENCODAGE et chemin null pour des octets hors UTF-8, ou,
- *         source 'journal', {raison: 'FORMAT_PLUS_RECENT' ou
- *         'FORMAT_TROP_ANCIEN', chemin: le journal de la base, format} quand
- *         ce journal est d'un format plus récent ou plus ancien, {raison:
- *         'ENCODAGE', chemin: le journal de la base} quand sa ligne
- *         d'ouverture n'est pas de l'UTF-8 et qu'aucun autre ne s'apparie
+ * @throws {ErreurStockage} CHEMIN_REFUSE {chemin: cle}, comme ouvrir ; les
+ *         chemins qui suivent sont relatifs au dossier : ABSENT {chemin} : le
+ *         .precedent manque, ou aucun journal ne s'apparie, ou il n'a aucune
+ *         entrée, chemin nommant alors le journal de la base ; ETAT_ILLISIBLE
+ *         {raison, chemin, [format]} : celui de l'analyse de l'état d'un
+ *         format plus ancien, raison FORMAT_TROP_ANCIEN ; celui de l'analyse
+ *         d'un .precedent illisible, raison ENCODAGE et chemin null pour des
+ *         octets hors UTF-8, ou, source 'journal', {raison:
+ *         'FORMAT_PLUS_RECENT' ou 'FORMAT_TROP_ANCIEN', chemin: le journal de
+ *         la base, format} quand ce journal est d'un format plus récent ou
+ *         plus ancien, {raison: 'ENCODAGE', chemin: le journal de la base}
+ *         quand sa ligne d'ouverture n'est pas de l'UTF-8 et qu'aucun autre
+ *         ne s'apparie
  * @throws {RangeError} une autre source
  */
-export async function ouvrirSecours(fs, racine, base, source) {
+export async function ouvrirSecours(fs, racine, cle, source) {
   if (source !== 'precedent' && source !== 'journal') {
     throw new RangeError(`ouvrirSecours : source precedent ou journal attendue, reçu ${JSON.stringify(source)}`);
   }
-  const vue = vueDe(fs, racine);
+  const { local, base } = dansDossier(fs, cle);
+  const vue = vueDe(local, racine);
   const etat = await vue.lecture(base + SUFFIXES.etat);
   if (etat.details?.raison === 'FORMAT_TROP_ANCIEN') throw new ErreurStockage('ETAT_ILLISIBLE', etat.details);
   const disque = surDisque(etat.texte, etat);
@@ -942,7 +1049,7 @@ export async function ouvrirSecours(fs, racine, base, source) {
     const depuis = depuisLecture(lecture, disque);
     const texteCourses = await vue.texteSiLisible(base + SUFFIXES.courses);
     const instant = instantDe(trouve.lu);
-    return assembler({ fs, racine, base, source: depuis, trouve, instant, avecRattrapage: false, texteCourses });
+    return assembler({ fs: local, racine, base, source: depuis, trouve, instant, avecRattrapage: false, texteCourses });
   }
   const trouve = await (etat.lecture === null
     ? journalSansEtat(vue, base)
@@ -967,7 +1074,7 @@ export async function ouvrirSecours(fs, racine, base, source) {
     ...disque,
   };
   const texteCourses = await vue.texteSiLisible(base + SUFFIXES.courses);
-  return assembler({ fs, racine, base, source: depuis, trouve, instant, avecRattrapage: false, texteCourses });
+  return assembler({ fs: local, racine, base, source: depuis, trouve, instant, avecRattrapage: false, texteCourses });
 }
 
 // Un Ouvert en lecture seule — un fichier qu'il a lu est d'un format plus
@@ -1091,23 +1198,35 @@ function textePlein(journal) {
   );
 }
 
-// L'ECRITURE d'une recherche dans le dossier de racine qui échoue avant une
-// écriture du journal chemin — le dossier qui ne se liste plus, ou un
-// fichier qui ne se lit plus : ABSENT quand le dossier a disparu avec son
-// support, cause ENOENT ; LECTURE quand la lecture est refusée, sa cause —,
-// chemin le journal, dossier le chemin de la racine, qui porte les fichiers
-// de l'événement. L'application nomme ainsi le fichier et son dossier, et
-// propose d'écrire ailleurs (§ 8.6). Toute autre erreur reste telle quelle.
-function enEcriture(erreur, chemin, racine) {
+// L'ECRITURE d'une recherche dans un dossier qui échoue avant une écriture
+// du fichier chemin — le dossier qui ne se liste plus, ou un fichier qui ne
+// se lit plus : ABSENT quand le dossier a disparu avec son support, cause
+// ENOENT ; LECTURE quand la lecture est refusée, sa cause —, dossier le
+// chemin affichable de celui qui porte le fichier : le dossier de
+// l'événement, ou la racine pour la corbeille. L'application nomme ainsi le
+// fichier et son dossier, et propose d'écrire ailleurs (§ 8.6). Toute autre
+// erreur reste telle quelle.
+function enEcriture(erreur, chemin, dossier) {
   if (erreur.code !== 'ABSENT' && erreur.code !== 'LECTURE') return erreur;
   const cause = erreur.code === 'ABSENT' ? 'ENOENT' : erreur.details.cause;
-  return new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause });
+  return new ErreurStockage('ECRITURE', { chemin, dossier, cause });
+}
+
+// Une base libre dans le dossier de l'Ouvert pour un journal que son nom
+// dérive (deriverBase) : aucune de celles que portent les fichiers
+// d'événement du dossier, à la casse près, sous la borne que donne le chemin
+// du dossier.
+async function deriverDansDossier({ fs, racine, charge }) {
+  const { separateur } = await fs.emplacements();
+  const existantes = basesDe(await fs.lister(racine, ''));
+  return deriverBase(charge.evenement.nom, { racine: await cheminDuDossier(fs, racine), separateur, existantes });
 }
 
 // La base où s'écrit le journal d'un Ouvert sans base de journal, celui de
 // sa base portant un autre événement : la base du journal que l'identifiant
 // de l'événement apparie dans le dossier tel qu'il est (apparier), sinon une
-// base libre que son nom dérive. L'essai repris après un refus réécrit
+// base libre que son nom dérive dans le dossier (deriverDansDossier). L'essai
+// repris après un refus réécrit
 // ainsi, avec sa reprise, le journal que l'essai refusé a créé, au lieu d'en
 // dériver un second que l'ouverture n'apparierait pas. Une recherche qui
 // échoue lève ECRITURE sur le journal de la base, comme l'écriture qu'elle
@@ -1116,11 +1235,10 @@ async function baseCherchee(ouvert, evenement) {
   const { fs, racine, base } = ouvert;
   try {
     return (
-      (await apparier(vueDe(fs, racine), base, evenement))?.base ??
-      (await deriver(fs, racine, ouvert.charge.evenement.nom, []))
+      (await apparier(vueDe(fs, racine), base, evenement))?.base ?? (await deriverDansDossier(ouvert))
     );
   } catch (erreur) {
-    throw enEcriture(erreur, base + SUFFIXES.journal, racine);
+    throw enEcriture(erreur, base + SUFFIXES.journal, await cheminDuDossier(fs, racine));
   }
 }
 
@@ -1134,7 +1252,7 @@ async function fichierPresent({ fs, racine }, chemin) {
   try {
     entrees = await fs.lister(racine, '');
   } catch (erreur) {
-    throw enEcriture(erreur, chemin, racine);
+    throw enEcriture(erreur, chemin, await cheminDuDossier(fs, racine));
   }
   const { insensibleCasse } = await fs.emplacements();
   const cle = insensibleCasse ? cleSansCasse : (nom) => nom;
@@ -1168,9 +1286,10 @@ async function ecrireJournal(ouvert, preparation, ligne) {
 
 /**
  * Met de côté l'état aux octets hors UTF-8 d'un Ouvert de secours (§ 8.8),
- * avant le premier geste qui le remplace : le fichier passe tel quel dans un
- * dossier neuf de la corbeille, daté de l'horodatage (dossierCorbeille), créé
- * d'abord, comme supprimer y range un événement. Ses octets ne se perdent
+ * avant le premier geste qui le remplace : le fichier passe tel quel de son
+ * dossier dans un dossier neuf de la corbeille de la racine, daté de
+ * l'horodatage (dossierCorbeille), créé d'abord, comme supprimer y range un
+ * événement. Ses octets ne se perdent
  * jamais, et l'écriture qui suit pose l'état comme pour un état absent :
  * l'Ouvert rendu ne le tient plus pour mal encodé. Un Ouvert dont l'état se
  * lit, ou manque, revient tel quel, sans rien écrire. Un état qui n'est plus
@@ -1188,19 +1307,19 @@ async function ecrireJournal(ouvert, preparation, ligne) {
  */
 export async function mettreDeCoteEtatMalEncode(ouvert, horodatage) {
   if (!ouvert.etatMalEncode) return ouvert;
-  const { fs, racine, base } = ouvert;
+  const { systeme, racine, dossier, base } = ouvert;
   const chemin = base + SUFFIXES.etat;
   if (!(await fichierPresent(ouvert, chemin))) return { ...ouvert, etatMalEncode: false };
   let existants = [];
   try {
-    existants = (await fs.lister(racine, DOSSIER_CORBEILLE)).map(({ nom }) => nom);
+    existants = (await systeme.lister(racine, DOSSIER_CORBEILLE)).map(({ nom }) => nom);
   } catch (erreur) {
     // Une corbeille absente est vide.
-    if (erreur.code !== 'ABSENT') throw enEcriture(erreur, DOSSIER_CORBEILLE, racine);
+    if (erreur.code !== 'ABSENT') throw enEcriture(erreur, DOSSIER_CORBEILLE, racine.chemin);
   }
-  const dossier = dossierCorbeille(horodatage, existants);
-  await fs.creerDossier(racine, dossier);
-  await fs.deplacer(racine, chemin, `${dossier}/${chemin}`);
+  const date = dossierCorbeille(horodatage, existants);
+  await systeme.creerDossier(racine, date);
+  await systeme.deplacer(racine, `${dossier}/${chemin}`, `${date}/${chemin}`);
   return { ...ouvert, etatMalEncode: false };
 }
 
@@ -1329,11 +1448,14 @@ function avecCopiesFigees(charge) {
 }
 
 /**
- * Crée l'événement de charge dans racine (§ 8.1, § 8.2) : sa base dérive de
- * son nom (deriverBase), libre dans le dossier. Le journal d'abord, écrit
- * d'un bloc — ouverture, entrée 1 en instantané, jalon nomJalon sur elle —,
- * puis l'état, à la révision 1, puis, quand courses en porte pour les
- * propositions de la charge, le compagnon des courses (poserCompagnon).
+ * Crée l'événement de charge dans racine (§ 8.1, § 8.2, § 8.6) : sa base
+ * dérive de son nom (deriverBase), libre parmi les noms des entrées de la
+ * racine. Son dossier d'abord, qui porte sa base (dossierEvenement) — une
+ * coupure ensuite le laisse vide, ne se liste pas et garde son nom —, puis,
+ * dans ce dossier, le journal, écrit d'un bloc — ouverture, entrée 1 en
+ * instantané, jalon nomJalon sur elle —, puis l'état, à la révision 1, puis,
+ * quand courses en porte pour les propositions de la charge, le compagnon
+ * des courses (poserCompagnon).
  * L'Ouvert porte des copies figées des propositions de charge, qui reste à
  * l'appelant, libre (avecCopiesFigees).
  *
@@ -1346,8 +1468,9 @@ function avecCopiesFigees(charge) {
  * @returns {Promise<Ouvert>}
  * @throws {TypeError} une charge, un libellé, un nom ou un horodatage que la
  *         lecture refuserait, avant toute écriture
- * @throws {ErreurStockage} ECRITURE : le journal n'a pas pu s'écrire, et rien
- *         n'est écrit ; ETAT_NON_ECRIT : le journal est écrit, l'état non ;
+ * @throws {ErreurStockage} ECRITURE : le dossier ne s'est pas créé, et rien
+ *         n'est écrit, ou le journal n'a pas pu s'écrire, le dossier seul
+ *         créé ; ETAT_NON_ECRIT : le journal est écrit, l'état non ;
  *         CHEMIN_TROP_LONG (deriverBase) ; ABSENT : racine n'existe pas
  */
 export async function creer(fs, racine, recue, { libelle, nomJalon, horodatage, produitVersion, courses = [] }) {
@@ -1359,9 +1482,12 @@ export async function creer(fs, racine, recue, { libelle, nomJalon, horodatage, 
   const vide = { evenement: charge.evenement.id, format: FORMAT, entrees: [], jalons: [], ecartees: 0 };
   const journal = avec(avec(vide, entree), jalon);
   const texteEtat = texteDeLEntree(canonique, 1, produitVersion, 'creer');
-  await fs.ecrireAtomique(racine, base + SUFFIXES.journal, texteDuJournal(journal));
+  const dossier = dossierEvenement(base);
+  await fs.creerDossier(racine, dossier);
+  const local = vueDossier(fs, dossier);
+  await local.ecrireAtomique(racine, base + SUFFIXES.journal, texteDuJournal(journal));
   const cree = {
-    fs,
+    ...lieuDe(local),
     racine,
     base,
     produitVersion,
@@ -1558,17 +1684,19 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
 }
 
 /**
- * Écrit l'événement ouvert sous une base libre d'une racine : dans une autre
- * racine (§ 8.6), la réponse à une écriture qui échoue, l'Ouvert reçu étant
- * celui d'avant le geste refusé (ECRITURE) ou l'Ouvert avancé
- * d'ETAT_NON_ECRIT ; ou, avec un geste, sous le nom que ce geste donne, dans
- * le dossier même, ce qu'écrit le renommage (§ 8.7). Une racine que
+ * Écrit l'événement ouvert sous une base libre d'une racine, dans un dossier
+ * neuf qui porte cette base : dans une autre racine (§ 8.6), la réponse à une
+ * écriture qui échoue, l'Ouvert reçu étant celui d'avant le geste refusé
+ * (ECRITURE) ou l'Ouvert avancé d'ETAT_NON_ECRIT ; ou, avec un geste, sous le
+ * nom que ce geste donne, dans la racine même, ce qu'écrit le renommage
+ * (§ 8.7). Une racine que
  * l'opérateur a choisie, que rien n'a sondée — documents en mode portable —,
  * se crée d'abord, parents compris, un dossier existant restant tel quel ;
  * creerRacine faux ne la crée pas : le dossier de travail qui disparaît en
  * cours de séance ne renaît pas vide (§ 8.6). La base dérive du nom que porte
- * la charge écrite (deriverBase), libre parmi existantes et les bases du
- * dossier. La paire s'y écrit alignée, comme après un geste (§ 8.2) : le
+ * la charge écrite (deriverBase), libre parmi existantes et les noms des
+ * entrées de la racine ; son dossier se crée sous la racine, puis la paire
+ * s'y écrit alignée, comme après un geste (§ 8.2) : le
  * journal en mémoire, en entier — suivi d'une entrée de reprise, au libellé
  * libelleReprise, quand il finit sur une autre révision que la charge
  * ouverte, puis de l'entrée du geste, et élagué au-delà de PLAFOND_ENTREES —,
@@ -1580,10 +1708,12 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
  * nouvelle base reçoit d'abord le sien, l'état d'avant le geste (etatDAvant),
  * comme enregistrer le pose, mais avant le journal : la base appartient alors
  * à l'événement (proprietaire), si bien qu'aucun autre état de son
- * identifiant — l'ancienne paire d'un renommage interrompu, dont le journal
- * de la base n'est pas le sien — ne s'apparie le journal neuf (apparier). La
- * paire va sous une base qu'aucun fichier du dossier ne porte : elle n'y
- * remplace rien, pas même la paire de l'Ouvert quand ce dossier est le sien.
+ * identifiant — l'ancienne paire d'un renommage interrompu — ne s'apparie le
+ * journal neuf : ni elle ni lui ne sont dans le dossier de l'autre, et les
+ * dossiers ne se lisent l'un pour l'autre que pour les doublons et le
+ * journal sans état (lister). La paire va dans un dossier neuf : elle ne
+ * remplace rien, pas même la paire de l'Ouvert quand la racine est la
+ * sienne.
  * Après l'état, la nouvelle base reçoit le compagnon des courses que
  * l'Ouvert connaît pour les propositions écrites, quand il en connaît
  * (poserCompagnon) : le renommage et l'écriture ailleurs l'emportent avec
@@ -1594,7 +1724,7 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
  * @param {import('./systeme_fichiers.js').Racine} racine
  * @param {Object} options
  * @param {Iterable<string>} options.existantes   bases à ne pas prendre
- *        là-bas, en plus de celles du dossier
+ *        là-bas, en plus des noms des entrées de la racine
  * @param {string} [options.libelleReprise]   texte de l'entrée de reprise,
  *        requis quand elle a lieu
  * @param {string} [options.horodatage]       AAAA-MM-JJTHH:MM:SS±HH:MM de
@@ -1609,10 +1739,11 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
  * @returns {Promise<Ouvert>}   l'Ouvert dans racine : le journal et la
  *          révision écrits, chargeJournal la charge de l'état écrit, et
  *          charge celle qu'en rend examiner
- * @throws {ErreurStockage} LECTURE_SEULE ; ECRITURE quand la racine ne se
- *         crée pas, ou que le .precedent d'un geste n'a pas pu s'écrire, rien
- *         d'autre n'étant écrit, ou que le journal n'a pas pu s'écrire, le
- *         .precedent d'un geste restant écrit avant lui ; ABSENT {chemin: ''}
+ * @throws {ErreurStockage} LECTURE_SEULE ; ECRITURE quand la racine ou le
+ *         dossier ne se créent pas, ou que le .precedent d'un geste n'a pas
+ *         pu s'écrire, rien d'autre que le dossier n'étant écrit, ou que le
+ *         journal n'a pas pu s'écrire, le .precedent d'un geste restant écrit
+ *         avant lui ; ABSENT {chemin: ''}
  *         quand creerRacine est faux et que la racine n'existe pas, rien
  *         n'étant écrit ; ETAT_NON_ECRIT quand l'état n'a pas pu s'écrire,
  *         ouvert étant l'Ouvert dans racine ; CHEMIN_TROP_LONG
@@ -1625,16 +1756,20 @@ export async function enregistrerAilleurs(
   { existantes, libelleReprise, horodatage, geste = null, creerRacine = true },
 ) {
   exigerEcriture(ouvert);
-  const { fs } = ouvert;
+  const { systeme } = ouvert;
   const paire = paireAilleurs(ouvert, { libelleReprise, horodatage, geste });
   const { journal, charge, texteEtat, revision, produitVersion } = paire;
   const precedent = geste === null ? null : etatDAvant(ouvert);
-  if (creerRacine) await fs.creerDossier(racine, '');
-  const base = await deriver(fs, racine, charge.evenement.nom, [...existantes]);
-  if (precedent !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.precedent, precedent);
-  if (journal !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.journal, paire.texteJournal);
+  if (creerRacine) await systeme.creerDossier(racine, '');
+  const base = await deriver(systeme, racine, charge.evenement.nom, [...existantes]);
+  const dossier = dossierEvenement(base);
+  await systeme.creerDossier(racine, dossier);
+  const local = vueDossier(systeme, dossier);
+  if (precedent !== null) await local.ecrireAtomique(racine, base + SUFFIXES.precedent, precedent);
+  if (journal !== null) await local.ecrireAtomique(racine, base + SUFFIXES.journal, paire.texteJournal);
   const ailleurs = {
     ...ouvert,
+    ...lieuDe(local),
     racine,
     base,
     produitVersion,

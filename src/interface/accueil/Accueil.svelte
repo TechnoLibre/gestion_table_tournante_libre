@@ -21,7 +21,7 @@
   //
   // Les lignes viennent d'App, qui lit la liste par la façade une fois la
   // détermination du dossier de travail réglée, puis leurs résumés, qu'App
-  // reçoit un événement après l'autre (resumes, par base) ; refusLecture est
+  // reçoit un événement après l'autre (resumes, par clé) ; refusLecture est
   // le refus qu'App a reçu en la lisant. L'accueil prend la détermination par
   // facade.demarrer — la même pour toute la séance, sans nouvelle sonde — et
   // en montre la question, puis l'autre emplacement, les avis et le dossier.
@@ -81,7 +81,8 @@
   let racine = $state.raw(seance.etat().racine);
   let corbeille = $state.raw([]);
   let importAutre = $state.raw(null);
-  // La récupération d'un état illisible : { base, chemin, refus }.
+  // La récupération d'un état illisible : { evenement, chemin, refus },
+  // evenement la clé de la ligne.
   let recuperation = $state.raw(null);
   let refusOuverture = $state.raw(null);
   let refusDemonstration = $state.raw(null);
@@ -207,12 +208,12 @@
   async function ouvrir(ligne) {
     refusOuverture = null;
     try {
-      await suivre(() => seance.ouvrir(ligne.base));
+      await suivre(() => seance.ouvrir(ligne.cle));
     } catch (erreur) {
       const refus = refusDeLaListe(erreur);
       if (refus === null) throw erreur;
-      if (refus.code === 'ETAT_ILLISIBLE') recuperation = { base: ligne.base, chemin: ligne.chemin, refus };
-      else refusOuverture = { base: ligne.base, refus };
+      if (refus.code === 'ETAT_ILLISIBLE') recuperation = { evenement: ligne.cle, chemin: ligne.chemin, refus };
+      else refusOuverture = { cle: ligne.cle, refus };
     }
   }
 

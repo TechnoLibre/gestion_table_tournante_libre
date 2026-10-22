@@ -67,6 +67,13 @@ ou charger une démonstration, en écrit un nouveau. Le nom d’un événement c
 au plus 68 caractères : au-delà, la création, la copie et le renommage le
 refusent en disant la longueur saisie, sans rien couper.
 
+Chaque événement a son propre dossier dans le dossier de travail, à son nom :
+le chemin qu’affiche sa ligne est celui de son fichier d’état, dans ce dossier.
+Créer, copier ou importer un événement crée son dossier ; supprimer en range
+les fichiers dans la corbeille. Des fichiers d’événement posés directement dans
+le dossier de travail, hors d’un dossier, ne s’affichent pas et restent tels
+quels.
+
 ## Étape 1b — Passer en écriture
 
 L’événement s’ouvre en lecture. Tentez un geste qui modifie, par exemple

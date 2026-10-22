@@ -21,7 +21,8 @@ import { creer, enregistrer, lister, ouvrir, ouvrirSecours, verrouiller } from '
 import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { lireJournal, reconstruire } from './journal.js';
-import { SUFFIXES, deriverBase } from './noms.js';
+import { SUFFIXES, cleEvenement, deriverBase } from './noms.js';
+import { vueDossier } from './systeme_fichiers.js';
 import {
   chargerDemonstration,
   copier,
@@ -46,6 +47,16 @@ const VERROU = `${BASE}${SUFFIXES.verrou}`;
 const COURSES = `${BASE}${SUFFIXES.courses}`;
 
 const REPRISE = "Reprise de l'état trouvé sur le disque";
+
+// Le chemin, relatif à la racine, d'un fichier du dossier de l'événement
+// BASE, où les épreuves posent les fichiers des événements qu'elles lisent
+// ensemble ; et la clé d'un événement de ce dossier, de même forme.
+const dans = (nom) => `${BASE}/${nom}`;
+const EVT = dans(BASE);
+
+// Le chemin relatif au dossier de l'événement BASE d'un chemin relatif à la
+// racine qui y mène ; tout autre chemin tel quel.
+const dansBase = (chemin) => (chemin.startsWith(`${BASE}/`) ? chemin.slice(BASE.length + 1) : chemin);
 const UTF8 = new TextEncoder();
 
 // La séance qui supprime : celle qui tient le verrou que posent les épreuves.
@@ -182,10 +193,11 @@ function nouveauDisque(options = {}) {
   return { disque, fs };
 }
 
-// Un disque neuf dont documents porte les fichiers [nom, texte].
+// Un disque neuf dont le dossier de l'événement BASE porte les fichiers
+// [nom, texte].
 function disqueAvec(fichiers, options = {}) {
   const { disque, fs } = nouveauDisque(options);
-  for (const [nom, texte] of fichiers) fs.deposer('documents', nom, texte);
+  for (const [nom, texte] of fichiers) fs.deposer('documents', dans(nom), texte);
   return { disque, fs };
 }
 
@@ -193,15 +205,16 @@ const parChemin = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
 
 // Fichiers de racine à toute profondeur, [chemin, texte] triés par chemin,
 // lus par un processus à part, que reglages décrit — l'exécutable publié pour
-// la racine portable.
-async function arbre(disque, racine = DOC, reglages = {}) {
+// la racine portable. Un chemin du dossier de l'événement BASE y est relatif
+// à ce dossier (dansBase), sauf complet ; un autre, relatif à la racine.
+async function arbre(disque, racine = DOC, reglages = {}, { complet = false } = {}) {
   const lecteur = creerFichiersSimules({ disque, ...reglages });
   const fichiers = [];
   const parcourir = async (dossier) => {
     for (const { nom, type } of await lecteur.lister(racine, dossier)) {
       const chemin = dossier === '' ? nom : `${dossier}/${nom}`;
       if (type === 'dossier') await parcourir(chemin);
-      else fichiers.push([chemin, lecteur.contenu(racine.id, chemin)]);
+      else fichiers.push([complet ? chemin : dansBase(chemin), lecteur.contenu(racine.id, chemin)]);
     }
   };
   await parcourir('');
@@ -219,22 +232,25 @@ async function arbreSonde(disque, racine = DOC) {
   return (await arbre(disque, racine)).map(([chemin, texte]) => [chemin, deLaSonde(chemin, texte) ? SONDE : texte]);
 }
 
-// Ouvre base par un processus neuf, en affirmant qu'ouvrir n'écrit rien.
-async function rouvrir(disque, base) {
+// Ouvre base d'un dossier d'événement, BASE par défaut, par un processus
+// neuf, en affirmant qu'ouvrir n'écrit rien.
+async function rouvrir(disque, base, dossier = BASE) {
   const fs = creerFichiersSimules({ disque });
-  const ouvert = await ouvrir(fs, DOC, base);
+  const ouvert = await ouvrir(fs, DOC, cleEvenement(dossier, base));
   assert.equal(fs.compteurs.ecritures, 0, 'ouvrir écrit');
   return ouvert;
 }
 
 // Inscrit, dans l'ordre, chaque appel d'une primitive d'écriture de fichier ou
-// de dossier : [primitive, chemin], ou [primitive, de, vers] pour deplacer.
+// de dossier : [primitive, chemin], ou [primitive, de, vers] pour deplacer,
+// chaque chemin relatif au dossier de l'événement BASE quand il y mène
+// (dansBase), relatif à la racine sinon.
 function tracer(fs) {
   const trace = [];
   for (const nom of ['ecrireAtomique', 'ajouterLigne', 'creerDossier', 'supprimerDossier', 'deplacer', 'supprimer']) {
     const primitive = fs[nom];
     fs[nom] = (racine, ...reste) => {
-      trace.push([nom, ...reste.slice(0, nom === 'deplacer' ? 2 : 1)]);
+      trace.push([nom, ...reste.slice(0, nom === 'deplacer' ? 2 : 1).map(dansBase)]);
       return primitive(racine, ...reste);
     };
   }
@@ -286,10 +302,11 @@ async function echec(promesse, code, message = '') {
 }
 
 // Un geste ⇔ une entrée ⇔ un état (§ 8.2) : la dernière entrée du journal
-// porte la révision de l'état et restitue exactement sa charge.
-function exigerEquivalence(fs, base, { racine = 'documents', journal = base } = {}) {
-  const etat = analyser(fs.contenu(racine, `${base}${SUFFIXES.etat}`));
-  const lu = lireJournal(fs.contenu(racine, `${journal}${SUFFIXES.journal}`));
+// porte la révision de l'état et restitue exactement sa charge. Les fichiers
+// sont ceux du dossier de l'événement, BASE par défaut.
+function exigerEquivalence(fs, base, { racine = 'documents', journal = base, dossier = BASE } = {}) {
+  const etat = analyser(fs.contenu(racine, `${dossier}/${base}${SUFFIXES.etat}`));
+  const lu = lireJournal(fs.contenu(racine, `${dossier}/${journal}${SUFFIXES.journal}`));
   const derniere = lu.entrees.at(-1);
   assert.equal(lu.ecartees, 0);
   assert.equal(derniere.revision, etat.entete.revision);
@@ -313,8 +330,8 @@ async function deuxRevisions(charge = chargeEssai(), options = {}) {
 async function paireDe(charge) {
   const { fs, ouvert } = await deuxRevisions(charge);
   return {
-    etat: fs.contenu('documents', `${ouvert.base}${SUFFIXES.etat}`),
-    journal: fs.contenu('documents', `${ouvert.base}${SUFFIXES.journal}`),
+    etat: fs.contenu('documents', `${ouvert.dossier}/${ouvert.base}${SUFFIXES.etat}`),
+    journal: fs.contenu('documents', `${ouvert.dossier}/${ouvert.base}${SUFFIXES.journal}`),
   };
 }
 
@@ -332,13 +349,13 @@ async function paireDe(charge) {
 async function evenementsApresCoupure(disque, nouvelle, depart, message) {
   const fs = creerFichiersSimules({ disque });
   const lisibles = [];
-  for (const { base, id, illisible } of await lister(fs, DOC)) {
+  for (const { cle, base, id, illisible } of await lister(fs, DOC)) {
     if (illisible !== null) {
       assert.deepEqual([base, illisible], [BASE, 'ABSENT'], `${message} : ${base} ne se lit pas`);
       assert.notEqual(id, depart.id, `${message} : l'événement se liste sans état sous ${base}`);
       continue;
     }
-    const ouvert = await ouvrir(fs, DOC, base);
+    const ouvert = await ouvrir(fs, DOC, cle);
     const ancienne = base === BASE;
     assert.deepEqual(
       [base, ouvert.charge.evenement.nom, ouvert.revision, ouvert.avertissements],
@@ -392,6 +409,146 @@ const chargement = (id, n) => ({
   produitVersion: V1,
 });
 
+describe('opérations : un événement, un dossier (§ 8.6, § 8.7)', () => {
+  const NOUVEAU = 'Gala des Saules';
+
+  test("copier crée la copie dans son propre dossier, nommé de sa base ; le dossier de l'original ne change pas", async () => {
+    const { disque, ouvert } = await deuxRevisions();
+    const avant = await arbre(disque, DOC, {}, { complet: true });
+    const copie = await copier(ouvert, optionsCopie('Variante'));
+    assert.deepEqual([copie.dossier, copie.base], ['Variante', 'Variante']);
+    assert.deepEqual(
+      (await arbre(disque, DOC, {}, { complet: true })).map(([chemin]) => chemin).filter((chemin) => !avant.some(([autre]) => autre === chemin)),
+      [`Variante/Variante${SUFFIXES.journal}`, `Variante/Variante${SUFFIXES.etat}`],
+    );
+    assert.deepEqual(
+      (await lister(creerFichiersSimules({ disque }), DOC)).map(({ cle }) => cle),
+      [EVT, 'Variante/Variante'],
+    );
+  });
+
+  test("renommer écrit la nouvelle paire dans un dossier neuf qui porte le nouveau nom, puis efface l'ancienne ; l'ancien dossier reste, avec ce qui n'est pas de l'événement", async () => {
+    const { disque, fs, ouvert } = await deuxRevisions();
+    fs.deposer('documents', `${BASE}/notes.txt`, 'à garder');
+    const trace = tracer(fs);
+    const renomme = await renommer(ouvert, renommage(NOUVEAU, 3));
+    assert.deepEqual([renomme.dossier, renomme.base, renomme.revision], [NOUVEAU, NOUVEAU, 3]);
+    assert.deepEqual(trace, [
+      ['creerDossier', NOUVEAU],
+      ['ecrireAtomique', `${NOUVEAU}/${NOUVEAU}${SUFFIXES.precedent}`],
+      ['ecrireAtomique', `${NOUVEAU}/${NOUVEAU}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${NOUVEAU}/${NOUVEAU}${SUFFIXES.etat}`],
+      ['supprimer', ETAT],
+      ['supprimer', PRECEDENT],
+      ['supprimer', JOURNAL],
+    ]);
+    assert.deepEqual(
+      (await arbre(disque, DOC, {}, { complet: true })).map(([chemin]) => chemin),
+      [
+        `${NOUVEAU}/${NOUVEAU}${SUFFIXES.journal}`,
+        `${NOUVEAU}/${NOUVEAU}${SUFFIXES.etat}`,
+        `${NOUVEAU}/${NOUVEAU}${SUFFIXES.precedent}`,
+        `${BASE}/notes.txt`,
+      ],
+    );
+    assert.deepEqual(
+      (await lister(creerFichiersSimules({ disque }), DOC)).map(({ cle }) => cle),
+      [cleEvenement(NOUVEAU, NOUVEAU)],
+    );
+  });
+
+  test("renommer en ne changeant que la casse réécrit en place : même dossier, même base, un seul geste", async () => {
+    const { disque, fs, ouvert } = await deuxRevisions();
+    const trace = tracer(fs);
+    const renomme = await renommer(ouvert, renommage(BASE.toUpperCase(), 3));
+    assert.deepEqual([renomme.dossier, renomme.base, renomme.charge.evenement.nom], [BASE, BASE, BASE.toUpperCase()]);
+    assert.deepEqual(trace, [
+      ['ajouterLigne', JOURNAL],
+      ['ecrireAtomique', PRECEDENT],
+      ['ecrireAtomique', ETAT],
+    ]);
+    assert.deepEqual((await creerFichiersSimules({ disque }).lister(DOC, '')).map(({ nom }) => nom), [BASE]);
+  });
+
+  test("un renommage refusé avant que la nouvelle paire soit complète efface ce que la recopie a écrit et retire le dossier neuf resté vide", async () => {
+    for (const refus of ['.precedent', 'journal', 'état']) {
+      const { disque, fs, ouvert } = await deuxRevisions();
+      const avant = await arbre(disque);
+      const ecrire = fs.ecrireAtomique;
+      const cible = { '.precedent': SUFFIXES.precedent, journal: SUFFIXES.journal, état: SUFFIXES.etat }[refus];
+      fs.ecrireAtomique = async (racine, chemin, texte) => {
+        if (chemin === `${NOUVEAU}/${NOUVEAU}${cible}`) fs.pannes.renommage('documents');
+        try {
+          return await ecrire(racine, chemin, texte);
+        } finally {
+          fs.pannes.renommage('documents', 0);
+        }
+      };
+      await echec(renommer(ouvert, renommage(NOUVEAU, 3)), 'ECRITURE', refus);
+      assert.deepEqual(await arbre(disque), avant, refus);
+      assert.deepEqual((await creerFichiersSimules({ disque }).lister(DOC, '')).map(({ nom }) => nom), [BASE], refus);
+    }
+  });
+
+  test("supprimer déplace les fichiers de l'événement de son dossier dans le dossier daté de la corbeille, qui les porte directement ; le dossier de l'événement reste avec ce qui n'est pas à lui", async () => {
+    const { disque, fs } = await deuxRevisions();
+    fs.deposer('documents', `${BASE}/notes.txt`, 'à garder');
+    const trace = tracer(fs);
+    assert.deepEqual(await supprimer(fs, DOC, EVT, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    const deplaces = [VERROU, JOURNAL, PRECEDENT, ETAT];
+    assert.deepEqual(trace.slice(-5), [
+      ['creerDossier', DATE],
+      ...deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`]),
+    ]);
+    assert.deepEqual(
+      (await arbre(disque, DOC, {}, { complet: true })).map(([chemin]) => chemin),
+      [`${BASE}/notes.txt`, `${DATE}/${VERROU}`, `${DATE}/${JOURNAL}`, `${DATE}/${ETAT}`, `${DATE}/${PRECEDENT}`].sort(),
+    );
+    assert.deepEqual(await lister(fs, DOC), []);
+  });
+
+  test("les fichiers d'événement posés à même la racine ne se suppriment, ne s'importent ni ne s'ouvrent : leur clé sans dossier se refuse, et l'autre emplacement n'en lit rien", async () => {
+    const disque = new Map();
+    const fs = creerFichiersSimules({ disque, executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    const { portable, documents } = await fs.racines();
+    const ancien = etatTexte(chargeEssai({ id: 'evt-ancien', nom: 'Ancien' }));
+    fs.deposer('documents', `Ancien${SUFFIXES.etat}`, ancien);
+    fs.deposer('portable', `Ancien${SUFFIXES.etat}`, ancien);
+    fs.deposer('portable', `Neuf/Neuf${SUFFIXES.etat}`, etatTexte(chargeEssai({ id: 'evt-neuf', nom: 'Neuf' })));
+    await echec(supprimer(fs, DOC, 'Ancien', { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'CHEMIN_REFUSE');
+    const cles = (await lister(fs, portable)).map(({ cle }) => cle);
+    assert.deepEqual(cles, ['Neuf/Neuf']);
+    assert.deepEqual(await importerDepuis(fs, portable, documents, cles), {
+      importes: [{ cle: 'Neuf/Neuf', nouvelle: 'Neuf/Neuf' }],
+      refuses: [],
+    });
+    assert.deepEqual(await importerDepuis(fs, portable, documents, ['Ancien']), {
+      importes: [],
+      refuses: [{ cle: 'Ancien', code: 'CHEMIN_REFUSE' }],
+    });
+    assert.deepEqual(
+      (await arbre(disque, DOC, {}, { complet: true })).map(([chemin]) => chemin),
+      [`Ancien${SUFFIXES.etat}`, `Neuf/Neuf${SUFFIXES.etat}`],
+    );
+    assert.equal(fs.contenu('documents', `Ancien${SUFFIXES.etat}`), ancien);
+  });
+
+  test("importer écrit l'état venu d'ailleurs dans un dossier neuf, nommé de la base que dérive son nom, et rend sa clé", async () => {
+    const { disque, fs } = nouveauDisque();
+    fs.deposerDossier('documents', 'Bal des Hérons');
+    const octets = UTF8.encode(etatTexte(chargeEssai({ id: 'evt-herons', nom: 'Bal des Hérons' })));
+    const trace = tracer(fs);
+    const importe = await importer(fs, DOC, octets);
+    assert.deepEqual(importe, { cle: 'Bal des Hérons (2)/Bal des Hérons (2)', base: 'Bal des Hérons (2)' });
+    assert.deepEqual(trace, [
+      ['creerDossier', 'Bal des Hérons (2)'],
+      ['ecrireAtomique', `Bal des Hérons (2)/Bal des Hérons (2)${SUFFIXES.etat}`],
+    ]);
+    assert.deepEqual((await rouvrir(disque, importe.base, importe.base)).base, 'Bal des Hérons (2)');
+  });
+});
+
 describe('opérations : copier (§ 8.7)', () => {
   test("copier un plan bloqué : identité et nom reçus, journal d'une entrée en instantané et son jalon, filiation de l'instant copié, état déduit du contenu ; l'original reste octet pour octet", async () => {
     const avecRetenu = chargeEssai();
@@ -417,8 +574,9 @@ describe('opérations : copier (§ 8.7)', () => {
       assert.deepEqual(
         trace,
         [
-          ['ecrireAtomique', `${variante}${SUFFIXES.journal}`],
-          ['ecrireAtomique', `${variante}${SUFFIXES.etat}`],
+          ['creerDossier', variante],
+          ['ecrireAtomique', `${variante}/${variante}${SUFFIXES.journal}`],
+          ['ecrireAtomique', `${variante}/${variante}${SUFFIXES.etat}`],
         ],
         nom,
       );
@@ -438,7 +596,7 @@ describe('opérations : copier (§ 8.7)', () => {
       };
       assert.equal(texteDeCharge(copie.charge), texteDeCharge(attendue), nom);
       assert.deepEqual([copie.base, copie.revision, copie.avertissements], [variante, 1, []], nom);
-      const journal = lireJournal(fs.contenu('documents', `${variante}${SUFFIXES.journal}`));
+      const journal = lireJournal(fs.contenu('documents', `${variante}/${variante}${SUFFIXES.journal}`));
       assert.equal(journal.evenement, 'evt-variante', nom);
       assert.deepEqual(
         journal.entrees.map(({ revision, libelle, instantane }) => [revision, libelle, instantane === null]),
@@ -450,8 +608,8 @@ describe('opérations : copier (§ 8.7)', () => {
         [[1, 'Création']],
         nom,
       );
-      exigerEquivalence(fs, variante);
-      const rouverte = await rouvrir(disque, variante);
+      exigerEquivalence(fs, variante, { dossier: variante });
+      const rouverte = await rouvrir(disque, variante, variante);
       assert.equal(texteDeCharge(rouverte.charge), texteDeCharge(attendue), nom);
       assert.deepEqual(rouverte.avertissements, [], nom);
     }
@@ -460,7 +618,7 @@ describe('opérations : copier (§ 8.7)', () => {
   test("la filiation nomme l'instant que l'Ouvert restitue : l'entrée de sa révision, celle d'un secours ; sans entrée, le libellé de reprise, requis avant toute écriture ; une base prise se dérive", async () => {
     const { disque, fs, ouvert } = await deuxRevisions();
     await enregistrer(ouvert, noter(ouvert.charge, 3), geste(3));
-    const secours = await ouvrirSecours(fs, DOC, BASE, 'precedent');
+    const secours = await ouvrirSecours(fs, DOC, dans(BASE), 'precedent');
     assert.equal(secours.revision, 2);
     const copie = await copier(secours, optionsCopie(BASE));
     assert.deepEqual(copie.charge.evenement.filiation, {
@@ -469,15 +627,15 @@ describe('opérations : copier (§ 8.7)', () => {
     });
     assert.equal(copie.charge.participants[0].notes, 'note 2');
     assert.equal(copie.base, `${BASE} (2)`);
-    assert.equal(fs.contenu('documents', ETAT), etatTexte(noter(noter(chargeEssai(), 2), 3), 3));
-    assert.ok((await arbre(disque)).some(([chemin]) => chemin === `${BASE} (2)${SUFFIXES.journal}`));
+    assert.equal(fs.contenu('documents', dans(ETAT)), etatTexte(noter(noter(chargeEssai(), 2), 3), 3));
+    assert.ok((await arbre(disque)).some(([chemin]) => chemin === `${BASE} (2)/${BASE} (2)${SUFFIXES.journal}`));
 
     // Un état sans journal, à la révision 4 : son instant n'a pas d'entrée.
     const seul = disqueAvec([[ETAT, etatTexte(chargeEssai(), 4)]]);
     const sansJournal = await rouvrir(seul.disque, BASE);
     await assert.rejects(copier(sansJournal, optionsCopie('Variante des Lucioles')), TypeError);
     await assert.rejects(copier(sansJournal, optionsCopie('', { libelleReprise: REPRISE })), TypeError);
-    assert.equal(sansJournal.fs.compteurs.ecritures, 0);
+    assert.equal(sansJournal.systeme.compteurs.ecritures, 0);
     const reprise = await copier(sansJournal, optionsCopie('Variante des Lucioles', { libelleReprise: REPRISE }));
     assert.deepEqual(reprise.charge.evenement.filiation.instant, { revision: 4, libelle: REPRISE });
   });
@@ -487,26 +645,27 @@ describe('opérations : renommer (§ 8.7)', () => {
   test("renommer écrit d'abord la paire complète sous la nouvelle base — l'état d'avant au .precedent, le journal recopié avec l'entrée du renommage, puis l'état —, sans écrire l'ancienne ni créer le dossier, puis supprime l'ancienne : état, .precedent, journal ; le verrou reste à la séance, et le geste suivant continue sous la nouvelle base", async () => {
     const { disque, fs, ouvert } = await deuxRevisions();
     assert.deepEqual(await verrouiller(ouvert, 'seance-a', HEURE_SUPPRESSION), { pris: true });
-    const verrou = fs.contenu('documents', VERROU);
-    const etatAvant = fs.contenu('documents', ETAT);
+    const verrou = fs.contenu('documents', dans(VERROU));
+    const etatAvant = fs.contenu('documents', dans(ETAT));
     const nouvelle = 'Gala des Saules';
     const options = renommage(nouvelle, 3, { libelle: 'Renommé en « Gala des Saules »' });
     const trace = tracer(fs);
     const renomme = await renommer(ouvert, options);
     assert.deepEqual(trace, [
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.precedent}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.journal}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.etat}`],
+      ['creerDossier', nouvelle],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.precedent}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.etat}`],
       ['supprimer', ETAT],
       ['supprimer', PRECEDENT],
       ['supprimer', JOURNAL],
     ]);
     assert.deepEqual(
       (await arbre(disque)).map(([chemin]) => chemin),
-      [`${nouvelle}${SUFFIXES.journal}`, `${nouvelle}${SUFFIXES.etat}`, `${nouvelle}${SUFFIXES.precedent}`, VERROU],
+      [`${nouvelle}/${nouvelle}${SUFFIXES.journal}`, `${nouvelle}/${nouvelle}${SUFFIXES.etat}`, `${nouvelle}/${nouvelle}${SUFFIXES.precedent}`, VERROU],
     );
-    assert.equal(fs.contenu('documents', `${nouvelle}${SUFFIXES.precedent}`), etatAvant);
-    assert.equal(fs.contenu('documents', VERROU), verrou);
+    assert.equal(fs.contenu('documents', `${nouvelle}/${nouvelle}${SUFFIXES.precedent}`), etatAvant);
+    assert.equal(fs.contenu('documents', dans(VERROU)), verrou);
 
     const attendue = noter(chargeEssai(), 2);
     attendue.evenement.nom = nouvelle;
@@ -515,7 +674,7 @@ describe('opérations : renommer (§ 8.7)', () => {
       [nouvelle, nouvelle, 3, nouvelle],
     );
     assert.equal(texteDeCharge(renomme.charge), texteDeCharge(attendue));
-    const journal = exigerEquivalence(fs, nouvelle);
+    const journal = exigerEquivalence(fs, nouvelle, { dossier: nouvelle });
     assert.equal(journal.evenement, 'evt-lucioles');
     assert.deepEqual(revisionsEtLibelles(journal), [
       [1, CREATION.libelle],
@@ -527,7 +686,7 @@ describe('opérations : renommer (§ 8.7)', () => {
       [[1, 'Création']],
     );
 
-    const rouvert = await rouvrir(disque, nouvelle);
+    const rouvert = await rouvrir(disque, nouvelle, nouvelle);
     assert.deepEqual([rouvert.revision, rouvert.avertissements], [3, []]);
     const lecteur = creerFichiersSimules({ disque });
     assert.deepEqual(
@@ -537,7 +696,7 @@ describe('opérations : renommer (§ 8.7)', () => {
 
     const suite = await enregistrer(renomme, noter(renomme.charge, 4), geste(4));
     assert.deepEqual([suite.base, suite.revision], [nouvelle, 4]);
-    exigerEquivalence(fs, nouvelle);
+    exigerEquivalence(fs, nouvelle, { dossier: nouvelle });
   });
 
   test("une coupure à chaque écriture et à chaque suppression laisse au moins une paire, deux dès que la nouvelle est complète, jamais aucune ; l'ancienne garde ses octets et s'ouvre sous l'ancien nom sans jamais s'apparier le journal neuf, que le journal de sa base soit le sien ou non — état importé sans journal, journal d'un autre événement, journal illisible, journal sous une autre base que le nouveau nom précède — ; achevé, une seule paire, sous la nouvelle base", async () => {
@@ -566,7 +725,7 @@ describe('opérations : renommer (§ 8.7)', () => {
       let deuxPaires = 0;
       for (let n = 0; ; n += 1) {
         const { disque, fs } = disqueAvec(poses);
-        const ouvert = await ouvrir(fs, DOC, BASE);
+        const ouvert = await ouvrir(fs, DOC, dans(BASE));
         const { revision, avertissements } = ouvert;
         const depart = { id: 'evt-lucioles', revision, avertissements, premiere };
         const avant = new Map(await arbre(disque));
@@ -583,7 +742,7 @@ describe('opérations : renommer (§ 8.7)', () => {
         // reste octet pour octet, ou s'en va ; seule la nouvelle base reçoit.
         for (const [chemin, texte] of await arbre(disque)) {
           if (avant.has(chemin)) assert.equal(texte, avant.get(chemin), `${message} : ${chemin} réécrit`);
-          else assert.ok(chemin.startsWith(`${nouvelle}.`), `${message} : ${chemin} écrit`);
+          else assert.ok(chemin.startsWith(`${nouvelle}/${nouvelle}.`), `${message} : ${chemin} écrit`);
         }
         const lisibles = await evenementsApresCoupure(disque, nouvelle, depart, message);
         assert.ok(lisibles.length >= 1, `${message} : aucune paire ne s'ouvre`);
@@ -599,10 +758,16 @@ describe('opérations : renommer (§ 8.7)', () => {
 
   test("un refus avant que la nouvelle paire soit complète laisse l'ancienne octet pour octet et l'Ouvert reçu d'où continuer — .precedent, journal ou état neufs refusés —, ce que la recopie a écrit s'effaçant quand le support le permet, le journal d'abord, son .precedent seulement après lui ; un refus pendant la suppression de l'ancienne remonte avec l'Ouvert de la nouvelle", async () => {
     const nouvelle = 'Gala des Saules';
-    const journalNeuf = `${nouvelle}${SUFFIXES.journal}`;
-    const etatNeuf = `${nouvelle}${SUFFIXES.etat}`;
-    const precedentNeuf = `${nouvelle}${SUFFIXES.precedent}`;
-    const refus = (chemin) => new ErreurStockage('ECRITURE', { chemin, dossier: DOCUMENTS, cause: 'EBUSY' });
+    const journalNeuf = `${nouvelle}/${nouvelle}${SUFFIXES.journal}`;
+    const etatNeuf = `${nouvelle}/${nouvelle}${SUFFIXES.etat}`;
+    const precedentNeuf = `${nouvelle}/${nouvelle}${SUFFIXES.precedent}`;
+    // Le refus d'une primitive, qui nomme le dossier du fichier refusé.
+    const refus = (chemin) =>
+      new ErreurStockage('ECRITURE', {
+        chemin,
+        dossier: [DOCUMENTS, ...chemin.split('/').slice(0, -1)].join('\\'),
+        cause: 'EBUSY',
+      });
     // Pièges posés sur le processus : l'écriture atomique, ou la suppression,
     // du chemin donné est refusée.
     const refuserEcriture = (fs, chemin) => {
@@ -657,8 +822,8 @@ describe('opérations : renommer (§ 8.7)', () => {
       ],
       [
         "l'ancien état qui ne se supprime pas",
-        (fs) => refuserSuppression(fs, ETAT),
-        ETAT,
+        (fs) => refuserSuppression(fs, dans(ETAT)),
+        dans(ETAT),
         nouvelle,
         [journalNeuf, etatNeuf, precedentNeuf],
         [
@@ -673,7 +838,9 @@ describe('opérations : renommer (§ 8.7)', () => {
       pieger(fs);
       const erreur = await echec(renommer(ouvert, renommage(nouvelle, 3)), 'ECRITURE', nom);
       const { ouvert: suite = ouvert, ...details } = erreur.details;
-      assert.deepEqual(details, { chemin, dossier: DOCUMENTS, cause: 'EBUSY' }, nom);
+      // Le chemin, relatif au dossier du fichier refusé, que sa vue rend.
+      const { chemin: relatif, ...reste } = refus(chemin).details;
+      assert.deepEqual(details, { chemin: relatif.split('/').at(-1), ...reste }, nom);
       const apres = await arbre(disque);
       assert.deepEqual(
         apres.filter(([fichier]) => !neufs.includes(fichier)),
@@ -695,14 +862,14 @@ describe('opérations : renommer (§ 8.7)', () => {
       const avance = await enregistrer(suite, noter(suite.charge, 4), geste(4));
       assert.equal(avance.revision, suite.revision + 1, nom);
       assert.deepEqual(
-        revisionsEtLibelles(exigerEquivalence(fs, base)).slice(-2),
+        revisionsEtLibelles(exigerEquivalence(fs, base, { dossier: base })).slice(-2),
         [
           [suite.revision, base === BASE ? 'Geste 2' : 'Renommé'],
           [avance.revision, 'Geste 4'],
         ],
         nom,
       );
-      const rouvert = await rouvrir(disque, base);
+      const rouvert = await rouvrir(disque, base, base);
       assert.deepEqual(
         [rouvert.revision, rouvert.charge.evenement.nom, rouvert.avertissements],
         [avance.revision, attendu[1], []],
@@ -715,11 +882,12 @@ describe('opérations : renommer (§ 8.7)', () => {
     // bien que la nouvelle base appartient à l'événement : l'état importé ne
     // s'apparie pas ce journal, et se rouvre sous l'ancien nom, à sa révision.
     const importe = disqueAvec([[ETAT, etatTexte(chargeEssai(), 4)]]);
-    const seul = await ouvrir(importe.fs, DOC, BASE);
+    const seul = await ouvrir(importe.fs, DOC, dans(BASE));
     refuserEcriture(importe.fs, etatNeuf);
     refuserSuppression(importe.fs, journalNeuf);
     const refusSeul = await echec(renommer(seul, renommage(nouvelle, 3, { libelleReprise: REPRISE })), 'ECRITURE');
-    assert.deepEqual(refusSeul.details, { chemin: etatNeuf, dossier: DOCUMENTS, cause: 'EBUSY' });
+    const { chemin: etatRefuse, ...dossierRefuse } = refus(etatNeuf).details;
+    assert.deepEqual(refusSeul.details, { chemin: etatRefuse.split('/').at(-1), ...dossierRefuse });
     assert.deepEqual(
       (await arbre(importe.disque)).map(([fichier]) => fichier),
       [journalNeuf, precedentNeuf, ETAT],
@@ -742,11 +910,11 @@ describe('opérations : renommer (§ 8.7)', () => {
     await assert.rejects(renommer(coupe.ouvert, renommage(nouvelle, 3)), PanneSimulee);
   });
 
-  test("un dossier de travail qui disparaît pendant le renommage ne renaît pas : à chaque écriture avant laquelle il disparaît, renommer lève ECRITURE, ENOENT, ou achève, sans jamais créer de dossier", async () => {
+  test("un dossier de travail qui disparaît pendant le renommage ne renaît pas : à chaque écriture avant laquelle il disparaît, renommer lève ECRITURE, ENOENT, ou achève, sans jamais créer d'autre dossier que celui du nouveau nom", async () => {
     const nouvelle = 'Gala des Saules';
     // Rangs où le dossier a disparu : au moins un par primitive que le
-    // renommage appelle — trois écritures, trois suppressions —, sans quoi le
-    // balayage n'a rien éprouvé.
+    // renommage appelle — le dossier neuf, trois écritures, trois
+    // suppressions —, sans quoi le balayage n'a rien éprouvé.
     let effacements = 0;
     for (let n = 0; ; n += 1) {
       const { disque, fs, ouvert } = await deuxRevisions();
@@ -762,7 +930,7 @@ describe('opérations : renommer (§ 8.7)', () => {
       const enoent = refus instanceof ErreurStockage && refus.code === 'ECRITURE' && refus.details.cause === 'ENOENT';
       assert.ok(refus === null || enoent, `${message} : ${String(refus)}`);
       assert.deepEqual(
-        trace.filter(([primitive]) => primitive === 'creerDossier'),
+        trace.filter(([primitive, chemin]) => primitive === 'creerDossier' && chemin !== nouvelle),
         [],
         message,
       );
@@ -773,7 +941,7 @@ describe('opérations : renommer (§ 8.7)', () => {
       effacements += 1;
       await echec(creerFichiersSimules({ disque }).lister(DOC, ''), 'ABSENT', message);
     }
-    assert.ok(effacements >= 6, `${effacements} rangs éprouvés, 6 attendus au moins`);
+    assert.ok(effacements >= 7, `${effacements} rangs éprouvés, 7 attendus au moins`);
   });
 
   test("un nom inchangé, aux blancs de bord près, ne touche à rien : aucune écriture — ni entrée, ni recopie, ni suppression — et l'Ouvert reçu revient, même sous une autre base que celle que le nom dérive", async () => {
@@ -791,7 +959,7 @@ describe('opérations : renommer (§ 8.7)', () => {
     // sans eux ne change rien non plus.
     const borde = disqueAvec([[ETAT, etatTexte(chargeEssai({ nom: ` ${BASE}  ` }))]]);
     const ouvertBorde = await rouvrir(borde.disque, BASE);
-    const traceBorde = tracer(ouvertBorde.fs);
+    const traceBorde = tracer(ouvertBorde.systeme);
     assert.equal(await renommer(ouvertBorde, renommage(BASE, 3)), ouvertBorde);
     assert.deepEqual(traceBorde, []);
 
@@ -806,7 +974,7 @@ describe('opérations : renommer (§ 8.7)', () => {
     let ouvertDeux = await creer(second, DOC, chargeEssai({ nom: gala }), CREATION);
     ouvertDeux = await enregistrer(ouvertDeux, noter(ouvertDeux.charge, 2), geste(2));
     assert.equal(ouvertDeux.base, deux);
-    await supprimer(second, DOC, gala, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+    await supprimer(second, DOC, cleEvenement(gala, gala), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
     const avantDeux = await arbre(disqueDeux);
     const ecrituresDeux = second.compteurs.ecritures;
     const traceDeux = tracer(second);
@@ -817,7 +985,7 @@ describe('opérations : renommer (§ 8.7)', () => {
     // Un état sans journal sous « (2) », de même.
     const seul = disqueAvec([[`${deux}${SUFFIXES.etat}`, etatTexte(chargeEssai({ nom: gala }), 2)]]);
     const sansJournal = await rouvrir(seul.disque, deux);
-    const traceSeul = tracer(sansJournal.fs);
+    const traceSeul = tracer(sansJournal.systeme);
     assert.equal(await renommer(sansJournal, renommage(gala, 3)), sansJournal);
     assert.deepEqual(traceSeul, []);
     assert.deepEqual(
@@ -839,19 +1007,20 @@ describe('opérations : renommer (§ 8.7)', () => {
       if (autre !== null) await creer(fs, DOC, chargeEssai({ id: 'evt-autre', nom: autre }), CREATION);
       const ouvert = await creer(fs, DOC, chargeEssai({ nom: ancien }), CREATION);
       const { base } = ouvert;
+      const fichier = (suffixe) => dansBase(`${base}/${base}${suffixe}`);
       const trace = tracer(fs);
       const renomme = await renommer(ouvert, renommage(nouveau, 2));
       assert.deepEqual(
         trace,
         [
-          ['ajouterLigne', `${base}${SUFFIXES.journal}`],
-          ['ecrireAtomique', `${base}${SUFFIXES.precedent}`],
-          ['ecrireAtomique', `${base}${SUFFIXES.etat}`],
+          ['ajouterLigne', fichier(SUFFIXES.journal)],
+          ['ecrireAtomique', fichier(SUFFIXES.precedent)],
+          ['ecrireAtomique', fichier(SUFFIXES.etat)],
         ],
         nom,
       );
-      assert.deepEqual([renomme.base, renomme.charge.evenement.nom, renomme.revision], [base, nouveau, 2], nom);
-      exigerEquivalence(fs, base);
+      assert.deepEqual([renomme.dossier, renomme.base, renomme.charge.evenement.nom, renomme.revision], [base, base, nouveau, 2], nom);
+      exigerEquivalence(fs, base, { dossier: base });
     }
 
     // Une racine de 161 unités laisse quatre unités à la base, aucune au
@@ -864,13 +1033,15 @@ describe('opérations : renommer (§ 8.7)', () => {
     const majuscules = await renommer(gala, renommage('GALA', 2));
     assert.deepEqual([gala.base, majuscules.base, majuscules.charge.evenement.nom], ['Gala', 'Gala', 'GALA']);
 
-    // La base du nouveau nom porte déjà un fichier, d'une autre casse.
-    const { fs } = disqueAvec([['GALA DES SAULES.gtt.verrou', '{}\n']]);
+    // La base du nouveau nom est déjà le nom d'une entrée de la racine, d'une
+    // autre casse.
+    const { fs } = nouveauDisque();
+    fs.deposer('documents', 'GALA DES SAULES', 'un fichier');
     const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
     const renomme = await renommer(ouvert, renommage('Gala des Saules', 2));
-    assert.equal(renomme.base, 'Gala des Saules (2)');
-    assert.equal(fs.contenu('documents', 'GALA DES SAULES.gtt.verrou'), '{}\n');
-    exigerEquivalence(fs, 'Gala des Saules (2)');
+    assert.deepEqual([renomme.dossier, renomme.base], ['Gala des Saules (2)', 'Gala des Saules (2)']);
+    assert.equal(fs.contenu('documents', 'GALA DES SAULES'), 'un fichier');
+    exigerEquivalence(fs, 'Gala des Saules (2)', { dossier: 'Gala des Saules (2)' });
   });
 
   test("renommer ne supprime jamais le journal d'un autre événement, que porte l'ancienne base, et ne crée de journal que sous la nouvelle, la reprise, requise, avant l'entrée du renommage ; le journal de l'événement sous une autre base part avec l'ancienne paire", async () => {
@@ -884,25 +1055,26 @@ describe('opérations : renommer (§ 8.7)', () => {
     const nouvelle = 'Bal des Hérons';
     const options = renommage(nouvelle, 2);
     await assert.rejects(renommer(ouvert, options), TypeError);
-    assert.equal(ouvert.fs.compteurs.ecritures, 0);
+    assert.equal(ouvert.systeme.compteurs.ecritures, 0);
 
-    const trace = tracer(ouvert.fs);
+    const trace = tracer(ouvert.systeme);
     const renomme = await renommer(ouvert, { ...options, libelleReprise: REPRISE });
     assert.deepEqual(trace, [
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.precedent}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.journal}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.etat}`],
+      ['creerDossier', nouvelle],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.precedent}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.etat}`],
       ['supprimer', ETAT],
       ['supprimer', PRECEDENT],
     ]);
     assert.equal(renomme.base, nouvelle);
     assert.deepEqual(await arbre(disque), [
-      [`${nouvelle}${SUFFIXES.journal}`, ouvert.fs.contenu('documents', `${nouvelle}${SUFFIXES.journal}`)],
-      [`${nouvelle}${SUFFIXES.etat}`, ouvert.fs.contenu('documents', `${nouvelle}${SUFFIXES.etat}`)],
-      [`${nouvelle}${SUFFIXES.precedent}`, etatTexte(chargeEssai())],
+      [`${nouvelle}/${nouvelle}${SUFFIXES.journal}`, ouvert.systeme.contenu('documents', `${nouvelle}/${nouvelle}${SUFFIXES.journal}`)],
+      [`${nouvelle}/${nouvelle}${SUFFIXES.etat}`, ouvert.systeme.contenu('documents', `${nouvelle}/${nouvelle}${SUFFIXES.etat}`)],
+      [`${nouvelle}/${nouvelle}${SUFFIXES.precedent}`, etatTexte(chargeEssai())],
       [JOURNAL, etranger],
     ]);
-    assert.deepEqual(revisionsEtLibelles(exigerEquivalence(ouvert.fs, nouvelle)), [
+    assert.deepEqual(revisionsEtLibelles(exigerEquivalence(ouvert.systeme, nouvelle, { dossier: nouvelle })), [
       [1, REPRISE],
       [2, 'Renommé'],
     ]);
@@ -918,22 +1090,23 @@ describe('opérations : renommer (§ 8.7)', () => {
     ]);
     const apparie = await rouvrir(deux.disque, BASE);
     assert.deepEqual([apparie.baseJournal, apparie.avertissements], ['Archives des Lucioles', []]);
-    const traceDeux = tracer(apparie.fs);
+    const traceDeux = tracer(apparie.systeme);
     await renommer(apparie, renommage(nouvelle, 3));
     assert.deepEqual(traceDeux, [
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.precedent}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.journal}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.etat}`],
+      ['creerDossier', nouvelle],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.precedent}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.etat}`],
       ['supprimer', ETAT],
       ['supprimer', PRECEDENT],
       ['supprimer', archives],
     ]);
     assert.deepEqual(
       (await arbre(deux.disque)).map(([chemin]) => chemin),
-      [`${nouvelle}${SUFFIXES.journal}`, `${nouvelle}${SUFFIXES.etat}`, `${nouvelle}${SUFFIXES.precedent}`, JOURNAL],
+      [`${nouvelle}/${nouvelle}${SUFFIXES.journal}`, `${nouvelle}/${nouvelle}${SUFFIXES.etat}`, `${nouvelle}/${nouvelle}${SUFFIXES.precedent}`, JOURNAL],
     );
-    assert.equal(apparie.fs.contenu('documents', JOURNAL), etranger);
-    assert.deepEqual(revisionsEtLibelles(exigerEquivalence(apparie.fs, nouvelle)), [
+    assert.equal(apparie.systeme.contenu('documents', dans(JOURNAL)), etranger);
+    assert.deepEqual(revisionsEtLibelles(exigerEquivalence(apparie.systeme, nouvelle, { dossier: nouvelle })), [
       [1, CREATION.libelle],
       [2, 'Geste 2'],
       [3, 'Renommé'],
@@ -950,9 +1123,12 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
     const trace = tracer(fs);
     const { base } = await importer(fs, DOC, octets);
     assert.equal(base, 'Bal des Hérons été');
-    assert.deepEqual(trace, [['ecrireAtomique', `${base}${SUFFIXES.etat}`]]);
-    assert.deepEqual(UTF8.encode(fs.contenu('documents', `${base}${SUFFIXES.etat}`)), octets);
-    const ouvert = await rouvrir(disque, base);
+    assert.deepEqual(trace, [
+      ['creerDossier', base],
+      ['ecrireAtomique', `${base}/${base}${SUFFIXES.etat}`],
+    ]);
+    assert.deepEqual(UTF8.encode(fs.contenu('documents', `${base}/${base}${SUFFIXES.etat}`)), octets);
+    const ouvert = await rouvrir(disque, base, base);
     assert.equal(texteDeCharge(ouvert.charge), texteDeCharge(charge));
     assert.deepEqual(
       [ouvert.journal, ouvert.revision, ouvert.formatPlusRecent, ouvert.avertissements],
@@ -960,7 +1136,10 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
     );
 
     const autre = UTF8.encode(etatTexte(chargeEssai({ id: 'evt-herons-bis', nom: 'Bal des Hérons été' })));
-    assert.deepEqual(await importer(fs, DOC, autre), { base: 'Bal des Hérons été (2)' });
+    assert.deepEqual(await importer(fs, DOC, autre), {
+      cle: 'Bal des Hérons été (2)/Bal des Hérons été (2)',
+      base: 'Bal des Hérons été (2)',
+    });
   });
 
   test("importer refuse ce que la lecture refuse, avec son code et ses détails, sans rien écrire : octets hors UTF-8, dans une chaîne JSON comprise, texte vide, JSON invalide, comptes faux", async () => {
@@ -994,12 +1173,12 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
     const ecritures = fs.compteurs.ecritures;
     const octets = UTF8.encode(etatTexte(chargeEssai({ nom: 'Bal des Hérons' })));
     const erreur = await echec(importer(fs, DOC, octets), 'IDENTIFIANT_PRESENT');
-    assert.deepEqual(erreur.details, { id: 'evt-lucioles', base: BASE });
+    assert.deepEqual(erreur.details, { id: 'evt-lucioles', base: BASE, dossier: BASE });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque), avant);
 
     const illisible = disqueAvec([[ETAT, '{']]);
-    assert.deepEqual(await importer(illisible.fs, DOC, octets), { base: 'Bal des Hérons' });
+    assert.deepEqual(await importer(illisible.fs, DOC, octets), { cle: 'Bal des Hérons/Bal des Hérons', base: 'Bal des Hérons' });
     const apparie = disqueAvec([
       [ETAT, ''],
       [PRECEDENT, etatTexte(chargeEssai())],
@@ -1016,7 +1195,7 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
       );
       const poses = await arbre(autre);
       const refus = await echec(importer(autreFs, DOC, octets), 'IDENTIFIANT_PRESENT', nom);
-      assert.deepEqual(refus.details, { id: 'evt-lucioles', base: BASE }, nom);
+      assert.deepEqual(refus.details, { id: 'evt-lucioles', base: BASE, dossier: BASE }, nom);
       assert.deepEqual(await arbre(autre), poses, nom);
     }
   });
@@ -1024,8 +1203,8 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
   test("un fichier d'un format plus récent s'importe tel quel et s'ouvre en lecture seule ; sans nom lisible, il est refusé avec le code de la lecture", async () => {
     const { disque, fs } = nouveauDisque();
     const texte = formatPlusRecent(chargeEssai());
-    assert.deepEqual(await importer(fs, DOC, UTF8.encode(texte)), { base: BASE });
-    assert.equal(fs.contenu('documents', ETAT), texte);
+    assert.deepEqual(await importer(fs, DOC, UTF8.encode(texte)), { cle: EVT, base: BASE });
+    assert.equal(fs.contenu('documents', dans(ETAT)), texte);
     const ouvert = await rouvrir(disque, BASE);
     assert.equal(ouvert.formatPlusRecent, true);
     await echec(enregistrer(ouvert, noter(ouvert.charge, 2), geste(2, { libelleReprise: REPRISE })), 'LECTURE_SEULE');
@@ -1072,9 +1251,9 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
       [`Archives des Saules${SUFFIXES.journal}`, saules.journal],
       [`Kermesse des Ifs${SUFFIXES.etat}`, etatTexte(chargeEssai({ id: 'evt-ifs', nom: 'Kermesse des Ifs' }))],
     ];
-    for (const [nom, texte] of poses) fs.deposer('portable', nom, texte);
+    for (const [nom, texte] of poses) fs.deposer('portable', dans(nom), texte);
     const kermesse = etatTexte(chargeEssai({ id: 'evt-ifs', nom: 'Kermesse' }));
-    fs.deposer('documents', `Kermesse${SUFFIXES.etat}`, kermesse);
+    fs.deposer('documents', `Kermesse/Kermesse${SUFFIXES.etat}`, kermesse);
     const avant = await arbre(disque, portable, PORTABLE);
 
     const racines = [];
@@ -1085,26 +1264,28 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
         return primitive(racine, ...reste);
       };
     }
-    const bases = ['Fête des Saules', "Gala d'automne", BASE, 'Inexistant', 'Kermesse des Ifs', 'Bal des Hérons'];
-    assert.deepEqual(await importerDepuis(fs, portable, documents, bases), {
+    const cles = ['Fête des Saules', "Gala d'automne", BASE, 'Inexistant', 'Kermesse des Ifs', 'Bal des Hérons'].map(dans);
+    // La clé dans documents : le dossier neuf porte la base.
+    const neuve = (base) => cleEvenement(base, base);
+    assert.deepEqual(await importerDepuis(fs, portable, documents, cles), {
       importes: [
-        { base: 'Fête des Saules', nouvelle: 'Fête des Saules' },
-        { base: BASE, nouvelle: BASE },
-        { base: 'Bal des Hérons', nouvelle: 'Bal des Hérons' },
+        { cle: dans('Fête des Saules'), nouvelle: neuve('Fête des Saules') },
+        { cle: EVT, nouvelle: EVT },
+        { cle: dans('Bal des Hérons'), nouvelle: neuve('Bal des Hérons') },
       ],
       refuses: [
-        { base: "Gala d'automne", code: 'ETAT_ILLISIBLE' },
-        { base: 'Inexistant', code: 'ABSENT' },
-        { base: 'Kermesse des Ifs', code: 'IDENTIFIANT_PRESENT' },
+        { cle: dans("Gala d'automne"), code: 'ETAT_ILLISIBLE' },
+        { cle: dans('Inexistant'), code: 'ABSENT' },
+        { cle: dans('Kermesse des Ifs'), code: 'IDENTIFIANT_PRESENT' },
       ],
     });
     assert.ok(racines.length > 0 && racines.every((id) => id === 'documents'), racines.join(' '));
     assert.deepEqual(await arbre(disque, portable, PORTABLE), avant);
     assert.deepEqual(await arbre(disque, documents), [
-      [`Bal des Hérons${SUFFIXES.etat}`, herons],
-      [`Fête des Saules${SUFFIXES.journal}`, saules.journal],
-      [`Fête des Saules${SUFFIXES.etat}`, saules.etat],
-      [`Kermesse${SUFFIXES.etat}`, kermesse],
+      [`Bal des Hérons/Bal des Hérons${SUFFIXES.etat}`, herons],
+      [`Fête des Saules/Fête des Saules${SUFFIXES.journal}`, saules.journal],
+      [`Fête des Saules/Fête des Saules${SUFFIXES.etat}`, saules.etat],
+      [`Kermesse/Kermesse${SUFFIXES.etat}`, kermesse],
       [JOURNAL, lucioles.journal],
       [ETAT, lucioles.etat],
     ]);
@@ -1113,7 +1294,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
       ['Fête des Saules', 2, 2],
       ['Bal des Hérons', 3, null],
     ]) {
-      const ouvert = await rouvrir(disque, base);
+      const ouvert = await rouvrir(disque, base, base);
       assert.deepEqual(
         [ouvert.revision, ouvert.journal?.entrees.length ?? null, ouvert.avertissements],
         [revision, entrees, []],
@@ -1135,46 +1316,49 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     // illisible. Saules : déjà dans documents, l'état illisible.
     const gala = await (async () => {
       const { fs: source, ouvert } = await deuxRevisions(chargeEssai({ id: 'evt-gala', nom: 'Gala des Ormes' }));
-      const lire = (suffixe) => source.contenu('documents', `${ouvert.base}${suffixe}`);
+      const lire = (suffixe) => source.contenu('documents', `${ouvert.dossier}/${ouvert.base}${suffixe}`);
       return { precedent: lire(SUFFIXES.precedent), journal: lire(SUFFIXES.journal), etat: lire(SUFFIXES.etat) };
     })();
     const fanfare = await paireDe(chargeEssai({ id: 'evt-fanfare', nom: 'Fanfare' }));
     const saules = await paireDe(chargeEssai({ id: 'evt-saules', nom: 'Fête des Saules' }));
     const roseraie = await paireDe(chargeEssai({ id: 'evt-roseraie', nom: 'Roseraie' }));
-    fs.deposer('portable', `Gala des Ormes${SUFFIXES.etat}`, '');
-    fs.deposer('portable', `Gala des Ormes${SUFFIXES.precedent}`, gala.precedent);
-    fs.deposer('portable', `Gala des Ormes${SUFFIXES.journal}`, gala.journal);
-    fs.deposerOctets('portable', `Fanfare${SUFFIXES.etat}`, enWindows1252(fanfare.etat));
-    fs.deposer('portable', `Fanfare${SUFFIXES.journal}`, fanfare.journal);
-    fs.deposer('portable', `Roseraie${SUFFIXES.etat}`, '{');
-    fs.deposer('portable', `Roseraie${SUFFIXES.precedent}`, roseraie.etat);
-    fs.deposer('portable', `Kermesse des Ifs${SUFFIXES.etat}`, '{');
-    fs.deposer('portable', `Fête des Saules${SUFFIXES.etat}`, saules.etat);
-    fs.deposer('documents', `Saules${SUFFIXES.etat}`, '');
-    fs.deposer('documents', `Saules${SUFFIXES.journal}`, saules.journal);
+    fs.deposer('portable', dans(`Gala des Ormes${SUFFIXES.etat}`), '');
+    fs.deposer('portable', dans(`Gala des Ormes${SUFFIXES.precedent}`), gala.precedent);
+    fs.deposer('portable', dans(`Gala des Ormes${SUFFIXES.journal}`), gala.journal);
+    fs.deposerOctets('portable', dans(`Fanfare${SUFFIXES.etat}`), enWindows1252(fanfare.etat));
+    fs.deposer('portable', dans(`Fanfare${SUFFIXES.journal}`), fanfare.journal);
+    fs.deposer('portable', dans(`Roseraie${SUFFIXES.etat}`), '{');
+    fs.deposer('portable', dans(`Roseraie${SUFFIXES.precedent}`), roseraie.etat);
+    fs.deposer('portable', dans(`Kermesse des Ifs${SUFFIXES.etat}`), '{');
+    fs.deposer('portable', dans(`Fête des Saules${SUFFIXES.etat}`), saules.etat);
+    fs.deposer('documents', dans(`Saules${SUFFIXES.etat}`), '');
+    fs.deposer('documents', dans(`Saules${SUFFIXES.journal}`), saules.journal);
     const ecritures = fs.compteurs.ecritures;
 
-    const bases = ['Gala des Ormes', 'Fanfare', 'Roseraie', 'Kermesse des Ifs', 'Fête des Saules'];
-    assert.deepEqual(await importerDepuis(fs, portable, documents, bases), {
+    const cles = ['Gala des Ormes', 'Fanfare', 'Roseraie', 'Kermesse des Ifs', 'Fête des Saules'].map(dans);
+    // La clé dans documents : le dossier neuf porte la base.
+    const neuve = (base) => cleEvenement(base, base);
+    assert.deepEqual(await importerDepuis(fs, portable, documents, cles), {
       importes: [
-        { base: 'Gala des Ormes', nouvelle: 'Gala des Ormes' },
-        { base: 'Fanfare', nouvelle: 'Fanfare' },
-        { base: 'Roseraie', nouvelle: 'Roseraie' },
+        { cle: dans('Gala des Ormes'), nouvelle: neuve('Gala des Ormes') },
+        { cle: dans('Fanfare'), nouvelle: neuve('Fanfare') },
+        { cle: dans('Roseraie'), nouvelle: neuve('Roseraie') },
       ],
       refuses: [
-        { base: 'Kermesse des Ifs', code: 'ETAT_ILLISIBLE' },
-        { base: 'Fête des Saules', code: 'IDENTIFIANT_PRESENT' },
+        { cle: dans('Kermesse des Ifs'), code: 'ETAT_ILLISIBLE' },
+        { cle: dans('Fête des Saules'), code: 'IDENTIFIANT_PRESENT' },
       ],
     });
-    assert.equal(fs.compteurs.ecritures - ecritures, 6);
-    assert.deepEqual(fs.octets('portable', `Fanfare${SUFFIXES.etat}`), enWindows1252(fanfare.etat));
+    // Trois dossiers neufs et les six fichiers qu'ils reçoivent.
+    assert.equal(fs.compteurs.ecritures - ecritures, 3 + 6);
+    assert.deepEqual(fs.octets('portable', dans(`Fanfare${SUFFIXES.etat}`)), enWindows1252(fanfare.etat));
     assert.deepEqual(await arbre(disque, documents), [
-      [`Fanfare${SUFFIXES.journal}`, fanfare.journal],
-      [`Gala des Ormes${SUFFIXES.journal}`, gala.journal],
-      [`Gala des Ormes${SUFFIXES.etat}`, ''],
-      [`Gala des Ormes${SUFFIXES.precedent}`, gala.precedent],
-      [`Roseraie${SUFFIXES.etat}`, '{'],
-      [`Roseraie${SUFFIXES.precedent}`, roseraie.etat],
+      [`Fanfare/Fanfare${SUFFIXES.journal}`, fanfare.journal],
+      [`Gala des Ormes/Gala des Ormes${SUFFIXES.journal}`, gala.journal],
+      [`Gala des Ormes/Gala des Ormes${SUFFIXES.etat}`, ''],
+      [`Gala des Ormes/Gala des Ormes${SUFFIXES.precedent}`, gala.precedent],
+      [`Roseraie/Roseraie${SUFFIXES.etat}`, '{'],
+      [`Roseraie/Roseraie${SUFFIXES.precedent}`, roseraie.etat],
       [`Saules${SUFFIXES.journal}`, saules.journal],
       [`Saules${SUFFIXES.etat}`, ''],
     ]);
@@ -1183,13 +1367,13 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
       ['Gala des Ormes', 'VIDE', { precedent: 1, journal: 2 }],
       ['Fanfare', 'ABSENT', { precedent: null, journal: 2 }],
     ]) {
-      const erreur = await echec(ouvrir(lecteur, documents, base), 'ETAT_ILLISIBLE', base);
+      const erreur = await echec(ouvrir(lecteur, documents, neuve(base)), 'ETAT_ILLISIBLE', base);
       assert.deepEqual([erreur.details.raison, erreur.details.secours], [raison, secours], base);
-      assert.equal((await ouvrirSecours(lecteur, documents, base, 'journal')).revision, 2, base);
+      assert.equal((await ouvrirSecours(lecteur, documents, neuve(base), 'journal')).revision, 2, base);
     }
-    const roseraieLa = await echec(ouvrir(lecteur, documents, 'Roseraie'), 'ETAT_ILLISIBLE');
+    const roseraieLa = await echec(ouvrir(lecteur, documents, neuve('Roseraie')), 'ETAT_ILLISIBLE');
     assert.deepEqual([roseraieLa.details.raison, roseraieLa.details.secours], ['JSON', { precedent: 2, journal: null }]);
-    const parPrecedent = await ouvrirSecours(lecteur, documents, 'Roseraie', 'precedent');
+    const parPrecedent = await ouvrirSecours(lecteur, documents, neuve('Roseraie'), 'precedent');
     assert.deepEqual([parPrecedent.revision, parPrecedent.charge.evenement.id], [2, 'evt-roseraie']);
   });
 
@@ -1201,20 +1385,21 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     const { portable, documents } = await fs.racines();
     const paire = await paireDe(chargeEssai({ id: 'evt-gala', nom: 'Gala des Ormes' }));
     const coupee = [...UTF8.encode('{"type":"entree","revision":3,"libelle":"Ajout de Th'), 0xc3];
-    fs.deposer('portable', `Gala des Ormes${SUFFIXES.etat}`, paire.etat);
-    fs.deposerOctets('portable', `Gala des Ormes${SUFFIXES.journal}`, new Uint8Array([...UTF8.encode(paire.journal), ...coupee]));
-    const ouvertIci = await ouvrir(fs, portable, 'Gala des Ormes');
+    fs.deposer('portable', dans(`Gala des Ormes${SUFFIXES.etat}`), paire.etat);
+    fs.deposerOctets('portable', dans(`Gala des Ormes${SUFFIXES.journal}`), new Uint8Array([...UTF8.encode(paire.journal), ...coupee]));
+    const ouvertIci = await ouvrir(fs, portable, dans('Gala des Ormes'));
     assert.deepEqual(ouvertIci.avertissements, [{ code: 'JOURNAL_ECARTEES', details: { n: 1 } }]);
 
-    assert.deepEqual(await importerDepuis(fs, portable, documents, ['Gala des Ormes']), {
-      importes: [{ base: 'Gala des Ormes', nouvelle: 'Gala des Ormes' }],
+    const gala = cleEvenement('Gala des Ormes', 'Gala des Ormes');
+    assert.deepEqual(await importerDepuis(fs, portable, documents, [dans('Gala des Ormes')]), {
+      importes: [{ cle: dans('Gala des Ormes'), nouvelle: gala }],
       refuses: [],
     });
     assert.deepEqual(await arbre(disque, documents), [
-      [`Gala des Ormes${SUFFIXES.journal}`, paire.journal],
-      [`Gala des Ormes${SUFFIXES.etat}`, paire.etat],
+      [`Gala des Ormes/Gala des Ormes${SUFFIXES.journal}`, paire.journal],
+      [`Gala des Ormes/Gala des Ormes${SUFFIXES.etat}`, paire.etat],
     ]);
-    const la = await ouvrir(creerFichiersSimules({ disque }), documents, 'Gala des Ormes');
+    const la = await ouvrir(creerFichiersSimules({ disque }), documents, gala);
     assert.deepEqual([la.revision, la.journal.entrees.length, la.avertissements], [2, 2, []]);
   });
 
@@ -1226,22 +1411,22 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     fs.deposerDossier('documents');
     const { portable, documents } = await fs.racines();
     const lucioles = await paireDe(chargeEssai());
-    fs.deposer('portable', ETAT, lucioles.etat);
-    fs.deposer('portable', JOURNAL, lucioles.journal);
+    fs.deposer('portable', dans(ETAT), lucioles.etat);
+    fs.deposer('portable', dans(JOURNAL), lucioles.journal);
     // Le support se retire après la lecture d'ouvrir : la recopie du journal
     // échoue.
     const lire = fs.lireTexte;
     let lectures = 0;
     fs.lireTexte = async (racine, chemin) => {
-      if (chemin === JOURNAL && (lectures += 1) > 1) {
+      if (chemin === dans(JOURNAL) && (lectures += 1) > 1) {
         throw new ErreurStockage('LECTURE', { chemin, dossier: racine.chemin, cause: 'EIO' });
       }
       return lire(racine, chemin);
     };
     const ecritures = fs.compteurs.ecritures;
-    assert.deepEqual(await importerDepuis(fs, portable, documents, [BASE]), {
+    assert.deepEqual(await importerDepuis(fs, portable, documents, [EVT]), {
       importes: [],
-      refuses: [{ base: BASE, code: 'LECTURE' }],
+      refuses: [{ cle: EVT, code: 'LECTURE' }],
     });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque, documents), []);
@@ -1249,18 +1434,18 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     // De même pour le .precedent d'un état illisible, que la recopie relit
     // après l'ouverture et l'ouverture du secours.
     const roseraie = await paireDe(chargeEssai({ id: 'evt-roseraie', nom: 'Roseraie' }));
-    fs.deposer('portable', `Roseraie${SUFFIXES.etat}`, '{');
-    fs.deposer('portable', `Roseraie${SUFFIXES.precedent}`, roseraie.etat);
+    fs.deposer('portable', dans(`Roseraie${SUFFIXES.etat}`), '{');
+    fs.deposer('portable', dans(`Roseraie${SUFFIXES.precedent}`), roseraie.etat);
     let precedents = 0;
     fs.lireTexte = async (racine, chemin) => {
-      if (chemin === `Roseraie${SUFFIXES.precedent}` && (precedents += 1) > 2) {
+      if (chemin === dans(`Roseraie${SUFFIXES.precedent}`) && (precedents += 1) > 2) {
         throw new ErreurStockage('LECTURE', { chemin, dossier: racine.chemin, cause: 'EIO' });
       }
       return lire(racine, chemin);
     };
-    assert.deepEqual(await importerDepuis(fs, portable, documents, ['Roseraie']), {
+    assert.deepEqual(await importerDepuis(fs, portable, documents, [dans('Roseraie')]), {
       importes: [],
-      refuses: [{ base: 'Roseraie', code: 'LECTURE' }],
+      refuses: [{ cle: dans('Roseraie'), code: 'LECTURE' }],
     });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque, documents), []);
@@ -1271,12 +1456,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
   test("supprimer déplace l'état, le .precedent, le journal apparié, le verrou et les écritures restées dans un seul dossier daté, créé d'abord, l'état en dernier ; listerCorbeille le montre ; le reste du dossier ne bouge pas", async () => {
     const { disque, fs, ouvert } = await deuxRevisions();
     await verrouiller(ouvert, 'seance-a', HEURE_SUPPRESSION);
-    fs.deposer('documents', `${ETAT}.ecriture`, 'partiel');
-    fs.deposer('documents', `${JOURNAL}.ecriture`, 'partiel aussi');
+    fs.deposer('documents', dans(`${ETAT}.ecriture`), 'partiel');
+    fs.deposer('documents', dans(`${JOURNAL}.ecriture`), 'partiel aussi');
     await creer(fs, DOC, chargeEssai({ id: 'evt-herons', nom: 'Bal des Hérons' }), CREATION);
     const avant = await arbre(disque);
     const trace = tracer(fs);
-    assert.deepEqual(await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
     const deplaces = [`${JOURNAL}.ecriture`, `${ETAT}.ecriture`, VERROU, JOURNAL, PRECEDENT, ETAT];
     assert.deepEqual(trace, [['creerDossier', DATE], ...deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`])]);
     assert.deepEqual(
@@ -1308,9 +1493,9 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       suppressions.push(chemin);
       return primitive(racine, chemin);
     };
-    const a = await supprimer(fs, DOC, 'Bal des Hérons', { horodatage: heure(30), seance: SEANCE });
-    const b = await supprimer(fs, DOC, 'Gala des Saules', { horodatage: heure(30), seance: SEANCE });
-    const c = await supprimer(fs, DOC, 'Fête des Ifs', { horodatage: '2031-05-17T08:29:59-04:00', seance: SEANCE });
+    const a = await supprimer(fs, DOC, cleEvenement('Bal des Hérons', 'Bal des Hérons'), { horodatage: heure(30), seance: SEANCE });
+    const b = await supprimer(fs, DOC, cleEvenement('Gala des Saules', 'Gala des Saules'), { horodatage: heure(30), seance: SEANCE });
+    const c = await supprimer(fs, DOC, cleEvenement('Fête des Ifs', 'Fête des Ifs'), { horodatage: '2031-05-17T08:29:59-04:00', seance: SEANCE });
     assert.deepEqual(
       [a, b, c],
       [{ dossier: DATE }, { dossier: `${DATE}_2` }, { dossier: 'corbeille/2031-05-17_08-29-59' }],
@@ -1326,11 +1511,11 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
 
     // Les opérations qui suivent n'en retirent rien.
     const avant = (await arbre(disque)).filter(([chemin]) => chemin.startsWith('corbeille/'));
-    const ouvert = await ouvrir(fs, DOC, BASE);
+    const ouvert = await ouvrir(fs, DOC, dans(BASE));
     const renomme = await renommer(ouvert, renommage('Kermesse des Ifs', 31));
     await copier(renomme, optionsCopie('Variante des Ifs'));
     await importer(fs, DOC, UTF8.encode(etatTexte(chargeEssai({ id: 'evt-e', nom: 'Bal des Hérons' }))));
-    await supprimer(fs, DOC, 'Kermesse des Ifs', { horodatage: heure(30), seance: SEANCE });
+    await supprimer(fs, DOC, cleEvenement('Kermesse des Ifs', 'Kermesse des Ifs'), { horodatage: heure(30), seance: SEANCE });
     const apres = (await arbre(disque)).filter(([chemin]) => chemin.startsWith('corbeille/'));
     assert.deepEqual(
       apres.filter(([chemin]) => !chemin.startsWith(`${DATE}_3/`)),
@@ -1360,7 +1545,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     ];
     for (const [nom, poses, restants] of cas) {
       const { disque, fs } = disqueAvec(poses);
-      const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+      const { dossier } = await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       assert.deepEqual(
         await arbreSonde(disque),
         [...poses, [VERROU, SONDE]]
@@ -1385,7 +1570,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
         [base],
         nom,
       );
-      const { dossier } = await supprimer(fs, DOC, base, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+      const { dossier } = await supprimer(fs, DOC, dans(base), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       assert.deepEqual(
         await arbreSonde(disque),
         [...poses, [`${base}${SUFFIXES.verrou}`, SONDE]]
@@ -1408,7 +1593,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     ];
     const { disque, fs } = disqueAvec(poses);
     const trace = tracer(fs);
-    const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+    const { dossier } = await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
     assert.deepEqual(
       await arbre(disque),
       poses.map(([chemin, texte]) => [`${dossier}/${chemin}`, texte]).sort(parChemin),
@@ -1421,7 +1606,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     // L'événement nommé dans une autre casse que celle de son état part de
     // même.
     const autre = disqueAvec(poses);
-    const { dossier: dossierAutre } = await supprimer(autre.fs, DOC, 'SOIRÉE DES LUCIOLES', {
+    const { dossier: dossierAutre } = await supprimer(autre.fs, DOC, dans('SOIRÉE DES LUCIOLES'), {
       horodatage: HEURE_SUPPRESSION,
       seance: SEANCE,
     });
@@ -1435,7 +1620,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     // lui.
     const illisible = [[ETAT, '{'], ...poses.slice(1)];
     const troisieme = disqueAvec(illisible);
-    const { dossier: dossierIllisible } = await supprimer(troisieme.fs, DOC, 'soirée des LUCIOLES', {
+    const { dossier: dossierIllisible } = await supprimer(troisieme.fs, DOC, dans('soirée des LUCIOLES'), {
       horodatage: HEURE_SUPPRESSION,
       seance: SEANCE,
     });
@@ -1453,7 +1638,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       [`ΧΟΡΟΣ ΤΗΣ ΛΙΜΝΗΣ${SUFFIXES.verrou}`, VERROU_MORT],
     ];
     const quatrieme = disqueAvec(grecs);
-    const { dossier: dossierLac } = await supprimer(quatrieme.fs, DOC, lac, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+    const { dossier: dossierLac } = await supprimer(quatrieme.fs, DOC, dans(lac), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
     assert.deepEqual(
       await arbre(quatrieme.disque),
       grecs.map(([chemin, texte]) => [`${dossierLac}/${chemin}`, texte]).sort(parChemin),
@@ -1479,7 +1664,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
         [verrou, VERROU_MORT],
       ];
       const { disque, fs } = disqueAvec(poses);
-      const { dossier } = await supprimer(fs, DOC, base, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+      const { dossier } = await supprimer(fs, DOC, dans(base), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       // Le verrou d'une base distincte n'est pas celui de l'événement : la
       // sonde en prend un, qui part avec lui.
       const sonde = prise ? [] : [[`${dossier}/${base}${SUFFIXES.verrou}`, SONDE]];
@@ -1505,7 +1690,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     ];
     const sensible = { insensibleCasse: false };
     const { disque, fs } = disqueAvec(poses, sensible);
-    const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+    const { dossier } = await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
     // Le journal d'une autre base que son identifiant apparie part avec
     // l'événement (apparier, dans le dépôt) ; le reste ne lui appartient pas.
     // Le verrou d'une autre casse n'est pas le sien : la sonde en prend un,
@@ -1520,7 +1705,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     );
     assert.equal(JSON.parse(creerFichiersSimules({ disque, ...sensible }).contenu('documents', `${dossier}/${VERROU}`)).seance, SEANCE);
     await echec(
-      supprimer(creerFichiersSimules({ disque, ...sensible }), DOC, 'SOIRÉE DES LUCIOLES', {
+      supprimer(creerFichiersSimules({ disque, ...sensible }), DOC, dans('SOIRÉE DES LUCIOLES'), {
         horodatage: HEURE_SUPPRESSION,
         seance: SEANCE,
       }),
@@ -1532,12 +1717,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     for (let n = 0; ; n += 1) {
       const { disque, fs, ouvert } = await deuxRevisions();
       await verrouiller(ouvert, 'seance-a', HEURE_SUPPRESSION);
-      fs.deposer('documents', `${ETAT}.ecriture`, 'partiel');
+      fs.deposer('documents', dans(`${ETAT}.ecriture`), 'partiel');
       const avant = await arbre(disque);
       fs.pannes.couperApres(n);
       let acheve = true;
       try {
-        await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+        await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       } catch (erreur) {
         assert.ok(erreur instanceof PanneSimulee, `coupure après ${n} écritures : ${String(erreur)}`);
         acheve = false;
@@ -1565,7 +1750,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       const temoin = effacerDocumentsAvant(disque, fs, n);
       let refus = null;
       try {
-        await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+        await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       } catch (erreur) {
         refus = erreur;
       }
@@ -1588,12 +1773,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     await creer(fs, DOC, chargeEssai(), CREATION);
     const avant = await arbre(disque);
     const ecritures = fs.compteurs.ecritures;
-    const absent = await echec(supprimer(fs, DOC, 'Inexistant', { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'ABSENT');
+    const absent = await echec(supprimer(fs, DOC, dans('Inexistant'), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'ABSENT');
     assert.deepEqual(absent.details, { chemin: `Inexistant${SUFFIXES.etat}` });
-    await assert.rejects(supprimer(fs, DOC, BASE, { horodatage: '17 mai 2031', seance: SEANCE }), TypeError);
+    await assert.rejects(supprimer(fs, DOC, dans(BASE), { horodatage: '17 mai 2031', seance: SEANCE }), TypeError);
     fs.deposerDossier('documents', DATE);
     for (let rang = 2; rang <= 99; rang += 1) fs.deposerDossier('documents', `${DATE}_${rang}`);
-    const saturee = await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'CORBEILLE_SATUREE');
+    const saturee = await echec(supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'CORBEILLE_SATUREE');
     assert.deepEqual(saturee.details, { dossier: DATE });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque), avant);
@@ -1603,7 +1788,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
   test("une lecture que le système de fichiers refuse autrement que par l'absence remonte telle quelle, sans rien écrire : un chemin refusé, une corbeille illisible", async () => {
     const { fs } = await deuxRevisions();
     const ecritures = fs.compteurs.ecritures;
-    await echec(supprimer(fs, DOC, '../ailleurs', { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'CHEMIN_REFUSE');
+    await echec(supprimer(fs, DOC, dans('../ailleurs'), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'CHEMIN_REFUSE');
     const lister = fs.lister;
     fs.lister = async (racine, dossier) => {
       if (dossier === 'corbeille') {
@@ -1612,7 +1797,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       return lister(racine, dossier);
     };
     await echec(listerCorbeille(fs, DOC), 'LECTURE');
-    await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'LECTURE');
+    await echec(supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'LECTURE');
     assert.equal(fs.compteurs.ecritures, ecritures);
   });
 
@@ -1621,17 +1806,22 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       ['une autre séance vivante', (fs, ouvert) => verrouiller(ouvert, 'seance-b', HEURE_SUPPRESSION), { seance: 'seance-b', vivant: true }],
       [
         "une séance d'un autre poste",
-        (fs, ouvert, disque) => verrouiller({ ...ouvert, fs: creerFichiersSimules({ disque, hote: 'poste-voisin' }) }, 'seance-c', HEURE_SUPPRESSION),
+        (fs, ouvert, disque) =>
+          verrouiller(
+            { ...ouvert, fs: vueDossier(creerFichiersSimules({ disque, hote: 'poste-voisin' }), BASE) },
+            'seance-c',
+            HEURE_SUPPRESSION,
+          ),
         { seance: 'seance-c', vivant: null },
       ],
-      ['un verrou illisible', (fs) => fs.deposer('documents', VERROU, '{'), { seance: null, vivant: null }],
+      ['un verrou illisible', (fs) => fs.deposer('documents', dans(VERROU), '{'), { seance: null, vivant: null }],
     ];
     for (const [nom, poser, attendu] of refuses) {
       const { disque, fs, ouvert } = await deuxRevisions();
       await poser(fs, ouvert, disque);
       const avant = await arbre(disque);
       const trace = tracer(fs);
-      const erreur = await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'VERROU_PRIS', nom);
+      const erreur = await echec(supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'VERROU_PRIS', nom);
       const { depuis, ...reste } = erreur.details;
       assert.deepEqual(reste, attendu, nom);
       assert.equal(depuis === null, attendu.seance === null, nom);
@@ -1644,7 +1834,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     const partage = await deuxRevisions();
     await verrouiller(partage.ouvert, SEANCE, HEURE_SUPPRESSION);
     const second = creerFichiersSimules({ disque: partage.disque });
-    const refus = await echec(supprimer(second, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: 'seance-b' }), 'VERROU_PRIS');
+    const refus = await echec(supprimer(second, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: 'seance-b' }), 'VERROU_PRIS');
     assert.deepEqual([refus.details.seance, refus.details.vivant], [SEANCE, true]);
     const suite = await enregistrer(partage.ouvert, noter(partage.ouvert.charge, 3), geste(3));
     assert.deepEqual([suite.revision, suite.avertissements], [3, []]);
@@ -1658,7 +1848,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
         "une séance coupée",
         async (disque) => {
           const coupee = creerFichiersSimules({ disque });
-          await coupee.verrouiller(DOC, VERROU, 'seance-morte', HEURE_SUPPRESSION);
+          await coupee.verrouiller(DOC, dans(VERROU), 'seance-morte', HEURE_SUPPRESSION);
           coupee.pannes.couperApres(0);
           return 'seance-morte';
         },
@@ -1669,7 +1859,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     for (const [nom, poser] of acceptes) {
       const { disque, fs, ouvert } = await deuxRevisions();
       const tenant = await poser(disque, fs, ouvert);
-      assert.deepEqual(await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE }, nom);
+      assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE }, nom);
       assert.deepEqual(await listerCorbeille(fs, DOC), [{ dossier: DATE, fichiers: [JOURNAL, ETAT, PRECEDENT, VERROU] }], nom);
       const parti = JSON.parse(fs.contenu('documents', `${DATE}/${VERROU}`));
       assert.deepEqual([parti.seance, parti.depuis], [tenant, HEURE_SUPPRESSION], nom);
@@ -1679,20 +1869,20 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
 
   test("sans verrou disponible, la sonde ne pose rien et rien d'autre ne part ; une séance absente lève TypeError sans rien écrire ; un refus après la sonde rend le verrou qu'elle a pris", async () => {
     const web = await deuxRevisions(chargeEssai(), { verrouDisponible: false });
-    assert.deepEqual(await supprimer(web.fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    assert.deepEqual(await supprimer(web.fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
     assert.deepEqual(await listerCorbeille(web.fs, DOC), [{ dossier: DATE, fichiers: [JOURNAL, ETAT, PRECEDENT] }]);
 
     const { disque, fs } = await deuxRevisions();
     const avant = await arbre(disque);
     const ecritures = fs.compteurs.ecritures;
     for (const seance of [undefined, '']) {
-      await assert.rejects(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance }), TypeError);
+      await assert.rejects(supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance }), TypeError);
     }
     assert.equal(fs.compteurs.ecritures, ecritures);
     fs.creerDossier = async (racine, chemin) => {
       throw new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EACCES' });
     };
-    await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'ECRITURE');
+    await echec(supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'ECRITURE');
     assert.deepEqual(await arbre(disque), avant);
   });
 
@@ -1733,25 +1923,26 @@ describe('opérations : charger une démonstration (§ 15)', () => {
         [nom, nom, 1, []],
       );
       assert.equal(texteDeCharge(ouvert.charge), texteDeCharge(attendue), nom);
-      const journal = exigerEquivalence(fs, nom);
+      const journal = exigerEquivalence(fs, nom, { dossier: nom });
       assert.equal(journal.evenement, `evt-demo-${n}`, nom);
       assert.deepEqual(revisionsEtLibelles(journal), [[1, 'Chargée depuis la démonstration']], nom);
     }
     assert.deepEqual(
       trace,
       ['Petite démonstration 1', 'Petite démonstration 2'].flatMap((nom) => [
-        ['ecrireAtomique', `${nom}${SUFFIXES.journal}`],
-        ['ecrireAtomique', `${nom}${SUFFIXES.etat}`],
+        ['creerDossier', nom],
+        ['ecrireAtomique', `${nom}/${nom}${SUFFIXES.journal}`],
+        ['ecrireAtomique', `${nom}/${nom}${SUFFIXES.etat}`],
       ]),
     );
     assert.equal(texteLivre('petite'), texte);
     assert.deepEqual(
       (await arbre(disque)).map(([chemin]) => chemin),
       [
-        `Petite démonstration 1${SUFFIXES.journal}`,
-        `Petite démonstration 1${SUFFIXES.etat}`,
-        `Petite démonstration 2${SUFFIXES.journal}`,
-        `Petite démonstration 2${SUFFIXES.etat}`,
+        `Petite démonstration 1/Petite démonstration 1${SUFFIXES.journal}`,
+        `Petite démonstration 1/Petite démonstration 1${SUFFIXES.etat}`,
+        `Petite démonstration 2/Petite démonstration 2${SUFFIXES.journal}`,
+        `Petite démonstration 2/Petite démonstration 2${SUFFIXES.etat}`,
       ],
     );
   });
@@ -1760,11 +1951,12 @@ describe('opérations : charger une démonstration (§ 15)', () => {
     const texte = texteLivre('petite');
     const livree = analyser(texte).charge;
     const nomme = (id, nom) => etatTexte({ ...livree, evenement: { ...livree.evenement, id, nom } });
+    // Chaque état dans le dossier de sa base.
     const fichiers = [
-      [`petite démonstration 1${SUFFIXES.etat}`, nomme('evt-p1', 'petite démonstration 1')],
-      [`Petite démonstration 2${SUFFIXES.etat}`, nomme('evt-p2', 'Petite de\u{301}monstration 2')],
-      [`Petite démonstration 3${SUFFIXES.etat}`, '{'],
-      [`Petite démonstration 4${SUFFIXES.etat}`, nomme('evt-p4', 'Petite démonstration 4')],
+      ['petite démonstration 1', nomme('evt-p1', 'petite démonstration 1')],
+      ['Petite démonstration 2', nomme('evt-p2', 'Petite de\u{301}monstration 2')],
+      ['Petite démonstration 3', '{'],
+      ['Petite démonstration 4', nomme('evt-p4', 'Petite démonstration 4')],
     ];
     const sensible = {
       separateur: '/',
@@ -1777,7 +1969,8 @@ describe('opérations : charger une démonstration (§ 15)', () => {
       ['casse distinguée', sensible, 'Petite démonstration 1', 'Petite démonstration 1 (2)'],
     ];
     for (const [nom, reglages, attendu, base] of cas) {
-      const { fs } = disqueAvec(fichiers, reglages);
+      const { fs } = nouveauDisque(reglages);
+      for (const [base, etat] of fichiers) fs.deposer('documents', `${base}/${base}${SUFFIXES.etat}`, etat);
       const racine = { id: 'documents', chemin: reglages.documents ?? DOCUMENTS };
       const ouvert = await chargerDemonstration(fs, racine, texte, chargement('evt-demo', 1));
       assert.deepEqual([ouvert.charge.evenement.nom, ouvert.base], [attendu, base], nom);
@@ -1809,16 +2002,16 @@ describe('opérations : un événement d’un format plus ancien (§ 8.7, § 8.8
     const paire = await paireDe(chargeEssai());
     const etat = etatAuFormat(paire.etat, FORMAT - 1);
     const journal = journalAuFormat(paire.journal, FORMAT - 1);
-    fs.deposer('portable', ETAT, etat);
-    fs.deposer('portable', JOURNAL, journal);
+    fs.deposer('portable', dans(ETAT), etat);
+    fs.deposer('portable', dans(JOURNAL), journal);
     const ecritures = fs.compteurs.ecritures;
-    assert.deepEqual(await importerDepuis(fs, portable, documents, [BASE]), {
+    assert.deepEqual(await importerDepuis(fs, portable, documents, [EVT]), {
       importes: [],
-      refuses: [{ base: BASE, code: 'ETAT_ILLISIBLE' }],
+      refuses: [{ cle: EVT, code: 'ETAT_ILLISIBLE' }],
     });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque, documents), []);
-    assert.deepEqual([fs.contenu('portable', ETAT), fs.contenu('portable', JOURNAL)], [etat, journal]);
+    assert.deepEqual([fs.contenu('portable', dans(ETAT)), fs.contenu('portable', dans(JOURNAL))], [etat, journal]);
   });
 
   test("une démonstration d'un format plus ancien ne se charge pas : ETAT_ILLISIBLE FORMAT_TROP_ANCIEN, sans rien écrire", async () => {
@@ -1841,7 +2034,7 @@ describe("opérations : ce qu'une construction plus récente a écrit (§ 8.8)",
       [
         'charger',
         chargerDemonstration(
-          ouvert.fs,
+          ouvert.systeme,
           DOC,
           formatPlusRecent(chargeEssai({ id: 'evt-demo', nom: 'Démonstration' })),
           chargement('evt-demo-1', 2),
@@ -1852,9 +2045,9 @@ describe("opérations : ce qu'une construction plus récente a écrit (§ 8.8)",
       const erreur = await echec(promesse, 'LECTURE_SEULE', nom);
       assert.deepEqual(erreur.details, { raison: 'FORMAT_PLUS_RECENT' }, nom);
     }
-    assert.equal(ouvert.fs.compteurs.ecritures, 0);
-    await echec(chargerDemonstration(ouvert.fs, DOC, '{', chargement('evt-demo-2', 3)), 'ETAT_ILLISIBLE');
-    assert.equal(ouvert.fs.compteurs.ecritures, 0);
+    assert.equal(ouvert.systeme.compteurs.ecritures, 0);
+    await echec(chargerDemonstration(ouvert.systeme, DOC, '{', chargement('evt-demo-2', 3)), 'ETAT_ILLISIBLE');
+    assert.equal(ouvert.systeme.compteurs.ecritures, 0);
   });
 });
 
@@ -1865,12 +2058,12 @@ describe('opérations : un état aux octets hors UTF-8 (§ 8.8)', () => {
       [`${BASE} `.toUpperCase(), BASE],
     ]) {
       const { disque, fs } = await deuxRevisions();
-      const octets = enWindows1252(fs.contenu('documents', ETAT));
-      fs.deposerOctets('documents', ETAT, octets);
-      const ouvert = await ouvrirSecours(fs, DOC, BASE, 'journal');
+      const octets = enWindows1252(fs.contenu('documents', dans(ETAT)));
+      fs.deposerOctets('documents', dans(ETAT), octets);
+      const ouvert = await ouvrirSecours(fs, DOC, dans(BASE), 'journal');
       const copie = await copier(ouvert, optionsCopie('Variante des Lucioles'));
       assert.equal(copie.charge.evenement.filiation.source.id, 'evt-lucioles', nom);
-      assert.deepEqual(fs.octets('documents', ETAT), octets, nom);
+      assert.deepEqual(fs.octets('documents', dans(ETAT)), octets, nom);
       const renomme = await renommer(ouvert, renommage(nom, 3, { libelleReprise: REPRISE }));
       assert.equal(renomme.base, base, nom);
       assert.deepEqual(fs.octets('documents', `corbeille/2031-05-17_08-03-00/${ETAT}`), octets, nom);
@@ -1882,7 +2075,7 @@ describe('opérations : un état aux octets hors UTF-8 (§ 8.8)', () => {
         ],
         nom,
       );
-      const rouvert = await ouvrir(creerFichiersSimules({ disque }), DOC, base);
+      const rouvert = await ouvrir(creerFichiersSimules({ disque }), DOC, cleEvenement(base, base));
       assert.deepEqual([rouvert.charge.evenement.nom, rouvert.avertissements], [nom, []], nom);
     }
   });
@@ -1904,7 +2097,7 @@ async function avecUneCourse() {
   const releves = [1, 10].map((mouvements) => ({ mouvements, placement: structuredClone(neuve.placement) }));
   const entree = entreeDeCourse(neuve, { evalues: 100, releves });
   const genere = await enregistrer(ouvert, apres, geste(2, { courses: [entree] }));
-  assert.equal(fs.contenu('documents', COURSES), texteDesCourses('evt-lucioles', [entree]));
+  assert.equal(fs.contenu('documents', dans(COURSES)), texteDesCourses('evt-lucioles', [entree]));
   return { disque, fs, ouvert: genere, entree };
 }
 
@@ -1915,19 +2108,20 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
     const trace = tracer(fs);
     const renomme = await renommer(ouvert, renommage(nouvelle, 3));
     assert.deepEqual(trace, [
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.precedent}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.journal}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.etat}`],
-      ['ecrireAtomique', `${nouvelle}${SUFFIXES.courses}`],
+      ['creerDossier', nouvelle],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.precedent}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.etat}`],
+      ['ecrireAtomique', `${nouvelle}/${nouvelle}${SUFFIXES.courses}`],
       ['supprimer', ETAT],
       ['supprimer', PRECEDENT],
       ['supprimer', JOURNAL],
       ['supprimer', COURSES],
     ]);
-    assert.equal(fs.contenu('documents', `${nouvelle}${SUFFIXES.courses}`), texteDesCourses('evt-lucioles', [entree]));
-    assert.equal(fs.contenu('documents', COURSES), null);
+    assert.equal(fs.contenu('documents', `${nouvelle}/${nouvelle}${SUFFIXES.courses}`), texteDesCourses('evt-lucioles', [entree]));
+    assert.equal(fs.contenu('documents', dans(COURSES)), null);
     assert.equal(courseDe(renomme, 2).evalues, 100);
-    const rouvert = await ouvrir(creerFichiersSimules({ disque }), DOC, nouvelle);
+    const rouvert = await ouvrir(creerFichiersSimules({ disque }), DOC, cleEvenement(nouvelle, nouvelle));
     assert.deepEqual(courseDe(rouvert, 2), courseDe(ouvert, 2));
   });
 
@@ -1937,7 +2131,7 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
     const renomme = await renommer(ouvert, renommage(BASE.toUpperCase(), 3));
     assert.equal(renomme.base, BASE);
     assert.deepEqual(trace.filter(([, chemin]) => chemin === COURSES), []);
-    assert.equal(fs.contenu('documents', COURSES), texteDesCourses('evt-lucioles', [entree]));
+    assert.equal(fs.contenu('documents', dans(COURSES)), texteDesCourses('evt-lucioles', [entree]));
   });
 
   test("copier écrit le compagnon de la copie sous son identifiant, après son état ; l'original et son compagnon restent octet pour octet", async () => {
@@ -1947,22 +2141,25 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
     const trace = tracer(fs);
     const copie = await copier(ouvert, optionsCopie(variante));
     assert.deepEqual(trace, [
-      ['ecrireAtomique', `${variante}${SUFFIXES.journal}`],
-      ['ecrireAtomique', `${variante}${SUFFIXES.etat}`],
-      ['ecrireAtomique', `${variante}${SUFFIXES.courses}`],
+      ['creerDossier', variante],
+      ['ecrireAtomique', `${variante}/${variante}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${variante}/${variante}${SUFFIXES.etat}`],
+      ['ecrireAtomique', `${variante}/${variante}${SUFFIXES.courses}`],
     ]);
-    assert.equal(fs.contenu('documents', `${variante}${SUFFIXES.courses}`), texteDesCourses('evt-variante', [entree]));
+    assert.equal(fs.contenu('documents', `${variante}/${variante}${SUFFIXES.courses}`), texteDesCourses('evt-variante', [entree]));
     assert.equal(courseDe(copie, 2).evalues, 100);
     const apres = await arbre(disque);
     assert.deepEqual(apres.filter(([chemin]) => !chemin.startsWith(variante)), avant);
   });
 
-  // L'écriture du compagnon sous la nouvelle base refusée, et elle seule.
+  // L'écriture du compagnon sous la nouvelle base, dans le dossier de ce
+  // nom, refusée, et elle seule.
   function refuserLeCompagnon(fs, base) {
     const ecrire = fs.ecrireAtomique;
     fs.ecrireAtomique = (racine, chemin, ...reste) => {
-      if (chemin !== `${base}${SUFFIXES.courses}`) return ecrire(racine, chemin, ...reste);
-      return Promise.reject(new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EACCES' }));
+      if (chemin !== `${base}/${base}${SUFFIXES.courses}`) return ecrire(racine, chemin, ...reste);
+      const dossier = `${racine.chemin}\\${base}`;
+      return Promise.reject(new ErreurStockage('ECRITURE', { chemin, dossier, cause: 'EACCES' }));
     };
   }
 
@@ -1977,12 +2174,12 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
       ['supprimer', ETAT],
       ['supprimer', PRECEDENT],
       ['supprimer', JOURNAL],
-      ['deplacer', COURSES, `${nouvelle}${SUFFIXES.courses}`],
+      ['deplacer', COURSES, `${nouvelle}/${nouvelle}${SUFFIXES.courses}`],
     ]);
-    assert.equal(fs.contenu('documents', COURSES), null);
-    assert.equal(fs.contenu('documents', `${nouvelle}${SUFFIXES.courses}`), texteDesCourses('evt-lucioles', [entree]));
+    assert.equal(fs.contenu('documents', dans(COURSES)), null);
+    assert.equal(fs.contenu('documents', `${nouvelle}/${nouvelle}${SUFFIXES.courses}`), texteDesCourses('evt-lucioles', [entree]));
     assert.equal(courseDe(renomme, 2).evalues, 100);
-    const rouvert = await rouvrir(disque, nouvelle);
+    const rouvert = await rouvrir(disque, nouvelle, nouvelle);
     assert.deepEqual(courseDe(rouvert, 2), courseDe(ouvert, 2));
   });
 
@@ -1994,8 +2191,8 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
       Promise.reject(new ErreurStockage('ECRITURE', { chemin: de, dossier: racine.chemin, cause: 'EBUSY' }));
     const renomme = await renommer(ouvert, renommage(nouvelle, 3));
     assert.equal(renomme.base, nouvelle);
-    assert.equal(fs.contenu('documents', COURSES), texteDesCourses('evt-lucioles', [entree]));
-    assert.equal(fs.contenu('documents', ETAT), null);
+    assert.equal(fs.contenu('documents', dans(COURSES)), texteDesCourses('evt-lucioles', [entree]));
+    assert.equal(fs.contenu('documents', dans(ETAT)), null);
   });
 
   test("importerDepuis recopie le compagnon tel quel, après l'état ; là-bas, l'événement retrouve sa course. Sans compagnon, illisible ou refusé à l'écriture, l'import passe, sans course", async () => {
@@ -2007,18 +2204,18 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
     const texte = texteDesCourses('evt-lucioles', [entree]);
 
     const trace = tracer(ailleurs);
-    assert.deepEqual(await importerDepuis(ailleurs, documents, portable, [BASE]), {
-      importes: [{ base: BASE, nouvelle: BASE }],
+    assert.deepEqual(await importerDepuis(ailleurs, documents, portable, [EVT]), {
+      importes: [{ cle: EVT, nouvelle: EVT }],
       refuses: [],
     });
     assert.deepEqual(trace.map(([, chemin]) => chemin).slice(-2), [ETAT, COURSES]);
-    assert.equal(ailleurs.contenu('portable', COURSES), texte);
-    const importe = await ouvrir(creerFichiersSimules({ disque, ...PORTABLE }), portable, BASE);
+    assert.equal(ailleurs.contenu('portable', dans(COURSES)), texte);
+    const importe = await ouvrir(creerFichiersSimules({ disque, ...PORTABLE }), portable, dans(BASE));
     assert.deepEqual(courseDe(importe, 2), courseDe(ouvert, 2));
 
     for (const [libelle, preparer] of [
-      ['sans compagnon', (f) => f.supprimer(documents, COURSES)],
-      ['compagnon hors UTF-8', (f) => f.deposerOctets('documents', COURSES, Uint8Array.of(0xff, 0xfe, 0x00))],
+      ['sans compagnon', (f) => f.supprimer(documents, dans(COURSES))],
+      ['compagnon hors UTF-8', (f) => f.deposerOctets('documents', dans(COURSES), Uint8Array.of(0xff, 0xfe, 0x00))],
       ['écriture refusée', (f) => refuserLeCompagnon(f, BASE)],
     ]) {
       const cas = await avecUneCourse();
@@ -2026,18 +2223,18 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
       autre.deposerDossier('portable');
       const racines = await autre.racines();
       await preparer(autre);
-      const rendu = await importerDepuis(autre, racines.documents, racines.portable, [BASE]);
-      assert.deepEqual(rendu, { importes: [{ base: BASE, nouvelle: BASE }], refuses: [] }, libelle);
-      const relu = await ouvrir(creerFichiersSimules({ disque: cas.disque, ...PORTABLE }), racines.portable, BASE);
+      const rendu = await importerDepuis(autre, racines.documents, racines.portable, [EVT]);
+      assert.deepEqual(rendu, { importes: [{ cle: EVT, nouvelle: EVT }], refuses: [] }, libelle);
+      const relu = await ouvrir(creerFichiersSimules({ disque: cas.disque, ...PORTABLE }), racines.portable, dans(BASE));
       assert.equal(courseDe(relu, 2), null, libelle);
     }
   });
 
   test("supprimer emporte le compagnon et son écriture restée dans le dossier daté, après le verrou et avant le journal", async () => {
     const { disque, fs } = await avecUneCourse();
-    fs.deposer('documents', `${COURSES}.ecriture`, 'partiel');
+    fs.deposer('documents', dans(`${COURSES}.ecriture`), 'partiel');
     const trace = tracer(fs);
-    assert.deepEqual(await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
     const deplaces = [`${COURSES}.ecriture`, VERROU, COURSES, JOURNAL, PRECEDENT, ETAT];
     assert.deepEqual(trace.filter(([primitive]) => primitive === 'deplacer'), deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`]));
     assert.deepEqual(

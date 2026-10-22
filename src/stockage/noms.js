@@ -222,6 +222,10 @@ const cle = cleSansCasse;
 // Les clés des noms réservés de la racine, comparées comme les bases.
 const CLES_RESERVEES_RACINE = new Set(NOMS_RESERVES_RACINE.map(cle));
 
+// La clé de la corbeille, à laquelle se compare le dossier d'une clé
+// d'événement (decouperCle).
+const CLE_CORBEILLE = cle(DOSSIER_CORBEILLE);
+
 /**
  * Base de nom de fichier d'un nom d'événement dans un dossier de travail
  * (§ 8.6) : ce que précèdent les suffixes de SUFFIXES. Les caractères
@@ -308,6 +312,54 @@ export function dossierEvenement(base) {
     throw new TypeError(`dossierEvenement : base de dossier attendue, reçu ${JSON.stringify(base)}`);
   }
   return base;
+}
+
+// Un segment de clé : une chaîne non vide, sans « / », autre que « . » et
+// « .. ».
+const estSegment = (texte) =>
+  typeof texte === 'string' && texte !== '' && texte !== '.' && texte !== '..' && !texte.includes('/');
+
+/**
+ * La clé d'un événement du dossier de travail (§ 8.1, § 8.6) : son dossier,
+ * relatif à la racine, et la base de ses fichiers, joints par « / ». Elle
+ * identifie la ligne de la liste, et l'événement à ouvrir, à copier, à
+ * renommer ou à supprimer. Le dossier porte la base quand le logiciel le
+ * crée ; une copie faite à la main dans l'explorateur donne un autre
+ * dossier, que la clé garde.
+ *
+ * @param {string} dossier
+ * @param {string} base
+ * @returns {string}
+ * @throws {TypeError} un dossier ou une base vide, « . », « .. », qui porte
+ *         « / », ou autre chose qu'une chaîne
+ */
+export function cleEvenement(dossier, base) {
+  if (!estSegment(dossier) || !estSegment(base)) {
+    throw new TypeError(`cleEvenement : dossier et base attendus, reçu ${JSON.stringify([dossier, base])}`);
+  }
+  return `${dossier}/${base}`;
+}
+
+/**
+ * Le dossier et la base d'une clé d'événement (cleEvenement). Une clé sans
+ * dossier désignerait un fichier posé à même la racine : rien ne l'ouvre.
+ * La corbeille, comparée sans égard à la casse, n'est pas le dossier d'un
+ * événement. Le reste du contrôle d'un chemin appartient au système de
+ * fichiers (exigerCheminRelatif).
+ *
+ * @param {string} cle
+ * @returns {{dossier: string, base: string}}
+ * @throws {ErreurStockage} CHEMIN_REFUSE {chemin: cle} : autre chose qu'une
+ *         chaîne, une clé qui n'a pas exactement deux segments valides
+ *         (estSegment), ou dont le dossier est la corbeille
+ */
+export function decouperCle(cle) {
+  const segments = typeof cle === 'string' ? cle.split('/') : [];
+  const [dossier, base] = segments;
+  if (segments.length !== 2 || !estSegment(dossier) || !estSegment(base) || cleSansCasse(dossier) === CLE_CORBEILLE) {
+    throw new ErreurStockage('CHEMIN_REFUSE', { chemin: cle });
+  }
+  return { dossier, base };
 }
 
 // Un horodatage de l'horloge de l'application : AAAA-MM-JJTHH:MM:SS±HH:MM. Le

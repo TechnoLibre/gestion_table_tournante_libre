@@ -323,7 +323,7 @@ describe('la pastille d’activité dans l’application : les opérations longu
     await chargerResumes(m);
     expect(m.racine.querySelector('[data-activite]')).toBeNull();
     const releves = guetter(m, m.seance, 'ouvrir');
-    await cliquer(m, `[data-evenement="${BASE}"] [data-commande="ouvrir"]`);
+    await cliquer(m, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
     await attendre('l’écran de l’événement', () => releves.fini && m.racine.querySelector('[data-ecran="evenement"]'));
     expect(releves.vues).toEqual([PEINTE]);
     flushSync();
@@ -337,11 +337,11 @@ describe('la pastille d’activité dans l’application : les opérations longu
     const releves = guetter(m, m.seance, 'ouvrir');
     const lireTexte = m.fs.lireTexte;
     m.fs.lireTexte = (racine, chemin) =>
-      chemin === `${BASE}${SUFFIXES.etat}`
+      chemin === `${BASE}/${BASE}${SUFFIXES.etat}`
         ? Promise.reject(new ErreurStockage('LECTURE', { chemin, cause: 'EIO' }))
         : lireTexte.call(m.fs, racine, chemin);
     try {
-      await cliquer(m, `[data-evenement="${BASE}"] [data-commande="ouvrir"]`);
+      await cliquer(m, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
       await attendre('la fin de l’ouverture', () => releves.fini);
     } finally {
       m.fs.lireTexte = lireTexte;

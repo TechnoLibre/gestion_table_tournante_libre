@@ -136,9 +136,9 @@ async function evenementOuvert({ sieges = 8, tours = 2, tables = 0, personnes = 
 }
 
 const base = (m) => m.seance.etat().evenement.base;
-const texteJournal = (m) => m.fs.contenu('documents', `${base(m)}${SUFFIXES.journal}`);
+const texteJournal = (m) => m.fs.contenu('documents', `${m.seance.etat().evenement.cle}${SUFFIXES.journal}`);
 const entrees = (m) => lireJournal(texteJournal(m)).entrees;
-const texteEtat = (m) => m.fs.contenu('documents', `${base(m)}${SUFFIXES.etat}`);
+const texteEtat = (m) => m.fs.contenu('documents', `${m.seance.etat().evenement.cle}${SUFFIXES.etat}`);
 const participants = (m) => m.seance.etat().charge.participants;
 const idDe = (m, nom) => participants(m).find((p) => p.nom === nom).id;
 
@@ -2353,9 +2353,9 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     // la section des participants ouverte.
     async function ouvrirSept() {
       const texte = serialiser(chargeSept(), { revision: 1, produitVersion: VERSION.affichee });
-      const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree${SUFFIXES.etat}`, texte }] });
+      const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree/soiree${SUFFIXES.etat}`, texte }] });
       montes.push(m);
-      await m.seance.ouvrir('soiree');
+      await m.seance.ouvrir('soiree/soiree');
       await m.seance.passerEnEcriture();
       m.ui.allerA('participants');
       await rendu();

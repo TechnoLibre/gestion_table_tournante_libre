@@ -26,7 +26,7 @@ import { FORMAT, analyser, configurationDepuisCharge, creerCharge, etatDeduit } 
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { estFigee } from '../stockage/gel.js';
 import { ligneEntree, ligneOuverture, lireJournal, reconstruire } from '../stockage/journal.js';
-import { SUFFIXES, nomPlanche } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement, nomPlanche } from '../stockage/noms.js';
 import { FICHIER_REGLAGES } from '../stockage/reglages_locaux.js';
 import { VERSION } from '../version.genere.js';
 import { examenNomme } from './avertissements.js';
@@ -40,9 +40,17 @@ const DOC = { id: 'documents', chemin: DOCUMENTS };
 const PORTABLE = { id: 'portable', chemin: 'E:\\soirees\\data' };
 
 const BASE = 'Soirée des Lucioles';
-const ETAT = `${BASE}${SUFFIXES.etat}`;
-const JOURNAL = `${BASE}${SUFFIXES.journal}`;
-const VERROU = `${BASE}${SUFFIXES.verrou}`;
+// La clé de l'événement d'essai, dans le dossier de sa base, et ses fichiers,
+// relatifs à la racine.
+const EVT = cleEvenement(BASE, BASE);
+const ETAT = `${BASE}/${BASE}${SUFFIXES.etat}`;
+const JOURNAL = `${BASE}/${BASE}${SUFFIXES.journal}`;
+const VERROU = `${BASE}/${BASE}${SUFFIXES.verrou}`;
+// Ce que nomme le refus d'écriture d'un fichier de l'événement d'essai : son
+// nom, relatif au dossier de l'événement, et le chemin affichable de ce
+// dossier sous la racine donnée.
+const NOM = { ETAT: `${BASE}${SUFFIXES.etat}`, JOURNAL: `${BASE}${SUFFIXES.journal}`, VERROU: `${BASE}${SUFFIXES.verrou}` };
+const dossierDe = (racine) => `${racine}\\${BASE}`;
 const CREATION = "Création de l'événement « Soirée des Lucioles »";
 
 // --- Le montage -------------------------------------------------------------
@@ -186,8 +194,8 @@ function generer(charge, nombre = 2, graine = 7) {
 }
 
 // Le journal et l'état que porte le disque.
-const journalDe = (fs, racine = 'documents', base = BASE) => lireJournal(fs.contenu(racine, `${base}${SUFFIXES.journal}`));
-const etatDe = (fs, racine = 'documents', base = BASE) => analyser(fs.contenu(racine, `${base}${SUFFIXES.etat}`));
+const journalDe = (fs, racine = 'documents', base = BASE) => lireJournal(fs.contenu(racine, `${base}/${base}${SUFFIXES.journal}`));
+const etatDe = (fs, racine = 'documents', base = BASE) => analyser(fs.contenu(racine, `${base}/${base}${SUFFIXES.etat}`));
 const libellesDe = (journal) => journal.entrees.map((entree) => entree.libelle);
 const verrouDe = (fs, racine = 'documents') => {
   const texte = fs.contenu(racine, VERROU);
@@ -195,11 +203,11 @@ const verrouDe = (fs, racine = 'documents') => {
 };
 const noms = (charge) => charge.participants.map(({ nom }) => nom);
 
-// Ouvre base par la séance d'un montage qui ne tient aucun verrou, et
-// constate qu'ouvrir n'écrit rien (§ 8.4).
+// Ouvre base, dans le dossier qui la porte, par la séance d'un montage qui
+// ne tient aucun verrou, et constate qu'ouvrir n'écrit rien (§ 8.4).
 async function ouvrirSansEcrire({ fs, seance }, base = BASE) {
   const avant = fs.compteurs.ecritures;
-  const rendu = await seance.ouvrir(base);
+  const rendu = await seance.ouvrir(cleEvenement(base, base));
   assert.equal(fs.compteurs.ecritures, avant, 'ouvrir écrit');
   assert.equal(seance.mode, 'lecture');
   return rendu;
@@ -233,7 +241,8 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     const avant = fs.compteurs.ecritures;
     const { base } = await seance.creer({ nom: ' Soirée des Lucioles ', date: '2031-05-17', siegesParDefaut: 8, tours: 3 });
     assert.equal(base, BASE);
-    assert.equal(fs.compteurs.ecritures - avant, 2);
+    // Le dossier de l'événement, le journal, l'état.
+    assert.equal(fs.compteurs.ecritures - avant, 3);
     assert.equal(seance.mode, 'lecture');
     assert.equal(verrouDe(fs), null);
     assert.deepEqual(identifiant.tirages, ['seance-1', 'seance-2']);
@@ -262,7 +271,7 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     await seance.creer({ nom: 'Soirée des Hiboux', date: null, siegesParDefaut: 2, tours: 1 });
     assert.deepEqual([seance.mode, seance.charge.evenement.nom, planificateur.actives], ['lecture', 'Soirée des Hiboux', 0]);
     assert.equal(verrouDe(fs), null);
-    assert.equal(fs.contenu('documents', `Soirée des Hiboux${SUFFIXES.verrou}`), null);
+    assert.equal(fs.contenu('documents', `Soirée des Hiboux/Soirée des Hiboux${SUFFIXES.verrou}`), null);
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'MODE_LECTURE');
   });
 
@@ -284,7 +293,7 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     await deposerEssai(fs);
     const { seance } = monter({ fs });
     const avant = fs.compteurs.ecritures;
-    const { base, avertissements } = await seance.ouvrir(BASE);
+    const { base, avertissements } = await seance.ouvrir(EVT);
     assert.deepEqual([base, avertissements], [BASE, []]);
     assert.equal(fs.compteurs.ecritures, avant, 'ouvrir écrit');
     assert.equal(seance.mode, 'lecture');
@@ -304,7 +313,7 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     await premier.seance.fermer();
     const second = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'seconde' });
     const avant = second.fs.compteurs.ecritures;
-    await second.seance.ouvrirSecours(BASE, 'precedent');
+    await second.seance.ouvrirSecours(EVT, 'precedent');
     assert.equal(second.fs.compteurs.ecritures, avant, 'ouvrirSecours écrit');
     assert.equal(second.seance.mode, 'lecture');
     assert.deepEqual([second.seance.ouvert.revision, noms(second.seance.charge)], [1, []]);
@@ -322,7 +331,7 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     });
     assert.notEqual(verrouDe(fs), null);
     const avant = fs.compteurs.ecritures;
-    await seance.ouvrir('Soirée des Hiboux');
+    await seance.ouvrir(cleEvenement('Soirée des Hiboux', 'Soirée des Hiboux'));
     assert.equal(fs.compteurs.ecritures - avant, 1);
     assert.equal(verrouDe(fs), null);
     assert.deepEqual([seance.mode, seance.charge.evenement.nom], ['lecture', 'Soirée des Hiboux']);
@@ -332,7 +341,7 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     const montage = monter();
     await enEcriture(montage);
     const avant = montage.fs.compteurs.ecritures;
-    await refus(montage.seance.ouvrir('Soirée absente'), 'ABSENT');
+    await refus(montage.seance.ouvrir(cleEvenement('Soirée absente', 'Soirée absente')), 'ABSENT');
     assert.equal(montage.fs.compteurs.ecritures - avant, 1, "seul le rendu du verrou s'écrit");
     assert.equal(verrouDe(montage.fs), null);
     assert.deepEqual([montage.seance.ouvert, montage.seance.charge, montage.seance.mode], [null, null, 'lecture']);
@@ -1053,7 +1062,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     for (const fichier of [ETAT, JOURNAL]) await autre.supprimer(DOC, fichier);
     await refus(seconde.passerEnEcriture(), 'ABSENT');
     assert.deepEqual([seconde.mode, verrouDe(fs)], ['lecture', null]);
-    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), []);
+    assert.deepEqual((await fs.lister(DOC, BASE)).map(({ nom }) => nom), []);
     await refus(seconde.executer('ajouterParticipant', { champs: { nom: 'Yvette' } }), 'MODE_LECTURE');
   });
 
@@ -1070,7 +1079,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     const { premiere, seconde, fs } = await deuxSeances();
     await premiere.passerEnEcriture();
     await premiere.executer('changerEtat', { etat: 'bloque' });
-    await seconde.ouvrir(BASE);
+    await seconde.ouvrir(EVT);
     await premiere.debloquer();
     await premiere.executer('ajouterParticipant', { champs: { nom: 'Xavier' } });
     await premiere.executer('changerEtat', { etat: 'bloque' });
@@ -1091,7 +1100,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     const { premiere, seconde, fs } = await deuxSeances();
     await premiere.passerEnEcriture();
     await premiere.executer('changerEtat', { etat: 'bloque' });
-    await seconde.ouvrir(BASE);
+    await seconde.ouvrir(EVT);
     await premiere.debloquer();
     await premiere.passerEnLecture();
     const entrees = journalDe(fs).entrees.length;
@@ -1108,7 +1117,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     await seance.executer('ajouterParticipant', { champs: { nom: 'Xavier' } });
     await seance.passerEnLecture();
     fs.deposer('documents', ETAT, '');
-    await seance.ouvrirSecours(BASE, 'journal');
+    await seance.ouvrirSecours(EVT, 'journal');
     assert.deepEqual(await seance.passerEnEcriture(), { avertissements: [] });
     await seance.executer('ajouterParticipant', { champs: { nom: 'Yvette' } });
     assert.deepEqual(noms(etatDe(fs).charge), ['Xavier', 'Yvette']);
@@ -1126,7 +1135,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     for (const nom of ['Aubépine', 'Bourrache']) await premiere.executer('ajouterParticipant', { champs: { nom } });
     await premiere.passerEnLecture();
     fs.deposer('documents', ETAT, '');
-    for (const seance of [premiere, seconde]) await seance.ouvrirSecours(BASE, 'precedent');
+    for (const seance of [premiere, seconde]) await seance.ouvrirSecours(EVT, 'precedent');
     assert.deepEqual([seconde.ouvert.revision, noms(seconde.charge)], [2, ['Aubépine']]);
     return deux;
   }
@@ -1171,7 +1180,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     await seance.passerEnLecture();
     const lisible = fs.contenu('documents', ETAT);
     fs.deposer('documents', ETAT, '');
-    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.ouvrirSecours(EVT, 'precedent');
     fs.deposer('documents', ETAT, lisible);
     assert.deepEqual(await seance.passerEnEcriture(), {
       avertissements: [{ code: 'EVENEMENT_CHANGE', details: { revision: 3 } }],
@@ -1187,7 +1196,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     await enEcriture(montage);
     for (const nom of ['Aubépine', 'Bourrache']) await seance.executer('ajouterParticipant', { champs: { nom } });
     await seance.passerEnLecture();
-    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.ouvrirSecours(EVT, 'precedent');
     assert.deepEqual(await seance.passerEnEcriture(), { avertissements: [] });
     assert.deepEqual([seance.ouvert.revision, noms(seance.charge)], [2, ['Aubépine']]);
     await seance.executer('ajouterParticipant', { champs: { nom: 'Cerfeuil' } });
@@ -1201,7 +1210,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     for (const nom of ['Aubépine', 'Bourrache']) await seance.executer('ajouterParticipant', { champs: { nom } });
     await seance.passerEnLecture();
     fs.deposer('documents', ETAT, '');
-    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.ouvrirSecours(EVT, 'precedent');
     await seance.passerEnEcriture();
     await seance.executer('ajouterParticipant', { champs: { nom: 'Cerfeuil' } });
     await seance.passerEnLecture();
@@ -1219,7 +1228,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     for (const nom of ['Aubépine', 'Bourrache']) await seance.executer('ajouterParticipant', { champs: { nom } });
     await seance.passerEnLecture();
     fs.deposer('documents', ETAT, '');
-    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.ouvrirSecours(EVT, 'precedent');
     await seance.passerEnEcriture();
     fs.pannes.ecriture('documents');
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Cerfeuil' } }), 'ECRITURE');
@@ -1236,7 +1245,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     for (const nom of ['Aubépine', 'Bourrache']) await seance.executer('ajouterParticipant', { champs: { nom } });
     await seance.passerEnLecture();
     fs.deposer('documents', ETAT, '');
-    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.ouvrirSecours(EVT, 'precedent');
     await seance.passerEnEcriture();
     assert.deepEqual(await seance.nommer('Point'), { revision: 4 });
     await seance.passerEnLecture();
@@ -1284,7 +1293,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     test(`un secours .precedent dont ${designe} est réécrit entre-temps par une construction plus récente : passer en écriture est refusé LECTURE_SEULE FORMAT, le verrou rendu`, async () => {
       const { seconde, fs } = await surPrecedent();
       if (fichier === 'etat') {
-        const precedent = fs.contenu('documents', `${BASE}${SUFFIXES.precedent}`);
+        const precedent = fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.precedent}`);
         fs.deposer('documents', ETAT, versPlusRecent(precedent));
       } else {
         plusRecent.journal(fs);
@@ -1297,7 +1306,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
       const { premiere, seconde, fs } = await deuxSeances();
       await premiere.passerEnEcriture();
       await premiere.executer('changerEtat', { etat: 'bloque' });
-      await seconde.ouvrir(BASE);
+      await seconde.ouvrir(EVT);
       const texte = fs.contenu('documents', JOURNAL);
       plusRecent[fichier](fs);
       await refus(seconde.debloquer(), 'LECTURE_SEULE', FORMAT_SEUL);
@@ -1337,7 +1346,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
     await premiere.passerEnEcriture();
     await premiere.executer('changerEtat', { etat: 'bloque' });
     await premiere.passerEnLecture();
-    await seconde.ouvrir(BASE);
+    await seconde.ouvrir(EVT);
     const octets = etatMalEncode(fs);
     const avant = await empreinte(fs);
     await refus(seconde.debloquer(), 'LECTURE_SEULE', ENCODAGE_SEUL);
@@ -1354,15 +1363,15 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
       for (const nom of ['Aubépine', 'Bourrache']) await seance.executer('ajouterParticipant', { champs: { nom } });
       await seance.passerEnLecture();
       const octets = etatMalEncode(fs);
-      const illisible = await refus(seance.ouvrir(BASE), 'ETAT_ILLISIBLE');
+      const illisible = await refus(seance.ouvrir(EVT), 'ETAT_ILLISIBLE');
       assert.equal(illisible.details.raison, 'ENCODAGE');
       assert.match(libelle(illisible.code, illisible.details), /UTF-8/);
-      await seance.ouvrirSecours(BASE, source);
+      await seance.ouvrirSecours(EVT, source);
       assert.equal(seance.ouvert.etatMalEncode, true);
       assert.deepEqual(await seance.passerEnEcriture(), { avertissements: [] });
       await seance.executer('ajouterParticipant', { champs: { nom: 'Cerfeuil' } });
       const [dossier] = (await fs.lister(DOC, 'corbeille')).map(({ nom }) => nom);
-      assert.deepEqual(fs.octets('documents', `corbeille/${dossier}/${ETAT}`), octets);
+      assert.deepEqual(fs.octets('documents', `corbeille/${dossier}/${NOM.ETAT}`), octets);
       assert.deepEqual(noms(etatDe(fs).charge), [...noms(seance.charge)]);
       assert.ok(noms(seance.charge).includes('Cerfeuil'));
       assert.equal(seance.ouvert.etatMalEncode, false);
@@ -1716,11 +1725,11 @@ describe('séance : un événement d’un format plus ancien ne s’ouvre pas (�
     fs.deposerDossier('documents');
     for (const suffixe of [SUFFIXES.journal, SUFFIXES.etat, SUFFIXES.precedent]) {
       const nom = `${FORMAT1_BASE}${suffixe}`;
-      fs.deposer('documents', nom, readFileSync(new URL(nom, FORMAT1), 'utf8'));
+      fs.deposer('documents', `${FORMAT1_BASE}/${nom}`, readFileSync(new URL(nom, FORMAT1), 'utf8'));
     }
     const { seance } = monter({ fs });
     const avant = fs.compteurs.ecritures;
-    const erreur = await refus(seance.ouvrir(FORMAT1_BASE), 'ETAT_ILLISIBLE');
+    const erreur = await refus(seance.ouvrir(cleEvenement(FORMAT1_BASE, FORMAT1_BASE)), 'ETAT_ILLISIBLE');
     assert.deepEqual(erreur.details, {
       base: FORMAT1_BASE,
       raison: 'FORMAT_TROP_ANCIEN',
@@ -1740,7 +1749,7 @@ describe('séance : un événement d’un format plus ancien ne s’ouvre pas (�
     const fs = creerFichiersSimules();
     deposerAuFormat(fs, FORMAT - 1);
     const { seance } = monter({ fs });
-    const erreur = await refus(seance.ouvrir(BASE), 'ETAT_ILLISIBLE');
+    const erreur = await refus(seance.ouvrir(EVT), 'ETAT_ILLISIBLE');
     assert.deepEqual([erreur.details.raison, erreur.details.format], ['FORMAT_TROP_ANCIEN', FORMAT - 1]);
     assert.equal(seance.etat().evenement, null);
   });
@@ -1885,7 +1894,7 @@ describe("séance : un fichier d'un format plus récent (§ 8.8)", () => {
     );
     const { seance } = monter({ fs });
     const avant = fs.compteurs.ecritures;
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     assert.equal(seance.ouvert.formatPlusRecent, true);
     const format = FORMAT_SEUL;
     await refus(seance.passerEnEcriture(), 'LECTURE_SEULE', format);
@@ -1910,7 +1919,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
   test("une écriture refusée rompt le support : le geste est refusé, les suivants aussi, puis écrire ailleurs rétablit", async () => {
     const { fs, seance } = await surPortable();
     fs.pannes.ecriture('portable');
-    const refusSupport = { echec: 'ECRITURE', chemin: JOURNAL, dossier: PORTABLE.chemin, cause: 'EROFS' };
+    const refusSupport = { echec: 'ECRITURE', chemin: NOM.JOURNAL, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' };
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
     assert.equal(seance.supportRompu, true);
     assert.deepEqual(seance.refusSupport, refusSupport);
@@ -1924,7 +1933,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     const { base, avertissements } = await seance.ecrireAilleurs(DOC);
     assert.equal(base, BASE);
     assert.deepEqual(avertissements, [
-      { code: 'VERROU_NON_RENDU', details: { chemin: VERROU, dossier: PORTABLE.chemin, cause: 'EROFS' } },
+      { code: 'VERROU_NON_RENDU', details: { chemin: NOM.VERROU, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' } },
     ]);
     assert.deepEqual([seance.supportRompu, seance.refusSupport, seance.mode], [false, null, 'ecriture']);
     assert.deepEqual(seance.racine, DOC);
@@ -1932,6 +1941,24 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     await seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } });
     assert.deepEqual(libellesDe(journalDe(fs)), [CREATION, 'Ajouté Ancolie', 'Ajouté Bruyère']);
     assert.deepEqual(noms(etatDe(fs).charge), ['Ancolie', 'Bruyère']);
+  });
+
+  test("écrire ailleurs aboutit dans une racine dont un dossier refuse sa liste : il ne porte rien, et l'identifiant se cherche dans les autres", async () => {
+    const { fs, seance } = await surPortable();
+    fs.deposerDossier('documents', 'System Volume Information');
+    const lister = fs.lister;
+    fs.lister = async (racine, chemin) => {
+      if (racine.id === 'documents' && chemin === 'System Volume Information') {
+        throw new ErreurStockage('LECTURE', { chemin, dossier: DOCUMENTS, cause: 'EPERM' });
+      }
+      return lister(racine, chemin);
+    };
+    fs.pannes.ecriture('portable');
+    await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
+    const { base } = await seance.ecrireAilleurs(DOC);
+    assert.equal(base, BASE);
+    assert.deepEqual([seance.supportRompu, seance.racine], [false, DOC]);
+    assert.deepEqual(noms(etatDe(fs).charge), ['Ancolie']);
   });
 
   test("le cadrage en attente quand le support rompt s'écrit dans les réglages de la racine nouvelle, après écrire ailleurs", async () => {
@@ -1972,13 +1999,13 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
       if (lignes === 2) fs.pannes.ecriture(racine.id);
       return ajouterLigne(racine, chemin, ligne);
     };
-    const refusSupport = { chemin: JOURNAL, dossier: DOCUMENTS, cause: 'EROFS' };
+    const refusSupport = { chemin: NOM.JOURNAL, dossier: dossierDe(DOCUMENTS), cause: 'EROFS' };
     const rendu = await seance.executer('changerEtat', { etat: 'bloque' });
     assert.deepEqual(rendu, {
       libelle: "Plan passé à l'état « Bloqué »",
       avertissements: [
         { code: 'JALON_NON_ECRIT', details: refusSupport },
-        { code: 'VERROU_NON_RENDU', details: { chemin: VERROU, dossier: DOCUMENTS, cause: 'EROFS' } },
+        { code: 'VERROU_NON_RENDU', details: { chemin: NOM.VERROU, dossier: dossierDe(DOCUMENTS), cause: 'EROFS' } },
       ],
     });
     assert.deepEqual([seance.supportRompu, seance.refusSupport], [true, { echec: 'JALON_NON_ECRIT', ...refusSupport }]);
@@ -2018,7 +2045,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     await planificateur.avancer(INACTIVITE_MS);
     assert.deepEqual([seance.mode, verrouDe(fs, 'portable')], ['lecture', null]);
     fs.pannes.ecriture('portable');
-    const details = { chemin: VERROU, dossier: PORTABLE.chemin, cause: 'EROFS' };
+    const details = { chemin: NOM.VERROU, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' };
     await refus(seance.passerEnEcriture(), 'ECRITURE', details);
     const refusSupport = { echec: 'VERROU_NON_ECRIT', ...details };
     assert.deepEqual([seance.mode, seance.supportRompu, seance.refusSupport], ['lecture', true, refusSupport]);
@@ -2040,7 +2067,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     await seance.executer('changerEtat', { etat: 'bloque' });
     assert.equal(seance.mode, 'lecture');
     fs.pannes.ecriture('portable');
-    const details = { chemin: VERROU, dossier: PORTABLE.chemin, cause: 'EROFS' };
+    const details = { chemin: NOM.VERROU, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' };
     await refus(seance.debloquer(), 'ECRITURE', details);
     assert.deepEqual([seance.mode, seance.supportRompu, seance.refusSupport], ['lecture', true, { echec: 'VERROU_NON_ECRIT', ...details }]);
     assert.equal(seance.charge.evenement.etat, 'bloque');
@@ -2056,7 +2083,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     fs.pannes.ecriture('portable');
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
     // Les Documents prennent la paire, mais refusent le verrou.
-    const details = { chemin: VERROU, dossier: DOCUMENTS, cause: 'EACCES' };
+    const details = { chemin: NOM.VERROU, dossier: dossierDe(DOCUMENTS), cause: 'EACCES' };
     const verrouiller = fs.verrouiller;
     fs.verrouiller = async (racine, chemin, jeton, depuis) => {
       if (racine.id === 'documents') throw new ErreurStockage('ECRITURE', details);
@@ -2082,11 +2109,11 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     assert.equal(seance.supportRompu, true);
     const avant = fs.compteurs.ecritures;
     const id = seance.charge.evenement.id;
-    const erreur = await refus(seance.ecrireAilleurs(DOC), 'IDENTIFIANT_PRESENT', { id, base: BASE });
+    const erreur = await refus(seance.ecrireAilleurs(DOC), 'IDENTIFIANT_PRESENT', { id, base: BASE, dossier: BASE });
     assert.equal(fs.compteurs.ecritures, avant);
     assert.deepEqual([seance.supportRompu, seance.racine], [true, DOC]);
-    const etats = (await fs.lister(DOC, '')).filter(({ nom }) => nom.endsWith(SUFFIXES.etat)).map(({ nom }) => nom);
-    assert.deepEqual(etats, [ETAT]);
+    const etats = (await fs.lister(DOC, BASE)).filter(({ nom }) => nom.endsWith(SUFFIXES.etat)).map(({ nom }) => nom);
+    assert.deepEqual(etats, [NOM.ETAT]);
     assert.doesNotMatch(libelle(erreur.code, erreur.details), /import/);
   });
 
@@ -2108,20 +2135,21 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     const id = seance.charge.evenement.id;
     await refus(seance.ecrireAilleurs(DOC), 'ETAT_NON_ECRIT');
     assert.deepEqual([seance.racine, seance.ouvert.racine, seance.ouvert.base], [DOC, DOC, BASE]);
-    const refusSupport = { echec: 'ETAT_NON_ECRIT', chemin: ETAT, dossier: DOCUMENTS, cause: 'EBUSY' };
+    const refusSupport = { echec: 'ETAT_NON_ECRIT', chemin: NOM.ETAT, dossier: dossierDe(DOCUMENTS), cause: 'EBUSY' };
     assert.deepEqual([seance.mode, seance.supportRompu, seance.refusSupport], ['lecture', true, refusSupport]);
     assert.deepEqual(seance.avertissements, [
-      { code: 'VERROU_NON_RENDU', details: { chemin: VERROU, dossier: PORTABLE.chemin, cause: 'EROFS' } },
+      { code: 'VERROU_NON_RENDU', details: { chemin: NOM.VERROU, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' } },
     ]);
     assert.deepEqual(noms(seance.charge), ['Ancolie']);
     assert.deepEqual(libellesDe(journalDe(fs)), [CREATION, 'Ajouté Ancolie']);
     assert.equal(fs.contenu('documents', ETAT), null);
     const avant = fs.compteurs.ecritures;
-    await refus(seance.ecrireAilleurs(DOC), 'IDENTIFIANT_PRESENT', { id, base: BASE });
-    await refus(seance.ecrireAilleurs(PORTABLE), 'IDENTIFIANT_PRESENT', { id, base: BASE });
+    await refus(seance.ecrireAilleurs(DOC), 'IDENTIFIANT_PRESENT', { id, base: BASE, dossier: BASE });
+    await refus(seance.ecrireAilleurs(PORTABLE), 'IDENTIFIANT_PRESENT', { id, base: BASE, dossier: BASE });
     assert.equal(fs.compteurs.ecritures, avant);
-    const fichiers = (await fs.lister(DOC, '')).map(({ nom }) => nom);
-    assert.deepEqual(fichiers, [JOURNAL]);
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), [BASE]);
+    const fichiers = (await fs.lister(DOC, BASE)).map(({ nom }) => nom);
+    assert.deepEqual(fichiers, [NOM.JOURNAL]);
   });
 
   // L'événement d'essai des Documents, dont l'état devient un JSON tronqué et
@@ -2134,9 +2162,9 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     fs.deposer('documents', ETAT, fs.contenu('documents', ETAT).slice(0, 40));
     const montage = monter({ fs });
     const { seance } = montage;
-    const illisible = await refus(seance.ouvrir(BASE), 'ETAT_ILLISIBLE');
+    const illisible = await refus(seance.ouvrir(EVT), 'ETAT_ILLISIBLE');
     assert.deepEqual([illisible.details.raison, illisible.details.secours], ['JSON', { precedent: null, journal: 1 }]);
-    await seance.ouvrirSecours(BASE, 'journal');
+    await seance.ouvrirSecours(EVT, 'journal');
     await seance.passerEnEcriture();
     fs.pannes.renommage('documents', 11);
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } }), 'ETAT_NON_ECRIT');
@@ -2152,11 +2180,11 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     const id = seance.charge.evenement.id;
     const avant = fs.compteurs.ecritures;
     const fichiers = await fichiersDe(fs, DOC);
-    await refus(seance.ecrireAilleurs(DOC), 'IDENTIFIANT_PRESENT', { id, base: BASE });
+    await refus(seance.ecrireAilleurs(DOC), 'IDENTIFIANT_PRESENT', { id, base: BASE, dossier: BASE });
     assert.equal(fs.compteurs.ecritures, avant);
     assert.deepEqual(await fichiersDe(fs, DOC), fichiers);
     assert.deepEqual([seance.supportRompu, seance.racine], [true, DOC]);
-    const illisible = await refus(ouvrirDansLeDepot(fs, DOC, BASE), 'ETAT_ILLISIBLE');
+    const illisible = await refus(ouvrirDansLeDepot(fs, DOC, EVT), 'ETAT_ILLISIBLE');
     assert.deepEqual(illisible.details.secours, { precedent: null, journal: 2 });
   });
 
@@ -2169,7 +2197,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
     const avant = fs.compteurs.ecritures;
     const fichiers = await fichiersDe(fs, DOC);
-    await refus(seance.ecrireAilleurs(DOC), 'IDENTIFIANT_PRESENT', { id, base: BASE });
+    await refus(seance.ecrireAilleurs(DOC), 'IDENTIFIANT_PRESENT', { id, base: BASE, dossier: BASE });
     assert.equal(fs.compteurs.ecritures, avant);
     assert.deepEqual(await fichiersDe(fs, DOC), fichiers);
     assert.deepEqual([seance.supportRompu, seance.racine], [true, PORTABLE]);
@@ -2182,7 +2210,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     const amovible = { code: 'SUPPORT_AMOVIBLE', details: { dossier: DOCUMENTS } };
     const { avertissements } = await seance.ecrireAilleurs(DOC);
     assert.deepEqual(avertissements, [
-      { code: 'VERROU_NON_RENDU', details: { chemin: VERROU, dossier: PORTABLE.chemin, cause: 'EROFS' } },
+      { code: 'VERROU_NON_RENDU', details: { chemin: NOM.VERROU, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' } },
       amovible,
     ]);
     assert.ok(seance.avertissements.some(({ code }) => code === 'SUPPORT_AMOVIBLE'));
@@ -2204,7 +2232,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
       const { base, avertissements } = await seance.ecrireAilleurs(DOC);
       assert.equal(base, BASE);
       assert.deepEqual(avertissements, [
-        { code: 'VERROU_NON_RENDU', details: { chemin: VERROU, dossier: PORTABLE.chemin, cause: 'EROFS' } },
+        { code: 'VERROU_NON_RENDU', details: { chemin: NOM.VERROU, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' } },
       ]);
       assert.deepEqual(seance.avertissements, avertissements);
       assert.deepEqual([seance.supportRompu, seance.mode, seance.racine, planificateur.actives], [false, 'ecriture', DOC, 1]);
@@ -2215,11 +2243,11 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     const { fs, seance } = await surPortable();
     fs.pannes.ecriture('portable');
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
-    const refusSupport = { echec: 'ECRITURE', chemin: JOURNAL, dossier: PORTABLE.chemin, cause: 'EROFS' };
+    const refusSupport = { echec: 'ECRITURE', chemin: NOM.JOURNAL, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' };
     const nonSauve = { ...refusSupport, remede: versRacine(DOC) };
     const avant = fs.compteurs.ecritures;
-    await refus(seance.ouvrir(BASE), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
-    await refus(seance.ouvrirSecours(BASE, 'journal'), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
+    await refus(seance.ouvrir(EVT), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
+    await refus(seance.ouvrirSecours(EVT, 'journal'), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
     await refus(seance.creer({ nom: 'Soirée des Grillons', date: null, siegesParDefaut: 2, tours: 2 }), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
     await refus(seance.fermer(), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
     assert.equal(fs.compteurs.ecritures, avant);
@@ -2234,7 +2262,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     const { fs, seance } = await surPortable();
     fs.pannes.ecriture('portable');
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
-    const rendu = await seance.ouvrir(BASE, { abandonner: true });
+    const rendu = await seance.ouvrir(EVT, { abandonner: true });
     assert.equal(rendu.base, BASE);
     assert.deepEqual([seance.supportRompu, seance.mode, noms(seance.charge)], [false, 'lecture', ['Ancolie']]);
     await refus(seance.passerEnEcriture(), 'ECRITURE');
@@ -2260,7 +2288,7 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     assert.equal(cree.base, grillons);
     assert.deepEqual([seance.supportRompu, seance.mode, seance.charge.evenement.nom], [false, 'lecture', grillons]);
     await rompre('Cerfeuil');
-    const secours = await seance.ouvrirSecours(BASE, 'journal', { abandonner: true });
+    const secours = await seance.ouvrirSecours(EVT, 'journal', { abandonner: true });
     assert.equal(secours.base, BASE);
     assert.deepEqual([seance.supportRompu, seance.mode, noms(seance.charge)], [false, 'lecture', ['Ancolie', 'Bruyère']]);
   });
@@ -2353,7 +2381,7 @@ async function ouvertSur(charge = chargeEssai(), options = {}) {
   const fs = options.fs ?? creerFichiersSimules();
   await deposerEssai(fs, charge);
   const montage = monter({ ...options, fs });
-  await montage.seance.ouvrir(BASE);
+  await montage.seance.ouvrir(EVT);
   return montage;
 }
 
@@ -2377,7 +2405,7 @@ describe('séance observable : etat() et subscribe (§ 8.4)', () => {
     assert.equal(recus.length, 1);
     assert.equal(recus[0], seance.etat());
     assert.equal(recus[0].evenement, null);
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     assert.deepEqual([recus.at(-1).evenement.base, recus.at(-1).mode], [BASE, 'lecture']);
     await seance.passerEnEcriture();
     assert.equal(recus.at(-1).mode, 'ecriture');
@@ -2439,7 +2467,15 @@ describe('séance observable : etat() et subscribe (§ 8.4)', () => {
     await seance.passerEnEcriture();
     await seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
     const etat = seance.etat();
-    assert.deepEqual(etat.evenement, { base: BASE, id: 'evt-lucioles', nom: BASE, etat: 'brouillon', revision: 2, annonceFormat: null });
+    assert.deepEqual(etat.evenement, {
+      cle: EVT,
+      base: BASE,
+      id: 'evt-lucioles',
+      nom: BASE,
+      etat: 'brouillon',
+      revision: 2,
+      annonceFormat: null,
+    });
     assert.deepEqual(etat.charge, seance.charge);
     assert.deepEqual(etat.examen, seance.ouvert.examen);
     assert.deepEqual(etat.retours, { defaire: true, refaire: false, jalons: 1 });
@@ -2531,7 +2567,7 @@ describe("séance observable : la charge publiée partage les propositions figé
       assert.equal(JSON.stringify(publie), JSON.stringify(copieEntiere(seance.ouvert)), `geste ${rang} : copie entière`);
       assert.deepStrictEqual(publie, copieEntiere(seance.ouvert));
       const autre = monter({ fs, prefixe: 'autre' }).seance;
-      await autre.ouvrir(BASE);
+      await autre.ouvrir(EVT);
       const relu = autre.etat();
       assert.equal(relu.evenement.revision, etat.evenement.revision);
       assert.equal(JSON.stringify({ charge: relu.charge, examen: relu.examen }), JSON.stringify(publie), `geste ${rang} : relu`);
@@ -2621,7 +2657,7 @@ describe('séance observable : la racine (§ 8.6)', () => {
     await montage.seance.changerRacine(PORTABLE);
     assert.equal(verrouDe(fs), null);
     assert.deepEqual([montage.seance.etat().evenement, montage.seance.etat().racine, montage.seance.etat().mode], [null, PORTABLE, 'lecture']);
-    await refus(montage.seance.ouvrir(BASE), 'ABSENT');
+    await refus(montage.seance.ouvrir(EVT), 'ABSENT');
   });
 });
 
@@ -2631,7 +2667,7 @@ describe('séance observable : la version de format (§ 8.8, § 18.6)', () => {
     deposerAuFormat(fs, FORMAT + 1);
     const { seance } = monter({ fs });
     const avant = fs.compteurs.ecritures;
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     assert.equal(seance.etat().evenement.annonceFormat, 'plusRecent');
     const format = { raison: 'FORMAT', remede: null };
     await refus(seance.passerEnEcriture(), 'LECTURE_SEULE', format);
@@ -2718,7 +2754,7 @@ describe("séance observable : l'annulation et le retour automatique (§ 8.4)", 
     await seance.fermer();
     assert.equal(appels, 3);
     desabonner();
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     await seance.passerEnEcriture();
     await seance.passerEnLecture();
     await seance.fermer();
@@ -2766,7 +2802,7 @@ describe('séance observable : le cadrage (§ 8.5)', () => {
       fs.deposer('documents', FICHIER_REGLAGES, REGLAGES);
       const montage = monter({ fs });
       const { seance, planificateur } = montage;
-      await seance.ouvrir(BASE);
+      await seance.ouvrir(EVT);
       if (ecriture) await seance.passerEnEcriture();
       assert.deepEqual(seance.cadrage(), { k: 2, tx: 10, ty: -5 });
       const avant = fs.compteurs.ecritures;
@@ -2818,7 +2854,7 @@ describe('séance observable : le cadrage (§ 8.5)', () => {
     assert.equal(planificateur.actives, 0);
     const { id } = etatDe(fs).charge.evenement;
     assert.deepEqual(lireCadrages(fs), [{ evenement: id, k: 0.5, tx: -40, ty: 12 }]);
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     assert.deepEqual(seance.cadrage(), { k: 0.5, tx: -40, ty: 12 });
     await seance.passerEnEcriture();
     await seance.defaire();
@@ -2836,7 +2872,7 @@ describe('séance observable : le cadrage (§ 8.5)', () => {
       return lireTexte(racine, chemin);
     };
     const { seance } = monter({ fs });
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     assert.deepEqual([seance.etat().evenement.base, seance.cadrage()], [BASE, null]);
   });
 
@@ -2853,7 +2889,7 @@ describe('séance observable : le cadrage (§ 8.5)', () => {
     };
     const montage = monter({ fs });
     const { seance, planificateur } = montage;
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     occupe = true;
     seance.demanderCadrage({ k: 1, tx: 0, ty: 0 });
     await planificateur.avancer(DELAI_REGLAGES_MS);
@@ -2870,7 +2906,7 @@ describe('séance observable : le cadrage (§ 8.5)', () => {
     ]);
     for (const corrompu of ['pas du json\n', '{"cadrages":[],"format":0,"papier":"A4"}\n']) {
       fs.deposer('documents', FICHIER_REGLAGES, corrompu);
-      await seance.ouvrir(BASE);
+      await seance.ouvrir(EVT);
       seance.demanderCadrage({ k: 2, tx: 5, ty: 5 });
       await planificateur.avancer(DELAI_REGLAGES_MS);
       await laisser();
@@ -2884,7 +2920,7 @@ describe('séance observable : le cadrage (§ 8.5)', () => {
     await deposerEssai(fs);
     fs.deposer('documents', FICHIER_REGLAGES, 'pas du json\n');
     const { seance } = monter({ fs });
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     assert.equal(seance.cadrage(), null);
     assert.ok(!codesDe(seance.etat().avertissements).includes('REGLAGES_ILLISIBLES'));
   });
@@ -3037,14 +3073,14 @@ describe('séance observable : le support rompu (§ 8.6, § 8.2)', () => {
     await montage.seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
     return montage;
   }
-  const rompu = { echec: 'ECRITURE', chemin: JOURNAL, dossier: PORTABLE.chemin, cause: 'EROFS' };
+  const rompu = { echec: 'ECRITURE', chemin: NOM.JOURNAL, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' };
   const versDocuments = { geste: 'ecrireAilleurs', racine: DOC };
 
   test("une écriture refusée remonte ECRITURE ; supportRompu en garde les champs et la racine documents ; le refus courant et le geste suivant sont SUPPORT_ROMPU, remède écrire ailleurs ; écrire ailleurs rétablit", async () => {
     const { fs, seance } = await surPortable();
     fs.pannes.ecriture('portable');
     const erreur = await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
-    assert.deepEqual(erreur.details, { chemin: JOURNAL, dossier: PORTABLE.chemin, cause: 'EROFS' });
+    assert.deepEqual(erreur.details, { chemin: NOM.JOURNAL, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' });
     assert.deepEqual(seance.etat().supportRompu, { ...rompu, ailleurs: DOC });
     const attendu = { code: 'SUPPORT_ROMPU', details: { ...rompu, remede: versDocuments } };
     assert.deepEqual(seance.etat().refus, attendu);
@@ -3074,7 +3110,7 @@ describe('séance observable : le support rompu (§ 8.6, § 8.2)', () => {
     await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
     const nonSauve = { ...rompu, remede: versDocuments };
     const avant = fs.compteurs.ecritures;
-    await refus(seance.ouvrir(BASE), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
+    await refus(seance.ouvrir(EVT), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
     await refus(seance.creer({ nom: 'Soirée des Grillons', date: null, siegesParDefaut: 2, tours: 2 }), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
     await refus(seance.fermer(), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
     await refus(seance.changerRacine(DOC), 'SUPPORT_ROMPU_NON_SAUVE', nonSauve);
@@ -3138,7 +3174,7 @@ describe('séance observable : le refus courant (§ 2.1, garantie 3)', () => {
     const fsFormat = creerFichiersSimules();
     deposerAuFormat(fsFormat, FORMAT + 1);
     const format = monter({ fs: fsFormat });
-    await format.seance.ouvrir(BASE);
+    await format.seance.ouvrir(EVT);
     const portable = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }), racine: PORTABLE });
     await enEcriture(portable);
     portable.fs.pannes.ecriture('portable');
@@ -3148,7 +3184,7 @@ describe('séance observable : le refus courant (§ 2.1, garantie 3)', () => {
       [lecture, 'MODE_LECTURE', { remede: MODIFIER }],
       [bloque, 'LECTURE_SEULE', { raison: 'BLOQUE', remede: DEBLOQUER }],
       [format, 'LECTURE_SEULE', { raison: 'FORMAT', remede: null }],
-      [portable, 'SUPPORT_ROMPU', { ...{ echec: 'ECRITURE', chemin: JOURNAL, dossier: PORTABLE.chemin, cause: 'EROFS' }, remede: { geste: 'ecrireAilleurs', racine: DOC } }],
+      [portable, 'SUPPORT_ROMPU', { ...{ echec: 'ECRITURE', chemin: NOM.JOURNAL, dossier: dossierDe(PORTABLE.chemin), cause: 'EROFS' }, remede: { geste: 'ecrireAilleurs', racine: DOC } }],
     ];
     assert.equal(cas.length, 4);
     for (const [{ seance }, code, details] of cas) {
@@ -3685,7 +3721,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     assert.equal(seance.etat().papier, 'A4', 'une autre racine : son papier l’emporte');
     await seance.changerRacine(DOC);
     assert.equal(seance.etat().papier, 'Lettre', 'de retour sur la racine du choix');
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     seance.demanderCadrage({ k: 2, tx: 0, ty: 0 });
     await planificateur.avancer(DELAI_REGLAGES_MS);
     await laisser();
@@ -4040,7 +4076,7 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
     const { seance } = monter({ fs, polices, provenance: 'production' });
     await seance.choisirModeleBadge('a6');
     await seance.choisirPapier('A4');
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     await seance.passerEnEcriture();
     const geste = seance.executer('echangerDansRetenu', { tour: 1, a: 1, b: 3 });
     const annonce = seance.preparerPlanche();
@@ -4058,7 +4094,7 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
     await deposerEssai(fs, chargeRetenue());
     const { seance } = monter({ fs, polices: async () => lirePolices(), provenance: 'production' });
     await seance.choisirModeleBadge('a6');
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     const choix = seance.choisirPapier('Lettre');
     const annonce = await seance.preparerPlanche();
     await choix;
@@ -4069,10 +4105,10 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
     const fs = creerFichiersSimules();
     await deposerEssai(fs, chargeRetenue());
     const sansPolices = monter({ fs, provenance: 'production' }).seance;
-    await sansPolices.ouvrir(BASE);
+    await sansPolices.ouvrir(EVT);
     await assert.rejects(sansPolices.preparerPlanche(), (erreur) => erreur instanceof TypeError && /polices/.test(erreur.message));
     const sansProvenance = monter({ fs, prefixe: 'sans-provenance', polices: async () => lirePolices() }).seance;
-    await sansProvenance.ouvrir(BASE);
+    await sansProvenance.ouvrir(EVT);
     await assert.rejects(sansProvenance.preparerPlanche(), TypeError);
 
     let essais = 0;
@@ -4083,7 +4119,7 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
     };
     const { seance } = monter({ fs, prefixe: 'reessai', polices, provenance: 'production' });
     await seance.choisirModeleBadge('a6');
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     await assert.rejects(seance.preparerPlanche(), /police illisible/);
     const annonce = await seance.preparerPlanche();
     assert.deepEqual([annonce.refus, annonce.papier], [null, 'Lettre']);
@@ -4092,7 +4128,7 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
 });
 
 describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.9, B31)', () => {
-  const COURSES = `${BASE}${SUFFIXES.courses}`;
+  const COURSES = `${BASE}/${BASE}${SUFFIXES.courses}`;
 
   // Les identifiants des propositions dont le compagnon sur le disque porte
   // la course, dans son ordre ; null sans compagnon.
@@ -4168,9 +4204,9 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
     assert.deepEqual(dansLeCompagnon(fs), [1, 2, 3]);
 
     await seance.passerEnLecture();
-    const etat = fs.contenu('documents', `${BASE}${SUFFIXES.etat}`);
+    const etat = fs.contenu('documents', ETAT);
     await refus(seance.executer('garderMeilleures', { n: 1 }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
-    assert.equal(fs.contenu('documents', `${BASE}${SUFFIXES.etat}`), etat);
+    assert.equal(fs.contenu('documents', ETAT), etat);
     assert.deepEqual(dansLeCompagnon(fs), [1, 2, 3]);
   });
 
@@ -4194,7 +4230,7 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
     assert.notEqual(seance.courseDe(1), null);
     await seance.passerEnLecture();
 
-    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.ouvrirSecours(EVT, 'precedent');
     await seance.passerEnEcriture();
     assert.deepEqual(seance.charge.propositions, []);
     await seance.executer('modifierParticipant', { id: 2, champs: { organisation: 'Société Alpha' } });
@@ -4259,7 +4295,7 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
     assert.notEqual(premiereCourse, null);
     await seance.passerEnLecture();
 
-    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.ouvrirSecours(EVT, 'precedent');
     await seance.passerEnEcriture();
     await seance.executer('modifierParticipant', { id: 2, champs: { organisation: 'Club des Merles' } });
     await seance.executer('enregistrerGeneration', generationDouze(seance.charge));
@@ -4303,7 +4339,7 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
 
     const seconde = monter({ fs, prefixe: 'seconde', horloge: creerHorloge(60) });
     await ouvrirSansEcrire(seconde);
-    await seconde.seance.ouvrirSecours(BASE, 'precedent');
+    await seconde.seance.ouvrirSecours(EVT, 'precedent');
     await seconde.seance.passerEnEcriture();
     await seconde.seance.executer('modifierParticipant', { id: 2, champs: { organisation: 'Club des Merles' } });
     await seconde.seance.executer('enregistrerGeneration', generationDouze(seconde.seance.charge));
@@ -4578,7 +4614,7 @@ describe('séance : le pied TechnoLibre des badges (§ 8.5, § 11.4)', () => {
     const fs = creerFichiersSimules();
     await deposerEssai(fs, chargeRetenue());
     const sansLogo = monter({ fs, logo: null, ...avecPlanche }).seance;
-    await sansLogo.ouvrir(BASE);
+    await sansLogo.ouvrir(EVT);
     await assert.rejects(sansLogo.preparerPlanche(), (erreur) => erreur instanceof TypeError && /logo/.test(erreur.message));
     await sansLogo.choisirPiedTechnolibre(false);
     assert.equal((await sansLogo.preparerPlanche()).refus, null);
@@ -4592,7 +4628,7 @@ describe('séance : le pied TechnoLibre des badges (§ 8.5, § 11.4)', () => {
     const fsBis = creerFichiersSimules();
     await deposerEssai(fsBis, chargeRetenue());
     const { seance } = monter({ fs: fsBis, prefixe: 'logo', logo, ...avecPlanche });
-    await seance.ouvrir(BASE);
+    await seance.ouvrir(EVT);
     await assert.rejects(seance.preparerPlanche(), /logo illisible/);
     await seance.preparerPlanche();
     await seance.preparerPlanche();

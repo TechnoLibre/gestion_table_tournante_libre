@@ -382,7 +382,7 @@ describe('la question du papier (§ 8.5, § 11.2)', () => {
     // Un App remonté sur le même système ne redemande pas.
     m.demonter();
     const second = await contexte.monter({ systeme: { disque: m.disque } });
-    await cliquer(second, '[data-evenement="soiree"] [data-commande="ouvrir"]');
+    await cliquer(second, '[data-evenement="soiree/soiree"] [data-commande="ouvrir"]');
     await attendre("l'événement", () => second.racine.querySelector('[data-ecran="evenement"]'), IMAGES);
     await cliquer(second, '[data-ecran="evenement"] [data-commande="apercu"]');
     await attendre('le document, sans question', () => second.racine.querySelector('[data-impression] [data-feuille]'), IMAGES);

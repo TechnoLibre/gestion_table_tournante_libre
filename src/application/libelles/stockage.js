@@ -110,8 +110,8 @@ export const TABLE = new Map([
   ],
   [
     'IDENTIFIANT_PRESENT',
-    ({ base }) =>
-      `Cet événement est déjà dans ce dossier, sous ${cite(base)} : ` +
+    ({ base, dossier }) =>
+      `Cet événement est déjà dans ce dossier, sous ${cite(dossier ?? base)} : ` +
       "l'y placer une seconde fois en ferait deux copies de même identifiant.",
   ],
   [

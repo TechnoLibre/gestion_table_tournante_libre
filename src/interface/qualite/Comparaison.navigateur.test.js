@@ -150,9 +150,9 @@ async function attendre(assertion) {
 // sauf mode 'lecture' —, la section donnée ouverte.
 async function ouvrir(charge, { mode = 'ecriture', section = 'qualite' } = {}) {
   const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }] });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }] });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   if (mode === 'ecriture') await m.seance.passerEnEcriture();
   m.ui.allerA(section);
   flushSync();

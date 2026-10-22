@@ -157,8 +157,8 @@ async function cran(m, deltaY, point = null) {
 function fichiers(m) {
   const { base, revision } = m.seance.etat().evenement;
   return {
-    etat: m.fs.contenu('documents', `${base}${SUFFIXES.etat}`),
-    journal: m.fs.contenu('documents', `${base}${SUFFIXES.journal}`),
+    etat: m.fs.contenu('documents', `${base}/${base}${SUFFIXES.etat}`),
+    journal: m.fs.contenu('documents', `${base}/${base}${SUFFIXES.journal}`),
     revision,
   };
 }
@@ -660,7 +660,7 @@ describe('le cadrage (§ 8.5, § 13.3)', () => {
     demonter(premier);
 
     const second = await monter({ systeme: { disque: premier.disque }, horloge: premier.horloge });
-    await second.seance.ouvrir(base);
+    await second.seance.ouvrir(`${base}/${base}`);
     flushSync();
     await attendre(() => expect(groupe(second).getAttribute('transform')).toBe(transform));
     await second.seance.passerEnEcriture();
@@ -685,7 +685,7 @@ describe('le cadrage (§ 8.5, § 13.3)', () => {
 
     await fixerCadre(683, 700);
     const petitCadre = await monter({ systeme: { disque: premier.disque }, horloge: premier.horloge });
-    await petitCadre.seance.ouvrir(base);
+    await petitCadre.seance.ouvrir(`${base}/${base}`);
     flushSync();
     await attendre(() => expect(groupe(petitCadre).getAttribute('transform')).not.toBeNull());
     const cadrePetit = cadreDe(petitCadre);
@@ -706,7 +706,7 @@ describe('le cadrage (§ 8.5, § 13.3)', () => {
 
     await fixerCadre(1366, 700);
     const grand = await monter({ systeme: { disque: premier.disque }, horloge: premier.horloge });
-    await grand.seance.ouvrir(base);
+    await grand.seance.ouvrir(`${base}/${base}`);
     flushSync();
     await attendre(() => expect(groupe(grand).getAttribute('transform')).not.toBeNull());
     expect(vueLue(grand).k).toBe(FACTEUR_K_MIN * kAjusteDe(grand));

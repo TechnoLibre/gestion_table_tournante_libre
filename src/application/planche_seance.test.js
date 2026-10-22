@@ -45,7 +45,7 @@ import { serialiser } from '../stockage/canonique.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { FORMAT, LIBELLE_TABLE_MAX } from '../stockage/document.js';
-import { SUFFIXES, deriverBase, nomControle, nomCsvBadges, nomPlanche } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement, deriverBase, nomControle, nomCsvBadges, nomPlanche } from '../stockage/noms.js';
 import { VERSION } from '../version.genere.js';
 import { libelle } from './libelles.js';
 import { creerSeance } from './seance.js';
@@ -139,10 +139,11 @@ async function deposer(fs, charge, { format = FORMAT } = {}) {
     return;
   }
   const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-  fs.deposer('documents', `${BASE}${SUFFIXES.etat}`, texte.replace(`"format":${FORMAT}`, `"format":${format}`));
+  fs.deposer('documents', `${BASE}/${BASE}${SUFFIXES.etat}`, texte.replace(`"format":${FORMAT}`, `"format":${format}`));
 }
 
-// Une séance sur l'événement de la charge, ouvert en lecture, le modèle de
+// Une séance sur l'événement de la charge, ouvert en lecture par sa clé, celle
+// de BASE dans son dossier par défaut, le modèle de
 // badge et le papier choisis quand ils sont donnés — l'A6 par défaut, le
 // modèle que ces épreuves éprouvent ; null garde Avery 5392, celui d'une
 // machine qui n'a rien choisi ; la case du pied TechnoLibre décochée, sauf
@@ -155,7 +156,7 @@ async function monter(
     piedTechnolibre = false,
     fs = creerFichiersSimules({ documents: DOCUMENTS }),
     format,
-    base = BASE,
+    cle = cleEvenement(BASE, BASE),
   } = {},
 ) {
   await deposer(fs, charge, { format });
@@ -178,7 +179,7 @@ async function monter(
   if (modeleBadge !== null) await seance.choisirModeleBadge(modeleBadge);
   if (!piedTechnolibre) await seance.choisirPiedTechnolibre(false);
   if (papier !== null) await seance.choisirPapier(papier);
-  await seance.ouvrir(base);
+  await seance.ouvrir(cle);
   const trace = tracer(fs);
   return { fs, seance, trace };
 }
@@ -301,7 +302,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
       polices: async () => POLICES,
       provenance: 'production',
     });
-    await autre.ouvrir(BASE);
+    await autre.ouvrir(cleEvenement(BASE, BASE));
     assert.equal((await autre.preparerPlanche()).papier, 'A4');
     assert.deepEqual(trace, []);
   });
@@ -416,7 +417,7 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
     assert.deepEqual(fs.octets('documents', second.nom), octetsPremiers);
     // Le PDF part d'abord, puis le geste écrit son entrée et son état.
     assert.deepEqual(trace[0], ['ecrireOctetsAtomique', premier.nom]);
-    assert.deepEqual(trace[1], ['ajouterLigne', `${BASE}${SUFFIXES.journal}`]);
+    assert.deepEqual(trace[1], ['ajouterLigne', `${BASE}/${BASE}${SUFFIXES.journal}`]);
     assert.ok(trace.slice(1).every(([primitive]) => primitive !== 'ecrireOctetsAtomique'));
 
     const retouche = await seance.preparerPlanche();
@@ -528,8 +529,9 @@ describe('planche dans la séance : un nom par pile (§ 11.6)', () => {
     const { separateur } = await fs.emplacements();
     // Une base lue sur le disque, plus longue que celles que deriverBase rend
     // sous la borne : la paire de l'événement, créée dans un autre dossier,
-    // puis copiée à la main sous ce nom. Le dépôt de la séance pose à côté
-    // une seconde paire, sous la base dérivée, que rien n'ouvre.
+    // puis copiée à la main sous ce nom, dans le dossier de la base dérivée.
+    // Le dépôt de la séance pose à côté une seconde paire, sous la base
+    // dérivée, que rien n'ouvre.
     const base = nom.trim();
     const modele = creerFichiersSimules({ documents: DOCUMENTS });
     await deposer(modele, chargeLucioles({ nom }));
@@ -537,9 +539,9 @@ describe('planche dans la séance : un nom par pile (§ 11.6)', () => {
     assert.ok(derivee.length < base.length, derivee);
     fs.deposerDossier('documents');
     for (const suffixe of [SUFFIXES.etat, SUFFIXES.journal]) {
-      fs.deposer('documents', base + suffixe, modele.contenu('documents', derivee + suffixe));
+      fs.deposer('documents', `${derivee}/${base}${suffixe}`, modele.contenu('documents', `${derivee}/${derivee}${suffixe}`));
     }
-    const { seance, trace } = await monter(chargeLucioles({ nom }), { papier: 'Lettre', fs, base });
+    const { seance, trace } = await monter(chargeLucioles({ nom }), { papier: 'Lettre', fs, cle: cleEvenement(derivee, base) });
     const demande = { source: 'proposition', proposition: 2, ordre: 'table' };
     const options = { papier: 'Lettre', imposition: 'feuille', horodatage: H_PROPOSITION, reedition: null, proposition: 2, ordre: 'table' };
     const raccourci = nomPlanche(base, { ...options, dossier: { racine: DOCUMENTS, separateur, existants: [] } });

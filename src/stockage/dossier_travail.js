@@ -51,21 +51,27 @@
 //                   retenu est sur un support amovible, où le renommage
 //                   par-dessus ne vaut pas celui du volume système (§ 8.8).
 //
-// Un événement se compte par ses deux fichiers (§ 8.6) : chaque base qui
-// porte un état ou un journal à la racine du dossier, un journal sans son
-// état compris, dont l'événement se relève (§ 8.8). Le compte lit les noms
-// sans ouvrir les fichiers ; l'appariement par identifiant interne reste
-// celui de la liste des événements.
+// Un événement se compte par ses deux fichiers (§ 8.6) : dans chaque dossier
+// de la racine hors la corbeille, chaque base qui y porte un état ou un
+// journal, un journal sans son état compris, dont l'événement se relève
+// (§ 8.8). Ce que la racine porte à même elle — fichiers d'événement posés à
+// plat, réglages — ne compte pas. Le compte lit les noms sans ouvrir les
+// fichiers ; l'appariement par identifiant interne reste celui de la liste
+// des événements.
 //
 // Une lecture qui échoue autrement que sur un dossier absent ne vaut pas un
-// dossier vide. Sur le dossier retenu, l'échec remonte : la séance n'y
-// lirait pas sa liste. Sur l'autre emplacement, qui ne sert qu'à proposer un
-// import ou à nommer ce qu'une bascule cacherait, il laisse un compte
-// inconnu, et le dossier retenu reste. Un chemin refusé, et ce qui n'est pas
-// une ErreurStockage, remontent d'où qu'ils viennent : une faute du code ou
-// un processus coupé ne disent rien du disque.
+// dossier vide. Sur le dossier retenu, l'échec de la liste de la racine
+// remonte : la séance n'y lirait pas sa liste ; la liste refusée de l'un de
+// ses dossiers, que la liste des événements saute, laisse un compte inconnu.
+// Sur l'autre emplacement, qui ne sert qu'à proposer un import ou à nommer
+// ce qu'une bascule cacherait, l'échec laisse un compte inconnu, et le
+// dossier retenu reste. Un chemin refusé, et ce qui n'est pas une
+// ErreurStockage, remontent d'où qu'ils viennent : une faute du code ou un
+// processus coupé ne disent rien du disque. Seul le nom refusé d'un dossier
+// de la racine ne remonte pas : ce dossier ne compte pas, comme la liste
+// des événements le saute.
 import { ErreurStockage } from './erreurs.js';
-import { SUFFIXES } from './noms.js';
+import { DOSSIER_CORBEILLE, SUFFIXES, cleSansCasse } from './noms.js';
 
 /**
  * @typedef {import('./systeme_fichiers.js').Racine} Racine
@@ -86,8 +92,9 @@ import { SUFFIXES } from './noms.js';
  * @property {null|{code: 'PORTABLE_NON_INSCRIPTIBLE'|'DOCUMENTS_NON_INSCRIPTIBLE',
  *           racine: Racine, evenements: number|null, cause: string|null}} question
  *           le dossier qui refuse l'écriture, ses événements — null quand
- *           data/ ne se lit pas —, la cause de sa sonde : le logiciel
- *           demande avant d'ouvrir la liste
+ *           data/, ou l'un des dossiers du dossier retenu, ne se lit pas —,
+ *           la cause de sa sonde : le logiciel demande avant d'ouvrir la
+ *           liste
  * @property {null|{racine: Racine, evenements: number}} autre
  *           le dossier retenu est neuf et vide, l'autre emplacement porte
  *           ces événements : le logiciel propose de les importer, par copie
@@ -135,27 +142,49 @@ export function estSous(chemin, parent, { insensibleCasse, separateur }) {
   return enfant === dossier || enfant.startsWith(dossier + separateur);
 }
 
-// Entrées directes de la racine d'un dossier ; aucune pour un dossier
-// absent. Tout autre échec de la lecture remonte : une panne n'est pas un
-// dossier vide.
-async function entrees(fs, racine) {
+// Entrées directes du dossier chemin d'une racine, '' la racine elle-même ;
+// aucune pour un dossier absent. Tout autre échec de la lecture remonte :
+// une panne n'est pas un dossier vide.
+async function entrees(fs, racine, chemin = '') {
   try {
-    return await fs.lister(racine, '');
+    return await fs.lister(racine, chemin);
   } catch (erreur) {
     if (erreur instanceof ErreurStockage && erreur.code === 'ABSENT') return [];
     throw erreur;
   }
 }
 
-// Événements d'une liste d'entrées : les bases distinctes de ses fichiers
-// d'état et de journal. Un dossier ne compte pas, fût-il nommé comme eux.
-function compterEvenements(liste) {
-  const bases = new Set();
-  for (const { nom, type } of liste) {
-    const suffixe = FICHIERS_EVENEMENT.find((fin) => nom.endsWith(fin));
-    if (type === 'fichier' && suffixe !== undefined) bases.add(nom.slice(0, -suffixe.length));
+// La clé de la corbeille, dont le dossier ne porte aucun événement.
+const CLE_CORBEILLE = cleSansCasse(DOSSIER_CORBEILLE);
+
+// Événements d'une racine, dont liste porte les entrées : dans chaque dossier
+// hors la corbeille, les bases distinctes de ses fichiers d'état et de
+// journal. Un dossier ne compte pas, fût-il nommé comme eux, ni un fichier
+// posé à même la racine. Un dossier disparu depuis la liste ne porte rien,
+// ni celui dont le système refuse le nom, que la liste des événements saute
+// aussi. Un dossier dont la plateforme refuse la liste (LECTURE) rend le
+// compte inconnu, null : il peut porter des événements.
+async function compterEvenements(fs, racine, liste) {
+  let compte = 0;
+  for (const { nom: dossier, type } of liste) {
+    if (type !== 'dossier' || cleSansCasse(dossier) === CLE_CORBEILLE) continue;
+    let noms;
+    try {
+      noms = await entrees(fs, racine, dossier);
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage)) throw erreur;
+      if (erreur.code === 'CHEMIN_REFUSE') continue;
+      if (erreur.code === 'LECTURE') return null;
+      throw erreur;
+    }
+    const bases = new Set();
+    for (const { nom, type: sorte } of noms) {
+      const suffixe = FICHIERS_EVENEMENT.find((fin) => nom.endsWith(fin));
+      if (sorte === 'fichier' && suffixe !== undefined) bases.add(nom.slice(0, -suffixe.length));
+    }
+    compte += bases.size;
   }
-  return bases.size;
+  return compte;
 }
 
 // Événements de l'autre emplacement ; null, compte inconnu, quand sa lecture
@@ -163,7 +192,7 @@ function compterEvenements(liste) {
 // refusé.
 async function compterAilleurs(fs, ailleurs) {
   try {
-    return compterEvenements(await entrees(fs, ailleurs));
+    return await compterEvenements(fs, ailleurs, await entrees(fs, ailleurs));
   } catch (erreur) {
     if (erreur instanceof ErreurStockage && erreur.code !== 'CHEMIN_REFUSE') return null;
     throw erreur;
@@ -196,9 +225,10 @@ async function appliquerRegle(fs, { portable, documents }) {
  *
  * @param {SystemeFichiers} fs
  * @returns {Promise<DossierTravail>}
- * @throws ce que lève une primitive, hors d'un dossier absent à la lecture
- *         et, à celle de l'autre emplacement, d'une ErreurStockage autre que
- *         CHEMIN_REFUSE
+ * @throws ce que lève une primitive, hors d'un dossier absent à la lecture,
+ *         de la liste refusée — LECTURE, CHEMIN_REFUSE — d'un dossier de
+ *         l'une des deux racines et, à la lecture de l'autre emplacement,
+ *         d'une ErreurStockage autre qu'un CHEMIN_REFUSE de sa racine
  */
 export async function determinerDossierTravail(fs) {
   const issue = await appliquerRegle(fs, await fs.racines());
@@ -214,7 +244,8 @@ export async function determinerDossierTravail(fs) {
   if (raison === 'SONDE_ECHOUEE' && evenementsAilleurs !== 0) {
     question = { code: 'PORTABLE_NON_INSCRIPTIBLE', racine: ailleurs, evenements: evenementsAilleurs, cause };
   } else if (!sonde.inscriptible) {
-    question = { code: 'DOCUMENTS_NON_INSCRIPTIBLE', racine, evenements: compterEvenements(ici), cause: sonde.cause };
+    const evenements = await compterEvenements(fs, racine, ici);
+    question = { code: 'DOCUMENTS_NON_INSCRIPTIBLE', racine, evenements, cause: sonde.cause };
   }
   // Un compte inconnu, null, ne propose rien : null n'est pas supérieur à 0.
   const autre = ici.length === 0 && evenementsAilleurs > 0 ? { racine: ailleurs, evenements: evenementsAilleurs } : null;

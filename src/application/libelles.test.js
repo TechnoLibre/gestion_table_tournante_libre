@@ -745,6 +745,12 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
     assert.notEqual(libelle('VERROU_PRIS', { seance: 's', depuis: '2031-05-01T21:40:00-04:00', vivant: false }), vivant);
   });
 
+  test("un identifiant déjà présent cite le dossier de l'événement, qui peut différer de sa base", () => {
+    const copie = libelle('IDENTIFIANT_PRESENT', { id: 'e', base: 'Bal des Ormes', dossier: 'Bal des Ormes - Copie' });
+    assert.match(copie, /« Bal des Ormes - Copie »/);
+    assert.match(libelle('IDENTIFIANT_PRESENT', { id: 'e', base: 'Bal des Ormes' }), /« Bal des Ormes »/);
+  });
+
   test('un état, un champ, un mode inconnus lèvent au lieu de se taire', () => {
     assert.throws(() => libelle('JALON_ETAT', { etat: 'archive' }), RangeError);
     assert.throws(() => libelle('ENTREE_MODIFIER_PARTICIPANT', { personne: 'x', champs: ['age'], devenu: null }), RangeError);

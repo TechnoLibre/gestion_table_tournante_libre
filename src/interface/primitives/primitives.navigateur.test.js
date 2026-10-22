@@ -79,13 +79,15 @@ async function preparer({ mode = 'ecriture', bloque = false } = {}) {
   await seance.executer('ajouterParticipant', { champs: { nom: NOM, prenom: 'Iris' } });
   if (bloque) await seance.executer('changerEtat', { etat: 'bloque' });
   if (mode === 'lecture') await seance.passerEnLecture();
-  const base = seance.etat().evenement.base;
+  // La clé de l'événement : suivie d'un suffixe, le chemin d'un de ses
+  // fichiers.
+  const cle = seance.etat().evenement.cle;
   const contexte = new Map([
     ['seance', seance],
     ['t', t],
     ['horloge', horloge],
   ]);
-  return { fs, horloge, seance, base, contexte };
+  return { fs, horloge, seance, cle, contexte };
 }
 
 // Monte un composant dans un conteneur neuf, au début du corps.
@@ -170,7 +172,7 @@ async function taper(texte) {
 
 // Les lignes du journal de l'événement.
 function lignesJournal(montage) {
-  return montage.fs.contenu('documents', `${montage.base}${SUFFIXES.journal}`).split('\n').filter((l) => l !== '');
+  return montage.fs.contenu('documents', `${montage.cle}${SUFFIXES.journal}`).split('\n').filter((l) => l !== '');
 }
 
 // Attend que la file de la séance ait passé tout ce qui s'y trouve — le
@@ -181,7 +183,7 @@ async function viderFile(montage) {
   await montage.seance.formeNommee(null).catch(() => undefined);
 }
 
-const verrouPresent = (montage) => montage.fs.contenu('documents', `${montage.base}${SUFFIXES.verrou}`) !== null;
+const verrouPresent = (montage) => montage.fs.contenu('documents', `${montage.cle}${SUFFIXES.verrou}`) !== null;
 
 // L'écart entre deux boîtes : 0 quand elles se touchent ou se chevauchent.
 function ecart(a, b) {
@@ -220,7 +222,7 @@ describe('champ : la fin du geste (§ 2.1, § 8.2)', () => {
     const etat = montage.seance.etat();
     expect(etat.evenement.revision).toBe(revision + 1);
     expect(etat.charge.participants[0].nom).toBe(`${NOM} Lacasse`);
-    const journal = lireJournal(montage.fs.contenu('documents', `${montage.base}${SUFFIXES.journal}`));
+    const journal = lireJournal(montage.fs.contenu('documents', `${montage.cle}${SUFFIXES.journal}`));
     const derniere = journal.entrees.at(-1);
     expect(derniere.revision).toBe(revision + 1);
     expect(serialiserCharge(reconstruire(journal, derniere.revision))).toBe(serialiserCharge(etat.charge));
@@ -725,14 +727,14 @@ describe('le remède « Débloquer » (§ 8.5)', () => {
     const bouton = message.querySelector('button');
     expect(bouton.getAttribute('data-commande')).toBe('debloquer');
     const ecritures = montage.fs.compteurs.ecritures;
-    const entrees = lireJournal(montage.fs.contenu('documents', `${montage.base}${SUFFIXES.journal}`)).entrees.length;
+    const entrees = lireJournal(montage.fs.contenu('documents', `${montage.cle}${SUFFIXES.journal}`)).entrees.length;
     await cliquer(bouton);
     expect(bouton.textContent.trim()).toBe('Confirmer le déblocage');
     expect(montage.fs.compteurs.ecritures).toBe(ecritures);
     aucuneFenetre();
     await cliquer(bouton);
     await vi.waitFor(() => expect(montage.seance.etat().evenement.etat).not.toBe('bloque'));
-    const journal = lireJournal(montage.fs.contenu('documents', `${montage.base}${SUFFIXES.journal}`));
+    const journal = lireJournal(montage.fs.contenu('documents', `${montage.cle}${SUFFIXES.journal}`));
     expect(journal.entrees.length).toBe(entrees + 1);
     expect(montage.seance.etat().mode).toBe('ecriture');
   });

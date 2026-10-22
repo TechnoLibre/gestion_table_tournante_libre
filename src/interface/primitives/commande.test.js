@@ -43,7 +43,7 @@ function seanceEnregistreuse() {
   };
   return {
     appels,
-    etat: () => ({ evenement: { base: 'Soirée des Merles' } }),
+    etat: () => ({ evenement: { cle: 'Merles - Copie/Soirée des Merles', base: 'Soirée des Merles' } }),
     executer: consigner('executer'),
     passerEnEcriture: consigner('passerEnEcriture'),
     debloquer: consigner('debloquer'),
@@ -302,7 +302,7 @@ describe('commande : l’action d’un remède', () => {
     assert.deepEqual(seance.appels, [['executer', 'retirerTitre', { table: 2, siege: 4 }]]);
   });
 
-  test('modifier → passerEnEcriture ; ouvrirSecours → la base ouverte et la source ; ecrireAilleurs → la racine du remède', async () => {
+  test('modifier → passerEnEcriture ; ouvrirSecours → la clé de l’événement ouvert et la source ; ecrireAilleurs → la racine du remède', async () => {
     const seance = seanceEnregistreuse();
     await actionRemede({ geste: 'modifier' }, { seance }).executer();
     await actionRemede({ geste: 'ouvrirSecours', source: 'journal' }, { seance }).executer();
@@ -310,7 +310,7 @@ describe('commande : l’action d’un remède', () => {
     await actionRemede({ geste: 'ecrireAilleurs', racine: null }, { seance }).executer();
     assert.deepEqual(seance.appels, [
       ['passerEnEcriture'],
-      ['ouvrirSecours', 'Soirée des Merles', 'journal'],
+      ['ouvrirSecours', 'Merles - Copie/Soirée des Merles', 'journal'],
       ['ecrireAilleurs', RACINE],
       ['ecrireAilleurs', null],
     ]);

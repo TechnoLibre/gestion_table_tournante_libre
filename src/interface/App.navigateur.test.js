@@ -77,8 +77,8 @@ function evenement(nom, { texte = PETITE, format = FORMAT } = {}) {
   }
   return auFormat;
 }
-const fichier = (base, nom, options) => ({ racine: 'documents', chemin: `${base}.gtt.json`, texte: evenement(nom, options) });
-const verrouDe = (m, base) => m.fs.contenu('documents', `${base}.gtt.verrou`);
+const fichier = (base, nom, options) => ({ racine: 'documents', chemin: `${base}/${base}.gtt.json`, texte: evenement(nom, options) });
+const verrouDe = (m, base) => m.fs.contenu('documents', `${base}/${base}.gtt.verrou`);
 
 // Les montages de l'épreuve en cours, démontés après elle ; le collecteur
 // n'a rien reçu pendant l'épreuve, sauf quand elle le veut.
@@ -110,7 +110,7 @@ const ecran = (m) => dans(m, '[data-ecran]');
 // Un montage dont l'événement « Bal des Grisailles » est ouvert, en lecture.
 async function avecEvenementOuvert(options = {}) {
   const m = await monter({ fichiers: [fichier('bal', 'Bal des Grisailles')], ...options });
-  await m.seance.ouvrir('bal');
+  await m.seance.ouvrir('bal/bal');
   flushSync();
   return m;
 }
@@ -187,7 +187,7 @@ describe('annonce de format (§ 8.8, § 18.6)', () => {
 
   test('un fichier au format FORMAT + 1 : « ce fichier s’ouvre en lecture seule » dans le bandeau', async () => {
     const m = await monter({ fichiers: [fichier('bal', 'Bal des Grisailles', { format: FORMAT + 1 })] });
-    await m.seance.ouvrir('bal');
+    await m.seance.ouvrir('bal/bal');
     flushSync();
     expect(bandeau(m).contains(annonce(m))).toBe(true);
     expect(annonce(m).textContent).toBe(t('coquille.format.plusRecent'));
@@ -202,7 +202,7 @@ describe('annonce de format (§ 8.8, § 18.6)', () => {
   test('un fichier au format FORMAT − 1 ne s’ouvre pas : refus FORMAT_TROP_ANCIEN, aucun événement ni annonce, et l’ouverture n’ajoute rien au relevé', async () => {
     const m = await monter({ fichiers: [fichier('bal', 'Bal des Grisailles', { format: FORMAT - 1 })] });
     const avant = m.trace.length;
-    await expect(m.seance.ouvrir('bal')).rejects.toMatchObject({
+    await expect(m.seance.ouvrir('bal/bal')).rejects.toMatchObject({
       code: 'ETAT_ILLISIBLE',
       details: { raison: 'FORMAT_TROP_ANCIEN', format: FORMAT - 1, secours: { precedent: null, journal: null } },
     });
@@ -287,13 +287,13 @@ describe('la liste relue', () => {
   test('un événement chargé puis fermé : la liste revenue le porte', async () => {
     const m = await monter();
     expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(0);
-    const { base } = await m.facade.chargerDemonstration('petite');
+    const { cle } = await m.facade.chargerDemonstration('petite');
     flushSync();
     expect(ecran(m).dataset.ecran).toBe('evenement');
     dans(m, '[data-commande="liste"]').click();
     await vi.waitFor(() => expect(m.seance.etat().evenement).toBeNull());
     await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(1));
-    expect(dans(m, '[data-evenement]').dataset.evenement).toBe(base);
+    expect(dans(m, '[data-evenement]').dataset.evenement).toBe(cle);
   });
 
   test('une relecture refusée : le refus traduit tient lieu de liste, sans ligne d’avant ; la relecture suivante le retire', async () => {
@@ -302,7 +302,7 @@ describe('la liste relue', () => {
     expect(dans(m, '[data-refus="accueil"]')).toBeNull();
     // L'ouverture relève aussi le dossier : le relevé ne se refuse qu'après
     // elle.
-    await m.seance.ouvrir('bal');
+    await m.seance.ouvrir('bal/bal');
     const refuse = new ErreurStockage('LECTURE', { chemin: '', cause: 'EACCES' });
     const lister = m.fs.lister;
     m.fs.lister = async () => {
@@ -318,7 +318,7 @@ describe('la liste relue', () => {
     expect(visible(refus)).toBe(true);
     expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(0);
     m.fs.lister = lister;
-    await m.seance.ouvrir('bal');
+    await m.seance.ouvrir('bal/bal');
     await m.seance.fermer();
     await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(1));
     expect(dans(m, '[data-refus="accueil"]')).toBeNull();
@@ -371,19 +371,19 @@ describe('la liste relue', () => {
     let suspendue = null;
     const lireTexte = m.fs.lireTexte;
     m.fs.lireTexte = (racine, chemin) => {
-      if (chemin === 'bal.gtt.verrou' && suspendue === null) {
+      if (chemin === 'bal/bal.gtt.verrou' && suspendue === null) {
         suspendue = barriere.then(() => lireTexte.call(m.fs, racine, chemin));
         return suspendue;
       }
       return lireTexte.call(m.fs, racine, chemin);
     };
-    await m.seance.ouvrir('bal');
+    await m.seance.ouvrir('bal/bal');
     await m.seance.fermer();
     await vi.waitFor(() => expect(suspendue).not.toBeNull());
     // Un second événement paraît ; une seconde fermeture relit la liste, qui
     // le porte.
-    m.fs.deposer('documents', 'club.gtt.json', evenement('Club des Merles', { texte: CONFLIT }));
-    await m.seance.ouvrir('bal');
+    m.fs.deposer('documents', 'club/club.gtt.json', evenement('Club des Merles', { texte: CONFLIT }));
+    await m.seance.ouvrir('bal/bal');
     await m.seance.fermer();
     await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(2));
     liberer();
@@ -409,7 +409,7 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
   }
   // Les collisions cumulées du retenu que la ligne d'un texte d'état écrit.
   const collisions = (texte) => format.nombre(evaluer(analyser(texte).charge).retenu.mesures.collisionsCumulees);
-  const cellule = (m) => dans(m, '[data-evenement="bal"] [data-colonne="collisionsCumulees"]');
+  const cellule = (m) => dans(m, '[data-evenement="bal/bal"] [data-colonne="collisionsCumulees"]');
   const uneImage = () => new Promise((resoudre) => requestAnimationFrame(() => resoudre()));
 
   // Retient la prochaine lecture de l'état de « bal » : elle lit le disque à
@@ -422,7 +422,7 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
     });
     const retenue = { promesse: null, liberer: () => liberer() };
     m.fs.lireTexte = (racine, chemin) => {
-      if (chemin === 'bal.gtt.json' && retenue.promesse === null) {
+      if (chemin === 'bal/bal.gtt.json' && retenue.promesse === null) {
         const lue = lireTexte.call(m.fs, racine, chemin);
         retenue.promesse = barriere.then(() => lue);
         return retenue.promesse;
@@ -436,7 +436,7 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
     const ancien = texteRetenu(1);
     const nouveau = texteRetenu(0);
     expect(collisions(ancien)).not.toBe(collisions(nouveau));
-    const m = await monter({ fichiers: [{ racine: 'documents', chemin: 'bal.gtt.json', texte: ancien }] });
+    const m = await monter({ fichiers: [{ racine: 'documents', chemin: 'bal/bal.gtt.json', texte: ancien }] });
     const retenue = retenirLecture(m);
     // Le premier pas de la première lecture lit l'état, et reste suspendu.
     await vi.waitFor(async () => {
@@ -444,7 +444,7 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
       m.horloge.avancer(0);
       expect(retenue.promesse).not.toBeNull();
     });
-    m.fs.deposer('documents', 'bal.gtt.json', nouveau);
+    m.fs.deposer('documents', 'bal/bal.gtt.json', nouveau);
     await m.facade.demarrer();
     flushSync();
     expect(cellule(m).querySelector('[data-chargement]')).not.toBeNull();
@@ -466,12 +466,12 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
   test('un événement ouvert pendant le chargement l’abandonne : l’horloge avancée ne relit plus aucun état', async () => {
     const m = await monter({
       fichiers: [
-        { racine: 'documents', chemin: 'bal.gtt.json', texte: texteRetenu(1) },
-        { racine: 'documents', chemin: 'club.gtt.json', texte: evenement('Club des Merles', { texte: CONFLIT }) },
+        { racine: 'documents', chemin: 'bal/bal.gtt.json', texte: texteRetenu(1) },
+        { racine: 'documents', chemin: 'club/club.gtt.json', texte: evenement('Club des Merles', { texte: CONFLIT }) },
       ],
     });
     expect(m.racine.querySelectorAll('[data-chargement]').length).toBeGreaterThan(0);
-    await m.seance.ouvrir('bal');
+    await m.seance.ouvrir('bal/bal');
     flushSync();
     const lireTexte = m.fs.lireTexte;
     const etats = [];
@@ -489,11 +489,11 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
   test('une lecture de la liste qui s’achève sous un événement ouvert ne lance aucun chargement', async () => {
     const m = await monter({
       fichiers: [
-        { racine: 'documents', chemin: 'bal.gtt.json', texte: texteRetenu(1) },
-        { racine: 'documents', chemin: 'club.gtt.json', texte: evenement('Club des Merles', { texte: CONFLIT }) },
+        { racine: 'documents', chemin: 'bal/bal.gtt.json', texte: texteRetenu(1) },
+        { racine: 'documents', chemin: 'club/club.gtt.json', texte: evenement('Club des Merles', { texte: CONFLIT }) },
       ],
     });
-    await m.seance.ouvrir('bal');
+    await m.seance.ouvrir('bal/bal');
     flushSync();
     // La lecture de la liste que lance la fermeture lit le dossier à son
     // appel, et ne rend ce qu'elle a lu qu'à liberer().
@@ -507,7 +507,7 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
       return barriere.then(() => lue);
     };
     await m.seance.fermer();
-    await m.seance.ouvrir('club');
+    await m.seance.ouvrir('club/club');
     flushSync();
     const lireTexte = m.fs.lireTexte;
     const etats = [];
@@ -536,8 +536,21 @@ describe('l’événement ouvert et sa navigation', () => {
     expect(dans(m, '[data-section="tables"]')).not.toBeNull();
     dans(m, '[data-commande="liste"]').click();
     await vi.waitFor(() => expect(m.seance.etat().evenement).toBeNull());
-    await m.seance.ouvrir('bal');
+    await m.seance.ouvrir('bal/bal');
     flushSync();
+    expect(m.ui.etat().section).toBe(SECTION_OUVERTURE);
+    expect(dans(m, '[data-section]').dataset.section).toBe(SECTION_OUVERTURE);
+  });
+
+  test('ouvrir, sans repasser par la liste, la copie à la main d’un dossier, sous la même base, remet aussi la navigation à son départ', async () => {
+    const copie = { ...fichier('bal', 'Bal des Grisailles'), chemin: 'bal - Copie/bal.gtt.json' };
+    const m = await avecEvenementOuvert({ fichiers: [fichier('bal', 'Bal des Grisailles'), copie] });
+    dans(m, '[data-commande="section"][data-cible="tables"]').click();
+    flushSync();
+    expect(m.ui.etat().section).toBe('tables');
+    await m.seance.ouvrir('bal - Copie/bal');
+    flushSync();
+    expect([m.seance.etat().evenement.cle, m.seance.etat().evenement.base]).toEqual(['bal - Copie/bal', 'bal']);
     expect(m.ui.etat().section).toBe(SECTION_OUVERTURE);
     expect(dans(m, '[data-section]').dataset.section).toBe(SECTION_OUVERTURE);
   });
@@ -563,7 +576,7 @@ describe('« À propos » (§ 18.6)', () => {
     flushSync();
     expect(ecran(m).dataset.ecran).toBe('accueil');
 
-    await m.seance.ouvrir('bal');
+    await m.seance.ouvrir('bal/bal');
     flushSync();
     expect(ecran(m).dataset.ecran).toBe('evenement');
     dans(m, '[data-commande="apropos"]').click();
@@ -747,7 +760,7 @@ describe('injection des plateformes (§ 13.4)', () => {
     expect(b.racine.textContent).toContain('Club des Merles');
     expect(a.racine.textContent).not.toContain('Club des Merles');
     expect(b.racine.textContent).not.toContain('Bal des Grisailles');
-    await a.seance.ouvrir('bal');
+    await a.seance.ouvrir('bal/bal');
     flushSync();
     expect(libelleDeMode(a)).not.toBeNull();
     expect(libelleDeMode(b)).toBeNull();
@@ -805,7 +818,7 @@ describe('l’ordre du montage', () => {
     });
     const lignes = [...m.racine.querySelectorAll('[data-evenement]')];
     expect(lignes.length).toBe(2);
-    expect(lignes.map((ligne) => ligne.dataset.evenement).sort()).toEqual(['bal', 'club']);
+    expect(lignes.map((ligne) => ligne.dataset.evenement).sort()).toEqual(['bal/bal', 'club/club']);
     expect(m.racine.textContent).toContain('Bal des Grisailles');
     expect(m.racine.textContent).toContain('Club des Merles');
   });
@@ -838,7 +851,7 @@ describe('l’ordre du montage', () => {
     });
     await m.facade.repondre('continuer');
     await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(1));
-    expect(dans(m, '[data-evenement]').dataset.evenement).toBe('bal');
+    expect(dans(m, '[data-evenement]').dataset.evenement).toBe('bal/bal');
     expect(dans(m, '[data-refus="accueil"]')).toBeNull();
     expect(issues).not.toContain('QUESTION_EN_ATTENTE');
     expect(issues).toContain('lue');

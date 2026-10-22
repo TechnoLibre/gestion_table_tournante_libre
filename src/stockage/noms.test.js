@@ -29,6 +29,8 @@ import {
   NOMS_RESERVES_RACINE,
   SUFFIXES,
   SUFFIXE_ECRITURE,
+  cleEvenement,
+  decouperCle,
   deriverBase,
   dossierCorbeille,
   dossierEvenement,
@@ -1009,6 +1011,37 @@ describe("dossierEvenement : le dossier d'un événement (§ 8.6)", () => {
     // Un nom voisin passe.
     assert.equal(dossierEvenement('corbeille (2)'), 'corbeille (2)');
     assert.equal(dossierEvenement('...a'), '...a');
+  });
+});
+
+describe("cleEvenement, decouperCle : l'identité d'un événement du dossier de travail (§ 8.1, § 8.6)", () => {
+  test('la clé joint le dossier et la base par « / », et se découpe en eux, le dossier pouvant ne pas être la base', () => {
+    assert.equal(cleEvenement('Gala', 'Gala'), 'Gala/Gala');
+    assert.equal(cleEvenement('Gala - Copie', 'Gala'), 'Gala - Copie/Gala');
+    for (const [dossier, base] of [
+      ['Gala', 'Gala'],
+      ['Gala - Copie', 'Gala'],
+      ['Soir\u{E9}e', 'Soir\u{E9}e (2)'],
+      ['corbeille (2)', 'corbeille (2)'],
+    ]) {
+      assert.deepEqual(decouperCle(cleEvenement(dossier, base)), { dossier, base });
+    }
+  });
+
+  test("une clé sans dossier — un fichier à plat —, à plus de deux segments, au segment vide, « . » ou « .. », d'un autre type, ou dans la corbeille, quelle que soit sa casse : CHEMIN_REFUSE {chemin}", () => {
+    const refusees = ['Gala', '', '/Gala', 'Gala/', 'a/b/c', './Gala', '../Gala', 'Gala/..', 'corbeille/Gala', 'Corbeille/x', null, 3];
+    for (const cle of refusees) {
+      let erreur = null;
+      try {
+        decouperCle(cle);
+      } catch (levee) {
+        erreur = levee;
+      }
+      assert.ok(erreur instanceof ErreurStockage, String(cle));
+      assert.deepEqual([erreur.code, erreur.details], ['CHEMIN_REFUSE', { chemin: cle }], String(cle));
+    }
+    assert.throws(() => cleEvenement('a/b', 'c'), TypeError);
+    assert.throws(() => cleEvenement('a', ''), TypeError);
   });
 });
 

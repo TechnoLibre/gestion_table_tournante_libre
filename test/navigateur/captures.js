@@ -678,8 +678,8 @@ const hex = (tampon) => [...new Uint8Array(tampon)].map((octet) => octet.toStrin
 export async function empreinteEtat(m) {
   const { evenement, racine } = m.seance.etat();
   if (evenement === null) return null;
-  const texte = m.fs.contenu(racine.id, `${evenement.base}${SUFFIXES.etat}`);
-  if (texte === null) throw new Error(`état de ${evenement.base} absent du disque simulé`);
+  const texte = m.fs.contenu(racine.id, `${evenement.cle}${SUFFIXES.etat}`);
+  if (texte === null) throw new Error(`état de ${evenement.cle} absent du disque simulé`);
   const { charge } = analyser(texte);
   return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialiserCharge(charge))));
 }

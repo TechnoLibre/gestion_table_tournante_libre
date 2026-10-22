@@ -231,3 +231,137 @@ export function exigerOctets(octets) {
     throw new TypeError(`octets : Uint8Array attendu, reçu ${Object.prototype.toString.call(octets)}`);
   }
 }
+
+// Les primitives qui ne reçoivent aucun chemin relatif, hors sonder : une
+// vue de dossier les relaie telles quelles.
+const SANS_CHEMIN = [
+  'emplacements',
+  'racines',
+  'choisirDossier',
+  'typeSupport',
+  'choisirFichierAImporter',
+  'enregistrerSous',
+];
+
+// Le témoin qu'écrit la sonde d'une vue de dossier, du nom de celui des
+// implémentations.
+const TEMOIN = '.gtt-temoin';
+
+// Les primitives dont le second argument est un chemin relatif, le seul
+// qu'elles reçoivent ; deplacer, qui en reçoit deux, et supprimerDossier,
+// qui refuse '', ont leur relais propre.
+const A_UN_CHEMIN = [
+  'lireTexte',
+  'ecrireAtomique',
+  'ecrireOctetsAtomique',
+  'ajouterLigne',
+  'lister',
+  'creerDossier',
+  'supprimer',
+  'verrouiller',
+  'deverrouiller',
+];
+
+/**
+ * La vue de fs sur un dossier de ses racines (§ 8.6) : un SystemeFichiers
+ * dont chaque primitive reçoit un chemin relatif au dossier, celui d'un
+ * événement, et le passe à fs préfixé du dossier ; '' y désigne le dossier
+ * lui-même. Le dépôt lit et écrit ainsi les fichiers d'un événement sous
+ * leurs seuls noms, <base> suivi d'un suffixe, comme dans une racine.
+ *
+ * Un chemin que le contrat refuse se refuse tel que reçu, avant tout accès,
+ * et '' se refuse à supprimerDossier, CHEMIN_REFUSE : la vue ne retire pas
+ * son propre dossier. Le chemin des détails d'une ErreurStockage que lève
+ * fs redevient relatif au dossier, celui que la vue a reçu ; le dossier
+ * d'une ECRITURE ou d'une LECTURE, chemin affichable de celui qui porte le
+ * fichier, reste tel quel. sonder éprouve le dossier, par les primitives
+ * de fs : il le crée sous la racine, qui doit exister, efface un témoin
+ * resté, en écrit un, le relit et l'efface ; un refus rend sa cause, et
+ * seul un chemin refusé lève. Les autres primitives sans chemin relatif —
+ * racines, type du support, dialogues — passent telles quelles. Chaque
+ * primitive se lit sur fs à l'appel, jamais à la création de la vue : une
+ * épreuve qui en remplace une après coup est entendue.
+ *
+ * @param {SystemeFichiers} fs
+ * @param {string} dossier   chemin relatif à une racine, non vide
+ * @returns {SystemeFichiers & {dossier: string, systeme: SystemeFichiers}}
+ *          la vue ; dossier et systeme sont ceux qu'elle prolonge
+ * @throws {ErreurStockage} CHEMIN_REFUSE {chemin: dossier} : un dossier vide,
+ *         ou que exigerCheminRelatif refuse
+ */
+export function vueDossier(fs, dossier) {
+  if (exigerCheminRelatif(dossier).length === 0) throw new ErreurStockage('CHEMIN_REFUSE', { chemin: dossier });
+  const prefixe = `${dossier}/`;
+  // Le chemin sous le dossier ; CHEMIN_REFUSE, tel que reçu, pour un chemin
+  // que le contrat refuse.
+  const dedans = (chemin) => {
+    exigerCheminRelatif(chemin);
+    return chemin === '' ? dossier : prefixe + chemin;
+  };
+  // Le chemin relatif au dossier d'un chemin relatif à la racine qui y
+  // mène ; tout autre chemin reste tel quel.
+  const relatif = (chemin) => {
+    if (chemin === dossier) return '';
+    return chemin.startsWith(prefixe) ? chemin.slice(prefixe.length) : chemin;
+  };
+  // L'appel de fs, dont l'ErreurStockage reprend le chemin relatif au
+  // dossier ; toute autre erreur remonte telle quelle.
+  async function relayer(appel) {
+    try {
+      return await appel();
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage) || typeof erreur.details?.chemin !== 'string') throw erreur;
+      throw new ErreurStockage(erreur.code, { ...erreur.details, chemin: relatif(erreur.details.chemin) });
+    }
+  }
+  const vue = {
+    dossier,
+    systeme: fs,
+    get nature() {
+      return fs.nature;
+    },
+    get renommageAtomique() {
+      return fs.renommageAtomique;
+    },
+    get verrouDisponible() {
+      return fs.verrouDisponible;
+    },
+    async deplacer(racine, de, vers) {
+      const source = dedans(de);
+      const cible = dedans(vers);
+      return relayer(() => fs.deplacer(racine, source, cible));
+    },
+    async supprimerDossier(racine, chemin) {
+      if (chemin === '') throw new ErreurStockage('CHEMIN_REFUSE', { chemin });
+      const plein = dedans(chemin);
+      return relayer(() => fs.supprimerDossier(racine, plein));
+    },
+    async sonder(racine) {
+      const temoin = prefixe + TEMOIN;
+      try {
+        await fs.creerDossier(racine, dossier);
+        await fs.supprimer(racine, temoin);
+        await fs.ecrireAtomique(racine, temoin, TEMOIN);
+        const relu = await fs.lireTexte(racine, temoin);
+        await fs.supprimer(racine, temoin);
+        if (relu !== TEMOIN) return { inscriptible: false, cause: 'RELECTURE_DIFFERENTE' };
+        return { inscriptible: true, cause: null };
+      } catch (erreur) {
+        if (!(erreur instanceof ErreurStockage) || erreur.code === 'CHEMIN_REFUSE') throw erreur;
+        return { inscriptible: false, cause: erreur.details.cause ?? erreur.code };
+      }
+    },
+    async ouvrirDansExplorateur(racine, chemin = '') {
+      const plein = dedans(chemin);
+      return relayer(() => fs.ouvrirDansExplorateur(racine, plein));
+    },
+  };
+  for (const nom of SANS_CHEMIN) vue[nom] = (...args) => fs[nom](...args);
+  for (const nom of A_UN_CHEMIN) {
+    vue[nom] = async (racine, chemin, ...reste) => {
+      const plein = dedans(chemin);
+      return relayer(() => fs[nom](racine, plein, ...reste));
+    };
+  }
+  return vue;
+}

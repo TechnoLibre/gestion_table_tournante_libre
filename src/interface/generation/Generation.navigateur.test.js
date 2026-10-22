@@ -215,9 +215,11 @@ async function cadrerPourLesListes(m) {
 const charge = (m) => m.seance.etat().charge;
 const revision = (m) => m.seance.etat().evenement.revision;
 const controleur = (m) => m.app.generation();
-const baseDe = (m) => m.seance.etat().evenement.base;
-const etatSurDisque = (m) => m.fs.contenu('documents', `${baseDe(m)}${SUFFIXES.etat}`);
-const journalDe = (m) => lireJournal(m.fs.contenu('documents', `${baseDe(m)}${SUFFIXES.journal}`));
+// La clé de l'événement ouvert, suivie d'un suffixe : le chemin d'un de ses
+// fichiers.
+const cleDe = (m) => m.seance.etat().evenement.cle;
+const etatSurDisque = (m) => m.fs.contenu('documents', `${cleDe(m)}${SUFFIXES.etat}`);
+const journalDe = (m) => lireJournal(m.fs.contenu('documents', `${cleDe(m)}${SUFFIXES.journal}`));
 
 // Attend que l'assertion passe, le rendu de Svelte à jour, image après image ;
 // images borne l'attente.

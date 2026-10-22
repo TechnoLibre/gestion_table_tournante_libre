@@ -10,7 +10,9 @@
 //
 // La façade ne connaît pas la séance : elle reçoit de quoi savoir quel
 // événement est ouvert, l'ouvrir, le fermer, en créer un, lire et poser le
-// dossier de travail, et appelle chacun au moment du geste. Une primitive du
+// dossier de travail, et appelle chacun au moment du geste. Un événement s'y
+// désigne par sa clé, <dossier>/<base> (cleEvenement), celle de sa ligne :
+// chaque événement a son dossier dans le dossier de travail. Une primitive du
 // système de fichiers se lit sur fs à l'appel, jamais à la création : une
 // épreuve la remplace après le montage.
 //
@@ -39,7 +41,7 @@ import { deverrouiller, lister as listerDepot, ouvrir as ouvrirDepot, verrouille
 import { determinerDossierTravail } from '../stockage/dossier_travail.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { decoderJournal, horodatageFinal } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement, decouperCle } from '../stockage/noms.js';
 import {
   chargerDemonstration as chargerSurDisque,
   copier as copierSurDisque,
@@ -51,6 +53,7 @@ import {
   supprimer as supprimerSurDisque,
 } from '../stockage/operations.js';
 import { lireReglages } from '../stockage/reglages_locaux.js';
+import { vueDossier } from '../stockage/systeme_fichiers.js';
 import { refusNomEvenement } from './commandes.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { resumeDuMeilleur, resumeDuRetenu } from './evaluation.js';
@@ -122,13 +125,13 @@ function exigerModifiable({ formatPlusRecent, charge }) {
   }
 }
 
-// L'horodatage de la dernière entrée du journal de base, tel que l'horloge
-// de l'application qui l'a écrite l'a noté (§ 19.4), lu depuis la fin du
-// texte par horodatageFinal, la ligne d'ouverture seule lue en tête, sans
-// contrôler la forme des lignes qui précèdent l'entrée ni aucun instantané ; null sans
-// journal, sans entrée lisible, ou quand le fichier ne se lit pas. Un
-// journal dont une ligne n'est pas de l'UTF-8 se lit jusqu'à elle, comme à
-// l'ouverture.
+// L'horodatage de la dernière entrée du journal de base, dans le dossier
+// que lit fs, tel que l'horloge de l'application qui l'a écrite l'a noté
+// (§ 19.4), lu depuis la fin du texte par horodatageFinal, la ligne
+// d'ouverture seule lue en tête, sans contrôler la forme des lignes qui
+// précèdent l'entrée ni aucun instantané ; null sans journal, sans entrée
+// lisible, ou quand le fichier ne se lit pas. Un journal dont une ligne
+// n'est pas de l'UTF-8 se lit jusqu'à elle, comme à l'ouverture.
 async function derniereModification(fs, racine, base) {
   if (base === null) return null;
   let texte;
@@ -150,7 +153,7 @@ async function derniereModification(fs, racine, base) {
 // liste montre pour un événement dont le calcul a fauté.
 const AUCUN_RESUME = Object.freeze({ mesuresDuRetenu: null, meilleureDuClassement: null });
 
-// La charge de l'événement base telle que l'ouverture la lit, sans rien
+// La charge de l'événement de clé cle telle que l'ouverture la lit, sans rien
 // écrire (ouvrir du dépôt, § 8.8) : un journal en avance d'une entrée la
 // rattrape en mémoire, par la règle de rattraper, et examiner (§ 8.9, point
 // 3) en écarte une proposition fautive, dont l'identifiant se répète ou
@@ -158,9 +161,9 @@ const AUCUN_RESUME = Object.freeze({ mesuresDuRetenu: null, meilleureDuClassemen
 // liste nomme ainsi la proposition au rang 1 que le bloc de génération de
 // l'événement ouvert nomme (§ 8.1). null pour un état absent ou qui ne
 // s'ouvre pas.
-async function chargeExaminee(fs, racine, base) {
+async function chargeExaminee(fs, racine, cle) {
   try {
-    return (await ouvrirDepot(fs, racine, base)).charge;
+    return (await ouvrirDepot(fs, racine, cle)).charge;
   } catch (erreur) {
     if (erreur instanceof ErreurStockage) return null;
     throw erreur;
@@ -172,10 +175,10 @@ async function chargeExaminee(fs, racine, base) {
 // un, et les secours lisibles —, sans rien écrire. Un état redevenu lisible,
 // ou disparu, depuis la liste du dépôt garde la raison du résumé, sans
 // secours.
-async function illisibleDe(fs, racine, { base, illisible }) {
+async function illisibleDe(fs, racine, { cle, illisible }) {
   if (illisible === null) return null;
   try {
-    await ouvrirDepot(fs, racine, base);
+    await ouvrirDepot(fs, racine, cle);
   } catch (erreur) {
     if (!(erreur instanceof ErreurStockage)) throw erreur;
     if (erreur.code === 'ETAT_ILLISIBLE') return { ...erreur.details };
@@ -183,9 +186,10 @@ async function illisibleDe(fs, racine, { base, illisible }) {
   return { raison: illisible, secours: null };
 }
 
-// Le .gtt.verrou de base, lu sans rien écrire : sa séance et l'instant de sa
-// prise ; null quand il manque ; seance et depuis null quand il ne se lit
-// pas. Seule une sonde, qui écrit, dit si sa séance vit.
+// Le .gtt.verrou de base, dans le dossier que lit fs, lu sans rien écrire :
+// sa séance et l'instant de sa prise ; null quand il manque ; seance et
+// depuis null quand il ne se lit pas. Seule une sonde, qui écrit, dit si sa
+// séance vit.
 async function verrouDe(fs, racine, base) {
   let texte;
   try {
@@ -215,10 +219,10 @@ async function verrouDe(fs, racine, base) {
  *        fois par événement qu'elle copie ou charge
  * @param {string} parametres.produitVersion
  * @param {Array<{cle: string, nom: string, texte: string}>} parametres.demonstrations
- * @param {() => string|null} parametres.ouvert          base de l'événement ouvert
- * @param {(base: string) => Promise<unknown>} parametres.ouvrir   en lecture
+ * @param {() => string|null} parametres.ouvert          clé de l'événement ouvert
+ * @param {(cle: string) => Promise<unknown>} parametres.ouvrir   en lecture
  * @param {() => Promise<unknown>} parametres.fermer
- * @param {(champs: Object) => Promise<{base: string}>} parametres.creer
+ * @param {(champs: Object) => Promise<{cle: string, base: string}>} parametres.creer
  *        celle de la séance, qui juge nom et date et ouvre l'événement créé
  * @param {() => Racine|null} parametres.racine          le dossier de travail
  * @param {(racine: Racine) => Promise<unknown>} parametres.changerRacine
@@ -293,8 +297,8 @@ export function creerFacade({
     let suite = { ...dossier, question: null };
     if (choix === 'documents') {
       // data/ illisible, compte null : rien à copier.
-      const bases = question.evenements === null ? [] : (await listerDepot(fs, question.racine)).map(({ base }) => base);
-      importe = await importerDepuis(fs, question.racine, dossier.racine, bases);
+      const cles = question.evenements === null ? [] : (await listerDepot(fs, question.racine)).map(({ cle }) => cle);
+      importe = await importerDepuis(fs, question.racine, dossier.racine, cles);
       suite = { ...suite, autre: null };
     }
     await changerRacine(suite.racine);
@@ -308,22 +312,24 @@ export function creerFacade({
     const { separateur } = await fs.emplacements();
     const lignes = [];
     for (const resume of resumes) {
-      const { base, id, doublon } = resume;
+      const { cle, dossier, base, id, doublon } = resume;
+      const local = vueDossier(fs, dossier);
       lignes.push({
+        cle,
         base,
         id,
         nom: resume.nom,
         date: resume.date,
         etat: resume.etat,
         participants: resume.participants,
-        derniereModification: await derniereModification(fs, courante, resume.journal),
-        chemin: cheminAffiche(courante, separateur, base + SUFFIXES.etat),
+        derniereModification: await derniereModification(local, courante, resume.journal),
+        chemin: cheminAffiche(courante, separateur, `${dossier}/${base}${SUFFIXES.etat}`),
         illisible: await illisibleDe(fs, courante, resume),
         journalSeul: resume.illisible === 'ABSENT',
         doublonAvec: doublon
-          ? resumes.filter((autre) => autre !== resume && autre.doublon && autre.id === id).map((autre) => autre.base)
+          ? resumes.filter((autre) => autre !== resume && autre.doublon && autre.id === id).map((autre) => autre.cle)
           : [],
-        verrou: await verrouDe(fs, courante, base),
+        verrou: await verrouDe(local, courante, base),
       });
     }
     return lignes;
@@ -339,16 +345,16 @@ export function creerFacade({
     const courante = racine();
     if (courante === null) throw new RangeError("resumer : aucun dossier de travail, demarrer n'a pas abouti");
     let abandonne = false;
-    for (const { base, illisible } of lignes) if (illisible !== null) recevoir(base, AUCUN_RESUME);
-    const lisibles = lignes.filter(({ illisible }) => illisible === null).map(({ base }) => base);
+    for (const { cle, illisible } of lignes) if (illisible !== null) recevoir(cle, AUCUN_RESUME);
+    const lisibles = lignes.filter(({ illisible }) => illisible === null).map(({ cle }) => cle);
     async function parcourir() {
       let faute = null;
-      for (const base of lisibles) {
+      for (const cle of lisibles) {
         await ceder();
         if (abandonne) break;
         let resume = AUCUN_RESUME;
         try {
-          const charge = await chargeExaminee(fs, courante, base);
+          const charge = await chargeExaminee(fs, courante, cle);
           if (!abandonne && charge !== null) {
             resume = { mesuresDuRetenu: resumeDuRetenu(charge), meilleureDuClassement: resumeDuMeilleur(charge) };
           }
@@ -356,7 +362,7 @@ export function creerFacade({
           faute ??= erreur;
         }
         if (abandonne) break;
-        recevoir(base, resume);
+        recevoir(cle, resume);
       }
       if (faute !== null) throw faute;
     }
@@ -386,11 +392,11 @@ export function creerFacade({
     }
   }
 
-  // Après le refus d'une opération qui a fermé l'événement base, le rouvre en
-  // lecture ; une panne, qui n'est pas un refus, laisse tout. Un échec de
-  // cette réouverture ne masque pas le refus.
-  async function rouvrirApresRefus(base, etaitOuvert, erreur) {
-    if (etaitOuvert && estRefus(erreur)) await ouvrir(base).catch(() => undefined);
+  // Après le refus d'une opération qui a fermé l'événement de clé cle, le
+  // rouvre en lecture ; une panne, qui n'est pas un refus, laisse tout. Un
+  // échec de cette réouverture ne masque pas le refus.
+  async function rouvrirApresRefus(cle, etaitOuvert, erreur) {
+    if (etaitOuvert && estRefus(erreur)) await ouvrir(cle).catch(() => undefined);
   }
 
   async function creerEvenement({ nom, date = null }) {
@@ -409,16 +415,17 @@ export function creerFacade({
       horodatage: horloge.horodatage(),
       produitVersion,
     });
-    await ouvrir(charge.base);
-    return { base: charge.base };
+    const chargee = cleEvenement(charge.dossier, charge.base);
+    await ouvrir(chargee);
+    return { cle: chargee, base: charge.base };
   }
 
   // Une source d'un format plus récent ne se copie pas : la LECTURE_SEULE du
   // dépôt se relaie avec remede null, comme les refus propres de la façade.
-  async function copier(base, { nom }) {
+  async function copier(cle, { nom }) {
     const texte = nomSaisi(nom);
     const courante = await exigerDossier();
-    const source = await ouvrirDepot(fs, courante, base);
+    const source = await ouvrirDepot(fs, courante, cle);
     // L'instant copié, par la règle même qui l'inscrit à la filiation.
     const instant = libelleDeLInstant(source, libelleReprise);
     let copie;
@@ -438,23 +445,26 @@ export function creerFacade({
       }
       throw erreur;
     }
-    await ouvrir(copie.base);
-    return { base: copie.base };
+    const cleCopie = cleEvenement(copie.dossier, copie.base);
+    await ouvrir(cleCopie);
+    return { cle: cleCopie, base: copie.base };
   }
 
-  async function renommer(base, { nom }) {
+  async function renommer(cle, { nom }) {
     const texte = nomSaisi(nom);
     const courante = await exigerDossier();
-    exigerModifiable(await ouvrirDepot(fs, courante, base));
-    const etaitOuvert = ouvert() === base;
+    exigerModifiable(await ouvrirDepot(fs, courante, cle));
+    const etaitOuvert = ouvert() === cle;
     if (etaitOuvert) await fermer();
-    const cible = { fs, racine: courante, base };
+    // Le verrou de l'événement, dans son dossier, par sa vue.
+    const { dossier, base } = decouperCle(cle);
+    const cible = { fs: vueDossier(fs, dossier), racine: courante, base };
     let renomme;
     try {
       await prendreVerrou(cible);
       try {
         // Relu sous le verrou : une autre séance a pu l'écrire depuis.
-        const source = await ouvrirDepot(fs, courante, base);
+        const source = await ouvrirDepot(fs, courante, cle);
         exigerModifiable(source);
         renomme = await renommerSurDisque(source, {
           nom: texte,
@@ -468,7 +478,7 @@ export function creerFacade({
         throw erreur;
       }
     } catch (erreur) {
-      await rouvrirApresRefus(base, etaitOuvert, erreur);
+      await rouvrirApresRefus(cle, etaitOuvert, erreur);
       throw erreur;
     }
     // Le renommage fait, un verrou qui ne se rend pas le dit sans le défaire.
@@ -479,18 +489,19 @@ export function creerFacade({
       if (!(erreur instanceof ErreurStockage)) throw erreur;
       avertissements.push({ code: 'VERROU_NON_RENDU', details: erreur.details });
     }
-    if (etaitOuvert) await ouvrir(renomme.base);
-    return { base: renomme.base, avertissements };
+    const cleRenomme = cleEvenement(renomme.dossier, renomme.base);
+    if (etaitOuvert) await ouvrir(cleRenomme);
+    return { cle: cleRenomme, base: renomme.base, avertissements };
   }
 
-  async function supprimer(base) {
+  async function supprimer(cle) {
     const courante = await exigerDossier();
-    const etaitOuvert = ouvert() === base;
+    const etaitOuvert = ouvert() === cle;
     if (etaitOuvert) await fermer();
     try {
-      return await supprimerSurDisque(fs, courante, base, { horodatage: horloge.horodatage(), seance });
+      return await supprimerSurDisque(fs, courante, cle, { horodatage: horloge.horodatage(), seance });
     } catch (erreur) {
-      await rouvrirApresRefus(base, etaitOuvert, erreur);
+      await rouvrirApresRefus(cle, etaitOuvert, erreur);
       if (erreur instanceof ErreurStockage && erreur.code === 'VERROU_PRIS') {
         throw new ErreurStockage('VERROU_PRIS', { ...erreur.details, remede: null });
       }
@@ -519,8 +530,8 @@ export function creerFacade({
     const vers = await exigerDossier();
     const autre = resultat.dossier.autre;
     if (autre === null) throw new RangeError("importerDepuisAutre : l'autre emplacement ne propose rien");
-    const bases = (await listerDepot(fs, autre.racine)).map(({ base }) => base);
-    const importe = await importerDepuis(fs, autre.racine, vers, bases);
+    const cles = (await listerDepot(fs, autre.racine)).map(({ cle }) => cle);
+    const importe = await importerDepuis(fs, autre.racine, vers, cles);
     resultat = { ...resultat, dossier: { ...resultat.dossier, autre: null } };
     return importe;
   }
@@ -555,12 +566,15 @@ export function creerFacade({
     /**
      * Les lignes de la liste (§ 8.1), dans l'ordre du dépôt, telles que le
      * relevé du dépôt les donne ; n'écrit rien, et n'évalue rien : leurs
-     * résumés viennent de resumer.
+     * résumés viennent de resumer. Chaque ligne porte la clé de son
+     * événement, qui l'identifie, sa base, et le chemin affichable de son
+     * état, dans son dossier ; doublonAvec, les clés des autres lignes du
+     * même identifiant.
      */
     lister,
     /**
      * Les résumés des lignes de lister (§ 8.1), un événement après l'autre,
-     * sans rien écrire : recevoir(base, { mesuresDuRetenu,
+     * sans rien écrire : recevoir(cle, { mesuresDuRetenu,
      * meilleureDuClassement }) une fois par ligne — resumeDuRetenu et
      * resumeDuMeilleur de sa charge examinée, chacun null sans retenu
      * mesurable ou sans proposition classée, l'un et l'autre null pour un
@@ -571,24 +585,27 @@ export function creerFacade({
      * rejette par la première faute d'un calcul, dont la ligne a reçu les
      * deux résumés à null. RangeError sans dossier de travail.
      *
-     * @param {Array<{base: string, illisible: object|null}>} lignes
-     * @param {{ceder: () => Promise<unknown>, recevoir: (base: string, resume: Object) => void}} rappels
+     * @param {Array<{cle: string, illisible: object|null}>} lignes
+     * @param {{ceder: () => Promise<unknown>, recevoir: (cle: string, resume: Object) => void}} rappels
      * @returns {{abandonner: () => void, fin: Promise<void>}}
      */
     resumer,
     /** Crée et ouvre en lecture l'événement { nom, date } (§ 2.1, étape 1). */
     creer: creerEvenement,
-    /** Charge la démonstration de clé donnée sous « ‹nom› N », ouverte en lecture (§ 15). */
+    /** Charge la démonstration de clé donnée sous « ‹nom› N », ouverte en lecture → { cle, base } (§ 15). */
     chargerDemonstration,
-    /** Copie l'événement base sous le nom donné, et ouvre la copie en lecture (§ 8.7). */
+    /** Copie l'événement de clé cle sous le nom donné, et ouvre la copie en lecture → { cle, base } (§ 8.7). */
     copier,
-    /** Renomme l'événement base ; ouvert, il se rouvre en lecture sous sa nouvelle base (§ 8.7). */
+    /**
+     * Renomme l'événement de clé cle ; ouvert, il se rouvre en lecture sous
+     * sa nouvelle clé → { cle, base, avertissements } (§ 8.7).
+     */
     renommer,
-    /** Déplace les fichiers de l'événement base dans la corbeille datée (§ 8.7). */
+    /** Déplace les fichiers de l'événement de clé cle dans la corbeille datée (§ 8.7). */
     supprimer,
     /** Le contenu de la corbeille : [{ dossier, chemin, fichiers }] (§ 8.7). */
     corbeille,
-    /** Importe le fichier d'événement que l'opérateur choisit → { base }, ou null (§ 8.7). */
+    /** Importe le fichier d'événement que l'opérateur choisit → { cle, base }, ou null (§ 8.7). */
     importerFichier,
     /** Copie dans le dossier de travail les événements de l'autre emplacement (§ 8.6). */
     importerDepuisAutre,

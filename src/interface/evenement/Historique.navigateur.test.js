@@ -87,7 +87,7 @@ async function attendre(assertion) {
 // --- Les événements d'épreuve ---------------------------------------------------
 
 const baseDe = (m) => m.seance.etat().evenement.base;
-const journalDe = (m) => lireJournal(m.fs.contenu('documents', `${baseDe(m)}${SUFFIXES.journal}`));
+const journalDe = (m) => lireJournal(m.fs.contenu('documents', `${m.seance.etat().evenement.cle}${SUFFIXES.journal}`));
 const quandDe = (horodatage) => `${horodatage.slice(0, 10)} ${horodatage.slice(11, 16)}`;
 
 // Un montage où l'événement neuf est ouvert ; en écriture, garni de n
@@ -338,10 +338,10 @@ describe('le journal en retard ou absent (§ 8.6)', () => {
     const m = await ouvert({ n: 2 });
     const base = baseDe(m);
     await m.seance.fermer();
-    const chemin = `${base}${SUFFIXES.etat}`;
+    const chemin = `${base}/${base}${SUFFIXES.etat}`;
     const { entete, charge } = analyser(m.fs.contenu('documents', chemin));
     m.fs.deposer('documents', chemin, serialiser(charge, { revision: entete.revision + 1, produitVersion: entete.produitVersion }));
-    await m.seance.ouvrir(base);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     await ouvrirPanneau(m);
     expect(texteDe(panneau(m).querySelector('[data-reprise]'))).toBe(t('evenement.historique.reprise'));
@@ -354,8 +354,8 @@ describe('le journal en retard ou absent (§ 8.6)', () => {
     const m = await ouvert({ n: 1 });
     const base = baseDe(m);
     await m.seance.fermer();
-    await m.fs.supprimer({ id: 'documents' }, `${base}${SUFFIXES.journal}`);
-    await m.seance.ouvrir(base);
+    await m.fs.supprimer({ id: 'documents' }, `${base}/${base}${SUFFIXES.journal}`);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     await ouvrirPanneau(m);
     expect(panneau(m).querySelector('[data-reprise]')).not.toBeNull();

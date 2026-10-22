@@ -24,19 +24,21 @@ import { lister, ouvrir, ouvrirSecours } from './depot.js';
 import { FORMAT, analyser } from './document.js';
 import { creerFichiersElectron } from './fichiers_electron.js';
 import { lireJournal } from './journal.js';
-import { SUFFIXES } from './noms.js';
+import { SUFFIXES, cleEvenement } from './noms.js';
 
 const FIXTURE = fileURLToPath(new URL('../../test/fixtures/stockage/format1/', import.meta.url));
 const { base: BASE } = JSON.parse(readFileSync(join(FIXTURE, 'empreintes.json'), 'utf8'));
 const NOMS = [SUFFIXES.journal, SUFFIXES.etat, SUFFIXES.precedent].map((suffixe) => `${BASE}${suffixe}`);
 const [JOURNAL, ETAT, PRECEDENT] = NOMS;
+// La clé de l'événement, posé dans le dossier de sa base.
+const CLE = cleEvenement(BASE, BASE);
 
 // Le système de fichiers de la plateforme electron sous dossier : la page
 // devant les primitives de la coquille, que servir offre canal par canal ;
 // l'IPC d'Electron y est remplacé par une copie structurée des arguments et
-// des réponses. La racine documents reçoit une copie des fichiers de la
-// fixture. Rend { fs, racine, chemin }, chemin(nom) étant le chemin sur le
-// disque d'un fichier de la racine.
+// des réponses. Le dossier de l'événement, sous la racine documents, reçoit
+// une copie des fichiers de la fixture. Rend { fs, racine, chemin },
+// chemin(nom) étant le chemin sur le disque d'un fichier de ce dossier.
 async function copieDeLaFixture(dossier) {
   const systeme = decrireSysteme({
     env: {},
@@ -58,9 +60,10 @@ async function copieDeLaFixture(dossier) {
   );
   const fs = creerFichiersElectron(pont);
   const { documents: racine } = await fs.racines();
-  mkdirSync(racine.chemin, { recursive: true });
-  for (const nom of NOMS) writeFileSync(join(racine.chemin, nom), readFileSync(join(FIXTURE, nom)));
-  return { fs, racine, chemin: (nom) => join(racine.chemin, nom) };
+  const dossierEvenement = join(racine.chemin, BASE);
+  mkdirSync(dossierEvenement, { recursive: true });
+  for (const nom of NOMS) writeFileSync(join(dossierEvenement, nom), readFileSync(join(FIXTURE, nom)));
+  return { fs, racine, chemin: (nom) => join(dossierEvenement, nom) };
 }
 
 // Exécute epreuve(copie) sur une copie neuve de la fixture, sous un dossier
@@ -74,16 +77,18 @@ async function surUneCopie(epreuve) {
   }
 }
 
-// Chaque fichier de la racine, par nom : ses octets et sa date de
-// modification.
+// Chaque fichier du dossier de l'événement, par nom : ses octets et sa date
+// de modification ; et les noms des entrées de la racine.
 function releve(racine) {
+  const dossier = join(racine.chemin, BASE);
   return Object.fromEntries(
-    readdirSync(racine.chemin)
+    readdirSync(dossier)
       .sort()
       .map((nom) => {
-        const chemin = join(racine.chemin, nom);
+        const chemin = join(dossier, nom);
         return [nom, { octets: readFileSync(chemin).toString('base64'), modifie: statSync(chemin).mtimeMs }];
-      }),
+      })
+      .concat([['racine', readdirSync(racine.chemin).sort()]]),
   );
 }
 
@@ -118,7 +123,7 @@ describe('stockage : un événement écrit par le code du format 1 se refuse (§
   test('ouvrir, lister et chaque secours refusent l’événement, FORMAT_TROP_ANCIEN, sans secours ; chaque fichier garde ses octets et sa date, et aucun ne s’ajoute', () =>
     surUneCopie(async ({ fs, racine }) => {
       const avant = releve(racine);
-      assert.deepEqual(await refusDe(ouvrir(fs, racine, BASE)), {
+      assert.deepEqual(await refusDe(ouvrir(fs, racine, CLE)), {
         code: 'ETAT_ILLISIBLE',
         details: {
           base: BASE,
@@ -131,7 +136,7 @@ describe('stockage : un événement écrit par le code du format 1 se refuse (§
       const [resume] = await lister(fs, racine);
       assert.deepEqual([resume.base, resume.id, resume.illisible], [BASE, null, 'FORMAT_TROP_ANCIEN']);
       for (const source of ['precedent', 'journal']) {
-        const { code, details } = await refusDe(ouvrirSecours(fs, racine, BASE, source));
+        const { code, details } = await refusDe(ouvrirSecours(fs, racine, CLE, source));
         assert.deepEqual([code, details.raison, details.format], ['ETAT_ILLISIBLE', 'FORMAT_TROP_ANCIEN', 1], source);
       }
       assert.deepEqual(releve(racine), avant);

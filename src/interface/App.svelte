@@ -171,8 +171,8 @@
     identifiant,
     produitVersion,
     demonstrations,
-    ouvert: () => seanceApp.etat().evenement?.base ?? null,
-    ouvrir: (base) => seanceApp.ouvrir(base),
+    ouvert: () => seanceApp.etat().evenement?.cle ?? null,
+    ouvrir: (cle) => seanceApp.ouvrir(cle),
     fermer: () => seanceApp.fermer(),
     creer: (champs) => seanceApp.creer(champs),
     racine: () => seanceApp.etat().racine,
@@ -230,7 +230,7 @@
   let lecture = Promise.resolve();
   let lectures = 0;
 
-  // Les résumés des lignes lues, par base, que facade.resumer rend un
+  // Les résumés des lignes lues, par clé, que facade.resumer rend un
   // événement après l'autre, chaque pas attendant l'image puis l'horloge
   // (creerPas) ; chargement est son flux en cours, ou null. Une lecture qui
   // commence abandonne le flux de la précédente, comme l'ouverture d'un
@@ -251,7 +251,7 @@
     resumes.clear();
     chargement = facadeContexte.resumer(lues, {
       ceder: creerPas(horloge, (rappel) => requestAnimationFrame(rappel)),
-      recevoir: (base, resume) => resumes.set(base, resume),
+      recevoir: (cle, resume) => resumes.set(cle, resume),
     });
   }
   onDestroy(abandonnerResumes);
@@ -282,8 +282,8 @@
     return lecture;
   }
 
-  // L'état observable de la séance, et la base de l'événement ouvert : une
-  // base qui change vers un événement remet la navigation à son départ. Le
+  // L'état observable de la séance, et la clé de l'événement ouvert : une
+  // clé qui change vers un événement remet la navigation à son départ. Le
   // refus de « Liste des événements » tient jusqu'au changement suivant.
   // La liste se relit à chaque fermeture d'un événement, qui a pu en créer,
   // en changer ou écrire ailleurs ; elle se lit aussi quand la détermination
@@ -291,13 +291,13 @@
   // réponse.
   let etatSeance = $state.raw(seanceApp.etat());
   let refusListe = $state.raw(null);
-  let baseOuverte = null;
+  let cleOuverte = null;
   const desabonner = seanceApp.subscribe((etat) => {
-    const base = etat.evenement?.base ?? null;
-    if (base !== null) abandonnerResumes();
-    if (base !== null && base !== baseOuverte) uiApp.reinitialiser();
-    const fermeture = baseOuverte !== null && base === null;
-    baseOuverte = base;
+    const cle = etat.evenement?.cle ?? null;
+    if (cle !== null) abandonnerResumes();
+    if (cle !== null && cle !== cleOuverte) uiApp.reinitialiser();
+    const fermeture = cleOuverte !== null && cle === null;
+    cleOuverte = cle;
     etatSeance = etat;
     refusListe = null;
     if (fermeture) relireListe();

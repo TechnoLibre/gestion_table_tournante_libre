@@ -139,7 +139,11 @@ const dans = (m, selecteur) => m.racine.querySelector(selecteur);
 const tous = (m, selecteur) => [...m.racine.querySelectorAll(selecteur)];
 const accueil = (m) => dans(m, '[data-ecran="accueil"]');
 const lignes = (m) => tous(m, '[data-evenement]');
-const ligneDe = (m, base) => dans(m, `[data-evenement="${CSS.escape(base)}"]`);
+// La base d'une ligne : ce qui suit le dossier dans la clé qu'elle porte.
+const baseDeLigne = (ligne) => ligne.dataset.evenement.split('/')[1];
+// La ligne de l'événement de base, dans son dossier, celui de sa base par
+// défaut.
+const ligneDe = (m, base, dossier = base) => dans(m, `[data-evenement="${CSS.escape(`${dossier}/${base}`)}"]`);
 const colonne = (ligne, nom) => ligne.querySelector(`[data-colonne="${nom}"]`)?.textContent;
 // Le nom de l'état d'une ligne : le seul texte de sa cellule, que la
 // pastille porte à côté de son signe.
@@ -249,13 +253,15 @@ function noeudsDeTexte(element) {
   return textes;
 }
 
-// Les textes de chaque fichier d'une racine du disque, par chemin relatif.
+// Les textes de chaque fichier d'une racine du disque, à toute profondeur,
+// par chemin relatif.
 async function photographier(m, racine, dossier = '') {
   const racines = await m.fs.racines();
   const photo = {};
   for (const { nom, type } of await m.fs.lister(racines[racine], dossier)) {
     const chemin = dossier === '' ? nom : `${dossier}/${nom}`;
     if (type === 'fichier') photo[chemin] = m.fs.contenu(racine, chemin);
+    else Object.assign(photo, await photographier(m, racine, chemin));
   }
   return photo;
 }
@@ -271,14 +277,16 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
     const { disque, fs, racines } = await disqueAvec([
       { id: 'evt-printemps', nom: 'Gala du printemps', date: '2031-05-17' },
     ]);
-    // Renommé à la main : ses deux fichiers sous une autre base.
+    // Renommé à la main dans son dossier : ses deux fichiers sous une autre
+    // base.
+    const gala = 'Gala du printemps';
     for (const suffixe of [SUFFIXES.etat, SUFFIXES.journal]) {
-      fs.deposer('documents', `soiree-a${suffixe}`, fs.contenu('documents', `Gala du printemps${suffixe}`));
-      await fs.supprimer(racines.documents, `Gala du printemps${suffixe}`);
+      fs.deposer('documents', `${gala}/soiree-a${suffixe}`, fs.contenu('documents', `${gala}/${gala}${suffixe}`));
+      await fs.supprimer(racines.documents, `${gala}/${gala}${suffixe}`);
     }
     // Sans journal.
     const club = texteRenomme('Club des Merles');
-    fs.deposer('documents', `club${SUFFIXES.etat}`, club);
+    fs.deposer('documents', `club/club${SUFFIXES.etat}`, club);
     const m = await monter({ systeme: { disque } });
 
     expect(m.seance.etat().evenement).toBeNull();
@@ -288,15 +296,15 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
     expect(visible(version)).toBe(true);
 
     expect(lignes(m).length).toBe(2);
-    const gala = ligneDe(m, 'soiree-a');
-    const lue = analyser(m.fs.contenu('documents', `soiree-a${SUFFIXES.etat}`));
-    expect(colonne(gala, 'nom')).toBe(lue.charge.evenement.nom);
-    expect(colonne(gala, 'nom')).toBe('Gala du printemps');
-    expect(colonne(gala, 'date')).toBe(format.date('2031-05-17'));
-    expect(etatDe(gala)).toBe(t('accueil.etat.brouillon'));
-    expect(colonne(gala, 'participants')).toBe(format.nombre(lue.entete.comptes.participants));
-    expect(colonne(gala, 'modification')).toBe(format.horodatage(HORODATAGE_DEPOT));
-    expect(colonne(gala, 'chemin')).toBe(`${DOCUMENTS}\\soiree-a${SUFFIXES.etat}`);
+    const ligneGala = ligneDe(m, 'soiree-a', gala);
+    const lue = analyser(m.fs.contenu('documents', `${gala}/soiree-a${SUFFIXES.etat}`));
+    expect(colonne(ligneGala, 'nom')).toBe(lue.charge.evenement.nom);
+    expect(colonne(ligneGala, 'nom')).toBe('Gala du printemps');
+    expect(colonne(ligneGala, 'date')).toBe(format.date('2031-05-17'));
+    expect(etatDe(ligneGala)).toBe(t('accueil.etat.brouillon'));
+    expect(colonne(ligneGala, 'participants')).toBe(format.nombre(lue.entete.comptes.participants));
+    expect(colonne(ligneGala, 'modification')).toBe(format.horodatage(HORODATAGE_DEPOT));
+    expect(colonne(ligneGala, 'chemin')).toBe(`${DOCUMENTS}\\${gala}\\soiree-a${SUFFIXES.etat}`);
 
     const ligneClub = ligneDe(m, 'club');
     const lu = analyser(club);
@@ -305,7 +313,7 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
     expect(colonne(ligneClub, 'participants')).toBe(format.nombre(lu.entete.comptes.participants));
     expect(Number(lu.entete.comptes.participants)).toBeGreaterThan(0);
     expect(colonne(ligneClub, 'modification')).toBe('\u{2014}');
-    expect(colonne(ligneClub, 'chemin')).toBe(`${DOCUMENTS}\\club${SUFFIXES.etat}`);
+    expect(colonne(ligneClub, 'chemin')).toBe(`${DOCUMENTS}\\club\\club${SUFFIXES.etat}`);
     // Le nom de chaque ligne se voit ; sous la largeur où le tableau tient,
     // le reste de la ligne défile dans le conteneur du tableau.
     for (const ligne of lignes(m)) expect(visible(ligne.querySelector('[data-colonne="nom"]'))).toBe(true);
@@ -346,7 +354,7 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
   });
 
   test('trois issues toujours offertes : devant une liste non vide, la création et les démonstrations restent atteignables', async () => {
-    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const m = await monter({ fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     expect(lignes(m).length).toBe(1);
     expect(atteint(dans(m, '[data-commande="creer"]'))).toBe(true);
     const entrees = tous(m, '[data-demonstration]');
@@ -360,18 +368,18 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
 
 describe('créer et ouvrir', () => {
   test('créer « Soirée d’essai » : le journal avant l’état, une entrée et le jalon « Création » ; ouvert en lecture ; la liste compte une ligne de plus', async () => {
-    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const m = await monter({ fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     const avant = ecritures(m);
     await creerParLeFormulaire(m, 'Soirée d\u{2019}essai');
     const ouvert = await attendreEvenement(m);
     expect(ouvert.nom).toBe('Soirée d\u{2019}essai');
     expect(m.seance.etat().mode).toBe('lecture');
     const ecrits = m.trace.slice(avant).map(([, , chemin]) => chemin);
-    const journal = ecrits.indexOf(`${ouvert.base}${SUFFIXES.journal}`);
-    const etat = ecrits.indexOf(`${ouvert.base}${SUFFIXES.etat}`);
+    const journal = ecrits.indexOf(`${ouvert.cle}${SUFFIXES.journal}`);
+    const etat = ecrits.indexOf(`${ouvert.cle}${SUFFIXES.etat}`);
     expect(journal).toBeGreaterThanOrEqual(0);
     expect(etat).toBeGreaterThan(journal);
-    const lu = lireJournal(m.fs.contenu('documents', `${ouvert.base}${SUFFIXES.journal}`));
+    const lu = lireJournal(m.fs.contenu('documents', `${ouvert.cle}${SUFFIXES.journal}`));
     expect(lu.entrees.length).toBe(1);
     expect(lu.jalons.map(({ nom }) => nom)).toEqual([libelle('JALON_CREATION')]);
     await revenirALaListe(m, 2);
@@ -418,17 +426,17 @@ describe('créer et ouvrir', () => {
     const confirmer = vi.spyOn(window, 'confirm');
     const m = await monter({
       fichiers: [
-        fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles')),
-        fichier(`club${SUFFIXES.etat}`, texteNeuf({ id: 'evt-merles', nom: 'Club des Merles' })),
+        fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles')),
+        fichier(`club/club${SUFFIXES.etat}`, texteNeuf({ id: 'evt-merles', nom: 'Club des Merles' })),
       ],
     });
     await ouvrirLigne(m, 'bal');
     await attendreEvenement(m, ({ base }) => base === 'bal');
     await m.seance.passerEnEcriture();
-    expect(m.fs.contenu('documents', `bal${SUFFIXES.verrou}`)).not.toBeNull();
+    expect(m.fs.contenu('documents', `bal/bal${SUFFIXES.verrou}`)).not.toBeNull();
     await revenirALaListe(m, 2);
     aucuneFenetre();
-    expect(m.fs.contenu('documents', `bal${SUFFIXES.verrou}`)).toBeNull();
+    expect(m.fs.contenu('documents', `bal/bal${SUFFIXES.verrou}`)).toBeNull();
     await ouvrirLigne(m, 'club');
     await attendreEvenement(m, ({ base }) => base === 'club');
     expect(m.seance.etat().mode).toBe('lecture');
@@ -436,7 +444,7 @@ describe('créer et ouvrir', () => {
   });
 
   test('ouvrir et lister n’écrivent rien : le relevé n’a rien gagné depuis le montage', async () => {
-    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const m = await monter({ fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     const avant = ecritures(m);
     expect(lignes(m).length).toBe(1);
     await ouvrirLigne(m, 'bal');
@@ -469,7 +477,7 @@ describe('créer et ouvrir', () => {
     const copie = await attendreEvenement(m, ({ nom }) => nom === 'Bal des Grisailles, variante');
     expect(m.seance.etat().mode).toBe('lecture');
     for (const { base } of [cree, demonstration, copie]) {
-      const texte = m.fs.contenu('documents', `${base}${SUFFIXES.etat}`);
+      const texte = m.fs.contenu('documents', `${base}/${base}${SUFFIXES.etat}`);
       expect(texte, base).not.toBeNull();
       expect(texte).not.toMatch(/"mode"|lecture|ecriture/);
     }
@@ -481,27 +489,27 @@ describe('créer et ouvrir', () => {
 describe('signalements et récupération (§ 8.1, § 8.8)', () => {
   test('un état vide, un journal seul, deux états de même identifiant ; réglages, corbeille et PDF : quatre lignes signalées, de trois sortes', async () => {
     const { disque, fs, racines } = await disqueAvec([{ id: 'evt-hiboux', nom: 'Soirée des Hiboux' }]);
-    await fs.supprimer(racines.documents, `Soirée des Hiboux${SUFFIXES.etat}`);
+    await fs.supprimer(racines.documents, `Soirée des Hiboux/Soirée des Hiboux${SUFFIXES.etat}`);
     const merles = texteNeuf({ id: 'evt-merles', nom: 'Club des Merles' });
     const m = await monter({
       systeme: { disque },
       fichiers: [
-        fichier(`Soirée vide${SUFFIXES.etat}`, ''),
-        fichier(`Merles A${SUFFIXES.etat}`, merles),
-        fichier(`Merles B${SUFFIXES.etat}`, merles),
+        fichier(`Soirée vide/Soirée vide${SUFFIXES.etat}`, ''),
+        fichier(`Merles A/Merles A${SUFFIXES.etat}`, merles),
+        fichier(`Merles B/Merles B${SUFFIXES.etat}`, merles),
         fichier('reglages_locaux.json', '{}'),
         fichier(`corbeille/2031-01-01_00-00-00/Ancienne${SUFFIXES.etat}`, merles),
         fichier('planche.pdf', '%PDF'),
       ],
     });
     expect(lignes(m).map((l) => l.dataset.evenement).sort()).toEqual([
-      'Merles A',
-      'Merles B',
-      'Soirée des Hiboux',
-      'Soirée vide',
+      'Merles A/Merles A',
+      'Merles B/Merles B',
+      'Soirée des Hiboux/Soirée des Hiboux',
+      'Soirée vide/Soirée vide',
     ]);
     const signalements = (base) => [...ligneDe(m, base).querySelectorAll('[data-signalement]')];
-    for (const ligne of lignes(m)) expect(signalements(ligne.dataset.evenement).length).toBe(1);
+    for (const ligne of lignes(m)) expect(ligne.querySelectorAll('[data-signalement]').length).toBe(1);
     const vide = signalements('Soirée vide')[0];
     expect(vide.dataset.signalement).toBe('ETAT_ILLISIBLE');
     expect(vide.textContent).toContain(t('ETAT_ILLISIBLE', { base: 'Soirée vide', raison: 'VIDE', chemin: null, secours: { precedent: null, journal: null } }));
@@ -511,11 +519,11 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
     const a = signalements('Merles A')[0];
     const b = signalements('Merles B')[0];
     expect(a.dataset.signalement).toBe('accueil.signalement.doublon');
-    // Chaque doublon nomme l'autre base dans son propre nœud de texte, à part
-    // de la phrase traduite.
+    // Chaque doublon nomme la clé de l'autre ligne — son dossier et sa base —
+    // dans son propre nœud de texte, à part de la phrase traduite.
     for (const [element, autre] of [
-      [a, 'Merles B'],
-      [b, 'Merles A'],
+      [a, 'Merles B/Merles B'],
+      [b, 'Merles A/Merles A'],
     ]) {
       expect(element.textContent).toContain(t('accueil.signalement.doublon', { autres: 1 }));
       const doublon = element.querySelector(`[data-doublon="${CSS.escape(autre)}"]`);
@@ -534,9 +542,9 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
   test('récupération : un état tronqué, .precedent et journal lisibles → un panneau nomme le fichier et la raison, offre le .precedent puis le journal, sans écrire ; .precedent ouvre en lecture ; le premier geste réécrit l’état', async () => {
     const { disque, fs } = await disqueAvec([{ id: 'evt-lucioles', nom: 'Nuit des Lucioles' }]);
     const base = 'Nuit des Lucioles';
-    const sain = fs.contenu('documents', `${base}${SUFFIXES.etat}`);
-    fs.deposer('documents', `${base}${SUFFIXES.precedent}`, sain);
-    fs.deposer('documents', `${base}${SUFFIXES.etat}`, sain.slice(0, Math.floor(sain.length / 2)));
+    const sain = fs.contenu('documents', `${base}/${base}${SUFFIXES.etat}`);
+    fs.deposer('documents', `${base}/${base}${SUFFIXES.precedent}`, sain);
+    fs.deposer('documents', `${base}/${base}${SUFFIXES.etat}`, sain.slice(0, Math.floor(sain.length / 2)));
     const m = await monter({ systeme: { disque } });
     const avant = ecritures(m);
     await ouvrirLigne(m, base);
@@ -546,7 +554,7 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
       return element;
     });
     expect(visible(panneau)).toBe(true);
-    expect(panneau.textContent).toContain(`${DOCUMENTS}\\${base}${SUFFIXES.etat}`);
+    expect(panneau.textContent).toContain(`${DOCUMENTS}\\${base}\\${base}${SUFFIXES.etat}`);
     const raison = panneau.querySelector('[data-refus="ETAT_ILLISIBLE"]');
     expect(raison).not.toBeNull();
     expect(raison.textContent).toContain(base);
@@ -563,12 +571,12 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
 
     await m.seance.passerEnEcriture();
     await m.seance.executer('ajouterParticipant', { champs: { nom: 'Pervenche' } });
-    const reecrit = analyser(m.fs.contenu('documents', `${base}${SUFFIXES.etat}`));
+    const reecrit = analyser(m.fs.contenu('documents', `${base}/${base}${SUFFIXES.etat}`));
     expect(reecrit.charge.participants.some(({ nom }) => nom === 'Pervenche')).toBe(true);
   });
 
   test('sans aucun secours lisible : un message, aucune commande d’ouverture, et aucun événement n’est créé', async () => {
-    const m = await monter({ fichiers: [fichier(`Soirée vide${SUFFIXES.etat}`, '')] });
+    const m = await monter({ fichiers: [fichier(`Soirée vide/Soirée vide${SUFFIXES.etat}`, '')] });
     const cles = [...m.disque.keys()].sort();
     const avant = ecritures(m);
     await ouvrirLigne(m, 'Soirée vide');
@@ -593,7 +601,7 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
 describe('le dossier de travail (§ 8.5, § 8.6)', () => {
   test('réglages locaux illisibles : l’avis REGLAGES_ILLISIBLES visible, la liste utilisable', async () => {
     const m = await monter({
-      fichiers: [fichier('reglages_locaux.json', 'pas du JSON'), fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))],
+      fichiers: [fichier('reglages_locaux.json', 'pas du JSON'), fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))],
     });
     const avis = dans(m, '[data-avertissement="REGLAGES_ILLISIBLES"]');
     expect(avis).not.toBeNull();
@@ -616,7 +624,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
   });
 
   test('la règle ne s’applique qu’une fois : ouvrir, fermer, revenir à la liste n’ajoutent aucune sonde', async () => {
-    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const m = await monter({ fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     const avant = sondes(m);
     expect(avant).toBe(1);
     await ouvrirLigne(m, 'bal');
@@ -635,7 +643,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
   ];
   for (const [code, systeme, details] of REPLIS) {
     test(`repli en Documents, ${code} : un avis non modal, une fois, la liste utilisable dessous`, async () => {
-      const m = await monter({ systeme, fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+      const m = await monter({ systeme, fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
       const avis = tous(m, `[data-avertissement="${code}"]`);
       expect(avis.length).toBe(1);
       expect(visible(avis[0])).toBe(true);
@@ -679,8 +687,8 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     const m = await monter({
       systeme: { executable: PUBLIE, sonde: { portable: 'EACCES' } },
       fichiers: [
-        fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'), 'portable'),
-        fichier(`club${SUFFIXES.etat}`, texteNeuf({ id: 'evt-merles', nom: 'Club des Merles' }), 'portable'),
+        fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'), 'portable'),
+        fichier(`club/club${SUFFIXES.etat}`, texteNeuf({ id: 'evt-merles', nom: 'Club des Merles' }), 'portable'),
       ],
     });
     const question = dans(m, '[data-question="PORTABLE_NON_INSCRIPTIBLE"]');
@@ -704,7 +712,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
   test('non publié, Documents non inscriptibles : la question avant toute liste ; « Réessayer », la panne tenant, la repose', async () => {
     const m = await monter({
       systeme: { sonde: { documents: 'EROFS' } },
-      fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))],
+      fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))],
     });
     const question = dans(m, '[data-question="DOCUMENTS_NON_INSCRIPTIBLE"]');
     expect(visible(question)).toBe(true);
@@ -789,21 +797,21 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     const copie = await attendreEvenement(m, ({ nom }) => nom === 'Bal des Grisailles, variante');
     await revenirALaListe(m, 2);
     const racines = await m.fs.racines();
-    const source = await ouvrirDansLeDepot(m.fs, racines.documents, 'Bal des Grisailles');
+    const source = await ouvrirDansLeDepot(m.fs, racines.documents, 'Bal des Grisailles/Bal des Grisailles');
     const attendu = libelle('ENTREE_COPIE', {
       source: 'Bal des Grisailles',
       instant: libelleDeLInstant(source, libelle('ENTREE_REPRISE')),
     });
-    const journal = lireJournal(m.fs.contenu('documents', `${copie.base}${SUFFIXES.journal}`));
+    const journal = lireJournal(m.fs.contenu('documents', `${copie.cle}${SUFFIXES.journal}`));
     expect(journal.entrees.map(({ libelle: texte }) => texte)).toEqual([attendu]);
-    expect(analyser(m.fs.contenu('documents', `${copie.base}${SUFFIXES.etat}`)).charge.evenement.etat).not.toBe('bloque');
+    expect(analyser(m.fs.contenu('documents', `${copie.cle}${SUFFIXES.etat}`)).charge.evenement.etat).not.toBe('bloque');
     expect(etatDe(ligneDe(m, copie.base))).not.toBe(t('accueil.etat.bloque'));
     const apres = await photographier(m, 'documents');
     for (const [chemin, texte] of Object.entries(original)) expect(apres[chemin]).toBe(texte);
   });
 
   test('copier sous un nom vide : refusé contre le champ, aucune copie, aucun « (copie) »', async () => {
-    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const m = await monter({ fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     const avant = ecritures(m);
     const ligne = ligneDe(m, 'bal');
     await cliquer(ligne.querySelector('[data-commande="copier"]'));
@@ -828,8 +836,8 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     expect(lignes(m).length).toBe(1);
     const renomme = ligneDe(m, 'Gala des Ombrelles');
     expect(colonne(renomme, 'nom')).toBe('Gala des Ombrelles');
-    expect(colonne(renomme, 'chemin')).toBe(`${DOCUMENTS}\\Gala des Ombrelles${SUFFIXES.etat}`);
-    expect(m.fs.contenu('documents', `Gala des Pervenches${SUFFIXES.verrou}`)).toBeNull();
+    expect(colonne(renomme, 'chemin')).toBe(`${DOCUMENTS}\\Gala des Ombrelles\\Gala des Ombrelles${SUFFIXES.etat}`);
+    expect(m.fs.contenu('documents', `Gala des Pervenches/Gala des Pervenches${SUFFIXES.verrou}`)).toBeNull();
   });
 
   // Coupe le processus du montage juste après l'écriture réussie de chemin.
@@ -859,12 +867,15 @@ describe('les opérations de fichiers (§ 8.7)', () => {
   }
 
   test('renommer coupé après le nouvel état : à la réouverture, deux lignes signalées doublons l’une de l’autre', async () => {
-    const rouvert = await renommerCoupe(`Gala des Ombrelles${SUFFIXES.etat}`);
-    expect(lignes(rouvert).map((l) => l.dataset.evenement).sort()).toEqual(['Gala des Ombrelles', 'Gala des Pervenches']);
+    const rouvert = await renommerCoupe(`Gala des Ombrelles/Gala des Ombrelles${SUFFIXES.etat}`);
+    expect(lignes(rouvert).map((l) => l.dataset.evenement).sort()).toEqual([
+      'Gala des Ombrelles/Gala des Ombrelles',
+      'Gala des Pervenches/Gala des Pervenches',
+    ]);
     const signalement = (base) => ligneDe(rouvert, base).querySelector('[data-signalement="accueil.signalement.doublon"]');
     for (const [base, autre] of [
-      ['Gala des Ombrelles', 'Gala des Pervenches'],
-      ['Gala des Pervenches', 'Gala des Ombrelles'],
+      ['Gala des Ombrelles', 'Gala des Pervenches/Gala des Pervenches'],
+      ['Gala des Pervenches', 'Gala des Ombrelles/Gala des Ombrelles'],
     ]) {
       expect(signalement(base).textContent).toContain(t('accueil.signalement.doublon', { autres: 1 }));
       expect(noeudsDeTexte(signalement(base)).filter((texte) => texte.includes('Gala'))).toEqual([autre]);
@@ -876,8 +887,8 @@ describe('les opérations de fichiers (§ 8.7)', () => {
   });
 
   test('renommer coupé après le seul nouveau journal : à la réouverture, une ligne, l’ancienne', async () => {
-    const rouvert = await renommerCoupe(`Gala des Ombrelles${SUFFIXES.journal}`);
-    expect(lignes(rouvert).map((l) => l.dataset.evenement)).toEqual(['Gala des Pervenches']);
+    const rouvert = await renommerCoupe(`Gala des Ombrelles/Gala des Ombrelles${SUFFIXES.journal}`);
+    expect(lignes(rouvert).map((l) => l.dataset.evenement)).toEqual(['Gala des Pervenches/Gala des Pervenches']);
     expect(ligneDe(rouvert, 'Gala des Pervenches').querySelectorAll('[data-signalement]').length).toBe(0);
   });
 
@@ -895,8 +906,10 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     expect(commande.textContent.toLowerCase()).not.toContain('participants');
     await cliquer(commande);
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
-    const base = lignes(m)[0].dataset.evenement;
-    expect([...m.fs.octets('documents', `${base}${SUFFIXES.etat}`)]).toEqual([...octets]);
+    // La clé de la ligne, suivie du suffixe, est le chemin de l'état.
+    const cle = lignes(m)[0].dataset.evenement;
+    const [, base] = cle.split('/');
+    expect([...m.fs.octets('documents', `${cle}${SUFFIXES.etat}`)]).toEqual([...octets]);
     await cliquer(dans(m, '[data-commande="importer"]'));
     const refus = await vi.waitFor(() => {
       const element = dans(m, '[data-refus="IDENTIFIANT_PRESENT"]');
@@ -911,7 +924,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
   test('supprimer : à confirmer en place ; la ligne part, la corbeille montre son dossier daté et ses fichiers, à côté de ceux qu’elle portait', async () => {
     const m = await monter({
       fichiers: [
-        fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles')),
+        fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles')),
         fichier(`${ANCIEN_DOSSIER}/Ancienne${SUFFIXES.etat}`, texteNeuf({ id: 'evt-cerfs', nom: 'Soirée des Cerfs' })),
         fichier(`${ANCIEN_DOSSIER}/Ancienne${SUFFIXES.journal}`, ''),
       ],
@@ -951,7 +964,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
   test('une corbeille déjà présente au lancement se montre, et encore après un aller-retour vers un événement', async () => {
     const m = await monter({
       fichiers: [
-        fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles')),
+        fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles')),
         fichier(`${ANCIEN_DOSSIER}/Ancienne${SUFFIXES.etat}`, texteNeuf({ id: 'evt-cerfs', nom: 'Soirée des Cerfs' })),
       ],
     });
@@ -970,9 +983,9 @@ describe('les opérations de fichiers (§ 8.7)', () => {
   });
 
   test('supprimer un événement qu’une séance vivante tient en écriture : refusé, la séance nommée, fichiers en place', async () => {
-    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const m = await monter({ fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     const second = await monter({ systeme: { disque: m.disque } });
-    await second.seance.ouvrir('bal');
+    await second.seance.ouvrir('bal/bal');
     await second.seance.passerEnEcriture();
     const commande = ligneDe(m, 'bal').querySelector('[data-commande="supprimer"]');
     await cliquer(commande);
@@ -987,12 +1000,12 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     // l'horloge du disque.
     const vivante = t('VERROU_PRIS', { seance: null, depuis: null, vivant: true }).split(' : ')[0];
     expect(refus.textContent).toContain(vivante);
-    expect(m.fs.contenu('documents', `bal${SUFFIXES.etat}`)).not.toBeNull();
+    expect(m.fs.contenu('documents', `bal/bal${SUFFIXES.etat}`)).not.toBeNull();
     expect(lignes(m).length).toBe(1);
   });
 
   test('supprimer un événement passé en écriture, après « Liste des événements » : il part, sans VERROU_PRIS', async () => {
-    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const m = await monter({ fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     await ouvrirLigne(m, 'bal');
     await attendreEvenement(m);
     await m.seance.passerEnEcriture();
@@ -1001,7 +1014,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     await cliquer(ligneDe(m, 'bal').querySelector('[data-commande="supprimer"]'));
     await vi.waitFor(() => expect(lignes(m).length).toBe(0));
     expect(dans(m, '[data-refus="VERROU_PRIS"]')).toBeNull();
-    expect(m.fs.contenu('documents', `bal${SUFFIXES.etat}`)).toBeNull();
+    expect(m.fs.contenu('documents', `bal/bal${SUFFIXES.etat}`)).toBeNull();
   });
 });
 
@@ -1094,7 +1107,7 @@ describe('un geste en cours ne se relance pas (§ 8.7, § 15)', () => {
   });
 
   test('copier : une seconde validation pendant l’écriture ne fait pas de seconde copie', async () => {
-    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const m = await monter({ fichiers: [fichier(`bal/bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     const ligne = ligneDe(m, 'bal');
     await cliquer(ligne.querySelector('[data-commande="copier"]'));
     saisir(ligne.querySelector('[data-champ="nomCopie"]'), 'Bal des Grisailles, variante');
@@ -1158,9 +1171,10 @@ describe('la racine neutre et la liste qui défile (§ 18.6, § 19.4)', () => {
   });
 
   test('deux cents événements, la liste défilée jusqu’en bas : le bandeau reste dans la fenêtre, son centre l’atteint', async () => {
-    const fichiers = Array.from({ length: 200 }, (_, rang) =>
-      fichier(`soiree-${String(rang).padStart(3, '0')}${SUFFIXES.etat}`, texteNeuf({ id: `evt-${rang}`, nom: `Soirée des Cerfs ${rang}` })),
-    );
+    const fichiers = Array.from({ length: 200 }, (_, rang) => {
+      const base = `soiree-${String(rang).padStart(3, '0')}`;
+      return fichier(`${base}/${base}${SUFFIXES.etat}`, texteNeuf({ id: `evt-${rang}`, nom: `Soirée des Cerfs ${rang}` }));
+    });
     const m = await monter({ fichiers });
     expect(lignes(m).length).toBe(200);
     window.scrollTo(0, document.documentElement.scrollHeight);
@@ -1246,7 +1260,7 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1)', () => {
     expect(mesures.rencontresRepetees.choisies).not.toBe(mesures.collisionsCumulees);
     expect(mesures.collisionsCumulees).not.toBe(Math.abs(1000 - mesures.totalRedondance));
     const m = await monter({
-      fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(charge)), fichier(`club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
+      fichiers: [fichier(`retenue/retenue${SUFFIXES.etat}`, etat(charge)), fichier(`club/club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
     });
     await vi.waitFor(() => expect(lignes(m).length).toBe(2));
     await chargerResumes(m);
@@ -1278,7 +1292,7 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1)', () => {
   });
 
   test('chaque intitulé s’explique : le survol puis le focus ouvrent son infobulle, Échap et la sortie la ferment', async () => {
-    const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(chargeRetenue()))] });
+    const m = await monter({ fichiers: [fichier(`retenue/retenue${SUFFIXES.etat}`, etat(chargeRetenue()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await eprouverTermes(accueil(m), [
       ['collisionsCumulees', 'accueil.explication.collisionsCumulees'],
@@ -1290,7 +1304,7 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1)', () => {
     const charge = chargeRetenue();
     const lu = JSON.parse(etat(charge));
     lu.charge.reglages.cibleRedondance = 25;
-    const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, `${JSON.stringify(lu, null, 2)}\n`)] });
+    const m = await monter({ fichiers: [fichier(`retenue/retenue${SUFFIXES.etat}`, `${JSON.stringify(lu, null, 2)}\n`)] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await chargerResumes(m);
     const ligne = ligneDe(m, 'retenue');
@@ -1347,7 +1361,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     expect(premiere.statut).toBe('comparable');
     expect(premiere.id).not.toBe(charge.retenu.proposition);
     const m = await monter({
-      fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(charge)), fichier(`club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
+      fichiers: [fichier(`classee/classee${SUFFIXES.etat}`, etat(charge)), fichier(`club/club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
     });
     await vi.waitFor(() => expect(lignes(m).length).toBe(2));
     await chargerResumes(m);
@@ -1373,13 +1387,13 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
   });
 
   test('le titre s’explique : le survol puis le focus ouvrent l’infobulle, Échap et la sortie la ferment', async () => {
-    const m = await monter({ fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
+    const m = await monter({ fichiers: [fichier(`classee/classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await eprouverTermes(accueil(m), [['meilleure', 'accueil.explication.meilleure']]);
   });
 
   test('la ligne écrit ce que le bloc de la génération écrit du même événement, sous les mêmes libellés, et de nouveau au retour', async () => {
-    const m = await monter({ fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
+    const m = await monter({ fichiers: [fichier(`classee/classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await chargerResumes(m);
     const deLaListe = lu(ligneDe(m, 'classee'));
@@ -1408,7 +1422,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     const statuts = evaluer(charge).propositions.map(({ statut }) => statut);
     expect(statuts.length).toBe(3);
     expect(statuts.every((statut) => statut !== 'comparable')).toBe(true);
-    const m = await monter({ fichiers: [fichier(`horsclassement${SUFFIXES.etat}`, etat(charge))] });
+    const m = await monter({ fichiers: [fichier(`horsclassement/horsclassement${SUFFIXES.etat}`, etat(charge))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await chargerResumes(m);
     expect(lu(ligneDe(m, 'horsclassement'))).toEqual({ id: TIRET });
@@ -1424,7 +1438,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
       await fixerCadre(largeur, 700);
       try {
         const bases = ['un', 'deux', 'trois', 'quatre', 'cinq', 'six'];
-        const m = await monter({ fichiers: bases.map((base) => fichier(`${base}${SUFFIXES.etat}`, etat(chargeClassee({ id: `evt-${base}` })))) });
+        const m = await monter({ fichiers: bases.map((base) => fichier(`${base}/${base}${SUFFIXES.etat}`, etat(chargeClassee({ id: `evt-${base}` })))) });
         await vi.waitFor(() => expect(lignes(m).length).toBe(bases.length));
         await chargerResumes(m);
         expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
@@ -1458,12 +1472,13 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
 
 describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', () => {
   // La petite démonstration au conflit inévitable, sous l'identifiant id,
-  // trois propositions du moteur et la deuxième retenue.
-  function chargeResumee(id) {
+  // trois propositions du moteur, cherchées depuis graine, et la deuxième
+  // retenue.
+  function chargeResumee(id, graine = 6) {
     let charge = analyser(texteLivre('petite-conflit')).charge;
     charge.evenement.id = id;
     const configuration = configurationDepuisCharge(charge);
-    const propositions = rechercher(configuration, { graine: 6, nombre: 3, arret: 300 });
+    const propositions = rechercher(configuration, { graine, nombre: 3, arret: 300 });
     charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
     return appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
   }
@@ -1513,14 +1528,14 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
 
   test('la liste paraît avant ses résumés, un signe muet par valeur, une seule annonce ; chaque pas de l’horloge résout une ligne, dans l’ordre, aux valeurs de l’évaluation ; rien d’écrit', async () => {
     const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
-    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}${SUFFIXES.etat}`, etat(charge))) });
+    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}/${base}${SUFFIXES.etat}`, etat(charge))) });
     const avant = ecritures(m);
     // pret résolu : les lignes et leurs informations sont là, chaque valeur
     // de résumé attend, et le reste tant que l'horloge n'avance pas.
-    expect(lignes(m).map((ligne) => ligne.dataset.evenement)).toEqual(['alpha', 'beta']);
+    expect(lignes(m).map(baseDeLigne)).toEqual(['alpha', 'beta']);
     for (const ligne of lignes(m)) {
-      expect(colonne(ligne, 'nom')).toBe(charges[ligne.dataset.evenement].evenement.nom);
-      expect(colonne(ligne, 'participants')).toBe(format.nombre(charges[ligne.dataset.evenement].participants.length));
+      expect(colonne(ligne, 'nom')).toBe(charges[baseDeLigne(ligne)].evenement.nom);
+      expect(colonne(ligne, 'participants')).toBe(format.nombre(charges[baseDeLigne(ligne)].participants.length));
       enAttente(ligne);
     }
     expect(signes(m).length).toBe(6);
@@ -1543,9 +1558,32 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
     expect(ecritures(m)).toBe(avant);
   });
 
+  test('deux dossiers sous une même base, « gala » et sa copie à la main « gala - Copie » : deux lignes, chacune son résumé ; le refus d’ouvrir l’une ne paraît que sous elle', async () => {
+    const COPIE = 'gala - Copie';
+    const charges = { gala: chargeResumee('evt-gala'), [COPIE]: chargeResumee('evt-gala-copie', 9) };
+    expect(attendues(charges[COPIE])).not.toEqual(attendues(charges.gala));
+    const m = await monter({
+      fichiers: Object.entries(charges).map(([dossier, charge]) => fichier(`${dossier}/gala${SUFFIXES.etat}`, etat(charge))),
+    });
+    expect(lignes(m).map((ligne) => ligne.dataset.evenement).sort()).toEqual([`${COPIE}/gala`, 'gala/gala']);
+    await chargerResumes(m);
+    resolue(ligneDe(m, 'gala'), attendues(charges.gala));
+    resolue(ligneDe(m, 'gala', COPIE), attendues(charges[COPIE]));
+
+    const lireTexte = m.fs.lireTexte;
+    m.fs.lireTexte = (racine, chemin) =>
+      chemin === `${COPIE}/gala${SUFFIXES.etat}`
+        ? Promise.reject(new ErreurStockage('LECTURE', { chemin, dossier: DOCUMENTS, cause: 'EIO' }))
+        : lireTexte.call(m.fs, racine, chemin);
+    await cliquer(ligneDe(m, 'gala', COPIE).querySelector('[data-commande="ouvrir"]'));
+    await vi.waitFor(() => expect(ligneDe(m, 'gala', COPIE).querySelector('[data-refus="LECTURE"]')).not.toBeNull());
+    expect(ligneDe(m, 'gala').querySelector('[data-refus]')).toBeNull();
+    expect(m.seance.etat().evenement).toBeNull();
+  });
+
   test('démontée avant le premier pas, l’application arrête le flux des résumés : aucun état ne se relit ensuite', async () => {
     const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
-    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}${SUFFIXES.etat}`, etat(charge))) });
+    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}/${base}${SUFFIXES.etat}`, etat(charge))) });
     expect(signes(m).length).toBe(6);
     const relus = [];
     const lireTexte = m.fs.lireTexte;
@@ -1565,10 +1603,10 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
 
   test('un état qui ne se relit pas pendant le chargement : « — » dans ses trois valeurs, et l’autre ligne résolue', async () => {
     const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
-    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}${SUFFIXES.etat}`, etat(charge))) });
+    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}/${base}${SUFFIXES.etat}`, etat(charge))) });
     const lireTexte = m.fs.lireTexte;
     m.fs.lireTexte = (racine, chemin) =>
-      chemin === `alpha${SUFFIXES.etat}`
+      chemin === `alpha/alpha${SUFFIXES.etat}`
         ? Promise.reject(new ErreurStockage('LECTURE', { chemin, cause: 'EIO' }))
         : lireTexte.call(m.fs, racine, chemin);
     await chargerResumes(m);
@@ -1577,7 +1615,7 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
   });
 
   test('le signe tourne par une animation CSS sans fin ; immobile sous prefers-reduced-motion: reduce, et sous la feuille qui annule les animations', async () => {
-    const m = await monter({ fichiers: [fichier(`alpha${SUFFIXES.etat}`, etat(chargeResumee('evt-alpha')))] });
+    const m = await monter({ fichiers: [fichier(`alpha/alpha${SUFFIXES.etat}`, etat(chargeResumee('evt-alpha')))] });
     const [signe] = signes(m);
     expect(signe).toBeDefined();
     const tourne = () => signe.getAnimations().filter((animation) => animation.playState === 'running');
@@ -1604,7 +1642,7 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
   });
 
   test('le signe se voit : il tient 3:1 sur ce qui l’entoure dans les deux thèmes, sans atténuation', async () => {
-    const m = await monter({ fichiers: [fichier(`alpha${SUFFIXES.etat}`, etat(chargeResumee('evt-alpha')))] });
+    const m = await monter({ fichiers: [fichier(`alpha/alpha${SUFFIXES.etat}`, etat(chargeResumee('evt-alpha')))] });
     // Une ligne qui attend : un signe par valeur de résumé, un tracé par
     // signe.
     const traces = tous(m, '[data-chargement] path');
@@ -1648,14 +1686,14 @@ describe('la liste en tableau : en-tête, tuiles, groupes et cartes (§ 8.1, § 
     ['souper', 'Souper des Hiboux', 'propose'],
   ];
   const fichiersDe = (evenements) =>
-    evenements.map(([base, nom, etatDuPlan]) => fichier(`${base}${SUFFIXES.etat}`, texteDe(`evt-${base}`, nom, etatDuPlan)));
+    evenements.map(([base, nom, etatDuPlan]) => fichier(`${base}/${base}${SUFFIXES.etat}`, texteDe(`evt-${base}`, nom, etatDuPlan)));
   async function monterCinq(options = {}) {
     const m = await monter({ fichiers: fichiersDe(CINQ), ...options });
     await vi.waitFor(() => expect(lignes(m).length).toBe(CINQ.length));
     return m;
   }
 
-  const bases = (m) => lignes(m).map((ligne) => ligne.dataset.evenement);
+  const bases = (m) => lignes(m).map(baseDeLigne);
   // Les tuiles des filtres, dans l'ordre du rendu, et celle d'un filtre.
   const groupeDesTuiles = (m) => dans(m, `[data-ecran="accueil"] [role="group"][aria-label="${t('accueil.filtre.groupe')}"]`);
   const tuiles = (m) => [...groupeDesTuiles(m).querySelectorAll('button[data-commande="filtrer"]')];
@@ -1668,7 +1706,7 @@ describe('la liste en tableau : en-tête, tuiles, groupes et cartes (§ 8.1, § 
   const groupes = (m) =>
     tous(m, '[data-ecran="accueil"] table tbody').map((corps) => {
       const intitule = corps.querySelector('th[scope="rowgroup"]');
-      return [intitule === null ? null : noeudsDeTexte(intitule), [...corps.querySelectorAll('[data-evenement]')].map((l) => l.dataset.evenement)];
+      return [intitule === null ? null : noeudsDeTexte(intitule), [...corps.querySelectorAll('[data-evenement]')].map(baseDeLigne)];
     });
   // Choisit un groupement dans le sélecteur, comme une personne.
   function grouper(m, valeur) {
@@ -1767,7 +1805,7 @@ describe('la liste en tableau : en-tête, tuiles, groupes et cartes (§ 8.1, § 
     expect(presses(m)).toEqual(['false', 'false', 'false', 'false', 'true']);
     expect(dans(m, '[data-champ="groupement"]').value).toBe('aucun');
     expect(ecritures(m)).toBe(ecrites);
-    for (const [base] of CINQ) expect(m.fs.contenu('documents', `${base}${SUFFIXES.etat}`)).not.toMatch(/filtre|groupement/);
+    for (const [base] of CINQ) expect(m.fs.contenu('documents', `${base}/${base}${SUFFIXES.etat}`)).not.toMatch(/filtre|groupement/);
     const autre = await monter({ systeme: { disque: m.disque } });
     await vi.waitFor(() => expect(lignes(autre).length).toBe(CINQ.length));
     expect(presses(autre)).toEqual(['true', 'false', 'false', 'false', 'false']);

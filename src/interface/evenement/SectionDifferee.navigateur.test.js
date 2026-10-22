@@ -62,11 +62,11 @@ async function ouvrir(sectionQualite) {
   const charge = creerCharge({ id: 'evt-differe', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 2 });
   const texte = serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
   const m = await monterApp({
-    fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }],
+    fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }],
     ...(sectionQualite === undefined ? {} : { sectionQualite }),
   });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   flushSync();
   return m;
 }

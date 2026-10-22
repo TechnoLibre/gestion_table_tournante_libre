@@ -119,7 +119,7 @@ import {
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { estFigee, figer } from '../stockage/gel.js';
 import { fil, lignesHistorique, reconstruire } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import {
   FICHIER_REGLAGES,
   avecCadrage,
@@ -392,14 +392,26 @@ export function creerSeance({
     }
   }
 
-  // L'événement de l'état observable : sa base, son identifiant, son nom, son
-  // état, sa révision, et l'annonce du format, 'plusRecent' pour un fichier
-  // d'un format plus récent, null sinon : un format plus ancien ne s'ouvre
-  // pas.
+  // La clé de l'événement d'un Ouvert dans son dossier de travail.
+  const cleDe = ({ dossier, base }) => cleEvenement(dossier, base);
+
+  // L'événement de l'état observable : sa clé (cleEvenement), qui le
+  // désigne dans le dossier de travail, sa base, qui nomme ses fichiers, son
+  // identifiant, son nom, son état, sa révision, et l'annonce du format,
+  // 'plusRecent' pour un fichier d'un format plus récent, null sinon : un
+  // format plus ancien ne s'ouvre pas.
   function evenementDe(ouvert) {
     const { id: idEvenement, nom, etat: etatDuPlan } = ouvert.charge.evenement;
     const annonceFormat = ouvert.formatPlusRecent ? 'plusRecent' : null;
-    return { base: ouvert.base, id: idEvenement, nom, etat: etatDuPlan, revision: ouvert.revision, annonceFormat };
+    return {
+      cle: cleDe(ouvert),
+      base: ouvert.base,
+      id: idEvenement,
+      nom,
+      etat: etatDuPlan,
+      revision: ouvert.revision,
+      annonceFormat,
+    };
   }
 
   // L'état observable, construit à neuf (contrat EtatSeance).
@@ -808,10 +820,11 @@ export function creerSeance({
   // en lecture, comme un format plus récent : LECTURE_SEULE {raison:
   // 'ENCODAGE'} ; l'opérateur l'écarte en ouvrant un secours.
   async function relire(ouvert) {
-    const { fs: systeme, racine: dossier, base, texteEtat } = ouvert;
+    const { systeme, racine: dossier, texteEtat } = ouvert;
+    const cle = cleDe(ouvert);
     if (etat.source === null) {
       try {
-        return { frais: await ouvrirSurDisque(systeme, dossier, base), source: null };
+        return { frais: await ouvrirSurDisque(systeme, dossier, cle), source: null };
       } catch (erreur) {
         const illisible = erreur instanceof ErreurStockage && erreur.code === 'ETAT_ILLISIBLE';
         if (illisible && erreur.details.raison === 'ENCODAGE') throw refusEncodage();
@@ -819,15 +832,15 @@ export function creerSeance({
       }
     }
     try {
-      const parEtat = await ouvrirSurDisque(systeme, dossier, base);
+      const parEtat = await ouvrirSurDisque(systeme, dossier, cle);
       if (parEtat.texteEtat !== texteEtat) return { frais: parEtat, source: null };
     } catch (erreur) {
       if (!(erreur instanceof ErreurStockage && erreur.code === 'ETAT_ILLISIBLE')) throw erreur;
     }
-    const parSource = await ouvrirSecoursSurDisque(systeme, dossier, base, etat.source);
+    const parSource = await ouvrirSecoursSurDisque(systeme, dossier, cle, etat.source);
     const derniere = derniereEntree(parSource);
     if (etat.source === 'precedent' && derniere !== null && derniere !== derniereEntree(ouvert)) {
-      return { frais: await ouvrirSecoursSurDisque(systeme, dossier, base, 'journal'), source: 'journal' };
+      return { frais: await ouvrirSecoursSurDisque(systeme, dossier, cle, 'journal'), source: 'journal' };
     }
     return { frais: parSource, source: etat.source };
   }
@@ -1227,7 +1240,7 @@ export function creerSeance({
     etat.source = source;
     etat.fautives = ouvert.examen.fautives;
     etat.cadrage = await cadrageMemorise(ouvert);
-    return { base: ouvert.base, avertissements: ouvert.avertissements };
+    return { cle: cleDe(ouvert), base: ouvert.base, avertissements: ouvert.avertissements };
   }
 
   // Crée l'événement de ces champs (§ 2.1, étape 1) : la charge neuve
@@ -1253,7 +1266,7 @@ export function creerSeance({
       if (erreur instanceof ErreurStockage && erreur.code === 'ETAT_NON_ECRIT') await rompre(erreur, erreur.details.ouvert);
       throw erreur;
     }
-    return { base: etat.ouvert.base };
+    return { cle: cleDe(etat.ouvert), base: etat.ouvert.base };
   }
 
   // --- Les modes (§ 8.4, § 8.8) -------------------------------------------------------
@@ -1380,7 +1393,11 @@ export function creerSeance({
     const nouvelle = designee ?? (await fs.choisirDossier());
     if (nouvelle === null) return null;
     const present = await dejaPresent(nouvelle, ouvert.charge.evenement.id);
-    if (present !== null) throw new ErreurStockage('IDENTIFIANT_PRESENT', { id: present.id, base: present.base });
+    if (present !== null) throw new ErreurStockage('IDENTIFIANT_PRESENT', {
+        id: present.id,
+        base: present.base,
+        dossier: present.dossier,
+      });
     const options = { existantes: [], libelleReprise, horodatage: horloge.horodatage() };
     let ailleurs;
     try {
@@ -1425,7 +1442,7 @@ export function creerSeance({
     }
     etat.avertissementsGeste = avertissements;
     armer();
-    return { base: ailleurs.base, avertissements };
+    return { cle: cleDe(ailleurs), base: ailleurs.base, avertissements };
   }
 
   // Le type du support de la racine (§ 8.8) ; 'inconnu' pour toute faute du
@@ -1470,11 +1487,13 @@ export function creerSeance({
   // Ce que la planche lit de l'événement ouvert, à son tour dans la file des
   // appels, une fois faites les écritures de réglages déjà demandées : le
   // papier, le modèle de badge et la case du pied TechnoLibre qu'un choix
-  // vient de poser comptent. AUCUN_EVENEMENT sans événement.
+  // vient de poser comptent. AUCUN_EVENEMENT sans événement. Le système de
+  // fichiers est celui de la séance, la racine celle de l'événement : la
+  // planche se pose à la racine, à côté du dossier de l'événement.
   async function lecturePlanche() {
     exigerOuvert();
     await fileReglages;
-    const { charge, base, fs: systeme, racine: dossier } = exigerOuvert();
+    const { charge, base, systeme, racine: dossier } = exigerOuvert();
     return {
       charge,
       base,
@@ -1697,11 +1716,12 @@ export function creerSeance({
       return ecrirePapier(etat.racine, papier);
     },
 
+    // cle : celle de l'événement dans le dossier de travail (cleEvenement).
     // quitter.abandonner : vrai pour quitter l'événement d'un support rompu
     // (exigerSauve).
-    ouvrir: (base, quitter) => enFile(() => ouvrirAvec(() => ouvrirSurDisque(fs, etat.racine, base), null, quitter)),
-    ouvrirSecours: (base, source, quitter) =>
-      enFile(() => ouvrirAvec(() => ouvrirSecoursSurDisque(fs, etat.racine, base, source), source, quitter)),
+    ouvrir: (cle, quitter) => enFile(() => ouvrirAvec(() => ouvrirSurDisque(fs, etat.racine, cle), null, quitter)),
+    ouvrirSecours: (cle, source, quitter) =>
+      enFile(() => ouvrirAvec(() => ouvrirSecoursSurDisque(fs, etat.racine, cle, source), source, quitter)),
     creer: (champs, quitter) => enFile(() => creerEvenement(champs, quitter)),
     fermer: (quitter) =>
       enFile(async () => {

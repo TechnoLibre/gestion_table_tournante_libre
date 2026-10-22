@@ -46,8 +46,8 @@
 
   // Le geste de chaque saisie, par la façade.
   const GESTES = {
-    copier: (nom) => facade.copier(ligne.base, { nom }),
-    renommer: (nom) => facade.renommer(ligne.base, { nom }),
+    copier: (nom) => facade.copier(ligne.cle, { nom }),
+    renommer: (nom) => facade.renommer(ligne.cle, { nom }),
   };
 
   async function valider(evenement) {
@@ -70,7 +70,7 @@
   }
 
   async function supprimer() {
-    await surLaListe(() => facade.supprimer(ligne.base));
+    await surLaListe(() => facade.supprimer(ligne.cle));
     apresOperation();
   }
 </script>

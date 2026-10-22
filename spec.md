@@ -2726,9 +2726,10 @@ coordonnées dans une unité arbitraire, que rien ne distingue des nouvelles.
 
 ### 8.1 Un événement, un fichier, une liste
 
-Chaque événement vit dans **son propre fichier d'état**, complet et autonome. Ce
-fichier seul suffit à rouvrir, imprimer et transmettre ; l'historique vit à côté
-et n'est jamais nécessaire pour ouvrir.
+Chaque événement vit dans **son propre fichier d'état**, complet et autonome, et
+dans **son propre dossier**, sous le dossier de travail (§ 8.6). Ce fichier seul
+suffit à rouvrir, imprimer et transmettre ; l'historique vit à côté et n'est
+jamais nécessaire pour ouvrir.
 
 **Ce que le fichier porte :**
 
@@ -2761,6 +2762,10 @@ autre. Seule son impression se refuse (§ 11.7).
 
 Le logiciel ouvre sur une **liste des événements**, avec pour chacun le nom, la
 date, l'état, le nombre de participants, la dernière modification et le chemin.
+Le chemin est celui du fichier d'état, dans le dossier de l'événement :
+`<dossier de travail>\<dossier>\<nom>.gtt.json`. Une ligne se désigne par
+son dossier et le nom de ses fichiers — une copie faite à la main d'un dossier
+porte un autre dossier et le même nom de fichiers, et fait une autre ligne.
 La dernière modification est l'horodatage de la dernière entrée du journal
 (§ 8.6), tel que l'horloge de l'application l'a noté (§ 19.4), jamais la date
 du système de fichiers. La liste le lit depuis la fin du journal, sans
@@ -3227,13 +3232,33 @@ a récrits après la sortie ou qu'une séance coupée a laissés. Un exécutable
 portable ne laisse ainsi, hors du dossier de travail, rien qui survive à la
 séance suivante.
 
-**Deux fichiers par événement, et le compagnon des courses :**
+**Un dossier par événement.** Chaque événement a son dossier, directement sous
+le dossier de travail, à côté de la corbeille et du fichier des réglages
+locaux ; le logiciel le nomme du nom de ses fichiers (`<nom>/`) et le crée
+avant d'y écrire quoi que ce soit — une création coupée juste après lui laisse
+un dossier vide, qui ne se liste pas et garde son nom. Le nom d'un événement
+neuf évite le nom de chaque entrée du dossier de travail, dossier ou fichier.
+La liste des événements lit chaque dossier du dossier de travail, hors la
+corbeille ; un dossier sans fichier d'état ni journal ne s'y montre pas, ni un
+dossier dont le système refuse la liste — un dossier système à la racine d'un
+volume —, qui ne fait pas échouer celle des autres ; pour la règle de `data/`
+ci-dessus, un tel dossier peut contenir des événements. **Des fichiers
+d'événement posés à même le dossier de travail**, sans dossier — ceux d'une
+version qui les rangeait ainsi —, **ne se lisent pas** : ni listés, ni ouverts,
+ni importés, ni supprimés, ils restent tels quels. Un état s'apparie à
+son journal **dans son dossier** ; deux états du même identifiant interne,
+dans un dossier ou dans deux, se signalent doublons l'un de l'autre, et un
+journal sans état se tait quand un état lisible d'un dossier porte son
+identifiant.
+
+**Deux fichiers par événement, et le compagnon des courses**, dans son
+dossier :
 
 | fichier | contenu | écriture |
 |---|---|---|
-| `<nom>.gtt.json` | l'état courant, complet | réécrit en entier à chaque entrée |
-| `<nom>.gtt-journal.jsonl` | les entrées d'historique | **ajout en fin**, une ligne par entrée ; réécrit en entier, de façon atomique, après des lignes écartées |
-| `<nom>.gtt-courses.json` | la course de la recherche de chaque proposition (§ 5.10) : ses mouvements évalués et les placements de ses points de relevé | réécrit en entier, de façon atomique, après l'état, **seulement quand les propositions changent** — une génération, un effacement, un retour qui en rend ou en retire — ; jamais à un autre geste |
+| `<nom>/<nom>.gtt.json` | l'état courant, complet | réécrit en entier à chaque entrée |
+| `<nom>/<nom>.gtt-journal.jsonl` | les entrées d'historique | **ajout en fin**, une ligne par entrée ; réécrit en entier, de façon atomique, après des lignes écartées |
+| `<nom>/<nom>.gtt-courses.json` | la course de la recherche de chaque proposition (§ 5.10) : ses mouvements évalués et les placements de ses points de relevé | réécrit en entier, de façon atomique, après l'état, **seulement quand les propositions changent** — une génération, un effacement, un retour qui en rend ou en retire — ; jamais à un autre geste |
 
 Les deux portent **l'identifiant interne de l'événement**, et c'est lui qui les
 apparie — jamais leurs noms.
@@ -3390,9 +3415,9 @@ que pas d'historique.
 
 ### 8.7 Copier, renommer, importer, supprimer
 
-**Copier** produit un nouvel événement avec une identité propre. Le logiciel
-**demande le nom avant de créer** ; sans cela les noms s'empilent en « (copie)
-(copie) ».
+**Copier** produit un nouvel événement avec une identité propre, dans un
+dossier neuf qui porte son nom (§ 8.6). Le logiciel **demande le nom avant de
+créer** ; sans cela les noms s'empilent en « (copie) (copie) ».
 
 **L'historique ne se copie pas.** La copie démarre sur une entrée unique :
 « Créée par copie de ‹nom›, à l'instant ‹libellé› ». Rejouer les entrées de
@@ -3404,10 +3429,15 @@ est conservée comme un fait inscrit dans le fichier.
 contenu. Copier un plan bloqué est le geste même de « le plan distribué reste
 figé, je travaille sur une variante ».
 
-**Renommer** change les **deux** fichiers : le logiciel écrit d'abord la paire
-complète sous les nouveaux noms, puis supprime l'ancienne — jamais l'inverse.
-Une panne laisse alors deux paires, ce qui se voit et se répare, au lieu
-d'aucune.
+**Renommer** change le dossier et les **deux** fichiers : le logiciel écrit
+d'abord la paire complète sous les nouveaux noms, dans un dossier neuf qui
+porte le nouveau nom, puis supprime l'ancienne — jamais l'inverse. Une panne
+laisse alors deux paires, ce qui se voit et se répare, au lieu d'aucune ; une
+écriture refusée avant que la nouvelle paire soit complète en efface ce qui
+s'est écrit, et le dossier neuf resté vide. L'ancien dossier reste, sans la
+paire, avec ce qui n'appartient pas à l'événement. Un nom qui ne change que
+par la casse, ou par un caractère que Windows refuse, se réécrit en place :
+le dossier et les fichiers gardent leur nom.
 
 Le compagnon des courses suit : écrit sous le nouveau nom après l'état, supprimé
 avec l'ancienne paire ; quand l'écriture du nouveau est refusée, l'ancien se
@@ -3419,13 +3449,18 @@ quel après l'état, quand il se lit ; l'ouverture le revalide entrée par entr�
 et un refus de l'écrire ne refuse pas l'import. Un **fichier d'état venu
 d'ailleurs** n'en a pas : ses courses ne sont pas connues.
 
-**Importer** un fichier venu d'ailleurs le **copie** dans le dossier de travail.
-Travailler en place écrirait dans un dossier de téléchargements que l'opérateur
-vide régulièrement.
+**Importer** un fichier venu d'ailleurs le **copie** dans le dossier de travail,
+dans un dossier neuf qui porte son nom. Travailler en place écrirait dans un
+dossier de téléchargements que l'opérateur vide régulièrement. **Importer de
+l'autre emplacement** n'y lit que les dossiers d'événement (§ 8.6) : des
+fichiers d'événement posés à même sa racine ne se copient pas.
 
-**Supprimer** déplace tous les fichiers dans une `corbeille/` datée. Le logiciel
-ne la vide jamais de lui-même et affiche ce qu'elle contient : un opérateur qui
-croit avoir supprimé les coordonnées d'une personne les a en réalité déplacées.
+**Supprimer** déplace tous les fichiers de l'événement, de son dossier, dans une
+`corbeille/` datée, à la racine du dossier de travail : le dossier daté porte
+directement les fichiers. Le dossier de l'événement reste, avec ce qui ne lui
+appartient pas. Le logiciel ne vide jamais la corbeille de lui-même et affiche
+ce qu'elle contient : un opérateur qui croit avoir supprimé les coordonnées
+d'une personne les a en réalité déplacées.
 
 ### 8.8 Ce qui résiste à une panne
 
@@ -3464,9 +3499,10 @@ plateforme**.
   illisible un fichier qu'elle n'a pas écrit, ou le réécrirait sans cette
   saisie.
 - **Une seule séance en écriture**, le verrou se prenant **à l'entrée en mode
-  écriture** et non à l'ouverture. Le verrou porte l'instant de sa prise, que la
-  séance lit à l'horloge unique de l'application (§ 19.4), comme toute date
-  qu'elle écrit.
+  écriture** et non à l'ouverture. Le verrou est un fichier du dossier de
+  l'événement, `<nom>.gtt.verrou`, à côté de son état. Il porte l'instant de sa
+  prise, que la séance lit à l'horloge unique de l'application (§ 19.4), comme
+  toute date qu'elle écrit.
 - **Contrôle de cohérence** : l'en-tête annonce ses comptes, sa révision, sa
   **version de format** et `produit_version` (§ 18.6) ; l'analyse syntaxique
   seule ne distingue pas un fichier complet d'un fichier plausible. Le contrôle

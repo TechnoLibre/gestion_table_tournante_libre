@@ -173,9 +173,9 @@ async function attendre(assertion) {
 // sauf mode 'lecture' —, la section des propositions ouverte.
 async function ouvrir(charge, { mode = 'ecriture' } = {}) {
   const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }] });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }] });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   if (mode === 'ecriture') await m.seance.passerEnEcriture();
   m.ui.allerA('propositions');
   flushSync();
@@ -1823,15 +1823,15 @@ describe('les pages du classement (§ 5.7)', () => {
     const { retenue, ordre } = pagesDEpreuve();
     const texte = serialiser(retenue, { revision: 1, produitVersion: V1 });
     const m = await monterApp({
-      fichiers: [BASE, 'autre-soiree'].map((base) => ({ racine: 'documents', chemin: `${base}${SUFFIXES.etat}`, texte })),
+      fichiers: [BASE, 'autre-soiree'].map((base) => ({ racine: 'documents', chemin: `${base}/${base}${SUFFIXES.etat}`, texte })),
     });
     montes.push(m);
-    await m.seance.ouvrir(BASE);
+    await m.seance.ouvrir(`${BASE}/${BASE}`);
     m.ui.allerA('propositions');
     flushSync();
     commandePage(m, 'haut', 'suivantes').click();
     await exigerPage(m, ordre, 101, 200, 237);
-    await m.seance.ouvrir('autre-soiree');
+    await m.seance.ouvrir('autre-soiree/autre-soiree');
     m.ui.allerA('propositions');
     await exigerPage(m, ordre, 1, 100, 237);
   });
@@ -1840,24 +1840,24 @@ describe('les pages du classement (§ 5.7)', () => {
     const { retenue, ordre } = pagesDEpreuve();
     const texte = serialiser(retenue, { revision: 1, produitVersion: V1 });
     const m = await monterApp({
-      fichiers: [BASE, 'autre-soiree'].map((base) => ({ racine: 'documents', chemin: `${base}${SUFFIXES.etat}`, texte })),
+      fichiers: [BASE, 'autre-soiree'].map((base) => ({ racine: 'documents', chemin: `${base}/${base}${SUFFIXES.etat}`, texte })),
     });
     montes.push(m);
-    await m.seance.ouvrir(BASE);
+    await m.seance.ouvrir(`${BASE}/${BASE}`);
     m.ui.allerA('propositions');
     flushSync();
     commandePage(m, 'haut', 'suivantes').click();
     await exigerPage(m, ordre, 101, 200, 237);
-    await m.seance.ouvrir('autre-soiree');
+    await m.seance.ouvrir('autre-soiree/autre-soiree');
     flushSync();
-    await m.seance.ouvrir(BASE);
+    await m.seance.ouvrir(`${BASE}/${BASE}`);
     m.ui.allerA('propositions');
     await exigerPage(m, ordre, 1, 100, 237);
     commandePage(m, 'haut', 'suivantes').click();
     await exigerPage(m, ordre, 101, 200, 237);
     await m.seance.fermer();
     flushSync();
-    await m.seance.ouvrir(BASE);
+    await m.seance.ouvrir(`${BASE}/${BASE}`);
     m.ui.allerA('propositions');
     await exigerPage(m, ordre, 1, 100, 237);
   });

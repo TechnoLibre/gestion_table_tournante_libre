@@ -363,6 +363,9 @@ const etat = () => m.seance.etat();
 const charge = () => etat().charge;
 const revision = () => etat().evenement.revision;
 const base = () => etat().evenement.base;
+// La clé de l'événement ouvert : suivie d'un suffixe, le chemin d'un de ses
+// fichiers.
+const cle = () => etat().evenement.cle;
 const plat = (texte) => texte.replace(/\s+/g, ' ').trim();
 const texteDe = (element) => plat(element.textContent);
 
@@ -387,15 +390,15 @@ function exigerModeSansCadre(mode) {
 // Le texte de l'état et du journal de l'événement ouvert, et sa révision.
 function fichiers() {
   return {
-    etat: m.fs.contenu('documents', `${base()}${SUFFIXES.etat}`),
-    journal: m.fs.contenu('documents', `${base()}${SUFFIXES.journal}`),
+    etat: m.fs.contenu('documents', `${cle()}${SUFFIXES.etat}`),
+    journal: m.fs.contenu('documents', `${cle()}${SUFFIXES.journal}`),
     revision: revision(),
   };
 }
 
 // Les entrées du journal relu de révision supérieure à r.
 function entreesApres(r) {
-  const texte = m.fs.contenu('documents', `${base()}${SUFFIXES.journal}`);
+  const texte = m.fs.contenu('documents', `${cle()}${SUFFIXES.journal}`);
   return texte === null ? [] : lireJournal(texte).entrees.filter((entree) => entree.revision > r);
 }
 
@@ -1786,7 +1789,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
   // privés des critères qui ne comptent pas, et 11 les nomme.
   test('10a la soirée rouverte, l’ordre réglé : excédent × 1 et tours hors objectif × 3 en un palier, animateurs décochés, mode par défaut', async () => {
     await cliquer('[data-bandeau] [data-commande="liste"]');
-    await cliquer(`[data-evenement="${memoire.base}"] [data-commande="ouvrir"]`);
+    await cliquer(`[data-evenement="${memoire.base}/${memoire.base}"] [data-commande="ouvrir"]`);
     await attendre('la soirée rouverte', () => dans('[data-ecran="evenement"]') && etat().evenement?.base === memoire.base);
     await cliquer('[data-place-fixe] [data-commande="modifier"]');
     await attendre('l’écriture', () => etat().mode === 'ecriture');
@@ -2168,13 +2171,13 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     // Nommer : le nom saisi se pose à la sortie du champ, que l'appui réel
     // sur « Nommer » provoque ; seul « Nommer » écrit, et la révision ne
     // change pas.
-    const avantNom = m.fs.contenu('documents', `${base()}${SUFFIXES.journal}`);
+    const avantNom = m.fs.contenu('documents', `${cle()}${SUFFIXES.journal}`);
     await taper(panneau.querySelector('[data-champ="nomInstant"]'), NOM_INSTANT);
-    expect(m.fs.contenu('documents', `${base()}${SUFFIXES.journal}`)).toBe(avantNom);
+    expect(m.fs.contenu('documents', `${cle()}${SUFFIXES.journal}`)).toBe(avantNom);
     await cliquerPointeur(panneau.querySelector('[data-commande="nommer"]'));
     await attendre('le jalon sur l’instant courant', () => pastilles(ligne(courante), 'jalon').includes(NOM_INSTANT));
     expect(revision()).toBe(courante);
-    expect(lireJournal(m.fs.contenu('documents', `${base()}${SUFFIXES.journal}`)).jalons.at(-1)).toMatchObject({ revision: courante, nom: NOM_INSTANT });
+    expect(lireJournal(m.fs.contenu('documents', `${cle()}${SUFFIXES.journal}`)).jalons.at(-1)).toMatchObject({ revision: courante, nom: NOM_INSTANT });
     document.activeElement?.blur();
     await images(2);
 
@@ -3139,10 +3142,11 @@ async function versLaListe() {
   await attendre('le premier écran', () => dans('[data-ecran="accueil"] [data-dossier-travail]'));
 }
 
-// Rouvre l'événement de base donnée depuis la liste.
+// Rouvre l'événement de base donnée, dans le dossier de cette base, depuis
+// la liste.
 async function rouvrir(baseVisee) {
   await versLaListe();
-  await cliquer(`[data-evenement="${baseVisee}"] [data-commande="ouvrir"]`);
+  await cliquer(`[data-evenement="${baseVisee}/${baseVisee}"] [data-commande="ouvrir"]`);
   await attendre('l’événement rouvert', () => dans('[data-ecran="evenement"]') && etat().evenement?.base === baseVisee);
 }
 
@@ -3152,7 +3156,7 @@ async function chargerDemonstration(cle) {
   await versLaListe();
   const connues = new Set(tous('[data-evenement]').map((element) => element.dataset.evenement));
   await cliquer(`[data-demonstration="${cle}"]`);
-  await attendre(`la démonstration ${cle}`, () => dans('[data-ecran="evenement"]') && etat().evenement !== null && !connues.has(etat().evenement.base));
+  await attendre(`la démonstration ${cle}`, () => dans('[data-ecran="evenement"]') && etat().evenement !== null && !connues.has(etat().evenement.cle));
 }
 
 async function passerEnEcriture() {

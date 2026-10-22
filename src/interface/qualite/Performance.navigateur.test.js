@@ -145,9 +145,9 @@ function executeurQuiDure(horloge, dureeMs, coeurs) {
 // sauf mode 'lecture' — ; options passe à monterApp.
 async function ouvrir(charge, { mode = 'ecriture', ...options } = {}) {
   const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }], ...options });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }], ...options });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   if (mode === 'ecriture') await m.seance.passerEnEcriture();
   return m;
 }
@@ -379,7 +379,7 @@ describe('une proposition rouverte, sa course lue du compagnon (§ 8.6, B23, D53
 
     const seconde = await monterApp({ systeme: { disque: premiere.disque } });
     montes.push(seconde);
-    await seconde.seance.ouvrir(BASE);
+    await seconde.seance.ouvrir(`${BASE}/${BASE}`);
     montrer(seconde, 2);
     const relu = await lireJumeau(seconde);
     expect(relu.colonnes).toEqual(ecrit.colonnes);

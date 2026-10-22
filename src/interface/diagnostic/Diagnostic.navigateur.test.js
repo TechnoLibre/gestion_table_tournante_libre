@@ -115,8 +115,8 @@ async function demonstration(cle) {
 
 // La charge posée en fichier d'état sous base, ouverte en lecture.
 async function ouvrirTexte(texte, base = 'soiree') {
-  const m = await monter({ fichiers: [{ racine: 'documents', chemin: `${base}${SUFFIXES.etat}`, texte }] });
-  await m.seance.ouvrir(base);
+  const m = await monter({ fichiers: [{ racine: 'documents', chemin: `${base}/${base}${SUFFIXES.etat}`, texte }] });
+  await m.seance.ouvrir(`${base}/${base}`);
   flushSync();
   return m;
 }

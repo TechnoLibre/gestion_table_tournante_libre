@@ -44,7 +44,7 @@ import { serialiserCharge } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { analyser, configurationDepuisCharge } from '../stockage/document.js';
 import { lireJournal, reconstruire } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import { derive, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { COMMANDES } from './commandes.js';
@@ -709,8 +709,8 @@ function monterFacade() {
     identifiant,
     produitVersion: V,
     demonstrations: DEMONSTRATIONS,
-    ouvert: () => monte.seance?.ouvert?.base ?? null,
-    ouvrir: (base) => monte.seance.ouvrir(base),
+    ouvert: () => monte.seance?.etat().evenement?.cle ?? null,
+    ouvrir: (cle) => monte.seance.ouvrir(cle),
     fermer: () => monte.seance.fermer(),
     creer: (champs) => monte.seance.creer(champs),
     racine: () => monte.racine,
@@ -730,26 +730,27 @@ function monterFacade() {
   return monte;
 }
 
-// Les fichiers de l'événement base sur le disque : [chemin, texte].
-function fichiersDe(fs, racine, base) {
+// Les fichiers de l'événement de clé cle sur le disque : [chemin, texte] ;
+// la clé suivie d'un suffixe est le chemin d'un de ses fichiers.
+function fichiersDe(fs, racine, cle) {
   return [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal]
-    .map((suffixe) => [base + suffixe, fs.contenu(racine.id, base + suffixe)])
+    .map((suffixe) => [cle + suffixe, fs.contenu(racine.id, cle + suffixe)])
     .filter(([, texte]) => texte !== null);
 }
 
 let departs = null;
 
 // Les deux événements de départ, construits au premier appel puis partagés :
-// { vide, temoin }, chacun { racine, base, fichiers }.
+// { vide, temoin }, chacun { racine, cle, fichiers }.
 function departsPrets() {
   departs ??= (async () => {
     const monte = monterFacade();
     const { facade, fs, horloge } = monte;
     await facade.demarrer();
-    const { base: baseVide } = await facade.creer({ nom: NOM_VIDE });
-    const vide = { racine: monte.racine, base: baseVide, fichiers: fichiersDe(fs, monte.racine, baseVide) };
+    const { cle: cleVide } = await facade.creer({ nom: NOM_VIDE });
+    const vide = { racine: monte.racine, cle: cleVide, fichiers: fichiersDe(fs, monte.racine, cleVide) };
 
-    const { base } = await facade.chargerDemonstration('petite');
+    const { cle } = await facade.chargerDemonstration('petite');
     const { seance } = monte;
     await seance.passerEnEcriture();
     await seance.executer('designer', { participant: 1, table: 1, siege: null, libelle: TITRE });
@@ -768,7 +769,7 @@ function departsPrets() {
     assert.equal(charge.evenement.etat, 'retenu');
     assert.ok(charge.prochainsIds.proposition > Math.max(...charge.propositions.map(({ id }) => id), charge.retenu.proposition));
     assert.deepEqual(violationsDuRetenu(charge), []);
-    const temoin = { racine: monte.racine, base, fichiers: fichiersDe(fs, monte.racine, base) };
+    const temoin = { racine: monte.racine, cle, fichiers: fichiersDe(fs, monte.racine, cle) };
     return { vide, temoin };
   })();
   return departs;
@@ -789,14 +790,14 @@ async function ouvrirCopie(depart, { ecriture = false } = {}) {
     planifier: horloge.planifier,
     annuler: horloge.annuler,
   });
-  await seance.ouvrir(depart.base);
+  await seance.ouvrir(depart.cle);
   if (ecriture) await seance.passerEnEcriture();
-  return { fs, seance, racine: depart.racine, base: depart.base };
+  return { fs, seance, racine: depart.racine, cle: depart.cle };
 }
 
 // Le même dossier rouvert par une autre séance, en lecture : l'avertissement
 // d'ouverture se calcule sur le fichier écrit, sans l'état de la première.
-async function rouvrir({ fs, racine, base }, prefixe) {
+async function rouvrir({ fs, racine, cle }, prefixe) {
   const horloge = creerHorlogePilotee({ depart: DEPART });
   const seance = creerSeance({
     fs,
@@ -807,7 +808,7 @@ async function rouvrir({ fs, racine, base }, prefixe) {
     planifier: horloge.planifier,
     annuler: horloge.annuler,
   });
-  await seance.ouvrir(base);
+  await seance.ouvrir(cle);
   return seance;
 }
 
@@ -840,18 +841,18 @@ function tracer(fs) {
 
 // La trace réduite à ce qui porte l'entrée, le .precedent et l'état, dans
 // l'ordre : 'entree' pour une ligne d'entrée ou le journal réécrit entier.
-function ordreDesEcritures(trace, base) {
+function ordreDesEcritures(trace, cle) {
   const sortes = [];
   for (const [primitive, chemin, sorte] of trace) {
-    if (chemin === base + SUFFIXES.journal && (primitive === 'ecrireAtomique' || sorte === 'entree')) sortes.push('entree');
-    if (chemin === base + SUFFIXES.precedent) sortes.push('precedent');
-    if (chemin === base + SUFFIXES.etat) sortes.push('etat');
+    if (chemin === cle + SUFFIXES.journal && (primitive === 'ecrireAtomique' || sorte === 'entree')) sortes.push('entree');
+    if (chemin === cle + SUFFIXES.precedent) sortes.push('precedent');
+    if (chemin === cle + SUFFIXES.etat) sortes.push('etat');
   }
   return sortes;
 }
 
-const journalDe = ({ fs, racine, base }) => lireJournal(fs.contenu(racine.id, base + SUFFIXES.journal));
-const chargeEcrite = ({ fs, racine, base }) => analyser(fs.contenu(racine.id, base + SUFFIXES.etat)).charge;
+const journalDe = ({ fs, racine, cle }) => lireJournal(fs.contenu(racine.id, cle + SUFFIXES.journal));
+const chargeEcrite = ({ fs, racine, cle }) => analyser(fs.contenu(racine.id, cle + SUFFIXES.etat)).charge;
 
 // Le refus que rejette la promesse, null quand elle aboutit.
 async function refusDe(promesse) {
@@ -965,18 +966,18 @@ describe('registre : en lecture et sur un plan bloqué, aucune commande n’écr
 describe('registre : debloquer (§ 8.5, § 9)', () => {
   test('seance.debloquer() sur un plan bloqué prend le verrou, écrit une entrée et un jalon, et laisse la séance en écriture', async () => {
     const ouvert = await ouvrirBloque((await departsPrets()).temoin);
-    const { fs, seance, racine, base } = ouvert;
-    assert.equal(fs.contenu(racine.id, base + SUFFIXES.verrou), null);
+    const { fs, seance, racine, cle } = ouvert;
+    assert.equal(fs.contenu(racine.id, cle + SUFFIXES.verrou), null);
     const journal = journalDe(ouvert);
     const trace = tracer(fs);
     await seance.debloquer();
-    const verrou = fs.contenu(racine.id, base + SUFFIXES.verrou);
+    const verrou = fs.contenu(racine.id, cle + SUFFIXES.verrou);
     assert.notEqual(verrou, null, 'aucun verrou pris');
     assert.equal(JSON.parse(verrou).seance, seance.id);
     const apres = journalDe(ouvert);
     assert.equal(apres.entrees.length, journal.entrees.length + 1);
     assert.equal(apres.jalons.length, journal.jalons.length + 1);
-    assert.deepEqual(ordreDesEcritures(trace, base), ['entree', 'precedent', 'etat']);
+    assert.deepEqual(ordreDesEcritures(trace, cle), ['entree', 'precedent', 'etat']);
     assert.equal(seance.mode, 'ecriture');
     assert.equal(chargeEcrite(ouvert).evenement.etat, 'retenu');
   });
@@ -993,7 +994,7 @@ describe('registre : en écriture, un exemple accepté écrit une entrée, et d�
       const ouvert = await ouvrirCopie(exemple.accepte.sur === 'vide' ? departsCourants.vide : departsCourants.temoin, {
         ecriture: true,
       });
-      const { fs, seance, base } = ouvert;
+      const { fs, seance, cle } = ouvert;
       await preparer(seance, exemple.accepte.avant);
       const avant = structuredClone(seance.charge);
       const journalAvant = journalDe(ouvert);
@@ -1004,7 +1005,7 @@ describe('registre : en écriture, un exemple accepté écrit une entrée, et d�
       assert.equal(typeof rendu.libelle, 'string');
       const journal = journalDe(ouvert);
       assert.equal(journal.entrees.length, journalAvant.entrees.length + 1, 'une entrée exactement');
-      assert.deepEqual(ordreDesEcritures(trace, base), ['entree', 'precedent', 'etat']);
+      assert.deepEqual(ordreDesEcritures(trace, cle), ['entree', 'precedent', 'etat']);
       const derniere = journal.entrees.at(-1);
       const ecrite = chargeEcrite(ouvert);
       assert.equal(serialiserCharge(reconstruire(journal, derniere.revision)), serialiserCharge(ecrite));
@@ -1106,19 +1107,19 @@ describe('registre : un exemple sans effet est refusé SANS_EFFET {commande}, sa
   for (const [nom, exemple] of sansEffet) {
     test(`${nom} : SANS_EFFET, remède null, rien n'écrit`, async () => {
       const ouvert = await ouvrirCopie((await departsPrets()).temoin, { ecriture: true });
-      const { fs, seance, racine, base } = ouvert;
+      const { fs, seance, racine, cle } = ouvert;
       await preparer(seance, exemple.sansEffet.avant);
       const args = argumentsDe(exemple.sansEffet.args, seance.charge);
       const ecritures = fs.compteurs.ecritures;
-      const etat = fs.contenu(racine.id, base + SUFFIXES.etat);
-      const journal = fs.contenu(racine.id, base + SUFFIXES.journal);
+      const etat = fs.contenu(racine.id, cle + SUFFIXES.etat);
+      const journal = fs.contenu(racine.id, cle + SUFFIXES.journal);
       const erreur = await refusDe(seance.executer(nom, args));
       assert.notEqual(erreur, null, 'accepté');
       assert.equal(erreur.code, 'SANS_EFFET', erreur.message);
       assert.deepEqual(erreur.details, { commande: nom, remede: null });
       assert.equal(fs.compteurs.ecritures, ecritures);
-      assert.equal(fs.contenu(racine.id, base + SUFFIXES.etat), etat);
-      assert.equal(fs.contenu(racine.id, base + SUFFIXES.journal), journal);
+      assert.equal(fs.contenu(racine.id, cle + SUFFIXES.etat), etat);
+      assert.equal(fs.contenu(racine.id, cle + SUFFIXES.journal), journal);
     });
   }
 });
@@ -1233,7 +1234,7 @@ describe('registre : le vérificateur d’invariants juge les retouches et l’o
       annuler: horloge.annuler,
     });
     const ecritures = fs.compteurs.ecritures;
-    await seance.ouvrir(ecrit.base);
+    await seance.ouvrir(cleEvenement(ecrit.dossier, ecrit.base));
     assert.equal(fs.compteurs.ecritures, ecritures, 'ouvrir écrit');
     assert.equal(seance.mode, 'lecture');
     const attendu = [
@@ -1287,24 +1288,24 @@ describe('registre : créer un événement et charger une démonstration écrive
     const monte = monterFacade();
     await monte.facade.demarrer();
     assert.equal(monte.seance.mode, 'lecture');
-    const { base } = await monte.facade.creer({ nom: NOM_VIDE });
+    const { cle } = await monte.facade.creer({ nom: NOM_VIDE });
     const { fs, racine, seance } = monte;
     assert.equal(seance.mode, 'lecture');
-    assert.notEqual(fs.contenu(racine.id, base + SUFFIXES.etat), null);
-    assert.equal(lireJournal(fs.contenu(racine.id, base + SUFFIXES.journal)).entrees.length, 1);
-    assert.equal(fs.contenu(racine.id, base + SUFFIXES.verrou), null);
+    assert.notEqual(fs.contenu(racine.id, cle + SUFFIXES.etat), null);
+    assert.equal(lireJournal(fs.contenu(racine.id, cle + SUFFIXES.journal)).entrees.length, 1);
+    assert.equal(fs.contenu(racine.id, cle + SUFFIXES.verrou), null);
   });
 
   test('charger une démonstration, par la façade, écrit l’état et son entrée, la séance restant en lecture, sans verrou', async () => {
     const monte = monterFacade();
     await monte.facade.demarrer();
-    const { base } = await monte.facade.chargerDemonstration('petite');
+    const { cle } = await monte.facade.chargerDemonstration('petite');
     const { fs, racine, seance } = monte;
     assert.equal(seance.mode, 'lecture');
-    assert.equal(seance.ouvert.base, base);
-    assert.notEqual(fs.contenu(racine.id, base + SUFFIXES.etat), null);
-    assert.equal(lireJournal(fs.contenu(racine.id, base + SUFFIXES.journal)).entrees.length, 1);
-    assert.equal(fs.contenu(racine.id, base + SUFFIXES.verrou), null);
+    assert.equal(cleEvenement(seance.ouvert.dossier, seance.ouvert.base), cle);
+    assert.notEqual(fs.contenu(racine.id, cle + SUFFIXES.etat), null);
+    assert.equal(lireJournal(fs.contenu(racine.id, cle + SUFFIXES.journal)).entrees.length, 1);
+    assert.equal(fs.contenu(racine.id, cle + SUFFIXES.verrou), null);
   });
 });
 

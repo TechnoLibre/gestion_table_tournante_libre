@@ -46,7 +46,7 @@ import { lireCourses } from '../stockage/courses.js';
 import { creer as creerDansLeDepot, enregistrer } from '../stockage/depot.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
 import { fil, lireJournal, reconstruire, versionDe } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
@@ -137,8 +137,8 @@ function demarrer(disque, releve, prefixe) {
   const ecrireAtomique = fs.ecrireAtomique;
   fs.ecrireAtomique = async (racine, chemin, texte) => {
     if (!chemin.endsWith(SUFFIXES.etat)) return ecrireAtomique(racine, chemin, texte);
-    const base = chemin.slice(0, -SUFFIXES.etat.length);
-    const journal = lireJournal(fs.contenu(racine.id, base + SUFFIXES.journal) ?? '');
+    const sansSuffixe = chemin.slice(0, -SUFFIXES.etat.length);
+    const journal = lireJournal(fs.contenu(racine.id, sansSuffixe + SUFFIXES.journal) ?? '');
     const derniere = journal.entrees.at(-1)?.revision ?? null;
     await ecrireAtomique(racine, chemin, texte);
     releve.etats.push({ revision: analyser(texte).entete.revision, texte, derniere });
@@ -160,15 +160,16 @@ function demarrer(disque, releve, prefixe) {
 // ne doit pas changer.
 const photographier = (disque) => JSON.stringify([...disque]);
 
-// Ouvre base par la séance du processus, et relève ce que l'ouverture a
-// écrit : primitives d'écriture comptées, et disque changé ou non.
-async function ouvrir({ fs, seance }, disque, base, releve) {
+// Ouvre l'événement de clé cle par la séance du processus, et relève ce que
+// l'ouverture a écrit : primitives d'écriture comptées, et disque changé ou
+// non.
+async function ouvrir({ fs, seance }, disque, cle, releve) {
   const ecritures = fs.compteurs.ecritures;
   const lectures = fs.compteurs.lectures;
   const avant = photographier(disque);
-  const rendu = await seance.ouvrir(base);
+  const rendu = await seance.ouvrir(cle);
   releve.ouvertures.push({
-    base,
+    cle,
     ecritures: fs.compteurs.ecritures - ecritures,
     lu: fs.compteurs.lectures > lectures,
     disqueInchange: photographier(disque) === avant,
@@ -177,8 +178,9 @@ async function ouvrir({ fs, seance }, disque, base, releve) {
   return rendu;
 }
 
-// Le journal que porte le disque, en texte.
-const texteDuJournal = ({ fs }, base) => fs.contenu('documents', base + SUFFIXES.journal);
+// Le journal que porte le disque, en texte, de l'événement de clé cle : la
+// clé, suivie d'un suffixe, est le chemin d'un fichier de l'événement.
+const texteDuJournal = ({ fs }, cle) => fs.contenu('documents', cle + SUFFIXES.journal);
 
 // Le participant de la charge par nom et prénom.
 const personneDe = (charge, nom, prenom) =>
@@ -192,11 +194,11 @@ async function derouler() {
   const vu = {};
   let processus = demarrer(disque, releve, 'p1');
   processus.fs.deposerDossier('documents');
-  const releverJournal = () => releve.journaux.push(texteDuJournal(processus, vu.base));
+  const releverJournal = () => releve.journaux.push(texteDuJournal(processus, vu.cle));
 
   // 1. Créer, puis poser les tables.
-  const { base } = await processus.seance.creer({ nom: NOM, date: '2033-11-12', siegesParDefaut: 4, tours: 3 });
-  vu.base = base;
+  const { cle } = await processus.seance.creer({ nom: NOM, date: '2033-11-12', siegesParDefaut: 4, tours: 3 });
+  vu.cle = cle;
   releverJournal();
   const avecTables = { ...structuredClone(processus.seance.charge), tables: structuredClone(TABLES) };
   avecTables.prochainsIds.table = TABLES.length + 1;
@@ -208,7 +210,7 @@ async function derouler() {
     retour: null,
   });
   releverJournal();
-  await ouvrir(processus, disque, base, releve);
+  await ouvrir(processus, disque, cle, releve);
 
   // 1b. Passer en écriture.
   await processus.seance.passerEnEcriture();
@@ -219,9 +221,9 @@ async function derouler() {
     participants: processus.seance.charge.participants, tours: processus.seance.charge.evenement.tours,
   });
   vu.apercu = apercu;
-  const entreesAvantImport = lireJournal(texteDuJournal(processus, base)).entrees.length;
+  const entreesAvantImport = lireJournal(texteDuJournal(processus, cle)).entrees.length;
   vu.import = await processus.seance.executer('importerParticipants', { apercu, mode: 'ajouter' });
-  vu.entreesImport = lireJournal(texteDuJournal(processus, base)).entrees.length - entreesAvantImport;
+  vu.entreesImport = lireJournal(texteDuJournal(processus, cle)).entrees.length - entreesAvantImport;
   vu.refus = decoder(exporterRefus(apercu, libelle, vu.import.resume.refusees)).texte;
   releverJournal();
 
@@ -266,7 +268,7 @@ async function derouler() {
 
   // Rouvrir, dans un processus neuf.
   processus = demarrer(disque, releve, 'p2');
-  vu.reouverture = await ouvrir(processus, disque, base, releve);
+  vu.reouverture = await ouvrir(processus, disque, cle, releve);
   vu.chargeRouverte = structuredClone(processus.seance.charge);
   vu.examen = processus.seance.ouvert.examen;
 
@@ -283,10 +285,10 @@ async function derouler() {
 
   // Rouvrir encore, dans un autre processus neuf.
   processus = demarrer(disque, releve, 'p3');
-  vu.seconde = await ouvrir(processus, disque, base, releve);
+  vu.seconde = await ouvrir(processus, disque, cle, releve);
   vu.chargeFinale = structuredClone(processus.seance.charge);
   vu.retoursFinaux = processus.seance.retours;
-  vu.journalFinal = lireJournal(texteDuJournal(processus, base));
+  vu.journalFinal = lireJournal(texteDuJournal(processus, cle));
   return { releve, vu };
 }
 
@@ -436,7 +438,7 @@ describe('intégration : les trois garanties d’un geste, sur le journal entier
     const { releve, vu } = await leParcours();
     assert.deepEqual(
       releve.ouvertures,
-      [1, 2, 3].map(() => ({ base: vu.base, ecritures: 0, lu: true, disqueInchange: true, mode: 'lecture' })),
+      [1, 2, 3].map(() => ({ cle: vu.cle, ecritures: 0, lu: true, disqueInchange: true, mode: 'lecture' })),
     );
   });
 });
@@ -585,9 +587,10 @@ function demarrerAvecControleur(disque, prefixe, executeur) {
   return { fs, seance, controleur, lancements };
 }
 
-// Les textes de l'état, du journal et du compagnon des courses de base.
-const textesDuDisque = ({ fs }, base) =>
-  Object.fromEntries(['etat', 'journal', 'courses'].map((cle) => [cle, fs.contenu('documents', base + SUFFIXES[cle])]));
+// Les textes de l'état, du journal et du compagnon des courses de
+// l'événement de clé cle.
+const textesDuDisque = ({ fs }, cle) =>
+  Object.fromEntries(['etat', 'journal', 'courses'].map((sorte) => [sorte, fs.contenu('documents', cle + SUFFIXES[sorte])]));
 
 // sorte : 'direct' ou 'fils'.
 async function deroulerDepart(sorte) {
@@ -597,15 +600,16 @@ async function deroulerDepart(sorte) {
     sorte === 'fils' ? creerExecuteurTravailleur(fabriqueDeFils(messages), { coeursDisponibles: 2 }) : creerExecuteurDirect();
   const depot = creerFichiersSimules({ disque });
   depot.deposerDossier('documents');
-  const { base } = await creerDansLeDepot(depot, DOC, chargeDuParcours(), {
+  const { dossier, base } = await creerDansLeDepot(depot, DOC, chargeDuParcours(), {
     libelle: libelle('ENTREE_CREATION', { nom: NOM_EVENEMENT_RICOCHETS }),
     nomJalon: libelle('JALON_CREATION'),
     horodatage: '2033-11-12T17:59:00-05:00',
     produitVersion: V,
   });
+  const cle = cleEvenement(dossier, base);
   const vu = { base };
   let processus = demarrerAvecControleur(disque, 'q1', executeur);
-  await processus.seance.ouvrir(base);
+  await processus.seance.ouvrir(cle);
   await processus.seance.passerEnEcriture();
   const charge = () => structuredClone(processus.seance.charge);
 
@@ -623,7 +627,7 @@ async function deroulerDepart(sorte) {
       apres: charge(),
       options: processus.lancements.slice(lancement),
       messages: messages.slice(debut),
-      libelle: lireJournal(texteDuJournal(processus, base)).entrees.at(-1).libelle,
+      libelle: lireJournal(texteDuJournal(processus, cle)).entrees.at(-1).libelle,
     };
   }
 
@@ -641,10 +645,10 @@ async function deroulerDepart(sorte) {
 
   // Rouvrir, dans un processus neuf.
   processus = demarrerAvecControleur(disque, 'q2', executeur);
-  await processus.seance.ouvrir(base);
+  await processus.seance.ouvrir(cle);
   vu.rouverte = charge();
   vu.courses = new Map(vu.rouverte.propositions.map(({ id }) => [id, processus.seance.courseDe(id)]));
-  vu.textes = textesDuDisque(processus, base);
+  vu.textes = textesDuDisque(processus, cle);
   return vu;
 }
 

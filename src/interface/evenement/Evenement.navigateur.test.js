@@ -134,7 +134,9 @@ async function attendre(assertion) {
 // --- Les événements d'épreuve -----------------------------------------------------
 
 const baseDe = (m) => m.seance.etat().evenement.base;
-const fichier = (m, suffixe, racine = 'documents') => m.fs.contenu(racine, `${baseDe(m)}${suffixe}`);
+// Un fichier de l'événement ouvert : sa clé, <dossier>/<base>, suivie du
+// suffixe, est son chemin relatif à la racine.
+const fichier = (m, suffixe, racine = 'documents') => m.fs.contenu(racine, `${m.seance.etat().evenement.cle}${suffixe}`);
 const journalDe = (m, racine = 'documents') => lireJournal(fichier(m, SUFFIXES.journal, racine));
 
 // Un montage où l'événement neuf « Club des Merles », zéro participant et
@@ -169,7 +171,7 @@ async function generer(m, { retenir = true } = {}) {
 // Réécrit l'état d'un événement fermé : change(charge) le modifie en place,
 // et l'état se sérialise à sa révision.
 function reecrireEtat(m, base, change) {
-  const chemin = `${base}${SUFFIXES.etat}`;
+  const chemin = `${base}/${base}${SUFFIXES.etat}`;
   const { entete, charge } = analyser(m.fs.contenu('documents', chemin));
   change(charge);
   m.fs.deposer('documents', chemin, serialiser(charge, { revision: entete.revision, produitVersion: entete.produitVersion }));
@@ -279,7 +281,7 @@ describe('un nom long ou de glyphes larges (point d’attention 3)', () => {
       reecrireEtat(m, base, (charge) => {
         charge.evenement.nom = nom;
       });
-      await m.seance.ouvrir(base);
+      await m.seance.ouvrir(`${base}/${base}`);
       flushSync();
       const titre = dans(m, '[data-ecran="evenement"] h1');
       expect(titre.textContent).toBe(nom);
@@ -426,7 +428,7 @@ describe('bloqué (§ 8.5, § 9)', () => {
     expect(fixe(m, 'debloquer')).not.toBeNull();
     const base = baseDe(m);
     const autre = await monter({ systeme: { disque: m.disque } });
-    await autre.seance.ouvrir(base);
+    await autre.seance.ouvrir(`${base}/${base}`);
     flushSync();
     expect(autre.seance.etat().evenement.etat).toBe('bloque');
     expect(fixe(autre, 'debloquer').textContent).toBe(t('communs.commande.debloquer'));
@@ -1015,9 +1017,9 @@ describe('les raccourcis de retour (§ 7.3, § 8.3)', () => {
     expect(appels).toEqual([['defaire', { touche: 'Ctrl+Z' }]]);
     const base = baseDe(m);
     await m.seance.fermer();
-    const chemin = `${base}${SUFFIXES.etat}`;
+    const chemin = `${base}/${base}${SUFFIXES.etat}`;
     m.fs.deposer('documents', chemin, m.fs.contenu('documents', chemin).replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`));
-    await m.seance.ouvrir(base);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     expect(m.seance.etat().evenement).not.toBeNull();
     expect(dans(m, '[data-place-fixe] [data-refus="LECTURE_SEULE"]')).not.toBeNull();
@@ -1041,7 +1043,7 @@ describe('les annonces d’ouverture (§ 8.9, § 9)', () => {
       charge.propositions[0].placement.pop();
       charge.participants[0].exclu = true;
     });
-    await m.seance.ouvrir(base);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     const etat = m.seance.etat();
     expect(etat.fautives.length).toBe(1);
@@ -1102,7 +1104,7 @@ describe('les annonces d’ouverture (§ 8.9, § 9)', () => {
     reecrireEtat(m, base, (charge) => {
       charge.retenu.placement.pop();
     });
-    await m.seance.ouvrir(base);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     const premier = dans(m, '[data-avertissement]');
     expect(premier.dataset.avertissement).toBe('RETENU_FAUTIF');
@@ -1129,13 +1131,13 @@ describe('l’écran tient dans la fenêtre, avertissements compris (§ 8.4)', (
       charge.propositions[0].placement.pop();
       charge.participants[0].exclu = true;
     });
-    const chemin = `${base}${SUFFIXES.journal}`;
+    const chemin = `${base}/${base}${SUFFIXES.journal}`;
     const lignes = m.fs.contenu('documents', chemin).split('\n');
     const rang = lignes.findIndex((ligne) => ligne.startsWith('{"type":"entree"') && JSON.parse(ligne).revision === 4);
     expect(rang).toBeGreaterThan(0);
     lignes[rang] = '{"type":"entree", abîmée';
     m.fs.deposer('documents', chemin, lignes.join('\n'));
-    await m.seance.ouvrir(base);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     await new Promise((resoudre) => requestAnimationFrame(resoudre));
   }
@@ -1303,14 +1305,14 @@ describe('le journal (§ 8.6, § 8.2)', () => {
     expect(journal.entrees.length).toBe(100);
     expect(journal.jalons.length).toBe(1);
     await m.seance.fermer();
-    const chemin = `${base}${SUFFIXES.journal}`;
+    const chemin = `${base}/${base}${SUFFIXES.journal}`;
     const lignes = m.fs.contenu('documents', chemin).split('\n');
     const rang = lignes.findIndex((ligne) => ligne.startsWith('{"type":"entree"') && JSON.parse(ligne).revision === 37);
     expect(rang).toBeGreaterThan(0);
     lignes[rang] = '{"type":"entree", abîmée';
     m.fs.deposer('documents', chemin, lignes.join('\n'));
     const avant = m.trace.length;
-    await m.seance.ouvrir(base);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     const ecartees = avertissement(m, 'JOURNAL_ECARTEES');
     expect(ecartees.textContent).toContain(t('JOURNAL_ECARTEES', { n: 64 }));
@@ -1326,9 +1328,9 @@ describe('le journal (§ 8.6, § 8.2)', () => {
     await m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[1] } });
     const base = baseDe(m);
     await m.seance.fermer();
-    m.fs.deposer('documents', `${base}${SUFFIXES.etat}`, m.fs.contenu('documents', `${base}${SUFFIXES.precedent}`));
+    m.fs.deposer('documents', `${base}/${base}${SUFFIXES.etat}`, m.fs.contenu('documents', `${base}/${base}${SUFFIXES.precedent}`));
     const avant = m.trace.length;
-    await m.seance.ouvrir(base);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     expect(m.seance.etat().charge.participants.map(({ nom }) => nom)).toEqual(NOMS.slice(0, 2));
     expect(m.seance.etat().evenement.revision).toBe(3);
@@ -1442,7 +1444,7 @@ describe('le verrou d’une autre séance (§ 8.8)', () => {
     // Les deux montages s'empilent dans la page : le premier se cache, et
     // le second occupe la fenêtre.
     premier.racine.hidden = true;
-    await second.seance.ouvrir(base);
+    await second.seance.ouvrir(`${base}/${base}`);
     flushSync();
     expect(second.seance.etat().mode).toBe('lecture');
     expect(dans(second, '[data-refus]')).toBeNull();
@@ -1476,7 +1478,7 @@ describe('le verrou d’une autre séance (§ 8.8)', () => {
     const tenu = JSON.parse(fichier(premier, SUFFIXES.verrou));
     const second = await monter({ systeme: { disque: premier.disque, hote: 'poste-voisin' } });
     premier.racine.hidden = true;
-    await second.seance.ouvrir(base);
+    await second.seance.ouvrir(`${base}/${base}`);
     flushSync();
     fixe(second, 'modifier').click();
     await attendre(() => expect(refusPres(fixe(second, 'modifier'), 'VERROU_PRIS')).not.toBeNull());
@@ -1560,7 +1562,7 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     flushSync();
     expect(dans(m, '[data-refus="liste"]')).toBeNull();
     const nouvelle = baseDe(m);
-    expect(m.fs.contenu('documents', `${nouvelle}${SUFFIXES.etat}`)).not.toBeNull();
+    expect(m.fs.contenu('documents', `${nouvelle}/${nouvelle}${SUFFIXES.etat}`)).not.toBeNull();
     const entrees = journalDe(m, 'documents').entrees.length;
     await m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[2] } });
     expect(journalDe(m, 'documents').entrees.length).toBe(entrees + 1);
@@ -1568,7 +1570,7 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     commandeListe(m).click();
     await attendre(() => expect(ecran(m).dataset.ecran).toBe('accueil'));
     expect(m.seance.etat().racine.id).toBe('documents');
-    await attendre(() => expect(dans(m, `[data-evenement="${nouvelle}"]`)).not.toBeNull());
+    await attendre(() => expect(dans(m, `[data-evenement="${nouvelle}/${nouvelle}"]`)).not.toBeNull());
     const dossier = dans(m, '[data-dossier-travail]');
     expect(dossier.textContent).toBe(DOCUMENTS);
     // La liste défile : le dossier de travail s'amène dans la fenêtre.
@@ -1621,13 +1623,13 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     await attendre(() => expect(m.seance.etat().supportRompu).toBeNull());
     expect(m.seance.etat().racine).toEqual({ id: 'choisi-1', chemin: 'D:\\Secours' });
     const base = baseDe(m);
-    expect(m.fs.contenu('choisi-1', `${base}${SUFFIXES.etat}`)).not.toBeNull();
+    expect(m.fs.contenu('choisi-1', `${base}/${base}${SUFFIXES.etat}`)).not.toBeNull();
     const entrees = journalDe(m, 'choisi-1').entrees.length;
     await m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[3] } });
     expect(journalDe(m, 'choisi-1').entrees.length).toBe(entrees + 1);
     commandeListe(m).click();
     await attendre(() => expect(ecran(m).dataset.ecran).toBe('accueil'));
-    await attendre(() => expect(dans(m, `[data-evenement="${base}"]`)).not.toBeNull());
+    await attendre(() => expect(dans(m, `[data-evenement="${base}/${base}"]`)).not.toBeNull());
   });
 });
 
@@ -1636,10 +1638,10 @@ describe('le format plus récent (§ 8.8)', () => {
     const m = await neuf();
     const base = baseDe(m);
     await m.seance.fermer();
-    const chemin = `${base}${SUFFIXES.etat}`;
+    const chemin = `${base}/${base}${SUFFIXES.etat}`;
     const texte = m.fs.contenu('documents', chemin);
     m.fs.deposer('documents', chemin, texte.replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`));
-    await m.seance.ouvrir(base);
+    await m.seance.ouvrir(`${base}/${base}`);
     flushSync();
     expect(fixe(m, 'modifier')).toBeNull();
     expect(dans(m, '[data-commande="historique"]')).toBeNull();

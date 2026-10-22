@@ -12,12 +12,18 @@
 // montre, s'éprouve ici sur l'implémentation d'épreuve, la seule qui sache
 // refuser un renommage ; celle de la coquille, dans
 // test/fichiers_electron.test.js, celle de la plateforme web, dans
-// fichiers_web.navigateur.test.js. Les noms d'épreuve sont inventés.
+// fichiers_web.navigateur.test.js. La vue d'un dossier d'événement
+// (vueDossier) passe la suite de contrat comme une implémentation, sur deux
+// réglages du système d'épreuve, puis ce qui n'appartient qu'à elle : le
+// préfixe de ses chemins, le chemin relatif au dossier dans les détails
+// d'un refus, et la primitive lue à l'appel. Les noms d'épreuve sont
+// inventés.
 import assert from 'node:assert/strict';
+import { eprouverContrat } from '../../test/contrat_fichiers.js';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { ErreurStockage } from './erreurs.js';
-import { exigerCheminRelatif, exigerOctets } from './systeme_fichiers.js';
+import { exigerCheminRelatif, exigerOctets, vueDossier } from './systeme_fichiers.js';
 
 // Rend l'erreur que lève la fonction ; échoue quand elle n'en lève pas.
 function erreurDe(fonction) {
@@ -165,5 +171,167 @@ describe("ecrireOctetsAtomique sur le système d'épreuve : l'atomicité (§ 8.8
     const erreur = await rejet(fs.ecrireOctetsAtomique(DOC, 'planche.pdf', NOUVEAUX));
     assert.equal(erreur.name, 'PanneSimulee');
     assert.deepEqual(fs.octets('documents', 'planche.pdf'), ANCIENS);
+  });
+});
+
+describe("vueDossier : un dossier d'événement vu comme une racine (§ 8.6)", () => {
+  const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
+  const DOC = { id: 'documents', chemin: DOCUMENTS };
+  const DOSSIER = 'Bal des Hirondelles';
+
+  // Rend la raison du rejet de la promesse ; échoue quand elle se résout.
+  async function rejette(promesse, message) {
+    let raison;
+    await assert.rejects(
+      promesse,
+      (erreur) => {
+        raison = erreur;
+        return true;
+      },
+      message,
+    );
+    return raison;
+  }
+
+  // Attend le rejet d'une ErreurStockage de ce code et de ces détails.
+  async function echoue(promesse, code, details) {
+    const erreur = await rejette(promesse, code);
+    assert.ok(erreur instanceof ErreurStockage, String(erreur));
+    assert.deepEqual([erreur.code, erreur.details], [code, details]);
+    return erreur;
+  }
+
+  // Un système d'épreuve dont la racine documents porte le dossier vide
+  // DOSSIER, posé sans compter.
+  function preparer(options = {}) {
+    const fs = creerFichiersSimules(options);
+    fs.deposerDossier('documents', DOSSIER);
+    return fs;
+  }
+
+  for (const [nom, options] of [
+    ['sous Windows', {}],
+    ['sous Unix', { separateur: '/', insensibleCasse: false, documents: '/home/exemple/Documents/Gestion table tournante Libre/data' }],
+  ]) {
+    eprouverContrat(
+      `vue d'un dossier d'événement, ${nom}`,
+      async () => {
+        const fs = preparer(options);
+        return { fs: vueDossier(fs, DOSSIER), racine: (await fs.racines()).documents };
+      },
+      { describe, test, egal: assert.deepStrictEqual, vrai: assert.ok, rejette },
+    );
+  }
+
+  test("chaque chemin reçu s'écrit sous le dossier, '' désignant le dossier lui-même ; rien ne s'écrit à la racine", async () => {
+    const fs = preparer();
+    const vue = vueDossier(fs, DOSSIER);
+    await vue.ecrireAtomique(DOC, 'Bal.gtt.json', 'état');
+    await vue.ajouterLigne(DOC, 'Bal.gtt-journal.jsonl', 'ligne');
+    await vue.creerDossier(DOC, 'logo');
+    await vue.ecrireOctetsAtomique(DOC, 'logo/a.png', new Uint8Array([1, 2]));
+    await vue.deplacer(DOC, 'logo/a.png', 'b.png');
+    assert.deepEqual((await vue.lister(DOC, '')).map(({ nom, type }) => [nom, type]), [
+      ['Bal.gtt-journal.jsonl', 'fichier'],
+      ['Bal.gtt.json', 'fichier'],
+      ['b.png', 'fichier'],
+      ['logo', 'dossier'],
+    ]);
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), [DOSSIER]);
+    assert.equal(fs.contenu('documents', `${DOSSIER}/Bal.gtt.json`), 'état');
+    assert.equal(await vue.lireTexte(DOC, 'Bal.gtt-journal.jsonl'), 'ligne\n');
+    await vue.supprimerDossier(DOC, 'logo');
+    await vue.supprimer(DOC, 'b.png');
+    assert.deepEqual((await fs.lister(DOC, DOSSIER)).map(({ nom }) => nom), ['Bal.gtt-journal.jsonl', 'Bal.gtt.json']);
+    const pris = await vue.verrouiller(DOC, 'Bal.gtt.verrou', 'seance-a', '2031-05-17T19:42:07-04:00');
+    assert.deepEqual(pris, { pris: true });
+    assert.notEqual(fs.contenu('documents', `${DOSSIER}/Bal.gtt.verrou`), null);
+    await vue.deverrouiller(DOC, 'Bal.gtt.verrou', 'seance-a');
+    assert.equal(fs.contenu('documents', `${DOSSIER}/Bal.gtt.verrou`), null);
+  });
+
+  test("le chemin d'un refus redevient celui que la vue a reçu ; le dossier d'une ECRITURE reste celui qui porte le fichier", async () => {
+    const fs = preparer();
+    const vue = vueDossier(fs, DOSSIER);
+    await echoue(vue.lireTexte(DOC, 'Bal.gtt.json'), 'ABSENT', { chemin: 'Bal.gtt.json' });
+    await echoue(vue.lister(DOC, 'logo'), 'ABSENT', { chemin: 'logo' });
+    await echoue(vue.ecrireAtomique(DOC, 'logo/a.txt', 'x'), 'ECRITURE', {
+      chemin: 'logo/a.txt',
+      dossier: `${DOCUMENTS}\\${DOSSIER}\\logo`,
+      cause: 'ENOENT',
+    });
+    await vue.ecrireAtomique(DOC, 'a.txt', 'a');
+    await vue.ecrireAtomique(DOC, 'b.txt', 'b');
+    await echoue(vue.deplacer(DOC, 'a.txt', 'b.txt'), 'EXISTE', { chemin: 'b.txt' });
+    await vue.creerDossier(DOC, 'plein');
+    await vue.ecrireAtomique(DOC, 'plein/c.txt', 'c');
+    await echoue(vue.supprimerDossier(DOC, 'plein'), 'NON_VIDE', { chemin: 'plein' });
+    fs.pannes.ecriture('documents', 'EROFS');
+    await echoue(vue.ecrireAtomique(DOC, 'a.txt', 'z'), 'ECRITURE', {
+      chemin: 'a.txt',
+      dossier: `${DOCUMENTS}\\${DOSSIER}`,
+      cause: 'EROFS',
+    });
+  });
+
+  test("un chemin que le contrat refuse se refuse tel que reçu, avant tout accès ; '' se refuse à supprimerDossier, le dossier restant", async () => {
+    const fs = preparer();
+    const vue = vueDossier(fs, DOSSIER);
+    for (const chemin of ['../x', `${DOSSIER}/..`, 'a/../../x', '/x', 'C:\\x', 42]) {
+      await echoue(vue.lireTexte(DOC, chemin), 'CHEMIN_REFUSE', { chemin });
+    }
+    await echoue(vue.supprimerDossier(DOC, ''), 'CHEMIN_REFUSE', { chemin: '' });
+    assert.deepEqual(fs.compteurs, { ecritures: 0, lectures: 0 });
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom }) => nom), [DOSSIER]);
+  });
+
+  test("un dossier vide, remontant, absolu ou d'autre chose qu'une chaîne se refuse à la création de la vue : CHEMIN_REFUSE", () => {
+    const fs = preparer();
+    for (const dossier of ['', '..', '../x', '/x', 'C:\\x', null, 7]) {
+      const erreur = erreurDe(() => vueDossier(fs, dossier));
+      assert.ok(erreur instanceof ErreurStockage, String(dossier));
+      assert.deepEqual([erreur.code, erreur.details], ['CHEMIN_REFUSE', { chemin: dossier }]);
+    }
+  });
+
+  test("sonder éprouve le dossier lui-même : il le crée sous une racine qui existe ; un refus, une relecture fausse ou une racine absente rendent leur cause sans lever", async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    const vue = vueDossier(fs, DOSSIER);
+    assert.deepEqual(await vue.sonder(DOC), { inscriptible: true, cause: null });
+    assert.deepEqual((await fs.lister(DOC, '')).map(({ nom, type }) => [nom, type]), [[DOSSIER, 'dossier']]);
+    assert.deepEqual(await fs.lister(DOC, DOSSIER), []);
+
+    const lireTexte = fs.lireTexte;
+    fs.lireTexte = async () => 'autre chose';
+    assert.deepEqual(await vue.sonder(DOC), { inscriptible: false, cause: 'RELECTURE_DIFFERENTE' });
+    fs.lireTexte = lireTexte;
+
+    fs.pannes.ecriture('documents', 'EROFS');
+    assert.deepEqual(await vue.sonder(DOC), { inscriptible: false, cause: 'EROFS' });
+
+    const sansRacine = vueDossier(creerFichiersSimules(), DOSSIER);
+    assert.deepEqual(await sansRacine.sonder(DOC), { inscriptible: false, cause: 'ENOENT' });
+    await echoue(sansRacine.sonder({ id: 'inconnue', chemin: 'X:\\nulle-part' }), 'CHEMIN_REFUSE', { chemin: DOSSIER });
+  });
+
+  test("la vue porte le dossier et le système qu'elle prolonge, en relaie la nature et les garanties, et lit chaque primitive à l'appel", async () => {
+    const fs = preparer({ nature: 'web', renommageAtomique: false, verrouDisponible: false });
+    const vue = vueDossier(fs, DOSSIER);
+    assert.deepEqual([vue.dossier, vue.systeme, vue.nature, vue.renommageAtomique, vue.verrouDisponible], [
+      DOSSIER,
+      fs,
+      'web',
+      false,
+      false,
+    ]);
+    const recus = [];
+    fs.lireTexte = async (racine, chemin) => {
+      recus.push(chemin);
+      return 'remplacée';
+    };
+    assert.equal(await vue.lireTexte(DOC, 'Bal.gtt.json'), 'remplacée');
+    assert.deepEqual(recus, [`${DOSSIER}/Bal.gtt.json`]);
+    assert.deepEqual(await vue.racines(), await fs.racines());
   });
 });

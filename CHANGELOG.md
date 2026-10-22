@@ -324,6 +324,15 @@
   intacts. Un événement ne prend jamais le nom de la corbeille ni celui du
   fichier des réglages : nommé « Corbeille », il s'enregistre sous
   « Corbeille (2) ».
+- Chaque événement a son propre dossier dans le dossier de travail, à son nom,
+  qui porte son fichier d'état, son historique et son verrou ; la liste affiche
+  le chemin du fichier d'état dans ce dossier. Créer, copier, importer ou
+  charger une démonstration crée le dossier ; renommer écrit l'événement dans
+  un dossier au nouveau nom ; supprimer range ses fichiers dans la corbeille.
+  Les fichiers d'événement posés directement dans le dossier de travail, sans
+  dossier, ne s'affichent plus, ne s'importent plus de l'autre emplacement, et
+  restent intacts. Une version antérieure ne voit pas les événements rangés en
+  dossiers.
 - Sous le placement retenu, glisser hors des tables une personne que sa
   réservation tient à la sienne annonce le refus dès le survol, au lieu de
   « retire du tour ».

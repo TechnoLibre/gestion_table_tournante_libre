@@ -134,7 +134,7 @@ async function preparer(charge, { mode = 'ecriture' } = {}) {
   };
   const fs = creerFichiersSimules();
   fs.deposerDossier('documents');
-  fs.deposer('documents', `${BASE}${SUFFIXES.etat}`, serialiser(charge, { revision: 1, produitVersion: VERSION.affichee }));
+  fs.deposer('documents', `${BASE}/${BASE}${SUFFIXES.etat}`, serialiser(charge, { revision: 1, produitVersion: VERSION.affichee }));
   const { documents } = await fs.racines();
   const horloge = creerHorlogePilotee();
   let tirages = 0;
@@ -150,7 +150,7 @@ async function preparer(charge, { mode = 'ecriture' } = {}) {
     planifier: horloge.planifier,
     annuler: horloge.annuler,
   });
-  await seance.ouvrir(BASE);
+  await seance.ouvrir(`${BASE}/${BASE}`);
   if (mode === 'ecriture') await seance.passerEnEcriture();
   const ui = creerEtatUi();
   const contexte = new Map([
@@ -690,7 +690,7 @@ describe('les tours (§ 4, § 4.3, § 2.1 étape 5)', () => {
     expect(charge(m).reservations).toEqual([resa(3, 1, null, 2)]);
 
     await m.seance.fermer();
-    await m.seance.ouvrir(BASE);
+    await m.seance.ouvrir(`${BASE}/${BASE}`);
     expect(m.seance.etat().charge.evenement.tours).toBe(3);
     expect(m.seance.etat().charge.reservations).toEqual([resa(3, 1, null, 2)]);
   });

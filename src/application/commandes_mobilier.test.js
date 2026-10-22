@@ -32,7 +32,7 @@ import {
   priorites,
 } from '../stockage/document.js';
 import { lireJournal } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import { gelerPropositions } from '../stockage/gel.js';
 import { derive, examiner, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
@@ -220,11 +220,11 @@ async function seanceSur(charge) {
     planifier: () => 1,
     annuler: () => {},
   });
-  await seance.ouvrir(NOM);
+  await seance.ouvrir(cleEvenement(NOM, NOM));
   await seance.passerEnEcriture();
   return {
     seance,
-    entrees: () => lireJournal(fs.contenu('documents', `${NOM}${SUFFIXES.journal}`)).entrees.length,
+    entrees: () => lireJournal(fs.contenu('documents', `${NOM}/${NOM}${SUFFIXES.journal}`)).entrees.length,
     ecritures: () => fs.compteurs.ecritures,
   };
 }

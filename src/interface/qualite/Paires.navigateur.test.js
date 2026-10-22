@@ -127,9 +127,9 @@ async function attendre(assertion) {
 // première proposition montrée au plan, la page de qualité ouverte.
 async function ouvrir(charge, { montrer = charge.propositions[0]?.id ?? null } = {}) {
   const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }] });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }] });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   await m.seance.passerEnEcriture();
   if (montrer !== null) m.ui.montrerProposition(montrer);
   m.ui.allerA('qualite');

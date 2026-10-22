@@ -110,9 +110,9 @@ async function ouvrir({
   charge.tables = tables;
   charge.prochainsIds.table = tables.length + 1;
   const texte = serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}.gtt.json`, texte }], langue });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}.gtt.json`, texte }], langue });
   montes.push(m);
-  await m.seance.ouvrir(BASE);
+  await m.seance.ouvrir(`${BASE}/${BASE}`);
   await m.seance.passerEnEcriture();
   if (prepare !== null) await prepare(m.seance, m.app.generation());
   if (!ecriture && m.seance.etat().mode === 'ecriture') await m.seance.passerEnLecture();
@@ -198,7 +198,7 @@ const participantsDe = ({ m }) => m.seance.etat().charge.participants;
 
 // Les entrées du journal de l'événement, 0 avant le premier geste.
 function entrees({ m }) {
-  const texte = m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`);
+  const texte = m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`);
   return texte === null ? 0 : lireJournal(texte).entrees.length;
 }
 
@@ -480,7 +480,7 @@ describe("un conflit d'organisation fautif refuse le fichier entier (§ 10.1)", 
     expect(rendu.resume.ajoutes).toBe(3);
     expect(participantsDe(e).map(({ conflits }) => conflits)).toEqual([undefined, ['Club des Merles'], ['Atelier Ressac', 'Société Gamma'], undefined]);
     // Le premier geste pose le journal, son entrée de reprise et la sienne.
-    expect(lireJournal(e.m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`)).entrees.at(-1).libelle).toBe('Mis à jour la liste par import : 3 ajoutés, 0 modifié');
+    expect(lireJournal(e.m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`)).entrees.at(-1).libelle).toBe('Mis à jour la liste par import : 3 ajoutés, 0 modifié');
   });
 
   test('sa propre organisation : la cause et son propre remède, rien d’écrit', async () => {
@@ -634,7 +634,7 @@ describe('une seule entrée, des doublons signalés, une mise à jour qui n’ef
     const { rendu } = await importer(e);
     expect(rendu.resume.ajoutes).toBe(260);
     expect(entrees(e)).toBe(entreesAvant + 1);
-    const etats = e.m.trace.slice(avant).filter(([primitive, , chemin]) => primitive === 'ecrireAtomique' && chemin === `${BASE}${SUFFIXES.etat}`);
+    const etats = e.m.trace.slice(avant).filter(([primitive, , chemin]) => primitive === 'ecrireAtomique' && chemin === `${BASE}/${BASE}${SUFFIXES.etat}`);
     expect(etats.length).toBe(1);
   });
 
