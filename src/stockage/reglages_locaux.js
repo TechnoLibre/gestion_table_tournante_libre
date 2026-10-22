@@ -3,17 +3,19 @@
 
 // Les réglages locaux (§ 8.5) : le fichier reglages_locaux.json, à la racine
 // du dossier de travail, à côté des fichiers d'événement et hors d'eux. Il
-// porte quatre choses, et quatre seulement : le cadrage de chaque événement,
+// porte cinq choses, et cinq seulement : le cadrage de chaque événement,
 // indexé par son identifiant — le zoom k en pixels par centimètre, la
 // translation tx, ty en pixels —, le format de papier des sorties, global
 // à la machine (§ 11.2), null tant que l'opérateur ne l'a pas choisi, le
 // modèle des badges, global à la machine, sous la clé modele_badge, absente
 // tant que l'opérateur ne l'a pas choisi : Avery 5392 vaut alors
-// (MODELE_BADGE_DEFAUT), et la taille du texte de l'écran, globale à la
-// machine, sous la clé taille_texte, absente tant que l'opérateur ne l'a
-// pas choisie : le défaut de l'échelle s'applique alors
-// (src/geometrie/taille_texte.js). Aucun ne voyage avec un événement ni ne
-// revient par un retour arrière.
+// (MODELE_BADGE_DEFAUT), la case du pied TechnoLibre des badges, globale à
+// la machine, sous la clé pied_technolibre, un booléen, absente tant que
+// l'opérateur n'y a pas touché : la case vaut alors cochée, et la taille du
+// texte de l'écran, globale à la machine, sous la clé taille_texte, absente
+// tant que l'opérateur ne l'a pas choisie : le défaut de l'échelle
+// s'applique alors (src/geometrie/taille_texte.js). Aucun ne voyage avec un
+// événement ni ne revient par un retour arrière.
 //
 // La lecture ne bloque jamais : un fichier absent donne les défauts ; un
 // fichier qui ne se lit pas, ou dont une valeur connue sort de sa règle,
@@ -51,6 +53,8 @@ const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
  *           nombre fini > 0, tx et ty nombres finis
  * @property {import('../geometrie/papiers.js').ModeleBadge} [modele_badge]   une clé de
  *           MODELES_BADGE ; absente tant que l'opérateur ne l'a pas choisi
+ * @property {boolean} [pied_technolibre]  la case du pied TechnoLibre des
+ *           badges ; absente tant que l'opérateur n'y a pas touché
  * @property {number} [taille_texte]      l'un de PALIERS_TAILLE_TEXTE ; absente
  *           tant que l'opérateur ne l'a pas choisie. Toute autre clé, à tout
  *           niveau, se garde telle quelle
@@ -88,13 +92,15 @@ function fauteDeCadrage(cadrage, chemin) {
 // Chemin de la première valeur connue des réglages qui sort de sa règle, ou
 // null ; '' quand les réglages ne sont pas un objet. Le second cadrage d'un
 // même événement est fautif ; un modèle de badge présent est une clé de
-// MODELES_BADGE, une taille du texte présente l'un des paliers.
+// MODELES_BADGE, une case du pied TechnoLibre présente un booléen, une
+// taille du texte présente l'un des paliers.
 function fauteDeReglages(reglages) {
   if (!estObjet(reglages)) return '';
   const { format, papier, cadrages } = reglages;
   if (!Number.isSafeInteger(format) || format < 1) return 'format';
   if (papier !== null && !estPapier(papier)) return 'papier';
   if (Object.hasOwn(reglages, 'modele_badge') && !estModeleBadge(reglages.modele_badge)) return 'modele_badge';
+  if (Object.hasOwn(reglages, 'pied_technolibre') && typeof reglages.pied_technolibre !== 'boolean') return 'pied_technolibre';
   if (Object.hasOwn(reglages, 'taille_texte') && !estPalierTailleTexte(reglages.taille_texte)) return 'taille_texte';
   if (!Array.isArray(cadrages)) return 'cadrages';
   const vus = new Set();
@@ -128,17 +134,17 @@ const illisibles = (raison) => ({
 
 /**
  * Lit les réglages locaux de racine (§ 8.5), sans rien écrire ni jamais
- * bloquer. Un fichier absent rend les défauts, sans avertissement. Un
- * fichier illisible rend les défauts et l'avertissement REGLAGES_ILLISIBLES
- * {chemin, raison} : raison JSON pour un texte qui ne se lit pas, vide
- * compris ; FORME pour une valeur connue hors de sa règle — un format qui
- * n'est pas un entier ≥ 1, un papier hors de null et des clés de PAPIERS,
- * un modèle de badge présent hors des clés de MODELES_BADGE, un cadrage
- * fautif ou en double, une taille du texte présente hors des
- * paliers ; le code d'une lecture que le système de fichiers refuse
- * autrement que par ABSENT. Une marque d'ordre d'octets en tête est
- * ignorée. Les réglages lus gardent leurs clés inconnues et leur format ;
- * leurs cadrages sont triés par identifiant d'événement.
+ * bloquer. Un fichier absent rend les défauts, sans avertissement. Un fichier
+ * illisible rend les défauts et l'avertissement REGLAGES_ILLISIBLES {chemin,
+ * raison} : raison JSON pour un texte qui ne se lit pas, vide compris ; FORME
+ * pour une valeur connue hors de sa règle — un format qui n'est pas un entier
+ * ≥ 1, un papier hors de null et des clés de PAPIERS, un modèle de badge
+ * présent hors des clés de MODELES_BADGE, une case du pied TechnoLibre
+ * présente qui n'est pas un booléen, un cadrage fautif ou en double, une
+ * taille du texte présente hors des paliers ; le code d'une lecture que le
+ * système de fichiers refuse autrement que par ABSENT. Une marque d'ordre
+ * d'octets en tête est ignorée. Les réglages lus gardent leurs clés inconnues
+ * et leur format ; leurs cadrages sont triés par identifiant d'événement.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -236,6 +242,31 @@ export function avecModeleBadge(reglages, modele) {
     throw new TypeError(`avecModeleBadge : une clé de MODELES_BADGE attendue, reçu ${JSON.stringify(modele)}`);
   }
   return { ...reglages, modele_badge: modele };
+}
+
+/**
+ * La case du pied TechnoLibre des badges que les réglages portent, à
+ * défaut cochée.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @returns {boolean}
+ */
+export function piedTechnolibreDe(reglages) {
+  return Object.hasOwn(reglages, 'pied_technolibre') ? reglages.pied_technolibre : true;
+}
+
+/**
+ * Les réglages reçus, la case du pied TechnoLibre remplacée ; ceux reçus ne
+ * changent pas.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @param {boolean} coche
+ * @returns {ReglagesLocaux}
+ * @throws {TypeError} une valeur qui n'est pas un booléen
+ */
+export function avecPiedTechnolibre(reglages, coche) {
+  if (typeof coche !== 'boolean') throw new TypeError(`avecPiedTechnolibre : un booléen attendu, reçu ${JSON.stringify(coche)}`);
+  return { ...reglages, pied_technolibre: coche };
 }
 
 /**

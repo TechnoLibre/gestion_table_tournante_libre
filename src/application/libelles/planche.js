@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes de la planche de badges (§ 11.3 à § 11.8, contrainte 25) : les
-// refus qui la gardent avant de produire, ce qu'un badge imprime — ses lignes
-// de tour, son pied —, les lignes de la feuille de contrôle et les en-têtes
-// de la liste des badges en CSV. Le papier et le CSV les lisent par libelle,
-// jamais décorés par la langue témoin : un texte imprimé est une donnée. Un
-// horodatage et une date se mettent en mots à partir de leur seule forme,
-// sans horloge ni langue du système. Le nom d'un papier arrive dans les
-// détails : cette table n'en écrit aucun.
+// refus qui la gardent avant de produire, ce qu'un badge imprime — ses
+// lignes de tour, son pied, le pied TechnoLibre —, les lignes de la feuille
+// de contrôle et les en-têtes de la liste des badges en CSV. Le papier et le
+// CSV les lisent par libelle, jamais décorés par la langue témoin : un texte
+// imprimé est une donnée. Un horodatage et une date se mettent en mots à
+// partir de leur seule forme, sans horloge ni langue du système. Le nom
+// d'un papier arrive dans les détails : cette table n'en écrit aucun.
 import { lireHorodatage } from '../format.js';
 import { compte, enumeration, nomDans, ouEcrire, phraseDeRaison } from './aides.js';
 
@@ -152,6 +152,9 @@ export const TABLE = new Map([
   ['planche.pied.horodatageInconnu', 'Horodatage du placement inconnu'],
   ['planche.pied.identifiant', ({ identifiant }) => `Identifiant n° ${identifiant}`],
   ['planche.brouillon', 'BROUILLON'],
+  // Le pied TechnoLibre, que le logo de l'éditeur suit, sous le pied du
+  // badge, quand la case de la section le demande.
+  ['planche.technolibre', 'Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise'],
 
   // --- La feuille de contrôle (§ 11.3, § 11.5, § 11.8) ----------------------
   // Le badge et son modèle : l'A6 à découper, ou les cartes prédécoupées

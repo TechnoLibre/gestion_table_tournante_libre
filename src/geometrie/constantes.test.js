@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du registre des constantes mesurées (§ 14.1, § 19.10) : les
-// vingt-six entrées du contrat de données, chacune complète et de statut
+// vingt-huit entrées du contrat de données, chacune complète et de statut
 // épinglé, la vérification qui nomme l'entrée et le champ d'une faute, et
 // l'accord du registre avec le relevé committé du banc : le banc écrit un
 // relevé, jamais le registre, et une constante du banc déclarée mesurée
@@ -41,6 +41,8 @@ const CONTRAT = [
   ['CORPS_TOURS_CARTE_PT', 12, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_ORGANISATION_CARTE_PT', 10, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_PIED_CARTE_PT', 7, 'pt', 'manuel', 'defautDeTravail'],
+  ['CORPS_TECHNOLIBRE_PT', 6, 'pt', 'manuel', 'defautDeTravail'],
+  ['CORPS_TECHNOLIBRE_PLANCHER_PT', 4, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_MIN_IMPRESSION_MM', 2.5, 'mm', 'manuel', 'defautDeTravail'],
   ['MARGE_PAGE_MM', 10, 'mm', 'manuel', 'defautDeTravail'],
   ['HAUTEUR_BANDE_IMPRESSION', null, 'mm', 'execution', 'mesuree'],
@@ -58,8 +60,8 @@ const ADOPTEES = ['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN', 'SEUIL_MAT
 const copie = () => CONSTANTES.map((entree) => ({ ...entree }));
 
 describe('constantes : le registre (§ 14.1, § 19.10)', () => {
-  test('le registre porte les vingt-six entrées du contrat, dans son ordre, chacune complète', () => {
-    assert.equal(CONSTANTES.length, 26);
+  test('le registre porte les vingt-huit entrées du contrat, dans son ordre, chacune complète', () => {
+    assert.equal(CONSTANTES.length, 28);
     assert.deepEqual(
       CONSTANTES.map(({ nom, valeur, unite, proprietaire, statut }) => [nom, valeur, unite, proprietaire, statut]),
       CONTRAT,
@@ -84,6 +86,15 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
     assert.match(entree('ZONE_SILENCE_CARTE_MM').raison, /prédécoup/);
     assert.match(entree('K_LISTES').protocole, /n'a pas écrit le logiciel/);
     assert.match(entree('TOLERANCE_CHAINE_TEMOIN').protocole, /repli/);
+  });
+
+  test('le plancher du pied TechnoLibre est un seuil de lisibilité à la loupe, relevé à la main sur les deux modèles', () => {
+    const plancher = CONSTANTES.find((c) => c.nom === 'CORPS_TECHNOLIBRE_PLANCHER_PT');
+    assert.match(plancher.protocole, /loupe/);
+    assert.match(plancher.protocole, /n'a pas écrit le logiciel/);
+    assert.match(plancher.configuration, /A6/);
+    assert.match(plancher.configuration, /Avery 5392/);
+    assert.ok(plancher.valeur < constante('CORPS_TECHNOLIBRE_PT'));
   });
 
   test('les deux seuils de la page de qualité sont adoptés du banc, protocole écrit (B29) ; la troncature se cale sur une longueur de nom écrite ici', () => {

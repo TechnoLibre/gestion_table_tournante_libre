@@ -77,6 +77,7 @@
   import './jetons.css';
   import { onDestroy, setContext, tick, untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
+  import { chargerLogo } from '../actifs/logo.js';
   import { creerFacade } from '../application/evenements.js';
   import { creerFormat } from '../application/format.js';
   import { creerControleurGeneration } from '../application/generation.js';
@@ -116,6 +117,10 @@
     // () => Promise<{regulier: Uint8Array, gras: Uint8Array}> : les octets
     // de la police que la production de la planche embarque (§ 11.1).
     polices,
+    // () => Promise<Uint8Array> : les octets SVG du logo que le pied
+    // TechnoLibre des badges dessine (§ 11.4) ; par défaut, le fichier de
+    // src/actifs, chargé à la première planche qui le demande.
+    logo = async () => (await chargerLogo()).svg,
     // { imprimer({papier, orientation}) → Promise<{issue, cause}> } : la
     // frontière « impression » de la plateforme (§ 13.4), que les
     // composants reçoivent par le contexte, sans importer src/impression.
@@ -139,9 +144,11 @@
     produitVersion,
     planifier: horloge.planifier,
     annuler: horloge.annuler,
-    // La planche de badges embarque la police, et sa feuille de contrôle lit
-    // la provenance pour la version visible (§ 11.4, § 19.4).
+    // La planche de badges embarque la police et le logo du pied
+    // TechnoLibre, et sa feuille de contrôle lit la provenance pour la
+    // version visible (§ 11.4, § 19.4).
     polices,
+    logo,
     provenance,
   });
   const finDeGeneration = suivreFinDeGeneration(executeur, activite);

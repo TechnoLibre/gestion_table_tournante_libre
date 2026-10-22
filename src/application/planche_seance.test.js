@@ -12,29 +12,31 @@
 // La liste des badges en CSV, dernière série, se dépose et se refuse de
 // même ; elle ne produit aucun PDF, et la borne qui suit ne la compte pas.
 //
-// La série surveillée borne le coût (§ 14.4, contrainte 31) : douze
+// La série surveillée borne le coût (§ 14.4, contrainte 31) : quatorze
 // productions de l'A6 au plus dans ce fichier, sur une soirée de quatre
-// personnes — trois pour les trois modes, deux pour la stabilité des
-// octets, une réédition, deux refus d'écriture et l'enregistrement sous,
-// une sous web, deux propositions de la même génération —, et neuf
-// d'Avery 5392, de deux documents chacune — une déposée, une de sept
-// badges en pile demandée, une au libellé de table le plus long, deux
-// refusées et trois enregistrements sous, une sous web. Les épreuves de
-// l'A6 choisissent ce modèle ; celles d'Avery 5392 n'en choisissent aucun,
-// comme une machine neuve. L'imposition et
-// l'ordre se lisent dans la place de chaque nom, et le papier, l'imposition
-// et le nombre de planches dans la feuille de contrôle : la première
-// production, sous la demande par défaut, en A4 — l'ordre alphabétique ; la
-// proposition, sous la demande par défaut, en Lettre — feuille par feuille
-// sur deux planches ; celle sous web en Lettre, en pile, par table. La
-// réédition porte un caractère sans glyphe, que sa feuille de contrôle
-// nomme. Le témoin de 257 ne s'analyse que pour son annonce. Les noms sont
-// inventés ; la version vient du module engendré.
+// personnes — trois pour les trois modes, deux pour la stabilité des octets,
+// une réédition, deux refus d'écriture et l'enregistrement sous, une sous
+// web, deux propositions de la même génération, deux sous le pied
+// TechnoLibre —, et douze d'Avery 5392, de deux documents chacune — une
+// déposée, une de sept badges en pile demandée, une au libellé de table le
+// plus long, deux refusées et trois enregistrements sous, une sous web, trois
+// pour le pied TechnoLibre. Les épreuves de l'A6 choisissent ce modèle ;
+// celles d'Avery 5392 n'en choisissent aucun, comme une machine neuve. La
+// case du pied TechnoLibre se décoche au montage, sauf pour les épreuves qui
+// le portent. L'imposition et l'ordre se lisent dans la place de chaque nom,
+// et le papier, l'imposition et le nombre de planches dans la feuille de
+// contrôle : la première production, sous la demande par défaut, en A4 —
+// l'ordre alphabétique ; la proposition, sous la demande par défaut, en
+// Lettre — feuille par feuille sur deux planches ; celle sous web en Lettre,
+// en pile, par table. La réédition porte un caractère sans glyphe, que sa
+// feuille de contrôle nomme. Le témoin de 257 ne s'analyse que pour son
+// annonce. Les noms sont inventés ; la version vient du module engendré.
 import assert from 'node:assert/strict';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_PROPOSITION, H_RETENU, personne, soiree, table } from '../../test/fixtures/badges/cas.js';
 import { FORME_TEMOIN, chargeTemoin } from '../../test/fixtures/badges/temoin.js';
 import { describe, test } from '../../test/lanceur.js';
+import { lireLogo } from '../../test/logo.js';
 import { lirePdf } from '../../test/pdf.js';
 import { lirePolices } from '../../test/polices.js';
 import { PAPIERS } from '../geometrie/papiers.js';
@@ -53,6 +55,7 @@ const DOCUMENTS = 'D:\\Soirees\\Gestion table tournante Libre';
 const DOC = { id: 'documents', chemin: DOCUMENTS };
 const BASE = 'Soirée des Lucioles';
 const POLICES = lirePolices();
+const LOGO = lireLogo();
 const FILIGRANE = libelle('planche.brouillon');
 
 // Les primitives qui écrivent, et enregistrerSous, que la trace consigne.
@@ -141,10 +144,18 @@ async function deposer(fs, charge, { format = FORMAT } = {}) {
 // Une séance sur l'événement de la charge, ouvert en lecture, le modèle de
 // badge et le papier choisis quand ils sont donnés — l'A6 par défaut, le
 // modèle que ces épreuves éprouvent ; null garde Avery 5392, celui d'une
-// machine qui n'a rien choisi ; la trace part ensuite, vide.
+// machine qui n'a rien choisi ; la case du pied TechnoLibre décochée, sauf
+// pour les épreuves qui le portent ; la trace part ensuite, vide.
 async function monter(
   charge = chargeLucioles(),
-  { papier = 'A4', modeleBadge = 'a6', fs = creerFichiersSimules({ documents: DOCUMENTS }), format, base = BASE } = {},
+  {
+    papier = 'A4',
+    modeleBadge = 'a6',
+    piedTechnolibre = false,
+    fs = creerFichiersSimules({ documents: DOCUMENTS }),
+    format,
+    base = BASE,
+  } = {},
 ) {
   await deposer(fs, charge, { format });
   let tirage = 0;
@@ -160,9 +171,11 @@ async function monter(
     planifier: () => null,
     annuler: () => {},
     polices: async () => POLICES,
+    logo: async () => LOGO,
     provenance: 'production',
   });
   if (modeleBadge !== null) await seance.choisirModeleBadge(modeleBadge);
+  if (!piedTechnolibre) await seance.choisirPiedTechnolibre(false);
   if (papier !== null) await seance.choisirPapier(papier);
   await seance.ouvrir(base);
   const trace = tracer(fs);
@@ -234,6 +247,8 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           brouillon: false,
           nom: attendu,
           nomControle: null,
+          piedTechnolibre: false,
+          sansTechnolibre: null,
         },
         nom,
       );
@@ -351,6 +366,8 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       brouillon: true,
       nom: null,
       nomControle: null,
+      piedTechnolibre: false,
+      sansTechnolibre: null,
     });
     await refusee(sans.seance.produirePlanche(), 'PLANCHE_SANS_PLACEMENT');
     await assert.rejects(sans.seance.preparerPlanche({ ordre: 'hasard' }), TypeError);
@@ -638,6 +655,8 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
       brouillon: false,
       nom: nomCartes,
       nomControle: nomFeuille,
+      piedTechnolibre: false,
+      sansTechnolibre: null,
     });
     assert.match(nomCartes, /\.badges_avery5392_/);
     assert.deepEqual(trace, []);
@@ -901,5 +920,73 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
     assert.deepEqual(await seance.produireListeBadges(), { chemin: null, nom: NOM_LISTE });
     assert.deepEqual(recus, [NOM_LISTE]);
     assert.deepEqual(trace, []);
+  });
+});
+
+// Le pied TechnoLibre (§ 11.4) : la case de la machine, cochée sur une
+// machine neuve, le porte sous le pied des badges, en couleurs, sur les
+// cartes Avery 5392 comme sur l'A6 ; la feuille de contrôle ne le porte
+// jamais. L'annonce compte les badges d'où il se retire.
+describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
+  const PROMOTION = libelle('planche.technolibre');
+  const COULEURS_LOGO = [[0x24, 0x37, 0x42], [255, 255, 255], [0xff, 0xd1, 0x66]];
+  const lu = (pdf) => pdf.pages.map((page) => textesDe(page).join(' ')).join(' ');
+  const zones = (pdf) => pdf.pages.flatMap((page) => page.zonesRemplies);
+
+  test('une machine neuve : Avery 5392, la case cochée ; chaque carte porte le texte et le logo en couleurs, la feuille de contrôle ni l’un ni l’autre', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { papier: null, modeleBadge: null, piedTechnolibre: true });
+    assert.equal(seance.etat().piedTechnolibre, true);
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.piedTechnolibre, annonce.sansTechnolibre], [null, true, 0]);
+    const { nom, controle } = await seance.produirePlanche();
+    const cartes = await lirePdf(fs.octets('documents', nom));
+    assert.ok(lu(cartes).includes('https://technolibre.ca'), lu(cartes));
+    assert.deepEqual(zones(cartes).map(({ couleur }) => couleur), [0, 1, 2, 3].flatMap(() => COULEURS_LOGO));
+    const feuille = await lirePdf(fs.octets('documents', controle.nom));
+    assert.ok(!lu(feuille).includes('technolibre'), lu(feuille));
+    assert.deepEqual(zones(feuille), []);
+  });
+
+  test('l’A6 le porte aussi, debout sur A4 ; les mêmes octets d’une production à l’autre', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { piedTechnolibre: true });
+    const { nom } = await seance.produirePlanche();
+    const octets = fs.octets('documents', nom);
+    const pdf = await lirePdf(octets);
+    assert.equal(zones(pdf).length, 3 * 4);
+    assert.ok(lu(pdf).replace(/\s+/g, ' ').includes(PROMOTION.split(' ').slice(-4).join(' ')), lu(pdf));
+    const autre = await monter(chargeLucioles(), { piedTechnolibre: true });
+    const second = await autre.seance.produirePlanche();
+    assert.deepEqual(autre.fs.octets('documents', second.nom), octets);
+  });
+
+  test('sept tours sur la carte : le pied TechnoLibre se retire des badges où il ne tient pas, que l’annonce compte ; la planche ne porte son logo que sur les autres', async () => {
+    const TOURS = 7;
+    const plan = Array.from({ length: TOURS }, (_, i) => (i % 2 === 0 ? PLAN[0] : PLAN[1]));
+    const club = { organisation: 'Club des Merles' };
+    const personnes = [personne(1, 'Iris', 'Ombrelle', club), personne(2, 'Théo', 'Pervenche', club), personne(3, 'Ondine', 'Lacasse', club), personne(4, null, 'Grisaille', club)];
+    const charge = chargeLucioles({ personnes, plan, propositions: [[1, plan]] });
+    const { fs, seance } = await monter(charge, { modeleBadge: null, piedTechnolibre: true });
+    const annonce = await seance.preparerPlanche();
+    assert.equal(annonce.refus, null);
+    assert.ok(annonce.sansTechnolibre > 0, String(annonce.sansTechnolibre));
+    const { nom } = await seance.produirePlanche();
+    const pdf = await lirePdf(fs.octets('documents', nom));
+    assert.equal(zones(pdf).length, 3 * (4 - annonce.sansTechnolibre));
+  });
+
+  test('décochée : l’annonce ne compte rien, la planche ne porte ni le texte ni le logo', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { modeleBadge: null });
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.piedTechnolibre, annonce.sansTechnolibre], [false, null]);
+    const { nom } = await seance.produirePlanche();
+    const pdf = await lirePdf(fs.octets('documents', nom));
+    assert.deepEqual(zones(pdf), []);
+    assert.ok(!lu(pdf).includes('technolibre'));
+  });
+
+  test('un refus du placement : l’annonce garde la case, sans compte', async () => {
+    const { seance } = await monter(chargeLucioles({ plan: null, etat: 'propose' }), { piedTechnolibre: true });
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus.code, annonce.piedTechnolibre, annonce.sansTechnolibre], ['PLANCHE_SANS_PLACEMENT', true, null]);
   });
 });

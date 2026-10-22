@@ -3048,13 +3048,14 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **quatre choses, et quatre seulement** :
+Ce fichier porte **cinq choses, et cinq seulement** :
 
 | réglage | portée |
 |---|---|
 | le **cadrage** | indexé par identifiant d'événement |
 | le **format de papier** (§ 11.2) | global à la machine |
 | le **modèle de badge** (§ 11.2), clé `modele_badge` | global à la machine |
+| la **case du pied TechnoLibre** des badges (§ 11.4), clé `pied_technolibre` | globale à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
@@ -3071,15 +3072,15 @@ mode portable (§ 8.6), ce fichier suit la clé avec les événements.
 **Le cadrage s'écrit en différé**, et échappe nommément à la règle « fin du
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
-cadrage, le papier, le modèle de badge et la taille du texte passent par une
-même file, qui relit le
-fichier avant chaque écriture : deux écrivains qui le liraient chacun avant que
-l'autre l'ait écrit perdraient le réglage de l'un. Un fichier que la lecture ne
-prend pas ne s'écrase pas. Ni lui, ni un dossier qui refuse de l'écrire, ne
-bloque le choix du papier : le papier choisi vaut pour la séance sur ce dossier
-de travail, sans être retenu sur la machine, et un avertissement nomme le
-fichier et dit que le choix n'est pas retenu ; la première écriture des réglages
-qui y réussit le retient, et l'avertissement se retire. Le cadrage attend.
+cadrage, le papier, le modèle de badge, la case du pied TechnoLibre et la taille
+du texte passent par une même file, qui relit le fichier avant chaque écriture :
+deux écrivains qui le liraient chacun avant que l'autre l'ait écrit perdraient
+le réglage de l'un. Un fichier que la lecture ne prend pas ne s'écrase pas. Ni
+lui, ni un dossier qui refuse de l'écrire, ne bloque le choix du papier : le
+papier choisi vaut pour la séance sur ce dossier de travail, sans être retenu
+sur la machine, et un avertissement nomme le fichier et dit que le choix n'est
+pas retenu ; la première écriture des réglages qui y réussit le retient, et
+l'avertissement se retire. Le cadrage attend.
 
 **Le modèle de badge** décrit le support que la machine garnit — des cartes
 Avery 5392 prédécoupées, ou des A6 à découper (§ 11.2) —, pas le plan. Le
@@ -3095,6 +3096,17 @@ que le fichier porte, à défaut celui de la séance. Un fichier que la lecture
 ne prend pas, ou un dossier qui refuse de l'écrire, ne bloque pas le choix : le
 modèle vaut pour la séance, et la section dit, sous ses réglages, qu'il n'est
 pas retenu sur ce poste.
+
+**La case du pied TechnoLibre** dit si les badges de la machine portent le pied
+de l'éditeur (§ 11.4) : un choix de la machine qui les imprime, pas du plan. Le
+fichier ne la porte que touchée, un booléen ; sans elle, la case est cochée.
+Une valeur présente qui n'est pas un booléen rend le fichier illisible, comme
+un papier inconnu. Elle se coche et se décoche dans la section des badges, sous
+les deux modèles, s'écrit au geste, dans tout mode, par la même file, et se
+relit comme le modèle de badge ; un fichier que la lecture ne prend pas, ou un
+dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut pour la
+séance, et la section dit, sous ses réglages, qu'elle n'est pas retenue sur ce
+poste.
 
 **La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
 (§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
@@ -4580,7 +4592,11 @@ bord de la feuille, où aucune imprimante à jet ou à laser courante ne dépose
 d'encre. Le logiciel ne dessine donc **ni fond perdu, ni aplat de couleur, ni
 cadre** : un fond coloré ressort avec une bande blanche de trois à cinq
 millimètres sur deux côtés, et la coupe se met à chasser la bande au lieu de
-suivre un repère.
+suivre un repère. **Une seule couleur entre sur le badge : le logo du pied
+TechnoLibre** (§ 11.4), dans ses couleurs d'origine, fond compris. Il se tient
+dans le cadre utile, loin de tout bord de coupe ou de feuille, et n'est donc
+pas un fond perdu ; sur une imprimante en noir et blanc, il sort en gris sans
+que rien d'autre ne change.
 
 #### Le Lettre : deux cellules, un encadrement complet
 
@@ -4699,11 +4715,32 @@ cherche à qui il parle.
 | 3 | **organisation**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
+| 6 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », suivi du logo de TechnoLibre en couleurs d'origine | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que tout le reste laisse |
 
 Le pied des **pages** imprimées porte cinq éléments, la version comprise
 (§ 11.7). Le badge n'est pas une page : il porte le nom de l'événement, sa date
 et l'horodatage, **pas le tour** — il les porte tous — et **pas la version**, qui
 ne sert à aucun diagnostic au cou d'un invité et dont la place est comptée.
+
+**Le pied TechnoLibre passe après tout le reste.** La place du badge se donne
+dans cet ordre : le nom et les tours toujours ; puis le logo du participant,
+quand une itération suivante le posera, entre les tours et le pied ; puis le
+pied, dans l'ordre de sacrifice du § 11.5 ; le pied TechnoLibre en dernier. Il
+se compose d'un texte, centré, replié comme le pied, puis du logo, centré, posé
+sur le bord bas du cadre utile, le pied remontant d'autant. Il ne prend que
+l'écart que le badge, composé sans lui, laisse entre ses tours et son pied : il
+ne réduit ni le nom, ni les tours, ni l'organisation, ni le pied, et ne les
+déplace pas, le pied excepté. Il rapetisse jusqu'à un plancher lisible à la
+loupe, puis se retire, et l'annonce le dit (§ 11.5). Un badge qui a perdu le nom
+de l'événement, et à plus forte raison l'organisation, ne le porte pas : il
+vient après eux dans l'ordre de sacrifice, et la place que leur retrait libère
+ne lui revient pas. Son logo est la seule couleur du badge (§ 11.2) : il se
+dessine en vecteurs, chemins et couleurs du fichier de l'éditeur,
+`src/actifs/full_logo_technolibre_2023.svg`, et un logo que l'éditeur changerait
+pour une forme que la planche ne sait pas rendre fidèlement — un dégradé, une
+transparence, un arc, une transformation — se refuse à la production au lieu de
+sortir faux. **La feuille de contrôle ne le porte pas** : elle s'imprime sur
+papier ordinaire et ne se distribue pas, et elle reste une page de mesure.
 
 **Un itinéraire constant s'écrit en une ligne.** Quand une personne, présente
 aux R tours, occupe la même table à chacun d'eux, R ≥ 2 — au même siège sous
@@ -4766,7 +4803,7 @@ qu'on y met est variable. Le logiciel fixe donc un **ordre de
 sacrifice**, écrit une fois, et ne laisse jamais la mise en page se résoudre par
 un débordement.
 
-> nom › lignes de tour › organisation › nom de l'événement
+> nom › lignes de tour › organisation › nom de l'événement › pied TechnoLibre
 
 - **Un nom très long.** Le nom **ne s'abrège jamais**. Le logiciel réduit le corps
   par paliers jusqu'à un plancher de lisibilité **mesuré sur les métriques de la
@@ -4828,6 +4865,22 @@ un débordement.
   produit et le compte attendu — « 257 badges pour 260 participants, 3 exclus » —
   sur la feuille de contrôle, pour que l'écart soit lu avant la coupe et non à
   l'accueil.
+- **Un badge sans place pour le pied TechnoLibre.** Le pied TechnoLibre
+  (§ 11.4) part de 6 pt, et descend d'un point par palier jusqu'à son
+  plancher, 4 pt, lisible à la loupe ; son logo mesure deux cadratins de ce
+  corps de haut — 4,2 mm au départ, 2,8 mm au plancher —, cinq fois plus en
+  largeur. Ces valeurs sont communes aux deux modèles ; le corps de départ et
+  le plancher sont au registre des constantes (§ 14.1), défauts de travail
+  jusqu'à leur relevé sur une impression réelle. Il prend le plus grand
+  palier dont le texte et le logo tiennent dans l'écart libre ; quand même le
+  plancher ne tient pas, ou que le badge a perdu le nom de l'événement, qui
+  le précède dans l'ordre de sacrifice, il se retire de ce badge, qui sort
+  tel qu'il serait sans lui, et l'annonce compte les badges concernés —
+  « Pied TechnoLibre : retiré de 3 badges, faute de place sous leurs
+  tours. ». Ce n'est jamais un refus : la planche se produit. Mesuré sur la
+  police embarquée, sous un nom d'une ligne et son organisation, avec des
+  lignes de tour sans siège ni titre, il tient au corps de départ jusqu'à
+  cinq tours sur la carte Avery 5392 et treize sur l'A6.
 
 ### 11.6 L'ordre des badges, et l'imposition
 
@@ -8641,8 +8694,8 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
 | `21-historique.png` | idem | le panneau d'historique ouvert à côté du plan : la liste, la plus récente en haut, chaque ligne sa date et son heure ; un geste défait au clavier, sa ligne « Défait (Ctrl+Z) : … », qui n'est pas abandonnée, et sous elle le geste défait, sur un fil abandonné, en encre secondaire et marqué ; en tête, l'instant courant, nommé « Avant l'accueil » par le champ du panneau (§ 8.2, § 8.3) | au moins un fil abandonné est présent et marqué comme tel ; le libellé du retour nomme la touche ; le jalon est sur l'instant courant, et le nommer ne change pas la révision |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
-| `24-badges-controle.png` / `25-badges-planche.png` | idem, sur une machine qui n'a pas choisi de modèle de badge : Avery 5392 | la **feuille de contrôle à part**, avec son échelle de 100 mm, le contour des six cartes et ses comptes, puis la première **feuille de cartes**, six cartes Avery 5392 sans filet, les six premiers noms de l'ordre alphabétique ; une personne assise à la même table à chaque tour lit une seule ligne, « Toute la soirée — table 1 (Table d’honneur) », le libellé de la table après son numéro (§ 11.4) | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle et pose sur une feuille de cartes avant d'engager les cartes, et une feuille de cartes seule ne le montre pas ; produire n'écrit que les deux PDF |
-| `25a-badge-absente.png` | idem que `02c`, la meilleure dérivée retenue | la feuille de cartes de la réédition des badges de la partante et de l'arrivée : « Tour 3 — absente » sur l'un, « Tour 1 — absente » sur l'autre (§ 11.5) | « Retenir » n'ouvre aucune fenêtre, le retenu n'étant ajusté qu'aux participants ; seuls la planche et sa feuille de contrôle s'écrivent ; tramée du PDF comme `24` et `25` (§ 19.6) |
+| `24-badges-controle.png` / `25-badges-planche.png` | idem, sur une machine qui n'a pas choisi de modèle de badge : Avery 5392 | la **feuille de contrôle à part**, avec son échelle de 100 mm, le contour des six cartes et ses comptes, puis la première **feuille de cartes**, six cartes Avery 5392 sans filet, les six premiers noms de l'ordre alphabétique ; une personne assise à la même table à chaque tour lit une seule ligne, « Toute la soirée — table 1 (Table d’honneur) », le libellé de la table après son numéro (§ 11.4) ; sous le pied de chaque carte, le pied TechnoLibre, son texte puis le logo en couleurs, la case de la machine étant cochée par défaut — la feuille de contrôle ne le porte pas | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle et pose sur une feuille de cartes avant d'engager les cartes, et une feuille de cartes seule ne le montre pas ; produire n'écrit que les deux PDF |
+| `25a-badge-absente.png` | idem que `02c`, la meilleure dérivée retenue | la feuille de cartes de la réédition des badges de la partante et de l'arrivée : « Tour 3 — absente » sur l'un, « Tour 1 — absente » sur l'autre (§ 11.5), chacun sous son pied TechnoLibre | « Retenir » n'ouvre aucune fenêtre, le retenu n'étant ajusté qu'aux participants ; seuls la planche et sa feuille de contrôle s'écrivent ; tramée du PDF comme `24` et `25` (§ 19.6) |
 
 Une image montre ce que tient la surface défilante d'un cadre de 1 366 × 700
 (§ 19.4), soit 482 px de haut sous la barre du plan ; ce que la ligne du tableau

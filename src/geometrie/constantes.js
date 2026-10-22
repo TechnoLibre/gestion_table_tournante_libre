@@ -293,6 +293,37 @@ export const CONSTANTES = Object.freeze(
         'logiciel ; le corps retenu, écrit dans ce registre',
     },
     {
+      nom: 'CORPS_TECHNOLIBRE_PT',
+      valeur: 6,
+      unite: 'pt',
+      mesure: "corps de départ du pied TechnoLibre d'un badge, A6 ou carte Avery 5392 ; son logo a deux cadratins de haut",
+      raison:
+        "l'invitation de l'éditeur se lit en main sous le pied sans lui disputer la lecture ; elle ne prend que " +
+        'la place que tout le reste du badge laisse (§ 11.4)',
+      configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle ; lecture en main par une personne qui n'a pas écrit " +
+        'le logiciel ; le corps retenu, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_TECHNOLIBRE_PLANCHER_PT',
+      valeur: 4,
+      unite: 'pt',
+      mesure: 'corps sous lequel le pied TechnoLibre ne descend pas : en deçà, il se retire du badge',
+      raison:
+        "un pied TechnoLibre qu'on ne lit plus n'invite personne : il se retire, et l'annonce le dit, plutôt que " +
+        'de sortir illisible (§ 11.5)',
+      configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture à la loupe',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle, le pied TechnoLibre à corps décroissants ; lecture à " +
+        "la loupe par une personne qui n'a pas écrit le logiciel ; le plus petit corps lu sans erreur, URL " +
+        'comprise, écrit dans ce registre',
+    },
+    {
       nom: 'CORPS_MIN_IMPRESSION_MM',
       valeur: 2.5,
       unite: 'mm',

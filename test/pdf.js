@@ -34,6 +34,8 @@ const DRAW = Object.freeze({ moveTo: 0, lineTo: 1, curveTo: 2, quadraticCurveTo:
 // remplissent : S s, f F f*, B B* b b*.
 const TRACENT = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke]);
 const REMPLISSENT = new Set([OPS.fill, OPS.eoFill, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke]);
+// Les opérateurs de couleur : pdf.js rend en RVB (rg, RG) les couleurs
+// posées en gris, en CMJN ou par sc et scn hors motif.
 const COULEURS = new Set([OPS.setFillRGBColor, OPS.setStrokeRGBColor]);
 // Les opérateurs qui montrent du texte : Tj TJ ' ".
 const MONTRENT = new Set([OPS.showText, OPS.showSpacedText, OPS.nextLineShowText, OPS.nextLineSetSpacingShowText]);
@@ -96,34 +98,67 @@ function boiteDuFragment({ transform, width, height }) {
   return { x1: Math.min(...xs), x2: Math.max(...xs), y1: Math.min(...ys), y2: Math.max(...ys) };
 }
 
+// L'englobant des points d'un chemin, contrôles des courbes compris, sous
+// la matrice m, en points : {x1, y1, x2, y2}. null pour un chemin vide.
+function englobant(donnees, m) {
+  const points = [];
+  for (let j = 0; j < donnees.length; ) {
+    const code = donnees[j++];
+    const nombre = { [DRAW.moveTo]: 1, [DRAW.lineTo]: 1, [DRAW.curveTo]: 3, [DRAW.quadraticCurveTo]: 2, [DRAW.closePath]: 0 }[code];
+    if (nombre === undefined) throw new TypeError(`lirePdf : code de chemin inconnu ${code}`);
+    for (let k = 0; k < nombre; k += 1) {
+      points.push(appliquer(m, donnees[j], donnees[j + 1]));
+      j += 2;
+    }
+  }
+  if (points.length === 0) return null;
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) };
+}
+
 // Les segments, remplissages, couleurs et tirets d'une liste d'opérateurs,
 // les segments en points sous la matrice courante, chacun avec son
-// épaisseur ; le mode de rendu en vigueur à chaque texte montré. La
-// matrice, l'épaisseur de trait (1 par défaut, PDF 32000 § 8.4.1) et le
-// mode font partie de l'état graphique : q les empile, Q les rend.
+// épaisseur ; l'englobant de chaque chemin rempli, avec la couleur de fond
+// en vigueur, noire par défaut ; le mode de rendu et la couleur de fond en
+// vigueur à chaque texte montré. La matrice, l'épaisseur de trait (1 par
+// défaut, PDF 32000 § 8.4.1), la couleur de fond et le mode font partie de
+// l'état graphique : q les empile, Q les rend.
 function lireDessin({ fnArray, argsArray }) {
   const segments = [];
   const couleurs = [];
   const modesTexte = [];
+  const couleursTexte = [];
+  const zones = [];
   let remplissages = 0;
   let tirets = false;
   let matrice = [1, 0, 0, 1, 0, 0];
   let mode = 0;
   let largeurTrait = 1;
+  let fond = [0, 0, 0];
   const pile = [];
   fnArray.forEach((fn, i) => {
     const args = argsArray[i];
-    if (fn === OPS.save) pile.push({ matrice, mode, largeurTrait });
-    else if (fn === OPS.restore) ({ matrice, mode, largeurTrait } = pile.pop() ?? { matrice: [1, 0, 0, 1, 0, 0], mode: 0, largeurTrait: 1 });
-    else if (fn === OPS.transform) matrice = composer(args, matrice);
+    if (fn === OPS.save) pile.push({ matrice, mode, largeurTrait, fond });
+    else if (fn === OPS.restore) {
+      ({ matrice, mode, largeurTrait, fond } = pile.pop() ?? { matrice: [1, 0, 0, 1, 0, 0], mode: 0, largeurTrait: 1, fond: [0, 0, 0] });
+    } else if (fn === OPS.transform) matrice = composer(args, matrice);
     else if (fn === OPS.setLineWidth) [largeurTrait] = args;
     else if (fn === OPS.setTextRenderingMode) [mode] = args;
-    else if (MONTRENT.has(fn)) modesTexte.push(mode);
-    else if (fn === OPS.setDash) tirets ||= args[0].length > 0;
-    else if (COULEURS.has(fn)) couleurs.push(enRgb(args[0]));
-    else if (fn === OPS.constructPath) {
+    else if (MONTRENT.has(fn)) {
+      modesTexte.push(mode);
+      couleursTexte.push(fond);
+    } else if (fn === OPS.setDash) tirets ||= args[0].length > 0;
+    else if (COULEURS.has(fn)) {
+      couleurs.push(enRgb(args[0]));
+      if (fn === OPS.setFillRGBColor) fond = enRgb(args[0]);
+    } else if (fn === OPS.constructPath) {
       const [peinture, [donnees]] = args;
-      if (REMPLISSENT.has(peinture)) remplissages += 1;
+      if (REMPLISSENT.has(peinture)) {
+        remplissages += 1;
+        const zone = donnees === null || donnees === undefined ? null : englobant(donnees, matrice);
+        if (zone !== null) zones.push({ ...zone, couleur: fond });
+      }
       if (!TRACENT.has(peinture) || donnees === null || donnees === undefined) return;
       let courant = null;
       let depart = null;
@@ -158,7 +193,7 @@ function lireDessin({ fnArray, argsArray }) {
       }
     }
   });
-  return { segments, remplissages, couleurs, tirets, modesTexte };
+  return { segments, remplissages, couleurs, tirets, modesTexte, couleursTexte, zones };
 }
 
 // La valeur d'un attribut héritable d'une page (MediaBox, CropBox,
@@ -239,9 +274,11 @@ async function lireStructure(octets) {
  *     textes: Array<{texte: string, x: number, y: number, l: number, h: number}>,
  *     segments: Array<{x1: number, y1: number, x2: number, y2: number, epaisseur: number}>,
  *     remplissages: number,
+ *     zonesRemplies: Array<{x: number, y: number, largeur: number, hauteur: number, couleur: [number, number, number]}>,
  *     couleurs: Array<[number, number, number]>,
  *     tirets: boolean,
- *     modesTexte: number[]}>,
+ *     modesTexte: number[],
+ *     couleursTexte: Array<[number, number, number]>}>,
  *   polices: Array<{nom: string, toUnicode: boolean, fontFile2: number|null}>,
  *   info: string[],
  *   id: boolean}>}
@@ -250,13 +287,18 @@ async function lireStructure(octets) {
  *   de blancs, x et y à son coin haut gauche ; segments : les côtés droits des chemins tracés,
  *   ceux d'un chemin seulement rempli exclus, epaisseur : celle du trait en
  *   millimètres, mesurée en travers du segment sous la matrice courante ; remplissages : le nombre de
- *   chemins remplis (f F f* B B* b b*) ; couleurs : chaque couleur posée,
+ *   chemins remplis (f F f* B B* b b*) ; zonesRemplies : l'englobant de
+ *   chacun de ces chemins sous la matrice courante, contrôles des courbes
+ *   compris, x et y à son coin haut gauche, et la couleur de fond en vigueur
+ *   en [r, g, b] de 0 à 255 ; couleurs : chaque couleur posée,
  *   de trait ou de fond, dans l'ordre ; tirets : un motif de tirets non
  *   vide posé ; modesTexte : le mode de rendu (Tr) en vigueur à chaque
  *   opérateur qui montre du texte, dans l'ordre du flux, 0 par défaut, 1
- *   au trait ; polices : fontFile2, la longueur en octets du programme
- *   TrueType embarqué, décodé, null sans FontFile2 ; info : les clés de
- *   /Info, [] sans /Info ; id : la remorque porte /ID.
+ *   au trait ; couleursTexte : la couleur de fond en vigueur à chacun de
+ *   ces opérateurs, en [r, g, b] de 0 à 255, noire par défaut ; polices :
+ *   fontFile2, la longueur en octets du programme TrueType embarqué,
+ *   décodé, null sans FontFile2 ; info : les clés de /Info, [] sans /Info ;
+ *   id : la remorque porte /ID.
  */
 export async function lirePdf(octets) {
   const structure = await lireStructure(octets);
@@ -306,9 +348,17 @@ export async function lirePdf(octets) {
         textes,
         segments: dessin.segments.map(enMm),
         remplissages: dessin.remplissages,
+        zonesRemplies: dessin.zones.map(({ x1, y1, x2, y2, couleur }) => ({
+          x: (x1 - gauche) * MM_PAR_PT,
+          y: (haut - y2) * MM_PAR_PT,
+          largeur: (x2 - x1) * MM_PAR_PT,
+          hauteur: (y2 - y1) * MM_PAR_PT,
+          couleur,
+        })),
         couleurs: dessin.couleurs,
         tirets: dessin.tirets,
         modesTexte: dessin.modesTexte,
+        couleursTexte: dessin.couleursTexte,
       });
     }
     return { pages, polices: structure.polices, info: structure.info, id: structure.id };

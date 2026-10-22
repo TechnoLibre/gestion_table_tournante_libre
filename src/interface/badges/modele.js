@@ -13,7 +13,9 @@
 //
 // Le modèle de badge est un réglage de la machine (EtatSeance.modeleBadge) :
 // la section l'offre, Avery 5392 d'abord. Un modèle qui impose son papier
-// n'offre ni imposition ni papier.
+// n'offre ni imposition ni papier. La case du pied TechnoLibre en est un
+// autre (EtatSeance.piedTechnolibre), et l'annonce nomme les badges d'où il
+// se retire.
 //
 // La liste des badges en CSV se tire du même placement que la planche : un
 // refus du placement la bloque comme la planche, un refus de la mise en
@@ -58,16 +60,22 @@ export function modeleImposeSonPapier(modele) {
 }
 
 /**
- * Vrai quand l'annonce reçue est celle du modèle et du papier de la
- * machine : son modèle est celui de la séance, son papier celui que ce
- * modèle prend (papierDesBadges). Une annonce sans modèle est celle de l'A6.
+ * Vrai quand l'annonce reçue est celle du modèle, du papier et de la case
+ * du pied TechnoLibre de la machine : son modèle est celui de la séance,
+ * son papier celui que ce modèle prend (papierDesBadges), sa case celle de
+ * la séance. Une annonce sans modèle est celle de l'A6 ; une annonce ou une
+ * machine sans case vaut décochée.
  *
  * @param {import('../../application/planche_seance.js').Annonce} annonce
- * @param {{modeleBadge: string, papier: string|null}} machine   EtatSeance
+ * @param {{modeleBadge: string, papier: string|null, piedTechnolibre?: boolean}} machine   EtatSeance
  */
-export function annonceDeLaMachine(annonce, { modeleBadge, papier }) {
+export function annonceDeLaMachine(annonce, { modeleBadge, papier, piedTechnolibre = false }) {
   const modele = annonce.modeleBadge ?? 'a6';
-  return modele === modeleBadge && annonce.papier === papierDesBadges(modeleBadge, papier);
+  return (
+    modele === modeleBadge &&
+    annonce.papier === papierDesBadges(modeleBadge, papier) &&
+    (annonce.piedTechnolibre ?? false) === piedTechnolibre
+  );
 }
 /** La source que désigne une demande sans source offerte : le retenu, que
  *  la séance refuse alors PLANCHE_SANS_PLACEMENT. */
@@ -170,7 +178,8 @@ const pointDeCode = (caractere) => `U+${caractere.codePointAt(0).toString(16).to
  * réédition ; le nombre de planches sur chaque papier de PAPIERS, le papier
  * utilisé marqué — pour Avery 5392, le nombre de feuilles de cartes ; chaque
  * groupe d'homonymes ; les caractères absents de la police avec leur point de
- * code ; la mention BROUILLON, de la source ; le nom du fichier — pour Avery
+ * code ; le nombre de badges d'où le pied TechnoLibre se retire, quand il y
+ * en a ; la mention BROUILLON, de la source ; le nom du fichier — pour Avery
  * 5392, ceux des cartes et de la feuille de contrôle à part. Une annonce sans
  * modèle est celle de l'A6. Sous un refus du placement, seule la source se
  * dit : comptes, planches et nom manquent à l'annonce. L'annonce reçue n'est
@@ -206,6 +215,9 @@ export function phrasesAnnonce(annonce, { source = 'retenu', proposition = null,
   if (annonce.absents.length > 0) {
     const caracteres = annonce.absents.map((caractere) => ({ caractere, point: pointDeCode(caractere) }));
     phrases.push({ cle: 'badges.annonce.absents', details: { caracteres } });
+  }
+  if ((annonce.sansTechnolibre ?? 0) > 0) {
+    phrases.push({ cle: 'badges.annonce.technolibreRetire', details: { n: annonce.sansTechnolibre } });
   }
   if (annonce.comptes !== null && annonce.brouillon) {
     phrases.push({ cle: `badges.annonce.brouillon.${source === 'proposition' ? 'proposition' : 'retenu'}`, details: {} });

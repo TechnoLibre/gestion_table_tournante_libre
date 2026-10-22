@@ -25,6 +25,13 @@
 // l'encode, comme la mise en page l'a mesuré : chaque police entre une fois
 // dans les ressources de chaque page.
 //
+// Le pied TechnoLibre, quand l'entrée le demande, porte un texte et le logo
+// de l'éditeur, lu de ses octets SVG (lireLogo, logo.js) : chaque forme se
+// remplit de sa couleur d'origine, la seule couleur du badge, par ses
+// opérateurs de chemin (m, l, c, h, f), chaque point converti un à un dans
+// le repère du badge, comme le texte : pas de matrice, et un badge à plat
+// tourne son logo avec lui. La feuille de contrôle ne le porte pas.
+//
 // Les octets ne dépendent que des entrées : pdf-lib tire les suffixes de ses
 // noms de ressources d'un générateur à graine fixe, créé avec le document ;
 // la date du document vient de l'horodatage du placement, jamais d'une
@@ -35,11 +42,17 @@ import {
   PDFName,
   PDFString,
   TextRenderingMode,
+  appendBezierCurve,
   beginText,
+  closePath,
   endText,
+  fill,
   grayscale,
+  lineTo,
+  moveTo,
   popGraphicsState,
   pushGraphicsState,
+  setFillingRgbColor,
   setFontAndSize,
   setLineWidth,
   setStrokingGrayscaleColor,
@@ -50,6 +63,7 @@ import {
 import { constante } from '../geometrie/constantes.js';
 import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js';
 import { cadreUtile, cellules, filets, imposer } from './imposition.js';
+import { lireLogo } from './logo.js';
 import { mettreEnPage, metriquesDe } from './mise_en_page.js';
 
 /**
@@ -137,6 +151,18 @@ function controlerModeleEtPolices(modele, polices, modeleBadge) {
   if (!estModeleBadge(modeleBadge)) throw new TypeError(`modeleBadge : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
 }
 
+// Le pied TechnoLibre demandé, contrôlé : null, ou son texte, non blanc,
+// et le logo lu de ses octets SVG ; TypeError sinon, et pour un logo que
+// lireLogo refuse.
+function technolibreLu(technolibre) {
+  if (technolibre === null) return null;
+  if (typeof technolibre?.texte !== 'string' || technolibre.texte.trim() === '' || !(technolibre.logo instanceof Uint8Array)) {
+    throw new TypeError('technolibre : {texte, logo} attendu, le logo en octets SVG');
+  }
+  const logo = lireLogo(technolibre.logo);
+  return { texte: technolibre.texte, logo, demande: { texte: technolibre.texte, rapport: logo.largeur / logo.hauteur } };
+}
+
 // Les entrées d'un document, contrôlées, et sa date PDF, null pour un
 // horodatage inconnu : le papier, que le modèle de badge admet ; les lignes
 // de contrôle ; le mot du filigrane d'un brouillon.
@@ -184,25 +210,34 @@ const textesDuBadge = ({ textes }) => [
  * @param {ModelePlanche} entrees.modele
  * @param {{regulier: Uint8Array, gras: Uint8Array}} entrees.polices
  * @param {import('../geometrie/papiers.js').ModeleBadge} [entrees.modeleBadge]   'a6' par défaut
- * @returns {Promise<{refus: null | {code: string, details: object, rang: number}, absents: string[]}>}
+ * @param {{texte: string, logo: Uint8Array}|null} [entrees.technolibre]   le
+ *        pied TechnoLibre : son texte, et les octets SVG du logo ; null par
+ *        défaut, sans pied TechnoLibre
+ * @returns {Promise<{refus: null | {code: string, details: object, rang: number}, absents: string[],
+ *   sansTechnolibre: number}>}
  *   refus : le premier badge que la mise en page refuse, rang étant son
  *   indice dans modele.badges ; src/pdf ne connaît pas la personne, et
  *   l'appelant complète les détails. absents : les caractères sans glyphe
  *   de tous les textes des badges, une fois chacun, dans l'ordre de
- *   première rencontre.
+ *   première rencontre. sansTechnolibre : le nombre de badges mis en page
+ *   d'où le pied TechnoLibre demandé se retire, faute de place ; 0 sans
+ *   pied TechnoLibre.
  * @throws {TypeError} un modèle sans badges, des polices qui ne sont pas des
- *         octets, un modèle de badge inconnu
+ *         octets, un modèle de badge inconnu, un pied TechnoLibre mal formé
  */
-export async function analyserPlanche({ modele, polices, modeleBadge = 'a6' }) {
+export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', technolibre = null }) {
   controlerModeleEtPolices(modele, polices, modeleBadge);
+  const promotion = technolibreLu(technolibre);
   const { metriques } = await documentAvecPolices(polices);
   let refus = null;
+  let sansTechnolibre = 0;
   const absents = [];
   const vus = new Set();
   modele.badges.forEach((badge, rang) => {
     if (refus === null) {
-      const page = mettreEnPage(badge.textes, metriques, modeleBadge);
+      const page = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null);
       if (page.refus !== undefined) refus = { ...page.refus, rang };
+      else if (page.technolibre !== null && page.technolibre.corps === null) sansTechnolibre += 1;
     }
     for (const caractere of metriques.absents(textesDuBadge(badge).join(''))) {
       if (vus.has(caractere)) continue;
@@ -210,7 +245,7 @@ export async function analyserPlanche({ modele, polices, modeleBadge = 'a6' }) {
       absents.push(caractere);
     }
   });
-  return { refus, absents };
+  return { refus, absents, sansTechnolibre };
 }
 
 // Un repère : la position, en points du repère PDF (origine en bas à
@@ -304,6 +339,25 @@ function poserFiligrane(page, { mot, police, metriques }, cadre, repere) {
 function poserTexte(page, texte, { x, y, corps, police }, repere) {
   const [X, Y] = repere.point(x, y);
   ecrire(page, texte, { police, corps, X, Y, ux: repere.ux, uy: repere.uy });
+}
+
+// Le logo dans sa boîte, en millimètres du cadre utile, y vers le bas :
+// chaque forme, une couleur et un tracé, se remplit à part, d'un état
+// graphique à elle. point convertit un point du cadre utile, en mm, en
+// points de la page.
+function poserLogo(page, logo, boite, point) {
+  const echelle = boite.hauteur / logo.hauteur;
+  const vers = (x, y) => point(boite.x + x * echelle, boite.y + y * echelle);
+  for (const { couleur, trace } of logo.formes) {
+    const operateurs = [pushGraphicsState(), setFillingRgbColor(...couleur)];
+    for (const p of trace) {
+      if (p.op === 'M') operateurs.push(moveTo(...vers(p.x, p.y)));
+      else if (p.op === 'L') operateurs.push(lineTo(...vers(p.x, p.y)));
+      else if (p.op === 'C') operateurs.push(appendBezierCurve(...vers(p.x1, p.y1), ...vers(p.x2, p.y2), ...vers(p.x, p.y)));
+      else operateurs.push(closePath());
+    }
+    page.pushOperators(...operateurs, fill(), popGraphicsState());
+  }
 }
 
 // Un segment en millimètres, repère haut gauche de la page.
@@ -434,6 +488,10 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane, c
  * filet ; chaque carte porte son badge et son filigrane comme une cellule
  * de l'A6. Les lignes de contrôle reçues vont à produireControle.
  *
+ * Le pied TechnoLibre demandé se pose sur chaque badge où la mise en page
+ * lui trouve place : son texte, puis le logo, chaque forme remplie de sa
+ * couleur d'origine, dans l'ordre du fichier.
+ *
  * La boîte de média est celle du papier ; ni CropBox ni UserUnit. /Info ne
  * porte que CreationDate, la date de l'horodatage du placement, décalage
  * local gardé, et n'existe pas quand l'horodatage est inconnu.
@@ -448,20 +506,33 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane, c
  * @param {string} [entrees.filigrane]     le mot du filigrane, composé par
  *        libelle ; exigé quand modele.brouillon est vrai, ignoré sinon
  * @param {import('../geometrie/papiers.js').ModeleBadge} [entrees.modeleBadge]   'a6' par défaut
+ * @param {{texte: string, logo: Uint8Array}|null} [entrees.technolibre]   le
+ *        pied TechnoLibre, comme analyserPlanche le reçoit ; null par défaut
  * @returns {Promise<Uint8Array>}
  * @throws {TypeError} une entrée hors de son domaine, un papier que le
  *         modèle de badge n'admet pas, un horodatage d'une autre forme, un
- *         brouillon sans le mot de son filigrane
+ *         brouillon sans le mot de son filigrane, un pied TechnoLibre mal
+ *         formé
  * @throws {RangeError} un badge que la mise en page refuse : analyserPlanche
  *         le dit avant de produire
  */
-export async function produirePlanche({ modele, papier, imposition, polices, controle, filigrane = null, modeleBadge = 'a6' }) {
+export async function produirePlanche({
+  modele,
+  papier,
+  imposition,
+  polices,
+  controle,
+  filigrane = null,
+  modeleBadge = 'a6',
+  technolibre = null,
+}) {
   const date = controlerDocument({ modele, papier, polices, controle, filigrane, modeleBadge });
   if (!IMPOSITIONS.has(imposition)) throw new TypeError(`imposition inconnue : ${JSON.stringify(imposition)}`);
+  const promotion = technolibreLu(technolibre);
 
   const { pdf, regulier, gras, metriques } = await documentAvecPolices(polices);
   const mises = modele.badges.map((badge, rang) => {
-    const mise = mettreEnPage(badge.textes, metriques, modeleBadge);
+    const mise = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null);
     if (mise.refus !== undefined) throw new RangeError(`badge ${rang} refusé par la mise en page : ${mise.refus.code}`);
     return mise;
   });
@@ -483,9 +554,18 @@ export async function produirePlanche({ modele, papier, imposition, polices, con
     planche.forEach((indice, rang) => {
       if (indice === null) return;
       const repere = repereDuBadge(lesCellules[rang], H);
+      // Un point du cadre utile, en mm, y vers le bas, dans le repère du
+      // badge, y vers le haut.
+      const dansLeBadge = (x, y) => ({ x: cadreBadge.x + x, y: badge.hauteur - (cadreBadge.y + y) });
       for (const { texte, corps, gras: enGras, x, y } of mises[indice].blocs) {
-        const position = { x: cadreBadge.x + x, y: badge.hauteur - (cadreBadge.y + y) };
-        poserTexte(page, texte, { ...position, corps, police: enGras ? gras : regulier }, repere);
+        poserTexte(page, texte, { ...dansLeBadge(x, y), corps, police: enGras ? gras : regulier }, repere);
+      }
+      const logo = mises[indice].technolibre?.logo ?? null;
+      if (logo !== null) {
+        poserLogo(page, promotion.logo, logo, (x, y) => {
+          const position = dansLeBadge(x, y);
+          return repere.point(position.x, position.y);
+        });
       }
       if (marque !== null) poserFiligrane(page, { ...marque, metriques }, cadreDroit, repere);
     });

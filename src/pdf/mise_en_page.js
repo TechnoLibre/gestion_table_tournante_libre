@@ -26,6 +26,16 @@
 // Chaque modèle de badge a son cadre utile (cadreUtile) et ses corps de
 // départ, lus au registre des constantes (TYPOGRAPHIES) ; les planchers du
 // nom et des tours sont ceux de la lisibilité, communs aux modèles.
+//
+// Le pied TechnoLibre, quand il est demandé, vient en dernier : un texte,
+// puis le logo, sous le pied, le logo posé sur le bord du cadre. Il ne prend
+// que la place que le badge entier laisse entre ses tours et son pied, et ne
+// change rien à ce qui le précède : le badge se compose d'abord sans lui, le
+// pied remonte ensuite de la hauteur du bloc. Il rapetisse de son corps de
+// départ à son plancher, par paliers d'un point ; quand même le plancher ne
+// tient pas, il se retire, et le badge est celui qu'il serait sans lui. Il
+// se retire aussi d'un badge qui a perdu le nom de l'événement : il le suit
+// dans l'ordre de sacrifice.
 import { constante } from '../geometrie/constantes.js';
 import { MODELES_BADGE, estModeleBadge } from '../geometrie/papiers.js';
 import { cadreUtile } from './imposition.js';
@@ -53,6 +63,12 @@ const MM_PAR_PT = 25.4 / 72;
 /** La marque d'abrègement d'une organisation ou d'un texte libre d'une
  *  ligne de tour. */
 const MARQUE = '\u{2026}';
+
+// La hauteur du logo du pied TechnoLibre, en cadratins du corps de son
+// texte, commune aux modèles : une proportion du bloc, non un seuil de
+// lisibilité. Le corps de départ du texte et son plancher, lisible à la
+// loupe, sont au registre (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT).
+const LOGO_EN_CADRATINS = 2;
 
 /** La tolérance d'une comparaison de cotes, en millimètres : une somme de
  *  hauteurs égale à la hauteur utile tient, malgré l'arrondi flottant. */
@@ -177,6 +193,20 @@ function morceauxLus({ lignes, abregeables }) {
   return abregeables;
 }
 
+// Le pied TechnoLibre demandé, contrôlé : null, ou {texte, rapport}, un
+// texte non blanc et le rapport largeur sur hauteur du logo, un nombre fini
+// positif ; TypeError sinon.
+function technolibreLu(technolibre) {
+  if (technolibre === null) return null;
+  const bien =
+    typeof technolibre?.texte === 'string' &&
+    technolibre.texte.trim() !== '' &&
+    Number.isFinite(technolibre.rapport) &&
+    technolibre.rapport > 0;
+  if (!bien) throw new TypeError(`mettreEnPage : pied TechnoLibre {texte, rapport} attendu, reçu ${JSON.stringify(technolibre)}`);
+  return technolibre;
+}
+
 /**
  * La mise en page d'un badge, ou le refus qui dit pourquoi il ne tient pas.
  *
@@ -215,6 +245,16 @@ function morceauxLus({ lignes, abregeables }) {
  * Le modèle de badge donne le cadre utile et les corps de départ : l'A6,
  * 89 × 132 mm ; la carte Avery 5392, 91,6 × 66,2 mm.
  *
+ * Pied TechnoLibre : son texte, replié comme le pied, centré, puis le logo,
+ * centré, de deux cadratins de haut, au rapport reçu, posé sur le bas du
+ * cadre ; le pied remonte d'autant. Au plus grand corps, du corps de départ
+ * à son plancher (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT au registre), où le
+ * bloc tient dans l'écart entre les tours et le pied du badge composé sans
+ * lui ; technolibre rend alors ce corps et la boîte du logo. Sinon, ou quand
+ * le badge a perdu le nom de l'événement, il se retire : technolibre rend
+ * {corps: null, logo: null}, et la page est celle du badge sans lui. Non
+ * demandé, technolibre rend null.
+ *
  * @param {{nom: string, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
  *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
  *        abregeables : pour chaque ligne de tour, ses textes libres, par
@@ -222,15 +262,22 @@ function morceauxLus({ lignes, abregeables }) {
  *        aucune ligne n'en porte
  * @param {Metriques} metriques
  * @param {import('../geometrie/papiers.js').ModeleBadge} [modeleBadge]   'a6' par défaut
+ * @param {{texte: string, rapport: number}|null} [technolibre]   le pied
+ *        TechnoLibre : son texte, et le rapport largeur sur hauteur du logo ;
+ *        null par défaut, sans pied TechnoLibre
  * @returns {{blocs: Array<{texte: string, corps: number, gras: boolean, x: number, y: number}>,
- *            colonnesTours: 1|2}
+ *            colonnesTours: 1|2,
+ *            technolibre: null | {corps: number|null,
+ *                                 logo: null|{x: number, y: number, largeur: number, hauteur: number}}}
  *          | {refus: {code: string, details: object}}}
+ *          la boîte du logo en millimètres du cadre utile, y à son haut
  * @throws {TypeError} un modèle de badge inconnu, des textes libres mal
- *         désignés
+ *         désignés, un pied TechnoLibre mal formé
  */
-export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
+export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre = null) {
   if (!estModeleBadge(modeleBadge)) throw new TypeError(`mettreEnPage : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
   const morceauxDesLignes = morceauxLus(textes);
+  const promotion = technolibreLu(technolibre);
   const badge = MODELES_BADGE[modeleBadge];
   const typographie = TYPOGRAPHIES[modeleBadge];
   const { largeur: L, hauteur: H } = cadreUtile({ x: 0, y: 0, largeur: badge.largeur, hauteur: badge.hauteur }, modeleBadge);
@@ -395,7 +442,9 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
   const centre = (texte, corps, gras) => (L - largeur(texte, corps, gras)) / 2;
 
   // Le badge sous une forme du nom, avec ou sans le nom de l'événement et
-  // l'organisation ; null quand aucune disposition des tours n'y tient.
+  // l'organisation ; null quand aucune disposition des tours n'y tient. La
+  // page rend aussi l'écart libre entre ses tours et son pied, en mm, et
+  // le nombre de ses blocs de pied, les derniers.
   function composer(forme, { evenement, avecOrganisation }) {
     const auPlusNom = (corps) => Math.min(corps, forme.corps);
     const corpsOrganisation = auPlusNom(constante(typographie.organisation));
@@ -497,9 +546,49 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
         x: centre(texte, corpsPied, false),
         y: hautDuPied + rang * pasPied.hauteur + pasPied.ascendante,
       }));
-      return { blocs: [...blocs, ...blocsTours, ...blocsPied], colonnesTours: disposition.colonnes };
+      const finDesTours = curseur + Math.ceil(textes.lignes.length / disposition.colonnes) * pasTours.hauteur;
+      return {
+        blocs: [...blocs, ...blocsTours, ...blocsPied],
+        colonnesTours: disposition.colonnes,
+        libre: hautDuPied - finDesTours,
+        nombrePied: blocsPied.length,
+      };
     }
     return null;
+  }
+
+  // La page finale d'une page composée : sans pied TechnoLibre demandé,
+  // telle quelle ; sinon, le bloc TechnoLibre au plus grand corps qui tient
+  // dans l'écart libre, le pied remonté de sa hauteur. La page reste telle
+  // quelle, le bloc retiré, quand même le plancher ne tient pas, ou que la
+  // page a perdu le nom de l'événement : il le suit dans l'ordre de
+  // sacrifice, et l'écart que le dépouillement libère ne lui revient pas.
+  function avecTechnolibre({ blocs, colonnesTours, libre, nombrePied }, { evenement }) {
+    if (promotion === null) return { blocs, colonnesTours, technolibre: null };
+    const retire = { blocs, colonnesTours, technolibre: { corps: null, logo: null } };
+    if (!evenement) return retire;
+    for (const corps of paliers(constante('CORPS_TECHNOLIBRE_PT'), constante('CORPS_TECHNOLIBRE_PLANCHER_PT'))) {
+      const lignes = replier(promotion.texte, corps, false, Infinity);
+      if (lignes === null) continue;
+      const pasTexte = pas(corps);
+      const hauteurLogo = corps * MM_PAR_PT * LOGO_EN_CADRATINS;
+      const largeurLogo = hauteurLogo * promotion.rapport;
+      const hauteurBloc = lignes.length * pasTexte.hauteur + hauteurLogo;
+      if (largeurLogo > L + TOLERANCE_MM || hauteurBloc > libre + TOLERANCE_MM) continue;
+      const debutPied = blocs.length - nombrePied;
+      const remonte = blocs.slice(debutPied).map((bloc) => ({ ...bloc, y: bloc.y - hauteurBloc }));
+      const hautDuBloc = H - hauteurBloc;
+      const blocsTexte = lignes.map((texte, rang) => ({
+        texte,
+        corps,
+        gras: false,
+        x: centre(texte, corps, false),
+        y: hautDuBloc + rang * pasTexte.hauteur + pasTexte.ascendante,
+      }));
+      const logo = { x: (L - largeurLogo) / 2, y: H - hauteurLogo, largeur: largeurLogo, hauteur: hauteurLogo };
+      return { blocs: [...blocs.slice(0, debutPied), ...remonte, ...blocsTexte], colonnesTours, technolibre: { corps, logo } };
+    }
+    return retire;
   }
 
   // Les essais, du badge complet au plus dépouillé : chaque forme du nom
@@ -514,7 +603,7 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6') {
   ];
   for (const { forme, ...niveau } of essais) {
     const page = composer(forme, niveau);
-    if (page !== null) return page;
+    if (page !== null) return avecTechnolibre(page, niveau);
   }
   if (nom.auDela) return refusNom;
   return { refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: textes.lignes.length } } };

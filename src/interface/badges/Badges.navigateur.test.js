@@ -842,3 +842,86 @@ describe('la liste des badges en CSV (§ 11.6)', () => {
     expect(texte(dans(m, '[data-chemin-liste]'))).toBe(plat(t('badges.produite.listeTelechargee', { nom: telechargees[0] })));
   });
 });
+
+describe('le pied TechnoLibre : une case gardée sur le poste (§ 8.5, § 11.4)', () => {
+  const caseTechnolibre = (m) => dans(m, '[data-section="badges"] [data-champ="piedTechnolibre"]');
+  const avisNonRetenu = (m) => dans(m, '[data-section="badges"] [data-avertissement="piedNonRetenu"]');
+  const cocher = (m, coche) => {
+    const element = caseTechnolibre(m);
+    if (element.checked !== coche) element.click();
+  };
+  const caseEcrite = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).pied_technolibre;
+
+  test('une machine neuve : la case cochée, sous les deux modèles, son libellé lié ; les cartes produites portent le logo, plus lourdes que sans lui', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const element = caseTechnolibre(m);
+    expect(element.type).toBe('checkbox');
+    expect(element.checked).toBe(true);
+    expect(m.seance.etat().piedTechnolibre).toBe(true);
+    expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(t('badges.technolibre.case')));
+    let depuis = m.trace.length;
+    await cliquerProduire(m, 'les cartes avec le pied', () => dans(m, '[data-chemin-controle]'));
+    const [avec, controleAvec] = planchesEcrites(m, depuis).map(([, , nom]) => m.fs.octets('documents', nom));
+
+    cocher(m, false);
+    await attendre('la case écrite', () => caseEcrite(m) === false, IMAGES);
+    depuis = m.trace.length;
+    await cliquerProduire(m, 'les cartes sans le pied', () => planchesEcrites(m, depuis).length === 2);
+    const [sans, controleSans] = planchesEcrites(m, depuis).map(([, , nom]) => m.fs.octets('documents', nom));
+    expect(avec.length).toBeGreaterThan(sans.length);
+    // La feuille de contrôle ne porte pas le pied TechnoLibre.
+    expect(controleAvec).toEqual(controleSans);
+
+    choisirReglage(m, 'modeleBadge', 'a6');
+    await attendre('l’A6', () => dans(m, '[data-section="badges"] [data-champ="imposition"]'), IMAGES);
+    expect(caseTechnolibre(m).checked).toBe(false);
+  });
+
+  test('décocher l’écrit sur la machine et retire l’annonce montrée ; l’annonce suivante se prépare sur la case ; recocher l’écrit de nouveau', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    const demandes = [];
+    const originale = m.seance.preparerPlanche;
+    m.seance.preparerPlanche = async (demande) => {
+      const rendue = await originale(demande);
+      demandes.push(rendue.piedTechnolibre);
+      return rendue;
+    };
+    cocher(m, false);
+    await attendre('la case écrite', () => caseEcrite(m) === false, IMAGES);
+    expect(m.seance.etat().piedTechnolibre).toBe(false);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce sans le pied', () => annonce(m), IMAGES);
+    expect(demandes).toEqual([false]);
+    cocher(m, true);
+    await attendre('la case écrite', () => caseEcrite(m) === true, IMAGES);
+    expect(avisNonRetenu(m)).toBeNull();
+  });
+
+  test('l’annonce nomme les badges d’où le pied TechnoLibre se retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const originale = m.seance.preparerPlanche;
+    m.seance.preparerPlanche = async (demande) => ({ ...(await originale(demande)), sansTechnolibre: 3 });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    expect(texte(annonce(m))).toContain(plat(t('badges.annonce.technolibreRetire', { n: 3 })));
+  });
+
+  test('l’écriture des réglages refusée : la case vaut pour la séance, et une annonce le dit sous les réglages, dans un rôle d’état ; une case retenue ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisNonRetenu(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    cocher(m, false);
+    const avis = await attendre('l’annonce de la case non retenue', () => avisNonRetenu(m), IMAGES);
+    expect(m.seance.etat().piedTechnolibre).toBe(false);
+    expect(caseTechnolibre(m).checked).toBe(false);
+    expect(texte(avis)).toBe(plat(t('badges.technolibre.nonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirPiedTechnolibre;
+    m.seance.choisirPiedTechnolibre = async (coche) => ({ ...(await originale(coche)), retenu: true });
+    cocher(m, true);
+    await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
+  });
+});

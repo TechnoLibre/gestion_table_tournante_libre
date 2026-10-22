@@ -20,17 +20,23 @@
   // (PAPIER_BADGES_DEFAUT), montré comme un papier choisi, que « Changer »
   // remplace pour la machine.
   //
+  // La case du pied TechnoLibre est un autre réglage de la machine
+  // (EtatSeance.piedTechnolibre, seance.choisirPiedTechnolibre), cochée tant
+  // que l'opérateur ne l'a pas décochée, sous les deux modèles. Une case que
+  // la machine ne retient pas vaut pour la séance, et une annonce le dit
+  // sous les réglages tant qu'elle est celle de la séance, comme le modèle.
+  //
   // Les réglages d'une demande : la source — le retenu s'il existe, sinon la
   // proposition demandée au plan depuis les propositions, choisie quand les
   // deux sont offertes (sourcesOffertes) —, l'imposition, feuille par
   // feuille par défaut, et l'ordre, alphabétique par défaut. Aucun n'est un
   // réglage local : ils valent pour la section ouverte.
   //
-  // « Préparer » demande l'annonce à la séance (preparerPlanche) et la
-  // montre, phrase par phrase (phrasesAnnonce), avec son refus et le remède
-  // de celui-ci. L'annonce montrée est celle des réglages, du modèle, du
-  // papier et de la charge courants : qu'un d'eux change, elle se retire, et
-  // la suivante se prépare. « Produire » prépare d'abord : une dérive, et
+  // « Préparer » demande l'annonce à la séance (preparerPlanche) et la montre,
+  // phrase par phrase (phrasesAnnonce), avec son refus et le remède de
+  // celui-ci. L'annonce montrée est celle des réglages, du modèle, du papier,
+  // de la case et de la charge courants : qu'un d'eux change, elle se retire,
+  // et la suivante se prépare. « Produire » prépare d'abord : une dérive, et
   // tout refus du placement ou de la mise en page, se nomme avant toute
   // production (§ 11.8), et « Produire » reste désactivé, expliqué, tant que
   // l'annonce montrée le porte. Un papier choisi par « Changer »
@@ -103,6 +109,7 @@
 
   const charge = $derived($seance.charge);
   const modeleBadge = $derived($seance.modeleBadge);
+  const piedTechnolibre = $derived($seance.piedTechnolibre);
   const cartes = $derived(modeleImposeSonPapier(modeleBadge));
   const offertes = $derived(charge === null ? [] : sourcesOffertes(charge, $ui.proposition));
 
@@ -145,8 +152,10 @@
   // de la dernière, que son « Enregistrer sous… » reprend.
   let liste = $state(null);
   let derniereListe = null;
-  // Le dernier modèle choisi que la machine n'a pas retenu, ou null.
+  // Le dernier modèle choisi que la machine n'a pas retenu, ou null ; de
+  // même, la dernière valeur de la case du pied TechnoLibre.
   let modeleNonRetenu = $state(null);
+  let piedNonRetenu = $state(null);
 
   async function preparer(selection) {
     const demande = demandeDe(selection);
@@ -240,6 +249,12 @@
     const { retenu } = await seance.choisirModeleBadge(modele);
     modeleNonRetenu = retenu ? null : modele;
   }
+
+  // La case cochée ou décochée s'écrit sur la machine, comme le modèle.
+  async function choisirPied(coche) {
+    const { retenu } = await seance.choisirPiedTechnolibre(coche);
+    piedNonRetenu = retenu ? null : coche;
+  }
 </script>
 
 <section data-section="badges">
@@ -287,9 +302,22 @@
             </select>
           </label>
         </div>
+        <div class="case">
+          <input
+            id={`${uid}-technolibre`}
+            type="checkbox"
+            data-champ="piedTechnolibre"
+            checked={piedTechnolibre}
+            onchange={(evenement) => choisirPied(evenement.currentTarget.checked)}
+          />
+          <label for={`${uid}-technolibre`}>{t('badges.technolibre.case')}</label>
+        </div>
         <div role="status">
           {#if modeleNonRetenu !== null && modeleNonRetenu === modeleBadge}
             <Message ton="avis"><p data-avertissement="modeleNonRetenu">{t('badges.modele.nonRetenu')}</p></Message>
+          {/if}
+          {#if piedNonRetenu !== null && piedNonRetenu === piedTechnolibre}
+            <Message ton="avis"><p data-avertissement="piedNonRetenu">{t('badges.technolibre.nonRetenu')}</p></Message>
           {/if}
         </div>
 
@@ -432,6 +460,18 @@
     font-weight: bold;
     letter-spacing: var(--interlettre-capitales);
     text-transform: uppercase;
+  }
+
+  /* La case du pied TechnoLibre, sous les sélecteurs : la case, puis son
+     libellé, en encre courante. */
+  .case {
+    display: flex;
+    align-items: center;
+    gap: var(--espace-2);
+  }
+
+  .case input {
+    margin: 0;
   }
 
   .commandes {

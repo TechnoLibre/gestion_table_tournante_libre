@@ -1,15 +1,18 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// L'aide d'extraction des PDF (test/pdf.js), éprouvée sur des documents
-// faits à la main par pdf-lib, dont chaque cote se calcule de tête : la
-// boîte d'un texte tourné, le mode de rendu des textes, les segments sous
+// L'aide d'extraction des PDF (test/pdf.js), éprouvée sur des documents faits
+// à la main par pdf-lib, dont chaque cote se calcule de tête : la boîte d'un
+// texte tourné, le mode de rendu et la couleur des textes, les segments sous
 // la matrice courante et leur épaisseur, les remplissages, les tirets et les
 // couleurs, les boîtes de page, les polices, leur ToUnicode et la longueur de
 // leur programme embarqué, le dictionnaire /Info et l'identifiant du fichier.
 import assert from 'node:assert/strict';
 import fontkit from '@pdf-lib/fontkit';
 import {
+  beginText,
+  endText,
+  moveText,
   PDFArray,
   PDFDocument,
   PDFHexString,
@@ -17,16 +20,21 @@ import {
   PDFNumber,
   PDFString,
   StandardFonts,
+  cmyk,
   concatTransformationMatrix,
   degrees,
+  fill,
   grayscale,
   lineTo,
   moveTo,
   popGraphicsState,
   pushGraphicsState,
   rgb,
+  setFillingRgbColor,
+  setFontAndSize,
   setLineWidth,
   setTextRenderingMode,
+  showText,
   stroke,
   TextRenderingMode,
 } from 'pdf-lib';
@@ -106,6 +114,39 @@ describe('lirePdf : le texte, en millimètres depuis le coin haut gauche', () =>
     assert.deepEqual((await lirePdf(await document(() => {}))).pages[0].modesTexte, []);
   });
 
+  test("la couleur de fond en vigueur à chaque texte montré, dans l'ordre : noire par défaut, celle d'un rg, rendue par Q", async () => {
+    const octets = await document(async (page, pdf) => {
+      const police = await noto(pdf);
+      const cle = page.node.newFontDictionary(police.name, police.ref);
+      // Un texte montré sans poser de couleur : celle de l'état graphique.
+      const montrer = (texte, y) => [beginText(), setFontAndSize(cle, 12), moveText(50, y), showText(police.encodeText(texte)), endText()];
+      page.pushOperators(
+        ...montrer('Iris', 500),
+        pushGraphicsState(),
+        setFillingRgbColor(1, 0.8, 0),
+        ...montrer('Ombrelle', 400),
+        popGraphicsState(),
+        ...montrer('Pervenche', 300),
+      );
+      page.drawText('Grisaille', { x: 50, y: 200, size: 12, font: police, color: rgb(0, 0, 1) });
+      // Le gris (g) et le CMJN (k) : pdf.js les rend en RVB, comme rg ; son
+      // CMJN suit un profil, d'où un rouge qui n'est pas pur.
+      page.drawText('Brume', { x: 50, y: 150, size: 12, font: police, color: grayscale(0.5) });
+      page.drawText('Coquelicot', { x: 50, y: 100, size: 12, font: police, color: cmyk(0, 1, 1, 0) });
+    });
+    const lues = (await lirePdf(octets)).pages[0].couleursTexte;
+    assert.deepEqual(lues.slice(0, 5), [
+      [0, 0, 0],
+      [255, 204, 0],
+      [0, 0, 0],
+      [0, 0, 255],
+      [128, 128, 128],
+    ]);
+    const [r, v, b] = lues[5];
+    assert.ok(lues.length === 6 && r > 200 && v < 80 && b < 80, JSON.stringify(lues));
+    assert.deepEqual((await lirePdf(await document(() => {}))).pages[0].couleursTexte, []);
+  });
+
   test('les accents et les capitales liées se lisent caractère par caractère, par la ToUnicode', async () => {
     const octets = await document(async (page, pdf) => {
       page.drawText('Ôjgq Æ Œuvre', { x: 50, y: 400, size: 12, font: await noto(pdf) });
@@ -169,6 +210,32 @@ describe('lirePdf : les chemins, sous la matrice courante', () => {
     assert.equal(page.segments.length, 4);
     const longueurs = page.segments.map(({ x1, y1, x2, y2 }) => Math.hypot(x2 - x1, y2 - y1)).sort((a, b) => a - b);
     [25.4, 25.4, 50.8, 50.8].forEach((attendue, i) => assert.ok(proche(longueurs[i], attendue), `côté ${i} : ${longueurs[i]}`));
+  });
+
+  test('chaque chemin rempli donne sa zone, l’englobant de ses points sous la matrice courante, et la couleur de fond en vigueur', async () => {
+    const octets = await document((page) => {
+      page.drawRectangle({ x: 72, y: 72, width: 72, height: 144, color: rgb(1, 0, 0) });
+      page.pushOperators(
+        pushGraphicsState(),
+        concatTransformationMatrix(2, 0, 0, 2, 0, 0),
+        moveTo(100, 100),
+        lineTo(136, 100),
+        lineTo(118, 136),
+        fill(),
+        popGraphicsState(),
+      );
+      // Un trait seul ne remplit rien.
+      page.drawLine({ start: { x: 0, y: 0 }, end: { x: 10, y: 0 } });
+    });
+    const { zonesRemplies } = (await lirePdf(octets)).pages[0];
+    assert.equal(zonesRemplies.length, 2);
+    const [rouge, noir] = zonesRemplies;
+    assert.deepEqual(rouge.couleur, [255, 0, 0]);
+    assert.ok(proche(rouge.x, 25.4) && proche(rouge.largeur, 25.4) && proche(rouge.hauteur, 50.8), JSON.stringify(rouge));
+    assert.ok(proche(rouge.y, (800 - 72 - 144) * MM_PAR_PT), JSON.stringify(rouge));
+    assert.deepEqual(noir.couleur, [0, 0, 0]);
+    assert.ok(proche(noir.x, 200 * MM_PAR_PT) && proche(noir.largeur, 72 * MM_PAR_PT) && proche(noir.hauteur, 72 * MM_PAR_PT), JSON.stringify(noir));
+    assert.ok(proche(noir.y, (800 - 272) * MM_PAR_PT), JSON.stringify(noir));
   });
 
   test('les couleurs posées se lisent en [r, g, b] de 0 à 255 ; les tirets se voient, un motif vide est un trait continu', async () => {

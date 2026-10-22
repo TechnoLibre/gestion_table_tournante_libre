@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFName } from 'pdf-lib';
 import { lirePdf } from '../../test/pdf.js';
+import { lireLogo } from '../../test/logo.js';
 import { lirePolices } from '../../test/polices.js';
 import { describe, test } from '../../test/lanceur.js';
 import { libelle } from '../application/libelles.js';
@@ -31,7 +32,8 @@ import { constante } from '../geometrie/constantes.js';
 import { PAPIERS } from '../geometrie/papiers.js';
 import { VERSION } from '../version.genere.js';
 import { cellules, filets, imposer, nombrePlanches } from './imposition.js';
-import { metriquesDe } from './mise_en_page.js';
+import { lireLogo as lireLogoSvg } from './logo.js';
+import { mettreEnPage, metriquesDe } from './mise_en_page.js';
 import { analyserPlanche, produireControle, produirePlanche } from './planche.js';
 
 const TOLERANCE = 1e-6;
@@ -557,7 +559,7 @@ describe('produirePlanche : la feuille de contrôle, page 1 (§ 11.3)', () => {
 describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
   test('un nom à glyphe absent : absents le nomme, une fois, et rien ne refuse', async () => {
     const m = modele([badge(1, 'Ondine 李'), badge(2, 'Théo 李 Pervenche')]);
-    assert.deepEqual(await analyserPlanche({ modele: m, polices }), { refus: null, absents: ['李'] });
+    assert.deepEqual(await analyserPlanche({ modele: m, polices }), { refus: null, absents: ['李'], sansTechnolibre: 0 });
   });
 
   test('un badge à 100 tours : refus PLANCHE_TROP_DE_TOURS, et son rang dans le modèle', async () => {
@@ -565,6 +567,7 @@ describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
     assert.deepEqual(await analyserPlanche({ modele: m, polices }), {
       refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100 }, rang: 1 },
       absents: [],
+      sansTechnolibre: 0,
     });
   });
 
@@ -700,5 +703,140 @@ describe('produirePlanche et produireControle : le modèle Avery 5392', () => {
     await assert.rejects(produirePlanche({ ...entreesAvery(MODELE_AVERY), modeleBadge: 'A6' }), TypeError);
     await assert.rejects(produireControle({ ...entreesAvery(MODELE_AVERY), papier: 'A4' }), TypeError);
     await assert.rejects(produireControle({ ...entrees(MODELE_A4, 'A4', 'feuille'), modeleBadge: 'a6' }), TypeError);
+  });
+});
+
+// Le pied TechnoLibre (§ 11.4) : un texte et le logo en couleurs d'origine,
+// sous le pied de chaque badge où il tient, dessinés en vecteurs. Les
+// planches A4 debout, Lettre à plat et Avery 5392 le portent ; la feuille
+// de contrôle, jamais.
+const TECHNOLIBRE = Object.freeze({ texte: libelle('planche.technolibre'), logo: lireLogo() });
+// Les couleurs du logo, dans l'ordre de ses formes : le fond, les lettres
+// blanches, les lettres jaunes.
+const COULEURS_LOGO = [[0x24, 0x37, 0x42], [255, 255, 255], [0xff, 0xd1, 0x66]];
+const avecPromotion = (base) => ({ ...base, technolibre: TECHNOLIBRE });
+const octetsAveryT = await produirePlanche(avecPromotion(entreesAvery(MODELE_AVERY)));
+const octetsA4T = await produirePlanche(avecPromotion(entrees(MODELE_A4, 'A4', 'feuille')));
+const octetsLettreT = await produirePlanche(avecPromotion(entrees(MODELE_LETTRE, 'Lettre', 'pile')));
+const PRODUCTIONS_T = [
+  { nom: 'Avery 5392', lu: await lirePdf(octetsAveryT), cases: cartes, zone: ZONE_CARTE, pages: [1, 2], rapportLogo: 5 },
+  { nom: 'A4', lu: await lirePdf(octetsA4T), cases: cellules('A4'), zone: ZONE, pages: [2, 3], rapportLogo: 5 },
+  { nom: 'Lettre', lu: await lirePdf(octetsLettreT), cases: cellules('Lettre'), zone: ZONE, pages: [2, 3], rapportLogo: 5 },
+];
+// Le logo lu, et l'englobant de chaque forme, contrôles des courbes compris,
+// dans la boîte de vue.
+const LOGO = lireLogoSvg(TECHNOLIBRE.logo);
+const ENGLOBANTS_LOGO = LOGO.formes.map(({ trace }) => {
+  const points = trace.flatMap((p) => (p.op === 'Z' ? [] : p.op === 'C' ? [[p.x1, p.y1], [p.x2, p.y2], [p.x, p.y]] : [[p.x, p.y]]));
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) };
+});
+// Le corps de départ du texte TechnoLibre, et la hauteur du logo à ce corps.
+const HAUTEUR_LOGO = (2 * constante('CORPS_TECHNOLIBRE_PT') * 25.4) / 72;
+
+describe('produirePlanche : le pied TechnoLibre (§ 11.4)', () => {
+  test('chaque badge porte le logo, trois remplissages dans ses couleurs d’origine, dans l’ordre du fichier', () => {
+    for (const { nom, lu: document, cases } of PRODUCTIONS_T) {
+      const planches = document.pages.slice(nom === 'Avery 5392' ? 0 : 1);
+      const badges = planches.reduce((n, page) => n + cases.filter((c) => page.textes.some((t) => dans(centre(t), c))).length, 0);
+      const zones = planches.flatMap((page) => page.zonesRemplies);
+      assert.equal(zones.length, 3 * badges, nom);
+      zones.forEach((zone, rang) => assert.deepEqual(zone.couleur, COULEURS_LOGO[rang % 3], `${nom} ${rang}`));
+    }
+  });
+
+  test('le fond du logo, centré dans son badge, posé au bas du cadre utile ; ses lettres dans le fond — debout et sur la carte comme à plat', () => {
+    for (const { nom, lu: document, cases, zone: silence } of PRODUCTIONS_T) {
+      const aPlat = nom === 'Lettre';
+      assert.ok(document.pages.filter((page) => page.zonesRemplies.length > 0).length >= 2, nom);
+      for (const page of document.pages) {
+        for (let i = 0; i < page.zonesRemplies.length; i += 3) {
+          const [fond, ...lettres] = page.zonesRemplies.slice(i, i + 3);
+          const cellule = cases.find((c) => dans([fond.x + fond.largeur / 2, fond.y + fond.hauteur / 2], c));
+          assert.ok(cellule !== undefined, nom);
+          const [long, court] = aPlat ? [fond.hauteur, fond.largeur] : [fond.largeur, fond.hauteur];
+          assert.ok(Math.abs(court - HAUTEUR_LOGO) < 0.01 && Math.abs(long - 5 * court) < 0.01, `${nom} : ${JSON.stringify(fond)}`);
+          if (aPlat) {
+            // Le haut du badge à gauche : son bas tombe à droite de la cellule.
+            assert.ok(Math.abs(fond.x + fond.largeur - (cellule.x + cellule.largeur - silence)) < 0.01, `${nom} : ${JSON.stringify(fond)}`);
+            assert.ok(Math.abs(fond.y + fond.hauteur / 2 - (cellule.y + cellule.hauteur / 2)) < 0.01, nom);
+          } else {
+            assert.ok(Math.abs(fond.y + fond.hauteur - (cellule.y + cellule.hauteur - silence)) < 0.01, `${nom} : ${JSON.stringify(fond)}`);
+            assert.ok(Math.abs(fond.x + fond.largeur / 2 - (cellule.x + cellule.largeur / 2)) < 0.01, nom);
+          }
+          for (const l of lettres) {
+            assert.ok(l.x >= fond.x - 0.01 && l.y >= fond.y - 0.01 && l.x + l.largeur <= fond.x + fond.largeur + 0.01 && l.y + l.hauteur <= fond.y + fond.hauteur + 0.01, nom);
+          }
+          if (!aPlat) {
+            // Les lettres à leur place dans le fond, comme le fichier les
+            // dessine, y vers le bas : ni retournées, ni décalées.
+            const echelle = fond.hauteur / LOGO.hauteur;
+            lettres.forEach((l, rang) => {
+              const e = ENGLOBANTS_LOGO[rang + 1];
+              const attendu = [fond.x + e.x1 * echelle, fond.y + e.y1 * echelle, (e.x2 - e.x1) * echelle, (e.y2 - e.y1) * echelle];
+              [l.x, l.y, l.largeur, l.hauteur].forEach((v, k) => assert.ok(Math.abs(v - attendu[k]) < 0.005, `${nom} : ${JSON.stringify(l)} contre ${attendu}`));
+            });
+          }
+        }
+      }
+    }
+  });
+
+  test('le texte TechnoLibre se lit dans chaque badge, entre le pied et le logo, dans la zone de silence', () => {
+    const avery = PRODUCTIONS_T[0];
+    assert.deepEqual(avery.lu.pages.map((page) => page.zonesRemplies.length), [18, 3]);
+    for (const page of avery.lu.pages) {
+      for (let i = 0; i < page.zonesRemplies.length; i += 3) {
+        const fond = page.zonesRemplies[i];
+        const carte = cartes.find((c) => dans([fond.x + 1, fond.y + 1], c));
+        const dedans = page.textes.filter((t) => dans(centre(t), carte));
+        const promotion = dedans.filter((t) => t.y > dedans.find((d) => d.texte.startsWith('Placement'))?.y && t.y < fond.y);
+        const lu = promotion.map((t) => t.texte).join(' ');
+        assert.equal(lu.replace(/\s+/g, ' '), TECHNOLIBRE.texte, lu);
+        for (const t of promotion) assert.ok(t.y + t.h <= fond.y + 0.01 && t.x >= carte.x + ZONE_CARTE - 0.01, t.texte);
+      }
+    }
+  });
+
+  test('le logo est la seule couleur : chaque texte de la planche se montre en noir, celui qui suit un logo compris', () => {
+    for (const { nom, lu: document } of PRODUCTIONS_T) {
+      // Les pages où un texte suit un logo : celles qui portent un logo et
+      // plus d'un badge.
+      assert.ok(document.pages.some((page) => page.zonesRemplies.length > 3), nom);
+      for (const page of document.pages) {
+        assert.ok(page.couleursTexte.length > 0, nom);
+        page.couleursTexte.forEach((couleur, rang) => assert.deepEqual(couleur, [0, 0, 0], `${nom}, texte ${rang + 1}`));
+      }
+    }
+  });
+
+  test('les mêmes octets d’un export à l’autre ; sans pied TechnoLibre, la planche d’avant, octet pour octet', async () => {
+    assert.deepEqual(await produirePlanche(avecPromotion(entreesAvery(MODELE_AVERY))), octetsAveryT);
+    assert.deepEqual(await produirePlanche({ ...entreesAvery(MODELE_AVERY), technolibre: null }), octets);
+    assert.notDeepEqual(octetsAveryT, octets);
+  });
+
+  test('analyserPlanche compte les badges où le pied TechnoLibre se retire, ceux où la mise en page ne le pose pas ; la planche n’y dessine pas le logo', async () => {
+    const m = modele(Array.from({ length: 16 }, (_, i) => badge(i + 1, NOMS_AVERY[i % NOMS_AVERY.length], { organisation: 'Club des Merles', tours: i + 1 })));
+    const pdf = await PDFDocument.create();
+    pdf.registerFontkit(fontkit);
+    const metriques = metriquesDe({ regulier: await pdf.embedFont(polices.regulier, { subset: true }), gras: await pdf.embedFont(polices.gras, { subset: true }) });
+    const posees = m.badges.map((b) => mettreEnPage(b.textes, metriques, AVERY, { texte: TECHNOLIBRE.texte, rapport: 5 }).technolibre.corps !== null);
+    const retires = posees.filter((p) => !p).length;
+    assert.ok(retires > 0 && retires < m.badges.length, String(retires));
+    const analyse = await analyserPlanche({ modele: m, polices, modeleBadge: AVERY, technolibre: TECHNOLIBRE });
+    assert.deepEqual(analyse, { refus: null, absents: [], sansTechnolibre: retires });
+    assert.equal((await analyserPlanche({ modele: m, polices, modeleBadge: AVERY })).sansTechnolibre, 0);
+    const document = await lirePdf(await produirePlanche(avecPromotion({ ...entreesAvery(m) })));
+    assert.equal(document.pages.reduce((n, page) => n + page.zonesRemplies.length, 0), 3 * (m.badges.length - retires));
+  });
+
+  test('un pied TechnoLibre mal formé lève TypeError : texte vide, logo qui n’est pas des octets ou pas un SVG lisible', async () => {
+    const base = entreesAvery(MODELE_AVERY);
+    for (const technolibre of [{ texte: '', logo: TECHNOLIBRE.logo }, { texte: TECHNOLIBRE.texte, logo: 'svg' }, { texte: TECHNOLIBRE.texte, logo: new TextEncoder().encode('<svg/>') }, 'oui']) {
+      await assert.rejects(produirePlanche({ ...base, technolibre }), TypeError, JSON.stringify(technolibre));
+      await assert.rejects(analyserPlanche({ modele: MODELE_AVERY, polices, modeleBadge: AVERY, technolibre }), TypeError);
+    }
   });
 });

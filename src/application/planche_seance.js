@@ -16,7 +16,14 @@
 // La production vit dans src/pdf, chargé par un seul import() différé : le
 // paquet n'embarque pdf-lib qu'au premier besoin, et cette couche ne voit
 // jamais un objet de pdf-lib, seulement des octets. La police arrive en
-// octets, par la fonction que la séance reçoit, chargée une fois.
+// octets, par la fonction que la séance reçoit, chargée une fois ; le logo
+// vectoriel du pied TechnoLibre de même, chargé au premier badge qui le
+// demande.
+//
+// Le pied TechnoLibre suit la case de la machine, que la lecture porte : il
+// se pose sous le pied des badges, jamais sur la feuille de contrôle, et
+// l'annonce compte les badges d'où la mise en page le retire faute de
+// place. Son texte vient de libelle, comme le mot du filigrane.
 //
 // Une demande désigne la source — le retenu, ou une proposition par son
 // identifiant, toujours BROUILLON (Q3) —, l'imposition, l'ordre de la pile
@@ -78,6 +85,8 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {'A4'|'Lettre'|null} papier   celui des réglages locaux, null sans choix
  * @property {import('../geometrie/papiers.js').ModeleBadge} [modeleBadge]   celui des
  *           réglages locaux ; 'a6' quand la lecture ne le porte pas
+ * @property {boolean} [piedTechnolibre]   la case du pied TechnoLibre des
+ *           réglages locaux ; faux quand la lecture ne la porte pas
  *
  * @typedef {Object} DemandePlanche
  * @property {'retenu'|'proposition'} [source]   'retenu' par défaut
@@ -101,6 +110,10 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {string|null} nom    le nom du fichier ; null sans modèle
  * @property {string|null} nomControle   le nom de la feuille de contrôle à
  *           part (nomControle) ; null pour l'A6, et sans modèle
+ * @property {boolean} piedTechnolibre   la case de la lecture
+ * @property {number|null} sansTechnolibre   le nombre de badges d'où le pied
+ *           TechnoLibre se retire, faute de place ; null sans la case, et
+ *           sans modèle
  */
 
 // La demande lue, ses défauts posés ; une imposition ou un ordre hors de sa
@@ -130,6 +143,14 @@ function modeleDe({ modeleBadge = 'a6' }) {
   return modeleBadge;
 }
 
+// La case du pied TechnoLibre d'une lecture, contrôlée, fausse quand elle
+// ne la porte pas ; une valeur qui n'est pas un booléen est une faute du
+// code.
+function piedDe({ piedTechnolibre = false }) {
+  if (typeof piedTechnolibre !== 'boolean') throw new TypeError(`piedTechnolibre : booléen attendu, reçu ${JSON.stringify(piedTechnolibre)}`);
+  return piedTechnolibre;
+}
+
 // Vrai pour un modèle à cartes prédécoupées, dont la feuille de contrôle
 // est un document à part.
 const aCartes = (modeleBadge) => MODELES_BADGE[modeleBadge].grille !== null;
@@ -141,6 +162,9 @@ const aCartes = (modeleBadge) => MODELES_BADGE[modeleBadge].grille !== null;
  * @param {(() => Promise<{regulier: Uint8Array, gras: Uint8Array}>)|null} parametres.polices
  *        charge les octets de la police embarquée ; appelée au premier
  *        besoin, puis gardée — un chargement refusé se réessaie au suivant
+ * @param {(() => Promise<Uint8Array>)|null} [parametres.logo]   charge les
+ *        octets SVG du logo du pied TechnoLibre, comme polices ; null : une
+ *        planche qui le demande lève TypeError
  * @param {string|null} parametres.provenance   le mode de construction
  * @param {string} parametres.version           la version affichée
  * @returns {{preparer: (lecture: LecturePlanche, demande?: DemandePlanche) => Promise<Annonce>,
@@ -151,20 +175,37 @@ const aCartes = (modeleBadge) => MODELES_BADGE[modeleBadge].grille !== null;
  *   produireListe: (lecture: LecturePlanche, demande?: DemandePlanche) => Promise<{chemin: string|null, nom: string}>,
  *   enregistrerListeSous: (lecture: LecturePlanche, demande?: DemandePlanche) => Promise<string|null>}}
  */
-export function creerPlanches({ polices, provenance, version }) {
-  let octetsPolices = null;
+export function creerPlanches({ polices, logo = null, provenance, version }) {
+  // Un chargement gardé : la promesse de son premier appel, que les appels
+  // suivants reprennent ; une promesse rejetée ne se garde pas, et l'appel
+  // suivant réessaie.
+  function garde(charger) {
+    let promesse = null;
+    return () => {
+      if (promesse === null) {
+        promesse = Promise.resolve().then(charger);
+        promesse.catch(() => {
+          promesse = null;
+        });
+      }
+      return promesse;
+    };
+  }
+  const policesGardees = garde(() => polices());
+  const logoGarde = garde(() => logo());
 
-  // Les octets de la police, chargés une fois ; une promesse rejetée ne se
-  // garde pas.
+  // Les octets de la police, chargés une fois.
   function lesPolices() {
     if (typeof polices !== 'function') throw new TypeError('polices : la fonction qui charge la police embarquée attendue');
-    if (octetsPolices === null) {
-      octetsPolices = Promise.resolve().then(polices);
-      octetsPolices.catch(() => {
-        octetsPolices = null;
-      });
-    }
-    return octetsPolices;
+    return policesGardees();
+  }
+
+  // Le pied TechnoLibre d'une planche qui le demande : son texte et les
+  // octets du logo, chargés une fois ; null sans la case.
+  async function technolibreDe(pied) {
+    if (!pied) return null;
+    if (typeof logo !== 'function') throw new TypeError('logo : la fonction qui charge le logo du pied TechnoLibre attendue');
+    return { texte: libelle('planche.technolibre'), logo: await logoGarde() };
   }
 
   // L'étude d'une demande : le refus du placement, ou le modèle, son
@@ -176,15 +217,17 @@ export function creerPlanches({ polices, provenance, version }) {
     const lue = demandeLue(demande);
     const { source, proposition, ordre, selection } = lue;
     const modeleBadge = modeleDe(lecture);
+    const pied = piedDe(lecture);
     const papier = papierDesBadges(modeleBadge, lecture.papier);
     const imposition = aCartes(modeleBadge) ? 'feuille' : lue.imposition;
     const rejet = refusPlanche(charge, { source, proposition });
-    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge };
+    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied };
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
     const modele = modelePlanche(charge, { source, proposition, ordre, selection, provenance, version });
     const octets = await lesPolices();
+    const technolibre = await technolibreDe(pied);
     const { analyserPlanche } = await chargerProduction();
-    const analyse = await analyserPlanche({ modele, polices: octets, modeleBadge });
+    const analyse = await analyserPlanche({ modele, polices: octets, modeleBadge, technolibre });
     let leRefus = null;
     if (analyse.refus !== null) {
       const { code, details, rang } = analyse.refus;
@@ -192,7 +235,19 @@ export function creerPlanches({ polices, provenance, version }) {
       const personne = code === 'PLANCHE_NOM_TROP_LONG' ? { participant: badge.participant, personne: badge.nom } : {};
       leRefus = refusProduction(code, { ...details, ...personne });
     }
-    return { refus: leRefus, modele, absents: analyse.absents, papier, imposition, ordre, source, modeleBadge };
+    return {
+      refus: leRefus,
+      modele,
+      absents: analyse.absents,
+      papier,
+      imposition,
+      ordre,
+      source,
+      modeleBadge,
+      pied,
+      technolibre,
+      sansTechnolibre: pied ? analyse.sansTechnolibre : null,
+    };
   }
 
   // Les options de nomPlanche pour une étude, sous le dossier donné.
@@ -294,7 +349,8 @@ export function creerPlanches({ polices, provenance, version }) {
 
   // Les octets de la planche d'une demande, et son nom : sous le dossier de
   // la lecture quand avecDossier est vrai, sans dossier sinon ; controle,
-  // ceux de la feuille de contrôle à part et son nom, null pour l'A6. Le
+  // ceux de la feuille de contrôle à part et son nom, null pour l'A6 ; le
+  // pied TechnoLibre va aux badges, jamais à la feuille de contrôle. Le
   // refus de l'étude lève, ErreurCommande, avant que rien ne se produise. Le
   // dossier se lit avant de produire : une liste refusée lève
   // PLANCHE_NON_ECRITE sans rien produire ni écrire.
@@ -312,7 +368,7 @@ export function creerPlanches({ polices, provenance, version }) {
       }
     }
     const nom = nomDe(lecture.base, etude, dossier);
-    const { modele, papier, imposition, absents, modeleBadge } = etude;
+    const { modele, papier, imposition, absents, modeleBadge, technolibre } = etude;
     const planches = nombrePlanches(modele.badges.length, papier, modeleBadge);
     const controle = textesControle(modele, { papier, imposition, planches, absents, modeleBadge });
     const { produireControle, produirePlanche } = await chargerProduction();
@@ -325,7 +381,7 @@ export function creerPlanches({ polices, provenance, version }) {
       filigrane: libelle('planche.brouillon'),
       modeleBadge,
     };
-    const octets = await produirePlanche(entrees);
+    const octets = await produirePlanche({ ...entrees, technolibre });
     if (!aCartes(modeleBadge)) return { octets, nom, controle: null };
     return { octets, nom, controle: { octets: await produireControle(entrees), nom: nomControleDe(lecture.base, etude, dossier) } };
   }
@@ -333,15 +389,18 @@ export function creerPlanches({ polices, provenance, version }) {
   return {
     /**
      * L'annonce de la planche, avant de produire (§ 11.2, § 11.5, § 11.8,
-     * décision 12). Un refus du placement rend l'annonce sans modèle :
-     * comptes, planches et noms null, ni homonymes ni absents, le brouillon
-     * de la source. Pour l'A6, les planches des deux papiers sont
-     * données ; aucune annonce ne demande le papier. Le nom est celui que
-     * la production donnerait, rang compris ; sans dossier, donc sans rang,
-     * quand le dossier ne se liste pas. Rien ne s'écrit.
+     * décision 12). Un refus du placement rend l'annonce sans modèle : comptes,
+     * planches et noms null, ni homonymes ni absents, le brouillon de la
+     * source. Pour l'A6, les planches des deux papiers sont données ; aucune
+     * annonce ne demande le papier. La case du pied TechnoLibre de la lecture
+     * s'y lit, et, quand elle est cochée et le modèle présent, le nombre de
+     * badges d'où il se retire. Le nom est celui que la production donnerait,
+     * rang compris ; sans dossier, donc sans rang, quand le dossier ne se liste
+     * pas. Rien ne s'écrit.
      *
      * @throws {TypeError} une demande hors de son domaine, une séance sans
-     *         polices ou sans provenance
+     *         polices ou sans provenance, une case cochée sans le chargement
+     *         du logo
      * @throws {ErreurCommande} PROPOSITION_INCONNUE, PARTICIPANT_INCONNU,
      *         PERSONNE_EXCLUE (modelePlanche)
      */
@@ -361,6 +420,8 @@ export function creerPlanches({ polices, provenance, version }) {
           brouillon: estBrouillon(charge, { source: etude.source, tour: 'tous' }),
           nom: null,
           nomControle: null,
+          piedTechnolibre: etude.pied,
+          sansTechnolibre: null,
         };
       }
       const { modele } = etude;
@@ -381,6 +442,8 @@ export function creerPlanches({ polices, provenance, version }) {
         brouillon: modele.brouillon,
         nom: nomDe(lecture.base, etude, dossier),
         nomControle: nomControleDe(lecture.base, etude, dossier),
+        piedTechnolibre: etude.pied,
+        sansTechnolibre: etude.sansTechnolibre,
       };
     },
 

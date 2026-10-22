@@ -11,6 +11,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { personne, soiree, table } from '../../../test/fixtures/badges/cas.js';
+import { lireLogo } from '../../../test/logo.js';
 import { lirePolices } from '../../../test/polices.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerPlanches } from '../../application/planche_seance.js';
@@ -77,7 +78,7 @@ const retenue = (champs = {}) =>
 
 // Les opérations de la planche d'une séance, sur la police embarquée lue
 // du disque, la provenance d'épreuve et la version engendrée.
-const planches = creerPlanches({ polices: async () => lirePolices(), provenance: 'test', version: VERSION.affichee });
+const planches = creerPlanches({ polices: async () => lirePolices(), logo: async () => lireLogo(), provenance: 'test', version: VERSION.affichee });
 // Un dossier de travail vide : le nom de la planche ne lit que son
 // séparateur et, pour une réédition, ses entrées.
 const fsVide = Object.freeze({ nature: 'epreuve', emplacements: async () => ({ separateur: '/' }), lister: async () => [] });
@@ -365,5 +366,53 @@ describe('le modèle de badge (§ 8.5, § 11.2)', () => {
     const textes = composer(phrases);
     assert.ok(textes.includes('Planches : 1 feuille de six cartes Avery 5392, sur Lettre.'), JSON.stringify(textes));
     assert.ok(textes.includes(`Fichiers : ${annonce.nom}, puis la feuille de contrôle ${annonce.nomControle}, à imprimer sur papier ordinaire.`));
+  });
+});
+
+describe('le pied TechnoLibre (§ 8.5, § 11.4)', () => {
+  // L'annonce de la séance sur la soirée retenue, la case donnée.
+  const annoncerAvecCase = (charge, piedTechnolibre) =>
+    planches.preparer({ charge, base: 'lucioles', fs: fsVide, racine: { id: 'documents', chemin: '/d' }, papier: 'A4', modeleBadge: 'a6', piedTechnolibre });
+
+  test('une annonce est celle de la machine quand sa case est celle de la machine ; une annonce ou une machine qui ne la porte pas vaut décochée', async () => {
+    const cochee = await annoncerAvecCase(retenue(), true);
+    const decochee = await annoncerAvecCase(retenue(), false);
+    const machine = { modeleBadge: 'a6', papier: 'A4' };
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, piedTechnolibre: true }), true);
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, piedTechnolibre: false }), false);
+    assert.equal(annonceDeLaMachine(decochee, { ...machine, piedTechnolibre: true }), false);
+    assert.equal(annonceDeLaMachine(decochee, { ...machine, piedTechnolibre: false }), true);
+    assert.equal(annonceDeLaMachine(decochee, machine), true);
+    const { piedTechnolibre: _case, ...sansCase } = cochee;
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, piedTechnolibre: false }), true);
+  });
+
+  test('l’annonce nomme les badges d’où le pied TechnoLibre se retire, après les caractères absents ; rien quand il tient partout ou n’est pas demandé', async () => {
+    const tient = await annoncerAvecCase(retenue(), true);
+    assert.equal(tient.sansTechnolibre, 0);
+    assert.ok(!cles(phrasesAnnonce(tient)).includes('badges.annonce.technolibreRetire'));
+    assert.ok(!cles(phrasesAnnonce(await annoncerAvecCase(retenue(), false))).includes('badges.annonce.technolibreRetire'));
+    for (const [n, texte] of [
+      [1, 'Pied TechnoLibre : retiré d’un badge, faute de place sous ses tours.'],
+      [3, 'Pied TechnoLibre : retiré de 3 badges, faute de place sous leurs tours.'],
+    ]) {
+      const charge = retenue();
+      charge.participants[1] = personne(2, 'Théo', 'Pervenche 李');
+      const annonce = { ...(await annoncerAvecCase(charge, true)), sansTechnolibre: n };
+      const phrases = phrasesAnnonce(annonce);
+      const rang = cles(phrases).indexOf('badges.annonce.technolibreRetire');
+      assert.equal(rang, cles(phrases).indexOf('badges.annonce.absents') + 1, JSON.stringify(cles(phrases)));
+      assert.deepEqual(phrases[rang].details, { n });
+      assert.equal(composer(phrases)[rang], texte);
+    }
+  });
+
+  test('la case et son avertissement ont leur libellé', () => {
+    const textes = composer([
+      { cle: 'badges.technolibre.case', details: {} },
+      { cle: 'badges.technolibre.nonRetenu', details: {} },
+    ]);
+    assert.match(textes[0], /TechnoLibre/);
+    assert.match(textes[1], /retenue sur ce poste/);
   });
 });

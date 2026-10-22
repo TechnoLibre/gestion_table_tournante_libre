@@ -2373,7 +2373,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     });
   });
 
-  test('25 la première feuille de cartes : six cartes Avery 5392, sans filet de coupe, les six premiers noms, le libellé de table après son numéro', async () => {
+  test('25 la première feuille de cartes : six cartes Avery 5392, sans filet de coupe, les six premiers noms, le libellé de table, le pied TechnoLibre', async () => {
     expect(memoire.planche, 'la planche de 24').toBeInstanceOf(Uint8Array);
     const presents = charge().participants.filter(({ exclu }) => !exclu);
     expect(presents.length).toBeGreaterThanOrEqual(CARTES_PAR_FEUILLE);
@@ -2394,6 +2394,9 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       const libellee = charge().tables.find(({ libelle: texteLibelle }) => texteLibelle === LIBELLE_TABLE);
       expect(texte).toContain(plat(`table ${libellee.numero} (${LIBELLE_TABLE})`));
       expect(texte).not.toContain(libelle('planche.brouillon'));
+      // Le pied TechnoLibre sous le pied de chaque carte : la case de la
+      // machine, que le parcours ne décoche pas, vaut cochée (§ 8.5, § 11.4).
+      expect(texte.split('https://technolibre.ca').length - 1).toBe(CARTES_PAR_FEUILLE);
     });
   });
 

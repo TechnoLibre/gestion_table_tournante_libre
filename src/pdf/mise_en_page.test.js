@@ -930,3 +930,240 @@ describe('mise en page : la carte Avery 5392', () => {
     assert.throws(() => mettreEnPage(textes(), NOTO, 'A6'), TypeError);
   });
 });
+
+// Le pied TechnoLibre (§ 11.4, § 11.5) : un texte et le logo sous le pied,
+// sur la place que le reste du badge laisse. Le reste du badge ne cède rien :
+// le pied TechnoLibre rapetisse de son corps de départ à son plancher, puis
+// se retire, et le badge est alors celui qu'il serait sans lui.
+describe('mise en page : le pied TechnoLibre', () => {
+  const PROMOTION = 'Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise';
+  const TECHNOLIBRE = Object.freeze({ texte: PROMOTION, rapport: 5 });
+  const DEPART = constante('CORPS_TECHNOLIBRE_PT');
+  const PLANCHER = constante('CORPS_TECHNOLIBRE_PLANCHER_PT');
+  const MODELES = [
+    ['A6', 'a6', CADRE],
+    ['Avery 5392', 'avery5392', cadreUtile({ x: 0, y: 0, ...MODELES_BADGE.avery5392 }, 'avery5392')],
+  ];
+  const hauteurLogo = (corps) => 2 * corps * MM_PAR_PT;
+  // Les blocs du texte TechnoLibre : ceux qui ne sont ni du badge sans lui.
+  const blocsTechnolibre = (avec, sans) => avec.blocs.slice(sans.blocs.length);
+  // La hauteur du bloc TechnoLibre au corps donné : ses lignes, puis le logo.
+  const hauteurBloc = (metriques, corps, lignes) => {
+    const { ascendante, descendante } = metriques.hauteurs(corps);
+    return lignes * (ascendante + descendante) + hauteurLogo(corps);
+  };
+  // L'écart libre d'un badge sans pied TechnoLibre : du bas des tours au
+  // haut du pied.
+  function ecartLibre(page, metriques, pied) {
+    const boites = page.blocs.map((bloc) => ({ bloc, ...boite(bloc, metriques) }));
+    const hautDuPied = Math.min(...boites.filter(({ bloc }) => pied.includes(bloc.texte)).map(({ haut }) => haut));
+    const basDuReste = Math.max(...boites.filter(({ bloc }) => !pied.includes(bloc.texte)).map(({ bas }) => bas));
+    return hautDuPied - basDuReste;
+  }
+
+  for (const [nomModele, modele, cadre] of MODELES) {
+    for (const [jeu, metriques] of JEUX) {
+      test(`${nomModele}, ${jeu} : sous un badge ordinaire, le texte au corps de départ puis le logo, centrés, posés sur le bas du cadre, sans rien chevaucher`, () => {
+        const sans = mettreEnPage(textes(), metriques, modele);
+        const avec = mettreEnPage(textes(), metriques, modele, TECHNOLIBRE);
+        assert.equal(sans.technolibre, null);
+        assert.equal(avec.technolibre.corps, DEPART);
+        const lignes = blocsTechnolibre(avec, sans);
+        assert.ok(lignes.length >= 1 && rejoint(lignes.map((b) => b.texte), PROMOTION), JSON.stringify(lignes));
+        assert.ok(lignes.every((b) => b.corps === DEPART && !b.gras));
+        for (const b of lignes) assert.ok(Math.abs(b.x - (cadre.largeur - metriques.largeur(b.texte, DEPART, false)) / 2) < TOLERANCE);
+        const { logo } = avec.technolibre;
+        assert.ok(Math.abs(logo.hauteur - hauteurLogo(DEPART)) < TOLERANCE);
+        assert.ok(Math.abs(logo.largeur - 5 * logo.hauteur) < TOLERANCE);
+        assert.ok(Math.abs(logo.x - (cadre.largeur - logo.largeur) / 2) < TOLERANCE);
+        assert.ok(Math.abs(logo.y + logo.hauteur - cadre.hauteur) < TOLERANCE);
+        // Le logo sous la dernière ligne du texte, la dernière ligne sous le
+        // pied.
+        assert.ok(boite(lignes.at(-1), metriques).bas <= logo.y + TOLERANCE);
+        const boites = avec.blocs.map((b) => boite(b, metriques));
+        assert.ok(boites.every((b) => b.droite <= cadre.largeur + TOLERANCE && b.bas <= cadre.hauteur + TOLERANCE && b.gauche >= -TOLERANCE));
+        assert.ok(boites.every((b) => b.bas <= logo.y + TOLERANCE), 'aucun texte ne descend sur le logo');
+        assert.deepEqual(chevauchements(avec, metriques), []);
+      });
+
+      test(`${nomModele}, ${jeu} : un logo trop large pour le cadre au corps de départ rapetisse jusqu'à tenir en largeur, puis se retire`, () => {
+        const tientEnLargeur = (corps, rapport) => hauteurLogo(corps) * rapport <= cadre.largeur + TOLERANCE;
+        const large = mettreEnPage(textes(), metriques, modele, { texte: PROMOTION, rapport: 30 });
+        const { corps, logo } = large.technolibre;
+        assert.ok(corps !== null && corps < DEPART && corps >= PLANCHER, JSON.stringify(large.technolibre));
+        assert.ok(tientEnLargeur(corps, 30) && !tientEnLargeur(corps + 1, 30));
+        assert.ok(logo.x >= -TOLERANCE && logo.x + logo.largeur <= cadre.largeur + TOLERANCE);
+        assert.ok(!tientEnLargeur(PLANCHER, 60));
+        const trop = mettreEnPage(textes(), metriques, modele, { texte: PROMOTION, rapport: 60 });
+        assert.deepEqual(trop.technolibre, { corps: null, logo: null });
+      });
+
+      test(`${nomModele}, ${jeu} : le reste du badge ne cède rien — nom, organisation, tours et colonnes identiques, le pied remonté de la hauteur du bloc`, () => {
+        const cas = [
+          textes(),
+          textes({ nom: 'Ondine-Théa Lacasse-Pervenche de la Grisaille', lignes: toursAuxSieges(4) }),
+          textes({ lignes: tours(9) }),
+          textes({ organisation: null, lignes: tours(2) }),
+        ];
+        for (const champs of cas) {
+          const sans = mettreEnPage(champs, metriques, modele);
+          const avec = mettreEnPage(champs, metriques, modele, TECHNOLIBRE);
+          const pied = sans.blocs.filter((b) => PIED.includes(b.texte) || PIED_REDUIT.includes(b.texte));
+          const haut = sans.blocs.slice(0, sans.blocs.length - pied.length);
+          assert.deepEqual(avec.blocs.slice(0, haut.length), haut, champs.nom);
+          assert.equal(avec.colonnesTours, sans.colonnesTours);
+          const piedAvec = avec.blocs.slice(haut.length, haut.length + pied.length);
+          if (avec.technolibre.corps === null) {
+            assert.deepEqual(avec.blocs, sans.blocs);
+            continue;
+          }
+          const decalage = pied[0].y - piedAvec[0].y;
+          assert.ok(decalage > 0);
+          pied.forEach((b, rang) => {
+            assert.deepEqual({ ...piedAvec[rang], y: 0 }, { ...b, y: 0 });
+            assert.ok(Math.abs(b.y - piedAvec[rang].y - decalage) < TOLERANCE);
+          });
+          const lignes = blocsTechnolibre(avec, sans).length;
+          assert.ok(Math.abs(decalage - hauteurBloc(metriques, avec.technolibre.corps, lignes)) < 1e-6);
+        }
+      });
+    }
+
+    test(`${nomModele}, Noto Sans : à mesure que les tours s’ajoutent, le pied TechnoLibre rapetisse jusqu’à son plancher, puis se retire ; chaque fois, la place libre le décide`, () => {
+      const vus = new Set();
+      for (let n = 1; n <= 24; n += 1) {
+        const champs = textes({ lignes: toursAuxSieges(n) });
+        const sans = mettreEnPage(champs, NOTO, modele);
+        if ('refus' in sans) {
+          assert.deepEqual(mettreEnPage(champs, NOTO, modele, TECHNOLIBRE), sans, `${n} tours`);
+          continue;
+        }
+        const avec = mettreEnPage(champs, NOTO, modele, TECHNOLIBRE);
+        const { corps } = avec.technolibre;
+        const pied = sans.blocs.filter((b) => PIED.includes(b.texte) || PIED_REDUIT.includes(b.texte)).map((b) => b.texte);
+        const libre = ecartLibre(sans, NOTO, pied);
+        // Le nombre de lignes du texte TechnoLibre à un corps : ses mots
+        // remplis ligne après ligne dans la largeur du cadre.
+        const lignesA = (c) => {
+          let lignes = 1;
+          let courante = '';
+          for (const mot of PROMOTION.split(' ')) {
+            const avec = courante === '' ? mot : `${courante} ${mot}`;
+            if (NOTO.largeur(avec, c, false) <= cadre.largeur + TOLERANCE) courante = avec;
+            else [lignes, courante] = [lignes + 1, mot];
+          }
+          return lignes;
+        };
+        if (corps === null) {
+          vus.add('retire');
+          assert.deepEqual(avec.blocs, sans.blocs, `${n} tours`);
+          assert.equal(avec.technolibre.logo, null);
+          // Même au plancher, le bloc dépasse la place libre : une ligne au
+          // moins, et le logo.
+          assert.ok(libre < hauteurBloc(NOTO, PLANCHER, 1) + 1e-9, `${n} tours : ${libre}`);
+        } else {
+          vus.add(corps === DEPART ? 'depart' : 'reduit');
+          assert.ok(corps >= PLANCHER && corps <= DEPART, `${n} tours : ${corps}`);
+          const lignes = blocsTechnolibre(avec, sans).length;
+          assert.ok(hauteurBloc(NOTO, corps, lignes) <= libre + 1e-9, `${n} tours`);
+          if (corps < DEPART) {
+            // Un point de plus ne tenait pas.
+            assert.ok(hauteurBloc(NOTO, corps + 1, lignesA(corps + 1)) > libre - 1e-9, `${n} tours`);
+            assert.equal(lignes, lignesA(corps), `${n} tours`);
+          }
+        }
+      }
+      assert.deepEqual([...vus].sort(), ['depart', 'reduit', 'retire']);
+    });
+  }
+
+  // Le nom de l'événement passe avant le pied TechnoLibre dans l'ordre de
+  // sacrifice (§ 11.5) : un badge qui l'a perdu, et à plus forte raison
+  // l'organisation, ne porte pas le pied TechnoLibre, quelle que soit la
+  // place que le dépouillement a libérée. Le badge sort tel qu'il serait
+  // sans lui, et le retrait se compte.
+  const MOTS_LARGES = 'WWWWWWWWWW MMMMMMMMMM WWWWWWWWWW MMMMMMMMM WWWWWWW';
+  const PIED_COURT = [`Souper ${TIRET} ${DATE}`, HORODATAGE];
+  const auSiege12 = (n) => tours(n).map((ligne) => `${ligne}, siège 12`);
+  // Le nom de l'événement est sur la page : seul le pied complet porte
+  // « Souper », replié ou non.
+  const avecEvenement = (page) => page.blocs.some((b) => b.texte.includes('Souper'));
+  const retire = (sans) => ({ ...sans, technolibre: { corps: null, logo: null } });
+
+  test('un badge qui a perdu le nom de l’événement ne porte pas le pied TechnoLibre, même quand la place le tiendrait : nom de trois lignes sous vingt tours, nom au-delà de trois lignes', () => {
+    const cas = [
+      ['a6', textes({ nom: 'Ondine-Théa Lacasse-Pervenche de la Grisaille', pied: PIED_COURT, lignes: auSiege12(20) })],
+      ...[1, 2, 3].flatMap((n) => MODELES.map(([, modele]) => [modele, textes({ nom: MOTS_LARGES, organisation: null, lignes: tours(n) })])),
+    ];
+    for (const [modele, champs] of cas) {
+      const sans = mettreEnPage(champs, NOTO, modele);
+      assert.ok(!('refus' in sans) && !avecEvenement(sans), `${modele} : ${champs.nom}, ${champs.lignes.length} tours`);
+      assert.deepEqual(mettreEnPage(champs, NOTO, modele, TECHNOLIBRE), retire(sans), `${modele} : ${champs.nom}, ${champs.lignes.length} tours`);
+    }
+  });
+
+  test('sur toute une gamme de badges, des deux modèles et des deux jeux de métriques, le pied TechnoLibre ne paraît que sur un badge qui garde le nom de l’événement', () => {
+    const noms = ['Iris Ombrelle', 'Ondine-Théa Lacasse-Pervenche de la Grisaille', NOMS_COMPOSES[0], MOTS_LARGES];
+    for (const [, modele] of MODELES) {
+      for (const [jeu, metriques] of JEUX) {
+        let depouilles = 0;
+        for (const nom of noms) {
+          for (const organisation of ['Club des Merles', null]) {
+            for (const pied of [PIED, PIED_COURT]) {
+              for (let n = 1; n <= 24; n += 1) {
+                const champs = textes({ nom, organisation, pied, lignes: auSiege12(n) });
+                const sans = mettreEnPage(champs, metriques, modele);
+                if ('refus' in sans) continue;
+                const avec = mettreEnPage(champs, metriques, modele, TECHNOLIBRE);
+                const quoi = `${modele}, ${jeu} : ${nom}, ${organisation}, ${n} tours`;
+                if (avecEvenement(sans)) {
+                  assert.ok(avec.technolibre.corps === null || avecEvenement(avec), quoi);
+                  continue;
+                }
+                depouilles += 1;
+                assert.deepEqual(avec, retire(sans), quoi);
+              }
+            }
+          }
+        }
+        assert.ok(depouilles > 0, `${modele}, ${jeu} : aucun badge dépouillé dans la gamme`);
+      }
+    }
+  });
+
+  test('sans pied TechnoLibre, la page est celle d’avant ; un refus reste le même refus', () => {
+    for (const [, modele] of MODELES) {
+      assert.deepEqual(mettreEnPage(textes(), NOTO, modele, null), mettreEnPage(textes(), NOTO, modele));
+      assert.deepEqual(mettreEnPage(textes({ lignes: tours(100) }), NOTO, modele, TECHNOLIBRE), {
+        refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100 } },
+      });
+    }
+  });
+
+  test('un pied TechnoLibre mal formé lève TypeError : texte vide ou absent, rapport du logo qui n’est pas un nombre positif fini', () => {
+    for (const faute of [{ texte: '', rapport: 5 }, { texte: '   ', rapport: 5 }, { rapport: 5 }, { texte: PROMOTION, rapport: 0 }, { texte: PROMOTION, rapport: Infinity }, { texte: PROMOTION }, 'texte']) {
+      assert.throws(() => mettreEnPage(textes(), NOTO, 'a6', faute), TypeError, JSON.stringify(faute));
+    }
+  });
+
+  test('le même badge, deux fois, rend la même page', () => {
+    assert.deepEqual(mettreEnPage(textes(), NOTO, 'avery5392', TECHNOLIBRE), mettreEnPage(textes(), NOTO, 'avery5392', TECHNOLIBRE));
+  });
+});
+
+describe('mise en page : le pied TechnoLibre, la mesure que la spécification cite (§ 11.5)', () => {
+  const TECHNOLIBRE = Object.freeze({
+    texte: 'Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise',
+    rapport: 5,
+  });
+  test('Noto Sans, un nom d’une ligne et son organisation, des tours sans siège ni titre : le corps de départ tient jusqu’à cinq tours sur la carte et treize sur l’A6, pas au-delà', () => {
+    for (const [modele, dernier] of [
+      ['avery5392', 5],
+      ['a6', 13],
+    ]) {
+      const corps = (n) => mettreEnPage(textes({ lignes: tours(n) }), NOTO, modele, TECHNOLIBRE).technolibre.corps;
+      for (let n = 1; n <= dernier; n += 1) assert.equal(corps(n), 6, `${modele}, ${n} tours`);
+      assert.notEqual(corps(dernier + 1), 6, `${modele}, ${dernier + 1} tours`);
+    }
+  });
+});

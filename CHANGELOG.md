@@ -41,6 +41,14 @@
   choisis, et une feuille de contrôle qui ne s'écrit pas le dit en nommant le
   fichier, les cartes déjà déposées. Un modèle de badge que le poste ne peut
   pas retenir s'annonce sous les réglages de la section.
+- Sous le pied de chaque badge, le pied TechnoLibre : « Demander un
+  développement logiciel personnalisé avec https://technolibre.ca pour votre
+  entreprise », suivi du logo de TechnoLibre en couleurs, seule couleur du
+  badge. Une case de la section, cochée par défaut, le retire, et le poste la
+  retient. Il ne prend que la place libre : il rapetisse sur un badge chargé,
+  s'en retire quand même sa plus petite taille ne tient pas ou quand le badge
+  perd le nom de l'événement, et l'annonce compte ces badges. La feuille de
+  contrôle ne le porte pas.
 - « Imprimer… » ouvre un aperçu de la page imprimée : le plan, découpé en pages
   repérées quand il ne se lit plus sur une seule ; la liste d'accueil ; la
   feuille par table, une pour la soirée ou une par tour. Les listes imprimées

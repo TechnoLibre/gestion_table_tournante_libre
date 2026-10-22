@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8,
-// Q3) : ses réglages — modèle de badge, source, imposition, ordre —, ses
-// commandes, les phrases de l'annonce que rend phrasesAnnonce
-// (badges/modele.js), la planche et la liste produites, et la réédition.
-// Chaque clé commence par « badges. ». Les refus de la planche sont des
-// textes de l'application (application/libelles/planche.js), le nom d'un
-// papier un libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit
-// par texte. Le chemin d'un fichier produit est une donnée : l'écran le pose
-// dans son propre nœud, à côté de son intitulé.
+// Q3) : ses réglages — modèle de badge, case du pied TechnoLibre, source,
+// imposition, ordre —, ses commandes, les phrases de l'annonce que rend
+// phrasesAnnonce (badges/modele.js), la planche et la liste produites, et la
+// réédition. Chaque clé commence par « badges. ». Les refus de la planche
+// sont des textes de l'application (application/libelles/planche.js), le nom
+// d'un papier un libellé de l'aperçu (impression.papier.nom.*), que l'annonce
+// lit par texte. Le chemin d'un fichier produit est une donnée : l'écran le
+// pose dans son propre nœud, à côté de son intitulé.
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
@@ -28,6 +28,11 @@ export const TABLE = new Map([
   [
     'badges.modele.nonRetenu',
     'Le modèle choisi vaut pour cette séance, sans être retenu sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
+  ['badges.technolibre.case', 'Pied TechnoLibre : une invitation et le logo en couleurs, sous le pied de chaque badge'],
+  [
+    'badges.technolibre.nonRetenu',
+    'La case vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
   ],
   ['badges.source.titre', 'Placement imprimé'],
   ['badges.source.retenu', 'Le placement retenu'],
@@ -89,6 +94,13 @@ export const TABLE = new Map([
       `Caractères absents de la police, imprimés sans glyphe et listés sur la feuille de contrôle : ${enumeration(
         caracteres.map(({ caractere, point }) => `« ${caractere} » (${point})`),
       )}.`,
+  ],
+  [
+    'badges.annonce.technolibreRetire',
+    ({ n }) =>
+      n === 1
+        ? 'Pied TechnoLibre : retiré d\u{2019}un badge, faute de place sous ses tours.'
+        : `Pied TechnoLibre : retiré de ${n} badges, faute de place sous leurs tours.`,
   ],
   [
     'badges.annonce.brouillon.retenu',

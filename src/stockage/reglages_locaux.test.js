@@ -18,12 +18,14 @@ import {
   avecCadrage,
   avecModeleBadge,
   avecPapier,
+  avecPiedTechnolibre,
   avecTailleTexte,
   cadrageDe,
   creerEcrivainDiffere,
   ecrireReglages,
   lireReglages,
   modeleBadgeDe,
+  piedTechnolibreDe,
   serialiserReglages,
   tailleTexteDe,
 } from './reglages_locaux.js';
@@ -541,5 +543,46 @@ describe('réglages locaux : le modèle de badge (§ 8.5, § 11.2)', () => {
     const { reglages } = await lireReglages(fs, DOC);
     await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
     assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"format":1,"modele_badge":"a6","papier":"Lettre"}\n');
+  });
+});
+
+describe('réglages locaux : le pied TechnoLibre des badges (§ 8.5, § 11.4)', () => {
+  test('pied_technolibre se lit tel quel ; absent, il vaut vrai sans que la clé s’ajoute aux réglages lus', async () => {
+    for (const valeur of [true, false]) {
+      const { reglages, avertissement } = await lireReglages(disque(`{"cadrages":[],"format":1,"papier":null,"pied_technolibre":${valeur}}\n`), DOC);
+      assert.equal(avertissement, null);
+      assert.deepEqual(reglages, { format: 1, papier: null, cadrages: [], pied_technolibre: valeur });
+      assert.equal(piedTechnolibreDe(reglages), valeur);
+    }
+    const absent = await lireReglages(disque(), DOC);
+    assert.equal(Object.hasOwn(absent.reglages, 'pied_technolibre'), false);
+    assert.equal(piedTechnolibreDe(absent.reglages), true);
+    assert.equal(piedTechnolibreDe((await lireReglages(disque('{"cadrages":[],"format":1,"papier":"A4"}\n'), DOC)).reglages), true);
+  });
+
+  test('une valeur qui n’est pas un booléen rend le fichier fautif : les défauts et REGLAGES_ILLISIBLES, raison FORME', async () => {
+    for (const valeur of ['"true"', '1', '0', 'null', '[]', '{}']) {
+      const fs = disque(`{"cadrages":[],"format":1,"papier":null,"pied_technolibre":${valeur}}\n`);
+      assert.deepEqual(await lireReglages(fs, DOC), { reglages: DEFAUTS, avertissement: illisibles('FORME') }, valeur);
+      assert.equal(fs.compteurs.ecritures, 0, valeur);
+    }
+  });
+
+  test('avecPiedTechnolibre pose la clé sans toucher au reste ; un non-booléen lève TypeError ; le texte canonique la range à son rang', () => {
+    const reglages = { ...DEFAUTS, papier: 'A4', modele_badge: 'a6', theme: 'sombre' };
+    const sans = avecPiedTechnolibre(reglages, false);
+    assert.deepEqual(sans, { ...reglages, pied_technolibre: false });
+    assert.equal(Object.hasOwn(reglages, 'pied_technolibre'), false);
+    assert.equal(serialiserReglages(sans), '{"cadrages":[],"format":1,"modele_badge":"a6","papier":"A4","pied_technolibre":false,"theme":"sombre"}\n');
+    assert.deepEqual(avecPiedTechnolibre(sans, true), { ...reglages, pied_technolibre: true });
+    for (const mauvais of ['true', 1, 0, null, undefined]) assert.throws(() => avecPiedTechnolibre(reglages, mauvais), TypeError, String(mauvais));
+    assert.throws(() => serialiserReglages({ ...DEFAUTS, pied_technolibre: 'non' }), TypeError);
+  });
+
+  test('un fichier qui porte la case, relu puis réécrit avec un autre papier, la garde', async () => {
+    const fs = disque('{"cadrages":[],"format":1,"papier":null,"pied_technolibre":false}\n');
+    const { reglages } = await lireReglages(fs, DOC);
+    await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"format":1,"papier":"Lettre","pied_technolibre":false}\n');
   });
 });

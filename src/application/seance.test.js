@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_RETENU, personne as personneBadge, soiree, table as tableBadge } from '../../test/fixtures/badges/cas.js';
 import { describe, test } from '../../test/lanceur.js';
+import { lireLogo } from '../../test/logo.js';
 import { lirePolices } from '../../test/polices.js';
 import { apercevoir } from '../csv/apercu.js';
 import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
@@ -111,7 +112,9 @@ function creerPlanificateur() {
 // défaut.
 // options : les paramètres de creerSeance qu'une épreuve règle en plus —
 // delaiReglagesMs. Une racine null crée la séance sans dossier de travail.
-function monter({ fs = creerFichiersSimules(), racine = DOC, prefixe = 'seance', inactiviteMs, ...options } = {}) {
+// La séance reçoit le chargement du logo vectoriel, que la planche lit pour
+// le pied TechnoLibre ; logo: null monte une séance sans lui.
+function monter({ fs = creerFichiersSimules(), racine = DOC, prefixe = 'seance', inactiviteMs, logo = async () => lireLogo(), ...options } = {}) {
   if (racine !== null) fs.deposerDossier(racine.id);
   const planificateur = creerPlanificateur();
   const identifiant = creerIdentifiants(prefixe);
@@ -123,6 +126,7 @@ function monter({ fs = creerFichiersSimules(), racine = DOC, prefixe = 'seance',
     produitVersion: V1,
     planifier: planificateur.planifier,
     annuler: planificateur.annuler,
+    logo,
     ...(inactiviteMs === undefined ? {} : { inactiviteMs }),
     ...options,
   });
@@ -4447,5 +4451,151 @@ describe('séance : le modèle de badge (§ 8.5, § 11.2)', () => {
     assert.deepEqual([a6.refus, a6.modeleBadge, a6.papier, a6.nomControle], [null, 'a6', 'Lettre', null]);
     assert.match(a6.nom, /\.badges_Lettre_feuille_/);
     assert.equal(seance.etat().papier, null);
+  });
+});
+
+describe('séance : le pied TechnoLibre des badges (§ 8.5, § 11.4)', () => {
+  const caseLue = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).pied_technolibre;
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Iris', 'Ombrelle'), personneBadge(2, 'Théo', 'Pervenche')],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+  const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
+
+  test('cochée au départ ; choisirPiedTechnolibre écrit les seuls réglages, dans tout mode, et l’état la porte ; une séance neuve la relit', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.equal(seance.etat().piedTechnolibre, true);
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirPiedTechnolibre(false), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual([caseLue(fs), seance.etat().piedTechnolibre], [false, false]);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().piedTechnolibre, false);
+    assert.deepEqual(await neuve.seance.choisirPiedTechnolibre(true), { retenu: true, avertissements: [] });
+    assert.deepEqual([caseLue(fs), neuve.seance.etat().piedTechnolibre], [true, true]);
+  });
+
+  test('une valeur qui n’est pas un booléen est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of ['false', 0, 1, null, undefined]) {
+      await assert.rejects(seance.choisirPiedTechnolibre(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().piedTechnolibre, true);
+  });
+
+  test('des réglages illisibles : la case vaut pour la séance, non retenue, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirPiedTechnolibre(false), { retenu: false, avertissements: [avis] });
+    assert.equal(seance.etat().piedTechnolibre, false);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('l’écriture garde le papier, le modèle, la taille du texte et les clés inconnues ; choisir le modèle garde la case', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4","taille_texte":115,"zeta":true}\n');
+    const { seance } = monter({ fs });
+    await seance.attendre();
+    await seance.choisirPiedTechnolibre(false);
+    await seance.choisirModeleBadge('a6');
+    assert.equal(
+      fs.contenu('documents', FICHIER_REGLAGES),
+      '{"cadrages":[],"format":1,"modele_badge":"a6","papier":"A4","pied_technolibre":false,"taille_texte":115,"zeta":true}\n',
+    );
+  });
+
+  test('au changement de racine : la case que les réglages portent, à défaut celle de la séance', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"pied_technolibre":false}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().piedTechnolibre, false);
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().piedTechnolibre, false, 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().piedTechnolibre, false, 'des réglages illisibles');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"pied_technolibre":true}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().piedTechnolibre, true, 'une case écrite sur la racine l’emporte');
+  });
+
+  test('une relecture des réglages partie avant un choix de la case ne l’écrase pas, ni dans l’état ni dans le fichier', async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"pied_technolibre":true}\n');
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(prise, true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirPiedTechnolibre(false);
+    await laisser();
+    liberer();
+    await changement;
+    assert.equal(seance.etat().piedTechnolibre, false);
+    assert.deepEqual(await choix, { retenu: true, avertissements: [] });
+    await seance.attendre();
+    assert.deepEqual([caseLue(fs, PORTABLE.id), seance.etat().piedTechnolibre], [false, false]);
+  });
+
+  test('la planche suit la case : cochée, l’annonce porte le pied TechnoLibre et ses retraits ; décochée, ni l’un ni l’autre', async () => {
+    const { seance } = await ouvertSur(chargeRetenue(), avecPlanche);
+    const cochee = await seance.preparerPlanche();
+    assert.deepEqual([cochee.refus, cochee.piedTechnolibre, cochee.sansTechnolibre], [null, true, 0]);
+    await seance.choisirPiedTechnolibre(false);
+    const decochee = await seance.preparerPlanche();
+    assert.deepEqual([decochee.refus, decochee.piedTechnolibre, decochee.sansTechnolibre], [null, false, null]);
+  });
+
+  test('sans le chargement du logo, une planche qui demande le pied TechnoLibre lève TypeError ; décochée, elle n’en a pas besoin ; le logo se charge une fois par séance', async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs, chargeRetenue());
+    const sansLogo = monter({ fs, logo: null, ...avecPlanche }).seance;
+    await sansLogo.ouvrir(BASE);
+    await assert.rejects(sansLogo.preparerPlanche(), (erreur) => erreur instanceof TypeError && /logo/.test(erreur.message));
+    await sansLogo.choisirPiedTechnolibre(false);
+    assert.equal((await sansLogo.preparerPlanche()).refus, null);
+
+    let chargements = 0;
+    const logo = async () => {
+      chargements += 1;
+      if (chargements === 1) throw new Error('logo illisible');
+      return lireLogo();
+    };
+    const fsBis = creerFichiersSimules();
+    await deposerEssai(fsBis, chargeRetenue());
+    const { seance } = monter({ fs: fsBis, prefixe: 'logo', logo, ...avecPlanche });
+    await seance.ouvrir(BASE);
+    await assert.rejects(seance.preparerPlanche(), /logo illisible/);
+    await seance.preparerPlanche();
+    await seance.preparerPlanche();
+    assert.equal(chargements, 2);
   });
 });

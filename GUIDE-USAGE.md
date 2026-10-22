@@ -927,9 +927,16 @@ La planche se produit dans la section « Badges » de l’événement. On y choi
 fois à l’autre, et l’ordre des badges, alphabétique ou par table du premier
 tour. Avec l’A6 seulement, la section montre aussi le papier — Lettre tant que
 le poste n’en a pas choisi d’autre, « Changer » le remplace — et l’imposition —
-feuille par feuille, ou en pile pour un massicot qui tranche toute la rame.
+feuille par feuille, ou en pile pour un massicot qui tranche toute la rame. Une
+case, cochée tant que vous ne la décochez pas, ajoute sous le pied de chaque
+badge le **pied TechnoLibre** : une invitation à demander un développement
+logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ; le poste
+garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la place
+libre : il rapetisse sur un badge chargé, et s’en retire quand même sa plus
+petite taille ne tient pas, ou que le badge a dû perdre le nom de l’événement.
 « Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
-homonymes, les caractères que la police ne dessine pas, le nom des fichiers.
+homonymes, les caractères que la police ne dessine pas, les badges d’où le pied
+TechnoLibre se retire, le nom des fichiers.
 « Produire la planche (PDF) » écrit le PDF à côté des fichiers de l’événement et
 en affiche le chemin ; dans un navigateur, le PDF se télécharge. « Produire la
 liste (CSV) » écrit au même endroit la liste des mêmes badges, pour un tableur :
@@ -957,10 +964,10 @@ Vient ensuite la planche, six cartes par feuille :
 *Chaque badge porte le nom, l’organisation et la table de chaque tour, son
 libellé entre parenthèses quand elle en a un ; une personne assise à la même
 table à chaque tour lit une seule ligne, comme « Toute la soirée — table 1
-(Table d’honneur) » sur le quatrième badge. En pied, le nom de
-l’événement et l’instant du placement. Les cartes étant prédécoupées, la
-feuille ne porte aucun trait de coupe ; avec l’A6, des traits fins marquent la
-coupe.*
+(Table d’honneur) » sur le quatrième badge. En pied, le nom de l’événement et
+l’instant du placement, puis le pied TechnoLibre et son logo en couleurs, que la
+case de la section retire. Les cartes étant prédécoupées, la feuille ne porte
+aucun trait de coupe ; avec l’A6, des traits fins marquent la coupe.*
 
 Une personne absente à un tour garde la ligne de ce tour sur son badge, qui
 dit « absente » au lieu d’une table :
