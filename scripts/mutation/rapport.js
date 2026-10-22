@@ -4,10 +4,12 @@
 // Le résultat écrit de l'audit par mutation (§ 14.13) : rediger compose le
 // Markdown et le JSON que audit.js écrit sous audit/, versionnés ; relire
 // recompose le Markdown du seul JSON écrit, par la même composition ;
-// equivalentsDe lit audit/mutants-equivalents.json. Fonctions pures et
-// déterministes : elles reçoivent des textes, ne lisent aucun fichier ni
-// horloge, et la sortie de rediger ne dépend pas de l'ordre des résultats
-// reçus.
+// equivalentsDe lit audit/mutants-equivalents.json ; delaisARejouerSeuls
+// désigne les délais déclarés équivalents qu'audit.js rejoue seuls avant de
+// les compter, et issuesApresRejeu reporte leurs issues rejouées. Fonctions
+// pures et déterministes : elles reçoivent des textes ou des listes, ne
+// lisent aucun fichier ni horloge, et la sortie de rediger ne dépend pas de
+// l'ordre des résultats reçus.
 //
 // Un rapport ne nomme pas sa machine (§ 19.10) : son en-tête est une liste
 // fermée de champs, chacun d'une forme stricte — la version, le périmètre en
@@ -276,6 +278,7 @@ function composer(donnees) {
     `| Node | ${tete.node} |`,
     '',
     'Chaque mutant se joue contre les épreuves de la série node qui atteignent son module, sous `node --test`.',
+    'Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans autre mutant à côté, avant d’être compté.',
     'Un survivant se rejoue contre les épreuves longues qui atteignent son module avant d’être compté : tué par elles, il se compte à part.',
     'Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affirmer.',
     '',
@@ -463,4 +466,45 @@ export function equivalentsDe(texte) {
     equivalents.set(cle, raison);
   });
   return equivalents;
+}
+
+/**
+ * Les rangs des mutants qu'audit.js rejoue seuls avant de les compter :
+ * ceux dont l'issue est un délai et dont la clé est déclarée équivalente,
+ * en rangs croissants. Joué parmi d'autres processus, un mutant lent peut
+ * dépasser un délai qu'il tient seul ; une déclaration d'équivalence dit
+ * qu'il ne boucle pas, et le rejeu seul le vérifie. Un délai non déclaré ne
+ * se rejoue pas : une boucle sans fin y coûterait son délai une seconde fois.
+ * La clé d'un rang se lit dans le mutant de la tâche du même rang. Lève une
+ * RangeError quand issues et taches n'ont pas la même longueur.
+ * @param {Issue[]} issues  l'issue de chaque mutant, par rang
+ * @param {{mutant: {cle: string}}[]} taches  la tâche de chaque mutant, au même rang
+ * @param {Map<string, string>} equivalents  les équivalences, par equivalentsDe
+ * @returns {number[]}
+ */
+export function delaisARejouerSeuls(issues, taches, equivalents) {
+  if (issues.length !== taches.length) throw new RangeError(`issues : ${issues.length}, tâches : ${taches.length}`);
+  return issues.flatMap((issue, rang) => (issue === 'delai' && equivalents.has(taches[rang].mutant.cle) ? [rang] : []));
+}
+
+/**
+ * Les issues après le rejeu seul : au rang rangs[i], rejouees[i], quelle
+ * qu'elle soit ; ailleurs, l'issue reçue. Rend une liste neuve, issues
+ * intacte. Lève une RangeError quand rangs et rejouees n'ont pas la même
+ * longueur, ou qu'un rang tombe hors des issues.
+ * @param {Issue[]} issues     les issues de la passe parallèle
+ * @param {number[]} rangs     les rangs rejoués, par delaisARejouerSeuls
+ * @param {Issue[]} rejouees  l'issue rejouée de chaque rang, au même indice
+ * @returns {Issue[]}
+ */
+export function issuesApresRejeu(issues, rangs, rejouees) {
+  if (rangs.length !== rejouees.length) throw new RangeError(`rangs : ${rangs.length}, issues rejouées : ${rejouees.length}`);
+  const apres = [...issues];
+  rangs.forEach((rang, i) => {
+    if (!Number.isInteger(rang) || rang < 0 || rang >= issues.length) {
+      throw new RangeError(`rang ${rang} hors des ${issues.length} issues`);
+    }
+    apres[rang] = rejouees[i];
+  });
+  return apres;
 }

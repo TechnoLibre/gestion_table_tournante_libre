@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { VERSION } from '../../src/version.genere.js';
 import { describe, test } from '../../test/lanceur.js';
-import { equivalentsDe, rediger, relire } from './rapport.js';
+import { delaisARejouerSeuls, equivalentsDe, issuesApresRejeu, rediger, relire } from './rapport.js';
 
 const RACINE = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -105,6 +105,17 @@ describe('rapport de mutation : les comptes', () => {
     assert.ok(lignes.includes('| `src/verger/poires.js` | 4 | 1 | 1 | 1 | 0 | 0 | 1 |'), 'ligne de poires.js');
     assert.ok(lignes.includes('| `src/verger/pommes.js` | 5 | 1 | 0 | 2 | 1 | 1 | 0 |'), 'ligne de pommes.js');
     assert.ok(lignes.includes('| frontiere | 3 | 1 | 0 | 2 | 0 | 0 | 0 |'), 'ligne de frontiere');
+  });
+
+  test('le préambule dit qu’un délai déclaré équivalent se rejoue seul avant d’être compté', () => {
+    const lignes = rediger({ entete: ENTETE, resultats: RESULTATS }).markdown.split('\n');
+    const rang = lignes.findIndex((ligne) => ligne.startsWith('Chaque mutant se joue'));
+    assert.deepEqual(lignes.slice(rang, rang + 4), [
+      'Chaque mutant se joue contre les épreuves de la série node qui atteignent son module, sous `node --test`.',
+      'Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans autre mutant à côté, avant d’être compté.',
+      'Un survivant se rejoue contre les épreuves longues qui atteignent son module avant d’être compté : tué par elles, il se compte à part.',
+      'Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affirmer.',
+    ]);
   });
 
   test('l’en-tête se recopie tel quel quand il ne nomme pas la machine', () => {
@@ -358,6 +369,54 @@ describe('rapport de mutation : les équivalents déclarés', () => {
       new RegExp(`en double.*${CLE}`),
     );
     assert.throws(() => equivalentsDe(texte([{ cle: CLE, raison: 'lu dans /home/exemple/notes' }])), /ne nomme pas sa machine/);
+  });
+});
+
+describe('rapport de mutation : les délais rejoués seuls', () => {
+  const cle = (n) => `src/verger/pommes.js:frontiere:00000000000000b${n}:0`;
+  const ISSUES = Object.freeze(['delai', 'delai', 'survivant', 'tue', 'erreur', 'delai', 'delai']);
+  const tache = (n) => ({ mutant: { cle: cle(n), fichier: 'src/verger/pommes.js' }, tests: [], longues: [] });
+  const TACHES = Object.freeze(ISSUES.map((_, rang) => tache(rang)));
+
+  test('seul un délai déclaré équivalent se rejoue : ni un délai non déclaré, ni un survivant, un tué, une erreur déclarés', () => {
+    // Déclarés : rangs 0, 2, 3, 4 et 6 ; délais : rangs 0, 1, 5 et 6.
+    const equivalents = new Map([0, 2, 3, 4, 6].map((rang) => [cle(rang), 'sans effet ici']));
+    assert.deepEqual(delaisARejouerSeuls(ISSUES, TACHES, equivalents), [0, 6]);
+  });
+
+  test('la clé se lit dans le mutant de la tâche du même rang', () => {
+    // Le délai du rang 1 porte la clé du rang 6 : seul lui se rejoue, et le
+    // délai du rang 6, qui porte celle du rang 1, non déclarée, ne se rejoue pas.
+    const croisees = TACHES.map((t, rang) => (rang === 1 ? tache(6) : rang === 6 ? tache(1) : t));
+    const equivalents = new Map([[cle(6), 'sans effet ici']]);
+    assert.deepEqual(delaisARejouerSeuls(ISSUES, croisees, equivalents), [1]);
+    const fichierSeul = TACHES.map((t) => ({ ...t, mutant: { fichier: t.mutant.fichier } }));
+    assert.deepEqual(delaisARejouerSeuls(ISSUES, fichierSeul, new Map([['src/verger/pommes.js', 'x']])), []);
+  });
+
+  test('aucun délai déclaré, aucun rejeu ; aucun mutant, aucun rejeu', () => {
+    assert.deepEqual(delaisARejouerSeuls(ISSUES, TACHES, new Map()), []);
+    assert.deepEqual(delaisARejouerSeuls(['survivant', 'tue'], [tache(0), tache(1)], new Map([[cle(0), 'x'], [cle(1), 'y']])), []);
+    assert.deepEqual(delaisARejouerSeuls([], [], new Map([[cle(0), 'x']])), []);
+  });
+
+  test('des issues et des tâches de longueurs différentes se refusent', () => {
+    assert.throws(() => delaisARejouerSeuls(['delai', 'delai'], [tache(0)], new Map()), /^RangeError: issues : 2, tâches : 1$/);
+  });
+
+  test('l’issue rejouée remplace celle de la passe parallèle, quelle qu’elle soit ; les autres restent', () => {
+    const rangs = [0, 1, 5, 6];
+    const rejouees = ['survivant', 'tue', 'delai', 'erreur'];
+    assert.deepEqual(issuesApresRejeu(ISSUES, rangs, rejouees), ['survivant', 'tue', 'survivant', 'tue', 'erreur', 'delai', 'erreur']);
+    assert.deepEqual(issuesApresRejeu(ISSUES, [], []), [...ISSUES]);
+    assert.notEqual(issuesApresRejeu(ISSUES, [], []), ISSUES, 'une liste neuve');
+  });
+
+  test('des rangs et des issues rejouées de longueurs différentes, un rang hors des issues, se refusent', () => {
+    assert.throws(() => issuesApresRejeu(ISSUES, [0, 1], ['tue']), /^RangeError: rangs : 2, issues rejouées : 1$/);
+    assert.throws(() => issuesApresRejeu(ISSUES, [7], ['tue']), /^RangeError: rang 7 hors des 7 issues$/);
+    assert.throws(() => issuesApresRejeu(ISSUES, [-1], ['tue']), /^RangeError: rang -1 hors des 7 issues$/);
+    assert.throws(() => issuesApresRejeu(ISSUES, [1.5], ['tue']), /^RangeError: rang 1\.5 hors des 7 issues$/);
   });
 });
 

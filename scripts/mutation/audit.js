@@ -20,20 +20,25 @@
 //      survivrait ;
 //   5. chaque mutant contre les épreuves node du périmètre qui atteignent son
 //      module, os.availableParallelism() à la fois ;
-//   6. les survivants rejoués contre les .long.test.js du périmètre qui
+//   6. chaque délai dont audit/mutants-equivalents.json déclare la clé se
+//      rejoue seul, un mutant à la fois, contre les mêmes épreuves et sous
+//      le même délai, et son issue rejouée remplace celle de l'étape 5 ; un
+//      délai non déclaré ne se rejoue pas ;
+//   7. les survivants rejoués contre les .long.test.js du périmètre qui
 //      atteignent leur module, après une ligne de base de ces épreuves ;
-//   7. l'empreinte des sources se reprend : différente de celle de l'étape 0,
+//   8. l'empreinte des sources se reprend : différente de celle de l'étape 0,
 //      les mutants ont été lus ou joués sur d'autres sources que celles que
 //      l'en-tête désigne, et rien ne s'écrit ;
-//   8. audit/mutation-moteur.md et .json, par rediger ; les survivants que la
+//   9. audit/mutation-moteur.md et .json, par rediger ; les survivants que la
 //      série longue tue, et ceux que audit/mutants-equivalents.json déclare
 //      équivalents, y sont rangés à part.
 //
 // Sortie 0 quand le rapport est écrit, survivants compris : l'audit n'est pas
 // bloquant. Sortie 2 quand l'audit ne mesure pas — en-tête refusé, ligne de
 // base rouge, aucun mutant, témoin non tué, fichier d'équivalents illisible,
-// sources changées pendant l'audit, arrêt demandé — et rien n'est écrit. Les durées se lisent à l'horloge réelle et
-// ne s'impriment que sur la sortie d'erreur, jamais dans le rapport.
+// sources changées pendant l'audit, arrêt demandé — et rien n'est écrit.
+// Les durées se lisent à l'horloge réelle et ne s'impriment que sur la
+// sortie d'erreur, jamais dans le rapport.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
@@ -42,7 +47,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { executerMutant, executerSerie } from './executer.js';
 import { grapheDuProjet, testsConcernes } from './graphe.js';
 import { mutants } from './mutants.js';
-import { equivalentsDe, rediger, verifierEntete } from './rapport.js';
+import { delaisARejouerSeuls, equivalentsDe, issuesApresRejeu, rediger, verifierEntete } from './rapport.js';
 
 // Les dossiers mutés, et dont les épreuves jugent les mutants : le moteur
 // seul (§ 14.13). audit.test.js le lit dans ce source.
@@ -58,8 +63,9 @@ const EQUIVALENTS = 'audit/mutants-equivalents.json';
 
 // Délai d'une ligne de base ; celui d'un mutant vaut FACTEUR_DELAI fois la
 // ligne de base qui le juge, DELAI_MIN_MS au moins : une boucle sans fin
-// coûte ce délai, et un mutant lent sous la charge de P processus ne se
-// confond pas avec elle.
+// coûte ce délai. La ligne de base se mesure seule, et le facteur couvre la
+// lenteur d'un mutant joué seul ; la charge de P mutants à la fois peut la
+// dépasser, d'où le rejeu seul des délais déclarés équivalents (étape 6).
 const DELAI_LIGNE_DE_BASE_MS = 30 * 60_000;
 const DELAI_MIN_MS = 10_000;
 const FACTEUR_DELAI = 4;
@@ -260,12 +266,29 @@ export async function auditer({ racine = RACINE, journal = (texte) => process.st
 
   const largeur = availableParallelism();
   journal(`${taches.length} mutants, ${largeur} à la fois, délai ${(delaiMs / 1000).toFixed(0)} s`);
-  const issues = await enParallele(
+  const paralleles = await enParallele(
     taches,
     largeur,
     async ({ mutant, tests }) => (tests.length === 0 ? 'survivant' : (await executerMutant({ mutant, tests, delaiMs, racine })).issue),
     { arreter, signaler: avancement('mutants', journal) },
   );
+
+  // Un délai déclaré équivalent se rejoue seul, contre les mêmes épreuves et
+  // sous le même délai : son issue rejouée remplace la sienne, quelle qu'elle
+  // soit, et un rejeu qui survit suit le chemin de tout survivant. Aucun
+  // délai déclaré : la liste est vide, et rien ne se joue ni ne s'imprime.
+  const seuls = delaisARejouerSeuls(paralleles, taches, equivalents);
+  if (seuls.length > 0) journal(`délais déclarés équivalents, rejoués seuls : ${seuls.length}`);
+  const rejoues = await enParallele(
+    seuls,
+    1,
+    async (rang) => {
+      const { mutant, tests } = taches[rang];
+      return (await executerMutant({ mutant, tests, delaiMs, racine })).issue;
+    },
+    { arreter, signaler: avancement('délais rejoués seuls', journal) },
+  );
+  const issues = issuesApresRejeu(paralleles, seuls, rejoues);
 
   const aRejouer = taches.map((tache, rang) => ({ ...tache, rang })).filter(({ rang, longues }) => issues[rang] === 'survivant' && longues.length > 0);
   const longues = new Array(taches.length).fill(null);

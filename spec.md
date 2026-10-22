@@ -7781,8 +7781,12 @@ couverture :
    budget ne serait pas fait du tout.
    Chaque mutant se joue sous `node --test`, le repli du § 14.8, contre les
    épreuves de la série `node` qui atteignent son module, et un survivant se
-   rejoue contre les épreuves longues qui l'atteignent avant d'être compté. Le
-   résultat s'écrit sous **`audit/`**, versionné : `mutation-moteur.md`, le
+   rejoue contre les épreuves longues qui l'atteignent avant d'être compté.
+   Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans
+   autre mutant à côté, avant d'être compté : l'audit joue ses mutants
+   plusieurs à la fois, et cette charge ne fait pas passer un équivalent lent
+   pour une boucle sans fin.
+   Le résultat s'écrit sous **`audit/`**, versionné : `mutation-moteur.md`, le
    rapport à lire, et `mutation-moteur.json`, le même à comparer d'un audit à
    l'autre ; `mutants-equivalents.json` y déclare, un par un et avec sa raison,
    les survivants qui ne changent rien et qu'aucune épreuve ne peut donc tuer.
