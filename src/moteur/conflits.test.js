@@ -138,6 +138,27 @@ describe('conflitsParTable', () => {
     });
   });
 
+  test("conflit d'organisation : une seule paire de présents en conflit, réunie, se signale", () => {
+    // 1, de la Sittelle, nomme le Club des Merles, dont 2 est le seul
+    // membre : une paire de présents en conflit en tout, que la table 1
+    // réunit au tour 1. 3 et 4, sans organisation, sont à la table 2.
+    const description = {
+      organisation: ['Sittelle', MERLES, null, null],
+      conflits: [[MERLES]],
+      capacite: 2,
+      tours: [[[1, 2], [3, 4]]],
+      contraintes: SANS_CASE,
+    };
+    assert.equal(preparer(description).instance.pairesEnConflit, 1);
+    assert.deepEqual(conflits(description), [
+      [
+        { table: 1, nombre: 1, regles: [{ regle: 'conflitsOrganisation', paires: [[1, 2]] }] },
+        sansConflit(2),
+      ],
+    ]);
+    assert.equal(mesures(description).conflitsOrganisation, 1);
+  });
+
   test('séparer : la table 2 réunit 1 et 2 au tour 1, une violation ; aucune autre table, à aucun tour', () => {
     // Au tour 2, (2, 6), (3, 5) et (1, 4) se rencontrent pour la première
     // fois, et chacun change de table.

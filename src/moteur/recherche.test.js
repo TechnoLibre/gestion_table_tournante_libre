@@ -3422,6 +3422,30 @@ describe('repartir : une réserve imposée se mesure comme indicateurs.js la lit
       reglage: 'reservesImposees',
     });
   });
+
+  test("une place fantôme qui précède une personne à sa table ne compte aucun conflit d'organisation au départ", () => {
+    // 1, du Rameau, est réservée à la table 10 au tour 1 ; 2, du Tilleul,
+    // nomme le Rameau ; 3 n'a pas d'organisation. Au tour 1, figé, 1 est en
+    // réserve imposée : son siège fixé, le premier de la table 10, reste une
+    // place fantôme, et 2 s'assied au siège mobile qui le suit. Au tour 2,
+    // 1 et 2 sont à des tables différentes : aucun conflit, à aucun tour.
+    const configuration = configurationDe({
+      organisations: ['Rameau', 'Tilleul', null],
+      tables: [{ id: 10, capacite: 2 }, { id: 20, capacite: 2 }],
+      tours: 2,
+      reservations: [auTour(1, 10, 1)],
+    });
+    configuration.participants[1].conflits = ['Rameau'];
+    const instance = normaliser(configuration);
+    assert.ok(compose(instance, 'conflitsOrganisation'));
+    const plan = { tables: [10, 20], tours: [[[2], [3]], [[1, 3], [2]]], reserves: [[], []] };
+    const etat = creerEtatDuDepart(instance, { plan, toursFiges: [1], reservesImposees: [{ participant: 1, tour: 1 }] });
+    const { indexDe } = instance;
+    assert.deepEqual(Array.from(etat.siege.subarray(0, 2)), [-1, indexDe.get(2)], 'la place fantôme précède 2');
+    assert.equal(etat.conflitsOrganisation, 0);
+    assert.equal(mesurer(instance, etat.tableDe).conflitsOrganisation, 0);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
+  });
 });
 
 // Vrai quand le critère nom est coché et a un objet dans l'instance : le

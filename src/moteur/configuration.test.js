@@ -1363,6 +1363,25 @@ describe('normaliser : les conflits d’organisation, par unités (§ 4, § 5.3)
     assert.equal(instance.pairesEnConflit, 5);
   });
 
+  test("deux membres qui nomment la même organisation, un nom répété : le lien et ses paires comptent une fois", () => {
+    // 1 et 2, du Rameau (0), nomment le Tilleul (1), et 1 le nomme deux
+    // fois : trois fois le même lien, dans le même sens, dont les 2 × 1
+    // paires Rameau–Tilleul ne comptent qu'une fois.
+    const instance = normaliser(configuration({
+      participants: [
+        membre(1, 'Rameau', ['Tilleul', 'Tilleul']),
+        membre(2, 'Rameau', ['Tilleul']),
+        membre(3, 'Tilleul'),
+      ],
+      tables: tablesDe([11], 4),
+      tours: 1,
+    }));
+    assert.equal(instance.unitesConflit, 2);
+    assert.deepEqual(unites(instance), [0, 0, 1]);
+    assert.deepEqual(relation(instance), [0, 1, 1, 0]);
+    assert.equal(instance.pairesEnConflit, 2);
+  });
+
   test("sa propre organisation, une organisation qu'aucun présent ne porte, une liste vide : rien n'est relié", () => {
     const instance = normaliser(configuration({
       participants: [

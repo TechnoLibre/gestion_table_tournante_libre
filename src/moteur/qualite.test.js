@@ -1914,6 +1914,17 @@ describe('planchersAtteints (§ 12.2, B11)', () => {
     assert.equal(nul.conflitsOrganisation, null);
   });
 
+  test('des conflits d’organisation sans plancher ne lisent pas leur mesure', () => {
+    const lue = {
+      ...mesures,
+      get conflitsOrganisation() {
+        throw new Error('mesure des conflits lue');
+      },
+    };
+    const lus = planchersAtteints({ ...planchers, conflitsOrganisation: null }, { mesures: lue, troisChiffres: chiffres, planchersValides: true });
+    assert.equal(lus.conflitsOrganisation, null);
+  });
+
   test('des objectifs sans plancher ne lisent pas les mesures des objectifs, absentes sans personne concernée', () => {
     const sansObjectif = { ...planchers, jamaisServies: null, toursHorsObjectif: null };
     const lus = planchersAtteints(sansObjectif, { mesures: { ...mesures, objectifs: null }, troisChiffres: chiffres, planchersValides: true });
