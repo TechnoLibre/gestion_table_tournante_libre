@@ -50,9 +50,9 @@
 // applicatives (electron/fichiers.js, § 8.6 point 2) : un exe placé sous
 // l'un d'eux ferait retenir les Documents. Sous Windows, les Documents sont
 // un dossier connu qu'aucune variable ne déplace : leur sonde y créerait le
-// dossier du produit, que la suppression de la racine ne retire pas. Avant
-// tout lancement, l'essai refuse donc un exe que l'une des données
-// applicatives prévisibles de la coquille porterait.
+// dossier du produit et son data/, que la suppression de la racine ne
+// retire pas. Avant tout lancement, l'essai refuse donc un exe que l'une des
+// données applicatives prévisibles de la coquille porterait.
 //
 // Sous Linux sans session graphique, Electron se lance sur la plateforme
 // Ozone « headless » de Chromium : la fenêtre existe et la page s'y charge

@@ -213,13 +213,13 @@ describe('refusApercu : un nom d’événement au-delà de la borne ne s’impri
   function refusAttendu(refus, longueur) {
     assert.ok(refus instanceof ErreurCommande, `ErreurCommande attendue, reçu ${refus}`);
     assert.equal(refus.code, 'NOM_EVENEMENT_TROP_LONG');
-    assert.deepEqual(refus.details, { longueur, maximum: 200, remede: { geste: 'renommer' } });
+    assert.deepEqual(refus.details, { longueur, maximum: 68, remede: { geste: 'renommer' } });
   }
 
-  test('200 caractères s’impriment ; 201, le refus et son remède, sans troncature', () => {
-    assert.equal(refusApercu({ ...PIED, nom: 'k'.repeat(200) }), null);
+  test('68 caractères s’impriment ; 69, le refus et son remède, sans troncature', () => {
+    assert.equal(refusApercu({ ...PIED, nom: 'k'.repeat(68) }), null);
     assert.equal(refusApercu(PIED), null);
-    refusAttendu(refusApercu({ ...PIED, nom: 'k'.repeat(201) }), 201);
+    refusAttendu(refusApercu({ ...PIED, nom: 'k'.repeat(69) }), 69);
   });
 
   test('un nom de 8 000 caractères lu d’un fichier : la charge s’ouvre, le pied se compose, l’aperçu rend le refus sans lever', () => {

@@ -53,7 +53,7 @@ function erreurDe(fonction) {
 
 const noms = (entrees) => entrees.map((entree) => entree.nom);
 
-const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 const DOC = { id: 'documents', chemin: DOCUMENTS };
 const DATA = 'E:\\soirees\\data';
 const PORTABLE = { id: 'portable', chemin: DATA };

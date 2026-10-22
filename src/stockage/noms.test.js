@@ -6,16 +6,19 @@
 // écrit, la dérivation de la base d'un nom — caractères invisibles et
 // demi-paires isolées, noms réservés, caractères que Windows refuse, composition
 // en NFC, collisions comparées par la majuscule, borne du chemin complet — et
-// le dossier daté de la corbeille, jusqu'à son dernier rang, et le nom du
-// fichier de la planche de badges (§ 11.6). Chaque épreuve de dérivation se
-// joue sur les deux dossiers de travail possibles du § 8.6.
+// le dossier daté de la corbeille, jusqu'à son dernier rang, le dossier d'un
+// événement, et le nom du fichier de la planche de badges (§ 11.6). Chaque
+// épreuve de dérivation se joue sur les deux dossiers de travail possibles du
+// § 8.6.
 //
 // La borne s'éprouve contre un oracle écrit ici : chaque chemin qu'un
 // événement écrit se recompose en entier, de la racine au suffixe, avec des
-// textes littéraux et non les constantes du module. Une borne prise sur le seul
-// état, ou sur le seul journal, y dépasse 259 unités. Les noms d'épreuve sont
-// inventés. Un caractère invisible ou combinant s'écrit en échappement, jamais
-// en clair : ce qu'on ne voit pas ne se relit pas.
+// textes littéraux et non les constantes du module — à la racine, dans le
+// dossier de l'événement, qui porte le nom de sa base, et dans le dossier
+// daté de la corbeille. Une borne prise sur le seul état, sur le seul
+// journal, ou sur la base comptée une fois, y dépasse 259 unités. Les noms
+// d'épreuve sont inventés. Un caractère invisible ou combinant s'écrit en
+// échappement, jamais en clair : ce qu'on ne voit pas ne se relit pas.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { PAPIERS } from '../geometrie/papiers.js';
@@ -23,10 +26,12 @@ import { ErreurStockage } from './erreurs.js';
 import {
   DOSSIER_CORBEILLE,
   LONGUEUR_CHEMIN_MAX,
+  NOMS_RESERVES_RACINE,
   SUFFIXES,
   SUFFIXE_ECRITURE,
   deriverBase,
   dossierCorbeille,
+  dossierEvenement,
   longueurRelativeMax,
   nomControle,
   nomCsvBadges,
@@ -34,19 +39,28 @@ import {
   nomPlanche,
   nomPlancheExigeListe,
 } from './noms.js';
+import { FICHIER_REGLAGES } from './reglages_locaux.js';
 
-// Les deux dossiers de travail possibles (§ 8.6) : le dossier du produit dans
-// les Documents, et data/ à côté d'un exécutable posé sur un support amovible.
+// Les deux dossiers de travail possibles (§ 8.6) : data/ dans le dossier du
+// produit des Documents, et data/ à côté d'un exécutable posé sur un support
+// amovible.
 const DOSSIERS = [
-  { racine: 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre', separateur: '\\' },
+  { racine: 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data', separateur: '\\' },
   { racine: 'E:\\soirees\\data', separateur: '\\' },
 ];
 
 // Le dossier daté de la corbeille au rang de collision le plus long, à deux
 // chiffres, et les suffixes des fichiers d'un événement : le journal en compte
-// 18, l'état 9, le compagnon des courses 17.
+// 18, l'état 9, le compagnon des courses 17, et la planche sans marque la
+// plus longue, d'une réédition de 9 999 badges, 51.
 const CORBEILLE_RANG_99 = 'corbeille/2026-10-06_19-02-11_99';
-const SUFFIXES_ECRITS = ['.gtt.json', '.gtt.json.precedent', '.gtt-journal.jsonl', '.gtt.verrou', '.gtt-courses.json'];
+const SUFFIXE_BADGES = '.badges-9999_Lettre_feuille_2026-10-06_19-02-11.pdf';
+const SUFFIXES_ECRITS = ['.gtt.json', '.gtt.json.precedent', '.gtt-journal.jsonl', '.gtt.verrou', '.gtt-courses.json', SUFFIXE_BADGES];
+
+// Les noms des entrées que la racine du dossier de travail porte à côté des
+// dossiers d'événement : la corbeille, les réglages locaux, le témoin de la
+// sonde.
+const ENTREES_RACINE = ['corbeille', 'reglages_locaux.json', '.gtt-temoin'];
 
 // Le caractère de substitution haute d'une paire, et celui de substitution basse.
 const estHaute = (unite) => unite >= 0xd800 && unite <= 0xdbff;
@@ -61,11 +75,13 @@ const lettres = (n) => Array.from({ length: n }, (_, i) => ALPHABET[i % ALPHABET
 const plusLong = (chemins) => chemins.reduce((a, b) => (b.length > a.length ? b : a));
 
 // Chaque chemin relatif qu'un événement de base donnée écrit : un fichier de
-// chaque suffixe et son fichier d'écriture atomique, dans le dossier de travail
-// puis dans le dossier daté de la corbeille.
+// chaque suffixe et son fichier d'écriture atomique, à la racine du dossier de
+// travail, puis dans le dossier de l'événement, qui porte le nom de sa base,
+// puis dans le dossier daté de la corbeille, qui porte directement les
+// fichiers.
 function cheminsRelatifs(base) {
   const noms = SUFFIXES_ECRITS.flatMap((suffixe) => [`${base}${suffixe}`, `${base}${suffixe}.ecriture`]);
-  return [...noms, ...noms.map((nom) => `${CORBEILLE_RANG_99}/${nom}`)];
+  return [...noms, ...noms.map((nom) => `${base}/${nom}`), ...noms.map((nom) => `${CORBEILLE_RANG_99}/${nom}`)];
 }
 
 // Chaque chemin complet : la racine, un seul séparateur, puis le chemin
@@ -112,6 +128,16 @@ function refuseTropLong(fonction, racine) {
 
 // Un dossier de travail dont la racine compte n unités, lecteur compris.
 const dossierDeLongueur = (n) => ({ racine: `C:\\${'x'.repeat(n - 3)}`, separateur: '\\' });
+
+// Une base lue sur le disque, plus longue que toute base que deriverBase
+// rend sous la racine du dossier — celle d'un fichier d'état copié à la
+// main : la plus longue dont la planche sans marque la plus longue, posée à
+// la racine en écriture atomique, tient en 259 unités. Tout nom marqué s'y
+// raccourcit.
+function baseLueLongue({ racine, separateur }) {
+  const unites = racine.endsWith(separateur) ? racine.length - 1 : racine.length;
+  return lettres(259 - (unites + 1) - SUFFIXE_BADGES.length - '.ecriture'.length);
+}
 
 // Les noms que Windows réserve, en capitales : CON, PRN, AUX, NUL, COM et LPT
 // de 0 à 9 et des exposants ¹ ² ³, CONIN$ et CONOUT$.
@@ -178,17 +204,32 @@ describe('noms.js : valeurs du contrat', () => {
 });
 
 describe("longueurRelativeMax : le plus long chemin relatif qu'un événement écrit", () => {
-  test("elle vaut la longueur du plus long chemin recomposé : l'état précédent en écriture atomique, dans la corbeille au rang 99", () => {
-    const bases = ['', 'a', 'Gala', lettres(100), lettres(197)];
-    assert.ok(bases.length > 0, 'aucune base examinée');
-    for (const base of bases) {
+  test("elle vaut la longueur du plus long chemin recomposé : la planche la plus longue en écriture atomique, dans la corbeille au rang 99 sous 32 unités de base, dans le dossier de l'événement au-delà", () => {
+    const cas = [
+      ['', 'corbeille'],
+      ['a', 'corbeille'],
+      ['Gala', 'corbeille'],
+      [lettres(31), 'corbeille'],
+      [lettres(33), 'dossier'],
+      [lettres(100), 'dossier'],
+      [lettres(197), 'dossier'],
+    ];
+    assert.ok(cas.length > 0, 'aucune base examinée');
+    for (const [base, ou] of cas) {
       const plus = plusLong(cheminsRelatifs(base));
-      assert.equal(plus, `${CORBEILLE_RANG_99}/${base}.gtt.json.precedent.ecriture`);
+      const tete = ou === 'corbeille' ? CORBEILLE_RANG_99 : base;
+      assert.equal(plus, `${tete}/${base}${SUFFIXE_BADGES}.ecriture`, `base de ${base.length} unités`);
       assert.equal(longueurRelativeMax(base), plus.length, `base de ${base.length} unités`);
     }
-    // La partie qui ne dépend pas de la base : la corbeille datée, son
-    // séparateur, et le suffixe le plus long.
-    assert.equal(longueurRelativeMax(''), 33 + 28);
+    // Les parties qui ne dépendent pas de la base : dans le dossier de
+    // l'événement, le séparateur, la planche et .ecriture, 1 + 51 + 9, outre
+    // deux fois la base ; dans la corbeille, le dossier daté et son
+    // séparateur, la planche et .ecriture, 33 + 51 + 9, outre la base. Les
+    // deux se valent à 32 unités.
+    assert.equal(longueurRelativeMax(lettres(100)), 2 * 100 + 1 + 51 + 9);
+    assert.equal(longueurRelativeMax(''), 33 + 51 + 9);
+    assert.equal(longueurRelativeMax(lettres(32)), 2 * 32 + 61);
+    assert.equal(longueurRelativeMax(lettres(32)), 32 + 93);
   });
 
   test("le rang le plus long que rend dossierCorbeille est celui que la longueur retient : deux chiffres, au rang 99", () => {
@@ -199,18 +240,19 @@ describe("longueurRelativeMax : le plus long chemin relatif qu'un événement é
     assert.equal(existants.length, 98);
     const dernier = dossierCorbeille(horodatage, existants);
     assert.equal(dernier, CORBEILLE_RANG_99);
-    assert.equal(longueurRelativeMax('Gala'), `${dernier}/Gala.gtt.json.precedent.ecriture`.length);
+    assert.equal(longueurRelativeMax('Gala'), `${dernier}/Gala${SUFFIXE_BADGES}.ecriture`.length);
   });
 });
 
 describe('deriverBase : les deux dossiers de travail', () => {
-  test("leur racine compte 56 et 15 unités, et la borne laisse 141 et 182 unités à la base", () => {
-    assert.deepEqual(DOSSIERS.map(({ racine }) => racine.length), [56, 15]);
-    // 259 − racine − 1 séparateur − 61 de chemin relatif hors base.
-    assert.deepEqual(DOSSIERS.map(longueurMaxDeBase), [259 - 56 - 1 - 61, 259 - 15 - 1 - 61]);
-    assert.deepEqual(DOSSIERS.map(longueurMaxDeBase), [141, 182]);
+  test("leur racine compte 61 et 15 unités, et la borne laisse 68 et 91 unités à la base", () => {
+    assert.deepEqual(DOSSIERS.map(({ racine }) => racine.length), [61, 15]);
+    // (259 − racine − 1 séparateur − 61) / 2 : la base compte deux fois, au
+    // dossier de l'événement et à ses fichiers.
+    assert.deepEqual(DOSSIERS.map(longueurMaxDeBase), [(259 - 61 - 1 - 61) / 2, (259 - 15 - 1 - 61) / 2]);
+    assert.deepEqual(DOSSIERS.map(longueurMaxDeBase), [68, 91]);
     // Le module laisse ces longueurs à la base d'un nom qui les dépasse.
-    assert.deepEqual(DOSSIERS.map((dossier) => derive(lettres(400), dossier).length), [141, 182]);
+    assert.deepEqual(DOSSIERS.map((dossier) => derive(lettres(400), dossier).length), [68, 91]);
   });
 });
 
@@ -455,6 +497,45 @@ describe('deriverBase : les noms réservés (§ 8.6)', () => {
   });
 });
 
+describe('deriverBase : les entrées de la racine du dossier de travail (§ 8.6)', () => {
+  test('NOMS_RESERVES_RACINE nomme la corbeille, les réglages locaux et le témoin de la sonde, et ne se modifie pas', () => {
+    assert.deepEqual([...NOMS_RESERVES_RACINE], ENTREES_RACINE);
+    assert.ok(Object.isFrozen(NOMS_RESERVES_RACINE));
+    // Les mêmes noms que ceux de la corbeille et du fichier des réglages.
+    assert.ok(NOMS_RESERVES_RACINE.includes(DOSSIER_CORBEILLE));
+    assert.ok(NOMS_RESERVES_RACINE.includes(FICHIER_REGLAGES));
+  });
+
+  surChaqueDossier('corbeille et reglages_locaux.json prennent le rang (2), quelle que soit la casse, comme une collision', (dossier) => {
+    const cas = [
+      ['corbeille', 'corbeille (2)'],
+      ['Corbeille', 'Corbeille (2)'],
+      ['CORBEILLE', 'CORBEILLE (2)'],
+      [' corbeille. ', 'corbeille (2)'],
+      ['corbe<ille', 'corbeille (2)'],
+      ['reglages_locaux.json', 'reglages_locaux.json (2)'],
+      ['Reglages_Locaux.JSON', 'Reglages_Locaux.JSON (2)'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(
+      cas.map(([nom]) => derive(nom, dossier)),
+      cas.map(([, attendu]) => attendu),
+    );
+    // Le rang (2) pris, le suivant ; un ensemble d'existantes vaut une liste.
+    assert.equal(derive('corbeille', dossier, ['CORBEILLE (2)']), 'corbeille (3)');
+    assert.equal(derive('Corbeille', dossier, new Set(['corbeille (2)', 'corbeille (3)'])), 'Corbeille (4)');
+  });
+
+  surChaqueDossier('seul le nom entier est réservé : un nom voisin reste, et le témoin perd son point de tête', (dossier) => {
+    const intacts = ['corbeilles', 'ma corbeille', 'corbeille 2026', 'corbeille (2)', 'reglages_locaux', 'reglages_locaux.json.bak', 'gtt-temoin'];
+    assert.ok(intacts.length > 0, 'aucun nom examiné');
+    assert.deepEqual(intacts.map((nom) => derive(nom, dossier)), intacts);
+    // La dérivation retire le point de tête : .gtt-temoin donne gtt-temoin,
+    // qui n'est pas réservé.
+    assert.equal(derive('.gtt-temoin', dossier), 'gtt-temoin');
+  });
+});
+
 describe('deriverBase : ce que Windows refuse (§ 8.6)', () => {
   surChaqueDossier('«Gala»: 2026/11/14? donne «Gala» 20261114, ... donne evenement, Soirée. donne Soirée', (dossier) => {
     assert.equal(derive('«Gala»: 2026/11/14?', dossier), '«Gala» 20261114');
@@ -625,7 +706,7 @@ describe('deriverBase : les collisions, sans égard à la casse (§ 8.6)', () =>
 });
 
 describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
-  surChaqueDossier('un nom de 400 caractères se tronque : le plus long chemin écrit tient en 259 unités, corbeille et écriture comprises', (dossier) => {
+  surChaqueDossier("un nom de 400 caractères se tronque : le plus long chemin écrit tient en 259 unités, dossier de l'événement, planche et écriture comprises", (dossier) => {
     const nom = lettres(400);
     const limite = longueurMaxDeBase(dossier);
     const base = derive(nom, dossier);
@@ -635,28 +716,33 @@ describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
     // La plus longue base qui tient : la tête du nom, au chemin de 259 unités.
     assert.equal(base, nom.slice(0, limite));
     assert.equal(plus.length, LONGUEUR_CHEMIN_MAX);
-    assert.ok(plus.endsWith('.gtt.json.precedent.ecriture'));
-    assert.ok(plus.includes(`${dossier.separateur}corbeille${dossier.separateur}`));
+    assert.ok(plus.endsWith(`${SUFFIXE_BADGES}.ecriture`));
+    assert.ok(plus.includes(`${dossier.separateur}${base}${dossier.separateur}${base}.`));
     assert.deepEqual(chemins.filter((chemin) => chemin.length > 259), []);
     // Une base plus longue d'une unité déborde : la borne n'est pas trop large.
     assert.ok(plusLong(cheminsComplets(dossier, nom.slice(0, limite + 1))).length > 259);
   });
 
-  surChaqueDossier("une borne sur un seul suffixe, sans la corbeille ou sans l'écriture atomique, laisserait déborder le plus long chemin ; la base dérivée reste en deçà", (dossier) => {
+  surChaqueDossier("une borne sur un seul fichier, sur la base comptée une fois, sans la planche ou sans l'écriture atomique, laisserait déborder le plus long chemin ; la base dérivée reste en deçà", (dossier) => {
+    // Chaque borne fautive, par le seul chemin relatif qu'elle retient.
     const bornes = [
-      ['sur .gtt.json seul', '.gtt.json'],
-      ['sur .gtt-journal.jsonl seul', '.gtt-journal.jsonl'],
-      ['sur .gtt.json.precedent.ecriture sans la corbeille', '.gtt.json.precedent.ecriture'],
-      ['sur la corbeille et .gtt.json.precedent sans .ecriture', `${CORBEILLE_RANG_99}/.gtt.json.precedent`],
-      ['sur la corbeille et .gtt-journal.jsonl.ecriture', `${CORBEILLE_RANG_99}/.gtt-journal.jsonl.ecriture`],
-      ['sur un rang à un chiffre', 'corbeille/2026-10-06_19-02-11_9/.gtt.json.precedent.ecriture'],
+      ['sur .gtt.json seul, à la racine', (b) => `${b}.gtt.json`],
+      ['sur .gtt-journal.jsonl seul, dans le dossier', (b) => `${b}/${b}.gtt-journal.jsonl`],
+      ['sur .gtt.json.precedent.ecriture, dans le dossier', (b) => `${b}/${b}.gtt.json.precedent.ecriture`],
+      ['sur la planche, la base comptée une fois', (b) => `${b}/${SUFFIXE_BADGES}.ecriture`],
+      ['sur la planche sans .ecriture', (b) => `${b}/${b}${SUFFIXE_BADGES}`],
+      ['sur la liste en CSV la plus longue', (b) => `${b}/${b}.badges-9999_BROUILLON_2026-10-06_19-02-11.csv.ecriture`],
+      ['sur la corbeille seule', (b) => `${CORBEILLE_RANG_99}/${b}${SUFFIXE_BADGES}.ecriture`],
+      ['sur la corbeille et .gtt.json.precedent.ecriture', (b) => `${CORBEILLE_RANG_99}/${b}.gtt.json.precedent.ecriture`],
     ];
     assert.ok(bornes.length > 0, 'aucune borne examinée');
     const limite = longueurMaxDeBase(dossier);
     const racine = dossier.racine.length;
     const base = derive(lettres(400), dossier);
-    for (const [libelle, relatifSansBase] of bornes) {
-      const fautive = 259 - (racine + 1) - relatifSansBase.length;
+    for (const [libelle, relatif] of bornes) {
+      // La plus longue base que cette borne laisserait.
+      let fautive = 0;
+      while (racine + 1 + relatif('a'.repeat(fautive + 1)).length <= 259) fautive += 1;
       assert.ok(fautive > limite, `${libelle} : ${fautive} unités, la bonne borne en laisse ${limite}`);
       assert.ok(
         plusLong(cheminsComplets(dossier, lettres(fautive))).length > 259,
@@ -726,9 +812,9 @@ describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
     refuseTropLong(() => derive('...', dossier), dossier.racine);
   });
 
-  test("la racine la plus longue qui laisse une base d'une unité compte 196 caractères ; à 197, aucune base ne tient", () => {
-    const auPlus = dossierDeLongueur(196);
-    const auDela = dossierDeLongueur(197);
+  test("la racine la plus longue qui laisse une base d'une unité compte 164 caractères ; à 165, aucune base ne tient", () => {
+    const auPlus = dossierDeLongueur(164);
+    const auDela = dossierDeLongueur(165);
     assert.equal(longueurMaxDeBase(auPlus), 1);
     assert.equal(longueurMaxDeBase(auDela), 0);
     assert.equal(derive('Gala', auPlus), 'G');
@@ -737,7 +823,7 @@ describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
   });
 
   test("à la limite, le rang d'une collision tient dans la borne : G (2) en 5 unités, puis plus aucun rang", () => {
-    const cinq = dossierDeLongueur(192);
+    const cinq = dossierDeLongueur(160);
     assert.equal(longueurMaxDeBase(cinq), 5);
     assert.equal(derive('Gala', cinq), 'Gala');
     assert.equal(derive('Gala', cinq, ['gala']), 'G (2)');
@@ -746,13 +832,13 @@ describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
     assert.equal(derive('Gala', cinq, neuf.slice(0, 8)), 'G (9)');
     refuseTropLong(() => derive('Gala', cinq, neuf), cinq.racine);
     // Une base d'une unité, déjà prise : le rang 2 ne tient plus.
-    const une = dossierDeLongueur(196);
+    const une = dossierDeLongueur(164);
     refuseTropLong(() => derive('Gala', une, ['g']), une.racine);
   });
 
   test('la coupe ne laisse jamais un nom réservé : « con_ » tient à quatre unités, « co » à trois', () => {
-    const trois = dossierDeLongueur(194);
-    const quatre = dossierDeLongueur(193);
+    const trois = dossierDeLongueur(162);
+    const quatre = dossierDeLongueur(161);
     assert.equal(longueurMaxDeBase(trois), 3);
     assert.equal(longueurMaxDeBase(quatre), 4);
     const surTrois = [['con', 'co'], ['console', 'co'], ['Con.x', 'Co'], ['aux x', 'au'], ['conin$.y', 'co']];
@@ -777,10 +863,10 @@ describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
   });
 
   test("un nom dont le premier caractère tient en deux unités ne tient pas dans une seule : CHEMIN_TROP_LONG", () => {
-    const une = dossierDeLongueur(196);
+    const une = dossierDeLongueur(164);
     refuseTropLong(() => derive('\u{1F600}Gala', une), une.racine);
     // À deux unités, la paire tient.
-    const deux = dossierDeLongueur(195);
+    const deux = dossierDeLongueur(163);
     assert.equal(derive('\u{1F600}Gala', deux), '\u{1F600}');
   });
 
@@ -789,7 +875,7 @@ describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
     assert.equal(dossier.racine.length, 3 + 2 * 50);
     assert.equal(Array.from(dossier.racine).length, 3 + 50);
     const limite = longueurMaxDeBase(dossier);
-    assert.equal(limite, 259 - 103 - 1 - 61);
+    assert.equal(limite, (259 - 103 - 1 - 61) / 2);
     const base = derive(lettres(400), dossier);
     assert.equal(base, lettres(limite));
     assert.equal(plusLong(cheminsComplets(dossier, base)).length, 259);
@@ -809,35 +895,42 @@ describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
       const limite = longueurMaxDeBase(dossier);
       const base = derive(nom, dossier);
       assert.equal(base, nom.slice(0, limite), dossier.racine);
-      assert.equal(plusLong(cheminsComplets(dossier, base)).length, 259, dossier.racine);
+      // La base compte deux fois : le plus long chemin remplit 259 unités, ou
+      // 258 quand une unité de plus en demanderait deux.
+      assert.ok(plusLong(cheminsComplets(dossier, base)).length >= 258, dossier.racine);
+      assert.ok(plusLong(cheminsComplets(dossier, base)).length <= 259, dossier.racine);
     }
     // Avec ou sans le séparateur final, le même dossier donne la même base.
     assert.equal(derive(nom, cas[0]), derive(nom, DOSSIERS[1]));
     assert.equal(derive(nom, cas[2]), derive(nom, cas[3]));
-    // Les valeurs : E:\ laisse 195 unités à la base, « / » 197.
-    assert.deepEqual([cas[1], cas[4]].map(longueurMaxDeBase), [195, 197]);
+    // Les valeurs : E:\ laisse 97 unités à la base, « / » 98.
+    assert.deepEqual([cas[1], cas[4]].map(longueurMaxDeBase), [97, 98]);
   });
 });
 
 // Noms que la dérivation doit traverser sans rien rompre : vides, réservés,
-// refusés, en NFD, à emoji, trop longs, à caractères de contrôle, de format ou
-// ignorables par défaut, à demi-paires isolées, à marque combinante que sépare
-// un caractère refusé, à sigma majuscule, médian ou final.
+// noms des entrées de la racine, refusés, en NFD, à emoji, trop longs, à
+// caractères de contrôle, de format ou ignorables par défaut, à demi-paires
+// isolées, à marque combinante que sépare un caractère refusé, à sigma
+// majuscule, médian ou final. Les longueurs de 66 à 69 et de 89 à 91
+// encadrent la borne des deux dossiers de travail, 68 et 91.
 const NOMS_HOSTILES = [
   '', ' ', '.', '...', '. . .', '<>:"/\\|?*', '\u0000\u001f', '\u00a0', '*.*',
   'con', 'CON', 'Con.txt', 'nul.', 'aux .x', 'COM1', 'lpt9.log', 'CONIN$', 'conout$.x', 'COM\u00b9', 'console',
   'c:o:n', ' con ', 'PRN . . ',
+  'corbeille', 'CORBEILLE', ' Corbeille.', 'reglages_locaux.json', 'REGLAGES_LOCAUX.JSON', '.gtt-temoin',
   '«Gala»: 2026/11/14?', 'Soirée.', 'Soire\u0301e', '  Gala   du   soir  ', 'Gala\u00a0du\u202fsoir',
-  '\u{1F600}', '\u{1F600}'.repeat(300), `${'a'.repeat(139)}\u{1F600}${'b'.repeat(50)}`,
-  `${'a'.repeat(140)}\u{1F600}${'b'.repeat(50)}`, `${'a'.repeat(181)}\u{1F600}${'b'.repeat(50)}`,
-  `${'a'.repeat(180)}\u{1F600}${'b'.repeat(50)}`,
+  '\u{1F600}', '\u{1F600}'.repeat(300), `${'a'.repeat(66)}\u{1F600}${'b'.repeat(50)}`,
+  `${'a'.repeat(67)}\u{1F600}${'b'.repeat(50)}`, `${'a'.repeat(90)}\u{1F600}${'b'.repeat(50)}`,
+  `${'a'.repeat(89)}\u{1F600}${'b'.repeat(50)}`,
   lettres(400), '\u00e9'.repeat(400), 'e\u0301'.repeat(200), '. '.repeat(250), `con.${lettres(400)}`,
-  `${'a'.repeat(138)} ${'b'.repeat(60)}`, `${'a'.repeat(140)}.${'b'.repeat(60)}`, 'x'.repeat(141), 'x'.repeat(142),
+  `${'a'.repeat(66)} ${'b'.repeat(60)}`, `${'a'.repeat(67)}.${'b'.repeat(60)}`, 'x'.repeat(68), 'x'.repeat(69),
+  'x'.repeat(91), 'x'.repeat(92),
   '\u200b', '\u200b'.repeat(300), '\u200eGala\u200e', 'Gala\u200b', 'Ga\ufeffla', 'Ga\u00adla', 'Gala\u202eslx.exe',
   'C\u200bON', 'Soire\u200b\u0301e', '\ud800', 'Ga\udc00la', '\ude00\ud83d', 'Ga\ud83d<\ude00la',
-  `${'a'.repeat(140)}\u200b${'b'.repeat(50)}`,
+  `${'a'.repeat(67)}\u200b${'b'.repeat(50)}`,
   // Un contrôle de C1, un remplisseur hangul et un sélecteur de variante, seuls ou dans un nom.
-  '\u{85}', '\u{3164}', '\u{fe0f}', 'Ga\u{3164}la', 'C\u{3164}ON', `${'a'.repeat(140)}\u{3164}${'b'.repeat(50)}`,
+  '\u{85}', '\u{3164}', '\u{fe0f}', 'Ga\u{3164}la', 'C\u{3164}ON', `${'a'.repeat(67)}\u{3164}${'b'.repeat(50)}`,
   // Une lettre et sa marque combinante, qu'un caractère refusé sépare : retiré, il les laisse se composer.
   'Ga<\u{301}la', 'a\u{301}<\u{323}', 'e:\u{302}\u{301}', '\u{1100}<\u{1161}<\u{11a8}',
   // Un sigma majuscule, médian et final : trois écritures d'un même nom.
@@ -857,6 +950,7 @@ function invariantsRompus(base, dossier) {
   if (INVISIBLE.test(base)) rompus.push('caractère invisible');
   if (BORD.test(base)) rompus.push('espace ou point de bord');
   if (estReserve(base)) rompus.push('nom réservé');
+  if (ENTREES_RACINE.some((entree) => cle(entree) === cle(base))) rompus.push("nom d'une entrée de la racine");
   if (SUBSTITUTION_ISOLEE.test(base)) rompus.push('paire de substitution coupée');
   const longueur = plusLong(cheminsComplets(dossier, base)).length;
   if (longueur > 259) rompus.push(`chemin de ${longueur} unités`);
@@ -890,6 +984,31 @@ describe('deriverBase : les invariants de toute base', () => {
     assert.equal(existantes.length, NOMS_HOSTILES.length);
     assert.equal(new Set(existantes.map(cle)).size, NOMS_HOSTILES.length);
     assert.deepEqual(ecarts, []);
+  });
+});
+
+describe("dossierEvenement : le dossier d'un événement (§ 8.6)", () => {
+  surChaqueDossier('le dossier est la base elle-même, telle que deriverBase la rend, nom hostile compris', (dossier) => {
+    const noms = ['Gala', 'Soir\u{E9}e des Lucioles', 'con', 'corbeille', lettres(400), ...NOMS_HOSTILES];
+    assert.ok(noms.length > 40, `${noms.length} noms examinés`);
+    const ecarts = noms
+      .map((nom) => derive(nom, dossier))
+      .filter((base) => dossierEvenement(base) !== base)
+      .map((base) => visible(base));
+    assert.deepEqual(ecarts, []);
+  });
+
+  test("une base vide ou d'un autre type, un caractère interdit, « . » ou « .. », un point ou une espace final, un périphérique, ou le nom d'une entrée de la racine, quelle que soit sa casse : TypeError", () => {
+    const refusees = [
+      ...['', null, undefined, 42, 'a/b', 'a\\b', '/', '.', '..', 'a:b', 'a*b'],
+      ...['corbeille', 'CORBEILLE', 'corbeille.', 'Corbeille ', 'reglages_locaux.json.', 'Reglages_Locaux.json'],
+      ...['.gtt-temoin', '.GTT-TEMOIN', 'con', 'NUL', 'com1.soir\u{E9}e', 'Gala.', 'Gala '],
+    ];
+    assert.ok(refusees.length > 0, 'aucune base examinée');
+    for (const base of refusees) assert.throws(() => dossierEvenement(base), TypeError, String(base));
+    // Un nom voisin passe.
+    assert.equal(dossierEvenement('corbeille (2)'), 'corbeille (2)');
+    assert.equal(dossierEvenement('...a'), '...a');
   });
 });
 
@@ -1096,7 +1215,7 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     assert.notEqual(nomPlanche(BASE, options), nomPlanche(BASE, { ...options, horodatage: '2031-05-17T20:15:08-04:00' }));
   });
 
-  test('le plus long suffixe, 51 unités, plus le suffixe d’écriture tient sous la partie fixe de longueurRelativeMax : la planche d’une base à la borne ne dépasse pas 259 unités', () => {
+  test('le plus long suffixe, 51 unités, avec le séparateur et le suffixe d’écriture, fait la partie fixe de longueurRelativeMax : la planche d’une base à la borne tient à la racine, et remplit 259 unités dans le dossier de l’événement', () => {
     const suffixes = [];
     for (const papier of Object.keys(PAPIERS)) {
       for (const imposition of ['feuille', 'pile']) {
@@ -1111,18 +1230,18 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     const plusLong = suffixes.reduce((a, b) => (b.length > a.length ? b : a));
     assert.equal(plusLong, '.badges-9999_Lettre_feuille_2031-05-17_20-15-07.pdf');
     assert.equal(plusLong.length, 51);
-    assert.ok(
-      plusLong.length + SUFFIXE_ECRITURE.length <= longueurRelativeMax(''),
-      `${plusLong.length} + ${SUFFIXE_ECRITURE.length} > ${longueurRelativeMax('')}`,
-    );
-    // Recomposé en entier, à côté des fichiers de l'événement, sur une base
-    // que deriverBase pousse à la borne.
+    assert.equal(longueurRelativeMax('b'.repeat(100)) - 2 * 100, 1 + plusLong.length + SUFFIXE_ECRITURE.length);
+    // Recomposé en entier sur une base que deriverBase pousse à la borne : à
+    // la racine du dossier de travail, et dans le dossier de l'événement,
+    // qui porte le nom de sa base.
     for (const dossier of DOSSIERS) {
       const base = deriverBase(lettres(400), { ...dossier, existantes: [] });
       assert.equal(base.length, longueurMaxDeBase(dossier));
       const nom = nomPlanche(base, { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: reeditionDe(9999) });
-      const chemin = `${dossier.racine}${dossier.separateur}${nom}.ecriture`;
-      assert.ok(chemin.length <= LONGUEUR_CHEMIN_MAX, `${dossier.racine} : ${chemin.length} unités`);
+      const aLaRacine = `${dossier.racine}${dossier.separateur}${nom}.ecriture`;
+      assert.ok(aLaRacine.length <= LONGUEUR_CHEMIN_MAX, `${dossier.racine} : ${aLaRacine.length} unités`);
+      const dansLeDossier = `${dossier.racine}${dossier.separateur}${base}${dossier.separateur}${nom}.ecriture`;
+      assert.equal(dansLeDossier.length, LONGUEUR_CHEMIN_MAX, dossier.racine);
     }
   });
 
@@ -1176,9 +1295,9 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     assert.equal(nomPlanche(BASE, { ...options, reedition: null, dossier: dossier([entiere]) }), entiere);
   });
 
-  test('le plus long nom marqué tient sous 259 unités à côté d’une base à la borne : la base s’y raccourcit, le suffixe reste entier ; le nom sans marque ne change pas', () => {
+  test('le plus long nom marqué tient sous 259 unités à côté d’une base lue sur le disque qui remplit la planche sans marque : la base s’y raccourcit, le suffixe reste entier ; le nom sans marque ne change pas', () => {
     for (const dossier of DOSSIERS) {
-      const base = deriverBase(lettres(400), { ...dossier, existantes: [] });
+      const base = baseLueLongue(dossier);
       const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table' };
       const sansDossier = nomPlanche(base, options);
       const suffixe = sansDossier.slice(base.length);
@@ -1209,10 +1328,13 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     const suffixe = nomPlanche('b', options).slice(1);
     assert.equal(suffixe, '.badges-p12_Lettre_feuille_table_2031-05-17_20-15-07.pdf');
     for (const dossier of DOSSIERS) {
-      // L'original et sa copie : la copie ne diffère que par « (2) », que la coupe retire.
+      // L'original et sa copie, deux bases lues sur le disque, plus longues
+      // que la borne de deriverBase : la copie ne diffère que par « (2) »,
+      // que la coupe retire.
       const nom = `Souper des Lucioles du printemps, \u{E9}dition sp\u{E9}ciale ${lettres(400)}`;
-      const original = derive(nom, dossier);
-      const copie = derive(nom, dossier, [original]);
+      const longueur = baseLueLongue(dossier).length;
+      const original = nom.slice(0, longueur);
+      const copie = `${nom.slice(0, longueur - 4)} (2)`;
       assert.ok(copie.endsWith(' (2)') && copie.length === original.length, copie);
       const sous = (existants) => ({ ...options, dossier: { ...dossier, existants } });
       const premier = nomPlanche(original, sous([]));
@@ -1232,8 +1354,7 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
       // Une base égale à la tête raccourcie se nomme entière, autrement que le nom raccourci.
       const tete = premier.slice(0, premier.length - suffixe.length);
       assert.ok(tete.endsWith('.'), tete);
-      const courte = derive(tete.slice(0, -1), dossier);
-      assert.equal(courte, tete.slice(0, -1));
+      const courte = tete.slice(0, -1);
       const entier = nomPlanche(courte, sous([premier]));
       assert.equal(entier, courte + suffixe);
       assert.notEqual(entier.toUpperCase(), premier.toUpperCase());
@@ -1243,7 +1364,7 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
   test('le nom se choisit parmi les entrées du dossier pour une réédition, ou pour une base qui se raccourcit ; jamais sans dossier', () => {
     const dossier = { ...DOSSIERS[0], existants: [] };
     const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: null, proposition: 12, ordre: 'table' };
-    const longue = derive(lettres(400), DOSSIERS[0]);
+    const longue = baseLueLongue(DOSSIERS[0]);
     assert.equal(nomPlancheExigeListe(BASE, { ...options, dossier }), false);
     assert.equal(nomPlancheExigeListe(BASE, { ...options, reedition: reeditionDe(2), dossier }), true);
     assert.equal(nomPlancheExigeListe(longue, { ...options, dossier }), true);
@@ -1257,7 +1378,9 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: null, proposition: 12, ordre: 'table' };
     const suffixe = '.badges-p12_Lettre_feuille_table_2031-05-17_20-15-07.pdf';
     // Le dossier dont la racine laisse exactement libres unités à la tête du nom :
-    // racine, séparateur, tête, point de la coupe, suffixe, « .ecriture ».
+    // racine, séparateur, tête, point de la coupe, suffixe, « .ecriture ». Les
+    // bases sont lues sur le disque : sous ces racines, deriverBase n'en rend
+    // aucune d'aussi longue.
     const dossierPour = (libres) => dossierDeLongueur(259 - 1 - libres - 1 - suffixe.length - '.ecriture'.length);
     const debut = (n) => `Gala ${lettres(n - 5)}`;
     const L = 40;
@@ -1271,7 +1394,6 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     ];
     for (const [quoi, libres, base, attendue] of cas) {
       const dossier = dossierPour(libres);
-      assert.equal(derive(base, dossier), base, `${quoi} : la base se dérive telle quelle`);
       const nom = nomPlanche(base, { ...options, dossier: { ...dossier, existants: [] } });
       assert.equal(nom, `${attendue}.${suffixe}`, quoi);
       const tete = nom.slice(0, nom.length - suffixe.length - 1);
@@ -1283,10 +1405,15 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
   });
 
   test('une base qui ne laisse rien à couper sous une racine trop longue garde son nom entier : l’écriture refusée offrira « Enregistrer sous… »', () => {
-    // La racine la plus longue où « Gala » se dérive encore.
-    const dossier = dossierDeLongueur(LONGUEUR_CHEMIN_MAX - 1 - longueurRelativeMax('Gala'));
-    assert.equal(derive('Gala', dossier), 'Gala');
     const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table' };
+    const marque = '.badges-p2147483647-9999_Lettre_feuille_table_2031-05-17_20-15-07.pdf';
+    // La racine qui ne laisse qu'une unité au nom avant son suffixe marqué :
+    // racine, séparateur, une unité, suffixe, « .ecriture ». Le point de la
+    // coupe n'y laisse aucun caractère de base. « Gala » vient d'un fichier
+    // lu sur le disque : sous cette racine, deriverBase n'en rend aucune.
+    const dossier = dossierDeLongueur(LONGUEUR_CHEMIN_MAX - 1 - 1 - marque.length - '.ecriture'.length);
+    refuseTropLong(() => derive('Gala', dossier), dossier.racine);
+    assert.equal(nomPlanche('Gala', options), `Gala${marque}`);
     assert.equal(nomPlanche('Gala', { ...options, dossier: { ...dossier, existants: [] } }), nomPlanche('Gala', options));
     // Un nom qui tient ne se raccourcit pas.
     const court = { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, proposition: 3 };
@@ -1300,9 +1427,11 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     // La racine qui laisse cinq unités au nom avant son suffixe : racine,
     // séparateur, nom, suffixe, « .ecriture ». « Gala. » y tient entière,
     // « Gala soir » s'y raccourcit en « Gala » suivi du point de la coupe.
+    // Les deux bases sont lues sur le disque : sous cette racine, deriverBase
+    // n'en rend aucune.
     const dossier = dossierDeLongueur(259 - 1 - 5 - suffixe.length - '.ecriture'.length);
     const sous = (existants) => ({ ...options, dossier: { ...dossier, existants } });
-    assert.equal(derive('Gala soir', dossier), 'Gala soir');
+    refuseTropLong(() => derive('Gala soir', dossier), dossier.racine);
     const raccourcie = nomPlanche('Gala soir', sous([]));
     assert.equal(raccourcie, `Gala.${suffixe}`);
     assert.equal(`${dossier.racine}${dossier.separateur}${raccourcie}.ecriture`.length, LONGUEUR_CHEMIN_MAX);
@@ -1343,15 +1472,14 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
       [{ racine: 'E:\\', separateur: '\\' }, 259 - 3 - 1 - suffixe.length - 9],
       [{ racine: '/', separateur: '/' }, 259 - 1 - 1 - suffixe.length - 9],
     ];
+    // Une base lue sur le disque, que la coupe raccourcit sous chaque racine.
+    const base = lettres(250);
     for (const [dossier, longueurTete] of cas) {
-      const base = derive(lettres(400), dossier);
-      assert.equal(base, lettres(longueurMaxDeBase(dossier)), dossier.racine);
       const nom = nomPlanche(base, { ...options, dossier: { ...dossier, existants: [] } });
       assert.equal(nom, `${lettres(longueurTete)}.${suffixe}`, dossier.racine);
       assert.equal(`${dossier.racine}${nom}.ecriture`.length, 259, dossier.racine);
     }
     // Avec ou sans le séparateur final, un même dossier donne le même nom.
-    const base = derive(lettres(400), DOSSIERS[1]);
     const nom = (racine) => nomPlanche(base, { ...options, dossier: { racine, separateur: '\\', existants: [] } });
     assert.equal(nom('E:\\soirees\\data\\'), nom('E:\\soirees\\data'));
     assert.equal(`E:\\soirees\\data\\${nom('E:\\soirees\\data\\')}.ecriture`.length, 259);
@@ -1433,12 +1561,12 @@ describe('nomPlanche et nomControle : les deux fichiers d’Avery 5392 (§ 11.6,
     assert.deepEqual([nomPlanche(BASE, sous([cartes, rang(controle, 2)])), nomControle(BASE, sous([cartes, rang(controle, 2)]))], [rang(cartes, 3), rang(controle, 3)]);
   });
 
-  test('la borne du chemin : le plus long suffixe Avery tient sous celui de l’A6 ; à côté d’une base à la borne, les deux noms marqués se raccourcissent en une même tête', () => {
+  test('la borne du chemin : le plus long suffixe Avery tient sous celui de l’A6 ; à côté d’une base lue sur le disque qui remplit la planche sans marque, les deux noms marqués se raccourcissent en une même tête', () => {
     const plusLongAvery = nomControle('b', { ...AVERY, reedition: reeditionDe(9999) }).slice(1);
     assert.equal(plusLongAvery, '.controle-9999_avery5392_2031-05-17_20-15-07.pdf');
     assert.ok(plusLongAvery.length <= 51, String(plusLongAvery.length));
     for (const dossier of DOSSIERS) {
-      const base = deriverBase(lettres(400), { ...dossier, existantes: [] });
+      const base = baseLueLongue(dossier);
       const options = { ...AVERY, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table', dossier: { ...dossier, existants: [] } };
       const cartes = nomPlanche(base, options);
       const controle = nomControle(base, options);
@@ -1486,12 +1614,12 @@ describe('nomCsvBadges : le nom de la liste des badges en CSV (§ 11.6, § 8.6)'
     assert.equal(nomCsvBadgesExigeListe(BASE, reedition), false);
   });
 
-  test('la borne du chemin : le plus long suffixe sans marque compte 46 unités, sous les 51 de la planche ; à côté d’une base à la borne, le nom marqué se raccourcit', () => {
+  test('la borne du chemin : le plus long suffixe sans marque compte 46 unités, sous les 51 de la planche ; à côté d’une base lue sur le disque qui remplit la planche sans marque, le nom marqué se raccourcit', () => {
     const plusLong = nomCsvBadges('b', { ...LISTE, reedition: reeditionDe(9999), brouillon: true }).slice(1);
     assert.equal(plusLong, '.badges-9999_BROUILLON_2031-05-17_20-15-07.csv');
     assert.equal(plusLong.length, 46);
     for (const dossier of DOSSIERS) {
-      const base = deriverBase(lettres(400), { ...dossier, existantes: [] });
+      const base = baseLueLongue(dossier);
       const options = { ...LISTE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table', brouillon: true, dossier: { ...dossier, existants: [] } };
       const nom = nomCsvBadges(base, options);
       assert.ok(nom.slice(0, nom.indexOf('.badges-')).endsWith('.'), nom);

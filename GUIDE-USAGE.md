@@ -63,7 +63,9 @@ commande qui l’ouvre dans l’explorateur.
 événement », seul le nom est exigé ; la date est facultative.*
 
 Ouvrir un événement existant ne réécrit jamais son fichier. Créer un événement,
-ou charger une démonstration, en écrit un nouveau.
+ou charger une démonstration, en écrit un nouveau. Le nom d’un événement compte
+au plus 68 caractères : au-delà, la création, la copie et le renommage le
+refusent en disant la longueur saisie, sans rien couper.
 
 ## Étape 1b — Passer en écriture
 

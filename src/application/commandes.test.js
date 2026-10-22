@@ -16,6 +16,7 @@ import { serialiser, serialiserCharge } from '../stockage/canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { cleDeCourse, courseDe, lireCourses, texteDesCourses } from '../stockage/courses.js';
 import { gelerPropositions } from '../stockage/gel.js';
+import { deriverBase } from '../stockage/noms.js';
 import {
   ajusterALaPresence,
   courseDepuisFichier,
@@ -1438,15 +1439,15 @@ describe("commandes : la charge d'un événement neuf (§ 8.1)", () => {
     assert.equal(libelle, "Création de l'événement « Soir\u{E9}e des Lucioles »");
   });
 
-  test('chargeNeuve borne le nom à 200 caractères, comptés après NFC et le retrait des blancs de bord, avant de tirer l’identifiant', () => {
-    assert.equal(NOM_EVENEMENT_MAX, 200);
+  test('chargeNeuve borne le nom à 68 caractères, comptés après NFC et le retrait des blancs de bord, avant de tirer l’identifiant', () => {
+    assert.equal(NOM_EVENEMENT_MAX, 68);
     let tirages = 0;
     const identifiant = () => {
       tirages += 1;
       return `evt-${tirages}`;
     };
     const base = { date: null, siegesParDefaut: 8, tours: 3 };
-    // 200 « é » en NFD : 400 unités avant NFC, 200 après ; les blancs de bord
+    // 68 « é » en NFD : 136 unités avant NFC, 68 après ; les blancs de bord
     // ne comptent pas.
     const nfd = 'e\u{301}'.repeat(NOM_EVENEMENT_MAX);
     const { charge } = chargeNeuve({ ...base, nom: `  ${nfd}\t` }, identifiant);
@@ -1455,30 +1456,41 @@ describe("commandes : la charge d'un événement neuf (§ 8.1)", () => {
     const astral = '\u{1D11E}'.repeat(NOM_EVENEMENT_MAX);
     assert.equal(chargeNeuve({ ...base, nom: astral }, identifiant).charge.evenement.nom, astral);
     assert.equal(tirages, 2);
-    refuse(() => chargeNeuve({ ...base, nom: 'e\u{301}'.repeat(201) }, identifiant), 'NOM_EVENEMENT_TROP_LONG', {
-      longueur: 201,
-      maximum: 200,
+    refuse(() => chargeNeuve({ ...base, nom: 'e\u{301}'.repeat(69) }, identifiant), 'NOM_EVENEMENT_TROP_LONG', {
+      longueur: 69,
+      maximum: 68,
       remede: null,
     });
     refuse(() => chargeNeuve({ ...base, nom: 'x'.repeat(8000) }, identifiant), 'NOM_EVENEMENT_TROP_LONG', {
       longueur: 8000,
-      maximum: 200,
+      maximum: 68,
       remede: null,
     });
     assert.equal(tirages, 2);
   });
 
   test('refusNomEvenement : null jusqu’à la borne, le refus au-delà, avec le remède reçu ; une autre valeur qu’une chaîne est une faute du code', () => {
-    assert.equal(refusNomEvenement('y'.repeat(200)), null);
-    assert.equal(refusNomEvenement(` ${'y'.repeat(200)} `), null);
+    assert.equal(refusNomEvenement('y'.repeat(68)), null);
+    assert.equal(refusNomEvenement(` ${'y'.repeat(68)} `), null);
     // Un nom lu d'un fichier, en NFD : compté après NFC.
-    assert.equal(refusNomEvenement('e\u{301}'.repeat(200)), null);
-    const trop = refusNomEvenement('y'.repeat(201), { geste: 'modifier' });
+    assert.equal(refusNomEvenement('e\u{301}'.repeat(68)), null);
+    const trop = refusNomEvenement('y'.repeat(69), { geste: 'modifier' });
     assert.ok(trop instanceof ErreurCommande);
     assert.equal(trop.code, 'NOM_EVENEMENT_TROP_LONG');
-    assert.deepEqual(trop.details, { longueur: 201, maximum: 200, remede: { geste: 'modifier' } });
-    assert.deepEqual(refusNomEvenement('y'.repeat(201)).details.remede, null);
+    assert.deepEqual(trop.details, { longueur: 69, maximum: 68, remede: { geste: 'modifier' } });
+    assert.deepEqual(refusNomEvenement('y'.repeat(69)).details.remede, null);
     assert.throws(() => refusNomEvenement(null), TypeError);
+  });
+
+  test('un nom saisi à la borne donne une base entière sous data/ des Documents, son dossier et ses fichiers compris (§ 8.6)', () => {
+    // La racine des Documents d'un poste d'épreuve, et data/ sur une clé.
+    const racines = ['C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data', 'E:\\soirees\\data'];
+    const nom = 'Soir\u{E9}e des Lucioles '.repeat(4).slice(0, NOM_EVENEMENT_MAX - 1) + 'x';
+    assert.equal([...nom].length, NOM_EVENEMENT_MAX);
+    assert.equal(refusNomEvenement(nom), null);
+    for (const racine of racines) {
+      assert.equal(deriverBase(nom, { racine, separateur: '\\', existantes: [] }), nom, racine);
+    }
   });
 });
 

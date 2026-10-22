@@ -81,17 +81,17 @@ const DELAI_MS = 4_000;
 // plus.
 const PID_TERMINE = spawnSync(process.execPath, ['-e', '']).pid;
 
-// Ce que le dossier temporaire porte avant la coquille : les Documents du
-// produit, où l'explorateur s'ouvre ; le profil qu'a laissé une séance
-// terminée, celui d'une séance qui tourne encore — ce processus d'épreuve —,
-// et un dossier dont le nom ne porte aucun pid.
+// Ce que le dossier temporaire porte avant la coquille : data/ dans les
+// Documents du produit, où l'explorateur s'ouvre ; le profil qu'a laissé une
+// séance terminée, celui d'une séance qui tourne encore — ce processus
+// d'épreuve —, et un dossier dont le nom ne porte aucun pid.
 const PROFIL_TERMINE = `gtt-profil-${PID_TERMINE}-Ab12Cd`;
 const PROFIL_VIVANT = `gtt-profil-${process.pid}-Ef34Gh`;
 const AUTRE = 'gtt-profil-sans-pid';
 const DOSSIERS_POSES = ['Documents', PROFIL_TERMINE, PROFIL_VIVANT, AUTRE];
 
-// Le verrou qu'une autre séance tient dans les Documents du produit, posé
-// avant le lancement : la sortie de la coquille ne le touche pas.
+// Le verrou qu'une autre séance tient dans data/ des Documents du produit,
+// posé avant le lancement : la sortie de la coquille ne le touche pas.
 const VERROU_AUTRE = 'autre.gtt.verrou';
 const CONTENU_AUTRE = {
   seance: 'seance-voisine',
@@ -113,8 +113,8 @@ function executerLaCoquille(scenario) {
   delete environnement.LOCALAPPDATA;
   const ailleurs = mkdtempSync(join(tmpdir(), 'coquille-'));
   const temporaire = mkdtempSync(join(tmpdir(), 'coquille-temp-'));
-  mkdirSync(join(temporaire, 'Documents', NOM_PRODUIT), { recursive: true });
-  writeFileSync(join(temporaire, 'Documents', NOM_PRODUIT, VERROU_AUTRE), `${JSON.stringify(CONTENU_AUTRE)}\n`);
+  mkdirSync(join(temporaire, 'Documents', NOM_PRODUIT, 'data'), { recursive: true });
+  writeFileSync(join(temporaire, 'Documents', NOM_PRODUIT, 'data', VERROU_AUTRE), `${JSON.stringify(CONTENU_AUTRE)}\n`);
   for (const nom of [PROFIL_TERMINE, PROFIL_VIVANT, AUTRE]) {
     mkdirSync(join(temporaire, nom, 'Session Storage'), { recursive: true });
     writeFileSync(join(temporaire, nom, 'Local State'), '{}');
@@ -332,7 +332,7 @@ describe('coquille : préchargement', () => {
     }
   });
 
-  test("emplacements et racines viennent du processus principal : le dossier publié et son data/, AppData, LOCALAPPDATA, le temporaire, les Documents du produit", () => {
+  test("emplacements et racines viennent du processus principal : le dossier publié et son data/, AppData, LOCALAPPDATA, le temporaire, data/ dans les Documents du produit", () => {
     const journal = journalDeLaCoquille('publie');
     const { chemins } = journal;
     assert.deepEqual(appelDe(journal, 'emplacements').reponse, {
@@ -348,7 +348,7 @@ describe('coquille : préchargement', () => {
       ok: true,
       valeur: {
         portable: { id: 'portable', chemin: join(PUBLIE, 'data') },
-        documents: { id: 'documents', chemin: join(chemins.documents, NOM_PRODUIT) },
+        documents: { id: 'documents', chemin: join(chemins.documents, NOM_PRODUIT, 'data') },
       },
     });
   });
@@ -369,7 +369,7 @@ describe('coquille : préchargement', () => {
       );
       assert.deepEqual(
         appelDe(journal, 'racines').reponse.valeur,
-        { portable: null, documents: { id: 'documents', chemin: join(chemins.documents, NOM_PRODUIT) } },
+        { portable: null, documents: { id: 'documents', chemin: join(chemins.documents, NOM_PRODUIT, 'data') } },
         scenario,
       );
     }
@@ -427,7 +427,7 @@ describe('coquille : préchargement', () => {
 
   test("l'explorateur s'ouvre sur la racine que la page désigne", () => {
     const journal = journalDeLaCoquille();
-    assert.deepEqual(journal.explorateur, [join(journal.chemins.documents, NOM_PRODUIT)]);
+    assert.deepEqual(journal.explorateur, [join(journal.chemins.documents, NOM_PRODUIT, 'data')]);
     // La réponse porte valeur: undefined, que le journal en JSON ne garde pas.
     assert.deepEqual(appelDe(journal, 'ouvrirDansExplorateur').reponse, { ok: true });
   });

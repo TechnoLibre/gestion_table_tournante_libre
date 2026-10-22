@@ -1172,9 +1172,12 @@ export function formeNommeeDe(charge, cible) {
 }
 
 /** Le nombre de caractères le plus grand qu'admet le nom d'un événement
- *  saisi — créé, copié ou renommé (§ 8.1). Le fichier lu n'est pas borné :
- *  un nom plus long s'ouvre, et seule son impression se refuse (§ 11.7). */
-export const NOM_EVENEMENT_MAX = 200;
+ *  saisi — créé, copié ou renommé (§ 8.1). Un nom à la borne donne une base
+ *  entière sous data/ des Documents (§ 8.6), où la base compte deux fois,
+ *  au dossier de l'événement et à ses fichiers. Le fichier lu n'est pas
+ *  borné : un nom plus long s'ouvre, et seule son impression se refuse
+ *  (§ 11.7). */
+export const NOM_EVENEMENT_MAX = 68;
 
 /**
  * Le refus d'un nom d'événement trop long (§ 8.1) : NOM_EVENEMENT_TROP_LONG

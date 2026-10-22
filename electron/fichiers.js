@@ -72,6 +72,11 @@ export const SUFFIXE_ECRITURE = '.ecriture';
 /** Le témoin de la sonde d'écriture, à la racine sondée (§ 8.6). */
 export const TEMOIN = '.gtt-temoin';
 
+// Le dossier de travail, dans les deux modes : data/ à côté de l'exécutable,
+// et data/ dans le dossier du produit des Documents (§ 8.6). Il porte les
+// dossiers d'événement, la corbeille, les réglages locaux et le témoin.
+const DOSSIER_DONNEES = 'data';
+
 // Ce que la sonde écrit, puis attend à la relecture : un texte en UTF-8 hors
 // de l'ASCII, qu'un support qui altère les octets ne rend pas tel quel.
 const TEXTE_TEMOIN = 'T\u{E9}moin d\u{2019}\u{E9}criture de Gestion table tournante Libre.\n';
@@ -179,8 +184,9 @@ export function segmentsAdmis(chemin) {
  * portable dans PORTABLE_EXECUTABLE_DIR — absente ou vide, aucun —, jamais
  * celui du processus, qui tourne dans le dossier temporaire où l'archive
  * s'extrait. Les données applicatives sont AppData, LOCALAPPDATA quand le
- * poste le définit, et le dossier temporaire. Les chemins se composent à la
- * manière de la plateforme donnée.
+ * poste le définit, et le dossier temporaire. Les racines sont data/ dans le
+ * dossier de l'exécutable et data/ dans le dossier du produit des
+ * Documents. Les chemins se composent à la manière de la plateforme donnée.
  *
  * @param {Object} poste
  * @param {Object<string, string|undefined>} poste.env  l'environnement du processus
@@ -205,8 +211,8 @@ export function decrireSysteme({ env, plateforme, cheminSysteme, nomProduit }) {
       separateur: chemins.sep,
     },
     racines: {
-      portable: executable === null ? null : chemins.join(executable, 'data'),
-      documents: chemins.join(cheminSysteme('documents'), nomProduit),
+      portable: executable === null ? null : chemins.join(executable, DOSSIER_DONNEES),
+      documents: chemins.join(cheminSysteme('documents'), nomProduit, DOSSIER_DONNEES),
     },
   };
 }
@@ -995,13 +1001,15 @@ export function creerFichiers({
     },
 
     // Le dialogue propose le nom, sans ses dossiers, dans les Documents du
-    // poste ; le fichier choisi s'écrit par écriture atomique, le dialogue
-    // ayant déjà fait confirmer le remplacement d'un existant.
+    // poste, deux niveaux au-dessus de la racine documents,
+    // Documents/<produit>/data ; le fichier choisi s'écrit par écriture
+    // atomique, le dialogue ayant déjà fait confirmer le remplacement d'un
+    // existant.
     async enregistrerSous(nomPropose, octets) {
       exigerTexte(nomPropose, 'le nom proposé');
       if (!(octets instanceof Uint8Array)) throw new TypeError('les octets ne sont pas un Uint8Array');
       const { canceled, filePath } = await dialog.showSaveDialog(fenetre(), {
-        defaultPath: chemins.join(chemins.dirname(documents), chemins.basename(nomPropose)),
+        defaultPath: chemins.join(chemins.dirname(chemins.dirname(documents)), chemins.basename(nomPropose)),
       });
       if (canceled || !filePath) return null;
       try {

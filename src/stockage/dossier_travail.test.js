@@ -23,7 +23,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { determinerDossierTravail, estSous } from './dossier_travail.js';
 import { ErreurStockage } from './erreurs.js';
 
-const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 const DOC = { id: 'documents', chemin: DOCUMENTS };
 const PORTABLE = { id: 'portable', chemin: 'E:\\soirees\\data' };
 

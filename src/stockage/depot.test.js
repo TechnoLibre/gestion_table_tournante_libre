@@ -54,7 +54,7 @@ const V1 = VERSION.affichee;
 const V2 = versionVoisine(V1);
 
 // La racine documents du système d'épreuve, à son chemin par défaut.
-const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 const DOC = { id: 'documents', chemin: DOCUMENTS };
 
 const BASE = 'Soirée des Lucioles';

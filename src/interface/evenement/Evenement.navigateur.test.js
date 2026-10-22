@@ -45,7 +45,7 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
 const NOMS = ['Ombrelle', 'Pervenche', 'Lacasse', 'Grisaille', 'Merlette', 'Fauvelle'];
 const EVENEMENT = { nom: 'Club des Merles', date: null, siegesParDefaut: 3, tours: 2 };
-const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 
 // Les montages de l'épreuve, démontés après elle ; le collecteur d'erreurs
 // n'a rien reçu pendant l'épreuve.
@@ -266,14 +266,20 @@ describe('la place fixe (§ 8.4, § 8.5)', () => {
 });
 
 describe('un nom long ou de glyphes larges (point d’attention 3)', () => {
-  test('deux cents caractères sans espace : la page ne s’élargit pas, et « Modifier » garde sa place', async () => {
+  test('deux cents caractères sans espace, lus d’un fichier : la page ne s’élargit pas, et « Modifier » garde sa place', async () => {
     const m = await neuf();
     const place = coin(fixe(m, 'modifier'));
+    const base = baseDe(m);
     await m.seance.fermer();
     for (const motif of ['W', 'WW W', '\u{C6}\u{C6}\u{C6}', '\u{D4}jgq']) {
       const nom = motif.repeat(Math.ceil(200 / motif.length)).slice(0, 200);
       expect(nom.length).toBe(200);
-      await m.seance.creer({ ...EVENEMENT, nom });
+      // Un nom au-delà de la borne de la saisie vient d'un fichier écrit
+      // hors de l'application, qui s'ouvre comme un autre (§ 8.1).
+      reecrireEtat(m, base, (charge) => {
+        charge.evenement.nom = nom;
+      });
+      await m.seance.ouvrir(base);
       flushSync();
       const titre = dans(m, '[data-ecran="evenement"] h1');
       expect(titre.textContent).toBe(nom);

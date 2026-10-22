@@ -457,7 +457,7 @@ describe('un nom d’événement au-delà de la borne de la saisie (§ 8.1, § 1
       () => dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]')?.parentElement.querySelector('[data-refus="NOM_EVENEMENT_TROP_LONG"]'),
       IMAGES,
     );
-    expect(texte(refus.querySelector('p'))).toBe(plat(t('NOM_EVENEMENT_TROP_LONG', { longueur: 7999, maximum: 200 })));
+    expect(texte(refus.querySelector('p'))).toBe(plat(t('NOM_EVENEMENT_TROP_LONG', { longueur: 7999, maximum: 68 })));
     const remede = refus.querySelector('[data-commande="renommer"]');
     expect(remede, 'le remède « Renommer »').not.toBeNull();
     expect(texte(remede)).toBe(t('communs.remede.renommer'));

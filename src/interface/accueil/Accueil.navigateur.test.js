@@ -62,7 +62,7 @@ import { TABLES_INTERFACE } from '../libelles.js';
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
 
-const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 const PUBLIE = 'E:\\soirees';
 const DATA = 'E:\\soirees\\data';
 const SOUS_APPDATA = 'C:\\Users\\Exemple\\AppData\\Local\\Programmes\\Tablee';

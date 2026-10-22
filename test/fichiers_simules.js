@@ -203,7 +203,7 @@ export function creerFichiersSimules({
   disque = new Map(),
   executable = null,
   donneesApplicatives = ['C:\\Users\\Exemple\\AppData\\Roaming', 'C:\\Users\\Exemple\\AppData\\Local'],
-  documents = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre',
+  documents = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data',
   separateur = '\\',
   insensibleCasse = true,
   nature = 'epreuve',

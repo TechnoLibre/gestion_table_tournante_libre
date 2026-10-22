@@ -526,7 +526,19 @@ describe('planche dans la séance : un nom par pile (§ 11.6)', () => {
     const nom = `Souper des Lucioles du printemps, \u{E9}dition sp\u{E9}ciale ${'et des Merles '.repeat(12)}`;
     const fs = creerFichiersSimules({ documents: DOCUMENTS });
     const { separateur } = await fs.emplacements();
-    const base = deriverBase(nom, { racine: DOCUMENTS, separateur, existantes: [] });
+    // Une base lue sur le disque, plus longue que celles que deriverBase rend
+    // sous la borne : la paire de l'événement, créée dans un autre dossier,
+    // puis copiée à la main sous ce nom. Le dépôt de la séance pose à côté
+    // une seconde paire, sous la base dérivée, que rien n'ouvre.
+    const base = nom.trim();
+    const modele = creerFichiersSimules({ documents: DOCUMENTS });
+    await deposer(modele, chargeLucioles({ nom }));
+    const derivee = deriverBase(nom, { racine: DOCUMENTS, separateur, existantes: [] });
+    assert.ok(derivee.length < base.length, derivee);
+    fs.deposerDossier('documents');
+    for (const suffixe of [SUFFIXES.etat, SUFFIXES.journal]) {
+      fs.deposer('documents', base + suffixe, modele.contenu('documents', derivee + suffixe));
+    }
     const { seance, trace } = await monter(chargeLucioles({ nom }), { papier: 'Lettre', fs, base });
     const demande = { source: 'proposition', proposition: 2, ordre: 'table' };
     const options = { papier: 'Lettre', imposition: 'feuille', horodatage: H_PROPOSITION, reedition: null, proposition: 2, ordre: 'table' };

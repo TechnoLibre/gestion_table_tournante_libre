@@ -11,7 +11,7 @@
 export const EXEMPLES = [
   ['PLAN_NON_BLOQUE', { remede: null }],
   // Refus et avertissements des commandes
-  ['NOM_EVENEMENT_TROP_LONG', { longueur: 201, maximum: 200, remede: null }],
+  ['NOM_EVENEMENT_TROP_LONG', { longueur: 69, maximum: 68, remede: null }],
   ['DATE_INVALIDE', { date: '2031-02-30', remede: null }],
   ['SIEGES_INVALIDES', { sieges: 1, remede: null }],
   ['TOURS_INVALIDES', { tours: 0, remede: null }],

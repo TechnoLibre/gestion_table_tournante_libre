@@ -115,20 +115,20 @@ describe('pagesDuPlan : une page par feuille, chacune la tuile de la découpe (�
     }
   });
 
-  test('un nom d’événement au-delà de 200 caractères : NOM_EVENEMENT_TROP_LONG et le remède « Renommer » avant toute découpe, même sous une bande que la découpe ne tiendrait pas', () => {
+  test('un nom d’événement au-delà de 68 caractères : NOM_EVENEMENT_TROP_LONG et le remède « Renommer » avant toute découpe, même sous une bande que la découpe ne tiendrait pas', () => {
     const { etat, geometries } = plan(demonstration('petite'));
     const pied = (nom) => feuilleDe({ nom, date: null, tour: 1, horodatage: null, version: 'epreuve' }, false);
     const options = { papier: 'A4', bandeMm: 12 };
     const attendue = decoupeAttendue(etat, geometries, 'auto');
-    assert.equal(pagesDuPlan(etat, geometries, 'auto', { ...options, pied: pied('m'.repeat(200)) }).length, attendue.pages.length);
+    assert.equal(pagesDuPlan(etat, geometries, 'auto', { ...options, pied: pied('m'.repeat(68)) }).length, attendue.pages.length);
     assert.throws(() => decoupeAttendue(etat, geometries, 'auto', { bandeMm: 400 }), RangeError);
-    for (const [nom, bandeMm] of [['m'.repeat(201), 12], ['Gala des Grèbes '.repeat(500), 400]]) {
+    for (const [nom, bandeMm] of [['m'.repeat(69), 12], ['Gala des Grèbes '.repeat(500), 400]]) {
       assert.throws(
         () => pagesDuPlan(etat, geometries, 'auto', { papier: 'A4', bandeMm, pied: pied(nom) }),
         (erreur) => {
           assert.ok(erreur instanceof ErreurCommande, `ErreurCommande attendue, reçu ${erreur}`);
           assert.equal(erreur.code, 'NOM_EVENEMENT_TROP_LONG');
-          assert.deepEqual(erreur.details, { longueur: nom.trim().length, maximum: 200, remede: { geste: 'renommer' } });
+          assert.deepEqual(erreur.details, { longueur: nom.trim().length, maximum: 68, remede: { geste: 'renommer' } });
           return true;
         },
       );

@@ -99,7 +99,7 @@ describe('exigerOctets', () => {
 });
 
 describe("ecrireOctetsAtomique sur le système d'épreuve : l'atomicité (§ 8.8)", () => {
-  const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+  const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
   const DOC = { id: 'documents', chemin: DOCUMENTS };
   const ANCIENS = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x0a, 0xe2]);
   const NOUVEAUX = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x32, 0x0a, 0xff]);

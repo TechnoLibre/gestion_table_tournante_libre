@@ -35,7 +35,7 @@ import { DELAI_REGLAGES_MS, INACTIVITE_MS, copiePubliee, creerSeance } from './s
 
 const V1 = VERSION.affichee;
 
-const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 const DOC = { id: 'documents', chemin: DOCUMENTS };
 const PORTABLE = { id: 'portable', chemin: 'E:\\soirees\\data' };
 

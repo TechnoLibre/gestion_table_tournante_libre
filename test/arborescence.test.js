@@ -162,6 +162,14 @@ const PARCOURS_DE_CLES_ADMIS = [
       'le domaine du papier, tiré de src/geometrie/papiers.js, sa seule définition : les clés de PAPIERS, ' +
       "rangées sur-le-champ par comparerTextes ; le message d'un refus ne dépend que de leur ensemble",
   },
+  {
+    fichier: join('src', 'stockage', 'noms.js'),
+    motif: /Object\s*\.\s*keys\s*\(\s*(?:MODELES_BADGE\s*\)\s*\.\s*flatMap\s*\(|PAPIERS\s*\)\s*:)/,
+    raison:
+      'suffixePlusLong, que lit la borne du chemin : les noms de la planche et de sa liste sur chaque modèle ' +
+      'et chaque papier, tirés de src/geometrie/papiers.js, leur seule définition ; seul le plus long compte, ' +
+      "qui ne dépend que de l'ensemble des clés",
+  },
 ];
 
 // Arbres dont les modules ne lisent aucune source non reproductible (§ 14.7) :

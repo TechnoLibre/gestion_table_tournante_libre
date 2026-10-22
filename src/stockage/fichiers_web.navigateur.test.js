@@ -20,7 +20,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { eprouverContrat } from '../../test/contrat_fichiers.js';
 import { ErreurStockage } from './erreurs.js';
-import { creerFichiersWeb } from './fichiers_web.js';
+import { TEMOIN, creerFichiersWeb } from './fichiers_web.js';
+import { NOMS_RESERVES_RACINE } from './noms.js';
 
 // Le dossier du produit dans l'OPFS, et la racine qui le désigne.
 const DOSSIER = 'gestion_table_tournante_libre';
@@ -109,6 +110,10 @@ eprouverContrat("web, sur l'OPFS de Chromium", async () => {
 });
 
 describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
+  test('le témoin que la sonde écrit à la racine est un nom réservé : aucun dossier d’événement ne le prend', () => {
+    expect(NOMS_RESERVES_RACINE).toContain(TEMOIN);
+  });
+
   test("nature web, ni renommage atomique ni verrou ; ni exécutable ni données applicatives ; noms comparés à la lettre sous « / » ; support inconnu", async () => {
     const fs = creerFichiersWeb();
     expect(fs.nature).toBe('web');

@@ -311,10 +311,19 @@
   trentaine de tours, ou quelques-uns sous des libellés longs — s'y répartit en
   blocs de tours consécutifs, chacun sur ses pages, sous un en-tête qui nomme
   ses tours (« Tours 1 à 6 ») ; chaque bloc reprend les noms.
-- Le nom d'un événement compte au plus 200 caractères, à la création, à la
-  copie et au renommage. Un événement dont le fichier porte un nom plus long
-  s'ouvre comme avant ; son aperçu d'impression refuse d'imprimer, au lieu
-  d'échouer, et offre « Renommer », qui ramène à la liste des événements.
+- Le nom d'un événement compte au plus 68 caractères, à la création, à la
+  copie et au renommage : à cette longueur, un nom de caractères ordinaires
+  tient entier dans le dossier de travail des Documents. Un événement dont le fichier porte
+  un nom plus long s'ouvre comme avant ; son aperçu d'impression refuse
+  d'imprimer, au lieu d'échouer, et offre « Renommer », qui ramène à la liste
+  des événements.
+- Sous Windows, quand le logiciel ne travaille pas à côté de l'exécutable, son
+  dossier de travail est `Documents\Gestion table tournante Libre\data` : dans
+  les deux modes, il s'appelle `data`. Les fichiers posés directement dans
+  `Documents\Gestion table tournante Libre` n'y figurent plus, et restent
+  intacts. Un événement ne prend jamais le nom de la corbeille ni celui du
+  fichier des réglages : nommé « Corbeille », il s'enregistre sous
+  « Corbeille (2) ».
 - Sous le placement retenu, glisser hors des tables une personne que sa
   réservation tient à la sienne annonce le refus dès le survol, au lieu de
   « retire du tour ».

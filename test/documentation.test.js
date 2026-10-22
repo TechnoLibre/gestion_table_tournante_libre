@@ -957,7 +957,7 @@ function fautesWindows(brut) {
     if (!portable.includes('`data`') || !portable.includes('à côté de l\u{2019}exécutable')) {
       fautes.push('issue portable absente : le dossier data à côté de l’exécutable');
     }
-    if (!documents.includes(`\`Documents\\${NOM_PRODUIT}\``)) fautes.push('issue Documents absente');
+    if (!documents.includes(`\`Documents\\${NOM_PRODUIT}\\data\``)) fautes.push('issue Documents absente');
     if (!enLigne(dossier.texte).includes(`« ${t('accueil.dossier.explorateur')} »`)) fautes.push('commande qui ouvre le dossier absente');
   }
   const version = sectionNommee(brut, 'Où lire la version');

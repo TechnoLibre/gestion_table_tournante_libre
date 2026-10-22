@@ -3,27 +3,27 @@
 
 // Les noms des fichiers d'un événement (§ 8.6, § 8.7) : leurs suffixes, la
 // base que le nom de l'événement donne dans un dossier de travail, le
-// dossier daté de la corbeille, et les noms de la planche de badges et de
-// sa liste en CSV que l'événement produit à côté de ses fichiers (§ 11.6).
-// Le module est pur : il ne touche aucun fichier, ne lit ni horloge ni
-// aléa, et ne dépend d'aucune langue — la casse se compare par toUpperCase
-// ou toLowerCase, jamais par une comparaison localisée.
+// dossier de l'événement, le dossier daté de la corbeille, et les noms de la
+// planche de badges et de sa liste en CSV que l'événement produit à côté de
+// ses fichiers (§ 11.6). Le module est pur : il ne touche aucun fichier, ne
+// lit ni horloge ni aléa, et ne dépend d'aucune langue — la casse se compare
+// par toUpperCase ou toLowerCase, jamais par une comparaison localisée.
 //
 // Les longueurs se comptent en unités UTF-16, comme MAX_PATH de Windows, et
 // une coupe ne sépare jamais une paire de substitution. Le chemin complet
 // d'un fichier est la racine du dossier de travail, un séparateur, puis un
 // chemin relatif. La borne porte sur le plus long chemin relatif que
-// l'événement écrit : un fichier de la corbeille datée, au suffixe le plus
-// long, que l'écriture atomique prolonge de SUFFIXE_ECRITURE. Une base qui ne
-// tiendrait que pour l'état laisserait déborder le journal, le fichier
-// précédent et leurs fichiers d'écriture. Le nom de la planche, posé à la
-// racine du dossier de travail, tient sous la même borne : son plus long
-// suffixe sans marque, prolongé de SUFFIXE_ECRITURE, ne dépasse pas la partie
-// fixe de longueurRelativeMax, et un nom marqué raccourcit sa base dans le
-// dossier qui le reçoit, suivie d'un point ; le nom de la liste, plus
-// court, suit la même règle. Un nom qui peut se confondre avec un autre —
-// base raccourcie, ou base lue sur le disque qui finit par un point — se
-// choisit parmi les entrées du dossier.
+// l'événement écrit, un fichier au suffixe le plus long que l'écriture
+// atomique prolonge de SUFFIXE_ECRITURE : dans le dossier de l'événement,
+// qui porte le nom de sa base, si bien que la base y compte deux fois, ou
+// dans le dossier daté de la corbeille, qui porte directement les fichiers.
+// Le plus long suffixe est celui de la planche de badges sans marque. Une
+// base qui ne tiendrait que pour l'état laisserait déborder le journal, la
+// planche et leurs fichiers d'écriture. Un nom de planche marqué raccourcit
+// sa base dans le dossier qui le reçoit, suivie d'un point ; le nom de la
+// liste, plus court, suit la même règle. Un nom qui peut se confondre avec
+// un autre — base raccourcie, ou base lue sur le disque qui finit par un
+// point — se choisit parmi les entrées du dossier.
 import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 
@@ -50,6 +50,13 @@ export const DOSSIER_CORBEILLE = 'corbeille';
 // MAX_PATH de Windows : 260 unités, le NUL final compris.
 export const LONGUEUR_CHEMIN_MAX = 259;
 
+// Les noms des entrées que la racine du dossier de travail porte à côté des
+// dossiers d'événement : la corbeille, le fichier des réglages locaux
+// (FICHIER_REGLAGES de reglages_locaux.js) et le témoin que la sonde écrit
+// (§ 8.6). Un dossier d'événement ne prend aucun de ces noms : deriverBase
+// les compte parmi les bases prises, sans égard à la casse.
+export const NOMS_RESERVES_RACINE = Object.freeze([DOSSIER_CORBEILLE, 'reglages_locaux.json', '.gtt-temoin']);
+
 // Un dossier daté de la corbeille se nomme AAAA-MM-JJ_HH-MM-SS, suivi de _n
 // quand ce nom est pris. Le rang s'arrête à RANG_MAX, deux chiffres : la borne
 // du chemin retient ce rang, le plus long que dossierCorbeille rend.
@@ -57,34 +64,40 @@ const MODELE_DATE = 'AAAA-MM-JJ_HH-MM-SS';
 const RANG_MAX = 99;
 const RANG_LE_PLUS_LONG = `_${RANG_MAX}`;
 
-// Ce que le plus long chemin relatif porte hors de la base : le dossier daté
-// de la corbeille au rang le plus long et son séparateur, puis le plus long
-// des suffixes, que l'écriture atomique prolonge de SUFFIXE_ECRITURE. Un
-// suffixe ajouté à SUFFIXES s'ajoute aussi à ce maximum.
-const LONGUEUR_FIXE =
-  `${DOSSIER_CORBEILLE}/${MODELE_DATE}${RANG_LE_PLUS_LONG}/`.length +
-  Math.max(
-    SUFFIXES.etat.length,
-    SUFFIXES.precedent.length,
-    SUFFIXES.journal.length,
-    SUFFIXES.verrou.length,
-    SUFFIXES.courses.length,
-  ) +
-  SUFFIXE_ECRITURE.length;
-
 /**
  * Longueur, en unités UTF-16, du plus long chemin relatif que l'événement de
- * base donnée écrit : le fichier d'écriture atomique de l'état précédent,
- * dans le dossier daté de la corbeille au rang de collision le plus long, soit
- * corbeille/AAAA-MM-JJ_HH-MM-SS_99/<base>.gtt.json.precedent.ecriture. C'est
- * lui, et non l'état ou le journal du dossier de travail, qui borne la base
- * (§ 8.6, § 14.10).
+ * base donnée écrit (§ 8.6, § 14.10) : le fichier d'écriture atomique de sa
+ * planche au plus long suffixe sans marque, dans le dossier de l'événement,
+ * <base>/<base>.badges-9999_<papier>_feuille_<date>.pdf.ecriture, ou dans le
+ * dossier daté de la corbeille au rang de collision le plus long,
+ * corbeille/AAAA-MM-JJ_HH-MM-SS_99/<base>.badges-…pdf.ecriture : le plus
+ * long des deux. Le premier compte la base deux fois, le second une : la
+ * corbeille l'emporte sous 32 unités de base, le dossier de l'événement
+ * au-delà. Ni l'état ni le journal ne bornent la base.
  *
  * @param {string} base
  * @returns {number}
  */
 export function longueurRelativeMax(base) {
-  return LONGUEUR_FIXE + base.length;
+  return longueurPourUnites(base.length);
+}
+
+// Le plus long chemin relatif d'une base de n unités : il ne dépend que de
+// sa longueur.
+function longueurPourUnites(n) {
+  return Math.max(2 * n + LONGUEUR_FIXE, n + LONGUEUR_FIXE_CORBEILLE);
+}
+
+// La plus longue base, en unités, dont le plus long chemin relatif tient en
+// disponibles unités : la plus grande longueur n telle que
+// longueurPourUnites(n) ne dépasse pas disponibles, 0 quand même une base
+// d'une unité ne tient pas. Le parcours suit longueurPourUnites, si bien que
+// la dérivation borne la base sur la longueur même que longueurRelativeMax
+// rend ; il compte au plus LONGUEUR_CHEMIN_MAX pas.
+function longueurBaseMax(disponibles) {
+  let n = 0;
+  while (longueurPourUnites(n + 1) <= disponibles) n += 1;
+  return n;
 }
 
 // Le nom que prend l'événement quand il ne reste rien de son nom.
@@ -206,6 +219,9 @@ function tenir(brut, limite) {
 export const cleSansCasse = (base) => base.normalize('NFC').toUpperCase();
 const cle = cleSansCasse;
 
+// Les clés des noms réservés de la racine, comparées comme les bases.
+const CLES_RESERVEES_RACINE = new Set(NOMS_RESERVES_RACINE.map(cle));
+
 /**
  * Base de nom de fichier d'un nom d'événement dans un dossier de travail
  * (§ 8.6) : ce que précèdent les suffixes de SUFFIXES. Les caractères
@@ -221,10 +237,12 @@ const cle = cleSansCasse;
  * premier point reçoit « _ » à cette partie. La base se tronque, sans couper
  * une paire de substitution, espaces et points finaux retirés, jusqu'à ce que
  * racine + séparateur + longueurRelativeMax(base) ne dépasse pas
- * LONGUEUR_CHEMIN_MAX. Une base qui heurte l'une des existantes, comparées par
- * la majuscule de leur NFC comme Windows compare les noms de fichier, prend
- * « (2) », « (3) »… après une espace ; la base se raccourcit alors pour que ce
- * rang tienne dans la borne.
+ * LONGUEUR_CHEMIN_MAX : la base y compte deux fois, au dossier de l'événement
+ * et à ses fichiers. Une base qui heurte l'une des existantes, ou l'un des
+ * NOMS_RESERVES_RACINE, comparées par la majuscule de leur NFC comme Windows
+ * compare les noms de fichier, prend « (2) », « (3) »… après une espace ; la
+ * base se raccourcit alors pour que ce rang, compté deux fois lui aussi,
+ * tienne dans la borne.
  * Une racine qui finit par le séparateur ne compte pas un séparateur de plus.
  *
  * @param {string} nom  le nom de l'événement, qui reste l'autorité (§ 8.6)
@@ -240,8 +258,8 @@ const cle = cleSansCasse;
 export function deriverBase(nom, { racine, separateur, existantes }) {
   const brut = epurer(nom);
   const unitesRacine = racine.endsWith(separateur) ? racine.length - 1 : racine.length;
-  const libres = LONGUEUR_CHEMIN_MAX - (unitesRacine + 1) - longueurRelativeMax('');
-  const prises = new Set(Array.from(existantes, cle));
+  const libres = longueurBaseMax(LONGUEUR_CHEMIN_MAX - (unitesRacine + 1));
+  const prises = new Set([...CLES_RESERVEES_RACINE, ...Array.from(existantes, cle)]);
   // La base de rang donné : brut tel quel au rang 1, puis suivi de « (n) », le
   // rang prenant sa place dans la borne. Un rang qui ne tient plus ne tiendra
   // pas davantage au rang suivant.
@@ -258,6 +276,38 @@ export function deriverBase(nom, { racine, separateur, existantes }) {
     candidat = proposer(rang);
   }
   return candidat;
+}
+
+/**
+ * Chemin relatif, à la racine du dossier de travail, du dossier d'un
+ * événement de base donnée (§ 8.6) : la base elle-même. deriverBase la rend
+ * sans séparateur, sans aucun des NOMS_RESERVES_RACINE, et sous une borne qui
+ * compte ce dossier en plus du fichier. Un nom que Windows ne crée pas tel
+ * quel se refuse : il retirerait le point ou l'espace final, et
+ * « corbeille. » prendrait la place de la corbeille.
+ *
+ * @param {string} base
+ * @returns {string}
+ * @throws {TypeError} une base vide ou autre chose qu'une chaîne, « . » ou
+ *         « .. », une base qui porte un caractère que Windows refuse
+ *         (séparateurs compris), qui finit par un point ou une espace, qui
+ *         nomme un périphérique, ou l'un des NOMS_RESERVES_RACINE, comparé
+ *         sans égard à la casse
+ */
+export function dossierEvenement(base) {
+  const forme =
+    typeof base === 'string' &&
+    base !== '' &&
+    base !== '.' &&
+    base !== '..' &&
+    base.search(INTERDITS) === -1 &&
+    !base.endsWith('.') &&
+    !base.endsWith(' ') &&
+    ecarterReserve(base) === base;
+  if (!forme || CLES_RESERVEES_RACINE.has(cle(base))) {
+    throw new TypeError(`dossierEvenement : base de dossier attendue, reçu ${JSON.stringify(base)}`);
+  }
+  return base;
 }
 
 // Un horodatage de l'horloge de l'application : AAAA-MM-JJTHH:MM:SS±HH:MM. Le
@@ -428,6 +478,46 @@ function composerCsv(base, options = {}) {
   return rangeable(base, leDossier, suffixes, reedition);
 }
 
+// Le plus long suffixe sans marque qu'un fichier de l'événement porte après
+// sa base : ceux de SUFFIXES, et ceux de la planche, de sa feuille de
+// contrôle et de sa liste en CSV, composés comme composer et composerCsv les
+// composent, sur chaque papier, imposition et modèle, au compte de
+// réédition le plus long, à la date et sans elle, en brouillon ou non, sans
+// source, sans ordre par table et sans rang. Une marque ou un rang allonge
+// le nom au-delà, et sa base se raccourcit alors (rangeable). Les clés de
+// PAPIERS et de MODELES_BADGE ne décident d'aucun ordre : seul leur maximum
+// compte. Un suffixe ajouté à SUFFIXES s'ajoute aussi à ce maximum.
+function suffixePlusLong() {
+  const fixes = [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou, SUFFIXES.courses];
+  const base = 'b';
+  const reedition = { ids: new Array(REEDITION_MAX) };
+  const dates = ['2000-01-01T00:00:00+00:00', null];
+  const supports = Object.keys(MODELES_BADGE).flatMap((modeleBadge) => {
+    const { papier } = MODELES_BADGE[modeleBadge];
+    const papiers = papier === null ? Object.keys(PAPIERS) : [papier];
+    return papiers.flatMap((lepapier) => IMPOSITIONS.map((imposition) => ({ papier: lepapier, imposition, modeleBadge })));
+  });
+  const noms = dates.flatMap((horodatage) => [
+    ...supports.flatMap((support) => composer(base, { ...support, horodatage, reedition }).nomsDeRang(1)),
+    ...[false, true].flatMap((brouillon) => composerCsv(base, { horodatage, reedition, brouillon }).nomsDeRang(1)),
+  ]);
+  return Math.max(...fixes.map((suffixe) => suffixe.length), ...noms.map((nom) => nom.length - base.length));
+}
+
+// La partie de longueurRelativeMax qui ne dépend pas de la base. Le plus
+// long suffixe, celui de la planche, .badges-9999_<papier>_feuille_<date>.pdf,
+// compte 7 + 5 + 1 + 6 + 8 + 1 + 19 + 4 = 51 unités, <papier> au plus long
+// de 6 et <date> de 19, AAAA-MM-JJ_HH-MM-SS. Dans le dossier de l'événement,
+// <base>/<base><suffixe>.ecriture : le séparateur, 1, le suffixe, 51, et
+// .ecriture, 9, soit 1 + 51 + 9 = 61 unités outre les deux bases. Dans la
+// corbeille, corbeille/AAAA-MM-JJ_HH-MM-SS_99/<base><suffixe>.ecriture : le
+// dossier daté au rang le plus long et son séparateur, 33, puis 51 et 9,
+// soit 33 + 51 + 9 = 93 unités outre la base.
+const SUFFIXE_PLUS_LONG = suffixePlusLong();
+const LONGUEUR_FIXE = 1 + SUFFIXE_PLUS_LONG + SUFFIXE_ECRITURE.length;
+const LONGUEUR_FIXE_CORBEILLE =
+  `${DOSSIER_CORBEILLE}/${MODELE_DATE}${RANG_LE_PLUS_LONG}/`.length + SUFFIXE_PLUS_LONG + SUFFIXE_ECRITURE.length;
+
 // Les noms de rang donné sous le dossier lu, de suffixes(rang), et si ces
 // noms se choisissent parmi les entrées du dossier — une réédition, une
 // base qui finit par MARQUE_COUPE, ou une base que la borne raccourcit dès
@@ -505,9 +595,10 @@ const nomsPlanche = (base, options) => nomsLibres(composer(base, options));
  * rang plutôt que de remplacer la première.
  *
  * La borne du chemin (§ 8.6) : le plus long suffixe sans marque, 51 unités,
- * prolongé de SUFFIXE_ECRITURE, tient sous la partie fixe de
- * longueurRelativeMax, et la base d'un événement, que deriverBase borne,
- * laisse place à sa planche. Les marques et le rang l'allongent au-delà :
+ * prolongé de SUFFIXE_ECRITURE, fait la partie fixe de longueurRelativeMax,
+ * et la base d'un événement, que deriverBase borne, laisse place à sa
+ * planche, à la racine du dossier de travail comme dans le dossier de
+ * l'événement. Les marques et le rang l'allongent au-delà :
  * quand le dossier est donné, la base du nom se raccourcit, sans couper une
  * paire de substitution, espaces et points finaux retirés, sans laisser un
  * nom réservé, et prend un point à sa suite, jusqu'à ce que racine +

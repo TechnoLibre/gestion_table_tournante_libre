@@ -79,7 +79,7 @@ const DOCUMENTS = 'documents';
 const CHEMIN_DOCUMENTS = `/${DOSSIER_PRODUIT}`;
 
 // Nom du témoin de la sonde (§ 8.6), qui porte aussi ce nom pour texte.
-const TEMOIN = '.gtt-temoin';
+export const TEMOIN = '.gtt-temoin';
 
 // Cause d'une écriture qui vise un dossier — la racine elle-même, ou un
 // dossier là où un fichier est attendu —, celle que lève l'OPFS.

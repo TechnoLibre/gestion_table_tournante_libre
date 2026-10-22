@@ -2747,12 +2747,17 @@ et n'est jamais nécessaire pour ouvrir.
 **Ce que le fichier ne porte pas : ni le mode, ni le cadrage.** Une liste de ce
 qui est dedans, sans son complément, laisse l'implémenteur ajouter.
 
-**Le nom d'un événement compte au plus 200 caractères.** La création, la copie
-et le renommage le comptent en NFC, ses blancs de bord retirés, un caractère
-par point de code, et refusent au-delà : `NOM_EVENEMENT_TROP_LONG`, qui dit la
-longueur saisie et le maximum. Rien n'est tronqué. La lecture ne borne pas : un
-fichier dont le nom passe la borne, écrit hors de l'application, s'ouvre et se
-lit comme un autre. Seule son impression se refuse (§ 11.7).
+**Le nom d'un événement compte au plus 68 caractères.** La création, la copie et
+le renommage le comptent en NFC, ses blancs de bord retirés, un caractère par
+point de code, et refusent au-delà : `NOM_EVENEMENT_TROP_LONG`, qui dit la
+longueur saisie et le maximum. Rien n'est tronqué. La borne vient du chemin
+(§ 8.6) : un nom de 68 caractères ordinaires donne un nom de fichier entier sous
+le dossier `data` des *Documents*, où il compte deux fois, au dossier de
+l'événement et à ses fichiers ; un caractère hors du plan de base, un nom de
+périphérique ou une racine plus longue le raccourcissent (§ 8.6). La lecture ne
+borne pas : un fichier dont le nom passe la borne, écrit hors de l'application
+ou sous une version qui en admettait de plus longs, s'ouvre et se lit comme un
+autre. Seule son impression se refuse (§ 11.7).
 
 Le logiciel ouvre sur une **liste des événements**, avec pour chacun le nom, la
 date, l'état, le nombre de participants, la dernière modification et le chemin.
@@ -3160,10 +3165,17 @@ règle écrite, et l'affiche :
    portable** : l'exécutable et les événements se déplacent ensemble, et la
    sauvegarde est la copie d'un seul dossier.
 5. L'épreuve échoue, ou le point 2 l'a interrompue → le dossier de travail est
-   un dossier nommé d'après le produit, dans les *Documents* de l'opérateur. Le
-   logiciel **dit pourquoi**, une fois par séance, sans bloquer : s'en souvenir
-   d'une séance à l'autre demanderait un réglage local de plus, et le § 8.5 les
-   borne à trois.
+   le dossier `data` d'un dossier nommé d'après le produit, dans les
+   *Documents* de l'opérateur : `Documents\<produit>\data`. Le logiciel **dit
+   pourquoi**, une fois par séance, sans bloquer : s'en souvenir d'une séance à
+   l'autre demanderait un réglage local de plus, et le § 8.5 les borne à trois.
+
+Dans les deux modes, le dossier de travail s'appelle donc `data`. Il porte les
+événements et, à côté d'eux, la corbeille (§ 8.7), le fichier des réglages
+locaux (§ 8.5) et, le temps d'une épreuve d'écriture, le fichier témoin. Sous
+`web`, il est la racine du stockage de la page, sans `data`, et suit les mêmes
+règles. Un dossier désigné pour écrire ailleurs devient le dossier de travail
+de la séance, de la même façon.
 
 **Le dossier retenu est éprouvé à son tour, et c'est cette épreuve qui le
 crée** : le dossier des *Documents* naît à la détermination, avant que la liste
@@ -3322,19 +3334,35 @@ caractères que Windows refuse, **refuse les noms réservés quelle que soit la
 casse**, **compare les collisions sans égard à la casse** (le système de
 livraison y est insensible, celui de développement non), **borne le chemin
 complet sur le plus long chemin que l'événement écrit**, et **retombe sur un nom
-générique** quand la dérivation ne laisse rien. Ce plus long chemin assemble les
-plus longues parties qu'un fichier de l'événement peut porter : le dossier daté
-de la corbeille (§ 8.7) au rang de collision le plus long — deux suppressions
-dans la même seconde se départagent par `_2`, `_3`… jusqu'à `_99` —, le plus
-long suffixe, celui de la génération de secours, `.gtt.json.precedent`, dix-neuf
-caractères, et le suffixe `.ecriture` de l'écriture atomique (§ 8.8) :
-`corbeille/AAAA-MM-JJ_HH-MM-SS_99/<nom>.gtt.json.precedent.ecriture`, soixante
-et un caractères outre le nom. `.gtt-journal.jsonl` n'en compte que dix-huit,
-`.gtt-courses.json` dix-sept, et `.gtt.json` neuf : une borne posée sur l'état
-ou sur le journal laisserait déborder tout le reste. **La dérivation reçoit la
-racine du dossier de travail en paramètre**, celle-ci n'étant plus connue à
-l'écriture du code, et son test l'exerce sur les deux issues. **L'autorité reste
-le nom inscrit dans le fichier.**
+générique** quand la dérivation ne laisse rien. Elle **écarte aussi les noms
+des entrées que le dossier de travail porte à côté des événements** —
+`corbeille`, `reglages_locaux.json`, `.gtt-temoin` —, sans égard à la casse :
+un nom qui y tombe prend le rang `(2)`, comme une collision, et aucun dossier
+d'événement ne prend la place de la corbeille.
+
+Le plus long chemin assemble les plus longues parties qu'un fichier de
+l'événement peut porter. Le plus long suffixe est celui de la planche de badges
+sans marque (§ 11.6), `.badges-9999_<papier>_feuille_<date>.pdf`, cinquante et
+un caractères ; l'écriture atomique (§ 8.8) le prolonge de `.ecriture`. Dans le
+dossier de l'événement, qui porte le nom de sa base, le nom compte deux fois :
+`<nom>/<nom>.badges-…pdf.ecriture`, soixante et un caractères outre les deux
+noms. Dans la corbeille (§ 8.7), le dossier daté porte directement les fichiers,
+au rang de collision le plus long — deux suppressions dans la même seconde se
+départagent par `_2`, `_3`… jusqu'à `_99` — :
+`corbeille/AAAA-MM-JJ_HH-MM-SS_99/<nom>.badges-…pdf.ecriture`,
+quatre-vingt-treize caractères outre le nom, compté une fois. Le plus long des
+deux borne le nom : la corbeille sous trente-deux caractères, le dossier de
+l'événement au-delà. `.gtt.json.precedent` ne compte que dix-neuf caractères,
+`.gtt-journal.jsonl` dix-huit, `.gtt-courses.json` dix-sept, et `.gtt.json`
+neuf : une borne posée sur l'état, sur le journal ou sur le nom compté une fois
+laisserait déborder tout le reste. Sous une racine de soixante et un caractères,
+celle du dossier `data` des *Documents* d'un compte au nom court, la borne
+laisse 68 caractères au nom, la borne de la saisie (§ 8.1). Une racine plus
+longue — un nom de compte long, un dossier synchronisé —, ou un caractère hors
+du plan de base, qui pèse deux unités, raccourcissent encore la base : **la
+dérivation reçoit la racine du dossier de travail en paramètre**, celle-ci
+n'étant plus connue à l'écriture du code, et son test l'exerce sur les deux
+issues. **L'autorité reste le nom inscrit dans le fichier.**
 
 **Pourquoi l'historique n'est pas dans le fichier d'état**, pour deux raisons
 distinctes. *La taille* : un plan de 260 personnes sur 4 tours pèse de l'ordre
@@ -7300,12 +7328,16 @@ refusé, et le journal trop ancien qu'un geste remplacerait.
 entrées corrompu à la trente-septième : trente-six entrées retenues,
 soixante-quatre annoncées écartées.
 
-**La dérivation des noms refuse `con` comme `CON`**, et borne le plus long
-chemin que l'événement écrit, corbeille et écriture atomique comprises (§ 8.6) :
-le test recompose ce chemin en entier, et échoue sur une borne posée sur
-`.gtt.json`, neuf caractères, sur le seul `.gtt-journal.jsonl`, dix-huit, ou qui
-oublie la corbeille ou l'écriture atomique. Elle reçoit la racine en paramètre et
-son test l'exerce sur les **deux** dossiers de travail possibles (§ 8.6).
+**La dérivation des noms refuse `con` comme `CON`**, donne `Corbeille (2)` à
+`Corbeille`, et borne le plus long chemin que l'événement écrit, dossier de
+l'événement, planche de badges, corbeille et écriture atomique comprises
+(§ 8.6) : le test recompose ce chemin en entier, et échoue sur une borne posée
+sur `.gtt.json`, neuf caractères, sur le seul `.gtt-journal.jsonl`, dix-huit,
+sur le nom compté une fois, ou qui oublie la planche, la corbeille ou
+l'écriture atomique. Elle reçoit la racine en paramètre et son test l'exerce
+sur les **deux** dossiers de travail possibles (§ 8.6) ; un nom de 68
+caractères ordinaires, la borne de la saisie, y donne un nom de fichier
+entier sous le dossier `data` des *Documents*.
 
 **Un renommage atomique qui échoue ne détruit pas la cible.** L'implémentation
 d'épreuve échoue au renommage : la cible conserve son contenu antérieur, et le

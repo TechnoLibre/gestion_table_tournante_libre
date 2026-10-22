@@ -213,7 +213,7 @@ describe('coquille sur un vrai disque', () => {
     { skip: SOUS_ROOT || SOUS_WINDOWS },
     async () => {
       const { fs, documents, portable } = systemeSur(dossierTemporaire(), {
-        publie: join('Documents', NOM_PRODUIT, 'cle'),
+        publie: join('Documents', NOM_PRODUIT, 'data', 'cle'),
       });
       mkdirSync(documents, { recursive: true });
       chmodSync(documents, 0o555);

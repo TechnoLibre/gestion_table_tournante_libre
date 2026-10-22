@@ -36,7 +36,7 @@ import {
 } from '../electron/fichiers.js';
 import { ErreurStockage } from '../src/stockage/erreurs.js';
 import { creerFichiersElectron } from '../src/stockage/fichiers_electron.js';
-import { SUFFIXE_ECRITURE as SUFFIXE_DU_STOCKAGE } from '../src/stockage/noms.js';
+import { NOMS_RESERVES_RACINE, SUFFIXE_ECRITURE as SUFFIXE_DU_STOCKAGE } from '../src/stockage/noms.js';
 import { exigerCheminRelatif } from '../src/stockage/systeme_fichiers.js';
 import { describe, test } from './lanceur.js';
 
@@ -53,7 +53,7 @@ const PID = 4242;
 const PRISE = '2026-10-06T19:02:11-04:00';
 
 // Les racines de l'épreuve, et ce que les échecs y nomment.
-const DOCUMENTS = '/poste/exemple/Documents/Gestion table tournante Libre';
+const DOCUMENTS = '/poste/exemple/Documents/Gestion table tournante Libre/data';
 const PUBLIE = '/media/cle/soirees';
 const DATA = `${PUBLIE}/data`;
 const AILLEURS = '/poste/exemple/ailleurs';
@@ -835,11 +835,11 @@ describe('coquille, fichiers : confinement aux racines', () => {
 
   test("la racine se résout par son identifiant, et un chemin réel se compare à celui de la racine, liens résolus des deux côtés", async () => {
     const disque = creerDisque();
-    disque.deposerDossier('/volume/reel/Documents/Gestion table tournante Libre');
+    disque.deposerDossier('/volume/reel/Documents/Gestion table tournante Libre/data');
     disque.deposerLien('/poste/exemple/Documents', '/volume/reel/Documents');
     const { fichiers } = preparer({ disque });
     await fichiers.ecrireAtomique(DOC, 'etat.json', 'sous un lien de racine');
-    assert.equal(disque.contenu('/volume/reel/Documents/Gestion table tournante Libre/etat.json'), 'sous un lien de racine');
+    assert.equal(disque.contenu('/volume/reel/Documents/Gestion table tournante Libre/data/etat.json'), 'sous un lien de racine');
   });
 });
 
@@ -1787,7 +1787,7 @@ describe('coquille, fichiers : emplacements et racines du système (§ 8.6)', ()
       nomProduit: 'Gestion table tournante Libre',
     });
 
-  test("sous Windows : le dossier publié et son data/, les Documents du produit, AppData, LOCALAPPDATA et le temporaire, sans égard à la casse", () => {
+  test("sous Windows : le dossier publié et son data/, data/ dans les Documents du produit, AppData, LOCALAPPDATA et le temporaire, sans égard à la casse", () => {
     assert.deepEqual(
       decrire('win32', { PORTABLE_EXECUTABLE_DIR: 'E:\\soirees', LOCALAPPDATA: 'C:\\Users\\Exemple\\AppData\\Local' }),
       {
@@ -1803,7 +1803,7 @@ describe('coquille, fichiers : emplacements et racines du système (§ 8.6)', ()
         },
         racines: {
           portable: 'E:\\soirees\\data',
-          documents: 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre',
+          documents: 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data',
         },
       },
     );
@@ -1831,7 +1831,7 @@ describe('coquille, fichiers : emplacements et racines du système (§ 8.6)', ()
     });
     assert.deepEqual(linux.racines, {
       portable: '/media/cle/soirees/data',
-      documents: '/poste/exemple/Documents/Gestion table tournante Libre',
+      documents: '/poste/exemple/Documents/Gestion table tournante Libre/data',
     });
     assert.equal(decrire('darwin', {}).emplacements.insensibleCasse, true);
   });
@@ -1923,8 +1923,11 @@ describe('coquille, fichiers : ce que la coquille recopie de src/stockage', () =
     }
   });
 
-  test("le suffixe de l'écriture atomique est celui de src/stockage/noms.js", () => {
+  test("le suffixe de l'écriture atomique et le témoin de la sonde sont ceux de src/stockage/noms.js", () => {
     assert.equal(SUFFIXE_ECRITURE, SUFFIXE_DU_STOCKAGE);
+    // Le témoin que la sonde écrit à la racine est un nom réservé : aucun
+    // dossier d'événement ne le prend.
+    assert.ok(NOMS_RESERVES_RACINE.includes(TEMOIN));
   });
 });
 

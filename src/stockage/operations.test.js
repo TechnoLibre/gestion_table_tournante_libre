@@ -35,7 +35,7 @@ import {
 const V1 = VERSION.affichee;
 
 // La racine documents du système d'épreuve, à son chemin par défaut.
-const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 const DOC = { id: 'documents', chemin: DOCUMENTS };
 
 const BASE = 'Soirée des Lucioles';
@@ -854,10 +854,10 @@ describe('opérations : renommer (§ 8.7)', () => {
       exigerEquivalence(fs, base);
     }
 
-    // Une racine de 193 unités laisse quatre unités à la base, aucune au
+    // Une racine de 161 unités laisse quatre unités à la base, aucune au
     // rang « (2) » : le nom qui tombe sur la base de l'événement se renomme
     // encore en place.
-    const longue = `C:\\${'x'.repeat(190)}`;
+    const longue = `C:\\${'x'.repeat(158)}`;
     const borne = nouveauDisque({ documents: longue });
     const racine = { id: 'documents', chemin: longue };
     const gala = await creer(borne.fs, racine, chargeEssai({ nom: 'Gala' }), CREATION);

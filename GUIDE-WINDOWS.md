@@ -68,13 +68,14 @@ fixe, puis l’affiche sur la liste des événements. La règle a **deux issues*
    vérifie qu’il peut y écrire et relire un fichier. S’il le peut, c’est son
    dossier de travail : l’exécutable et vos événements voyagent ensemble, et
    copier ce dossier suffit à tout emporter.
-2. **Sinon, un dossier dans vos Documents :
-   `Documents\Gestion table tournante Libre`.** Le logiciel le crée et dit
-   pourquoi, une fois par lancement, sans rien bloquer. Les raisons possibles :
-   le dossier de l’exécutable n’est pas connu ; l’exécutable est rangé sous
-   les données applicatives de Windows ou dans un dossier temporaire ; ou le
-   dossier `data` refuse l’écriture — une clé verrouillée en lecture seule, un
-   dossier protégé comme celui des programmes, un antivirus.
+2. **Sinon, un dossier `data` dans vos Documents :
+   `Documents\Gestion table tournante Libre\data`.** Le logiciel le crée et
+   dit pourquoi, une fois par lancement, sans rien bloquer. Les raisons
+   possibles : le dossier de l’exécutable n’est pas connu ; l’exécutable est
+   rangé sous les données applicatives de Windows ou dans un dossier
+   temporaire ; ou le dossier `data` de l’exécutable refuse l’écriture — une
+   clé verrouillée en lecture seule, un dossier protégé comme celui des
+   programmes, un antivirus.
 
 Le logiciel ne range jamais vos événements dans un dossier caché.
 

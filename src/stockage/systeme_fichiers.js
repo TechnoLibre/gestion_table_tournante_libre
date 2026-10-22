@@ -95,8 +95,8 @@ import { estHorodatage } from './journal.js';
  *           rend alors { pris: true } à chaque appel, et deverrouiller n'efface rien
  * @property {() => Promise<Emplacements>} emplacements
  * @property {() => Promise<{portable: Racine|null, documents: Racine}>} racines
- *           portable : data/ à côté de l'exécutable publié ; documents : le
- *           dossier du produit dans les Documents (§ 8.6)
+ *           portable : data/ à côté de l'exécutable publié ; documents :
+ *           data/ dans le dossier du produit des Documents (§ 8.6)
  * @property {() => Promise<Racine|null>} choisirDossier       dialogue natif ;
  *           null quand l'opérateur annule
  * @property {(r: Racine) => Promise<{inscriptible: boolean, cause: string|null}>} sonder

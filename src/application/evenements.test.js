@@ -31,7 +31,7 @@ import { creerSeance } from './seance.js';
 
 const V1 = VERSION.affichee;
 
-const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre';
+const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 const DOC = { id: 'documents', chemin: DOCUMENTS };
 const PUBLIE = 'E:\\soirees';
 const PORTABLE = { id: 'portable', chemin: 'E:\\soirees\\data' };
@@ -162,8 +162,8 @@ const ecritures = (fs) => fs.compteurs.ecritures;
 const NFD = 'Soire\u{0065}\u{0301}e des Hiboux'.normalize('NFD');
 const NFC = NFD.normalize('NFC');
 
-// Des Documents sous un chemin de 250 caractères : aucun nom long n'y tient
-// sous la borne d'un chemin, que lève deriverBase.
+// Des Documents sous un chemin de 250 caractères : aucun nom n'y tient sous
+// la borne d'un chemin, que lève deriverBase.
 const PROFOND = `C:\\${'p'.repeat(247)}`;
 
 // --- La détermination du dossier de travail (§ 8.6) --------------------------
@@ -1111,17 +1111,19 @@ describe('creer (§ 2.1, § 8.3)', () => {
     assert.equal(ecritures(fs), avant);
   });
 
-  test('un nom de 200 caractères est créé ; de 201, NOM_EVENEMENT_TROP_LONG qui dit le maximum, rien d’écrit', async () => {
+  test('un nom de 68 caractères est créé ; de 69, NOM_EVENEMENT_TROP_LONG qui dit le maximum, rien d’écrit', async () => {
     const { fs, facade } = monter();
     await facade.demarrer();
     const avant = ecritures(fs);
-    const refus = await refusDe(facade.creer({ nom: ` ${'h'.repeat(201)} ` }));
+    const refus = await refusDe(facade.creer({ nom: ` ${'h'.repeat(69)} ` }));
     assert.equal(refus.code, 'NOM_EVENEMENT_TROP_LONG');
-    assert.deepEqual(refus.details, { longueur: 201, maximum: 200, remede: null });
-    assert.equal(libelle(refus.code, refus.details), "Le nom compte 201 caractères : celui d'un événement en compte au plus 200.");
+    assert.deepEqual(refus.details, { longueur: 69, maximum: 68, remede: null });
+    assert.equal(libelle(refus.code, refus.details), "Le nom compte 69 caractères : celui d'un événement en compte au plus 68.");
     assert.equal(ecritures(fs), avant);
-    const { base } = await facade.creer({ nom: ` ${'h'.repeat(200)} ` });
-    assert.equal(analyser(fs.contenu('documents', base + SUFFIXES.etat)).charge.evenement.nom, 'h'.repeat(200));
+    const { base } = await facade.creer({ nom: ` ${'h'.repeat(68)} ` });
+    // Le nom à la borne donne une base entière sous data/ des Documents.
+    assert.equal(base, 'h'.repeat(68));
+    assert.equal(analyser(fs.contenu('documents', base + SUFFIXES.etat)).charge.evenement.nom, 'h'.repeat(68));
   });
 
   test('des Documents sous un chemin de 250 caractères : CHEMIN_TROP_LONG, rien d’écrit', async () => {
@@ -1218,14 +1220,14 @@ describe('copier (§ 8.7)', () => {
     for (const [fichier, texte] of Object.entries(original)) assert.equal(apres[fichier], texte);
   });
 
-  test('un nom de plus de 200 caractères : NOM_EVENEMENT_TROP_LONG, sans écrire', async () => {
+  test('un nom de plus de 68 caractères : NOM_EVENEMENT_TROP_LONG, sans écrire', async () => {
     const { fs, facade } = monter();
     await facade.demarrer();
     await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
     const avant = ecritures(fs);
-    const refus = await refusDe(facade.copier(LUCIOLES, { nom: 'c'.repeat(201) }));
+    const refus = await refusDe(facade.copier(LUCIOLES, { nom: 'c'.repeat(69) }));
     assert.equal(refus.code, 'NOM_EVENEMENT_TROP_LONG');
-    assert.deepEqual(refus.details, { longueur: 201, maximum: 200, remede: null });
+    assert.deepEqual(refus.details, { longueur: 69, maximum: 68, remede: null });
     assert.equal(ecritures(fs), avant);
   });
 
@@ -1273,7 +1275,7 @@ describe('copier (§ 8.7)', () => {
     await facade.demarrer();
     fs.deposer('documents', `Court${SUFFIXES.etat}`, texteEtat({ id: 'evt-court', nom: 'Court' }));
     const avant = ecritures(fs);
-    const refus = await refusDe(facade.copier('Court', { nom: 'x'.repeat(120) }));
+    const refus = await refusDe(facade.copier('Court', { nom: 'x'.repeat(60) }));
     assert.equal(refus.code, 'CHEMIN_TROP_LONG');
     assert.equal(ecritures(fs), avant);
     assert.deepEqual(Object.keys(await photographier(fs, { id: 'documents', chemin: PROFOND })), [`Court${SUFFIXES.etat}`]);
@@ -1375,17 +1377,18 @@ describe('renommer (§ 8.7, § 8.8)', () => {
     assert.equal(ecritures(fs), avant);
   });
 
-  test('un nom de 201 caractères : NOM_EVENEMENT_TROP_LONG avant toute sonde, rien d’écrit ; de 200, renommé', async () => {
+  test('un nom de 69 caractères : NOM_EVENEMENT_TROP_LONG avant toute sonde, rien d’écrit ; de 68, renommé', async () => {
     const { fs, facade } = monter();
     await facade.demarrer();
     await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
     const avant = ecritures(fs);
-    const refus = await refusDe(facade.renommer(LUCIOLES, { nom: 'e\u{301}'.repeat(201) }));
+    const refus = await refusDe(facade.renommer(LUCIOLES, { nom: 'e\u{301}'.repeat(69) }));
     assert.equal(refus.code, 'NOM_EVENEMENT_TROP_LONG');
-    assert.deepEqual(refus.details, { longueur: 201, maximum: 200, remede: null });
+    assert.deepEqual(refus.details, { longueur: 69, maximum: 68, remede: null });
     assert.equal(ecritures(fs), avant);
-    const { base } = await facade.renommer(LUCIOLES, { nom: `\t${'e\u{301}'.repeat(200)} ` });
-    assert.equal(analyser(fs.contenu('documents', base + SUFFIXES.etat)).charge.evenement.nom, '\u{E9}'.repeat(200));
+    const { base } = await facade.renommer(LUCIOLES, { nom: `\t${'e\u{301}'.repeat(68)} ` });
+    assert.equal(base, '\u{E9}'.repeat(68));
+    assert.equal(analyser(fs.contenu('documents', base + SUFFIXES.etat)).charge.evenement.nom, '\u{E9}'.repeat(68));
   });
 
   test('un fichier dont le nom passe la borne s’ouvre comme avant, en lecture, son nom entier', async () => {
@@ -1419,7 +1422,7 @@ describe('renommer (§ 8.7, § 8.8)', () => {
     const photo = await photographier(fs, profond);
     assert.deepEqual(Object.keys(photo), [`Court${SUFFIXES.etat}`]);
     const avant = ecritures(fs);
-    const refus = await refusDe(facade.renommer('Court', { nom: 'x'.repeat(120) }));
+    const refus = await refusDe(facade.renommer('Court', { nom: 'x'.repeat(60) }));
     assert.equal(refus.code, 'CHEMIN_TROP_LONG');
     // La sonde qui prend le verrou, puis le verrou rendu.
     assert.equal(ecritures(fs), avant + 2);
@@ -1450,7 +1453,7 @@ describe('renommer (§ 8.7, § 8.8)', () => {
     fs.deposer('documents', `Court${SUFFIXES.etat}`, texteEtat({ id: 'evt-court', nom: 'Court' }));
     await montage.seance.ouvrir('Court');
     appels.length = 0;
-    const refus = await refusDe(facade.renommer('Court', { nom: 'x'.repeat(120) }));
+    const refus = await refusDe(facade.renommer('Court', { nom: 'x'.repeat(60) }));
     assert.equal(refus.code, 'CHEMIN_TROP_LONG');
     assert.deepEqual(appels, [['fermer'], ['ouvrir', 'Court']]);
     assert.deepEqual([montage.seance.ouvert.base, montage.seance.mode], ['Court', 'lecture']);
