@@ -496,6 +496,10 @@
   feuille de contrôle ajoute une ligne qui les compte, « Logos : 12 posés, 2
   sans place, 1 introuvable » par exemple, sans image ; la liste des badges en
   CSV ne porte jamais le logo.
+- À la création d'un événement, la date facultative se choisit dans un
+  sélecteur de date, qui la montre au format du poste ; une date commencée mais
+  incomplète, ou absente du calendrier, refuse la création, contre son champ,
+  sans rien écrire.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

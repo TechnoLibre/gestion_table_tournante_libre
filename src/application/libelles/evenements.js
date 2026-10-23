@@ -16,6 +16,15 @@ export const TABLE = new Map([
     ({ longueur, maximum }) => `Le nom compte ${longueur} caractères : celui d'un événement en compte au plus ${maximum}.`,
   ],
   ['DATE_INVALIDE', ({ date }) => `La date ${cite(String(date))} n'est pas un jour du calendrier, écrit AAAA-MM-JJ.`],
+  // Levé par la création de l'accueil, avant la façade : le sélecteur de
+  // date porte une saisie qu'il ne lit pas comme une date. Il ne distingue
+  // pas un segment vide d'un jour absent du calendrier, et le texte couvre
+  // les deux.
+  [
+    'DATE_INCOMPLETE',
+    () =>
+      "La date est incomplète ou n'existe pas au calendrier : choisissez le jour, le mois et l'année, ou videz le champ pour créer sans date.",
+  ],
   ['SIEGES_INVALIDES', () => 'Une table compte au moins deux sièges.'],
   ['TOURS_INVALIDES', () => 'La soirée compte au moins un tour.'],
   ['AUCUNE_PROPOSITION', () => "Aucune proposition n'existe : l'état « Proposé » suit une génération."],

@@ -59,13 +59,15 @@ const RACINE = fileURLToPath(new URL('../..', import.meta.url));
 // dépôt du plan lève un refus que la commande n'a pas à lever, et son texte
 // vit ici, avec ceux des commandes des places ; la conversion du logo d'une
 // personne refuse une image avant que la séance la reçoive, et son texte
-// vit avec ceux des participants.
+// vit avec ceux des participants ; la création de l'accueil refuse une date
+// incomplète avant la façade, et son texte vit avec ceux de la création.
 const ARBRES = ['src/stockage', 'src/csv', 'src/application'];
 const TABLES = [
   'src/stockage/types.js',
   'src/csv/erreurs.js',
   'src/interface/plan/depot.js',
   'src/interface/participants/image_logo.js',
+  'src/interface/accueil/modele.js',
 ];
 // L'assemblage et les tables des textes n'émettent rien : leurs clés sont ce
 // qu'on éprouve, et un texte qui en compose un autre le nomme sans l'émettre.
@@ -826,7 +828,7 @@ describe('libellés : les tables par domaine (§ 14.6)', () => {
       ['csv', ['NOM_ABSENT', 'UTF8_INVALIDE', 'ENREGISTRER_EN_UTF8', 'PLAN_BLOQUE', 'AMBIGUITE']],
       ['seance', ['MODE_LECTURE', 'SUPPORT_ROMPU', 'SANS_EFFET', 'ENTREE_DEFAIRE', 'JALON_CREATION']],
       ['participants', ['NOM_REQUIS', 'PARTICIPANT_INCONNU', 'RESERVATIONS_SUSPENDUES', 'IMPORT_EN_RETENU', 'ENTREE_AJOUTER_PARTICIPANT']],
-      ['evenements', ['ENTREE_CREATION', 'DATE_INVALIDE', 'AUCUN_RETENU', 'PLAN_NON_BLOQUE', 'ENTREE_DEBLOQUER']],
+      ['evenements', ['ENTREE_CREATION', 'DATE_INVALIDE', 'DATE_INCOMPLETE', 'AUCUN_RETENU', 'PLAN_NON_BLOQUE', 'ENTREE_DEBLOQUER']],
       ['generation', ['PROPOSITION_INCONNUE', 'ENTREE_ENREGISTRER_GENERATION', 'ENTREE_EFFACER_PROPOSITIONS', 'ENTREE_GARDER_MEILLEURES']],
       ['format', ['format.vide', 'format.duree.vingtMinutes']],
     ];

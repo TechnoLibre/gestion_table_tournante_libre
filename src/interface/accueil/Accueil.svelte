@@ -58,6 +58,7 @@
   import {
     champDuRefus,
     premiereAnnonce,
+    refusDeLaDate,
     refusDeLaListe,
     resumeDeLaListe,
     retenirVue,
@@ -112,8 +113,12 @@
   const filtrer = (filtre) => changerVue({ filtre });
   const grouper = (groupement) => changerVue({ groupement });
 
-  // Le champ du nom de la création, où mène « Créer un événement ».
+  // Le champ du nom de la création, où mène « Créer un événement », et
+  // celui de la date, où revient le focus d'une date refusée. La date se
+  // choisit dans un sélecteur, que max borne à une année de quatre
+  // chiffres : la règle du champ date du schéma veut AAAA-MM-JJ.
   let champNom = $state(null);
+  let champDate = $state(null);
   const allerALaCreation = () => champNom?.focus();
 
   let detruit = false;
@@ -242,10 +247,17 @@
     }
   }
 
+  // La création : une date que le sélecteur ne lit pas, incomplète ou
+  // absente du calendrier, se refuse contre son champ, qui reprend le focus,
+  // avant tout appel à la façade ; le reste se juge par la commande.
   async function creer(evenement) {
     evenement.preventDefault();
     if (creationEnCours) return;
-    refusCreation = null;
+    refusCreation = refusDeLaDate(champDate);
+    if (refusCreation !== null) {
+      champDate.focus();
+      return;
+    }
     creationEnCours = true;
     try {
       await surLaListe(() => facade.creer({ nom, date }));
@@ -333,8 +345,10 @@
             <label for={`${uid}-date`}>{t('accueil.creation.date')}</label>
             <input
               id={`${uid}-date`}
-              type="text"
+              type="date"
+              max="9999-12-31"
               data-champ="date"
+              bind:this={champDate}
               bind:value={date}
               aria-invalid={champRefuse === 'date' ? 'true' : undefined}
               aria-describedby={champRefuse === 'date' ? `${uid}-refus` : undefined}

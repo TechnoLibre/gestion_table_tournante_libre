@@ -2793,7 +2793,11 @@ pastille de l'état et son compte —, ou ne les groupe pas, au choix ; ses
 en-têtes de colonnes se groupent en « Événement », « Placement retenu » et
 « Meilleure proposition du classement », et le nom de chaque ligne en est
 l'en-tête, la date et le chemin en petite ligne dessous. Sous le tableau, des
-cartes offrent la création, le dossier de travail et les démonstrations. Deux
+cartes offrent la création, le dossier de travail et les démonstrations. Le
+formulaire de la création exige un nom ; la date, facultative, se choisit dans
+un sélecteur de date, et une date commencée mais incomplète, ou complète mais
+absente du calendrier, refuse la création (`DATE_INCOMPLETE`), contre le champ
+de la date, sans rien écrire. Deux
 colonnes résument en plus le **placement retenu**, sous l'en-tête du groupe qui
 les couvre toutes deux : « Collisions cumulées (paire et tour) », les collisions
 cumulées du retenu, puis « Rencontres répétées choisies (paires) », les paires

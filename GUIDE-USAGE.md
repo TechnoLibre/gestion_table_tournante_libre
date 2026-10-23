@@ -60,7 +60,9 @@ commande qui l’ouvre dans l’explorateur.
 
 *Regardez la partie « Démonstrations » : chacune se charge comme un nouvel
 événement, ouvert en lecture, sans toucher aux autres. Sous « Créer un
-événement », seul le nom est exigé ; la date est facultative.*
+événement », seul le nom est exigé ; la date est facultative, choisie dans le
+calendrier du champ ; une date commencée doit être complète et exister au
+calendrier.*
 
 Ouvrir un événement existant ne réécrit jamais son fichier. Créer un événement,
 ou charger une démonstration, en écrit un nouveau. Le nom d’un événement compte

@@ -13,6 +13,7 @@ export const EXEMPLES = [
   // Refus et avertissements des commandes
   ['NOM_EVENEMENT_TROP_LONG', { longueur: 69, maximum: 68, remede: null }],
   ['DATE_INVALIDE', { date: '2031-02-30', remede: null }],
+  ['DATE_INCOMPLETE', { remede: null }],
   ['SIEGES_INVALIDES', { sieges: 1, remede: null }],
   ['TOURS_INVALIDES', { tours: 0, remede: null }],
   ['AUCUNE_PROPOSITION', { remede: { geste: 'ouvrirSection', section: 'generation' } }],
@@ -31,6 +32,11 @@ export const EXEMPLES = [
 ];
 
 export const TEXTES = [
+  [
+    'DATE_INCOMPLETE',
+    { remede: null },
+    "La date est incomplète ou n'existe pas au calendrier : choisissez le jour, le mois et l'année, ou videz le champ pour créer sans date.",
+  ],
   [
     'DOSSIER_NON_RETIRE',
     { dossier: 'E:\\data\\Gala des Saules', cause: 'NON_VIDE' },

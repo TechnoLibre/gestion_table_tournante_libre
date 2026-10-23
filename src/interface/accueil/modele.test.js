@@ -34,6 +34,7 @@ import {
   groupesDeLaListe,
   ligneAffichee,
   premiereAnnonce,
+  refusDeLaDate,
   resumeDeLaListe,
   retenirVue,
   tuilesDeLaListe,
@@ -299,13 +300,31 @@ describe('surLaListe : une opération de la liste et son refus', () => {
 });
 
 describe('champDuRefus : le champ contre lequel un refus se pose', () => {
-  test('le nom pour NOM_REQUIS et un nom trop long, la date pour DATE_INVALIDE, aucun sinon', () => {
+  test('le nom pour NOM_REQUIS et un nom trop long, la date pour DATE_INVALIDE et DATE_INCOMPLETE, aucun sinon', () => {
     assert.equal(champDuRefus({ code: 'NOM_REQUIS', details: {} }), 'nom');
     // Le refus même que la création, la copie et le renommage lèvent.
     assert.equal(champDuRefus(refusNomEvenement('h'.repeat(NOM_EVENEMENT_MAX + 1))), 'nom');
     assert.equal(champDuRefus({ code: 'DATE_INVALIDE', details: { date: '2031-02-30' } }), 'date');
+    assert.equal(champDuRefus({ code: 'DATE_INCOMPLETE', details: { remede: null } }), 'date');
     assert.equal(champDuRefus({ code: 'CHEMIN_TROP_LONG', details: {} }), null);
     assert.equal(champDuRefus(null), null);
+  });
+});
+
+describe('refusDeLaDate : une date commencée mais incomplète refuse la création (§ 8.1)', () => {
+  test('une saisie que le sélecteur ne lit pas rend DATE_INCOMPLETE, sans remède, contre le champ de la date', () => {
+    const refus = refusDeLaDate({ value: '', validity: { badInput: true } });
+    assert.deepEqual(refus, { code: 'DATE_INCOMPLETE', details: { remede: null } });
+    assert.equal(champDuRefus(refus), 'date');
+    assert.equal(
+      t(refus.code, refus.details),
+      "La date est incomplète ou n'existe pas au calendrier : choisissez le jour, le mois et l'année, ou videz le champ pour créer sans date.",
+    );
+  });
+
+  test('un champ vide ou une date lue par le sélecteur ne refusent rien : la commande juge la date', () => {
+    assert.equal(refusDeLaDate({ value: '', validity: { badInput: false } }), null);
+    assert.equal(refusDeLaDate({ value: '2031-05-17', validity: { badInput: false } }), null);
   });
 });
 

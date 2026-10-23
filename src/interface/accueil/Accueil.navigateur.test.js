@@ -446,19 +446,107 @@ describe('créer et ouvrir', () => {
     aucuneFenetre();
   });
 
-  test('une date hors du calendrier : le message contre le champ de la date, rien au relevé', async () => {
+  test('la date se choisit dans un sélecteur de date, à l’année de quatre chiffres, sous l’étiquette sans format', async () => {
+    const m = await monter();
+    const champ = dans(m, '[data-champ="date"]');
+    expect(champ.type).toBe('date');
+    expect(champ.max).toBe('9999-12-31');
+    expect(champ.labels[0].textContent.trim()).toBe(t('accueil.creation.date'));
+    expect(t('accueil.creation.date')).toBe('Date, facultative');
+  });
+
+  test('une date choisie arrive telle quelle à l’événement créé, et à sa ligne de la liste', async () => {
+    const m = await monter();
+    await creerParLeFormulaire(m, 'Bal des Grisailles', '2031-05-17');
+    const cree = await attendreEvenement(m);
+    const lue = analyser(m.fs.contenu('documents', `${cree.cle}${SUFFIXES.etat}`));
+    expect(lue.charge.evenement.date).toBe('2031-05-17');
+    await revenirALaListe(m, 1);
+    expect(colonne(ligneDe(m, cree.base), 'date')).toBe(format.date('2031-05-17'));
+  });
+
+  test('une date commencée mais incomplète : le refus contre le champ de la date, le focus sur lui, rien au relevé ; vidée, la création se fait sans date', async () => {
     const m = await monter();
     const avant = ecritures(m);
-    await creerParLeFormulaire(m, 'Bal des Grisailles', '2031-02-30');
+    saisir(dans(m, '[data-champ="nom"]'), 'Bal des Grisailles');
+    const champ = dans(m, '[data-champ="date"]');
+    // Un chiffre tapé dans le premier segment du sélecteur : la saisie est
+    // commencée, la valeur reste vide et validity.badInput est vrai.
+    champ.focus();
+    await touche('1');
+    flushSync();
+    expect(champ.value).toBe('');
+    expect(champ.validity.badInput).toBe(true);
+    // Le clic d'une souris porte le focus sur « Créer » ; click() ne le fait
+    // pas, d'où le focus posé avant lui.
+    const creer = dans(m, '[data-commande="creer"]');
+    const creerFacade = vi.spyOn(m.facade, 'creer');
+    creer.focus();
+    await cliquer(creer);
     const message = await vi.waitFor(() => {
-      const element = dans(m, '[data-refus="DATE_INVALIDE"]');
+      const element = dans(m, '[data-refus="DATE_INCOMPLETE"]');
       expect(element).not.toBeNull();
       return element;
     });
-    expect(message.textContent).toContain(t('DATE_INVALIDE', { date: '2031-02-30' }));
-    expect(dans(m, '[data-champ="date"]').getAttribute('aria-describedby')).toBe(message.id);
+    expect(visible(message)).toBe(true);
+    expect(message.textContent).toContain(t('DATE_INCOMPLETE', { remede: null }));
+    expect(champ.getAttribute('aria-invalid')).toBe('true');
+    expect(champ.getAttribute('aria-describedby')).toBe(message.id);
     expect(dans(m, '[data-champ="nom"]').getAttribute('aria-invalid')).toBeNull();
+    expect(document.activeElement).toBe(champ);
+    expect(creerFacade).not.toHaveBeenCalled();
     expect(ecritures(m)).toBe(avant);
+    expect(m.seance.etat().evenement).toBeNull();
+
+    saisir(champ, '');
+    expect(champ.validity.badInput).toBe(false);
+    await cliquer(dans(m, '[data-commande="creer"]'));
+    const cree = await attendreEvenement(m);
+    expect(creerFacade).toHaveBeenCalledTimes(1);
+    expect(cree.nom).toBe('Bal des Grisailles');
+    const lue = analyser(m.fs.contenu('documents', `${cree.cle}${SUFFIXES.etat}`));
+    expect(lue.charge.evenement.date).toBeNull();
+  });
+
+  test('une date complète mais absente du calendrier : le même refus, dont le texte la couvre, contre le champ, rien au relevé', async () => {
+    const m = await monter();
+    const avant = ecritures(m);
+    saisir(dans(m, '[data-champ="nom"]'), 'Bal des Grisailles');
+    const champ = dans(m, '[data-champ="date"]');
+    // Le 30 février 2031, tapé segment par segment dans l'ordre que le
+    // sélecteur suit, celui de la langue du navigateur : chaque segment est
+    // rempli, la valeur reste vide et validity.badInput est vrai, comme pour
+    // une saisie à moitié faite.
+    const segments = { day: '30', month: '02', year: '2031' };
+    const ordre = new Intl.DateTimeFormat(navigator.language, { year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(0)
+      .map(({ type }) => type)
+      .filter((type) => type in segments);
+    expect([...ordre].sort()).toEqual(['day', 'month', 'year']);
+    champ.focus();
+    for (const chiffre of ordre.map((type) => segments[type]).join('')) await touche(chiffre);
+    flushSync();
+    expect(champ.value).toBe('');
+    expect(champ.validity.badInput).toBe(true);
+    const creer = dans(m, '[data-commande="creer"]');
+    const creerFacade = vi.spyOn(m.facade, 'creer');
+    creer.focus();
+    await cliquer(creer);
+    const message = await vi.waitFor(() => {
+      const element = dans(m, '[data-refus="DATE_INCOMPLETE"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(visible(message)).toBe(true);
+    expect(message.textContent).toContain(
+      "La date est incomplète ou n'existe pas au calendrier : choisissez le jour, le mois et l'année, ou videz le champ pour créer sans date.",
+    );
+    expect(champ.getAttribute('aria-invalid')).toBe('true');
+    expect(champ.getAttribute('aria-describedby')).toBe(message.id);
+    expect(document.activeElement).toBe(champ);
+    expect(creerFacade).not.toHaveBeenCalled();
+    expect(ecritures(m)).toBe(avant);
+    expect(m.seance.etat().evenement).toBeNull();
   });
 
   test('un seul événement ouvert : A en écriture, « Liste des événements » le ferme sans question ni verrou ; B s’ouvre en lecture', async () => {

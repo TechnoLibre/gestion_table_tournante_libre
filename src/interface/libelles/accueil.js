@@ -133,7 +133,8 @@ export const TABLE = new Map([
   // --- La création (§ 2.1, étape 1) ----------------------------------------
   ['accueil.creation.titre', 'Créer un événement'],
   ['accueil.creation.nom', 'Nom de l\u{2019}événement'],
-  ['accueil.creation.date', 'Date, facultative (AAAA-MM-JJ)'],
+  // Le sélecteur de date montre son propre format, celui du poste.
+  ['accueil.creation.date', 'Date, facultative'],
   ['accueil.creation.creer', 'Créer l\u{2019}événement'],
 
   // --- Les opérations de fichiers (§ 8.7) ----------------------------------
