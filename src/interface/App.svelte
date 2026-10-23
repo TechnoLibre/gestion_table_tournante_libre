@@ -131,12 +131,19 @@
     themeInitial,
   } = untrack(() => dependances);
 
-  const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue });
+  // Deux traductions des mêmes tables. t, celle de l'écran, pose les
+  // insécables de la ponctuation haute (§ 14.6) : c'est elle que les
+  // composants lisent au contexte, et la mise en forme. tBrut garde le
+  // texte des tables pour ce qui quitte l'écran : le bloc copié dans le
+  // presse-papiers et le titre de la fenêtre, égal à titreAvecVersion.
+  const tablesDeTextes = [...TABLES_APPLICATION, ...TABLES_INTERFACE];
+  const { t } = creerTraduction(tablesDeTextes, { langue, ecran: true });
+  const { t: tBrut } = creerTraduction(tablesDeTextes, { langue });
   const format = creerFormat(t);
   // Le bloc « À propos » se compose au montage, avant toute séance : une
   // version que les dépendances ne portent pas lève RangeError ici, et App
   // ne se monte pas avec un bloc copiable faux (§ 18.6).
-  const bloc = blocAPropos({ version: produitVersion, plateforme: fs.nature, provenance, format: formatCourant }, t);
+  const bloc = blocAPropos({ version: produitVersion, plateforme: fs.nature, provenance, format: formatCourant }, tBrut);
   const seanceApp = creerSeance({
     fs,
     horloge,
@@ -314,7 +321,7 @@
     document.documentElement.style.removeProperty('font-size');
   });
 
-  const titre = t('coquille.titre', { version: produitVersion });
+  const titre = tBrut('coquille.titre', { version: produitVersion });
   const version = versionVisible(provenance, produitVersion, t);
   const provenanceAffichee = provenanceVisible(provenance, t);
 

@@ -7087,6 +7087,23 @@ montre jamais une clé brute ni un texte vide. Un texte qui devient une donnée 
 le libellé figé d'une entrée du journal (§ 8.2), le motif du CSV des lignes
 refusées (§ 10.1) — se compose en français, sans la marque de la langue témoin.
 
+**L'écran pose les insécables de la ponctuation haute, au rendu seulement.** Le
+`t` de l'écran, la traduction qu'App pose au contexte, passe son résultat
+entier, une fois et avant la marque témoin, par `typographier` : la suite
+d'espaces qui suit « « » ou précède « : » et « » » devient une insécable
+U+00A0, celle qui précède « ; », « ? » et « ! » une fine insécable U+202F ; le
+saut de ligne, la tabulation et un signe sans espace devant restent tels. Le
+navigateur ne renvoie donc plus un signe seul en début de ligne. Les tables
+gardent leurs espaces ordinaires, et ce qui quitte l'écran garde le texte brut :
+le journal, le motif du CSV des refus, les PDF, la documentation engendrée, le
+bloc copié de « À propos » et le titre de la fenêtre. L'historique, qui montre
+les libellés figés du journal sans passer par `t`, les typographie à
+l'affichage, la donnée lue restant intacte ; une donnée saisie montrée hors de
+`t` — un nom, un libellé de table, le nom d'un jalon — reste telle. Les pages
+imprimées, rendues par le même `t`, ne coupent un texte entre deux mots qu'à
+un blanc sécable ; un mot trop long pour une page se coupe encore par
+caractères.
+
 **Les tours se nomment par une seule aide**, que les textes de la présence
 emploient tous : « tous les tours », « tour 2 », « tours 1 et 3 », « tours 2 à
 4 », « tours 1 à 3 et 5 » — une suite d'au moins trois tours se lit « a à

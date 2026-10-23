@@ -663,7 +663,7 @@
                   {/if}
                 </th>
                 <td class="fois">{rencontre.fois}</td>
-                <td>{rencontre.tours.map((etape) => t('participants.fiche.rencontres.tour', etape)).join(' ; ')}</td>
+                <td>{t('participants.fiche.rencontres.toursListe', { tours: rencontre.tours })}</td>
               </tr>
             {/each}
           </tbody>

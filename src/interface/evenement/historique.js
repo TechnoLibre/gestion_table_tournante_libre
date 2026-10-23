@@ -16,6 +16,13 @@
 // ligne visée : celle-ci, de même contenu, offre encore « Revenir », que la
 // séance refuse comme sans effet. En reprise, le journal finit sur une
 // autre révision que l'Ouvert, et aucune ligne n'est courante.
+//
+// Le libellé d'une ligne est la donnée figée du journal, composée par
+// libelle() sans insécable (§ 8.2) : la vue en donne en plus la forme
+// affichée, passée par typographier comme tout texte de l'écran (§ 14.6).
+// Les fichiers déjà écrits s'affichent ainsi corrigés sans être réécrits.
+// Le nom d'un jalon, une donnée saisie, reste tel.
+import { typographier } from '../../application/typographie.js';
 import { TAILLE_PAGE, nombreDePages } from '../propositions/modele.js';
 
 // L'heure affichée d'un horodatage AAAA-MM-JJTHH:MM:SS±HH:MM : sa date et
@@ -38,14 +45,15 @@ const quandDe = (horodatage) => `${horodatage.slice(0, 10)} ${horodatage.slice(1
  *   vide: 'aucunInstant'|'aucunJalon'|null}}  lignes : celles de la page, de
  *   la plus récente à la plus ancienne, chacune une copie de la ligne reçue
  *   — ses jalons copiés — qui porte en plus courante (la plus récente du
- *   journal, hors reprise), revenir (vrai hors de la ligne courante) et
- *   quand (son horodatage « AAAA-MM-JJ HH:MM ») ; page : la page bornée ;
- *   pages : leur nombre, un au moins ; premier et dernier : les places, à
- *   partir de 1, de la première et de la dernière ligne de la page parmi
- *   les lignes gardées, 0 et 0 sans ligne ; total : le nombre de lignes
- *   gardées ; paginee : vrai au-delà d'une page ; vide : 'aucunInstant'
- *   quand l'historique n'a aucune ligne, 'aucunJalon' quand le filtre n'en
- *   garde aucune, null sinon
+ *   journal, hors reprise), revenir (vrai hors de la ligne courante),
+ *   quand (son horodatage « AAAA-MM-JJ HH:MM ») et libelleAffiche (son
+ *   libellé passé par typographier ; libelle reste la donnée lue) ; page :
+ *   la page bornée ; pages : leur nombre, un au moins ; premier et
+ *   dernier : les places, à partir de 1, de la première et de la dernière
+ *   ligne de la page parmi les lignes gardées, 0 et 0 sans ligne ; total :
+ *   le nombre de lignes gardées ; paginee : vrai au-delà d'une page ;
+ *   vide : 'aucunInstant' quand l'historique n'a aucune ligne, 'aucunJalon'
+ *   quand le filtre n'en garde aucune, null sinon
  * @throws {TypeError} une page qui n'est pas un entier
  */
 export function vueHistorique(historique, { jalonsSeuls = false, page = 1 } = {}) {
@@ -67,6 +75,7 @@ export function vueHistorique(historique, { jalonsSeuls = false, page = 1 } = {}
     courante: ligne === courante,
     revenir: ligne !== courante,
     quand: quandDe(ligne.horodatage),
+    libelleAffiche: typographier(ligne.libelle),
   }));
   let vide = null;
   if (recues.length === 0) vide = 'aucunInstant';

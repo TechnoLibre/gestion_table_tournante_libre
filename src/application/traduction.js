@@ -13,6 +13,13 @@
 // clé a son texte, pour un détail qui porte un code ou une cause du système.
 // En langue témoin, t encadre de la marque son résultat entier, une fois :
 // une composition par texte n'en ajoute aucune.
+//
+// L'option ecran fait de t celui de l'écran : son résultat entier passe une
+// fois par typographier, qui pose les insécables de la ponctuation haute,
+// avant la marque témoin ; texte, la composition interne, reste brut. Sans
+// elle, t rend le texte tel que les tables l'écrivent : c'est le t des
+// textes qui quittent l'écran — journal, CSV, PDF, documentation.
+import { typographier } from './typographie.js';
 
 /** Les deux marques de la langue témoin, U+2045 et U+2046. */
 export const MARQUE_TEMOIN = Object.freeze({ ouverture: '\u{2045}', fermeture: '\u{2046}' });
@@ -26,17 +33,20 @@ const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
  * La traduction de ces tables, dans cette langue.
  *
  * @param {Array<Map<string, string|((details: Object, texte: Function) => string)>>} tables
- * @param {{langue?: 'fr'|'temoin'}} [options]
+ * @param {{langue?: 'fr'|'temoin', ecran?: boolean}} [options]  ecran :
+ *   vrai pour le t de l'écran, qui typographie son résultat ; faux par
+ *   défaut
  * @returns {{t: (cle: string, details?: Object) => string, cles: () => string[], langue: string}}
  *   t lève RangeError sur une clé absente, TypeError quand une fonction de
  *   table ne rend pas une chaîne ; cles() rend toutes les clés, triées par
  *   unités UTF-16
  * @throws {RangeError} une clé de deux tables, une langue inconnue
  * @throws {TypeError} une table qui n'est pas une Map, une entrée ni chaîne
- *   ni fonction
+ *   ni fonction, une option ecran qui n'est pas un booléen
  */
-export function creerTraduction(tables, { langue = 'fr' } = {}) {
+export function creerTraduction(tables, { langue = 'fr', ecran = false } = {}) {
   if (!LANGUES.includes(langue)) throw new RangeError(`traduction : langue inconnue ${JSON.stringify(langue)}`);
+  if (typeof ecran !== 'boolean') throw new TypeError(`traduction : ecran est un booléen, reçu ${JSON.stringify(ecran)}`);
   const entrees = new Map();
   for (const table of tables) {
     if (!(table instanceof Map)) throw new TypeError('traduction : chaque table est une Map');
@@ -64,10 +74,8 @@ export function creerTraduction(tables, { langue = 'fr' } = {}) {
   texte.existe = (cle) => entrees.has(cle);
 
   const { ouverture, fermeture } = MARQUE_TEMOIN;
-  const t =
-    langue === 'temoin'
-      ? (cle, details) => `${ouverture}${texte(cle, details)}${fermeture}`
-      : (cle, details) => texte(cle, details);
+  const rendu = ecran ? (cle, details) => typographier(texte(cle, details)) : (cle, details) => texte(cle, details);
+  const t = langue === 'temoin' ? (cle, details) => `${ouverture}${rendu(cle, details)}${fermeture}` : rendu;
   const triees = Object.freeze([...entrees.keys()].sort(comparerTextes));
   return { t, cles: () => [...triees], langue };
 }

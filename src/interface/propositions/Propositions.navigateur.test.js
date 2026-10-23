@@ -1104,7 +1104,7 @@ describe('la phrase de l’ordre désigne les colonnes (§ 5.7)', () => {
     // morceaux.
     expect(section(m).querySelectorAll('[data-ordre] p').length).toBe(1);
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
-      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, puis rencontres répétées, " +
+      "Ordre du classement, chaque critère au plus faible d'abord\u{A0}: excédent de collisions, puis rencontres répétées, " +
         "puis collisions cumulées, puis écart au plafond a priori, puis redondance d'organisation, puis l'identifiant croissant.",
     );
     const cible = colonne(m, 'excedentCollisions');
@@ -1501,7 +1501,7 @@ describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => 
     }
     expect(cellules(ligneRetenu(m)).has('toursHorsObjectif')).toBe(true);
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
-      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, puis rencontres répétées, " +
+      "Ordre du classement, chaque critère au plus faible d'abord\u{A0}: excédent de collisions, puis rencontres répétées, " +
         'puis collisions cumulées, puis écart au plafond a priori, puis personnes jamais servies, puis tours hors objectif, ' +
         "puis redondance d'organisation, puis l'identifiant croissant.",
     );
@@ -1555,7 +1555,7 @@ describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => 
     ];
     const m = await ouvrir(chargeLue);
     expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
-      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis ensemble, " +
+      "Ordre du classement, chaque critère au plus faible d'abord\u{A0}: écart au plafond a priori, puis ensemble, " +
         "excédent de collisions (poids 3), redondance d'organisation (poids 2), puis collisions cumulées, " +
         "puis rencontres répétées, puis l'identifiant croissant.",
     );

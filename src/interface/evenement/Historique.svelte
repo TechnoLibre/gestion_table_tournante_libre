@@ -19,17 +19,16 @@
   // sa validation — la sortie du champ, Entrée — pose le nom que « Nommer »
   // enverra, et seul « Nommer » écrit.
   //
-  // Une ligne, <li>, porte data-revision et data-fil — courant, abandonne
-  // ou retour : son heure, en encre secondaire et en chiffres tabulaires,
-  // son libellé figé, ses pastilles — « instant courant », « fil
-  // abandonné », une par jalon, de son nom —, puis « Revenir à cet
-  // instant », hors de la ligne courante, qui restitue l'instant
-  // (seance.revenir), sous l'indicateur d'activité (activite.js). Une
-  // ligne d'un fil abandonné est d'encre secondaire. Chaque pastille se
+  // Une ligne, <li>, porte data-revision et data-fil — courant, abandonne ou
+  // retour : son heure, en encre secondaire et en chiffres tabulaires, son
+  // libellé figé, dans sa forme affichée (libelleAffiche), ses pastilles —
+  // « instant courant », « fil abandonné », une par jalon, de son nom —, puis
+  // « Revenir à cet instant », hors de la ligne courante, qui restitue
+  // l'instant (seance.revenir), sous l'indicateur d'activité (activite.js).
+  // Une ligne d'un fil abandonné est d'encre secondaire. Chaque pastille se
   // désigne par data-pastille-instant — courant, abandonne ou jalon. En
-  // lecture, la liste se lit ; « Nommer » et
-  // « Revenir » sont refusés à côté d'eux avec leur remède, comme toute
-  // commande.
+  // lecture, la liste se lit ; « Nommer » et « Revenir » sont refusés à côté
+  // d'eux avec leur remède, comme toute commande.
   //
   // Le panneau relit seance.historique() à son montage, puis quand la
   // révision de l'événement, le nombre de ses jalons — un jalon ne change
@@ -138,7 +137,7 @@
       <ol class="instants">
         {#each vue.lignes as ligne (ligne.revision)}
           <li data-revision={ligne.revision} data-fil={ligne.fil} class:abandonne={ligne.fil === 'abandonne'}>
-            <p class="instant"><span class="quand">{ligne.quand}</span><span class="libelle">{ligne.libelle}</span></p>
+            <p class="instant"><span class="quand">{ligne.quand}</span><span class="libelle">{ligne.libelleAffiche}</span></p>
             {#if ligne.courante || ligne.fil === 'abandonne' || ligne.jalons.length > 0}
               <p class="pastilles">
                 {#if ligne.courante}

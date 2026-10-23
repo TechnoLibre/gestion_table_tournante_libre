@@ -25,6 +25,7 @@ import { flushSync } from 'svelte';
 import { TABLES_APPLICATION, libelle } from '../../application/libelles.js';
 import { INACTIVITE_MS } from '../../application/seance.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { typographier } from '../../application/typographie.js';
 import { apercevoir } from '../../csv/apercu.js';
 import { FLUX, creerPcg32 } from '../../demo/prng.js';
 import { rechercher } from '../../moteur/recherche.js';
@@ -36,12 +37,15 @@ import { VERSION } from '../../version.genere.js';
 import { fixerCadre, molette, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { boutonActions, ouvrirActions } from '../../../test/navigateur/menus.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { visible } from '../../../test/navigateur/rendu.js';
+import { traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { CONFIRMATION_DEBLOCAGE, DELAI_CONFIRMATION_MS } from '../primitives/commande.js';
 import { SECTIONS } from './sections.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 
 const NOMS = ['Ombrelle', 'Pervenche', 'Lacasse', 'Grisaille', 'Merlette', 'Fauvelle'];
 const EVENEMENT = { nom: 'Club des Merles', date: null, siegesParDefaut: 3, tours: 2 };
@@ -309,7 +313,7 @@ describe('passer en écriture (§ 8.4, § 19.3 01b)', () => {
       expect(element).not.toBeNull();
       return element;
     });
-    expect(refus.textContent).toContain(t('MODE_LECTURE', {}));
+    expect(refus.textContent).toContain(tEcran('MODE_LECTURE', {}));
     expect(refus.querySelector('[data-commande="modifier"]').textContent).toBe(t('communs.remede.modifier'));
     expect(visible(refus)).toBe(true);
     expect(m.trace.length).toBe(avant);
@@ -410,7 +414,7 @@ describe('l’inactivité (§ 8.4, § 19.4)', () => {
       expect(libelleBarre(m).textContent).toBe(t('coquille.mode.lecture'));
       expect(libelleBandeau(m).textContent).toBe(t('coquille.mode.lecture'));
       const annonce = avertissement(m, 'RETOUR_AUTOMATIQUE');
-      expect(annonce.textContent).toContain(t('RETOUR_AUTOMATIQUE', {}));
+      expect(annonce.textContent).toContain(tEcran('RETOUR_AUTOMATIQUE', {}));
       expect(visible(annonce)).toBe(true);
       expect(fixe(m, 'modifier')).not.toBeNull();
     });
@@ -707,7 +711,8 @@ describe('le panneau d’historique (§ 8.3, § 8.4)', () => {
 describe('les raccourcis de retour (§ 7.3, § 8.3)', () => {
   const nombre = (m) => m.seance.etat().charge.participants.length;
   const derniere = (m) => journalDe(m).entrees.at(-1);
-  // Le libellé de la première ligne du panneau ouvert.
+  // Le libellé de la première ligne du panneau ouvert : celui du journal,
+  // que le panneau typographie à l'affichage, le journal le gardant brut.
   const enTete = (m) => dans(m, '[data-panneau="historique"] li[data-revision] .libelle')?.textContent ?? null;
 
   test('Ctrl+Z défait, puis Ctrl+Y refait : leurs entrées nomment la touche, et la liste du panneau les montre en tête ; Ctrl+Maj+Z refait aussi', async () => {
@@ -722,12 +727,12 @@ describe('les raccourcis de retour (§ 7.3, § 8.3)', () => {
     await attendre(() => expect(nombre(m)).toBe(2));
     const defait = libelle('ENTREE_DEFAIRE', { libelle: troisieme, touche: 'Ctrl+Z' });
     expect(derniere(m).libelle).toBe(defait);
-    await attendre(() => expect(enTete(m)).toBe(defait));
+    await attendre(() => expect(enTete(m)).toBe(typographier(defait)));
     await touche('y', { ctrl: true });
     await attendre(() => expect(nombre(m)).toBe(3));
     const refait = libelle('ENTREE_REFAIRE', { libelle: troisieme, touche: 'Ctrl+Y' });
     expect(derniere(m).libelle).toBe(refait);
-    await attendre(() => expect(enTete(m)).toBe(refait));
+    await attendre(() => expect(enTete(m)).toBe(typographier(refait)));
     await touche('z', { ctrl: true });
     await attendre(() => expect(nombre(m)).toBe(2));
     await touche('z', { ctrl: true, maj: true });
@@ -1056,7 +1061,7 @@ describe('les annonces d’ouverture (§ 8.9, § 9)', () => {
     for (const faute of fautive.fautes) expect(ecartee.textContent).toContain(t(faute.code, faute));
     expect(ecartee.querySelector('[data-fautive]').textContent).toContain(String(fautive.id));
     const derive = avertissement(m, 'DERIVE');
-    expect(derive.textContent).toContain(t('DERIVE', { ids: [seconde], retenu: false }));
+    expect(derive.textContent).toContain(tEcran('DERIVE', { ids: [seconde], retenu: false }));
     const [{ raisons }] = etat.examen.derives;
     expect(raisons.length).toBeGreaterThan(0);
     for (const raison of raisons) expect(derive.textContent).toContain(t(raison.code, raison));
@@ -1108,7 +1113,7 @@ describe('les annonces d’ouverture (§ 8.9, § 9)', () => {
     flushSync();
     const premier = dans(m, '[data-avertissement]');
     expect(premier.dataset.avertissement).toBe('RETENU_FAUTIF');
-    expect(premier.textContent).toContain(t('RETENU_FAUTIF', {}));
+    expect(premier.textContent).toContain(tEcran('RETENU_FAUTIF', {}));
     const remede = premier.querySelector('[data-commande="ouvrirSecours"]');
     expect(remede.textContent).toBe(t('communs.remede.ouvrirSecours.precedent'));
     const avant = m.trace.length;
@@ -1356,7 +1361,7 @@ describe('la dérive (§ 9)', () => {
     expect(touchees).not.toContain('retenu');
     expect(touchees.length).toBeGreaterThan(0);
     const element = avertissement(m, 'DERIVE_NOUVELLE');
-    expect(element.textContent).toContain(t('DERIVE_NOUVELLE', nouvelle.details));
+    expect(element.textContent).toContain(tEcran('DERIVE_NOUVELLE', nouvelle.details));
     // La raison telle que la séance la rend, détails compris : son texte
     // est celui que l'avertissement affiche.
     const { raisons } = nouvelle.details.touchees[0];
@@ -1387,13 +1392,13 @@ describe('la dérive (§ 9)', () => {
       const nouvelle = m.seance.etat().avertissements.find(({ code }) => code === 'DERIVE_NOUVELLE');
       expect(nouvelle, nom).toBeDefined();
       expect(nouvelle.details.touchees.length, nom).toBeGreaterThan(0);
-      expect(avertissement(m, 'DERIVE_NOUVELLE').textContent).toContain(t('DERIVE_NOUVELLE', nouvelle.details));
+      expect(avertissement(m, 'DERIVE_NOUVELLE').textContent).toContain(tEcran('DERIVE_NOUVELLE', nouvelle.details));
       expect(m.seance.etat().charge.propositions.length).toBe(propositions);
     }
     const apercu = apercevoir('nom\nTilleraie\n', { participants: m.seance.etat().charge.participants });
     await m.seance.executer('importerParticipants', { apercu, mode: 'ajouter' });
     flushSync();
-    expect(avertissement(m, 'IMPORT_EN_RETENU').textContent).toContain(t('IMPORT_EN_RETENU', {}));
+    expect(avertissement(m, 'IMPORT_EN_RETENU').textContent).toContain(tEcran('IMPORT_EN_RETENU', {}));
   });
 });
 
@@ -1456,7 +1461,7 @@ describe('le verrou d’une autre séance (§ 8.8)', () => {
     });
     const pris = second.seance.etat().verrouAutre;
     expect(pris).toEqual({ seance: tenu.seance, depuis: tenu.depuis, vivant: true });
-    expect(refus.textContent).toContain(t('VERROU_PRIS', { ...pris, remede: null }));
+    expect(refus.textContent).toContain(tEcran('VERROU_PRIS', { ...pris, remede: null }));
     const verrou = dans(second, '[data-verrou]');
     expect(visible(verrou)).toBe(true);
     expect(dans(second, '[data-verrou-seance]').textContent).toBe(tenu.seance);
@@ -1537,7 +1542,7 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     expect(rompu.ailleurs).toEqual({ id: 'documents', chemin: DOCUMENTS });
     expect(visible(message(m))).toBe(true);
     const { ailleurs, ...details } = rompu;
-    expect(message(m).textContent).toContain(t('SUPPORT_ROMPU', details));
+    expect(message(m).textContent).toContain(tEcran('SUPPORT_ROMPU', details));
     expect(message(m).textContent).toContain(rompu.chemin);
     expect(message(m).textContent).toContain(rompu.dossier);
     await expect(m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[1] } })).rejects.toMatchObject({
@@ -1607,7 +1612,7 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     expect(abandonner().textContent).toBe(t('evenement.supportRompu.abandonner'));
     abandonner().click();
     flushSync();
-    expect(abandonner().textContent).toBe(t('evenement.supportRompu.confirmerAbandon'));
+    expect(abandonner().textContent).toBe(tEcran('evenement.supportRompu.confirmerAbandon'));
     expect(m.seance.etat().evenement).not.toBeNull();
     abandonner().click();
     await attendre(() => expect(ecran(m).dataset.ecran).toBe('accueil'));
@@ -1652,7 +1657,7 @@ describe('le format plus récent (§ 8.8)', () => {
     // n'offre pas.
     const bande = dans(m, '[data-ecran="evenement"] > [role="status"]');
     expect(bande).not.toBeNull();
-    expect(bande.textContent).toContain(t('evenement.bande.lectureSeule'));
+    expect(bande.textContent).toContain(tEcran('evenement.bande.lectureSeule'));
     for (const cle of ['communs.commande.modifier', 'communs.commande.debloquer']) expect(bande.textContent).not.toContain(t(cle));
     const avant = m.trace.length;
     const boutons = tous(m, '[data-ecran="evenement"] button').filter((bouton) => bouton.dataset.commande !== 'section');

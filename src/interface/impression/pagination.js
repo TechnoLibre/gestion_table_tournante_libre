@@ -143,6 +143,13 @@ export function mesurerPlace(sonde, tableau) {
 // dépend pas de la langue du système, que l'interface ne lit pas.
 const DEBUT_DE_CARACTERE = /(?<!\u{200D})[^\p{M}\u{200D}]/gu;
 
+// Les débuts de mot : un caractère qui n'est pas un blanc sécable et suit
+// un blanc sécable — espace, tabulation, saut de ligne. Les insécables
+// U+00A0 et U+202F, que l'écran pose devant « : » ou « ? » et après « « »
+// (§ 14.6), lient leurs voisins : un morceau ne finit pas sur elles, et un
+// signe ne commence une page que si son mot ne tient pas seul sur elle.
+const DEBUT_DE_MOT = /(?<=[ \t\n\r])[^ \t\n\r]/gu;
+
 const sontDesTextes = (textes) => Array.isArray(textes) && textes.every((texte) => typeof texte === 'string');
 
 /**
@@ -181,7 +188,7 @@ function coupesPossibles(textes) {
   for (const texte of textes) {
     mots.add(origine);
     caracteres.add(origine);
-    for (const { index } of texte.matchAll(/(?<=\s)\S/gu)) mots.add(origine + index);
+    for (const { index } of texte.matchAll(DEBUT_DE_MOT)) mots.add(origine + index);
     for (const { index } of texte.matchAll(DEBUT_DE_CARACTERE)) caracteres.add(origine + index);
     origine += texte.length;
   }

@@ -44,6 +44,7 @@ import TEXTE_HUIT from '../../../test/fixtures/plan/huit_tables_retenu.gtt.json?
 import TEXTE_CONFLIT from '../../../test/fixtures/plan/conflit_table_un.gtt.json?raw';
 import { fixerCadre, glisser, pointer, touche, toucher } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { traductionEcran } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import ListesTravail from './ListesTravail.svelte';
 import { detailConflits } from './modele.js';
@@ -237,6 +238,9 @@ const vueLue = (m) => vueDepuisTransform(groupe(m).getAttribute('transform'));
 const charge = (m) => m.seance.etat().charge;
 const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const actif = (m) => racinePlan(m).getAttribute('aria-activedescendant');
 
 // Les commandes d'un conteneur : la valeur de data-commande de chaque
@@ -609,8 +613,8 @@ describe('l’infobulle nomme l’organisation d’une paire réunie ; la légen
       await attendre(() => expect(infobulleVisible(infobulle())).toBe(true));
       const lignes = [...infobulle().querySelectorAll('p')];
       expect(lignes.map((p) => p.textContent)).toEqual([
-        `${t('plan.infobulle.table', { numero: table })}${t('plan.infobulle.nombre', { nombre: 1 })}`,
-        `${t('plan.infobulle.separerOrganisations')}${organisation}${t('plan.infobulle.finOrganisation')}${noms.join(t('plan.infobulle.et'))}`,
+        `${tEcran('plan.infobulle.table', { numero: table })}${tEcran('plan.infobulle.nombre', { nombre: 1 })}`,
+        `${tEcran('plan.infobulle.separerOrganisations')}${organisation}${tEcran('plan.infobulle.finOrganisation')}${noms.join(tEcran('plan.infobulle.et'))}`,
       ]);
       expect(lignes[1].textContent).toMatch(/^Même organisation \(/);
       const noeuds = [...lignes[1].children].map((e) => e.textContent);
@@ -625,7 +629,7 @@ describe('l’infobulle nomme l’organisation d’une paire réunie ; la légen
     const libellee = deuxOrganisations();
     libellee.tables[0].libelle = 'Coin des invités';
     const m = await ouvrir(libellee);
-    expect(tableEl(m, 1).getAttribute('aria-label')).toBe('Table 1 « Coin des invités », 3 places, 1 conflit');
+    expect(tableEl(m, 1).getAttribute('aria-label')).toBe('Table 1 «\u{A0}Coin des invités\u{A0}», 3 places, 1 conflit');
     expect(tableEl(m, 2).getAttribute('aria-label')).toBe('Table 2, 3 places, 1 conflit');
     const infobulle = () => document.querySelector('[role="tooltip"]');
     await pointer('bouger', pointSol(m).x, pointSol(m).y);
@@ -638,11 +642,11 @@ describe('l’infobulle nomme l’organisation d’une paire réunie ; la légen
       const entete = entetes.at(-1);
       if (table === 1) {
         expect(entete.textContent).toBe(
-          `${t('plan.infobulle.table', { numero: 1 })}${t('plan.table.avantLibelle')}Coin des invités${t('plan.infobulle.nombre', { nombre: 1 })}`,
+          `${tEcran('plan.infobulle.table', { numero: 1 })}${tEcran('plan.table.avantLibelle')}Coin des invités${tEcran('plan.infobulle.nombre', { nombre: 1 })}`,
         );
         expect([...entete.children].map((e) => e.textContent)).toContain('Coin des invités');
       } else {
-        expect(entete.textContent).toBe(`${t('plan.infobulle.table', { numero: 2 })}${t('plan.infobulle.nombre', { nombre: 1 })}`);
+        expect(entete.textContent).toBe(`${tEcran('plan.infobulle.table', { numero: 2 })}${tEcran('plan.infobulle.nombre', { nombre: 1 })}`);
       }
       await pointer('bouger', pointSol(m).x, pointSol(m).y);
       await attendre(() => expect(infobulleVisible(infobulle())).toBe(false));

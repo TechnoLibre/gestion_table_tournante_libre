@@ -56,11 +56,15 @@ import {
   contraste,
   fondPeintSous,
   sousTheme,
+  traductionEcran,
   visible as visibleDansLaFenetre,
 } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const format = creerFormat(t);
 
 const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
@@ -489,7 +493,7 @@ describe('créer et ouvrir', () => {
       return element;
     });
     expect(visible(message)).toBe(true);
-    expect(message.textContent).toContain(t('DATE_INCOMPLETE', { remede: null }));
+    expect(message.textContent).toContain(tEcran('DATE_INCOMPLETE', { remede: null }));
     expect(champ.getAttribute('aria-invalid')).toBe('true');
     expect(champ.getAttribute('aria-describedby')).toBe(message.id);
     expect(dans(m, '[data-champ="nom"]').getAttribute('aria-invalid')).toBeNull();
@@ -539,7 +543,7 @@ describe('créer et ouvrir', () => {
     });
     expect(visible(message)).toBe(true);
     expect(message.textContent).toContain(
-      "La date est incomplète ou n'existe pas au calendrier : choisissez le jour, le mois et l'année, ou videz le champ pour créer sans date.",
+      "La date est incomplète ou n'existe pas au calendrier\u{A0}: choisissez le jour, le mois et l'année, ou videz le champ pour créer sans date.",
     );
     expect(champ.getAttribute('aria-invalid')).toBe('true');
     expect(champ.getAttribute('aria-describedby')).toBe(message.id);
@@ -639,10 +643,10 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
     for (const ligne of lignes(m)) expect(ligne.querySelectorAll('[data-signalement]').length).toBe(1);
     const vide = signalements('Soirée vide')[0];
     expect(vide.dataset.signalement).toBe('ETAT_ILLISIBLE');
-    expect(vide.textContent).toContain(t('ETAT_ILLISIBLE', { base: 'Soirée vide', raison: 'VIDE', chemin: null, secours: { precedent: null, journal: null } }));
+    expect(vide.textContent).toContain(tEcran('ETAT_ILLISIBLE', { base: 'Soirée vide', raison: 'VIDE', chemin: null, secours: { precedent: null, journal: null } }));
     const hiboux = signalements('Soirée des Hiboux')[0];
     expect(hiboux.dataset.signalement).toBe('ETAT_ILLISIBLE');
-    expect(hiboux.textContent).toContain(t('ETAT_ILLISIBLE', { base: 'Soirée des Hiboux', raison: 'ABSENT', chemin: null, secours: { precedent: null, journal: 1 } }));
+    expect(hiboux.textContent).toContain(tEcran('ETAT_ILLISIBLE', { base: 'Soirée des Hiboux', raison: 'ABSENT', chemin: null, secours: { precedent: null, journal: 1 } }));
     const a = signalements('Merles A')[0];
     const b = signalements('Merles B')[0];
     expect(a.dataset.signalement).toBe('accueil.signalement.doublon');
@@ -652,7 +656,7 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
       [a, 'Merles B/Merles B'],
       [b, 'Merles A/Merles A'],
     ]) {
-      expect(element.textContent).toContain(t('accueil.signalement.doublon', { autres: 1 }));
+      expect(element.textContent).toContain(tEcran('accueil.signalement.doublon', { autres: 1 }));
       const doublon = element.querySelector(`[data-doublon="${CSS.escape(autre)}"]`);
       expect(doublon?.textContent).toBe(autre);
       // La base nommée se lit à l'écran, pas seulement dans l'arbre.
@@ -712,7 +716,7 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
       expect(element).not.toBeNull();
       return element;
     });
-    expect(panneau.textContent).toContain(t('accueil.recuperation.aucunSecours'));
+    expect(panneau.textContent).toContain(tEcran('accueil.recuperation.aucunSecours'));
     expect(panneau.querySelectorAll('[data-secours]').length).toBe(0);
     expect(ecritures(m)).toBe(avant);
     expect([...m.disque.keys()].sort()).toEqual(cles);
@@ -735,7 +739,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     expect(visible(avis)).toBe(true);
     const { avis: attendus } = await m.facade.demarrer();
     const reglages = attendus.find(({ code }) => code === 'REGLAGES_ILLISIBLES');
-    expect(avis.textContent).toBe(t(reglages.code, reglages.details));
+    expect(avis.textContent).toBe(tEcran(reglages.code, reglages.details));
     aucuneFenetre();
     expect(atteint(ligneDe(m, 'bal').querySelector('[data-commande="ouvrir"]'))).toBe(true);
     await ouvrirLigne(m, 'bal');
@@ -774,7 +778,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
       const avis = tous(m, `[data-avertissement="${code}"]`);
       expect(avis.length).toBe(1);
       expect(visible(avis[0])).toBe(true);
-      expect(avis[0].textContent).toBe(t(code, details));
+      expect(avis[0].textContent).toBe(tEcran(code, details));
       aucuneFenetre();
       expect(atteint(ligneDe(m, 'bal').querySelector('[data-commande="ouvrir"]'))).toBe(true);
       expect(atteint(dans(m, '[data-commande="creer"]'))).toBe(true);
@@ -791,7 +795,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     const amovible = await monter({ systeme: { support: { documents: 'amovible' } } });
     const avis = dans(amovible, '[data-avertissement="SUPPORT_AMOVIBLE"]');
     expect(visible(avis)).toBe(true);
-    expect(avis.textContent).toBe(t('SUPPORT_AMOVIBLE', {}));
+    expect(avis.textContent).toBe(tEcran('SUPPORT_AMOVIBLE', {}));
   });
 
   test('explorateur : la commande appelle ouvrirDansExplorateur avec la racine ; sous web, absente, et une phrase dit pourquoi', async () => {
@@ -805,7 +809,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     const web = await monter({ systeme: { nature: 'web' } });
     expect(dans(web, '[data-commande="explorateur"]')).toBeNull();
     const phrase = dans(web, '[data-avertissement="EXPLORATEUR_ABSENT"]');
-    expect(phrase?.textContent).toBe(t('EXPLORATEUR_ABSENT'));
+    expect(phrase?.textContent).toBe(tEcran('EXPLORATEUR_ABSENT'));
     expect(visible(phrase)).toBe(true);
     expect(web.erreurs()).toEqual([]);
   });
@@ -873,7 +877,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     const proposition = dans(m, '[data-autre]');
     expect(visible(proposition)).toBe(true);
     const cheminAutre = `${SOUS_APPDATA}\\data`;
-    expect(proposition.textContent).toContain(t('accueil.autre.proposition', { evenements: 2 }));
+    expect(proposition.textContent).toContain(tEcran('accueil.autre.proposition', { evenements: 2 }));
     // Le chemin est une donnée : son propre nœud de texte, à part de la phrase.
     const chemin = dans(m, '[data-autre-chemin]');
     expect(chemin?.textContent).toBe(cheminAutre);
@@ -881,7 +885,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     expect(visible(chemin)).toBe(true);
     expect(atteint(chemin)).toBe(true);
     expect(noeudsDeTexte(proposition).filter((texte) => texte.includes('\\'))).toEqual([cheminAutre]);
-    expect(proposition.textContent).toContain(t('accueil.autre.originaux'));
+    expect(proposition.textContent).toContain(tEcran('accueil.autre.originaux'));
     // En tête : avant la création, les démonstrations et toute ligne.
     for (const suivant of [dans(m, '[data-commande="creer"]'), dans(m, '[data-demonstration]')]) {
       expect(proposition.compareDocumentPosition(suivant) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -989,7 +993,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     });
     expect(ligneDe(m, 'Gala des Ombrelles')).not.toBeNull();
     expect(avis.textContent).toBe(
-      t('DOSSIER_NON_RETIRE', { dossier: `${DOCUMENTS}\\Gala des Pervenches`, cause: 'NON_VIDE' }),
+      tEcran('DOSSIER_NON_RETIRE', { dossier: `${DOCUMENTS}\\Gala des Pervenches`, cause: 'NON_VIDE' }),
     );
     expect(visible(avis)).toBe(true);
     expect(atteint(avis)).toBe(true);
@@ -1040,7 +1044,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
       ['Gala des Ombrelles', 'Gala des Pervenches/Gala des Pervenches'],
       ['Gala des Pervenches', 'Gala des Ombrelles/Gala des Ombrelles'],
     ]) {
-      expect(signalement(base).textContent).toContain(t('accueil.signalement.doublon', { autres: 1 }));
+      expect(signalement(base).textContent).toContain(tEcran('accueil.signalement.doublon', { autres: 1 }));
       expect(noeudsDeTexte(signalement(base)).filter((texte) => texte.includes('Gala'))).toEqual([autre]);
       const doublon = signalement(base).querySelector(`[data-doublon="${CSS.escape(autre)}"]`);
       expect(doublon?.textContent).toBe(autre);
@@ -1097,7 +1101,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     const avant = ecritures(m);
     const commande = () => ligneDe(m, 'bal')?.querySelector('[data-commande="supprimer"]') ?? null;
     await cliquer(commande());
-    expect(commande().textContent).toBe(t('accueil.operation.confirmerSuppression'));
+    expect(commande().textContent).toBe(tEcran('accueil.operation.confirmerSuppression'));
     expect(ecritures(m)).toBe(avant);
     aucuneFenetre();
     await cliquer(commande());
@@ -1203,7 +1207,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
       return element;
     });
     expect(visible(avis)).toBe(true);
-    expect(avis.textContent).toContain(t('LOGOS_NON_COPIES', details));
+    expect(avis.textContent).toContain(tEcran('LOGOS_NON_COPIES', details));
   });
 
   test('un logo que l’import de l’autre emplacement ne recopie pas : les événements arrivent, et l’accueil montre un LOGOS_NON_COPIES par événement', async () => {
@@ -1225,7 +1229,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
       expect(elements.length).toBe(2);
       return elements;
     });
-    const attendu = (evenement) => t('LOGOS_NON_COPIES', { evenement, logos: 1, personnes: 1 });
+    const attendu = (evenement) => tEcran('LOGOS_NON_COPIES', { evenement, logos: 1, personnes: 1 });
     expect(avis.map((element) => element.textContent)).toEqual(['Nuit des Lucioles', 'Soirée des Cerfs'].map(attendu));
     for (const element of avis) expect(visible(element)).toBe(true);
   });
@@ -1285,7 +1289,7 @@ describe('un geste en cours ne se relance pas (§ 8.7, § 15)', () => {
       return lue;
     });
     expect(attente.getAttribute('role')).toBe('status');
-    expect(attente.textContent).toBe(t('accueil.demonstrations.enCours', { nom }));
+    expect(attente.textContent).toBe(tEcran('accueil.demonstrations.enCours', { nom }));
     expect(second.getAttribute('aria-describedby')).toBe(attente.id);
     liberer();
     await attendreEvenement(m, (e) => e.nom === `${nom} 1`);
@@ -1425,7 +1429,7 @@ function exigerInfobulle(ancre, cle) {
   const [bulle] = bulles;
   expect(bulle.hidden, cle).toBe(false);
   expect(getComputedStyle(bulle).visibility, cle).toBe('visible');
-  expect(bulle.textContent.trim(), cle).toBe(t(cle));
+  expect(bulle.textContent.trim(), cle).toBe(tEcran(cle));
   expect(ancre.getAttribute('aria-describedby'), cle).toBe(bulle.id);
   expect(document.querySelectorAll(`[aria-describedby~="${bulle.id}"]`).length, cle).toBe(1);
   const b = bulle.getBoundingClientRect();
@@ -2057,12 +2061,12 @@ describe('la liste en tableau : en-tête, tuiles, groupes et cartes (§ 8.1, § 
     await vi.waitFor(() => expect(lignes(m).length).toBe(2));
     await cliquer(tuile(m, 'retenu'));
     expect(lignes(m).length).toBe(0);
-    const message = tous(m, '[data-ecran="accueil"] p').find((p) => p.textContent === t('accueil.filtre.vide'));
+    const message = tous(m, '[data-ecran="accueil"] p').find((p) => p.textContent === tEcran('accueil.filtre.vide'));
     expect(message).toBeDefined();
     expect(visible(message)).toBe(true);
     await cliquer(tuile(m, 'tous'));
     expect(lignes(m).length).toBe(2);
-    expect(tous(m, '[data-ecran="accueil"] p').some((p) => p.textContent === t('accueil.filtre.vide'))).toBe(false);
+    expect(tous(m, '[data-ecran="accueil"] p').some((p) => p.textContent === tEcran('accueil.filtre.vide'))).toBe(false);
   });
 
   test('en-têtes groupés : Événement, Placement retenu à la teinte de Retenu, Meilleure proposition à celle de Proposé ; chaque valeur sous son groupe ; le nom en tête de ligne, la date et le chemin en petite ligne dessous', async () => {

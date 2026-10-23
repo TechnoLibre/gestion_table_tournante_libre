@@ -230,6 +230,12 @@ export const TABLE = new Map([
   ['participants.fiche.rencontres.fois', 'Fois'],
   ['participants.fiche.rencontres.tours', 'Tours'],
   ['participants.fiche.rencontres.tour', ({ tour, table }) => `tour ${tour}, table ${table}`],
+  // Les tours d'une rencontre, [{tour, table}] dans l'ordre reçu, chacun
+  // par participants.fiche.rencontres.tour, séparés par « ; ».
+  [
+    'participants.fiche.rencontres.toursListe',
+    ({ tours }, texte) => tours.map((etape) => texte('participants.fiche.rencontres.tour', etape)).join(' ; '),
+  ],
   ['participants.fiche.rencontres.aucune', 'Elle ne rencontre personne dans ce placement.'],
   [
     'participants.fiche.rencontres.nonMesurable',

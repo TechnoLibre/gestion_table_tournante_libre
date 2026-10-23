@@ -42,13 +42,16 @@ import { VERSION } from '../../version.genere.js';
 import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { composantes, contraste, sousTheme } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, sousTheme, traductionEcran } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { evaluation } from '../propositions/modele.js';
 import { REGLAGES_GENERATION, valeurDuReglage } from './reglages.js';
 import Travailleur from './travailleur.js?worker&inline';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 
 // Les champs de la section, dans l'ordre de l'écran.
 const CHAMPS = ['graine', 'generation.nombre', 'generation.arret', 'generation.historique'];
@@ -382,7 +385,7 @@ describe('les réglages (§ 5.7, § 5.10)', () => {
       const graine = champ(m, 'graine');
       const refus = refusPres(graine, attendu[0].code);
       expect(refus, saisie).not.toBeNull();
-      expect(refus.querySelector('p').textContent).toBe(t(attendu[0].code, attendu[0].details));
+      expect(refus.querySelector('p').textContent).toBe(tEcran(attendu[0].code, attendu[0].details));
       expect(graine.getAttribute('aria-invalid')).toBe('true');
       expect(generer(m).parentElement.querySelector('[data-refus]')).toBeNull();
     }
@@ -526,7 +529,7 @@ describe('le travailleur qui ne démarre pas (§ 5.9, § 5.10)', () => {
     await cliquer(m, generer(m));
     await attendre(() => expect(refusPres(generer(m), 'TRAVAILLEUR_EN_ECHEC')).not.toBeNull());
     const refus = refusPres(generer(m), 'TRAVAILLEUR_EN_ECHEC');
-    expect(refus.querySelector('p').textContent).toBe(t('TRAVAILLEUR_EN_ECHEC', { remede: null }));
+    expect(refus.querySelector('p').textContent).toBe(tEcran('TRAVAILLEUR_EN_ECHEC', { remede: null }));
     expect(suivi.travailleurs).toBe(1);
     expect(enCours(m)).toBe(false);
     expect(section(m).getAttribute('aria-busy')).toBe('false');
@@ -652,9 +655,9 @@ describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
     expect(automatique.checked).toBe(true);
     expect(etiquette(m, 'coeursAutomatiques').textContent).toBe(t('generation.coeurs.automatique'));
     expect(champCoeurs(m)).toBeNull();
-    expect(disponiblesAffiches(m).textContent).toBe(t('generation.coeurs.disponibles', { disponibles: 4 }));
+    expect(disponiblesAffiches(m).textContent).toBe(tEcran('generation.coeurs.disponibles', { disponibles: 4 }));
     expect(disponiblesAffiches(m).textContent).toContain('4 cœurs');
-    expect(section(m).querySelector('[data-coeurs]').textContent).toContain(t('generation.coeurs.note'));
+    expect(section(m).querySelector('[data-coeurs]').textContent).toContain(tEcran('generation.coeurs.note'));
     expect(controleur(m).coeurs()).toEqual({ automatique: true, manuel: 4, disponibles: 4, nombre: 4 });
   });
 
@@ -669,7 +672,7 @@ describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
     expect(champCoeurs(m)).not.toBeNull();
     expect(champCoeurs(m).value).toBe('4');
     expect(etiquette(m, 'coeurs').textContent).toBe(t('generation.coeurs.nombre', { disponibles: 4 }));
-    expect(disponiblesAffiches(m).textContent).toBe(t('generation.coeurs.disponibles', { disponibles: 4 }));
+    expect(disponiblesAffiches(m).textContent).toBe(tEcran('generation.coeurs.disponibles', { disponibles: 4 }));
     const refusees = [
       ['0', 'HORS_DOMAINE', { min: 1, max: 4, remede: null }],
       ['5', 'HORS_DOMAINE', { min: 1, max: 4, remede: null }],
@@ -679,7 +682,7 @@ describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
       await saisir(m, champCoeurs(m), saisie);
       const refus = refusPres(champCoeurs(m), code);
       expect(refus, saisie).not.toBeNull();
-      expect(refus.querySelector('p').textContent).toBe(t(code, details));
+      expect(refus.querySelector('p').textContent).toBe(tEcran(code, details));
       expect(champCoeurs(m).getAttribute('aria-invalid')).toBe('true');
       expect(champCoeurs(m).value).toBe(saisie);
       expect(controleur(m).coeurs().nombre, saisie).toBe(4);
@@ -790,7 +793,7 @@ describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
     await attendre(() => expect(enCours(m)).toBe(false));
     const mesure = controleur(m).derniereGeneration();
     expect(mesure).toMatchObject({ dureeMs: 2000, nombre: 5, coeurs: 4 });
-    expect(duree(m).textContent).toBe(t('generation.duree.observee', mesure));
+    expect(duree(m).textContent).toBe(tEcran('generation.duree.observee', mesure));
     expect(duree(m).textContent).toContain('sur 4 cœurs');
     const estimation = () => section(m).querySelector('[data-estimation]');
     const reglages = charge(m).reglages.generation;
@@ -821,7 +824,7 @@ describe('les refus à la commande (§ 5.9, § 15.4, § 9)', () => {
     const refus = refusPres(generer(m), 'PLACES_MANQUANTES');
     expect(refus).not.toBeNull();
     const message = refus.querySelector('p').textContent;
-    expect(message).toBe(t('PLACES_MANQUANTES', { placesManquantes: 1 }));
+    expect(message).toBe(tEcran('PLACES_MANQUANTES', { placesManquantes: 1 }));
     expect(message).toContain('1 place');
     const remede = refus.querySelector('[data-commande="ouvrirSection"]');
     expect(remede.textContent).toBe(t('communs.remede.ouvrirSection.tables'));
@@ -846,7 +849,7 @@ describe('les refus à la commande (§ 5.9, § 15.4, § 9)', () => {
     await cliquer(m, generer(m));
     const sansPersonne = refusPres(generer(m), 'AUCUN_PARTICIPANT');
     expect(sansPersonne).not.toBeNull();
-    expect(sansPersonne.querySelector('p').textContent).toBe(t('AUCUN_PARTICIPANT', {}));
+    expect(sansPersonne.querySelector('p').textContent).toBe(tEcran('AUCUN_PARTICIPANT', {}));
     expect(fenetre()).toBeNull();
     expect(m.trace.length).toBe(ecritures);
     await cliquer(m, sansPersonne.querySelector('[data-commande="ouvrirSection"]'));
@@ -860,7 +863,7 @@ describe('les refus à la commande (§ 5.9, § 15.4, § 9)', () => {
     await cliquer(m, generer(m));
     const sansTable = refusPres(generer(m), 'AUCUNE_TABLE');
     expect(sansTable).not.toBeNull();
-    expect(sansTable.querySelector('p').textContent).toBe(t('AUCUNE_TABLE', {}));
+    expect(sansTable.querySelector('p').textContent).toBe(tEcran('AUCUNE_TABLE', {}));
     expect(fenetre()).toBeNull();
     expect(m.trace.length).toBe(ecritures);
     await cliquer(m, sansTable.querySelector('[data-commande="ouvrirSection"]'));
@@ -891,7 +894,7 @@ describe('les refus à la commande (§ 5.9, § 15.4, § 9)', () => {
     await cliquer(m, generer(m));
     const bloque = refusPres(generer(m), 'LECTURE_SEULE');
     expect(bloque).not.toBeNull();
-    expect(bloque.querySelector('p').textContent).toBe(t('LECTURE_SEULE', m.seance.etat().refus.details));
+    expect(bloque.querySelector('p').textContent).toBe(tEcran('LECTURE_SEULE', m.seance.etat().refus.details));
     expect(bloque.querySelector('[data-commande="debloquer"]').textContent).toBe(t('communs.remede.debloquer'));
     expect(fenetre()).toBeNull();
     expect(m.trace.length).toBe(ecrituresBloque);
@@ -903,7 +906,7 @@ describe('la durée du calcul (§ 5.10, § 19.4)', () => {
   test('exécuteur résolu à la main : sans mesure, le panneau le dit sans écrire 0 ; 1 800 ms d’horloge pilotée pour 5 × 200 000 mouvements, durée et réglages affichés', async () => {
     const { executeur, executions } = executeurAMain();
     const m = await demonstration('petite', { executeur });
-    expect(duree(m).textContent).toBe(t('generation.duree.inconnue'));
+    expect(duree(m).textContent).toBe(tEcran('generation.duree.inconnue'));
     expect(duree(m).textContent).not.toMatch(/\b0\b/);
     await cliquer(m, generer(m));
     expect(executions.length).toBe(1);
@@ -914,7 +917,7 @@ describe('la durée du calcul (§ 5.10, § 19.4)', () => {
     executions[0].resoudre(propositions);
     await attendre(() => expect(section(m).getAttribute('aria-busy')).toBe('false'));
     await attendre(() => expect(charge(m).propositions.length).toBe(5));
-    const attendu = t('generation.duree.observee', { dureeMs: 1800, nombre: 5, arret: 200000 });
+    const attendu = tEcran('generation.duree.observee', { dureeMs: 1800, nombre: 5, arret: 200000 });
     expect(duree(m).textContent).toBe(attendu);
     expect(attendu).toContain('1,8 s');
     expect(attendu).toContain('5 \u{00D7} 200\u{202F}000');
@@ -1105,7 +1108,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
     m.ui.choisirDepart(2);
     flushSync();
     expect(carteDepart(m)).not.toBeNull();
-    expect(carteDepart(m).textContent).toContain(t('generation.depart.titre', { depart: 2 }));
+    expect(carteDepart(m).textContent).toContain(tEcran('generation.depart.titre', { depart: 2 }));
     expect(carteDepart(m).querySelector('fieldset legend').textContent).toBe(t('generation.depart.legende'));
     expect(cases(m).map((c) => [c.getAttribute('data-tour-fige'), c.checked, nomAccessible(c)])).toEqual(
       [1, 2, 3, 4].map((tour) => [String(tour), false, t('generation.depart.tour', { tour })]),
@@ -1179,7 +1182,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
     const ecritures = m.trace.length;
     await cliquer(m, genererDepuis(m));
     await attendre(() => expect(enCours(m)).toBe(false));
-    expect(issue(m).textContent).toBe(t('generation.issue.departSansReprise', { depart: 2 }));
+    expect(issue(m).textContent).toBe(tEcran('generation.issue.departSansReprise', { depart: 2 }));
     expect(section(m).querySelector('[data-commande="comparerIssue"]')).toBeNull();
     expect(m.trace.length).toBe(ecritures);
 
@@ -1188,7 +1191,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
     remplacer = (propositions) => propositions.map((p) => ({ ...p, plan: autre }));
     await cliquer(m, genererDepuis(m));
     await attendre(() => expect(enCours(m)).toBe(false));
-    expect(issue(m).textContent).toBe(t('generation.issue.ajoutees', { ajoutees: 0, identiques: 1 }));
+    expect(issue(m).textContent).toBe(tEcran('generation.issue.ajoutees', { ajoutees: 0, identiques: 1 }));
     expect(issue(m).textContent).not.toContain('reprendre');
   });
 
@@ -1250,7 +1253,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
     await cliquer(m, genererDepuis(m));
     const refus = carteDepart(m).querySelector('fieldset [data-refus="TOURS_FIGES_TOUS"]');
     expect(refus).not.toBeNull();
-    expect(refus.querySelector('p').textContent).toBe(t('TOURS_FIGES_TOUS', { tours: 4 }));
+    expect(refus.querySelector('p').textContent).toBe(tEcran('TOURS_FIGES_TOUS', { tours: 4 }));
     expect(refusPres(genererDepuis(m), 'TOURS_FIGES_TOUS')).toBeNull();
     for (const c of cases(m)) expect(c.getAttribute('aria-describedby')).toBe(refus.id);
     expect(lancements).toEqual([]);
@@ -1343,7 +1346,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
       expect(pose).not.toBeNull();
       return pose;
     }, 120);
-    expect(refus.querySelector('p').textContent).toBe(t('GENERATION_INVARIANT_VIOLE', details));
+    expect(refus.querySelector('p').textContent).toBe(tEcran('GENERATION_INVARIANT_VIOLE', details));
     expect(generer(m).getAttribute('aria-describedby')).toBe(refus.id);
     expect(generer(m).getAttribute('aria-busy')).toBeNull();
     expect(enCours(m)).toBe(false);
@@ -1358,7 +1361,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
       expect(pose).not.toBeNull();
       return pose;
     }, 120);
-    expect(refus.querySelector('p').textContent).toBe(t('DEPART_INCOMPATIBLE', details));
+    expect(refus.querySelector('p').textContent).toBe(tEcran('DEPART_INCOMPATIBLE', details));
     expect(genererDepuis(tenu.m).getAttribute('aria-describedby')).toBe(refus.id);
 
     const retire = await deriveeEnCours({ repartir: true });
@@ -1380,7 +1383,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
     // « Repartir d'elle » sur une autre ligne choisit un autre départ.
     m.ui.choisirDepart(3);
     flushSync();
-    expect(carteDepart(m).textContent).toContain(t('generation.depart.titre', { depart: 3 }));
+    expect(carteDepart(m).textContent).toContain(tEcran('generation.depart.titre', { depart: 3 }));
     expect(cases(m).map((c) => c.checked)).toEqual([false, false, false, false]);
     await cocher(m, 4);
     expect(m.ui.etat().depart).toEqual({ id: 3, toursFiges: [4] });

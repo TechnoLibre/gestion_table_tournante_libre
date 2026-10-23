@@ -31,12 +31,13 @@ import { VERSION } from '../../version.genere.js';
 import TEXTE_TOUTES_EN_CONFLIT from '../../../test/fixtures/plan/toutes_en_conflit.gtt.json?raw';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { composantes, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { cartesDiagnostic, enonces, numeroDeCharge } from './phrases.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+const { t: tEcran } = traductionEcran();
 const V1 = VERSION.affichee;
 
 // --- Les charges d'épreuve -------------------------------------------------------
@@ -555,7 +556,7 @@ describe('le bandeau du plan énonce le diagnostic (§ 7.5)', () => {
     await attendre(() => expect(m.racine.querySelectorAll('[data-plan] [data-table]').length).toBe(4));
     await attendre(() => expect(bandeau(m)).toBeNull());
     expect(m.racine.textContent).not.toContain(t('plan.bandeau.toutesEnConflit'));
-    expect(m.racine.querySelector('[data-surface]').textContent).not.toContain(t('plan.bandeau.collisionPartout'));
+    expect(m.racine.querySelector('[data-surface]').textContent).not.toContain(tEcran('plan.bandeau.collisionPartout'));
   });
 });
 

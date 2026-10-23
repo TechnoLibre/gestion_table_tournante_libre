@@ -41,7 +41,7 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { composantes, rangeesDeTexte, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, rangeesDeTexte, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import urlCasLimites from '../../../exemples/participants_cas_limites.csv?url';
 import urlCasLimites1252 from '../../../exemples/participants_cas_limites_cp1252.csv?url';
 import urlGrande from '../../../exemples/participants_demo_grande.csv?url';
@@ -51,6 +51,9 @@ import { traceIcone } from '../primitives/icones.js';
 import { ENCODAGES, SEPARATEURS } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const format = creerFormat(t);
 
 const BASE = 'soiree';
@@ -335,7 +338,7 @@ describe('les colonnes s’associent par leur en-tête (§ 10.1)', () => {
     expect(vus[0].association.get('NOM')).toBe(t('import.champ.nom'));
     expect(vus[0].association.get('Équipe')).toBe(t('import.champ.organisation'));
     expect(vus[0].association.get('Rôle')).toBe(t('import.champ.titrePressenti'));
-    expect(vus[0].association.get('Allergies')).toBe(t('import.colonne.nonReconnue'));
+    expect(vus[0].association.get('Allergies')).toBe(tEcran('import.colonne.nonReconnue'));
     expect(vus[1].lignes).toEqual(vus[0].lignes);
     expect(vus[0].lignes.length).toBe(2);
   });
@@ -432,7 +435,7 @@ describe('les refus globaux (§ 10.1)', () => {
       expect(pose, code).not.toBeNull();
       expect(vu(pose), code).toBe(true);
       const texte = pose.textContent;
-      expect(texte, code).toContain(t(remede, { ligne: 2 }));
+      expect(texte, code).toContain(tEcran(remede, { ligne: 2 }));
       expect(texte.length, code).toBeGreaterThan(t(remede, { ligne: 2 }).length);
       expect(commande(e, 'importer'), code).toBeNull();
     }
@@ -582,8 +585,8 @@ describe('le CSV des lignes refusées (§ 10.1)', () => {
     expect(corrige).toContain('Ravenelle;Clotilde;');
     await choisir(e, 'corrige.csv', enUtf8(corrige));
     const vu = new Map(association(dans(e, '[data-apercu]')));
-    expect(vu.get('ligne')).toBe(t('import.colonne.nonReconnue'));
-    expect(vu.get('motif')).toBe(t('import.colonne.nonReconnue'));
+    expect(vu.get('ligne')).toBe(tEcran('import.colonne.nonReconnue'));
+    expect(vu.get('motif')).toBe(tEcran('import.colonne.nonReconnue'));
     await importer(e);
     expect(participantsDe(e).map(({ nom, prenom, presence }) => [nom, prenom, presence])).toEqual([
       ['Ravenelle', 'Clotilde', undefined],
@@ -940,7 +943,7 @@ describe('le collage en bloc passe par le même analyseur (§ 10.2, § 14.10)', 
     const e = await ouvrir();
     await coller(e, 'Ombrelle\nLacasse, Ondine\nPervenche');
     const pose = dans(e, '[data-refus="SEPARATEUR_INTROUVABLE"]');
-    expect(pose.textContent).toContain(t('import.remede.separateurIntrouvableCollage'));
+    expect(pose.textContent).toContain(tEcran('import.remede.separateurIntrouvableCollage'));
     commande(e, 'ordreDeLaGrille').click();
     await vi.waitFor(() => expect(dans(e, '[data-refus]')).toBeNull());
     expect(lignesMontrees(dans(e, '[data-apercu]')).map(([nom]) => nom)).toEqual(['Ombrelle', 'Lacasse, Ondine', 'Pervenche']);
@@ -951,7 +954,7 @@ describe('les cas du § 10.3', () => {
   // Chacun des neuf cas, lu dans un conteneur : l'aperçu, puis le rapport.
   function neufCas(conteneur) {
     const colonnes = new Map(association(conteneur));
-    expect(colonnes.get('Téléphone'), 'colonne non reconnue').toBe(t('import.colonne.nonReconnue'));
+    expect(colonnes.get('Téléphone'), 'colonne non reconnue').toBe(tEcran('import.colonne.nonReconnue'));
     expect(cellule(conteneur, 6, 'organisation'), 'sans organisation').toBe('');
     expect(cellule(conteneur, 7, 'exclu'), 'exclusion').toBe(t('import.exclu.oui'));
     expect(cellule(conteneur, 8, 'notes'), 'champ cité avec le séparateur').toBe('végétarien; sans noix, ni arachides');
@@ -1202,7 +1205,7 @@ describe('la nature du fichier : choisie avant l’aperçu, jamais devinée (§ 
   test('une liste de participants qui porte une colonne « Table », lue sous Participants : la table ignorée, des personnes ; sous Objectifs, refusée faute d’objectif', async () => {
     const e = await ouvrir({ tables: NEUF_TABLES() });
     await choisir(e, 'invites.csv', enUtf8('nom;prenom;table\r\nOmbrelle;Iris;2\r\nPervenche;Théo;1\r\n'));
-    expect(association(dans(e, '[data-apercu]')).at(-1)).toEqual(['table', t('import.colonne.nonReconnue')]);
+    expect(association(dans(e, '[data-apercu]')).at(-1)).toEqual(['table', tEcran('import.colonne.nonReconnue')]);
     expect(lignesMontrees(dans(e, '[data-apercu]')).map(([nom]) => nom)).toEqual(['Ombrelle', 'Pervenche']);
     choisirNature(e, 'objectifs');
     expect(dans(e, '[data-apercu] [data-refus="OBJECTIF_NON_ASSOCIE"]')).not.toBeNull();
@@ -1254,7 +1257,7 @@ describe('l’aperçu des objectifs de table (§ 10.4)', () => {
       const ligne = refusee(ici, details.ligne);
       expect(ligne, code).not.toBeNull();
       expect(vu(ligne), code).toBe(true);
-      expect(ligne.querySelector('[data-motif]').textContent, code).toBe(t(code, details));
+      expect(ligne.querySelector('[data-motif]').textContent, code).toBe(tEcran(code, details));
     }
     const [{ retenue }] = apercu.fusionsEtiquettes;
     expect(lignesMontrees(ici)[0]).toEqual(['1', t('import.tour.soiree'), retenue, t('import.regle.defaut')]);

@@ -36,7 +36,7 @@ import { VERSION } from '../../version.genere.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { actionDe, boutonActions } from '../../../test/navigateur/menus.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
-import { composantes, rangeesDeTexte, sousTheme, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, rangeesDeTexte, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
 import { RANGS_ORGANISATION, teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -44,6 +44,9 @@ import { comptesEntete } from './entete.js';
 import { COLONNES, GROUPEMENTS, cheminDe, cleDeGroupement, cleDeStatut, groupesGrille, lignesGrille, lignesVisibles } from './grille.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 
 const EVENEMENT = 'Soirée des Merles';
 const CLUB = 'Club des Merles';
@@ -1367,7 +1370,7 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
   // nommée par son aria-label.
   const retraits = (m) => [...fiche(m).querySelectorAll('[data-commande="retirerEtiquette"]')];
   const retrait = (m, motCle) =>
-    retraits(m).find((bouton) => bouton.getAttribute('aria-label') === t('participants.etiquettes.retirer', { motCle })) ?? null;
+    retraits(m).find((bouton) => bouton.getAttribute('aria-label') === tEcran('participants.etiquettes.retirer', { motCle })) ?? null;
   const legendeEtiquettes = (m) => section(m).querySelector('[data-legende-etiquettes]');
   const etiquettesDe = (m, nom) => participants(m).find((p) => p.nom === nom).etiquettes;
 

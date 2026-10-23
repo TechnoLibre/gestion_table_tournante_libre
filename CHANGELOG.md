@@ -503,6 +503,10 @@
   sélecteur de date, qui la montre au format du poste ; une date commencée mais
   incomplète, ou absente du calendrier, refuse la création, contre son champ,
   sans rien écrire.
+- À l'écran, « : », « ; », « ? », « ! » et le guillemet fermant ne commencent
+  plus une ligne, et le guillemet ouvrant n'en finit plus une : leur espace
+  devient insécable à l'affichage, historique compris ; le journal, les CSV et
+  les PDF gardent le texte tel quel.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

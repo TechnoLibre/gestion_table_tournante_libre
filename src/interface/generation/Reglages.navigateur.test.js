@@ -39,7 +39,7 @@ import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
 import { couleurDeJeton, releverTextes } from '../../../test/navigateur/captures.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { composantes, sousTheme } from '../../../test/navigateur/rendu.js';
+import { composantes, sousTheme, traductionEcran } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { ECART_INFOBULLE_PX } from '../primitives/infobulle.js';
 import Reglages from './Reglages.svelte';
@@ -50,6 +50,9 @@ import { REGLAGES_GENERATION, reglagesDeSection } from './reglages.js';
 const DE_LA_GENERATION = reglagesDeSection(REGLAGES_GENERATION, 'generation');
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 
 // Les composants montés par l'épreuve courante, et leurs conteneurs.
 const montes = [];
@@ -327,7 +330,7 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(etatAffiche(etats.get(CONFLITS))).toBe('sansObjet');
     expect(paliers[0].contains(critereDe(m, CONFLITS))).toBe(true);
     expect(editeur(m).querySelector('input[data-champ^="poids."]')).toBeNull();
-    expect(editeur(m).textContent).toContain(t('generation.priorites.parDefaut'));
+    expect(editeur(m).textContent).toContain(tEcran('generation.priorites.parDefaut'));
     expect(annonce(m)).toBe('');
   });
 
@@ -379,7 +382,7 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(journal(m)).toBe(e0 + 1);
     expect(charge(m).reglages.priorites).toEqual(attendue);
     expect(liste(m).querySelectorAll(':scope > li[data-palier]')).toHaveLength(7);
-    expect(annonce(m)).toBe(t('generation.priorites.annonce', { critere: REDONDANCE, palier: 7, paliers: 7, avec: [ANIMATEURS] }));
+    expect(annonce(m)).toBe(tEcran('generation.priorites.annonce', { critere: REDONDANCE, palier: 7, paliers: 7, avec: [ANIMATEURS] }));
     expect(critereDe(m, REDONDANCE).contains(document.activeElement)).toBe(true);
     expect(editeur(m).textContent).toContain(t('generation.priorites.regle'));
     const poids = [...editeur(m).querySelectorAll('input[data-champ^="poids."]')].map((e) => e.dataset.champ);
@@ -401,14 +404,14 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(charge(m).reglages.priorites).toBeUndefined();
     expect(journal(m)).toBe(e0 + 2);
     expect(document.activeElement).toBe(bouton(m, CUMULEES, 'descendreCritere'));
-    expect(annonce(m)).toBe(t('generation.priorites.annonce', { critere: CUMULEES, palier: 4, paliers: 8, avec: [] }));
+    expect(annonce(m)).toBe(tEcran('generation.priorites.annonce', { critere: CUMULEES, palier: 4, paliers: 8, avec: [] }));
   });
 
   test('le poids d’un critère d’un palier partagé : un champ nombre étroit de 1 à 100 ; 0 refusé contre son champ, rien d’écrit ; 5 écrit, une entrée', async () => {
     const m = await demonstration();
     await cliquer(m, bouton(m, REDONDANCE, 'joindrePalier'));
     const champ = () => editeur(m).querySelector(`input[data-champ="poids.${REDONDANCE}"]`);
-    expect(editeur(m).querySelector(`label[for="${champ().id}"]`).textContent.trim()).toBe(t('generation.priorites.poids', { critere: REDONDANCE }));
+    expect(editeur(m).querySelector(`label[for="${champ().id}"]`).textContent.trim()).toBe(tEcran('generation.priorites.poids', { critere: REDONDANCE }));
     expect([champ().type, champ().min, champ().max, champ().step]).toEqual(['number', '1', '100', '1']);
     // Étroit : six caractères de large, le contenu de la boîte, flèches
     // comprises.
@@ -491,7 +494,7 @@ describe('l’ordre des priorités : l’infobulle du nom de chaque critère (§
   const nomDe = (m, nom) => critereDe(m, nom).querySelector('.nom');
   const bulle = (m) => editeur(m).querySelector('[role="tooltip"]');
   const decrits = (m) => [...editeur(m).querySelectorAll(`[aria-describedby~="${bulle(m).id}"]`)];
-  const explication = (nom) => t(`generation.priorites.explication.${nom}`);
+  const explication = (nom) => tEcran(`generation.priorites.explication.${nom}`);
 
   // Le pointeur réel au centre du nom d'un critère, puis hors de tout terme.
   async function survoler(m, nom) {
@@ -635,16 +638,16 @@ describe('le mode des objectifs (§ 5.3, A8, A12, D22, D23)', () => {
     expect(caseObjectifs.compareDocumentPosition(groupe(m)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(groupe(m).compareDocumentPosition(caseAnimateurs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(groupe(m).tagName).toBe('FIELDSET');
-    expect(groupe(m).querySelector('legend').textContent.trim()).toBe(t('generation.reglage.modeObjectifs'));
+    expect(groupe(m).querySelector('legend').textContent.trim()).toBe(tEcran('generation.reglage.modeObjectifs'));
     for (const valeur of MODES_OBJECTIFS) {
       const r = radio(m, valeur);
-      expect(groupe(m).querySelector(`label[for="${r.id}"]`).textContent.trim()).toBe(t(`generation.reglage.modeObjectifs.${valeur}`));
+      expect(groupe(m).querySelector(`label[for="${r.id}"]`).textContent.trim()).toBe(tEcran(`generation.reglage.modeObjectifs.${valeur}`));
       expect(document.getElementById(r.getAttribute('aria-describedby')).textContent.trim()).toBe(
-        t(`generation.reglage.modeObjectifs.${valeur}.explication`),
+        tEcran(`generation.reglage.modeObjectifs.${valeur}.explication`),
       );
       expect(r.checked, valeur).toBe(valeur === 'places');
     }
-    expect(groupe(m).textContent).toContain(t('generation.reglage.modeObjectifs.etat.sansObjet'));
+    expect(groupe(m).textContent).toContain(tEcran('generation.reglage.modeObjectifs.etat.sansObjet'));
   });
 
   test('un choix au pointeur, une entrée ; au clavier, la flèche choisit le voisin ; l’état décoché s’écrit sans recalcul', async () => {
@@ -660,7 +663,7 @@ describe('le mode des objectifs (§ 5.3, A8, A12, D22, D23)', () => {
     expect(radio(m, 'minimum').checked).toBe(true);
     expect(journal(m)).toBe(e0 + 2);
     await cliquer(m, section(m).querySelector('input[type="checkbox"][data-champ="respecterObjectifs"]'));
-    expect(groupe(m).textContent).toContain(t('generation.reglage.modeObjectifs.etat.decoche'));
+    expect(groupe(m).textContent).toContain(tEcran('generation.reglage.modeObjectifs.etat.decoche'));
     // Toujours modifiable, case décochée.
     await cliquer(m, radio(m, 'places'));
     expect(Object.hasOwn(charge(m).reglages, 'modeObjectifs')).toBe(false);
@@ -679,7 +682,7 @@ describe('le mode des objectifs (§ 5.3, A8, A12, D22, D23)', () => {
     await cliquer(m, radio(m, 'minimum'));
     const refus = groupe(m).querySelector('[data-refus="OBJECTIFS_PALIER_PARTAGE"]');
     expect(refus).not.toBeNull();
-    expect(refus.querySelector(':scope > p').textContent).toBe(t('OBJECTIFS_PALIER_PARTAGE', { mode: 'minimum', palier: 5 }));
+    expect(refus.querySelector(':scope > p').textContent).toBe(tEcran('OBJECTIFS_PALIER_PARTAGE', { mode: 'minimum', palier: 5 }));
     // Chaque bouton radio est décrit par le refus, en plus de son
     // explication ; le focus reste dans le groupe.
     expect(refus.id).not.toBe('');

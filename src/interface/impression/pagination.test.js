@@ -200,6 +200,18 @@ describe('couperTexte : les bornes des morceaux d’un texte trop haut pour une 
     assert.deepEqual(couperTexte(['OmbrelleOmbrelle Pervenche'], auPlus(10).tient), [0, 10, 17, 26]);
   });
 
+  test('seul un blanc sécable ouvre un mot : un morceau ne finit jamais sur une insécable, devant « : » ou « ? »', () => {
+    // « Ombrelle Pervenche » puis l'insécable et le signe : la page de 20
+    // tiendrait « Ombrelle Pervenche » et l'insécable ; le signe resterait
+    // seul en tête de la page suivante. Le mot va avec son signe.
+    assert.deepEqual(couperTexte(['Ombrelle Pervenche\u{00A0}: Lys'], auPlus(20).tient), [0, 9, 24]);
+    assert.deepEqual(couperTexte(['Ombrelle Pervenche\u{202F}? Lys'], auPlus(20).tient), [0, 9, 24]);
+    // Après « et son insécable, le mot cité reste avec le guillemet.
+    assert.deepEqual(couperTexte(['Ombrelle «\u{00A0}Pervenche'], auPlus(12).tient), [0, 9, 20]);
+    // La tabulation et le saut de ligne restent des blancs sécables.
+    assert.deepEqual(couperTexte(['Ombrelle\tPervenche\nLys'], auPlus(10).tient), [0, 9, 19, 22]);
+  });
+
   test('rien ne tient : chaque morceau prend un caractère, le texte avance toujours', () => {
     assert.deepEqual(couperTexte(['abc'], () => false), [0, 1, 2, 3]);
   });

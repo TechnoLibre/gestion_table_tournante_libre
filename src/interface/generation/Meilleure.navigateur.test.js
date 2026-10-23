@@ -35,11 +35,15 @@ import {
   fondPeintSous,
   porteursDeTexte,
   sousTheme,
+  traductionEcran,
 } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { COLONNE_ANNONCEE } from './meilleure.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const format = creerFormat(t);
 
 // Les montages de l'épreuve, démontés après elle ; le collecteur d'erreurs
@@ -195,7 +199,7 @@ describe('la meilleure proposition, en tête de la génération (§ 5.4, § 5.7)
     const titre = document.getElementById(region.getAttribute('aria-labelledby'));
     expect(titre?.textContent).toBe(t('generation.meilleure.titre'));
     expect(region.contains(titre)).toBe(true);
-    expect(vide(m)?.textContent).toBe(t('generation.meilleure.aucune'));
+    expect(vide(m)?.textContent).toBe(tEcran('generation.meilleure.aucune'));
     expect(identifiant(m)).toBeNull();
     expect(collisions(m)).toBeNull();
     expect(region.textContent).not.toContain(t('format.vide'));
@@ -240,7 +244,7 @@ describe('la meilleure proposition, en tête de la génération (§ 5.4, § 5.7)
     await m.seance.executer('effacerPropositions', {});
     flushSync();
     expect(charge(m).propositions).toEqual([]);
-    await attendre(() => expect(vide(m)?.textContent).toBe(t('generation.meilleure.aucune')));
+    await attendre(() => expect(vide(m)?.textContent).toBe(tEcran('generation.meilleure.aucune')));
     expect(collisions(m)).toBeNull();
     expect(identifiant(m)).toBeNull();
   });
@@ -252,7 +256,7 @@ describe('la meilleure proposition, en tête de la génération (§ 5.4, § 5.7)
     await m.seance.executer('exclureParticipant', { id: charge(m).participants[0].id });
     flushSync();
     expect(charge(m).propositions.length).toBe(2);
-    await attendre(() => expect(vide(m)?.textContent).toBe(t('generation.meilleure.aucune')));
+    await attendre(() => expect(vide(m)?.textContent).toBe(tEcran('generation.meilleure.aucune')));
     expect(collisions(m)).toBeNull();
   });
 
@@ -275,7 +279,7 @@ describe('la meilleure proposition, en tête de la génération (§ 5.4, § 5.7)
       expect(getComputedStyle(bulle).visibility).toBe('visible');
       expect(bulle.getBoundingClientRect().width).toBeGreaterThan(0);
     });
-    expect(bulle.textContent).toBe(t('propositions.explication.collisionsCumulees'));
+    expect(bulle.textContent).toBe(tEcran('propositions.explication.collisionsCumulees'));
     expect(libelle.getAttribute('aria-describedby')).toBe(bulle.id);
     // L'infobulle ne couvre pas le terme qu'elle explique.
     const a = libelle.getBoundingClientRect();
@@ -292,7 +296,7 @@ describe('la meilleure proposition, en tête de la génération (§ 5.4, § 5.7)
     flushSync();
     expect(document.activeElement).toBe(libelle);
     await attendre(() => expect(bulle.hidden).toBe(false));
-    expect(bulle.textContent).toBe(t('propositions.explication.collisionsCumulees'));
+    expect(bulle.textContent).toBe(tEcran('propositions.explication.collisionsCumulees'));
     await touche('Escape');
     await attendre(() => expect(bulle.hidden).toBe(true));
     expect(document.activeElement).toBe(libelle);

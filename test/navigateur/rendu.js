@@ -29,9 +29,24 @@
 // entière : son fond, son texte ou son image couvrent tout point de la boîte,
 // coin arrondi ou zone sans glyphe compris. isPointInFill et isPointInStroke
 // ignorent clip-path : une forme rognée au point y compte comme peinte.
+//
+// traductionEcran rend la traduction qu'App pose au contexte : les mêmes
+// tables, l'option ecran, qui pose les insécables de la ponctuation haute
+// (§ 14.6). Une épreuve qui lit le texte d'App, ou d'un composant monté sous
+// le t de l'écran, en tire ses attendus ; le t brut reste celui de ce qui
+// quitte l'écran — journal, CSV, PDF, titre de la fenêtre.
+import { TABLES_APPLICATION } from '../../src/application/libelles.js';
+import { creerTraduction } from '../../src/application/traduction.js';
+import { TABLES_INTERFACE } from '../../src/interface/libelles.js';
 
 /** Le rapport de contraste des WCAG, seule implémentation du dépôt. */
 export { contraste } from '../../src/interface/palette.js';
+
+/** La traduction de l'écran, celle d'App, dans la langue donnée.
+ *  → { t, cles, langue } de creerTraduction. */
+export function traductionEcran({ langue = 'fr' } = {}) {
+  return creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue, ecran: true });
+}
 
 const PSEUDOS = ['::before', '::after'];
 

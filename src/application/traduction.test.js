@@ -3,9 +3,10 @@
 
 // Épreuves du mécanisme de traduction (§ 14.6) : une clé absente lève et se
 // nomme, une clé de deux tables lève à la création, les clés s'énumèrent
-// triées, une entrée en compose une autre, et la langue témoin encadre le
-// résultat entier de t d'une seule paire de marques. Les tables d'épreuve sont
-// inventées.
+// triées, une entrée en compose une autre, la langue témoin encadre le
+// résultat entier de t d'une seule paire de marques, et l'option ecran pose
+// les insécables de la ponctuation haute sur ce résultat, la composition
+// interne restant brute. Les tables d'épreuve sont inventées.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { MARQUE_TEMOIN, creerTraduction } from './traduction.js';
@@ -107,5 +108,61 @@ describe('traduction : la langue témoin (§ 14.6)', () => {
   test('une clé absente lève en langue témoin comme en français', () => {
     const { t } = creerTraduction([TABLE_A], { langue: 'temoin' });
     assert.throws(() => t('essai.inconnue'), RangeError);
+  });
+});
+
+describe("traduction : la typographie de l'écran (§ 14.6)", () => {
+  const I = '\u{00A0}';
+  const FINE = '\u{202F}';
+  // Une table ponctuée, et une entrée qui relève ce que texte lui rend
+  // quand elle compose les autres.
+  const composees = [];
+  const TABLE_PONCTUEE = new Map([
+    ['essai.question', 'Vraiment ?'],
+    ['essai.citation', ({ nom }) => `Le dossier « ${nom} » : vide`],
+    [
+      'essai.relais',
+      (details, texte) => {
+        const question = texte('essai.question');
+        composees.push(question);
+        return `${texte('essai.citation', details)} ; ${question}`;
+      },
+    ],
+  ]);
+
+  test("sans l'option, t rend le texte tel que la table l'écrit", () => {
+    const { t } = creerTraduction([TABLE_PONCTUEE]);
+    assert.equal(t('essai.question'), 'Vraiment ?');
+    assert.equal(t('essai.citation', { nom: 'Ombrelle' }), 'Le dossier « Ombrelle » : vide');
+    assert.equal(creerTraduction([TABLE_PONCTUEE], { ecran: false }).t('essai.question'), 'Vraiment ?');
+  });
+
+  test("avec ecran, t pose les insécables de la ponctuation haute sur son résultat entier", () => {
+    const { t } = creerTraduction([TABLE_PONCTUEE], { ecran: true });
+    assert.equal(t('essai.question'), `Vraiment${FINE}?`);
+    assert.equal(t('essai.citation', { nom: 'Ombrelle' }), `Le dossier «${I}Ombrelle${I}»${I}: vide`);
+    // La donnée interpolée fait partie du texte rendu.
+    assert.equal(t('essai.citation', { nom: 'Qui ? Moi' }), `Le dossier «${I}Qui${FINE}? Moi${I}»${I}: vide`);
+  });
+
+  test('texte, la composition interne, reste brut : seul le résultat de t change', () => {
+    composees.length = 0;
+    const { t } = creerTraduction([TABLE_PONCTUEE], { ecran: true });
+    assert.equal(t('essai.relais', { nom: 'Ombrelle' }), `Le dossier «${I}Ombrelle${I}»${I}: vide${FINE}; Vraiment${FINE}?`);
+    assert.deepEqual(composees, ['Vraiment ?']);
+  });
+
+  test('en langue témoin, la typographie se pose dans les marques, qui encadrent le texte une fois', () => {
+    const { t } = creerTraduction([TABLE_PONCTUEE], { langue: 'temoin', ecran: true });
+    assert.equal(t('essai.question'), `${O}Vraiment${FINE}?${F}`);
+    const rendu = t('essai.relais', { nom: 'Ombrelle' });
+    assert.equal(rendu, `${O}Le dossier «${I}Ombrelle${I}»${I}: vide${FINE}; Vraiment${FINE}?${F}`);
+    assert.equal(rendu.split(O).length - 1, 1);
+    assert.equal(creerTraduction([TABLE_PONCTUEE], { langue: 'temoin' }).t('essai.question'), `${O}Vraiment ?${F}`);
+  });
+
+  test("une option ecran qui n'est pas un booléen lève TypeError à la création", () => {
+    assert.throws(() => creerTraduction([TABLE_PONCTUEE], { ecran: 'oui' }), TypeError);
+    assert.throws(() => creerTraduction([TABLE_PONCTUEE], { ecran: 1 }), TypeError);
   });
 });

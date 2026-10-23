@@ -4,9 +4,10 @@
 // La vue du panneau d'historique (historique.js, § 8.3) : les lignes de la
 // plus récente à la plus ancienne, le filtre des instants nommés, les pages
 // de cent lignes, l'instant courant et les retours offerts, l'horodatage
-// rendu par découpe, l'état vide ; l'étendue de la page, par la traduction
-// et le format de l'application. Les historiques sont inventés, de la forme
-// que rend seance.historique().
+// rendu par découpe, le libellé affiché avec les insécables de la ponctuation
+// haute, la donnée lue restant brute, l'état vide ; l'étendue de la page, par
+// la traduction et le format de l'application. Les historiques sont inventés,
+// de la forme que rend seance.historique().
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { creerFormat } from '../../application/format.js';
@@ -52,7 +53,7 @@ describe('vueHistorique : l’ordre, l’instant courant, l’heure', () => {
     assert.notEqual(vue.lignes[0].jalons, historique.lignes[3].jalons);
   });
 
-  test('chaque ligne garde ce qu’elle portait, et ajoute courante, revenir et quand ; la plus récente est l’instant courant, où que soit la position', () => {
+  test('chaque ligne garde ce qu’elle portait, et ajoute courante, revenir, quand et libelleAffiche ; la plus récente est l’instant courant, où que soit la position', () => {
     const jalons = [{ nom: 'Avant la soirée', horodatage: '2031-04-02T09:15:00-04:00' }];
     // Un défaire : la ligne 4 restitue la ligne 2, la position ; la ligne 3,
     // défaite, sort du fil courant.
@@ -63,8 +64,8 @@ describe('vueHistorique : l’ordre, l’instant courant, l’heure', () => {
     };
     const vue = vueHistorique(historique, { jalonsSeuls: false, page: 1 });
     const quand = (n) => historique.lignes[n].horodatage.slice(0, 10) + ' ' + historique.lignes[n].horodatage.slice(11, 16);
-    assert.deepEqual(vue.lignes[2], { ...historique.lignes[1], courante: false, revenir: true, quand: quand(1) });
-    assert.deepEqual(vue.lignes[0], { ...historique.lignes[3], courante: true, revenir: false, quand: quand(3) });
+    assert.deepEqual(vue.lignes[2], { ...historique.lignes[1], courante: false, revenir: true, quand: quand(1), libelleAffiche: 'Geste 2' });
+    assert.deepEqual(vue.lignes[0], { ...historique.lignes[3], courante: true, revenir: false, quand: quand(3), libelleAffiche: 'Geste 4' });
     assert.deepEqual(
       vue.lignes.map(({ revision, fil, courante, revenir }) => [revision, fil, courante, revenir]),
       [
@@ -125,6 +126,34 @@ describe('vueHistorique : l’ordre, l’instant courant, l’heure', () => {
     const historique = { position: 9, lignes: [ligne(9, { sens: 'revenir', retour: 4 })], reprise: false };
     const [seule] = vueHistorique(historique, { jalonsSeuls: false, page: 1 }).lignes;
     assert.deepEqual([seule.fil, seule.courante, seule.revenir], ['courant', true, false]);
+  });
+});
+
+describe('vueHistorique : le libellé affiché (§ 8.3, § 14.6)', () => {
+  test('un libellé figé du journal s’affiche avec les insécables de la ponctuation haute ; la ligne lue et son libellé restent tels', () => {
+    const jalons = [{ nom: 'Avant : « essai »', horodatage: '2031-04-02T09:15:00-04:00' }];
+    const historique = {
+      position: 2,
+      lignes: [ligne(1, { libelle: 'Table 3 : 4 places' }), ligne(2, { libelle: 'Défait : « Ajouté Iris Ombrelle ; placement retenu ajusté »', jalons })],
+      reprise: false,
+    };
+    const avant = structuredClone(historique);
+    const vue = vueHistorique(historique, { jalonsSeuls: false, page: 1 });
+    assert.deepEqual(
+      vue.lignes.map(({ libelleAffiche }) => libelleAffiche),
+      [
+        'Défait\u{00A0}: «\u{00A0}Ajouté Iris Ombrelle\u{202F}; placement retenu ajusté\u{00A0}»',
+        'Table 3\u{00A0}: 4 places',
+      ],
+    );
+    // La donnée lue n'est pas réécrite : le libellé de la ligne, celui que
+    // « Revenir » cite, et le nom du jalon, une donnée saisie, restent bruts.
+    assert.deepEqual(historique, avant);
+    assert.deepEqual(
+      vue.lignes.map(({ libelle }) => libelle),
+      ['Défait : « Ajouté Iris Ombrelle ; placement retenu ajusté »', 'Table 3 : 4 places'],
+    );
+    assert.equal(vue.lignes[0].jalons[0].nom, 'Avant : « essai »');
   });
 });
 

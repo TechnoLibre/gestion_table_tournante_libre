@@ -47,11 +47,15 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { dessinerGraphiques, fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { traductionEcran } from '../../../test/navigateur/rendu.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import Fiche from './Fiche.svelte';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const V1 = VERSION.affichee;
 const BASE = 'soiree';
 
@@ -185,6 +189,12 @@ describe('la rubrique « Rencontres » de la fiche (§ 12.5, D33)', () => {
     ]);
     expect(lignesDe(section)).toEqual(attendues);
     expect(lignesDe(section)[0].slice(0, 2)).toEqual(['Théo Pervenche', '6']);
+    // La cellule des tours, lue telle quelle : le t de l'écran tient chaque
+    // « ; » à l'étape qu'il suit par une fine insécable.
+    const etapes = rencontresDePersonne(lue, id, 1).lignes[0].tours.map(({ tour, table }) => ({ tour: tour + 1, table: 10 + table }));
+    const cellule = section.querySelector('tbody tr').querySelectorAll('td')[1];
+    expect(cellule.textContent).toBe(tEcran('participants.fiche.rencontres.toursListe', { tours: etapes }));
+    expect(cellule.textContent).toContain('\u{202F};');
   });
 
   test('la ligne de la fiche égale celle de la matrice de la page de qualité, pour chaque personne', async () => {
@@ -774,7 +784,7 @@ describe('la rubrique « Logo » de la fiche (§ 8.9, § 10.2)', () => {
     expect(section.compareDocumentPosition(fiche.querySelector('[data-etiquettes]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(texteDe(section.querySelector('[data-logo-absent]'))).toBe('Aucun logo.');
     expect(texteDe(commande(fiche, 'choisirLogo'))).toBe('Logo');
-    expect(commande(fiche, 'choisirLogo').getAttribute('aria-label')).toBe('Logo de Ondine Lacasse : choisir une image');
+    expect(commande(fiche, 'choisirLogo').getAttribute('aria-label')).toBe('Logo de Ondine Lacasse\u{A0}: choisir une image');
     expect(commande(fiche, 'retirerLogo')).toBeNull();
     expect(vignette(fiche)).toBeNull();
     expect(m.choix).toEqual([]);

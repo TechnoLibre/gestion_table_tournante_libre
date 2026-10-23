@@ -5,11 +5,12 @@
 // § 19.11, § 12.7, § 7.6, § 13.1, § 2, § 19.2, § 8.4, § 18.6) : langue
 // témoin, erreurs par leur libellé, contrastes et marques dans les deux
 // thèmes, aucune atténuation, jamais la seule couleur, teinte réservée, aucun
-// emoji, balisage littéral, bandeau, formulaires, transitions annulées ; la
-// page de qualité — chaque pourcentage suivi de son compte, celui de sa
-// ligne sur une ligne, le signe « % » à ses seules places, chaque niveau de
-// l'échelle rendu, les motifs des tracés, ses graphiques nommés et décrits,
-// ses jumeaux au clavier ; puis
+// emoji, la ponctuation haute insécable, balisage littéral, bandeau,
+// formulaires, transitions annulées ; la page de qualité — chaque
+// pourcentage suivi de son compte, celui de sa ligne sur une ligne, le
+// signe « % » à ses seules places, chaque niveau de l'échelle rendu, les
+// motifs des tracés, ses graphiques nommés et décrits, ses jumeaux au
+// clavier ; puis
 // le mécanisme des captures d'écran (§ 19.4, § 19.5, § 19.7, § 19.11),
 // chaque contrôle montré en train d'échouer sur un dossier d'épreuve.
 //
@@ -31,10 +32,9 @@ import { appliquerCommande } from '../application/commandes.js';
 import { comparerPlacements, evaluer } from '../application/evaluation.js';
 import { creerFormat } from '../application/format.js';
 import { creerExecuteurDirect } from '../application/generation.js';
-import { TABLES_APPLICATION } from '../application/libelles.js';
 import { nomAffiche } from '../application/personnes.js';
 import { etatPlaces } from '../application/places.js';
-import { MARQUE_TEMOIN, creerTraduction } from '../application/traduction.js';
+import { MARQUE_TEMOIN } from '../application/traduction.js';
 import { decoder } from '../csv/encodage.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { decouper } from '../csv/lecture.js';
@@ -84,16 +84,16 @@ import {
   texteReleve,
 } from '../../test/navigateur/captures.js';
 import { poserFeuille } from '../../test/navigateur/feuilles.js';
-import { composantes, couleursPeintes, designation, sousTheme, visible } from '../../test/navigateur/rendu.js';
+import { composantes, couleursPeintes, designation, sousTheme, traductionEcran, visible } from '../../test/navigateur/rendu.js';
 import { provenanceVisible } from './apropos.js';
-import { TABLES_INTERFACE } from './libelles.js';
 import { nomDe } from './propositions/modele.js';
 import { colonnesComparaison } from './qualite/colonnes.js';
 import SOURCE_CAPTURES from '../../test/navigateur/captures.js?raw';
 import { CONFLITS, FONDS_GRAPHIQUE, JETON_RETRAIT, MARQUES, MARQUES_GRAPHIQUE, NIVEAUX_GRAPHIQUE, SEPARATIONS, TEINTES_ORGANISATION } from './marques.js';
 import { SIMULATIONS, ecartPercu, simuler } from './palette.js';
 
-const { t: tTemoin } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue: 'temoin' });
+// Le t de l'écran en langue témoin, celui que lit App montée par creerContexte.
+const { t: tTemoin } = traductionEcran({ langue: 'temoin' });
 const { ouverture: OUVERTURE, fermeture: FERMETURE } = MARQUE_TEMOIN;
 const PROVENANCE = 'test';
 const THEMES = ['clair', 'sombre'];
@@ -267,6 +267,28 @@ export function fautesEmoji(racine, { titre = null } = {}) {
   if (titre !== null) textes.push({ ou: 'document.title', texte: titre });
   const fautes = textes.filter(({ texte }) => PICTOGRAPHIQUE.test(texte)).map(({ ou, texte }) => `${ou} : « ${extrait(texte)} »`);
   return { fautes, lus: textes.length };
+}
+
+// Une espace ordinaire U+0020 devant la ponctuation haute ou « » », ou après
+// « « » : la place où le t de l'écran pose une insécable (§ 14.6).
+const PONCTUATION_DETACHEE = / [;:?!»]|« /u;
+// Une insécable U+00A0 ou fine U+202F à l'une de ces places.
+const PONCTUATION_INSECABLE = /[\u{A0}\u{202F}][;:?!»]|«[\u{A0}\u{202F}]/u;
+
+/** Fautes de typographie sous racine (§ 14.6) : un texte affiché qui porte
+ *  une espace ordinaire devant « ; », « : », « ? », « ! », « » » ou après
+ *  « « ». Le titre de la fenêtre n'est pas lu : il quitte l'écran et garde
+ *  le texte brut. → { fautes, lus, insecables }, lus le nombre de textes
+ *  affichés lus, insecables le nombre de ceux qui portent une insécable à
+ *  l'une de ces places. */
+export function fautesTypographie(racine) {
+  const textes = textesAffiches(racine);
+  const fautes = [];
+  for (const { ou, texte } of textes) {
+    const motif = PONCTUATION_DETACHEE.exec(texte);
+    if (motif !== null) fautes.push(`${ou} : « ${extrait(texte)} » (« ${motif[0].trim()} »)`);
+  }
+  return { fautes, lus: textes.length, insecables: textes.filter(({ texte }) => PONCTUATION_INSECABLE.test(texte)).length };
 }
 
 // --- Les listes de noms et les tables -----------------------------------------------
@@ -1182,6 +1204,7 @@ beforeAll(async () => {
       const connues = await donneesConnues(contexte, { cellules: ecran.nom.startsWith('import.') ? cellules : [] });
       releve.temoin = fautesTemoin(racine, connues, { titre: document.title });
       releve.emoji = fautesEmoji(racine, { titre: document.title });
+      releve.typographie = fautesTypographie(racine);
       releve.bandeau = fautesBandeau(racine, ecran.mode);
       releve.formulaires = fautesFormulaires(racine);
       releve.imbrication = fautesImbrication(racine);
@@ -1268,6 +1291,26 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     const { fautes, lus } = avecFragment(`<p>${OUVERTURE}Prêt${FERMETURE} \u{1F642}</p><p>${OUVERTURE}2 + 2${FERMETURE}</p>`, (c) => fautesEmoji(c));
     expect(lus).toBe(2);
     expect(fautes).toHaveLength(1);
+  });
+
+  test('typographie : une espace ordinaire devant « ; », « : », « ? », « ! » ou « » », ou après « « », est relevée, texte ou attribut ; l’insécable et un signe collé passent', () => {
+    const { fautes, lus } = avecFragment(
+      `<p>${OUVERTURE}Table 3 : 4 places${FERMETURE}</p><p>« Iris\u{A0}»</p><p>a ; b</p><p>Oui !</p><p>«\u{A0}Iris »</p>` +
+        '<button aria-label="Fermer ?">x</button>' +
+        `<p>${OUVERTURE}Table 3\u{A0}: 4 places\u{202F}; «\u{A0}Iris\u{A0}»\u{202F}?\u{202F}!${FERMETURE}</p><p>https://exemple.test à 21:42</p>`,
+      (c) => fautesTypographie(c),
+    );
+    // Sept paragraphes, le texte du bouton et son aria-label : une faute par
+    // signe de la garde, chacune nommée par son signe.
+    expect(lus).toBe(9);
+    expect(fautes).toEqual([
+      `p : « ${OUVERTURE}Table 3 : 4 places${FERMETURE} » (« : »)`,
+      'p : « « Iris » » (« « »)',
+      'p : « a ; b » (« ; »)',
+      'p : « Oui ! » (« ! »)',
+      'p : « « Iris » » (« » »)',
+      'button[aria-label] : « Fermer ? » (« ? »)',
+    ]);
   });
 
   test('contraste et atténuation : un gris clair sur blanc et une opacité partielle sont relevés', () => {
@@ -1907,6 +1950,14 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
   test('aucun emoji au rendu', () => {
     expect(atteints().reduce((n, r) => n + r.emoji.lus, 0), 'textes affichés lus').toBeGreaterThan(0);
     aucuneFaute(atteints().flatMap((r) => r.emoji.fautes.map((f) => `${r.nom} — ${f}`)), 'emoji');
+  });
+
+  test('typographie : aucune espace ordinaire devant la ponctuation haute ni après « « », et des insécables posées (§ 14.6)', () => {
+    expect(atteints().reduce((n, r) => n + r.typographie.lus, 0), 'textes affichés lus').toBeGreaterThan(0);
+    aucuneFaute([...new Set(atteints().flatMap((r) => r.typographie.fautes.map((f) => `${r.nom} — ${f}`)))], 'typographie');
+    // Les écrans montrent de la ponctuation haute : la garde a lu des
+    // insécables posées, non des textes qui n'en portent aucune.
+    expect(atteints().reduce((n, r) => n + r.typographie.insecables, 0), 'textes affichés qui portent une insécable de ponctuation').toBeGreaterThan(0);
   });
 
   test('le bandeau sur tout écran : visible, version et provenance ; libellé de mode absent de la liste, égal à celui de la barre sur un événement', () => {

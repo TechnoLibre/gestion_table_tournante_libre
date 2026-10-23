@@ -52,6 +52,7 @@ import {
   fondPeintSous,
   porteursDeTexte,
   sousTheme,
+  traductionEcran,
   visible,
 } from '../../test/navigateur/rendu.js';
 import { blocAPropos } from './apropos.js';
@@ -60,6 +61,9 @@ import { SECTION_OUVERTURE } from './evenement/sections.js';
 import { cleDeMode } from './mode.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const format = creerFormat(t);
 
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
@@ -260,7 +264,7 @@ describe('« Liste des événements » (§ 8.1, § 8.4)', () => {
     const remede = leve.details.remede;
     expect(remede.geste).toBe('ecrireAilleurs');
     const cleRemede = `communs.remede.ecrireAilleurs.${remede.racine ? 'documents' : 'choisi'}`;
-    expect(refus.textContent).toContain(t(leve.code, leve.details));
+    expect(refus.textContent).toContain(tEcran(leve.code, leve.details));
     const commandeRemede = refus.querySelector('[data-commande="ecrireAilleurs"]');
     expect(commandeRemede?.textContent).toBe(t(cleRemede));
     expect(visible(refus)).toBe(true);
@@ -314,7 +318,7 @@ describe('la liste relue', () => {
       expect(element).not.toBeNull();
       return element;
     });
-    expect(refus.textContent).toBe(t(refuse.code, refuse.details));
+    expect(refus.textContent).toBe(tEcran(refuse.code, refuse.details));
     expect(visible(refus)).toBe(true);
     expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(0);
     m.fs.lister = lister;
@@ -336,7 +340,7 @@ describe('la liste relue', () => {
     const m = await monter({ systeme: { disque: new DisqueIllisible() } });
     expect(ecran(m)?.dataset.ecran).toBe('accueil');
     const refus = dans(m, '[data-refus="accueil"]');
-    expect(refus?.textContent).toBe(t(refuse.code, refuse.details));
+    expect(refus?.textContent).toBe(tEcran(refuse.code, refuse.details));
     expect(visible(refus)).toBe(true);
     expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(0);
   });
@@ -354,7 +358,7 @@ describe('la liste relue', () => {
       }
     }
     const m = await monter({ systeme: { disque: new DisqueUneFoisIllisible() } });
-    expect(dans(m, '[data-refus="accueil"]')?.textContent).toBe(t(refuse.code, refuse.details));
+    expect(dans(m, '[data-refus="accueil"]')?.textContent).toBe(tEcran(refuse.code, refuse.details));
     await m.facade.demarrer();
     await vi.waitFor(() => expect(dans(m, '[data-refus="accueil"]')).toBeNull());
   });

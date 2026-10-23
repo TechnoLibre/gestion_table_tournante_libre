@@ -30,11 +30,15 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { dessinerGraphiques, fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { traductionEcran } from '../../../test/navigateur/rendu.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import VuePaires from './VuePaires.svelte';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const format = creerFormat(t);
 const V1 = VERSION.affichee;
 const BASE = 'soiree';
@@ -265,7 +269,7 @@ describe('le tableau des paires sur 12 / 4 × 3 / 6 (§ 12.5, D32)', () => {
       const bouton = commandes(ligne, 'allerAuTour')[rang + 1];
       const libelle = t('qualite.paires.tour', { tour: tour + 1, table: 10 + table });
       expect(texteDe(bouton)).toBe(libelle);
-      expect(bouton.getAttribute('aria-label')).toBe(t('qualite.paires.tourNom', { tour: tour + 1, table: 10 + table, a: nomDe(a), b: nomDe(b) }));
+      expect(bouton.getAttribute('aria-label')).toBe(tEcran('qualite.paires.tourNom', { tour: tour + 1, table: 10 + table, a: nomDe(a), b: nomDe(b) }));
       bouton.click();
       flushSync();
       expect([m.ui.etat().section, m.ui.etat().tour, m.ui.etat().miseEnEvidence]).toEqual(['plan', tour + 1, a]);

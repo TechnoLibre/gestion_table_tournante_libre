@@ -25,11 +25,14 @@ import { creerFormat } from '../../application/format.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { composantes, contraste, couleurTexte, fondPeintSous, porteursDeTexte, sousTheme, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, couleurTexte, fondPeintSous, porteursDeTexte, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { PHASES, SECTIONS } from './sections.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const format = creerFormat(t);
 const THEMES = ['clair', 'sombre'];
 
@@ -177,8 +180,8 @@ describe('la bande de mode et la pleine fenêtre (§ 8.4)', () => {
         for (const cote of ['Top', 'Right', 'Bottom', 'Left']) {
           expect(Number.parseFloat(style(surface(m))[`border${cote}Width`]), `${mode} ${cote}`).toBe(0);
         }
-        expect(region.textContent, mode).toContain(t(cle));
-        expect(region.textContent, mode).toContain(t(explication));
+        expect(region.textContent, mode).toContain(tEcran(cle));
+        expect(region.textContent, mode).toContain(tEcran(explication));
         expect(region.textContent, mode).toContain(dans(m, '[data-mode-libelle="barre"]').textContent);
         expect(visible(region), mode).toBe(true);
         hauteurs.push(b.height);
@@ -481,7 +484,7 @@ describe('les avertissements, en messages d’avis', () => {
         });
         const texte = message.querySelector('p');
         const action = message.querySelector('button[data-commande]');
-        expect(texte.textContent).toBe(t('PLACES_MANQUANTES', { placesManquantes: manque }));
+        expect(texte.textContent).toBe(tEcran('PLACES_MANQUANTES', { placesManquantes: manque }));
         expect(action).not.toBeNull();
         expect(action.textContent.trim()).toBe(t('communs.remede.ouvrirSection.tables'));
         // La zone des annonces ne défile pas, et le bouton tient dans sa

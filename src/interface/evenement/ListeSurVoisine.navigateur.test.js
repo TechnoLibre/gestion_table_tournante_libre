@@ -21,10 +21,14 @@ import { creerTraduction } from '../../application/traduction.js';
 import { creerCharge } from '../../stockage/document.js';
 import { fixerCadre, touche } from '../../../test/navigateur/entrees.js';
 import { attendre, cliquer, creerContexte, ouvrirEvenement } from '../../../test/navigateur/ecrans.js';
+import { traductionEcran } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { avertissementsOrdonnes } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// texte lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 
 // Images attendues au plus par étape : bien au-delà d'une écriture simulée
 // et de son rendu, et sous le délai d'une épreuve, pour qu'une étape qui ne
@@ -86,7 +90,7 @@ describe('LISTE_SUR_VOISINE : la liste d’une table agrandie passe sur sa voisi
     const montres = [...m.racine.querySelectorAll('[data-annonces] [data-avertissement]')].map((element) => element.dataset.avertissement);
     expect(montres).toEqual(avertissementsOrdonnes(m.seance.etat()).map(({ code }) => code));
     expect(montres).toContain('LISTE_SUR_VOISINE');
-    const texte = t('LISTE_SUR_VOISINE', details);
+    const texte = tEcran('LISTE_SUR_VOISINE', details);
     expect(annonce.querySelector('p').textContent).toBe(texte);
     expect(texte).toContain('table 2');
 
