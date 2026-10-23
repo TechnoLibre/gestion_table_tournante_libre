@@ -118,6 +118,17 @@ personnes, « Mettre à jour » met à jour celles que le fichier reconnaît san
 effacer les champs qu’il ne porte pas, « Remplacer » remplace la liste et
 annonce d’abord ce qu’il détruit.
 
+Deux lignes au même nom, prénom et organisation — ou une ligne qui reprend une
+personne déjà dans la liste — se signalent en doublons : chacun nomme la
+personne et ses lignes, « Roger Galet — lignes 15 et 16 », numérotées comme la
+colonne « Ligne » de l’aperçu et comme le tableur, l’en-tête en ligne 1. Le
+logiciel ne fusionne jamais deux personnes : s’il s’agit bien de deux convives,
+« Rendre les noms uniques » garde le nom de la première et ajoute aux suivantes
+un numéro, « Galet 01 », « Galet 02 », en sautant un numéro déjà pris. Votre
+fichier n’est pas modifié : l’aperçu se recalcule sur ces noms, et le rapport
+compte les noms rendus uniques. En mise à jour, une ligne qui met à jour une
+personne de la liste garde son nom.
+
 Un fichier enregistré par un tableur sous Windows n’est souvent pas en UTF-8.
 Le logiciel le reconnaît et le dit :
 

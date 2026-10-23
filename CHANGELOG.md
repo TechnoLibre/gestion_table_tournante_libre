@@ -512,6 +512,12 @@
 - Sous Linux, quand le gestionnaire de fichiers ne s'ouvre pas, « Ouvrir dans
   l'explorateur » et « Ouvrir le dossier » le disent à côté du bouton, avec la
   raison donnée par le système, au lieu de ne rien faire.
+- Dans l'aperçu d'un import, chaque doublon nomme la personne et énumère ses
+  lignes, « lignes 15 et 16 », là où les numéros se collaient en « 1516 ».
+  « Rendre les noms uniques », dans le bloc des doublons, garde le nom de la
+  première personne et numérote les suivantes, « Galet 01 », « Galet 02 », en
+  sautant un nom déjà pris ; le fichier n'est pas modifié, l'aperçu se
+  recalcule, et le rapport d'import compte les noms rendus uniques.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

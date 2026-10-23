@@ -11,7 +11,8 @@
 // la cellule des conflits d'organisation, et le refus entier qu'un conflit
 // fautif cause, avec l'organisation et la ligne, et son invitation à
 // réimporter ; le modèle à télécharger de chaque nature, son nom et son nom
-// accessible.
+// accessible ; les doublons nommés, leurs lignes énumérées, et les noms que
+// « Rendre les noms uniques » leur donne.
 // Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
@@ -49,6 +50,7 @@ import {
   modePropose,
   motifLigne,
   nommer,
+  nomsRendusUniques,
   refuseesDe,
 } from './modele.js';
 
@@ -295,6 +297,7 @@ describe('modeleApercu : la cause et le remède de chaque refus global (§ 10.1)
       assert.deepEqual(modele[liste], [], liste);
     }
     assert.equal(modele.valides, 0);
+    assert.equal(modele.renommes, 0);
   });
 });
 
@@ -392,7 +395,7 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
         ],
       },
     ]);
-    assert.deepEqual(modele.doublons, [{ lignes: [2], existants: [4] }]);
+    assert.deepEqual(modele.doublons, [{ lignes: [2], existants: [4], nom: 'Ombrelle', prenom: 'Iris' }]);
     const motif = motifLigne(t);
     const [, refusee] = modele.refusees;
     assert.equal(motif(refusee.code, refusee.details), t('EXCLU_INCONNU', { ligne: 4, valeur: 'peut-être' }));
@@ -524,8 +527,8 @@ describe('messageDuBloc : chaque message de l’aperçu et du rapport classé en
     }
   });
 
-  test('les informations : les orthographes fondues, d’organisation ou d’étiquette, un import qui n’a rien écrit', () => {
-    for (const bloc of ['fusions', 'fusionsEtiquettes', 'rienEcrit']) {
+  test('les informations : les orthographes fondues, d’organisation ou d’étiquette, les noms rendus uniques, un import qui n’a rien écrit', () => {
+    for (const bloc of ['fusions', 'fusionsEtiquettes', 'renommes', 'rienEcrit']) {
       assert.deepEqual(messageDuBloc(bloc), { sorte: 'information', cle: 'import.sorte.information', icone: 'information' }, bloc);
     }
   });
@@ -536,7 +539,9 @@ describe('messageDuBloc : chaque message de l’aperçu et du rapport classé en
 
   test('trois sortes, chacune un ton de pastille, un libellé traduit et une icône distincte', () => {
     assert.deepEqual(SORTES_DE_MESSAGE, ['refus', 'avis', 'information']);
-    const blocs = ['global', 'refusees', 'doublons', 'homonymes', 'fusions', 'fusionsEtiquettes', 'multilignes', 'rienEcrit'].map(messageDuBloc);
+    const blocs = ['global', 'refusees', 'doublons', 'homonymes', 'fusions', 'fusionsEtiquettes', 'renommes', 'multilignes', 'rienEcrit'].map(
+      messageDuBloc,
+    );
     assert.equal(new Set(blocs.map(({ icone }) => icone)).size, 3);
     assert.deepEqual(
       SORTES_DE_MESSAGE.map((sorte) => t(`import.sorte.${sorte}`)),
@@ -938,5 +943,54 @@ describe('la cellule de la présence (§ 10.1)', () => {
     assert.deepEqual(lu.lignes.map(({ champs }) => champs.presence), [[2]]);
     assert.deepEqual(lu.refusees.map(({ code, tour, tours }) => [code, tour, tours]), [['PRESENCE_HORS_TOURS', 3, 2]]);
     assert.equal(apercevoirSelon('participants', lignes('nom', 'Ombrelle'), charge, { mode: 'mettreAJour' }).tours, 2);
+  });
+});
+
+// --- Les doublons : la personne, ses lignes, « Rendre les noms uniques » (§ 10.1) ---
+
+describe('modèle : les doublons nommés et les noms rendus uniques (§ 10.1)', () => {
+  const existants = [{ id: 4, nom: 'Galet', prenom: 'Roger', organisation: null }];
+
+  test('chaque doublon nomme la personne telle que sa première ligne l’écrit, prénom null sans prénom', () => {
+    const texte = lignes('nom;prenom', 'GALET;roger', 'Galet;Roger', 'Houle;', 'houle;');
+    const modele = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte) });
+    assert.deepEqual(modele.doublons, [
+      { lignes: [2, 3], existants: [], nom: 'GALET', prenom: 'roger' },
+      { lignes: [4, 5], existants: [], nom: 'Houle', prenom: null },
+    ]);
+  });
+
+  test('les lignes d’un doublon s’énumèrent en une phrase : « ligne 15 », « lignes 15 et 16 », « lignes 15, 16 et 17 »', () => {
+    assert.equal(t('import.apercu.doublonLignes', { lignes: [15] }), 'ligne 15');
+    assert.equal(t('import.apercu.doublonLignes', { lignes: [15, 16] }), 'lignes 15 et 16');
+    assert.equal(t('import.apercu.doublonLignes', { lignes: [15, 16, 17] }), 'lignes 15, 16 et 17');
+    // Les rangs s'écrivent comme la colonne « Ligne », groupés au-delà de 999.
+    assert.equal(t('import.apercu.doublonLignes', { lignes: [1000, 1001] }), 'lignes 1\u{202F}000 et 1\u{202F}001');
+  });
+
+  test('nomsRendusUniques : ceux de rendreNomsUniques pour des participants, aucun pour des objectifs ni sans aperçu', () => {
+    const texte = lignes('nom;prenom', 'Galet;Roger', 'Galet;Roger');
+    const charge = { participants: existants, tables: [], evenement: { tours: 2 } };
+    const apercu = apercevoirSelon('participants', texte, charge, { mode: 'ajouter' });
+    assert.deepEqual([...nomsRendusUniques('participants', apercu, existants)], [[2, 'Galet 01'], [3, 'Galet 02']]);
+    assert.deepEqual([...nomsRendusUniques('participants', null, existants)], []);
+    assert.deepEqual([...nomsRendusUniques('objectifs', apercu, existants)], []);
+    assert.throws(() => nomsRendusUniques('tables', apercu, existants), RangeError);
+  });
+
+  test('apercevoirSelon passe les noms rendus : le modèle n’a plus de doublon, et compte les noms rendus uniques', () => {
+    const texte = lignes('nom;prenom', 'Galet;Roger', 'Galet;Roger');
+    const charge = { participants: existants, tables: [], evenement: { tours: 2 } };
+    const avant = apercevoirSelon('participants', texte, charge, { mode: 'ajouter' });
+    assert.equal(modeleApercu({ encodage: 'utf-8', apercu: avant }).renommes, 0);
+    const noms = nomsRendusUniques('participants', avant, existants);
+    const apres = apercevoirSelon('participants', texte, charge, { mode: 'ajouter', noms });
+    const modele = modeleApercu({ encodage: 'utf-8', apercu: apres });
+    assert.deepEqual(modele.doublons, []);
+    assert.equal(modele.renommes, 2);
+    assert.deepEqual(modele.lignes.map(({ cellules }) => cellules[0].texte), ['Galet 01', 'Galet 02']);
+    assert.equal(t('import.apercu.nomsRendusUniques', { n: 1 }), 'nom rendu unique par un suffixe numéroté');
+    assert.equal(t('import.apercu.nomsRendusUniques', { n: 2 }), 'noms rendus uniques par un suffixe numéroté');
+    for (const cle of ['import.apercu.renommes', 'import.commande.rendreNomsUniques']) assert.ok(t(cle).length > 0, cle);
   });
 });

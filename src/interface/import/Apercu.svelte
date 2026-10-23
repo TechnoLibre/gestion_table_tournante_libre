@@ -9,10 +9,10 @@
   // ou commande du geste qui y mène —, l'association des colonnes et ses
   // ambiguïtés, les lignes valides sous les colonnes de leur nature, les
   // lignes refusées et leur motif, les orthographes fondues d'organisations
-  // puis, dans un bloc à part, celles d'étiquettes, les doublons, les
-  // homonymes d'une mise à jour, les cellules sur plusieurs lignes. Le
-  // rapport le reprend pour l'aperçu appliqué, ses refus remplacés par ceux
-  // du résumé. Une cellule d'étiquettes, celles d'une personne ou l'objectif
+  // puis, dans un bloc à part, celles d'étiquettes, les noms rendus uniques,
+  // les doublons, les homonymes d'une mise à jour, les cellules sur
+  // plusieurs lignes. Le rapport le reprend pour l'aperçu appliqué, ses
+  // refus remplacés par ceux du résumé. Une cellule d'étiquettes, celles d'une personne ou l'objectif
   // d'une table, montre chacune en pastille, à l'icône des étiquettes ;
   // seule une cellule de conflits, chaque organisation nommée en pastille,
   // prend l'icône « interdit » ; une cellule à clé se traduit avec ses
@@ -24,23 +24,38 @@
   // modele : le modèle ; source : { origine: 'fichier'|'collage', nom } ;
   // participants : ceux de la charge, qui nomment les personnes désignées ;
   // refusees : les lignes refusées à montrer, celles du modèle par défaut ;
-  // choisir(champ, rang) : tranche une ambiguïté, null pour un aperçu figé.
+  // choisir(champ, rang) : tranche une ambiguïté, null pour un aperçu figé ;
+  // rendreUniques() : « Rendre les noms uniques », dans le bloc des
+  // doublons, null quand aucun nom n'est à rendre ou que l'aperçu est figé.
+  // La commande retire son propre bouton : le geste abouti, le focus va à la
+  // phrase des noms rendus uniques, focalisable par programme.
   // Chaque donnée — nom de fichier, en-tête, cellule, rang, compte — occupe
-  // son propre nœud de texte.
+  // son propre nœud de texte, sauf les lignes d'un doublon, qu'une phrase
+  // énumère : « lignes 15 et 16 ». Un doublon nomme la personne telle que
+  // sa première ligne l'écrit, puis ses lignes, puis les personnes de la
+  // liste qu'il recoupe, séparées d'une virgule.
   //
   // Chaque message est classé (Message, messageDuBloc) : le refus global et
   // les lignes refusées en refus, les doublons, les homonymes et les
   // cellules sur plusieurs lignes en avis, les orthographes fondues,
   // d'organisations et d'étiquettes, en information. Les tableaux prennent le langage des cartes : en-tête sur
   // le fond sourd, lignes séparées d'un filet léger.
-  import { getContext } from 'svelte';
+  import { getContext, tick } from 'svelte';
   import { actionRemede } from '../primitives/commande.js';
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Message from './Message.svelte';
   import { messageDuBloc, motifLigne, nommer } from './modele.js';
 
-  let { modele, source, participants = [], refusees = null, choisir = null } = $props();
+  let { modele, source, participants = [], refusees = null, choisir = null, rendreUniques = null } = $props();
+
+  // La phrase des noms rendus uniques, où le focus va après le geste.
+  let phraseRenommes = $state(null);
+  async function rendreEtSuivre() {
+    await rendreUniques();
+    await tick();
+    phraseRenommes?.focus();
+  }
 
   const t = getContext('t');
   const format = getContext('format');
@@ -242,27 +257,45 @@
     </Message>
   {/if}
 
+  {#if modele.renommes > 0}
+    <Message bloc="renommes" titre={t('import.apercu.renommes')}>
+      <p class="renommes" tabindex="-1" bind:this={phraseRenommes}>
+        <span data-nombre>{format.nombre(modele.renommes)}</span>
+        <span>{t('import.apercu.nomsRendusUniques', { n: modele.renommes })}</span>
+      </p>
+    </Message>
+  {/if}
+
   {#if modele.doublons.length > 0}
     <Message bloc="doublons" titre={t('import.apercu.doublons')}>
       <ul data-doublons>
         {#each modele.doublons as doublon, rang (rang)}
           <li data-doublon>
-            <span>{t('import.apercu.doublonLignes')}</span>
-            {#each doublon.lignes as ligne (ligne)}
-              <span data-nombre>{format.nombre(ligne)}</span>
-            {/each}
+            <span class="personne">
+              {#if doublon.prenom !== null}<span>{doublon.prenom}</span>{/if}
+              <span>{doublon.nom}</span>
+            </span>
+            <span aria-hidden="true">—</span>
+            <span>{t('import.apercu.doublonLignes', { lignes: doublon.lignes })}</span>
             {#if doublon.existants.length > 0}
+              {@const existants = nommer(participants, doublon.existants)}
+              <span aria-hidden="true">—</span>
               <span>{t('import.apercu.doublonExistants')}</span>
-              {#each nommer(participants, doublon.existants) as personne (personne.id)}
+              {#each existants as personne, place (personne.id)}
                 <span class="personne" data-participant={personne.id}>
                   {#if personne.prenom !== null}<span>{personne.prenom}</span>{/if}
                   <span>{personne.nom}</span>
-                </span>
+                </span>{#if place < existants.length - 1}{', '}{/if}
               {/each}
             {/if}
           </li>
         {/each}
       </ul>
+      {#if rendreUniques !== null}
+        <div class="rendre">
+          <Commande cle="import.commande.rendreNomsUniques" nom="rendreNomsUniques" executer={rendreEtSuivre} />
+        </div>
+      {/if}
     </Message>
   {/if}
 
@@ -439,5 +472,14 @@
     display: inline-flex;
     gap: var(--espace-1);
     font-weight: bold;
+  }
+
+  /* « Rendre les noms uniques » sous la liste des doublons, à sa largeur. */
+  .rendre {
+    display: flex;
+  }
+
+  .renommes {
+    margin: 0;
   }
 </style>

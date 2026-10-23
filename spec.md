@@ -4318,7 +4318,8 @@ une cellule vide les garde : un CSV n'efface pas les étiquettes.
 L'aperçu et le rapport classent chacun de leurs messages en **refus** — le refus
 global, les lignes refusées —, **avis** — les doublons, les homonymes d'une mise
 à jour, les cellules sur plusieurs lignes qui portent le séparateur — ou
-**information** — les orthographes fondues, un import qui n'a rien écrit. Une
+**information** — les orthographes fondues, les noms rendus uniques, un import
+qui n'a rien écrit. Une
 pastille nomme la classe en texte, avec son icône ; la couleur la redit.
 
 **La ligne invalide : importer le reste.** Le logiciel importe les lignes
@@ -4341,7 +4342,30 @@ tiendrait dans un seul champ, et deux personnes se fondraient en une —, et
 **Les doublons** se repèrent sur le triplet (nom, prénom, organisation)
 normalisé, et le logiciel **ne fusionne jamais tout seul** : deux personnes
 portent le même nom, et la fusion silencieuse fait disparaître un convive qui se
-présentera quand même.
+présentera quand même. Chaque doublon nomme la personne, prénom et nom tels que
+sa première ligne les écrit, puis ses lignes en une phrase — « lignes 15, 16
+et 17 », les rangs de la colonne « Ligne », en-tête compris —, puis les
+personnes de la liste qu'il recoupe.
+
+**« Rendre les noms uniques »**, offert dans le bloc des doublons, distingue les
+personnes sans en fusionner aucune : dans chaque doublon, le premier porteur du
+triplet garde son nom — la personne de la liste quand le doublon en recoupe
+une, sinon la première ligne du fichier —, et chaque autre ligne, dans l'ordre
+du fichier, reçoit au nom une espace et un numéro : « 01 », « 02 »…, deux
+chiffres, trois au-delà de 99 ; le prénom ne change pas. Le nom « Galet », prénom
+« Roger », devient « Galet 01 », « Roger ». Un nom suffixé que porte déjà une
+personne de la liste ou une ligne du fichier, valide ou refusée, ou qu'un autre
+doublon vient de recevoir, comparé par la clé normalisée, saute au numéro libre
+suivant. En mise à jour, une ligne que l'import applique à une personne de la
+liste est cette personne, non un doublon : elle garde son nom, que le suffixe
+changerait en création ; sous « Remplacer », la liste retirée ne compte pas.
+Le fichier n'est jamais réécrit : l'aperçu se recalcule sur les noms rendus, le
+bloc des doublons se vide — sauf, en mise à jour, les lignes qui mettent à jour
+leur personne —, et l'import applique ces noms ; l'aperçu, puis le rapport
+d'import, comptent les noms rendus uniques, en information. La commande n'est
+offerte que lorsqu'elle rend un nom au moins, et vaut pour le texte ouvert,
+sous chaque mode et chaque choix de colonnes, jusqu'à ce qu'un autre texte ou
+une autre nature l'ouvre de nouveau.
 
 **Mettre à jour n'efface pas** : un champ vide dans le fichier laisse la valeur
 existante. Un fichier ne portant que les noms effacerait sinon tous les

@@ -24,6 +24,7 @@ import {
   apercevoirObjectifs,
   modeleObjectifs,
   modeleParticipants,
+  rendreNomsUniques,
 } from '../../application/csv.js';
 
 /** Les deux natures d'un fichier importé (§ 10.4), dans l'ordre où l'écran
@@ -171,18 +172,40 @@ export function modeleATelecharger(nature, { base, charge }) {
  * @param {'participants'|'objectifs'} nature
  * @param {string} texte
  * @param {Object} charge  la charge de l'événement ouvert
- * @param {{choix?: Object<string, number>, mode?: string}} [options]  le
- *   choix des colonnes ambiguës et le mode ; chaque aperçu prend son mode
- *   par défaut quand mode manque
+ * @param {{choix?: Object<string, number>, mode?: string, noms?: Map<number, string>}} [options]
+ *   le choix des colonnes ambiguës et le mode ; chaque aperçu prend son mode
+ *   par défaut quand mode manque ; noms, ceux de nomsRendusUniques, que lit
+ *   le seul aperçu des participants
  * @returns {Object}  l'aperçu de la nature, tel que src/csv le rend
  * @throws {RangeError} une nature inconnue
  */
-export function apercevoirSelon(nature, texte, charge, { choix = {}, mode } = {}) {
+export function apercevoirSelon(nature, texte, charge, { choix = {}, mode, noms } = {}) {
   const options = mode === undefined ? { choix } : { choix, mode };
   if (exigerNature(nature) === 'objectifs') return apercevoirObjectifs(texte, charge, options);
   return apercevoir(texte, {
-    participants: charge.participants, tables: charge.tables, tours: charge.evenement.tours, ...options,
+    participants: charge.participants,
+    tables: charge.tables,
+    tours: charge.evenement.tours,
+    ...options,
+    ...(noms === undefined ? {} : { noms }),
   });
+}
+
+/**
+ * Les noms que « Rendre les noms uniques » donne aux doublons d'un aperçu
+ * (rendreNomsUniques, § 10.1) : rang de ligne → nom suffixé. Aucun pour des
+ * objectifs, qui n'ont pas de doublon, ni sans aperçu. L'écran n'offre la
+ * commande que lorsqu'il y en a un au moins.
+ *
+ * @param {'participants'|'objectifs'} nature
+ * @param {Object|null} apercu  l'aperçu de la nature, calculé sans noms
+ * @param {Array<Object>} participants  ceux contre lesquels il s'est calculé
+ * @returns {Map<number, string>}
+ * @throws {RangeError} une nature inconnue
+ */
+export function nomsRendusUniques(nature, apercu, participants) {
+  if (exigerNature(nature) === 'objectifs' || apercu === null) return new Map();
+  return rendreNomsUniques(apercu, participants);
 }
 
 /** Les trois sortes d'un message de l'aperçu et du rapport, chacune un ton
@@ -203,7 +226,7 @@ const ICONES_DE_SORTE = new Map([
 // à jour —, ou une cellule sur plusieurs lignes qui porte le séparateur,
 // peut-être un guillemet mal fermé ; une information dit ce qui a été fait
 // ou lu sans rien écarter — les orthographes fondues d'organisations et
-// celles d'étiquettes, deux blocs distincts.
+// celles d'étiquettes, deux blocs distincts, et les noms rendus uniques.
 const SORTES_DES_BLOCS = new Map([
   ['global', 'refus'],
   ['refusees', 'refus'],
@@ -212,6 +235,7 @@ const SORTES_DES_BLOCS = new Map([
   ['multilignes', 'avis'],
   ['fusions', 'information'],
   ['fusionsEtiquettes', 'information'],
+  ['renommes', 'information'],
   ['rienEcrit', 'information'],
 ]);
 
@@ -219,7 +243,8 @@ const SORTES_DES_BLOCS = new Map([
  * La classe d'un bloc de messages de l'aperçu ou du rapport.
  *
  * @param {string} bloc  'global', 'refusees', 'doublons', 'homonymes',
- *        'fusions', 'fusionsEtiquettes', 'multilignes' ou 'rienEcrit'
+ *        'fusions', 'fusionsEtiquettes', 'renommes', 'multilignes' ou
+ *        'rienEcrit'
  * @returns {{sorte: string, cle: string, icone: string}}  la sorte, la clé
  *   de son libellé et l'icône de sa pastille
  * @throws {RangeError} un bloc inconnu
@@ -458,6 +483,17 @@ function lignesDesObjectifs(lignes) {
   }));
 }
 
+// Chaque doublon de l'aperçu, ses lignes et ses existants, et la personne
+// qu'il nomme : le nom et le prénom de sa première ligne, tels qu'écrits.
+// Un aperçu des objectifs n'en a pas.
+function doublonsNommes({ doublons = [], lignes }) {
+  const champsDe = new Map(lignes.map(({ ligne, champs }) => [ligne, champs]));
+  return doublons.map(({ lignes: rangs, existants }) => {
+    const { nom, prenom } = champsDe.get(rangs[0]);
+    return { lignes: rangs, existants, nom, prenom };
+  });
+}
+
 /**
  * Les lignes refusées, par l'aperçu ou par la mise à jour, telles que
  * l'aperçu et le rapport les montrent : le rang, le code, et les détails que
@@ -516,6 +552,7 @@ const RIEN = Object.freeze({
   doublons: [],
   homonymes: [],
   multilignes: [],
+  renommes: 0,
   global: null,
 });
 
@@ -524,8 +561,8 @@ const RIEN = Object.freeze({
  * encodage (null pour un collage) et séparateur nommés — « une seule
  * colonne » pour un séparateur null —, association par colonne, ambiguïtés,
  * colonnes et lignes valides, lignes refusées, orthographes fondues
- * d'organisations et d'étiquettes, chacune dans son bloc, doublons, et le
- * refus global, de decoder (refusDecodage, apercu null) ou de l'aperçu
+ * d'organisations et d'étiquettes, chacune dans son bloc, doublons, le
+ * nombre de noms rendus uniques, et le refus global, de decoder (refusDecodage, apercu null) ou de l'aperçu
  * (apercu.refusGlobal), avec la clé de sa cause et celle de son remède — en
  * clés de libellés et en données. Un aperçu des objectifs n'a ni
  * organisations, ni doublons, ni homonymes : ces listes y sont vides.
@@ -552,9 +589,10 @@ const RIEN = Object.freeze({
  *   refusees: Array<{ligne: number, code: string, details: Object}>,
  *   fusions: Array<{affichee: string, orthographes: Array<{texte: string, lignes: number}>}>,
  *   fusionsEtiquettes: Array<{retenue: string, orthographes: string[], lignes: number}>,
- *   doublons: Array<{lignes: number[], existants: number[]}>,
+ *   doublons: Array<{lignes: number[], existants: number[], nom: string, prenom: string|null}>,
  *   homonymes: Array<{ligne: number, participants: number[]}>,
  *   multilignes: Array<{ligne: number, rangs: number[]}>,
+ *   renommes: number,
  *   global: null|{cle: string, details: Object,
  *     remede: {cle: string|null, details: Object, dansLaCause: boolean, geste: Object|null}},
  * }}
@@ -566,7 +604,10 @@ const RIEN = Object.freeze({
  *   que reçoit le motif d'une ligne (motifLigne) ; fusions[].orthographes[].lignes, le
  *   nombre de lignes de l'orthographe, 0 pour celle que seuls des
  *   participants existants portent ; fusionsEtiquettes[].lignes, le nombre
- *   de lignes réécrites sous l'orthographe retenue
+ *   de lignes réécrites sous l'orthographe retenue ; doublons[].nom et
+ *   doublons[].prenom, la personne telle que la première ligne du doublon
+ *   l'écrit ; renommes, le nombre de lignes dont le nom vient de « Rendre
+ *   les noms uniques »
  * @throws {RangeError} une nature, un encodage, un séparateur ou un refus
  *   sans clé
  */
@@ -598,9 +639,10 @@ export function modeleApercu({ nature = 'participants', encodage = null, apercu 
       orthographes: [...orthographes],
       lignes,
     })),
-    doublons: (apercu.doublons ?? []).map(({ lignes, existants }) => ({ lignes, existants })),
+    doublons: doublonsNommes(apercu),
     homonymes: apercu.homonymes ?? [],
     multilignes: apercu.multilignes,
+    renommes: (apercu.renommes ?? []).length,
     global: globalDeLApercu(apercu, encodage === null, nature),
   };
 }

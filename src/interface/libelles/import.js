@@ -6,8 +6,10 @@
 // clé commence par « import. ». Un nombre, un nom ou un rang s'affiche dans
 // son propre nœud de texte : les libellés qui le suivent ne reçoivent que ce
 // qui accorde le nom au compte, ou, pour la présence, les tours que
-// toursNommes met en mots.
-import { toursNommes } from '../../application/libelles/aides.js';
+// toursNommes met en mots, et pour un doublon, ses lignes, qu'enumeration
+// joint en une phrase.
+import { enumeration, toursNommes } from '../../application/libelles/aides.js';
+import { creerFormat } from '../../application/format.js';
 
 // Le singulier jusqu'à un, le pluriel au-delà, comme le veut le français.
 const accorde = (n, singulier, pluriel) => (n <= 1 ? singulier : pluriel);
@@ -25,6 +27,7 @@ export const TABLE = new Map([
   ['import.commande.ordreDeLaGrille', "Lire les colonnes dans l'ordre de la grille"],
   ['import.commande.enregistrerRefus', 'Enregistrer les lignes refusées'],
   ['import.commande.fermerRapport', 'Fermer le rapport'],
+  ['import.commande.rendreNomsUniques', 'Rendre les noms uniques'],
   ['import.refusEnregistres', 'Lignes refusées enregistrées :'],
 
   // --- Le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4) -----------
@@ -114,8 +117,19 @@ export const TABLE = new Map([
   ['import.apercu.orthographes', 'orthographes :'],
   ['import.apercu.lignesReecrites', ({ n }) => accorde(n, 'ligne réécrite', 'lignes réécrites')],
   ['import.apercu.doublons', 'Doublons signalés, jamais fusionnés'],
-  ['import.apercu.doublonLignes', 'lignes'],
+  // Les lignes d'un doublon, rangs du fichier en-tête compris, ceux de la
+  // colonne « Ligne » : « lignes 15, 16 et 17 ».
+  [
+    'import.apercu.doublonLignes',
+    ({ lignes }, texte) =>
+      `${accorde(lignes.length, 'ligne', 'lignes')} ${enumeration(lignes.map((ligne) => creerFormat(texte).nombre(ligne)))}`,
+  ],
   ['import.apercu.doublonExistants', 'déjà dans la liste :'],
+  ['import.apercu.renommes', 'Noms rendus uniques'],
+  [
+    'import.apercu.nomsRendusUniques',
+    ({ n }) => accorde(n, 'nom rendu unique par un suffixe numéroté', 'noms rendus uniques par un suffixe numéroté'),
+  ],
   ['import.apercu.homonymes', "Ajoutées à côté d'une personne de même nom"],
   ['import.apercu.multilignes', 'Cellules sur plusieurs lignes qui portent le séparateur : à vérifier'],
 

@@ -37,6 +37,8 @@
 //   8. en mode mettreAJour, les lignes ajoutées à côté d'un existant de même
 //      nom se nomment ; dans chaque mode, les cellules qui s'étendent sur
 //      plusieurs lignes du texte et portent le séparateur.
+// Une ligne valide dont l'option noms donne le nom le prend dès le point 6 :
+// tout ce qui suit se lit sur ce nom.
 // Une ligne refusée ne refuse pas le texte : le reste s'importe, et la ligne
 // revient dans le CSV des refus (§ 10.1). Un conflit fautif, lui, refuse le
 // texte entier : importer le reste ferait d'un conflit mal écrit un conflit
@@ -177,6 +179,10 @@ export const VALEURS_EXCLU = new Map([
  *           l'import met à jour ou refuse ces lignes, et ne les crée jamais ;
  *           une cellule vide y garde la valeur de la personne. Toujours vide
  *           dans les autres modes, où chaque ligne est créée
+ * @property {number[]} renommes
+ *           les rangs croissants des lignes valides dont le nom vient de
+ *           l'option noms (rendreNomsUniques, noms_uniques.js) et non de leur
+ *           cellule ; vide sans elle
  * @property {Array<{ligne: number, rangs: number[]}>} multilignes
  *           chaque ligne valide dont une cellule au moins s'étend sur
  *           plusieurs lignes du texte et porte le séparateur, rangée par
@@ -191,8 +197,9 @@ export const VALEURS_EXCLU = new Map([
  * @property {null|'CARACTERE_NUL'|'AUCUN_ENTETE'|'SEPARATEUR_INTROUVABLE'|'GUILLEMET_OUVERT'|'NOM_NON_ASSOCIE'|'AUCUNE_LIGNE_VALIDE'
  *             |'CONFLIT_ORGANISATION_INCONNUE'|'CONFLIT_ORGANISATION_PROPRE'} refusGlobal
  *           sous un refus global, lignes, fusions, fusionsEtiquettes,
- *           doublons, homonymes, designees et multilignes sont vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les lignes
- *           refusées sont la cause
+ *           doublons, homonymes, designees, renommes et multilignes sont
+ *           vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les
+ *           lignes refusées sont la cause
  * @property {number|null} refusGlobalLigne   sous GUILLEMET_OUVERT, le rang de
  *           l'enregistrement où le guillemet s'ouvre ; sous
  *           SEPARATEUR_INTROUVABLE, celui de l'enregistrement dont le nombre
@@ -229,6 +236,7 @@ function refuserEn(
     doublons: [],
     homonymes: [],
     designees: [],
+    renommes: [],
     multilignes: [],
     refusGlobal: code,
     refusGlobalLigne: ligne,
@@ -673,20 +681,28 @@ function multilignesDe(lignes, separateur) {
  * @param {number} [options.tours]  le nombre de tours de l'événement, sous
  *   lequel la présence se lit ; TOURS_MAX par défaut, qui ne refuse qu'un
  *   tour au-delà du plus grand nombre de tours admis
+ * @param {Map<number, string>} [options.noms]  rang → nom, ceux que rend
+ *   rendreNomsUniques (noms_uniques.js) : la ligne valide de ce rang prend
+ *   ce nom à la place de celui de sa cellule, dès sa lecture, si bien que
+ *   réconciliation, doublons, conflits et mise à jour se calculent sur lui.
+ *   Le texte n'est pas réécrit : brut garde la cellule. Un rang qui n'est
+ *   pas celui d'une ligne valide est ignoré
  * @returns {Apercu}
  * @throws {TypeError} quand texte n'est pas une chaîne : des octets passent
  *   d'abord par decoder ; pour un mode inconnu ; pour un nombre de tours qui
- *   n'est pas un entier de 1 à TOURS_MAX
+ *   n'est pas un entier de 1 à TOURS_MAX ; pour des noms qui ne sont pas une
+ *   Map
  */
 export function apercevoir(
   texte,
-  { participants = [], tables = [], choix = {}, mode = 'ajouter', tours = TOURS_MAX } = {},
+  { participants = [], tables = [], choix = {}, mode = 'ajouter', tours = TOURS_MAX, noms = new Map() } = {},
 ) {
   if (typeof texte !== 'string') throw new TypeError('texte : chaîne attendue');
   if (!MODES.includes(mode)) throw new TypeError(`mode : ${MODES.join(', ')} attendu, reçu ${String(mode)}`);
   if (!Number.isInteger(tours) || tours < 1 || tours > TOURS_MAX) {
     throw new TypeError(`tours : entier de 1 à ${TOURS_MAX} attendu, reçu ${String(tours)}`);
   }
+  if (!(noms instanceof Map)) throw new TypeError('noms : Map rang → nom attendue');
   // Chaque refus global porte le mode et le nombre de tours de l'aperçu.
   const refuser = (...refus) => refuserEn({ mode, tours }, ...refus);
   if (contientNul(texte)) return refuser('CARACTERE_NUL');
@@ -720,13 +736,20 @@ export function apercevoir(
 
   const valides = [];
   const refusees = [];
+  const renommes = [];
   for (let indice = indiceEntete + 1; indice < enregistrements.length; indice += 1) {
     const brut = enregistrements[indice];
     if (enregistrementVide(brut)) continue;
     const ligne = indice + 1;
     const { champs: lus, ...refus } = lireLigne(brut, entetes.length, association.colonnes, tours);
-    if (lus === undefined) refusees.push({ ligne, ...refus, brut });
-    else valides.push({ ligne, champs: lus, brut });
+    if (lus === undefined) {
+      refusees.push({ ligne, ...refus, brut });
+    } else if (noms.has(ligne)) {
+      valides.push({ ligne, champs: { ...lus, nom: noms.get(ligne) }, brut });
+      renommes.push(ligne);
+    } else {
+      valides.push({ ligne, champs: lus, brut });
+    }
   }
   if (valides.length === 0) return { ...refuser('AUCUNE_LIGNE_VALIDE', lu), refusees };
 
@@ -770,6 +793,7 @@ export function apercevoir(
     doublons: doublonsDe(existants, lignes),
     homonymes: mode === 'mettreAJour' ? homonymesDe(participants, lignes) : [],
     designees: mode === 'mettreAJour' ? designeesDe(participants, lignes) : [],
+    renommes,
     multilignes: multilignesDe(lignes, separateur),
     refusGlobal: null,
     refusGlobalLigne: null,

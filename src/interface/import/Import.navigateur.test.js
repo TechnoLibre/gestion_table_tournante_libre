@@ -7,7 +7,8 @@
 // séparateur nommés, l'association par en-tête, l'ambiguïté, les refus
 // d'une ligne et les refus globaux, les étiquettes en pastilles et leurs
 // fusions à part, le rapport, le CSV des refus, les modes, l'import selon
-// l'état, le collage, le modèle à télécharger, la colonne de la présence.
+// l'état, le collage, le modèle à télécharger, la colonne de la présence,
+// les doublons nommés et « Rendre les noms uniques ».
 // Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé, ouvre un événement et sa
 // section d'import ; le dialogue de choix sert, dans l'ordre, les fichiers
@@ -136,7 +137,8 @@ const section = ({ m }) => m.racine.querySelector('[data-section="import"]');
 const dans = (e, selecteur) => section(e).querySelector(selecteur);
 const tous = (e, selecteur) => [...section(e).querySelectorAll(selecteur)];
 const commande = (e, nom) => dans(e, `[data-commande="${nom}"]`);
-const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
+const enLigne = (texte) => texte.replace(/\s+/g, ' ').trim();
+const texteDe = (element) => enLigne(element.textContent);
 const ecritures = ({ m }) => m.trace.length;
 const imports = ({ espion }, nom = 'importerParticipants') => espion.mock.calls.filter(([appel]) => appel === nom);
 
@@ -745,6 +747,96 @@ describe('une seule entrée, des doublons signalés, une mise à jour qui n’ef
   });
 });
 
+describe('les doublons nommés, et « Rendre les noms uniques » (§ 10.1)', () => {
+  // Le compte du bloc des noms rendus uniques d'un conteneur, lu au
+  // paragraphe du bloc que son titre nomme ; null sans ce bloc.
+  const compteRenommes = (conteneur) => {
+    const titre = enLigne(tEcran('import.apercu.renommes'));
+    const intitule = [...conteneur.querySelectorAll('h4')].find((h4) => texteDe(h4) === titre);
+    return intitule === undefined ? null : texteDe(intitule.closest('section').querySelector('p'));
+  };
+
+  test('le doublon nomme la personne et ses lignes ; « Rendre les noms uniques » suffixe les noms, le bloc disparaît, l’import et le rapport suivent', async () => {
+    const e = await ouvrir({ participants: [personne(1, 'Galet', 'Roger'), personne(2, 'GALET', 'Roger')] });
+    await choisir(e, 'homonymes.csv', enUtf8('nom;prenom\r\nGalet;Roger\r\nGalet 01;Aurèle\r\nGALET;roger\r\n'));
+    choisirMode(e, 'ajouter');
+    const lignes = tEcran('import.apercu.doublonLignes', { lignes: [2, 4] });
+    const deja = tEcran('import.apercu.doublonExistants');
+    expect(tous(e, '[data-apercu] [data-doublon]').map(texteDe)).toEqual([enLigne(`Roger Galet — ${lignes} — ${deja} Roger Galet, Roger GALET`)]);
+    const bouton = commande(e, 'rendreNomsUniques');
+    expect(bouton.closest('section')).toBe(dans(e, '[data-apercu] [data-doublons]').closest('section'));
+    expect(texteDe(bouton)).toBe(enLigne(tEcran('import.commande.rendreNomsUniques')));
+    expect(compteRenommes(dans(e, '[data-apercu]'))).toBeNull();
+
+    bouton.click();
+    flushSync();
+    await vi.waitFor(() => expect(dans(e, '[data-apercu] [data-doublons]')).toBeNull());
+    expect(lignesMontrees(dans(e, '[data-apercu]')).map(([nom]) => nom)).toEqual(['Galet 02', 'Galet 01', 'GALET 03']);
+    const compte = enLigne(`2 ${tEcran('import.apercu.nomsRendusUniques', { n: 2 })}`);
+    expect(compteRenommes(dans(e, '[data-apercu]'))).toBe(compte);
+    expect(commande(e, 'rendreNomsUniques')).toBeNull();
+    // Le bouton parti, le focus va à la phrase des noms rendus uniques.
+    await vi.waitFor(() => expect(document.activeElement).toBe(dans(e, '[data-apercu] .renommes')));
+
+    const { rendu } = await importer(e);
+    expect(rendu.resume.ajoutes).toBe(3);
+    expect(participantsDe(e).map(({ nom, prenom }) => [nom, prenom])).toEqual([
+      ['Galet', 'Roger'], ['GALET', 'Roger'], ['Galet 02', 'Roger'], ['Galet 01', 'Aurèle'], ['GALET 03', 'roger'],
+    ]);
+    expect(compteRenommes(dans(e, '[data-rapport]'))).toBe(compte);
+    expect(dans(e, '[data-rapport] [data-doublons]')).toBeNull();
+    expect(e.enregistres).toEqual([]);
+  });
+
+  test('une mise à jour qui ne fait que mettre à jour sa personne : le doublon se montre, sans commande ; en Ajouter, la commande s’offre', async () => {
+    const e = await ouvrir({ participants: [personne(1, 'Galet', 'Roger')] });
+    await choisir(e, 'mise_a_jour.csv', enUtf8('nom;prenom\r\nGalet;Roger\r\n'));
+    expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
+    expect(tous(e, '[data-apercu] [data-doublon]').length).toBe(1);
+    expect(commande(e, 'rendreNomsUniques')).toBeNull();
+    choisirMode(e, 'ajouter');
+    expect(commande(e, 'rendreNomsUniques')).not.toBeNull();
+  });
+
+  // Le choix vaut pour le texte ouvert sous sa nature : rendus, les noms
+  // de « Galet » ne disent rien du fichier suivant ni de la nature suivante.
+  const PREMIER = enUtf8('nom;prenom\r\nGalet;Roger\r\nGalet;Roger\r\n');
+  async function rendusUniques(e) {
+    await choisir(e, 'premier.csv', PREMIER);
+    commande(e, 'rendreNomsUniques').click();
+    flushSync();
+    await vi.waitFor(() => expect(dans(e, '[data-apercu] [data-doublons]')).toBeNull());
+    expect(lignesMontrees(dans(e, '[data-apercu]')).map(([nom]) => nom)).toEqual(['Galet', 'Galet 01']);
+  }
+  // L'aperçu d'un texte lu tel qu'il est écrit : le doublon montré, la
+  // commande offerte, aucun nom rendu unique.
+  function telQuEcrit(e, noms) {
+    expect(tous(e, '[data-apercu] [data-doublon]').length).toBe(1);
+    expect(commande(e, 'rendreNomsUniques')).not.toBeNull();
+    expect(compteRenommes(dans(e, '[data-apercu]'))).toBeNull();
+    expect(lignesMontrees(dans(e, '[data-apercu]')).map(([nom]) => nom)).toEqual(noms);
+  }
+
+  test('un autre fichier à doublons, après « Rendre les noms uniques » : son aperçu et son import gardent les noms écrits, la commande de nouveau offerte', async () => {
+    const e = await ouvrir();
+    await rendusUniques(e);
+    await choisir(e, 'second.csv', enUtf8('nom;prenom\r\nPlume;Iris\r\nPlume;Iris\r\n'));
+    telQuEcrit(e, ['Plume', 'Plume']);
+    await importer(e);
+    expect(participantsDe(e).map(({ nom, prenom }) => [nom, prenom])).toEqual([['Plume', 'Iris'], ['Plume', 'Iris']]);
+  });
+
+  test('une autre nature, puis de nouveau Participants, après « Rendre les noms uniques » : le même texte se relit tel qu’il est écrit', async () => {
+    const e = await ouvrir();
+    await rendusUniques(e);
+    choisirNature(e, 'objectifs');
+    expect(dans(e, '[data-apercu] [data-doublons]')).toBeNull();
+    expect(commande(e, 'rendreNomsUniques')).toBeNull();
+    choisirNature(e, 'participants');
+    telQuEcrit(e, ['Galet', 'Galet']);
+  });
+});
+
 // Deux tables de trois places, puis une génération enregistrée jusqu'à
 // compter nombre propositions.
 async function avecPropositions(seance, generation, nombre) {
@@ -959,9 +1051,10 @@ describe('les cas du § 10.3', () => {
     expect(cellule(conteneur, 7, 'exclu'), 'exclusion').toBe(t('import.exclu.oui'));
     expect(cellule(conteneur, 8, 'notes'), 'champ cité avec le séparateur').toBe('végétarien; sans noix, ni arachides');
     expect(cellule(conteneur, 9, 'notes'), 'champ cité sur deux lignes').toMatch(/premier tour\r?\nrepart/);
-    const doublons = [...conteneur.querySelectorAll('[data-doublon]')].map((d) =>
-      [...d.querySelectorAll('[data-nombre]')].map((n) => n.textContent));
-    expect(doublons, 'doublon').toEqual([['2', '10']]);
+    // Le doublon se lit d'un trait : la personne, puis ses lignes, jamais
+    // « 210 » pour les lignes 2 et 10.
+    const doublons = [...conteneur.querySelectorAll('[data-doublon]')].map(texteDe);
+    expect(doublons, 'doublon').toEqual([enLigne(`Basile Lanterneau — ${tEcran('import.apercu.doublonLignes', { lignes: [2, 10] })}`)]);
     expect(cellule(conteneur, 11, 'prenom'), 'sans prénom').toBe('');
     const fusions = [...conteneur.querySelectorAll('[data-fusion] [data-orthographe] [data-texte]')].map((o) => o.textContent);
     expect(fusions, 'paire d’orthographes').toEqual(['Société des Hérons', 'Societe des herons']);

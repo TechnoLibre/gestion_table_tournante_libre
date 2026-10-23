@@ -145,6 +145,7 @@ const EXEMPLES_ECRAN = [
   ['generation.priorites.poids', { critere: 'redondance' }],
   ['generation.priorites.separer', { critere: 'redondance' }],
   // L'import et les participants
+  ['import.apercu.doublonLignes', { lignes: [15, 16, 17] }],
   ['import.presence.tours', { tours: [1, 3] }],
   ['participants.conflit.personne', { regles: ['conflitsOrganisation', 'nouveauxVoisins'] }],
   ['participants.conflit.raison.nouveauxVoisins', { deja: [{ tour: 1, numero: 3 }] }],

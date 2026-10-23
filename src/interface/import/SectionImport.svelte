@@ -16,7 +16,12 @@
   // sous la nature, le mode choisi et le choix des colonnes ambiguës : il
   // n'écrit rien, et s'ouvre en lecture comme sur un plan bloqué. Changer
   // de nature recalcule l'aperçu du même texte, le choix des colonnes et le
-  // mode repartant de rien. Seule « Importer » écrit, par seance.executer —
+  // mode repartant de rien. « Rendre les noms uniques », offert dans le bloc
+  // des doublons quand nomsRendusUniques en rend un au moins, recalcule
+  // l'aperçu sur les noms rendus, sous chaque choix et chaque mode qui
+  // suivent, jusqu'au prochain texte ou à la prochaine nature : le fichier
+  // n'est pas réécrit, et l'import applique l'aperçu montré, ses noms
+  // compris. Seule « Importer » écrit, par seance.executer —
   // importerParticipants ou importerObjectifs —, et son refus se pose à
   // côté d'elle ; « Remplacer » passe d'abord par la fenêtre à confirmer,
   // qui porte les quatre comptes de bilanRemplacement pour des
@@ -64,6 +69,7 @@
     modeleATelecharger,
     modePropose,
     modesDImport,
+    nomsRendusUniques,
   } from './modele.js';
 
   // La commande qu'applique « Importer », par nature.
@@ -86,6 +92,8 @@
   // { champ: rang } qui tranche une ambiguïté de l'en-tête.
   let choix = $state.raw({});
   let mode = $state('ajouter');
+  // Vrai quand « Rendre les noms uniques » a été choisi pour ce texte.
+  let uniques = $state(false);
   // Le dernier import appliqué : { nature, modele, source, apercu, resume, libelle }.
   let rapport = $state.raw(null);
   // La fenêtre de « Remplacer » ouverte : { titre, nature, apercu, depuis, elements }.
@@ -101,11 +109,20 @@
   const nomDuModele = $derived(t(NATURES_D_IMPORT.find((offerte) => offerte.nature === nature).modele));
   const cheminDuModele = $derived(modeleEnregistre?.nature === nature ? modeleEnregistre.chemin : null);
   const participants = $derived(charge?.participants ?? []);
-  const apercu = $derived(
+  // L'aperçu du texte tel qu'il est écrit, puis les noms qui en rendraient
+  // les doublons uniques.
+  const apercuDuTexte = $derived(
     source === null || source.refusDecodage !== null || charge === null
       ? null
       : apercevoirSelon(nature, source.texte, charge, { choix, mode }),
   );
+  const noms = $derived(nomsRendusUniques(nature, apercuDuTexte, participants));
+  // L'aperçu montré et importé : celui des noms rendus quand ils sont
+  // choisis et qu'il y en a.
+  const apercu = $derived(
+    uniques && noms.size > 0 ? apercevoirSelon(nature, source.texte, charge, { choix, mode, noms }) : apercuDuTexte,
+  );
+  const rendreUniques = $derived(uniques || noms.size === 0 ? null : () => (uniques = true));
   const modele = $derived(
     source === null ? null : modeleApercu({ nature, encodage: source.encodage, apercu, refusDecodage: source.refusDecodage }),
   );
@@ -114,11 +131,12 @@
     source?.origine === 'collage' && apercu !== null ? avecEntetesDeLaGrille(source.texte, apercu, nature) : null,
   );
 
-  // Ce qui suit un aperçu neuf : le choix des colonnes repart de rien, le
-  // mode proposé suit la nature et la liste, le rapport précédent se
-  // retire.
+  // Ce qui suit un aperçu neuf : le choix des colonnes et les noms rendus
+  // uniques repartent de rien, le mode proposé suit la nature et la liste,
+  // le rapport précédent se retire.
   function repartir() {
     choix = {};
+    uniques = false;
     mode = modePropose(untrack(() => participants), untrack(() => nature));
     rapport = null;
     confirmation = null;
@@ -194,6 +212,7 @@
   function lireDansLOrdreDeLaGrille() {
     source = { ...source, texte: grille };
     choix = {};
+    uniques = false;
   }
 
   function fermerApercu() {
@@ -338,7 +357,13 @@
                 {/each}
               </fieldset>
             {/if}
-            <Apercu {modele} source={{ origine: source.origine, nom: source.nom }} {participants} choisir={choisirColonne} />
+            <Apercu
+              {modele}
+              source={{ origine: source.origine, nom: source.nom }}
+              {participants}
+              choisir={choisirColonne}
+              {rendreUniques}
+            />
             <div class="commandes">
               {#if grille !== null}
                 <Commande cle="import.commande.ordreDeLaGrille" nom="ordreDeLaGrille" executer={lireDansLOrdreDeLaGrille} />

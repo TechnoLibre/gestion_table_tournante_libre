@@ -18,6 +18,7 @@ import * as encodage from '../csv/encodage.js';
 import * as exportCsv from '../csv/export.js';
 import * as importCsv from '../csv/import.js';
 import { decouper } from '../csv/lecture.js';
+import * as nomsUniques from '../csv/noms_uniques.js';
 import * as normalisation from '../csv/normalisation.js';
 import * as objectifs from '../csv/objectifs.js';
 import { creerCharge } from '../stockage/document.js';
@@ -26,10 +27,11 @@ import * as relais from './csv.js';
 import { libelle } from './libelles.js';
 
 describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
-  test('decoder, apercevoir, exporterParticipants, bilanRemplacement, cleNormalisee, CHAMPS, JOINTURE_ETIQUETTES et ceux des objectifs sont ceux de src/csv', () => {
+  test('decoder, apercevoir, rendreNomsUniques, exporterParticipants, bilanRemplacement, cleNormalisee, CHAMPS, JOINTURE_ETIQUETTES et ceux des objectifs sont ceux de src/csv', () => {
     const attendus = [
       ['decoder', encodage.decoder],
       ['apercevoir', apercu.apercevoir],
+      ['rendreNomsUniques', nomsUniques.rendreNomsUniques],
       ['exporterParticipants', exportCsv.exporterParticipants],
       ['bilanRemplacement', importCsv.bilanRemplacement],
       ['cleNormalisee', normalisation.cleNormalisee],
@@ -37,7 +39,7 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
       ['exporterObjectifs', objectifs.exporterObjectifs],
       ['bilanRemplacementObjectifs', objectifs.bilanRemplacementObjectifs],
     ];
-    assert.equal(attendus.length, 8);
+    assert.equal(attendus.length, 9);
     for (const [nom, fonction] of attendus) {
       assert.equal(typeof fonction, 'function', nom);
       assert.equal(relais[nom], fonction, nom);
@@ -49,7 +51,7 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
     assert.deepEqual(Object.keys(relais).sort(), [
       'CHAMPS', 'CHAMPS_OBJECTIFS', 'JOINTURE_ETIQUETTES', 'apercevoir', 'apercevoirObjectifs', 'bilanRemplacement',
       'bilanRemplacementObjectifs', 'cleNormalisee', 'decoder', 'exporterObjectifs', 'exporterParticipants', 'exporterRefus',
-      'modeleObjectifs', 'modeleParticipants',
+      'modeleObjectifs', 'modeleParticipants', 'rendreNomsUniques',
     ]);
   });
 
