@@ -3,7 +3,7 @@
 
 // Les réglages locaux (§ 8.5) : le fichier reglages_locaux.json, à la racine
 // du dossier de travail, à côté des dossiers d'événement et hors d'eux. Il
-// porte cinq choses, et cinq seulement : le cadrage de chaque événement,
+// porte six choses, et six seulement : le cadrage de chaque événement,
 // indexé par son identifiant — le zoom k en pixels par centimètre, la
 // translation tx, ty en pixels —, le format de papier des sorties, global
 // à la machine (§ 11.2), null tant que l'opérateur ne l'a pas choisi, le
@@ -11,9 +11,13 @@
 // tant que l'opérateur ne l'a pas choisi : Avery 5392 vaut alors
 // (MODELE_BADGE_DEFAUT), la case du pied TechnoLibre des badges, globale à
 // la machine, sous la clé pied_technolibre, un booléen, absente tant que
-// l'opérateur n'y a pas touché : la case vaut alors cochée, et la taille du
-// texte de l'écran, globale à la machine, sous la clé taille_texte, absente
-// tant que l'opérateur ne l'a pas choisie : le défaut de l'échelle
+// l'opérateur n'y a pas touché : la case vaut alors cochée, les cases de ce
+// que le badge imprime, globales à la machine, sous la clé donnees_badge, un
+// objet d'un booléen par donnée de DONNEES_BADGE, absent tant que
+// l'opérateur n'a touché à aucune et ne portant que celles qu'il a
+// touchées : une case absente vaut cochée, et la taille du texte de
+// l'écran, globale à la machine, sous la clé taille_texte, absente tant
+// que l'opérateur ne l'a pas choisie : le défaut de l'échelle
 // s'applique alors (src/geometrie/taille_texte.js). Aucun ne voyage avec un
 // événement ni ne revient par un retour arrière.
 //
@@ -37,6 +41,14 @@ import { ErreurStockage } from './erreurs.js';
 /** Le fichier des réglages locaux, à la racine du dossier de travail (§ 8.5). */
 export const FICHIER_REGLAGES = 'reglages_locaux.json';
 
+/**
+ * Les données qu'une case retire du badge (§ 11.4), dans l'ordre des cases :
+ * l'organisation, le nom de l'événement, sa date, l'horodatage du placement
+ * — « Placement du … à … » — et l'identifiant d'un homonyme. Le nom de la
+ * personne et ses tours n'en sont pas : ils s'impriment toujours.
+ */
+export const DONNEES_BADGE = Object.freeze(['organisation', 'evenement', 'date', 'horodatage', 'identifiant']);
+
 // Format d'un fichier que ce code crée.
 const FORMAT_REGLAGES = 1;
 
@@ -55,6 +67,9 @@ const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
  *           MODELES_BADGE ; absente tant que l'opérateur ne l'a pas choisi
  * @property {boolean} [pied_technolibre]  la case du pied TechnoLibre des
  *           badges ; absente tant que l'opérateur n'y a pas touché
+ * @property {Object<string, boolean>} [donnees_badge]   les cases de ce que
+ *           le badge imprime, par donnée de DONNEES_BADGE, celles que
+ *           l'opérateur a touchées ; absent tant qu'il n'en a touché aucune
  * @property {number} [taille_texte]      l'un de PALIERS_TAILLE_TEXTE ; absente
  *           tant que l'opérateur ne l'a pas choisie. Toute autre clé, à tout
  *           niveau, se garde telle quelle
@@ -89,11 +104,21 @@ function fauteDeCadrage(cadrage, chemin) {
   return null;
 }
 
+// Chemin de la première valeur connue des cases de ce que le badge imprime
+// qui sort de sa règle, ou null : un objet, dont chaque donnée de
+// DONNEES_BADGE présente est un booléen ; une autre clé s'y garde.
+function fauteDeDonnees(donnees) {
+  if (!estObjet(donnees)) return 'donnees_badge';
+  const fautive = DONNEES_BADGE.find((donnee) => Object.hasOwn(donnees, donnee) && typeof donnees[donnee] !== 'boolean');
+  return fautive === undefined ? null : `donnees_badge.${fautive}`;
+}
+
 // Chemin de la première valeur connue des réglages qui sort de sa règle, ou
 // null ; '' quand les réglages ne sont pas un objet. Le second cadrage d'un
 // même événement est fautif ; un modèle de badge présent est une clé de
-// MODELES_BADGE, une case du pied TechnoLibre présente un booléen, une
-// taille du texte présente l'un des paliers.
+// MODELES_BADGE, une case du pied TechnoLibre présente un booléen, les cases
+// de ce que le badge imprime présentes un objet de booléens, une taille du
+// texte présente l'un des paliers.
 function fauteDeReglages(reglages) {
   if (!estObjet(reglages)) return '';
   const { format, papier, cadrages } = reglages;
@@ -101,6 +126,10 @@ function fauteDeReglages(reglages) {
   if (papier !== null && !estPapier(papier)) return 'papier';
   if (Object.hasOwn(reglages, 'modele_badge') && !estModeleBadge(reglages.modele_badge)) return 'modele_badge';
   if (Object.hasOwn(reglages, 'pied_technolibre') && typeof reglages.pied_technolibre !== 'boolean') return 'pied_technolibre';
+  if (Object.hasOwn(reglages, 'donnees_badge')) {
+    const faute = fauteDeDonnees(reglages.donnees_badge);
+    if (faute !== null) return faute;
+  }
   if (Object.hasOwn(reglages, 'taille_texte') && !estPalierTailleTexte(reglages.taille_texte)) return 'taille_texte';
   if (!Array.isArray(cadrages)) return 'cadrages';
   const vus = new Set();
@@ -140,7 +169,9 @@ const illisibles = (raison) => ({
  * pour une valeur connue hors de sa règle — un format qui n'est pas un entier
  * ≥ 1, un papier hors de null et des clés de PAPIERS, un modèle de badge
  * présent hors des clés de MODELES_BADGE, une case du pied TechnoLibre
- * présente qui n'est pas un booléen, un cadrage fautif ou en double, une
+ * présente qui n'est pas un booléen, des cases de ce que le badge imprime
+ * qui ne sont pas un objet, ou dont une donnée connue n'est pas un booléen,
+ * un cadrage fautif ou en double, une
  * taille du texte présente hors des paliers ; le code d'une lecture que le
  * système de fichiers refuse autrement que par ABSENT. Une marque d'ordre
  * d'octets en tête est ignorée. Les réglages lus gardent leurs clés inconnues
@@ -267,6 +298,40 @@ export function piedTechnolibreDe(reglages) {
 export function avecPiedTechnolibre(reglages, coche) {
   if (typeof coche !== 'boolean') throw new TypeError(`avecPiedTechnolibre : un booléen attendu, reçu ${JSON.stringify(coche)}`);
   return { ...reglages, pied_technolibre: coche };
+}
+
+/**
+ * Les cases de ce que le badge imprime que les réglages portent : un
+ * booléen par donnée de DONNEES_BADGE, dans leur ordre, vrai — cochée —
+ * pour une donnée que les réglages ne portent pas. Un objet neuf à chaque
+ * appel.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @returns {{organisation: boolean, evenement: boolean, date: boolean, horodatage: boolean, identifiant: boolean}}
+ */
+export function donneesBadgeDe(reglages) {
+  const portees = Object.hasOwn(reglages, 'donnees_badge') ? reglages.donnees_badge : {};
+  return Object.fromEntries(DONNEES_BADGE.map((donnee) => [donnee, Object.hasOwn(portees, donnee) ? portees[donnee] : true]));
+}
+
+/**
+ * Les réglages reçus, la case de la donnée remplacée, les autres cases et
+ * les clés inconnues de donnees_badge gardées ; ceux reçus ne changent pas.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @param {string} donnee   l'une de DONNEES_BADGE
+ * @param {boolean} coche
+ * @returns {ReglagesLocaux}
+ * @throws {TypeError} une donnée hors de DONNEES_BADGE, une valeur qui n'est
+ *         pas un booléen
+ */
+export function avecDonneeBadge(reglages, donnee, coche) {
+  if (!DONNEES_BADGE.includes(donnee)) {
+    throw new TypeError(`avecDonneeBadge : ${DONNEES_BADGE.join(', ')} attendue, reçu ${JSON.stringify(donnee)}`);
+  }
+  if (typeof coche !== 'boolean') throw new TypeError(`avecDonneeBadge : un booléen attendu, reçu ${JSON.stringify(coche)}`);
+  const portees = Object.hasOwn(reglages, 'donnees_badge') ? reglages.donnees_badge : {};
+  return { ...reglages, donnees_badge: { ...portees, [donnee]: coche } };
 }
 
 /**

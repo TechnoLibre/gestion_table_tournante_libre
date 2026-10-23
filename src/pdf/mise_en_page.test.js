@@ -1440,3 +1440,43 @@ describe('mise en page : le logo du participant', () => {
     assert.deepEqual(mettreEnPage(textes(), NOTO, 'avery5392', TECHNOLIBRE, CARRE), mettreEnPage(textes(), NOTO, 'avery5392', TECHNOLIBRE, CARRE));
   });
 });
+
+describe('mise en page : un badge dont les cases retirent des données (§ 11.4)', () => {
+  const TECHNOLIBRE = Object.freeze({
+    texte: 'Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise',
+    rapport: 5,
+  });
+  const CARRE = Object.freeze({ rapport: 1 });
+  // Le pied d'un badge dont la case du nom de l'événement est décochée : la
+  // date et l'horodatage, pied et pied réduit confondus.
+  const SANS_EVENEMENT = { pied: PIED_REDUIT, piedReduit: PIED_REDUIT };
+  const SANS_PIED = { pied: [], piedReduit: [] };
+
+  for (const modele of Object.keys(MODELES_BADGE)) {
+    for (const [jeu, metriques] of JEUX) {
+      test(`${modele}, ${jeu} : un pied vide ne pose aucune ligne sous les tours, et la place revient au pied TechnoLibre là où le pied entier le retirait`, () => {
+        const vide = mettreEnPage(textes({ ...SANS_PIED, organisation: null }), metriques, modele);
+        assert.deepEqual(
+          vide.blocs.map(({ texte }) => texte),
+          ['Iris Ombrelle', ...tours(4)],
+        );
+        // Le premier nombre de tours où le pied entier retire le pied
+        // TechnoLibre : sans pied, il y tient.
+        const n = Array.from({ length: 40 }, (_, i) => i + 1).find((nombre) => {
+          const page = mettreEnPage(textes({ lignes: tours(nombre) }), metriques, modele, TECHNOLIBRE);
+          return !('refus' in page) && page.technolibre.corps === null;
+        });
+        assert.ok(n !== undefined, 'un nombre de tours retire le pied TechnoLibre');
+        const allegee = mettreEnPage(textes({ ...SANS_PIED, organisation: null, lignes: tours(n) }), metriques, modele, TECHNOLIBRE);
+        assert.notEqual(allegee.technolibre.corps, null, `${n} tours`);
+      });
+
+      test(`${modele}, ${jeu} : un pied sans le nom de l’événement, décoché, garde le logo du participant et le pied TechnoLibre, que seul le nom perdu faute de place retire`, () => {
+        const page = mettreEnPage(textes({ ...SANS_EVENEMENT, lignes: tours(2) }), metriques, modele, TECHNOLIBRE, CARRE);
+        assert.notEqual(page.logoParticipant.boite, null);
+        assert.notEqual(page.technolibre.corps, null);
+        assert.ok(PIED_REDUIT.every((ligne) => page.blocs.some(({ texte }) => texte === ligne)));
+      });
+    }
+  }
+});

@@ -14,17 +14,18 @@
 // série éprouve le dossier de l'événement : la borne qu'il impose, sa
 // disparition, « Ouvrir le dossier », l'écriture ailleurs.
 //
-// La série surveillée borne le coût (§ 14.4, contrainte 31) : dix-huit
+// La série surveillée borne le coût (§ 14.4, contrainte 31) : vingt-trois
 // productions de l'A6 au plus dans ce fichier, sur une soirée de quatre
 // personnes — trois pour les trois modes, deux pour la stabilité des octets,
 // une réédition, deux refus d'écriture et l'enregistrement sous, une sous
 // web, deux propositions de la même génération, deux sous le pied
-// TechnoLibre, quatre pour le dossier de l'événement —, et douze d'Avery
-// 5392, de deux documents chacune — une déposée, une de sept badges en pile
-// demandée, une au libellé de table le plus long, deux refusées et trois
-// enregistrements sous, une sous web, trois pour le pied TechnoLibre. Les
-// épreuves de l'A6 choisissent ce modèle ;
-// celles d'Avery 5392 n'en choisissent aucun, comme une machine neuve. La
+// TechnoLibre, quatre pour le dossier de l'événement, cinq sous les cases
+// de ce que le badge imprime —, et quatorze d'Avery 5392, de deux
+// documents chacune — une déposée, une de sept badges en pile demandée, une
+// au libellé de table le plus long, deux refusées et trois enregistrements
+// sous, une sous web, trois pour le pied TechnoLibre, deux sous les cases.
+// Les épreuves de l'A6 choisissent ce modèle ; celles d'Avery 5392 n'en
+// choisissent aucun, comme une machine neuve. La
 // case du pied TechnoLibre se décoche au montage, sauf pour les épreuves qui
 // le portent. L'imposition et l'ordre se lisent dans la place de chaque nom,
 // et le papier, l'imposition et le nombre de planches dans la feuille de
@@ -38,6 +39,7 @@
 // voisins qui en portent et la même sans aucun logo —, sur des PNG composés
 // ici. Les noms sont inventés ; la version vient du module engendré.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_PROPOSITION, H_RETENU, personne, soiree, table } from '../../test/fixtures/badges/cas.js';
@@ -79,6 +81,8 @@ const ICI = `${BASE}/`;
 const POLICES = lirePolices();
 const LOGO = lireLogo();
 const FILIGRANE = libelle('planche.brouillon');
+// Les cases de ce que le badge imprime d'une machine qui n'y a pas touché.
+const TOUTES_COCHEES = Object.freeze({ organisation: true, evenement: true, date: true, horodatage: true, identifiant: true });
 
 // Les primitives qui écrivent, et enregistrerSous, que la trace consigne.
 const ECRITURES = [
@@ -170,14 +174,16 @@ async function deposer(fs, charge, { format = FORMAT, racine = DOC } = {}) {
 // par défaut, le modèle de badge et le papier choisis quand ils sont donnés
 // — l'A6 par défaut, le modèle que ces épreuves éprouvent ; null garde
 // Avery 5392, celui d'une machine qui n'a rien choisi ; la case du pied
-// TechnoLibre décochée, sauf pour les épreuves qui le portent ; la trace
-// part ensuite, vide.
+// TechnoLibre décochée, sauf pour les épreuves qui le portent ; les données
+// de retirees décochées dans la section, aucune par défaut ; la trace part
+// ensuite, vide.
 async function monter(
   charge = chargeLucioles(),
   {
     papier = 'A4',
     modeleBadge = 'a6',
     piedTechnolibre = false,
+    retirees = [],
     fs = creerFichiersSimules({ documents: DOCUMENTS }),
     format,
     cle = cleEvenement(BASE, BASE),
@@ -203,6 +209,7 @@ async function monter(
   });
   if (modeleBadge !== null) await seance.choisirModeleBadge(modeleBadge);
   if (!piedTechnolibre) await seance.choisirPiedTechnolibre(false);
+  for (const donnee of retirees) await seance.choisirDonneeBadge(donnee, false);
   if (papier !== null) await seance.choisirPapier(papier);
   await seance.ouvrir(cle);
   const trace = tracer(fs);
@@ -275,6 +282,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           nom: attendu,
           nomControle: null,
           piedTechnolibre: false,
+          donneesBadge: TOUTES_COCHEES,
           sansTechnolibre: null,
           logos: null,
         },
@@ -395,6 +403,7 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       nom: null,
       nomControle: null,
       piedTechnolibre: false,
+      donneesBadge: TOUTES_COCHEES,
       sansTechnolibre: null,
       logos: null,
     });
@@ -707,6 +716,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
       nom: nomCartes,
       nomControle: nomFeuille,
       piedTechnolibre: false,
+      donneesBadge: TOUTES_COCHEES,
       sansTechnolibre: null,
       logos: null,
     });
@@ -1388,5 +1398,139 @@ describe('planche dans la séance : les logos des participants (§ 11.4, § 11.5
     const lusRefus = lectures(refus.fs);
     const annonceRefus = await refus.seance.preparerPlanche();
     assert.deepEqual([annonceRefus.refus.code, annonceRefus.logos, lusRefus], ['PLANCHE_SANS_PLACEMENT', null, []]);
+  });
+});
+
+describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.3, § 11.4)', () => {
+  const lu = (pdf, depuis = 0) => pdf.pages.slice(depuis).flatMap((page) => textesDe(page));
+  const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
+  // La feuille de contrôle relue d'un trait : une ligne longue s'y replie.
+  const controleLu = (pdf) => textesDe(pdf.pages[0]).join(' ');
+  // L'empreinte des cartes Avery 5392 de la soirée d'essai, toutes les cases
+  // cochées, le pied TechnoLibre décoché : celle des octets que la planche
+  // rendait avant que les cases n'existent.
+  const EMPREINTE_CARTES = 'd3d05267dcbeec94eeba4db54aec441c14deffb4fe67206a715519bcf63f84b0';
+
+  test('toutes cochées, les cartes gardent leurs octets, empreinte comprise ; l’identifiant décoché sans homonyme ne change aucune carte, et la feuille de contrôle seule le nomme', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { papier: null, modeleBadge: null });
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual(annonce.donneesBadge, TOUTES_COCHEES);
+    const toutes = await seance.produirePlanche();
+    const cartes = fs.octets('documents', ICI + toutes.nom);
+    assert.equal(sha256(cartes), EMPREINTE_CARTES);
+    assert.ok(!controleLu(await lirePdf(fs.octets('documents', ICI + toutes.controle.nom))).includes('retirées'));
+
+    const autre = await monter(chargeLucioles(), { papier: null, modeleBadge: null, retirees: ['identifiant'] });
+    const sans = await autre.seance.produirePlanche();
+    assert.deepEqual(autre.fs.octets('documents', ICI + sans.nom), cartes);
+    const feuille = await lirePdf(autre.fs.octets('documents', ICI + sans.controle.nom));
+    const lue = controleLu(feuille);
+    const rang = lue.indexOf(libelle('planche.controle.retirees', { donnees: ['identifiant'] }));
+    // Après la consigne, puis après la ligne de la feuille à part, qui
+    // finit sur « prédécoupes ».
+    assert.ok(rang > lue.indexOf('prédécoupes') && lue.indexOf('prédécoupes') > lue.indexOf(libelle('planche.controle.consigne')), lue);
+  });
+
+  test('les cinq décochées : chaque badge ne porte que le nom et les tours ; la feuille de contrôle nomme les cinq, l’événement gardé ; l’annonce nomme toujours les homonymes, et la liste en CSV garde ses octets', async () => {
+    const personnes = [
+      personne(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
+      personne(2, 'Théo', 'Pervenche'),
+      personne(3, 'Théo', 'Pervenche'),
+      personne(4, null, 'Grisaille'),
+    ];
+    const charge = chargeLucioles({ personnes });
+    const { fs, seance } = await monter(charge);
+    const listeToutes = fs.octets('documents', ICI + (await seance.produireListeBadges()).nom);
+    const avant = await seance.preparerPlanche();
+    for (const donnee of ['organisation', 'evenement', 'date', 'horodatage', 'identifiant']) await seance.choisirDonneeBadge(donnee, false);
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual(annonce.homonymes, avant.homonymes);
+    assert.equal(annonce.homonymes.length, 1);
+    const { nom } = await seance.produirePlanche();
+    const pdf = await lirePdf(fs.octets('documents', ICI + nom));
+    const badges = lu(pdf, 1).join(' | ');
+    for (const nomLu of ['Iris Ombrelle', 'Théo Pervenche', 'Grisaille']) assert.ok(badges.includes(nomLu), badges);
+    assert.ok(/Tour 1/.test(badges), badges);
+    for (const retire of ['Club des Merles', 'Soirée des Lucioles', '2031', 'Placement du', 'Identifiant']) assert.ok(!badges.includes(retire), `${retire} : ${badges}`);
+    const controle = controleLu(pdf);
+    const retirees = libelle('planche.controle.retirees', { donnees: ['organisation', 'evenement', 'date', 'horodatage', 'identifiant'] });
+    assert.ok(controle.includes(retirees), controle);
+    assert.ok(controle.includes(libelle('planche.controle.evenement', { nom: BASE, date: '2031-05-17' })), controle);
+    const liste = await seance.produireListeBadges();
+    assert.deepEqual(fs.octets('documents', ICI + liste.nom), listeToutes);
+  });
+
+  test('le nom et la date de l’événement se combinent : la date décochée, le nom seul ; le nom décoché, la date seule', async () => {
+    const pied = (pdf) => lu(pdf, 1);
+    const complet = libelle('planche.pied.evenement', { nom: BASE, date: '2031-05-17' });
+    const sansDate = await monter(chargeLucioles(), { retirees: ['date'] });
+    const pdfSansDate = await lirePdf(sansDate.fs.octets('documents', ICI + (await sansDate.seance.produirePlanche()).nom));
+    assert.ok(pied(pdfSansDate).includes(libelle('planche.pied.evenement', { nom: BASE, date: null })), pied(pdfSansDate).join(' | '));
+    assert.ok(!pied(pdfSansDate).includes(complet));
+    assert.ok(pied(pdfSansDate).some((texte) => texte.startsWith('Placement du')));
+    const sansNom = await monter(chargeLucioles(), { retirees: ['evenement'] });
+    const pdfSansNom = await lirePdf(sansNom.fs.octets('documents', ICI + (await sansNom.seance.produirePlanche()).nom));
+    assert.ok(pied(pdfSansNom).includes(libelle('planche.pied.date', { date: '2031-05-17' })), pied(pdfSansNom).join(' | '));
+    assert.ok(!pied(pdfSansNom).some((texte) => texte.includes(BASE)));
+  });
+
+  test('la place libérée revient au reste : sept tours sur la carte, le pied TechnoLibre se retire de moins de badges ; une organisation retirée ne nomme plus ses caractères absents', async () => {
+    const TOURS = 7;
+    const plan = Array.from({ length: TOURS }, (_, i) => (i % 2 === 0 ? PLAN[0] : PLAN[1]));
+    const club = { organisation: 'Club des Merles \u{674E}' };
+    const personnes = [personne(1, 'Iris', 'Ombrelle', club), personne(2, 'Théo', 'Pervenche', club), personne(3, 'Ondine', 'Lacasse', club), personne(4, null, 'Grisaille', club)];
+    const charge = chargeLucioles({ personnes, plan, propositions: [[1, plan]] });
+    const { seance } = await monter(charge, { modeleBadge: null, piedTechnolibre: true });
+    const toutes = await seance.preparerPlanche();
+    assert.deepEqual([toutes.refus, toutes.absents], [null, ['\u{674E}']]);
+    assert.ok(toutes.sansTechnolibre > 0, String(toutes.sansTechnolibre));
+    for (const donnee of ['organisation', 'evenement', 'horodatage']) await seance.choisirDonneeBadge(donnee, false);
+    const allegee = await seance.preparerPlanche();
+    assert.deepEqual([allegee.refus, allegee.absents], [null, []]);
+    assert.ok(allegee.sansTechnolibre < toutes.sansTechnolibre, `${allegee.sansTechnolibre} sur ${toutes.sansTechnolibre}`);
+  });
+
+  test('une case décochée garde au pied ce que les autres gardent : l’identifiant des homonymes, et l’horodatage inconnu d’un retenu qui n’en porte pas', async () => {
+    const personnes = [
+      personne(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
+      personne(2, 'Théo', 'Pervenche'),
+      personne(3, 'Théo', 'Pervenche'),
+      personne(4, null, 'Grisaille'),
+    ];
+    const { fs, seance } = await monter(chargeLucioles({ personnes, horodatage: null }), { retirees: ['organisation'] });
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    const badges = lu(pdf, 1);
+    const identifiants = badges.filter((texte) => texte.startsWith(libelle('planche.pied.identifiant', { identifiant: '' })));
+    assert.deepEqual(identifiants.sort(), [2, 3].map((identifiant) => libelle('planche.pied.identifiant', { identifiant })), badges.join(' | '));
+    assert.equal(badges.filter((texte) => texte === libelle('planche.pied.horodatageInconnu')).length, personnes.length, badges.join(' | '));
+    assert.equal(badges.filter((texte) => texte === libelle('planche.pied.evenement', { nom: BASE, date: '2031-05-17' })).length, personnes.length);
+    assert.ok(!badges.includes('Club des Merles'), badges.join(' | '));
+  });
+
+  test('un nom au-delà de trois lignes, l’horodatage décoché : le badge perd le nom de l’événement faute de place, et garde sa date', async () => {
+    const charge = chargeLucioles();
+    const long = 'Lacasse-Ombrelle '.repeat(8).trim();
+    charge.participants[2].nom = long;
+    const { fs, seance } = await monter(charge, { retirees: ['horodatage'] });
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    const badges = lu(pdf, 1);
+    const complet = libelle('planche.pied.evenement', { nom: BASE, date: '2031-05-17' });
+    // Les trois autres badges portent l'événement et sa date d'une ligne ;
+    // celui du nom long, la date seule.
+    assert.equal(badges.filter((texte) => texte === complet).length, charge.participants.length - 1, badges.join(' | '));
+    assert.deepEqual(badges.filter((texte) => texte === libelle('planche.pied.date', { date: '2031-05-17' })).length, 1, badges.join(' | '));
+    assert.ok(!badges.some((texte) => texte.startsWith('Placement du')), badges.join(' | '));
+  });
+
+  test('un nom au-delà de trois lignes, le nom de l’événement décoché : chaque badge, celui du nom long compris, garde la date seule', async () => {
+    const charge = chargeLucioles();
+    const long = 'Lacasse-Ombrelle '.repeat(8).trim();
+    charge.participants[2].nom = long;
+    const { fs, seance } = await monter(charge, { retirees: ['evenement'] });
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    const badges = lu(pdf, 1);
+    const date = libelle('planche.pied.date', { date: '2031-05-17' });
+    assert.equal(badges.filter((texte) => texte === date).length, charge.participants.length, badges.join(' | '));
+    assert.ok(!badges.some((texte) => texte.includes(BASE)), badges.join(' | '));
   });
 });

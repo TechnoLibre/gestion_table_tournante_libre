@@ -21,6 +21,7 @@
 // (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { appliquerCommande } from '../../application/commandes.js';
+import { DONNEES_BADGE } from '../../application/seance.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { listeBadges, modelePlanche } from '../../application/planche.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js';
@@ -983,5 +984,98 @@ describe('le pied TechnoLibre : une case gardée sur le poste (§ 8.5, § 11.4)'
     m.seance.choisirPiedTechnolibre = async (coche) => ({ ...(await originale(coche)), retenu: true });
     cocher(m, true);
     await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
+  });
+});
+
+describe('les cases de ce que le badge imprime : gardées sur le poste (§ 8.5, § 11.4)', () => {
+  const caseDonnee = (m, donnee) => dans(m, `[data-section="badges"] [data-champ="donneeBadge.${donnee}"]`);
+  const avisNonRetenues = (m) => dans(m, '[data-section="badges"] [data-avertissement="donneesNonRetenues"]');
+  const casesEcrites = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).donnees_badge;
+
+  test('une machine neuve : cinq cases cochées, à côté de celle du pied TechnoLibre, chacune son libellé lié', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const groupe = dans(m, '[data-section="badges"] [data-champ="piedTechnolibre"]').closest('[role="group"]');
+    expect(groupe).not.toBeNull();
+    expect(DONNEES_BADGE).toEqual(['organisation', 'evenement', 'date', 'horodatage', 'identifiant']);
+    for (const donnee of DONNEES_BADGE) {
+      const element = caseDonnee(m, donnee);
+      expect(element, donnee).not.toBeNull();
+      expect(element.type).toBe('checkbox');
+      expect(element.checked, donnee).toBe(true);
+      expect(groupe.contains(element)).toBe(true);
+      expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran(`badges.donnees.${donnee}`)));
+    }
+    expect(texte(dans(m, `[id="${groupe.getAttribute('aria-labelledby')}"]`))).toBe(plat(tEcran('badges.donnees.titre')));
+    expect(m.seance.etat().donneesBadge).toEqual(Object.fromEntries(DONNEES_BADGE.map((donnee) => [donnee, true])));
+  });
+
+  test('décocher une case l’écrit sur la machine et retire l’annonce montrée ; l’annonce suivante se prépare sur les cases ; recocher l’écrit de nouveau', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    const lues = [];
+    const originale = m.seance.preparerPlanche;
+    m.seance.preparerPlanche = async (demande) => {
+      const rendue = await originale(demande);
+      lues.push(rendue.donneesBadge);
+      return rendue;
+    };
+    caseDonnee(m, 'horodatage').click();
+    await attendre('la case écrite', () => casesEcrites(m)?.horodatage === false, IMAGES);
+    expect(m.seance.etat().donneesBadge.horodatage).toBe(false);
+    expect(caseDonnee(m, 'horodatage').checked).toBe(false);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce sur les cases', () => annonce(m), IMAGES);
+    expect(lues.map((donnees) => donnees.horodatage)).toEqual([false]);
+    caseDonnee(m, 'horodatage').click();
+    await attendre('la case écrite', () => casesEcrites(m)?.horodatage === true, IMAGES);
+    expect(avisNonRetenues(m)).toBeNull();
+  });
+
+  test('l’écriture des réglages refusée : la case vaut pour la séance, et une annonce le dit sous les réglages, dans un rôle d’état ; une case retenue ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisNonRetenues(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    caseDonnee(m, 'organisation').click();
+    const avis = await attendre('l’annonce de la case non retenue', () => avisNonRetenues(m), IMAGES);
+    expect(m.seance.etat().donneesBadge.organisation).toBe(false);
+    expect(caseDonnee(m, 'organisation').checked).toBe(false);
+    expect(texte(avis)).toBe(plat(tEcran('badges.donnees.nonRetenues')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirDonneeBadge;
+    m.seance.choisirDonneeBadge = async (donnee, coche) => ({ ...(await originale(donnee, coche)), retenu: true });
+    caseDonnee(m, 'organisation').click();
+    await attendre('l’annonce retirée', () => avisNonRetenues(m) === null, IMAGES);
+  });
+
+  test('une case retenue n’en retient pas une autre : l’annonce reste tant qu’une case non retenue garde sa valeur, et se retire quand celle-ci l’est', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    m.fs.pannes.ecriture('documents');
+    caseDonnee(m, 'organisation').click();
+    await attendre('l’annonce de la case non retenue', () => avisNonRetenues(m), IMAGES);
+    // Les choix suivants se disent retenus, comme après une écriture rendue
+    // possible : chacun n'écrit que sa case.
+    const originale = m.seance.choisirDonneeBadge;
+    const retenues = [];
+    m.seance.choisirDonneeBadge = async (donnee, coche) => {
+      const rendu = await originale(donnee, coche);
+      retenues.push(donnee);
+      return { ...rendu, retenu: true };
+    };
+    caseDonnee(m, 'horodatage').click();
+    await attendre('la case retenue', () => retenues.length === 1, IMAGES);
+    expect(m.seance.etat().donneesBadge).toMatchObject({ organisation: false, horodatage: false });
+    expect(avisNonRetenues(m)).not.toBeNull();
+    caseDonnee(m, 'organisation').click();
+    await attendre('la case retenue', () => retenues.length === 2, IMAGES);
+    expect(retenues).toEqual(['horodatage', 'organisation']);
+    await attendre('l’annonce retirée', () => avisNonRetenues(m) === null, IMAGES);
+    // Retenue, la case a quitté les non retenues : décochée de nouveau et
+    // retenue, elle ne ramène pas l'annonce.
+    caseDonnee(m, 'organisation').click();
+    await attendre('la case retenue', () => retenues.length === 3, IMAGES);
+    expect(m.seance.etat().donneesBadge.organisation).toBe(false);
+    expect(avisNonRetenues(m)).toBeNull();
   });
 });

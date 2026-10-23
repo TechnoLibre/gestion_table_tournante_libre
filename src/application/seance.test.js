@@ -4969,3 +4969,117 @@ describe('séance : le pied TechnoLibre des badges (§ 8.5, § 11.4)', () => {
     assert.equal(chargements, 2);
   });
 });
+
+describe('séance : les cases de ce que le badge imprime (§ 8.5, § 11.4)', () => {
+  const casesLues = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).donnees_badge;
+  const TOUTES = { organisation: true, evenement: true, date: true, horodatage: true, identifiant: true };
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Iris', 'Ombrelle'), personneBadge(2, 'Théo', 'Pervenche')],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+  const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
+
+  test('toutes cochées au départ ; choisirDonneeBadge écrit les seuls réglages, dans tout mode, et l’état la porte ; une séance neuve les relit', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.deepEqual(seance.etat().donneesBadge, TOUTES);
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirDonneeBadge('organisation', false), { retenu: true, avertissements: [] });
+    assert.deepEqual(await seance.choisirDonneeBadge('horodatage', false), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 2);
+    assert.deepEqual(casesLues(fs), { horodatage: false, organisation: false });
+    assert.deepEqual(seance.etat().donneesBadge, { ...TOUTES, organisation: false, horodatage: false });
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.deepEqual(neuve.seance.etat().donneesBadge, { ...TOUTES, organisation: false, horodatage: false });
+    await neuve.seance.choisirDonneeBadge('organisation', true);
+    assert.deepEqual(casesLues(fs), { horodatage: false, organisation: true });
+    assert.deepEqual(neuve.seance.etat().donneesBadge, { ...TOUTES, horodatage: false });
+  });
+
+  test('une donnée inconnue, ou une valeur qui n’est pas un booléen, est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const [donnee, coche] of [['nom', false], ['tours', false], ['date', 'false'], ['identifiant', 0], ['evenement', null]]) {
+      await assert.rejects(seance.choisirDonneeBadge(donnee, coche), TypeError, `${donnee} ${coche}`);
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.deepEqual(seance.etat().donneesBadge, TOUTES);
+  });
+
+  test('des réglages illisibles : la case vaut pour la séance, non retenue, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirDonneeBadge('date', false), { retenu: false, avertissements: [avis] });
+    assert.deepEqual(seance.etat().donneesBadge, { ...TOUTES, date: false });
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('au changement de racine : chaque case que les réglages portent, à défaut celle de la séance', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"donnees_badge":{"evenement":false},"format":1,"papier":null}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.deepEqual(seance.etat().donneesBadge, { ...TOUTES, evenement: false });
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.deepEqual(seance.etat().donneesBadge, { ...TOUTES, evenement: false }, 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    await seance.changerRacine(PORTABLE);
+    assert.deepEqual(seance.etat().donneesBadge, { ...TOUTES, evenement: false }, 'des réglages illisibles');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"donnees_badge":{"identifiant":false},"format":1,"papier":null}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.deepEqual(seance.etat().donneesBadge, { ...TOUTES, evenement: false, identifiant: false }, 'une case absente garde celle de la séance');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"donnees_badge":{"evenement":true},"format":1,"papier":null}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.deepEqual(seance.etat().donneesBadge, { ...TOUTES, identifiant: false }, 'une case écrite sur la racine l’emporte');
+  });
+
+  test('une relecture des réglages partie avant un choix d’une case ne l’écrase pas, ni dans l’état ni dans le fichier', async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"donnees_badge":{"date":true},"format":1,"papier":null}\n');
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(prise, true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirDonneeBadge('date', false);
+    await laisser();
+    liberer();
+    await changement;
+    assert.deepEqual(seance.etat().donneesBadge, { ...TOUTES, date: false });
+    assert.deepEqual(await choix, { retenu: true, avertissements: [] });
+    await seance.attendre();
+    assert.deepEqual([casesLues(fs, PORTABLE.id), seance.etat().donneesBadge], [{ date: false }, { ...TOUTES, date: false }]);
+  });
+
+  test('la planche lit les cases de la séance : l’annonce les porte, toutes cochées puis la date du placement décochée', async () => {
+    const { seance } = await ouvertSur(chargeRetenue(), avecPlanche);
+    await seance.choisirPiedTechnolibre(false);
+    assert.deepEqual((await seance.preparerPlanche()).donneesBadge, TOUTES);
+    await seance.choisirDonneeBadge('horodatage', false);
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.donneesBadge], [null, { ...TOUTES, horodatage: false }]);
+  });
+});

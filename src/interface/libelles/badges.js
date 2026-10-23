@@ -1,16 +1,16 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8,
-// Q3) : ses réglages — modèle de badge, case du pied TechnoLibre, source,
-// imposition, ordre —, ses commandes, les phrases de l'annonce que rend
-// phrasesAnnonce (badges/modele.js), logos des participants compris, la
-// planche et la liste produites, et la réédition. Chaque clé commence par
-// « badges. ». Les refus de la planche sont des textes de l'application
-// (application/libelles/planche.js), le nom d'un papier un libellé de
-// l'aperçu (impression.papier.nom.*), que l'annonce lit par texte. Le chemin
-// d'un fichier produit est une donnée : l'écran le pose dans son propre
-// nœud, à côté de son intitulé.
+// Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3) :
+// ses réglages — modèle de badge, case du pied TechnoLibre, cases de ce que le
+// badge imprime, source, imposition, ordre —, ses commandes, les phrases de
+// l'annonce que rend phrasesAnnonce (badges/modele.js), logos des participants
+// compris, la planche et la liste produites, et la réédition. Chaque clé
+// commence par « badges. ». Les refus de la planche sont des textes de
+// l'application (application/libelles/planche.js), le nom d'un papier un
+// libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit par texte.
+// Le chemin d'un fichier produit est une donnée : l'écran le pose dans son
+// propre nœud, à côté de son intitulé.
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
@@ -34,6 +34,19 @@ export const TABLE = new Map([
   [
     'badges.technolibre.nonRetenu',
     'La case vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
+  // Les cases de ce que le badge imprime (§ 11.4), une par donnée de
+  // DONNEES_BADGE, sous l'intitulé du groupe qui porte aussi celle du pied
+  // TechnoLibre ; le nom et les tours s'impriment toujours.
+  ['badges.donnees.titre', 'Sur chaque badge, en plus du nom et des tours'],
+  ['badges.donnees.organisation', 'Organisation'],
+  ['badges.donnees.evenement', 'Nom de l\u{2019}événement'],
+  ['badges.donnees.date', 'Date de l\u{2019}événement'],
+  ['badges.donnees.horodatage', 'Date du placement'],
+  ['badges.donnees.identifiant', 'Identifiant'],
+  [
+    'badges.donnees.nonRetenues',
+    'Les cases valent pour cette séance, sans être retenues sur ce poste : les réglages locaux ne se sont pas écrits.',
   ],
   ['badges.source.titre', 'Placement imprimé'],
   ['badges.source.retenu', 'Le placement retenu'],

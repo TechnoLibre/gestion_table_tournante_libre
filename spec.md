@@ -3074,7 +3074,7 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **cinq choses, et cinq seulement** :
+Ce fichier porte **six choses, et six seulement** :
 
 | réglage | portée |
 |---|---|
@@ -3082,6 +3082,7 @@ Ce fichier porte **cinq choses, et cinq seulement** :
 | le **format de papier** (§ 11.2) | global à la machine |
 | le **modèle de badge** (§ 11.2), clé `modele_badge` | global à la machine |
 | la **case du pied TechnoLibre** des badges (§ 11.4), clé `pied_technolibre` | globale à la machine |
+| les **cases de ce que le badge imprime** (§ 11.4), clé `donnees_badge` | globales à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
@@ -3098,15 +3099,16 @@ mode portable (§ 8.6), ce fichier suit la clé avec les événements.
 **Le cadrage s'écrit en différé**, et échappe nommément à la règle « fin du
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
-cadrage, le papier, le modèle de badge, la case du pied TechnoLibre et la taille
-du texte passent par une même file, qui relit le fichier avant chaque écriture :
-deux écrivains qui le liraient chacun avant que l'autre l'ait écrit perdraient
-le réglage de l'un. Un fichier que la lecture ne prend pas ne s'écrase pas. Ni
-lui, ni un dossier qui refuse de l'écrire, ne bloque le choix du papier : le
-papier choisi vaut pour la séance sur ce dossier de travail, sans être retenu
-sur la machine, et un avertissement nomme le fichier et dit que le choix n'est
-pas retenu ; la première écriture des réglages qui y réussit le retient, et
-l'avertissement se retire. Le cadrage attend.
+cadrage, le papier, le modèle de badge, la case du pied TechnoLibre, les cases
+de ce que le badge imprime et la taille du texte passent par une même file, qui
+relit le fichier avant chaque écriture : deux écrivains qui le liraient chacun
+avant que l'autre l'ait écrit perdraient le réglage de l'un. Un fichier que la
+lecture ne prend pas ne s'écrase pas. Ni lui, ni un dossier qui refuse de
+l'écrire, ne bloque le choix du papier : le papier choisi vaut pour la séance
+sur ce dossier de travail, sans être retenu sur la machine, et un avertissement
+nomme le fichier et dit que le choix n'est pas retenu ; la première écriture des
+réglages qui y réussit le retient, et l'avertissement se retire. Le cadrage
+attend.
 
 **Le modèle de badge** décrit le support que la machine garnit — des cartes
 Avery 5392 prédécoupées, ou des A6 à découper (§ 11.2) —, pas le plan. Le
@@ -3133,6 +3135,25 @@ relit comme le modèle de badge ; un fichier que la lecture ne prend pas, ou un
 dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut pour la
 séance, et la section dit, sous ses réglages, qu'elle n'est pas retenue sur ce
 poste.
+
+**Les cases de ce que le badge imprime** — « Organisation », « Nom de
+l'événement », « Date de l'événement », « Date du placement », « Identifiant »
+(§ 11.4) — sont, comme celle du pied TechnoLibre, un choix de la machine qui
+imprime. Le fichier les porte sous `donnees_badge`, un objet d'un booléen par
+donnée — `organisation`, `evenement`, `date`, `horodatage`, `identifiant` —,
+qui n'existe que touché et ne porte que les cases touchées ; une case absente
+est cochée. Un objet qui n'en est pas un, ou une case connue qui n'est pas un
+booléen, rend le fichier illisible, comme un papier inconnu ; une clé inconnue
+de l'objet se garde telle quelle. Chaque case se coche et se décoche dans la
+section des badges, sous les deux modèles, s'écrit au geste, dans tout mode,
+par la même file, et se relit comme le modèle de badge, chacune pour
+elle-même : une case que le fichier ne porte pas garde celle de la séance. Un
+fichier que la lecture ne prend pas, ou un dossier qui refuse de l'écrire, ne
+bloque pas le choix : la case vaut pour la séance, et la section dit, sous ses
+réglages, que les cases ne sont pas retenues sur ce poste. Chaque écriture ne
+porte que sa case : une écriture qui réussit pour une case n'en retient pas une
+autre, et l'avertissement reste tant qu'une case non retenue garde la valeur
+choisie, jusqu'à ce qu'un choix de cette case soit retenu.
 
 **La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
 (§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
@@ -4930,13 +4951,15 @@ et le compte attendu, le nom et la date de l'événement, la source — le place
 retenu, ou la proposition imprimée par son numéro, que l'horodatage ne distingue
 pas des autres propositions de sa génération —, l'horodatage du placement, la
 version (§ 18.6), la consigne d'impression — recto seul, à 100 % —, quand un
-badge désigne un logo de participant, une ligne de texte qui compte les
-logos — « Logos : 41 posés, 2 sans place, 1 introuvable » (§ 11.5) —, les
-caractères que la police n'a pas, par leur point de code (§ 11.5), et le
-filigrane BROUILLON s'il y a lieu, sur chacune de ses pages. Elle ne porte
-aucune image, ni logo de participant ni logo TechnoLibre. L'opérateur la
-mesure sous une règle avant d'engager la rame : si la planche est sortie
-« ajustée à la page », la graduation ne fait plus 100 mm et le défaut se
+badge désigne un logo de participant, une ligne de texte qui compte les logos —
+« Logos : 41 posés, 2 sans place, 1 introuvable » (§ 11.5) —, quand une case de
+la section retire des données des badges (§ 11.4), une ligne qui les nomme dans
+l'ordre des cases — « Données retirées des badges : organisation et date du
+placement » —, les caractères que la police n'a pas, par leur point de code
+(§ 11.5), et le filigrane BROUILLON s'il y a lieu, sur chacune de ses pages.
+Elle ne porte aucune image, ni logo de participant ni logo TechnoLibre.
+L'opérateur la mesure sous une règle avant d'engager la rame : si la planche est
+sortie « ajustée à la page », la graduation ne fait plus 100 mm et le défaut se
 découvre sur la première feuille au lieu de la soixante-cinquième.
 
 **L'impression est recto seul.** Un verso aligné dépend d'un retournement dont le
@@ -4963,6 +4986,26 @@ Le pied des **pages** imprimées porte cinq éléments, la version comprise
 (§ 11.7). Le badge n'est pas une page : il porte le nom de l'événement, sa date
 et l'horodatage, **pas le tour** — il les porte tous — et **pas la version**, qui
 ne sert à aucun diagnostic au cou d'un invité et dont la place est comptée.
+
+**Cinq cases retirent des données du badge.** La section des badges porte, à
+côté de la case du pied TechnoLibre, cinq cases, **toutes cochées par défaut**
+et **gardées sur le poste** comme elle (§ 8.5) : « Organisation » (rang 3),
+« Nom de l'événement » et « Date de l'événement » (rang 4), « Date du
+placement » — la ligne « Placement du … à … », rang 5 — et « Identifiant » —
+la ligne « Identifiant n° … » d'un homonyme. Le nom de la personne et ses
+tours s'impriment toujours. Une case décochée retire sa donnée de chaque badge
+du PDF, A6 comme Avery 5392, et la place libérée revient au reste comme celle
+d'une ligne absente (§ 11.5) : au nom et aux tours, puis au logo du
+participant et au pied TechnoLibre. Le nom et la date de l'événement se
+combinent : la date décochée, le nom reste seul sur sa ligne ; le nom décoché,
+la date seule ; les deux décochés, la ligne disparaît. Un nom de l'événement
+que sa case retire n'est pas un nom perdu au sens de l'ordre de sacrifice : le
+logo du participant et le pied TechnoLibre s'y posent encore quand l'écart le
+permet. La feuille de contrôle nomme les données retirées, d'une ligne
+(§ 11.3) ; l'annonce nomme toujours les homonymes que rien ne sépare,
+« Identifiant » décoché compris, et l'opérateur décide. La liste des badges en
+CSV (§ 11.6) ne lit aucune case : elle ne change pas. Toutes les cases
+cochées, la planche garde exactement ses octets.
 
 **Le logo du participant passe après tout le texte.** La place du badge se
 donne dans cet ordre : le nom et les tours toujours ; puis l'organisation et
@@ -5041,7 +5084,9 @@ les sépare pas plus que son absence. La pile étant
 alphabétique, leurs deux cartons sont voisins : l'hôte en tend un au hasard et
 deux personnes passent la soirée aux tables l'une de l'autre, sans que rien ne le
 signale. Le logiciel **compte ces collisions avant de produire, les nomme, et
-porte l'identifiant en pied des seuls badges concernés.**
+porte l'identifiant en pied des seuls badges concernés** — sauf quand la case
+« Identifiant » est décochée : l'annonce les nomme encore, et aucun badge ne le
+porte.
 
 ### 11.5 Les cas qui cassent la mise en page
 
@@ -5061,21 +5106,22 @@ un débordement.
 
 > nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre
 
-- **Un nom très long.** Le nom **ne s'abrège jamais**. Le logiciel réduit le corps
-  par paliers jusqu'à un plancher de lisibilité **mesuré sur les métriques de la
-  police embarquée**, puis replie sur une seconde ligne, puis sur une troisième —
-  aux espaces, et entre deux lettres seulement quand un mot seul ne tient pas,
-  jamais entre une lettre et son accent. Si, le nom au plancher, le badge ne tient
-  toujours pas, il se dépouille dans l'ordre de sacrifice : le nom de l'événement
-  quitte le pied, sa date restant, puis l'organisation part. **Au-delà de trois
-  lignes, le nom continue de se replier** au corps plancher, sur autant de lignes
-  qu'il lui faut, et le badge perd d'emblée le nom de l'événement, puis
-  l'organisation s'il le faut ; si les lignes de tour ne tiennent plus sous lui,
-  le logiciel **refuse de produire la planche** et nomme la personne, dont le nom
-  se corrige dans la liste des participants. L'horodatage ne quitte jamais le
-  pied. Le seuil se cale sur le **glyphe le plus large** de l'alphabet visé,
-  jamais sur une moyenne (§ 14.1) : un nom en capitales larges déborde sinon
-  par-dessus la première ligne de tour, en silence.
+- **Un nom très long.** Le nom **ne s'abrège jamais**. Le logiciel réduit le
+  corps par paliers jusqu'à un plancher de lisibilité **mesuré sur les métriques
+  de la police embarquée**, puis replie sur une seconde ligne, puis sur une
+  troisième — aux espaces, et entre deux lettres seulement quand un mot seul ne
+  tient pas, jamais entre une lettre et son accent. Si, le nom au plancher, le
+  badge ne tient toujours pas, il se dépouille dans l'ordre de sacrifice : le
+  nom de l'événement quitte le pied, sa date restant, puis l'organisation part.
+  **Au-delà de trois lignes, le nom continue de se replier** au corps plancher,
+  sur autant de lignes qu'il lui faut, et le badge perd d'emblée le nom de
+  l'événement, puis l'organisation s'il le faut ; si les lignes de tour ne
+  tiennent plus sous lui, le logiciel **refuse de produire la planche** et nomme
+  la personne, dont le nom se corrige dans la liste des participants.
+  L'horodatage ne quitte jamais le pied ; seule sa case le retire (§ 11.4). Le
+  seuil se cale sur le **glyphe le plus large** de l'alphabet visé, jamais sur
+  une moyenne (§ 14.1) : un nom en capitales larges déborde sinon par-dessus la
+  première ligne de tour, en silence.
 - **Une organisation très longue.** Elle **s'abrège** avec une marque, sur une
   seule ligne. C'est une étiquette de contexte, pas une identité, et un
   repliement sur trois lignes mange les tours.
@@ -5108,7 +5154,9 @@ un débordement.
   réservé, ni tiret : le « — » signale une mesure vide dans la page de qualité
   (§ 5.4), et sur un carton il se lit comme une donnée manquante dont la personne
   viendra demander la cause à l'accueil. La place libérée revient au bloc du nom.
-  La mise en page est donc un flux, non une grille de cases fixes.
+  La mise en page est donc un flux, non une grille de cases fixes. Une
+  organisation, ou une ligne de pied, que sa case retire (§ 11.4) s'en va de
+  même, et sa place revient au reste.
 - **Une personne en réserve à un tour.** La ligne porte « pas de table » en toutes
   lettres. Une ligne blanche se lit comme un défaut d'impression.
 - **Une personne absente à un tour.** La ligne de ce tour porte « absente » en
@@ -5474,7 +5522,8 @@ jamais.
   celui de la première planche — c'est ce qu'on attend d'un badge perdu ; si le
   placement a bougé, l'horodatage diffère, et c'est ce qu'on attend d'un badge
   refait. Un logo changé change le badge sans faire dériver le placement : il
-  ne garde pas la planche.
+  ne garde pas la planche. Une case de ce que le badge imprime (§ 11.4)
+  changée sur le poste le change de même.
 
 ---
 

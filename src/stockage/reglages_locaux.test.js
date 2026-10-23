@@ -14,14 +14,17 @@ import { PAPIERS } from '../geometrie/papiers.js';
 import { PALIERS_TAILLE_TEXTE, TAILLE_TEXTE_DEFAUT } from '../geometrie/taille_texte.js';
 import { ErreurStockage } from './erreurs.js';
 import {
+  DONNEES_BADGE,
   FICHIER_REGLAGES,
   avecCadrage,
+  avecDonneeBadge,
   avecModeleBadge,
   avecPapier,
   avecPiedTechnolibre,
   avecTailleTexte,
   cadrageDe,
   creerEcrivainDiffere,
+  donneesBadgeDe,
   ecrireReglages,
   lireReglages,
   modeleBadgeDe,
@@ -584,5 +587,63 @@ describe('réglages locaux : le pied TechnoLibre des badges (§ 8.5, § 11.4)', 
     const { reglages } = await lireReglages(fs, DOC);
     await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
     assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"format":1,"papier":"Lettre","pied_technolibre":false}\n');
+  });
+});
+
+describe('réglages locaux : les cases de ce que le badge imprime (§ 8.5, § 11.4)', () => {
+  const TOUTES = { organisation: true, evenement: true, date: true, horodatage: true, identifiant: true };
+
+  test('les cinq données, dans l’ordre des cases ; absentes, toutes cochées, sans que la clé s’ajoute aux réglages lus', async () => {
+    assert.deepEqual(DONNEES_BADGE, ['organisation', 'evenement', 'date', 'horodatage', 'identifiant']);
+    assert.ok(Object.isFrozen(DONNEES_BADGE));
+    const absent = await lireReglages(disque(), DOC);
+    assert.equal(Object.hasOwn(absent.reglages, 'donnees_badge'), false);
+    assert.deepEqual(donneesBadgeDe(absent.reglages), TOUTES);
+    assert.deepEqual(Object.keys(donneesBadgeDe(absent.reglages)), DONNEES_BADGE);
+  });
+
+  test('donnees_badge se lit tel quel ; une case absente de l’objet vaut cochée, une clé inconnue se garde', async () => {
+    const texte = '{"cadrages":[],"donnees_badge":{"horodatage":false,"organisation":false,"zeta":3},"format":1,"papier":null}\n';
+    const { reglages, avertissement } = await lireReglages(disque(texte), DOC);
+    assert.equal(avertissement, null);
+    assert.deepEqual(reglages.donnees_badge, { horodatage: false, organisation: false, zeta: 3 });
+    assert.deepEqual(donneesBadgeDe(reglages), { ...TOUTES, organisation: false, horodatage: false });
+    assert.equal(serialiserReglages(reglages), texte);
+  });
+
+  test('un objet fautif, ou une case connue qui n’est pas un booléen, rend le fichier fautif : les défauts et REGLAGES_ILLISIBLES, raison FORME', async () => {
+    for (const valeur of ['true', 'null', '[]', '"non"', '{"evenement":"false"}', '{"identifiant":0}', '{"date":null}']) {
+      const fs = disque(`{"cadrages":[],"donnees_badge":${valeur},"format":1,"papier":null}\n`);
+      assert.deepEqual(await lireReglages(fs, DOC), { reglages: DEFAUTS, avertissement: illisibles('FORME') }, valeur);
+      assert.equal(fs.compteurs.ecritures, 0, valeur);
+    }
+    assert.throws(() => serialiserReglages({ ...DEFAUTS, donnees_badge: { organisation: 1 } }), TypeError);
+  });
+
+  test('avecDonneeBadge pose une case sans toucher aux autres ni au reste ; une donnée inconnue ou un non-booléen lève TypeError ; le texte canonique range la clé à son rang', () => {
+    const reglages = { ...DEFAUTS, papier: 'A4', pied_technolibre: false, theme: 'sombre' };
+    const une = avecDonneeBadge(reglages, 'evenement', false);
+    assert.deepEqual(une, { ...reglages, donnees_badge: { evenement: false } });
+    assert.equal(Object.hasOwn(reglages, 'donnees_badge'), false);
+    const deux = avecDonneeBadge(avecDonneeBadge(une, 'identifiant', false), 'evenement', true);
+    assert.deepEqual(deux.donnees_badge, { evenement: true, identifiant: false });
+    assert.deepEqual(une.donnees_badge, { evenement: false });
+    assert.equal(
+      serialiserReglages(deux),
+      '{"cadrages":[],"donnees_badge":{"evenement":true,"identifiant":false},"format":1,"papier":"A4","pied_technolibre":false,"theme":"sombre"}\n',
+    );
+    const inconnue = avecDonneeBadge({ ...DEFAUTS, donnees_badge: { zeta: 1 } }, 'date', false);
+    assert.deepEqual(inconnue.donnees_badge, { zeta: 1, date: false });
+    for (const mauvaise of ['nom', 'tours', 'toString', '__proto__', '', null]) {
+      assert.throws(() => avecDonneeBadge(reglages, mauvaise, false), TypeError, String(mauvaise));
+    }
+    for (const mauvais of ['false', 0, 1, null, undefined]) assert.throws(() => avecDonneeBadge(reglages, 'date', mauvais), TypeError, String(mauvais));
+  });
+
+  test('un fichier qui porte les cases, relu puis réécrit avec un autre papier, les garde', async () => {
+    const fs = disque('{"cadrages":[],"donnees_badge":{"date":false},"format":1,"papier":null}\n');
+    const { reglages } = await lireReglages(fs, DOC);
+    await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"donnees_badge":{"date":false},"format":1,"papier":"Lettre"}\n');
   });
 });

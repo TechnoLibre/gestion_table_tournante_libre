@@ -26,6 +26,15 @@
   // la machine ne retient pas vaut pour la séance, et une annonce le dit
   // sous les réglages tant qu'elle est celle de la séance, comme le modèle.
   //
+  // À côté d'elle, dans le même groupe, cinq cases de la machine disent ce
+  // que le badge imprime en plus du nom et des tours, une par donnée de
+  // DONNEES_BADGE (EtatSeance.donneesBadge, seance.choisirDonneeBadge),
+  // cochées tant que l'opérateur ne les a pas décochées. Chaque écriture ne
+  // porte que sa case : une case que la machine ne retient pas le reste
+  // jusqu'à ce qu'un choix de CETTE case soit retenu, quoi qu'il advienne
+  // des autres, et l'annonce le dit tant qu'une case non retenue garde dans
+  // la séance la valeur choisie.
+  //
   // Les réglages d'une demande : la source — le retenu s'il existe, sinon la
   // proposition demandée au plan depuis les propositions, choisie quand les
   // deux sont offertes (sourcesOffertes) —, l'imposition, feuille par
@@ -35,7 +44,7 @@
   // « Préparer » demande l'annonce à la séance (preparerPlanche) et la montre,
   // phrase par phrase (phrasesAnnonce), avec son refus et le remède de
   // celui-ci. L'annonce montrée est celle des réglages, du modèle, du papier,
-  // de la case et de la charge courants : qu'un d'eux change, elle se retire,
+  // des cases et de la charge courants : qu'un d'eux change, elle se retire,
   // et la suivante se prépare. « Produire » prépare d'abord : une dérive, et
   // tout refus du placement ou de la mise en page, se nomme avant toute
   // production (§ 11.8), et « Produire » reste désactivé, expliqué, tant que
@@ -77,6 +86,7 @@
   // fond sourd de la carte, les fichiers produits sur le fond de
   // l'information. La réédition est une carte à elle.
   import { getContext } from 'svelte';
+  import { DONNEES_BADGE } from '../../application/seance.js';
   import { PAPIER_BADGES_DEFAUT } from '../../geometrie/papiers.js';
   import Message from '../accueil/Message.svelte';
   import { suivre } from '../activite.js';
@@ -113,6 +123,7 @@
   const charge = $derived($seance.charge);
   const modeleBadge = $derived($seance.modeleBadge);
   const piedTechnolibre = $derived($seance.piedTechnolibre);
+  const donneesBadge = $derived($seance.donneesBadge);
   const cartes = $derived(modeleImposeSonPapier(modeleBadge));
   const offertes = $derived(charge === null ? [] : sourcesOffertes(charge, $ui.proposition));
 
@@ -126,15 +137,21 @@
   // null pour toute la soirée.
   const demandeDe = (selection) => ({ source: source.source, proposition: source.proposition, imposition, ordre, selection });
 
+  // Vrai quand l'annonce a lu les cases de la séance ; une annonce sans
+  // cases les a lues toutes cochées.
+  const memesDonnees = (annonce) => DONNEES_BADGE.every((donnee) => (annonce.donneesBadge?.[donnee] ?? true) === donneesBadge[donnee]);
+
   // La dernière annonce préparée : {annonce, demande, charge}, la charge lue
-  // au départ de la préparation. Montrée tant que réglages, modèle, papier
-  // et charge sont ceux qu'elle a lus. Gardée telle quelle, sans mandataire
-  // réactif : la charge se compare par identité à celle de la séance.
+  // au départ de la préparation. Montrée tant que réglages, modèle, papier,
+  // cases et charge sont ceux qu'elle a lus. Gardée telle quelle, sans
+  // mandataire réactif : la charge se compare par identité à celle de la
+  // séance.
   let preparee = $state.raw(null);
   const montree = $derived(
     preparee !== null &&
       preparee.charge === charge &&
       annonceDeLaMachine(preparee.annonce, $seance) &&
+      memesDonnees(preparee.annonce) &&
       memesReglages(preparee.demande, demandeDe(null))
       ? preparee
       : null,
@@ -159,6 +176,14 @@
   // même, la dernière valeur de la case du pied TechnoLibre.
   let modeleNonRetenu = $state(null);
   let piedNonRetenu = $state(null);
+  // Les cases que la machine n'a pas retenues, chacune avec la valeur de son
+  // dernier choix : une donnée y entre quand son choix n'est pas retenu, en
+  // sort quand un choix d'elle l'est. Vide tant que tout est retenu.
+  let donneesNonRetenues = $state.raw({});
+  // Vrai quand une case non retenue garde, dans la séance, la valeur choisie.
+  const annoncerDonnees = $derived(
+    DONNEES_BADGE.some((donnee) => Object.hasOwn(donneesNonRetenues, donnee) && donneesNonRetenues[donnee] === donneesBadge[donnee]),
+  );
 
   async function preparer(selection) {
     const demande = demandeDe(selection);
@@ -258,6 +283,15 @@
     const { retenu } = await seance.choisirPiedTechnolibre(coche);
     piedNonRetenu = retenu ? null : coche;
   }
+
+  // La case d'une donnée du badge s'écrit sur la machine, comme celle du
+  // pied TechnoLibre ; son issue ne touche que l'entrée de cette donnée
+  // parmi les non retenues.
+  async function choisirDonnee(donnee, coche) {
+    const { retenu } = await seance.choisirDonneeBadge(donnee, coche);
+    const { [donnee]: _, ...autres } = donneesNonRetenues;
+    donneesNonRetenues = retenu ? autres : { ...autres, [donnee]: coche };
+  }
 </script>
 
 <section data-section="badges">
@@ -305,15 +339,32 @@
             </select>
           </label>
         </div>
-        <div class="case">
-          <input
-            id={`${uid}-technolibre`}
-            type="checkbox"
-            data-champ="piedTechnolibre"
-            checked={piedTechnolibre}
-            onchange={(evenement) => choisirPied(evenement.currentTarget.checked)}
-          />
-          <label for={`${uid}-technolibre`}>{t('badges.technolibre.case')}</label>
+        <div class="cases" role="group" aria-labelledby={`${uid}-cases`}>
+          <p class="intitule" id={`${uid}-cases`}>{t('badges.donnees.titre')}</p>
+          <div class="rangee">
+            {#each DONNEES_BADGE as donnee (donnee)}
+              <div class="case">
+                <input
+                  id={`${uid}-donnee-${donnee}`}
+                  type="checkbox"
+                  data-champ={`donneeBadge.${donnee}`}
+                  checked={donneesBadge[donnee]}
+                  onchange={(evenement) => choisirDonnee(donnee, evenement.currentTarget.checked)}
+                />
+                <label for={`${uid}-donnee-${donnee}`}>{t(`badges.donnees.${donnee}`)}</label>
+              </div>
+            {/each}
+          </div>
+          <div class="case">
+            <input
+              id={`${uid}-technolibre`}
+              type="checkbox"
+              data-champ="piedTechnolibre"
+              checked={piedTechnolibre}
+              onchange={(evenement) => choisirPied(evenement.currentTarget.checked)}
+            />
+            <label for={`${uid}-technolibre`}>{t('badges.technolibre.case')}</label>
+          </div>
         </div>
         <div role="status">
           {#if modeleNonRetenu !== null && modeleNonRetenu === modeleBadge}
@@ -321,6 +372,9 @@
           {/if}
           {#if piedNonRetenu !== null && piedNonRetenu === piedTechnolibre}
             <Message ton="avis"><p data-avertissement="piedNonRetenu">{t('badges.technolibre.nonRetenu')}</p></Message>
+          {/if}
+          {#if annoncerDonnees}
+            <Message ton="avis"><p data-avertissement="donneesNonRetenues">{t('badges.donnees.nonRetenues')}</p></Message>
           {/if}
         </div>
 
@@ -465,8 +519,31 @@
     text-transform: uppercase;
   }
 
-  /* La case du pied TechnoLibre, sous les sélecteurs : la case, puis son
-     libellé, en encre courante. */
+  /* Les cases de ce que le badge imprime, sous les sélecteurs : leur
+     intitulé, en petites capitales d'encre secondaire comme celui d'un
+     sélecteur, puis les cinq cases en rangée qui se replie, puis celle du
+     pied TechnoLibre. Chaque case : la case, puis son libellé, en encre
+     courante. */
+  .cases {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+  }
+
+  .intitule {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
+    font-weight: bold;
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
+  }
+
+  .rangee {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-2) var(--espace-5);
+  }
+
   .case {
     display: flex;
     align-items: center;

@@ -1008,6 +1008,16 @@ logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ; le poste
 garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la place
 libre : il rapetisse sur un badge chargé, et s’en retire quand même sa plus
 petite taille ne tient pas, ou que le badge a dû perdre le nom de l’événement.
+À côté, cinq autres cases, cochées elles aussi tant que vous ne les décochez
+pas, disent ce que chaque badge imprime en plus du nom et des tours :
+« Organisation », « Nom de l’événement », « Date de l’événement », « Date du
+placement » — la ligne « Placement du … à … » — et « Identifiant » — la ligne
+« Identifiant n° … » qui sépare deux homonymes. Le poste les garde, comme le
+modèle. Une case décochée retire sa donnée de chaque badge, et la place
+libérée revient au reste ; le nom et la date de l’événement partagent une
+ligne, qui disparaît quand les deux sont décochés. La feuille de contrôle
+ajoute alors une ligne « Données retirées des badges : … » qui les nomme ; la
+liste en CSV, elle, ne change pas.
 
 Le badge d’une personne qui porte un logo (étape 3) le pose entre ses tours et
 le pied, dans la place que le texte laisse : le logo ne rapetisse ni ne retire

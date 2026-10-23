@@ -25,6 +25,16 @@ const NOMS_DES_MODELES = new Map([
   ['avery5392', 'Avery 5392'],
 ]);
 
+// Les données qu'une case de la section retire des badges, comme la feuille
+// de contrôle les nomme, par leur clé de DONNEES_BADGE.
+const NOMS_DES_DONNEES = new Map([
+  ['organisation', 'organisation'],
+  ['evenement', 'nom de l\u{2019}\u{E9}v\u{E9}nement'],
+  ['date', 'date de l\u{2019}\u{E9}v\u{E9}nement'],
+  ['horodatage', 'date du placement'],
+  ['identifiant', 'identifiant'],
+]);
+
 // Une cote en millimètres, la virgule pour décimale.
 const cote = (mm) => String(mm).replace('.', ',');
 
@@ -213,6 +223,13 @@ export const TABLE = new Map([
     'planche.controle.logos',
     ({ poses, sansPlace, introuvables }) =>
       `Logos : ${compte(poses, 'posé', 'posés')}, ${sansPlace} sans place, ${compte(introuvables, 'introuvable', 'introuvables')}`,
+  ],
+  // Les données que les cases de la section retirent des badges, dans
+  // l'ordre des cases ; la ligne ne s'écrit que quand une case au moins est
+  // décochée.
+  [
+    'planche.controle.retirees',
+    ({ donnees }) => `Données retirées des badges : ${enumeration(donnees.map((donnee) => nomDans(NOMS_DES_DONNEES, donnee, 'donnée du badge')))}`,
   ],
   ['planche.controle.reedition', ({ n }) => `Réédition : ${compte(n, 'badge', 'badges')}`],
   [

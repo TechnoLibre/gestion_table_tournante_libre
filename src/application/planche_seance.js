@@ -28,6 +28,17 @@
 // l'annonce compte les badges d'où la mise en page le retire faute de
 // place. Son texte vient de libelle, comme le mot du filigrane.
 //
+// Les cases de ce que le badge imprime suivent aussi la machine, que la
+// lecture porte : une case décochée retire sa donnée — l'organisation, le
+// nom de l'événement, sa date, l'horodatage du placement, l'identifiant d'un
+// homonyme — de chaque badge du PDF, avant la mise en page, qui rend la
+// place libérée au reste comme pour une ligne absente. Le pied se recompose
+// par libelle, le nom et la date de l'événement en une ligne ou l'un sans
+// l'autre ; toutes cochées, le modèle passe tel quel, et les octets ne
+// changent pas. La feuille de contrôle nomme les données retirées, d'une
+// ligne ; l'annonce nomme toujours les homonymes, et la liste en CSV ne lit
+// aucune case.
+//
 // Le logo d'un participant arrive en octets, lus du dossier de l'événement
 // par lireOctets au chemin que porte son badge : chaque chemin distinct se
 // lit une fois par étude, dans l'ordre de la pile, et ses octets se
@@ -72,6 +83,7 @@ import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js'
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurPng, lirePng } from '../pdf/png.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
+import { DONNEES_BADGE } from '../stockage/reglages_locaux.js';
 import { nomControle, nomCsvBadges, nomCsvBadgesExigeListe, nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
 import { cheminAffiche } from '../stockage/systeme_fichiers.js';
 import { ErreurCommande, refus } from './erreurs.js';
@@ -111,6 +123,9 @@ const chargerProduction = () => import('../pdf/planche.js');
  *           réglages locaux ; 'a6' quand la lecture ne le porte pas
  * @property {boolean} [piedTechnolibre]   la case du pied TechnoLibre des
  *           réglages locaux ; faux quand la lecture ne la porte pas
+ * @property {Object<string, boolean>} [donneesBadge]   les cases de ce que le
+ *           badge imprime, un booléen par donnée de DONNEES_BADGE ; toutes
+ *           cochées quand la lecture ne les porte pas
  *
  * @typedef {Object} DemandePlanche
  * @property {'retenu'|'proposition'} [source]   'retenu' par défaut
@@ -135,6 +150,8 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {string|null} nomControle   le nom de la feuille de contrôle à
  *           part (nomControle) ; null pour l'A6, et sans modèle
  * @property {boolean} piedTechnolibre   la case de la lecture
+ * @property {Object<string, boolean>} donneesBadge   les cases de la lecture,
+ *           une par donnée de DONNEES_BADGE, dans leur ordre
  * @property {number|null} sansTechnolibre   le nombre de badges d'où le pied
  *           TechnoLibre se retire, faute de place ; null sans la case, et
  *           sans modèle
@@ -180,6 +197,56 @@ function modeleDe({ modeleBadge = 'a6' }) {
 function piedDe({ piedTechnolibre = false }) {
   if (typeof piedTechnolibre !== 'boolean') throw new TypeError(`piedTechnolibre : booléen attendu, reçu ${JSON.stringify(piedTechnolibre)}`);
   return piedTechnolibre;
+}
+
+// Les cases de ce que le badge imprime d'une lecture, contrôlées : un
+// booléen par donnée de DONNEES_BADGE, dans leur ordre, toutes vraies quand
+// la lecture ne les porte pas ; un objet qui n'en porte pas exactement un
+// booléen par donnée est une faute du code.
+function donneesDe({ donneesBadge = null }) {
+  if (donneesBadge === null) return Object.fromEntries(DONNEES_BADGE.map((donnee) => [donnee, true]));
+  const bien = typeof donneesBadge === 'object' && DONNEES_BADGE.every((donnee) => typeof donneesBadge[donnee] === 'boolean');
+  if (!bien) throw new TypeError(`donneesBadge : un booléen par donnée de ${DONNEES_BADGE.join(', ')} attendu, reçu ${JSON.stringify(donneesBadge)}`);
+  return Object.fromEntries(DONNEES_BADGE.map((donnee) => [donnee, donneesBadge[donnee]]));
+}
+
+// Les données que les cases retirent, dans l'ordre de DONNEES_BADGE.
+const retireesDe = (donnees) => DONNEES_BADGE.filter((donnee) => !donnees[donnee]);
+
+// Le modèle tel que le badge l'imprime sous les cases : toutes cochées, le
+// modèle reçu ; sinon un modèle neuf dont chaque badge perd, de ses textes,
+// l'organisation décochée, et dont le pied se recompose sans les données
+// décochées. Le pied porte le nom de l'événement suivi de sa date, l'un ou
+// l'autre seul, ou aucun ; puis l'horodatage, puis l'identifiant d'un
+// homonyme. Le pied réduit, celui d'un badge qui perd le nom de l'événement
+// faute de place, garde la date quand sa case la garde. Les données du
+// badge, et tout le reste du modèle, ne changent pas.
+function modeleImprime(modele, donnees) {
+  if (retireesDe(donnees).length === 0) return modele;
+  const { evenement, horodatage } = modele;
+  const date = donnees.date ? evenement.date : null;
+  const lignesDate = date === null ? [] : [libelle('planche.pied.date', { date })];
+  const lignesEvenement = donnees.evenement ? [libelle('planche.pied.evenement', { nom: evenement.nom, date })] : lignesDate;
+  const ligneHorodatage = horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
+  const lignesHorodatage = donnees.horodatage ? [ligneHorodatage] : [];
+  const badges = modele.badges.map((badge) => {
+    const { identifiant, textes } = badge;
+    const lignesIdentifiant = donnees.identifiant && identifiant !== null ? [libelle('planche.pied.identifiant', { identifiant })] : [];
+    const fin = [...lignesHorodatage, ...lignesIdentifiant];
+    const organisation = donnees.organisation ? textes.organisation : null;
+    return { ...badge, textes: { ...textes, organisation, pied: [...lignesEvenement, ...fin], piedReduit: [...lignesDate, ...fin] } };
+  });
+  return { ...modele, badges };
+}
+
+// Les lignes de la feuille de contrôle, celle des données retirées posée
+// quand une case au moins est décochée : après la consigne d'impression,
+// celle de la feuille à part d'un modèle à cartes et celle des logos,
+// avant le reste, dans l'ordre de textesControle.
+function controleAvecRetirees(lignes, retirees, { cartes, logos }) {
+  if (retirees.length === 0) return lignes;
+  const rang = lignes.indexOf(libelle('planche.controle.consigne')) + 1 + (cartes ? 1 : 0) + (logos === null ? 0 : 1);
+  return [...lignes.slice(0, rang), libelle('planche.controle.retirees', { donnees: retirees }), ...lignes.slice(rang)];
 }
 
 // Vrai pour un modèle à cartes prédécoupées, dont la feuille de contrôle
@@ -286,12 +353,13 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     const { source, proposition, ordre, selection } = lue;
     const modeleBadge = modeleDe(lecture);
     const pied = piedDe(lecture);
+    const donnees = donneesDe(lecture);
     const papier = papierDesBadges(modeleBadge, lecture.papier);
     const imposition = aCartes(modeleBadge) ? 'feuille' : lue.imposition;
     const rejet = refusPlanche(charge, { source, proposition });
-    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied };
+    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, donnees };
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
-    const modele = modelePlanche(charge, { source, proposition, ordre, selection, provenance, version });
+    const modele = modeleImprime(modelePlanche(charge, { source, proposition, ordre, selection, provenance, version }), donnees);
     const octets = await lesPolices();
     const technolibre = await technolibreDe(pied);
     const { octets: logosParticipants, echecs } = await logosDe(lecture, modele);
@@ -318,6 +386,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       source,
       modeleBadge,
       pied,
+      donnees,
       technolibre,
       sansTechnolibre: pied ? analyse.sansTechnolibre : null,
       logosParticipants,
@@ -475,7 +544,11 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     const { modele, papier, imposition, absents, modeleBadge, technolibre, logosParticipants } = etude;
     const planches = nombrePlanches(modele.badges.length, papier, modeleBadge);
     const logos = etude.logos === null ? null : { ...etude.logos, introuvables: etude.logos.introuvables.length };
-    const controle = textesControle(modele, { papier, imposition, planches, absents, modeleBadge, logos });
+    const controle = controleAvecRetirees(
+      textesControle(modele, { papier, imposition, planches, absents, modeleBadge, logos }),
+      retireesDe(etude.donnees),
+      { cartes: aCartes(modeleBadge), logos },
+    );
     const { produireControle, produirePlanche } = await chargerProduction();
     const entrees = {
       modele,
@@ -499,7 +572,8 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * source. Pour l'A6, les planches des deux papiers sont données ; aucune
      * annonce ne demande le papier. La case du pied TechnoLibre de la lecture
      * s'y lit, et, quand elle est cochée et le modèle présent, le nombre de
-     * badges d'où il se retire. Les logos des participants s'y comptent quand
+     * badges d'où il se retire ; les cases de ce que le badge imprime s'y
+     * lisent de même. Les logos des participants s'y comptent quand
      * un badge en désigne un, les introuvables nommés ; aucun ne refuse la
      * planche. Le nom est celui que la production donnerait, rang compris ;
      * sans dossier, donc sans rang, quand le dossier ne se liste pas. Rien ne
@@ -528,6 +602,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
           nom: null,
           nomControle: null,
           piedTechnolibre: etude.pied,
+          donneesBadge: etude.donnees,
           sansTechnolibre: null,
           logos: null,
         };
@@ -551,6 +626,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
         nom: nomDe(lecture.base, etude, dossier),
         nomControle: nomControleDe(lecture.base, etude, dossier),
         piedTechnolibre: etude.pied,
+        donneesBadge: etude.donnees,
         sansTechnolibre: etude.sansTechnolibre,
         logos: etude.logos,
       };

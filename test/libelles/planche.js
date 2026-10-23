@@ -102,4 +102,13 @@ export const TEXTES = [
   // Les comptes des logos des participants, accordés au nombre.
   ['planche.controle.logos', { poses: 12, sansPlace: 3, introuvables: 2 }, 'Logos : 12 posés, 3 sans place, 2 introuvables'],
   ['planche.controle.logos', { poses: 1, sansPlace: 0, introuvables: 0 }, 'Logos : 1 posé, 0 sans place, 0 introuvable'],
+  // Les données que les cases de la section retirent des badges, nommées
+  // dans l'ordre des cases.
+  ['planche.controle.retirees', { donnees: ['horodatage'] }, 'Donn\u{E9}es retir\u{E9}es des badges : date du placement'],
+  [
+    'planche.controle.retirees',
+    { donnees: ['organisation', 'evenement', 'date', 'horodatage', 'identifiant'] },
+    'Donn\u{E9}es retir\u{E9}es des badges : organisation, nom de l\u{2019}\u{E9}v\u{E9}nement, ' +
+      'date de l\u{2019}\u{E9}v\u{E9}nement, date du placement et identifiant',
+  ],
 ];

@@ -123,14 +123,17 @@ import { fil, lignesHistorique, reconstruire } from '../stockage/journal.js';
 import { cheminLogo, ecrireLogo, empreinteSha256, estCheminLogo } from '../stockage/logos.js';
 import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import {
+  DONNEES_BADGE,
   FICHIER_REGLAGES,
   avecCadrage,
+  avecDonneeBadge,
   avecModeleBadge,
   avecPapier,
   avecPiedTechnolibre,
   avecTailleTexte,
   cadrageDe,
   creerEcrivainDiffere,
+  donneesBadgeDe,
   ecrireReglages,
   lireReglages,
   modeleBadgeDe,
@@ -143,6 +146,10 @@ import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 import { libelle } from './libelles.js';
 import { nomAffiche } from './personnes.js';
 import { creerPlanches } from './planche_seance.js';
+
+/** Les données qu'une case retire du badge (§ 11.4), dans l'ordre des cases,
+ *  que l'interface lit ici : le stockage lui est fermé. */
+export { DONNEES_BADGE };
 
 /** Inactivité au terme de laquelle la séance revient seule en lecture (§ 8.4). */
 export const INACTIVITE_MS = 10 * 60 * 1000;
@@ -372,7 +379,10 @@ export function creerSeance({
   // modeleBadge : le modèle des badges, lu et choisi comme la taille du
   // texte, MODELE_BADGE_DEFAUT tant que ni l'un ni l'autre n'est venu ;
   // piedTechnolibre : la case du pied TechnoLibre des badges, de même,
-  // cochée tant que ni l'une ni l'autre n'est venue.
+  // cochée tant que ni l'une ni l'autre n'est venue ; donneesBadge : les
+  // cases de ce que le badge imprime, une par donnée de DONNEES_BADGE, de
+  // même, chacune lue ou choisie pour elle-même, cochées tant que rien
+  // n'est venu.
   const etat = {
     racine,
     ouvert: null,
@@ -394,6 +404,7 @@ export function creerSeance({
     tailleTexte: TAILLE_TEXTE_DEFAUT,
     modeleBadge: MODELE_BADGE_DEFAUT,
     piedTechnolibre: true,
+    donneesBadge: donneesBadgeDe({}),
   };
 
   // --- L'observation ------------------------------------------------------------
@@ -479,6 +490,7 @@ export function creerSeance({
       tailleTexte: etat.tailleTexte,
       modeleBadge: etat.modeleBadge,
       piedTechnolibre: etat.piedTechnolibre,
+      donneesBadge: etat.donneesBadge,
     });
     return figer({
       racine: petit.racine,
@@ -497,6 +509,7 @@ export function creerSeance({
       tailleTexte: petit.tailleTexte,
       modeleBadge: petit.modeleBadge,
       piedTechnolibre: petit.piedTechnolibre,
+      donneesBadge: petit.donneesBadge,
     });
   }
 
@@ -636,12 +649,14 @@ export function creerSeance({
     });
   }
 
-  // Le rang du dernier choix de la taille du texte, celui du modèle de badge
-  // et celui de la case du pied TechnoLibre : une relecture des réglages
-  // partie avant un choix ne pose pas sa valeur, plus ancienne.
+  // Le rang du dernier choix de la taille du texte, celui du modèle de badge,
+  // celui de la case du pied TechnoLibre et celui des cases de ce que le
+  // badge imprime : une relecture des réglages partie avant un choix ne pose
+  // pas sa valeur, plus ancienne.
   let choixTaille = 0;
   let choixModele = 0;
   let choixPied = 0;
+  let choixDonnees = 0;
 
   // À son tour dans la file des réglages, lit une fois les réglages de
   // dossier et pose dans l'état ce que la machine y garde, quand dossier est
@@ -651,13 +666,16 @@ export function creerSeance({
   // null sans dossier. La taille du texte : celle que les réglages portent, à
   // défaut celle de la séance — sans taille, pour des réglages que la lecture
   // ne prend pas, sans dossier, et quand un choix a suivi le départ de la
-  // relecture. Le modèle de badge et la case du pied TechnoLibre, de même. Ne
+  // relecture. Le modèle de badge et la case du pied TechnoLibre, de même ;
+  // les cases de ce que le badge imprime aussi, chacune pour elle-même : une
+  // case que les réglages ne portent pas garde celle de la séance. Ne
   // lève jamais ; ne publie pas : l'appelant est un travail de la file des
   // appels, qui publie en finissant.
   function relireReglagesMachine(dossier) {
     const rang = choixTaille;
     const rangModele = choixModele;
     const rangPied = choixPied;
+    const rangDonnees = choixDonnees;
     return enFileReglages(async () => {
       let lus = null;
       if (dossier !== null) {
@@ -674,6 +692,13 @@ export function creerSeance({
       if (lus !== null && Object.hasOwn(lus, 'taille_texte') && rang === choixTaille) etat.tailleTexte = tailleTexteDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'modele_badge') && rangModele === choixModele) etat.modeleBadge = modeleBadgeDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'pied_technolibre') && rangPied === choixPied) etat.piedTechnolibre = piedTechnolibreDe(lus);
+      if (lus !== null && Object.hasOwn(lus, 'donnees_badge') && rangDonnees === choixDonnees) {
+        const portees = lus.donnees_badge;
+        const lues = donneesBadgeDe(lus);
+        etat.donneesBadge = Object.fromEntries(
+          DONNEES_BADGE.map((donnee) => [donnee, Object.hasOwn(portees, donnee) ? lues[donnee] : etat.donneesBadge[donnee]]),
+        );
+      }
     });
   }
 
@@ -1592,10 +1617,11 @@ export function creerSeance({
 
   // Ce que la planche lit de l'événement ouvert, à son tour dans la file des
   // appels, une fois faites les écritures de réglages déjà demandées : le
-  // papier, le modèle de badge et la case du pied TechnoLibre qu'un choix
-  // vient de poser comptent. AUCUN_EVENEMENT sans événement. Le système de
-  // fichiers est la vue du dossier de l'événement, sous la racine de
-  // l'Ouvert : la planche se pose dans ce dossier.
+  // papier, le modèle de badge, la case du pied TechnoLibre et les cases de ce
+  // que le badge imprime qu'un choix vient de poser comptent. AUCUN_EVENEMENT
+  // sans événement. Le système de fichiers est la vue du dossier de
+  // l'événement, sous la racine de l'Ouvert : la planche se pose dans ce
+  // dossier.
   async function lecturePlanche() {
     exigerOuvert();
     await fileReglages;
@@ -1609,6 +1635,7 @@ export function creerSeance({
       papier: etat.papier,
       modeleBadge: etat.modeleBadge,
       piedTechnolibre: etat.piedTechnolibre,
+      donneesBadge: etat.donneesBadge,
     };
   }
 
@@ -1803,6 +1830,32 @@ export function creerSeance({
       etat.piedTechnolibre = coche;
       publier();
       const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecPiedTechnolibre(reglages, coche));
+      return { retenu: ecrit, avertissements };
+    },
+    /**
+     * Coche ou décoche la case d'une donnée que le badge imprime, l'une de
+     * DONNEES_BADGE (§ 8.5, § 11.4) : EtatSeance.donneesBadge la porte
+     * aussitôt, les autres cases inchangées, et le choix s'écrit dans
+     * reglages_locaux.json de la racine sous donnees_badge, comme la case du
+     * pied TechnoLibre, dans tout mode, avec ou sans événement.
+     *
+     * Rend {retenu, avertissements}, aux règles de choisirPiedTechnolibre :
+     * sans dossier, des réglages que la lecture ne prend pas, ou une
+     * écriture que le dossier refuse, la case vaut pour la séance, en
+     * mémoire.
+     *
+     * @param {string} donnee   l'une de DONNEES_BADGE
+     * @param {boolean} coche
+     * @returns {Promise<{retenu: boolean, avertissements: Array<{code: string, details: Object}>}>}
+     * @throws {TypeError} une donnée hors de DONNEES_BADGE, une valeur qui
+     *         n'est pas un booléen, sans rien lire ni écrire
+     */
+    async choisirDonneeBadge(donnee, coche) {
+      avecDonneeBadge({ format: 1, papier: null, cadrages: [] }, donnee, coche);
+      choixDonnees += 1;
+      etat.donneesBadge = { ...etat.donneesBadge, [donnee]: coche };
+      publier();
+      const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecDonneeBadge(reglages, donnee, coche));
       return { retenu: ecrit, avertissements };
     },
     /**

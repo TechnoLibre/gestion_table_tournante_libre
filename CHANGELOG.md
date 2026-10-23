@@ -518,6 +518,14 @@
   première personne et numérote les suivantes, « Galet 01 », « Galet 02 », en
   sautant un nom déjà pris ; le fichier n'est pas modifié, l'aperçu se
   recalcule, et le rapport d'import compte les noms rendus uniques.
+- Dans la section « Badges », à côté du pied TechnoLibre, cinq cases disent ce
+  que chaque badge imprime en plus du nom et des tours : « Organisation »,
+  « Nom de l'événement », « Date de l'événement », « Date du placement » et
+  « Identifiant ». Toutes cochées par défaut, elles sont gardées sur le poste.
+  Une case décochée retire sa donnée de chaque badge, A6 comme Avery 5392, et
+  la place libérée revient au reste ; la feuille de contrôle nomme alors les
+  données retirées. La liste en CSV ne change pas, et toutes cochées, la
+  planche sort identique à celle d'avant.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
