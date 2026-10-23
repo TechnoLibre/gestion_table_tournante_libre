@@ -265,6 +265,46 @@ d’organisation », avec « Appliquer ». Ce n’est pas une interdiction : la
 recherche les évite autant qu’elle peut (étape 9), et un placement qui en garde
 le dit.
 
+Une personne peut enfin porter un **logo** — celui de son organisation, par
+exemple —, que son badge imprime (étape 12). Il se pose dans sa fiche, sous la
+rubrique « Logo », entre ses valeurs et ses étiquettes ; la rubrique montre la
+vignette du logo, ou « Aucun logo. ». Le bouton « Logo » ouvre le choix d’une
+image, puis pose le logo, ou remplace celui que la personne portait. Une image
+PNG, JPEG, GIF, WebP, AVIF, BMP, ICO ou SVG convient. Une photo HEIC, une image
+TIFF ou un fichier qui ne s’ouvre pas comme une image est refusé : exportez-le
+d’abord en JPEG ou en PNG. Un fichier de plus de 25 Mo est refusé sans être lu,
+une image de plus de 50 millions de pixels sans être ouverte. Le logiciel range
+le logo dans le dossier de l’événement, en PNG : redressé selon l’orientation de
+la photo, sa transparence gardée, ramené à 1 200 pixels de plus grand côté,
+jamais agrandi ; un SVG, dessin sans résolution propre, se dessine à 1 200
+pixels de plus grand côté. Un clic sur la vignette montre le logo à la largeur
+de la fiche, dans la fiche même ; « Fermer », ou Échap, rend la vignette. Cette
+vue se lit aussi en lecture.
+
+« Retirer le logo » n’est offert qu’en écriture, hors d’un plan bloqué ; en
+lecture et sur un plan bloqué, « Logo » refuse à côté du bouton avant d’ouvrir
+quoi que ce soit, en nommant le geste qui lève le refus. Poser, remplacer ou
+retirer un logo est un geste : « Défaire » rend le logo d’avant. Aucune image
+ne s’efface : celle d’un logo retiré ou remplacé reste dans le sous-dossier
+`logo` du dossier de l’événement, et n’en part qu’avec l’événement, pour la
+corbeille.
+
+« Logo introuvable » dit que la fiche désigne une image que le dossier de
+l’événement n’a pas, ou qui ne se lit pas. La cause ordinaire : un événement
+venu d’un seul fichier, par « Importer un événement depuis un fichier… », qui
+n’emporte pas le sous-dossier `logo`. « Copier », « Importer ces événements »
+depuis l’autre emplacement et l’écriture ailleurs qu’offre une écriture
+échouée — « Écrire dans les Documents » ou « Choisir un dossier… » — emportent
+les logos ; un logo qui ne se recopie pas n’empêche jamais l’opération, et un
+avertissement compte ceux restés en arrière. Choisir de nouveau l’image par
+« Logo » la remet en place, et la vignette paraît aussitôt ; recopiée à la main
+dans le sous-dossier `logo`, elle paraît quand on rouvre la fiche.
+
+Le fichier des participants ne porte pas de logo : l’export n’en écrit pas, et
+un import « Mettre à jour » garde ceux des personnes. « Remplacer » retire
+chaque personne avec son logo ; après l’import, un avertissement compte les
+logos retirés, et « Défaire » les rend.
+
 ## Étape 4 — Préparer les tables
 
 Dans la section « Tables et tours », fixez d’abord les **places par défaut**,
@@ -953,19 +993,29 @@ logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ; le poste
 garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la place
 libre : il rapetisse sur un badge chargé, et s’en retire quand même sa plus
 petite taille ne tient pas, ou que le badge a dû perdre le nom de l’événement.
+
+Le badge d’une personne qui porte un logo (étape 3) le pose entre ses tours et
+le pied, dans la place que le texte laisse : le logo ne rapetisse ni ne retire
+jamais un texte. Il s’y pose le plus grand possible, proportions gardées ; le
+pied TechnoLibre lui cède d’abord de la place en rapetissant, puis s’en retire
+quand le logo ne tient qu’ainsi. Un logo dont la plus petite dimension
+n’atteindrait pas 8 mm ne se pose pas, et le badge sort tel qu’il serait sans
+logo ; un badge qui a perdu le nom de l’événement n’en porte pas non plus. Une
+image introuvable ou illisible n’arrête rien : son badge s’imprime sans logo.
 « Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
-homonymes, les caractères que la police ne dessine pas, les badges d’où le pied
-TechnoLibre se retire, le nom des fichiers.
+homonymes, les caractères que la police ne dessine pas, les personnes dont le
+logo est introuvable ou illisible, les badges sans place pour leur logo, les
+badges d’où le pied TechnoLibre se retire, le nom des fichiers.
 « Produire la planche (PDF) » écrit le PDF dans le dossier de l’événement et
 en affiche le chemin ; « Ouvrir le dossier » montre ce dossier dans
 l’explorateur ; dans un navigateur, le PDF se télécharge. « Produire la
 liste (CSV) » écrit au même endroit la liste des mêmes badges, pour un tableur :
 une ligne par personne, avec son nom, son prénom, son organisation et, dans une
 seule cellule, ses lignes de tour telles que le badge les compose, jamais
-abrégées ; tirée d’une proposition, son nom de fichier porte « BROUILLON ». Avec
-l’A6, la feuille de contrôle est la première page de la planche ; avec Avery
-5392, elle est un **second PDF**, écrit à côté du premier, à imprimer sur papier
-ordinaire pour ne pas gâcher une feuille de cartes :
+abrégées, et jamais le logo ; tirée d’une proposition, son nom de fichier porte
+« BROUILLON ». Avec l’A6, la feuille de contrôle est la première page de la
+planche ; avec Avery 5392, elle est un **second PDF**, écrit à côté du premier,
+à imprimer sur papier ordinaire pour ne pas gâcher une feuille de cartes :
 
 ![La feuille de contrôle de la planche : la règle de 100 mm, puis les comptes de la soirée](doc/captures/24-badges-controle.png)
 
@@ -976,6 +1026,10 @@ une fenêtre, la feuille imprimée doit le montrer sur les prédécoupes. Suiven
 le format du badge et du papier, le nombre de feuilles, les comptes de la
 soirée — un badge par personne présente, les exclus comptés à part —, l’instant
 du placement et la version du logiciel.*
+
+Quand un badge au moins désigne un logo, la feuille de contrôle ajoute une ligne
+qui les compte, par exemple « Logos : 12 posés, 2 sans place, 1 introuvable » ;
+elle ne porte jamais d’image.
 
 Vient ensuite la planche, six cartes par feuille :
 

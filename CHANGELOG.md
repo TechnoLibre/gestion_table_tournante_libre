@@ -44,12 +44,12 @@
   pas retenir s'annonce sous les réglages de la section.
 - Sous le pied de chaque badge, le pied TechnoLibre : « Demander un
   développement logiciel personnalisé avec https://technolibre.ca pour votre
-  entreprise », suivi du logo de TechnoLibre en couleurs, seule couleur du
-  badge. Une case de la section, cochée par défaut, le retire, et le poste la
-  retient. Il ne prend que la place libre : il rapetisse sur un badge chargé,
-  s'en retire quand même sa plus petite taille ne tient pas ou quand le badge
-  perd le nom de l'événement, et l'annonce compte ces badges. La feuille de
-  contrôle ne le porte pas.
+  entreprise », suivi du logo de TechnoLibre en couleurs : avec le logo de la
+  personne, les seules couleurs du badge. Une case de la section, cochée par
+  défaut, le retire, et le poste la retient. Il ne prend que la place libre :
+  il rapetisse sur un badge chargé, s'en retire quand même sa plus petite
+  taille ne tient pas ou quand le badge perd le nom de l'événement, et
+  l'annonce compte ces badges. La feuille de contrôle ne le porte pas.
 - « Imprimer… » ouvre un aperçu de la page imprimée : le plan, découpé en pages
   repérées quand il ne se lit plus sur une seule ; la liste d'accueil ; la
   feuille par table, une pour la soirée ou une par tour. Les listes imprimées
@@ -469,6 +469,33 @@
   dit sous son numéro, « 2 conflits restants », et une réservation ou un
   placement à la main qui en crée un est accepté, la table signalée et son
   panneau nommant la paire.
+- **Le logo d'une personne.** Il se pose dans sa fiche, sous la rubrique
+  « Logo » : le bouton « Logo » choisit une image PNG, JPEG, GIF, WebP, AVIF,
+  BMP, ICO ou SVG, que le logiciel range en PNG dans le sous-dossier `logo` du
+  dossier de l'événement, redressée, ramenée à 1 200 pixels de plus grand côté,
+  jamais agrandie ; un SVG se dessine à 1 200 pixels de plus grand côté. Une
+  photo HEIC, une image TIFF ou un fichier illisible est refusé, avec le conseil
+  de l'exporter en JPEG ou en PNG ; un fichier de plus de 25 Mo l'est sans être
+  lu, une image de plus de 50 millions de pixels sans être ouverte. Un clic sur
+  la vignette montre le logo à la largeur de la fiche, « Fermer » ou Échap la
+  rend. « Retirer le logo » n'est offert qu'en écriture, et « Défaire » rend le
+  logo d'avant : aucune image ne s'efface, elle ne part qu'avec l'événement, à
+  la corbeille. « Copier », « Importer ces événements » et l'écriture ailleurs
+  qu'offre une écriture échouée — « Écrire dans les Documents » ou « Choisir un
+  dossier… » — emportent les logos, et un avertissement compte ceux qui ne se
+  recopient pas, sans refuser l'opération ; un événement importé d'un seul
+  fichier ne les emporte pas, et sa fiche dit « Logo introuvable ». Le CSV des
+  participants ne porte pas de logo : « Mettre à jour » les garde, « Remplacer »
+  compte ceux qu'il retire, que « Défaire » rend. Sur le badge, le logo prend la
+  place que le texte laisse entre les tours et le pied, le plus grand possible,
+  sans jamais réduire ni retirer un texte ; le pied TechnoLibre rapetisse, puis
+  se retire, avant lui, et un logo dont la plus petite dimension n'atteindrait
+  pas 8 mm ne se pose pas. L'annonce nomme les personnes dont le logo est
+  introuvable ou illisible et compte les badges sans place pour le leur, qui
+  s'impriment sans logo, sans rien refuser. Quand un badge désigne un logo, la
+  feuille de contrôle ajoute une ligne qui les compte, « Logos : 12 posés, 2
+  sans place, 1 introuvable » par exemple, sans image ; la liste des badges en
+  CSV ne porte jamais le logo.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
