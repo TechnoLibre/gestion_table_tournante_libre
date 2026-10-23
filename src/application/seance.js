@@ -1330,8 +1330,11 @@ export function creerSeance({
   // Ouvre en lecture l'Ouvert que rend lire, sans rien écrire, après avoir
   // fermé le précédent ; source dit d'où il se relit (relireSousVerrou).
   // L'ouverture garde les propositions qu'elle écarte et le cadrage mémorisé
-  // de l'événement.
-  async function ouvrirAvec(lire, source, quitter) {
+  // de l'événement. annonce : les avertissements que l'appelant confie à
+  // l'ouverture, ceux d'une opération que le disque ne garde pas, comme le
+  // LOGOS_NON_COPIES de la copie qu'elle ouvre ; ils deviennent ceux du
+  // dernier geste, et le rendu les porte après ceux de l'Ouvert.
+  async function ouvrirAvec(lire, source, quitter, annonce = []) {
     exigerSauve(quitter);
     await fermerEvenement();
     const ouvert = await lire();
@@ -1339,7 +1342,8 @@ export function creerSeance({
     etat.source = source;
     etat.fautives = ouvert.examen.fautives;
     etat.cadrage = await cadrageMemorise(ouvert);
-    return { cle: cleDe(ouvert), base: ouvert.base, avertissements: ouvert.avertissements };
+    etat.avertissementsGeste = [...annonce];
+    return { cle: cleDe(ouvert), base: ouvert.base, avertissements: [...ouvert.avertissements, ...annonce] };
   }
 
   // Crée l'événement de ces champs (§ 2.1, étape 1) : la charge neuve
@@ -1469,6 +1473,9 @@ export function creerSeance({
 
   // Écrit l'événement dans la racine nouvelle, la réponse au support rompu
   // (§ 8.6) : la paire alignée de l'Ouvert gardé (enregistrerAilleurs), puis
+  // les logos de son dossier, recopiés un à un dans le dossier neuf — un logo
+  // que l'ancien support ne rend plus ne refuse rien, et LOGOS_NON_COPIES
+  // s'annonce parmi les avertissements de l'Ouvert (§ 8.7) —, puis
   // le verrou rendu là où il était, puis, en écriture, pris là-bas. La séance
   // s'y poursuit, son support rétabli. Un dossier qui porte déjà
   // l'événement (dejaPresent), celui de la séance compris, se refuse
@@ -1497,7 +1504,7 @@ export function creerSeance({
         base: present.base,
         dossier: present.dossier,
       });
-    const options = { existantes: [], libelleReprise, horodatage: horloge.horodatage() };
+    const options = { existantes: [], libelleReprise, horodatage: horloge.horodatage(), logos: true };
     let ailleurs;
     try {
       ailleurs = await enregistrerAilleurs(ouvert, nouvelle, options);
@@ -1833,8 +1840,11 @@ export function creerSeance({
 
     // cle : celle de l'événement dans le dossier de travail (cleEvenement).
     // quitter.abandonner : vrai pour quitter l'événement d'un support rompu
-    // (exigerSauve).
-    ouvrir: (cle, quitter) => enFile(() => ouvrirAvec(() => ouvrirSurDisque(fs, etat.racine, cle), null, quitter)),
+    // (exigerSauve). avertissements : ceux que l'ouverture annonce parmi
+    // ceux du dernier geste, jusqu'au geste suivant (ouvrirAvec) ; aucun par
+    // défaut.
+    ouvrir: (cle, quitter, { avertissements = [] } = {}) =>
+      enFile(() => ouvrirAvec(() => ouvrirSurDisque(fs, etat.racine, cle), null, quitter, avertissements)),
     ouvrirSecours: (cle, source, quitter) =>
       enFile(() => ouvrirAvec(() => ouvrirSecoursSurDisque(fs, etat.racine, cle, source), source, quitter)),
     creer: (champs, quitter) => enFile(() => creerEvenement(champs, quitter)),

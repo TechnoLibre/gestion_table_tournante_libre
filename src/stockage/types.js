@@ -449,6 +449,21 @@
  */
 
 /**
+ * Avertissement de la recopie des logos d'un événement — sa copie, son
+ * import de l'autre emplacement, son écriture ailleurs (copierLogos, du
+ * dépôt) —, qui ne refuse jamais l'opération :
+ *
+ *   LOGOS_NON_COPIES     {evenement, logos,      des fichiers de logo/ ne se
+ *                         personnes}             sont pas recopiés dans le
+ *                                                dossier neuf : evenement, le
+ *                                                nom de l'événement écrit ;
+ *                                                logos, le nombre de ces
+ *                                                fichiers ; personnes, celui
+ *                                                des personnes dont le logo
+ *                                                en est un
+ */
+
+/**
  * Codes d'une ErreurStockage, et ses détails :
  *
  *   ABSENT               {chemin}                    lecture d'un fichier qui

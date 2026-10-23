@@ -25,6 +25,14 @@
 // fichier, le déplacer ou le supprimer en entier, et créer un dossier ou en
 // retirer un vide.
 //
+// Les logos du dossier, logo/<empreinte>.png, suivent l'événement là où ses
+// fichiers vont : copier et importer de l'autre emplacement les recopient
+// dans le dossier neuf, fichier par fichier, une fois l'événement écrit
+// (copierLogos, du dépôt) ; renommer et supprimer déplacent logo/ avec le
+// reste. Un logo qui ne se recopie pas ne refuse jamais l'opération :
+// LOGOS_NON_COPIES le compte. Un fichier d'état venu d'ailleurs n'arrive
+// qu'avec ses octets : aucun logo ne le suit.
+//
 // Un fichier d'un format plus récent que FORMAT ne se réécrit sous aucun nom
 // (§ 8.8) : la charge que l'analyse en lit tait les clés qu'elle ne connaît
 // pas. Copier, renommer et charger le refusent avant toute écriture ;
@@ -54,6 +62,7 @@ import { canoniser } from './canonique.js';
 import { entreesPour } from './courses.js';
 import {
   basesPrises,
+  copierLogos,
   creer,
   enregistrer,
   enregistrerAilleurs,
@@ -192,7 +201,11 @@ export function libelleDeLInstant({ journal, revision }, libelleReprise) {
  * connaît pour ses propositions, sous l'identifiant de la copie, dans un
  * dossier neuf que sa base nomme, sous la racine de l'Ouvert ; sa base se
  * dérive du nom. L'original n'est ni lu ni écrit : la copie part de
- * l'Ouvert, en lecture comme en écriture.
+ * l'Ouvert, en lecture comme en écriture. Puis les logos du dossier de
+ * l'Ouvert se recopient dans celui de la copie (copierLogos) : une panne
+ * pendant la recopie laisse la copie complète, et l'original intact ; un
+ * logo qui ne se recopie pas ne refuse pas la copie, et LOGOS_NON_COPIES
+ * finit les avertissements de son Ouvert.
  *
  * @param {import('./depot.js').Ouvert} ouvert
  * @param {Object} options
@@ -204,7 +217,9 @@ export function libelleDeLInstant({ journal, revision }, libelleReprise) {
  * @param {string} options.produitVersion   la construction qui écrit
  * @param {string} [options.libelleReprise] libellé de l'instant copié quand
  *        sa révision n'a pas d'entrée au journal ; requis alors
- * @returns {Promise<import('./depot.js').Ouvert>}   l'Ouvert de la copie
+ * @returns {Promise<import('./depot.js').Ouvert>}   l'Ouvert de la copie ;
+ *          ses avertissements finissent sur LOGOS_NON_COPIES quand un logo
+ *          ne s'est pas recopié
  * @throws {ErreurStockage} LECTURE_SEULE {raison: 'FORMAT_PLUS_RECENT'}, sans
  *         rien écrire ; ce que lève creer
  * @throws {TypeError} une valeur que la lecture refuserait, libelleReprise
@@ -223,7 +238,10 @@ export async function copier(ouvert, { id, nom, libelle, nomJalon, horodatage, p
     filiation: { source: { id: source.id, nom: source.nom }, instant },
   };
   const courses = entreesPour(ouvert.courses, charge.propositions);
-  return creer(ouvert.systeme, ouvert.racine, charge, { libelle, nomJalon, horodatage, produitVersion, courses });
+  const options = { libelle, nomJalon, horodatage, produitVersion, courses };
+  const copie = await creer(ouvert.systeme, ouvert.racine, charge, options);
+  const avertissement = await copierLogos(ouvert, copie, copie.charge);
+  return avertissement === null ? copie : { ...copie, avertissements: [...copie.avertissements, avertissement] };
 }
 
 // Vrai quand la base que deriver tire du nom, parmi les autres bases, tombe
@@ -649,13 +667,25 @@ export async function importer(fs, racine, octets) {
   return deposer(fs, racine, { id, nom, texteEtat: texte, texteJournal: null });
 }
 
+// L'événement que deposer vient d'écrire dans vers, sous la clé nouvelle,
+// reçoit les logos du dossier que local voit dans depuis (copierLogos) ;
+// charge, celle qu'il porte, compte les personnes d'un logo non recopié.
+// Rend { nouvelle, avertissement }, l'avertissement null quand chaque logo
+// s'est recopié.
+async function avecLogos(fs, { local, depuis, vers, nouvelle, charge }) {
+  const dossier = vueDossier(fs, decouperCle(nouvelle).dossier);
+  const avertissement = await copierLogos({ fs: local, racine: depuis }, { fs: dossier, racine: vers }, charge);
+  return { nouvelle, avertissement };
+}
+
 // Les fichiers de l'événement de clé cle dans depuis, dont l'état ne se lit
 // pas, recopiés tels quels dans vers (deposer), lus dans son dossier par la
 // vue de l'Ouvert du secours : le .precedent et l'état, chacun quand il
 // existe et que ses octets sont de l'UTF-8, et le journal que le secours
-// source apparie, par ses lignes lisibles (journalSiPresent). Le secours
-// source — 'precedent' ou 'journal' (ouvrirSecours) — donne l'identifiant et
-// le nom. Rend la clé dans vers.
+// source apparie, par ses lignes lisibles (journalSiPresent) ; puis ses
+// logos (avecLogos). Le secours source — 'precedent' ou 'journal'
+// (ouvrirSecours) — donne l'identifiant, le nom et les personnes. Rend
+// { nouvelle, avertissement }, comme avecLogos.
 async function importerSecours(fs, depuis, vers, cle, source) {
   const { charge, baseJournal, base, fs: local } = await ouvrirSecours(fs, depuis, cle, source);
   const { id, nom } = charge.evenement;
@@ -668,17 +698,18 @@ async function importerSecours(fs, depuis, vers, cle, source) {
     texteJournal: journal === null ? null : await journalSiPresent(local, depuis, journal),
     texteEtat: await lire(base + SUFFIXES.etat),
   });
-  return nouvelle;
+  return avecLogos(fs, { local, depuis, vers, nouvelle, charge });
 }
 
 // Importe l'événement de clé cle de depuis dans vers (importerDepuis) et
-// rend sa clé là-bas. Ses fichiers se lisent dans son dossier, par la vue de
-// son Ouvert. Un état lisible s'importe avec son journal et son
-// compagnon des courses, tel quel, quand ses octets se lisent
-// (texteSiLisible) : l'ouverture là-bas le revalide entrée par entrée. Un
-// état illisible qui a un secours lisible s'importe par ses fichiers
-// (importerSecours), le .precedent pour source quand il se lit ; sans
-// secours, son refus remonte.
+// rend { nouvelle, avertissement } : sa clé là-bas, et ce que la recopie de
+// ses logos annonce (avecLogos). Ses fichiers se lisent dans son dossier,
+// par la vue de son Ouvert. Un état lisible s'importe avec son journal et
+// son compagnon des courses, tel quel, quand ses octets se lisent
+// (texteSiLisible) : l'ouverture là-bas le revalide entrée par entrée ; puis
+// ses logos. Un état illisible qui a un secours lisible s'importe par ses
+// fichiers (importerSecours), le .precedent pour source quand il se lit ;
+// sans secours, son refus remonte.
 async function importerUn(fs, depuis, vers, cle) {
   let ouvert;
   try {
@@ -690,11 +721,13 @@ async function importerUn(fs, depuis, vers, cle) {
     return importerSecours(fs, depuis, vers, cle, precedent === null ? 'journal' : 'precedent');
   }
   const { texteEtat, baseJournal, base, fs: local } = ouvert;
-  const { id, nom } = analyser(texteEtat).charge.evenement;
+  const { charge } = analyser(texteEtat);
+  const { id, nom } = charge.evenement;
   const journal = baseJournal === null ? null : baseJournal + SUFFIXES.journal;
   const texteJournal = journal === null ? null : await journalSiPresent(local, depuis, journal);
   const texteCourses = await texteSiLisible(local, depuis, base + SUFFIXES.courses);
-  return (await deposer(fs, vers, { id, nom, texteEtat, texteJournal, texteCourses })).cle;
+  const { cle: nouvelle } = await deposer(fs, vers, { id, nom, texteEtat, texteJournal, texteCourses });
+  return avecLogos(fs, { local, depuis, vers, nouvelle, charge });
 }
 
 /**
@@ -715,30 +748,40 @@ async function importerUn(fs, depuis, vers, cle) {
  * depuis. Une clé qui ne s'importe pas se refuse par son code —
  * ETAT_ILLISIBLE sans secours lisible, ABSENT, IDENTIFIANT_PRESENT,
  * ECRITURE, CHEMIN_REFUSE… —, sans arrêter les suivantes ; l'écriture
- * refusée d'un fichier laisse dans vers ceux déjà écrits.
+ * refusée d'un fichier laisse dans vers ceux déjà écrits. Chaque événement
+ * importé, ses fichiers écrits, reçoit ensuite les logos de son dossier
+ * (copierLogos) : un logo qui ne se recopie pas ne refuse pas l'import, et
+ * l'avertissement LOGOS_NON_COPIES le compte.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} depuis
  * @param {import('./systeme_fichiers.js').Racine} vers
  * @param {Iterable<string>} cles   clés des événements de depuis
- * @returns {Promise<{importes: Array<{cle: string, nouvelle: string}>, refuses: Array<{cle: string, code: string}>}>}
+ * @returns {Promise<{importes: Array<{cle: string, nouvelle: string}>,
+ *          refuses: Array<{cle: string, code: string}>,
+ *          avertissements: Array<{code: string, details: Object}>}>}
  *          importes : chaque clé importée et sa clé dans vers ; refuses :
- *          chaque clé refusée et le code de son refus ; l'un et l'autre
+ *          chaque clé refusée et le code de son refus ; avertissements :
+ *          LOGOS_NON_COPIES {evenement, logos, personnes} de chaque
+ *          événement importé dont un logo ne s'est pas recopié ; chacun
  *          dans l'ordre des clés reçues. Une erreur qui n'est pas une
  *          ErreurStockage remonte telle quelle
  */
 export async function importerDepuis(fs, depuis, vers, cles) {
   const importes = [];
   const refuses = [];
+  const avertissements = [];
   for (const cle of cles) {
     try {
-      importes.push({ cle, nouvelle: await importerUn(fs, depuis, vers, cle) });
+      const { nouvelle, avertissement } = await importerUn(fs, depuis, vers, cle);
+      importes.push({ cle, nouvelle });
+      if (avertissement !== null) avertissements.push(avertissement);
     } catch (erreur) {
       if (!(erreur instanceof ErreurStockage)) throw erreur;
       refuses.push({ cle, code: erreur.code });
     }
   }
-  return { importes, refuses };
+  return { importes, refuses, avertissements };
 }
 
 // Base du journal de l'événement de clé cle, dans son dossier : celle

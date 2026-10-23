@@ -3479,6 +3479,26 @@ quel après l'état, quand il se lit ; l'ouverture le revalide entrée par entr�
 et un refus de l'écrire ne refuse pas l'import. Un **fichier d'état venu
 d'ailleurs** n'en a pas : ses courses ne sont pas connues.
 
+Les logos suivent aussi, fichier par fichier, une fois l'événement neuf
+écrit : seuls les fichiers de `logo/` nommés comme un logo passent, un fichier
+posé à la main dans ce dossier reste où il est. **Copier** les recopie tous
+dans le dossier de la copie, ceux que seul l'historique de l'original désigne
+compris. **Importer de l'autre emplacement** les recopie dans le dossier de
+chaque événement importé. **Écrire ailleurs** (§ 8.6) les recopie depuis le
+support rompu, quand il les rend encore. Un logo qui ne se recopie pas — un
+fichier illisible, un support retiré, une écriture refusée — ne refuse jamais
+l'opération : l'événement est copié, importé ou écrit, et un avertissement
+compte les logos restés en arrière et les personnes dont la fiche les dira
+introuvables. Il se lit là où l'opération mène l'opérateur : dans la vue de
+la copie, qu'elle ouvre ; sur la liste des événements, un par événement
+importé ; dans la vue de l'événement écrit ailleurs. Le disque n'en garde
+rien : il vit jusqu'au geste suivant dans la vue, jusqu'à l'opération
+suivante sur la liste. Une panne pendant la recopie laisse l'original intact
+et l'événement neuf complet, à quelques logos près ; un état refusé là-bas
+lève avant la recopie, et les logos restent en arrière. Un **fichier d'état venu
+d'ailleurs** n'emporte aucun logo : ses personnes gardent leur chemin, et leur
+fiche dit le logo introuvable.
+
 **Importer** un fichier venu d'ailleurs le **copie** dans le dossier de travail,
 dans un dossier neuf qui porte son nom. Travailler en place écrirait dans un
 dossier de téléchargements que l'opérateur vide régulièrement. **Importer de

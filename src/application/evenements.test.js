@@ -19,6 +19,7 @@ import { creer as creerDansLeDepot, enregistrer as enregistrerDansLeDepot } from
 import { FORMAT, analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { lireJournal } from '../stockage/journal.js';
+import { cheminLogo, empreinteSha256 } from '../stockage/logos.js';
 import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import { examiner } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
@@ -76,8 +77,9 @@ function creerIdentifiants(prefixe) {
 }
 
 // La façade sur le système fs, branchée comme App la branche : changerRacine
-// crée la séance sur la racine reçue. appels relève, dans l'ordre, ce que la
-// façade demande à la séance, et ce que l'épreuve y ajoute.
+// crée la séance sur la racine reçue, et ouvrir passe à la séance ce que la
+// façade lui confie d'annoncer. appels relève, dans l'ordre, ce que la façade
+// demande à la séance, et ce que l'épreuve y ajoute.
 function monter({ fs = creerFichiersSimules(), horloge = creerHorlogePilotee({ depart: DEPART }), demonstrations = DEMONSTRATIONS } = {}) {
   const identifiant = creerIdentifiants('id');
   const appels = [];
@@ -90,9 +92,9 @@ function monter({ fs = creerFichiersSimules(), horloge = creerHorlogePilotee({ d
     produitVersion: V1,
     demonstrations,
     ouvert: () => seance?.etat().evenement?.cle ?? null,
-    ouvrir: async (cle) => {
+    ouvrir: async (cle, annonce) => {
       appels.push(['ouvrir', cle]);
-      return seance.ouvrir(cle);
+      return seance.ouvrir(cle, undefined, annonce);
     },
     fermer: async () => {
       appels.push(['fermer']);
@@ -416,7 +418,7 @@ describe('les questions du dossier de travail (§ 8.6)', () => {
     const lus = listes.length;
     const avant = ecritures(fs);
     const reponse = await facade.repondre('documents');
-    assert.deepEqual(reponse.importe, { importes: [], refuses: [] });
+    assert.deepEqual(reponse.importe, { importes: [], refuses: [], avertissements: [] });
     assert.deepEqual(reponse.dossier.racine, DOC);
     assert.deepEqual(appels, [['changerRacine', DOC]]);
     assert.deepEqual(listes.slice(lus), []);
@@ -1918,5 +1920,129 @@ describe('explorateur (§ 8.6)', () => {
     assert.deepEqual(facade.explorateur(), { disponible: true, raison: null });
     await facade.ouvrirExplorateur();
     assert.deepEqual(recus, [DOC]);
+  });
+});
+
+// --- Les logos suivent la copie et l'import (§ 8.7) -------------------------
+
+// Des octets d'image d'épreuve : la signature d'un PNG suivie de n, qu'aucune
+// copie ne décode. Et le chemin que leur contenu leur donne, relatif au
+// dossier de l'événement.
+const imageEssai = (n) => Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, n);
+const logoDe = (octets) => cheminLogo(empreinteSha256(octets));
+const IMAGE = imageEssai(7);
+
+// La charge d'un événement neuf dont l'unique personne porte le logo IMAGE.
+function chargeAvecLogo({ id, nom }) {
+  const charge = creerCharge({ id, nom, siegesParDefaut: 8, tours: 2 });
+  charge.prochainsIds.participant = 2;
+  charge.participants = [
+    {
+      id: 1,
+      nom: 'Ombrelle',
+      prenom: 'Iris',
+      organisation: null,
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: false,
+      logo: logoDe(IMAGE),
+    },
+  ];
+  return charge;
+}
+
+// Un événement posé par le dépôt, dont la personne porte le logo IMAGE, et
+// ce logo dans logo/ de son dossier. Rend sa clé.
+async function deposerAvecLogo(fs, racine, { id, nom }) {
+  const ouvert = await creerDansLeDepot(fs, racine, chargeAvecLogo({ id, nom }), {
+    libelle: libelle('ENTREE_CREATION', { nom }),
+    nomJalon: libelle('JALON_CREATION'),
+    horodatage: '2031-05-17T08:00:00-04:00',
+    produitVersion: V1,
+  });
+  fs.deposerOctets(racine.id, `${ouvert.dossier}/${logoDe(IMAGE)}`, IMAGE);
+  return cleEvenement(ouvert.dossier, ouvert.base);
+}
+
+// Refuse par une ECRITURE EBUSY toute écriture d'octets sur la racine
+// d'identifiant racineId.
+function refuserOctetsSur(fs, racineId) {
+  const ecrire = fs.ecrireOctetsAtomique;
+  fs.ecrireOctetsAtomique = async (racine, chemin, octets) => {
+    if (racine.id === racineId) throw new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EBUSY' });
+    return ecrire(racine, chemin, octets);
+  };
+}
+
+describe('les logos suivent la copie et l’import (§ 8.7)', () => {
+  test('copier emporte logo/ dans le dossier de la copie et rend avertissements, vide ; un logo qui ne se recopie pas rend LOGOS_NON_COPIES, la copie faite et ouverte, et la séance qui l’ouvre l’annonce', async () => {
+    const montage = monter();
+    const { fs, facade } = montage;
+    // Les LOGOS_NON_COPIES que la séance montre, une fois la copie ouverte.
+    const annonces = () => montage.seance.etat().avertissements.filter(({ code }) => code === 'LOGOS_NON_COPIES');
+    await facade.demarrer();
+    const cle = await deposerAvecLogo(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+    const copie = await facade.copier(cle, { nom: 'Variante des Lucioles' });
+    assert.deepEqual(copie, { cle: enDossier('Variante des Lucioles'), base: 'Variante des Lucioles', avertissements: [] });
+    assert.deepEqual(fs.octets('documents', `Variante des Lucioles/${logoDe(IMAGE)}`), IMAGE);
+    assert.deepEqual(fs.octets('documents', `${LUCIOLES}/${logoDe(IMAGE)}`), IMAGE);
+    assert.deepEqual(annonces(), []);
+
+    refuserOctetsSur(fs, 'documents');
+    const refusee = await facade.copier(cle, { nom: 'Seconde variante' });
+    assert.deepEqual(refusee, {
+      cle: enDossier('Seconde variante'),
+      base: 'Seconde variante',
+      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: 'Seconde variante', logos: 1, personnes: 1 } }],
+    });
+    assert.equal(fs.octets('documents', `Seconde variante/${logoDe(IMAGE)}`), null);
+    assert.equal(typeof libelle('LOGOS_NON_COPIES', refusee.avertissements[0].details), 'string');
+    // La copie ouverte se relit sur le disque, qui ne garde rien de
+    // l'avertissement : c'est la séance qui le reçoit de la façade.
+    assert.equal(montage.seance.etat().evenement.cle, enDossier('Seconde variante'));
+    assert.deepEqual(annonces(), refusee.avertissements);
+  });
+
+  test('importer depuis l’autre emplacement emporte logo/ de chaque événement ; un logo qui ne se recopie pas laisse l’import se faire, et avertissements le dit', async () => {
+    const disque = new Map();
+    const avant = creerFichiersSimules({ disque, executable: SOUS_APPDATA });
+    avant.deposerDossier('portable');
+    await deposerAvecLogo(avant, PORTABLE_APPDATA, { id: 'evt-lucioles', nom: LUCIOLES });
+    await deposerAvecLogo(avant, PORTABLE_APPDATA, { id: 'evt-cerfs', nom: CERFS });
+    const fs = creerFichiersSimules({ disque, executable: SOUS_APPDATA });
+    const { facade } = monter({ fs });
+    await facade.demarrer();
+    const ecrire = fs.ecrireOctetsAtomique;
+    // Le logo des Cerfs seul se refuse dans les Documents.
+    fs.ecrireOctetsAtomique = async (racine, chemin, octets) => {
+      if (racine.id === 'documents' && chemin.startsWith(`${CERFS}/`)) {
+        throw new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EBUSY' });
+      }
+      return ecrire(racine, chemin, octets);
+    };
+    const importe = await facade.importerDepuisAutre();
+    assert.deepEqual(importe, {
+      importes: [
+        { cle: enDossier(CERFS), nouvelle: enDossier(CERFS) },
+        { cle: enDossier(LUCIOLES), nouvelle: enDossier(LUCIOLES) },
+      ],
+      refuses: [],
+      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: CERFS, logos: 1, personnes: 1 } }],
+    });
+    assert.deepEqual(fs.octets('documents', `${LUCIOLES}/${logoDe(IMAGE)}`), IMAGE);
+    assert.equal(fs.octets('documents', `${CERFS}/${logoDe(IMAGE)}`), null);
+    assert.deepEqual(fs.octets('portable', `${CERFS}/${logoDe(IMAGE)}`), IMAGE);
+  });
+
+  test('importer un fichier d’événement n’emporte aucun logo : la personne garde son chemin, qu’aucun fichier ne porte', async () => {
+    const { fs, facade } = monter();
+    await facade.demarrer();
+    const texte = serialiser(chargeAvecLogo({ id: 'evt-merles', nom: 'Soirée des Merles' }), { revision: 1, produitVersion: V1 });
+    fs.choisirFichierAImporter = async () => ({ nom: 'recu-par-courriel.gtt.json', octets: UTF8.encode(texte) });
+    const { cle } = await facade.importerFichier();
+    const dossier = cle.slice(0, cle.indexOf('/'));
+    assert.deepEqual((await fs.lister(DOC, dossier)).map(({ nom }) => nom), [`Soirée des Merles${SUFFIXES.etat}`]);
+    assert.equal(analyser(fs.contenu('documents', cle + SUFFIXES.etat)).charge.participants[0].logo, logoDe(IMAGE));
   });
 });

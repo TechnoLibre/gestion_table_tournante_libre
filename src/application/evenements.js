@@ -232,7 +232,10 @@ async function verrouDe(fs, racine, base) {
  * @param {string} parametres.produitVersion
  * @param {Array<{cle: string, nom: string, texte: string}>} parametres.demonstrations
  * @param {() => string|null} parametres.ouvert          clé de l'événement ouvert
- * @param {(cle: string) => Promise<unknown>} parametres.ouvrir   en lecture
+ * @param {(cle: string, annonce?: {avertissements: Array<{code: string, details: Object}>}) => Promise<unknown>} parametres.ouvrir
+ *        en lecture ; annonce.avertissements, ceux qu'une opération que le
+ *        disque ne garde pas confie à l'ouverture, que la séance annonce
+ *        parmi ceux de son dernier geste
  * @param {() => Promise<unknown>} parametres.fermer
  * @param {(champs: Object) => Promise<{cle: string, base: string}>} parametres.creer
  *        celle de la séance, qui juge nom et date et ouvre l'événement créé
@@ -434,6 +437,9 @@ export function creerFacade({
 
   // Une source d'un format plus récent ne se copie pas : la LECTURE_SEULE du
   // dépôt se relaie avec remede null, comme les refus propres de la façade.
+  // Les avertissements rendus sont ceux de la recopie des logos : la copie se
+  // rouvre par la séance, qui relit les autres sur le disque, et reçoit
+  // ceux-là d'ouvrir, qui les annonce une fois la copie ouverte.
   async function copier(cle, { nom }) {
     const texte = nomSaisi(nom);
     const courante = await exigerDossier();
@@ -458,8 +464,9 @@ export function creerFacade({
       throw erreur;
     }
     const cleCopie = cleEvenement(copie.dossier, copie.base);
-    await ouvrir(cleCopie);
-    return { cle: cleCopie, base: copie.base };
+    const avertissements = copie.avertissements.filter(({ code }) => code === 'LOGOS_NON_COPIES');
+    await ouvrir(cleCopie, { avertissements });
+    return { cle: cleCopie, base: copie.base, avertissements };
   }
 
   async function renommer(cle, { nom }) {
@@ -578,9 +585,9 @@ export function creerFacade({
     demarrer,
     /**
      * La réponse à la question du dossier de travail : comme demarrer ;
-     * 'documents' rend aussi importe, ce que la copie de data/ a importé et
-     * refusé (importerDepuis). RangeError sans question, ou pour un choix
-     * qu'elle n'admet pas.
+     * 'documents' rend aussi importe, ce que la copie de data/ a importé,
+     * refusé et annoncé (importerDepuis). RangeError sans question, ou pour
+     * un choix qu'elle n'admet pas.
      * @param {'reessayer'|'documents'|'continuer'} choix
      */
     repondre,
@@ -615,7 +622,12 @@ export function creerFacade({
     creer: creerEvenement,
     /** Charge la démonstration de clé donnée sous « ‹nom› N », ouverte en lecture → { cle, base } (§ 15). */
     chargerDemonstration,
-    /** Copie l'événement de clé cle sous le nom donné, et ouvre la copie en lecture → { cle, base } (§ 8.7). */
+    /**
+     * Copie l'événement de clé cle sous le nom donné, logos compris, et ouvre
+     * la copie en lecture → { cle, base, avertissements } (§ 8.7) :
+     * LOGOS_NON_COPIES {evenement, logos, personnes} quand un logo ne s'est
+     * pas recopié, sans défaire la copie.
+     */
     copier,
     /**
      * Renomme l'événement de clé cle ; ouvert, il se rouvre en lecture sous
@@ -636,9 +648,16 @@ export function creerFacade({
      * système (§ 8.7).
      */
     corbeille,
-    /** Importe le fichier d'événement que l'opérateur choisit → { cle, base }, ou null (§ 8.7). */
+    /**
+     * Importe le fichier d'événement que l'opérateur choisit → { cle, base },
+     * ou null (§ 8.7) ; un fichier seul n'emporte aucun logo.
+     */
     importerFichier,
-    /** Copie dans le dossier de travail les événements de l'autre emplacement (§ 8.6). */
+    /**
+     * Copie dans le dossier de travail les événements de l'autre emplacement,
+     * logos compris → { importes, refuses, avertissements } (importerDepuis,
+     * § 8.6, § 8.7).
+     */
     importerDepuisAutre,
     /** Le dialogue de choix d'un fichier, relayé : { nom, octets } ou null. */
     choisirCsv: () => fs.choisirFichierAImporter(),

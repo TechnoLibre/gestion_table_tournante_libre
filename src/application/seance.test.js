@@ -307,6 +307,23 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     assert.match(libelle('MODE_LECTURE'), /« Modifier »/);
   });
 
+  test("ouvrir annonce, parmi les avertissements du dernier geste, ceux qu'on lui confie, sans rien écrire ; une autre ouverture, ou le geste suivant, les retire", async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs);
+    const { seance } = monter({ fs });
+    const annonce = { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 2, personnes: 3 } };
+    const avant = fs.compteurs.ecritures;
+    const rendu = await seance.ouvrir(EVT, undefined, { avertissements: [annonce] });
+    assert.deepEqual(rendu.avertissements, [annonce]);
+    assert.equal(fs.compteurs.ecritures, avant, 'ouvrir écrit');
+    assert.deepEqual(seance.etat().avertissements, [annonce]);
+    await seance.ouvrir(EVT);
+    assert.deepEqual(seance.etat().avertissements, []);
+    await seance.ouvrir(EVT, undefined, { avertissements: [annonce] });
+    await seance.passerEnEcriture();
+    assert.deepEqual(seance.etat().avertissements, []);
+  });
+
   test("ouvrir un secours n'écrit rien et laisse en lecture", async () => {
     const disque = new Map();
     const premier = monter({ fs: creerFichiersSimules({ disque }) });
@@ -2049,6 +2066,67 @@ describe('séance : le logo d’une personne, écrit avant son entrée (§ 8.3, 
     // Sans événement, poser ne juge pas le PNG ; lire juge le chemin d'abord.
     await refus(seance.poserLogoParticipant({ id: 1, octets: Uint8Array.of(1, 2, 3) }), 'AUCUN_EVENEMENT');
     await assert.rejects(seance.lireLogoParticipant('x'), TypeError);
+  });
+
+  // Un événement du disque portable, en écriture, dont la personne ajoutée
+  // porte un logo ; puis le support refuse toute écriture, et le geste
+  // suivant le rompt. Rend le montage et les octets du logo.
+  async function logoSurSupportRompu() {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    const montage = monter({ fs, racine: PORTABLE });
+    await enEcriture(montage);
+    const { seance } = montage;
+    await seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
+    const octets = pngEssai(3, 2, 5);
+    await seance.poserLogoParticipant({ id: seance.charge.participants[0].id, octets });
+    fs.pannes.ecriture('portable');
+    await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
+    return { ...montage, octets };
+  }
+
+  test('écrire ailleurs emporte logo/ dans le dossier neuf : la personne y retrouve son logo, et rien ne l’annonce', async () => {
+    const { fs, seance, octets } = await logoSurSupportRompu();
+    await seance.ecrireAilleurs(DOC);
+    assert.equal(seance.supportRompu, false);
+    assert.deepEqual(fs.octets('documents', surLaRacine(cheminDuLogo(octets))), octets);
+    assert.deepEqual(await seance.lireLogoParticipant(cheminDuLogo(octets)), octets);
+    assert.ok(!codesDe(seance.etat().avertissements).includes('LOGOS_NON_COPIES'));
+  });
+
+  test('un support retiré, que plus rien ne lit, ne refuse pas écrire ailleurs : l’événement y est, sans logo, et LOGOS_NON_COPIES compte ceux restés en arrière', async () => {
+    const { fs, seance, octets } = await logoSurSupportRompu();
+    // Le support retiré : chaque chemin de l'ancienne racine est absent.
+    for (const nom of ['lister', 'lireOctets', 'lireTexte']) {
+      const primitive = fs[nom];
+      fs[nom] = async (racine, chemin, ...reste) => {
+        if (racine.id === 'portable') throw new ErreurStockage('ABSENT', { chemin });
+        return primitive(racine, chemin, ...reste);
+      };
+    }
+    const { base } = await seance.ecrireAilleurs(DOC);
+    assert.deepEqual([base, seance.supportRompu, seance.racine], [BASE, false, DOC]);
+    assert.equal(fs.octets('documents', surLaRacine(cheminDuLogo(octets))), null);
+    assert.deepEqual(
+      seance.etat().avertissements.filter(({ code }) => code === 'LOGOS_NON_COPIES'),
+      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1 } }],
+    );
+  });
+
+  test('un logo que l’ancien support ne rend plus ne refuse pas écrire ailleurs : l’événement y est, son support rétabli, et LOGOS_NON_COPIES s’annonce', async () => {
+    const { fs, seance, octets } = await logoSurSupportRompu();
+    const lireOctets = fs.lireOctets;
+    fs.lireOctets = async (racine, chemin) => {
+      if (racine.id === 'portable') throw new ErreurStockage('LECTURE', { chemin, dossier: racine.chemin, cause: 'EIO' });
+      return lireOctets(racine, chemin);
+    };
+    const { base } = await seance.ecrireAilleurs(DOC);
+    assert.deepEqual([base, seance.supportRompu, seance.racine], [BASE, false, DOC]);
+    assert.equal(fs.octets('documents', surLaRacine(cheminDuLogo(octets))), null);
+    assert.equal(etatDe(fs).charge.participants[0].logo, cheminDuLogo(octets));
+    assert.deepEqual(
+      seance.etat().avertissements.filter(({ code }) => code === 'LOGOS_NON_COPIES'),
+      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1 } }],
+    );
   });
 });
 

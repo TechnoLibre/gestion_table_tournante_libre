@@ -172,7 +172,7 @@
     produitVersion,
     demonstrations,
     ouvert: () => seanceApp.etat().evenement?.cle ?? null,
-    ouvrir: (cle) => seanceApp.ouvrir(cle),
+    ouvrir: (cle, annonce) => seanceApp.ouvrir(cle, undefined, annonce),
     fermer: () => seanceApp.fermer(),
     creer: (champs) => seanceApp.creer(champs),
     racine: () => seanceApp.etat().racine,

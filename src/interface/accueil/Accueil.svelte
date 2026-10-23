@@ -193,15 +193,22 @@
       reponseEnCours = false;
     }
     if (detruit) return;
-    if (rendue.importe !== undefined) importAutre = comptesImport(rendue.importe);
+    if (rendue.importe !== undefined) {
+      importAutre = comptesImport(rendue.importe);
+      avertissementsOperation = rendue.importe.avertissements;
+    }
     issue = rendue;
     await lireCorbeille();
   }
 
-  // L'import de l'autre emplacement ; la détermination relue ne le propose
-  // plus.
+  // L'import de l'autre emplacement ; ses avertissements, un
+  // LOGOS_NON_COPIES par événement dont un logo ne s'est pas recopié,
+  // deviennent ceux de l'opération, comme ceux de la réponse « Documents » ;
+  // la détermination relue ne le propose plus.
   async function importerDepuisAutre() {
-    importAutre = comptesImport(await surLaListe(() => facade.importerDepuisAutre()));
+    const importe = await surLaListe(() => facade.importerDepuisAutre());
+    importAutre = comptesImport(importe);
+    avertissementsOperation = importe.avertissements;
     await prendreIssue(facade.demarrer());
   }
 

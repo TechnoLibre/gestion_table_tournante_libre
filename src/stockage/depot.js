@@ -69,7 +69,10 @@
 // nouveau nom, dans le dossier de ce nom, sans toucher l'ancienne ni créer
 // la racine. Son .precedent, l'état d'avant le geste, s'écrit avant le
 // journal : la nouvelle base appartient à l'événement dès que son journal
-// existe.
+// existe. Sans geste, l'écriture ailleurs peut aussi recopier les logos du
+// dossier, fichier par fichier, une fois la paire complète (copierLogos) :
+// un logo qui ne se recopie pas ne refuse jamais l'écriture, et l'Ouvert
+// rendu le dit, LOGOS_NON_COPIES.
 //
 // Un état ou un journal d'un format plus ancien que FORMAT ne se lit pas,
 // et rien ne le remplace (§ 8.8). L'état se refuse, ETAT_ILLISIBLE raison
@@ -121,6 +124,7 @@ import { avecCourses, cleDeCourse, entreesPour, heriterEmpreintes, lireCourses, 
 import { FORMAT, analyser } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { copieDeTravail, gelerPropositions } from './gel.js';
+import { DOSSIER_LOGO, estCheminLogo } from './logos.js';
 import {
   PLAFOND_ENTREES,
   decoderJournal,
@@ -227,7 +231,10 @@ import { cheminAffiche, vueDossier } from './systeme_fichiers.js';
  *           propositions que l'en-tête compte sans que la liste les porte ;
  *           DERIVE {ids, retenu}, les
  *           propositions périmées par identifiant, et vrai quand le retenu
- *           l'est (§ 9)
+ *           l'est (§ 9) ; en dernier, LOGOS_NON_COPIES {evenement, logos,
+ *           personnes}, que posent seulement la copie et l'écriture ailleurs
+ *           quand un logo ne s'est pas recopié (copierLogos), et que
+ *           l'écriture suivante ne recalcule pas
  */
 
 /**
@@ -1681,6 +1688,109 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
   return { journal, texteJournal: texte, charge: apres, chargeJournal: canonique, texteEtat, revision, produitVersion };
 }
 
+// Les chemins des logos que désignent les personnes de la charge, chacun
+// une fois, rangés par unités UTF-16.
+function logosDesignes(charge) {
+  const chemins = charge.participants.map(({ logo }) => logo).filter((logo) => logo !== undefined);
+  return [...new Set(chemins)].sort(comparerTextes);
+}
+
+/**
+ * Recopie les logos d'un dossier d'événement dans un autre (§ 8.7) : chaque
+ * fichier de logo/ du dossier depuis dont le chemin a la forme d'un logo
+ * (estCheminLogo) — et lui seul : ni un sous-dossier, ni un autre nom —, par
+ * ordre de nom, se lit (lireOctets) puis s'écrit sous le même chemin dans le
+ * dossier vers (ecrireOctetsAtomique), logo/ créé d'abord là-bas quand il y
+ * a quelque chose à recopier. Chaque fichier passe en entier, l'un après
+ * l'autre ; rien ne s'efface ni ne se déplace, et depuis reste tel quel. Le
+ * dossier vers est neuf : aucun logo ne s'y trouve déjà.
+ *
+ * Un refus par une ErreurStockage ne lève jamais ; il compte les fichiers
+ * qui ne se sont pas recopiés : un fichier dont la lecture ou l'écriture est
+ * refusée, la suite continuant ; tous quand logo/ ne se crée pas là-bas ;
+ * quand la liste de logo/ est refusée, chaque logo que désigne une personne
+ * de charge, ce que porte logo/ étant inconnu, et rien ne s'écrit. logo/
+ * absent, le dossier depuis se liste à son tour : présent, il n'a rien à
+ * recopier ; absent ou refusé — un support retiré rend ABSENT sur tout
+ * chemin —, c'est un refus de la liste, qui compte chaque logo désigné. Un
+ * logo qu'une personne désigne sans que son fichier soit dans logo/ n'est
+ * pas un refus : il manquait déjà.
+ * Toute autre erreur remonte telle quelle.
+ *
+ * @param {{fs: import('./systeme_fichiers.js').SystemeFichiers, racine: import('./systeme_fichiers.js').Racine}} depuis
+ *        la vue du dossier d'où les logos viennent, et sa racine (un Ouvert)
+ * @param {{fs: import('./systeme_fichiers.js').SystemeFichiers, racine: import('./systeme_fichiers.js').Racine}} vers
+ *        la vue du dossier où ils vont, et sa racine
+ * @param {import('./types.js').Charge} charge   celle de l'événement recopié
+ * @returns {Promise<null|{code: 'LOGOS_NON_COPIES', details: {evenement: string, logos: number, personnes: number}}>}
+ *          null quand chaque logo s'est recopié ; sinon l'avertissement : le
+ *          nom de l'événement de charge, le nombre de fichiers non recopiés
+ *          et celui des personnes dont le logo en est un
+ */
+export async function copierLogos(depuis, vers, charge) {
+  let chemins;
+  try {
+    chemins = (await depuis.fs.lister(depuis.racine, DOSSIER_LOGO))
+      .filter(({ type }) => type === 'fichier')
+      .map(({ nom }) => `${DOSSIER_LOGO}/${nom}`)
+      .filter(estCheminLogo)
+      .sort(comparerTextes);
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+    // Un logo/ absent d'un dossier présent n'a rien à recopier ; sans
+    // personne qui porte un logo, rien ne peut manquer, et le dossier ne se
+    // relit pas.
+    const designes = logosDesignes(charge);
+    if (erreur.code === 'ABSENT' && (designes.length === 0 || (await dossierPresent(depuis)))) return null;
+    return avertissementLogos(designes, charge);
+  }
+  if (chemins.length === 0) return null;
+  // Un refus par une ErreurStockage rend faux, sans lever.
+  const reussit = async (geste) => {
+    try {
+      await geste();
+      return true;
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage)) throw erreur;
+      return false;
+    }
+  };
+  if (!(await reussit(() => vers.fs.creerDossier(vers.racine, DOSSIER_LOGO)))) {
+    return avertissementLogos(chemins, charge);
+  }
+  const refuses = [];
+  for (const chemin of chemins) {
+    const recopie = await reussit(async () => {
+      const octets = await depuis.fs.lireOctets(depuis.racine, chemin);
+      await vers.fs.ecrireOctetsAtomique(vers.racine, chemin, octets);
+    });
+    if (!recopie) refuses.push(chemin);
+  }
+  return avertissementLogos(refuses, charge);
+}
+
+// Vrai quand le dossier d'événement que voit depuis se liste ; faux quand
+// sa liste se refuse par une ErreurStockage, ABSENT compris. Toute autre
+// erreur remonte.
+async function dossierPresent(depuis) {
+  try {
+    await depuis.fs.lister(depuis.racine, '');
+    return true;
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+    return false;
+  }
+}
+
+// L'avertissement des chemins de logo refusés (refuses), ceux que
+// copierLogos n'a pas recopiés : null quand il n'y en a aucun.
+function avertissementLogos(refuses, charge) {
+  if (refuses.length === 0) return null;
+  const manquants = new Set(refuses);
+  const personnes = charge.participants.filter(({ logo }) => manquants.has(logo)).length;
+  return { code: 'LOGOS_NON_COPIES', details: { evenement: charge.evenement.nom, logos: refuses.length, personnes } };
+}
+
 /**
  * Écrit l'événement ouvert sous une base libre d'une racine, dans un dossier
  * neuf qui porte cette base : dans une autre racine (§ 8.6), la réponse à une
@@ -1718,6 +1828,13 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
  * la paire. Les lignes et les textes d'état se calculent, et se relisent,
  * avant la première écriture, celle de la racine comprise.
  *
+ * Avec logos, les logos du dossier de l'Ouvert se recopient ensuite dans le
+ * dossier neuf (copierLogos), la paire et le compagnon déjà écrits : une
+ * panne pendant la recopie laisse l'événement complet là-bas, et l'Ouvert
+ * d'origine intact. Un logo qui ne se recopie pas ne refuse pas l'écriture :
+ * LOGOS_NON_COPIES finit les avertissements de l'Ouvert rendu. Sans logos,
+ * logo/ ne se lit ni ne s'écrit : le renommage le déplace lui-même.
+ *
  * @param {Ouvert} ouvert
  * @param {import('./systeme_fichiers.js').Racine} racine
  * @param {Object} options
@@ -1734,6 +1851,8 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
  *        sous la version produitVersion ; null par défaut
  * @param {boolean} [options.creerRacine]   faux : la racine n'est pas créée,
  *        et doit exister ; vrai par défaut
+ * @param {boolean} [options.logos]   vrai : les logos du dossier de l'Ouvert
+ *        se recopient dans le dossier neuf ; faux par défaut
  * @returns {Promise<Ouvert>}   l'Ouvert dans racine : le journal et la
  *          révision écrits, chargeJournal la charge de l'état écrit, et
  *          charge celle qu'en rend examiner
@@ -1751,7 +1870,7 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
 export async function enregistrerAilleurs(
   ouvert,
   racine,
-  { existantes, libelleReprise, horodatage, geste = null, creerRacine = true },
+  { existantes, libelleReprise, horodatage, geste = null, creerRacine = true, logos = false },
 ) {
   exigerEcriture(ouvert);
   const { systeme } = ouvert;
@@ -1780,5 +1899,8 @@ export async function enregistrerAilleurs(
     etatMalEncode: false,
     compagnon: [],
   };
-  return poserCompagnon(await ecrireEtat(apresEcriture(ailleurs, { charge, revision, journal }), texteEtat));
+  const examine = apresEcriture(ailleurs, { charge, revision, journal });
+  const ecrit = await poserCompagnon(await ecrireEtat(examine, texteEtat));
+  const avertissement = logos ? await copierLogos(ouvert, ecrit, ecrit.charge) : null;
+  return avertissement === null ? ecrit : { ...ecrit, avertissements: [...ecrit.avertissements, avertissement] };
 }

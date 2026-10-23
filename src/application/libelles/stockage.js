@@ -330,6 +330,29 @@ export const TABLE = new Map([
     },
   ],
 
+  // --- Ce que la copie, l'import et l'écriture ailleurs annoncent (§ 8.7) ----
+  // evenement, le nom de l'événement écrit ; logos, les fichiers de son
+  // dossier logo que la recopie n'a pas écrits ; personnes, celles dont le
+  // logo en est un. Un logo qu'aucune personne ne porte se compte aussi : la
+  // phrase le dit, sans plus.
+  [
+    'LOGOS_NON_COPIES',
+    ({ evenement, logos, personnes }) => {
+      const un = logos <= 1;
+      const recopies = compte(logos, "logo ne s'est pas recopié", 'logos ne se sont pas recopiés');
+      const suite =
+        personnes === 0
+          ? ` ; aucune personne ne ${un ? 'le' : 'les'} porte.`
+          : `, et ${compte(personnes, 'personne y a', 'personnes y ont')} un logo introuvable.`;
+      const remede = un
+        ? "L'original reste dans le dossier logo de l'événement d'origine : " +
+          'le recopier à la main dans celui-ci le rend.'
+        : "Les originaux restent dans le dossier logo de l'événement d'origine : " +
+          'les recopier à la main dans celui-ci les rend.';
+      return `${cite(evenement)} : ${recopies}${suite} ${remede}`;
+    },
+  ],
+
   // --- Le dossier de travail, les réglages locaux (§ 8.5, § 8.6, § 8.8) ------
   ['NON_PUBLIE', () => "Le dossier de l'exécutable n'est pas connu : les événements se rangent dans les Documents."],
   [

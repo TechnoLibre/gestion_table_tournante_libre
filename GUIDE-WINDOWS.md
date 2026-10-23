@@ -130,8 +130,11 @@ par l’explorateur, ou au moins ses deux fichiers, `<nom>.gtt.json` et
 `<nom>.gtt-journal.jsonl`. Pour le reprendre, extrayez le ZIP, puis déposez son
 dossier dans le dossier de travail — des fichiers déposés seuls, hors d’un
 dossier, ne s’affichent pas —, ou utilisez « Importer un événement depuis un
-fichier… » sur la liste des événements, qui lui crée son dossier. Ces fichiers
-se lisent sans le logiciel : ce sont des fichiers texte ordinaires.
+fichier… » sur la liste des événements, qui lui crée son dossier. Les logos des
+participants, dans le sous-dossier `logo`, ne voyagent qu’avec le dossier
+entier : reçu par ses deux fichiers, ou importé depuis un fichier, l’événement
+dit leur logo introuvable. Ces deux fichiers se lisent sans le logiciel : ce
+sont des fichiers texte ordinaires.
 
 Ils contiennent les noms, et parfois les courriels et les notes, des
 participants : traitez-les comme toute liste de personnes, et ne les envoyez

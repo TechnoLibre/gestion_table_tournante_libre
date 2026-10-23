@@ -21,6 +21,7 @@ import { creer, enregistrer, lister, ouvrir, ouvrirSecours, verrouiller } from '
 import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { lireJournal, reconstruire } from './journal.js';
+import { cheminLogo, empreinteSha256 } from './logos.js';
 import {
   LONGUEUR_CHEMIN_MAX,
   SUFFIXES,
@@ -833,10 +834,12 @@ describe('opérations : un événement, un dossier (§ 8.6, § 8.7)', () => {
     assert.deepEqual(await importerDepuis(fs, portable, documents, cles), {
       importes: [{ cle: 'Neuf/Neuf', nouvelle: 'Neuf/Neuf' }],
       refuses: [],
+      avertissements: [],
     });
     assert.deepEqual(await importerDepuis(fs, portable, documents, ['Ancien']), {
       importes: [],
       refuses: [{ cle: 'Ancien', code: 'CHEMIN_REFUSE' }],
+      avertissements: [],
     });
     assert.deepEqual(
       (await arbre(disque, DOC, {}, { complet: true })).map(([chemin]) => chemin),
@@ -1593,6 +1596,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
         { cle: dans('Inexistant'), code: 'ABSENT' },
         { cle: dans('Kermesse des Ifs'), code: 'IDENTIFIANT_PRESENT' },
       ],
+      avertissements: [],
     });
     assert.ok(racines.length > 0 && racines.every((id) => id === 'documents'), racines.join(' '));
     assert.deepEqual(await arbre(disque, portable, PORTABLE), avant);
@@ -1663,6 +1667,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
         { cle: dans('Kermesse des Ifs'), code: 'ETAT_ILLISIBLE' },
         { cle: dans('Fête des Saules'), code: 'IDENTIFIANT_PRESENT' },
       ],
+      avertissements: [],
     });
     // Trois dossiers neufs et les six fichiers qu'ils reçoivent.
     assert.equal(fs.compteurs.ecritures - ecritures, 3 + 6);
@@ -1709,6 +1714,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     assert.deepEqual(await importerDepuis(fs, portable, documents, [dans('Gala des Ormes')]), {
       importes: [{ cle: dans('Gala des Ormes'), nouvelle: gala }],
       refuses: [],
+      avertissements: [],
     });
     assert.deepEqual(await arbre(disque, documents), [
       [`Gala des Ormes/Gala des Ormes${SUFFIXES.journal}`, paire.journal],
@@ -1742,6 +1748,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     assert.deepEqual(await importerDepuis(fs, portable, documents, [EVT]), {
       importes: [],
       refuses: [{ cle: EVT, code: 'LECTURE' }],
+      avertissements: [],
     });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque, documents), []);
@@ -1761,6 +1768,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     assert.deepEqual(await importerDepuis(fs, portable, documents, [dans('Roseraie')]), {
       importes: [],
       refuses: [{ cle: dans('Roseraie'), code: 'LECTURE' }],
+      avertissements: [],
     });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque, documents), []);
@@ -2354,6 +2362,7 @@ describe('opérations : un événement d’un format plus ancien (§ 8.7, § 8.8
     assert.deepEqual(await importerDepuis(fs, portable, documents, [EVT]), {
       importes: [],
       refuses: [{ cle: EVT, code: 'ETAT_ILLISIBLE' }],
+      avertissements: [],
     });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque, documents), []);
@@ -2553,6 +2562,7 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
     assert.deepEqual(await importerDepuis(ailleurs, documents, portable, [EVT]), {
       importes: [{ cle: EVT, nouvelle: EVT }],
       refuses: [],
+      avertissements: [],
     });
     assert.deepEqual(trace.map(([, chemin]) => chemin).slice(-2), [ETAT, COURSES]);
     assert.equal(ailleurs.contenu('portable', dans(COURSES)), texte);
@@ -2570,7 +2580,7 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
       const racines = await autre.racines();
       await preparer(autre);
       const rendu = await importerDepuis(autre, racines.documents, racines.portable, [EVT]);
-      assert.deepEqual(rendu, { importes: [{ cle: EVT, nouvelle: EVT }], refuses: [] }, libelle);
+      assert.deepEqual(rendu, { importes: [{ cle: EVT, nouvelle: EVT }], refuses: [], avertissements: [] }, libelle);
       const relu = await ouvrir(creerFichiersSimules({ disque: cas.disque, ...PORTABLE }), racines.portable, dans(BASE));
       assert.equal(courseDe(relu, 2), null, libelle);
     }
@@ -2590,5 +2600,237 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
       (await arbre(disque)).map(([chemin]) => chemin).filter((chemin) => !chemin.startsWith(DATE)),
       [],
     );
+  });
+});
+
+// --- Les logos suivent la copie et l'import (§ 8.7, § 8.8) -------------------
+
+// Des octets d'image d'épreuve, distincts par n : la signature d'un PNG
+// suivie de n, qu'aucune copie ne décode. Et le chemin que leur contenu leur
+// donne, relatif au dossier de l'événement.
+const imageEssai = (n) => Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, n);
+const logoDe = (octets) => cheminLogo(empreinteSha256(octets));
+const [IMAGE_UN, IMAGE_DEUX] = [imageEssai(1), imageEssai(2)];
+// Les logos que pose poserLogos, [chemin, octets], par chemin.
+const LOGOS = [
+  [logoDe(IMAGE_UN), IMAGE_UN],
+  [logoDe(IMAGE_DEUX), IMAGE_DEUX],
+].sort(parChemin);
+
+// La charge d'essai dont les personnes 1 et 3 portent le logo IMAGE_UN, la 2
+// le logo IMAGE_DEUX, la 4 aucun.
+function chargeAvecLogos(options) {
+  const charge = chargeEssai(options);
+  charge.participants[0].logo = logoDe(IMAGE_UN);
+  charge.participants[2].logo = logoDe(IMAGE_UN);
+  charge.participants[1].logo = logoDe(IMAGE_DEUX);
+  return charge;
+}
+
+// Pose, dans logo/ du dossier de racineId, les fichiers de LOGOS et un
+// fichier posé à la main, qui n'a pas la forme d'un logo.
+function poserLogos(fs, racineId, dossier = BASE) {
+  for (const [chemin, octets] of LOGOS) fs.deposerOctets(racineId, `${dossier}/${chemin}`, octets);
+  fs.deposerOctets(racineId, `${dossier}/logo/Alice.png`, imageEssai(3));
+}
+
+// Les fichiers du dossier de racine, à toute profondeur, [chemin relatif au
+// dossier, octets], par chemin, lus par un processus à part que reglages
+// décrit ; aucun quand le dossier manque.
+async function octetsDe(disque, racine, dossier, reglages = {}) {
+  const lecteur = creerFichiersSimules({ disque, ...reglages });
+  const fichiers = [];
+  const parcourir = async (sous) => {
+    let entrees;
+    try {
+      entrees = await lecteur.lister(racine, sous === '' ? dossier : `${dossier}/${sous}`);
+    } catch (erreur) {
+      if (erreur.code === 'ABSENT') return;
+      throw erreur;
+    }
+    for (const { nom, type } of entrees) {
+      const relatif = sous === '' ? nom : `${sous}/${nom}`;
+      if (type === 'dossier') await parcourir(relatif);
+      else fichiers.push([relatif, lecteur.octets(racine.id, `${dossier}/${relatif}`)]);
+    }
+  };
+  await parcourir('');
+  return fichiers.sort(parChemin);
+}
+
+// Les fichiers de logo/ parmi ceux que rend octetsDe.
+const logosParmi = (fichiers) => fichiers.filter(([chemin]) => chemin.startsWith('logo/'));
+
+// Inscrit, dans l'ordre, chaque appel d'une primitive d'écriture, octets
+// compris : [primitive, chemin relatif à la racine].
+function journaliserEcritures(fs) {
+  const appels = [];
+  const ecritures = ['ecrireAtomique', 'ecrireOctetsAtomique', 'ajouterLigne', 'creerDossier', 'supprimerDossier', 'deplacer', 'supprimer'];
+  for (const nom of ecritures) {
+    const primitive = fs[nom];
+    fs[nom] = (racine, chemin, ...reste) => {
+      appels.push([nom, chemin]);
+      return primitive(racine, chemin, ...reste);
+    };
+  }
+  return appels;
+}
+
+// Refuse par une ECRITURE EBUSY l'écriture d'octets au chemin donné,
+// relatif à la racine, sur la racine d'identifiant racineId.
+function refuserOctets(fs, racineId, cible) {
+  const ecrire = fs.ecrireOctetsAtomique;
+  fs.ecrireOctetsAtomique = async (racine, chemin, octets) => {
+    if (racine.id === racineId && chemin === cible) {
+      throw new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EBUSY' });
+    }
+    return ecrire(racine, chemin, octets);
+  };
+}
+
+describe('opérations : les logos suivent la copie et l’import (§ 8.7, § 8.8)', () => {
+  test("copier recopie logo/ dans le dossier de la copie, après son état, fichier par fichier : chaque fichier qui a la forme d'un logo, octets tels quels ; l'original ne change pas, et l'Ouvert de la copie n'avertit de rien", async () => {
+    const { disque, fs, ouvert } = await deuxRevisions(chargeAvecLogos());
+    poserLogos(fs, 'documents');
+    const original = await octetsDe(disque, DOC, BASE);
+    const appels = journaliserEcritures(fs);
+    const copie = await copier(ouvert, optionsCopie('Variante'));
+    assert.deepEqual(appels, [
+      ['creerDossier', 'Variante'],
+      ['ecrireAtomique', `Variante/Variante${SUFFIXES.journal}`],
+      ['ecrireAtomique', `Variante/Variante${SUFFIXES.etat}`],
+      ['creerDossier', 'Variante/logo'],
+      ...LOGOS.map(([chemin]) => ['ecrireOctetsAtomique', `Variante/${chemin}`]),
+    ]);
+    assert.deepEqual(copie.avertissements, []);
+    assert.deepEqual(logosParmi(await octetsDe(disque, DOC, 'Variante')), LOGOS);
+    assert.deepEqual(await octetsDe(disque, DOC, BASE), original);
+    const rouverte = await rouvrir(disque, 'Variante', 'Variante');
+    assert.deepEqual(
+      rouverte.charge.participants.map(({ logo }) => logo ?? null),
+      [logoDe(IMAGE_UN), logoDe(IMAGE_DEUX), logoDe(IMAGE_UN), null],
+    );
+  });
+
+  test("un logo que la copie ne recopie pas ne la refuse pas : la copie est faite, se liste et s'ouvre, et son Ouvert finit sur LOGOS_NON_COPIES {evenement, logos, personnes}", async () => {
+    const { disque, fs, ouvert } = await deuxRevisions(chargeAvecLogos());
+    poserLogos(fs, 'documents');
+    refuserOctets(fs, 'documents', `Variante/${logoDe(IMAGE_UN)}`);
+    const copie = await copier(ouvert, optionsCopie('Variante'));
+    assert.deepEqual(copie.avertissements, [
+      { code: 'LOGOS_NON_COPIES', details: { evenement: 'Variante', logos: 1, personnes: 2 } },
+    ]);
+    assert.deepEqual(logosParmi(await octetsDe(disque, DOC, 'Variante')), [[logoDe(IMAGE_DEUX), IMAGE_DEUX]]);
+    assert.deepEqual(
+      (await lister(creerFichiersSimules({ disque }), DOC)).map(({ cle }) => cle),
+      [EVT, 'Variante/Variante'],
+    );
+    assert.equal((await rouvrir(disque, 'Variante', 'Variante')).charge.evenement.id, 'evt-variante');
+  });
+
+  test("importerDepuis recopie logo/ de chaque événement après ses fichiers, celui d'un état lisible comme celui d'un état qui s'importe par ses secours ; un logo refusé ne refuse pas l'import, et LOGOS_NON_COPIES, dans avertissements, nomme l'événement ; l'autre emplacement ne change pas", async () => {
+    const disque = new Map();
+    const PORTABLE = { executable: 'E:\\soirees' };
+    const fs = creerFichiersSimules({ disque, ...PORTABLE });
+    fs.deposerDossier('portable');
+    fs.deposerDossier('documents');
+    const { portable, documents } = await fs.racines();
+    const lucioles = await paireDe(chargeAvecLogos());
+    const roseraie = await paireDe(chargeAvecLogos({ id: 'evt-roseraie', nom: 'Roseraie' }));
+    fs.deposer('portable', dans(ETAT), lucioles.etat);
+    fs.deposer('portable', dans(JOURNAL), lucioles.journal);
+    poserLogos(fs, 'portable');
+    // Roseraie : l'état illisible, son .precedent lisible, et ses logos.
+    fs.deposer('portable', `Roseraie/Roseraie${SUFFIXES.etat}`, '{');
+    fs.deposer('portable', `Roseraie/Roseraie${SUFFIXES.precedent}`, roseraie.etat);
+    poserLogos(fs, 'portable', 'Roseraie');
+    const avant = [await octetsDe(disque, portable, BASE, PORTABLE), await octetsDe(disque, portable, 'Roseraie', PORTABLE)];
+    refuserOctets(fs, 'documents', `Roseraie/${logoDe(IMAGE_DEUX)}`);
+
+    const roseraieCle = cleEvenement('Roseraie', 'Roseraie');
+    assert.deepEqual(await importerDepuis(fs, portable, documents, [EVT, roseraieCle]), {
+      importes: [
+        { cle: EVT, nouvelle: EVT },
+        { cle: roseraieCle, nouvelle: roseraieCle },
+      ],
+      refuses: [],
+      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: 'Roseraie', logos: 1, personnes: 1 } }],
+    });
+    assert.deepEqual(logosParmi(await octetsDe(disque, documents, BASE)), LOGOS);
+    assert.deepEqual(logosParmi(await octetsDe(disque, documents, 'Roseraie')), [[logoDe(IMAGE_UN), IMAGE_UN]]);
+    assert.deepEqual(
+      [await octetsDe(disque, portable, BASE, PORTABLE), await octetsDe(disque, portable, 'Roseraie', PORTABLE)],
+      avant,
+    );
+    const la = await rouvrir(disque, BASE);
+    assert.equal(la.charge.participants[1].logo, logoDe(IMAGE_DEUX));
+  });
+
+  test("importer un fichier d'état venu d'ailleurs n'emporte aucun logo : ses personnes gardent leur chemin, qu'aucun fichier ne porte dans le dossier neuf", async () => {
+    const { disque, fs } = nouveauDisque();
+    const octets = UTF8.encode(etatTexte(chargeAvecLogos({ id: 'evt-herons', nom: 'Bal des Hérons' })));
+    const { base } = await importer(fs, DOC, octets);
+    assert.deepEqual(
+      (await octetsDe(disque, DOC, base)).map(([chemin]) => chemin),
+      [`${base}${SUFFIXES.etat}`],
+    );
+    assert.equal((await rouvrir(disque, base, base)).charge.participants[1].logo, logoDe(IMAGE_DEUX));
+  });
+
+  test("une coupure à chaque écriture d'une copie ou d'un import qui recopient logo/ laisse l'original intact, octet pour octet ; un logo n'arrive là-bas qu'après l'état, et chacun y est entier ; achevée, chaque logo y est", async () => {
+    const PORTABLE = { executable: 'E:\\soirees' };
+    const cas = [
+      [
+        'copier',
+        async () => {
+          const { disque, fs, ouvert } = await deuxRevisions(chargeAvecLogos());
+          poserLogos(fs, 'documents');
+          return { disque, fs, source: DOC, vers: DOC, dossier: 'Variante', faire: () => copier(ouvert, optionsCopie('Variante')) };
+        },
+      ],
+      [
+        'importerDepuis',
+        async () => {
+          const disque = new Map();
+          const fs = creerFichiersSimules({ disque, ...PORTABLE });
+          fs.deposerDossier('portable');
+          fs.deposerDossier('documents');
+          const { portable, documents } = await fs.racines();
+          const lucioles = await paireDe(chargeAvecLogos());
+          fs.deposer('portable', dans(ETAT), lucioles.etat);
+          fs.deposer('portable', dans(JOURNAL), lucioles.journal);
+          poserLogos(fs, 'portable');
+          return { disque, fs, source: portable, vers: documents, dossier: BASE, faire: () => importerDepuis(fs, portable, documents, [EVT]) };
+        },
+      ],
+    ];
+    for (const [nom, monter] of cas) {
+      for (let n = 0; ; n += 1) {
+        const message = `${nom}, coupure après ${n} écritures`;
+        const { disque, fs, source, vers, dossier, faire } = await monter();
+        const original = await octetsDe(disque, source, BASE, PORTABLE);
+        fs.pannes.couperApres(n);
+        let acheve = true;
+        try {
+          await faire();
+        } catch (erreur) {
+          assert.ok(erreur instanceof PanneSimulee, `${message} : ${String(erreur)}`);
+          acheve = false;
+        }
+        assert.deepEqual(await octetsDe(disque, source, BASE, PORTABLE), original, message);
+        const la = await octetsDe(disque, vers, dossier, PORTABLE);
+        const logos = logosParmi(la);
+        for (const fichier of logos) assert.ok(LOGOS.some((attendu) => JSON.stringify(attendu) === JSON.stringify(fichier)), message);
+        if (logos.length > 0) {
+          assert.ok(la.some(([chemin]) => chemin === `${dossier}${SUFFIXES.etat}`), `${message} : un logo avant l'état`);
+          const lecteur = creerFichiersSimules({ disque, ...PORTABLE });
+          assert.equal((await ouvrir(lecteur, vers, cleEvenement(dossier, dossier))).charge.participants[1].logo, logoDe(IMAGE_DEUX), message);
+        }
+        if (acheve) {
+          assert.deepEqual(logos, LOGOS, message);
+          break;
+        }
+      }
+    }
   });
 });

@@ -21,6 +21,7 @@ import { canoniser, serialiser, serialiserCharge } from './canonique.js';
 import { appliquer, difference } from './correctifs.js';
 import {
   basesPrises,
+  copierLogos,
   creer,
   deverrouiller,
   enregistrer,
@@ -47,8 +48,10 @@ import {
   reconstruire,
   texteDuJournal,
 } from './journal.js';
+import { cheminLogo, empreinteSha256 } from './logos.js';
 import { SUFFIXES, cleEvenement } from './noms.js';
 import { ajusterALaPresence, examiner } from './placements.js';
+import { vueDossier } from './systeme_fichiers.js';
 
 const V1 = VERSION.affichee;
 const V2 = versionVoisine(V1);
@@ -3789,5 +3792,246 @@ describe('dépôt : la présence par tour (§ 8.8, § 8.9)', () => {
     assert.deepEqual(rouvert.examen.retenu, { fautes: [], raisons: [] });
     assert.equal(serialiserCharge(reconstruire(rouvert.journal, 1)), serialiserCharge(ouvert.charge));
     exigerEquivalence(rouvert.systeme, BASE);
+  });
+});
+
+// --- Les logos recopiés dans un autre dossier (§ 8.7) -----------------------
+
+// Des octets d'image d'épreuve, distincts par n : la signature d'un PNG
+// suivie de n, qu'aucune copie ne décode. Et le chemin que leur contenu
+// leur donne, relatif au dossier de l'événement.
+const imageEssai = (n) => Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, n);
+const logoDe = (octets) => cheminLogo(empreinteSha256(octets));
+
+// Inscrit, dans l'ordre, chaque appel des primitives nommées :
+// [primitive, identifiant de la racine, chemin relatif à la racine].
+function journaliser(fs, noms) {
+  const appels = [];
+  for (const nom of noms) {
+    const primitive = fs[nom];
+    fs[nom] = (racine, chemin, ...reste) => {
+      appels.push([nom, racine.id, chemin]);
+      return primitive(racine, chemin, ...reste);
+    };
+  }
+  return appels;
+}
+
+// Refuse, sur la racine d'identifiant racineId, l'appel de la primitive nom
+// au chemin donné, relatif à la racine, par l'erreur que fabrique faire.
+function refuserSur(fs, nom, racineId, chemin, faire) {
+  const primitive = fs[nom];
+  fs[nom] = async (racine, cible, ...reste) => {
+    if (racine.id === racineId && cible === chemin) throw faire(cible);
+    return primitive(racine, cible, ...reste);
+  };
+}
+
+const refusLecture = (chemin) => new ErreurStockage('LECTURE', { chemin, dossier: DOCUMENTS, cause: 'EIO' });
+const refusEcriture = (chemin) => new ErreurStockage('ECRITURE', { chemin, dossier: DOCUMENTS, cause: 'EBUSY' });
+
+describe('dépôt : les logos recopiés dans un autre dossier (§ 8.7)', () => {
+  const CIBLE = 'Variante des Lucioles';
+  const [UN, DEUX, ABSENTE] = [imageEssai(1), imageEssai(2), imageEssai(9)];
+  // Les deux logos du dossier, dans l'ordre de leur nom, et ce que logosDe
+  // rend d'un dossier qui les porte tous deux.
+  const ORDRE = [logoDe(UN), logoDe(DEUX)].sort();
+  const RECOPIES = ORDRE.map((chemin) => [chemin.slice(5), chemin === logoDe(UN) ? UN : DEUX]);
+
+  // L'événement BASE, sur la racine racineId, dont les personnes 1 et 3
+  // portent le logo UN, la 2 le logo DEUX, et la 4 un logo dont le fichier
+  // manque ; son dossier logo/ porte UN et DEUX, puis ce qui n'a pas la forme
+  // d'un logo : un nom posé à la main, des chiffres en capitales, un
+  // sous-dossier.
+  async function avecLogos(fs, racine) {
+    const charge = chargeEssai();
+    charge.participants[0].logo = logoDe(UN);
+    charge.participants[2].logo = logoDe(UN);
+    charge.participants[1].logo = logoDe(DEUX);
+    charge.participants[3].logo = logoDe(ABSENTE);
+    const ouvert = await creer(fs, racine, charge, CREATION);
+    for (const octets of [UN, DEUX]) fs.deposerOctets(racine.id, dans(logoDe(octets)), octets);
+    fs.deposerOctets(racine.id, dans('logo/Alice.png'), imageEssai(3));
+    const capitales = logoDe(imageEssai(4)).slice(5).toUpperCase();
+    fs.deposerOctets(racine.id, dans(`logo/${capitales}`), imageEssai(4));
+    fs.deposerOctets(racine.id, dans(`logo/vieux/${logoDe(imageEssai(5)).slice(5)}`), imageEssai(5));
+    return ouvert;
+  }
+
+  // Les fichiers de logo/ du dossier d'un événement, [nom, octets], par nom.
+  async function logosDe(fs, racine, dossier) {
+    let entrees;
+    try {
+      entrees = await fs.lister(racine, `${dossier}/logo`);
+    } catch (erreur) {
+      if (erreur.code === 'ABSENT') return [];
+      throw erreur;
+    }
+    return entrees.map(({ nom, type }) => [nom, type === 'fichier' ? fs.octets(racine.id, `${dossier}/logo/${nom}`) : type]);
+  }
+
+  // Un disque où l'événement de avecLogos est posé dans documents, et le
+  // dossier CIBLE, vide, où ses logos vont.
+  async function disqueAvecLogos() {
+    const { disque, fs } = nouveauDisque();
+    const ouvert = await avecLogos(fs, DOC);
+    fs.deposerDossier('documents', CIBLE);
+    return { disque, fs, ouvert, vers: { fs: vueDossier(fs, CIBLE), racine: DOC } };
+  }
+
+  test("copierLogos recopie chaque fichier de logo/ qui a la forme d'un logo, octets tels quels, par ordre de nom, logo/ créé d'abord ; rien d'autre ne se recopie, la source reste, et un logo qu'une personne désigne sans fichier n'est pas une faute ; sans logo/, rien ne s'écrit", async () => {
+    const { fs, ouvert, vers } = await disqueAvecLogos();
+    const source = await logosDe(fs, DOC, BASE);
+    const appels = journaliser(fs, ['lister', 'lireOctets', 'creerDossier', 'ecrireOctetsAtomique']);
+    assert.equal(await copierLogos(ouvert, vers, ouvert.charge), null);
+    assert.deepEqual(appels, [
+      ['lister', 'documents', dans('logo')],
+      ['creerDossier', 'documents', `${CIBLE}/logo`],
+      ...ORDRE.flatMap((chemin) => [
+        ['lireOctets', 'documents', dans(chemin)],
+        ['ecrireOctetsAtomique', 'documents', `${CIBLE}/${chemin}`],
+      ]),
+    ]);
+    assert.deepEqual(await logosDe(fs, DOC, CIBLE), RECOPIES);
+    assert.deepEqual(await logosDe(fs, DOC, BASE), source);
+
+    // Un événement sans logo/ : la liste seule, aucune écriture.
+    const autre = await creer(fs, DOC, chargeEssai({ id: 'evt-ifs', nom: 'Fête des Ifs' }), CREATION);
+    appels.length = 0;
+    assert.equal(await copierLogos(autre, vers, autre.charge), null);
+    assert.deepEqual(appels, [['lister', 'documents', 'Fête des Ifs/logo']]);
+  });
+
+  test("un refus ne lève jamais : LOGOS_NON_COPIES {evenement, logos, personnes} compte les fichiers non recopiés et les personnes qui en désignent un — lecture ou écriture d'un fichier refusée, la suite continuant ; logo/ refusé là-bas, tous ; liste de logo/ refusée, chaque logo que désigne une personne, sans rien écrire ; toute autre erreur remonte", async () => {
+    const cas = [
+      ['lireOctets', dans(logoDe(DEUX)), refusLecture, { logos: 1, personnes: 1 }, [logoDe(UN)]],
+      ['ecrireOctetsAtomique', `${CIBLE}/${logoDe(UN)}`, refusEcriture, { logos: 1, personnes: 2 }, [logoDe(DEUX)]],
+      ['creerDossier', `${CIBLE}/logo`, refusEcriture, { logos: 2, personnes: 3 }, []],
+      ['lister', dans('logo'), refusLecture, { logos: 3, personnes: 4 }, []],
+    ];
+    for (const [primitive, chemin, refus, comptes, recopies] of cas) {
+      const message = `${primitive} ${chemin}`;
+      const { disque, fs, ouvert, vers } = await disqueAvecLogos();
+      // Un processus à part relit le disque, sans les refus de fs.
+      const lecteur = creerFichiersSimules({ disque });
+      const source = await logosDe(lecteur, DOC, BASE);
+      refuserSur(fs, primitive, 'documents', chemin, refus);
+      assert.deepEqual(
+        await copierLogos(ouvert, vers, ouvert.charge),
+        { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, ...comptes } },
+        message,
+      );
+      assert.deepEqual(
+        (await logosDe(lecteur, DOC, CIBLE)).map(([nom]) => `logo/${nom}`),
+        ORDRE.filter((logo) => recopies.includes(logo)),
+        message,
+      );
+      assert.deepEqual(await logosDe(lecteur, DOC, BASE), source, message);
+    }
+
+    const { fs, ouvert, vers } = await disqueAvecLogos();
+    refuserSur(fs, 'lireOctets', 'documents', dans(ORDRE[0]), () => new TypeError('faute du code'));
+    await assert.rejects(copierLogos(ouvert, vers, ouvert.charge), TypeError);
+  });
+
+  test("une source retirée, absente sur tout chemin, n'est pas un dossier sans logo/ : LOGOS_NON_COPIES compte chaque logo que désigne une personne, sans rien écrire ; un dossier présent sans logo/ rend null, et un événement dont aucune personne ne porte de logo ne relit pas son dossier", async () => {
+    const { fs, ouvert, vers } = await disqueAvecLogos();
+    // refus(chemin) : l'erreur que lister lève sur ce chemin de documents,
+    // ou null quand il le liste.
+    let refus = () => null;
+    const lister = fs.lister;
+    fs.lister = async (racine, chemin) => {
+      const erreur = racine.id === 'documents' ? refus(chemin) : null;
+      if (erreur !== null) throw erreur;
+      return lister(racine, chemin);
+    };
+    const appels = journaliser(fs, ['lister', 'lireOctets', 'creerDossier', 'ecrireOctetsAtomique']);
+    const absent = (chemin) => new ErreurStockage('ABSENT', { chemin });
+    const nonLu = () => ({ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 3, personnes: 4 } });
+
+    // Retirée : le dossier de l'événement et tout ce qu'il porte.
+    refus = (chemin) => (chemin === BASE || chemin.startsWith(`${BASE}/`) ? absent(chemin) : null);
+    assert.deepEqual(await copierLogos(ouvert, vers, ouvert.charge), nonLu());
+    assert.deepEqual(appels, [
+      ['lister', 'documents', dans('logo')],
+      ['lister', 'documents', BASE],
+    ]);
+
+    // La liste du dossier refusée autrement : ce qu'il porte est inconnu.
+    refus = (chemin) => {
+      if (chemin === dans('logo')) return absent(chemin);
+      return chemin === BASE ? refusLecture(chemin) : null;
+    };
+    assert.deepEqual(await copierLogos(ouvert, vers, ouvert.charge), nonLu());
+
+    // Le dossier présent, logo/ seul absent : les logos désignés manquaient
+    // déjà, rien n'est resté en arrière.
+    refus = (chemin) => (chemin === dans('logo') ? absent(chemin) : null);
+    appels.length = 0;
+    assert.equal(await copierLogos(ouvert, vers, ouvert.charge), null);
+    assert.deepEqual(appels, [
+      ['lister', 'documents', dans('logo')],
+      ['lister', 'documents', BASE],
+    ]);
+    assert.deepEqual(await logosDe(fs, DOC, CIBLE), []);
+
+    // Aucune personne ne porte de logo : rien ne manque, le dossier ne se
+    // relit pas.
+    const sans = await creer(fs, DOC, chargeEssai({ id: 'evt-ifs', nom: 'Fête des Ifs' }), CREATION);
+    refus = (chemin) => (chemin.startsWith('Fête des Ifs') ? absent(chemin) : null);
+    appels.length = 0;
+    assert.equal(await copierLogos(sans, vers, sans.charge), null);
+    assert.deepEqual(appels, [['lister', 'documents', 'Fête des Ifs/logo']]);
+  });
+
+  test("enregistrerAilleurs, logos vrai, recopie logo/ dans le dossier neuf de l'autre racine après l'état ; un logo refusé finit les avertissements de l'Ouvert rendu, LOGOS_NON_COPIES, sans refuser l'écriture ; sans l'option, logo/ ne se lit pas", async () => {
+    const monter = async () => {
+      const disque = new Map();
+      const fs = creerFichiersSimules({ disque, executable: 'E:\\soirees' });
+      fs.deposerDossier('portable');
+      const { portable, documents } = await fs.racines();
+      const ouvert = await avecLogos(fs, portable);
+      fs.pannes.ecriture('portable');
+      return { disque, fs, ouvert, documents };
+    };
+
+    const { fs, ouvert, documents } = await monter();
+    const appels = journaliser(fs, ['lister', 'creerDossier', 'ecrireAtomique', 'ecrireOctetsAtomique']);
+    const ailleurs = await enregistrerAilleurs(ouvert, documents, { existantes: [], logos: true });
+    assert.deepEqual(
+      appels.filter(([nom, , chemin]) => nom !== 'lister' || chemin.endsWith('/logo')),
+      [
+        ['creerDossier', 'documents', ''],
+        ['creerDossier', 'documents', BASE],
+        ['ecrireAtomique', 'documents', dans(JOURNAL)],
+        ['ecrireAtomique', 'documents', dans(ETAT)],
+        ['lister', 'portable', dans('logo')],
+        ['creerDossier', 'documents', dans('logo')],
+        ...ORDRE.map((chemin) => ['ecrireOctetsAtomique', 'documents', dans(chemin)]),
+      ],
+    );
+    assert.deepEqual(ailleurs.avertissements, []);
+    assert.deepEqual(await logosDe(fs, documents, BASE), RECOPIES);
+    exigerEquivalence(fs, BASE);
+
+    // Un logo que l'autre racine refuse : l'événement y est écrit, et
+    // l'avertissement le dit.
+    const refuse = await monter();
+    refuserSur(refuse.fs, 'ecrireOctetsAtomique', 'documents', dans(logoDe(DEUX)), refusEcriture);
+    const partiel = await enregistrerAilleurs(refuse.ouvert, refuse.documents, { existantes: [], logos: true });
+    assert.deepEqual(partiel.avertissements, [
+      { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1 } },
+    ]);
+    const rouvert = await rouvrir(refuse.disque, BASE);
+    assert.equal(rouvert.charge.participants[1].logo, logoDe(DEUX));
+    assert.deepEqual((await logosDe(refuse.fs, refuse.documents, BASE)).map(([nom]) => `logo/${nom}`), [logoDe(UN)]);
+
+    // Sans l'option — le renommage, qui déplace logo/ lui-même —, rien ne
+    // lit logo/ ni ne l'écrit.
+    const sans = await monter();
+    const appelsSans = journaliser(sans.fs, ['lister', 'lireOctets', 'ecrireOctetsAtomique']);
+    await enregistrerAilleurs(sans.ouvert, sans.documents, { existantes: [] });
+    assert.deepEqual(appelsSans.filter(([, , chemin]) => chemin.includes('logo')), []);
+    assert.deepEqual(await logosDe(sans.fs, sans.documents, BASE), []);
   });
 });

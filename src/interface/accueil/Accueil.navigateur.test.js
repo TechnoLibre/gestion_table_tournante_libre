@@ -41,6 +41,7 @@ import { creer as creerDansLeDepot, ouvrir as ouvrirDansLeDepot } from '../../st
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { ErreurStockage } from '../../stockage/erreurs.js';
 import { lireJournal } from '../../stockage/journal.js';
+import { cheminLogo, empreinteSha256 } from '../../stockage/logos.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { libelleDeLInstant } from '../../stockage/operations.js';
 import { planDepuisFichier } from '../../stockage/placements.js';
@@ -97,7 +98,7 @@ const fichier = (chemin, texte, racine = 'documents') => ({ racine, chemin, text
 // Un disque garni par le dépôt avant le montage — un autre processus, celui
 // d'une séance d'avant : chaque événement a son journal d'une entrée et son
 // jalon. Rend le disque, l'instance qui l'a garni et ses racines.
-async function disqueAvec(evenements, reglages = {}) {
+async function disqueAvec(evenements, reglages = {}, logo = null) {
   const disque = new Map();
   const fs = creerFichiersSimules({ disque, ...reglages });
   const racines = await fs.racines();
@@ -105,14 +106,49 @@ async function disqueAvec(evenements, reglages = {}) {
     fs.deposerDossier(racine);
     const charge = creerCharge({ id, nom, date, siegesParDefaut: 8, tours: 2 });
     if (etat !== null) charge.evenement.etat = etat;
-    await creerDansLeDepot(fs, racines[racine], charge, {
+    if (logo !== null) avecPersonneALogo(charge, logo);
+    const ouvert = await creerDansLeDepot(fs, racines[racine], charge, {
       libelle: libelle('ENTREE_CREATION', { nom }),
       nomJalon: libelle('JALON_CREATION'),
       horodatage: HORODATAGE_DEPOT,
       produitVersion: VERSION.affichee,
     });
+    if (logo !== null) fs.deposerOctets(racine, `${ouvert.dossier}/${cheminLogo(empreinteSha256(logo))}`, logo);
   }
   return { disque, fs, racines };
+}
+
+// Des octets d'image d'épreuve : la signature d'un PNG suivie d'un octet,
+// qu'aucune copie ne décode.
+const IMAGE_LOGO = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7);
+
+// Pose dans la charge une personne unique, qui porte le logo de ces octets.
+function avecPersonneALogo(charge, octets) {
+  charge.prochainsIds.participant = 2;
+  charge.participants = [
+    {
+      id: 1,
+      nom: 'Ombrelle',
+      prenom: 'Iris',
+      organisation: null,
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: false,
+      logo: cheminLogo(empreinteSha256(octets)),
+    },
+  ];
+}
+
+// Refuse par une ECRITURE EBUSY toute écriture d'octets sur la racine
+// d'identifiant racineId : un logo n'y arrive plus, les fichiers d'état
+// toujours.
+function refuserOctets(fs, racineId) {
+  const ecrire = fs.ecrireOctetsAtomique;
+  fs.ecrireOctetsAtomique = async (racine, chemin, octets) => {
+    if (racine.id === racineId) throw new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EBUSY' });
+    return ecrire(racine, chemin, octets);
+  };
 }
 
 // --- Le montage et ses lectures ---------------------------------------------------
@@ -1061,6 +1097,49 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     await vi.waitFor(() => expect(lignes(m).length).toBe(0));
     expect(dans(m, '[data-refus="VERROU_PRIS"]')).toBeNull();
     expect(m.fs.contenu('documents', `bal/bal${SUFFIXES.etat}`)).toBeNull();
+  });
+
+  test('un logo que la copie ne recopie pas : la copie s’ouvre, et sa vue montre LOGOS_NON_COPIES, que le disque ne garde pas', async () => {
+    const { disque } = await disqueAvec([{ id: 'evt-grisailles', nom: 'Bal des Grisailles' }], {}, IMAGE_LOGO);
+    const m = await monter({ systeme: { disque } });
+    refuserOctets(m.fs, 'documents');
+    const ligne = ligneDe(m, 'Bal des Grisailles');
+    await cliquer(ligne.querySelector('[data-commande="copier"]'));
+    saisir(ligne.querySelector('[data-champ="nomCopie"]'), 'Bal des Grisailles, variante');
+    await cliquer(ligne.querySelector('[data-commande="validerCopie"]'));
+    await attendreEvenement(m, ({ nom }) => nom === 'Bal des Grisailles, variante');
+    const details = { evenement: 'Bal des Grisailles, variante', logos: 1, personnes: 1 };
+    const avis = await vi.waitFor(() => {
+      const element = dans(m, '[data-ecran="evenement"] [data-avertissement="LOGOS_NON_COPIES"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(visible(avis)).toBe(true);
+    expect(avis.textContent).toContain(t('LOGOS_NON_COPIES', details));
+  });
+
+  test('un logo que l’import de l’autre emplacement ne recopie pas : les événements arrivent, et l’accueil montre un LOGOS_NON_COPIES par événement', async () => {
+    const reglages = { executable: SOUS_APPDATA };
+    const { disque } = await disqueAvec(
+      [
+        { racine: 'portable', id: 'evt-lucioles', nom: 'Nuit des Lucioles' },
+        { racine: 'portable', id: 'evt-cerfs', nom: 'Soirée des Cerfs' },
+      ],
+      reglages,
+      IMAGE_LOGO,
+    );
+    const m = await monter({ systeme: { disque, ...reglages } });
+    refuserOctets(m.fs, 'documents');
+    await cliquer(dans(m, '[data-autre] [data-commande="importerAutre"]'));
+    await vi.waitFor(() => expect(lignes(m).length).toBe(2));
+    const avis = await vi.waitFor(() => {
+      const elements = tous(m, '[data-ecran="accueil"] p[data-avertissement="LOGOS_NON_COPIES"]');
+      expect(elements.length).toBe(2);
+      return elements;
+    });
+    const attendu = (evenement) => t('LOGOS_NON_COPIES', { evenement, logos: 1, personnes: 1 });
+    expect(avis.map((element) => element.textContent)).toEqual(['Nuit des Lucioles', 'Soirée des Cerfs'].map(attendu));
+    for (const element of avis) expect(visible(element)).toBe(true);
   });
 });
 
