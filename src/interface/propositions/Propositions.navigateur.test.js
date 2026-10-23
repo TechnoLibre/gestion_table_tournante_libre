@@ -40,11 +40,14 @@ import { centre } from '../../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { actionDe, actionsDe, boutonActions } from '../../../test/navigateur/menus.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme, traductionEcran } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { evaluation, tableau } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
+// nom accessible lu tel que l'écran le porte, insécables comprises.
+const { t: tEcran } = traductionEcran();
 const format = creerFormat(t);
 const V1 = VERSION.affichee;
 const BASE = 'soiree';
@@ -1986,15 +1989,15 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     for (const id of [1, 2, 3]) {
       const noms = commandesDe(ligne(m, id));
       expect(noms, String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir']);
-      expect(actionDe(ligne(m, id), 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
+      expect(actionDe(ligne(m, id), 'repartir').getAttribute('aria-label')).toBe(tEcran('propositions.nom.repartir', { proposition: id }));
     }
     for (const id of [4, 5]) {
       const tr = ligne(m, id);
       expect(commandesDe(tr), String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir', 'comparer']);
       expect(texteDe(actionDe(tr, 'repartir'))).toBe(t('propositions.commande.repartir'));
       expect(texteDe(actionDe(tr, 'comparer'))).toBe(t('propositions.commande.comparer'));
-      expect(actionDe(tr, 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
-      expect(actionDe(tr, 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparer', { proposition: id }));
+      expect(actionDe(tr, 'repartir').getAttribute('aria-label')).toBe(tEcran('propositions.nom.repartir', { proposition: id }));
+      expect(actionDe(tr, 'comparer').getAttribute('aria-label')).toBe(tEcran('propositions.nom.comparer', { proposition: id }));
     }
     expect(commandesDe(ligneRetenu(m))).toEqual(['voir', 'qualite', 'comparer']);
     expect(actionDe(ligneRetenu(m), 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparerRetenu'));
@@ -2019,7 +2022,7 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
       expect(texteDe(bouton)).toBe(t('communs.menu.actions'));
       expect(bouton.getAttribute('aria-haspopup')).toBe('menu');
       expect(bouton.getAttribute('aria-expanded')).toBe('false');
-      expect(bouton.getAttribute('aria-label')).toBe(id === null ? t('propositions.nom.actionsRetenu') : t('propositions.nom.actions', { proposition: Number(id) }));
+      expect(bouton.getAttribute('aria-label')).toBe(id === null ? t('propositions.nom.actionsRetenu') : tEcran('propositions.nom.actions', { proposition: Number(id) }));
       expect(cellule.querySelectorAll('[data-commande]')).toHaveLength(0);
     }
     expect(t('propositions.nom.actions', { proposition: 4 })).toBe('Actions de la proposition n° 4');
@@ -2126,8 +2129,8 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     const noms = [];
     for (const tr of lignes(m)) {
       const id = Number(tr.dataset.proposition);
-      expect(actionDe(tr, 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
-      expect(actionDe(tr, 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparer', { proposition: id }));
+      expect(actionDe(tr, 'repartir').getAttribute('aria-label')).toBe(tEcran('propositions.nom.repartir', { proposition: id }));
+      expect(actionDe(tr, 'comparer').getAttribute('aria-label')).toBe(tEcran('propositions.nom.comparer', { proposition: id }));
       noms.push(actionDe(tr, 'repartir').getAttribute('aria-label'), actionDe(tr, 'comparer').getAttribute('aria-label'));
     }
     noms.push(actionDe(ligneRetenu(m), 'comparer').getAttribute('aria-label'));
@@ -2135,7 +2138,7 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     expect(new Set(noms).size).toBe(201);
     // Les boutons des menus, de même : chacun porte le numéro de sa ligne.
     const menus = lignes(m).map((tr) => boutonActions(tr).getAttribute('aria-label'));
-    expect(menus).toEqual(lignes(m).map((tr) => t('propositions.nom.actions', { proposition: Number(tr.dataset.proposition) })));
+    expect(menus).toEqual(lignes(m).map((tr) => tEcran('propositions.nom.actions', { proposition: Number(tr.dataset.proposition) })));
     menus.push(boutonActions(ligneRetenu(m)).getAttribute('aria-label'));
     expect(new Set(menus).size).toBe(101);
     expect(ligne(m, idRetenue)).toBeNull();

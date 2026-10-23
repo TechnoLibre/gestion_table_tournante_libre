@@ -4,7 +4,8 @@
 // Le balayage de la typographie de l'écran (§ 14.6). Chaque clé des tables
 // de l'application et des écrans, rendue par le t de l'écran — la traduction
 // créée avec ecran: true, celle qu'App pose au contexte —, ne laisse aucune
-// espace ordinaire devant ; : ? ! » ni après «. Les détails d'une clé
+// espace ordinaire devant ; : ? ! » ni après «, ni entre un nombre et son
+// unité, après « n° » ou entre le jour et le mois. Les détails d'une clé
 // viennent des exemples de test/libelles/ (EXEMPLES et TEXTES), de
 // EXEMPLES_ECRAN pour les clés qui lisent des détails typés — un nombre, une
 // liste, une clé —, et sinon d'un objet générique, qui rend « ⟨nom⟩ » pour
@@ -31,6 +32,7 @@ import * as exemplesSorties from '../../test/libelles/sorties.js';
 import * as exemplesStockage from '../../test/libelles/stockage.js';
 import { TABLES_APPLICATION, libelle } from '../application/libelles.js';
 import { creerTraduction } from '../application/traduction.js';
+import { typographier } from '../application/typographie.js';
 import { TABLES_INTERFACE } from './libelles.js';
 
 const TABLES = [...TABLES_APPLICATION, ...TABLES_INTERFACE];
@@ -60,6 +62,13 @@ const MODULES_EXEMPLES = [
 const EXEMPLES_ECRAN = [
   // La mise en forme et le pied des badges (application)
   ['format.date', { annee: 2031, mois: 4, jour: 1 }],
+  ['format.date', { annee: 2031, mois: 5, jour: 17 }],
+  ['format.duree.secondes', { secondes: '12,5' }],
+  ['format.duree.minutes', { minutes: 3, secondes: 0 }],
+  ['format.duree.minutes', { minutes: 3, secondes: 4 }],
+  ['format.duree.heures', { heures: 2, minutes: 0 }],
+  ['format.duree.heures', { heures: 2, minutes: 15 }],
+  ['format.heure', { heure: 20, minute: 5 }],
   ['format.horodatage', { annee: 2031, mois: 4, jour: 2, heure: 20, minute: 5 }],
   ['planche.controle.absents', { points: ['U+1F33C', 'U+2603'] }],
   ['planche.controle.evenement', { nom: 'Soirée des Ombrelles', date: '2031-04-02' }],
@@ -220,8 +229,36 @@ function rendre(t, cle, details) {
 
 const ESPACE_DEVANT = / [;:?!»]/u;
 const ESPACE_APRES = /« /u;
+// Une espace ordinaire entre un nombre et son unité, après « n° », ou entre
+// le jour et le mois d'une date en lettres. Les fins de mot sont celles de
+// typographier : l'unité s'arrête à ce qui n'est ni lettre, ni chiffre, ni
+// apostrophe, ni trait d'union, le mois à ce qui n'est ni lettre ni chiffre.
+const ESPACE_LIEE =
+  /\d (?:[hs]|min|mm|Mo|Mpx|px|po|pt)(?![\p{L}\p{N}'\u{2019}-])|n° \d|\d+ (?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)(?![\p{L}\p{N}])/u;
+
+// Des textes où le motif du balayage et typographier doivent s'accorder :
+// une plage au trait d'union, une date suivie d'un guillemet simple, un mot
+// qui commence par une unité ou un mois sans en être un.
+const ACCORDS = [
+  'du 3 mai-5 juin',
+  'de 20 h 30-22 h 00',
+  '17 mai 2031-2032',
+  '\u{2018}le 31 mai\u{2019}',
+  "3 s'y rangent",
+  '3 s\u{2019}y rangent',
+  '3 maisons',
+  '2 hérons',
+];
 
 describe("typographie de l'écran : le balayage des clés (§ 14.6, § 14.2)", () => {
+  test('le motif du balayage ne relève aucune sortie de typographier, et relève le brut de ce qu’elle lie', () => {
+    for (const texte of ACCORDS) {
+      const rendu = typographier(texte);
+      assert.equal(ESPACE_LIEE.test(rendu), false, `sortie ${JSON.stringify(rendu)}`);
+      assert.equal(ESPACE_LIEE.test(texte), rendu !== texte, `brut ${JSON.stringify(texte)}`);
+    }
+  });
+
   test('les exemples de l’écran ne nomment que des clés des tables', () => {
     const cles = new Set(brut.cles());
     assert.ok(EXEMPLES_ECRAN.length > 0);
@@ -231,7 +268,7 @@ describe("typographie de l'écran : le balayage des clés (§ 14.6, § 14.2)", (
     );
   });
 
-  test("chaque clé se rend par le t de l'écran, sans espace ordinaire devant ; : ? ! » ni après «", () => {
+  test("chaque clé se rend par le t de l'écran, sans espace ordinaire devant ; : ? ! » ni après «, ni dans un nombre et son unité, « n° » ou une date", () => {
     const paires = aRendre();
     const rendues = new Set();
     const fautes = [];
@@ -242,7 +279,7 @@ describe("typographie de l'écran : le balayage des clés (§ 14.6, § 14.2)", (
         continue;
       }
       rendues.add(cle);
-      if (ESPACE_DEVANT.test(texte) || ESPACE_APRES.test(texte)) fautes.push(`${cle} : ${JSON.stringify(texte)}`);
+      if (ESPACE_DEVANT.test(texte) || ESPACE_APRES.test(texte) || ESPACE_LIEE.test(texte)) fautes.push(`${cle} : ${JSON.stringify(texte)}`);
     }
     assert.deepEqual(fautes, []);
     assert.ok(rendues.size > 0, 'balayage vide');
@@ -264,6 +301,32 @@ describe("typographie de l'écran : le balayage des clés (§ 14.6, § 14.2)", (
       }
     }
     assert.ok(changes > 100, `${changes} textes ponctués seulement`);
+  });
+
+  test("le balayage porte : des dizaines de textes bruts ont l'espace d'une unité, de « n° » ou d'une date que l'écran lie", () => {
+    let changes = 0;
+    for (const [cle, details] of aRendre()) {
+      const avant = rendre(brut.t, cle, details).texte;
+      if (avant === undefined) continue;
+      if (ESPACE_LIEE.test(avant)) {
+        changes += 1;
+        const apres = ecran.t(cle, details);
+        assert.notEqual(apres, avant, cle);
+        assert.equal(apres.replace(/[\u{00A0}\u{202F}]/gu, ' '), avant.replace(/[\u{00A0}\u{202F}]/gu, ' '), cle);
+      }
+    }
+    assert.ok(changes > 50, `${changes} textes à unité, « n° » ou date seulement`);
+  });
+
+  test('la durée, l’heure et la date de la mise en forme : brutes à l’espace, liées sur l’écran', () => {
+    assert.equal(brut.t('format.duree.minutes', { minutes: 3, secondes: 4 }), '3 min 4 s');
+    assert.equal(ecran.t('format.duree.minutes', { minutes: 3, secondes: 4 }), '3\u{A0}min 4\u{A0}s');
+    assert.equal(ecran.t('format.duree.heures', { heures: 2, minutes: 15 }), '2\u{A0}h 15\u{A0}min');
+    assert.equal(brut.t('format.heure', { heure: 20, minute: 5 }), '20 h 05');
+    assert.equal(ecran.t('format.heure', { heure: 20, minute: 5 }), '20\u{A0}h\u{A0}05');
+    assert.equal(brut.t('format.date', { annee: 2031, mois: 5, jour: 1 }), '1er mai 2031');
+    assert.equal(ecran.t('format.date', { annee: 2031, mois: 5, jour: 1 }), '1er\u{A0}mai\u{A0}2031');
+    assert.equal(ecran.t('PROPOSITION_INCONNUE', { id: 17 }), 'La proposition n°\u{A0}17 n\'est pas dans cet événement.');
   });
 
   test('l’énumération des tours d’une rencontre se fait dans la table : brute « ; », à fine insécable sur l’écran', () => {

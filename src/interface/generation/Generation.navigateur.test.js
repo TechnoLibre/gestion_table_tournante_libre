@@ -919,7 +919,7 @@ describe('la durée du calcul (§ 5.10, § 19.4)', () => {
     await attendre(() => expect(charge(m).propositions.length).toBe(5));
     const attendu = tEcran('generation.duree.observee', { dureeMs: 1800, nombre: 5, arret: 200000 });
     expect(duree(m).textContent).toBe(attendu);
-    expect(attendu).toContain('1,8 s');
+    expect(attendu).toContain('1,8\u{A0}s');
     expect(attendu).toContain('5 \u{00D7} 200\u{202F}000');
   });
 
@@ -1114,7 +1114,7 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
       [1, 2, 3, 4].map((tour) => [String(tour), false, t('generation.depart.tour', { tour })]),
     );
     expect(generer(m)).toBeNull();
-    expect(genererDepuis(m).textContent).toBe('Générer depuis n° 2');
+    expect(genererDepuis(m).textContent).toBe('Générer depuis n°\u{A0}2');
     // La carte est au-dessus de « Générer », dans la carte des réglages.
     expect(carteDepart(m).getBoundingClientRect().bottom).toBeLessThanOrEqual(genererDepuis(m).getBoundingClientRect().top);
 
@@ -1148,18 +1148,18 @@ describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
     const { ordre } = evaluation(charge(m)).table.classement;
     const meilleure = ordre.find((id) => ajoutees.includes(id));
     const texte = issue(m).textContent;
-    expect(texte).toContain(`dérivée${ajoutees.length > 1 ? 's' : ''} de n° 2`);
-    expect(texte).toContain(`n° 2 est ${ordre.indexOf(2) + 1 === 1 ? '1\u{02B3}\u{1D49}' : `${ordre.indexOf(2) + 1}\u{1D49}`}`);
+    expect(texte).toContain(`dérivée${ajoutees.length > 1 ? 's' : ''} de n°\u{A0}2`);
+    expect(texte).toContain(`n°\u{A0}2 est ${ordre.indexOf(2) + 1 === 1 ? '1\u{02B3}\u{1D49}' : `${ordre.indexOf(2) + 1}\u{1D49}`}`);
     expect(texte).toContain(`${ordre.indexOf(meilleure) + 1 === 1 ? '1\u{02B3}\u{1D49}' : `${ordre.indexOf(meilleure) + 1}\u{1D49}`} du classement`);
     // Le départ reste choisi, ses cases telles quelles, pour une autre graine.
     expect(m.ui.etat().depart).toEqual({ id: 2, toursFiges: [1] });
     expect(cases(m).map((c) => c.checked)).toEqual([true, false, false, false]);
-    expect(genererDepuis(m).textContent).toBe('Générer depuis n° 2');
+    expect(genererDepuis(m).textContent).toBe('Générer depuis n°\u{A0}2');
 
     // « Comparer n° a à n° 2 » pose la paire : a au plan, 2 en second, la
     // page de qualité et sa vue de comparaison demandées ; rien d'écrit.
     const comparer = section(m).querySelector('[data-commande="comparerIssue"]');
-    expect(comparer.textContent).toBe(t('generation.commande.comparerIssue', { a: meilleure, depart: 2 }));
+    expect(comparer.textContent).toBe(tEcran('generation.commande.comparerIssue', { a: meilleure, depart: 2 }));
     const ecritures = m.trace.length;
     const { etats, desabonner } = suivreUi(m);
     await cliquer(m, comparer);
@@ -1446,7 +1446,7 @@ describe('le départ en dérive par ses participants (§ 5.7)', () => {
     await cliquer(m, genererDepuis(m));
     await attendre(() => expect(enCours(m)).toBe(false));
     expect(lancements.map(({ options }) => options.depart.reservesImposees)).toEqual([[{ participant: reservee, tour: 1 }]]);
-    expect(issue(m).textContent).toContain(`n° ${depart.id}, en dérive, n'est pas classée`);
+    expect(issue(m).textContent).toContain(`n°\u{A0}${depart.id}, en dérive, n'est pas classée`);
     expect(section(m).querySelector('[data-commande="comparerIssue"]')).toBeNull();
     // Le départ reste choisi, et la carte dit toujours ses écarts.
     expect(m.ui.etat().depart).toEqual({ id: depart.id, toursFiges: [1] });
@@ -1463,7 +1463,7 @@ describe('le départ en dérive par ses participants (§ 5.7)', () => {
     await m.seance.executer('changerPresence', { id: 1, tours: [1, 2] });
     flushSync();
     expect(m.ui.etat().depart).toEqual({ id: 2, toursFiges: [1] });
-    expect(genererDepuis(m).textContent).toBe('Générer depuis n° 2');
+    expect(genererDepuis(m).textContent).toBe('Générer depuis n°\u{A0}2');
     const nom = nomAffiche(charge(m).participants.find(({ id }) => id === 1));
     expect(texteDe(ligneEcart(m, 1))).toBe(`${nom} — retirée des tours 3 et 4`);
   });

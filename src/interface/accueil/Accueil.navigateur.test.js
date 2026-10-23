@@ -66,6 +66,9 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 // texte lu tel que l'écran le porte, insécables comprises.
 const { t: tEcran } = traductionEcran();
 const format = creerFormat(t);
+// La mise en forme par le t de l'écran : une date ou un horodatage lu dans
+// le DOM, insécables comprises.
+const formatEcran = creerFormat(tEcran);
 
 const DOCUMENTS = 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre\\data';
 const PUBLIE = 'E:\\soirees';
@@ -343,16 +346,16 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
     const lue = analyser(m.fs.contenu('documents', `${gala}/soiree-a${SUFFIXES.etat}`));
     expect(colonne(ligneGala, 'nom')).toBe(lue.charge.evenement.nom);
     expect(colonne(ligneGala, 'nom')).toBe('Gala du printemps');
-    expect(colonne(ligneGala, 'date')).toBe(format.date('2031-05-17'));
+    expect(colonne(ligneGala, 'date')).toBe(formatEcran.date('2031-05-17'));
     expect(etatDe(ligneGala)).toBe(t('accueil.etat.brouillon'));
     expect(colonne(ligneGala, 'participants')).toBe(format.nombre(lue.entete.comptes.participants));
-    expect(colonne(ligneGala, 'modification')).toBe(format.horodatage(HORODATAGE_DEPOT));
+    expect(colonne(ligneGala, 'modification')).toBe(formatEcran.horodatage(HORODATAGE_DEPOT));
     expect(colonne(ligneGala, 'chemin')).toBe(`${DOCUMENTS}\\${gala}\\soiree-a${SUFFIXES.etat}`);
 
     const ligneClub = ligneDe(m, 'club');
     const lu = analyser(club);
     expect(colonne(ligneClub, 'nom')).toBe('Club des Merles');
-    expect(colonne(ligneClub, 'date')).toBe(lu.charge.evenement.date === null ? '\u{2014}' : format.date(lu.charge.evenement.date));
+    expect(colonne(ligneClub, 'date')).toBe(lu.charge.evenement.date === null ? '\u{2014}' : formatEcran.date(lu.charge.evenement.date));
     expect(colonne(ligneClub, 'participants')).toBe(format.nombre(lu.entete.comptes.participants));
     expect(Number(lu.entete.comptes.participants)).toBeGreaterThan(0);
     expect(colonne(ligneClub, 'modification')).toBe('\u{2014}');
@@ -466,7 +469,7 @@ describe('créer et ouvrir', () => {
     const lue = analyser(m.fs.contenu('documents', `${cree.cle}${SUFFIXES.etat}`));
     expect(lue.charge.evenement.date).toBe('2031-05-17');
     await revenirALaListe(m, 1);
-    expect(colonne(ligneDe(m, cree.base), 'date')).toBe(format.date('2031-05-17'));
+    expect(colonne(ligneDe(m, cree.base), 'date')).toBe(formatEcran.date('2031-05-17'));
   });
 
   test('une date commencée mais incomplète : le refus contre le champ de la date, le focus sur lui, rien au relevé ; vidée, la création se fait sans date', async () => {
@@ -905,7 +908,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
         .sort();
     expect(journaux(originaux).length).toBe(2);
     expect(journaux(await photographier(m, 'documents'))).toEqual(journaux(originaux));
-    for (const ligne of lignes(m)) expect(colonne(ligne, 'modification')).toBe(format.horodatage(HORODATAGE_DEPOT));
+    for (const ligne of lignes(m)) expect(colonne(ligne, 'modification')).toBe(formatEcran.horodatage(HORODATAGE_DEPOT));
   });
 });
 

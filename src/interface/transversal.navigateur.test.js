@@ -35,6 +35,7 @@ import { creerExecuteurDirect } from '../application/generation.js';
 import { nomAffiche } from '../application/personnes.js';
 import { etatPlaces } from '../application/places.js';
 import { MARQUE_TEMOIN } from '../application/traduction.js';
+import { typographier } from '../application/typographie.js';
 import { decoder } from '../csv/encodage.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { decouper } from '../csv/lecture.js';
@@ -269,23 +270,48 @@ export function fautesEmoji(racine, { titre = null } = {}) {
   return { fautes, lus: textes.length };
 }
 
+// Les mois d'une date en lettres, en alternative d'expression.
+const MOIS_EN_LETTRES = 'janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre';
+// Les unités qu'un nombre garde contre lui, en alternative d'expression.
+const UNITES_LIEES = 'h|min|s|ms|mm|cm|m|km|po|pt|px|Mo|Ko|Go|Mpx|%|°C';
 // Une espace ordinaire U+0020 devant la ponctuation haute ou « » », ou après
 // « « » : la place où le t de l'écran pose une insécable (§ 14.6).
 const PONCTUATION_DETACHEE = / [;:?!»]|« /u;
+// Une espace ordinaire U+0020 que le t de l'écran lie aussi (§ 14.6) : entre
+// un nombre et une unité de la liste, entre le « h » d'une heure et ses
+// minutes sur deux chiffres qu'aucune unité ne suit, après « n° », entre le
+// jour et le mois d'une date en lettres, entre le mois et l'année. Les
+// débuts et fins de mot sont ceux de typographier : un mot commence après ce
+// qui n'est ni lettre ni chiffre ; le mois, l'année et les minutes
+// s'arrêtent à ce qui n'est ni lettre ni chiffre — le trait d'union d'une
+// plage compris —, l'unité aussi à l'apostrophe et au trait d'union.
+const FIN_MOT = '(?![\\p{L}\\p{N}])';
+const FIN_UNITE = "(?![\\p{L}\\p{N}'\\u{2019}-])";
+const NOMBRE_DETACHE = new RegExp(
+  [
+    `(?<![\\p{L}\\p{N}])\\d+(?:,\\d+)? (?:${UNITES_LIEES})${FIN_UNITE}`,
+    `(?<=\\d[\\u{A0}\\u{202F}])h \\d{2}${FIN_MOT}(?![ \\u{A0}\\u{202F}]+(?:${UNITES_LIEES})${FIN_UNITE})`,
+    '(?<![\\p{L}\\p{N}])[nN]° (?=[\\p{L}\\p{N}])',
+    `(?<![\\p{L}\\p{N}])(?:1er|\\d{1,2}) (?:${MOIS_EN_LETTRES})${FIN_MOT}`,
+    `(?<![\\p{L}\\p{N}])(?:${MOIS_EN_LETTRES}) \\d{4}${FIN_MOT}`,
+  ].join('|'),
+  'u',
+);
 // Une insécable U+00A0 ou fine U+202F à l'une de ces places.
 const PONCTUATION_INSECABLE = /[\u{A0}\u{202F}][;:?!»]|«[\u{A0}\u{202F}]/u;
 
 /** Fautes de typographie sous racine (§ 14.6) : un texte affiché qui porte
  *  une espace ordinaire devant « ; », « : », « ? », « ! », « » » ou après
- *  « « ». Le titre de la fenêtre n'est pas lu : il quitte l'écran et garde
- *  le texte brut. → { fautes, lus, insecables }, lus le nombre de textes
- *  affichés lus, insecables le nombre de ceux qui portent une insécable à
- *  l'une de ces places. */
+ *  « « », ou à l'une des places de NOMBRE_DETACHE. Le titre de la fenêtre
+ *  n'est pas lu : il quitte l'écran et garde le texte brut. → { fautes,
+ *  lus, insecables }, lus le nombre de textes affichés lus, insecables le
+ *  nombre de ceux qui portent une insécable devant la ponctuation haute ou
+ *  après « « ». */
 export function fautesTypographie(racine) {
   const textes = textesAffiches(racine);
   const fautes = [];
   for (const { ou, texte } of textes) {
-    const motif = PONCTUATION_DETACHEE.exec(texte);
+    const motif = PONCTUATION_DETACHEE.exec(texte) ?? NOMBRE_DETACHE.exec(texte);
     if (motif !== null) fautes.push(`${ou} : « ${extrait(texte)} » (« ${motif[0].trim()} »)`);
   }
   return { fautes, lus: textes.length, insecables: textes.filter(({ texte }) => PONCTUATION_INSECABLE.test(texte)).length };
@@ -1313,6 +1339,52 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     ]);
   });
 
+  test('typographie : une espace ordinaire entre un nombre et son unité, entre « h » et les minutes, après « n° », entre jour et mois ou mois et année est relevée ; l’insécable et un mot qui n’est pas une unité passent', () => {
+    const { fautes, lus } = avecFragment(
+      '<p>12,5 s</p><p>20\u{A0}h 30</p><p>proposition n° 4</p><p>le 17 mai</p><p>en mai 2031</p>' +
+        '<p>12,5\u{A0}s, 20\u{A0}h\u{A0}30, 3\u{A0}min 4\u{A0}s, 2\u{A0}h 15\u{A0}min, n°\u{A0}4, 17\u{A0}mai\u{A0}2031, 12\u{202F}%, ' +
+        'du 3\u{A0}mai-5\u{A0}juin, de 20\u{A0}h\u{A0}30-22\u{A0}h\u{A0}00</p>' +
+        "<p>3 sièges, 4 tours, 2 places, 100\u{202F}000 mouvements, 3 s'y rangent, 21:42, A4 m</p>",
+      (c) => fautesTypographie(c),
+    );
+    // Sept paragraphes : une faute par place de la garde, chacune nommée par
+    // son extrait.
+    expect(lus).toBe(7);
+    expect(fautes).toEqual([
+      'p : « 12,5 s » (« 12,5 s »)',
+      'p : « 20 h 30 » (« h 30 »)',
+      'p : « proposition n° 4 » (« n° »)',
+      'p : « le 17 mai » (« 17 mai »)',
+      'p : « en mai 2031 » (« mai 2031 »)',
+    ]);
+  });
+
+  test('typographie : la garde ne relève aucune sortie de typographier, et relève le brut de chaque texte qu’elle change', () => {
+    // Une plage au trait d'union, une date suivie d'un guillemet simple, un
+    // mot qui commence par une unité ou un mois sans en être un, des minutes
+    // qu'un mot à apostrophe suit, un mois ou une année collés à un chiffre
+    // ou à une lettre.
+    const textes = [
+      'du 3 mai-5 juin',
+      'de 20 h 30-22 h 00',
+      '17 mai 2031-2032',
+      '\u{2018}le 31 mai\u{2019}',
+      "3 s'y rangent",
+      '3 maisons',
+      '2 hérons',
+      "20\u{A0}h 30 s'y rangent",
+      'le 3 mai2031',
+      'du 3mai 2031',
+      'en mai 2031e',
+    ];
+    const lire = (texte) => avecFragment(`<p>${texte}</p>`, (c) => fautesTypographie(c).fautes);
+    for (const texte of textes) {
+      const rendu = typographier(texte);
+      expect(lire(rendu), `sortie ${JSON.stringify(rendu)}`).toEqual([]);
+      expect(lire(texte), `brut ${JSON.stringify(texte)}`).toHaveLength(rendu === texte ? 0 : 1);
+    }
+  });
+
   test('contraste et atténuation : un gris clair sur blanc et une opacité partielle sont relevés', () => {
     const { fautes, attenuations: voiles, mesures } = avecFragment(
       '<div style="background:#ffffff;color:#000000;padding:4px"><p style="color:#bbbbbb">pâle</p><p style="opacity:0.5">voilé</p></div>',
@@ -1952,7 +2024,7 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     aucuneFaute(atteints().flatMap((r) => r.emoji.fautes.map((f) => `${r.nom} — ${f}`)), 'emoji');
   });
 
-  test('typographie : aucune espace ordinaire devant la ponctuation haute ni après « « », et des insécables posées (§ 14.6)', () => {
+  test('typographie : aucune espace ordinaire devant la ponctuation haute ni après « « », ni dans un nombre et son unité, « n° » ou une date, et des insécables posées (§ 14.6)', () => {
     expect(atteints().reduce((n, r) => n + r.typographie.lus, 0), 'textes affichés lus').toBeGreaterThan(0);
     aucuneFaute([...new Set(atteints().flatMap((r) => r.typographie.fautes.map((f) => `${r.nom} — ${f}`)))], 'typographie');
     // Les écrans montrent de la ponctuation haute : la garde a lu des
@@ -2256,7 +2328,7 @@ describe('la comparaison, le départ et les dérivées, sur leurs écrans (C9, C
       if (!entetes.a?.includes(tTemoin('qualite.comparaison.nom.retenu'))) fautes.push(`qualite.comparaison.retenu : la colonne a « ${entetes.a} » ne nomme pas le retenu`);
       // Le second placement par défaut d'un retenu ajusté : sa proposition
       // d'origine, la n° 1.
-      if (!entetes.b?.includes(tTemoin('qualite.comparaison.nom.proposition', { proposition: 1 }))) fautes.push(`qualite.comparaison.retenu : la colonne b « ${entetes.b} » ne nomme pas la proposition d’origine n° 1`);
+      if (!entetes.b?.includes(texteReduit(tTemoin('qualite.comparaison.nom.proposition', { proposition: 1 })))) fautes.push(`qualite.comparaison.retenu : la colonne b « ${entetes.b} » ne nomme pas la proposition d’origine n° 1`);
       if (!rangs.a?.includes(tTemoin('format.vide'))) fautes.push(`qualite.comparaison.retenu : la place du retenu ajusté « ${rangs.a} »`);
     }
     for (const nom of ['qualite.comparaison.repli', 'qualite.comparaison.lecture', 'qualite.comparaison.bloque']) {
@@ -2288,7 +2360,7 @@ describe('la comparaison, le départ et les dérivées, sur leurs écrans (C9, C
     // que le modèle des colonnes donne à son côté.
     const repli = releveDe('qualite.comparaison.repli')?.qualite?.comparaison ?? null;
     expect(repli?.pourcentages.parColonne, 'repli ouvert').toEqual({ a: 3, b: 3 });
-    const proposition = (cle) => tTemoin('qualite.comparaison.nom.proposition', { proposition: cle });
+    const proposition = (cle) => texteReduit(tTemoin('qualite.comparaison.nom.proposition', { proposition: cle }));
     const a = [1, 2].find((cle) => repli.entetes.a?.includes(proposition(cle)));
     expect(a, `la colonne a « ${repli.entetes.a} »`).toBeDefined();
     expect(repli.pourcentagesEnColonne, 'repli ouvert, pourcentages et comptes').toEqual(pourcentagesAttendus(chargeComparaisonObjectifs(), a, 3 - a));

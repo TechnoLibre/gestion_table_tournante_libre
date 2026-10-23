@@ -504,9 +504,11 @@
   incomplète, ou absente du calendrier, refuse la création, contre son champ,
   sans rien écrire.
 - À l'écran, « : », « ; », « ? », « ! » et le guillemet fermant ne commencent
-  plus une ligne, et le guillemet ouvrant n'en finit plus une : leur espace
-  devient insécable à l'affichage, historique compris ; le journal, les CSV et
-  les PDF gardent le texte tel quel.
+  plus une ligne, et le guillemet ouvrant n'en finit plus une ; un nombre ne se
+  sépare plus de son unité (« 20 h 30 », « 3 min 4 s », « 25 Mo »), ni « n° »
+  de son numéro, ni le jour, le mois et l'année d'une date : ces espaces
+  deviennent insécables à l'affichage, historique compris ; le journal, les CSV
+  et les PDF gardent le texte tel quel.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

@@ -1056,7 +1056,7 @@ describe('les annonces d’ouverture (§ 8.9, § 9)', () => {
     expect(fautive.id).toBe(premiere);
     const ecartee = avertissement(m, 'PROPOSITIONS_FAUTIVES');
     expect(visible(ecartee)).toBe(true);
-    expect(ecartee.textContent).toContain(t('PROPOSITIONS_FAUTIVES', { ids: [fautive.id] }));
+    expect(ecartee.textContent).toContain(tEcran('PROPOSITIONS_FAUTIVES', { ids: [fautive.id] }));
     expect(fautive.fautes.length).toBeGreaterThan(0);
     for (const faute of fautive.fautes) expect(ecartee.textContent).toContain(t(faute.code, faute));
     expect(ecartee.querySelector('[data-fautive]').textContent).toContain(String(fautive.id));
@@ -1471,7 +1471,7 @@ describe('le verrou d’une autre séance (§ 8.8)', () => {
     fixe(second, 'modifier').click();
     await attendre(() => expect(second.seance.etat().mode).toBe('ecriture'));
     const repris = avertissement(second, 'VERROU_REPRIS');
-    expect(repris.textContent).toContain(t('VERROU_REPRIS', { seance: tenu.seance, depuis: tenu.depuis }));
+    expect(repris.textContent).toContain(tEcran('VERROU_REPRIS', { seance: tenu.seance, depuis: tenu.depuis }));
     expect(JSON.parse(fichier(second, SUFFIXES.verrou)).seance).toBe(second.seance.id);
     expect(dans(second, '[data-verrou]')).toBeNull();
   });
@@ -1505,7 +1505,7 @@ describe('le verrou d’une autre séance (§ 8.8)', () => {
     await attendre(() => expect(second.seance.etat().mode).toBe('ecriture'));
     expect(JSON.parse(fichier(second, SUFFIXES.verrou)).seance).toBe(second.seance.id);
     expect(avertissement(second, 'VERROU_REPRIS').textContent).toContain(
-      t('VERROU_REPRIS', { seance: tenu.seance, depuis: tenu.depuis }),
+      tEcran('VERROU_REPRIS', { seance: tenu.seance, depuis: tenu.depuis }),
     );
     expect(dans(second, '[data-verrou]')).toBeNull();
   });

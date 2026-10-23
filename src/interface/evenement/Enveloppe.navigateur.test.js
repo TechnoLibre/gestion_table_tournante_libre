@@ -225,7 +225,7 @@ describe('la carte d’en-tête', () => {
     expect(titre.textContent).toBe(EVENEMENT.nom);
     const entete = titre.closest('header');
     const attendus = [
-      format.date('2031-05-17'),
+      creerFormat(tEcran).date('2031-05-17'),
       t('evenement.resume.participants', { participants: 6 }),
       t('evenement.resume.tables', { tables: 2, sieges: 8 }),
       t('evenement.resume.tours', { tours: 3 }),

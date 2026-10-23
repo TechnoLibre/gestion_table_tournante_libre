@@ -7093,7 +7093,11 @@ entier, une fois et avant la marque témoin, par `typographier` : la suite
 d'espaces qui suit « « » ou précède « : » et « » » devient une insécable
 U+00A0, celle qui précède « ; », « ? » et « ! » une fine insécable U+202F ; le
 saut de ligne, la tabulation et un signe sans espace devant restent tels. Le
-navigateur ne renvoie donc plus un signe seul en début de ligne. Les tables
+navigateur ne renvoie donc plus un signe seul en début de ligne. La même passe
+lie un nombre à l'unité d'une liste fermée qui le suit, « n° » à ce qu'il
+numérote, et le jour, le mois et l'année d'une date en lettres : « 20 h 30 »,
+« 3 min 4 s », « n° 4 » et « 1er mai 2031 » ne se coupent plus, quand
+« 3 sièges » ou l'espace entre « min » et « 4 » restent sécables. Les tables
 gardent leurs espaces ordinaires, et ce qui quitte l'écran garde le texte brut :
 le journal, le motif du CSV des refus, les PDF, la documentation engendrée, le
 bloc copié de « À propos » et le titre de la fenêtre. L'historique, qui montre
