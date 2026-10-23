@@ -103,6 +103,9 @@
   au départ. La recherche poursuit l'ordre réglé et le classement l'applique ;
   la phrase au-dessus du tableau nomme les paliers dans l'ordre. Un critère
   décoché garde son rang et ne compte nulle part.
+- Dans l'ordre des priorités, survoler le nom d'un critère, ou l'atteindre au
+  clavier, ouvre une bulle d'aide qui dit ce qu'il compte et la colonne des
+  propositions qui le montre.
 - Le tableau des propositions ajoute le groupe de colonnes des objectifs des
   tables et des animateurs, quand l'un de ces critères compte ; le diagnostic
   dit combien de tours hors objectif la configuration impose au moins, pour

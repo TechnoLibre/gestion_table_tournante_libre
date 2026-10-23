@@ -505,7 +505,9 @@ d’abord et ce que le classement compare. Par défaut, chaque critère est seul
 son palier. Les boutons d’un critère le montent ou le descendent d’un palier,
 ou le joignent au palier du dessus, où chacun reçoit un poids ; « Rétablir
 l’ordre par défaut » revient au départ. Un critère que ses cases ne cochent
-pas garde son rang, mais ne compte nulle part.
+pas garde son rang, mais ne compte nulle part. Survoler le nom d’un critère, ou
+l’atteindre avec Tab, ouvre une bulle d’aide qui dit ce qu’il compte ; Échap la
+referme.
 
 ![L’ordre des priorités : un palier de deux critères et leurs poids, les animateurs décochés](doc/captures/10a-ordre-priorites.png)
 

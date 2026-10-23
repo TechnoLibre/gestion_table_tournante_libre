@@ -1656,7 +1656,10 @@ de l'ordre fixe de référence ; sous les quatre cases cochées, le classement e
 sa phrase le sont aussi. Une case décochée retire son critère du
 classement et de la phrase (§ 5.3) ; « nouvelle table » cochée seule y fait
 classer les retours choisis. Un événement qui ne règle rien n'écrit rien
-(§ 8.9) ; « Rétablir l'ordre par défaut » retire le réglage.
+(§ 8.9) ; « Rétablir l'ordre par défaut » retire le réglage. Dans l'éditeur de
+l'ordre, le nom de chaque critère est un terme expliqué : son survol, ou son
+focus au clavier, ouvre une infobulle qui dit ce qu'il compte et nomme la
+colonne des propositions qui le montre (§ 14.5).
 
 **L'ordre par défaut met d'abord ce que la soirée promet à chacun.** Ne jamais
 asseoir ensemble deux organisations en conflit vient avant tout : c'est le

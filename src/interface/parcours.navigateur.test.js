@@ -1896,10 +1896,12 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     // conflit d'organisation, ses deux critères et leurs poids, et la ligne
     // des animateurs qui dit « décoché » ; le choix du mode, au-dessus, et
     // « Rétablir l'ordre par défaut », au-dessous, n'entrent pas dans la
-    // même fenêtre qu'eux.
+    // même fenêtre qu'eux. Le pointeur s'écarte une fois l'éditeur cadré : un
+    // nom de critère arrivé sous lui ouvrirait son infobulle sur l'image.
     document.activeElement?.blur();
     const numero = editeur().querySelector(':scope > [data-palier="1"] > p');
     await cadrerDansLaSurface([numero, critere('animateursNonRencontres').querySelector('.etat')]);
+    await ecarterLePointeur();
     await photographier(m, '10a-ordre-priorites', {
       condition: [
         '[data-priorites] > [data-palier="1"] > p',

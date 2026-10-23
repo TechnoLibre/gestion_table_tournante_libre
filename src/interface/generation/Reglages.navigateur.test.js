@@ -16,7 +16,9 @@
 // geste, au pointeur réel ou au clavier, est une commande et une entrée ; les
 // gestes offerts sont ceux du modèle sous l'admission de la commande ; un
 // refus se pose contre la liste ou contre le groupe, et le choix refusé
-// revient à l'ancien mode. Le texte attendu vient de la même traduction que
+// revient à l'ancien mode. Le nom de chaque critère est un terme expliqué :
+// son survol réel ou son focus ouvre l'infobulle de l'éditeur, une seule,
+// sur son explication. Le texte attendu vient de la même traduction que
 // celle de l'application ; les noms d'épreuve sont inventés.
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
@@ -39,6 +41,7 @@ import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { ECART_INFOBULLE_PX } from '../primitives/infobulle.js';
 import Reglages from './Reglages.svelte';
 import { LISTE_PAR_DEFAUT, admissionSous, etatAffiche, etatsDesCriteres, gestesOfferts, listeApres } from './priorites.js';
 import { REGLAGES_GENERATION, reglagesDeSection } from './reglages.js';
@@ -479,6 +482,148 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(editeur(m).querySelector(':scope > [data-refus="LECTURE_SEULE"] [data-commande="debloquer"]')).not.toBeNull();
     expect(Object.hasOwn(charge(m).reglages, 'priorites')).toBe(false);
     expect(m.trace.length).toBe(ecrituresBloque);
+  });
+});
+
+describe('l’ordre des priorités : l’infobulle du nom de chaque critère (§ 5.7, § 14.5)', () => {
+  // Le nom d'un critère dans l'éditeur, l'infobulle de l'éditeur, et les
+  // termes qu'elle décrit.
+  const nomDe = (m, nom) => critereDe(m, nom).querySelector('.nom');
+  const bulle = (m) => editeur(m).querySelector('[role="tooltip"]');
+  const decrits = (m) => [...editeur(m).querySelectorAll(`[aria-describedby~="${bulle(m).id}"]`)];
+  const explication = (nom) => t(`generation.priorites.explication.${nom}`);
+
+  // Le pointeur réel au centre du nom d'un critère, puis hors de tout terme.
+  async function survoler(m, nom) {
+    const element = nomDe(m, nom);
+    element.scrollIntoView({ block: 'center' });
+    const { left, top, width, height } = element.getBoundingClientRect();
+    await pointer('bouger', left + width / 2, top + height / 2);
+    await passer(m);
+  }
+  const quitter = async (m) => {
+    await pointer('bouger', 2, 2);
+    await passer(m);
+  };
+
+  // L'infobulle ouverte sur le nom d'un critère : visible, placée contre lui
+  // sans le couvrir, son texte l'explication du critère, et ce nom le seul
+  // terme qu'elle décrit.
+  function ouverteSur(m, nom) {
+    const b = bulle(m);
+    expect(b.hidden, nom).toBe(false);
+    expect(getComputedStyle(b).visibility, nom).toBe('visible');
+    expect(b.textContent, nom).toBe(explication(nom));
+    expect(decrits(m), nom).toEqual([nomDe(m, nom)]);
+    const a = nomDe(m, nom).getBoundingClientRect();
+    const r = b.getBoundingClientRect();
+    const dessous = Math.abs(r.top - (a.bottom + ECART_INFOBULLE_PX)) < 1;
+    const dessus = Math.abs(r.bottom - (a.top - ECART_INFOBULLE_PX)) < 1;
+    expect(dessous || dessus, `${nom} : placée contre son terme`).toBe(true);
+  }
+
+  function fermee(m) {
+    expect(bulle(m).hidden).toBe(true);
+    expect(decrits(m)).toEqual([]);
+  }
+
+  afterEach(async () => {
+    await pointer('bouger', 2, 2);
+  });
+
+  test('au survol réel du nom : l’infobulle porte l’explication du critère, le nom la désigne ; le quitter la referme', async () => {
+    const m = await demonstration();
+    await quitter(m);
+    fermee(m);
+    // Le nom est un terme : focalisable au clavier, sans rôle de commande.
+    for (const nom of CRITERES) {
+      expect(nomDe(m, nom).getAttribute('tabindex'), nom).toBe('0');
+      expect(nomDe(m, nom).dataset.terme, nom).toBe(nom);
+    }
+    await survoler(m, CUMULEES);
+    ouverteSur(m, CUMULEES);
+    await quitter(m);
+    fermee(m);
+  });
+
+  test('au clavier : Tab atteint le nom et ouvre son explication ; Échap la referme, le focus resté sur le nom ; y revenir la rouvre, et Tab, en quittant le nom, la referme', async () => {
+    const m = await demonstration();
+    await quitter(m);
+    // Le nom des rencontres répétées suit le dernier bouton de l'excédent.
+    const avant = [...critereDe(m, EXCEDENT).querySelectorAll('button')].at(-1);
+    avant.focus();
+    await presser(m, 'Tab');
+    expect(document.activeElement).toBe(nomDe(m, REPETEES));
+    ouverteSur(m, REPETEES);
+    await presser(m, 'Escape');
+    fermee(m);
+    expect(document.activeElement).toBe(nomDe(m, REPETEES));
+    // Maj+Tab puis Tab : le focus revient sur le nom et rouvre l'explication,
+    // pour que le Tab suivant la trouve ouverte et que seule la sortie du
+    // focus puisse la fermer.
+    await touche('Tab', { maj: true });
+    await passer(m);
+    expect(document.activeElement).toBe(avant);
+    await presser(m, 'Tab');
+    expect(document.activeElement).toBe(nomDe(m, REPETEES));
+    ouverteSur(m, REPETEES);
+    await presser(m, 'Tab');
+    expect(critereDe(m, REPETEES).querySelector('button')).toBe(document.activeElement);
+    fermee(m);
+  });
+
+  test('passer d’un critère à un autre remplace l’explication : une seule infobulle, un seul terme décrit', async () => {
+    const m = await demonstration();
+    await survoler(m, EXCEDENT);
+    ouverteSur(m, EXCEDENT);
+    await survoler(m, ANIMATEURS);
+    ouverteSur(m, ANIMATEURS);
+    expect(editeur(m).querySelectorAll('[role="tooltip"]')).toHaveLength(1);
+    // Le focus sur un autre nom l'emporte, puis sa sortie ne ferme que la
+    // sienne.
+    nomDe(m, ECART).focus();
+    await passer(m);
+    ouverteSur(m, ECART);
+    await quitter(m);
+    ouverteSur(m, ECART);
+  });
+
+  test('balayage : chacun des huit critères de l’ordre par défaut ouvre son propre texte, jamais vide', async () => {
+    const m = await demonstration();
+    const vus = [];
+    for (const nom of CRITERES) {
+      await survoler(m, nom);
+      ouverteSur(m, nom);
+      expect(bulle(m).textContent.trim().length, nom).toBeGreaterThan(0);
+      vus.push(bulle(m).textContent);
+    }
+    expect(new Set(vus).size).toBe(CRITERES.length);
+  });
+
+  test('après un geste qui déplace ou refait un palier, l’infobulle suit son terme ou se ferme : jamais ouverte sur une ancre retirée ni laissée à l’ancienne place', async () => {
+    const m = await demonstration();
+    // L'infobulle, ouverte ou fermée, n'est jamais décalée de son terme.
+    const coherente = (etape) => {
+      if (bulle(m).hidden) return fermee(m);
+      const [terme] = decrits(m);
+      expect(terme?.isConnected, etape).toBe(true);
+      return ouverteSur(m, terme.dataset.terme);
+    };
+    // Monter : le palier change de place, le nom reste dans le document.
+    await survoler(m, CUMULEES);
+    ouverteSur(m, CUMULEES);
+    bouton(m, CUMULEES, 'monterCritere').focus();
+    await presser(m, 'Enter');
+    expect(charge(m).reglages.priorites).toEqual(listeApres(LISTE_PAR_DEFAUT, 'monterCritere', CUMULEES));
+    coherente('monter');
+    // Joindre : le palier se refait, l'ancien nom quitte le document.
+    await survoler(m, REDONDANCE);
+    ouverteSur(m, REDONDANCE);
+    const ancien = nomDe(m, REDONDANCE);
+    bouton(m, REDONDANCE, 'joindrePalier').focus();
+    await presser(m, 'Enter');
+    expect(ancien.isConnected).toBe(false);
+    coherente('joindre');
   });
 });
 

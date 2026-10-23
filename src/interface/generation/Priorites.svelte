@@ -9,6 +9,16 @@
   // nom complet, celui de mobilier.critere.<nom>. L'ordre se lit sur la charge
   // par valeurDuReglage, l'ordre par défaut quand elle n'en porte pas.
   //
+  // Le nom d'un critère est un terme expliqué (data-terme, le nom du
+  // critère), focalisable au clavier (tabindex 0) : son survol ou son focus
+  // ouvre l'infobulle de l'éditeur, une seule (Infobulle, primitive), sur
+  // generation.priorites.explication.<nom>, et le quitter la referme quand
+  // elle est encore la sienne ; ouvrir sur un autre nom remplace
+  // l'explication, Échap la referme, le focus restant sur le nom. Le nom
+  // expliqué porte aria-describedby vers elle, et lui seul. Quand la liste
+  // change, l'infobulle se replace contre son nom, ou se ferme quand ce nom
+  // a quitté le document.
+  //
   // L'état d'un critère, « décoché » ou « sans objet », s'écrit en texte à
   // côté de son nom : il se lit dans etats, l'état que la table d'évaluation
   // porte (etatsDesCriteres, priorites.js), jamais recalculé ici. Le critère
@@ -23,7 +33,8 @@
   // plusieurs. Un geste est une commande changerPriorites {paliers} — une
   // entrée du journal — ; abouti, la région role="status" annonce la place du
   // critère, et le focus le suit : le même bouton quand le geste reste
-  // offert, sinon son premier bouton, sinon son nom. « Rétablir l'ordre par
+  // offert, sinon son premier bouton, sinon son nom, qui ouvre alors son
+  // explication comme tout focus. « Rétablir l'ordre par
   // défaut » est retablirPriorites, sans fenêtre à confirmer (D19).
   //
   // Le refus d'un geste — lecture, plan bloqué, support rompu — se pose
@@ -35,11 +46,12 @@
   // la sortie du champ par changerPriorites ; son refus, un poids hors de
   // son domaine compris, se pose contre le champ : les bornes de l'entrée
   // guident ses flèches et ne refusent rien.
-  import { getContext, tick } from 'svelte';
+  import { getContext, tick, untrack } from 'svelte';
   import { lireEntier } from '../../application/capacite.js';
   import { POIDS_MAX } from '../../application/commandes_mobilier.js';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
+  import Infobulle from '../primitives/Infobulle.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { admissionSous, avecPoids, etatAffiche, gestesOfferts, listeApres, placeDe } from './priorites.js';
   import { valeurDuReglage } from './reglages.js';
@@ -50,6 +62,7 @@
   const seance = getContext('seance');
   const uid = $props.id();
   const idRefus = `${uid}-refus`;
+  const idExplication = `${uid}-explication`;
 
   // La clé du libellé de chaque geste : celle d'un critère seul, puis celle
   // d'un critère d'un palier partagé.
@@ -64,6 +77,30 @@
   const liste = $derived(valeurDuReglage(charge.reglages, entree));
   const regle = $derived(charge.reglages[entree.cle] !== undefined);
   const admet = $derived(admissionSous(charge.reglages));
+
+  // Le critère expliqué : {ancre, critere, cle, details} — l'élément de son
+  // nom, le critère et la clé de son explication — ; null sans infobulle.
+  let expliquee = $state.raw(null);
+  function expliquer(evenement, critere) {
+    expliquee = { ancre: evenement.currentTarget, critere, cle: `generation.priorites.explication.${critere}`, details: {} };
+  }
+  function taire(critere) {
+    if (expliquee?.critere === critere) expliquee = null;
+  }
+  const fermerExplication = () => (expliquee = null);
+  // L'aria-describedby du nom d'un critère : l'infobulle quand elle l'explique.
+  const decrit = (critere) => (expliquee?.critere === critere ? idExplication : undefined);
+
+  // Après chaque rendu d'une liste, l'explication ouverte se replace : une
+  // copie d'expliquee relance le placement de l'infobulle, contre son nom
+  // déplacé avec son palier ; un nom qu'un palier refait a retiré du
+  // document la referme, la primitive le vérifiant à chaque placement.
+  $effect(() => {
+    void liste;
+    untrack(() => {
+      if (expliquee !== null) expliquee = { ...expliquee };
+    });
+  });
 
   // Le refus du dernier geste, posé contre la liste ; l'annonce du dernier
   // geste abouti.
@@ -125,7 +162,20 @@
           {#each palier as { critere, poids } (critere)}
             {@const etat = etatAffiche(etats?.get(critere))}
             <li data-priorite={critere}>
-              <span class="nom" tabindex="-1">{t(`mobilier.critere.${critere}`)}</span>
+              <!-- Le nom est un terme, non une commande : le focus ne sert qu'à
+                   montrer au clavier l'explication que le pointeur montre au
+                   survol. -->
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+              <span
+                class="nom"
+                data-terme={critere}
+                tabindex="0"
+                aria-describedby={decrit(critere)}
+                onmouseenter={(evenement) => expliquer(evenement, critere)}
+                onmouseleave={() => taire(critere)}
+                onfocus={(evenement) => expliquer(evenement, critere)}
+                onblur={() => taire(critere)}>{t(`mobilier.critere.${critere}`)}</span
+              >
               {#if etat !== null}
                 <span class="etat">{t(`generation.priorites.etat.${etat}`)}</span>
               {/if}
@@ -159,6 +209,7 @@
       </li>
     {/each}
   </ol>
+  <Infobulle id={idExplication} ouverte={expliquee} fermer={fermerExplication} />
   <p class="annonce" role="status">{annonce}</p>
   <div class="retablir">
     <Commande cle="generation.priorites.retablir" nom="retablirPriorites" executer={retablir} />
@@ -242,8 +293,12 @@
     gap: var(--espace-1) var(--espace-3);
   }
 
+  /* Le nom, terme expliqué, se signale par un soulignement pointillé, comme
+     un en-tête de colonne du tableau des propositions. */
   .nom {
     font-weight: bold;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
   }
 
   .nom:focus-visible {

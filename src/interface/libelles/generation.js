@@ -152,6 +152,78 @@ export const TABLE = new Map([
     },
   ],
   ['generation.priorites.annonceRetablie', "L'ordre par défaut est rétabli."],
+  // L'explication de chaque critère, le texte de l'infobulle de son nom :
+  // ce qu'il compte, sur quelle population, un court exemple chiffré ; ce
+  // que la recherche et le classement en font à son palier ; la colonne des
+  // propositions qui le montre. Les termes sont ceux du glossaire (§ 5.5)
+  // et des explications des colonnes (propositions.explication.*).
+  [
+    'generation.priorites.explication.ecartAuPlafondAPrioriMax',
+    "Pour chaque personne, l'écart au plafond a priori : son plafond a priori, le plus de rencontres que permettent " +
+      'les capacités des tables sur son meilleur itinéraire, moins ses rencontres, sur ses tours de présence. Le ' +
+      'critère compte le plus grand : une personne au plafond a priori de 12 qui en rencontre 9 est à 3 ; à 0, ' +
+      'chacun atteint son plafond a priori. La recherche et le classement le veulent aussi bas que possible à son ' +
+      'palier avant de regarder les paliers suivants. Colonne « Écart au plafond a priori maximal (personnes) » ' +
+      'des propositions.',
+  ],
+  [
+    'generation.priorites.explication.excedentCollisions',
+    'Les retrouvailles de deux personnes de la même organisation après leur première table commune, soit les ' +
+      'collisions cumulées moins les paires distinctes : deux collègues ensemble aux quatre tours en font 3, une ' +
+      'personne qui croise quatre collègues une fois chacun, 0. La recherche et le classement le veulent aussi bas ' +
+      'que possible à son palier avant de regarder les paliers suivants. Colonne « Excédent de collisions ' +
+      '(retrouvailles au-delà de la première) » des propositions.',
+  ],
+  [
+    'generation.priorites.explication.collisionsCumulees',
+    'Chaque tour où deux personnes de la même organisation partagent une table, compté une fois par paire : deux ' +
+      'collègues ensemble aux quatre tours en font 4, autant que quatre paires de collègues réunies une fois. La ' +
+      'recherche et le classement le veulent aussi bas que possible à son palier avant de regarder les paliers ' +
+      'suivants. Colonne « Collisions cumulées (paire et tour) » des propositions.',
+  ],
+  [
+    'generation.priorites.explication.toursHorsObjectif',
+    "Pour chaque personne, les tours où une table dont l'objectif lui correspond pouvait l'accueillir mais où le " +
+      "placement l'assied ailleurs, additionnés sur toutes : qui pouvait y être servi à trois tours et ne l'est " +
+      "qu'à un en compte 2. Le mode des objectifs dit ce qu'il compare \u{2014} ce total par défaut, sinon d'abord " +
+      "les personnes jamais servies ou le plus de tours hors objectif d'une personne \u{2014}, et la recherche et le " +
+      'classement le veulent aussi bas que possible à son palier avant de regarder les paliers suivants. Colonnes ' +
+      "« Tours hors objectif (personne et tour) », « Personnes jamais servies par un objectif » et « Tours hors " +
+      "objectif d'une personne, au plus » des propositions.",
+  ],
+  [
+    'generation.priorites.explication.rencontresRepetees',
+    "Sous « Nouveaux voisins à chaque tour », les paires de personnes que le placement réunit à plus d'un tour, " +
+      "celles qu'imposent les réservations mises à part ; sous « Nouvelle table à chaque tour » seule, les retours " +
+      "choisis d'une personne à une table où elle s'est déjà assise. La recherche et le classement le veulent aussi " +
+      'bas que possible à son palier avant de regarder les paliers suivants, et il y reste seul : une paire réunie à ' +
+      'trois tours coûte deux à la recherche et un au classement. Colonnes « Rencontres répétées choisies (paires) » ' +
+      'et « Retours choisis à une table déjà occupée » des propositions.',
+  ],
+  [
+    'generation.priorites.explication.animateursNonRencontres',
+    "Pour chaque personne, la borne des animateurs B(p), le plus d'animateurs différents que la configuration lui " +
+      "permet de rencontrer là où ils animent, moins m(p), ceux qu'elle rencontre ; le critère en fait la somme, " +
+      '\u{03A3} (B(p) \u{2212} m(p)) : qui pouvait en croiser trois et en rencontre deux en compte 1. La recherche et ' +
+      'le classement le veulent aussi bas que possible à son palier avant de regarder les paliers suivants. Colonne ' +
+      '« Animateurs non rencontrés (personne et animateur) » des propositions.',
+  ],
+  [
+    'generation.priorites.explication.redondance',
+    "r(p) : le nombre de personnes que p rencontre et qui ont une organisation, moins le nombre d'organisations " +
+      "différentes qu'elles portent ; le critère en fait la somme sur toutes les personnes, \u{03A3} r(p) : " +
+      'rencontrer trois personnes de deux organisations en fait 1, trois de trois organisations, 0. La recherche et ' +
+      'le classement le veulent aussi bas que possible à son palier avant de regarder les paliers suivants. Colonne ' +
+      "« Redondance d'organisation, somme \u{03A3} r(p) » des propositions.",
+  ],
+  [
+    'generation.priorites.explication.conflitsOrganisation',
+    "Chaque tour où deux personnes en conflit d'organisation partagent une table, compté une fois par paire : quand " +
+      "une personne nomme une organisation, chaque membre de la sienne, ou elle seule si elle n'en a pas, est en " +
+      'conflit avec chaque membre de celle-ci. La recherche et le classement le veulent aussi bas que possible à son ' +
+      "palier avant de regarder les paliers suivants. Colonne « Conflits d'organisation (paire et tour) » des " +
+      'propositions.',
+  ],
 
   // --- Les cœurs de calcul, un réglage du poste pour la séance (§ 5.10) --------
   // disponibles : les processeurs logiques du poste, hyperthreads compris.

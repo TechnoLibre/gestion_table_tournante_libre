@@ -10,15 +10,21 @@
 // « chacun » et « minimum » — ; l'admission par la commande, égale à la
 // validation du registre ; l'état des critères, lu dans la table
 // d'évaluation, jamais recalculé — la garde des sources qui le tient vit
-// dans test/sources_interface.test.js. Les noms d'épreuve sont inventés.
+// dans test/sources_interface.test.js ; l'explication de chaque critère,
+// une clé generation.priorites.explication.<nom> par nom complet
+// mobilier.critere.<nom>, et réciproquement. Les noms d'épreuve sont
+// inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { appliquerCommande } from '../../application/commandes.js';
 import { evaluer } from '../../application/evaluation.js';
+import { TABLES_APPLICATION } from '../../application/libelles.js';
+import { creerTraduction } from '../../application/traduction.js';
 import { CRITERES, MODES_OBJECTIFS, PRIORITES_PAR_DEFAUT, verifierPriorites } from '../../moteur/criteres.js';
 import { rechercher } from '../../moteur/recherche.js';
 import { configurationDepuisCharge, creerCharge, priorites } from '../../stockage/document.js';
 import { VERSION } from '../../version.genere.js';
+import { TABLES_INTERFACE } from '../libelles.js';
 import {
   CRITERES_DU_REGISTRE,
   GESTES,
@@ -332,5 +338,59 @@ describe('l’état des critères, lu dans la table d’évaluation (§ 5.3, A8,
     charge.reglages.modeObjectifs = 'minimum';
     charge.reglages.priorites = liste([ECART], [EXCEDENT], [CUMULEES, HORS_OBJECTIF], [REPETEES], [ANIMATEURS], [REDONDANCE]);
     assert.equal(etatsDesCriteres(charge), null);
+  });
+});
+
+describe('l’explication de chaque critère, l’infobulle de son nom (§ 5.7, § 14.5)', () => {
+  const { t, cles } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+  // Les noms de critère que portent les clés d'un préfixe, triés.
+  const nomsSous = (prefixe) =>
+    cles()
+      .filter((cle) => cle.startsWith(prefixe))
+      .map((cle) => cle.slice(prefixe.length))
+      .sort();
+
+  test('chaque nom complet mobilier.critere.<nom> a son explication generation.priorites.explication.<nom>, et réciproquement ; ce sont les critères du registre', () => {
+    const noms = nomsSous('mobilier.critere.');
+    assert.deepEqual(nomsSous('generation.priorites.explication.'), noms);
+    assert.deepEqual(noms, [...CRITERES_DU_REGISTRE].sort());
+    assert.equal(noms.length, 8);
+  });
+
+  test('chaque explication est un texte à elle, de deux phrases au moins, sans le mot que seul le libellé d’un mode porte (D22)', () => {
+    const textes = CRITERES_DU_REGISTRE.map((nom) => t(`generation.priorites.explication.${nom}`));
+    assert.equal(new Set(textes).size, textes.length);
+    textes.forEach((texte, rang) => {
+      const nom = CRITERES_DU_REGISTRE[rang];
+      assert.equal(typeof texte, 'string', nom);
+      assert.ok((texte.match(/[.!?](?:\s|$)/g) ?? []).length >= 2, `${nom} : ${texte}`);
+      assert.doesNotMatch(texte, /équité/i, nom);
+    });
+  });
+
+  // Les colonnes des propositions qui montrent chaque critère : sa propre
+  // colonne, sauf l'écart (la colonne de l'écart a priori), la redondance (la
+  // colonne de la somme), les tours hors objectif (une colonne par mode des
+  // objectifs) et les rencontres répétées (deux colonnes, l'une quand
+  // « Nouveaux voisins à chaque tour » est cochée, l'autre sinon).
+  const COLONNES_DU_CRITERE = new Map([
+    ['ecartAuPlafondAPrioriMax', ['ecartAuPlafondAPriori']],
+    ['excedentCollisions', ['excedentCollisions']],
+    ['collisionsCumulees', ['collisionsCumulees']],
+    ['toursHorsObjectif', ['toursHorsObjectif', 'jamaisServies', 'horsObjectifMax']],
+    ['rencontresRepetees', ['rencontresRepetees', 'retoursChoisis']],
+    ['animateursNonRencontres', ['animateursNonRencontres']],
+    ['redondance', ['totalRedondance']],
+    ['conflitsOrganisation', ['conflitsOrganisation']],
+  ]);
+
+  test('chaque explication nomme, entre guillemets, le libellé courant de la colonne des propositions qui montre le critère', () => {
+    assert.deepEqual([...COLONNES_DU_CRITERE.keys()].sort(), [...CRITERES_DU_REGISTRE].sort());
+    for (const [nom, colonnes] of COLONNES_DU_CRITERE) {
+      const texte = t(`generation.priorites.explication.${nom}`);
+      for (const colonne of colonnes) {
+        assert.ok(texte.includes(`« ${t(`propositions.colonne.${colonne}`)} »`), `${nom} : colonne ${colonne}`);
+      }
+    }
   });
 });
