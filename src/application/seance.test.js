@@ -10,7 +10,9 @@
 // se remplace par un autre dossier. Les noms d'épreuve sont inventés ; la
 // version vient du module engendré.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { crc32, deflateSync } from 'node:zlib';
 import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_RETENU, personne as personneBadge, soiree, table as tableBadge } from '../../test/fixtures/badges/cas.js';
 import { describe, test } from '../../test/lanceur.js';
@@ -31,7 +33,7 @@ import { FICHIER_REGLAGES } from '../stockage/reglages_locaux.js';
 import { VERSION } from '../version.genere.js';
 import { examenNomme } from './avertissements.js';
 import { libelle } from './libelles.js';
-import { DELAI_REGLAGES_MS, INACTIVITE_MS, copiePubliee, creerSeance } from './seance.js';
+import { DELAI_REGLAGES_MS, INACTIVITE_MS, LOGO_PARTICIPANT_COTE_MAX, copiePubliee, creerSeance } from './seance.js';
 
 const V1 = VERSION.affichee;
 
@@ -1795,6 +1797,258 @@ describe('séance : les jalons automatiques (§ 8.3)', () => {
       [4, 'État « Bloqué »'],
     ]);
     assert.deepEqual([seance.mode, seance.charge.evenement.etat, verrouDe(fs)], ['lecture', 'bloque', null]);
+  });
+});
+
+// --- Le logo d'une personne (§ 8.3, § 8.9) -----------------------------------
+
+// Un PNG composé morceau par morceau : largeur × hauteur en RVBA 8 bits,
+// une ligne de pixels répétée, teintée par teinte ; le CRC de node:zlib.
+function pngEssai(largeur = 2, hauteur = 2, teinte = 0) {
+  const mot = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+  const morceau = (type, donnees) => {
+    const corps = Uint8Array.from([...new TextEncoder().encode(type), ...donnees]);
+    return [...mot(donnees.length), ...corps, ...mot(crc32(corps))];
+  };
+  const ligne = [0, ...Array.from({ length: Math.min(largeur, 4) * 4 }, (_, i) => (i * 31 + teinte) & 0xff)];
+  const donnees = deflateSync(Uint8Array.from(Array.from({ length: Math.min(hauteur, 4) }, () => ligne).flat()));
+  return Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ...morceau('IHDR', [...mot(largeur), ...mot(hauteur), 8, 6, 0, 0, 0]),
+    ...morceau('IDAT', [...donnees]),
+    ...morceau('IEND', []),
+  ]);
+}
+
+// Le chemin d'un logo, relatif au dossier de l'événement, d'après le SHA-256
+// de node:crypto ; et ce même fichier relatif à la racine.
+const cheminDuLogo = (octets) => `logo/${createHash('sha256').update(octets).digest('hex')}.png`;
+const surLaRacine = (chemin) => `${BASE}/${chemin}`;
+
+// La charge d'essai déposée, ouverte et passée en écriture.
+async function essaiEnEcriture(options = {}) {
+  const montage = monter(options);
+  await deposerEssai(montage.fs);
+  await montage.seance.ouvrir(EVT);
+  await montage.seance.passerEnEcriture();
+  return montage;
+}
+
+describe('séance : le logo d’une personne, écrit avant son entrée (§ 8.3, § 8.9)', () => {
+  test('poser écrit l’image dans logo/ du dossier de l’événement, sous le SHA-256 de ses octets, puis une entrée qui la nomme', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    const octets = pngEssai();
+    const recus = Uint8Array.from(octets);
+    const chemin = cheminDuLogo(octets);
+    const journal = journalDe(fs).entrees.length;
+    const rendu = await seance.poserLogoParticipant({ id: 4, octets });
+    assert.deepEqual(rendu, { libelle: 'Logo de Ondine Lacasse : posé', chemin, avertissements: [] });
+    assert.deepEqual(octets, recus);
+    assert.deepEqual(fs.octets('documents', surLaRacine(chemin)), octets);
+    assert.equal(seance.charge.participants[3].logo, chemin);
+    assert.equal(etatDe(fs).charge.participants[3].logo, chemin);
+    assert.deepEqual(libellesDe(journalDe(fs)).slice(journal), ['Logo de Ondine Lacasse : posé']);
+    assert.equal(seance.mode, 'ecriture');
+  });
+
+  test('remplacer, retirer, puis défaire et refaire : chaque retour rend le chemin, et aucun fichier ne s’efface', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    const premier = pngEssai(2, 2, 0);
+    const second = pngEssai(3, 1, 9);
+    await seance.poserLogoParticipant({ id: 1, octets: premier });
+    const remplace = await seance.poserLogoParticipant({ id: 1, octets: second });
+    assert.equal(remplace.libelle, 'Logo de Iris Ombrelle : remplacé');
+    assert.equal(seance.charge.participants[0].logo, cheminDuLogo(second));
+    const retire = await seance.retirerLogoParticipant({ id: 1 });
+    assert.equal(retire.libelle, 'Logo de Iris Ombrelle : retiré');
+    assert.equal(Object.hasOwn(seance.charge.participants[0], 'logo'), false);
+    const presents = () => [premier, second].map((octets) => fs.octets('documents', surLaRacine(cheminDuLogo(octets))));
+    assert.deepEqual(presents(), [premier, second]);
+    await seance.defaire();
+    assert.equal(seance.charge.participants[0].logo, cheminDuLogo(second));
+    await seance.defaire();
+    assert.equal(seance.charge.participants[0].logo, cheminDuLogo(premier));
+    assert.deepEqual(await seance.lireLogoParticipant(seance.charge.participants[0].logo), premier);
+    await seance.refaire();
+    assert.equal(seance.charge.participants[0].logo, cheminDuLogo(second));
+    assert.deepEqual(presents(), [premier, second]);
+    // Supprimer la personne laisse aussi son image.
+    await seance.executer('supprimerParticipant', { id: 1 });
+    assert.deepEqual(presents(), [premier, second]);
+  });
+
+  test('les mêmes octets pour deux personnes font un seul fichier, écrit une fois', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    const octets = pngEssai();
+    await seance.poserLogoParticipant({ id: 2, octets });
+    const ecritures = fs.compteurs.ecritures;
+    await seance.poserLogoParticipant({ id: 3, octets: Uint8Array.from(octets) });
+    assert.equal(seance.charge.participants[1].logo, seance.charge.participants[2].logo);
+    // L'entrée et l'état seulement : ni logo/, ni l'image.
+    const journalEtEtat = fs.compteurs.ecritures - ecritures;
+    await seance.executer('modifierParticipant', { id: 3, champs: { notes: 'au fond' } });
+    assert.equal(fs.compteurs.ecritures - ecritures - journalEtEtat, journalEtEtat);
+    assert.deepEqual(fs.octets('documents', surLaRacine(cheminDuLogo(octets))), octets);
+  });
+
+  test('en lecture, sur un plan bloqué, rien ne s’écrit : ni l’image, ni logo/, ni l’entrée', async () => {
+    const montage = monter();
+    await deposerEssai(montage.fs);
+    await montage.seance.ouvrir(EVT);
+    const { fs, seance } = montage;
+    const octets = pngEssai();
+    let ecritures = fs.compteurs.ecritures;
+    await refus(seance.poserLogoParticipant({ id: 4, octets }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    await refus(seance.retirerLogoParticipant({ id: 4 }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    // Les refus de l'écriture passent avant le contrôle du PNG.
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
+    await refus(seance.poserLogoParticipant({ id: 4, octets: jpeg }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    await refus(seance.poserLogoParticipant({ id: 4, octets: pngEssai(1201, 1) }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    await seance.passerEnEcriture();
+    await seance.executer('changerEtat', { etat: 'bloque' });
+    assert.equal(seance.mode, 'lecture');
+    ecritures = fs.compteurs.ecritures;
+    await refus(seance.poserLogoParticipant({ id: 4, octets }), 'LECTURE_SEULE', BLOQUE_SEUL);
+    await refus(seance.retirerLogoParticipant({ id: 4 }), 'LECTURE_SEULE', BLOQUE_SEUL);
+    await refus(seance.poserLogoParticipant({ id: 4, octets: jpeg }), 'LECTURE_SEULE', BLOQUE_SEUL);
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    assert.equal(fs.octets('documents', `${BASE}/logo`), null);
+    assert.equal(fs.octets('documents', surLaRacine(cheminDuLogo(octets))), null);
+  });
+
+  test('une personne inconnue, ou le même logo, se refusent avant toute écriture', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    const octets = pngEssai();
+    const ecritures = fs.compteurs.ecritures;
+    await refus(seance.poserLogoParticipant({ id: 9, octets }), 'PARTICIPANT_INCONNU', { id: 9, remede: null });
+    await refus(seance.retirerLogoParticipant({ id: 4 }), 'SANS_EFFET', { commande: 'changerLogo', remede: null });
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    assert.equal(fs.octets('documents', surLaRacine(cheminDuLogo(octets))), null);
+    await seance.poserLogoParticipant({ id: 4, octets });
+    const apres = fs.compteurs.ecritures;
+    const journal = journalDe(fs).entrees.length;
+    await refus(seance.poserLogoParticipant({ id: 4, octets }), 'SANS_EFFET', { commande: 'changerLogo', remede: null });
+    assert.equal(fs.compteurs.ecritures, apres);
+    assert.equal(journalDe(fs).entrees.length, journal);
+  });
+
+  test('le même logo, son image disparue du dossier, se réécrit sans entrée : le chemin se retrouve', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    const octets = pngEssai();
+    await seance.poserLogoParticipant({ id: 4, octets });
+    const chemin = surLaRacine(cheminDuLogo(octets));
+    await fs.supprimer(DOC, chemin);
+    assert.equal(await seance.lireLogoParticipant(cheminDuLogo(octets)), null);
+    const journal = journalDe(fs).entrees.length;
+    await refus(seance.poserLogoParticipant({ id: 4, octets }), 'SANS_EFFET', { commande: 'changerLogo', remede: null });
+    assert.deepEqual(fs.octets('documents', chemin), octets);
+    assert.equal(journalDe(fs).entrees.length, journal);
+  });
+
+  test('une image que le disque refuse lève LOGO_NON_ECRIT, sans entrée ni rupture du support : le geste suivant s’écrit', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    // Un fichier logo en travers du dossier logo/.
+    fs.deposer('documents', `${BASE}/logo`, 'pas un dossier');
+    const journal = journalDe(fs).entrees.length;
+    const erreur = await refus(seance.poserLogoParticipant({ id: 4, octets: pngEssai() }), 'LOGO_NON_ECRIT');
+    assert.equal(erreur.details.personne, 'Ondine Lacasse');
+    assert.equal(erreur.details.remede, null);
+    assert.equal(typeof erreur.details.chemin, 'string');
+    assert.equal(typeof erreur.details.dossier, 'string');
+    assert.ok(Object.hasOwn(erreur.details, 'cause'));
+    assert.equal(libelle('LOGO_NON_ECRIT', erreur.details).startsWith("Le logo de Ondine Lacasse n'a pas pu s'écrire : "), true);
+    assert.equal(journalDe(fs).entrees.length, journal);
+    assert.equal(Object.hasOwn(seance.charge.participants[3], 'logo'), false);
+    assert.equal(seance.etat().refus, null);
+    // L'image elle-même refusée, dossier logo/ libre : de même.
+    await fs.supprimer(DOC, `${BASE}/logo`);
+    const ecrire = fs.ecrireOctetsAtomique;
+    fs.ecrireOctetsAtomique = async () => {
+      throw new ErreurStockage('ECRITURE', { chemin: 'Soirée des Lucioles/logo/x.png', dossier: dossierDe(DOCUMENTS), cause: 'ENOSPC' });
+    };
+    await refus(seance.poserLogoParticipant({ id: 4, octets: pngEssai() }), 'LOGO_NON_ECRIT', {
+      personne: 'Ondine Lacasse',
+      chemin: 'logo/x.png',
+      dossier: dossierDe(DOCUMENTS),
+      cause: 'ENOSPC',
+      remede: null,
+    });
+    fs.ecrireOctetsAtomique = ecrire;
+    assert.equal(seance.etat().refus, null);
+    // Le fichier déjà présent qui ne se lit pas : de même.
+    const lire = fs.lireOctets;
+    fs.lireOctets = async () => {
+      throw new ErreurStockage('LECTURE', { chemin: 'Soirée des Lucioles/logo/y.png', dossier: dossierDe(DOCUMENTS), cause: 'EACCES' });
+    };
+    await refus(seance.poserLogoParticipant({ id: 4, octets: pngEssai() }), 'LOGO_NON_ECRIT', {
+      personne: 'Ondine Lacasse',
+      chemin: 'logo/y.png',
+      dossier: dossierDe(DOCUMENTS),
+      cause: 'EACCES',
+      remede: null,
+    });
+    fs.lireOctets = lire;
+    assert.equal(seance.etat().refus, null);
+    await seance.executer('modifierParticipant', { id: 4, champs: { notes: 'au fond' } });
+    assert.equal(journalDe(fs).entrees.length, journal + 1);
+  });
+
+  test('des octets qui ne sont pas un PNG, ou plus grands que LOGO_PARTICIPANT_COTE_MAX, sont une faute du code, sans écriture', async () => {
+    assert.equal(LOGO_PARTICIPANT_COTE_MAX, 1200);
+    const { fs, seance } = await essaiEnEcriture();
+    const ecritures = fs.compteurs.ecritures;
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
+    await assert.rejects(seance.poserLogoParticipant({ id: 4, octets: jpeg }), TypeError);
+    // Le PNG se juge avant l'essai à blanc : une personne inconnue n'y change rien.
+    await assert.rejects(seance.poserLogoParticipant({ id: 9, octets: jpeg }), TypeError);
+    await assert.rejects(seance.poserLogoParticipant({ id: 9, octets: pngEssai(1201, 1) }), RangeError);
+    await assert.rejects(seance.poserLogoParticipant({ id: 4, octets: [...pngEssai()] }), TypeError);
+    await assert.rejects(seance.poserLogoParticipant({ id: 4 }), TypeError);
+    await assert.rejects(seance.poserLogoParticipant(), TypeError);
+    await assert.rejects(seance.poserLogoParticipant({ id: 4, octets: pngEssai(1201, 1) }), RangeError);
+    await assert.rejects(seance.poserLogoParticipant({ id: 4, octets: pngEssai(1, 1201) }), RangeError);
+    await assert.rejects(seance.retirerLogoParticipant(), TypeError);
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    // 1200 de côté passe.
+    const grand = pngEssai(1200, 900);
+    assert.equal((await seance.poserLogoParticipant({ id: 4, octets: grand })).chemin, cheminDuLogo(grand));
+  });
+
+  test('lire l’image d’un chemin se fait dans tout mode, sans rien écrire ; absente, null ; un chemin d’une autre forme, TypeError', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    const octets = pngEssai();
+    const { chemin } = await seance.poserLogoParticipant({ id: 4, octets });
+    await seance.passerEnLecture();
+    const ecritures = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.lireLogoParticipant(chemin), octets);
+    assert.equal(await seance.lireLogoParticipant(cheminDuLogo(pngEssai(5, 5))), null);
+    for (const fautif of [`../${chemin}`, chemin.toUpperCase(), `${BASE}.gtt.json`, null, 7]) {
+      await assert.rejects(seance.lireLogoParticipant(fautif), TypeError, String(fautif));
+    }
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    // Un fichier présent qui ne se lit pas n'est pas absent : LECTURE passe.
+    const lire = fs.lireOctets;
+    fs.lireOctets = async () => {
+      throw new ErreurStockage('LECTURE', { chemin, dossier: dossierDe(DOCUMENTS), cause: 'EACCES' });
+    };
+    await refus(seance.lireLogoParticipant(chemin), 'LECTURE');
+    fs.lireOctets = lire;
+    // Bloqué, la lecture répond encore.
+    await seance.passerEnEcriture();
+    await seance.executer('changerEtat', { etat: 'bloque' });
+    assert.deepEqual(await seance.lireLogoParticipant(chemin), octets);
+  });
+
+  test('sans événement ouvert, chaque appel du logo lève AUCUN_EVENEMENT', async () => {
+    const { seance } = monter();
+    const chemin = cheminDuLogo(pngEssai());
+    await refus(seance.lireLogoParticipant(chemin), 'AUCUN_EVENEMENT');
+    await refus(seance.poserLogoParticipant({ id: 1, octets: pngEssai() }), 'AUCUN_EVENEMENT');
+    await refus(seance.retirerLogoParticipant({ id: 1 }), 'AUCUN_EVENEMENT');
+    // Sans événement, poser ne juge pas le PNG ; lire juge le chemin d'abord.
+    await refus(seance.poserLogoParticipant({ id: 1, octets: Uint8Array.of(1, 2, 3) }), 'AUCUN_EVENEMENT');
+    await assert.rejects(seance.lireLogoParticipant('x'), TypeError);
   });
 });
 

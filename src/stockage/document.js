@@ -59,6 +59,7 @@ import { CRITERES, POIDS_MAX, PRIORITES_PAR_DEFAUT, completerPriorites, verifier
 import { HISTORIQUE_PAR_DEFAUT } from '../moteur/recherche.js';
 import { ETIQUETTES_MAX, estEtiquetteBienFormee } from './etiquettes.js';
 import { ErreurStockage } from './erreurs.js';
+import { estCheminLogo } from './logos.js';
 
 /**
  * Version de format que ce code écrit, et la seule qu'il lit en entier
@@ -347,10 +348,14 @@ const PARTICIPANT = objet([
   // absent : la personne n'est en conflit avec aucune organisation ;
   // présent, une liste non vide d'organisations distinctes, rangée par
   // unités de code à l'écriture ; examinerConflits refuse la sienne, et
-  // examinerReferences une organisation que nul participant ne porte.
+  // examinerReferences une organisation que nul participant ne porte. logo
+  // absent : la personne ne porte aucun logo ; présent, le chemin de son
+  // image dans le dossier de l'événement, logo/<empreinte>.png
+  // (estCheminLogo), que le moteur ne lit pas.
   ['etiquettes', regle('liste', { ...ETIQUETTES, optionnel: true })],
   ['presence', liste(entier(1, TOURS_MAX), { min: 1, distincts: true, tri: croissant, optionnel: true })],
   ['conflits', liste(CHAINE, { min: 1, distincts: true, tri: comparerTextes, optionnel: true })],
+  ['logo', regle('logo', { optionnel: true })],
 ]);
 
 const TABLE = objet([
@@ -627,6 +632,8 @@ function conforme(valeur, { genre, min, max, valeurs, distincts }) {
       return estEtiquetteBienFormee(valeur);
     case 'libelleTable':
       return estLibelleTable(valeur);
+    case 'logo':
+      return estCheminLogo(valeur);
   }
 }
 

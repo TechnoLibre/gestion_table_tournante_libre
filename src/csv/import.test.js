@@ -172,7 +172,7 @@ function objetsDe(valeur) {
 
 // Résumé d'un import, ses comptes omis à zéro.
 const resumeDe = (comptes = {}) => ({
-  ajoutes: 0, misAJour: 0, inchanges: 0, retires: 0, reservationsRetirees: 0, refusees: [], derive: false, ...comptes,
+  ajoutes: 0, misAJour: 0, inchanges: 0, retires: 0, reservationsRetirees: 0, logosRetires: 0, refusees: [], derive: false, ...comptes,
 });
 
 const MODES = ['ajouter', 'mettreAJour', 'remplacer'];
@@ -740,6 +740,27 @@ describe('appliquerImport : remplacer, et ce que remplacer annonce (§ 10.1)', (
     const ajoutee = importer(remplacee, csv('nom', 'Lacasse'), 'ajouter').charge;
     assert.deepEqual(ajoutee.participants.map(({ id }) => id), [6, 7, 8]);
     assert.equal(ajoutee.prochainsIds.participant, 9);
+  });
+
+  test('remplacer compte les liens de logo qu’il retire, une personne qui en porte un chacune ; ajouter et mettre à jour n’en retirent aucun et gardent chaque logo', () => {
+    const LOGO = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+    const AUTRE = `logo/${'fedcba9876543210'.repeat(4)}.png`;
+    const charge = chargeGarnie();
+    charge.participants[0].logo = LOGO;
+    charge.participants[1].logo = AUTRE;
+    charge.participants[3].logo = LOGO;
+    const remplacee = importer(charge, csv('nom;prenom', 'Ombrelle;Iris', 'Bruyère;Anouk'), 'remplacer');
+    assert.deepEqual(remplacee.resume, resumeDe({ ajoutes: 2, retires: 4, reservationsRetirees: 4, logosRetires: 3 }));
+    assert.ok(remplacee.charge.participants.every((participant) => !Object.hasOwn(participant, 'logo')));
+    const miseAJour = importer(charge, csv('nom;prenom;notes', 'Ombrelle;Iris;au fond', 'Bruyère;Anouk;'), 'mettreAJour');
+    assert.equal(miseAJour.resume.logosRetires, 0);
+    assert.deepEqual(miseAJour.charge.participants.slice(0, 4).map(({ logo }) => logo ?? null), [LOGO, AUTRE, null, LOGO]);
+    assert.equal(miseAJour.charge.participants[0].notes, 'au fond');
+    const ajout = importer(charge, csv('nom', 'Bruyère'), 'ajouter');
+    assert.equal(ajout.resume.logosRetires, 0);
+    assert.deepEqual(ajout.charge.participants.map(({ logo }) => logo ?? null), [LOGO, AUTRE, null, LOGO, null]);
+    // Sans logo dans la charge, remplacer n'en compte aucun.
+    assert.equal(importer(chargeGarnie(), csv('nom', 'Bruyère'), 'remplacer').resume.logosRetires, 0);
   });
 
   test('bilanRemplacement ne modifie pas la charge', () => {

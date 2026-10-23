@@ -130,10 +130,14 @@ function objetsDe(valeur) {
   return vus;
 }
 
+// Deux chemins de logo, d'empreintes inventées.
+const LOGO = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+const AUTRE_LOGO = `logo/${'fedcba9876543210'.repeat(4)}.png`;
+
 const CSV_DEUX = 'nom;prenom;organisation\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, changerLogo, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
       'ajouterConflit',
       'ajouterParticipant',
@@ -141,6 +145,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'changerEtat',
       'changerPresence',
       'changerEtiquettes',
+      'changerLogo',
       'convertirEnTous',
       'debloquer',
       'deplacerDansRetenu',
@@ -164,7 +169,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 28);
+    assert.equal(attendues.length, 29);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     assert.deepEqual([...COMMANDES_PRESENCE.keys()], ['changerPresence']);
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
@@ -302,6 +307,68 @@ describe('commandes : les participants (§ 4, § 4.4, § 10.2)', () => {
       { code: 'RENCONTRES_RETIREES_DU_RETENU', details: { participant: 1, personne: 'Iris Ombrelle', tours: [1, 2], remede: null } },
     ]);
     refuse(() => executer('supprimerParticipant', chargeEssai(), { id: 9 }), 'PARTICIPANT_INCONNU');
+  });
+});
+
+describe('commandes : le logo d’une personne (§ 8.9)', () => {
+  test('poser : le chemin s’écrit en dernier champ de la personne, et le libellé dit « posé »', () => {
+    const avant = chargeEssai();
+    const { charge, libelle, avertissements } = executer('changerLogo', figer(avant), { id: 4, chemin: LOGO });
+    assert.deepEqual(charge.participants[3], { ...personne(4, 'Lacasse', 'Ondine', 'Société Alpha'), logo: LOGO });
+    assert.deepEqual(Object.keys(charge.participants[3]).at(-1), 'logo');
+    assert.deepEqual(charge.participants.slice(0, 3), avant.participants.slice(0, 3));
+    assert.equal(libelle, 'Logo de Ondine Lacasse : posé');
+    assert.deepEqual(avertissements, []);
+    assert.equal(analyser(serialiser(charge, { revision: 2, produitVersion: V1 })).charge.participants[3].logo, LOGO);
+  });
+
+  test('remplacer : un autre chemin prend la place du premier, et le libellé dit « remplacé »', () => {
+    const posee = executer('changerLogo', chargeEssai(), { id: 4, chemin: LOGO }).charge;
+    const { charge, libelle } = executer('changerLogo', posee, { id: 4, chemin: AUTRE_LOGO });
+    assert.equal(charge.participants[3].logo, AUTRE_LOGO);
+    assert.equal(libelle, 'Logo de Ondine Lacasse : remplacé');
+  });
+
+  test('retirer : null retire le champ, et la personne redevient celle d’avant le logo ; le libellé dit « retiré »', () => {
+    const posee = executer('changerLogo', chargeEssai(), { id: 3, chemin: LOGO }).charge;
+    const { charge, libelle } = executer('changerLogo', posee, { id: 3, chemin: null });
+    assert.deepEqual(charge.participants[2], personne(3, 'Pervenche', 'Théo'));
+    assert.equal(Object.hasOwn(charge.participants[2], 'logo'), false);
+    assert.equal(serialiserCharge(charge), serialiserCharge(chargeEssai()));
+    assert.equal(libelle, 'Logo de Théo Pervenche : retiré');
+  });
+
+  test('le même chemin, ou null sans logo, est SANS_EFFET ; une personne inconnue, PARTICIPANT_INCONNU ; un plan bloqué, PLAN_BLOQUE', () => {
+    const posee = executer('changerLogo', chargeEssai(), { id: 4, chemin: LOGO }).charge;
+    refuse(() => executer('changerLogo', posee, { id: 4, chemin: LOGO }), 'SANS_EFFET', { commande: 'changerLogo', remede: null });
+    refuse(() => executer('changerLogo', chargeEssai(), { id: 4, chemin: null }), 'SANS_EFFET', { commande: 'changerLogo', remede: null });
+    refuse(() => executer('changerLogo', chargeEssai(), { id: 9, chemin: LOGO }), 'PARTICIPANT_INCONNU', { id: 9, remede: null });
+    const bloquee = { ...chargeEssai(), evenement: { ...chargeEssai().evenement, etat: 'bloque' } };
+    refuse(() => executer('changerLogo', bloquee, { id: 4, chemin: LOGO }), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+  });
+
+  test('un chemin d’une autre forme que celle d’un logo, ou absent, est une faute du code : la séance le compose', () => {
+    const fautifs = [undefined, '', LOGO.toUpperCase(), LOGO.replace('.png', '.jpg'), `../${LOGO}`, `logo/../${LOGO}`, 'evenement.gtt.json', 7, [LOGO]];
+    for (const chemin of fautifs) {
+      assert.throws(() => executer('changerLogo', chargeEssai(), { id: 4, chemin }), TypeError, JSON.stringify(chemin));
+    }
+    assert.throws(() => executer('changerLogo', chargeEssai(), { id: '4', chemin: LOGO }), TypeError);
+  });
+
+  test('modifier une personne garde son logo, et la saisie refuse toujours le champ logo', () => {
+    const posee = executer('changerLogo', chargeEssai(), { id: 4, chemin: LOGO }).charge;
+    const modifiee = executer('modifierParticipant', posee, { id: 4, champs: { notes: 'arrive tard' } }).charge;
+    assert.equal(modifiee.participants[3].logo, LOGO);
+    assert.throws(() => executer('modifierParticipant', posee, { id: 4, champs: { logo: AUTRE_LOGO } }), TypeError);
+    assert.throws(() => executer('ajouterParticipant', chargeEssai(), { champs: { nom: 'Bruyère', logo: LOGO } }), TypeError);
+  });
+
+  test('le moteur ne lit pas le logo : la configuration et les raisons de dérive restent les mêmes', () => {
+    const charge = chargeRiche();
+    const posee = executer('changerLogo', charge, { id: 1, chemin: LOGO }).charge;
+    assert.deepEqual(configurationDepuisCharge(posee), configurationDepuisCharge(charge));
+    assert.deepEqual(derive(posee.propositions[0], posee), derive(charge.propositions[0], charge));
+    assert.deepEqual(posee.retenu, charge.retenu);
   });
 });
 
@@ -462,6 +529,26 @@ describe("commandes : l'import (§ 10.1)", () => {
     });
     assert.deepEqual([misAJour.resume.ajoutes, misAJour.resume.misAJour], [2, 1]);
     assert.equal(misAJour.libelle, 'Mis à jour la liste par import : 2 ajoutés, 1 modifié');
+  });
+
+  test('remplacer avertit IMPORT_LOGOS_RETIRES {logos} des liens de logo qu’il retire ; mettre à jour et ajouter les gardent, sans avertir', () => {
+    const avant = chargeEssai();
+    avant.participants[0].logo = LOGO;
+    avant.participants[2].logo = AUTRE_LOGO;
+    const avec = (mode, csv = 'nom;prenom\nOmbrelle;Iris\nBruyère;Anouk\n') =>
+      executer('importerParticipants', avant, { apercu: apercevoir(csv, { participants: avant.participants, mode }), mode });
+    const remplace = avec('remplacer');
+    assert.deepEqual(remplace.avertissements, [{ code: 'IMPORT_LOGOS_RETIRES', details: { logos: 2 } }]);
+    assert.equal(remplace.resume.logosRetires, 2);
+    assert.ok(remplace.charge.participants.every((participant) => !Object.hasOwn(participant, 'logo')));
+    const misAJour = avec('mettreAJour', 'nom;prenom;notes\nOmbrelle;Iris;au fond\n');
+    assert.deepEqual(misAJour.avertissements, []);
+    assert.equal(misAJour.charge.participants[0].logo, LOGO);
+    assert.deepEqual(avec('ajouter').avertissements, []);
+    // Sans logo, remplacer n'avertit pas.
+    const sansLogo = chargeEssai();
+    const apercu = apercevoir('nom\nBruyère\n', { participants: sansLogo.participants, mode: 'remplacer' });
+    assert.deepEqual(executer('importerParticipants', sansLogo, { apercu, mode: 'remplacer' }).avertissements, []);
   });
 
   test("importer selon l'état : rien en brouillon et proposé, l'avertissement de dérive en retenu, refusé en bloqué", () => {
@@ -1586,6 +1673,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['ajouterConflit', { id: 4, organisation: 'Club des Merles' }],
       ['retirerConflit', { id: 4, organisation: 'Club des Merles' }],
       ['changerConflits', { id: 4, organisations: ['Club des Merles'] }],
+      ['changerLogo', { id: 4, chemin: LOGO }],
       ['changerPresence', { id: 3, tours: [2] }],
       ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
       ['retirerObjectif', { table: 2, tour: null }],
@@ -1868,8 +1956,8 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les trois des conflits, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
-    assert.equal(COMMANDES.size, 17 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les trois des conflits, changerLogo, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
+    assert.equal(COMMANDES.size, 18 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
     assert.ok(COMMANDES_PRESENCE instanceof Map);

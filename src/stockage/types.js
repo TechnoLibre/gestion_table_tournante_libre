@@ -182,6 +182,14 @@
  *                                          jamais la sienne, sans doublon,
  *                                          rangées par unités UTF-16 ;
  *                                          absent, aucune
+ * @property {string} [logo]               facultatif : le chemin de son
+ *                                          logo, relatif au dossier de
+ *                                          l'événement, logo/ puis le
+ *                                          SHA-256 de ses octets en 64
+ *                                          chiffres hexadécimaux
+ *                                          minuscules, puis .png
+ *                                          (logos.js) ; absent, aucun
+ *                                          logo (§ 8.9)
  *
  * @typedef {Object} Table
  * @property {number} id            identifiant, unique
@@ -311,12 +319,13 @@
  * Une règle de SCHEMA, qui décrit une valeur du fichier d'état.
  *
  * @typedef {Object} Regle
- * @property {'objet'|'liste'|'chaine'|'entier'|'nombre'|'booleen'|'parmi'|'date'|'horodatage'|'etiquettes'|'libelleTable'} genre
+ * @property {'objet'|'liste'|'chaine'|'entier'|'nombre'|'booleen'|'parmi'|'date'|'horodatage'|'etiquettes'|'libelleTable'|'logo'} genre
  *           chaine : non vide ; nombre : fini ; parmi : l'une de valeurs ;
  *           date : AAAA-MM-JJ d'un jour du calendrier ; horodatage :
  *           AAAA-MM-JJTHH:MM:SS±HH:MM ; etiquettes : une étiquette bien
  *           formée (estEtiquetteBienFormee) ; libelleTable : le libellé
- *           d'une table (estLibelleTable)
+ *           d'une table (estLibelleTable) ; logo : le chemin d'un logo,
+ *           logo/<empreinte>.png (estCheminLogo, logos.js)
  * @property {boolean} nul                   null est admis
  * @property {boolean} optionnel             le champ peut manquer à son
  *           objet : absent, il ne s'écrit pas et ne se compare pas

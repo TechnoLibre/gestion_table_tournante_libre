@@ -32,6 +32,18 @@ export const EXEMPLES = [
   ['ENTREE_RETIRER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }],
   ['ENTREE_CHANGER_CONFLITS', { personne: 'Iris Ombrelle', ajoutees: ['Société Alpha', 'Société Beta'], retirees: ['Club des Merles'] }],
   ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
+  // Le logo d'une personne
+  ['ENTREE_CHANGER_LOGO', { personne: 'Iris Ombrelle', effet: 'pose' }],
+  [
+    'LOGO_NON_ECRIT',
+    {
+      personne: 'Iris Ombrelle',
+      chemin: `logo/${'0123456789abcdef'.repeat(4)}.png`,
+      dossier: 'C:\\Données\\Soirée des Lucioles',
+      cause: 'ENOSPC',
+      remede: null,
+    },
+  ],
   // La présence par tour
   ['RESERVATIONS_SUSPENDUES_AUX_TOURS', { participant: 1, personne: 'Iris Ombrelle', reservations: 2, tours: [3, 4], titres: 1 }],
   ['RESERVATIONS_RETABLIES_AUX_TOURS', { participant: 1, personne: 'Iris Ombrelle', reservations: 1, tours: [2], titres: 0 }],
@@ -144,6 +156,27 @@ export const TEXTES = [
     'ENTREE_IMPORTER_PARTICIPANTS',
     { mode: 'mettreAJour', ajoutes: 1, misAJour: 2, retires: 0, ajuste: true },
     'Mis à jour la liste par import : 1 ajouté, 2 modifiés ; placement retenu ajusté',
+  ],
+  ['ENTREE_CHANGER_LOGO', { personne: 'Iris Ombrelle', effet: 'pose' }, 'Logo de Iris Ombrelle : posé'],
+  ['ENTREE_CHANGER_LOGO', { personne: 'Théo Pervenche', effet: 'remplace' }, 'Logo de Théo Pervenche : remplacé'],
+  ['ENTREE_CHANGER_LOGO', { personne: 'Basile Mélèze', effet: 'retire' }, 'Logo de Basile Mélèze : retiré'],
+  [
+    'LOGO_NON_ECRIT',
+    {
+      personne: 'Iris Ombrelle',
+      chemin: `logo/${'0123456789abcdef'.repeat(4)}.png`,
+      dossier: 'C:\\Données\\Soirée des Lucioles',
+      cause: 'ENOSPC',
+      remede: null,
+    },
+    `Le logo de Iris Ombrelle n'a pas pu s'écrire : « logo/${'0123456789abcdef'.repeat(4)}.png » dans le dossier ` +
+      "« C:\\Données\\Soirée des Lucioles » (ENOSPC). Rien n'est enregistré : la personne garde son logo d'avant, ou aucun.",
+  ],
+  [
+    'LOGO_NON_ECRIT',
+    { personne: 'Théo Pervenche', chemin: `logo/${'fedcba9876543210'.repeat(4)}.png`, dossier: 'Soirée des Lucioles', cause: null, remede: null },
+    `Le logo de Théo Pervenche n'a pas pu s'écrire : « logo/${'fedcba9876543210'.repeat(4)}.png » dans le dossier ` +
+      "« Soirée des Lucioles ». Rien n'est enregistré : la personne garde son logo d'avant, ou aucun.",
   ],
   [
     'IMPORT_EN_RETENU',

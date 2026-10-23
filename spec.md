@@ -2917,6 +2917,14 @@ le même instant. Revenir à un tel instant, choisi dans la liste, ne change rie
 et ne s'écrit pas : le refus le dit, « Cet instant a déjà le contenu courant :
 rien n'est enregistré. »
 
+**Un retour rend le chemin d'un logo, et son image est toujours là.** Le logo
+d'une personne est un fichier du dossier de l'événement nommé par son contenu
+(§ 8.9) ; l'état n'en garde que le chemin, qu'un retour restitue comme tout
+champ. **Aucun geste n'efface une image de logo** — ni la remplacer, ni la
+retirer, ni supprimer la personne, ni un import qui remplace la liste — : le
+chemin restitué désigne toujours l'image que l'instant portait. Une image ne
+part qu'avec le dossier de l'événement, à la corbeille (§ 8.7).
+
 **La vue d'historique est un panneau**, ouvert et refermé par « Historique… »
 dans la barre de l'événement, à côté de « Défaire » et « Refaire ». Il se pose
 à droite de la surface, sur toute sa hauteur, ou par-dessus elle quand la
@@ -3489,7 +3497,10 @@ avertissement le nomme. Les fichiers d'un autre événement posés à la main da
 le même dossier ne partent pas, et cet événement reste listé. Le logiciel ne
 vide jamais la corbeille de lui-même et affiche ce qu'elle contient, chaque
 fichier par son chemin dans le dossier daté : un opérateur qui croit avoir
-supprimé les coordonnées d'une personne les a en réalité déplacées.
+supprimé les coordonnées d'une personne les a en réalité déplacées. Il en va
+de même de son logo : retirer le logo, le remplacer ou supprimer la personne
+laisse son image dans `logo/`, que l'historique désigne encore (§ 8.3) ; elle
+ne quitte le dossier qu'avec l'événement, pour la corbeille.
 
 ### 8.8 Ce qui résiste à une panne
 
@@ -3799,6 +3810,45 @@ réserve la personne à des tours où elle est absente depuis — et
 `PRESENCE_AJOUTEE` — il la dit absente à des tours où elle est présente
 depuis —, chacune avec ses tours. Les deux champs font partie du format 3,
 comme `depart` et `toursFiges`.
+
+#### Un champ facultatif : le logo d'une personne
+
+Le logo d'une personne s'écrit dans un champ facultatif, absent quand elle n'en
+porte pas :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `logo` | chaque participant, en dernier, après `conflits` | aucun logo | `logo/`, puis les 64 chiffres hexadécimaux minuscules du SHA-256 des octets de l'image, puis `.png` : un chemin relatif au dossier de l'événement |
+
+Une autre forme — des capitales, une autre longueur, un autre dossier ou une
+autre extension, une remontée `..`, un chemin absolu, un blanc, `null` — est une
+faute de forme, nommée par son chemin (§ 8.8) : un chemin lu dans le fichier ne
+désigne ainsi qu'une image de `logo/`, jamais l'état, le journal ni un fichier
+hors du dossier de l'événement. L'image est un PNG d'au plus 1 200 pixels de
+côté, nommé par son contenu : les mêmes octets font le même fichier, écrit une
+fois, et deux images distinctes ne se remplacent jamais. Une personne sans logo
+s'écrit octet pour octet comme sans ce champ, démonstrations comprises.
+
+Le champ se pose, se remplace et se retire par une commande, `changerLogo`, qui
+reçoit le chemin ou `null` — une entrée d'historique, refusée en lecture et sur
+un plan bloqué, dont le libellé dit le logo « posé », « remplacé » ou « retiré »
+d'après celui d'avant et celui d'après ; le même chemin n'écrit rien.
+`modifierParticipant` ne le reçoit pas. **L'image s'écrit avant l'entrée** : la
+séance refuse d'abord tout ce qu'un geste refuserait, puis contrôle le PNG — sa
+signature, son en-tête, le CRC de chaque morceau, ses côtés —, essaie la
+commande à blanc, écrit l'image dans `logo/` si elle n'y est pas encore, puis
+l'entrée. Une image que le disque refuse refuse le geste, `LOGO_NON_ECRIT`, le
+fichier et la cause nommés : rien n'est enregistré, et le support n'en est pas
+rompu. Le même logo choisi de nouveau, son image disparue du dossier, la
+réécrit sans entrée. Retirer le logo retire le champ ; aucune image ne
+s'efface (§ 8.3). L'image d'un chemin se lit dans tout mode, et un chemin dont
+le fichier manque se lit comme absent, sans faute du fichier.
+
+Le CSV des participants ne porte pas de logo : un import qui remplace la liste
+retire les logos avec les personnes, et le dit en comptant les logos retirés ;
+mettre à jour les garde (§ 10.1). Le moteur ne lit pas le champ : la
+configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
+mêmes. Le champ fait partie du format 3.
 
 #### La forme positionnelle
 

@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes des commandes de la liste des participants, de leurs
-// étiquettes, de leurs conflits d'organisation, de leur présence par tour et
-// de l'import des participants (§ 4, § 4.4, § 4.5, § 5.8, § 10.2, § 14.6) : leurs refus, leurs avertissements
+// étiquettes, de leurs conflits d'organisation, de leur logo, de leur
+// présence par tour et de l'import des participants (§ 4, § 4.4, § 4.5,
+// § 5.8, § 8.9, § 10.2, § 14.6) : leurs refus, leurs avertissements
 // et leurs libellés figés. Une personne s'y dit au féminin ; les tours se
 // nomment par toursNommes et auxToursNommes (aides.js). Cette
 // table ne porte que des codes. Un champ ou une raison inconnus lèvent
 // RangeError, au lieu de se taire. Les bornes d'une étiquette viennent de la
 // règle qui les pose.
 import { ETIQUETTES_MAX, ETIQUETTE_LONGUEUR_MAX } from '../../stockage/etiquettes.js';
-import { auxToursNommes, cite, compte, enumeration, nomDans, toursNommes } from './aides.js';
+import { auxToursNommes, cite, compte, enumeration, nomDans, ouEcrire, toursNommes } from './aides.js';
 
 // Les champs d'un participant qu'une saisie modifie, dans l'ordre du fichier.
 const NOMS_DES_CHAMPS = new Map([
@@ -71,6 +72,14 @@ function dansLeRetenu(retiree, enReserve) {
   return parties.length > 0 ? ` ; ${parties.join(', ')}` : '';
 }
 
+// Ce que changerLogo fait du logo d'une personne, d'après celui d'avant et
+// celui d'après : les trois libellés figés de son entrée.
+const EFFETS_DU_LOGO = new Map([
+  ['pose', 'posé'],
+  ['remplace', 'remplacé'],
+  ['retire', 'retiré'],
+]);
+
 // Les titres de place qu'un geste sur une personne touche, quand il y en a.
 const titresDe = (n, singulier, pluriel) =>
   n > 0 ? `, et ${compte(n, 'titre de place', 'titres de place')} ${n <= 1 ? singulier : pluriel}` : '';
@@ -130,6 +139,17 @@ export const TABLE = new Map([
       "L'import change la liste après le choix d'un placement : le placement retenu suit la présence de chacun, " +
       "les arrivées en réserve et les départs laissant leur chaise vide, sans que personne d'autre n'y change de place ; " +
       "à vous de juger s'il convient encore.",
+  ],
+
+  // --- Le logo d'une personne (§ 8.9) ---------------------------------------
+  // L'image refusée par le disque, avant toute entrée : chemin, le fichier
+  // relatif au dossier de l'événement ; dossier, ce dossier ; cause, celle
+  // que le système donne, ou null.
+  [
+    'LOGO_NON_ECRIT',
+    (details, texte) =>
+      `Le logo de ${details.personne} n'a pas pu s'écrire : ${ouEcrire(details, texte)}. ` +
+      "Rien n'est enregistré : la personne garde son logo d'avant, ou aucun.",
   ],
 
   // --- La présence par tour (§ 4, § 5.8, § 9) -------------------------------
@@ -196,6 +216,10 @@ export const TABLE = new Map([
       if (retirees.length > 0) parties.push(`retiré ${etiquettesCitees(retirees)}`);
       return `Conflits de ${personne} : ${parties.join(' ; ')}`;
     },
+  ],
+  [
+    'ENTREE_CHANGER_LOGO',
+    ({ personne, effet }) => `Logo de ${personne} : ${nomDans(EFFETS_DU_LOGO, effet, 'effet du logo')}`,
   ],
   [
     'ENTREE_IMPORTER_PARTICIPANTS',

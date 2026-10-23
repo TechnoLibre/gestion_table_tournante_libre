@@ -103,6 +103,7 @@
 // ni l'heure ni un aléa, et n'arme aucune minuterie elle-même.
 import { MODELE_BADGE_DEFAUT } from '../geometrie/papiers.js';
 import { TAILLE_TEXTE_DEFAUT } from '../geometrie/taille_texte.js';
+import { ErreurPng, lirePng } from '../pdf/png.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { avecCourses, courseDe } from '../stockage/courses.js';
 import {
@@ -119,6 +120,7 @@ import {
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { estFigee, figer } from '../stockage/gel.js';
 import { fil, lignesHistorique, reconstruire } from '../stockage/journal.js';
+import { cheminLogo, ecrireLogo, empreinteSha256, estCheminLogo } from '../stockage/logos.js';
 import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import {
   FICHIER_REGLAGES,
@@ -139,6 +141,7 @@ import { cheminAffiche } from '../stockage/systeme_fichiers.js';
 import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
 import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 import { libelle } from './libelles.js';
+import { nomAffiche } from './personnes.js';
 import { creerPlanches } from './planche_seance.js';
 
 /** Inactivité au terme de laquelle la séance revient seule en lecture (§ 8.4). */
@@ -146,6 +149,13 @@ export const INACTIVITE_MS = 10 * 60 * 1000;
 
 /** Délai de l'écriture différée du cadrage dans reglages_locaux.json (§ 8.5). */
 export const DELAI_REGLAGES_MS = 1000;
+
+/**
+ * Le plus grand côté, en pixels, du PNG qu'un logo de participant dépose
+ * (§ 8.9) : l'interface réduit l'image source à cette taille, sans jamais
+ * l'agrandir, et la séance refuse un PNG plus grand.
+ */
+export const LOGO_PARTICIPANT_COTE_MAX = 1200;
 
 /**
  * Le refus d'un geste par la séance : son code et ses détails, dont le
@@ -227,6 +237,35 @@ const derniereEntree = ({ journal }) => journal?.entrees.at(-1)?.revision ?? nul
 
 // Le libellé de l'entrée de révision donnée.
 const libelleDeRevision = (journal, revision) => journal.entrees.find((entree) => entree.revision === revision).libelle;
+
+// Les dimensions du PNG d'un logo de participant (lirePng) : des octets qui
+// ne sont pas un Uint8Array, ou pas un PNG bien formé, lèvent TypeError, un
+// côté au-delà de LOGO_PARTICIPANT_COTE_MAX, RangeError. L'interface compose
+// ce PNG : l'un et l'autre sont des fautes du code.
+function exigerPngDeLogo(octets) {
+  let dimensions;
+  try {
+    dimensions = lirePng(octets);
+  } catch (erreur) {
+    if (erreur instanceof ErreurPng) throw new TypeError(`octets : PNG attendu, ${erreur.message}`);
+    throw erreur;
+  }
+  const { largeur, hauteur } = dimensions;
+  if (largeur > LOGO_PARTICIPANT_COTE_MAX || hauteur > LOGO_PARTICIPANT_COTE_MAX) {
+    const max = LOGO_PARTICIPANT_COTE_MAX;
+    throw new RangeError(`octets : PNG de ${largeur} × ${hauteur}, au-delà de ${max} pixels de côté`);
+  }
+}
+
+// Le chemin qu'on demande à lireLogoParticipant : un chemin d'une autre
+// forme que logo/<empreinte>.png (estCheminLogo) lève TypeError, avant tout
+// accès.
+function exigerCheminLogo(chemin) {
+  if (!estCheminLogo(chemin)) {
+    throw new TypeError(`chemin : logo/<empreinte>.png attendu, reçu ${JSON.stringify(chemin)}`);
+  }
+  return chemin;
+}
 
 // Le libellé figé d'une entrée de retour, qui nomme l'instant : celui que
 // défaire quitte, celui que refaire ou revenir restituent ; et la touche qui
@@ -1091,6 +1130,65 @@ export function creerSeance({
     return { ...rendu, avertissements: [...etat.avertissementsGeste] };
   }
 
+  // --- Le logo d'une personne (§ 8.3, § 8.9) -----------------------------------
+
+  // Pose le logo de la personne id, PNG de octets : les refus de l'écriture
+  // d'abord (exigerEcriture), puis le PNG (exigerPngDeLogo), puis la
+  // commande essayée à blanc sur le chemin logo/<empreinte>.png, qui refuse
+  // une personne inconnue ou le même logo sans rien écrire ; puis l'image,
+  // par ecrireLogo dans le dossier de l'événement, puis le geste changerLogo.
+  // Une image que le disque refuse — ECRITURE, ou LECTURE du fichier déjà
+  // présent — lève LOGO_NON_ECRIT {personne, chemin, dossier, cause}, remède
+  // null, sans rien enregistrer : le support n'en est pas rompu. Le même
+  // logo, son image disparue du dossier, la réécrit avant de lever
+  // SANS_EFFET : le chemin que porte la personne désigne de nouveau son
+  // image. Une image écrite dont le geste se refuse ensuite reste, sans que
+  // rien la désigne. Rend le libellé et le chemin.
+  async function poserLogoParticipant(demande) {
+    const { id, octets } = demande ?? {};
+    const ouvert = exigerEcriture();
+    exigerPngDeLogo(octets);
+    const chemin = cheminLogo(empreinteSha256(octets));
+    let sansEffet = null;
+    try {
+      appliquerCommande('changerLogo', ouvert.charge, { id, chemin });
+    } catch (erreur) {
+      if (erreur?.code !== 'SANS_EFFET') throw erreur;
+      sansEffet = erreur;
+    }
+    const personne = nomAffiche(ouvert.charge.participants.find((participant) => participant.id === id));
+    try {
+      await ecrireLogo(ouvert.fs, ouvert.racine, octets);
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage) || !['ECRITURE', 'LECTURE'].includes(erreur.code)) throw erreur;
+      const { chemin: fichier = chemin, dossier = null, cause = null } = erreur.details ?? {};
+      throw new ErreurSeance('LOGO_NON_ECRIT', { personne, chemin: fichier, dossier, cause, remede: null });
+    }
+    if (sansEffet !== null) throw sansEffet;
+    const { libelle: texte } = await geste('changerLogo', { id, chemin });
+    return { libelle: texte, chemin };
+  }
+
+  // Retire le logo de la personne id : le geste changerLogo, chemin null.
+  // Aucune image ne s'efface.
+  function retirerLogoParticipant(demande) {
+    return geste('changerLogo', { id: demande.id, chemin: null });
+  }
+
+  // Les octets de l'image d'un logo, chemin relatif au dossier de
+  // l'événement ouvert ; null quand le fichier n'y est pas. Une lecture, dans
+  // tout mode.
+  async function lireLogoParticipant(chemin) {
+    exigerCheminLogo(chemin);
+    const { fs: vue, racine } = exigerOuvert();
+    try {
+      return await vue.lireOctets(racine, chemin);
+    } catch (erreur) {
+      if (erreur instanceof ErreurStockage && erreur.code === 'ABSENT') return null;
+      throw erreur;
+    }
+  }
+
   // --- Les retours (§ 8.3) -----------------------------------------------------
 
   // {defaire, refaire, jalons} : les retours qui existent sur le fil de
@@ -1770,6 +1868,26 @@ export function creerSeance({
     passerEnLecture: () => enFile(passerEnLecture),
     executer: (nom, args = {}) => enFile(() => suivi(() => geste(nom, args))),
     debloquer: () => enFile(() => suivi(() => geste('debloquer', {}))),
+    /**
+     * Pose le logo d'une personne (§ 8.9) : demande {id, octets}, octets
+     * ceux d'un PNG d'au plus LOGO_PARTICIPANT_COTE_MAX pixels de côté, que
+     * l'interface compose. L'image s'écrit dans logo/ du dossier de
+     * l'événement, sous le SHA-256 de ses octets, avant l'entrée du geste
+     * changerLogo : {libelle, chemin, avertissements}. Refusé comme un geste,
+     * sans rien écrire ; LOGO_NON_ECRIT quand le disque refuse l'image.
+     */
+    poserLogoParticipant: (demande) => enFile(() => suivi(() => poserLogoParticipant(demande))),
+    /**
+     * Retire le logo d'une personne, demande {id} : le geste changerLogo,
+     * chemin null. Son image reste dans le dossier de l'événement (§ 8.3).
+     */
+    retirerLogoParticipant: (demande) => enFile(() => suivi(() => retirerLogoParticipant(demande))),
+    /**
+     * Les octets de l'image d'un logo, chemin logo/<empreinte>.png relatif
+     * au dossier de l'événement ouvert, null quand le fichier n'y est pas :
+     * une lecture, admise dans tout mode, qui n'écrit rien.
+     */
+    lireLogoParticipant: (chemin) => enFile(() => lireLogoParticipant(chemin)),
     /**
      * Défait le dernier geste du fil courant (§ 8.3). options facultatives,
      * {touche} : 'Ctrl+Z', que le libellé figé de l'entrée nomme ; une autre

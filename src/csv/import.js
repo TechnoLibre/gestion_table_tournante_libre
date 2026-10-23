@@ -78,6 +78,9 @@ const ENTETE_MOTIF = 'motif';
  *           ligne qui ne change rien
  * @property {number} retires               participants retirés
  * @property {number} reservationsRetirees  leurs réservations
+ * @property {number} logosRetires          les liens de logo qui partent
+ *           avec eux : un par participant retiré qui porte un logo ; le
+ *           fichier de l'image reste dans le dossier de l'événement
  * @property {LigneRefusee[]} refusees      rangées par ligne
  * @property {boolean} derive               vrai en état retenu
  */
@@ -365,8 +368,10 @@ function mettreAJour(participants, lignes, tours) {
  *   PLUSIEURS_CORRESPONDENT ; qui désigne un participant qu'une ligne
  *   précédente désigne déjà, refusée DEJA_DESIGNE ;
  * - 'remplacer' : les participants et leurs réservations sont retirés,
- *   puis chaque ligne valide ajoutée. Tables, titres, propositions et retenu
- *   restent (bilanRemplacement).
+ *   leurs logos avec eux, puis chaque ligne valide ajoutée. Tables, titres,
+ *   propositions et retenu restent (bilanRemplacement). Le CSV ne porte
+ *   aucun logo : une personne ajoutée n'en a pas, et une personne mise à
+ *   jour garde le sien.
  * Une personne créée prend les champs de sa ligne, exclu vide valant non,
  * ses étiquettes rangées par unités de code, absentes quand la ligne n'en
  * porte pas, sa présence canonique, absente quand la cellule est vide ou
@@ -376,7 +381,8 @@ function mettreAJour(participants, lignes, tours) {
  * propositions figées (gel.js) exceptées, qu'elle reprend telles quelles.
  *
  * Le résumé (ResumeImport) compte les participants ajoutés, mis à jour,
- * inchangés et retirés, et les réservations retirées. refusees porte les
+ * inchangés et retirés, les réservations retirées et les liens de logo
+ * retirés. refusees porte les
  * lignes refusées par l'aperçu, puis par la mise à jour, rangées par ligne :
  * c'est la liste que reçoit exporterRefus. Chaque ligne valide est comptée
  * une fois : ajoutée, mise à jour, inchangée ou refusée. Une mise à jour dont
@@ -423,11 +429,13 @@ export function appliquerImport(charge, apercu, mode) {
   const resultat = copieDeTravail(charge);
   let retires = 0;
   let reservationsRetirees = 0;
+  let logosRetires = 0;
   let aAjouter = apercu.lignes;
   let suite = { refusees: [], misAJour: 0, inchanges: 0 };
   if (mode === 'remplacer') {
     retires = resultat.participants.length;
     reservationsRetirees = resultat.reservations.length;
+    logosRetires = resultat.participants.filter((participant) => participant.logo !== undefined).length;
     resultat.participants = [];
     resultat.reservations = [];
   } else if (mode === 'mettreAJour') {
@@ -446,6 +454,7 @@ export function appliquerImport(charge, apercu, mode) {
       inchanges: suite.inchanges,
       retires,
       reservationsRetirees,
+      logosRetires,
       refusees: [...structuredClone(apercu.refusees), ...suite.refusees].sort(parLigne),
       derive: charge.evenement.etat === 'retenu',
     },

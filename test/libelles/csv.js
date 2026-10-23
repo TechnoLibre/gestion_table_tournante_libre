@@ -50,6 +50,7 @@ export const EXEMPLES = [
   ['REGLE_INCONNUE', { ligne: 6, valeur: 'peut-être' }],
   ['OBJECTIF_EN_DOUBLE', { ligne: 8, valeur: null, premiereLigne: 3, numero: 1, tour: 2 }],
   ['IMPORT_OBJECTIFS_RECLASSE', {}],
+  ['IMPORT_LOGOS_RETIRES', { logos: 2 }],
   ['ENTREE_IMPORTER_OBJECTIFS', { mode: 'mettreAJour', ajoutes: 3, remplaces: 1, retires: 0 }],
 ];
 
@@ -86,6 +87,18 @@ export const TEXTES = [
     'PRESENCE_HORS_TOURS',
     { ligne: 6, valeur: '2, 5-6', tour: 5, tours: 4 },
     "La présence « 2, 5-6 » nomme le tour 5 : la soirée compte 4 tours.",
+  ],
+  [
+    'IMPORT_LOGOS_RETIRES',
+    { logos: 3 },
+    "Remplacer la liste a retiré 3 logos : le CSV n'en porte pas. Les images restent dans le dossier de l'événement, " +
+      'et « Défaire » rend les logos.',
+  ],
+  [
+    'IMPORT_LOGOS_RETIRES',
+    { logos: 1 },
+    "Remplacer la liste a retiré 1 logo : le CSV n'en porte pas. Les images restent dans le dossier de l'événement, " +
+      'et « Défaire » rend les logos.',
   ],
   [
     'APERCU_TOURS_CHANGES',

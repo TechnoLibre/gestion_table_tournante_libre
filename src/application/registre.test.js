@@ -144,6 +144,10 @@ const REMEDE_NUL_ADMIS = new Map([
   ],
 ]);
 
+// Le chemin d'un logo, d'empreinte inventée : la commande ne lit aucun
+// fichier, et le registre l'éprouve sans image.
+const LOGO = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+
 // Le geste qui pose deux places de plus à la table 2, par son champ.
 const QUATRE_PLACES_A_LA_TABLE_2 = ['changerPlacesTable', { id: 2, sieges: '4', origine: 'champ' }];
 
@@ -499,6 +503,15 @@ const EXEMPLES = new Map([
         remede: null,
       },
       sansEffet: { args: { id: 2, organisations: [] } },
+    },
+  ],
+  [
+    'changerLogo',
+    {
+      accepte: { args: { id: 2, chemin: LOGO } },
+      personne: () => 2,
+      refuse: { args: { id: 999, chemin: LOGO }, code: 'PARTICIPANT_INCONNU' },
+      sansEffet: { avant: [['changerLogo', { id: 2, chemin: LOGO }]], args: { id: 2, chemin: LOGO } },
     },
   ],
   [

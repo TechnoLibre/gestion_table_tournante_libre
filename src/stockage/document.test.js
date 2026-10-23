@@ -1431,8 +1431,8 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
       ],
     );
     assert.deepEqual(
-      PARTICIPANT.champs.slice(-4).map(([cle, regle]) => [cle, regle.optionnel]),
-      [['exclu', false], ['etiquettes', true], ['presence', true], ['conflits', true]],
+      PARTICIPANT.champs.slice(-5).map(([cle, regle]) => [cle, regle.optionnel]),
+      [['exclu', false], ['etiquettes', true], ['presence', true], ['conflits', true], ['logo', true]],
     );
     assert.deepEqual(
       TABLE.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
@@ -1668,6 +1668,80 @@ describe('le libellé d’une table : un champ facultatif, absent quand la table
   test('la configuration du moteur ne lit pas le libellé : une table libellée donne la même configuration', () => {
     const sans = analyser(JSON.stringify(documentValide())).charge;
     const avec = analyser(abime((d) => { d.charge.tables[0].libelle = 'Honneur'; })).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
+// --- Le logo d'une personne (§ 8.9) ------------------------------------------
+
+describe('le logo d’une personne : un champ facultatif, absent quand elle n’en porte pas (§ 8.9)', () => {
+  // Deux empreintes inventées, de 64 chiffres hexadécimaux minuscules.
+  const EMPREINTE = '0123456789abcdef'.repeat(4);
+  const AUTRE = 'fedcba9876543210'.repeat(4);
+  const LOGO = `logo/${EMPREINTE}.png`;
+
+  test('il s’écrit en dernier, après les conflits, et se relit à l’identique ; absent, il ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.participants[0].conflits = ['Cercle Gamma'];
+    d.charge.participants[0].logo = LOGO;
+    d.charge.participants[2].logo = `logo/${AUTRE}.png`;
+    const lu = analyser(JSON.stringify(d));
+    assert.equal(lu.charge.participants[0].logo, LOGO);
+    assert.equal(Object.hasOwn(lu.charge.participants[1], 'logo'), false);
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(texte.includes(`"conflits":["Cercle Gamma"],"logo":"${LOGO}"}`), texte);
+    assert.ok(texte.includes(`"exclu":true,"logo":"logo/${AUTRE}.png"}`), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    // Sans logo, la personne s'écrit comme avant lui.
+    const sans = serialiser(documentComplet().charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(!sans.includes('"logo"'), sans);
+  });
+
+  test('une autre forme que logo/, 64 chiffres hexadécimaux minuscules et .png est une faute de forme nommée par son chemin', () => {
+    const chemin = 'charge.participants[1].logo';
+    const avec = (valeur) => abime((d) => { d.charge.participants[1].logo = valeur; });
+    assert.deepEqual(ecartsDeRefus([
+      ['des capitales', avec(`logo/${EMPREINTE.toUpperCase()}.png`), 'FORME', chemin],
+      ['63 chiffres', avec(`logo/${EMPREINTE.slice(1)}.png`), 'FORME', chemin],
+      ['65 chiffres', avec(`logo/${EMPREINTE}0.png`), 'FORME', chemin],
+      ['une lettre hors de l’hexadécimal', avec(`logo/${EMPREINTE.slice(1)}g.png`), 'FORME', chemin],
+      ['une autre extension', avec(`logo/${EMPREINTE}.jpg`), 'FORME', chemin],
+      ['l’extension en capitales', avec(`logo/${EMPREINTE}.PNG`), 'FORME', chemin],
+      ['un autre dossier', avec(`images/${EMPREINTE}.png`), 'FORME', chemin],
+      ['le dossier en capitales', avec(`Logo/${EMPREINTE}.png`), 'FORME', chemin],
+      ['une remontée', avec(`logo/../${EMPREINTE}.png`), 'FORME', chemin],
+      ['un chemin absolu', avec(`/logo/${EMPREINTE}.png`), 'FORME', chemin],
+      ['une barre oblique inverse', avec(`logo\\${EMPREINTE}.png`), 'FORME', chemin],
+      ['un blanc en tête', avec(` ${LOGO}`), 'FORME', chemin],
+      ['une fin de ligne en fin', avec(`${LOGO}\n`), 'FORME', chemin],
+      ['l’empreinte seule', avec(EMPREINTE), 'FORME', chemin],
+      ['vide', avec(''), 'FORME', chemin],
+      ['nul', avec(null), 'FORME', chemin],
+      ['un nombre', avec(7), 'FORME', chemin],
+      ['une liste', avec([LOGO]), 'FORME', chemin],
+    ]), []);
+  });
+
+  test('un fichier d’un format plus récent garde le logo, et lève FORMAT_PLUS_RECENT sur un logo que le format courant refuse', () => {
+    const lu = analyser(abime((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.participants[0].logo = LOGO;
+    }));
+    assert.equal(lu.formatPlusRecent, true);
+    assert.equal(lu.charge.participants[0].logo, LOGO);
+    assert.deepEqual(ecartsDeRefus([
+      ['un logo d’un autre format d’image', abime((d) => {
+        d.entete.format = FORMAT + 1;
+        d.charge.participants[0].logo = `logo/${EMPREINTE}.webp`;
+      }), 'FORMAT_PLUS_RECENT', 'charge.participants[0].logo', { format: FORMAT + 1 }],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne lit pas le logo : une personne qui en porte un donne la même configuration', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    const avec = analyser(abime((d) => { d.charge.participants[0].logo = LOGO; })).charge;
     assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
   });
 });
@@ -2143,7 +2217,8 @@ describe('la présence par tour : participant.presence et les absents d’un pla
 
   test('presence est facultative et vient après etiquettes ; absents est facultatif et vient après reserve', () => {
     const PARTICIPANT = regleDuChamp(CHARGE_SCHEMA, 'participants').element;
-    assert.deepEqual(PARTICIPANT.champs.at(-2)[0], 'presence');
+    const cles = PARTICIPANT.champs.map(([cle]) => cle);
+    assert.equal(cles[cles.indexOf('etiquettes') + 1], 'presence');
     assert.deepEqual(TOUR.champs.map(([cle, regle]) => [cle, regle.optionnel]), [['sieges', false], ['reserve', false], ['absents', true]]);
   });
 

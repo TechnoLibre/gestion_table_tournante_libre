@@ -4,8 +4,9 @@
 // Les textes des codes de src/csv (§ 10.1, § 10.4, § 14.6) : encodage,
 // séparateur, en-tête, refus d'une ligne, présence comprise, refus de la
 // mise à jour, aperçu calculé pour un autre nombre de tours, conflits
-// d'organisation fautifs, et ceux du CSV des objectifs de table, son import
-// et son libellé d'historique.
+// d'organisation fautifs, les logos qu'un import « remplacer » retire, et
+// ceux du CSV des objectifs de table, son import et son libellé
+// d'historique.
 import { ETIQUETTE_LONGUEUR_MAX, ETIQUETTES_MAX } from '../../stockage/etiquettes.js';
 import { cite, compte, enumeration, nomDans } from './aides.js';
 
@@ -167,6 +168,15 @@ export const TABLE = new Map([
     () =>
       'Le plan est retenu : les objectifs importés peuvent changer le classement des propositions, ' +
       "sans qu'aucune passe en dérive.",
+  ],
+  // Un import « remplacer » retire chaque participant, et le lien de logo
+  // de ceux qui en portaient un : logos, leur nombre. Le fichier de l'image
+  // reste, et le retour rend les liens (§ 8.3, § 10.1).
+  [
+    'IMPORT_LOGOS_RETIRES',
+    ({ logos }) =>
+      `Remplacer la liste a retiré ${compte(logos, 'logo', 'logos')} : le CSV n'en porte pas. ` +
+      "Les images restent dans le dossier de l'événement, et « Défaire » rend les logos.",
   ],
   [
     'ENTREE_IMPORTER_OBJECTIFS',

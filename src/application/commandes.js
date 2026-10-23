@@ -52,6 +52,7 @@ import { ErreurStockage } from '../stockage/erreurs.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { estHorodatage } from '../stockage/journal.js';
+import { estCheminLogo } from '../stockage/logos.js';
 import {
   ajusterALaPresence,
   courseVersFichier,
@@ -380,6 +381,39 @@ function changerConflits(charge, { id, organisations } = {}) {
   };
 }
 
+/**
+ * changerLogo {id, chemin} (§ 8.9) : le logo de la personne devient chemin,
+ * celui d'un fichier logo/<empreinte>.png du dossier de l'événement
+ * (estCheminLogo), écrit en dernier champ de la personne ; null retire le
+ * champ. Un chemin d'une autre forme, ou absent, est une faute du code : la
+ * séance le compose (cheminLogo). Le même chemin, ou null sans logo, est
+ * SANS_EFFET. La commande ne lit aucun fichier : la séance écrit l'image
+ * avant elle, et aucun geste n'en efface une. Une entrée d'historique, dont
+ * le libellé dit le logo posé, remplacé ou retiré (effet : pose, remplace,
+ * retire), d'après celui d'avant et celui d'après.
+ */
+function changerLogo(charge, { id, chemin } = {}) {
+  exigerModifiable(charge);
+  if (chemin !== null && !estCheminLogo(chemin)) {
+    throw new TypeError(`chemin : logo/<empreinte>.png ou null attendu, reçu ${JSON.stringify(chemin)}`);
+  }
+  const participant = participantDe(charge, id);
+  const avant = participant.logo ?? null;
+  if (avant === chemin) throw refus('SANS_EFFET', { commande: 'changerLogo' });
+  let effet = 'remplace';
+  if (chemin === null) effet = 'retire';
+  else if (avant === null) effet = 'pose';
+  return {
+    charge: avecParticipant(charge, id, (copie) => {
+      const reste = { ...copie };
+      delete reste.logo;
+      return chemin === null ? reste : { ...reste, logo: chemin };
+    }),
+    libelle: libelle('ENTREE_CHANGER_LOGO', { personne: nomAffiche(participant), effet }),
+    avertissements: [],
+  };
+}
+
 // Une chaîne, ou undefined pour un argument absent ; une autre valeur est une
 // faute du code.
 function texteOuAbsent(valeur, nom) {
@@ -561,8 +595,10 @@ function avertissementsDExclusion(avant, suivante) {
  * l'état : sans avertissement en brouillon et proposé ; en retenu,
  * l'avertissement de dérive IMPORT_EN_RETENU, quel que soit le mode, sur le
  * signal resume.derive d'appliquerImport ; refusé en bloqué, PLAN_BLOQUE.
- * Une personne que l'import exclut ou réintègre le dit ensuite comme sa
- * commande le dirait (avertissementsDExclusion).
+ * Un remplacement qui retire des liens de logo le dit ensuite,
+ * IMPORT_LOGOS_RETIRES {logos} : le CSV ne porte aucun logo (§ 8.9). Une
+ * personne que l'import exclut ou réintègre le dit enfin comme sa commande
+ * le dirait (avertissementsDExclusion).
  *
  * Une personne existante dont la présence par tour s'étend — présence
  * rendue, réintégration — se contrôle comme changerPresence
@@ -586,7 +622,7 @@ function importerParticipants(charge, { apercu, mode }) {
     if (erreur instanceof ErreurCsv) throw new ErreurCommande(erreur.code, { ...erreur.details, remede: null });
     throw erreur;
   }
-  const { ajoutes, misAJour, retires, derive, refusees } = resultat.resume;
+  const { ajoutes, misAJour, retires, logosRetires, derive, refusees } = resultat.resume;
   if (refusees.length > 0 && serialiserCharge(resultat.charge) === serialiserCharge(charge)) {
     return { charge, libelle: null, avertissements: [], resume: resultat.resume };
   }
@@ -608,6 +644,7 @@ function importerParticipants(charge, { apercu, mode }) {
     }),
     avertissements: [
       ...(derive ? [avertissement('IMPORT_EN_RETENU', {})] : []),
+      ...(logosRetires > 0 ? [avertissement('IMPORT_LOGOS_RETIRES', { logos: logosRetires })] : []),
       ...avertissementsDExclusion(charge, resultat.charge),
     ],
     resume: resultat.resume,
@@ -1023,6 +1060,7 @@ export const COMMANDES = reunirCommandes(
     ['ajouterConflit', ajouterConflit],
     ['retirerConflit', retirerConflit],
     ['changerConflits', changerConflits],
+    ['changerLogo', changerLogo],
     ['exclureParticipant', exclureParticipant],
     ['reintegrerParticipant', reintegrerParticipant],
     ['supprimerParticipant', supprimerParticipant],
