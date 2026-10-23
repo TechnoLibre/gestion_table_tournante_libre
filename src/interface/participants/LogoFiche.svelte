@@ -25,7 +25,8 @@
   // rien. Puis la conversion en PNG (image_logo.js), sous l'indicateur
   // d'activité, qui refuse une image illisible ou de trop de pixels ; puis
   // seance.poserLogoParticipant. Chaque refus se pose à côté de « Logo »
-  // (Commande). Le geste reste ouvert du clic à la pose : le compte
+  // (Commande), sauf celui du même logo choisi sous « Logo introuvable » :
+  // la séance a réécrit son image, que la rubrique relit. Le geste reste ouvert du clic à la pose : le compte
   // d'inactivité ne ramène pas la séance en lecture pendant le choix.
   // L'image choisie va à la personne qui l'a demandée, même quand la fiche
   // est passée à une autre entre-temps. « Retirer le logo » retire le
@@ -69,12 +70,15 @@
   // l'adresse blob: de ses octets — ou 'introuvable'.
   let image = $state.raw({ etat: 'aucun', adresse: null });
   let agrandi = $state(false);
+  // Monte à chaque relecture demandée d'un chemin inchangé.
+  let relecture = $state(0);
   let section;
   let vignette = $state(null);
   let fermer = $state(null);
 
   $effect(() => {
     const lu = chemin;
+    relecture;
     untrack(refermerVue);
     if (lu === null) {
       image = { etat: 'aucun', adresse: null };
@@ -131,7 +135,12 @@
       const choisi = await facade.choisirImage();
       if (choisi === null) return;
       const octets = await suivre(() => convertirLogo(choisi.octets, { fichier: choisi.nom }));
-      await seance.poserLogoParticipant({ id, octets });
+      try {
+        await seance.poserLogoParticipant({ id, octets });
+      } catch (erreur) {
+        if (erreur?.code !== 'SANS_EFFET' || image.etat !== 'introuvable') throw erreur;
+        relecture += 1;
+      }
     } finally {
       geste.tenir(false);
     }

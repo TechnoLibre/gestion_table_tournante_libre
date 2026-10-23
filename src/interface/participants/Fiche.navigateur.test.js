@@ -41,6 +41,7 @@ import { lirePng } from '../../pdf/png.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { ErreurStockage } from '../../stockage/erreurs.js';
 import { lireJournal } from '../../stockage/journal.js';
+import { convertirLogo } from './image_logo.js';
 import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
@@ -998,6 +999,24 @@ describe('la rubrique « Logo » de la fiche (§ 8.9, § 10.2)', () => {
     const { m: autre } = await ouvrirFiche(abimee, 3, { images });
     await attendre(() => expect(rubriqueLogo(ficheDe(autre, 3)).querySelector('[data-logo-introuvable]')).not.toBeNull());
     expect(vignette(ficheDe(autre, 3))).toBeNull();
+  });
+
+  test('sous « Logo introuvable », choisir de nouveau la même image la remet en place : la vignette paraît, sans refus ni entrée', async () => {
+    const source = await image(60, 30);
+    const png = await convertirLogo(source, { fichier: 'emblème.png' });
+    const charge = chargeDouze();
+    charge.participants[2].logo = await cheminDe(png);
+    const choisi = { nom: 'emblème.png', octets: source };
+    const { m, fiche } = await ouvrirFiche(charge, 3, { aImporter: [choisi, choisi] });
+    await attendre(() => expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-introuvable]')).not.toBeNull());
+    commande(fiche, 'choisirLogo').click();
+    expect(await vignetteChargee(m, 3)).toEqual({ largeur: 60, hauteur: 30 });
+    expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-refus]')).toBeNull();
+    expect(libelles(m)).toEqual([]);
+    expect(logoDe(m, 3)).toBe(charge.participants[2].logo);
+    // Le logo présent, le même choix se refuse : il ne change rien.
+    commande(ficheDe(m, 3), 'choisirLogo').click();
+    await attendre(() => expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-refus="SANS_EFFET"]')).not.toBeNull());
   });
 
   test('une image illisible ou trop lourde se refuse à côté de « Logo », sans rien écrire ; un dialogue annulé ne fait rien', async () => {

@@ -4403,7 +4403,9 @@ blanc des badges, en clair comme en sombre, ou « Aucun logo. », ou « Logo
 introuvable » quand son image manque au dossier de l'événement — un événement
 importé d'un seul fichier, une image retirée à la main — ou ne se lit pas.
 « Logo » ouvre le dialogue des images, puis pose ou remplace le logo ;
-« Retirer le logo », en écriture seulement, le retire sans effacer l'image. Toute image que le moteur
+« Retirer le logo », en écriture seulement, le retire sans effacer l'image.
+Sous « Logo introuvable », choisir de nouveau la même image la remet en place :
+la vignette paraît, sans entrée au journal. Toute image que le moteur
 de rendu décode s'accepte — PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, et SVG,
 rastérisé à 1 200 pixels de plus grand côté ; une photo HEIC, une image TIFF
 ou un fichier illisible se refusent, `LOGO_ILLISIBLE`, d'un texte qui dit de
