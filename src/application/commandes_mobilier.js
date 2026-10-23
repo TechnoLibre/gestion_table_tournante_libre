@@ -20,11 +20,15 @@
 //
 // Une table a un identifiant, tiré de prochainsIds.table, qui ne revient
 // jamais, et un numéro affiché, le plus grand plus un, qui ne se renumérote
-// pas (§ 4). Les capacités passent par controlerCapacite (capacite.js) ; le
-// retenu les suit, ses surnuméraires versés en réserve, et une table créée y
-// entre, vide à chaque tour : il ne gagne aucune raison de dérive. Une
-// proposition ne se réécrit jamais : elle dérive (§ 8.9, § 9). Supprimer une
-// table et changer les tours laissent propositions et retenu en dérive.
+// pas (§ 4). creerTable crée une table, ou, avec combler, en une seule
+// entrée, les tables d'une taille donnée qui assoient chacun : le manque est
+// celui de l'avis PLACES_MANQUANTES, lu dans capaciteParTour. Les capacités
+// passent par controlerCapacite (capacite.js) ; le retenu les suit, ses
+// surnuméraires versés en réserve, et une table créée y entre, vide à chaque
+// tour : il ne gagne aucune raison de dérive. Une proposition ne se réécrit
+// jamais : elle dérive (§ 8.9, § 9). Supprimer une table et changer les tours
+// laissent propositions et retenu en dérive.
+import { constante } from '../geometrie/constantes.js';
 import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js';
 import { CRITERES, MODES_OBJECTIFS, POIDS_MAX, seulsASonPalier, verifierPriorites } from '../moteur/criteres.js';
 import {
@@ -42,7 +46,7 @@ import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { fautes } from '../stockage/placements.js';
 import { presencesSousTours } from '../stockage/presence.js';
-import { bilanChangementDefaut } from './bilans.js';
+import { bilanChangementDefaut, capaciteParTour } from './bilans.js';
 import { controlerCapacite, lireEntier, retenuAuxCapacites } from './capacite.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
@@ -51,12 +55,20 @@ import { nomAffiche } from './personnes.js';
 import { leverRefus } from './pose.js';
 
 const FORMES = new Set(['ronde', 'carree']);
+// La constante du seuil au-delà duquel le dessin d'une table cesse d'être
+// lisible (§ 6.2), que lit constante.
+const SEUIL_LISIBLE = { nom: 'SEUIL_SIEGES_LISIBLES' };
 const ORIGINES = new Set(['champ', 'poignee']);
 
 // Le plus grand identifiant de table qu'admet la règle du schéma : le
 // compteur, qui la suit, n'aurait plus de valeur au-delà de lui.
 const regleDuChamp = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
-const IDENTIFIANT_MAX = regleDuChamp(regleDuChamp(regleDuChamp(SCHEMA, 'charge'), 'tables').element, 'id').max;
+const REGLE_TABLE = regleDuChamp(regleDuChamp(SCHEMA, 'charge'), 'tables').element;
+const IDENTIFIANT_MAX = regleDuChamp(REGLE_TABLE, 'id').max;
+
+/** Les bornes du nombre de places d'une table, celles de la règle du
+ *  schéma : min et max compris. */
+export const PLACES_TABLE = Object.freeze({ min: regleDuChamp(REGLE_TABLE, 'sieges').min, max: regleDuChamp(REGLE_TABLE, 'sieges').max });
 
 // Les réglages que modifierReglage change : un interrupteur, ou un entier ≥ 1
 // de la génération (§ 5.3, § 5.10).
@@ -173,30 +185,101 @@ function exigerCapacite(charge, id, sieges, origine) {
   return avertissements;
 }
 
+// Ajoute à suivante, la copie de travail, une table de la forme donnée,
+// à sieges places — null, elle suit le défaut —, d'identifiant
+// prochainsIds.table, numérotée après la plus grande, posée sur la première
+// case libre (caseLibre) de la grille, au pas que donnent les tables déjà
+// posées, chacune à sa capacité, et la nouvelle. Sous un retenu lisible
+// (dansLeRetenu), elle y entre avec sa capacité et une liste vide à chaque
+// tour. Rend son numéro.
+function poserTable(suivante, forme, sieges, dansLeRetenu) {
+  const id = suivante.prochainsIds.table;
+  const numero = Math.max(0, ...suivante.tables.map((table) => table.numero)) + 1;
+  const places = sieges ?? suivante.evenement.siegesParDefaut;
+  const posees = suivante.tables.map((table) => ({ position: table.position, forme: table.forme, places: capacite(suivante, table) }));
+  const position = caseLibre(posees, { forme, places });
+  suivante.tables.push({ id, numero, sieges, forme, position });
+  suivante.prochainsIds.table = id + 1;
+  if (dansLeRetenu) {
+    suivante.retenu.tables.push(id);
+    suivante.retenu.capacites.push(places);
+    for (const etage of suivante.retenu.placement) etage.sieges.push([]);
+  }
+  return numero;
+}
+
+// Vrai quand le retenu de la charge se lit : une table créée y entre.
+const retenuLisible = ({ retenu }) => retenu !== null && fautes(retenu).length === 0;
+
 /**
- * creerTable {forme} (§ 4, § 6.1) : une table qui suit le défaut, d'identifiant
- * prochainsIds.table, numérotée après la plus grande, posée sur la première
- * case libre (caseLibre) de la grille des démonstrations, au pas que donnent
- * les tables posées, chacune à sa capacité, et la nouvelle. Sous un retenu
- * lisible, elle y entre avec sa capacité et une liste vide à chaque tour.
+ * Les tables qui manquent pour asseoir chacun, à sieges places par table
+ * (§ 6.1) : manque, le plus grand manque d'un même tour — celui de l'avis
+ * PLACES_MANQUANTES, max(0, présents du tour − places), lu dans
+ * capaciteParTour —, 0 quand les places suffisent ; presentes, le plus grand
+ * nombre de personnes présentes à un même tour, non exclues, qui vaut sans
+ * absence le nombre de non-exclues ; places, la somme des capacités ;
+ * tables, ceil(manque / sieges), 0 sans manque ; placesApres, les places
+ * une fois ces tables créées. sieges n'est pas borné ici : la commande le
+ * borne.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {number} sieges   un entier positif
+ * @returns {{manque: number, presentes: number, places: number, tables: number, sieges: number, placesApres: number}}
+ * @throws {TypeError} sieges qui n'est pas un entier positif
  */
-function creerTable(charge, { forme } = {}) {
+export function bilanTablesManquantes(charge, sieges) {
+  if (!Number.isSafeInteger(sieges) || sieges < 1) throw new TypeError(`sieges : entier positif attendu, reçu ${JSON.stringify(sieges)}`);
+  const parTour = capaciteParTour(charge);
+  const places = charge.tables.reduce((total, table) => total + capacite(charge, table), 0);
+  const manque = Math.max(0, ...parTour.map((tour) => tour.manque));
+  const presentes = Math.max(0, ...parTour.map((tour) => tour.presentes));
+  const tables = Math.ceil(manque / sieges);
+  return { manque, presentes, places, tables, sieges, placesApres: places + tables * sieges };
+}
+
+// creerTable {forme, combler} : les tables de combler places qui
+// assoient chacun (bilanTablesManquantes), en une entrée. combler se lit
+// par lireEntier et se borne comme une capacité (PLACES_TABLE) :
+// MOINS_DE_DEUX, TROP_DE_PLACES {max}, remède null. Sans manque :
+// PLACES_SUFFISANTES {places, presentes}, remède null. Un compteur qui ne
+// suffit pas à toutes refuse COMPTEUR_SATURE, et rien ne se crée. Une
+// table à la taille du défaut le suit ; une autre est surchargée. Au-delà
+// du seuil lisible, AU_DELA_LISIBLE {seuil}, comme une saisie de places.
+function creerTablesManquantes(charge, forme, saisie) {
+  const sieges = entierSaisi(saisie);
+  if (sieges < PLACES_TABLE.min) throw refus('MOINS_DE_DEUX');
+  if (sieges > PLACES_TABLE.max) throw refus('TROP_DE_PLACES', { max: PLACES_TABLE.max });
+  const bilan = bilanTablesManquantes(charge, sieges);
+  if (bilan.tables === 0) throw refus('PLACES_SUFFISANTES', { places: bilan.places, presentes: bilan.presentes });
+  if (charge.prochainsIds.table + bilan.tables - 1 >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'table' });
+  const suivante = copieDeTravail(charge);
+  const dansLeRetenu = retenuLisible(suivante);
+  const surcharge = sieges === charge.evenement.siegesParDefaut ? null : sieges;
+  const numeros = Array.from({ length: bilan.tables }, () => poserTable(suivante, forme, surcharge, dansLeRetenu));
+  const seuil = constante(SEUIL_LISIBLE.nom);
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CREER_TABLES', { premier: numeros[0], dernier: numeros.at(-1), sieges }),
+    avertissements: sieges > seuil ? [{ code: 'AU_DELA_LISIBLE', details: { seuil } }] : [],
+  };
+}
+
+/**
+ * creerTable {forme, combler?} (§ 4, § 6.1) : sans combler, une table qui
+ * suit le défaut, d'identifiant prochainsIds.table, numérotée après la plus
+ * grande, posée sur la première case libre (caseLibre) de la grille des
+ * démonstrations, au pas que donnent les tables posées, chacune à sa
+ * capacité, et la nouvelle. Sous un retenu lisible, elle y entre avec sa
+ * capacité et une liste vide à chaque tour. Avec combler, les places par
+ * table saisies, les tables qui comblent le manque (creerTablesManquantes).
+ */
+function creerTable(charge, { forme, combler } = {}) {
   exigerModifiable(charge);
   if (!FORMES.has(forme)) throw new TypeError(`forme : 'ronde' ou 'carree' attendue, reçu ${JSON.stringify(forme)}`);
-  const id = charge.prochainsIds.table;
-  if (id >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'table' });
-  const numero = Math.max(0, ...charge.tables.map((table) => table.numero)) + 1;
-  const posees = charge.tables.map((table) => ({ position: table.position, forme: table.forme, places: capacite(charge, table) }));
-  const position = caseLibre(posees, { forme, places: charge.evenement.siegesParDefaut });
+  if (combler !== undefined) return creerTablesManquantes(charge, forme, combler);
+  if (charge.prochainsIds.table >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'table' });
   const suivante = copieDeTravail(charge);
-  suivante.tables.push({ id, numero, sieges: null, forme, position });
-  suivante.prochainsIds.table = id + 1;
-  const { retenu } = suivante;
-  if (retenu !== null && fautes(retenu).length === 0) {
-    retenu.tables.push(id);
-    retenu.capacites.push(charge.evenement.siegesParDefaut);
-    for (const etage of retenu.placement) etage.sieges.push([]);
-  }
+  const numero = poserTable(suivante, forme, null, retenuLisible(suivante));
   return { charge: suivante, libelle: libelle('ENTREE_CREER_TABLE', { numero }), avertissements: [] };
 }
 

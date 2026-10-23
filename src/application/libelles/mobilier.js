@@ -114,6 +114,14 @@ export const TABLE = new Map([
   ['MOINS_D_UN_TOUR', () => 'Une soirée compte au moins un tour.'],
   ['TROP_DE_PLACES', ({ max }) => `Une table compte au plus ${max} places : le plan ne dessinerait pas plus de chaises.`],
   ['TROP_DE_TOURS', ({ max }) => `Une soirée compte au plus ${max} tours.`],
+  // places : la somme des capacités ; presentes : le plus grand nombre de
+  // personnes présentes à un même tour.
+  [
+    'PLACES_SUFFISANTES',
+    ({ places, presentes }) =>
+      `Les places suffisent déjà : ${compte(places, 'place', 'places')} pour ` +
+      `${compte(presentes, 'personne', 'personnes')}, aucune table n'est à créer.`,
+  ],
   // longueur : les caractères du libellé saisi ; maximum : LIBELLE_TABLE_MAX.
   [
     'LIBELLE_TABLE_TROP_LONG',
@@ -249,6 +257,16 @@ export const TABLE = new Map([
 
   // --- Les libellés figés du journal (§ 8.2) ---------------------------------
   ['ENTREE_CREER_TABLE', ({ numero }) => `Ajouté la table ${numero}`],
+  // Les tables qui comblent le manque, numérotées de premier à dernier.
+  [
+    'ENTREE_CREER_TABLES',
+    ({ premier, dernier, sieges }) => {
+      const places = compte(sieges, 'place', 'places');
+      if (premier === dernier) return `Ajouté la table ${premier}, de ${places}`;
+      const lien = dernier === premier + 1 ? 'et' : 'à';
+      return `Ajouté les tables ${premier} ${lien} ${dernier}, de ${places}`;
+    },
+  ],
   [
     'ENTREE_SUPPRIMER_TABLE',
     ({ numero, reservations, titres, objectifs = 0 }) => {

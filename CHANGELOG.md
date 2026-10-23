@@ -526,6 +526,16 @@
   la place libérée revient au reste ; la feuille de contrôle nomme alors les
   données retirées. La liste en CSV ne change pas, et toutes cochées, la
   planche sort identique à celle d'avant.
+- Quand les places manquent, l'avis qui offre « Ouvrir les tables » offre aussi
+  « Créer les tables… », et la section « Tables et tours » offre la même
+  commande tant qu'il en manque. Elle déplie un petit formulaire : le nombre de
+  places par table, pré-rempli du défaut de l'événement, puis ce que la
+  création fera, « 22 tables de 8 places : 176 places pour 171 participants ».
+  « Créer » ajoute aux tables existantes juste assez de tables de cette taille
+  pour asseoir chacun, numérotées à la suite, en une seule entrée de
+  l'historique que « Défaire » ou Ctrl+Z retire ; l'avis tombe, et une annonce
+  nomme les tables créées. Sous une présence partielle, le compte est celui des
+  personnes présentes au plus à un même tour.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

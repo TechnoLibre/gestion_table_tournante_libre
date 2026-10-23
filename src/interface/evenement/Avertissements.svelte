@@ -8,7 +8,9 @@
   // numéro et leurs fautes ; les placements en dérive et leurs raisons —,
   // puis son remède en Commande, par actionRemede (primitives/commande.js),
   // confirmé en place quand actionRemede le demande — « Débloquer ».
-  // Un avertissement n'empêche rien.
+  // PLACES_MANQUANTES offre en plus « Créer les tables… », qui ouvre la
+  // section des tables, son formulaire déplié (demanderCreationTables,
+  // CreerTables.svelte). Un avertissement n'empêche rien.
   //
   // Chacun est un message d'avis : le fond, le filet et l'encre de l'avis,
   // le triangle de sa marque devant le texte. Le remède se pose en haut à
@@ -23,6 +25,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
   import { actionRemede } from '../primitives/commande.js';
+  import { demanderCreationTables } from '../tables/CreerTables.svelte';
   import { avertissementsOrdonnes } from './modele.js';
 
   const t = getContext('t');
@@ -30,6 +33,14 @@
   const ui = getContext('ui');
 
   const liste = $derived(avertissementsOrdonnes($seance));
+
+  // La création des tables qui manquent, offerte à côté du remède de
+  // PLACES_MANQUANTES quand l'état de navigation sait ouvrir les tables :
+  // la demande précède l'ouverture, que le formulaire monté reçoit.
+  function creerLesTables() {
+    demanderCreationTables(seance);
+    ui.allerA('tables');
+  }
 </script>
 
 {#if liste.length > 0}
@@ -48,6 +59,9 @@
               confirmer={action.confirmer}
               executer={action.executer}
             />
+            {#if avertissement.code === 'PLACES_MANQUANTES' && ui !== null && ui !== undefined}
+              <Commande cle="tables.manque.ouvrir" nom="creerTablesManquantes" executer={creerLesTables} />
+            {/if}
           </div>
         {/if}
         {#if avertissement.fautives !== undefined && avertissement.fautives.length > 0}
@@ -134,6 +148,9 @@
   }
 
   .action {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-1);
     grid-row: 1;
     grid-column: 3;
   }

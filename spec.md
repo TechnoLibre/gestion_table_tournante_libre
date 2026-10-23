@@ -113,10 +113,11 @@ Valider une présence est une entrée d'historique, qui ajuste le placement
 retenu (§ 5.8).
 
 **4. Préparer les tables.** *Obligatoire.* L'opérateur fixe le nombre de sièges
-par défaut, crée les tables, surcharge celles qui diffèrent (§ 6.1) et les
-dispose sur le plan (§ 7.1). Le logiciel énonce la conséquence chiffrée d'un
-changement de défaut avant de l'appliquer, n'écrase aucune surcharge, et refuse
-en bloc une baisse qu'une seule table refuse (§ 6.1).
+par défaut, crée les tables — une à une, ou d'un geste celles qui manquent
+pour asseoir chacun, à la taille qu'il donne —, surcharge celles qui diffèrent
+(§ 6.1) et les dispose sur le plan (§ 7.1). Le logiciel énonce la conséquence
+chiffrée d'un changement de défaut avant de l'appliquer, n'écrase aucune
+surcharge, et refuse en bloc une baisse qu'une seule table refuse (§ 6.1).
 
 Il donne au besoin à une table un **objectif** (§ 4.5) — les étiquettes des
 personnes qu'elle attend, sous la règle « au moins une » ou « toutes » —, pour
@@ -2268,6 +2269,25 @@ nomme, dans son annonce, chaque présence que le retrait rogne.
 
 Deux boutons : appliquer, ou appliquer **et réaligner les 4 surchargées** — le
 second geste est séparé parce qu'il détruit de la saisie.
+
+**Créer les tables qui manquent.** Quand les places manquent — le manque de
+l'avertissement PLACES_MANQUANTES, le plus grand, d'un tour à l'autre, des
+présents non exclus moins la somme des capacités —, l'avertissement offre,
+à côté de « Ouvrir les tables », « Créer les tables… », et la section des
+tables offre la même commande tant qu'il en manque. Elle déplie en place un
+petit formulaire, sans fenêtre : le nombre de places par table, pré-rempli
+du défaut, borné comme une table (§ 6.2), puis la conséquence chiffrée avant
+d'appliquer :
+
+> « 22 tables de 8 places : 176 places pour 171 participants »
+
+— sous une présence partielle, « … pour 112 personnes présentes au plus à un
+même tour ». Elle ajoute aux tables existantes ⌈manque / taille⌉ tables
+rondes de cette taille, numérotées à la suite, posées sur des cases libres,
+en **une seule entrée d'historique** ; une table à la taille du défaut le
+suit, une autre est surchargée. Elle se refuse en lecture et sur un plan
+bloqué comme tout geste sur les tables, et quand plus rien ne manque. Après,
+l'avertissement tombe, et le focus passe à l'annonce des tables créées.
 
 **Un changement de défaut est une seule entrée d'historique**, quel que soit le
 nombre de tables touchées. **Baisser le défaut** subit les refus du § 6.2, et

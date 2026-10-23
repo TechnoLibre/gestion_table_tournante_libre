@@ -23,7 +23,7 @@ import { flushSync } from 'svelte';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerFormat } from '../../application/format.js';
 import { creerTraduction } from '../../application/traduction.js';
-import { fixerCadre } from '../../../test/navigateur/entrees.js';
+import { fixerCadre, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, contraste, couleurTexte, fondPeintSous, porteursDeTexte, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -514,6 +514,66 @@ describe('les avertissements, en messages d’avis', () => {
       });
     }
   }
+});
+
+describe('le remède « Créer les tables… » de PLACES_MANQUANTES (§ 6.1)', () => {
+  const avis = (m) => dans(m, '[data-annonces] [data-avertissement="PLACES_MANQUANTES"]');
+
+  test('« Créer les tables… » ouvre le formulaire des tables ; « Créer » fait tomber l’avis ; Ctrl+Z défait', async () => {
+    const m = await neuf();
+    await enManque(m);
+    const message = await attendre(() => {
+      expect(avis(m)).not.toBeNull();
+      return avis(m);
+    });
+    const actions = [...message.querySelectorAll('button[data-commande]')];
+    expect(actions.map((bouton) => bouton.textContent.trim())).toEqual([
+      tEcran('communs.remede.ouvrirSection.tables'),
+      tEcran('tables.manque.ouvrir'),
+    ]);
+    expect(actions[1].dataset.commande).toBe('creerTablesManquantes');
+    actions[1].click();
+    const formulaire = await attendre(() => {
+      const element = dans(m, '[data-section="tables"] [data-enonce="creerTables"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(m.ui.etat().section).toBe('tables');
+    const champ = formulaire.querySelector('input[data-champ="siegesParTable"]');
+    expect(champ.value).toBe(String(EVENEMENT.siegesParDefaut));
+    await attendre(() => expect(document.activeElement).toBe(champ));
+    // Une table de 3 pour 4 personnes : une table de plus.
+    expect(formulaire.querySelector('[data-phrase]').textContent).toBe(
+      tEcran('tables.manque.apercu', { tables: 1, sieges: 3, placesApres: 6, presentes: 4, partielle: false }),
+    );
+    const revision = m.seance.etat().evenement.revision;
+    formulaire.querySelector('[data-commande="creerTables"]').click();
+    await attendre(() => expect(m.seance.etat().charge.tables).toHaveLength(2));
+    expect(m.seance.etat().evenement.revision).toBe(revision + 1);
+    await attendre(() => expect(avis(m)).toBeNull());
+    const annonce = await attendre(() => {
+      const element = dans(m, '[data-section="tables"] [data-enonce="tablesCreees"]');
+      expect(document.activeElement).toBe(element);
+      return element;
+    });
+    expect(annonce.textContent).toBe(tEcran('tables.manque.fait', { premier: 2, dernier: 2 }));
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(m.seance.etat().charge.tables).toHaveLength(1));
+  });
+
+  test('section des tables déjà ouverte : le remède déplie le formulaire', async () => {
+    const m = await neuf();
+    m.ui.allerA('tables');
+    await enManque(m);
+    const bouton = await attendre(() => {
+      const element = avis(m)?.querySelector('[data-commande="creerTablesManquantes"]');
+      expect(element).toBeTruthy();
+      return element;
+    });
+    expect(dans(m, '[data-section="tables"] [data-enonce="creerTables"]')).toBeNull();
+    bouton.click();
+    await attendre(() => expect(document.activeElement).toBe(dans(m, '[data-section="tables"] input[data-champ="siegesParTable"]')));
+  });
 });
 
 describe('le support rompu, en message de refus (§ 8.6)', () => {

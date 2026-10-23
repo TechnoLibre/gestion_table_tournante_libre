@@ -15,6 +15,7 @@ import { chargements } from '../../test/chargements.js';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
+import { constante } from '../geometrie/constantes.js';
 import { caseLibre } from '../geometrie/tables.js';
 import { STATUT, nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
@@ -38,7 +39,7 @@ import { derive, examiner, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { invariantViole } from './avertissements.js';
 import { COMMANDES, appliquerCommande } from './commandes.js';
-import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
+import { COMMANDES_MOBILIER, PLACES_TABLE, bilanTablesManquantes } from './commandes_mobilier.js';
 import { ErreurCommande } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { etatPlaces } from './places.js';
@@ -630,6 +631,146 @@ describe('mobilier : créer, déplacer et supprimer une table (§ 4, § 6.1, § 
     const deux = await seanceSur(charge);
     const reduit = await deux.seance.executer('changerPlacesTable', { id: 1, sieges: 6, origine: 'champ' });
     assert.deepEqual(reduit.avertissements, [{ code: 'PLACES_MANQUANTES', details: { placesManquantes: 2 } }]);
+  });
+});
+
+describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
+  // Le manque de la charge tel que l'avis PLACES_MANQUANTES le compte : le
+  // plus grand manque par tour de l'instance normalisée.
+  const manqueDuMoteur = (charge) => nombrePlacesManquantes(normaliser(configurationDepuisCharge(charge)));
+
+  test('les bornes d’une table sont celles de la règle du schéma : 2 à SIEGES_MAX', () => {
+    assert.deepEqual(PLACES_TABLE, { min: 2, max: SIEGES_MAX });
+    assert.ok(Object.isFrozen(PLACES_TABLE));
+  });
+
+  test('171 personnes, aucune table, 8 par table : 22 tables numérotées 1 à 22, qui suivent le défaut, en une commande ; le manque tombe à 0', () => {
+    const charge = chargeDe({ n: 171 });
+    assert.deepEqual(bilanTablesManquantes(charge, 8), { manque: 171, presentes: 171, places: 0, tables: 22, sieges: 8, placesApres: 176 });
+    const { charge: apres, libelle: texte, avertissements } = accepter('creerTable', charge, { forme: 'ronde', combler: 8 });
+    assert.equal(texte, 'Ajouté les tables 1 à 22, de 8 places');
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual(apres.tables.map(({ id, numero }) => [id, numero]), suite(1, 22).map((n) => [n, n]));
+    assert.ok(apres.tables.every(({ sieges, forme }) => sieges === null && forme === 'ronde'));
+    assert.equal(apres.prochainsIds.table, 23);
+    assert.equal(manqueDuMoteur(apres), 0);
+    assert.deepEqual(fautesBandes(apres).fautes, []);
+    assert.equal(bilanTablesManquantes(apres, 8).tables, 0);
+  });
+
+  test('aux tables existantes s’ajoutent ceil(manque / taille) tables de cette taille, numérotées après la plus grande ; hors du défaut, surchargées', () => {
+    // Deux tables de 8, numérotées 1 et 5 : 16 places pour 30 personnes,
+    // dont une exclue — 29 à asseoir, il en manque 13.
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2, numero: 5 }], n: 30, exclus: [7] });
+    assert.equal(manqueDuMoteur(charge), 13);
+    assert.deepEqual(bilanTablesManquantes(charge, 6), { manque: 13, presentes: 29, places: 16, tables: 3, sieges: 6, placesApres: 34 });
+    const { charge: apres, libelle: texte } = accepter('creerTable', charge, { forme: 'carree', combler: '6' });
+    assert.equal(texte, 'Ajouté les tables 6 à 8, de 6 places');
+    assert.deepEqual(apres.tables.slice(2).map(({ id, numero, sieges, forme }) => [id, numero, sieges, forme]), [
+      [3, 6, 6, 'carree'],
+      [4, 7, 6, 'carree'],
+      [5, 8, 6, 'carree'],
+    ]);
+    assert.deepEqual(apres.tables.slice(0, 2), charge.tables);
+    assert.equal(manqueDuMoteur(apres), 0);
+    // Les tables d'épreuve se recouvrent déjà : seules les paires d'une
+    // table créée s'examinent.
+    for (const id of [3, 4, 5]) assert.deepEqual(fautesBandes(apres, { avec: id }).fautes, [], `table ${id}`);
+    // Un manque que la taille divise : 12 manquent, 6 par table, 2 tables.
+    const juste = chargeDe({ tables: [{ id: 1 }], n: 20 });
+    assert.equal(bilanTablesManquantes(juste, 6).tables, 2);
+    // Une seule table : le libellé la nomme seule.
+    const une = accepter('creerTable', chargeDe({ tables: [{ id: 1 }], n: 9 }), { forme: 'ronde', combler: 8 });
+    assert.equal(une.libelle, 'Ajouté la table 2, de 8 places');
+    assert.deepEqual(une.charge.tables.map(({ numero }) => numero), [1, 2]);
+  });
+
+  test('sous une présence partielle, le manque est celui de l’avis : le plus grand manque d’un même tour, présents non exclus seuls', () => {
+    // Une table de 8, 3 tours, 14 personnes : 3 absentes au tour 1, 6 au
+    // tour 2, une exclue présente à tous. Présents : 10, 7 et 13 ; le manque
+    // du tour 3, 5, est le plus grand.
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 14, tours: 3, exclus: [14] });
+    for (const id of [1, 2, 3]) charge.participants[id - 1].presence = [2, 3];
+    for (const id of [4, 5, 6, 7, 8, 9]) charge.participants[id - 1].presence = [1, 3];
+    assert.equal(manqueDuMoteur(charge), 5);
+    assert.deepEqual(bilanTablesManquantes(charge, 4), { manque: 5, presentes: 13, places: 8, tables: 2, sieges: 4, placesApres: 16 });
+    const { charge: apres } = accepter('creerTable', charge, { forme: 'ronde', combler: 4 });
+    assert.equal(apres.tables.length, 3);
+    assert.equal(manqueDuMoteur(apres), 0);
+    // Le même compte que le moteur sur d'autres charges : sans absence, avec
+    // exclus, avec des tables surchargées.
+    const autres = [chargeDe({ n: 5 }), chargeDe({ tables: [{ id: 1, sieges: 3 }, { id: 2 }], n: 40, exclus: [1, 2, 3] }), charge];
+    for (const autre of autres) assert.equal(bilanTablesManquantes(autre, 2).manque, manqueDuMoteur(autre));
+  });
+
+  test('sous un retenu lisible, chaque table créée y entre, à sa capacité, vide à chaque tour', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 20 });
+    const listes = [[suite(1, 8), suite(9, 16)], [suite(9, 16), suite(1, 8)]];
+    placer(charge, listes, { id: 1, retenu: true });
+    const { charge: apres } = accepter('creerTable', charge, { forme: 'ronde', combler: 3 });
+    assert.deepEqual(apres.retenu.tables, [1, 2, 3, 4]);
+    assert.deepEqual(apres.retenu.capacites, [8, 8, 3, 3]);
+    for (const { sieges } of apres.retenu.placement) assert.deepEqual(sieges.slice(2), [[], []]);
+    assert.deepEqual(fautes(apres.retenu), []);
+    assert.deepEqual(derive(apres.retenu, apres), []);
+  });
+
+  test('au-delà du seuil lisible, la création avertit AU_DELA_LISIBLE, comme une saisie de places', () => {
+    const seuil = constante('SEUIL_SIEGES_LISIBLES');
+    const { avertissements } = accepter('creerTable', chargeDe({ n: 40 }), { forme: 'ronde', combler: seuil + 1 });
+    assert.deepEqual(avertissements, [{ code: 'AU_DELA_LISIBLE', details: { seuil } }]);
+    assert.deepEqual(accepter('creerTable', chargeDe({ n: 40 }), { forme: 'ronde', combler: seuil }).avertissements, []);
+  });
+
+  test('refus : aucune place ne manque, PLACES_SUFFISANTES ; une taille hors des bornes ou non entière ; un plan bloqué ; un compteur saturé', () => {
+    const assez = chargeDe({ tables: [{ id: 1 }], n: 8 });
+    refuse(() => COMMANDES.get('creerTable')(assez, { forme: 'ronde', combler: 8 }), 'PLACES_SUFFISANTES', { places: 8, presentes: 8, remede: null });
+    const manque = chargeDe({ n: 9 });
+    refuse(() => COMMANDES.get('creerTable')(manque, { forme: 'ronde', combler: 1 }), 'MOINS_DE_DEUX', { remede: null });
+    refuse(() => COMMANDES.get('creerTable')(manque, { forme: 'ronde', combler: SIEGES_MAX + 1 }), 'TROP_DE_PLACES', { max: SIEGES_MAX, remede: null });
+    // Les bornes elles-mêmes s'acceptent : 2 places, 5 tables pour 9
+    // personnes ; SIEGES_MAX, une table, au-delà du seuil lisible.
+    const deux = accepter('creerTable', manque, { forme: 'ronde', combler: 2 });
+    assert.equal(deux.libelle, 'Ajouté les tables 1 à 5, de 2 places');
+    assert.ok(deux.charge.tables.every(({ sieges }) => sieges === 2));
+    const max = accepter('creerTable', manque, { forme: 'ronde', combler: SIEGES_MAX });
+    assert.deepEqual(max.charge.tables.map(({ numero, sieges }) => [numero, sieges]), [[1, SIEGES_MAX]]);
+    assert.deepEqual(max.avertissements, [{ code: 'AU_DELA_LISIBLE', details: { seuil: constante('SEUIL_SIEGES_LISIBLES') } }]);
+    refuse(() => COMMANDES.get('creerTable')(manque, { forme: 'ronde', combler: '8 places' }), 'NON_ENTIER', { saisie: '8 places' });
+    const bloquee = chargeDe({ n: 9 });
+    bloquee.evenement.etat = 'bloque';
+    refuse(() => COMMANDES.get('creerTable')(bloquee, { forme: 'ronde', combler: 8 }), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+    // Deux tables à créer, une seule valeur de compteur : rien ne se crée.
+    const saturee = chargeDe({ n: 9 });
+    saturee.prochainsIds.table = 2 ** 31 - 2;
+    refuse(() => COMMANDES.get('creerTable')(saturee, { forme: 'ronde', combler: 5 }), 'COMPTEUR_SATURE', { compteur: 'table', remede: null });
+    assert.equal(accepter('creerTable', saturee, { forme: 'ronde', combler: 9 }).charge.tables.length, 1);
+    assert.throws(() => bilanTablesManquantes(manque, '8'), TypeError);
+  });
+
+  test('par la séance : une entrée du journal, l’avis tombe, défaire rend les tables d’avant ; en lecture, MODE_LECTURE sans écriture', async () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 20 });
+    const { seance, entrees, ecritures } = await seanceSur(charge);
+    // Retirer une table fait naître l'avis.
+    await seance.executer('changerPlacesTable', { id: 1, sieges: 4, origine: 'champ' });
+    assert.ok(seance.etat().avertissements.some(({ code }) => code === 'PLACES_MANQUANTES'));
+    const avant = entrees();
+    const rendu = await seance.executer('creerTable', { forme: 'ronde', combler: 8 });
+    assert.equal(rendu.libelle, 'Ajouté les tables 2 et 3, de 8 places');
+    assert.equal(entrees() - avant, 1);
+    assert.equal(seance.charge.tables.length, 3);
+    assert.ok(!seance.etat().avertissements.some(({ code }) => code === 'PLACES_MANQUANTES'));
+    await seance.defaire();
+    assert.equal(seance.charge.tables.length, 1);
+    await seance.passerEnLecture();
+    const ecrites = ecritures();
+    const lecture = await seance.executer('creerTable', { forme: 'ronde', combler: 8 }).then(
+      () => null,
+      (erreur) => erreur,
+    );
+    assert.equal(lecture?.code, 'MODE_LECTURE');
+    assert.deepEqual(lecture.details.remede, { geste: 'modifier' });
+    assert.equal(ecritures(), ecrites);
   });
 });
 

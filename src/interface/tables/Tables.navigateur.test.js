@@ -27,7 +27,7 @@ import { creerTraduction } from '../../application/traduction.js';
 import { constante } from '../../geometrie/constantes.js';
 import { nombrePlaces, normaliser } from '../../moteur/configuration.js';
 import { serialiser } from '../../stockage/canonique.js';
-import { capacite, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
+import { SIEGES_MAX, capacite, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
@@ -35,6 +35,7 @@ import { pointer, touche } from '../../../test/navigateur/entrees.js';
 import { composantes, visible } from '../../../test/navigateur/rendu.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { demanderCreationTables } from './CreerTables.svelte';
 import SectionTables from './SectionTables.svelte';
 import { comptesTables } from './modele.js';
 
@@ -1379,4 +1380,141 @@ describe('la présence par tour (§ 6.1, § 2.1 étape 5)', () => {
     expect(ecritures(m)).toBe(avant);
     expect(charge(m).evenement.tours).toBe(4);
   });
+});
+
+describe('créer les tables qui manquent (§ 6.1)', () => {
+  // La section reçoit au contexte le t de l'épreuve, sans les insécables
+  // de l'écran : l'attendu d'un texte rendu se compose par lui.
+  const formulaire = (m) => section(m).querySelector('[data-enonce="creerTables"]');
+  const apercu = (m) => formulaire(m).querySelector('[data-phrase]').textContent;
+  const ouvrir = (m) => commande(section(m), 'creerTablesManquantes');
+
+  test('l’aperçu dit ce que la commande fera, verbatim : « 22 tables de 8 places : 176 places pour 171 participants »', async () => {
+    assert171();
+    const m = await preparer(chargeDe({ n: 171 }));
+    expect(ouvrir(m).textContent).toBe(t('tables.manque.ouvrir'));
+    await cliquer(m, ouvrir(m));
+    expect(apercu(m)).toBe(t('tables.manque.apercu', { tables: 22, sieges: 8, placesApres: 176, presentes: 171, partielle: false }));
+  });
+
+  test('pré-rempli du défaut, l’aperçu chiffré suit la taille validée ; « Créer » ajoute les tables en une entrée, le focus va à l’annonce, la commande disparaît ; défaire les retire', async () => {
+    // Deux tables de 8, numérotées 1 et 2 : 16 places pour 29 personnes non
+    // exclues.
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 30, exclus: [7] }));
+    expect(formulaire(m)).toBeNull();
+    await cliquer(m, ouvrir(m));
+    expect(ouvrir(m)).toBeNull();
+    const taille = champ(m, 'siegesParTable');
+    expect(taille.value).toBe('8');
+    expect(document.activeElement).toBe(taille);
+    expect(apercu(m)).toBe(t('tables.manque.apercu', { tables: 2, sieges: 8, placesApres: 32, presentes: 29, partielle: false }));
+    expect(commande(formulaire(m), 'creerTables').textContent).toBe(t('tables.manque.creer', { tables: 2 }));
+
+    await saisir(m, taille, '6');
+    expect(apercu(m)).toBe(t('tables.manque.apercu', { tables: 3, sieges: 6, placesApres: 34, presentes: 29, partielle: false }));
+    const r0 = revision(m);
+    const ecrites = ecritures(m);
+    await cliquer(m, commande(formulaire(m), 'creerTables'));
+    expect(revision(m)).toBe(r0 + 1);
+    expect(ecritures(m)).toBeGreaterThan(ecrites);
+    expect(charge(m).tables.map(({ numero, sieges }) => [numero, sieges])).toEqual([[1, null], [2, null], [3, 6], [4, 6], [5, 6]]);
+    expect(formulaire(m)).toBeNull();
+    expect(ouvrir(m)).toBeNull();
+    // Le focus va à l'annonce, hors de tout champ : Ctrl+Z y défait le
+    // geste, là où un champ défairait sa frappe.
+    const annonce = section(m).querySelector('[data-enonce="tablesCreees"]');
+    expect(annonce.textContent).toBe(t('tables.manque.fait', { premier: 3, dernier: 5 }));
+    expect(document.activeElement).toBe(annonce);
+
+    await m.seance.defaire();
+    await attendre(m);
+    expect(charge(m).tables.map(({ id }) => id)).toEqual([1, 2]);
+    expect(ouvrir(m)).not.toBeNull();
+    expect(section(m).querySelector('[data-enonce="tablesCreees"]')).toBeNull();
+  });
+
+  test('le formulaire ouvert, un geste ailleurs comble le manque : il se replie, et le manque revenu par « Défaire » ne montre que la commande', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 12 }));
+    await cliquer(m, ouvrir(m));
+    expect(formulaire(m)).not.toBeNull();
+    await m.seance.executer('creerTable', { forme: 'ronde', combler: 8 });
+    await attendre(m);
+    expect(formulaire(m)).toBeNull();
+    expect(ouvrir(m)).toBeNull();
+    await m.seance.defaire();
+    await attendre(m);
+    expect(ouvrir(m)).not.toBeNull();
+    expect(formulaire(m)).toBeNull();
+  });
+
+  test('sans manque, aucune commande ; sous présence partielle, l’aperçu compte les personnes présentes au plus à un même tour', async () => {
+    const assez = await preparer(chargeDe({ tables: [{ id: 1 }], n: 8 }));
+    expect(ouvrir(assez)).toBeNull();
+    // Dix personnes, dont deux au seul tour 2 : 8 au tour 1, 10 au tour 2,
+    // pour 4 places.
+    const m = await preparer(avecPresencesDe(chargeDe({ tables: [{ id: 1, sieges: 4 }], n: 10 }), { 1: [2], 2: [2] }));
+    await cliquer(m, ouvrir(m));
+    expect(apercu(m)).toBe(t('tables.manque.apercu', { tables: 1, sieges: 8, placesApres: 12, presentes: 10, partielle: true }));
+    expect(t('tables.manque.apercu', { tables: 1, sieges: 8, placesApres: 12, presentes: 10, partielle: true })).toBe(
+      '1 table de 8 places : 12 places pour 10 personnes présentes au plus à un même tour',
+    );
+  });
+
+  test('une taille hors des bornes se refuse contre le champ, l’aperçu inchangé ; 2 et SIEGES_MAX passent ; « Annuler » referme, le focus rendu à la commande', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 12 }));
+    await cliquer(m, ouvrir(m));
+    const avant = apercu(m);
+    await saisir(m, champ(m, 'siegesParTable'), '1');
+    const refus = formulaire(m).querySelector('[data-refus="MOINS_DE_DEUX"]');
+    expect(refus).not.toBeNull();
+    expect(apercu(m)).toBe(avant);
+    await saisir(m, champ(m, 'siegesParTable'), String(SIEGES_MAX + 1));
+    expect(formulaire(m).querySelector('[data-refus="TROP_DE_PLACES"]')).not.toBeNull();
+    expect(apercu(m)).toBe(avant);
+    // Les bornes s'acceptent : aucun refus, l'aperçu suit la taille.
+    await saisir(m, champ(m, 'siegesParTable'), '2');
+    expect(formulaire(m).querySelector('[data-refus]')).toBeNull();
+    expect(apercu(m)).toBe(t('tables.manque.apercu', { tables: 2, sieges: 2, placesApres: 12, presentes: 12, partielle: false }));
+    await saisir(m, champ(m, 'siegesParTable'), String(SIEGES_MAX));
+    expect(formulaire(m).querySelector('[data-refus]')).toBeNull();
+    expect(apercu(m)).toBe(t('tables.manque.apercu', { tables: 1, sieges: SIEGES_MAX, placesApres: 8 + SIEGES_MAX, presentes: 12, partielle: false }));
+    const ecrites = ecritures(m);
+    await cliquer(m, commande(formulaire(m), 'annulerCreationTables'));
+    expect(formulaire(m)).toBeNull();
+    expect(document.activeElement).toBe(ouvrir(m));
+    expect(ecritures(m)).toBe(ecrites);
+    expect(charge(m).tables).toHaveLength(1);
+  });
+
+  test('en lecture, « Créer » se refuse MODE_LECTURE, sans écriture ; la commande reste offerte', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 12 }), { mode: 'lecture' });
+    await cliquer(m, ouvrir(m));
+    const ecrites = ecritures(m);
+    await cliquer(m, commande(formulaire(m), 'creerTables'));
+    expect(formulaire(m).querySelector('[data-refus="MODE_LECTURE"]')).not.toBeNull();
+    expect(ecritures(m)).toBe(ecrites);
+    expect(charge(m).tables).toHaveLength(1);
+  });
+
+  test('une demande venue d’ailleurs (demanderCreationTables) ouvre le formulaire de la section montée, le champ au focus', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 12 }));
+    expect(formulaire(m)).toBeNull();
+    demanderCreationTables(m.seance);
+    await attendre(m);
+    await tick();
+    expect(formulaire(m)).not.toBeNull();
+    expect(document.activeElement).toBe(champ(m, 'siegesParTable'));
+  });
+
+  // Le texte verbatim de l'exemple du § 6.1, par la traduction.
+  function assert171() {
+    expect(t('tables.manque.apercu', { tables: 22, sieges: 8, placesApres: 176, presentes: 171, partielle: false })).toBe(
+      '22 tables de 8 places : 176 places pour 171 participants',
+    );
+  }
+
+  function avecPresencesDe(donnees, presences) {
+    for (const [id, presence] of Object.entries(presences)) donnees.participants[Number(id) - 1].presence = presence;
+    return donnees;
+  }
 });

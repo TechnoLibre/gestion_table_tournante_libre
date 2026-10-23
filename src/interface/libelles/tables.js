@@ -118,6 +118,34 @@ export const TABLE = new Map([
   ['tables.creer.ronde', 'Ajouter une table ronde'],
   ['tables.creer.carree', 'Ajouter une table carrée'],
 
+  // --- Les tables qui manquent (§ 6.1) --------------------------------------
+  // L'aperçu : les tables à créer et leur taille, puis les places une fois
+  // créées (placesApres) et les personnes à asseoir — sous présence
+  // partielle (partielle), le plus grand nombre de personnes présentes à un
+  // même tour.
+  ['tables.manque.ouvrir', 'Créer les tables\u{2026}'],
+  ['tables.manque.titre', 'Créer les tables qui manquent'],
+  ['tables.manque.places', 'Places par table'],
+  [
+    'tables.manque.apercu',
+    ({ tables, sieges, placesApres, presentes, partielle = false }) =>
+      `${compte(tables, 'table', 'tables')} de ${compte(sieges, 'place', 'places')} : ` +
+      `${compte(placesApres, 'place', 'places')} pour ` +
+      (partielle
+        ? `${compte(presentes, 'personne présente', 'personnes présentes')} au plus à un même tour`
+        : compte(presentes, 'participant', 'participants')),
+  ],
+  ['tables.manque.creer', ({ tables }) => (tables <= 1 ? 'Créer la table' : `Créer les ${tables} tables`)],
+  ['tables.manque.annuler', 'Annuler'],
+  // L'annonce du geste accepté : les tables créées, de premier à dernier.
+  [
+    'tables.manque.fait',
+    ({ premier, dernier }) => {
+      if (premier === dernier) return `Table ${premier} ajoutée.`;
+      return `Tables ${premier} ${dernier === premier + 1 ? 'et' : 'à'} ${dernier} ajoutées.`;
+    },
+  ],
+
   // Ce qu'un refus SIEGES_RETIRES retire, siège par siège : le nom de la
   // personne réservée suit, dans son propre nœud.
   ['tables.siegeRetire.titre', ({ siege, libelle }) => `Siège ${siege} : titre ${cite(libelle)}`],

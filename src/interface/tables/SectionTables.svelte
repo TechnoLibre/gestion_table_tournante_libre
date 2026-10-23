@@ -6,13 +6,15 @@
   // 5) : la carte des réglages — le nombre de places par défaut et l'énoncé
   // de son changement, le nombre de tours, la règle par défaut des
   // objectifs —, sous lesquels le tableau des personnes présentes par tour,
-  // monté seulement quand une personne manque un tour, puis la carte de la
-  // liste des tables et de leurs objectifs.
+  // monté seulement quand une personne manque un tour, puis, tant que des
+  // places manquent, la création des tables qui manquent (CreerTables), puis
+  // la carte de la liste des tables et de leurs objectifs.
   // Elle lit la charge et la révision dans l'état observable de la séance
   // et les donne à ses parties ; chaque geste passe par la séance, et
   // chaque refus se pose là où il a eu lieu.
   import { getContext } from 'svelte';
   import Carte from '../primitives/Carte.svelte';
+  import CreerTables from './CreerTables.svelte';
   import Defaut from './Defaut.svelte';
   import ListeTables from './ListeTables.svelte';
   import PresencesParTour from './PresencesParTour.svelte';
@@ -35,6 +37,7 @@
       </div>
       <PresencesParTour charge={$seance.charge} />
     </Carte>
+    <CreerTables charge={$seance.charge} revision={$seance.evenement.revision} />
     <ListeTables charge={$seance.charge} revision={$seance.evenement.revision} />
   {/if}
 </div>

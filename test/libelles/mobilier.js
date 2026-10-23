@@ -35,6 +35,8 @@ export const EXEMPLES = [
   ['AU_DELA_LISIBLE', { seuil: 16 }],
   ['LISTE_SUR_VOISINE', { table: 4, voisine: 7, numero: 3, numeroVoisine: 5, remede: { commande: 'deplacerTable', arguments: { id: 7, position: { x: 1626, y: 0 } } } }],
   ['ENTREE_CREER_TABLE', { numero: 3 }],
+  ['ENTREE_CREER_TABLES', { premier: 3, dernier: 24, sieges: 8 }],
+  ['PLACES_SUFFISANTES', { places: 176, presentes: 171, remede: null }],
   ['ENTREE_SUPPRIMER_TABLE', { numero: 2, reservations: 2, titres: 1 }],
   ['ENTREE_DEPLACER_TABLE', { numero: 3 }],
   ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: 'Coin des invités' }],
@@ -103,4 +105,12 @@ export const TEXTES = [
   ],
   ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: 'Coin des invités' }, 'Table 3 : libellé « Coin des invités »'],
   ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: null }, 'Table 3 : libellé retiré'],
+  ['ENTREE_CREER_TABLES', { premier: 3, dernier: 24, sieges: 8 }, 'Ajouté les tables 3 à 24, de 8 places'],
+  ['ENTREE_CREER_TABLES', { premier: 7, dernier: 7, sieges: 10 }, 'Ajouté la table 7, de 10 places'],
+  ['ENTREE_CREER_TABLES', { premier: 2, dernier: 3, sieges: 8 }, 'Ajouté les tables 2 et 3, de 8 places'],
+  [
+    'PLACES_SUFFISANTES',
+    { places: 176, presentes: 171, remede: null },
+    "Les places suffisent déjà : 176 places pour 171 personnes, aucune table n'est à créer.",
+  ],
 ];
