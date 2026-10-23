@@ -13,13 +13,17 @@
 // terminé, sous Linux celui d'un pid vivant dont le démarrage n'est pas
 // celui qu'il inscrit, le démarrage que ps écrit en temps universel quel
 // que soit le fuseau du processus qui le lit, et le plafond d'une image
-// choisie, que la taille lue sur le disque décide avant toute lecture.
+// choisie, que la taille lue sur le disque décide avant toute lecture. Le
+// lanceur de l'ouvreur du bureau s'y éprouve enfin sur de vrais processus,
+// des Node qui jouent l'ouvreur.
 // Chaque épreuve écrit sous ses propres dossiers temporaires, retirés à sa
 // fin, qu'elle passe ou non.
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -30,11 +34,20 @@ import {
   truncateSync,
   writeFileSync,
 } from 'node:fs';
+import { readFile as lireFichier, writeFile as ecrireFichier } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileFunction } from 'node:vm';
-import { GENRES_A_IMPORTER, TEMOIN, creerFichiers, decrireSysteme, servir } from '../electron/fichiers.js';
+import {
+  DELAI_OUVREUR_MS,
+  GENRES_A_IMPORTER,
+  TEMOIN,
+  creerFichiers,
+  decrireSysteme,
+  lancerOuvreur,
+  servir,
+} from '../electron/fichiers.js';
 import { ErreurStockage } from '../src/stockage/erreurs.js';
 import { creerFichiersElectron } from '../src/stockage/fichiers_electron.js';
 import { eprouverContrat } from './contrat_fichiers.js';
@@ -141,7 +154,7 @@ function systemeSur(dossier, { publie = null, dialog = SANS_APPEL } = {}) {
     cheminSysteme: (nom) => chemins[nom],
     nomProduit: NOM_PRODUIT,
   });
-  const fs = creerFichiersElectron(parLePrechargement(creerFichiers({ ...systeme, dialog, shell: SANS_APPEL })));
+  const fs = creerFichiersElectron(parLePrechargement(creerFichiers({ ...systeme, dialog, shell: SANS_APPEL, lancerOuvreur: SANS_APPEL.lancerOuvreur })));
   return { fs, ...systeme.racines };
 }
 
@@ -420,6 +433,7 @@ describe('coquille sur un vrai disque', () => {
         racines: { portable: null, documents },
         dialog: SANS_APPEL,
         shell: SANS_APPEL,
+        lancerOuvreur: SANS_APPEL.lancerOuvreur,
         plateforme: 'darwin',
       });
       assert.deepEqual(await fichiers.verrouiller({ id: 'documents' }, 'soiree.gtt.verrou', 'seance-a', PRISE), { pris: true });
@@ -456,4 +470,118 @@ describe('coquille sur un vrai disque', () => {
       });
     },
   );
+});
+
+describe("coquille : le lanceur de l'ouvreur du bureau, sur de vrais processus", () => {
+  // Un Node qui joue l'ouvreur : il exécute le script donné, puis sort au
+  // statut donné.
+  const ouvreurJoue = (script, statut = 0) => [process.execPath, ['-e', `${script};process.exit(${statut})`]];
+
+  test("un ouvreur qui sort à 0 rend ''", async () => {
+    const [commande, arguments_] = ouvreurJoue('');
+    assert.equal(await lancerOuvreur(commande, arguments_, { delai: 10_000 }), '');
+  });
+
+  test("un ouvreur qui échoue rend la dernière ligne non vide de son erreur standard, sans ses séquences ni caractères de contrôle", async () => {
+    const message = "premi\u{E8}re ligne\\n\u{1B}[?1049h\u{1B}[?1000hpas de m\u{E9}thode pour \u{AB} x \u{BB}\u{7}\\r\\n\\n";
+    const [commande, arguments_] = ouvreurJoue(`process.stderr.write("${message}")`, 3);
+    assert.equal(await lancerOuvreur(commande, arguments_, { delai: 10_000 }), 'pas de m\u{E9}thode pour \u{AB} x \u{BB}');
+  });
+
+  test("un ouvreur muet en échec se nomme avec son statut ou son signal ; une commande introuvable, avec le code du lancement", async () => {
+    const [commande, statut4] = ouvreurJoue('', 4);
+    assert.equal(await lancerOuvreur(commande, statut4, { delai: 10_000 }), `${commande} : statut 4`);
+    // Le signal tue le processus avant toute sortie à un statut.
+    const tue = ['-e', "process.kill(process.pid, 'SIGTERM');setInterval(()=>{},1000)"];
+    assert.equal(await lancerOuvreur(commande, tue, { delai: 10_000 }), `${commande} : signal SIGTERM`);
+    assert.equal(await lancerOuvreur('gtt-ouvreur-introuvable', [], { delai: 10_000 }), 'gtt-ouvreur-introuvable : ENOENT');
+  });
+
+  test("l'ouvreur reçoit ses arguments sans shell, les variables données, une entrée standard vide", async () => {
+    const script = "process.stderr.write([process.argv[1],process.env.MM_NOTTTY,require('fs').readFileSync(0).length].join('|'))";
+    const resultat = await lancerOuvreur(process.execPath, ['-e', `${script};process.exit(1)`, '$HOME ; dossier « x »'], {
+      variables: { MM_NOTTTY: '1' },
+      delai: 10_000,
+    });
+    assert.equal(resultat, '$HOME ; dossier « x »|1|0');
+  });
+
+  testNettoye("un ouvreur qui tient encore au terme du délai est tenu pour lancé : '' sans attendre sa sortie", async () => {
+    // L'ouvreur pose une marque 1,5 s après son départ, puis sort : rendu au
+    // terme d'un délai de 0,2 s, le lanceur n'a pas attendu la marque. Le
+    // dossier retiré avant elle, l'ouvreur sort en échec, sans suite.
+    const marque = join(dossierTemporaire(), 'sorti');
+    const script = `setTimeout(()=>require('fs').writeFileSync(${JSON.stringify(marque)},''),1500)`;
+    assert.equal(await lancerOuvreur(process.execPath, ['-e', script], { delai: 200 }), '');
+    assert.equal(existsSync(marque), false);
+  });
+
+  test("un ouvreur qui sort en échec rend sa raison sans attendre le descendant qui garde son erreur standard ouverte", async () => {
+    // Le descendant, détaché, hérite de l'erreur standard de l'ouvreur et
+    // vit 2 s, bien au-delà du délai de 0,5 s ; l'ouvreur, lui, sort aussitôt
+    // à 3, avec ou sans un mot.
+    const avecDescendant = (mot) =>
+      [
+        "require('child_process').spawn(process.execPath,['-e','setTimeout(()=>{},2000)'],{detached:true,stdio:['ignore','ignore','inherit']}).unref()",
+        mot === '' ? '' : `process.stderr.write(${JSON.stringify(`premi\u{E8}re ligne\n${mot}\n`)})`,
+        'process.exit(3)',
+      ].join(';');
+    assert.equal(await lancerOuvreur(process.execPath, ['-e', avecDescendant('pas de m\u{E9}thode')], { delai: 500 }), 'pas de m\u{E9}thode');
+    assert.equal(await lancerOuvreur(process.execPath, ['-e', avecDescendant('')], { delai: 500 }), `${process.execPath} : statut 3`);
+  });
+
+  testNettoye(
+    "un ouvreur resté au premier plan survit au processus qui l'a lancé, et écrit encore sur son erreur standard",
+    { skip: SOUS_WINDOWS },
+    async () => {
+      // Un processus lance l'ouvreur, en reçoit l'issue au terme du délai,
+      // puis sort. L'ouvreur — sh, qu'une écriture sur un tube sans lecteur
+      // tue par SIGPIPE, comme un gestionnaire de fichiers — tient la file
+      // retour ouverte depuis son départ, attend la file départ, que
+      // l'épreuve n'ouvre qu'une fois le processus sorti, écrit sur son
+      // erreur standard, puis « vivant » sur retour. Tué, il ferme retour
+      // sans rien y écrire. Le processus a son propre dossier temporaire,
+      // que le journal de l'ouvreur laisse vide.
+      const dossier = dossierTemporaire();
+      const temporaire = join(dossier, 'temporaire');
+      mkdirSync(temporaire);
+      const [depart, retour] = [join(dossier, 'depart'), join(dossier, 'retour')];
+      for (const file of [depart, retour]) {
+        const posee = spawnSync('mkfifo', [file], { encoding: 'utf8' });
+        assert.equal(posee.status, 0, ditPar(posee));
+      }
+      const ouvreur = 'exec 4>"$1"; read _ <"$2"; echo avertissement >&2; echo vivant >&4';
+      const lanceur = [
+        'const { lancerOuvreur } = await import(process.env.GTT_MODULE);',
+        "const issue = await lancerOuvreur('sh', ['-c', process.env.GTT_OUVREUR, 'sh', process.env.GTT_RETOUR, process.env.GTT_DEPART], { delai: 200 });",
+        'process.stdout.write(JSON.stringify(issue));',
+      ].join('\n');
+      const recu = lireFichier(retour, 'utf8');
+      const parent = spawn(process.execPath, ['--input-type=module', '-e', lanceur], {
+        env: {
+          ...process.env,
+          GTT_MODULE: new URL('../electron/fichiers.js', import.meta.url).href,
+          GTT_OUVREUR: ouvreur,
+          GTT_RETOUR: retour,
+          GTT_DEPART: depart,
+          TMPDIR: temporaire,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let sortieStandard = '';
+      let erreurStandard = '';
+      parent.stdout.on('data', (morceau) => (sortieStandard += morceau));
+      parent.stderr.on('data', (morceau) => (erreurStandard += morceau));
+      const [statut] = await once(parent, 'close');
+      assert.equal(statut, 0, erreurStandard);
+      assert.equal(sortieStandard, '""');
+      await ecrireFichier(depart, 'va\n');
+      assert.equal(await recu, 'vivant\n');
+      assert.deepEqual(readdirSync(temporaire), []);
+    },
+  );
+
+  test("le délai de l'ouvreur vaut 3 s", () => {
+    assert.equal(DELAI_OUVREUR_MS, 3000);
+  });
 });

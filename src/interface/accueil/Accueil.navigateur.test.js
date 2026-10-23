@@ -817,6 +817,25 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     expect(web.erreurs()).toEqual([]);
   });
 
+  test('explorateur : un ouvreur du système en échec se refuse NON_DISPONIBLE à côté de la commande, sa raison citée, et la commande reste offerte', async () => {
+    const m = await monter();
+    const cause = "xdg-open: no method available for opening '/poste/essai/data'";
+    m.fs.ouvrirDansExplorateur = async () => {
+      throw new ErreurStockage('NON_DISPONIBLE', { cause });
+    };
+    await cliquer(dans(m, '[data-commande="explorateur"]'));
+    const refus = await vi.waitFor(() => {
+      const element = dans(m, '[data-dossier] [data-refus="NON_DISPONIBLE"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(visible(refus)).toBe(true);
+    expect(refus.textContent.replace(/\s+/g, ' ')).toContain(tEcran('NON_DISPONIBLE', { cause }).replace(/\s+/g, ' '));
+    const commande = dans(m, '[data-dossier] [data-commande="explorateur"]');
+    expect(commande.getAttribute('aria-disabled')).toBeNull();
+    expect(m.erreurs()).toEqual([]);
+  });
+
   test('data/ porte deux événements et refuse l’écriture : la question nomme le dossier et la cause, dit « 2 », offre ses réponses ; aucune liste des Documents', async () => {
     const m = await monter({
       systeme: { executable: PUBLIE, sonde: { portable: 'EACCES' } },

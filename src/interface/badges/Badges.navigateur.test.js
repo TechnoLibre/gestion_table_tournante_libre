@@ -31,7 +31,7 @@ import { FICHIER_REGLAGES } from '../../stockage/reglages_locaux.js';
 import { VERSION } from '../../version.genere.js';
 import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
-import { composantes, contraste } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, traductionEcran } from '../../../test/navigateur/rendu.js';
 import { BASE, attendre, chargeBloquee, chargePrincipale, cliquer, creerContexte, fichierReglages, ouvrirEvenement } from '../../../test/navigateur/ecrans.js';
 import { FORME_TEMOIN, chargeTemoin } from '../../../test/fixtures/badges/temoin.js';
 import { clesPapier } from '../impression/modele.js';
@@ -40,6 +40,7 @@ import { personnesReeditables } from './modele.js';
 
 const TABLES = [...TABLES_APPLICATION, ...TABLES_INTERFACE];
 const { t } = creerTraduction(TABLES);
+const { t: tEcran } = traductionEcran();
 
 // Images attendues au plus pour une préparation ou une production : la
 // police et pdf-lib se chargent à la première, et le témoin met en page
@@ -506,6 +507,19 @@ describe('une écriture refusée, et son remède (§ 8.5, § 11.6)', () => {
     expect(refus.querySelector('[data-commande="enregistrerSous"]')).not.toBeNull();
     expect(m.trace.slice(depuis).filter(([primitive]) => primitive === 'creerDossier')).toEqual([]);
     expect((await m.fs.lister(racine, '')).map(({ nom }) => nom)).not.toContain(dossier);
+  });
+
+  test('un ouvreur du système en échec : « Ouvrir le dossier » se refuse NON_DISPONIBLE à côté de la commande, sa raison citée, et la commande reste offerte', async () => {
+    const m = await ouvrirBadges(chargeBloquee());
+    const cause = "xdg-open: no method available for opening '/poste/essai/data/Veillée du Héron'";
+    m.fs.ouvrirDansExplorateur = async () => {
+      throw new ErreurStockage('NON_DISPONIBLE', { cause });
+    };
+    dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]').click();
+    const selecteur = '[data-section="badges"] .commandes [data-refus="NON_DISPONIBLE"]';
+    const refus = await attendre('le refus de l’ouverture', () => dans(m, selecteur), IMAGES);
+    expect(texte(refus)).toContain(plat(tEcran('NON_DISPONIBLE', { cause })));
+    expect(dans(m, '[data-section="badges"] [data-commande="ouvrirDossier"]').getAttribute('aria-disabled')).toBeNull();
   });
 
   test('une production refusée après une réussie ne montre plus le chemin de la précédente', async () => {

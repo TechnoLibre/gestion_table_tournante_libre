@@ -20,11 +20,11 @@
 // (electron/impression.js) s'éprouve ici, sur un contenu de fenêtre factice.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, sep } from 'node:path';
+import { basename, delimiter, dirname, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { GENRES_A_IMPORTER, PRIMITIVES } from '../electron/fichiers.js';
+import { GENRES_A_IMPORTER, PRIMITIVES, parOuvreurDuBureau } from '../electron/fichiers.js';
 import { CANAL_IMPRESSION, FORMATS_DE_PAGE, imprimer, optionsImpression, servirImpression } from '../electron/impression.js';
 import { PAPIERS } from '../src/geometrie/papiers.js';
 import { LIENS } from '../src/interface/apropos.js';
@@ -47,12 +47,31 @@ const CANAL_IMPRIMER = 'gtt:imprimer';
 const PUBLIE = join(sep, 'media', 'cle', 'soirees');
 const LOCAL = join(sep, 'donnees', 'locales');
 
+// La raison que l'ouvreur factice écrit sur son erreur standard, dans le
+// scénario où il échoue.
+const RAISON_OUVREUR = "xdg-open: no method available for opening the folder";
+
 // Ce que la coquille voit de l'environnement, par scénario.
 const SCENARIOS = {
   publie: { PORTABLE_EXECUTABLE_DIR: PUBLIE, LOCALAPPDATA: LOCAL },
   absent: {},
   vide: { PORTABLE_EXECUTABLE_DIR: '' },
+  ouvreurEnEchec: { GTT_OUVREUR_ECHEC: RAISON_OUVREUR },
 };
+
+// Hors de Windows et de macOS, la coquille montre un dossier par l'ouvreur
+// du bureau, xdg-open, et non par shell.openPath.
+const PAR_OUVREUR = parOuvreurDuBureau(process.platform);
+
+// L'ouvreur factice, posé en tête du PATH de la coquille : il consigne
+// chacun de ses arguments sur une ligne de GTT_JOURNAL_OUVREUR, puis sort à
+// 0, ou, GTT_OUVREUR_ECHEC posé, l'écrit sur son erreur standard et sort à 3.
+const OUVREUR_FACTICE = [
+  '#!/bin/sh',
+  'printf \'%s\\n\' "$@" >> "$GTT_JOURNAL_OUVREUR"',
+  'if [ -n "$GTT_OUVREUR_ECHEC" ]; then printf \'%s\\n\' "$GTT_OUVREUR_ECHEC" >&2; exit 3; fi',
+  '',
+].join('\n');
 
 // Les adresses que la page demande d'ouvrir dans une nouvelle fenêtre, puis
 // de naviguer : les liens du panneau « À propos », puis des voisines que la
@@ -105,17 +124,21 @@ const CONTENU_AUTRE = {
 };
 
 // Exécute la coquille contre le factice dans un scénario, et rend son
-// journal, son pid, le dossier temporaire qu'elle a reçu, et ce qu'elle y a
-// laissé. Le répertoire courant est un dossier vide hors du projet : dans
+// journal, son pid, le dossier temporaire qu'elle a reçu, ce qu'elle y a
+// laissé, et les arguments reçus par l'ouvreur factice, un par ligne. Le
+// répertoire courant est un dossier vide hors du projet : dans
 // l'exécutable, il n'est jamais l'intérieur d'app.asar, si bien qu'un chemin
 // résolu contre lui ne désigne ni la page ni le préchargement. Le dossier
-// temporaire est neuf, et porte les DOSSIERS_POSES.
+// temporaire est neuf, et porte les DOSSIERS_POSES. L'ouvreur factice et son
+// journal vivent dans un troisième dossier neuf, hors du répertoire courant.
 function executerLaCoquille(scenario) {
   const environnement = { ...process.env };
   delete environnement.PORTABLE_EXECUTABLE_DIR;
   delete environnement.LOCALAPPDATA;
   const ailleurs = mkdtempSync(join(tmpdir(), 'coquille-'));
   const temporaire = mkdtempSync(join(tmpdir(), 'coquille-temp-'));
+  const ouvreur = mkdtempSync(join(tmpdir(), 'coquille-ouvreur-'));
+  const journalOuvreur = join(ouvreur, 'appels.txt');
   mkdirSync(join(temporaire, 'Documents', NOM_PRODUIT, 'data'), { recursive: true });
   writeFileSync(join(temporaire, 'Documents', NOM_PRODUIT, 'data', VERROU_AUTRE), `${JSON.stringify(CONTENU_AUTRE)}\n`);
   for (const nom of [PROFIL_TERMINE, PROFIL_VIVANT, AUTRE]) {
@@ -123,6 +146,8 @@ function executerLaCoquille(scenario) {
     writeFileSync(join(temporaire, nom, 'Local State'), '{}');
   }
   try {
+    writeFileSync(join(ouvreur, 'xdg-open'), OUVREUR_FACTICE);
+    chmodSync(join(ouvreur, 'xdg-open'), 0o755);
     const resultat = spawnSync(process.execPath, ['--import', FACTICE, PRINCIPAL], {
       cwd: ailleurs,
       encoding: 'utf8',
@@ -132,6 +157,8 @@ function executerLaCoquille(scenario) {
         TEMP: temporaire,
         TMP: temporaire,
         GTT_ADRESSES_DE_LA_PAGE: JSON.stringify(ADRESSES_DE_LA_PAGE),
+        PATH: `${ouvreur}${delimiter}${environnement.PATH ?? ''}`,
+        GTT_JOURNAL_OUVREUR: journalOuvreur,
         ...SCENARIOS[scenario],
       },
       timeout: DELAI_MS,
@@ -148,10 +175,12 @@ function executerLaCoquille(scenario) {
       pid: resultat.pid,
       temporaire,
       restes: readdirSync(temporaire).sort(),
+      ouvreur: existsSync(journalOuvreur) ? readFileSync(journalOuvreur, 'utf8').split('\n').filter(Boolean) : [],
     };
   } finally {
     rmSync(ailleurs, { recursive: true, force: true });
     rmSync(temporaire, { recursive: true, force: true });
+    rmSync(ouvreur, { recursive: true, force: true });
   }
 }
 
@@ -433,11 +462,25 @@ describe('coquille : préchargement', () => {
     assert.equal(sequence.filter((appel) => appel === 'webContents.print').length, 3);
   });
 
-  test("l'explorateur s'ouvre sur la racine que la page désigne", () => {
-    const journal = journalDeLaCoquille();
-    assert.deepEqual(journal.explorateur, [join(journal.chemins.documents, NOM_PRODUIT, 'data')]);
+  test("l'explorateur s'ouvre sur la racine que la page désigne : par xdg-open hors de Windows et de macOS, par shell.openPath sinon", () => {
+    const { journal, ouvreur } = coquille();
+    const data = join(journal.chemins.documents, NOM_PRODUIT, 'data');
+    assert.deepEqual(
+      { ouvreur, explorateur: journal.explorateur },
+      PAR_OUVREUR ? { ouvreur: [data], explorateur: [] } : { ouvreur: [], explorateur: [data] },
+    );
     // La réponse porte valeur: undefined, que le journal en JSON ne garde pas.
     assert.deepEqual(appelDe(journal, 'ouvrirDansExplorateur').reponse, { ok: true });
+  });
+
+  test("hors de Windows et de macOS, un xdg-open en échec répond NON_DISPONIBLE à la page, la raison qu'il écrit en cause, au lieu d'un succès muet", { skip: !PAR_OUVREUR }, () => {
+    const { journal, ouvreur } = coquille('ouvreurEnEchec');
+    assert.deepEqual(ouvreur, [join(journal.chemins.documents, NOM_PRODUIT, 'data')]);
+    assert.deepEqual(appelDe(journal, 'ouvrirDansExplorateur').reponse, {
+      ok: false,
+      code: 'NON_DISPONIBLE',
+      details: { cause: RAISON_OUVREUR },
+    });
   });
 });
 

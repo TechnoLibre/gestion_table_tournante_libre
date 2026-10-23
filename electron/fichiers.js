@@ -32,13 +32,25 @@
 // dossier illisible n'est pas un dossier vide —, ou un fichier dont les
 // octets ne sont pas de l'UTF-8, cause UTF8_INVALIDE, ses détails portant
 // alors aussi octets, un Uint8Array que l'IPC transporte ; NON_DISPONIBLE
-// {cause}, l'explorateur du système qui ne s'ouvre pas ; et TROP_VOLUMINEUX
+// {cause}, l'explorateur du système qui ne s'ouvre pas, la raison de son
+// refus en cause ; et TROP_VOLUMINEUX
 // {chemin, dossier, taille, max}, un fichier choisi à importer plus lourd que
 // le plafond de son genre, dont rien n'est lu.
-import { execFile } from 'node:child_process';
-import { readFileSync, realpath as realpathRappel, unlinkSync } from 'node:fs';
+import { execFile, spawn } from 'node:child_process';
+import {
+  closeSync,
+  fstatSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  readSync,
+  realpath as realpathRappel,
+  rmdirSync,
+  rmSync,
+  unlinkSync,
+} from 'node:fs';
 import { lstat, mkdir, open, readdir, readFile, rename, rmdir, stat, unlink } from 'node:fs/promises';
-import { hostname } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -137,6 +149,45 @@ const CAUSES_PASSAGERES_DOSSIER = new Set([...CAUSES_PASSAGERES, ...CAUSES_NON_V
 
 /** La commande qui lit le type d'un lecteur sous Windows est bornée à 5 s. */
 export const DELAI_SUPPORT_MS = 5000;
+
+/**
+ * L'ouvreur du bureau, hors de Windows et de macOS : la commande qui montre
+ * un dossier dans le gestionnaire de fichiers que le bureau désigne.
+ * shell.openPath la lance aussi sous Linux, mais rend '' sans attendre sa
+ * sortie, et un ouvreur en échec n'y laisse aucune trace : la coquille la
+ * lance elle-même, pour en lire l'issue.
+ */
+export const OUVREUR_BUREAU = 'xdg-open';
+
+/**
+ * Le temps qu'a l'ouvreur du bureau pour sortir : un ouvreur qui tient
+ * encore au-delà — celui qui garde le gestionnaire de fichiers au premier
+ * plan jusqu'à sa fermeture — est tenu pour lancé.
+ */
+export const DELAI_OUVREUR_MS = 3000;
+
+// Les plateformes où shell.openPath rend la raison d'un échec.
+const OUVERTURE_PAR_SHELL = new Set(['win32', 'darwin']);
+
+/**
+ * Vrai quand la coquille montre un dossier par l'ouvreur du bureau,
+ * xdg-open, et non par shell.openPath : hors de Windows et de macOS, où
+ * shell.openPath rend un succès sans attendre l'issue de l'ouvreur.
+ * @param {string} plateforme  process.platform
+ * @returns {boolean}
+ */
+export const parOuvreurDuBureau = (plateforme) => !OUVERTURE_PAR_SHELL.has(plateforme);
+
+// Ce que la raison d'un ouvreur lit au plus de son erreur standard, ses
+// derniers octets.
+const ERREUR_OUVREUR_MAX = 4096;
+
+// SEQUENCE_TERMINAL, une séquence d'échappement de terminal (CSI, ou ESC
+// suivi d'un seul caractère), et CONTROLE, un caractère de contrôle autre
+// que la tabulation et la fin de ligne : un ouvreur qui essaie un navigateur
+// en mode texte en écrit sur son erreur standard.
+const SEQUENCE_TERMINAL = /\u{1B}(?:\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/gu;
+const CONTROLE = /[\u{0}-\u{8}\u{B}-\u{1F}\u{7F}]/gu;
 
 // Lit le type du lecteur de la racine que reçoit la variable GTT_RACINE : le
 // chemin passe par l'environnement, jamais par le texte de la commande, où
@@ -286,6 +337,131 @@ function lancerCommande(commande, arguments_, { variables, delai }) {
 
 const pause = (ms) => new Promise((resoudre) => setTimeout(resoudre, ms));
 
+/**
+ * Ouvre le journal où un ouvreur écrit son erreur standard : un fichier
+ * temporaire, dans un dossier à lui, tous deux retirés du disque dès
+ * l'ouverture là où le système le permet. Un fichier n'a pas de lecteur à
+ * perdre : l'ouvreur y écrit tant qu'il vit, même une fois sorti le
+ * processus qui l'a lancé, sans recevoir SIGPIPE, qui tue un gestionnaire
+ * de fichiers écrivant sur un tube sans lecteur.
+ *
+ * Rend { descripteur, lire, fermer } : lire rend, en UTF-8, les derniers
+ * ERREUR_OUVREUR_MAX octets écrits, sans déplacer la position d'écriture
+ * que l'ouvreur partage ; fermer ferme le seul descripteur de la coquille,
+ * l'ouvreur gardant le sien, et retire ce que l'ouverture n'a pas pu
+ * retirer. Rend null quand le système refuse le fichier.
+ *
+ * @returns {{descripteur: number, lire: () => string, fermer: () => void} | null}
+ */
+function ouvrirJournalOuvreur() {
+  let dossier = null;
+  let descripteur = null;
+  try {
+    dossier = mkdtempSync(path.join(tmpdir(), 'gtt-ouvreur-'));
+    const fichier = path.join(dossier, 'erreur');
+    descripteur = openSync(fichier, 'w+');
+    // Windows refuse de retirer un fichier ouvert : il part à la fermeture.
+    let aRetirer = null;
+    try {
+      unlinkSync(fichier);
+      rmdirSync(dossier);
+    } catch {
+      aRetirer = dossier;
+    }
+    const tenu = descripteur;
+    return {
+      descripteur: tenu,
+      lire() {
+        const { size } = fstatSync(tenu);
+        const debut = Math.max(0, size - ERREUR_OUVREUR_MAX);
+        const octets = Buffer.alloc(size - debut);
+        const lus = readSync(tenu, octets, 0, octets.length, debut);
+        return octets.subarray(0, lus).toString('utf8');
+      },
+      fermer() {
+        try {
+          closeSync(tenu);
+          if (aRetirer !== null) rmSync(aRetirer, { recursive: true, force: true });
+        } catch {
+          // Un journal que le système refuse de fermer ou de retirer ne
+          // change rien à l'issue rendue.
+        }
+      },
+    };
+  } catch {
+    try {
+      if (descripteur !== null) closeSync(descripteur);
+      if (dossier !== null) rmSync(dossier, { recursive: true, force: true });
+    } catch {
+      // Rien de plus à défaire.
+    }
+    return null;
+  }
+}
+
+/**
+ * Lance un ouvreur et rend son issue, sans jamais lever : '' quand il sort à
+ * 0, ou qu'il tient encore au terme de delai ; sinon la raison de son échec,
+ * la dernière ligne non vide de son erreur standard, séquences et
+ * caractères de contrôle retirés, à défaut « <commande> : statut N » ou
+ * « <commande> : signal S », et pour un lancement refusé « <commande> :
+ * <code> », ENOENT pour une commande introuvable.
+ *
+ * Il se lance sans shell — un argument est un argument, quels que soient
+ * ses caractères —, détaché, dans sa propre session, les variables données
+ * ajoutées à l'environnement du processus ; son entrée et sa sortie
+ * standard sont fermées, et son erreur standard est le journal
+ * d'ouvrirJournalOuvreur, lu à sa sortie. Sa raison se lit donc dès qu'il
+ * sort, même si un descendant garde ce journal ouvert ; un journal que le
+ * système refuse le laisse sans erreur standard, son échec nommé par son
+ * statut. Rendue l'issue, plus rien ne retient le processus principal : la
+ * minuterie est levée, l'ouvreur n'est plus attendu, et la coquille ferme
+ * son descripteur du journal, l'ouvreur restant libre d'y écrire.
+ *
+ * @param {string} commande
+ * @param {string[]} arguments_
+ * @param {{variables?: Object<string, string>, delai?: number}} [options]
+ * @returns {Promise<string>}
+ */
+export function lancerOuvreur(commande, arguments_, { variables = {}, delai = DELAI_OUVREUR_MS } = {}) {
+  return new Promise((resoudre) => {
+    const journal = ouvrirJournalOuvreur();
+    let rendu = false;
+    let minuterie = null;
+    let ouvreur;
+
+    const raisonDeSortie = (code, signal) => {
+      const lignes = (journal?.lire() ?? '').replace(SEQUENCE_TERMINAL, '').replace(CONTROLE, '').split('\n');
+      const derniere = lignes.map((ligne) => ligne.trim()).filter((ligne) => ligne !== '').at(-1);
+      if (derniere !== undefined) return derniere;
+      return code !== null ? `${commande} : statut ${code}` : `${commande} : signal ${signal}`;
+    };
+    const rendre = (raison) => {
+      if (rendu) return;
+      rendu = true;
+      clearTimeout(minuterie);
+      ouvreur?.unref();
+      journal?.fermer();
+      resoudre(raison);
+    };
+
+    try {
+      ouvreur = spawn(commande, arguments_, {
+        detached: true,
+        stdio: ['ignore', 'ignore', journal === null ? 'ignore' : journal.descripteur],
+        env: { ...process.env, ...variables },
+        windowsHide: true,
+      });
+    } catch (erreur) {
+      rendre(`${commande} : ${erreur?.code ?? erreur?.message}`);
+      return;
+    }
+    ouvreur.on('error', (erreur) => rendre(`${commande} : ${erreur?.code ?? erreur?.message}`));
+    ouvreur.on('exit', (code, signal) => rendre(code === 0 ? '' : raisonDeSortie(code, signal)));
+    minuterie = setTimeout(() => rendre(''), delai);
+  });
+}
+
 // Vrai pour une erreur du système, telle que node:fs la lève : un code et
 // l'appel système qui a échoué. Les autres sont des fautes du code.
 const estErreurSysteme = (erreur) =>
@@ -382,6 +558,9 @@ export function processusVivant(pid, signaler = (cible) => process.kill(cible, 0
  * @param {string} [reglages.plateforme]  process.platform
  * @param {Function} [reglages.lancer]  (commande, arguments, {variables,
  *        delai}) → la sortie standard de la commande
+ * @param {Function} [reglages.lancerOuvreur]  (commande, arguments,
+ *        {variables, delai}) → '' ou la raison de l'échec, comme
+ *        lancerOuvreur
  * @param {(ms: number) => Promise<void>} [reglages.attendre]
  * @param {(pid: number) => void} [reglages.signaler]  celui de processusVivant
  * @param {(pid: number) => Promise<string|null>} [reglages.demarrage]
@@ -402,6 +581,7 @@ export function creerFichiers({
   chemins = path,
   plateforme = process.platform,
   lancer = lancerCommande,
+  lancerOuvreur: ouvrir = lancerOuvreur,
   attendre = pause,
   signaler,
   demarrage,
@@ -1030,8 +1210,12 @@ export function creerFichiers({
     },
 
     // La racine, ou l'un de ses dossiers, confiné comme toute cible ; un
-    // absent, ou un fichier, lève ABSENT. shell.openPath rend '' quand
-    // l'explorateur s'ouvre, et sinon la raison de l'échec.
+    // absent, ou un fichier, lève ABSENT. Sous Windows et macOS,
+    // shell.openPath le montre, et rend '' quand l'explorateur s'ouvre, sinon
+    // la raison de l'échec. Ailleurs, l'ouvreur du bureau le montre, lancé
+    // par la coquille, qui en lit l'issue de même ; MM_NOTTTY dit à mailcap,
+    // où un ouvreur sans bureau reconnu se replie, qu'aucun terminal n'est
+    // là. Une raison non vide lève NON_DISPONIBLE {cause}.
     async ouvrirDansExplorateur(racine, chemin = '') {
       const loc = localiser(racine, chemin);
       let etat;
@@ -1042,7 +1226,9 @@ export function creerFichiers({
         throw echecLecture(loc, erreur);
       }
       if (!etat?.isDirectory()) throw new RefusFichier('ABSENT', { chemin });
-      const raison = await shell.openPath(loc.absolu);
+      const raison = !parOuvreurDuBureau(plateforme)
+        ? await shell.openPath(loc.absolu)
+        : await ouvrir(OUVREUR_BUREAU, [loc.absolu], { variables: { MM_NOTTTY: '1' }, delai: DELAI_OUVREUR_MS });
       if (raison !== '') throw new RefusFichier('NON_DISPONIBLE', { cause: raison });
     },
 

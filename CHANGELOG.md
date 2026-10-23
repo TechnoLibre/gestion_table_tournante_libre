@@ -509,6 +509,9 @@
   de son numéro, ni le jour, le mois et l'année d'une date : ces espaces
   deviennent insécables à l'affichage, historique compris ; le journal, les CSV
   et les PDF gardent le texte tel quel.
+- Sous Linux, quand le gestionnaire de fichiers ne s'ouvre pas, « Ouvrir dans
+  l'explorateur » et « Ouvrir le dossier » le disent à côté du bouton, avec la
+  raison donnée par le système, au lieu de ne rien faire.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

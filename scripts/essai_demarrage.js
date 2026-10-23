@@ -8,8 +8,9 @@
 // page, que l'application y monte, que la détermination du dossier de
 // travail retient le mode portable, qu'un travailleur de génération naît et
 // rend son issue dans la page chargée sous file://, que la police de
-// l'interface s'y charge, que l'aperçu s'y imprime une page par feuille, et
-// que la sortie rend les verrous.
+// l'interface s'y charge, que l'aperçu s'y imprime une page par feuille, que
+// les commandes de l'explorateur y lancent l'ouvreur du bureau sur le bon
+// dossier, et que la sortie rend les verrous.
 //
 //   node scripts/essai_demarrage.js
 //
@@ -20,9 +21,11 @@
 //     chargées, le corps du document est en Noto Sans, et la chaîne témoin
 //     y a la longueur des avances de la police, dans
 //     TOLERANCE_CHAINE_TEMOIN (§ 19.4) ;
-//  2. la liste affiche le dossier de travail exe/data ; créer un événement,
-//     qui s'ouvre, revenir à la liste, puis charger la petite
-//     démonstration, qui s'ouvre ;
+//  2. la liste affiche le dossier de travail exe/data ; hors de Windows et
+//     de macOS, « Ouvrir dans l'explorateur » lance xdg-open sur exe/data,
+//     sans refus à côté de la commande ; créer un événement, qui s'ouvre,
+//     revenir à la liste, puis charger la petite démonstration, qui
+//     s'ouvre ;
 //  3. le mode portable : leurs deux .gtt.json sous exe/data, aucun sous home
 //     ni sous temp, chacun avec son journal dans le dossier de son
 //     événement, exe/data/<nom>/<nom>.gtt.json, aucun à même exe/data
@@ -31,6 +34,8 @@
 //     feuille par table (webContents.printToPDF, à la taille de page de la
 //     feuille de style) : une page par feuille de l'aperçu, chacune aux
 //     dimensions de la sienne à TOLERANCE_PAGE_MM près ; l'aperçu se ferme ;
+//     hors de Windows et de macOS, Badges › « Ouvrir le dossier » lance
+//     xdg-open sur le dossier de la démonstration, sans refus ;
 //  4. « Modifier » prend un verrou dans le dossier de l'événement, sous
 //     exe/data ; le compte d'arrêt passe à 2 000 mouvements par son champ,
 //     puis « Générer », dans la page chargée sous file://, fait naître un
@@ -47,7 +52,11 @@
 // Linux, les données applicatives et les Documents se déduisent alors de
 // home seul. Sous Windows, le profil (USERPROFILE), AppData et LOCALAPPDATA
 // passent eux aussi sous home : le temporaire du poste, où mkdtemp prend la
-// racine, se range d'ordinaire sous LOCALAPPDATA.
+// racine, se range d'ordinaire sous LOCALAPPDATA. Hors de Windows et de
+// macOS, un faux xdg-open, posé en tête du PATH, consigne chacun de ses
+// arguments sur une ligne d'un journal et sort à 0 : l'essai lit dans ce
+// journal le dossier que chaque commande de l'explorateur a demandé, sans
+// qu'aucun gestionnaire de fichiers s'ouvre.
 // La coquille range le dossier temporaire et LOCALAPPDATA parmi les données
 // applicatives (electron/fichiers.js, § 8.6 point 2) : un exe placé sous
 // l'un d'eux ferait retenir les Documents. Sous Windows, les Documents sont
@@ -64,11 +73,11 @@
 // Sort à 0 sur un démarrage conforme, à 1 sinon : chaque constat s'imprime,
 // et le premier échec arrête la séance.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import path, { join, relative, resolve } from 'node:path';
+import path, { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decrireSysteme } from '../electron/fichiers.js';
+import { OUVREUR_BUREAU, decrireSysteme, parOuvreurDuBureau } from '../electron/fichiers.js';
 import { constante } from '../src/geometrie/constantes.js';
 import { estSous } from '../src/stockage/dossier_travail.js';
 import { VERSION } from '../src/version.genere.js';
@@ -349,6 +358,68 @@ function lireEtat(chemin) {
   }
 }
 
+// La règle des plateformes vient de la coquille : l'essai attend l'ouvreur
+// du bureau exactement là où elle le lance.
+export { parOuvreurDuBureau };
+
+/**
+ * Le faux ouvreur du bureau, un script sh : il ajoute chacun de ses
+ * arguments, sur sa ligne, au fichier que nomme GTT_JOURNAL_OUVREUR, et
+ * sort à 0.
+ */
+export const OUVREUR_FACTICE = ['#!/bin/sh', 'printf \'%s\\n\' "$@" >> "$GTT_JOURNAL_OUVREUR"', ''].join('\n');
+
+/**
+ * L'environnement de la coquille avec le faux ouvreur : une copie de env où
+ * dossier, qui le porte, ouvre le PATH, et où GTT_JOURNAL_OUVREUR nomme
+ * journal. env n'est pas modifié.
+ * @param {Record<string, string|undefined>} env
+ * @param {string} dossier
+ * @param {string} journal
+ * @param {path.PlatformPath} [chemins]  node:path, ou l'une de ses variantes
+ * @returns {Record<string, string|undefined>}
+ */
+export function environnementAvecOuvreur(env, dossier, journal, chemins = path) {
+  const suite = env.PATH ? `${chemins.delimiter}${env.PATH}` : '';
+  return { ...env, PATH: `${dossier}${suite}`, GTT_JOURNAL_OUVREUR: journal };
+}
+
+/**
+ * Les fautes d'une commande de l'explorateur, [] quand l'ouvreur a reçu
+ * exactement un argument, le dossier attendu : aucun appel ; sinon chaque
+ * argument reçu autre que lui, ou un compte d'arguments autre que un.
+ * @param {string[]} recus  les arguments que l'ouvreur a consignés pour la commande
+ * @param {string} attendu  le chemin absolu du dossier à montrer
+ * @returns {string[]}
+ */
+export function fautesDOuverture(recus, attendu) {
+  if (recus.length === 0) return [`aucun appel de ${OUVREUR_BUREAU}`];
+  const fautes = recus.filter((recu) => recu !== attendu).map((recu) => `${OUVREUR_BUREAU} reçoit ${recu} pour ${attendu}`);
+  if (recus.length !== 1) fautes.push(`${recus.length} arguments pour un`);
+  return fautes;
+}
+
+// Les lignes du journal de l'ouvreur, aucune tant qu'il n'existe pas.
+function lignesDe(journal) {
+  try {
+    return readFileSync(journal, 'utf8').split('\n').filter((ligne) => ligne !== '');
+  } catch {
+    return [];
+  }
+}
+
+// Clique la commande, puis attend qu'un argument de plus entre au journal
+// de l'ouvreur, ou qu'un refus se montre dans conteneur ; rend les
+// arguments reçus depuis le clic et le texte des refus montrés.
+async function ouvrirParLOuvreur(conteneur, commande, journal) {
+  const avant = lignesDe(journal).length;
+  await commande.click();
+  const refus = conteneur.locator('[data-refus]');
+  await attendre(async () => lignesDe(journal).length > avant || (await refus.count()) > 0);
+  const textes = (await refus.allTextContents()).map((texte) => texte.replace(/\s+/g, ' ').trim());
+  return { recus: lignesDe(journal).slice(avant), refus: textes };
+}
+
 class EchecDEssai extends Error {}
 
 // Imprime un constat ; un constat faux arrête la séance.
@@ -357,7 +428,7 @@ function constater(libelle, vrai, detail) {
   if (!vrai) throw new EchecDEssai(libelle);
 }
 
-async function seance(application, dossiers) {
+async function seance(application, dossiers, journalOuvreur) {
   const data = join(dossiers.exe, 'data');
   const fenetre = await application.firstWindow({ timeout: ATTENTE_MS });
   // La fenêtre de la plateforme headless peut n'avoir qu'un pixel de côté :
@@ -394,6 +465,16 @@ async function seance(application, dossiers) {
   // 2. Le dossier affiché, un événement créé, la démonstration chargée.
   const affiche = (await fenetre.locator('[data-dossier-travail]').textContent()).trim();
   constater('dossier de travail affiché', resolve(affiche) === resolve(data), affiche);
+  if (journalOuvreur !== null) {
+    const carte = fenetre.locator('[data-ecran="accueil"] [data-dossier]');
+    const { recus, refus } = await ouvrirParLOuvreur(carte, carte.locator('[data-commande="explorateur"]'), journalOuvreur);
+    const fautes = [...fautesDOuverture(recus, data), ...refus];
+    constater(
+      `« Ouvrir dans l’explorateur » lance ${OUVREUR_BUREAU} sur le dossier de travail, sans refus`,
+      fautes.length === 0,
+      fautes.length === 0 ? recus.join(', ') : fautes.join(' ; '),
+    );
+  }
   await fenetre.locator('[data-ecran="accueil"] input[data-champ="nom"]').fill(NOM_EVENEMENT);
   await fenetre.locator('[data-ecran="accueil"] [data-commande="creer"]').click();
   await fenetre.locator('[data-ecran="evenement"]').waitFor({ timeout: ATTENTE_MS });
@@ -445,6 +526,25 @@ async function seance(application, dossiers) {
   }
   await fenetre.locator('[data-ecran="apercu"] [data-commande="fermerApercu"]').click();
   await fenetre.locator('[data-ecran="evenement"]').waitFor({ timeout: ATTENTE_MS });
+  // Badges › « Ouvrir le dossier », sur le dossier de la démonstration
+  // ouverte : celui de l'état qui ne porte pas l'événement créé.
+  if (journalOuvreur !== null) {
+    const demonstration = etats.find((f) => {
+      const etat = lireEtat(join(data, f));
+      return etat !== null && etat.evenement?.nom !== NOM_EVENEMENT;
+    });
+    constater('dossier de la démonstration sous exe/data', demonstration !== undefined, demonstration && dirname(demonstration));
+    await fenetre.locator('[data-commande="section"][data-cible="badges"]').click();
+    const badges = fenetre.locator('[data-section="badges"]');
+    await badges.waitFor({ timeout: ATTENTE_MS });
+    const { recus, refus } = await ouvrirParLOuvreur(badges, badges.locator('[data-commande="ouvrirDossier"]'), journalOuvreur);
+    const fautes = [...fautesDOuverture(recus, join(data, dirname(demonstration))), ...refus];
+    constater(
+      `Badges › « Ouvrir le dossier » lance ${OUVREUR_BUREAU} sur le dossier de l’événement, sans refus`,
+      fautes.length === 0,
+      fautes.length === 0 ? recus.join(', ') : fautes.join(' ; '),
+    );
+  }
 
   // 4. « Modifier », le compte d'arrêt, « Générer ».
   await fenetre.locator('[data-commande="modifier"]').first().click();
@@ -536,7 +636,11 @@ async function principal() {
 
   const racine = mkdtempSync(join(tmpdir(), 'gtt-essai-demarrage-'));
   const dossiers = dossiersDEssai(racine);
-  const env = environnementDEssai(process.env, dossiers);
+  // Le faux ouvreur et son journal, hors des trois dossiers de l'essai.
+  const ouvreur = join(racine, 'ouvreur');
+  const journalOuvreur = parOuvreurDuBureau(process.platform) ? join(racine, 'ouvreur.txt') : null;
+  const sansOuvreur = environnementDEssai(process.env, dossiers);
+  const env = journalOuvreur === null ? sansOuvreur : environnementAvecOuvreur(sansOuvreur, ouvreur, journalOuvreur);
   for (const dossier of [...Object.values(dossiers), env.APPDATA, env.LOCALAPPDATA]) mkdirSync(dossier, { recursive: true });
   let conforme = false;
   let retrait = null;
@@ -549,6 +653,11 @@ async function principal() {
       portent.length === 0,
       portent.length === 0 ? dossiers.exe : `${dossiers.exe} sous ${portent.join(', ')}`,
     );
+    if (journalOuvreur !== null) {
+      mkdirSync(ouvreur);
+      writeFileSync(join(ouvreur, OUVREUR_BUREAU), OUVREUR_FACTICE);
+      chmodSync(join(ouvreur, OUVREUR_BUREAU), 0o755);
+    }
     const { _electron } = await import('playwright');
     const application = await _electron.launch({
       args: [...(sansBacASable ? ['--no-sandbox'] : []), ...(sansEcran ? ['--ozone-platform=headless'] : []), '.'],
@@ -557,7 +666,7 @@ async function principal() {
       timeout: ATTENTE_MS,
     });
     try {
-      await seance(application, dossiers);
+      await seance(application, dossiers, journalOuvreur);
       conforme = true;
     } finally {
       await application.close().catch(() => {});

@@ -21,8 +21,13 @@
 // d'événement dans le dossier de son événement, data/<nom>/<nom><suffixe>,
 // sous le séparateur du système ; un fichier posé à même data, plus profond,
 // ou nommé autrement que son dossier se nomme.
+//
+// Les commandes de l'explorateur (§ 8.6) : hors de Windows et de macOS, un
+// faux xdg-open en tête du PATH consigne ce qu'il reçoit, et chaque commande
+// doit lui donner le seul dossier attendu ; chaque écart se nomme.
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path, { dirname, join, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +43,10 @@ import {
   fautesDePolice,
   fautesDAppariement,
   fautesDeDisposition,
+  OUVREUR_FACTICE,
+  environnementAvecOuvreur,
+  fautesDOuverture,
+  parOuvreurDuBureau,
 } from './essai_demarrage.js';
 
 const RACINE_ESSAI = join('/', 'racine-essai', 'gtt-essai-demarrage-x');
@@ -358,5 +367,51 @@ describe('essai de démarrage : un dossier par événement sous data (§ 8.6)', 
     assert.deepEqual(fautesDeDisposition(['Bal des Mésanges\\Bal des Mésanges.gtt.json'], ETAT, path.posix), [
       'Bal des Mésanges\\Bal des Mésanges.gtt.json : posé à même data, hors d’un dossier d’événement',
     ]);
+  });
+});
+
+describe('essai de démarrage : les commandes de l’explorateur (§ 8.6)', () => {
+  const DATA = '/racine-essai/gtt-essai-demarrage-x/exe/data';
+  const EVENEMENT = `${DATA}/Bal des Mésanges`;
+
+  test('le faux ouvreur ne sert que hors de Windows et de macOS, là où la coquille lance xdg-open', () => {
+    assert.deepEqual(
+      ['linux', 'freebsd', 'win32', 'darwin'].map(parOuvreurDuBureau),
+      [true, true, false, false],
+    );
+  });
+
+  test('le PATH s’ouvre sur le dossier du faux ouvreur, le journal se nomme, le reste est gardé et env intact', () => {
+    const env = { PATH: '/usr/bin:/bin', HOME: '/racine-essai/home' };
+    const avec = environnementAvecOuvreur(env, '/racine-essai/ouvreur', '/racine-essai/ouvreur.txt', path.posix);
+    assert.deepEqual(avec, {
+      PATH: '/racine-essai/ouvreur:/usr/bin:/bin',
+      HOME: '/racine-essai/home',
+      GTT_JOURNAL_OUVREUR: '/racine-essai/ouvreur.txt',
+    });
+    assert.deepEqual(env, { PATH: '/usr/bin:/bin', HOME: '/racine-essai/home' });
+    assert.equal(environnementAvecOuvreur({}, '/racine-essai/ouvreur', '/j', path.posix).PATH, '/racine-essai/ouvreur');
+  });
+
+  test('le seul dossier attendu ne porte aucune faute ; aucun appel, un autre dossier, un argument de trop se nomment', () => {
+    assert.deepEqual(fautesDOuverture([EVENEMENT], EVENEMENT), []);
+    assert.deepEqual(fautesDOuverture([], DATA), ['aucun appel de xdg-open']);
+    assert.deepEqual(fautesDOuverture([DATA], EVENEMENT), [`xdg-open reçoit ${DATA} pour ${EVENEMENT}`]);
+    assert.deepEqual(fautesDOuverture([EVENEMENT, EVENEMENT], EVENEMENT), ['2 arguments pour un']);
+  });
+
+  test('le faux ouvreur consigne chaque argument sur sa ligne, espaces et apostrophes compris, et sort à 0', { skip: process.platform === 'win32' }, () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'essai-ouvreur-'));
+    try {
+      const script = join(dossier, 'xdg-open');
+      const journal = join(dossier, 'journal.txt');
+      writeFileSync(script, OUVREUR_FACTICE);
+      chmodSync(script, 0o755);
+      execFileSync(script, [EVENEMENT, "l'autre"], { env: { ...process.env, GTT_JOURNAL_OUVREUR: journal } });
+      execFileSync(script, [DATA], { env: { ...process.env, GTT_JOURNAL_OUVREUR: journal } });
+      assert.equal(readFileSync(journal, 'utf8'), `${EVENEMENT}\nl'autre\n${DATA}\n`);
+    } finally {
+      rmSync(dossier, { recursive: true, force: true });
+    }
   });
 });

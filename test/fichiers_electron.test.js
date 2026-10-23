@@ -10,7 +10,8 @@
 // Suivent la page, src/stockage/fichiers_electron.js, derrière le vrai
 // préchargement, et les définitions que la coquille recopie de src/stockage
 // faute de pouvoir les importer. La suite de contrat se joue sur un vrai
-// dossier, dans test/fichiers_electron.long.test.js. Les noms d'épreuve sont
+// dossier, dans test/fichiers_electron.long.test.js, avec le lanceur de
+// l'ouvreur du bureau sur de vrais processus. Les noms d'épreuve sont
 // inventés.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,8 +19,10 @@ import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileFunction } from 'node:vm';
 import {
+  DELAI_OUVREUR_MS,
   DELAI_SUPPORT_MS,
   GENRES_A_IMPORTER,
+  OUVREUR_BUREAU,
   PAUSE_INITIALE_MS,
   PAUSE_MAX_MS,
   PREFIXE_CANAL,
@@ -375,14 +378,17 @@ function dialogueFactice(reponses = []) {
 /**
  * La coquille sur un disque en mémoire où la racine documents existe. Rend
  * le disque, les primitives, et ce que l'épreuve lit des injections : les
- * pauses demandées, les dossiers ouverts dans l'explorateur, les commandes
- * lancées, les pid signalés. demarrage, quand il est donné, remplace la
+ * pauses demandées, les dossiers ouverts par shell.openPath (ouvertures),
+ * chaque lancement de l'ouvreur du bureau (ouvreurs), les commandes lancées,
+ * les pid signalés. ouvrir rend la raison de shell.openPath, ouvreur celle
+ * de l'ouvreur du bureau. demarrage, quand il est donné, remplace la
  * lecture de l'instant de démarrage d'un processus.
  */
 function preparer({
   disque = creerDisque(),
   dialog = dialogueFactice(),
   ouvrir = async () => '',
+  ouvreur = async () => '',
   lancer = async () => '',
   signaler = () => {},
   demarrage,
@@ -393,6 +399,7 @@ function preparer({
   if (!disque.existe(DOCUMENTS)) disque.deposerDossier(DOCUMENTS);
   const pauses = [];
   const ouvertures = [];
+  const ouvreurs = [];
   const commandes = [];
   const signaux = [];
   const fichiers = creerFichiers({
@@ -413,6 +420,10 @@ function preparer({
       commandes.push({ commande, arguments_, options });
       return lancer(commande, arguments_, options);
     },
+    lancerOuvreur: async (commande, arguments_, options) => {
+      ouvreurs.push({ commande, arguments_, options });
+      return ouvreur(commande, arguments_, options);
+    },
     attendre: async (ms) => {
       pauses.push(ms);
     },
@@ -424,7 +435,7 @@ function preparer({
     pid: PID,
     hote,
   });
-  return { disque, fichiers, dialog, pauses, ouvertures, commandes, signaux };
+  return { disque, fichiers, dialog, pauses, ouvertures, ouvreurs, commandes, signaux };
 }
 
 /**
@@ -1826,26 +1837,55 @@ describe('coquille, fichiers : dialogues et explorateur', () => {
     await refuse(fichiers.enregistrerSous('liste.csv', new Uint8Array(1)), 'ECRITURE', ecriture('liste.csv', '/poste/exemple/Documents', 'EROFS'));
   });
 
-  test("ouvrirDansExplorateur ouvre la racine ; une racine absente lève ABSENT sans rien ouvrir, un refus de l'explorateur NON_DISPONIBLE", async () => {
-    const { fichiers, ouvertures } = preparer();
+  // Le lancement de l'ouvreur du bureau sur un dossier, tel que la coquille
+  // le demande hors de Windows et de macOS.
+  const lancement = (absolu) => ({
+    commande: OUVREUR_BUREAU,
+    arguments_: [absolu],
+    options: { variables: { MM_NOTTTY: '1' }, delai: DELAI_OUVREUR_MS },
+  });
+
+  test("sous Linux, ouvrirDansExplorateur lance xdg-open sur la racine, jamais shell.openPath ; une racine absente lève ABSENT sans rien lancer", async () => {
+    assert.equal(OUVREUR_BUREAU, 'xdg-open');
+    const { fichiers, ouvertures, ouvreurs } = preparer();
     await fichiers.ouvrirDansExplorateur(DOC);
-    assert.deepEqual(ouvertures, [DOCUMENTS]);
+    assert.deepEqual(ouvreurs, [lancement(DOCUMENTS)]);
     await refuse(fichiers.ouvrirDansExplorateur(PORTABLE), 'ABSENT', { chemin: '' });
-    assert.deepEqual(ouvertures, [DOCUMENTS]);
-    const { fichiers: sansExplorateur } = preparer({ ouvrir: async () => 'Failed to open path' });
-    await refuse(sansExplorateur.ouvrirDansExplorateur(DOC), 'NON_DISPONIBLE', { cause: 'Failed to open path' });
+    assert.deepEqual(ouvreurs, [lancement(DOCUMENTS)]);
+    assert.deepEqual(ouvertures, []);
+  });
+
+  test("sous Linux, un ouvreur en échec lève NON_DISPONIBLE, sa raison en cause : shell.openPath rend '' sans attendre xdg-open, et n'en dirait rien", async () => {
+    const raison = "xdg-open: no method available for opening '/poste/exemple'";
+    for (const plateforme of ['linux', 'freebsd']) {
+      const { fichiers, ouvertures, ouvreurs } = preparer({ plateforme, ouvreur: async () => raison });
+      await refuse(fichiers.ouvrirDansExplorateur(DOC), 'NON_DISPONIBLE', { cause: raison }, plateforme);
+      assert.deepEqual(ouvreurs, [lancement(DOCUMENTS)], plateforme);
+      assert.deepEqual(ouvertures, [], plateforme);
+    }
+  });
+
+  test("sous Windows et macOS, ouvrirDansExplorateur passe par shell.openPath, dont la raison non vide lève NON_DISPONIBLE ; l'ouvreur du bureau n'est jamais lancé", async () => {
+    for (const plateforme of ['win32', 'darwin']) {
+      const { fichiers, ouvertures, ouvreurs } = preparer({ plateforme });
+      await fichiers.ouvrirDansExplorateur(DOC);
+      assert.deepEqual(ouvertures, [DOCUMENTS], plateforme);
+      const { fichiers: sansExplorateur, ouvreurs: aucun } = preparer({ plateforme, ouvrir: async () => 'Failed to open path' });
+      await refuse(sansExplorateur.ouvrirDansExplorateur(DOC), 'NON_DISPONIBLE', { cause: 'Failed to open path' }, plateforme);
+      assert.deepEqual([...ouvreurs, ...aucun], [], plateforme);
+    }
   });
 
   test("ouvrirDansExplorateur ouvre un dossier de la racine ; un dossier absent ou un fichier lève ABSENT {chemin} sans rien ouvrir", async () => {
-    const { disque, fichiers, ouvertures } = preparer();
+    const { disque, fichiers, ouvreurs } = preparer();
     disque.deposerDossier(`${DOCUMENTS}/Gala des Saules/logo`);
     disque.deposer(`${DOCUMENTS}/note.txt`, 'x');
     await fichiers.ouvrirDansExplorateur(DOC, 'Gala des Saules/logo');
     await fichiers.ouvrirDansExplorateur(DOC, '');
-    assert.deepEqual(ouvertures, [`${DOCUMENTS}/Gala des Saules/logo`, DOCUMENTS]);
+    assert.deepEqual(ouvreurs, [lancement(`${DOCUMENTS}/Gala des Saules/logo`), lancement(DOCUMENTS)]);
     await refuse(fichiers.ouvrirDansExplorateur(DOC, 'Absent'), 'ABSENT', { chemin: 'Absent' });
     await refuse(fichiers.ouvrirDansExplorateur(DOC, 'note.txt'), 'ABSENT', { chemin: 'note.txt' });
-    assert.equal(ouvertures.length, 2);
+    assert.equal(ouvreurs.length, 2);
   });
 });
 
