@@ -111,12 +111,15 @@ const CHEMINS = Object.freeze({
 // racines() quand elle a précédé : une racine que le processus principal ne
 // connaît pas, pour que la réponse vienne du confinement sans toucher au
 // disque ; la racine documents pour l'explorateur ; un nom et des octets
-// pour l'enregistrement. Une fonction absente d'ici s'appelle sans argument.
+// pour l'enregistrement ; le genre image pour le choix d'un fichier, dont le
+// dialogue porte alors ses filtres. Une fonction absente d'ici s'appelle sans
+// argument.
 const INCONNUE = { id: 'racine-inconnue', chemin: TEMPORAIRE };
 const ARGUMENTS_DE_LA_PAGE = {
   sonder: () => [INCONNUE],
   typeSupport: () => [INCONNUE],
   lireTexte: () => [INCONNUE, 'soiree.gtt.json'],
+  lireOctets: () => [INCONNUE, `logo/${'0123456789abcdef'.repeat(4)}.png`],
   ecrireAtomique: () => [INCONNUE, 'soiree.gtt.json', '{}\n'],
   ajouterLigne: () => [INCONNUE, 'soiree.gtt-journal.jsonl', '{}'],
   lister: () => [INCONNUE, ''],
@@ -129,6 +132,7 @@ const ARGUMENTS_DE_LA_PAGE = {
   ouvrirDansExplorateur: (racines) => [racines?.documents],
   ecrireOctetsAtomique: () => [INCONNUE, 'soiree.badges.pdf', new Uint8Array([0x25, 0x50, 0x44, 0x46])],
   enregistrerSous: () => ['liste.csv', new Uint8Array([0x6e, 0x6f, 0x6d])],
+  choisirFichierAImporter: () => [{ genre: 'image' }],
 };
 
 const journal = {

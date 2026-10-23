@@ -1,7 +1,7 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le système de fichiers de la coquille (§ 8.6, § 8.8, § 13.1) : les dix-neuf
+// Le système de fichiers de la coquille (§ 8.6, § 8.8, § 13.1) : les vingt
 // primitives de l'interface de src/stockage/systeme_fichiers.js, exécutées
 // sous Node par le processus principal, et le service qui les offre à la
 // page, un canal IPC par primitive, gtt:fichiers:<primitive>.
@@ -16,9 +16,9 @@
 //
 // Le paquet n'emporte de src/ que la page construite (§ 14.15) : ce module ne
 // charge que des modules de Node. Ce qu'il partage avec src/stockage — la
-// règle des segments, le suffixe .ecriture, les codes d'échec — s'y
-// recopie, et test/fichiers_electron.test.js éprouve que les deux
-// définitions s'accordent.
+// règle des segments, le suffixe .ecriture, les codes d'échec, les genres du
+// dialogue d'import — s'y recopie, et test/fichiers_electron.test.js éprouve
+// que les deux définitions s'accordent.
 //
 // Un échec que l'interface nomme lève RefusFichier, porteur du code et des
 // détails d'une ErreurStockage. Une erreur ne traverse pas l'IPC : repondre
@@ -27,12 +27,14 @@
 // ErreurStockage. Une faute du code, ou un argument de forme fausse, lève une
 // autre erreur, dont Electron ne transmet que le message.
 //
-// Deux codes s'ajoutent à ceux de l'interface : LECTURE {chemin, dossier,
+// Trois codes s'ajoutent à ceux de l'interface : LECTURE {chemin, dossier,
 // cause}, une lecture que le système refuse autrement que sur un absent — un
 // dossier illisible n'est pas un dossier vide —, ou un fichier dont les
 // octets ne sont pas de l'UTF-8, cause UTF8_INVALIDE, ses détails portant
-// alors aussi octets, un Uint8Array que l'IPC transporte ; et NON_DISPONIBLE
-// {cause}, l'explorateur du système qui ne s'ouvre pas.
+// alors aussi octets, un Uint8Array que l'IPC transporte ; NON_DISPONIBLE
+// {cause}, l'explorateur du système qui ne s'ouvre pas ; et TROP_VOLUMINEUX
+// {chemin, dossier, taille, max}, un fichier choisi à importer plus lourd que
+// le plafond de son genre, dont rien n'est lu.
 import { execFile } from 'node:child_process';
 import { readFileSync, realpath as realpathRappel, unlinkSync } from 'node:fs';
 import { lstat, mkdir, open, readdir, readFile, rename, rmdir, stat, unlink } from 'node:fs/promises';
@@ -48,6 +50,7 @@ export const PRIMITIVES = Object.freeze([
   'sonder',
   'typeSupport',
   'lireTexte',
+  'lireOctets',
   'ecrireAtomique',
   'ecrireOctetsAtomique',
   'ajouterLigne',
@@ -71,6 +74,36 @@ export const SUFFIXE_ECRITURE = '.ecriture';
 
 /** Le témoin de la sonde d'écriture, à la racine sondée (§ 8.6). */
 export const TEMOIN = '.gtt-temoin';
+
+/**
+ * Les genres que le dialogue d'import sait demander, recopiés de
+ * GENRES_A_IMPORTER (src/stockage/systeme_fichiers.js) : les extensions et
+ * le plafond en octets, et les filtres du dialogue qui en suivent — le genre
+ * d'abord, puis « Tous les fichiers », qui laisse choisir une image d'un
+ * format que la page refusera en disant pourquoi. Les noms des filtres sont
+ * ceux de FILTRES_DIALOGUE_IMPORT (src/application/libelles/stockage.js),
+ * recopiés comme le reste.
+ */
+export const GENRES_A_IMPORTER = Object.freeze({
+  image: genreImport(
+    'Images',
+    ['png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'bmp', 'ico', 'avif', 'svg'],
+    25 * 1024 * 1024,
+  ),
+});
+
+// Un genre d'import : ses extensions, son plafond et les filtres du
+// dialogue, figés.
+function genreImport(nom, extensions, maxOctets) {
+  return Object.freeze({
+    extensions: Object.freeze(extensions),
+    maxOctets,
+    filtres: Object.freeze([
+      Object.freeze({ name: nom, extensions: Object.freeze([...extensions]) }),
+      Object.freeze({ name: 'Tous les fichiers', extensions: Object.freeze(['*']) }),
+    ]),
+  });
+}
 
 // Le dossier de travail, dans les deux modes : data/ à côté de l'exécutable,
 // et data/ dans le dossier du produit des Documents (§ 8.6). Il porte les
@@ -267,6 +300,18 @@ function exigerTexte(valeur, quoi) {
 function exigerLigne(ligne) {
   exigerTexte(ligne, 'la ligne');
   if (/[\r\n]/.test(ligne)) throw new TypeError('la ligne porte une fin de ligne');
+}
+
+// Le genre que demandent les options reçues de la page, comme genreAImporter
+// le lit : null sans options ; TypeError pour une autre forme ou un genre
+// inconnu.
+function genreDemande(options) {
+  if (options === undefined) return null;
+  const genre = estObjet(options) ? options.genre : undefined;
+  if (typeof genre !== 'string' || !Object.hasOwn(GENRES_A_IMPORTER, genre)) {
+    throw new TypeError(`genre d'import inconnu : ${JSON.stringify(options)}`);
+  }
+  return GENRES_A_IMPORTER[genre];
 }
 
 function exigerSeance(seance) {
@@ -730,6 +775,18 @@ export function creerFichiers({
       }
     },
 
+    // Les octets tels quels, copiés hors du Buffer que rend readFile : seul
+    // ce tableau traverse l'IPC, jamais la mémoire qui le porterait.
+    async lireOctets(racine, chemin) {
+      const loc = localiser(racine, chemin);
+      try {
+        await confiner(loc);
+        return new Uint8Array(await fs.readFile(loc.absolu));
+      } catch (erreur) {
+        throw echecLecture(loc, erreur);
+      }
+    },
+
     // Une cible qui est un dossier est refusée avant d'écrire : le
     // renommage par-dessus un dossier échouerait, sous Windows après ses
     // réessais.
@@ -989,14 +1046,28 @@ export function creerFichiers({
       if (raison !== '') throw new RefusFichier('NON_DISPONIBLE', { cause: raison });
     },
 
-    async choisirFichierAImporter() {
-      const { canceled, filePaths } = await dialog.showOpenDialog(fenetre(), { properties: ['openFile'] });
+    // Un genre filtre le dialogue, et la taille du fichier choisi se lit
+    // avant ses octets : au-delà du plafond, rien n'est lu.
+    async choisirFichierAImporter(options) {
+      const genre = genreDemande(options);
+      const filtres = genre === null ? {} : { filters: genre.filtres };
+      const { canceled, filePaths } = await dialog.showOpenDialog(fenetre(), { properties: ['openFile'], ...filtres });
       if (canceled || filePaths.length === 0) return null;
       const [absolu] = filePaths;
+      const nomme = horsRacine(absolu);
+      let taille;
+      try {
+        if (genre !== null) taille = (await fs.stat(absolu)).size;
+      } catch (erreur) {
+        throw echecLecture(nomme, erreur);
+      }
+      if (genre !== null && taille > genre.maxOctets) {
+        throw new RefusFichier('TROP_VOLUMINEUX', { ...nomme, taille, max: genre.maxOctets });
+      }
       try {
         return { nom: chemins.basename(absolu), octets: new Uint8Array(await fs.readFile(absolu)) };
       } catch (erreur) {
-        throw echecLecture(horsRacine(absolu), erreur);
+        throw echecLecture(nomme, erreur);
       }
     },
 

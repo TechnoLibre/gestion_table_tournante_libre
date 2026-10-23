@@ -1334,15 +1334,19 @@ describe('opérations : renommer (§ 8.7)', () => {
       exigerEquivalence(fs, base, { dossier: base });
     }
 
-    // Une racine de 161 unités laisse quatre unités à la base, aucune au
-    // rang « (2) » : le nom qui tombe sur la base de l'événement se renomme
-    // encore en place.
-    const longue = `C:\\${'x'.repeat(158)}`;
+    // Une racine de 152 unités, la plus longue qui admet encore une base, en
+    // laisse treize à la base, qu'un nom de treize unités remplit. Dérivé
+    // contre sa propre base, le nom en majuscules deviendrait « GALA DES (2) »,
+    // raccourci et numéroté ; il se renomme en place et garde la base entière.
+    const longue = `C:\\${'x'.repeat(149)}`;
     const borne = nouveauDisque({ documents: longue });
     const racine = { id: 'documents', chemin: longue };
-    const gala = await creer(borne.fs, racine, chargeEssai({ nom: 'Gala' }), CREATION);
-    const majuscules = await renommer(gala, renommage('GALA', 2));
-    assert.deepEqual([gala.base, majuscules.base, majuscules.charge.evenement.nom], ['Gala', 'Gala', 'GALA']);
+    const gala = await creer(borne.fs, racine, chargeEssai({ nom: 'Gala des Saul' }), CREATION);
+    const majuscules = await renommer(gala, renommage('GALA DES SAUL', 2));
+    assert.deepEqual(
+      [gala.base, majuscules.dossier, majuscules.base, majuscules.charge.evenement.nom],
+      ['Gala des Saul', 'Gala des Saul', 'Gala des Saul', 'GALA DES SAUL'],
+    );
 
     // La base du nouveau nom est déjà le nom d'une entrée de la racine, d'une
     // autre casse.

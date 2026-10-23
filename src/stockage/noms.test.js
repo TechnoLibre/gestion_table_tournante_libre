@@ -15,10 +15,11 @@
 // événement écrit se recompose en entier, de la racine au suffixe, avec des
 // textes littéraux et non les constantes du module — à la racine, dans le
 // dossier de l'événement, qui porte le nom de sa base, et dans le dossier
-// daté de la corbeille. Une borne prise sur le seul état, sur le seul
-// journal, ou sur la base comptée une fois, y dépasse 259 unités. Les noms
-// d'épreuve sont inventés. Un caractère invisible ou combinant s'écrit en
-// échappement, jamais en clair : ce qu'on ne voit pas ne se relit pas.
+// daté de la corbeille, logo d'une personne compris. Une borne prise sur le
+// seul état, sur le seul journal, sur la base comptée une fois, ou sans le
+// logo dans la corbeille, y dépasse 259 unités. Les noms d'épreuve sont
+// inventés. Un caractère invisible ou combinant s'écrit en échappement,
+// jamais en clair : ce qu'on ne voit pas ne se relit pas.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { PAPIERS } from '../geometrie/papiers.js';
@@ -60,6 +61,12 @@ const CORBEILLE_RANG_99 = 'corbeille/2026-10-06_19-02-11_99';
 const SUFFIXE_BADGES = '.badges-9999_Lettre_feuille_2026-10-06_19-02-11.pdf';
 const SUFFIXES_ECRITS = ['.gtt.json', '.gtt.json.precedent', '.gtt-journal.jsonl', '.gtt.verrou', '.gtt-courses.json', SUFFIXE_BADGES];
 
+// Le logo d'une personne, sous le dossier logo/ de l'événement, nommé par
+// l'empreinte de son contenu en 64 chiffres hexadécimaux : 73 unités, qui ne
+// dépendent pas de la base. La suppression le déplace, sans écriture, dans
+// le dossier daté de la corbeille, à son niveau : 33 + 73 = 106 unités.
+const LOGO = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+
 // Les noms des entrées que la racine du dossier de travail porte à côté des
 // dossiers d'événement : la corbeille, les réglages locaux, le témoin de la
 // sonde.
@@ -81,10 +88,18 @@ const plusLong = (chemins) => chemins.reduce((a, b) => (b.length > a.length ? b 
 // chaque suffixe et son fichier d'écriture atomique, à la racine du dossier de
 // travail, puis dans le dossier de l'événement, qui porte le nom de sa base,
 // puis dans le dossier daté de la corbeille, qui porte directement les
-// fichiers.
+// fichiers ; enfin le logo, dans le dossier de l'événement, en écriture
+// atomique, puis dans le dossier daté de la corbeille.
 function cheminsRelatifs(base) {
   const noms = SUFFIXES_ECRITS.flatMap((suffixe) => [`${base}${suffixe}`, `${base}${suffixe}.ecriture`]);
-  return [...noms, ...noms.map((nom) => `${base}/${nom}`), ...noms.map((nom) => `${CORBEILLE_RANG_99}/${nom}`)];
+  return [
+    ...noms,
+    ...noms.map((nom) => `${base}/${nom}`),
+    ...noms.map((nom) => `${CORBEILLE_RANG_99}/${nom}`),
+    `${base}/${LOGO}`,
+    `${base}/${LOGO}.ecriture`,
+    `${CORBEILLE_RANG_99}/${LOGO}`,
+  ];
 }
 
 // Chaque chemin complet : la racine, un seul séparateur, puis le chemin
@@ -207,11 +222,13 @@ describe('noms.js : valeurs du contrat', () => {
 });
 
 describe("longueurRelativeMax : le plus long chemin relatif qu'un événement écrit", () => {
-  test("elle vaut la longueur du plus long chemin recomposé : la planche la plus longue en écriture atomique, dans la corbeille au rang 99 sous 32 unités de base, dans le dossier de l'événement au-delà", () => {
+  test("elle vaut la longueur du plus long chemin recomposé : le logo dans la corbeille sous 13 unités de base, puis la planche la plus longue en écriture atomique, dans la corbeille au rang 99 jusqu'à 32 unités, dans le dossier de l'événement au-delà", () => {
     const cas = [
-      ['', 'corbeille'],
-      ['a', 'corbeille'],
-      ['Gala', 'corbeille'],
+      ['', 'logo'],
+      ['a', 'logo'],
+      ['Gala', 'logo'],
+      [lettres(12), 'logo'],
+      [lettres(14), 'corbeille'],
       [lettres(31), 'corbeille'],
       [lettres(33), 'dossier'],
       [lettres(100), 'dossier'],
@@ -221,18 +238,27 @@ describe("longueurRelativeMax : le plus long chemin relatif qu'un événement é
     for (const [base, ou] of cas) {
       const plus = plusLong(cheminsRelatifs(base));
       const tete = ou === 'corbeille' ? CORBEILLE_RANG_99 : base;
-      assert.equal(plus, `${tete}/${base}${SUFFIXE_BADGES}.ecriture`, `base de ${base.length} unités`);
+      const attendu = ou === 'logo' ? `${CORBEILLE_RANG_99}/${LOGO}` : `${tete}/${base}${SUFFIXE_BADGES}.ecriture`;
+      assert.equal(plus, attendu, `base de ${base.length} unités`);
       assert.equal(longueurRelativeMax(base), plus.length, `base de ${base.length} unités`);
     }
     // Les parties qui ne dépendent pas de la base : dans le dossier de
     // l'événement, le séparateur, la planche et .ecriture, 1 + 51 + 9, outre
     // deux fois la base ; dans la corbeille, le dossier daté et son
-    // séparateur, la planche et .ecriture, 33 + 51 + 9, outre la base. Les
-    // deux se valent à 32 unités.
+    // séparateur, la planche et .ecriture, 33 + 51 + 9, outre la base ; le
+    // logo dans la corbeille, 33 + 73, quelle que soit la base. Les deux
+    // premières se valent à 32 unités, la corbeille et le logo à 13.
     assert.equal(longueurRelativeMax(lettres(100)), 2 * 100 + 1 + 51 + 9);
-    assert.equal(longueurRelativeMax(''), 33 + 51 + 9);
+    assert.equal(longueurRelativeMax(''), 33 + 73);
+    assert.equal(longueurRelativeMax(lettres(12)), 106);
+    assert.equal(longueurRelativeMax(lettres(13)), 13 + 93);
+    assert.equal(longueurRelativeMax(lettres(13)), 106);
+    assert.equal(longueurRelativeMax(lettres(14)), 14 + 93);
     assert.equal(longueurRelativeMax(lettres(32)), 2 * 32 + 61);
     assert.equal(longueurRelativeMax(lettres(32)), 32 + 93);
+    // Le logo dans le dossier de l'événement, en écriture atomique, compte
+    // 1 + 73 + 9 unités outre la base : toujours moins que la corbeille.
+    assert.ok(`${lettres(12)}/${LOGO}.ecriture`.length < longueurRelativeMax(lettres(12)));
   });
 
   test("le rang le plus long que rend dossierCorbeille est celui que la longueur retient : deux chiffres, au rang 99", () => {
@@ -243,7 +269,7 @@ describe("longueurRelativeMax : le plus long chemin relatif qu'un événement é
     assert.equal(existants.length, 98);
     const dernier = dossierCorbeille(horodatage, existants);
     assert.equal(dernier, CORBEILLE_RANG_99);
-    assert.equal(longueurRelativeMax('Gala'), `${dernier}/Gala${SUFFIXE_BADGES}.ecriture`.length);
+    assert.equal(longueurRelativeMax('Gala des Saules'), `${dernier}/Gala des Saules${SUFFIXE_BADGES}.ecriture`.length);
   });
 });
 
@@ -815,62 +841,59 @@ describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
     refuseTropLong(() => derive('...', dossier), dossier.racine);
   });
 
-  test("la racine la plus longue qui laisse une base d'une unité compte 164 caractères ; à 165, aucune base ne tient", () => {
-    const auPlus = dossierDeLongueur(164);
-    const auDela = dossierDeLongueur(165);
-    assert.equal(longueurMaxDeBase(auPlus), 1);
+  test("la racine la plus longue qui laisse une base compte 152 caractères, et lui laisse 13 unités ; à 153, le logo dans la corbeille dépasse seul la borne, et aucune base ne tient", () => {
+    const auPlus = dossierDeLongueur(152);
+    const auDela = dossierDeLongueur(153);
+    assert.equal(longueurMaxDeBase(auPlus), 13);
     assert.equal(longueurMaxDeBase(auDela), 0);
-    assert.equal(derive('Gala', auPlus), 'G');
-    assert.equal(plusLong(cheminsComplets(auPlus, 'G')).length, 259);
-    refuseTropLong(() => derive('Gala', auDela), auDela.racine);
+    assert.equal(derive('Gala', auPlus), 'Gala');
+    assert.equal(derive('\u{1F600}Gala', auPlus), '\u{1F600}Gala');
+    assert.equal(derive(lettres(400), auPlus), lettres(13));
+    assert.equal(plusLong(cheminsComplets(auPlus, lettres(13))).length, 259);
+    // La base d'une seule unité, sous 153 caractères, déborde par le logo.
+    const logoEnCorbeille = `${CORBEILLE_RANG_99}/${LOGO}`.replaceAll('/', '\\');
+    assert.equal(plusLong(cheminsComplets(auDela, 'G')), `${auDela.racine}\\${logoEnCorbeille}`);
+    assert.equal(plusLong(cheminsComplets(auDela, 'G')).length, 260);
+    for (const nom of ['Gala', 'G', '\u{1F600}Gala', '...']) refuseTropLong(() => derive(nom, auDela), auDela.racine);
+    refuseTropLong(() => derive('Gala', dossierDeLongueur(164)), dossierDeLongueur(164).racine);
   });
 
-  test("à la limite, le rang d'une collision tient dans la borne : G (2) en 5 unités, puis plus aucun rang", () => {
-    const cinq = dossierDeLongueur(160);
-    assert.equal(longueurMaxDeBase(cinq), 5);
-    assert.equal(derive('Gala', cinq), 'Gala');
-    assert.equal(derive('Gala', cinq, ['gala']), 'G (2)');
-    assert.equal(derive('Gala', cinq, ['gala', 'g (2)']), 'G (3)');
-    const neuf = ['gala', ...Array.from({ length: 8 }, (_, i) => `g (${i + 2})`)];
-    assert.equal(derive('Gala', cinq, neuf.slice(0, 8)), 'G (9)');
-    refuseTropLong(() => derive('Gala', cinq, neuf), cinq.racine);
-    // Une base d'une unité, déjà prise : le rang 2 ne tient plus.
-    const une = dossierDeLongueur(164);
-    refuseTropLong(() => derive('Gala', une, ['g']), une.racine);
-  });
-
-  test('la coupe ne laisse jamais un nom réservé : « con_ » tient à quatre unités, « co » à trois', () => {
-    const trois = dossierDeLongueur(162);
-    const quatre = dossierDeLongueur(161);
-    assert.equal(longueurMaxDeBase(trois), 3);
-    assert.equal(longueurMaxDeBase(quatre), 4);
-    const surTrois = [['con', 'co'], ['console', 'co'], ['Con.x', 'Co'], ['aux x', 'au'], ['conin$.y', 'co']];
-    assert.ok(surTrois.length > 0, 'aucun nom examiné');
-    assert.deepEqual(
-      surTrois.map(([nom]) => derive(nom, trois)),
-      surTrois.map(([, attendu]) => attendu),
-    );
-    const surQuatre = [['con', 'con_'], ['console', 'cons'], ['con.x', 'con_'], ['aux x', 'aux_'], ['conin$.y', 'coni']];
-    assert.ok(surQuatre.length > 0, 'aucun nom examiné');
-    assert.deepEqual(
-      surQuatre.map(([nom]) => derive(nom, quatre)),
-      surQuatre.map(([, attendu]) => attendu),
-    );
-    for (const [dossier, noms] of [[trois, surTrois], [quatre, surQuatre]]) {
-      for (const [nom] of noms) {
-        const base = derive(nom, dossier);
-        assert.ok(!estReserve(base), `${nom} donne ${base}`);
-        assert.ok(plusLong(cheminsComplets(dossier, base)).length <= 259);
-      }
+  test("à la racine la plus longue, le rang d'une collision se loge dans les 13 unités : la base se raccourcit de son rang", () => {
+    const treize = dossierDeLongueur(152);
+    assert.equal(longueurMaxDeBase(treize), 13);
+    assert.equal(derive('Gala', treize, ['gala']), 'Gala (2)');
+    const nom = lettres(400);
+    assert.equal(derive(nom, treize, [lettres(13)]), `${lettres(9)} (2)`);
+    const pris = [lettres(13), ...Array.from({ length: 8 }, (_, i) => `${lettres(9)} (${i + 2})`)];
+    assert.equal(derive(nom, treize, pris), `${lettres(8)} (10)`);
+    for (const base of [derive(nom, treize, pris), derive('Gala', treize, ['gala'])]) {
+      assert.ok(plusLong(cheminsComplets(treize, base)).length <= 259, base);
     }
   });
 
-  test("un nom dont le premier caractère tient en deux unités ne tient pas dans une seule : CHEMIN_TROP_LONG", () => {
-    const une = dossierDeLongueur(164);
-    refuseTropLong(() => derive('\u{1F600}Gala', une), une.racine);
-    // À deux unités, la paire tient.
-    const deux = dossierDeLongueur(163);
-    assert.equal(derive('\u{1F600}Gala', deux), '\u{1F600}');
+  test('la coupe ne laisse jamais un nom réservé : la tête de 13 unités qui en tombe sur un reçoit « _ », et recule quand « _ » ne tient plus', () => {
+    const treize = dossierDeLongueur(152);
+    assert.equal(longueurMaxDeBase(treize), 13);
+    const cas = [
+      // Les points et les espaces de la coupe partent : il reste un nom réservé.
+      [`con${'.'.repeat(10)}sole`, 'con_'],
+      [`Aux${' .'.repeat(5)}x`, 'Aux_'],
+      // Le « _ » porterait la tête à 14 unités : elle recule d'une.
+      [`con.${lettres(20)}`, `con_.${lettres(8)}`],
+      [`conout$.${lettres(20)}`, `conout$_.${lettres(4)}`],
+    ];
+    assert.ok(cas.length > 0, 'aucun nom examiné');
+    assert.deepEqual(
+      cas.map(([nom]) => derive(nom, treize)),
+      cas.map(([, attendu]) => attendu),
+    );
+    assert.equal(derive(`con${'.'.repeat(10)}sole`, treize, ['CON_']), 'con_ (2)');
+    for (const [nom] of cas) {
+      const base = derive(nom, treize);
+      assert.ok(!estReserve(base), `${nom} donne ${base}`);
+      assert.ok(base.length <= 13, `${nom} donne ${base}`);
+      assert.ok(plusLong(cheminsComplets(treize, base)).length <= 259);
+    }
   });
 
   test('la racine se compte en unités UTF-16 comme la base : un emoji y pèse deux unités', () => {

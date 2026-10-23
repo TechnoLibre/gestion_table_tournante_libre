@@ -32,6 +32,7 @@ const PRIMITIVES = [
   'sonder',
   'typeSupport',
   'lireTexte',
+  'lireOctets',
   'ecrireAtomique',
   'ecrireOctetsAtomique',
   'ajouterLigne',
@@ -78,6 +79,7 @@ const CHEMINS_REFUSES = ['../x', '/x', 'C:\\x', 'a/../../x'];
 // seul le chemin éprouvé peut alors faire échouer l'appel.
 const APPELS_A_CHEMIN = [
   ['lireTexte', (fs, racine, chemin) => fs.lireTexte(racine, chemin)],
+  ['lireOctets', (fs, racine, chemin) => fs.lireOctets(racine, chemin)],
   ['ecrireAtomique', (fs, racine, chemin) => fs.ecrireAtomique(racine, chemin, 'texte')],
   ['ecrireOctetsAtomique', (fs, racine, chemin) => fs.ecrireOctetsAtomique(racine, chemin, new Uint8Array([0x25]))],
   ['ajouterLigne', (fs, racine, chemin) => fs.ajouterLigne(racine, chemin, 'ligne')],
@@ -136,7 +138,7 @@ export function eprouverContrat(nom, fabrique, { describe, test, egal, vrai, rej
   }
 
   describe(`contrat du système de fichiers : ${nom}`, () => {
-    test("l'interface porte sa nature, ses deux garanties et ses dix-neuf primitives, et décrit ses emplacements et ses racines", async () => {
+    test("l'interface porte sa nature, ses deux garanties et ses vingt primitives, et décrit ses emplacements et ses racines", async () => {
       const { fs, racine } = await fabrique();
       vrai(['electron', 'web', 'epreuve'].includes(fs.nature), `nature ${fs.nature}`);
       egal(typeof fs.renommageAtomique, 'boolean', 'renommageAtomique');
@@ -197,6 +199,35 @@ export function eprouverContrat(nom, fabrique, { describe, test, egal, vrai, rej
       await fs.ecrireOctetsAtomique(racine, 'liste.csv', new TextEncoder().encode(TEXTE_EN_OCTETS));
       egal(await fs.lireTexte(racine, 'liste.csv'), TEXTE_EN_OCTETS);
       egal(noms(await fs.lister(racine, '')), ['liste.csv', 'planche.pdf']);
+    });
+
+    test("lireOctets rend les octets tels qu'écrits — hors UTF-8, ceux d'un texte, aucun pour un fichier vide —, dans un Uint8Array neuf à chaque appel", async () => {
+      const { fs, racine } = await fabrique();
+      await fs.creerDossier(racine, 'logo');
+      await fs.ecrireOctetsAtomique(racine, 'logo/image.png', new Uint8Array(OCTETS_BINAIRES));
+      const lus = await fs.lireOctets(racine, 'logo/image.png');
+      vrai(Object.getPrototypeOf(lus) === Uint8Array.prototype, `prototype ${Object.prototype.toString.call(lus)}`);
+      egal([...lus], [...OCTETS_BINAIRES]);
+      // L'appelant qui altère ce qu'il a lu ne change ni le fichier ni la
+      // lecture suivante.
+      lus.fill(0);
+      egal([...(await fs.lireOctets(racine, 'logo/image.png'))], [...OCTETS_BINAIRES]);
+      await fs.ecrireAtomique(racine, 'liste.csv', TEXTE_EN_OCTETS);
+      egal([...(await fs.lireOctets(racine, 'liste.csv'))], [...new TextEncoder().encode(TEXTE_EN_OCTETS)]);
+      await fs.ecrireAtomique(racine, 'vide.txt', '');
+      egal([...(await fs.lireOctets(racine, 'vide.txt'))], []);
+      egal(noms(await fs.lister(racine, 'logo')), ['image.png']);
+    });
+
+    test("lireOctets d'un fichier absent, d'un dossier, de la racine elle-même, sous un dossier absent ou sous un fichier lève ABSENT {chemin}, sans rien écrire", async () => {
+      const { fs, racine } = await fabrique();
+      await fs.creerDossier(racine, 'logo');
+      await fs.ecrireAtomique(racine, 'note.txt', 'note');
+      for (const chemin of ['absent.png', 'logo', '', 'disparu/image.png', 'note.txt/image.png']) {
+        await echoue(fs.lireOctets(racine, chemin), 'ABSENT', { chemin }, `lireOctets « ${chemin} »`);
+      }
+      egal(noms(await fs.lister(racine, '')), ['logo', 'note.txt']);
+      egal(await fs.lister(racine, 'logo'), []);
     });
 
     test('ecrireOctetsAtomique dans un dossier absent lève ECRITURE, sans créer le dossier ni toucher aux autres fichiers', async () => {

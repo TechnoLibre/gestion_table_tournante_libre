@@ -1865,6 +1865,20 @@ describe('les dialogues de fichiers, lus sur fs à l’appel', () => {
     assert.equal(await facade.choisirCsv(), choisi);
   });
 
+  test('choisirImage appelle le dialogue une fois sous le genre image et rend sa valeur ; choisirCsv, sans argument', async () => {
+    const { fs, facade } = monter();
+    const appels = [];
+    const choisi = { nom: 'blason.png', octets: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) };
+    fs.choisirFichierAImporter = async (...args) => {
+      appels.push(args);
+      return choisi;
+    };
+    assert.equal(await facade.choisirImage(), choisi);
+    assert.deepEqual(appels, [[{ genre: 'image' }]]);
+    assert.equal(await facade.choisirCsv(), choisi);
+    assert.deepEqual(appels, [[{ genre: 'image' }], []]);
+  });
+
   test('enregistrerSous remet nom et octets tels quels, et rend le chemin ou null', async () => {
     const { fs, facade } = monter();
     assert.equal(await facade.enregistrerSous('a.csv', new Uint8Array([1])), null);

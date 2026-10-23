@@ -16,7 +16,9 @@
 // primitives sont asynchrones. Un échec lève une ErreurStockage :
 //
 //   ABSENT         {chemin}                  lecture d'un fichier, ou liste
-//                                            d'un dossier, qui n'existe pas
+//                                            d'un dossier, qui n'existe pas ;
+//                                            pour un fichier choisi hors des
+//                                            racines, chemin est son nom
 //   ECRITURE       {chemin, dossier, cause}  une écriture, un ajout, un
 //                                            renommage refusés ; la cible est
 //                                            intacte. chemin est le chemin
@@ -40,10 +42,17 @@
 //                                            U+FFFD ; les détails portent
 //                                            alors aussi octets, une copie
 //                                            des octets du fichier
+//   TROP_VOLUMINEUX {chemin, dossier, taille, max}  un fichier choisi à
+//                                            importer plus lourd que le
+//                                            plafond de son genre : chemin
+//                                            est son nom, dossier celui qui
+//                                            le porte, null sous web ; rien
+//                                            n'en est lu
 //
 // types.js donne la table entière des codes du stockage.
 import { ErreurStockage } from './erreurs.js';
 import { estHorodatage } from './journal.js';
+import { LOGO_SOURCE_MAX_OCTETS } from './logos.js';
 
 /**
  * Une racine : un dossier que l'implémentation connaît par son identifiant
@@ -111,6 +120,12 @@ import { estHorodatage } from './journal.js';
  *           pas de l'UTF-8 lèvent LECTURE {chemin, dossier, cause:
  *           'UTF8_INVALIDE', octets}, octets étant un Uint8Array, copie des
  *           octets du fichier, que le dépôt décode ligne par ligne
+ * @property {(r: Racine, chemin: string) => Promise<Uint8Array>} lireOctets
+ *           les octets du fichier, tels quels, dans un Uint8Array neuf que
+ *           l'appelant peut altérer : ce qu'écrit ecrireOctetsAtomique, un
+ *           logo (logos.js). ABSENT pour un fichier absent ou un dossier, la
+ *           racine elle-même comprise ; LECTURE pour tout autre refus ; le
+ *           confinement de lireTexte
  * @property {(r: Racine, chemin: string, texte: string) => Promise<void>} ecrireAtomique
  *           <chemin>.ecriture, vidé sur le disque, renommé par-dessus ; réessaie
  *           le renommage ; un échec laisse la cible intacte (§ 8.8) ; là où
@@ -170,8 +185,15 @@ import { estHorodatage } from './journal.js';
  *           chemin, '' par défaut : la racine elle-même ; un dossier absent,
  *           ou un fichier, lève ABSENT ; là où il n'y a pas d'explorateur,
  *           NON_DISPONIBLE, une fois le chemin admis
- * @property {() => Promise<{nom: string, octets: Uint8Array}|null>} choisirFichierAImporter
- *           null quand l'opérateur annule
+ * @property {(options?: {genre: 'image'}) => Promise<{nom: string, octets: Uint8Array}|null>} choisirFichierAImporter
+ *           le nom et les octets du fichier que l'opérateur choisit, null
+ *           quand il annule. Sans option, tout fichier, sans plafond. Un
+ *           genre de GENRES_A_IMPORTER restreint le dialogue à ses
+ *           extensions — la coquille garde un filtre « Tous les fichiers » —
+ *           et lit la taille du fichier avant ses octets : au-delà de
+ *           maxOctets, TROP_VOLUMINEUX, sans rien lire. Une option d'une
+ *           autre forme lève TypeError avant d'ouvrir le dialogue
+ *           (genreAImporter)
  * @property {(nomPropose: string, octets: Uint8Array) => Promise<string|null>} enregistrerSous
  *           le chemin choisi, ou null quand l'opérateur annule
  */
@@ -219,6 +241,41 @@ export function exigerDepuis(depuis) {
 }
 
 /**
+ * Les genres de fichier que choisirFichierAImporter sait demander. image :
+ * ce que Chromium décode, dont le dialogue de la coquille filtre les
+ * extensions et le champ de fichier de la page accepte le type image/* ;
+ * plafond LOGO_SOURCE_MAX_OCTETS. electron/fichiers.js recopie les
+ * extensions et le plafond.
+ */
+export const GENRES_A_IMPORTER = Object.freeze({
+  image: Object.freeze({
+    extensions: Object.freeze(['png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'bmp', 'ico', 'avif', 'svg']),
+    accept: 'image/*',
+    maxOctets: LOGO_SOURCE_MAX_OCTETS,
+  }),
+});
+
+/**
+ * Le genre que demandent les options de choisirFichierAImporter : null sans
+ * options, sinon celui de GENRES_A_IMPORTER que nomme options.genre ; les
+ * autres clés ne comptent pas. Chaque implémentation l'appelle avant
+ * d'ouvrir son dialogue, celle de la coquille avant de passer le pont.
+ *
+ * @param {unknown} options
+ * @returns {{extensions: readonly string[], accept: string, maxOctets: number}|null}
+ * @throws {TypeError} des options qui ne sont ni absentes ni un objet dont
+ *         genre est une clé propre de GENRES_A_IMPORTER
+ */
+export function genreAImporter(options) {
+  if (options === undefined) return null;
+  const genre = options !== null && typeof options === 'object' ? options.genre : undefined;
+  if (typeof genre !== 'string' || !Object.hasOwn(GENRES_A_IMPORTER, genre)) {
+    throw new TypeError(`choisirFichierAImporter : genre inconnu, reçu ${JSON.stringify(options)}`);
+  }
+  return GENRES_A_IMPORTER[genre];
+}
+
+/**
  * Lève TypeError quand octets n'est pas un Uint8Array — un Buffer de Node en
  * est un — : chaque implémentation d'ecrireOctetsAtomique l'appelle avant de
  * rien écrire, et celle de la coquille avant de passer le pont.
@@ -252,6 +309,7 @@ const TEMOIN = '.gtt-temoin';
 // qui refuse '', ont leur relais propre.
 const A_UN_CHEMIN = [
   'lireTexte',
+  'lireOctets',
   'ecrireAtomique',
   'ecrireOctetsAtomique',
   'ajouterLigne',

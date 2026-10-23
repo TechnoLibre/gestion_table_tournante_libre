@@ -3375,9 +3375,20 @@ noms. Dans la corbeille (§ 8.7), le dossier daté porte directement les fichier
 au rang de collision le plus long — deux suppressions dans la même seconde se
 départagent par `_2`, `_3`… jusqu'à `_99` — :
 `corbeille/AAAA-MM-JJ_HH-MM-SS_99/<nom>.badges-…pdf.ecriture`,
-quatre-vingt-treize caractères outre le nom, compté une fois. Le plus long des
-deux borne le nom : la corbeille sous trente-deux caractères, le dossier de
-l'événement au-delà. `.gtt.json.precedent` ne compte que dix-neuf caractères,
+quatre-vingt-treize caractères outre le nom, compté une fois. Le logo d'une
+personne, `logo/<empreinte>.png`, nommé par les 64 chiffres hexadécimaux de
+l'empreinte SHA-256 de son contenu, compte soixante-treize caractères qui ne
+dépendent pas du nom : dans le dossier de l'événement, en écriture atomique,
+quatre-vingt-trois outre le nom, toujours moins que la corbeille ; dans le
+dossier daté de la corbeille, où la suppression le déplace sans écriture,
+`corbeille/AAAA-MM-JJ_HH-MM-SS_99/logo/<empreinte>.png`, cent six caractères,
+sans le nom. Le plus long des trois borne le nom : le logo sous treize
+caractères, la corbeille de treize à trente-deux, le dossier de l'événement
+au-delà. Le logo pose ainsi un plancher : une racine de plus de cent
+cinquante-deux caractères ne laisse tenir aucun nom, et la plus longue qui en
+laisse un lui en donne treize ; l'empreinte reste entière, car raccourcie elle
+laisserait deux images différentes prendre le même nom.
+`.gtt.json.precedent` ne compte que dix-neuf caractères,
 `.gtt-journal.jsonl` dix-huit, `.gtt-courses.json` dix-sept, et `.gtt.json`
 neuf : une borne posée sur l'état, sur le journal ou sur le nom compté une fois
 laisserait déborder tout le reste. Sous une racine de soixante et un caractères,
@@ -6693,6 +6704,17 @@ Windows : le retrait se réessaie comme le renommage de l'écriture atomique
 refuse celui qui porte une entrée, fichier d'échange de Chromium compris. La
 commande de l'explorateur (§ 8.6) ouvre la racine ou l'un de ses dossiers,
 confiné à elle comme toute cible.
+
+**Les octets se lisent tels quels, et une image se pèse avant de se lire.**
+L'interface du système de fichiers compte vingt primitives. Une seule lit un
+fichier d'une racine en octets, sans le décoder : elle rend un fichier
+binaire — un logo — tel qu'écrit, sous le confinement de la lecture d'un
+texte, et un fichier absent
+ou un dossier s'y disent absents. Le dialogue d'import demande au besoin un
+genre, l'image : il en filtre les extensions sans fermer l'accès aux autres
+fichiers, et lit la taille du fichier choisi avant ses octets ; au-delà de
+25 Mo, il refuse sans rien lire, car le fichier entier traverserait sinon le
+pont de la coquille avant qu'aucun contrôle ne le voie.
 
 **Une proposition entrée dans l'événement ouvert ne change plus** : le stockage
 la fige, et tout changement passe par un objet neuf. Les mémoires du stockage

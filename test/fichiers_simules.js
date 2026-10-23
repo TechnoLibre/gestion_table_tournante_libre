@@ -23,7 +23,7 @@
 // ainsi le dossier de travail qu'aucun code n'a créé, ou qui a disparu, comme
 // le verrait la coquille.
 import { ErreurStockage } from '../src/stockage/erreurs.js';
-import { exigerCheminRelatif, exigerDepuis, exigerOctets } from '../src/stockage/systeme_fichiers.js';
+import { exigerCheminRelatif, exigerDepuis, exigerOctets, genreAImporter } from '../src/stockage/systeme_fichiers.js';
 
 /**
  * Levée par chaque primitive d'une instance dont le processus est coupé
@@ -180,8 +180,8 @@ const estContenuVerrou = (contenu) =>
  *   - compteurs.ecritures, compteurs.lectures : les appels des primitives
  *     d'écriture (ecrireAtomique, ecrireOctetsAtomique, ajouterLigne,
  *     creerDossier, supprimerDossier, deplacer, supprimer, verrouiller,
- *     deverrouiller, sonder) et de lecture (lireTexte, lister), refusés
- *     compris ; les autres ne comptent pas ;
+ *     deverrouiller, sonder) et de lecture (lireTexte, lireOctets, lister),
+ *     refusés compris ; les autres ne comptent pas ;
  *   - deposer(racineId, chemin, texte, modifie = l'instant courant) : pose un
  *     fichier, dossiers parents compris, sans compter ni avancer l'horloge ;
  *   - deposerOctets(racineId, chemin, octets, modifie = l'instant courant) :
@@ -478,6 +478,14 @@ export function creerFichiersSimules({
       return texte;
     }),
 
+    // Une copie des octets, texte compris en UTF-8 : l'appelant peut
+    // altérer ce qu'il reçoit.
+    lireOctets: primitive('lectures', (racine, chemin) => {
+      const noeud = disque.get(localiser(racine, chemin).cle);
+      if (noeud?.type !== 'fichier') throw new ErreurStockage('ABSENT', { chemin });
+      return octetsDuNoeud(noeud);
+    }),
+
     ecrireAtomique: primitive('ecritures', (racine, chemin, texte) => {
       exigerChaine(texte, 'le texte');
       remplacer(racine, chemin, texte);
@@ -601,7 +609,11 @@ export function creerFichiersSimules({
       if (disque.get(loc.cle)?.type !== 'dossier') throw new ErreurStockage('ABSENT', { chemin });
     }),
 
-    choisirFichierAImporter: primitive(null, () => null),
+    // Le genre demandé se contrôle comme ailleurs, avant le dialogue.
+    choisirFichierAImporter: primitive(null, (options) => {
+      genreAImporter(options);
+      return null;
+    }),
 
     enregistrerSous: primitive(null, () => null),
 

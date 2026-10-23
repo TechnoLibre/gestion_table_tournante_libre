@@ -13,7 +13,7 @@
 //
 // L'écriture atomique et le verrou du § 8.8 sont ceux de la coquille.
 import { ErreurStockage } from './erreurs.js';
-import { exigerDepuis, exigerOctets } from './systeme_fichiers.js';
+import { exigerDepuis, exigerOctets, genreAImporter } from './systeme_fichiers.js';
 
 /**
  * Le système de fichiers de la plateforme electron.
@@ -45,6 +45,7 @@ export function creerFichiersElectron(pont = window.gtt.fichiers) {
     sonder: (racine) => appeler('sonder', racine),
     typeSupport: (racine) => appeler('typeSupport', racine),
     lireTexte: (racine, chemin) => appeler('lireTexte', racine, chemin),
+    lireOctets: (racine, chemin) => appeler('lireOctets', racine, chemin),
     ecrireAtomique: (racine, chemin, texte) => appeler('ecrireAtomique', racine, chemin, texte),
     // La forme des octets se juge ici, avant le pont : une TypeError levée
     // dans le processus principal n'en ressortirait que par son message.
@@ -68,7 +69,14 @@ export function creerFichiersElectron(pont = window.gtt.fichiers) {
     deverrouiller: (racine, chemin, seance) => appeler('deverrouiller', racine, chemin, seance),
     // Sans chemin, la racine elle-même : '' traverse le pont tel quel.
     ouvrirDansExplorateur: (racine, chemin = '') => appeler('ouvrirDansExplorateur', racine, chemin),
-    choisirFichierAImporter: () => appeler('choisirFichierAImporter'),
+    // Le genre se juge ici, avant le pont ; seul le genre le traverse, et
+    // rien sans option.
+    choisirFichierAImporter: async (options) => {
+      genreAImporter(options);
+      return options === undefined
+        ? appeler('choisirFichierAImporter')
+        : appeler('choisirFichierAImporter', { genre: options.genre });
+    },
     enregistrerSous: (nomPropose, octets) => appeler('enregistrerSous', nomPropose, octets),
   };
 }

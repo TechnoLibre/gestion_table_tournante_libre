@@ -67,11 +67,12 @@
 // choisirFichierAImporter passe par un champ de fichier, que le navigateur
 // n'ouvre que dans le prolongement d'un geste de l'opérateur, et qui ne dit
 // du fichier choisi que son nom : l'échec de sa lecture le nomme, dossier
-// null. enregistrerSous passe par un lien de téléchargement : le navigateur
-// range le fichier sans dire où ni si l'opérateur y renonce, et la
-// primitive rend le nom proposé.
+// null. Un genre restreint le champ par accept, et sa taille, connue avant
+// la lecture, se compare au plafond du genre. enregistrerSous passe par un
+// lien de téléchargement : le navigateur range le fichier sans dire où ni si
+// l'opérateur y renonce, et la primitive rend le nom proposé.
 import { ErreurStockage } from './erreurs.js';
-import { exigerCheminRelatif, exigerDepuis, exigerOctets } from './systeme_fichiers.js';
+import { exigerCheminRelatif, exigerDepuis, exigerOctets, genreAImporter } from './systeme_fichiers.js';
 
 // Le dossier du produit dans l'OPFS, et la racine documents qui le désigne.
 const DOSSIER_PRODUIT = 'gestion_table_tournante_libre';
@@ -270,10 +271,13 @@ async function retirerDossierVide(loc) {
   }
 }
 
+// Les octets d'un fichier, dans un tableau neuf.
+const octetsDe = async (poignee) => new Uint8Array(await (await poignee.getFile()).arrayBuffer());
+
 // Ce que porte un fichier : { texte, octets }, ses octets et leur décodage
 // tel quel ; texte null quand ils ne sont pas de l'UTF-8.
 async function lire(poignee) {
-  const octets = new Uint8Array(await (await poignee.getFile()).arrayBuffer());
+  const octets = await octetsDe(poignee);
   try {
     return { texte: DECODEUR.decode(octets), octets };
   } catch {
@@ -351,11 +355,14 @@ async function copierVers(loc, octets) {
 // Ouvre le dialogue du navigateur par un champ de fichier, hors du document,
 // et rend le nom et les octets du fichier choisi ; null quand l'opérateur
 // annule — l'événement cancel — ou que le champ revient sans fichier. Un
-// fichier choisi qui ne se lit pas lève ABSENT ou LECTURE sous son nom.
-function choisirFichier() {
+// genre, de genreAImporter, donne au champ son accept, et un fichier plus
+// lourd que son plafond lève TROP_VOLUMINEUX sans être lu. Un fichier
+// choisi qui ne se lit pas lève ABSENT ou LECTURE sous son nom.
+function choisirFichier(genre) {
   return new Promise((resoudre, rejeter) => {
     const champ = document.createElement('input');
     champ.type = 'file';
+    if (genre !== null) champ.accept = genre.accept;
     champ.addEventListener('cancel', () => resoudre(null), { once: true });
     champ.addEventListener(
       'change',
@@ -363,6 +370,11 @@ function choisirFichier() {
         const fichier = champ.files[0];
         if (fichier === undefined) {
           resoudre(null);
+          return;
+        }
+        if (genre !== null && fichier.size > genre.maxOctets) {
+          const details = { chemin: fichier.name, dossier: null, taille: fichier.size, max: genre.maxOctets };
+          rejeter(new ErreurStockage('TROP_VOLUMINEUX', details));
           return;
         }
         fichier.arrayBuffer().then(
@@ -438,6 +450,16 @@ export function creerFichiersWeb() {
         throw new ErreurStockage('LECTURE', details);
       }
       return lu.texte;
+    },
+
+    lireOctets: async (racine, chemin) => {
+      const loc = localiser(racine, chemin);
+      if (loc.nom === null) throw absent(chemin);
+      try {
+        return await octetsDe(await fichierDe(await dossierDe(loc.parent), loc.nom));
+      } catch (erreur) {
+        throw echecLecture(loc, erreur);
+      }
     },
 
     ecrireAtomique: async (racine, chemin, texte) => {
@@ -550,7 +572,8 @@ export function creerFichiersWeb() {
       throw new ErreurStockage('NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' });
     },
 
-    choisirFichierAImporter: () => choisirFichier(),
+    // Le genre se contrôle avant que le champ ne s'ouvre.
+    choisirFichierAImporter: async (options) => choisirFichier(genreAImporter(options)),
 
     // Le clic remet au navigateur l'adresse du contenu, qui se libère à la
     // tâche suivante.

@@ -11,9 +11,11 @@
 // racine, un dossier voisin dont le nom prolonge celui de la racine, le
 // renommage qui remplace la cible, le verrou d'un processus vivant ou
 // terminé, sous Linux celui d'un pid vivant dont le démarrage n'est pas
-// celui qu'il inscrit, et le démarrage que ps écrit en temps universel quel
-// que soit le fuseau du processus qui le lit. Chaque épreuve écrit sous ses
-// propres dossiers temporaires, retirés à sa fin, qu'elle passe ou non.
+// celui qu'il inscrit, le démarrage que ps écrit en temps universel quel
+// que soit le fuseau du processus qui le lit, et le plafond d'une image
+// choisie, que la taille lue sur le disque décide avant toute lecture.
+// Chaque épreuve écrit sous ses propres dossiers temporaires, retirés à sa
+// fin, qu'elle passe ou non.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
@@ -25,13 +27,14 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileFunction } from 'node:vm';
-import { TEMOIN, creerFichiers, decrireSysteme, servir } from '../electron/fichiers.js';
+import { GENRES_A_IMPORTER, TEMOIN, creerFichiers, decrireSysteme, servir } from '../electron/fichiers.js';
 import { ErreurStockage } from '../src/stockage/erreurs.js';
 import { creerFichiersElectron } from '../src/stockage/fichiers_electron.js';
 import { eprouverContrat } from './contrat_fichiers.js';
@@ -118,7 +121,7 @@ function parLePrechargement(fichiers) {
   return gtt.fichiers;
 }
 
-// Les dialogues et l'explorateur ne servent à aucune de ces épreuves.
+// Les dialogues et l'explorateur ne servent qu'aux épreuves qui les donnent.
 const SANS_APPEL = new Proxy({}, {
   get: (_, nom) => () => assert.fail(`appel inattendu : ${String(nom)}`),
 });
@@ -126,10 +129,11 @@ const SANS_APPEL = new Proxy({}, {
 /**
  * Le système de la page sur un dossier temporaire neuf : les Documents du
  * poste y sont Documents/, et le dossier publié par le lanceur portable,
- * quand il est donné, y est relatif. Rend le système et le chemin de ses
- * racines sur le disque.
+ * quand il est donné, y est relatif ; dialog, quand il est donné, remplace
+ * celui d'Electron. Rend le système et le chemin de ses racines sur le
+ * disque.
  */
-function systemeSur(dossier, { publie = null } = {}) {
+function systemeSur(dossier, { publie = null, dialog = SANS_APPEL } = {}) {
   const chemins = { appData: join(dossier, 'AppData'), temp: tmpdir(), documents: join(dossier, 'Documents') };
   const systeme = decrireSysteme({
     env: publie === null ? {} : { PORTABLE_EXECUTABLE_DIR: join(dossier, publie) },
@@ -137,7 +141,7 @@ function systemeSur(dossier, { publie = null } = {}) {
     cheminSysteme: (nom) => chemins[nom],
     nomProduit: NOM_PRODUIT,
   });
-  const fs = creerFichiersElectron(parLePrechargement(creerFichiers({ ...systeme, dialog: SANS_APPEL, shell: SANS_APPEL })));
+  const fs = creerFichiersElectron(parLePrechargement(creerFichiers({ ...systeme, dialog, shell: SANS_APPEL })));
   return { fs, ...systeme.racines };
 }
 
@@ -244,6 +248,7 @@ describe('coquille sur un vrai disque', () => {
     symlinkSync(dehors, join(documents, 'lien'), SOUS_WINDOWS ? 'junction' : 'dir');
     const racine = (await fs.racines()).documents;
     await echoue(fs.lireTexte(racine, 'lien/secret.txt'), 'CHEMIN_REFUSE', { chemin: 'lien/secret.txt' });
+    await echoue(fs.lireOctets(racine, 'lien/secret.txt'), 'CHEMIN_REFUSE', { chemin: 'lien/secret.txt' });
     await echoue(fs.ecrireAtomique(racine, 'lien/neuf.txt', 'x'), 'CHEMIN_REFUSE', { chemin: 'lien/neuf.txt' });
     await echoue(fs.ajouterLigne(racine, 'lien/secret.txt', 'x'), 'CHEMIN_REFUSE', { chemin: 'lien/secret.txt' });
     await echoue(fs.lister(racine, 'lien'), 'CHEMIN_REFUSE', { chemin: 'lien' });
@@ -253,6 +258,7 @@ describe('coquille sur un vrai disque', () => {
     if (!SOUS_WINDOWS) {
       symlinkSync(join(dehors, 'secret.txt'), join(documents, 'secret.txt'));
       await echoue(fs.lireTexte(racine, 'secret.txt'), 'CHEMIN_REFUSE', { chemin: 'secret.txt' });
+      await echoue(fs.lireOctets(racine, 'secret.txt'), 'CHEMIN_REFUSE', { chemin: 'secret.txt' });
       await echoue(fs.ajouterLigne(racine, 'secret.txt', 'x'), 'CHEMIN_REFUSE', { chemin: 'secret.txt' });
     }
     assert.deepEqual(readdirSync(dehors).sort(), ['secret.txt', 'soiree.gtt.verrou']);
@@ -276,6 +282,46 @@ describe('coquille sur un vrai disque', () => {
     assert.deepEqual(readdirSync(voisin), ['secret.txt']);
     assert.equal(readFileSync(join(voisin, 'secret.txt'), 'utf8'), 'dans le dossier voisin');
     assert.equal(readFileSync(join(documents, 'ici.txt'), 'utf8'), 'ici');
+  });
+
+  testNettoye("une image choisie se pèse sur le disque avant d'être lue : au plafond elle traverse le pont, au-delà TROP_VOLUMINEUX, sans être lue ; un fichier qui n'en est pas une n'a pas de plafond", async () => {
+    const images = dossierTemporaire();
+    const max = GENRES_A_IMPORTER.image.maxOctets;
+    // Des fichiers creux : leur taille est celle du plafond, ou d'un octet de
+    // plus, sans les octets à écrire sur le disque.
+    const auPlafond = join(images, 'au-plafond.png');
+    const tropLourde = join(images, 'trop-lourde.jpg');
+    const sauvegarde = join(images, 'sauvegarde.gtt.json');
+    for (const [chemin, taille] of [[auPlafond, max], [tropLourde, max + 1], [sauvegarde, max + 1]]) {
+      writeFileSync(chemin, '');
+      truncateSync(chemin, taille);
+    }
+    const choix = [auPlafond, tropLourde, sauvegarde];
+    const options = [];
+    const dialog = {
+      async showOpenDialog(_fenetre, demande) {
+        options.push(demande);
+        return { canceled: false, filePaths: [choix.shift()] };
+      },
+    };
+    const { fs } = systemeSur(dossierTemporaire(), { dialog });
+    const lue = await fs.choisirFichierAImporter({ genre: 'image' });
+    assert.deepEqual(
+      [lue.nom, lue.octets.length, Object.getPrototypeOf(lue.octets)],
+      ['au-plafond.png', max, Uint8Array.prototype],
+    );
+    await echoue(fs.choisirFichierAImporter({ genre: 'image' }), 'TROP_VOLUMINEUX', {
+      chemin: 'trop-lourde.jpg',
+      dossier: images,
+      taille: max + 1,
+      max,
+    });
+    assert.equal((await fs.choisirFichierAImporter()).octets.length, max + 1);
+    assert.deepEqual(options, [
+      { properties: ['openFile'], filters: GENRES_A_IMPORTER.image.filtres },
+      { properties: ['openFile'], filters: GENRES_A_IMPORTER.image.filtres },
+      { properties: ['openFile'] },
+    ]);
   });
 
   testNettoye("l'écriture atomique remplace la cible par un renommage : le nom passe à un autre fichier, sans résidu", async () => {

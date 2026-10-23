@@ -17,7 +17,9 @@
 // l'événement écrit, un fichier au suffixe le plus long que l'écriture
 // atomique prolonge de SUFFIXE_ECRITURE : dans le dossier de l'événement,
 // qui porte le nom de sa base, si bien que la base y compte deux fois, ou
-// dans le dossier daté de la corbeille, qui porte directement les fichiers.
+// dans le dossier daté de la corbeille, qui porte directement les fichiers ;
+// ou le logo d'une personne dans ce dossier daté, dont la longueur ne dépend
+// pas de la base (logos.js).
 // Le plus long suffixe est celui de la planche de badges sans marque. Une
 // base qui ne tiendrait que pour l'état laisserait déborder le journal, la
 // planche et leurs fichiers d'écriture. Un nom de planche marqué raccourcit
@@ -27,6 +29,7 @@
 // point — se choisit parmi les entrées du dossier.
 import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
+import { cheminLogo } from './logos.js';
 
 // Suffixes des fichiers d'un événement, que précède la base de son nom :
 // l'état, son .precedent, le journal, le verrou, et le compagnon des
@@ -71,10 +74,15 @@ const RANG_LE_PLUS_LONG = `_${RANG_MAX}`;
  * planche au plus long suffixe sans marque, dans le dossier de l'événement,
  * <base>/<base>.badges-9999_<papier>_feuille_<date>.pdf.ecriture, ou dans le
  * dossier daté de la corbeille au rang de collision le plus long,
- * corbeille/AAAA-MM-JJ_HH-MM-SS_99/<base>.badges-…pdf.ecriture : le plus
- * long des deux. Le premier compte la base deux fois, le second une : la
- * corbeille l'emporte sous 32 unités de base, le dossier de l'événement
- * au-delà. Ni l'état ni le journal ne bornent la base.
+ * corbeille/AAAA-MM-JJ_HH-MM-SS_99/<base>.badges-…pdf.ecriture, ou le logo
+ * d'une personne dans ce dossier daté,
+ * corbeille/AAAA-MM-JJ_HH-MM-SS_99/logo/<empreinte>.png, 106 unités quelle
+ * que soit la base : le plus long des trois. Le premier compte la base deux
+ * fois, le deuxième une, le troisième aucune : le logo l'emporte sous 13
+ * unités de base, la corbeille jusqu'à 32, le dossier de l'événement
+ * au-delà. Ni l'état ni le journal ne bornent la base ; le logo dans le
+ * dossier de l'événement, <base>/logo/<empreinte>.png.ecriture, compte 83
+ * unités outre la base, toujours moins que la corbeille.
  *
  * @param {string} base
  * @returns {number}
@@ -84,9 +92,9 @@ export function longueurRelativeMax(base) {
 }
 
 // Le plus long chemin relatif d'une base de n unités : il ne dépend que de
-// sa longueur.
+// sa longueur, et ne descend jamais sous celui du logo dans la corbeille.
 function longueurPourUnites(n) {
-  return Math.max(2 * n + LONGUEUR_FIXE, n + LONGUEUR_FIXE_CORBEILLE);
+  return Math.max(2 * n + LONGUEUR_FIXE, n + LONGUEUR_FIXE_CORBEILLE, LONGUEUR_LOGO_CORBEILLE);
 }
 
 // La plus longue base, en unités, dont le plus long chemin relatif tient en
@@ -570,6 +578,11 @@ const SUFFIXE_PLUS_LONG = suffixePlusLong();
 const LONGUEUR_FIXE = 1 + SUFFIXE_PLUS_LONG + SUFFIXE_ECRITURE.length;
 const LONGUEUR_FIXE_CORBEILLE =
   `${DOSSIER_CORBEILLE}/${MODELE_DATE}${RANG_LE_PLUS_LONG}/`.length + SUFFIXE_PLUS_LONG + SUFFIXE_ECRITURE.length;
+// Le logo dans la corbeille, corbeille/AAAA-MM-JJ_HH-MM-SS_99/logo/<64
+// chiffres>.png : 33 + 73 = 106 unités, sans base. La suppression le déplace
+// sans écriture atomique, d'où aucun .ecriture.
+const LONGUEUR_LOGO_CORBEILLE =
+  `${DOSSIER_CORBEILLE}/${MODELE_DATE}${RANG_LE_PLUS_LONG}/`.length + cheminLogo('0'.repeat(64)).length;
 
 // Ce qui précède un suffixe de unites unités dans un nom de la planche posé
 // dans le dossier { racine, separateur } : la base entière quand le chemin

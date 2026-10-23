@@ -27,6 +27,7 @@ const PRIMITIVES = [
   'sonder',
   'typeSupport',
   'lireTexte',
+  'lireOctets',
   'ecrireAtomique',
   'ecrireOctetsAtomique',
   'ajouterLigne',

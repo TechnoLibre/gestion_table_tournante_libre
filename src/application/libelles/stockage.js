@@ -79,6 +79,21 @@ const PHRASES_DE_DERIVATION = new Map([
 ]);
 const DERIVATION_GENERIQUE = 'La dérivation de cette proposition se contredit';
 
+// Un poids en mégaoctets de 2^20 octets, comme l'explorateur de Windows les
+// compte, d'une décimale arrondie au-dessus et sans « ,0 » : un poids
+// au-delà d'un plafond ne se dit jamais du chiffre du plafond.
+function megaoctets(octets) {
+  const dixiemes = Math.ceil((octets * 10) / 2 ** 20);
+  const texte = dixiemes % 10 === 0 ? String(dixiemes / 10) : `${Math.floor(dixiemes / 10)},${dixiemes % 10}`;
+  return `${texte} Mo`;
+}
+
+// Les noms des filtres du dialogue d'import, par genre de
+// GENRES_A_IMPORTER, puis celui du filtre qui montre tous les fichiers. La
+// coquille (electron/fichiers.js) n'importe rien de src/ et en garde une
+// copie, qu'une épreuve compare à celle-ci.
+export const FILTRES_DIALOGUE_IMPORT = Object.freeze({ image: 'Images', tous: 'Tous les fichiers' });
+
 export const TABLE = new Map([
   // --- Le système de fichiers et le dépôt (src/stockage/types.js) ------------
   [
@@ -94,6 +109,12 @@ export const TABLE = new Map([
     ({ chemin }) => `Le dossier ${cite(chemin)} n'est pas vide : il reste en place, avec tout ce qu'il contient.`,
   ],
   ['CHEMIN_REFUSE', ({ chemin }) => `Le chemin ${cite(String(chemin))} est refusé.`],
+  [
+    'TROP_VOLUMINEUX',
+    ({ chemin, taille, max }) =>
+      `Le fichier ${cite(chemin)} pèse ${megaoctets(taille)}, au-delà des ${megaoctets(max)} qu'accepte une image : ` +
+      "il n'est pas lu. Une image plus petite, ou réenregistrée en JPEG ou en PNG, convient.",
+  ],
   [
     'ETAT_ILLISIBLE',
     (details, texte) => {

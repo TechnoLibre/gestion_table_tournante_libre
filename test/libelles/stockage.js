@@ -26,6 +26,7 @@ export const EXEMPLES = [
   ['CORBEILLE_SATUREE', { dossier: 'corbeille/2031-05-17_08-05-00_99' }],
   ['COMPTEUR_SATURE', { compteur: 'proposition' }],
   ['NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' }],
+  ['TROP_VOLUMINEUX', { chemin: 'affiche-lucioles.png', dossier: 'E:\\images', taille: 31_457_281, max: 26_214_400 }],
   // Raisons d'un état illisible
   ['VIDE', {}],
   ['JSON', {}],
@@ -81,6 +82,20 @@ export const EXEMPLES = [
 ];
 
 export const TEXTES = [
+  // La taille se dit en mégaoctets d'une décimale, arrondie au-dessus : un
+  // fichier d'un octet de trop ne se dit jamais du poids du plafond.
+  [
+    'TROP_VOLUMINEUX',
+    { chemin: 'affiche-lucioles.png', dossier: null, taille: 26_214_401, max: 26_214_400 },
+    "Le fichier « affiche-lucioles.png » pèse 25,1 Mo, au-delà des 25 Mo qu'accepte une image : " +
+      "il n'est pas lu. Une image plus petite, ou réenregistrée en JPEG ou en PNG, convient.",
+  ],
+  [
+    'TROP_VOLUMINEUX',
+    { chemin: 'affiche-lucioles.png', dossier: 'E:\\images', taille: 31_457_280, max: 26_214_400 },
+    "Le fichier « affiche-lucioles.png » pèse 30 Mo, au-delà des 25 Mo qu'accepte une image : " +
+      "il n'est pas lu. Une image plus petite, ou réenregistrée en JPEG ou en PNG, convient.",
+  ],
   [
     'NON_VIDE',
     { chemin: 'Soirée des Lucioles' },

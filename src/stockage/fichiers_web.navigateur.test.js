@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { eprouverContrat } from '../../test/contrat_fichiers.js';
 import { ErreurStockage } from './erreurs.js';
 import { TEMOIN, creerFichiersWeb } from './fichiers_web.js';
+import { LOGO_SOURCE_MAX_OCTETS } from './logos.js';
 import { NOMS_RESERVES_RACINE } from './noms.js';
 
 // Le dossier du produit dans l'OPFS, et la racine qui le désigne.
@@ -327,6 +328,7 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
     await echoue(fs.deplacer(DOCUMENTS, enfant, 'copie.json'), 'ECRITURE', refus(enfant), 'deplacer depuis');
     await echoue(fs.deplacer(DOCUMENTS, 'etat.json', '\u{E9}/neuf.json'), 'ECRITURE', refus('\u{E9}/neuf.json'), 'deplacer vers');
     await echoue(fs.lireTexte(DOCUMENTS, enfant), 'LECTURE', refus(enfant), 'lireTexte');
+    await echoue(fs.lireOctets(DOCUMENTS, enfant), 'LECTURE', refus(enfant), 'lireOctets');
     await echoue(fs.lister(DOCUMENTS, '\u{E9}'), 'LECTURE', refus('\u{E9}', CHEMIN_DOCUMENTS), 'lister');
     await echoue(fs.supprimerDossier(DOCUMENTS, '\u{E9}'), 'ECRITURE', refus('\u{E9}', CHEMIN_DOCUMENTS), 'supprimerDossier');
     vi.restoreAllMocks();
@@ -372,6 +374,7 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
     const refus = { chemin: nom, dossier: CHEMIN_DOCUMENTS, cause: 'NOM_NON_CONVERTI' };
 
     await echoue(fs.lireTexte(DOCUMENTS, nom), 'LECTURE', refus, 'lireTexte');
+    await echoue(fs.lireOctets(DOCUMENTS, nom), 'LECTURE', refus, 'lireOctets');
     await echoue(fs.ecrireAtomique(DOCUMENTS, nom, 'x'), 'ECRITURE', refus, 'ecrireAtomique');
     await echoue(fs.ajouterLigne(DOCUMENTS, nom, 'x'), 'ECRITURE', refus, 'ajouterLigne');
     await echoue(fs.supprimer(DOCUMENTS, nom), 'ECRITURE', refus, 'supprimer');
@@ -497,6 +500,8 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
 
     vi.spyOn(Blob.prototype, 'arrayBuffer').mockRejectedValueOnce(new DOMException('change', 'NotReadableError'));
     await echoue(fs.lireTexte(DOCUMENTS, etat), 'LECTURE', lecture(etat, corbeille, 'NotReadableError'), 'octets');
+    vi.spyOn(Blob.prototype, 'arrayBuffer').mockRejectedValueOnce(new DOMException('change', 'NotReadableError'));
+    await echoue(fs.lireOctets(DOCUMENTS, etat), 'LECTURE', lecture(etat, corbeille, 'NotReadableError'), 'lireOctets');
     vi.spyOn(FileSystemFileHandle.prototype, 'getFile').mockRejectedValueOnce(
       new DOMException('illisible', 'NotReadableError'),
     );
@@ -513,6 +518,7 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
 
     vi.spyOn(StorageManager.prototype, 'getDirectory').mockRejectedValue(new DOMException('refus', 'SecurityError'));
     await echoue(fs.lireTexte(DOCUMENTS, etat), 'LECTURE', lecture(etat, corbeille, 'SecurityError'), 'lireTexte');
+    await echoue(fs.lireOctets(DOCUMENTS, etat), 'LECTURE', lecture(etat, corbeille, 'SecurityError'), 'lireOctets');
     await echoue(fs.lister(DOCUMENTS, ''), 'LECTURE', lecture('', CHEMIN_DOCUMENTS, 'SecurityError'), 'lister');
     vi.restoreAllMocks();
     expect(await fs.lireTexte(DOCUMENTS, etat)).toBe('etat');
@@ -639,6 +645,55 @@ describe('fichiers web : importer et enregistrer', () => {
       this.dispatchEvent(new Event('change'));
     });
     expect(await fs.choisirFichierAImporter()).toBeNull();
+  });
+
+  test("sans genre, le champ n'accepte rien de particulier ; le genre image le restreint aux images par accept", async () => {
+    const fs = creerFichiersWeb();
+    const accepts = [];
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function annuler() {
+      accepts.push(this.accept);
+      this.dispatchEvent(new Event('cancel'));
+    });
+    expect(await fs.choisirFichierAImporter()).toBeNull();
+    expect(await fs.choisirFichierAImporter({ genre: 'image' })).toBeNull();
+    expect(accepts).toStrictEqual(['', 'image/*']);
+  });
+
+  test("le genre image lit la taille du fichier avant ses octets : au plafond, il le lit ; au-delà, TROP_VOLUMINEUX {chemin, dossier: null, taille, max} sans rien lire ; sans genre, aucun plafond", async () => {
+    const fs = creerFichiersWeb();
+    const lectures = vi.spyOn(Blob.prototype, 'arrayBuffer');
+    const aServir = [
+      new File([new Uint8Array(LOGO_SOURCE_MAX_OCTETS + 1)], 'trop-lourde.jpg'),
+      new File([new Uint8Array(LOGO_SOURCE_MAX_OCTETS)], 'au-plafond.png'),
+      new File([new Uint8Array(LOGO_SOURCE_MAX_OCTETS + 1)], 'sauvegarde.gtt.json'),
+    ];
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function cliquer() {
+      const transfert = new DataTransfer();
+      transfert.items.add(aServir.shift());
+      this.files = transfert.files;
+      this.dispatchEvent(new Event('change'));
+    });
+    await echoue(fs.choisirFichierAImporter({ genre: 'image' }), 'TROP_VOLUMINEUX', {
+      chemin: 'trop-lourde.jpg',
+      dossier: null,
+      taille: LOGO_SOURCE_MAX_OCTETS + 1,
+      max: LOGO_SOURCE_MAX_OCTETS,
+    });
+    expect(lectures).not.toHaveBeenCalled();
+    const auPlafond = await fs.choisirFichierAImporter({ genre: 'image' });
+    expect([auPlafond.nom, auPlafond.octets.length]).toStrictEqual(['au-plafond.png', LOGO_SOURCE_MAX_OCTETS]);
+    const sansGenre = await fs.choisirFichierAImporter();
+    expect([sansGenre.nom, sansGenre.octets.length]).toStrictEqual(['sauvegarde.gtt.json', LOGO_SOURCE_MAX_OCTETS + 1]);
+    expect(lectures).toHaveBeenCalledTimes(2);
+  });
+
+  test("un genre inconnu ou une option de forme fausse lève TypeError avant d'ouvrir le champ", async () => {
+    const fs = creerFichiersWeb();
+    const clic = vi.spyOn(HTMLInputElement.prototype, 'click');
+    for (const options of [null, 'image', {}, { genre: 'csv' }, { genre: 'toString' }]) {
+      await expect(fs.choisirFichierAImporter(options), JSON.stringify(options)).rejects.toThrow(TypeError);
+    }
+    expect(clic).not.toHaveBeenCalled();
   });
 
   test("un fichier choisi qui ne se lit pas lève LECTURE, ou ABSENT quand il a disparu, et se nomme par son seul nom : le navigateur tait son dossier", async () => {

@@ -608,6 +608,7 @@ describe('fichiers simulés : compteurs, préparation, horloge', () => {
     await fs.sonder(DOC);
     await assert.rejects(fs.ecrireAtomique(DOC, '../a.txt', 'a'));
     await fs.lireTexte(DOC, 'journal.jsonl');
+    await fs.lireOctets(DOC, 'journal.jsonl');
     await fs.lister(DOC, '');
     await assert.rejects(fs.lireTexte(DOC, 'absent.txt'));
     await fs.emplacements();
@@ -619,7 +620,7 @@ describe('fichiers simulés : compteurs, préparation, horloge', () => {
     await fs.enregistrerSous('liste.csv', new Uint8Array([0x61]));
     fs.contenu('documents', 'journal.jsonl');
     fs.deposer('documents', 'pose.txt', 'posé');
-    assert.deepEqual(fs.compteurs, { ecritures: 10, lectures: 3 });
+    assert.deepEqual(fs.compteurs, { ecritures: 10, lectures: 4 });
   });
 
   test('deposer et deposerDossier posent sans compter, dossiers parents compris ; contenu lit sans compter et rend null hors d\u{2019}un fichier', async () => {

@@ -642,6 +642,12 @@ export function creerFacade({
     importerDepuisAutre,
     /** Le dialogue de choix d'un fichier, relayé : { nom, octets } ou null. */
     choisirCsv: () => fs.choisirFichierAImporter(),
+    /**
+     * Le dialogue de choix d'une image, relayé sous le genre image : { nom,
+     * octets } ou null ; TROP_VOLUMINEUX, sans rien lire, au-delà de
+     * LOGO_SOURCE_MAX_OCTETS (§ 8.6).
+     */
+    choisirImage: () => fs.choisirFichierAImporter({ genre: 'image' }),
     /** Le dialogue d'enregistrement, relayé : le chemin choisi, ou null. */
     enregistrerSous: (nomPropose, octets) => fs.enregistrerSous(nomPropose, octets),
     /** { disponible, raison } : raison EXPLORATEUR_ABSENT sous web (§ 8.6). */

@@ -461,6 +461,15 @@
  *   CHEMIN_REFUSE        {chemin}                    chemin absolu, .., racine
  *                                                    inconnue, et '' pour
  *                                                    supprimerDossier
+ *   TROP_VOLUMINEUX      {chemin, dossier, taille,   un fichier choisi à
+ *                         max}                       importer pèse taille
+ *                                                    octets, plus que le
+ *                                                    plafond max de son genre
+ *                                                    (choisirFichierAImporter) ;
+ *                                                    rien n'en est lu. chemin
+ *                                                    est son nom, dossier
+ *                                                    celui qui le porte, null
+ *                                                    sous web
  *   ETAT_ILLISIBLE       DetailsIllisible            un fichier d'état qui ne
  *                                                    se lit pas
  *   CORRECTIF            {rang}                      un correctif qui ne

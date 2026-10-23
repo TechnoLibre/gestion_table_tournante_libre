@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { PRIMITIVES } from '../electron/fichiers.js';
+import { GENRES_A_IMPORTER, PRIMITIVES } from '../electron/fichiers.js';
 import { CANAL_IMPRESSION, FORMATS_DE_PAGE, imprimer, optionsImpression, servirImpression } from '../electron/impression.js';
 import { PAPIERS } from '../src/geometrie/papiers.js';
 import { LIENS } from '../src/interface/apropos.js';
@@ -37,6 +37,9 @@ const PRECHARGEMENT = join(RACINE, 'electron', 'preload.cjs');
 const NOM_PRODUIT = JSON.parse(readFileSync(join(RACINE, 'package.json'), 'utf8')).productName;
 const CANAUX = PRIMITIVES.map((primitive) => `gtt:fichiers:${primitive}`);
 const CANAL_COPIE = 'gtt:copier';
+// Le logo que la page factice demande à lireOctets (test/electron_factice.js),
+// sous une racine que le processus principal ne connaît pas.
+const LOGO_DE_LA_PAGE = `logo/${'0123456789abcdef'.repeat(4)}.png`;
 const CANAL_IMPRIMER = 'gtt:imprimer';
 
 // Dossier que publie le lanceur portable, et LOCALAPPDATA, dans le scénario
@@ -205,7 +208,7 @@ describe('coquille : processus principal', () => {
     const { canaux, sequence } = journalDeLaCoquille();
     assert.equal(CANAL_IMPRESSION, CANAL_IMPRIMER);
     assert.deepEqual(canaux, [...CANAUX, CANAL_COPIE, CANAL_IMPRIMER]);
-    assert.equal(CANAUX.length, 19);
+    assert.equal(CANAUX.length, 20);
     const charge = sequence.indexOf('loadFile');
     assert.notEqual(charge, -1);
     for (const canal of [...CANAUX, CANAL_COPIE, CANAL_IMPRIMER]) {
@@ -313,6 +316,7 @@ describe('coquille : préchargement', () => {
       ['sonder', ''],
       ['typeSupport', ''],
       ['lireTexte', 'soiree.gtt.json'],
+      ['lireOctets', LOGO_DE_LA_PAGE],
       ['ecrireAtomique', 'soiree.gtt.json'],
       ['ecrireOctetsAtomique', 'soiree.badges.pdf'],
       ['ajouterLigne', 'soiree.gtt-journal.jsonl'],
@@ -379,7 +383,11 @@ describe('coquille : préchargement', () => {
     const journal = journalDeLaCoquille();
     assert.deepEqual(journal.dialogues, [
       { methode: 'showOpenDialog', parent: true, options: { properties: ['openDirectory', 'createDirectory'] } },
-      { methode: 'showOpenDialog', parent: true, options: { properties: ['openFile'] } },
+      {
+        methode: 'showOpenDialog',
+        parent: true,
+        options: { properties: ['openFile'], filters: GENRES_A_IMPORTER.image.filtres },
+      },
       { methode: 'showSaveDialog', parent: true, options: { defaultPath: join(journal.chemins.documents, 'liste.csv') } },
     ]);
     for (const membre of ['choisirDossier', 'choisirFichierAImporter', 'enregistrerSous']) {

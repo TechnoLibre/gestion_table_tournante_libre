@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { compileFunction } from 'node:vm';
 import {
   DELAI_SUPPORT_MS,
+  GENRES_A_IMPORTER,
   PAUSE_INITIALE_MS,
   PAUSE_MAX_MS,
   PREFIXE_CANAL,
@@ -37,7 +38,9 @@ import {
 import { ErreurStockage } from '../src/stockage/erreurs.js';
 import { creerFichiersElectron } from '../src/stockage/fichiers_electron.js';
 import { NOMS_RESERVES_RACINE, SUFFIXE_ECRITURE as SUFFIXE_DU_STOCKAGE } from '../src/stockage/noms.js';
-import { exigerCheminRelatif } from '../src/stockage/systeme_fichiers.js';
+import { FILTRES_DIALOGUE_IMPORT } from '../src/application/libelles/stockage.js';
+import { LOGO_SOURCE_MAX_OCTETS } from '../src/stockage/logos.js';
+import { GENRES_A_IMPORTER as GENRES_DU_STOCKAGE, exigerCheminRelatif } from '../src/stockage/systeme_fichiers.js';
 import { describe, test } from './lanceur.js';
 
 const PRECHARGEMENT = fileURLToPath(new URL('../electron/preload.cjs', import.meta.url));
@@ -478,6 +481,7 @@ const ecriture = (chemin, dossier, cause) => ({ chemin, dossier, cause });
 // échouer l'appel.
 const APPELS_A_CHEMIN = [
   ['lireTexte', (fichiers, racine, chemin) => fichiers.lireTexte(racine, chemin)],
+  ['lireOctets', (fichiers, racine, chemin) => fichiers.lireOctets(racine, chemin)],
   ['ecrireAtomique', (fichiers, racine, chemin) => fichiers.ecrireAtomique(racine, chemin, 'x')],
   ['ecrireOctetsAtomique', (fichiers, racine, chemin) => fichiers.ecrireOctetsAtomique(racine, chemin, new Uint8Array([0x25]))],
   ['ajouterLigne', (fichiers, racine, chemin) => fichiers.ajouterLigne(racine, chemin, 'x')],
@@ -880,6 +884,27 @@ describe('coquille, fichiers : lecture, liste, dossiers, déplacement, suppressi
       cause: 'UTF8_INVALIDE',
       octets: new Uint8Array([0x61, 0xc3]),
     });
+  });
+
+  test("lireOctets rend une copie des octets du fichier, dans un Uint8Array qui n'est pas un Buffer, hors UTF-8 compris ; ABSENT pour un absent, un dossier, la racine ou un parent fichier ; LECTURE pour un autre refus", async () => {
+    const { disque, fichiers } = preparer();
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff]);
+    disque.deposer(`${DOCUMENTS}/Gala des Saules/logo/image.png`, png);
+    const lus = await fichiers.lireOctets(DOC, 'Gala des Saules/logo/image.png');
+    assert.equal(Object.getPrototypeOf(lus), Uint8Array.prototype);
+    assert.deepEqual(lus, png);
+    lus.fill(0);
+    assert.deepEqual(disque.octets(`${DOCUMENTS}/Gala des Saules/logo/image.png`), png);
+    for (const chemin of ['absent.png', 'Gala des Saules/logo', '', 'Gala des Saules/logo/image.png/x']) {
+      await refuse(fichiers.lireOctets(DOC, chemin), 'ABSENT', { chemin }, chemin);
+    }
+    disque.panne('readFile', 'EACCES');
+    await refuse(fichiers.lireOctets(DOC, 'Gala des Saules/logo/image.png'), 'LECTURE', {
+      chemin: 'Gala des Saules/logo/image.png',
+      dossier: `${DOCUMENTS}/Gala des Saules/logo`,
+      cause: 'EACCES',
+    });
+    assert.deepEqual(ecritures(disque), []);
   });
 
   test("lister trie par unités UTF-16, type les entrées, donne 0 octet à un dossier et passe un lien sans cible", async () => {
@@ -1710,6 +1735,69 @@ describe('coquille, fichiers : dialogues et explorateur', () => {
     assert.equal(await fichiers.choisirFichierAImporter(), null);
   });
 
+  test("choisirFichierAImporter({genre: 'image'}) filtre le dialogue sur les images, sans fermer l'accès aux autres fichiers, et lit la taille avant le fichier : au plafond il le lit, au-delà TROP_VOLUMINEUX sans le lire", async () => {
+    const dossier = '/poste/exemple/Images';
+    const plafond = 25 * 1024 * 1024;
+    const dialog = dialogueFactice([
+      { canceled: false, filePaths: [`${dossier}/au-plafond.png`] },
+      { canceled: false, filePaths: [`${dossier}/trop-lourde.jpg`] },
+      { canceled: true, filePaths: [] },
+    ]);
+    const { disque, fichiers } = preparer({ dialog });
+    disque.deposer(`${dossier}/au-plafond.png`, new Uint8Array(plafond));
+    disque.deposer(`${dossier}/trop-lourde.jpg`, new Uint8Array(plafond + 1));
+    const choisi = await fichiers.choisirFichierAImporter({ genre: 'image' });
+    assert.equal(choisi.nom, 'au-plafond.png');
+    assert.equal(Object.getPrototypeOf(choisi.octets), Uint8Array.prototype);
+    assert.equal(choisi.octets.length, plafond);
+    await refuse(fichiers.choisirFichierAImporter({ genre: 'image' }), 'TROP_VOLUMINEUX', {
+      chemin: 'trop-lourde.jpg',
+      dossier,
+      taille: plafond + 1,
+      max: plafond,
+    });
+    assert.equal(await fichiers.choisirFichierAImporter({ genre: 'image' }), null);
+    const filtres = [
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'bmp', 'ico', 'avif', 'svg'] },
+      { name: 'Tous les fichiers', extensions: ['*'] },
+    ];
+    assert.deepEqual(
+      dialog.appels.map(({ parent, options }) => ({ parent, options })),
+      Array(3).fill({ parent: FENETRE, options: { properties: ['openFile'], filters: filtres } }),
+    );
+    // La taille se lit avant tout : le fichier trop lourd n'est jamais lu.
+    const lus = disque.appels.filter((ligne) => ligne.startsWith('readFile '));
+    assert.deepEqual(lus, [`readFile ${dossier}/au-plafond.png`]);
+    const pese = disque.appels.indexOf(`stat ${dossier}/au-plafond.png`);
+    assert.ok(pese !== -1 && pese < disque.appels.indexOf(lus[0]), 'taille lue après les octets');
+    assert.ok(disque.appels.includes(`stat ${dossier}/trop-lourde.jpg`), 'taille non lue');
+  });
+
+  test("choisirFichierAImporter sans genre ne filtre rien et ne borne aucune taille ; un fichier disparu entre le dialogue et la lecture de sa taille lève ABSENT sous son nom", async () => {
+    const dossier = '/poste/exemple/T\u{E9}l\u{E9}chargements';
+    const dialog = dialogueFactice([
+      { canceled: false, filePaths: [`${dossier}/sauvegarde.gtt.json`] },
+      { canceled: false, filePaths: [`${dossier}/disparue.png`] },
+    ]);
+    const { disque, fichiers } = preparer({ dialog });
+    disque.deposer(`${dossier}/sauvegarde.gtt.json`, new Uint8Array(25 * 1024 * 1024 + 1));
+    assert.equal((await fichiers.choisirFichierAImporter()).octets.length, 25 * 1024 * 1024 + 1);
+    assert.ok(!disque.appels.some((ligne) => ligne.startsWith('stat ')), 'taille lue sans genre');
+    await refuse(fichiers.choisirFichierAImporter({ genre: 'image' }), 'ABSENT', { chemin: 'disparue.png' });
+    assert.deepEqual(dialog.appels.map(({ options }) => options), [
+      { properties: ['openFile'] },
+      { properties: ['openFile'], filters: GENRES_A_IMPORTER.image.filtres },
+    ]);
+  });
+
+  test("choisirFichierAImporter refuse un genre inconnu ou une option de forme fausse par TypeError, avant d'ouvrir le dialogue", async () => {
+    const { dialog, fichiers } = preparer();
+    for (const options of [null, 'image', {}, { genre: 'csv' }, { genre: 'toString' }, { genre: 'constructor' }, []]) {
+      await assert.rejects(fichiers.choisirFichierAImporter(options), TypeError, JSON.stringify(options));
+    }
+    assert.deepEqual(dialog.appels, []);
+  });
+
   test("enregistrerSous propose le nom dans les Documents, écrit le fichier choisi par écriture atomique et rend son chemin ; une annulation n'écrit rien", async () => {
     const choisi = '/poste/exemple/Documents/liste-retenue.csv';
     const dialog = dialogueFactice([{ canceled: false, filePath: choisi }]);
@@ -1864,7 +1952,8 @@ describe('coquille, fichiers : le service IPC', () => {
       canaux.push(canal);
     });
     assert.deepEqual(canaux, PRIMITIVES.map((primitive) => `gtt:fichiers:${primitive}`));
-    assert.equal(PRIMITIVES.length, 19);
+    assert.equal(PRIMITIVES.length, 20);
+    assert.equal(PRIMITIVES.indexOf('lireOctets'), PRIMITIVES.indexOf('lireTexte') + 1);
     assert.equal(PRIMITIVES.indexOf('supprimerDossier'), PRIMITIVES.indexOf('creerDossier') + 1);
     assert.equal(PRIMITIVES.indexOf('ecrireOctetsAtomique'), PRIMITIVES.indexOf('ecrireAtomique') + 1);
     assert.ok(Object.isFrozen(PRIMITIVES));
@@ -1920,6 +2009,27 @@ describe('coquille, fichiers : ce que la coquille recopie de src/stockage', () =
         obtenu = { code: erreur.code, details: erreur.details };
       }
       assert.deepEqual(obtenu, attendu, String(chemin));
+    }
+  });
+
+  test("les genres du dialogue d'import sont ceux de src/stockage/systeme_fichiers.js : mêmes extensions, même plafond, celui des sources de logo", () => {
+    assert.deepEqual(Object.keys(GENRES_A_IMPORTER), Object.keys(GENRES_DU_STOCKAGE));
+    for (const [genre, { extensions, maxOctets }] of Object.entries(GENRES_DU_STOCKAGE)) {
+      assert.deepEqual(GENRES_A_IMPORTER[genre].extensions, extensions, genre);
+      assert.equal(GENRES_A_IMPORTER[genre].maxOctets, maxOctets, genre);
+      assert.deepEqual(GENRES_A_IMPORTER[genre].filtres[0].extensions, extensions, genre);
+    }
+    assert.equal(GENRES_A_IMPORTER.image.maxOctets, LOGO_SOURCE_MAX_OCTETS);
+    assert.ok(Object.isFrozen(GENRES_A_IMPORTER) && Object.isFrozen(GENRES_A_IMPORTER.image));
+  });
+
+  test("les noms des filtres du dialogue d'import sont ceux du module de libellés du stockage", () => {
+    for (const [genre, { filtres }] of Object.entries(GENRES_A_IMPORTER)) {
+      assert.deepEqual(
+        filtres.map(({ name }) => name),
+        [FILTRES_DIALOGUE_IMPORT[genre], FILTRES_DIALOGUE_IMPORT.tous],
+        genre,
+      );
     }
   });
 
@@ -1989,7 +2099,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
     return { pont, appels };
   }
 
-  test('nature electron, renommage atomique et verrou ; les dix-neuf primitives, dans l\u{2019}ordre de la coquille', () => {
+  test('nature electron, renommage atomique et verrou ; les vingt primitives, dans l\u{2019}ordre de la coquille', () => {
     const fs = creerFichiersElectron(pontFactice([]).pont);
     assert.deepEqual(
       { nature: fs.nature, renommageAtomique: fs.renommageAtomique, verrouDisponible: fs.verrouDisponible },
@@ -2010,6 +2120,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
       ['sonder', [DOC]],
       ['typeSupport', [DOC]],
       ['lireTexte', [DOC, 'a.txt']],
+      ['lireOctets', [DOC, 'logo/a.png']],
       ['ecrireAtomique', [DOC, 'a.txt', 'texte']],
       ['ecrireOctetsAtomique', [DOC, 'a.pdf', octets]],
       ['ajouterLigne', [DOC, 'a.jsonl', 'ligne']],
@@ -2021,7 +2132,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
       ['verrouiller', [DOC, 'a.gtt.verrou', 'seance-a', PRISE]],
       ['deverrouiller', [DOC, 'a.gtt.verrou', 'seance-a']],
       ['ouvrirDansExplorateur', [DOC, 'Gala des Saules']],
-      ['choisirFichierAImporter', []],
+      ['choisirFichierAImporter', [{ genre: 'image' }]],
       ['enregistrerSous', ['liste.csv', octets]],
     ];
     const { pont, appels: recus } = pontFactice(appels.map((_, rang) => ({ ok: true, valeur: rang })));
@@ -2030,6 +2141,18 @@ describe('page : src/stockage/fichiers_electron.js', () => {
       assert.equal(await fs[primitive](...parametres, 'argument en trop'), rang, primitive);
     }
     assert.deepEqual(recus, appels.map(([primitive, parametres]) => [primitive, ...parametres]));
+  });
+
+  test("choisirFichierAImporter sans option n'en passe aucune au pont ; avec, il ne passe que le genre, et refuse avant le pont un genre inconnu : TypeError", async () => {
+    const { pont, appels } = pontFactice([{ ok: true, valeur: null }, { ok: true, valeur: null }]);
+    const fs = creerFichiersElectron(pont);
+    assert.equal(await fs.choisirFichierAImporter(), null);
+    assert.equal(await fs.choisirFichierAImporter({ genre: 'image', titre: 'ignoré' }), null);
+    for (const options of [null, {}, { genre: 'csv' }, { genre: 'toString' }]) {
+      const erreur = await rejette(fs.choisirFichierAImporter(options));
+      assert.ok(erreur instanceof TypeError, `${JSON.stringify(options)} : ${erreur}`);
+    }
+    assert.deepEqual(appels, [['choisirFichierAImporter'], ['choisirFichierAImporter', { genre: 'image' }]]);
   });
 
   test("ouvrirDansExplorateur sans chemin passe '' au pont : la racine elle-même", async () => {
@@ -2091,6 +2214,9 @@ describe('page : src/stockage/fichiers_electron.js', () => {
     const planche = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x0a, 0xe2, 0xe3, 0x00, 0xff]);
     await fs.ecrireOctetsAtomique(DOC, 'soiree.badges.pdf', planche);
     assert.deepEqual(disque.octets(`${DOCUMENTS}/soiree.badges.pdf`), planche);
+    const relue = await fs.lireOctets(DOC, 'soiree.badges.pdf');
+    assert.equal(Object.getPrototypeOf(relue), Uint8Array.prototype);
+    assert.deepEqual(relue, planche);
     await fs.ecrireAtomique(DOC, 'soiree.gtt.json', '{"entete":{}}\n');
     assert.equal(await fs.lireTexte(DOC, 'soiree.gtt.json'), '{"entete":{}}\n');
     assert.equal(disque.contenu(`${DOCUMENTS}/soiree.gtt.json`), '{"entete":{}}\n');
@@ -2104,6 +2230,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
     assert.deepEqual([plein.code, plein.details], ['CHEMIN_REFUSE', { chemin: '' }]);
     assert.deepEqual(invoques, [
       'gtt:fichiers:ecrireOctetsAtomique',
+      'gtt:fichiers:lireOctets',
       'gtt:fichiers:ecrireAtomique',
       'gtt:fichiers:lireTexte',
       'gtt:fichiers:deplacer',
