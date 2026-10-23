@@ -416,3 +416,53 @@ describe('le pied TechnoLibre (§ 8.5, § 11.4)', () => {
     assert.match(textes[1], /retenue sur ce poste/);
   });
 });
+
+describe('les logos des participants (§ 11.4, § 11.5, § 5.9)', () => {
+  const avecLogos = async (logos) => ({ ...(await annoncer(retenue(), 'A4')), logos });
+
+  test('sans logo désigné, l’annonce ne dit rien des logos', async () => {
+    const annonce = await annoncer(retenue(), 'A4');
+    assert.equal(annonce.logos, null);
+    assert.ok(!cles(phrasesAnnonce(annonce)).some((cle) => cle.startsWith('badges.annonce.logos')));
+    assert.ok(!cles(phrasesAnnonce(await avecLogos({ poses: 4, sansPlace: 0, introuvables: [] }))).some((cle) => cle.startsWith('badges.annonce.logos')));
+  });
+
+  test('les logos introuvables, puis illisibles, nomment leurs personnes dans l’ordre de la pile, puis le compte de ceux sans place, avant le pied TechnoLibre ; rien ne bloque', async () => {
+    const annonce = {
+      ...(await avecLogos({
+        poses: 1,
+        sansPlace: 2,
+        introuvables: [
+          { participant: 4, nom: 'Grisaille', cause: 'ABSENT' },
+          { participant: 3, nom: 'Ondine Lacasse', cause: 'ILLISIBLE' },
+          { participant: 1, nom: 'Iris Ombrelle', cause: 'ABSENT' },
+        ],
+      })),
+      sansTechnolibre: 1,
+    };
+    const phrases = phrasesAnnonce(annonce);
+    const rangs = ['badges.annonce.logosIntrouvables', 'badges.annonce.logosIllisibles', 'badges.annonce.logosSansPlace', 'badges.annonce.technolibreRetire'].map((cle) =>
+      cles(phrases).indexOf(cle),
+    );
+    assert.ok(rangs.every((rang, k) => rang > 0 && (k === 0 || rang === rangs[k - 1] + 1)), JSON.stringify(cles(phrases)));
+    assert.deepEqual(phrases[rangs[0]].details, { noms: ['Grisaille', 'Iris Ombrelle'] });
+    const textes = composer(phrases);
+    assert.equal(textes[rangs[0]], 'Logos introuvables dans le dossier de l’événement pour Grisaille et Iris Ombrelle : leurs badges s’impriment sans logo.');
+    assert.equal(textes[rangs[1]], 'Logo illisible pour Ondine Lacasse : son badge s’imprime sans logo.');
+    assert.equal(textes[rangs[2]], 'Logo du participant : retiré de 2 badges, faute de place sous leurs tours.');
+    assert.equal(produireBloque(annonce), false);
+  });
+
+  test('au singulier comme au pluriel, chaque phrase des logos se compose', () => {
+    const textes = composer([
+      { cle: 'badges.annonce.logosIntrouvables', details: { noms: ['Iris Ombrelle'] } },
+      { cle: 'badges.annonce.logosIllisibles', details: { noms: ['Iris Ombrelle', 'Théo Pervenche', 'Grisaille'] } },
+      { cle: 'badges.annonce.logosSansPlace', details: { n: 1 } },
+    ]);
+    assert.deepEqual(textes, [
+      'Logo introuvable dans le dossier de l’événement pour Iris Ombrelle : son badge s’imprime sans logo.',
+      'Logos illisibles pour Iris Ombrelle, Théo Pervenche et Grisaille : leurs badges s’impriment sans logo.',
+      'Logo du participant : retiré d’un badge, faute de place sous ses tours.',
+    ]);
+  });
+});

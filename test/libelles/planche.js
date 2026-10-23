@@ -99,4 +99,7 @@ export const TEXTES = [
     { modeleBadge: 'avery5392' },
     'Imprimer cette feuille sur papier ordinaire : posée sur une feuille Avery 5392, le contour des six cartes tombe sur leurs prédécoupes',
   ],
+  // Les comptes des logos des participants, accordés au nombre.
+  ['planche.controle.logos', { poses: 12, sansPlace: 3, introuvables: 2 }, 'Logos : 12 posés, 3 sans place, 2 introuvables'],
+  ['planche.controle.logos', { poses: 1, sansPlace: 0, introuvables: 0 }, 'Logos : 1 posé, 0 sans place, 0 introuvable'],
 ];

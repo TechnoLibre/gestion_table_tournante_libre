@@ -18,8 +18,11 @@
 // la ligne de contrôle se replie aux espaces, reporte entier un mot qui
 // tient seul, puis coupe un mot qui ne tient pas seul. Les lignes de
 // contrôle viennent de textesControle, le mot du filigrane de libelle,
-// comme la séance les passera.
+// comme la séance les passera. Les logos des participants s'éprouvent sur
+// la même série, A4 debout et Lettre à plat, chacune produite une fois avec
+// des logos, et sur des PNG composés ici, morceau par morceau.
 import assert from 'node:assert/strict';
+import { crc32, deflateSync } from 'node:zlib';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFName } from 'pdf-lib';
 import { lirePdf } from '../../test/pdf.js';
@@ -31,7 +34,7 @@ import { textesControle } from '../application/planche.js';
 import { constante } from '../geometrie/constantes.js';
 import { PAPIERS } from '../geometrie/papiers.js';
 import { VERSION } from '../version.genere.js';
-import { cellules, filets, imposer, nombrePlanches } from './imposition.js';
+import { cadreUtile, cellules, filets, imposer, nombrePlanches } from './imposition.js';
 import { lireLogo as lireLogoSvg } from './logo.js';
 import { mettreEnPage, metriquesDe } from './mise_en_page.js';
 import { analyserPlanche, produireControle, produirePlanche } from './planche.js';
@@ -559,7 +562,12 @@ describe('produirePlanche : la feuille de contrôle, page 1 (§ 11.3)', () => {
 describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
   test('un nom à glyphe absent : absents le nomme, une fois, et rien ne refuse', async () => {
     const m = modele([badge(1, 'Ondine 李'), badge(2, 'Théo 李 Pervenche')]);
-    assert.deepEqual(await analyserPlanche({ modele: m, polices }), { refus: null, absents: ['李'], sansTechnolibre: 0 });
+    assert.deepEqual(await analyserPlanche({ modele: m, polices }), {
+      refus: null,
+      absents: ['李'],
+      sansTechnolibre: 0,
+      logosParticipants: { poses: 0, sansPlace: 0 },
+    });
   });
 
   test('un badge à 100 tours : refus PLANCHE_TROP_DE_TOURS, et son rang dans le modèle', async () => {
@@ -568,6 +576,7 @@ describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
       refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100 }, rang: 1 },
       absents: [],
       sansTechnolibre: 0,
+      logosParticipants: { poses: 0, sansPlace: 0 },
     });
   });
 
@@ -799,6 +808,8 @@ describe('produirePlanche : le pied TechnoLibre (§ 11.4)', () => {
     }
   });
 
+  // Ces planches ne portent aucun logo de participant : le pied TechnoLibre
+  // y est la seule couleur.
   test('le logo est la seule couleur : chaque texte de la planche se montre en noir, celui qui suit un logo compris', () => {
     for (const { nom, lu: document } of PRODUCTIONS_T) {
       // Les pages où un texte suit un logo : celles qui portent un logo et
@@ -826,7 +837,7 @@ describe('produirePlanche : le pied TechnoLibre (§ 11.4)', () => {
     const retires = posees.filter((p) => !p).length;
     assert.ok(retires > 0 && retires < m.badges.length, String(retires));
     const analyse = await analyserPlanche({ modele: m, polices, modeleBadge: AVERY, technolibre: TECHNOLIBRE });
-    assert.deepEqual(analyse, { refus: null, absents: [], sansTechnolibre: retires });
+    assert.deepEqual(analyse, { refus: null, absents: [], sansTechnolibre: retires, logosParticipants: { poses: 0, sansPlace: 0 } });
     assert.equal((await analyserPlanche({ modele: m, polices, modeleBadge: AVERY })).sansTechnolibre, 0);
     const document = await lirePdf(await produirePlanche(avecPromotion({ ...entreesAvery(m) })));
     assert.equal(document.pages.reduce((n, page) => n + page.zonesRemplies.length, 0), 3 * (m.badges.length - retires));
@@ -837,6 +848,216 @@ describe('produirePlanche : le pied TechnoLibre (§ 11.4)', () => {
     for (const technolibre of [{ texte: '', logo: TECHNOLIBRE.logo }, { texte: TECHNOLIBRE.texte, logo: 'svg' }, { texte: TECHNOLIBRE.texte, logo: new TextEncoder().encode('<svg/>') }, 'oui']) {
       await assert.rejects(produirePlanche({ ...base, technolibre }), TypeError, JSON.stringify(technolibre));
       await assert.rejects(analyserPlanche({ modele: MODELE_AVERY, polices, modeleBadge: AVERY, technolibre }), TypeError);
+    }
+  });
+});
+
+// Le logo du participant (§ 11.4, § 11.5) : une image PNG, embarquée une
+// fois par chemin, peinte par Do sous une matrice qui la pose dans la boîte
+// que la mise en page donne, dans le repère du badge — debout sur A4, à plat
+// sur Lettre —, après le texte et le pied TechnoLibre, avant le filigrane.
+// Un badge sans logo, ou dont le logo ne trouve pas de place, sort tel
+// qu'avant, octet pour octet.
+const SIGNATURE_PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const mot = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+// Un morceau PNG : longueur, type, données, CRC du type et des données.
+function morceauPng(type, donnees) {
+  const corps = [...new TextEncoder().encode(type), ...donnees];
+  return [...mot(donnees.length), ...corps, ...mot(crc32(Uint8Array.from(corps)))];
+}
+// Un PNG RVB 8 bits d'une couleur unie ; donnees remplace l'IDAT compressé.
+function pngUni(largeur, hauteur, couleur, donnees = null) {
+  const ligne = [0, ...Array.from({ length: largeur }, () => couleur).flat()];
+  const idat = donnees ?? [...deflateSync(Uint8Array.from(Array.from({ length: hauteur }, () => ligne).flat()))];
+  const ihdr = [...mot(largeur), ...mot(hauteur), 8, 2, 0, 0, 0];
+  return Uint8Array.from([...SIGNATURE_PNG, ...morceauPng('IHDR', ihdr), ...morceauPng('IDAT', idat), ...morceauPng('IEND', [])]);
+}
+const chemin = (chiffre) => `logo/${chiffre.repeat(64)}.png`;
+const LARGE = chemin('a');
+const HAUT = chemin('b');
+const MANQUANT = chemin('c');
+const LOGOS = new Map([
+  [LARGE, pngUni(4, 2, [200, 30, 30])],
+  [HAUT, pngUni(2, 4, [30, 30, 200])],
+]);
+const RAPPORTS = new Map([
+  [LARGE, 2],
+  [HAUT, 0.5],
+]);
+// Les badges de la série, chacun avec son logo : deux partagent le large, un
+// porte le haut, un désigne un fichier que la carte ne porte pas, le
+// dernier n'en a pas.
+const CHEMINS_A4 = [LARGE, HAUT, LARGE, MANQUANT, null];
+const avecLogos = (m, chemins) => ({ ...m, badges: m.badges.map((b, i) => ({ ...b, logo: chemins[i % chemins.length] })) });
+const MODELE_A4_LOGOS = avecLogos(MODELE_A4, CHEMINS_A4);
+const MODELE_LETTRE_LOGOS = avecLogos(MODELE_LETTRE, [HAUT, LARGE, null]);
+const octetsA4Logos = await produirePlanche({ ...entrees(MODELE_A4_LOGOS, 'A4', 'feuille'), logosParticipants: LOGOS });
+const octetsLettreLogos = await produirePlanche({ ...entrees(MODELE_LETTRE_LOGOS, 'Lettre', 'pile'), logosParticipants: LOGOS });
+const A4_LOGOS = await lirePdf(octetsA4Logos);
+const LETTRE_LOGOS = await lirePdf(octetsLettreLogos);
+const CADRE_A6 = cadreUtile({ x: 0, y: 0, largeur: 105, hauteur: 148 });
+
+// La page et la cellule de chaque badge d'une planche : la page 1 est la
+// feuille de contrôle.
+function places(n, papier, imposition) {
+  const lesCellules = cellules(papier);
+  const resultat = [];
+  imposer(n, papier, imposition).forEach((planche, rang) => {
+    planche.forEach((indice, k) => {
+      if (indice !== null) resultat[indice] = { page: rang + 1, cellule: lesCellules[k] };
+    });
+  });
+  return resultat;
+}
+
+// La boîte attendue du logo d'un badge sur sa page, en millimètres, y vers
+// le bas, son origine et son axe : celle que la mise en page donne dans le
+// cadre utile, portée dans la cellule — debout telle quelle, à plat tournée
+// d'un quart de tour, le haut du badge à gauche.
+function logoAttendu(badgeDuModele, cellule, rapport) {
+  const { boite } = mettreEnPage(badgeDuModele.textes, metriques, 'a6', null, { rapport }).logoParticipant;
+  const [bx, by] = [CADRE_A6.x + boite.x, CADRE_A6.y + boite.y];
+  if (!cellule.aPlat) {
+    return {
+      x: cellule.x + bx,
+      y: cellule.y + by,
+      largeur: boite.largeur,
+      hauteur: boite.hauteur,
+      origine: [cellule.x + bx, cellule.y + by + boite.hauteur],
+      axe: [1, 0],
+    };
+  }
+  const bas = cellule.y + cellule.hauteur;
+  return {
+    x: cellule.x + by,
+    y: bas - bx - boite.largeur,
+    largeur: boite.hauteur,
+    hauteur: boite.largeur,
+    origine: [cellule.x + by + boite.hauteur, bas - bx],
+    axe: [0, -1],
+  };
+}
+
+describe('produirePlanche : le logo du participant (§ 11.4, § 11.5)', () => {
+  test('une image par chemin distinct : trois badges peints de deux images, le badge au fichier manquant et celui sans logo n’en portent pas, la feuille de contrôle non plus', () => {
+    assert.equal(A4_LOGOS.images, 2);
+    assert.deepEqual(A4_LOGOS.pages.map((page) => page.images.length), [0, 3, 0]);
+    assert.equal(LETTRE_LOGOS.images, 2);
+    // En pile, les badges se répartissent sur les deux feuilles.
+    const parPage = [0, 0, 0];
+    places(3, 'Lettre', 'pile').forEach(({ page }, indice) => {
+      if (MODELE_LETTRE_LOGOS.badges[indice].logo !== null) parPage[page] += 1;
+    });
+    assert.deepEqual(LETTRE_LOGOS.pages.map((page) => page.images.length), parPage);
+  });
+
+  test('chaque image tombe dans la boîte que la mise en page donne, à 0,01 mm, proportions gardées : debout sur A4, tournée avec le badge à plat sur Lettre, ni retournée ni décalée', () => {
+    for (const [lu, m, papier, imposition] of [
+      [A4_LOGOS, MODELE_A4_LOGOS, 'A4', 'feuille'],
+      [LETTRE_LOGOS, MODELE_LETTRE_LOGOS, 'Lettre', 'pile'],
+    ]) {
+      const lesPlaces = places(m.badges.length, papier, imposition);
+      const attendues = m.badges
+        .map((b, indice) => ({ b, indice }))
+        .filter(({ b }) => LOGOS.has(b.logo))
+        .map(({ b, indice }) => ({ ...lesPlaces[indice], attendu: logoAttendu(b, lesPlaces[indice].cellule, RAPPORTS.get(b.logo)) }));
+      for (const { page, cellule, attendu } of attendues) {
+        const image = lu.pages[page].images.find((im) => dans([im.x + im.largeur / 2, im.y + im.hauteur / 2], cellule));
+        assert.ok(image !== undefined, `${papier} : aucune image dans la cellule ${JSON.stringify(cellule)}`);
+        for (const cle of ['x', 'y', 'largeur', 'hauteur']) assert.ok(Math.abs(image[cle] - attendu[cle]) < 0.01, `${papier} ${cle} : ${JSON.stringify(image)} contre ${JSON.stringify(attendu)}`);
+        attendu.origine.forEach((v, k) => assert.ok(Math.abs(image.origine[k] - v) < 0.01, `${papier} origine : ${image.origine} contre ${attendu.origine}`));
+        assert.deepEqual(image.axe.map((v) => Math.round(v * 1e6) / 1e6 + 0), attendu.axe, papier);
+        // Dans le cadre utile de sa cellule, hors de la zone de silence.
+        assert.ok(image.x >= cellule.x + ZONE - 0.01 && image.x + image.largeur <= cellule.x + cellule.largeur - ZONE + 0.01, papier);
+        assert.ok(image.y >= cellule.y + ZONE - 0.01 && image.y + image.hauteur <= cellule.y + cellule.hauteur - ZONE + 0.01, papier);
+      }
+    }
+  });
+
+  test('aucun texte du badge sur l’image, filigrane excepté ; l’image se peint après le texte du badge et, sur le brouillon, avant le filigrane, qui la recouvre', () => {
+    for (const lu of [A4_LOGOS, LETTRE_LOGOS]) {
+      for (const page of lu.pages) {
+        for (const image of page.images) {
+          assert.equal(page.modesTexte[image.textesAvant - 1], 0, 'un texte plein avant l’image');
+          if (lu === A4_LOGOS) assert.equal(page.modesTexte[image.textesAvant], 1, 'le filigrane, au trait, juste après');
+          const recouvrants = page.textes.filter(
+            (t) =>
+              t.texte !== FILIGRANE &&
+              t.x < image.x + image.largeur - 0.01 &&
+              t.x + t.l > image.x + 0.01 &&
+              t.y < image.y + image.hauteur - 0.01 &&
+              t.y + t.h > image.y + 0.01,
+          );
+          assert.deepEqual(recouvrants.map(({ texte }) => texte), []);
+        }
+      }
+    }
+  });
+
+  test('avec le pied TechnoLibre, le logo du participant se peint après celui de TechnoLibre, sans le recouvrir', async () => {
+    const lu = await lirePdf(await produirePlanche({ ...avecPromotion(entreesAvery(avecLogos(MODELE_AVERY, [LARGE]))), logosParticipants: LOGOS }));
+    const page = lu.pages[0];
+    assert.ok(page.images.length >= 1);
+    let suivies = 0;
+    for (const image of page.images) {
+      assert.equal(image.remplissagesAvant % 3, 0);
+      const carte = cartes.find((c) => dans([image.x + image.largeur / 2, image.y + image.hauteur / 2], c));
+      const fonds = page.zonesRemplies.filter((z, rang) => rang % 3 === 0 && dans([z.x + z.largeur / 2, z.y + z.hauteur / 2], carte));
+      if (fonds.length === 0) continue;
+      assert.equal(image.remplissagesAvant, page.zonesRemplies.indexOf(fonds[0]) + 3, 'le logo TechnoLibre de la carte, puis le sien');
+      assert.ok(image.y + image.hauteur <= fonds[0].y + 0.01, JSON.stringify([image, fonds[0]]));
+      suivies += 1;
+    }
+    assert.ok(suivies >= 1, 'aucune carte ne porte les deux logos');
+  });
+
+  test('sans logo désigné, ou avec une carte de logos que nul badge ne désigne, la planche d’avant, octet pour octet ; un logo sans place sur chaque badge ne l’embarque pas', async () => {
+    assert.deepEqual(await produirePlanche({ ...entrees(MODELE_A4, 'A4', 'feuille'), logosParticipants: LOGOS }), octetsA4);
+    assert.deepEqual(await produirePlanche({ ...entrees(avecLogos(MODELE_A4, [null]), 'A4', 'feuille'), logosParticipants: null }), octetsA4);
+    // Un logo vingt fois plus large que haut n'atteint son plancher sur aucun
+    // badge : ni image ni objet, et les octets de la planche sans logo.
+    const etroit = new Map([[LARGE, pngUni(40, 2, [0, 0, 0])]]);
+    const sansPlace = await produirePlanche({ ...entreesAvery(avecLogos(MODELE_AVERY, [LARGE])), logosParticipants: etroit });
+    assert.deepEqual(sansPlace, octets);
+    assert.deepEqual(await produirePlanche({ ...entrees(MODELE_A4_LOGOS, 'A4', 'feuille'), logosParticipants: LOGOS }), octetsA4Logos);
+  });
+
+  test('analyserPlanche compte les logos posés et ceux sans place ; un chemin que la carte ne porte pas n’est compté ni l’un ni l’autre', async () => {
+    const analyse = await analyserPlanche({ modele: MODELE_A4_LOGOS, polices, logosParticipants: LOGOS });
+    assert.deepEqual(analyse.logosParticipants, { poses: 3, sansPlace: 0 });
+    const etroit = new Map([[LARGE, pngUni(40, 2, [0, 0, 0])]]);
+    const avery = await analyserPlanche({ modele: avecLogos(MODELE_AVERY, [LARGE, null]), polices, modeleBadge: AVERY, logosParticipants: etroit });
+    assert.deepEqual(avery.logosParticipants, { poses: 0, sansPlace: 4 });
+  });
+
+  test('analyserPlanche compte dans sansTechnolibre le pied TechnoLibre retiré pour laisser place au logo du participant', async () => {
+    const m = avecLogos(
+      modele(Array.from({ length: 16 }, (_, i) => badge(i + 1, NOMS_AVERY[i % NOMS_AVERY.length], { organisation: 'Club des Merles', tours: i + 1 }))),
+      [LARGE],
+    );
+    const carre = new Map([[LARGE, pngUni(10, 10, [0, 0, 0])]]);
+    const pdf = await PDFDocument.create();
+    pdf.registerFontkit(fontkit);
+    const metriques = metriquesDe({ regulier: await pdf.embedFont(polices.regulier, { subset: true }), gras: await pdf.embedFont(polices.gras, { subset: true }) });
+    const pages = m.badges.map((b) => mettreEnPage(b.textes, metriques, AVERY, { texte: TECHNOLIBRE.texte, rapport: 5 }, { rapport: 1 }));
+    const retires = pages.filter((p) => p.technolibre.corps === null);
+    assert.ok(retires.some((p) => p.logoParticipant.boite !== null), 'aucun pied retiré pour le logo');
+    const analyse = await analyserPlanche({ modele: m, polices, modeleBadge: AVERY, technolibre: TECHNOLIBRE, logosParticipants: carre });
+    assert.equal(analyse.sansTechnolibre, retires.length);
+    assert.equal(analyse.logosParticipants.poses, pages.filter((p) => p.logoParticipant.boite !== null).length);
+  });
+
+  test('un PNG dont la structure tient mais que zlib refuse : le badge se produit sans logo, tel qu’il serait sans lui, sans lever', async () => {
+    const corrompu = new Map([[LARGE, pngUni(4, 2, [0, 0, 0], [0x78, 0x9c, 0xff, 0xff, 0xff, 0xff])]]);
+    const m = avecLogos(MODELE_A4, [LARGE]);
+    assert.deepEqual(await produirePlanche({ ...entrees(m, 'A4', 'feuille'), logosParticipants: corrompu }), octetsA4);
+  });
+
+  test('une carte de logos mal formée lève TypeError : ni Map ni null, une clé qui n’est pas un chemin, des octets qui ne sont pas un PNG', async () => {
+    const base = entrees(MODELE_A4_LOGOS, 'A4', 'feuille');
+    for (const logosParticipants of [{}, new Map([[1, LOGOS.get(LARGE)]]), new Map([[LARGE, 'png']]), new Map([[LARGE, Uint8Array.of(1, 2, 3)]])]) {
+      await assert.rejects(produirePlanche({ ...base, logosParticipants }), TypeError);
+      await assert.rejects(analyserPlanche({ modele: MODELE_A4_LOGOS, polices, logosParticipants }), TypeError);
     }
   });
 });

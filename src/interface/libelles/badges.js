@@ -4,12 +4,13 @@
 // Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8,
 // Q3) : ses réglages — modèle de badge, case du pied TechnoLibre, source,
 // imposition, ordre —, ses commandes, les phrases de l'annonce que rend
-// phrasesAnnonce (badges/modele.js), la planche et la liste produites, et la
-// réédition. Chaque clé commence par « badges. ». Les refus de la planche
-// sont des textes de l'application (application/libelles/planche.js), le nom
-// d'un papier un libellé de l'aperçu (impression.papier.nom.*), que l'annonce
-// lit par texte. Le chemin d'un fichier produit est une donnée : l'écran le
-// pose dans son propre nœud, à côté de son intitulé.
+// phrasesAnnonce (badges/modele.js), logos des participants compris, la
+// planche et la liste produites, et la réédition. Chaque clé commence par
+// « badges. ». Les refus de la planche sont des textes de l'application
+// (application/libelles/planche.js), le nom d'un papier un libellé de
+// l'aperçu (impression.papier.nom.*), que l'annonce lit par texte. Le chemin
+// d'un fichier produit est une donnée : l'écran le pose dans son propre
+// nœud, à côté de son intitulé.
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
@@ -94,6 +95,30 @@ export const TABLE = new Map([
       `Caractères absents de la police, imprimés sans glyphe et listés sur la feuille de contrôle : ${enumeration(
         caracteres.map(({ caractere, point }) => `« ${caractere} » (${point})`),
       )}.`,
+  ],
+  // Les logos des participants : ceux dont le fichier manque au dossier de
+  // l'événement, ceux qui ne se lisent pas, nommés par leur personne, et le
+  // compte des badges où le logo ne trouve pas de place. Aucun ne bloque.
+  [
+    'badges.annonce.logosIntrouvables',
+    ({ noms }) =>
+      noms.length === 1
+        ? `Logo introuvable dans le dossier de l\u{2019}événement pour ${noms[0]} : son badge s\u{2019}imprime sans logo.`
+        : `Logos introuvables dans le dossier de l\u{2019}événement pour ${enumeration(noms)} : leurs badges s\u{2019}impriment sans logo.`,
+  ],
+  [
+    'badges.annonce.logosIllisibles',
+    ({ noms }) =>
+      noms.length === 1
+        ? `Logo illisible pour ${noms[0]} : son badge s\u{2019}imprime sans logo.`
+        : `Logos illisibles pour ${enumeration(noms)} : leurs badges s\u{2019}impriment sans logo.`,
+  ],
+  [
+    'badges.annonce.logosSansPlace',
+    ({ n }) =>
+      n === 1
+        ? 'Logo du participant : retiré d\u{2019}un badge, faute de place sous ses tours.'
+        : `Logo du participant : retiré de ${n} badges, faute de place sous leurs tours.`,
   ],
   [
     'badges.annonce.technolibreRetire',

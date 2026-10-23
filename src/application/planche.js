@@ -18,6 +18,12 @@
 //
 // La liste des badges en CSV (listeBadges) se lit du même modèle : mêmes
 // badges, même ordre, mêmes lignes de tour, texte pour texte.
+//
+// Chaque badge porte le chemin du logo de sa personne, relatif au dossier
+// de l'événement, ou null : le modèle ne lit pas l'image, la séance la lit
+// et la planche la dessine. La liste en CSV ne le porte jamais, et la
+// feuille de contrôle ne dit des logos que leurs comptes, quand la séance
+// les lui donne.
 import { SEPARATEUR, ecrireCsv } from '../csv/export.js';
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { cleNormalisee } from '../csv/normalisation.js';
@@ -53,6 +59,9 @@ import { versionVisible } from './version.js';
  * @property {string|null} organisation   en NFC ; null : la ligne n'existe pas
  * @property {LigneTour[]} lignes
  * @property {number|null} identifiant    celui d'un homonyme que rien ne sépare
+ * @property {string|null} logo           le chemin du logo de la personne,
+ *                                        relatif au dossier de l'événement ;
+ *                                        null sans logo
  * @property {{nom: string, lignes: string[], abregeables: Array<Array<{debut: number, fin: number}>>,
  *             organisation: string|null, pied: string[], piedReduit: string[]}} textes
  *           abregeables : pour chaque ligne de tour, les textes libres que la
@@ -472,7 +481,7 @@ export function modelePlanche(
       lignes: lignesDe(personne.id, places, titres),
       identifiant: identifiants.has(personne.id) ? personne.id : null,
     };
-    return { ...badge, textes: textesDe(badge, evenement, horodatage) };
+    return { ...badge, logo: personne.logo ?? null, textes: textesDe(badge, evenement, horodatage) };
   });
 
   const exclus = charge.participants.filter(({ exclu }) => exclu).length;
@@ -505,10 +514,12 @@ const sansAbsents = (texte, absents) => [...texte].map((c) => (absents.has(c) ? 
  * compte attendu, l'événement et sa date, la source — le placement retenu, ou
  * la proposition par son numéro —, l'horodatage du placement, la version, la
  * consigne d'impression, puis, pour Avery 5392, celle de la feuille à part,
- * sur papier ordinaire ; BROUILLON s'il y a lieu ; pour une réédition, son
- * compte puis les noms réédités dans l'ordre de la pile ; les caractères
- * absents de la police, quand il y en a, par leur point de code. Dans toutes
- * les lignes, un caractère absent s'écrit « U+674E », jamais tel quel.
+ * sur papier ordinaire ; quand logos est donné, les comptes des logos des
+ * participants, posés, sans place et introuvables ; BROUILLON s'il y a
+ * lieu ; pour une réédition, son compte puis les noms réédités dans l'ordre
+ * de la pile ; les caractères absents de la police, quand il y en a, par
+ * leur point de code. Dans toutes les lignes, un caractère absent s'écrit
+ * « U+674E », jamais tel quel.
  *
  * @param {ModelePlanche} modele
  * @param {Object} options
@@ -517,11 +528,14 @@ const sansAbsents = (texte, absents) => [...texte].map((c) => (absents.has(c) ? 
  * @param {number} options.planches        entier ≥ 0
  * @param {string[]} [options.absents]     un caractère chacun, doublons admis
  * @param {import('../geometrie/papiers.js').ModeleBadge} [options.modeleBadge]   'a6' par défaut
+ * @param {null|{poses: number, sansPlace: number, introuvables: number}} [options.logos]   les
+ *        comptes des logos des badges, entiers ≥ 0 ; null par défaut, quand
+ *        aucun badge ne désigne de logo : la ligne n'existe pas
  * @returns {string[]}
  * @throws {TypeError} une option hors de son domaine, un papier que le
  *         modèle de badge n'admet pas, une source du modèle hors de la sienne
  */
-export function textesControle(modele, { papier, imposition, planches, absents = [], modeleBadge = 'a6' }) {
+export function textesControle(modele, { papier, imposition, planches, absents = [], modeleBadge = 'a6', logos = null }) {
   if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
     throw new TypeError(`papier : clé de PAPIERS attendue, reçu ${JSON.stringify(papier)}`);
   }
@@ -541,6 +555,9 @@ export function textesControle(modele, { papier, imposition, planches, absents =
   if (!Array.isArray(absents) || !absents.every(unCaractere)) {
     throw new TypeError(`absents : caractères attendus, reçu ${JSON.stringify(absents)}`);
   }
+  const compteLogos = (n) => Number.isSafeInteger(n) && n >= 0;
+  const logosBienFormes = logos === null || [logos?.poses, logos?.sansPlace, logos?.introuvables].every(compteLogos);
+  if (!logosBienFormes) throw new TypeError(`logos : null ou trois comptes entiers ≥ 0 attendus, reçu ${JSON.stringify(logos)}`);
   const { badges, source, proposition, evenement, horodatage, brouillon, comptes, reedition, version } = modele;
   const sourceBienFormee =
     (source === 'retenu' && proposition === null) || (source === 'proposition' && Number.isSafeInteger(proposition));
@@ -560,6 +577,7 @@ export function textesControle(modele, { papier, imposition, planches, absents =
     libelle('planche.controle.version', { version }),
     libelle('planche.controle.consigne'),
     ...(cartes ? [libelle('planche.controle.cartes', { modeleBadge })] : []),
+    ...(logos === null ? [] : [libelle('planche.controle.logos', logos)]),
   ];
   if (brouillon) lignes.push(libelle('planche.brouillon'));
   if (reedition !== null) {

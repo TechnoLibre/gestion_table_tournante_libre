@@ -324,6 +324,37 @@ export const CONSTANTES = Object.freeze(
         'comprise, écrit dans ce registre',
     },
     {
+      nom: 'LOGO_PARTICIPANT_PLANCHER_MM',
+      valeur: 8,
+      unite: 'mm',
+      mesure: "plus petite cote dessinée du logo d'un participant sur son badge, A6 ou carte Avery 5392",
+      raison:
+        "un logo qu'on ne reconnaît plus n'apprend rien à l'hôte de salle : sous ce plancher, il ne se pose pas " +
+        "sur ce badge, et l'annonce le compte, plutôt que de sortir en timbre illisible (§ 11.5)",
+      configuration: 'badge A6 et carte Avery 5392 imprimés, logos de proportions variées, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle, des logos de proportions variées à cotes " +
+        "décroissantes ; lecture en main par une personne qui n'a pas écrit le logiciel ; la plus petite cote " +
+        'reconnue sans erreur, écrite dans ce registre',
+    },
+    {
+      nom: 'LOGO_PARTICIPANT_ECART_MM',
+      valeur: 1.5,
+      unite: 'mm',
+      mesure: "dégagement au-dessus et au-dessous du logo d'un participant, entre ses tours et son pied",
+      raison:
+        "un logo collé à une ligne de tour ou au pied se lit comme une souillure du texte ; le dégagement les " +
+        'sépare sans prendre la place du logo (§ 11.4)',
+      configuration: 'badge A6 et carte Avery 5392 imprimés, logo le plus grand que la place permette',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle ; lecture en main par une personne qui n'a pas écrit " +
+        'le logiciel ; le plus petit dégagement qui sépare le logo du texte, écrit dans ce registre',
+    },
+    {
       nom: 'CORPS_MIN_IMPRESSION_MM',
       valeur: 2.5,
       unite: 'mm',

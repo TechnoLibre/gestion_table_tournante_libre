@@ -16,21 +16,36 @@
 // (produireControle), à imprimer sur papier ordinaire, qui trace aussi le
 // contour des cartes à leur place exacte. Les cotes se posent en
 // millimètres, origine en haut à gauche de la feuille, et se convertissent
-// en points au seul moment d'écrire : aucune matrice d'échelle (cm) n'entre
-// dans le flux, ni CropBox, ni UserUnit — une transformation posée dans le
-// flux ne se verrait sur aucune boîte de page, et la planche sortirait à la
-// mauvaise taille sans qu'un contrôle des boîtes ne le dise. Un texte tourné
-// l'est par sa matrice de texte (Tm), qui ne touche pas les chemins. Le
-// texte s'écrit par ses opérateurs (BT, Tf, Tm, Tj, ET), tel que la police
-// l'encode, comme la mise en page l'a mesuré : chaque police entre une fois
-// dans les ressources de chaque page.
+// en points au seul moment d'écrire : ni CropBox, ni UserUnit, et aucune
+// matrice (cm) ne s'applique au texte ni aux chemins — une transformation
+// posée dans le flux ne se verrait sur aucune boîte de page, et la planche
+// sortirait à la mauvaise taille sans qu'un contrôle des boîtes ne le dise.
+// La seule matrice du flux est celle d'une image, qu'un PDF ne peint que
+// dans son carré unité : elle vit dans le q … Q de cette seule image et ne
+// touche rien d'autre. Un texte tourné l'est par sa matrice de texte (Tm),
+// qui ne touche pas les chemins. Le texte s'écrit par ses opérateurs (BT,
+// Tf, Tm, Tj, ET), tel que la police l'encode, comme la mise en page l'a
+// mesuré : chaque police entre une fois dans les ressources de chaque page.
 //
 // Le pied TechnoLibre, quand l'entrée le demande, porte un texte et le logo
 // de l'éditeur, lu de ses octets SVG (lireLogo, logo.js) : chaque forme se
-// remplit de sa couleur d'origine, la seule couleur du badge, par ses
-// opérateurs de chemin (m, l, c, h, f), chaque point converti un à un dans
-// le repère du badge, comme le texte : pas de matrice, et un badge à plat
-// tourne son logo avec lui. La feuille de contrôle ne le porte pas.
+// remplit de sa couleur d'origine par ses opérateurs de chemin (m, l, c, h,
+// f), chaque point converti un à un dans le repère du badge, comme le
+// texte : pas de matrice, et un badge à plat tourne son logo avec lui. La
+// feuille de contrôle ne le porte pas.
+//
+// Le logo d'un participant arrive en octets PNG, par son chemin dans le
+// dossier de l'événement (logosParticipants), avec le chemin que porte le
+// badge : lirePng (png.js) en donne le rapport, que la mise en page
+// reçoit. Chaque image s'embarque une fois, au premier badge de la pile où
+// elle se pose — n badges du même logo ne portent qu'un objet image —, et
+// se peint par Do dans son propre état graphique (q, cm, Do, Q), la
+// matrice posant son carré unité sur la boîte de la mise en page dans le
+// repère du badge : un badge à plat tourne son image avec lui. Elle se
+// peint après le texte et le pied TechnoLibre, avant le filigrane, qui la
+// recouvre. Une image que pdf-lib ne décode pas ne s'embarque pas : son
+// badge sort tel qu'il serait sans logo. La feuille de contrôle ne porte
+// aucune image.
 //
 // Les octets ne dépendent que des entrées : pdf-lib tire les suffixes de ses
 // noms de ressources d'un générateur à graine fixe, créé avec le document ;
@@ -45,6 +60,8 @@ import {
   appendBezierCurve,
   beginText,
   closePath,
+  concatTransformationMatrix,
+  drawObject,
   endText,
   fill,
   grayscale,
@@ -65,6 +82,7 @@ import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js'
 import { cadreUtile, cellules, filets, imposer } from './imposition.js';
 import { lireLogo } from './logo.js';
 import { mettreEnPage, metriquesDe } from './mise_en_page.js';
+import { ErreurPng, lirePng } from './png.js';
 
 /**
  * Ce que la production lit du modèle de la planche, ModelePlanche de
@@ -72,9 +90,10 @@ import { mettreEnPage, metriquesDe } from './mise_en_page.js';
  *
  * @typedef {Object} ModelePlanche
  * @property {Array<{textes: {nom: string, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
- *            organisation: string|null, pied: string[], piedReduit: string[]}}>} badges
+ *            organisation: string|null, pied: string[], piedReduit: string[]}, logo?: string|null}>} badges
  *           dans l'ordre de la pile ; abregeables, les textes libres de chaque
- *           ligne de tour, que la mise en page abrège au plancher
+ *           ligne de tour, que la mise en page abrège au plancher ; logo, le
+ *           chemin du logo de la personne, absent ou null sans logo
  * @property {string|null} horodatage   l'horodatage du placement ; null : inconnu
  * @property {boolean} brouillon
  */
@@ -163,6 +182,39 @@ function technolibreLu(technolibre) {
   return { texte: technolibre.texte, logo, demande: { texte: technolibre.texte, rapport: logo.largeur / logo.hauteur } };
 }
 
+// La carte des logos des participants, contrôlée : null, une carte vide ;
+// sinon une Map d'un chemin, une chaîne, aux octets d'un PNG bien formé.
+// Rend, par chemin, les octets et le rapport largeur sur hauteur de l'image.
+// TypeError pour une autre forme, et pour des octets que lirePng refuse.
+function logosLus(logosParticipants) {
+  const lus = new Map();
+  if (logosParticipants === null) return lus;
+  if (!(logosParticipants instanceof Map)) throw new TypeError('logosParticipants : une Map des chemins aux octets PNG attendue');
+  for (const [chemin, octets] of logosParticipants) {
+    if (typeof chemin !== 'string' || !(octets instanceof Uint8Array)) {
+      throw new TypeError(`logosParticipants : un chemin et des octets attendus, reçu ${JSON.stringify(chemin)}`);
+    }
+    let dimensions;
+    try {
+      dimensions = lirePng(octets);
+    } catch (erreur) {
+      if (erreur instanceof ErreurPng) throw new TypeError(`logosParticipants : ${chemin} n'est pas un PNG, ${erreur.message}`);
+      throw erreur;
+    }
+    lus.set(chemin, { octets, rapport: dimensions.largeur / dimensions.hauteur });
+  }
+  return lus;
+}
+
+// Le logo du participant qu'un badge demande à la mise en page : {rapport}
+// quand la carte porte son chemin, null sans logo ou pour un chemin que la
+// carte ne porte pas.
+function logoDemande(badge, logos) {
+  const chemin = badge.logo ?? null;
+  if (chemin === null || !logos.has(chemin)) return null;
+  return { rapport: logos.get(chemin).rapport };
+}
+
 // Les entrées d'un document, contrôlées, et sa date PDF, null pour un
 // horodatage inconnu : le papier, que le modèle de badge admet ; les lignes
 // de contrôle ; le mot du filigrane d'un brouillon.
@@ -213,31 +265,43 @@ const textesDuBadge = ({ textes }) => [
  * @param {{texte: string, logo: Uint8Array}|null} [entrees.technolibre]   le
  *        pied TechnoLibre : son texte, et les octets SVG du logo ; null par
  *        défaut, sans pied TechnoLibre
+ * @param {Map<string, Uint8Array>|null} [entrees.logosParticipants]   les
+ *        octets PNG des logos des participants, par chemin, celui que porte
+ *        le badge ; null par défaut, aucun logo
  * @returns {Promise<{refus: null | {code: string, details: object, rang: number}, absents: string[],
- *   sansTechnolibre: number}>}
+ *   sansTechnolibre: number, logosParticipants: {poses: number, sansPlace: number}}>}
  *   refus : le premier badge que la mise en page refuse, rang étant son
  *   indice dans modele.badges ; src/pdf ne connaît pas la personne, et
  *   l'appelant complète les détails. absents : les caractères sans glyphe
  *   de tous les textes des badges, une fois chacun, dans l'ordre de
  *   première rencontre. sansTechnolibre : le nombre de badges mis en page
  *   d'où le pied TechnoLibre demandé se retire, faute de place ; 0 sans
- *   pied TechnoLibre.
+ *   pied TechnoLibre. logosParticipants : parmi les badges mis en page dont
+ *   la carte porte le logo, ceux où il se pose et ceux où il ne trouve pas
+ *   de place ; un badge dont la carte ne porte pas le chemin n'est compté
+ *   ni l'un ni l'autre.
  * @throws {TypeError} un modèle sans badges, des polices qui ne sont pas des
- *         octets, un modèle de badge inconnu, un pied TechnoLibre mal formé
+ *         octets, un modèle de badge inconnu, un pied TechnoLibre ou une
+ *         carte de logos mal formés
  */
-export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', technolibre = null }) {
+export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', technolibre = null, logosParticipants = null }) {
   controlerModeleEtPolices(modele, polices, modeleBadge);
   const promotion = technolibreLu(technolibre);
+  const logos = logosLus(logosParticipants);
   const { metriques } = await documentAvecPolices(polices);
   let refus = null;
   let sansTechnolibre = 0;
+  const comptesLogos = { poses: 0, sansPlace: 0 };
   const absents = [];
   const vus = new Set();
   modele.badges.forEach((badge, rang) => {
     if (refus === null) {
-      const page = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null);
+      const page = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null, logoDemande(badge, logos));
       if (page.refus !== undefined) refus = { ...page.refus, rang };
-      else if (page.technolibre !== null && page.technolibre.corps === null) sansTechnolibre += 1;
+      else {
+        if (page.technolibre !== null && page.technolibre.corps === null) sansTechnolibre += 1;
+        if (page.logoParticipant !== null) comptesLogos[page.logoParticipant.boite === null ? 'sansPlace' : 'poses'] += 1;
+      }
     }
     for (const caractere of metriques.absents(textesDuBadge(badge).join(''))) {
       if (vus.has(caractere)) continue;
@@ -245,7 +309,7 @@ export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', tec
       absents.push(caractere);
     }
   });
-  return { refus, absents, sansTechnolibre };
+  return { refus, absents, sansTechnolibre, logosParticipants: comptesLogos };
 }
 
 // Un repère : la position, en points du repère PDF (origine en bas à
@@ -358,6 +422,32 @@ function poserLogo(page, logo, boite, point) {
     }
     page.pushOperators(...operateurs, fill(), popGraphicsState());
   }
+}
+
+// La clé de ressource d'une image sur une page, créée à sa première
+// demande, la même ensuite.
+const CLES_IMAGES = new WeakMap();
+function cleDImage(page, image) {
+  if (!CLES_IMAGES.has(page)) CLES_IMAGES.set(page, new Map());
+  const cles = CLES_IMAGES.get(page);
+  if (!cles.has(image)) cles.set(image, page.node.newXObject('Image', image.ref));
+  return cles.get(image);
+}
+
+// Une image dans sa boîte, en millimètres du cadre utile, y vers le bas :
+// son carré unité posé par une matrice, dans un état graphique à elle. Le
+// coin bas gauche de la boîte, converti par point, en est l'origine ; sa
+// largeur court selon (ux, uy), la direction du repère du badge, sa hauteur
+// selon (−uy, ux), le haut du badge.
+function poserImage(page, image, boite, point, { ux, uy }) {
+  const [X, Y] = point(boite.x, boite.y + boite.hauteur);
+  const [l, h] = [boite.largeur * PT_PAR_MM, boite.hauteur * PT_PAR_MM];
+  page.pushOperators(
+    pushGraphicsState(),
+    concatTransformationMatrix(l * ux, l * uy, -h * uy, h * ux, X, Y),
+    drawObject(cleDImage(page, image)),
+    popGraphicsState(),
+  );
 }
 
 // Un segment en millimètres, repère haut gauche de la page.
@@ -492,6 +582,13 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane, c
  * lui trouve place : son texte, puis le logo, chaque forme remplie de sa
  * couleur d'origine, dans l'ordre du fichier.
  *
+ * Le logo d'un participant se pose sur chaque badge dont la carte porte le
+ * chemin et où la mise en page lui trouve place, après le pied TechnoLibre
+ * et avant le filigrane ; chaque image s'embarque une fois, dans l'ordre de
+ * la pile. Une image que pdf-lib ne décode pas ne s'embarque pas, et ses
+ * badges se mettent en page sans logo. Une planche où aucun logo ne se pose
+ * a les octets de la même planche sans carte de logos.
+ *
  * La boîte de média est celle du papier ; ni CropBox ni UserUnit. /Info ne
  * porte que CreationDate, la date de l'horodatage du placement, décalage
  * local gardé, et n'existe pas quand l'horodatage est inconnu.
@@ -508,11 +605,14 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane, c
  * @param {import('../geometrie/papiers.js').ModeleBadge} [entrees.modeleBadge]   'a6' par défaut
  * @param {{texte: string, logo: Uint8Array}|null} [entrees.technolibre]   le
  *        pied TechnoLibre, comme analyserPlanche le reçoit ; null par défaut
+ * @param {Map<string, Uint8Array>|null} [entrees.logosParticipants]   les
+ *        logos des participants, comme analyserPlanche les reçoit ; null par
+ *        défaut
  * @returns {Promise<Uint8Array>}
  * @throws {TypeError} une entrée hors de son domaine, un papier que le
  *         modèle de badge n'admet pas, un horodatage d'une autre forme, un
- *         brouillon sans le mot de son filigrane, un pied TechnoLibre mal
- *         formé
+ *         brouillon sans le mot de son filigrane, un pied TechnoLibre ou une
+ *         carte de logos mal formés
  * @throws {RangeError} un badge que la mise en page refuse : analyserPlanche
  *         le dit avant de produire
  */
@@ -525,17 +625,37 @@ export async function produirePlanche({
   filigrane = null,
   modeleBadge = 'a6',
   technolibre = null,
+  logosParticipants = null,
 }) {
   const date = controlerDocument({ modele, papier, polices, controle, filigrane, modeleBadge });
   if (!IMPOSITIONS.has(imposition)) throw new TypeError(`imposition inconnue : ${JSON.stringify(imposition)}`);
   const promotion = technolibreLu(technolibre);
+  const logos = logosLus(logosParticipants);
 
   const { pdf, regulier, gras, metriques } = await documentAvecPolices(polices);
-  const mises = modele.badges.map((badge, rang) => {
-    const mise = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null);
+  const mettre = (badge, rang, logo) => {
+    const mise = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null, logo);
     if (mise.refus !== undefined) throw new RangeError(`badge ${rang} refusé par la mise en page : ${mise.refus.code}`);
     return mise;
-  });
+  };
+  let mises = modele.badges.map((badge, rang) => mettre(badge, rang, logoDemande(badge, logos)));
+  // Les images des logos posés, embarquées une fois chacune, au premier
+  // badge de la pile qui les pose. pdf-lib décode l'image en l'embarquant :
+  // une image qu'il refuse ne s'embarque pas, et ses badges se remettent en
+  // page sans logo.
+  const images = new Map();
+  const refusees = new Set();
+  for (const [rang, badge] of modele.badges.entries()) {
+    if ((mises[rang].logoParticipant?.boite ?? null) === null || images.has(badge.logo) || refusees.has(badge.logo)) continue;
+    try {
+      images.set(badge.logo, await pdf.embedPng(logos.get(badge.logo).octets));
+    } catch {
+      refusees.add(badge.logo);
+    }
+  }
+  if (refusees.size > 0) {
+    mises = mises.map((mise, rang) => (refusees.has(modele.badges[rang].logo) ? mettre(modele.badges[rang], rang, null) : mise));
+  }
   if (date !== null) pdf.getInfoDict().set(PDFName.of('CreationDate'), PDFString.of(date));
 
   const marque = modele.brouillon ? { mot: filigrane, police: gras } : null;
@@ -560,13 +680,14 @@ export async function produirePlanche({
       for (const { texte, corps, gras: enGras, x, y } of mises[indice].blocs) {
         poserTexte(page, texte, { ...dansLeBadge(x, y), corps, police: enGras ? gras : regulier }, repere);
       }
+      const versLaPage = (x, y) => {
+        const position = dansLeBadge(x, y);
+        return repere.point(position.x, position.y);
+      };
       const logo = mises[indice].technolibre?.logo ?? null;
-      if (logo !== null) {
-        poserLogo(page, promotion.logo, logo, (x, y) => {
-          const position = dansLeBadge(x, y);
-          return repere.point(position.x, position.y);
-        });
-      }
+      if (logo !== null) poserLogo(page, promotion.logo, logo, versLaPage);
+      const boite = mises[indice].logoParticipant?.boite ?? null;
+      if (boite !== null) poserImage(page, images.get(modele.badges[indice].logo), boite, versLaPage, repere);
       if (marque !== null) poserFiligrane(page, { ...marque, metriques }, cadreDroit, repere);
     });
   }

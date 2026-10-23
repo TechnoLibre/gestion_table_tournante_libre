@@ -206,6 +206,14 @@ export const TABLE = new Map([
       `Imprimer cette feuille sur papier ordinaire : posée sur une feuille ${nomDans(NOMS_DES_MODELES, modeleBadge, 'modèle de badge')}, ` +
       'le contour des six cartes tombe sur leurs prédécoupes',
   ],
+  // Les logos des participants : posés, sans place sur leur badge, et
+  // introuvables ou illisibles dans le dossier de l'événement. La ligne ne
+  // s'écrit que quand un badge désigne un logo.
+  [
+    'planche.controle.logos',
+    ({ poses, sansPlace, introuvables }) =>
+      `Logos : ${compte(poses, 'posé', 'posés')}, ${sansPlace} sans place, ${compte(introuvables, 'introuvable', 'introuvables')}`,
+  ],
   ['planche.controle.reedition', ({ n }) => `Réédition : ${compte(n, 'badge', 'badges')}`],
   [
     'planche.controle.absents',

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du registre des constantes mesurées (§ 14.1, § 19.10) : les
-// vingt-huit entrées du contrat de données, chacune complète et de statut
+// trente entrées du contrat de données, chacune complète et de statut
 // épinglé, la vérification qui nomme l'entrée et le champ d'une faute, et
 // l'accord du registre avec le relevé committé du banc : le banc écrit un
 // relevé, jamais le registre, et une constante du banc déclarée mesurée
@@ -43,6 +43,8 @@ const CONTRAT = [
   ['CORPS_PIED_CARTE_PT', 7, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_TECHNOLIBRE_PT', 6, 'pt', 'manuel', 'defautDeTravail'],
   ['CORPS_TECHNOLIBRE_PLANCHER_PT', 4, 'pt', 'manuel', 'defautDeTravail'],
+  ['LOGO_PARTICIPANT_PLANCHER_MM', 8, 'mm', 'manuel', 'defautDeTravail'],
+  ['LOGO_PARTICIPANT_ECART_MM', 1.5, 'mm', 'manuel', 'defautDeTravail'],
   ['CORPS_MIN_IMPRESSION_MM', 2.5, 'mm', 'manuel', 'defautDeTravail'],
   ['MARGE_PAGE_MM', 10, 'mm', 'manuel', 'defautDeTravail'],
   ['HAUTEUR_BANDE_IMPRESSION', null, 'mm', 'execution', 'mesuree'],
@@ -60,8 +62,8 @@ const ADOPTEES = ['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN', 'SEUIL_MAT
 const copie = () => CONSTANTES.map((entree) => ({ ...entree }));
 
 describe('constantes : le registre (§ 14.1, § 19.10)', () => {
-  test('le registre porte les vingt-huit entrées du contrat, dans son ordre, chacune complète', () => {
-    assert.equal(CONSTANTES.length, 28);
+  test('le registre porte les trente entrées du contrat, dans son ordre, chacune complète', () => {
+    assert.equal(CONSTANTES.length, 30);
     assert.deepEqual(
       CONSTANTES.map(({ nom, valeur, unite, proprietaire, statut }) => [nom, valeur, unite, proprietaire, statut]),
       CONTRAT,

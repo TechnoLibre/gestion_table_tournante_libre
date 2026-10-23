@@ -4677,8 +4677,10 @@ coupés trop court sont refaits à la main pendant que la file s'allonge.
 plus de SVG : ni `<use>`, ni `<symbol>`, ni `<tspan>` à décalage explicite, ni
 plan vectoriel. Le seul point de l'architecture de sortie qui reposait sur une
 supposition **disparaît**, et avec lui le test permanent qui l'éprouvait. Ce qui
-reste exigé d'elle est du texte, des filets, des rectangles et une police
-embarquée.
+reste exigé d'elle est du texte, des filets, des rectangles, une police
+embarquée et, pour le logo d'un participant (§ 11.4), une image PNG qu'elle
+embarque telle que le dossier de l'événement la porte, une fois par fichier
+quel que soit le nombre de badges qui la portent.
 
 Conséquences à tenir :
 
@@ -4701,7 +4703,10 @@ Conséquences à tenir :
   `/UserUnit`, pas de boîte de recadrage distincte de la boîte de média. Le test
   le vérifie sur le fichier produit, et vérifie en outre la **position mesurée**
   des filets de coupe : une transformation posée dans le flux de contenu ne se
-  voit sur aucune des deux boîtes.
+  voit sur aucune des deux boîtes. La seule matrice du flux est celle d'une
+  image, qu'un PDF ne peint que dans son carré unité : elle ne vit que dans
+  l'état graphique de cette image et ne touche ni le texte ni les filets ; le
+  test mesure l'image à sa place dans le badge, debout comme à plat.
 - **Les mesures de texte ont une seule autorité : les métriques de la police
   embarquée**, lues par la bibliothèque qui dessine. Le § 14.1 impose de mesurer
   dans un navigateur ce qui dépend du rendu du navigateur ; le badge n'en dépend
@@ -4791,11 +4796,12 @@ bord de la feuille, où aucune imprimante à jet ou à laser courante ne dépose
 d'encre. Le logiciel ne dessine donc **ni fond perdu, ni aplat de couleur, ni
 cadre** : un fond coloré ressort avec une bande blanche de trois à cinq
 millimètres sur deux côtés, et la coupe se met à chasser la bande au lieu de
-suivre un repère. **Une seule couleur entre sur le badge : le logo du pied
-TechnoLibre** (§ 11.4), dans ses couleurs d'origine, fond compris. Il se tient
-dans le cadre utile, loin de tout bord de coupe ou de feuille, et n'est donc
-pas un fond perdu ; sur une imprimante en noir et blanc, il sort en gris sans
-que rien d'autre ne change.
+suivre un repère. **La couleur n'entre sur le badge que par deux logos : celui
+du pied TechnoLibre** (§ 11.4), dans ses couleurs d'origine, fond compris,
+**et celui du participant**, l'image telle que son fichier la porte. Ils se
+tiennent dans le cadre utile, loin de tout bord de coupe ou de feuille, et ne
+sont donc pas des fonds perdus ; sur une imprimante en noir et blanc, ils
+sortent en gris sans que rien d'autre ne change.
 
 #### Le Lettre : deux cellules, un encadrement complet
 
@@ -4890,9 +4896,12 @@ retenue — l'A6 seulement —, le nombre de planches, le compte de badges produ
 et le compte attendu, le nom et la date de l'événement, la source — le placement
 retenu, ou la proposition imprimée par son numéro, que l'horodatage ne distingue
 pas des autres propositions de sa génération —, l'horodatage du placement, la
-version (§ 18.6), la consigne d'impression — recto seul, à 100 % —, les
+version (§ 18.6), la consigne d'impression — recto seul, à 100 % —, quand un
+badge désigne un logo de participant, une ligne de texte qui compte les
+logos — « Logos : 41 posés, 2 sans place, 1 introuvable » (§ 11.5) —, les
 caractères que la police n'a pas, par leur point de code (§ 11.5), et le
-filigrane BROUILLON s'il y a lieu, sur chacune de ses pages. L'opérateur la
+filigrane BROUILLON s'il y a lieu, sur chacune de ses pages. Elle ne porte
+aucune image, ni logo de participant ni logo TechnoLibre. L'opérateur la
 mesure sous une règle avant d'engager la rame : si la planche est sortie
 « ajustée à la page », la graduation ne fait plus 100 mm et le défaut se
 découvre sur la première feuille au lieu de la soixante-cinquième.
@@ -4914,27 +4923,42 @@ cherche à qui il parle.
 | 3 | **organisation**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
-| 6 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », suivi du logo de TechnoLibre en couleurs d'origine | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que tout le reste laisse |
+| 6 | **le logo du participant**, quand sa fiche en porte un (§ 10.2), entre les tours et le pied, le plus grand que l'écart permette | l'hôte de salle reconnaît l'organisation d'un coup d'œil ; il ne prend que la place que tout le texte laisse |
+| 7 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », suivi du logo de TechnoLibre en couleurs d'origine | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que tout le reste laisse |
 
 Le pied des **pages** imprimées porte cinq éléments, la version comprise
 (§ 11.7). Le badge n'est pas une page : il porte le nom de l'événement, sa date
 et l'horodatage, **pas le tour** — il les porte tous — et **pas la version**, qui
 ne sert à aucun diagnostic au cou d'un invité et dont la place est comptée.
 
-**Le pied TechnoLibre passe après tout le reste.** La place du badge se donne
-dans cet ordre : le nom et les tours toujours ; puis le logo du participant,
-quand une itération suivante le posera, entre les tours et le pied ; puis le
-pied, dans l'ordre de sacrifice du § 11.5 ; le pied TechnoLibre en dernier. Il
-se compose d'un texte, centré, replié comme le pied, puis du logo, centré, posé
-sur le bord bas du cadre utile, le pied remontant d'autant. Il ne prend que
+**Le logo du participant passe après tout le texte.** La place du badge se
+donne dans cet ordre : le nom et les tours toujours ; puis l'organisation et
+le pied, dans l'ordre de sacrifice du § 11.5 ; puis le logo du participant ;
+le pied TechnoLibre en dernier. Le logo ne prend que l'écart que le texte
+laisse entre les tours et le pied, moins un dégagement au-dessus et
+au-dessous : il ne réduit ni ne retire aucun texte. Il s'y pose le plus grand
+possible, proportions gardées, sans plafond, centré, et ne se pose pas sur un
+badge où sa plus petite cote n'atteindrait pas son plancher, ni sur un badge
+qui a perdu le nom de l'événement (§ 11.5). Son image se lit dans le dossier
+de l'événement, au chemin que porte la fiche, à la première préparation qui
+la demande, puis se garde pour cet événement ; un échec ne se garde pas. La
+planche l'embarque une fois par fichier, quel que soit le nombre de badges
+qui la portent.
+
+**Le pied TechnoLibre passe après tout le reste.** Il se compose d'un texte,
+centré, replié comme le pied, puis du logo, centré, posé sur le bord bas du
+cadre utile, le pied remontant d'autant. Il ne prend que
 l'écart que le badge, composé sans lui, laisse entre ses tours et son pied : il
 ne réduit ni le nom, ni les tours, ni l'organisation, ni le pied, et ne les
 déplace pas, le pied excepté. Il rapetisse jusqu'à un plancher lisible à la
 loupe, puis se retire, et l'annonce le dit (§ 11.5). Un badge qui a perdu le nom
 de l'événement, et à plus forte raison l'organisation, ne le porte pas : il
 vient après eux dans l'ordre de sacrifice, et la place que leur retrait libère
-ne lui revient pas. Son logo est la seule couleur du badge (§ 11.2) : il se
-dessine en vecteurs, chemins et couleurs du fichier de l'éditeur,
+ne lui revient pas. Sous un logo de participant, il cède au logo tout ce qui
+dépasse son plancher, puis reprend le plus grand palier que le logo laisse ;
+quand même ainsi le logo n'atteint pas son plancher, il se retire pour lui
+(§ 11.5). Son logo, l'un des deux seuls éléments en couleur du badge
+(§ 11.2), se dessine en vecteurs, chemins et couleurs du fichier de l'éditeur,
 `src/actifs/full_logo_technolibre_2023.svg`, et un logo que l'éditeur changerait
 pour une forme que la planche ne sait pas rendre fidèlement — un dégradé, une
 transparence, un arc, une transformation — se refuse à la production au lieu de
@@ -5002,7 +5026,7 @@ qu'on y met est variable. Le logiciel fixe donc un **ordre de
 sacrifice**, écrit une fois, et ne laisse jamais la mise en page se résoudre par
 un débordement.
 
-> nom › lignes de tour › organisation › nom de l'événement › pied TechnoLibre
+> nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre
 
 - **Un nom très long.** Le nom **ne s'abrège jamais**. Le logiciel réduit le corps
   par paliers jusqu'à un plancher de lisibilité **mesuré sur les métriques de la
@@ -5079,7 +5103,34 @@ un débordement.
   tours. ». Ce n'est jamais un refus : la planche se produit. Mesuré sur la
   police embarquée, sous un nom d'une ligne et son organisation, avec des
   lignes de tour sans siège ni titre, il tient au corps de départ jusqu'à
-  cinq tours sur la carte Avery 5392 et treize sur l'A6.
+  cinq tours sur la carte Avery 5392 et treize sur l'A6. Sous un logo de
+  participant, il se compte d'abord à son plancher, puis reprend le plus grand
+  palier que le logo laisse, et se retire quand le logo ne trouve qu'ainsi sa
+  place : le retrait se compte de même.
+- **Un badge sans place pour le logo du participant.** Le logo prend l'écart
+  entre les tours et le pied, moins 1,5 mm au-dessus et au-dessous ; sa plus
+  petite cote dessinée ne descend pas sous 8 mm. Ces deux valeurs, communes
+  aux deux modèles, sont au registre des constantes
+  (`LOGO_PARTICIPANT_ECART_MM`, `LOGO_PARTICIPANT_PLANCHER_MM`), défauts de
+  travail jusqu'à leur relevé sur une impression réelle. Quand même sans le
+  pied TechnoLibre il n'atteint pas son plancher, ou que le badge a perdu le
+  nom de l'événement, il ne se pose pas sur ce badge, qui sort tel qu'il
+  serait sans logo, et l'annonce compte les badges concernés — « Logo du
+  participant : retiré de 3 badges, faute de place sous leurs tours. ». Un
+  logo très large bute sur la largeur du cadre, un logo très haut sur la
+  hauteur de l'écart ; l'un et l'autre peuvent ainsi manquer leur plancher
+  sur tous les badges. Ce n'est jamais un refus.
+- **Un logo introuvable ou illisible.** Le fichier qu'une fiche désigne peut
+  manquer au dossier de l'événement — un événement importé d'un seul fichier
+  d'état —, ne pas se lire, ou ne pas être un PNG. L'annonce nomme les
+  personnes concernées, la cause dite — « Logo introuvable dans le dossier de
+  l'événement pour… », « Logo illisible pour… » —, et leur badge s'imprime
+  sans logo. Ce n'est jamais un refus (§ 5.9) : la planche se produit, et un
+  fichier remis se lit à la préparation suivante. La feuille de contrôle
+  compte ces logos parmi les introuvables. Seules la structure et les sommes
+  de contrôle du PNG s'éprouvent à la préparation : un fichier dont les
+  données compressées ne se décompressent pas, qu'aucune image écrite par
+  l'interface ne donne, se compte posé, et son badge sort sans logo.
 
 ### 11.6 L'ordre des badges, et l'imposition
 
@@ -5157,12 +5208,15 @@ remplacerait la première sans rien dire. L'ordre par table change la pile
 autant que l'imposition, et se lit donc dans le nom de la même façon. Même
 événement, même source, même papier, même imposition, même ordre, même
 placement : même nom, et la planche entière remplace la sienne, qui imprime la
-même pile. **Une réédition ne remplace jamais un fichier** : deux rééditions de
-trois personnes différentes partagent tout le reste du nom, et la seconde prend
-le premier rang libre, `_2`, `_3`…, comme le dossier daté de la corbeille
-(§ 8.7). Une planche dont la base se raccourcit (ci-dessous) prend aussi le
-premier rang libre : la base d'un événement et celle de sa copie (§ 8.7), qui
-partagent propositions et horodatages, peuvent se raccourcir en une même tête.
+même pile. Le logo d'une personne et la case du pied TechnoLibre n'entrent pas
+dans le nom : une planche refaite après un changement de logo remplace celle
+du même placement. **Une réédition ne remplace jamais un fichier** : deux
+rééditions de trois personnes différentes partagent tout le reste du nom, et
+la seconde prend le premier rang libre, `_2`, `_3`…, comme le dossier daté de
+la corbeille (§ 8.7). Une planche dont la base se raccourcit (ci-dessous) prend
+aussi le premier rang libre : la base d'un événement et celle de sa copie
+(§ 8.7), qui partagent propositions et horodatages, peuvent se raccourcir en une
+même tête.
 Une base lue sur le disque qui finit par un point — celle d'un fichier
 « Gala..gtt.json » déposé dans le dossier — prend aussi le premier rang libre :
 son nom entier est celui qu'une base plus longue raccourcit en la même tête.
@@ -5228,7 +5282,9 @@ nom et le prénom de la personne — le prénom vide quand elle n'en a pas —,
 l'organisation telle que le badge l'imprime, vide sans elle, et, dans une seule
 cellule, les lignes de tour du badge, **texte pour texte**, une par ligne —
 « Toute la soirée — table 13 — animation », « Tour 1 — table 5 (Terrasse) » —,
-jamais abrégées. Les personnes exclues n'y figurent pas. Le fichier est celui de
+jamais abrégées. Les personnes exclues n'y figurent pas. **Elle ne porte jamais
+le logo** : un logo ne se range pas dans une cellule, ses octets sont les mêmes
+avec et sans logos, et elle ne lit aucun fichier de logo. Le fichier est celui de
 l'export des participants (§ 10.3) : UTF-8 avec marque d'ordre d'octets, `;`,
 CRLF entre les enregistrements, un saut de ligne dans la cellule des tours, qui
 s'écrit alors entre guillemets (RFC 4180). Mêmes entrées, mêmes octets. Il se
@@ -5380,10 +5436,12 @@ jamais.
   badge le dirait aussi, mais après la coupe.
 - **Produire une planche partielle en silence.** Rééditer le badge de trois
   retardataires est une commande nommée, qui produit une planche de trois badges
-  et l'annonce comme telle sur sa feuille de contrôle. Tant que le placement n'a
-  pas bougé, le badge réédité est **identique** à celui de la première planche —
-  c'est ce qu'on attend d'un badge perdu ; s'il a bougé, l'horodatage diffère, et
-  c'est ce qu'on attend d'un badge refait.
+  et l'annonce comme telle sur sa feuille de contrôle. Tant que ni le placement
+  ni le logo de la personne n'ont bougé, le badge réédité est **identique** à
+  celui de la première planche — c'est ce qu'on attend d'un badge perdu ; si le
+  placement a bougé, l'horodatage diffère, et c'est ce qu'on attend d'un badge
+  refait. Un logo changé change le badge sans faire dériver le placement : il
+  ne garde pas la planche.
 
 ---
 
@@ -8356,8 +8414,8 @@ sa valeur soit encore relevée ; un seul reste entièrement ouvert.
    nommés, les placements engendrés passent à la **forme positionnelle** : § 8.9.
 2. **TRANCHÉ — la bibliothèque PDF est `pdf-lib`, sa police lue par `fontkit` ;
    l'outil d'extraction est `pdfjs-dist`.** La question de l'ingestion du SVG
-   avait disparu : la bibliothèque ne dessine que du texte, des filets et des
-   rectangles (§ 11.1). `pdf-lib` tient le cahier des charges étroit qui restait :
+   avait disparu : la bibliothèque ne dessine que du texte, des filets, des
+   rectangles et le PNG du logo d'un participant (§ 11.1). `pdf-lib` tient le cahier des charges étroit qui restait :
    exécution sous `node`, police embarquée en latin étendu et en sous-ensemble,
    table `ToUnicode` écrite, boîte de page exacte, couche de texte extractible, et
    la liberté de ne poser ni date lue à l'horloge, ni identifiant de document, ni

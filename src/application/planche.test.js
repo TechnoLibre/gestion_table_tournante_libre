@@ -997,3 +997,57 @@ describe('planche : la liste des badges en CSV (§ 11.6)', () => {
     );
   });
 });
+
+// Le logo du participant (§ 11.4, § 11.6) : le badge porte le chemin du logo
+// de sa personne, que la séance lit et que la planche dessine ; la liste en
+// CSV ne le porte jamais, et la feuille de contrôle compte les logos d'une
+// ligne de texte, seulement quand un badge en désigne un.
+describe('planche : le logo du participant', () => {
+  const LOGO_A = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+  const LOGO_B = `logo/${'fedcba9876543210'.repeat(4)}.png`;
+  const avecLogos = () => {
+    const charge = aReserve();
+    charge.participants[0].logo = LOGO_A;
+    charge.participants[2].logo = LOGO_B;
+    charge.participants[3].logo = LOGO_A;
+    return charge;
+  };
+
+  test('chaque badge porte le chemin du logo de sa personne, null sans logo ; ses textes n’en changent pas', () => {
+    const avec = modele(avecLogos());
+    const sans = modele(aReserve());
+    assert.deepEqual(avec.badges.map(({ participant, logo }) => [participant, logo]), [
+      [5, null],
+      [3, LOGO_B],
+      [4, LOGO_A],
+      [1, LOGO_A],
+      [2, null],
+    ]);
+    assert.ok(sans.badges.every(({ logo }) => logo === null));
+    assert.deepEqual(avec.badges.map(({ textes }) => textes), sans.badges.map(({ textes }) => textes));
+  });
+
+  test('la liste en CSV a les mêmes octets avec et sans logos', () => {
+    const avec = avecLogos();
+    const sans = aReserve();
+    assert.deepEqual(listeBadges(modele(avec), avec), listeBadges(modele(sans), sans));
+    assert.ok(!texteCsv(listeBadges(modele(avec), avec)).includes('logo/'));
+  });
+
+  test('la feuille de contrôle compte les logos d’une ligne, avant BROUILLON, quand logos est donné ; sans lui, les lignes d’avant', () => {
+    const m = modele(avecLogos(), { selection: [1, 3] });
+    const options = { papier: 'A4', imposition: 'feuille', planches: 1 };
+    const avant = textesControle(m, options);
+    assert.deepEqual(textesControle(m, { ...options, logos: null }), avant);
+    assert.ok(!avant.some((ligne) => ligne.startsWith('Logos')), JSON.stringify(avant));
+    const lignes = textesControle(m, { ...options, logos: { poses: 2, sansPlace: 1, introuvables: 3 } });
+    const rang = lignes.indexOf('Logos : 2 posés, 1 sans place, 3 introuvables');
+    assert.ok(rang > 0, JSON.stringify(lignes));
+    assert.deepEqual([...lignes.slice(0, rang), ...lignes.slice(rang + 1)], avant);
+    assert.equal(lignes[rang - 1], 'Imprimer en recto seul, à 100 %');
+    assert.ok(textesControle(m, { ...options, logos: { poses: 1, sansPlace: 0, introuvables: 1 } }).includes('Logos : 1 posé, 0 sans place, 1 introuvable'));
+    for (const logos of [{}, { poses: -1, sansPlace: 0, introuvables: 0 }, { poses: 1, sansPlace: 0 }, { poses: 1.5, sansPlace: 0, introuvables: 0 }, 'deux']) {
+      assert.throws(() => textesControle(m, { ...options, logos }), TypeError, JSON.stringify(logos));
+    }
+  });
+});

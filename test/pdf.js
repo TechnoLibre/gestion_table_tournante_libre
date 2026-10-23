@@ -14,7 +14,11 @@
 // dans l'espace de l'utilisateur, avant la matrice courante. La lecture
 // suit elle-même la matrice courante (q, Q, cm) et l'épaisseur de trait
 // (w) : une mise à l'échelle posée dans le flux déplace et épaissit les
-// segments qu'elle rend, là où les boîtes de page ne changent pas.
+// segments qu'elle rend, là où les boîtes de page ne changent pas. Une
+// image se lit par la place de son carré unité sous la matrice courante, là
+// où Do la peint ; pdfjs réunit en un seul opérateur une suite d'au moins
+// trois images identiques que seule leur translation sépare, que la lecture
+// redéplie.
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFRef, decodePDFRawStream } from 'pdf-lib';
@@ -121,15 +125,17 @@ function englobant(donnees, m) {
 // les segments en points sous la matrice courante, chacun avec son
 // épaisseur ; l'englobant de chaque chemin rempli, avec la couleur de fond
 // en vigueur, noire par défaut ; le mode de rendu et la couleur de fond en
-// vigueur à chaque texte montré. La matrice, l'épaisseur de trait (1 par
-// défaut, PDF 32000 § 8.4.1), la couleur de fond et le mode font partie de
-// l'état graphique : q les empile, Q les rend.
+// vigueur à chaque texte montré ; la matrice de chaque image peinte, et les
+// nombres de textes montrés et de chemins remplis avant elle. La matrice,
+// l'épaisseur de trait (1 par défaut, PDF 32000 § 8.4.1), la couleur de fond
+// et le mode font partie de l'état graphique : q les empile, Q les rend.
 function lireDessin({ fnArray, argsArray }) {
   const segments = [];
   const couleurs = [];
   const modesTexte = [];
   const couleursTexte = [];
   const zones = [];
+  const images = [];
   let remplissages = 0;
   let tirets = false;
   let matrice = [1, 0, 0, 1, 0, 0];
@@ -148,6 +154,16 @@ function lireDessin({ fnArray, argsArray }) {
     else if (MONTRENT.has(fn)) {
       modesTexte.push(mode);
       couleursTexte.push(fond);
+    } else if (fn === OPS.paintImageXObject) {
+      images.push({ matrice, textesAvant: modesTexte.length, remplissagesAvant: remplissages });
+    } else if (fn === OPS.paintImageXObjectRepeat) {
+      // [image, échelle x, échelle y, positions] : chaque image sous la
+      // matrice [ex 0 0 ey x y], posée dans la matrice courante.
+      const [, ex, ey, positions] = args;
+      for (let k = 0; k < positions.length; k += 2) {
+        const posee = composer([ex, 0, 0, ey, positions[k], positions[k + 1]], matrice);
+        images.push({ matrice: posee, textesAvant: modesTexte.length, remplissagesAvant: remplissages });
+      }
     } else if (fn === OPS.setDash) tirets ||= args[0].length > 0;
     else if (COULEURS.has(fn)) {
       couleurs.push(enRgb(args[0]));
@@ -193,7 +209,7 @@ function lireDessin({ fnArray, argsArray }) {
       }
     }
   });
-  return { segments, remplissages, couleurs, tirets, modesTexte, couleursTexte, zones };
+  return { segments, remplissages, couleurs, tirets, modesTexte, couleursTexte, zones, images };
 }
 
 // La valeur d'un attribut héritable d'une page (MediaBox, CropBox,
@@ -223,12 +239,21 @@ function longueurFontFile2(police) {
 
 // La structure lue par pdf-lib : par page, la boîte de média, la CropBox,
 // l'UserUnit ; les polices des ressources des pages, une fois chacune, dans
-// l'ordre de première rencontre, avec la longueur de leur programme ; les
-// clés de /Info ; la présence de /ID.
+// l'ordre de première rencontre, avec la longueur de leur programme ; le
+// nombre d'objets image du fichier, qu'une page les nomme ou non, sans les
+// masques de transparence ; les clés de /Info ; la présence de /ID.
 async function lireStructure(octets) {
   const document = await PDFDocument.load(octets, { updateMetadata: false });
   const vues = new Set();
   const polices = [];
+  const images = [];
+  const masques = new Set();
+  for (const [ref, objet] of document.context.enumerateIndirectObjects()) {
+    if (!(objet instanceof PDFRawStream) || objet.dict.lookup(PDFName.of('Subtype')) !== PDFName.of('Image')) continue;
+    images.push(ref.toString());
+    const masque = objet.dict.get(PDFName.of('SMask'));
+    if (masque instanceof PDFRef) masques.add(masque.toString());
+  }
   const pages = document.getPages().map((page) => {
     const cropBox = attributHerite(page.node, 'CropBox');
     const userUnit = attributHerite(page.node, 'UserUnit');
@@ -256,6 +281,7 @@ async function lireStructure(octets) {
   return {
     pages,
     polices,
+    images: images.filter((ref) => !masques.has(ref)).length,
     info: info instanceof PDFDict ? info.keys().map((cle) => cle.asString().slice(1)) : [],
     id: document.context.trailerInfo.ID !== undefined,
   };
@@ -278,8 +304,11 @@ async function lireStructure(octets) {
  *     couleurs: Array<[number, number, number]>,
  *     tirets: boolean,
  *     modesTexte: number[],
- *     couleursTexte: Array<[number, number, number]>}>,
+ *     couleursTexte: Array<[number, number, number]>,
+ *     images: Array<{x: number, y: number, largeur: number, hauteur: number, origine: [number, number],
+ *       axe: [number, number], textesAvant: number, remplissagesAvant: number}>}>,
  *   polices: Array<{nom: string, toUnicode: boolean, fontFile2: number|null}>,
+ *   images: number,
  *   info: string[],
  *   id: boolean}>}
  *   boite et cropBox : x et y au coin bas gauche, en millimètres du repère
@@ -297,8 +326,16 @@ async function lireStructure(octets) {
  *   au trait ; couleursTexte : la couleur de fond en vigueur à chacun de
  *   ces opérateurs, en [r, g, b] de 0 à 255, noire par défaut ; polices :
  *   fontFile2, la longueur en octets du programme TrueType embarqué,
- *   décodé, null sans FontFile2 ; info : les clés de /Info, [] sans /Info ;
- *   id : la remorque porte /ID.
+ *   décodé, null sans FontFile2 ; images, par page : chaque image peinte,
+ *   dans l'ordre du flux — l'englobant de son carré unité sous la matrice
+ *   courante, x et y à son coin haut gauche, origine le point où tombe le
+ *   coin (0, 0) de l'image — son coin bas gauche, l'image droite —, axe la
+ *   direction unitaire où court sa largeur, l'une et l'autre dans la page, y
+ *   vers le bas ; textesAvant et remplissagesAvant, les nombres d'opérateurs
+ *   de texte montrés et de chemins remplis avant elle sur la page ; images, au
+ *   document : le nombre d'objets image du fichier, qu'une page les nomme ou
+ *   non, un masque de transparence n'en étant pas un ;
+ *   info : les clés de /Info, [] sans /Info ; id : la remorque porte /ID.
  */
 export async function lirePdf(octets) {
   const structure = await lireStructure(octets);
@@ -359,9 +396,31 @@ export async function lirePdf(octets) {
         tirets: dessin.tirets,
         modesTexte: dessin.modesTexte,
         couleursTexte: dessin.couleursTexte,
+        images: dessin.images.map(({ matrice, textesAvant, remplissagesAvant }) => {
+          const coins = [
+            [0, 0],
+            [1, 0],
+            [0, 1],
+            [1, 1],
+          ].map(([u, v]) => appliquer(matrice, u, v));
+          const xs = coins.map(([x]) => x);
+          const ys = coins.map(([, y]) => y);
+          const [a, b, , , e, f] = matrice;
+          const norme = Math.hypot(a, b);
+          return {
+            x: (Math.min(...xs) - gauche) * MM_PAR_PT,
+            y: (haut - Math.max(...ys)) * MM_PAR_PT,
+            largeur: (Math.max(...xs) - Math.min(...xs)) * MM_PAR_PT,
+            hauteur: (Math.max(...ys) - Math.min(...ys)) * MM_PAR_PT,
+            origine: [(e - gauche) * MM_PAR_PT, (haut - f) * MM_PAR_PT],
+            axe: [a / norme + 0, -b / norme + 0],
+            textesAvant,
+            remplissagesAvant,
+          };
+        }),
       });
     }
-    return { pages, polices: structure.polices, info: structure.info, id: structure.id };
+    return { pages, polices: structure.polices, images: structure.images, info: structure.info, id: structure.id };
   } finally {
     await tache.destroy();
   }

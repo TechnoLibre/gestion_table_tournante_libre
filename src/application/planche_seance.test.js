@@ -33,8 +33,12 @@
 // Lettre — feuille par feuille sur deux planches ; celle sous web en Lettre,
 // en pile, par table. La réédition porte un caractère sans glyphe, que sa
 // feuille de contrôle nomme. Le témoin de 257 ne s'analyse que pour son
-// annonce. Les noms sont inventés ; la version vient du module engendré.
+// annonce. Les logos des participants ajoutent quatre productions de l'A6
+// — logos lus et posés, logo introuvable, une réédition sans logo sous des
+// voisins qui en portent et la même sans aucun logo —, sur des PNG composés
+// ici. Les noms sont inventés ; la version vient du module engendré.
 import assert from 'node:assert/strict';
+import { crc32, deflateSync } from 'node:zlib';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_PROPOSITION, H_RETENU, personne, soiree, table } from '../../test/fixtures/badges/cas.js';
 import { FORME_TEMOIN, chargeTemoin } from '../../test/fixtures/badges/temoin.js';
@@ -272,6 +276,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           nomControle: null,
           piedTechnolibre: false,
           sansTechnolibre: null,
+          logos: null,
         },
         nom,
       );
@@ -391,6 +396,7 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       nomControle: null,
       piedTechnolibre: false,
       sansTechnolibre: null,
+      logos: null,
     });
     await refusee(sans.seance.produirePlanche(), 'PLANCHE_SANS_PLACEMENT');
     await assert.rejects(sans.seance.preparerPlanche({ ordre: 'hasard' }), TypeError);
@@ -702,6 +708,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
       nomControle: nomFeuille,
       piedTechnolibre: false,
       sansTechnolibre: null,
+      logos: null,
     });
     assert.match(nomCartes, /\.badges_avery5392_/);
     assert.deepEqual(trace, []);
@@ -1198,5 +1205,188 @@ describe('planche dans la séance : le dossier de l’événement (§ 8.6, § 11
     assert.equal(rendu.chemin, `E:\\${BASE}\\${rendu.nom}`);
     await retirerDossier(fs, VOLUME);
     await refusee(seance.ouvrirDossierEvenement(), 'DOSSIER_EVENEMENT_ABSENT', { dossier: `E:\\${BASE}`, remede: null });
+  });
+});
+
+// Les logos des participants (§ 11.4, § 11.5) : la séance lit chaque chemin
+// distinct une fois par préparation, dans le dossier de l'événement, garde
+// les lectures réussies et jamais un échec, pour un seul événement ; un logo
+// introuvable ou illisible se nomme dans l'annonce sans rien refuser, et le
+// badge s'imprime sans lui. La feuille de contrôle compte les logos quand un
+// badge imprimé en désigne un ; la liste en CSV ne lit aucun logo.
+describe('planche dans la séance : les logos des participants (§ 11.4, § 11.5)', () => {
+  const mot = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+  const morceau = (type, donnees) => {
+    const corps = [...new TextEncoder().encode(type), ...donnees];
+    return [...mot(donnees.length), ...corps, ...mot(crc32(Uint8Array.from(corps)))];
+  };
+  // Un PNG RVB 8 bits d'une couleur unie.
+  const pngUni = (largeur, hauteur, couleur) => {
+    const ligne = [0, ...Array.from({ length: largeur }, () => couleur).flat()];
+    const idat = [...deflateSync(Uint8Array.from(Array.from({ length: hauteur }, () => ligne).flat()))];
+    const ihdr = [...mot(largeur), ...mot(hauteur), 8, 2, 0, 0, 0];
+    return Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...morceau('IHDR', ihdr), ...morceau('IDAT', idat), ...morceau('IEND', [])]);
+  };
+  const ROND = `logo/${'5'.repeat(64)}.png`;
+  const LARGE = `logo/${'6'.repeat(64)}.png`;
+  const PERDU = `logo/${'7'.repeat(64)}.png`;
+  const ETROIT = `logo/${'8'.repeat(64)}.png`;
+  // La soirée d'essai, Iris et Ondine sous le même logo, Théo sous un autre,
+  // Grisaille sans logo, sauf ce que logos remplace : participant → chemin.
+  const chargeAuxLogos = (logos = { 1: ROND, 2: LARGE, 3: ROND }) => {
+    const charge = chargeLucioles();
+    for (const personne of charge.participants) if (logos[personne.id] !== undefined) personne.logo = logos[personne.id];
+    return charge;
+  };
+  // Pose les logos donnés dans le dossier de l'événement.
+  const poserLogos = (fs, chemins) => {
+    for (const chemin of chemins) fs.deposerOctets('documents', ICI + chemin, chemin === ETROIT ? pngUni(40, 2, [0, 0, 0]) : pngUni(chemin === LARGE ? 4 : 3, 3, [180, 40, 40]));
+  };
+  // Les chemins que la séance lit par lireOctets, relatifs à la racine.
+  const lectures = (fs) => {
+    const lus = [];
+    const lire = fs.lireOctets;
+    fs.lireOctets = (racine, chemin) => {
+      lus.push(chemin);
+      return lire(racine, chemin);
+    };
+    return lus;
+  };
+  const ligneLogos = (pdf) => textesDe(pdf.pages[0]).find((texte) => texte.startsWith('Logos'));
+
+  test('chaque chemin distinct se lit une fois par préparation, puis se garde ; la planche pose une image par chemin et la feuille de contrôle compte les logos', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const { seance } = await monter(chargeAuxLogos(), { fs });
+    poserLogos(fs, [ROND, LARGE]);
+    const lus = lectures(fs);
+    const annonce = await seance.preparerPlanche();
+    // Dans l'ordre de la pile : Lacasse et Ombrelle sous le même logo,
+    // puis Pervenche.
+    assert.deepEqual(lus, [ICI + ROND, ICI + LARGE]);
+    assert.equal(annonce.refus, null);
+    assert.deepEqual(annonce.logos, { poses: 3, sansPlace: 0, introuvables: [] });
+    // Produire prépare de nouveau, sans relire ce qui s'est lu.
+    const { nom } = await seance.produirePlanche();
+    assert.equal(lus.length, 2);
+    const pdf = await lirePdf(fs.octets('documents', ICI + nom));
+    assert.equal(pdf.images, 2);
+    assert.equal(pdf.pages.reduce((n, page) => n + page.images.length, 0), 3);
+    assert.equal(ligneLogos(pdf), 'Logos : 3 posés, 0 sans place, 0 introuvable');
+    assert.deepEqual(pdf.pages[0].images, []);
+  });
+
+  test('un logo introuvable, illisible ou qui n’est pas un PNG : l’annonce nomme ses personnes, sans refus ; leur badge s’imprime sans logo ; l’échec ne se garde pas, et le fichier remis se lit à la préparation suivante', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const { seance } = await monter(chargeAuxLogos({ 1: PERDU, 2: LARGE, 3: ROND, 4: ETROIT }), { fs });
+    poserLogos(fs, [LARGE, ETROIT]);
+    fs.deposerOctets('documents', ICI + ROND, new TextEncoder().encode('pas une image'));
+    const lus = lectures(fs);
+    const lire = fs.lireOctets;
+    fs.lireOctets = (racine, chemin) => (chemin === ICI + LARGE ? Promise.reject(new ErreurStockage('LECTURE', { chemin, cause: 'EIO' })) : lire(racine, chemin));
+    const annonce = await seance.preparerPlanche();
+    assert.equal(annonce.refus, null);
+    // Ordre de la pile : Grisaille, Lacasse, Ombrelle, Pervenche.
+    assert.deepEqual(annonce.logos, {
+      poses: 0,
+      sansPlace: 1,
+      introuvables: [
+        { participant: 3, nom: 'Ondine Lacasse', cause: 'ILLISIBLE' },
+        { participant: 1, nom: 'Iris Ombrelle', cause: 'ABSENT' },
+        { participant: 2, nom: 'Théo Pervenche', cause: 'ILLISIBLE' },
+      ],
+    });
+    const { nom } = await seance.produirePlanche();
+    const pdf = await lirePdf(fs.octets('documents', ICI + nom));
+    assert.equal(pdf.images, 0);
+    assert.equal(ligneLogos(pdf), 'Logos : 0 posé, 1 sans place, 3 introuvables');
+    // Chaque échec se relit : la préparation suivante trouve le logo remis.
+    fs.lireOctets = lire;
+    const avant = lus.length;
+    poserLogos(fs, [PERDU]);
+    const reprise = await seance.preparerPlanche();
+    // Le logo trop étroit de Grisaille, lu, se garde ; les trois échecs se
+    // relisent, dans l'ordre de la pile.
+    assert.deepEqual(lus.slice(avant), [ICI + ROND, ICI + PERDU, ICI + LARGE]);
+    assert.deepEqual(reprise.logos.introuvables.map(({ participant }) => participant), [3]);
+    assert.equal(reprise.logos.poses, 2);
+  });
+
+  test('un autre événement qui désigne les mêmes chemins repart d’une garde vide : la séance relit dans son dossier, où le logo manque, et l’annonce nomme ses personnes', async () => {
+    const AUTRE = 'Soirée des Martinets';
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const { seance } = await monter(chargeAuxLogos({ 1: ROND, 3: ROND }), { fs });
+    poserLogos(fs, [ROND]);
+    const lus = lectures(fs);
+    assert.deepEqual((await seance.preparerPlanche()).logos, { poses: 2, sansPlace: 0, introuvables: [] });
+    assert.deepEqual(lus, [ICI + ROND]);
+    // Le même fichier d'événement sous un autre nom, sans son dossier logo/.
+    const autre = chargeLucioles({ nom: AUTRE });
+    for (const membre of autre.participants) if (membre.id === 1 || membre.id === 3) membre.logo = ROND;
+    await deposer(fs, autre);
+    await seance.fermer();
+    await seance.ouvrir(cleEvenement(AUTRE, AUTRE));
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual(lus, [ICI + ROND, `${AUTRE}/${ROND}`]);
+    assert.equal(annonce.refus, null);
+    assert.deepEqual(annonce.logos, {
+      poses: 0,
+      sansPlace: 0,
+      introuvables: [
+        { participant: 3, nom: 'Ondine Lacasse', cause: 'ABSENT' },
+        { participant: 1, nom: 'Iris Ombrelle', cause: 'ABSENT' },
+      ],
+    });
+  });
+
+  test('une réédition de personnes sans logo, sous un voisin et une personne exclue qui en portent un : rien ne se lit, l’annonce porte logos null, et la planche est celle du même événement sans aucun logo', async () => {
+    // Cinq personnes, la cinquième exclue, hors du placement.
+    const cinq = (logos) => {
+      const charge = chargeLucioles();
+      charge.participants.push(personne(5, 'Maëlle', 'Courlis', { exclu: true }));
+      charge.prochainsIds.participant = 6;
+      for (const membre of charge.participants) if (logos[membre.id] !== undefined) membre.logo = logos[membre.id];
+      return charge;
+    };
+    const selection = [2, 4];
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const { seance } = await monter(cinq({ 1: ROND, 5: LARGE }), { fs });
+    poserLogos(fs, [ROND, LARGE]);
+    const lus = lectures(fs);
+    const annonce = await seance.preparerPlanche({ selection });
+    assert.equal(annonce.refus, null);
+    assert.equal(annonce.logos, null);
+    const { nom } = await seance.produirePlanche({ selection });
+    assert.deepEqual(lus, []);
+    const pdf = await lirePdf(fs.octets('documents', ICI + nom));
+    assert.equal(ligneLogos(pdf), undefined);
+    assert.equal(pdf.images, 0);
+    const sans = await monter(cinq({}));
+    const temoin = await sans.seance.produirePlanche({ selection });
+    assert.equal(temoin.nom, nom);
+    assert.deepEqual(fs.octets('documents', ICI + nom), sans.fs.octets('documents', ICI + nom));
+  });
+
+  test('sans logo désigné, ou sous un refus du placement : rien ne se lit, l’annonce porte logos null ; la liste en CSV ne lit jamais un logo, et ses octets ne changent pas', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const { seance } = await monter(chargeLucioles(), { fs });
+    const lus = lectures(fs);
+    const annonce = await seance.preparerPlanche();
+    assert.equal(annonce.logos, null);
+    assert.deepEqual(lus, []);
+    const autre = await monter(chargeAuxLogos());
+    poserLogos(autre.fs, [ROND, LARGE]);
+    const lusListe = lectures(autre.fs);
+    const sans = await monter(chargeLucioles());
+    const { nom } = await autre.seance.produireListeBadges();
+    const second = await sans.seance.produireListeBadges();
+    assert.deepEqual(lusListe, []);
+    assert.deepEqual(autre.fs.octets('documents', ICI + nom), sans.fs.octets('documents', ICI + second.nom));
+    // Un refus du placement : ni modèle ni logos, rien ne se lit.
+    const charge = chargeAuxLogos();
+    Object.assign(charge, chargeLucioles({ plan: null, etat: 'propose' }), { participants: charge.participants });
+    const refus = await monter(charge);
+    const lusRefus = lectures(refus.fs);
+    const annonceRefus = await refus.seance.preparerPlanche();
+    assert.deepEqual([annonceRefus.refus.code, annonceRefus.logos, lusRefus], ['PLANCHE_SANS_PLACEMENT', null, []]);
   });
 });
