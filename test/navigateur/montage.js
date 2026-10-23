@@ -111,7 +111,9 @@ export function tracer(fs) {
  * @param {Array<{racine: 'documents'|'portable', chemin: string, texte: string}>} [options.fichiers]
  *        posés avant le montage, sans compter
  * @param {Array<{nom: string, octets: Uint8Array}>} [options.aImporter]  ce que
- *        rend fs.choisirFichierAImporter, dans l'ordre, puis null
+ *        rend fs.choisirFichierAImporter, dans l'ordre, puis null, quelles
+ *        que soient ses options — le genre 'image' du choix d'un logo
+ *        compris ; choix relève les options de chaque appel
  * @param {Object} [options.horloge]   une horloge pilotée à partager ; sinon
  *        une neuve, au départ par défaut
  * @param {Object} [options.executeur] sinon l'exécuteur direct
@@ -129,9 +131,11 @@ export function tracer(fs) {
  * @param {() => Function | PromiseLike<Function>} [options.sectionQualite]
  *        le chargement de la section de la qualité qu'App reçoit ; sinon une
  *        fonction qui rend le composant importé d'emblée
- * @returns {Promise<Object>} { app, racine, fs, disque, trace, horloge,
- *   presse, polices, imprimante, seance, facade, ui, erreurs(), demonter() }
- *   — polices est le chargement de la police qu'App a reçu, imprimante
+ * @returns {Promise<Object>} { app, racine, fs, disque, trace, choix,
+ *   horloge, presse, polices, imprimante, seance, facade, ui, erreurs(),
+ *   demonter() } — choix porte, dans l'ordre, les options reçues par
+ *   chaque appel de fs.choisirFichierAImporter, null sans options ;
+ *   polices est le chargement de la police qu'App a reçu, imprimante
  *   l'imprimante qu'il a reçue ; seance est un
  *   accesseur de app.seance() ; presse.copies, les textes copiés ;
  *   erreurs(), ce que le collecteur a reçu depuis ce montage ; demonter()
@@ -162,7 +166,11 @@ export async function monterApp({
   const fs = creerFichiersSimules({ ...systeme, disque });
   for (const { racine: id, chemin, texte } of fichiers) fs.deposer(id, chemin, texte);
   const enAttente = [...aImporter];
-  fs.choisirFichierAImporter = async () => enAttente.shift() ?? null;
+  const choix = [];
+  fs.choisirFichierAImporter = async (options) => {
+    choix.push(options ?? null);
+    return enAttente.shift() ?? null;
+  };
   const trace = tracer(fs);
 
   const horlogeMontage = horloge ?? creerHorlogePilotee();
@@ -212,6 +220,7 @@ export async function monterApp({
     fs,
     disque,
     trace,
+    choix,
     horloge: horlogeMontage,
     presse,
     polices,

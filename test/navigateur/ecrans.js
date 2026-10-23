@@ -762,6 +762,42 @@ async function tablesSurPosition(contexte, position) {
   return m.racine;
 }
 
+// Un logo d'épreuve inventé, dessiné sur un canevas hors du document : un
+// disque et un bandeau sur fond transparent, 360 × 120 ; ses octets PNG.
+async function logoEpreuve() {
+  const canevas = new OffscreenCanvas(360, 120);
+  const contexte = canevas.getContext('2d');
+  contexte.fillStyle = 'rgb(32, 96, 160)';
+  contexte.beginPath();
+  contexte.arc(60, 60, 48, 0, 2 * Math.PI);
+  contexte.fill();
+  contexte.fillStyle = 'rgb(232, 140, 40)';
+  contexte.fillRect(124, 36, 220, 48);
+  const blob = await canevas.convertToBlob({ type: 'image/png' });
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+// L'image du montage qu'atteint le sélecteur, attendue chargée.
+const imageChargee = (m, selecteur) =>
+  attendre(`${selecteur} chargée`, () => {
+    const image = m.racine.querySelector(selecteur);
+    return image?.complete && image.naturalWidth > 0 ? image : null;
+  });
+
+// La principale ouverte en écriture sur les participants, la fiche de la
+// personne 1 ouverte, et son logo choisi par « Logo » : la vignette chargée
+// et « Retirer le logo » offert. Rend le montage.
+async function ficheAvecLogo(contexte) {
+  const aImporter = [{ nom: 'logo-epreuve.png', octets: await logoEpreuve() }];
+  const reglages = { ecriture: true, section: 'participants', options: { aImporter } };
+  const m = await ouvrirEvenement(contexte, chargePrincipale(), reglages);
+  await cliquer(m, '[data-participant="1"] [data-commande="fiche"]');
+  await cliquer(m, '[data-fiche="1"] [data-commande="choisirLogo"]');
+  await imageChargee(m, '[data-fiche="1"] [data-logo-vignette] img');
+  await element(m, '[data-fiche="1"] [data-commande="retirerLogo"]');
+  return m;
+}
+
 /**
  * Le contexte d'un parcours : il monte App dans la langue et le thème
  * donnés, garde chaque montage et chaque nettoyage, et défait tout par
@@ -1109,6 +1145,29 @@ export const ECRANS = Object.freeze([
       await touche('Enter');
       await element(m, '[data-fiche="3"] [data-etiquettes] [data-avertissement="ORTHOGRAPHE_RETENUE"]');
       await element(m, '[data-legende-etiquettes]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'participants.logo',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // La vignette du logo sur le papier des badges, « Logo » et « Retirer
+      // le logo ».
+      const m = await ficheAvecLogo(contexte);
+      return m.racine;
+    },
+  },
+  {
+    nom: 'participants.logoAgrandi',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // La vignette cliquée : l'image à la largeur de la fiche, puis
+      // « Fermer », qui tient le focus.
+      const m = await ficheAvecLogo(contexte);
+      await cliquer(m, '[data-fiche="1"] [data-logo-vignette]');
+      await imageChargee(m, '[data-fiche="1"] [data-logo-agrandi] img');
+      await attendre('le focus sur « Fermer »', () => document.activeElement?.dataset.commande === 'fermerLogo');
       return m.racine;
     },
   },

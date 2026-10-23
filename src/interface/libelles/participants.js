@@ -31,6 +31,12 @@
 // conflits d'organisation (participants/liste_conflits.js) : le groupe de
 // ses cases, sa légende, le groupe sans choix et sa commande ;
 // participants.fiche.conflits* la rubrique de la fiche.
+// participants.fiche.logo et participants.fiche.aucunLogo portent la
+// rubrique « Logo » de la fiche ; participants.logo.* ses commandes —
+// « Logo », nommée par la personne, « Retirer le logo » —, sa vignette, qui
+// agrandit, l'image agrandie, nommée par la personne, son « Fermer », et la
+// phrase d'un logo dont l'image manque au dossier de l'événement ou ne se
+// lit pas.
 
 import { toursNommes } from '../../application/libelles/aides.js';
 
@@ -201,6 +207,17 @@ export const TABLE = new Map([
   ['participants.fiche.conflits', "Conflits d'organisation"],
   ['participants.fiche.aucunConflit', "Aucun conflit d'organisation."],
   ['participants.fiche.absente', 'absente'],
+  ['participants.fiche.logo', 'Logo'],
+  ['participants.fiche.aucunLogo', 'Aucun logo.'],
+
+  // --- Le logo de la fiche (§ 8.9, § 10.2) ----------------------------------
+  ['participants.logo.choisir', 'Logo'],
+  ['participants.logo.choisirNomme', ({ nom }) => `Logo de ${nom} : choisir une image`],
+  ['participants.logo.retirer', 'Retirer le logo'],
+  ['participants.logo.agrandir', ({ nom }) => `Agrandir le logo de ${nom}`],
+  ['participants.logo.image', ({ nom }) => `Logo de ${nom}`],
+  ['participants.logo.fermer', 'Fermer'],
+  ['participants.logo.introuvable', 'Logo introuvable : son image manque au dossier de l\u{2019}événement ou ne se lit pas.'],
 
   // --- La rubrique « Rencontres » de la fiche (§ 12.5, D33) -----------------
   // La ligne de la personne dans le placement que le plan montre, celui que

@@ -80,6 +80,9 @@ const EFFETS_DU_LOGO = new Map([
   ['retire', 'retiré'],
 ]);
 
+// Un nombre de pixels : en millions quand il en compte un nombre entier.
+const pixels = (n) => (n % 1_000_000 === 0 ? `${n / 1_000_000} millions de pixels` : `${n} pixels`);
+
 // Les titres de place qu'un geste sur une personne touche, quand il y en a.
 const titresDe = (n, singulier, pluriel) =>
   n > 0 ? `, et ${compte(n, 'titre de place', 'titres de place')} ${n <= 1 ? singulier : pluriel}` : '';
@@ -150,6 +153,21 @@ export const TABLE = new Map([
     (details, texte) =>
       `Le logo de ${details.personne} n'a pas pu s'écrire : ${ouEcrire(details, texte)}. ` +
       "Rien n'est enregistré : la personne garde son logo d'avant, ou aucun.",
+  ],
+  // L'image choisie que la conversion de l'interface refuse
+  // (participants/image_logo.js), avant toute écriture : fichier, le nom du
+  // fichier choisi ; largeur, hauteur et max, en pixels.
+  [
+    'LOGO_ILLISIBLE',
+    ({ fichier }) =>
+      `Le fichier ${cite(fichier)} ne s'ouvre pas comme une image : un logo se lit d'un fichier PNG, JPEG, GIF, WebP, ` +
+      "AVIF, BMP, ICO ou SVG. Une photo HEIC ou une image TIFF s'exporte d'abord en JPEG ou en PNG.",
+  ],
+  [
+    'LOGO_TROP_GRAND',
+    ({ fichier, largeur, hauteur, max }) =>
+      `L'image ${cite(fichier)} compte ${largeur} × ${hauteur} pixels, au-delà des ${pixels(max)} qu'accepte un ` +
+      "logo : elle n'est pas ouverte. Une image réduite, exportée en JPEG ou en PNG, convient.",
   ],
 
   // --- La présence par tour (§ 4, § 5.8, § 9) -------------------------------

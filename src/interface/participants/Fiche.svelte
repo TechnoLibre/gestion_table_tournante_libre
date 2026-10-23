@@ -4,11 +4,12 @@
 <script>
   // La fiche d'une personne à l'écran (§ 4, § 4.2, § 4.5, § 7.4, § 10.2) :
   // nom, prénom, organisation, courriel, titre pressenti, notes, statut
-  // calculé, ses étiquettes, ses conflits d'organisation, sa présence par
-  // tour, ses réservations, et sa table et son siège à chaque tour du
-  // retenu, ou son absence à ce tour ; un tour que le retenu ne porte pas se
-  // dit hors du retenu. La fiche replie, ne tronque jamais : un nom de deux
-  // cents caractères s'y lit entier, sur autant de lignes qu'il en faut.
+  // calculé, son logo, ses étiquettes, ses conflits d'organisation, sa
+  // présence par tour, ses réservations, et sa table et son siège à chaque
+  // tour du retenu, ou son absence à ce tour ; un tour que le retenu ne
+  // porte pas se dit hors du retenu. La fiche replie, ne tronque jamais :
+  // un nom de deux cents caractères s'y lit entier, sur autant de lignes
+  // qu'il en faut.
   // Chaque donnée occupe son propre nœud de texte, et rien n'y est
   // interprété comme du balisage.
   //
@@ -17,6 +18,12 @@
   // tour par tour dans etatPlaces : la fiche ne recalcule ni l'un ni
   // l'autre. Ses contrôles de saisie sont le champ des étiquettes, les cases
   // des conflits et celles de la présence.
+  //
+  // La rubrique « Logo » (LogoFiche.svelte, data-logo-fiche), entre les
+  // valeurs et les étiquettes : la vignette du logo et sa vue grande,
+  // « Logo » et « Retirer le logo ». Elle se recrée à chaque personne
+  // ({#key}) : ni refus, ni vue grande, ni image d'une autre personne n'y
+  // restent.
   //
   // Les étiquettes (etiquettes.js) : une pastille neutre à icône par
   // étiquette, dans l'ordre de la charge — la teinte d'organisation ne sert
@@ -110,6 +117,7 @@
   import { cleNormalisee } from '../../application/csv.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
+  import LogoFiche from './LogoFiche.svelte';
   import { ajoutEtiquettes, etiquettesDeLaFiche, retraitEtiquette, saisieApresAjout, signauxOrthographe } from './etiquettes.js';
   import { cleDeColonne, cleDeStatut, commandeDeCellule, itineraire, ligneVoisine, reservationsDe } from './grille.js';
   import { choixDeConflits, commandeDeConflits, lectureConflits, saisieApresBasculeConflit, saisieConflitsEnregistree } from './liste_conflits.js';
@@ -416,6 +424,10 @@
     <dt>{t('participants.fiche.statut')}</dt>
     <dd>{statut}</dd>
   </dl>
+
+  {#key participant.id}
+    <LogoFiche {participant} />
+  {/key}
 
   <section class="etiquettes" data-etiquettes aria-labelledby={`${uid}-titre-etiquettes`}>
     <h4 id={`${uid}-titre-etiquettes`}>{t('participants.fiche.etiquettes')}</h4>

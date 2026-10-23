@@ -15,7 +15,15 @@
 // d'organisation » (§ 4, § 10.2) : son résumé et son choix multiple, un
 // brouillon qui n'écrit rien, « Appliquer » en une entrée par organisation
 // qui change, le clavier, le refus sous les cases et l'écriture venue
-// d'ailleurs. Chaque épreuve
+// d'ailleurs. Puis la rubrique « Logo » (§ 8.9, § 10.2) : sa place, la
+// vignette, « Logo » qui choisit, convertit et pose l'image, la remplace,
+// « Retirer le logo », Défaire, l'adresse blob: de chaque vignette libérée
+// au chemin suivant et à la fermeture de la fiche, la vue grande dans la
+// fiche avec « Fermer » et Échap, « logo introuvable », les refus posés à
+// côté de « Logo » — en lecture et sur un plan bloqué avant que le dialogue
+// s'ouvre —, le geste tenu tant que le dialogue est ouvert, le passage à
+// une autre personne pendant une conversion, et l'écriture venue
+// d'ailleurs ; chaque image se compose dans l'épreuve. Chaque épreuve
 // monte App par monterApp, au cadre de 1 366 × 700, ouvre la section des
 // participants et la fiche, et lit le rendu par le texte et les attributs
 // data-…, jamais par une classe ; la dernière monte la fiche seule, sur
@@ -29,12 +37,14 @@ import { rencontresDePersonne } from '../../application/evaluation.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { rechercher } from '../../moteur/recherche.js';
+import { lirePng } from '../../pdf/png.js';
 import { serialiser } from '../../stockage/canonique.js';
+import { ErreurStockage } from '../../stockage/erreurs.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { dessinerGraphiques, fixerCadre, touche } from '../../../test/navigateur/entrees.js';
+import { dessinerGraphiques, fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -117,11 +127,15 @@ async function attendre(assertion) {
 
 // La charge posée en fichier d'état, ouverte — en écriture sauf mode
 // 'lecture' —, la proposition montrer demandée au plan, la section des
-// participants et la fiche de la personne ouvertes.
-async function ouvrirFiche(charge, personne, { mode = 'ecriture', montrer = null } = {}) {
+// participants et la fiche de la personne ouvertes ; aImporter, ce que rend
+// le dialogue de choix d'un fichier, et images, des octets posés dans le
+// dossier de l'événement sous leur chemin, avant l'ouverture.
+async function ouvrirFiche(charge, personne, { mode = 'ecriture', montrer = null, aImporter = [], images = [] } = {}) {
   const texte = serialiser(charge, { revision: 1, produitVersion: V1 });
-  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }] });
+  const fichiers = [{ racine: 'documents', chemin: `${BASE}/${BASE}${SUFFIXES.etat}`, texte }];
+  const m = await monterApp({ fichiers, aImporter });
   montes.push(m);
+  for (const { chemin, octets } of images) m.fs.deposerOctets('documents', `${BASE}/${chemin}`, octets);
   await m.seance.ouvrir(`${BASE}/${BASE}`);
   if (mode === 'ecriture') await m.seance.passerEnEcriture();
   if (montrer !== null) m.ui.montrerProposition(montrer);
@@ -677,5 +691,384 @@ describe("la rubrique « Conflits d'organisation » de la fiche (§ 4, § 10.2)"
     await m.seance.defaire();
     await attendre(() => expect(texteDe(rubriqueConflits(fiche).querySelector('[data-conflits-resume]'))).toBe("Aucun conflit d'organisation."));
     expect(coches(fiche)).toEqual([false, false]);
+  });
+});
+
+describe('la rubrique « Logo » de la fiche (§ 8.9, § 10.2)', () => {
+  const rubriqueLogo = (fiche) => fiche.querySelector('[data-logo-fiche]');
+  const commande = (fiche, nom) => rubriqueLogo(fiche).querySelector(`[data-commande="${nom}"]`);
+  const vignette = (fiche) => rubriqueLogo(fiche).querySelector('[data-logo-vignette]');
+  const ficheDe = (m, id) => m.racine.querySelector(`[data-fiche="${id}"]`);
+  const logoDe = (m, id) => m.seance.etat().charge.participants.find((p) => p.id === id).logo;
+  // Les entrées de logo du journal, une par geste.
+  const libelles = (m) => {
+    const texte = m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`);
+    const tous = texte === null ? [] : lireJournal(texte).entrees.map(({ libelle }) => libelle);
+    return tous.filter((libelle) => libelle.startsWith('Logo de '));
+  };
+
+  // Les octets d'une image largeur × hauteur, d'une teinte unie, encodée
+  // sous le type donné.
+  async function image(largeur, hauteur, teinte = 'rgb(40, 110, 170)', type = 'image/png') {
+    const canevas = new OffscreenCanvas(largeur, hauteur);
+    const contexte = canevas.getContext('2d');
+    contexte.fillStyle = teinte;
+    contexte.fillRect(0, 0, largeur, hauteur);
+    const blob = await canevas.convertToBlob({ type });
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  // Le chemin logo/<SHA-256>.png d'octets.
+  async function cheminDe(octets) {
+    const empreinte = new Uint8Array(await crypto.subtle.digest('SHA-256', octets));
+    return `logo/${[...empreinte].map((octet) => octet.toString(16).padStart(2, '0')).join('')}.png`;
+  }
+
+  // La vignette chargée, et les dimensions naturelles de son image.
+  async function vignetteChargee(m, id) {
+    return attendre(() => {
+      const image = vignette(ficheDe(m, id))?.querySelector('img');
+      expect(image?.complete && image.naturalWidth > 0, 'vignette chargée').toBe(true);
+      return { largeur: image.naturalWidth, hauteur: image.naturalHeight };
+    });
+  }
+
+  // Une charge dont la troisième personne porte le logo d'octets, posés
+  // dans le dossier de l'événement.
+  async function chargeAvecLogo(octets, charge = chargeDouze()) {
+    const chemin = await cheminDe(octets);
+    charge.participants[2].logo = chemin;
+    return { charge, images: [{ chemin, octets }] };
+  }
+
+  // Les adresses blob: créées et libérées tant que la sonde est posée ;
+  // lever() rend les fonctions d'origine.
+  function sonderAdresses() {
+    const { createObjectURL: creer, revokeObjectURL: liberer } = URL;
+    const sonde = { creees: [], liberees: [] };
+    URL.createObjectURL = (objet) => {
+      const adresse = creer.call(URL, objet);
+      sonde.creees.push(adresse);
+      return adresse;
+    };
+    URL.revokeObjectURL = (adresse) => {
+      sonde.liberees.push(adresse);
+      liberer.call(URL, adresse);
+    };
+    sonde.lever = () => {
+      URL.createObjectURL = creer;
+      URL.revokeObjectURL = liberer;
+    };
+    return sonde;
+  }
+
+  const aucuneFenetre = () => expect(document.querySelectorAll('dialog[open], [role=dialog], [role=alertdialog]').length).toBe(0);
+
+  test('entre les valeurs et les étiquettes : son titre, « Aucun logo. », « Logo » ; « Retirer le logo » absent sans logo', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeDouze(), 3);
+    const section = rubriqueLogo(fiche);
+    expect(section).not.toBeNull();
+    expect(texteDe(section.querySelector('h4'))).toBe(t('participants.fiche.logo'));
+    expect(fiche.querySelector('dl').compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(section.compareDocumentPosition(fiche.querySelector('[data-etiquettes]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(texteDe(section.querySelector('[data-logo-absent]'))).toBe('Aucun logo.');
+    expect(texteDe(commande(fiche, 'choisirLogo'))).toBe('Logo');
+    expect(commande(fiche, 'choisirLogo').getAttribute('aria-label')).toBe('Logo de Ondine Lacasse : choisir une image');
+    expect(commande(fiche, 'retirerLogo')).toBeNull();
+    expect(vignette(fiche)).toBeNull();
+    expect(m.choix).toEqual([]);
+  });
+
+  test('« Logo » ouvre le dialogue des images, convertit et pose : une entrée « posé », le PNG réduit dans logo/, la vignette ; « Retirer le logo » paraît', async () => {
+    const source = await image(3000, 1500);
+    const { m, fiche } = await ouvrirFiche(chargeDouze(), 3, { aImporter: [{ nom: 'emblème.png', octets: source }] });
+    commande(fiche, 'choisirLogo').click();
+    await attendre(() => expect(logoDe(m, 3)).toMatch(/^logo\/[0-9a-f]{64}\.png$/));
+    expect(m.choix).toEqual([{ genre: 'image' }]);
+    const posee = m.fs.octets('documents', `${BASE}/${logoDe(m, 3)}`);
+    expect(lirePng(posee)).toEqual({ largeur: 1200, hauteur: 600 });
+    expect(logoDe(m, 3)).toBe(await cheminDe(posee));
+    expect(libelles(m)).toEqual(['Logo de Ondine Lacasse : posé']);
+    expect(await vignetteChargee(m, 3)).toEqual({ largeur: 1200, hauteur: 600 });
+    const apres = ficheDe(m, 3);
+    expect(vignette(apres).getAttribute('aria-label')).toBe('Agrandir le logo de Ondine Lacasse');
+    expect(vignette(apres).querySelector('img').getAttribute('alt')).toBe('');
+    expect(rubriqueLogo(apres).querySelector('[data-logo-absent]')).toBeNull();
+    expect(texteDe(commande(apres, 'retirerLogo'))).toBe('Retirer le logo');
+    expect(m.seance.gesteEnCours).toBe(false);
+  });
+
+  test('remplacer garde l’ancienne image, Défaire rend l’ancienne vignette ; « Retirer le logo » écrit une entrée, garde les deux images et rend le focus à « Logo »', async () => {
+    const premiere = await image(300, 100, 'rgb(200, 60, 60)');
+    const seconde = await image(200, 200, 'rgb(60, 160, 60)');
+    const { m, fiche } = await ouvrirFiche(chargeDouze(), 3, {
+      aImporter: [
+        { nom: 'premier.png', octets: premiere },
+        { nom: 'second.jpg', octets: seconde },
+      ],
+    });
+    commande(fiche, 'choisirLogo').click();
+    expect(await vignetteChargee(m, 3)).toEqual({ largeur: 300, hauteur: 100 });
+    const cheminPremier = logoDe(m, 3);
+    commande(ficheDe(m, 3), 'choisirLogo').click();
+    await attendre(() => expect(logoDe(m, 3)).not.toBe(cheminPremier));
+    expect(await vignetteChargee(m, 3)).toEqual({ largeur: 200, hauteur: 200 });
+    const cheminSecond = logoDe(m, 3);
+    expect(libelles(m)).toEqual(['Logo de Ondine Lacasse : posé', 'Logo de Ondine Lacasse : remplacé']);
+    expect(m.fs.octets('documents', `${BASE}/${cheminPremier}`)).not.toBeNull();
+
+    await m.seance.defaire();
+    await attendre(() => expect(logoDe(m, 3)).toBe(cheminPremier));
+    expect(await vignetteChargee(m, 3)).toEqual({ largeur: 300, hauteur: 100 });
+    await m.seance.refaire();
+    expect(await vignetteChargee(m, 3)).toEqual({ largeur: 200, hauteur: 200 });
+
+    commande(ficheDe(m, 3), 'retirerLogo').click();
+    await attendre(() => expect(logoDe(m, 3)).toBeUndefined());
+    await attendre(() => expect(texteDe(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-absent]'))).toBe('Aucun logo.'));
+    expect(libelles(m).at(-1)).toBe('Logo de Ondine Lacasse : retiré');
+    expect(commande(ficheDe(m, 3), 'retirerLogo')).toBeNull();
+    for (const chemin of [cheminPremier, cheminSecond]) expect(m.fs.octets('documents', `${BASE}/${chemin}`)).not.toBeNull();
+    await attendre(() => expect(document.activeElement).toBe(commande(ficheDe(m, 3), 'choisirLogo')));
+  });
+
+  test('chaque adresse blob: d’une vignette se libère au chemin suivant — remplacer, Défaire, Refaire — et à la fermeture de la fiche', async () => {
+    const premiere = await image(300, 100, 'rgb(200, 60, 60)');
+    const seconde = await image(200, 200, 'rgb(60, 160, 60)');
+    const { m, fiche } = await ouvrirFiche(chargeDouze(), 3, {
+      aImporter: [
+        { nom: 'premier.png', octets: premiere },
+        { nom: 'second.png', octets: seconde },
+      ],
+    });
+    const sonde = sonderAdresses();
+    try {
+      commande(fiche, 'choisirLogo').click();
+      expect(await vignetteChargee(m, 3)).toEqual({ largeur: 300, hauteur: 100 });
+      const cheminPremier = logoDe(m, 3);
+      commande(ficheDe(m, 3), 'choisirLogo').click();
+      await attendre(() => expect(logoDe(m, 3)).not.toBe(cheminPremier));
+      expect(await vignetteChargee(m, 3)).toEqual({ largeur: 200, hauteur: 200 });
+      await m.seance.defaire();
+      await attendre(() => expect(logoDe(m, 3)).toBe(cheminPremier));
+      expect(await vignetteChargee(m, 3)).toEqual({ largeur: 300, hauteur: 100 });
+      await m.seance.refaire();
+      expect(await vignetteChargee(m, 3)).toEqual({ largeur: 200, hauteur: 200 });
+
+      // Deux conversions et quatre vignettes : seule la montrée vit encore.
+      const montree = vignette(ficheDe(m, 3)).querySelector('img').getAttribute('src');
+      expect(sonde.creees).toContain(montree);
+      expect(sonde.creees.length).toBe(6);
+      expect([...sonde.liberees].sort()).toEqual(sonde.creees.filter((adresse) => adresse !== montree).sort());
+
+      m.ui.ouvrirFiche(4);
+      await attendre(() => expect(ficheDe(m, 4)).not.toBeNull());
+      await attendre(() => expect([...sonde.liberees].sort()).toEqual([...sonde.creees].sort()));
+    } finally {
+      sonde.lever();
+    }
+  });
+
+  test('la vignette cliquée laisse place à l’image à la largeur de la fiche, avec « Fermer », sans fenêtre ; « Fermer » et Échap rendent la vignette et son focus', async () => {
+    const { charge, images } = await chargeAvecLogo(await image(240, 120));
+    const { m, fiche } = await ouvrirFiche(charge, 3, { images });
+    await vignetteChargee(m, 3);
+    vignette(fiche).click();
+    const agrandi = await attendre(() => {
+      const trouve = rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-agrandi]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    aucuneFenetre();
+    expect(vignette(ficheDe(m, 3))).toBeNull();
+    const grande = agrandi.querySelector('img');
+    expect(grande.getAttribute('alt')).toBe('Logo de Ondine Lacasse');
+    await attendre(() => expect(grande.complete && grande.naturalWidth === 240).toBe(true));
+    const largeurFiche = rubriqueLogo(ficheDe(m, 3)).getBoundingClientRect().width;
+    expect(Math.abs(grande.getBoundingClientRect().width - largeurFiche)).toBeLessThanOrEqual(2);
+    const fermer = agrandi.querySelector('[data-commande="fermerLogo"]');
+    expect(texteDe(fermer)).toBe('Fermer');
+    await attendre(() => expect(document.activeElement).toBe(fermer));
+    fermer.click();
+    await attendre(() => expect(vignette(ficheDe(m, 3))).not.toBeNull());
+    expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-agrandi]')).toBeNull();
+    await attendre(() => expect(document.activeElement).toBe(vignette(ficheDe(m, 3))));
+
+    vignette(ficheDe(m, 3)).click();
+    await attendre(() => expect(document.activeElement?.dataset.commande).toBe('fermerLogo'));
+    // Un vrai clic sur l'image laisse le focus à la vue, où Échap porte.
+    const boite = rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-agrandi] img').getBoundingClientRect();
+    await pointer('presser', boite.x + boite.width / 2, boite.y + boite.height / 2);
+    await pointer('relacher', boite.x + boite.width / 2, boite.y + boite.height / 2);
+    await attendre(() => expect(document.activeElement?.hasAttribute('data-logo-agrandi')).toBe(true));
+    await touche('Escape');
+    await attendre(() => expect(vignette(ficheDe(m, 3))).not.toBeNull());
+    await attendre(() => expect(document.activeElement).toBe(vignette(ficheDe(m, 3))));
+    // La fiche reste ouverte : Échap ne ferme que la vue grande.
+    expect(ficheDe(m, 3)).not.toBeNull();
+  });
+
+  test('un autre chemin referme la vue grande : le focus qui y était va à « Logo », le logo suivant se montre en vignette', async () => {
+    const { charge, images } = await chargeAvecLogo(await image(240, 120));
+    const aImporter = [{ nom: 'neuf.png', octets: await image(90, 30) }];
+    const { m, fiche } = await ouvrirFiche(charge, 3, { images, aImporter });
+    await vignetteChargee(m, 3);
+    vignette(fiche).click();
+    await attendre(() => expect(document.activeElement?.dataset.commande).toBe('fermerLogo'));
+    await m.seance.retirerLogoParticipant({ id: 3 });
+    await attendre(() => expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-absent]')).not.toBeNull());
+    expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-agrandi]')).toBeNull();
+    await attendre(() => expect(document.activeElement).toBe(commande(ficheDe(m, 3), 'choisirLogo')));
+    commande(ficheDe(m, 3), 'choisirLogo').click();
+    expect(await vignetteChargee(m, 3)).toEqual({ largeur: 90, hauteur: 30 });
+    expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-agrandi]'), 'vue grande rouverte sans clic').toBeNull();
+  });
+
+  test('en lecture : la vignette et la vue grande restent, « Retirer le logo » est absent, « Logo » refuse avant d’ouvrir le dialogue, avec son remède, sans rien écrire', async () => {
+    const { charge, images } = await chargeAvecLogo(await image(240, 120));
+    const aImporter = [{ nom: 'autre.png', octets: await image(10, 10) }];
+    const { m, fiche } = await ouvrirFiche(charge, 3, { mode: 'lecture', images, aImporter });
+    await vignetteChargee(m, 3);
+    expect(commande(fiche, 'retirerLogo')).toBeNull();
+    const trace = m.trace.length;
+    commande(fiche, 'choisirLogo').click();
+    const refus = await attendre(() => {
+      const trouve = rubriqueLogo(ficheDe(m, 3)).querySelector('[data-refus="MODE_LECTURE"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(refus.querySelector('button')).not.toBeNull();
+    expect(document.getElementById(commande(ficheDe(m, 3), 'choisirLogo').getAttribute('aria-describedby'))).toBe(refus);
+    expect(m.choix).toEqual([]);
+    expect(m.trace.length).toBe(trace);
+    vignette(ficheDe(m, 3)).click();
+    await attendre(() => expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-agrandi]')).not.toBeNull());
+  });
+
+  test('sur un plan bloqué, en écriture comme en lecture : « Retirer le logo » absent, « Logo » refuse par le refus de la séance avant le dialogue', async () => {
+    const lue = generee(chargeDouze());
+    const retenue = executer(lue, 'retenirProposition', { id: lue.propositions[0].id });
+    for (const mode of ['ecriture', 'lecture']) {
+      // En écriture, le plan se bloque séance ouverte ; en lecture, il
+      // l'est dans le fichier.
+      const depart = mode === 'ecriture' ? retenue : executer(retenue, 'changerEtat', { etat: 'bloque' });
+      const { charge, images } = await chargeAvecLogo(await image(50, 50), structuredClone(depart));
+      const { m } = await ouvrirFiche(charge, 3, { mode, images });
+      if (mode === 'ecriture') {
+        await vignetteChargee(m, 3);
+        expect(commande(ficheDe(m, 3), 'retirerLogo')).not.toBeNull();
+        await m.seance.executer('changerEtat', { etat: 'bloque' });
+      }
+      await vignetteChargee(m, 3);
+      const fiche = ficheDe(m, 3);
+      expect(commande(fiche, 'retirerLogo'), mode).toBeNull();
+      const trace = m.trace.length;
+      commande(fiche, 'choisirLogo').click();
+      const refus = await attendre(() => {
+        const trouve = rubriqueLogo(ficheDe(m, 3)).querySelector('[data-refus]');
+        expect(trouve).not.toBeNull();
+        return trouve;
+      });
+      expect(refus.dataset.refus).toBe(m.seance.etat().refus.code);
+      expect(refus.querySelector('button'), mode).not.toBeNull();
+      expect(m.choix, mode).toEqual([]);
+      expect(m.trace.length, mode).toBe(trace);
+    }
+  });
+
+  test('un chemin dont l’image manque ou ne se lit pas : « Logo introuvable », « Logo » et « Retirer le logo » offerts', async () => {
+    const charge = chargeDouze();
+    charge.participants[2].logo = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+    const { m, fiche } = await ouvrirFiche(charge, 3);
+    const phrase = await attendre(() => {
+      const trouvee = rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-introuvable]');
+      expect(trouvee).not.toBeNull();
+      return trouvee;
+    });
+    expect(texteDe(phrase)).toBe(t('participants.logo.introuvable'));
+    expect(texteDe(phrase)).toMatch(/^Logo introuvable/);
+    expect(vignette(fiche)).toBeNull();
+    expect(commande(fiche, 'choisirLogo')).not.toBeNull();
+    expect(commande(fiche, 'retirerLogo')).not.toBeNull();
+
+    // Une image présente que le moteur ne lit pas se dit introuvable de même.
+    const abimee = chargeDouze();
+    abimee.participants[2].logo = `logo/${'fedcba9876543210'.repeat(4)}.png`;
+    const images = [{ chemin: abimee.participants[2].logo, octets: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]) }];
+    const { m: autre } = await ouvrirFiche(abimee, 3, { images });
+    await attendre(() => expect(rubriqueLogo(ficheDe(autre, 3)).querySelector('[data-logo-introuvable]')).not.toBeNull());
+    expect(vignette(ficheDe(autre, 3))).toBeNull();
+  });
+
+  test('une image illisible ou trop lourde se refuse à côté de « Logo », sans rien écrire ; un dialogue annulé ne fait rien', async () => {
+    const bruit = new Uint8Array(256).map((_, rang) => (rang * 37 + 5) % 256);
+    const { m, fiche } = await ouvrirFiche(chargeDouze(), 3, { aImporter: [{ nom: 'IMG_0042.HEIC', octets: bruit }] });
+    const trace = m.trace.length;
+    commande(fiche, 'choisirLogo').click();
+    const refus = await attendre(() => {
+      const trouve = rubriqueLogo(ficheDe(m, 3)).querySelector('[data-refus="LOGO_ILLISIBLE"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(texteDe(refus)).toContain('« IMG_0042.HEIC »');
+    expect(texteDe(refus)).toContain('JPEG ou en PNG');
+    expect(m.trace.length).toBe(trace);
+    expect(logoDe(m, 3)).toBeUndefined();
+
+    m.fs.choisirFichierAImporter = async () => {
+      const details = { chemin: 'affiche.png', dossier: 'D:\\images', taille: 30_000_000, max: 26_214_400 };
+      throw new ErreurStockage('TROP_VOLUMINEUX', details);
+    };
+    commande(ficheDe(m, 3), 'choisirLogo').click();
+    await attendre(() => expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-refus="TROP_VOLUMINEUX"]')).not.toBeNull());
+    expect(m.trace.length).toBe(trace);
+
+    // Le geste reste ouvert tant que le dialogue l'est ; annulé, il se ferme.
+    let annuler;
+    m.fs.choisirFichierAImporter = () => new Promise((resoudre) => (annuler = () => resoudre(null)));
+    commande(ficheDe(m, 3), 'choisirLogo').click();
+    await attendre(() => expect(typeof annuler).toBe('function'));
+    expect(m.seance.gesteEnCours, 'geste pendant le choix').toBe(true);
+    annuler();
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    await attendre(() => expect(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-refus]')).toBeNull());
+    await attendre(() => expect(commande(ficheDe(m, 3), 'choisirLogo').getAttribute('aria-busy')).toBeNull());
+    expect(m.trace.length).toBe(trace);
+    expect(m.seance.gesteEnCours).toBe(false);
+  });
+
+  test('passer à une autre personne pendant le choix : rien ne se pose sur sa fiche ; l’image choisie va à la personne qui l’a demandée, un refus n’est posé nulle part', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeDouze(), 3);
+    let rendre;
+    m.fs.choisirFichierAImporter = () => new Promise((resoudre) => (rendre = resoudre));
+    commande(fiche, 'choisirLogo').click();
+    await attendre(() => expect(typeof rendre).toBe('function'));
+    expect(m.seance.gesteEnCours, 'geste pendant le choix').toBe(true);
+    m.ui.ouvrirFiche(4);
+    await attendre(() => expect(ficheDe(m, 4)).not.toBeNull());
+    rendre({ nom: 'bruit.png', octets: new Uint8Array([1, 2, 3, 4]) });
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    expect(m.racine.querySelector('[data-refus]')).toBeNull();
+    expect(texteDe(rubriqueLogo(ficheDe(m, 4)).querySelector('[data-logo-absent]'))).toBe('Aucun logo.');
+
+    rendre = null;
+    commande(ficheDe(m, 4), 'choisirLogo').click();
+    await attendre(() => expect(typeof rendre).toBe('function'));
+    m.ui.ouvrirFiche(5);
+    await attendre(() => expect(ficheDe(m, 5)).not.toBeNull());
+    rendre({ nom: 'emblème.png', octets: await image(64, 32) });
+    await attendre(() => expect(logoDe(m, 4)).toMatch(/^logo\//));
+    expect(logoDe(m, 5)).toBeUndefined();
+    expect(texteDe(rubriqueLogo(ficheDe(m, 5)).querySelector('[data-logo-absent]'))).toBe('Aucun logo.');
+    expect(vignette(ficheDe(m, 5))).toBeNull();
+  });
+
+  test('une écriture venue d’ailleurs — la séance, puis Défaire — met la vignette à jour', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    await m.seance.poserLogoParticipant({ id: 3, octets: await image(80, 40) });
+    expect(await vignetteChargee(m, 3)).toEqual({ largeur: 80, hauteur: 40 });
+    await m.seance.defaire();
+    await attendre(() => expect(texteDe(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-absent]'))).toBe('Aucun logo.'));
+    expect(vignette(ficheDe(m, 3))).toBeNull();
   });
 });

@@ -287,6 +287,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PRE-11` | Donner des objectifs aux tables, à l'écran ou en CSV, et les exporter | § 4.5, § 10.4 |
 | `PRE-12` | Télécharger les modèles CSV et les fichiers d'exemple | § 10.1, § 10.3 |
 | `PRE-13` | Donner un libellé aux tables | § 4, § 7.7 |
+| `PRE-14` | Donner un logo aux personnes | § 8.9, § 10.2 |
 
 **Placer** — `PLA`
 
@@ -4395,6 +4396,26 @@ champ qui en ajoute une ou plusieurs, séparées comme dans une cellule CSV ; la
 § 10.1). Quand l'événement porte des étiquettes, une légende des étiquettes suit
 celle des organisations, chacune avec le nombre de personnes qui la portent,
 exclues comprises.
+
+**Le logo d'une personne se pose dans sa fiche.** La rubrique « Logo », entre
+les valeurs et les étiquettes, montre la vignette du logo (§ 8.9) sur le papier
+blanc des badges, en clair comme en sombre, ou « Aucun logo. », ou « Logo
+introuvable » quand son image manque au dossier de l'événement — un événement
+importé d'un seul fichier, une image retirée à la main — ou ne se lit pas.
+« Logo » ouvre le dialogue des images, puis pose ou remplace le logo ;
+« Retirer le logo », en écriture seulement, le retire sans effacer l'image. Toute image que le moteur
+de rendu décode s'accepte — PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, et SVG,
+rastérisé à 1 200 pixels de plus grand côté ; une photo HEIC, une image TIFF
+ou un fichier illisible se refusent, `LOGO_ILLISIBLE`, d'un texte qui dit de
+l'exporter en JPEG ou en PNG. Un fichier de plus de 25 Mo se refuse sans être
+lu (`TROP_VOLUMINEUX`), une image de plus de 50 millions de pixels sans être
+décodée (`LOGO_TROP_GRAND`). L'interface convertit l'image en PNG : orientation
+EXIF appliquée, transparence gardée, plus grand côté ramené à 1 200 pixels,
+jamais agrandi. En lecture et sur un plan bloqué, « Logo » refuse avant que le
+dialogue s'ouvre, le refus posé à côté du bouton avec son remède. Un clic sur
+la vignette montre l'image à la largeur de la fiche, dans la fiche même —
+aucune fenêtre ne s'ouvre (§ 5.9) —, avec « Fermer », qui, comme Échap, rend
+la vignette ; la vue se lit dans tout mode, et un autre chemin la referme.
 
 **La présence se saisit dans la grille et dans la fiche.** La colonne
 « Présence » de la grille, après celle de l'exclusion, écrit « tous », en encre

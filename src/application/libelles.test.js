@@ -57,9 +57,16 @@ const RACINE = fileURLToPath(new URL('../..', import.meta.url));
 
 // Les arbres balayés, et les fichiers qui portent une table de codes : le
 // dépôt du plan lève un refus que la commande n'a pas à lever, et son texte
-// vit ici, avec ceux des commandes des places.
+// vit ici, avec ceux des commandes des places ; la conversion du logo d'une
+// personne refuse une image avant que la séance la reçoive, et son texte
+// vit avec ceux des participants.
 const ARBRES = ['src/stockage', 'src/csv', 'src/application'];
-const TABLES = ['src/stockage/types.js', 'src/csv/erreurs.js', 'src/interface/plan/depot.js'];
+const TABLES = [
+  'src/stockage/types.js',
+  'src/csv/erreurs.js',
+  'src/interface/plan/depot.js',
+  'src/interface/participants/image_logo.js',
+];
 // L'assemblage et les tables des textes n'émettent rien : leurs clés sont ce
 // qu'on éprouve, et un texte qui en compose un autre le nomme sans l'émettre.
 const TABLE_DES_TEXTES = join('src', 'application', 'libelles.js');
