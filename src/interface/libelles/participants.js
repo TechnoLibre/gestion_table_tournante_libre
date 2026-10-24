@@ -22,11 +22,13 @@
 // commandes ; participants.conflit.* les conflits du placement montré : dans
 // la liste groupée, la marque d'un groupe et celle d'une personne, puis
 // chaque ligne de conflit — son lieu, la liaison de deux noms, sa raison par
-// règle — ; dans la colonne « Conflits du placement », le tour et le texte
-// court de chaque règle, le tiret d'une personne sans conflit ; dans la
-// rubrique du même nom de la fiche (participants.fiche.conflitsPlacement.*),
-// son titre, le « avec » qui précède les autres personnes d'une ligne, et les
-// phrases sans ligne. participants.presence.* porte la présence par tour
+// règle — ; dans la colonne « Conflits du placement », le tour, le texte
+// de chaque règle — court, ou qui nomme les personnes revues, ou la table
+// où la personne revient —, leur réunion, le tiret d'une personne sans
+// conflit ; dans la rubrique du même nom de la fiche
+// (participants.fiche.conflitsPlacement.*), son titre, le « avec » qui
+// précède les autres personnes d'une ligne, et les phrases sans ligne.
+// participants.presence.* porte la présence par tour
 // (participants/presence.js) : la cellule et l'en-tête de groupe — « tous »,
 // ou les tours nommés par toursNommes —, puis les cases d'une saisie, leur
 // groupe et ses commandes ; participants.fiche.presence* la rubrique de la
@@ -165,6 +167,22 @@ export const TABLE = new Map([
   ['participants.conflit.avec', 'avec'],
   ['participants.conflit.tour', ({ tour }) => `tour ${tour} :`],
   ...[...REGLES_COURTES].map(([regle, texte]) => [`participants.conflit.regle.${regle}`, texte]),
+  // Dans la colonne, « se revoient » nomme qui, « revient à une table » dit
+  // laquelle ; sans nom ni table, le texte court reste.
+  [
+    'participants.conflit.regle.nouveauxVoisinsAvec',
+    ({ noms }) => (noms.length === 0 ? REGLES_COURTES.get('nouveauxVoisins') : `se revoient avec ${enumeration(noms)}`),
+  ],
+  [
+    'participants.conflit.regle.nouvelleTableNumero',
+    ({ tables }) => {
+      if (tables.length === 0) return REGLES_COURTES.get('nouvelleTable');
+      return tables.length === 1 ? `revient à la table ${tables[0]}` : `revient aux tables ${enumeration(tables)}`;
+    },
+  ],
+  // Les règles d'un tour dans la colonne, séparées d'un point-virgule : une
+  // règle peut elle-même énumérer des noms.
+  ['participants.conflit.reglesDuTour', ({ textes }) => textes.join(' ; ')],
   ['participants.conflit.aucun', '\u{2014}'],
   // Un placement montré en dérive : ses conflits ne se comptent pas.
   ['participants.conflit.nonCompte', 'non compté'],

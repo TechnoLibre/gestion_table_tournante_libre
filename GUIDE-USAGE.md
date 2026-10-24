@@ -293,15 +293,17 @@ le dit.
 Une fois des propositions générées (étape 9), la colonne « Conflits du
 placement », juste après celle des conflits d’organisation, dit pour chaque
 personne ce qui cloche dans le placement que le plan montre — la proposition que
-vous regardez, sinon le placement retenu —, tour par tour : « tour 2 : même
-organisation », « tour 4 : conflit d’organisation, se revoient ». Un tiret dit
-qu’elle n’a aucun conflit, ou qu’aucun placement n’est montré ; « non compté »,
-que le placement montré a dérivé depuis (une personne exclue, une table changée)
-et que ses conflits ne se comptent plus. Ce sont les conflits mêmes que comptent
-les pastilles du plan, de toutes les règles ; la colonne se lit seulement, ne se
-trie pas, et l’export n’en écrit rien. La fiche de la personne les détaille sous
-« Conflits du placement », juste avant « Rencontres » : une ligne par conflit,
-« Tour 2, table 5 : avec Iris Ombrelle — même organisation ».
+vous regardez, sinon le placement retenu —, tour par tour, en nommant qui elle
+revoit et à quelle table elle revient : « tour 2 : même organisation »,
+« tour 4 : conflit d’organisation ; se revoient avec Iris Ombrelle et
+Théo Pervenche ; revient à la table 5 ». Un tiret dit qu’elle n’a aucun conflit,
+ou qu’aucun placement n’est montré ; « non compté », que le placement montré a
+dérivé depuis (une personne exclue, une table changée) et que ses conflits ne se
+comptent plus. Ce sont les conflits mêmes que comptent les pastilles du plan, de
+toutes les règles ; la colonne se lit seulement, ne se trie pas, et l’export
+n’en écrit rien. La fiche de la personne les détaille sous « Conflits du
+placement », juste avant « Rencontres » : une ligne par conflit, « Tour 2,
+table 5 : avec Iris Ombrelle — même organisation ».
 
 Une personne peut enfin porter un **logo** — celui de son organisation, par
 exemple —, que son badge imprime (étape 12). Il se pose dans sa fiche, sous la

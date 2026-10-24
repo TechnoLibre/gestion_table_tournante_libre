@@ -96,11 +96,13 @@
   // que la grille lit elle-même par conflitsDuPlacement
   // (src/application/conflits_placement.js), les mêmes que ceux des groupes
   // et des pastilles du plan : une ligne de texte par tour où la personne
-  // est en conflit, « tour 2 : » puis le texte court de chaque règle
-  // (conflitsParTour, conflits.js), ou un tiret sans conflit comme sans
-  // placement montré. Elle se lit seulement : sa cellule prend le focus,
-  // Entrée et F2 n'y ouvrent rien, son en-tête ne trie pas, elle ne se
-  // groupe ni ne se filtre, et l'export ne l'écrit pas.
+  // est en conflit, « tour 2 : » puis le texte de chaque règle — « se
+  // revoient avec » le nom de chaque personne revue, « revient à la
+  // table » et son numéro, le texte court des deux autres —
+  // (conflitsParTour, texteDuTour, conflits.js), ou un tiret sans conflit
+  // comme sans placement montré. Elle se lit seulement : sa cellule prend
+  // le focus, Entrée et F2 n'y ouvrent rien, son en-tête ne trie pas, elle
+  // ne se groupe ni ne se filtre, et l'export ne l'écrit pas.
   import { getContext, onDestroy, tick } from 'svelte';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
@@ -114,7 +116,7 @@
   import { effetDe } from '../raccourcis.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
-  import { cleDeRaison, cleDeRegleCourte, conflitsParTour } from './conflits.js';
+  import { cleDeRaison, conflitsParTour, texteDuTour } from './conflits.js';
   import {
     COLONNES,
     MESURES,
@@ -180,7 +182,7 @@
   const conflitsBruts = $derived(
     $seance.charge === null ? null : conflitsDuPlacement($seance.charge, { proposition: $ui.proposition }),
   );
-  const conflitsDesPersonnes = $derived(conflitsParTour(conflitsBruts));
+  const conflitsDesPersonnes = $derived(conflitsParTour(conflitsBruts, $seance.charge?.participants ?? []));
   const nonCompte = $derived(
     $seance.charge !== null && conflitsBruts === null && ($ui.proposition !== null || $seance.charge.retenu !== null),
   );
@@ -586,7 +588,7 @@
               {#each conflitsDesPersonnes.get(personne.id) as { tour, regles } (tour)}
                 <li>
                   <span class="tour">{t('participants.conflit.tour', { tour })}</span>
-                  <span>{regles.map((regle) => t(cleDeRegleCourte(regle))).join(', ')}</span>
+                  <span>{texteDuTour(regles, t)}</span>
                 </li>
               {/each}
             </ul>

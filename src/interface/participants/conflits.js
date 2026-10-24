@@ -7,16 +7,26 @@
 // Grille écrit : un groupe, de tout niveau, porte chaque conflit qui touche
 // l'une de ses lignes ; une personne, les règles de ses conflits. Groupée ou
 // non, la colonne « Conflits du placement » de Grille écrit ceux de chaque
-// personne tour par tour (conflitsParTour), et la rubrique du même nom de
-// sa fiche, ligne par ligne (lignesDePersonne). Aucune fonction ne modifie
-// ce qu'elle reçoit.
+// personne tour par tour, qui elle revoit et à quelle table elle revient
+// (conflitsParTour, texteDuTour), et la rubrique du même nom de sa fiche,
+// ligne par ligne (lignesDePersonne). Aucune fonction ne modifie ce qu'elle
+// reçoit.
 import { nomAffiche } from '../../application/personnes.js';
 
 /** Les règles qui se localisent à une table, dans l'ordre de conflitsParTable. */
 export const REGLES = Object.freeze(['conflitsOrganisation', 'separerOrganisations', 'nouveauxVoisins', 'nouvelleTable']);
 
 const CLES_RAISONS = new Map(REGLES.map((regle) => [regle, `participants.conflit.raison.${regle}`]));
-const CLES_COURTES = new Map(REGLES.map((regle) => [regle, `participants.conflit.regle.${regle}`]));
+// La clé du texte de chaque règle dans la colonne « Conflits du placement » :
+// celles qui portent un détail lisent les noms ou les tables, les deux
+// autres gardent leur texte court, celui de la marque d'une personne en
+// conflit.
+const CLES_DU_TOUR = new Map([
+  ['conflitsOrganisation', 'participants.conflit.regle.conflitsOrganisation'],
+  ['separerOrganisations', 'participants.conflit.regle.separerOrganisations'],
+  ['nouveauxVoisins', 'participants.conflit.regle.nouveauxVoisinsAvec'],
+  ['nouvelleTable', 'participants.conflit.regle.nouvelleTableNumero'],
+]);
 
 /**
  * La clé du texte qui dit la raison d'un conflit de la règle donnée.
@@ -27,20 +37,6 @@ const CLES_COURTES = new Map(REGLES.map((regle) => [regle, `participants.conflit
  */
 export function cleDeRaison(regle) {
   const cle = CLES_RAISONS.get(regle);
-  if (cle === undefined) throw new RangeError(`règle inconnue : ${JSON.stringify(regle)}`);
-  return cle;
-}
-
-/**
- * La clé du texte court d'une règle, celui de la marque d'une personne en
- * conflit et de la colonne « Conflits du placement ».
- *
- * @param {string} regle   l'une de REGLES
- * @returns {string}
- * @throws {RangeError} une autre règle
- */
-export function cleDeRegleCourte(regle) {
-  const cle = CLES_COURTES.get(regle);
   if (cle === undefined) throw new RangeError(`règle inconnue : ${JSON.stringify(regle)}`);
   return cle;
 }
@@ -120,31 +116,75 @@ export function lignesDeConflit(conflits, participants) {
  * « Conflits du placement » écrit : par identifiant, un élément par tour où
  * elle est en conflit, les tours croissants quel que soit l'ordre reçu,
  * chacun avec les règles de ses conflits à ce tour, sans doublon, dans
- * l'ordre de REGLES. Une personne sans conflit n'a pas d'entrée ; null,
- * aucun placement montré, rend une table vide.
+ * l'ordre de REGLES. Chaque règle porte son détail : avec, le nom affiché
+ * de chaque autre personne de ses conflits à ce tour, dans l'ordre des
+ * paires, chacune une fois ; tables, le numéro affiché de la table de ses
+ * conflits, croissants, sans doublon — un seul, une personne n'étant assise
+ * qu'à une table par tour. Comme dans la fiche, une autre personne se
+ * reconnaît à son identifiant : deux homonymes y font deux noms. Une
+ * personne que participants n'a pas n'est pas nommée. Une personne sans
+ * conflit n'a pas d'entrée ; null, aucun placement montré, rend une table
+ * vide.
  *
- * @param {Array<{tour: number, regle: string, personnes: number[]}>|null} conflits   ceux de conflitsDuPlacement
- * @returns {Map<number, Array<{tour: number, regles: string[]}>>}
+ * @param {Array<{tour: number, numero: number, regle: string, personnes: number[]}>|null} conflits   ceux de conflitsDuPlacement
+ * @param {Array<{id: number, nom: string, prenom: string|null}>} participants
+ * @returns {Map<number, Array<{tour: number, regles: Array<{regle: string, avec: string[], tables: number[]}>}>>}
  */
-export function conflitsParTour(conflits) {
-  // Par personne, puis par tour, l'ensemble des règles vues.
+export function conflitsParTour(conflits, participants) {
+  const parId = new Map(participants.map((p) => [p.id, p]));
+  // Par personne, par tour, puis par règle : les autres personnes vues,
+  // dans l'ordre d'arrivée, et les numéros des tables.
   const vues = new Map();
-  for (const { tour, regle, personnes } of conflits ?? []) {
+  for (const { tour, numero, regle, personnes } of conflits ?? []) {
     for (const id of personnes) {
       if (!vues.has(id)) vues.set(id, new Map());
       const parTour = vues.get(id);
-      if (!parTour.has(tour)) parTour.set(tour, new Set());
-      parTour.get(tour).add(regle);
+      if (!parTour.has(tour)) parTour.set(tour, new Map());
+      const parRegle = parTour.get(tour);
+      if (!parRegle.has(regle)) parRegle.set(regle, { autres: new Set(), tables: new Set() });
+      const vue = parRegle.get(regle);
+      vue.tables.add(numero);
+      for (const autre of personnes) if (autre !== id) vue.autres.add(autre);
     }
   }
+  const detail = (regle, { autres, tables }) => ({
+    regle,
+    avec: [...autres].filter((autre) => parId.has(autre)).map((autre) => nomAffiche(parId.get(autre))),
+    tables: [...tables].sort((a, b) => a - b),
+  });
   return new Map(
     [...vues].map(([id, parTour]) => [
       id,
       [...parTour]
         .sort(([a], [b]) => a - b)
-        .map(([tour, regles]) => ({ tour, regles: REGLES.filter((regle) => regles.has(regle)) })),
+        .map(([tour, parRegle]) => ({
+          tour,
+          regles: REGLES.filter((regle) => parRegle.has(regle)).map((regle) => detail(regle, parRegle.get(regle))),
+        })),
     ]),
   );
+}
+
+/**
+ * Le texte des règles d'un tour dans la colonne « Conflits du placement »,
+ * celles d'un élément de conflitsParTour : « se revoient » nomme les autres
+ * personnes, « revient à une table » donne le numéro de la table, les deux
+ * autres règles gardent leur texte court ; la clé
+ * participants.conflit.reglesDuTour les réunit. Chaque texte passe par t,
+ * si bien que celui de l'écran y pose ses insécables.
+ *
+ * @param {Array<{regle: string, avec: string[], tables: number[]}>} regles
+ * @param {(cle: string, details?: Object) => string} t
+ * @returns {string}
+ * @throws {RangeError} une règle hors de REGLES
+ */
+export function texteDuTour(regles, t) {
+  const textes = regles.map(({ regle, avec, tables }) => {
+    const cle = CLES_DU_TOUR.get(regle);
+    if (cle === undefined) throw new RangeError(`règle inconnue : ${JSON.stringify(regle)}`);
+    return t(cle, { noms: avec, tables });
+  });
+  return t('participants.conflit.reglesDuTour', { textes });
 }
 
 /**

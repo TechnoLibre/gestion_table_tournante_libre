@@ -150,6 +150,10 @@ const EXEMPLES_ECRAN = [
   ['participants.conflit.personne', { regles: ['conflitsOrganisation', 'nouveauxVoisins'] }],
   ['participants.conflit.raison.nouveauxVoisins', { deja: [{ tour: 1, numero: 3 }] }],
   ['participants.conflit.raison.nouvelleTable', { numero: 3, deja: [{ tour: 1 }, { tour: 2 }] }],
+  ['participants.conflit.regle.nouveauxVoisinsAvec', { noms: ['Iris Ombrelle', 'Théo Pervenche'] }],
+  ['participants.conflit.regle.nouvelleTableNumero', { tables: [5] }],
+  ['participants.conflit.regle.nouvelleTableNumero', { tables: [2, 5] }],
+  ['participants.conflit.reglesDuTour', { textes: ['même organisation', 'revient à la table 5'] }],
   ['participants.presence.tours', { tours: [2, 3, 4] }],
   [
     'participants.informations.conflitsSuivis',

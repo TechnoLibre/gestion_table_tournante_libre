@@ -12,7 +12,7 @@ import { cleNormalisee } from '../../application/csv.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { REGLES, cleDeRaison, cleDeRegleCourte, conflitsDesGroupes, conflitsParTour, lignesDeConflit, lignesDePersonne, reglesParPersonne } from './conflits.js';
+import { REGLES, cleDeRaison, conflitsDesGroupes, conflitsParTour, lignesDeConflit, lignesDePersonne, reglesParPersonne, texteDuTour } from './conflits.js';
 import { groupesGrille, lignesGrille } from './grille.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -161,7 +161,10 @@ describe('les textes des conflits', () => {
 });
 
 describe('conflitsParTour : les conflits de chaque personne, tour par tour (colonne « Conflits du placement »)', () => {
-  test('par personne, les tours croissants, les règles de chaque tour sans doublon dans l’ordre de REGLES ; une personne sans conflit n’a pas d’entrée', () => {
+  // Une règle d'un tour : les autres personnes nommées, les tables.
+  const r = (regle, avec, tables) => ({ regle, avec, tables });
+
+  test('par personne, les tours croissants, les règles de chaque tour sans doublon dans l’ordre de REGLES, chacune avec les autres personnes nommées dans l’ordre des paires et le numéro de sa table ; une personne sans conflit n’a pas d’entrée', () => {
     const conflits = [
       C1,
       conflit(2, 1, 4, 'nouvelleTable', [1], [{ tour: 1, numero: 4 }]),
@@ -170,35 +173,111 @@ describe('conflitsParTour : les conflits de chaque personne, tour par tour (colo
       conflit(2, 1, 4, 'conflitsOrganisation', [1, 4]),
       C2,
     ];
-    const parPersonne = conflitsParTour(conflits);
+    const parPersonne = conflitsParTour(conflits, PERSONNES);
     assert.deepEqual(
       [...parPersonne].sort(([a], [b]) => a - b),
       [
-        [1, [{ tour: 1, regles: ['separerOrganisations'] }, { tour: 2, regles: ['conflitsOrganisation', 'nouveauxVoisins', 'nouvelleTable'] }]],
-        [2, [{ tour: 1, regles: ['separerOrganisations'] }, { tour: 2, regles: ['nouveauxVoisins'] }]],
-        [3, [{ tour: 2, regles: ['nouveauxVoisins'] }]],
-        [4, [{ tour: 2, regles: ['conflitsOrganisation'] }]],
-        [5, [{ tour: 2, regles: ['conflitsOrganisation', 'nouveauxVoisins'] }]],
+        [
+          1,
+          [
+            { tour: 1, regles: [r('separerOrganisations', ['Noé Fontaine'], [4])] },
+            {
+              tour: 2,
+              regles: [
+                r('conflitsOrganisation', ['Grisaille', 'Ondine Lacasse'], [4]),
+                r('nouveauxVoisins', ['Grisaille'], [4]),
+                r('nouvelleTable', [], [4]),
+              ],
+            },
+          ],
+        ],
+        [2, [{ tour: 1, regles: [r('separerOrganisations', ['Iris Ombrelle'], [4])] }, { tour: 2, regles: [r('nouveauxVoisins', ['Théo Pervenche'], [1])] }]],
+        [3, [{ tour: 2, regles: [r('nouveauxVoisins', ['Noé Fontaine'], [1])] }]],
+        [4, [{ tour: 2, regles: [r('conflitsOrganisation', ['Iris Ombrelle'], [4])] }]],
+        [5, [{ tour: 2, regles: [r('conflitsOrganisation', ['Iris Ombrelle'], [4]), r('nouveauxVoisins', ['Iris Ombrelle'], [4])] }]],
       ],
     );
   });
 
+  test('une personne revue deux fois au même tour est nommée une fois ; deux homonymes font deux noms ; une personne que la liste n’a pas n’est pas nommée', () => {
+    const homonymes = [...PERSONNES, personne(6, 'Fontaine', 'Noé', 'Club des Merles')];
+    const conflits = [
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 2], [{ tour: 1, numero: 4 }]),
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 9], [{ tour: 2, numero: 1 }]),
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 6], [{ tour: 1, numero: 4 }]),
+      conflit(3, 1, 4, 'nouveauxVoisins', [2, 1], [{ tour: 2, numero: 1 }]),
+    ];
+    assert.deepEqual(conflitsParTour(conflits, homonymes).get(1), [{ tour: 3, regles: [r('nouveauxVoisins', ['Noé Fontaine', 'Noé Fontaine'], [4])] }]);
+    assert.deepEqual(conflitsParTour(conflits, homonymes).get(9), [{ tour: 3, regles: [r('nouveauxVoisins', ['Iris Ombrelle'], [4])] }]);
+  });
+
+  test('« se revoient » nomme les autres personnes dans l’ordre des paires, ni celui des identifiants, ni l’alphabétique, ni l’inverse', () => {
+    // Pour 1, les paires donnent Ondine (4), Théo (3), Grisaille (5) : un
+    // ordre distinct de celui des identifiants (3, 4, 5), de l'alphabétique
+    // (Grisaille, Ondine, Théo) et de l'inverse (Grisaille, Théo, Ondine).
+    const conflits = [
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 4], [{ tour: 1, numero: 4 }]),
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 3], [{ tour: 2, numero: 4 }]),
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 5], [{ tour: 1, numero: 4 }]),
+    ];
+    assert.deepEqual(conflitsParTour(conflits, PERSONNES).get(1), [
+      { tour: 3, regles: [r('nouveauxVoisins', ['Ondine Lacasse', 'Théo Pervenche', 'Grisaille'], [4])] },
+    ]);
+  });
+
+  test('les tables d’un tour se rangent croissantes, sans doublon', () => {
+    const conflits = [
+      conflit(2, 7, 5, 'nouvelleTable', [1], [{ tour: 1, numero: 5 }]),
+      conflit(2, 3, 2, 'nouvelleTable', [1], [{ tour: 1, numero: 2 }]),
+      conflit(2, 7, 5, 'nouvelleTable', [1], [{ tour: 1, numero: 5 }]),
+    ];
+    assert.deepEqual(conflitsParTour(conflits, PERSONNES).get(1), [{ tour: 2, regles: [r('nouvelleTable', [], [2, 5])] }]);
+  });
+
   test('l’ordre reçu ne décide pas de celui des tours : un conflit du tour 1 reçu après ceux du tour 3 le précède', () => {
-    const parPersonne = conflitsParTour([conflit(3, 2, 1, 'nouveauxVoisins', [1, 2]), conflit(1, 1, 4, 'separerOrganisations', [1, 2])]);
+    const parPersonne = conflitsParTour([conflit(3, 2, 1, 'nouveauxVoisins', [1, 2]), conflit(1, 1, 4, 'separerOrganisations', [1, 2])], PERSONNES);
     assert.deepEqual(parPersonne.get(1).map(({ tour }) => tour), [1, 3]);
   });
 
   test('aucun conflit, ou null — aucun placement montré — : aucune entrée', () => {
-    assert.equal(conflitsParTour([]).size, 0);
-    assert.equal(conflitsParTour(null).size, 0);
+    assert.equal(conflitsParTour([], PERSONNES).size, 0);
+    assert.equal(conflitsParTour(null, PERSONNES).size, 0);
   });
 
-  test('le texte court de chaque règle est celui de la marque d’une personne ; une autre règle lève', () => {
+  test('le texte d’un tour : « se revoient » nomme les autres personnes, « revient à une table » donne son numéro, les deux autres règles gardent leur texte court ; les règles se séparent d’un point-virgule', () => {
+    assert.equal(texteDuTour([r('nouveauxVoisins', ['Théo Pervenche'], [1])], t), 'se revoient avec Théo Pervenche');
+    assert.equal(texteDuTour([r('nouvelleTable', [], [4])], t), 'revient à la table 4');
+    assert.equal(
+      texteDuTour(
+        [
+          r('conflitsOrganisation', ['Ondine Lacasse'], [4]),
+          r('separerOrganisations', ['Noé Fontaine'], [4]),
+          r('nouveauxVoisins', ['Noé Fontaine', 'Grisaille', 'Léon Mésange'], [4]),
+          r('nouvelleTable', [], [4]),
+        ],
+        t,
+      ),
+      "conflit d'organisation ; même organisation ; se revoient avec Noé Fontaine, Grisaille et Léon Mésange ; revient à la table 4",
+    );
+    // Sans personne nommée ni table, le texte court reste.
+    assert.equal(texteDuTour([r('nouveauxVoisins', [], [4]), r('nouvelleTable', [], [])], t), 'se revoient ; revient à une table');
+    assert.equal(texteDuTour([r('nouvelleTable', [], [2, 5])], t), 'revient aux tables 2 et 5');
+  });
+
+  test('les textes de la colonne, mot pour mot ; le texte court de chaque règle est celui de la marque d’une personne, et celui des deux règles sans détail dans la colonne ; une autre règle lève', () => {
     for (const regle of REGLES) {
-      assert.equal(cleDeRegleCourte(regle), `participants.conflit.regle.${regle}`);
-      assert.equal(t('participants.conflit.personne', { regles: [regle] }), `en conflit : ${t(cleDeRegleCourte(regle))}`);
+      assert.equal(t('participants.conflit.personne', { regles: [regle] }), `en conflit : ${t(`participants.conflit.regle.${regle}`)}`);
     }
-    assert.throws(() => cleDeRegleCourte('varierOrganisations'), RangeError);
+    for (const regle of ['conflitsOrganisation', 'separerOrganisations']) {
+      assert.equal(texteDuTour([{ regle, avec: ['Noé Fontaine'], tables: [4] }], t), t(`participants.conflit.regle.${regle}`));
+    }
+    assert.throws(() => texteDuTour([r('varierOrganisations', [], [4])], t), RangeError);
+    assert.equal(t('participants.conflit.regle.nouveauxVoisinsAvec', { noms: ['Iris Ombrelle', 'Théo Pervenche'] }), 'se revoient avec Iris Ombrelle et Théo Pervenche');
+    assert.equal(t('participants.conflit.regle.nouveauxVoisinsAvec', { noms: [] }), 'se revoient');
+    assert.equal(t('participants.conflit.regle.nouvelleTableNumero', { tables: [5] }), 'revient à la table 5');
+    assert.equal(t('participants.conflit.regle.nouvelleTableNumero', { tables: [2, 3, 5] }), 'revient aux tables 2, 3 et 5');
+    assert.equal(t('participants.conflit.regle.nouvelleTableNumero', { tables: [] }), 'revient à une table');
+    assert.equal(t('participants.conflit.reglesDuTour', { textes: ['même organisation', 'revient à la table 5'] }), 'même organisation ; revient à la table 5');
     assert.equal(t('participants.conflit.tour', { tour: 2 }), 'tour 2 :');
     assert.equal(t('participants.conflit.aucun'), '\u{2014}');
     assert.equal(t('participants.colonne.conflitsPlacement'), 'Conflits du placement');

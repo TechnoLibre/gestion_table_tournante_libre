@@ -584,13 +584,15 @@
   leurs.
 - La liste des participants dit les conflits du placement de chaque personne,
   même sans « Grouper par » : la colonne « Conflits du placement », juste après
-  celle des conflits d'organisation, les résume tour par tour — « tour 2 : même
-  organisation » —, un tiret sans conflit, pour la proposition que le plan
-  montre ou, à défaut, le placement retenu. Elle se lit seulement et ne
-  s'exporte pas. La fiche de la personne les détaille dans une rubrique du même
-  nom, juste avant « Rencontres », une ligne par conflit : « Tour 2, table 5 :
-  avec Iris Ombrelle — même organisation ». Les en-têtes de la grille passent
-  en petit corps, pour que les dix colonnes tiennent.
+  celle des conflits d'organisation, les résume tour par tour, en nommant qui la
+  personne revoit et à quelle table elle revient — « tour 2 : même
+  organisation ; se revoient avec Iris Ombrelle ; revient à la table 5 » —, un
+  tiret sans conflit, pour la proposition que le plan montre ou, à défaut, le
+  placement retenu. Elle se lit seulement et ne s'exporte pas. La fiche de la
+  personne les détaille dans une rubrique du même nom, juste avant
+  « Rencontres », une ligne par conflit : « Tour 2, table 5 : avec Iris
+  Ombrelle — même organisation ». Les en-têtes de la grille passent en petit
+  corps, pour que les dix colonnes tiennent.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

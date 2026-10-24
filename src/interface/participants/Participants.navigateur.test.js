@@ -2497,15 +2497,16 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     });
 
     // La colonne « Conflits du placement » : une ligne de texte par tour où
-    // la personne est en conflit, ou le tiret.
+    // la personne est en conflit, ou le tiret ; « se revoient » y nomme qui,
+    // « revient à une table » y donne laquelle.
     const toursDe = (m, id) => [...cellule(m, id, 'conflitsPlacement').querySelectorAll('li')].map(texteDe);
     const COLONNE_SOUS_LE_PLAN_1 = new Map([
-      [1, ['tour 1 : même organisation', 'tour 2 : revient à une table']],
-      [2, ['tour 1 : même organisation', 'tour 2 : se revoient']],
-      [3, ['tour 2 : se revoient']],
-      [4, ['tour 2 : se revoient']],
-      [5, ['tour 2 : se revoient']],
-      [6, ['tour 2 : revient à une table']],
+      [1, ['tour 1 : même organisation', 'tour 2 : revient à la table 4']],
+      [2, ['tour 1 : même organisation', 'tour 2 : se revoient avec Théo Pervenche']],
+      [3, ['tour 2 : se revoient avec Noé Fontaine']],
+      [4, ['tour 2 : se revoient avec Grisaille']],
+      [5, ['tour 2 : se revoient avec Ondine Lacasse']],
+      [6, ['tour 2 : revient à la table 1']],
       [7, []],
     ]);
     function attendreColonneSousLePlan1(m) {
@@ -2570,12 +2571,25 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
 
       await gesteDeProposition(m, 2, 'voir');
       expect(toursDe(m, 1)).toEqual(['tour 1 : même organisation']);
-      expect(toursDe(m, 3)).toEqual(['tour 2 : se revoient, revient à une table']);
-      expect(toursDe(m, 4)).toEqual(['tour 2 : se revoient, revient à une table']);
+      expect(toursDe(m, 3)).toEqual(['tour 2 : se revoient avec Noé Fontaine ; revient à la table 4']);
+      expect(toursDe(m, 4)).toEqual(['tour 2 : se revoient avec Grisaille ; revient à la table 1']);
       expect(toursDe(m, 6)).toEqual([]);
+      // Le texte même de l'écran, insécables comprises : celui du t de
+      // l'écran, les règles réunies par reglesDuTour.
+      const [, regles] = cellule(m, 3, 'conflitsPlacement').querySelector('li').children;
+      expect(regles.textContent).toBe(
+        tEcran('participants.conflit.reglesDuTour', {
+          textes: [
+            tEcran('participants.conflit.regle.nouveauxVoisinsAvec', { noms: ['Noé Fontaine'] }),
+            tEcran('participants.conflit.regle.nouvelleTableNumero', { tables: [4] }),
+          ],
+        }),
+      );
+      expect(regles.textContent).toContain('\u{202F};');
 
       await grouperPar(m, 'organisation');
-      expect(toursDe(m, 3)).toEqual(['tour 2 : se revoient, revient à une table']);
+      expect(toursDe(m, 3)).toEqual(['tour 2 : se revoient avec Noé Fontaine ; revient à la table 4']);
+      // La marque de la personne, dans la liste groupée, garde ses textes courts.
       expect(texteDe(marqueDePersonne(m, 3))).toBe('en conflit : se revoient, revient à une table');
     });
 
@@ -2607,8 +2621,8 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
       await gesteDeProposition(m, 1, 'voir');
       await m.seance.executer('modifierReglage', { cle: 'separerOrganisations', valeur: false });
       await attendreSeance(m);
-      expect(toursDe(m, 1)).toEqual(['tour 2 : revient à une table']);
-      expect(toursDe(m, 2)).toEqual(['tour 2 : se revoient']);
+      expect(toursDe(m, 1)).toEqual(['tour 2 : revient à la table 4']);
+      expect(toursDe(m, 2)).toEqual(['tour 2 : se revoient avec Théo Pervenche']);
       // Une personne placée exclue : la proposition montrée dérive, ses
       // conflits ne se comptent pas, et la colonne le dit au lieu du tiret.
       await m.seance.executer('exclureParticipant', { id: 3 });

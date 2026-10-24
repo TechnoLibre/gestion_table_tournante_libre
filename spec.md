@@ -4677,13 +4677,17 @@ dans la fiche** (§ 7.5). La colonne « Conflits du placement », juste après c
 des conflits d'organisation, groupée ou non, écrit ceux de la personne dans le
 placement que le plan montre — la proposition demandée, sinon le retenu —, de
 toutes les règles que la génération compte : une ligne par tour où elle est en
-conflit, « tour 2 : » puis le texte court de chaque règle, dans l'ordre des
-règles — « conflit d'organisation », « même organisation », « se revoient »,
-« revient à une table » —, un tiret sans conflit comme sans placement montré, et
-« non compté » quand le placement montré dérive et que ses conflits ne se
-comptent pas. C'est une mesure, non une donnée : elle se lit seulement — sa
-cellule prend le focus, Entrée et F2 n'y ouvrent rien —, son en-tête ne trie
-pas, la liste ne se groupe ni ne se filtre par elle, et l'export ne l'écrit pas.
+conflit, « tour 2 : » puis le texte de chaque règle, dans l'ordre des règles,
+séparés d'un point-virgule — « conflit d'organisation », « même organisation »,
+« se revoient avec » suivi du nom de chaque personne revue à ce tour, « revient
+à la table » suivi de son numéro : « tour 2 : même organisation ; se revoient
+avec Iris Ombrelle et Théo Pervenche ; revient à la table 5 » —, deux homonymes
+y faisant deux noms, comme dans la fiche ; un tiret sans conflit comme sans
+placement montré, et « non compté » quand le placement montré dérive et que ses
+conflits ne se comptent pas. C'est une mesure, non une donnée : elle se lit
+seulement — sa cellule prend le focus, Entrée et F2 n'y ouvrent rien —, son
+en-tête ne trie pas, la liste ne se groupe ni ne se filtre par elle, et l'export
+ne l'écrit pas.
 La fiche porte une rubrique « Conflits du placement », juste avant
 « Rencontres », sous la même ligne de source : une ligne par conflit, dans
 l'ordre des tours — « Tour 2, table 5 : avec Iris Ombrelle — même organisation »
