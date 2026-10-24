@@ -21,7 +21,7 @@
 // (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { appliquerCommande } from '../../application/commandes.js';
-import { DONNEES_BADGE } from '../../application/seance.js';
+import { DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT } from '../../application/seance.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { listeBadges, modelePlanche } from '../../application/planche.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js';
@@ -1077,5 +1077,109 @@ describe('les cases de ce que le badge imprime : gardées sur le poste (§ 8.5, 
     await attendre('la case retenue', () => retenues.length === 3, IMAGES);
     expect(m.seance.etat().donneesBadge.organisation).toBe(false);
     expect(avisNonRetenues(m)).toBeNull();
+  });
+});
+
+describe('le texte du pied TechnoLibre : un champ gardé sur le poste (§ 8.5, § 11.4)', () => {
+  const champTexte = (m) => dans(m, '[data-section="badges"] [data-champ="textePiedTechnolibre"]');
+  const boutonDefaut = (m) => dans(m, '[data-section="badges"] [data-commande="texteParDefaut"]');
+  const avisTexte = (m) => dans(m, '[data-section="badges"] [data-avertissement="texteNonRetenu"]');
+  const caseTechnolibre = (m) => dans(m, '[data-section="badges"] [data-champ="piedTechnolibre"]');
+  // Les réglages de la machine relus ; texteEcrit, la clé du texte, undefined
+  // quand le fichier ne la porte pas.
+  const reglagesEcrits = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES));
+  const texteEcrit = (m) => reglagesEcrits(m).texte_pied_technolibre;
+  // Une frappe dans le champ, puis sa sortie, que le navigateur signale par
+  // change.
+  const saisir = (m, valeur) => {
+    const element = champTexte(m);
+    element.value = valeur;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const quitter = (m) => champTexte(m).dispatchEvent(new Event('change', { bubbles: true }));
+
+  test('une machine neuve : sous la case, le champ prérempli de la phrase d’origine, libellé et aide liés ; « Texte par défaut » désactivé, et les deux sous la case décochée', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const element = champTexte(m);
+    expect(element.tagName).toBe('TEXTAREA');
+    expect(element.value).toBe(TEXTE_PIED_TECHNOLIBRE_DEFAUT);
+    expect(element.rows).toBeGreaterThanOrEqual(2);
+    expect(element.rows).toBeLessThanOrEqual(3);
+    expect(element.disabled).toBe(false);
+    expect(m.seance.etat().textePiedTechnolibre).toBe(TEXTE_PIED_TECHNOLIBRE_DEFAUT);
+    const groupe = caseTechnolibre(m).closest('[role="group"]');
+    expect(groupe.contains(element)).toBe(true);
+    expect(caseTechnolibre(m).compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran('badges.technolibre.texte')));
+    expect(texte(dans(m, `[id="${element.getAttribute('aria-describedby')}"]`))).toBe(plat(tEcran('badges.technolibre.texteAide')));
+    expect(texte(boutonDefaut(m))).toBe(plat(tEcran('badges.technolibre.texteDefaut')));
+    expect(boutonDefaut(m).disabled).toBe(true);
+    caseTechnolibre(m).click();
+    await attendre('le champ désactivé', () => champTexte(m).disabled, IMAGES);
+    expect(boutonDefaut(m).disabled).toBe(true);
+  });
+
+  test('une frappe n’écrit rien ; quitter le champ écrit le texte normalisé et retire l’annonce ; « Texte par défaut » remet la phrase d’origine, la clé retirée', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    const lus = [];
+    const originale = m.seance.preparerPlanche;
+    m.seance.preparerPlanche = async (demande) => {
+      const rendue = await originale(demande);
+      lus.push(rendue.textePiedTechnolibre);
+      return rendue;
+    };
+    const ecrituresAvant = m.trace.length;
+    saisir(m, '  Atelier des Hérons\n cendrés ');
+    await attendre('le bouton offert', () => boutonDefaut(m).disabled === false, IMAGES);
+    expect(m.trace.length).toBe(ecrituresAvant);
+    expect(texteEcrit(m)).toBeUndefined();
+    expect(m.seance.etat().textePiedTechnolibre).toBe(TEXTE_PIED_TECHNOLIBRE_DEFAUT);
+    expect(annonce(m)).not.toBeNull();
+
+    quitter(m);
+    await attendre('le texte écrit', () => texteEcrit(m) === 'Atelier des Hérons cendrés', IMAGES);
+    expect(m.seance.etat().textePiedTechnolibre).toBe('Atelier des Hérons cendrés');
+    await attendre('le champ normalisé', () => champTexte(m).value === 'Atelier des Hérons cendrés', IMAGES);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce sur le texte', () => annonce(m), IMAGES);
+    expect(lus).toEqual(['Atelier des Hérons cendrés']);
+
+    boutonDefaut(m).click();
+    await attendre('la clé retirée', () => !Object.hasOwn(reglagesEcrits(m), 'texte_pied_technolibre'), IMAGES);
+    expect(m.seance.etat().textePiedTechnolibre).toBe(TEXTE_PIED_TECHNOLIBRE_DEFAUT);
+    await attendre('la phrase d’origine dans le champ', () => champTexte(m).value === TEXTE_PIED_TECHNOLIBRE_DEFAUT, IMAGES);
+    expect(boutonDefaut(m).disabled).toBe(true);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    expect(avisTexte(m)).toBeNull();
+  });
+
+  test('un champ vidé s’écrit vide : le pied ne portera que le logo', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    saisir(m, ' \n ');
+    quitter(m);
+    await attendre('le texte vide écrit', () => texteEcrit(m) === '', IMAGES);
+    expect(m.seance.etat().textePiedTechnolibre).toBe('');
+    expect(champTexte(m).value).toBe('');
+    expect(boutonDefaut(m).disabled).toBe(false);
+  });
+
+  test('l’écriture refusée : le texte vaut pour la séance, une annonce le dit dans un rôle d’état ; un texte retenu ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisTexte(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    saisir(m, 'Atelier des Hérons');
+    quitter(m);
+    const avis = await attendre('l’annonce du texte non retenu', () => avisTexte(m), IMAGES);
+    expect(m.seance.etat().textePiedTechnolibre).toBe('Atelier des Hérons');
+    expect(texte(avis)).toBe(plat(tEcran('badges.technolibre.texteNonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirTextePiedTechnolibre;
+    m.seance.choisirTextePiedTechnolibre = async (valeur) => ({ ...(await originale(valeur)), retenu: true });
+    saisir(m, 'Atelier des Hérons cendrés');
+    quitter(m);
+    await attendre('l’annonce retirée', () => avisTexte(m) === null, IMAGES);
   });
 });

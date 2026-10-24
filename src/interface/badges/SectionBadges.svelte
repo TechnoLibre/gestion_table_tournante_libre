@@ -26,6 +26,18 @@
   // la machine ne retient pas vaut pour la séance, et une annonce le dit
   // sous les réglages tant qu'elle est celle de la séance, comme le modèle.
   //
+  // Sous la case, un champ de quelques lignes porte le texte de ce pied,
+  // autre réglage de la machine (EtatSeance.textePiedTechnolibre,
+  // seance.choisirTextePiedTechnolibre), prérempli de la phrase d'origine
+  // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) ; la case décochée le désactive. La
+  // frappe ne vit que dans le champ, en brouillon ; le texte s'écrit quand
+  // le champ se quitte — l'événement change —, normalisé, et seulement
+  // quand il diffère de celui de la séance. « Texte par défaut » remet la
+  // phrase d'origine ; il est désactivé quand le champ la porte déjà, à la
+  // normalisation près, ou que la case est décochée. Un texte que la
+  // machine ne retient pas s'annonce tant qu'il est celui de la séance,
+  // comme la case.
+  //
   // À côté d'elle, dans le même groupe, cinq cases de la machine disent ce
   // que le badge imprime en plus du nom et des tours, une par donnée de
   // DONNEES_BADGE (EtatSeance.donneesBadge, seance.choisirDonneeBadge),
@@ -44,12 +56,12 @@
   // « Préparer » demande l'annonce à la séance (preparerPlanche) et la montre,
   // phrase par phrase (phrasesAnnonce), avec son refus et le remède de
   // celui-ci. L'annonce montrée est celle des réglages, du modèle, du papier,
-  // des cases et de la charge courants : qu'un d'eux change, elle se retire,
-  // et la suivante se prépare. « Produire » prépare d'abord : une dérive, et
-  // tout refus du placement ou de la mise en page, se nomme avant toute
-  // production (§ 11.8), et « Produire » reste désactivé, expliqué, tant que
-  // l'annonce montrée le porte. Un papier choisi par « Changer »
-  // (Papier.svelte) prépare de nouveau l'annonce montrée.
+  // des cases, du texte du pied TechnoLibre et de la charge courants : qu'un
+  // d'eux change, elle se retire, et la suivante se prépare. « Produire »
+  // prépare d'abord : une dérive, et tout refus du placement ou de la mise en
+  // page, se nomme avant toute production (§ 11.8), et « Produire » reste
+  // désactivé, expliqué, tant que l'annonce montrée le porte. Un papier choisi
+  // par « Changer » (Papier.svelte) prépare de nouveau l'annonce montrée.
   //
   // La planche produite nomme son chemin — dans le dossier de l'événement
   // —, ou, sous web, où elle se télécharge, son nom ; pour Avery 5392, ceux
@@ -86,7 +98,7 @@
   // fond sourd de la carte, les fichiers produits sur le fond de
   // l'information. La réédition est une carte à elle.
   import { getContext } from 'svelte';
-  import { DONNEES_BADGE } from '../../application/seance.js';
+  import { DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT, normaliserTextePied } from '../../application/seance.js';
   import { PAPIER_BADGES_DEFAUT } from '../../geometrie/papiers.js';
   import Message from '../accueil/Message.svelte';
   import { suivre } from '../activite.js';
@@ -123,6 +135,7 @@
   const charge = $derived($seance.charge);
   const modeleBadge = $derived($seance.modeleBadge);
   const piedTechnolibre = $derived($seance.piedTechnolibre);
+  const textePiedTechnolibre = $derived($seance.textePiedTechnolibre);
   const donneesBadge = $derived($seance.donneesBadge);
   const cartes = $derived(modeleImposeSonPapier(modeleBadge));
   const offertes = $derived(charge === null ? [] : sourcesOffertes(charge, $ui.proposition));
@@ -140,6 +153,9 @@
   // Vrai quand l'annonce a lu les cases de la séance ; une annonce sans
   // cases les a lues toutes cochées.
   const memesDonnees = (annonce) => DONNEES_BADGE.every((donnee) => (annonce.donneesBadge?.[donnee] ?? true) === donneesBadge[donnee]);
+  // Vrai quand l'annonce a lu le texte du pied TechnoLibre de la séance ;
+  // une annonce sans texte a lu la phrase d'origine.
+  const memeTexte = (annonce) => (annonce.textePiedTechnolibre ?? TEXTE_PIED_TECHNOLIBRE_DEFAUT) === textePiedTechnolibre;
 
   // La dernière annonce préparée : {annonce, demande, charge}, la charge lue
   // au départ de la préparation. Montrée tant que réglages, modèle, papier,
@@ -152,6 +168,7 @@
       preparee.charge === charge &&
       annonceDeLaMachine(preparee.annonce, $seance) &&
       memesDonnees(preparee.annonce) &&
+      memeTexte(preparee.annonce) &&
       memesReglages(preparee.demande, demandeDe(null))
       ? preparee
       : null,
@@ -180,6 +197,14 @@
   // dernier choix : une donnée y entre quand son choix n'est pas retenu, en
   // sort quand un choix d'elle l'est. Vide tant que tout est retenu.
   let donneesNonRetenues = $state.raw({});
+  // Le dernier texte du pied TechnoLibre que la machine n'a pas retenu,
+  // normalisé, ou null.
+  let texteNonRetenu = $state(null);
+  // Le texte que la frappe pose dans le champ avant qu'il ne se quitte, ou
+  // null : le champ montre alors le texte de la séance.
+  let brouillon = $state(null);
+  const texteMontre = $derived(brouillon ?? textePiedTechnolibre);
+  const texteDejaDefaut = $derived(normaliserTextePied(texteMontre) === TEXTE_PIED_TECHNOLIBRE_DEFAUT);
   // Vrai quand une case non retenue garde, dans la séance, la valeur choisie.
   const annoncerDonnees = $derived(
     DONNEES_BADGE.some((donnee) => Object.hasOwn(donneesNonRetenues, donnee) && donneesNonRetenues[donnee] === donneesBadge[donnee]),
@@ -284,6 +309,18 @@
     piedNonRetenu = retenu ? null : coche;
   }
 
+  // Le texte quitté s'écrit sur la machine, comme la case, quand sa forme
+  // normalisée diffère de celui de la séance ; le champ montre ensuite le
+  // texte de la séance, normalisé. Quitter le champ sans changement — une
+  // frappe défaite, qui ne lève pas change — jette aussi le brouillon : le
+  // champ suit alors le texte de la séance, même relu entre-temps.
+  async function retenirTexte(valeur) {
+    brouillon = null;
+    if (normaliserTextePied(valeur) === textePiedTechnolibre) return;
+    const { retenu } = await seance.choisirTextePiedTechnolibre(valeur);
+    texteNonRetenu = retenu ? null : normaliserTextePied(valeur);
+  }
+
   // La case d'une donnée du badge s'écrit sur la machine, comme celle du
   // pied TechnoLibre ; son issue ne touche que l'entrée de cette donnée
   // parmi les non retenues.
@@ -365,6 +402,28 @@
             />
             <label for={`${uid}-technolibre`}>{t('badges.technolibre.case')}</label>
           </div>
+          <div class="texte-pied">
+            <label for={`${uid}-texte-pied`}>{t('badges.technolibre.texte')}</label>
+            <textarea
+              id={`${uid}-texte-pied`}
+              data-champ="textePiedTechnolibre"
+              rows="3"
+              value={texteMontre}
+              disabled={!piedTechnolibre}
+              aria-describedby={`${uid}-texte-pied-aide`}
+              oninput={(evenement) => (brouillon = evenement.currentTarget.value)}
+              onchange={(evenement) => retenirTexte(evenement.currentTarget.value)}
+              onblur={() => (brouillon = null)}
+            ></textarea>
+            <p class="aide" id={`${uid}-texte-pied-aide`}>{t('badges.technolibre.texteAide')}</p>
+            <button
+              type="button"
+              class="defaut"
+              data-commande="texteParDefaut"
+              disabled={!piedTechnolibre || texteDejaDefaut}
+              onclick={() => retenirTexte(TEXTE_PIED_TECHNOLIBRE_DEFAUT)}>{t('badges.technolibre.texteDefaut')}</button
+            >
+          </div>
         </div>
         <div role="status">
           {#if modeleNonRetenu !== null && modeleNonRetenu === modeleBadge}
@@ -372,6 +431,9 @@
           {/if}
           {#if piedNonRetenu !== null && piedNonRetenu === piedTechnolibre}
             <Message ton="avis"><p data-avertissement="piedNonRetenu">{t('badges.technolibre.nonRetenu')}</p></Message>
+          {/if}
+          {#if texteNonRetenu !== null && texteNonRetenu === textePiedTechnolibre}
+            <Message ton="avis"><p data-avertissement="texteNonRetenu">{t('badges.technolibre.texteNonRetenu')}</p></Message>
           {/if}
           {#if annoncerDonnees}
             <Message ton="avis"><p data-avertissement="donneesNonRetenues">{t('badges.donnees.nonRetenues')}</p></Message>
@@ -554,6 +616,51 @@
     margin: 0;
   }
 
+  /* Le texte du pied TechnoLibre, sous sa case, en retrait : son libellé,
+     en encre courante, puis le champ de trois lignes, que l'opérateur peut
+     agrandir en hauteur, son aide en encre secondaire, et « Texte par
+     défaut », une commande secondaire, tiretée quand elle est désactivée. */
+  .texte-pied {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--espace-1);
+    padding-left: var(--espace-5);
+  }
+
+  textarea {
+    box-sizing: border-box;
+    width: min(100%, 40rem);
+    padding: var(--espace-1) var(--espace-2);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    font: inherit;
+    resize: vertical;
+  }
+
+  textarea:disabled {
+    color: var(--couleur-page-texte-secondaire);
+  }
+
+  .aide {
+    color: var(--couleur-page-texte-secondaire);
+  }
+
+  button.defaut {
+    border-style: solid;
+    color: var(--couleur-page-texte);
+    font-weight: normal;
+    cursor: pointer;
+  }
+
+  button.defaut:disabled {
+    border-style: dashed;
+    color: var(--couleur-page-texte-secondaire);
+    cursor: default;
+  }
+
   .commandes {
     display: flex;
     flex-wrap: wrap;
@@ -590,6 +697,7 @@
   }
 
   select:focus-visible,
+  textarea:focus-visible,
   button:focus-visible {
     outline: 2px solid var(--couleur-focus);
     outline-offset: 2px;

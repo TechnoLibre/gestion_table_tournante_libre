@@ -553,6 +553,16 @@
   revient à « Ajouter ». Retirer un animateur de sa rangée retire sa
   réservation et son titre ensemble, un seul titre, le reste de la table
   intact. En lecture, les pastilles restent, sans ces boutons.
+- Dans la section « Badges », sous la case du pied TechnoLibre, un champ porte
+  le texte de ce pied, prérempli de l'invitation d'origine : on le remplace par
+  le sien, et le poste le garde, comme la case ; « Texte par défaut » remet
+  l'invitation. Le texte s'enregistre quand on quitte le champ, se replie seul
+  sur le badge — un retour à la ligne y devient une espace — et rapetisse,
+  puis se retire faute de place, comme l'invitation. Laissé vide, le pied ne
+  porte que le logo. Un caractère que la police ne dessine pas s'annonce avant
+  de produire et se nomme sur la feuille de contrôle, qui ne change pas
+  autrement ; la liste en CSV non plus. Avec l'invitation d'origine, la
+  planche sort identique à celle d'avant.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

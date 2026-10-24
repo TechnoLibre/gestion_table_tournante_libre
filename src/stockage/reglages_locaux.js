@@ -3,7 +3,7 @@
 
 // Les réglages locaux (§ 8.5) : le fichier reglages_locaux.json, à la racine
 // du dossier de travail, à côté des dossiers d'événement et hors d'eux. Il
-// porte six choses, et six seulement : le cadrage de chaque événement,
+// porte sept choses, et sept seulement : le cadrage de chaque événement,
 // indexé par son identifiant — le zoom k en pixels par centimètre, la
 // translation tx, ty en pixels —, le format de papier des sorties, global
 // à la machine (§ 11.2), null tant que l'opérateur ne l'a pas choisi, le
@@ -11,15 +11,17 @@
 // tant que l'opérateur ne l'a pas choisi : Avery 5392 vaut alors
 // (MODELE_BADGE_DEFAUT), la case du pied TechnoLibre des badges, globale à
 // la machine, sous la clé pied_technolibre, un booléen, absente tant que
-// l'opérateur n'y a pas touché : la case vaut alors cochée, les cases de ce
-// que le badge imprime, globales à la machine, sous la clé donnees_badge, un
-// objet d'un booléen par donnée de DONNEES_BADGE, absent tant que
-// l'opérateur n'a touché à aucune et ne portant que celles qu'il a
-// touchées : une case absente vaut cochée, et la taille du texte de
-// l'écran, globale à la machine, sous la clé taille_texte, absente tant
-// que l'opérateur ne l'a pas choisie : le défaut de l'échelle
-// s'applique alors (src/geometrie/taille_texte.js). Aucun ne voyage avec un
-// événement ni ne revient par un retour arrière.
+// l'opérateur n'y a pas touché : la case vaut alors cochée, le texte de ce
+// pied, global à la machine, sous la clé texte_pied_technolibre, une chaîne,
+// absente tant que l'opérateur garde la phrase d'origine, que l'application
+// compose, les cases de ce que le badge imprime, globales à la machine, sous
+// la clé donnees_badge, un objet d'un booléen par donnée de DONNEES_BADGE,
+// absent tant que l'opérateur n'a touché à aucune et ne portant que celles
+// qu'il a touchées : une case absente vaut cochée, et la taille du texte de
+// l'écran, globale à la machine, sous la clé taille_texte, absente tant que
+// l'opérateur ne l'a pas choisie : le défaut de l'échelle s'applique alors
+// (src/geometrie/taille_texte.js). Aucun ne voyage avec un événement ni ne
+// revient par un retour arrière.
 //
 // La lecture ne bloque jamais : un fichier absent donne les défauts ; un
 // fichier qui ne se lit pas, ou dont une valeur connue sort de sa règle,
@@ -54,6 +56,12 @@ const FORMAT_REGLAGES = 1;
 
 const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
 
+// Une suite de blancs que le texte du pied TechnoLibre ramène à une espace :
+// espaces, tabulations, sauts de ligne et de page, séparateurs de ligne et
+// de paragraphe. L'espace insécable et les autres espaces typographiques
+// n'en sont pas : ce sont des caractères que la police dessine.
+const BLANCS_DU_PIED = /[ \t\n\v\f\r\u{85}\u{2028}\u{2029}]+/gu;
+
 /**
  * Les réglages locaux, tels que reglages_locaux.json les porte.
  *
@@ -67,6 +75,8 @@ const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
  *           MODELES_BADGE ; absente tant que l'opérateur ne l'a pas choisi
  * @property {boolean} [pied_technolibre]  la case du pied TechnoLibre des
  *           badges ; absente tant que l'opérateur n'y a pas touché
+ * @property {string} [texte_pied_technolibre]   le texte du pied TechnoLibre ;
+ *           absent tant que l'opérateur garde la phrase d'origine
  * @property {Object<string, boolean>} [donnees_badge]   les cases de ce que
  *           le badge imprime, par donnée de DONNEES_BADGE, celles que
  *           l'opérateur a touchées ; absent tant qu'il n'en a touché aucune
@@ -116,9 +126,9 @@ function fauteDeDonnees(donnees) {
 // Chemin de la première valeur connue des réglages qui sort de sa règle, ou
 // null ; '' quand les réglages ne sont pas un objet. Le second cadrage d'un
 // même événement est fautif ; un modèle de badge présent est une clé de
-// MODELES_BADGE, une case du pied TechnoLibre présente un booléen, les cases
-// de ce que le badge imprime présentes un objet de booléens, une taille du
-// texte présente l'un des paliers.
+// MODELES_BADGE, une case du pied TechnoLibre présente un booléen, son texte
+// présent une chaîne, les cases de ce que le badge imprime présentes un objet
+// de booléens, une taille du texte présente l'un des paliers.
 function fauteDeReglages(reglages) {
   if (!estObjet(reglages)) return '';
   const { format, papier, cadrages } = reglages;
@@ -126,6 +136,9 @@ function fauteDeReglages(reglages) {
   if (papier !== null && !estPapier(papier)) return 'papier';
   if (Object.hasOwn(reglages, 'modele_badge') && !estModeleBadge(reglages.modele_badge)) return 'modele_badge';
   if (Object.hasOwn(reglages, 'pied_technolibre') && typeof reglages.pied_technolibre !== 'boolean') return 'pied_technolibre';
+  if (Object.hasOwn(reglages, 'texte_pied_technolibre') && typeof reglages.texte_pied_technolibre !== 'string') {
+    return 'texte_pied_technolibre';
+  }
   if (Object.hasOwn(reglages, 'donnees_badge')) {
     const faute = fauteDeDonnees(reglages.donnees_badge);
     if (faute !== null) return faute;
@@ -169,13 +182,14 @@ const illisibles = (raison) => ({
  * pour une valeur connue hors de sa règle — un format qui n'est pas un entier
  * ≥ 1, un papier hors de null et des clés de PAPIERS, un modèle de badge
  * présent hors des clés de MODELES_BADGE, une case du pied TechnoLibre
- * présente qui n'est pas un booléen, des cases de ce que le badge imprime
- * qui ne sont pas un objet, ou dont une donnée connue n'est pas un booléen,
- * un cadrage fautif ou en double, une
- * taille du texte présente hors des paliers ; le code d'une lecture que le
- * système de fichiers refuse autrement que par ABSENT. Une marque d'ordre
- * d'octets en tête est ignorée. Les réglages lus gardent leurs clés inconnues
- * et leur format ; leurs cadrages sont triés par identifiant d'événement.
+ * présente qui n'est pas un booléen, un texte de ce pied présent qui n'est
+ * pas une chaîne, des cases de ce que le badge imprime qui ne sont pas un
+ * objet, ou dont une donnée connue n'est pas un booléen, un cadrage fautif ou
+ * en double, une taille du texte présente hors des paliers ; le code d'une
+ * lecture que le système de fichiers refuse autrement que par ABSENT. Une
+ * marque d'ordre d'octets en tête est ignorée. Les réglages lus gardent leurs
+ * clés inconnues et leur format ; leurs cadrages sont triés par identifiant
+ * d'événement.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -298,6 +312,53 @@ export function piedTechnolibreDe(reglages) {
 export function avecPiedTechnolibre(reglages, coche) {
   if (typeof coche !== 'boolean') throw new TypeError(`avecPiedTechnolibre : un booléen attendu, reçu ${JSON.stringify(coche)}`);
   return { ...reglages, pied_technolibre: coche };
+}
+
+/**
+ * Le texte du pied TechnoLibre sous sa forme gardée (§ 8.5, § 11.4) : en NFC,
+ * chaque suite d'espaces, de tabulations ou de sauts de ligne ramenée à une
+ * espace, les blancs de bord retirés. La mise en page replie le texte aux
+ * espaces : un saut de ligne saisi n'y serait qu'un caractère de plus, il
+ * devient une espace. Le texte vide reste vide.
+ *
+ * @param {string} texte
+ * @returns {string}
+ * @throws {TypeError} une valeur qui n'est pas une chaîne
+ */
+export function normaliserTextePied(texte) {
+  if (typeof texte !== 'string') throw new TypeError(`normaliserTextePied : une chaîne attendue, reçu ${JSON.stringify(texte)}`);
+  return texte.normalize('NFC').replace(BLANCS_DU_PIED, ' ').trim();
+}
+
+/**
+ * Le texte du pied TechnoLibre que les réglages portent, normalisé
+ * (normaliserTextePied) ; null quand ils ne le portent pas : la phrase
+ * d'origine, que l'application compose, vaut alors.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @returns {string|null}
+ */
+export function textePiedTechnolibreDe(reglages) {
+  return Object.hasOwn(reglages, 'texte_pied_technolibre') ? normaliserTextePied(reglages.texte_pied_technolibre) : null;
+}
+
+/**
+ * Les réglages reçus, le texte du pied TechnoLibre remplacé par sa forme
+ * normalisée, ou retiré pour null — la phrase d'origine ; ceux reçus ne
+ * changent pas.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @param {string|null} texte
+ * @returns {ReglagesLocaux}
+ * @throws {TypeError} une valeur qui n'est ni une chaîne ni null
+ */
+export function avecTextePiedTechnolibre(reglages, texte) {
+  if (texte === null) {
+    const { texte_pied_technolibre: _retire, ...reste } = reglages;
+    return reste;
+  }
+  if (typeof texte !== 'string') throw new TypeError(`avecTextePiedTechnolibre : une chaîne ou null attendue, reçu ${JSON.stringify(texte)}`);
+  return { ...reglages, texte_pied_technolibre: normaliserTextePied(texte) };
 }
 
 /**

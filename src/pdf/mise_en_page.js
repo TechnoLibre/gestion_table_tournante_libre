@@ -28,7 +28,8 @@
 // nom et des tours sont ceux de la lisibilité, communs aux modèles.
 //
 // Le pied TechnoLibre, quand il est demandé, vient en dernier : un texte,
-// puis le logo, sous le pied, le logo posé sur le bord du cadre. Il ne prend
+// puis le logo, sous le pied, le logo posé sur le bord du cadre ; un texte
+// vide, ou fait d'espaces, ne pose que le logo. Il ne prend
 // que la place que le badge entier laisse entre ses tours et son pied, et ne
 // change rien à ce qui le précède : le badge se compose d'abord sans lui, le
 // pied remonte ensuite de la hauteur du bloc. Il rapetisse de son corps de
@@ -206,15 +207,11 @@ function morceauxLus({ lignes, abregeables }) {
 }
 
 // Le pied TechnoLibre demandé, contrôlé : null, ou {texte, rapport}, un
-// texte non blanc et le rapport largeur sur hauteur du logo, un nombre fini
-// positif ; TypeError sinon.
+// texte, vide admis, et le rapport largeur sur hauteur du logo, un nombre
+// fini positif ; TypeError sinon.
 function technolibreLu(technolibre) {
   if (technolibre === null) return null;
-  const bien =
-    typeof technolibre?.texte === 'string' &&
-    technolibre.texte.trim() !== '' &&
-    Number.isFinite(technolibre.rapport) &&
-    technolibre.rapport > 0;
+  const bien = typeof technolibre?.texte === 'string' && Number.isFinite(technolibre.rapport) && technolibre.rapport > 0;
   if (!bien) throw new TypeError(`mettreEnPage : pied TechnoLibre {texte, rapport} attendu, reçu ${JSON.stringify(technolibre)}`);
   return technolibre;
 }
@@ -269,13 +266,14 @@ function logoParticipantLu(logoParticipant) {
  *
  * Pied TechnoLibre : son texte, replié comme le pied, centré, puis le logo,
  * centré, de deux cadratins de haut, au rapport reçu, posé sur le bas du
- * cadre ; le pied remonte d'autant. Au plus grand corps, du corps de départ
- * à son plancher (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT au registre), où le
+ * cadre ; le pied remonte d'autant. Un texte vide, ou fait d'espaces, ne donne
+ * aucune ligne : le bloc est le logo seul. Au plus grand corps, du corps de
+ * départ à son plancher (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT au registre), où le
  * bloc tient dans l'écart entre les tours et le pied du badge composé sans
- * lui ; technolibre rend alors ce corps et la boîte du logo. Sinon, ou quand
- * le badge a perdu le nom de l'événement, il se retire : technolibre rend
- * {corps: null, logo: null}, et la page est celle du badge sans lui. Non
- * demandé, technolibre rend null.
+ * lui ; technolibre rend alors ce corps et la boîte du logo. Sinon, ou quand le
+ * badge a perdu le nom de l'événement, il se retire : technolibre rend {corps:
+ * null, logo: null}, et la page est celle du badge sans lui. Non demandé,
+ * technolibre rend null.
  *
  * Logo du participant : la boîte la plus grande, au rapport reçu, qui tient
  * dans la largeur du cadre et dans l'écart entre les tours et le pied, moins
@@ -296,8 +294,8 @@ function logoParticipantLu(logoParticipant) {
  * @param {Metriques} metriques
  * @param {import('../geometrie/papiers.js').ModeleBadge} [modeleBadge]   'a6' par défaut
  * @param {{texte: string, rapport: number}|null} [technolibre]   le pied
- *        TechnoLibre : son texte, et le rapport largeur sur hauteur du logo ;
- *        null par défaut, sans pied TechnoLibre
+ *        TechnoLibre : son texte, vide pour le logo seul, et le rapport
+ *        largeur sur hauteur du logo ; null par défaut, sans pied TechnoLibre
  * @param {{rapport: number}|null} [logoParticipant]   le logo du
  *        participant : le rapport largeur sur hauteur de son image ; null par
  *        défaut, sans logo

@@ -843,12 +843,41 @@ describe('produirePlanche : le pied TechnoLibre (§ 11.4)', () => {
     assert.equal(document.pages.reduce((n, page) => n + page.zonesRemplies.length, 0), 3 * (m.badges.length - retires));
   });
 
-  test('un pied TechnoLibre mal formé lève TypeError : texte vide, logo qui n’est pas des octets ou pas un SVG lisible', async () => {
+  test('un pied TechnoLibre mal formé lève TypeError : texte absent ou qui n’est pas une chaîne, logo qui n’est pas des octets ou pas un SVG lisible', async () => {
     const base = entreesAvery(MODELE_AVERY);
-    for (const technolibre of [{ texte: '', logo: TECHNOLIBRE.logo }, { texte: TECHNOLIBRE.texte, logo: 'svg' }, { texte: TECHNOLIBRE.texte, logo: new TextEncoder().encode('<svg/>') }, 'oui']) {
+    const fautes = [
+      { logo: TECHNOLIBRE.logo },
+      { texte: null, logo: TECHNOLIBRE.logo },
+      { texte: TECHNOLIBRE.texte, logo: 'svg' },
+      { texte: TECHNOLIBRE.texte, logo: new TextEncoder().encode('<svg/>') },
+      'oui',
+    ];
+    for (const technolibre of fautes) {
       await assert.rejects(produirePlanche({ ...base, technolibre }), TypeError, JSON.stringify(technolibre));
       await assert.rejects(analyserPlanche({ modele: MODELE_AVERY, polices, modeleBadge: AVERY, technolibre }), TypeError);
     }
+  });
+
+  test('un texte vide : chaque carte porte le logo seul, sans ligne de texte TechnoLibre, et la planche se produit', async () => {
+    const document = await lirePdf(await produirePlanche({ ...entreesAvery(MODELE_AVERY), technolibre: { texte: '', logo: TECHNOLIBRE.logo } }));
+    const avec = PRODUCTIONS_T[0].lu;
+    assert.deepEqual(document.pages.map((page) => page.zonesRemplies.length), avec.pages.map((page) => page.zonesRemplies.length));
+    const lus = document.pages.flatMap((page) => page.textes.map(({ texte }) => texte)).join(' ');
+    for (const mot of TECHNOLIBRE.texte.split(' ')) assert.ok(!lus.includes(mot), `${mot} : ${lus}`);
+    const sans = await lirePdf(octets);
+    assert.deepEqual(
+      document.pages.map((page) => page.textes.map(({ texte }) => texte)),
+      sans.pages.map((page) => page.textes.map(({ texte }) => texte)),
+    );
+  });
+
+  test('un texte personnalisé passe par la garde des caractères : un caractère que la police n’a pas se nomme dans absents, après ceux des badges, une fois, sans refus', async () => {
+    const m = modele([badge(1, 'Ondine \u{4E00}'), badge(2, 'Théo Pervenche')]);
+    const technolibre = { texte: 'Atelier \u{674E} des Hérons \u{674E}', logo: TECHNOLIBRE.logo };
+    const analyse = await analyserPlanche({ modele: m, polices, modeleBadge: AVERY, technolibre });
+    assert.deepEqual([analyse.refus, analyse.absents], [null, ['\u{4E00}', '\u{674E}']]);
+    assert.deepEqual((await analyserPlanche({ modele: m, polices, modeleBadge: AVERY })).absents, ['\u{4E00}']);
+    assert.deepEqual((await analyserPlanche({ modele: m, polices, modeleBadge: AVERY, technolibre: TECHNOLIBRE })).absents, ['\u{4E00}']);
   });
 });
 

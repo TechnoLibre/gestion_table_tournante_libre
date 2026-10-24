@@ -27,12 +27,12 @@
 // Tf, Tm, Tj, ET), tel que la police l'encode, comme la mise en page l'a
 // mesuré : chaque police entre une fois dans les ressources de chaque page.
 //
-// Le pied TechnoLibre, quand l'entrée le demande, porte un texte et le logo
-// de l'éditeur, lu de ses octets SVG (lireLogo, logo.js) : chaque forme se
-// remplit de sa couleur d'origine par ses opérateurs de chemin (m, l, c, h,
-// f), chaque point converti un à un dans le repère du badge, comme le
-// texte : pas de matrice, et un badge à plat tourne son logo avec lui. La
-// feuille de contrôle ne le porte pas.
+// Le pied TechnoLibre, quand l'entrée le demande, porte un texte — vide, le
+// logo seul — et le logo de l'éditeur, lu de ses octets SVG (lireLogo,
+// logo.js) : chaque forme se remplit de sa couleur d'origine par ses opérateurs
+// de chemin (m, l, c, h, f), chaque point converti un à un dans le repère du
+// badge, comme le texte : pas de matrice, et un badge à plat tourne son logo
+// avec lui. La feuille de contrôle ne le porte pas.
 //
 // Le logo d'un participant arrive en octets PNG, par son chemin dans le
 // dossier de l'événement (logosParticipants), avec le chemin que porte le
@@ -170,12 +170,12 @@ function controlerModeleEtPolices(modele, polices, modeleBadge) {
   if (!estModeleBadge(modeleBadge)) throw new TypeError(`modeleBadge : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
 }
 
-// Le pied TechnoLibre demandé, contrôlé : null, ou son texte, non blanc,
+// Le pied TechnoLibre demandé, contrôlé : null, ou son texte, vide admis,
 // et le logo lu de ses octets SVG ; TypeError sinon, et pour un logo que
 // lireLogo refuse.
 function technolibreLu(technolibre) {
   if (technolibre === null) return null;
-  if (typeof technolibre?.texte !== 'string' || technolibre.texte.trim() === '' || !(technolibre.logo instanceof Uint8Array)) {
+  if (typeof technolibre?.texte !== 'string' || !(technolibre.logo instanceof Uint8Array)) {
     throw new TypeError('technolibre : {texte, logo} attendu, le logo en octets SVG');
   }
   const logo = lireLogo(technolibre.logo);
@@ -244,13 +244,15 @@ async function documentAvecPolices(polices) {
   return { pdf, regulier, gras, metriques: metriquesDe({ regulier, gras }) };
 }
 
-// Les textes d'un badge, dans l'ordre où ses absents se nomment.
-const textesDuBadge = ({ textes }) => [
+// Les textes d'un badge, dans l'ordre où ses absents se nomment : les siens,
+// puis celui du pied TechnoLibre demandé, que chaque badge peut porter.
+const textesDuBadge = ({ textes }, promotion) => [
   textes.nom,
   ...(textes.organisation === null ? [] : [textes.organisation]),
   ...textes.lignes,
   ...textes.pied,
   ...textes.piedReduit,
+  ...(promotion === null ? [] : [promotion.texte]),
 ];
 
 /**
@@ -263,8 +265,8 @@ const textesDuBadge = ({ textes }) => [
  * @param {{regulier: Uint8Array, gras: Uint8Array}} entrees.polices
  * @param {import('../geometrie/papiers.js').ModeleBadge} [entrees.modeleBadge]   'a6' par défaut
  * @param {{texte: string, logo: Uint8Array}|null} [entrees.technolibre]   le
- *        pied TechnoLibre : son texte, et les octets SVG du logo ; null par
- *        défaut, sans pied TechnoLibre
+ *        pied TechnoLibre : son texte, vide pour le logo seul, et les octets
+ *        SVG du logo ; null par défaut, sans pied TechnoLibre
  * @param {Map<string, Uint8Array>|null} [entrees.logosParticipants]   les
  *        octets PNG des logos des participants, par chemin, celui que porte
  *        le badge ; null par défaut, aucun logo
@@ -272,14 +274,15 @@ const textesDuBadge = ({ textes }) => [
  *   sansTechnolibre: number, logosParticipants: {poses: number, sansPlace: number}}>}
  *   refus : le premier badge que la mise en page refuse, rang étant son
  *   indice dans modele.badges ; src/pdf ne connaît pas la personne, et
- *   l'appelant complète les détails. absents : les caractères sans glyphe
- *   de tous les textes des badges, une fois chacun, dans l'ordre de
- *   première rencontre. sansTechnolibre : le nombre de badges mis en page
- *   d'où le pied TechnoLibre demandé se retire, faute de place ; 0 sans
- *   pied TechnoLibre. logosParticipants : parmi les badges mis en page dont
- *   la carte porte le logo, ceux où il se pose et ceux où il ne trouve pas
- *   de place ; un badge dont la carte ne porte pas le chemin n'est compté
- *   ni l'un ni l'autre.
+ *   l'appelant complète les détails. absents : les caractères sans glyphe de
+ *   tous les textes des badges, celui du pied TechnoLibre demandé compris,
+ *   une fois chacun, dans l'ordre de première rencontre, chaque badge lu
+ *   avant le pied TechnoLibre qu'il porte. sansTechnolibre : le nombre de
+ *   badges mis en page d'où le pied TechnoLibre demandé se retire, faute de
+ *   place ; 0 sans pied TechnoLibre. logosParticipants : parmi les badges mis
+ *   en page dont la carte porte le logo, ceux où il se pose et ceux où il ne
+ *   trouve pas de place ; un badge dont la carte ne porte pas le chemin n'est
+ *   compté ni l'un ni l'autre.
  * @throws {TypeError} un modèle sans badges, des polices qui ne sont pas des
  *         octets, un modèle de badge inconnu, un pied TechnoLibre ou une
  *         carte de logos mal formés
@@ -303,7 +306,7 @@ export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', tec
         if (page.logoParticipant !== null) comptesLogos[page.logoParticipant.boite === null ? 'sansPlace' : 'poses'] += 1;
       }
     }
-    for (const caractere of metriques.absents(textesDuBadge(badge).join(''))) {
+    for (const caractere of metriques.absents(textesDuBadge(badge, promotion).join(''))) {
       if (vus.has(caractere)) continue;
       vus.add(caractere);
       absents.push(caractere);
@@ -580,7 +583,8 @@ function poserControle(pdf, { controle, papier, polices, metriques, filigrane, c
  *
  * Le pied TechnoLibre demandé se pose sur chaque badge où la mise en page
  * lui trouve place : son texte, puis le logo, chaque forme remplie de sa
- * couleur d'origine, dans l'ordre du fichier.
+ * couleur d'origine, dans l'ordre du fichier ; le logo seul pour un texte
+ * vide.
  *
  * Le logo d'un participant se pose sur chaque badge dont la carte porte le
  * chemin et où la mise en page lui trouve place, après le pied TechnoLibre

@@ -3153,7 +3153,7 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **six choses, et six seulement** :
+Ce fichier porte **sept choses, et sept seulement** :
 
 | réglage | portée |
 |---|---|
@@ -3161,6 +3161,7 @@ Ce fichier porte **six choses, et six seulement** :
 | le **format de papier** (§ 11.2) | global à la machine |
 | le **modèle de badge** (§ 11.2), clé `modele_badge` | global à la machine |
 | la **case du pied TechnoLibre** des badges (§ 11.4), clé `pied_technolibre` | globale à la machine |
+| le **texte du pied TechnoLibre** (§ 11.4), clé `texte_pied_technolibre` | global à la machine |
 | les **cases de ce que le badge imprime** (§ 11.4), clé `donnees_badge` | globales à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
@@ -3178,16 +3179,16 @@ mode portable (§ 8.6), ce fichier suit la clé avec les événements.
 **Le cadrage s'écrit en différé**, et échappe nommément à la règle « fin du
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
-cadrage, le papier, le modèle de badge, la case du pied TechnoLibre, les cases
-de ce que le badge imprime et la taille du texte passent par une même file, qui
-relit le fichier avant chaque écriture : deux écrivains qui le liraient chacun
-avant que l'autre l'ait écrit perdraient le réglage de l'un. Un fichier que la
-lecture ne prend pas ne s'écrase pas. Ni lui, ni un dossier qui refuse de
-l'écrire, ne bloque le choix du papier : le papier choisi vaut pour la séance
-sur ce dossier de travail, sans être retenu sur la machine, et un avertissement
-nomme le fichier et dit que le choix n'est pas retenu ; la première écriture des
-réglages qui y réussit le retient, et l'avertissement se retire. Le cadrage
-attend.
+cadrage, le papier, le modèle de badge, la case du pied TechnoLibre et son
+texte, les cases de ce que le badge imprime et la taille du texte passent par
+une même file, qui relit le fichier avant chaque écriture : deux écrivains qui
+le liraient chacun avant que l'autre l'ait écrit perdraient le réglage de l'un.
+Un fichier que la lecture ne prend pas ne s'écrase pas. Ni lui, ni un dossier
+qui refuse de l'écrire, ne bloque le choix du papier : le papier choisi vaut
+pour la séance sur ce dossier de travail, sans être retenu sur la machine, et un
+avertissement nomme le fichier et dit que le choix n'est pas retenu ; la
+première écriture des réglages qui y réussit le retient, et l'avertissement se
+retire. Le cadrage attend.
 
 **Le modèle de badge** décrit le support que la machine garnit — des cartes
 Avery 5392 prédécoupées, ou des A6 à découper (§ 11.2) —, pas le plan. Le
@@ -3214,6 +3215,28 @@ relit comme le modèle de badge ; un fichier que la lecture ne prend pas, ou un
 dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut pour la
 séance, et la section dit, sous ses réglages, qu'elle n'est pas retenue sur ce
 poste.
+
+**Le texte du pied TechnoLibre** remplace, sur les badges de la machine, la
+phrase d'origine du pied (§ 11.4) : un choix de la machine qui les imprime,
+comme la case. Il se saisit dans la section des badges, dans un champ de
+quelques lignes sous la case, prérempli de la phrase d'origine et désactivé
+tant que la case est décochée ; « Texte par défaut » la remet. Il se garde
+**normalisé** : en NFC, chaque suite d'espaces, de tabulations ou de sauts de
+ligne ramenée à une espace, les blancs de bord retirés — la mise en page replie
+le texte d'elle-même, et un saut de ligne saisi n'est pas garanti sur le
+badge. Le fichier ne le porte que s'il diffère de la phrase d'origine, une
+chaîne sous `texte_pied_technolibre` ; sans elle, la phrase d'origine vaut, et
+revenir à celle-ci retire la clé. Une valeur présente qui n'est pas une chaîne
+rend le fichier illisible, comme un papier inconnu. Le texte s'écrit quand le
+champ se quitte, jamais à chaque frappe, dans tout mode, par la même file. Il
+se relit au lancement, puis à chaque changement de dossier de travail : celui
+que le fichier porte, à défaut la phrase d'origine, car un fichier lu sans la
+clé la désigne — le texte d'un autre dossier ne s'y applique pas. Seuls un
+fichier que la lecture ne prend pas, l'absence de dossier, ou un choix fait
+pendant la relecture laissent celui de la séance. Un fichier que la lecture ne
+prend pas, ou un dossier qui refuse de l'écrire, ne bloque pas le choix : le
+texte vaut pour la séance, et la section dit, sous ses réglages, qu'il n'est
+pas retenu sur ce poste.
 
 **Les cases de ce que le badge imprime** — « Organisation », « Nom de
 l'événement », « Date de l'événement », « Date du placement », « Identifiant »
@@ -5059,7 +5082,7 @@ cherche à qui il parle.
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
 | 6 | **le logo du participant**, quand sa fiche en porte un (§ 10.2), entre les tours et le pied, le plus grand que l'écart permette | l'hôte de salle reconnaît l'organisation d'un coup d'œil ; il ne prend que la place que tout le texte laisse |
-| 7 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », suivi du logo de TechnoLibre en couleurs d'origine | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que tout le reste laisse |
+| 7 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », ou le texte que la machine garde à sa place (§ 8.5), suivi du logo de TechnoLibre en couleurs d'origine ; un texte vide laisse le logo seul | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que tout le reste laisse |
 
 Le pied des **pages** imprimées porte cinq éléments, la version comprise
 (§ 11.7). Le badge n'est pas une page : il porte le nom de l'événement, sa date
@@ -5102,7 +5125,11 @@ qui la portent.
 
 **Le pied TechnoLibre passe après tout le reste.** Il se compose d'un texte,
 centré, replié comme le pied, puis du logo, centré, posé sur le bord bas du
-cadre utile, le pied remontant d'autant. Il ne prend que
+cadre utile, le pied remontant d'autant. Le texte est la phrase d'origine, ou
+celui que la machine garde à sa place (§ 8.5), sans borne de longueur : il se
+replie et rapetisse comme elle. Un texte vide ne pose que le logo, à la même
+taille. La phrase d'origine, que la machine n'en garde pas d'autre ou qu'elle
+y soit revenue, laisse la planche exactement à ses octets. Il ne prend que
 l'écart que le badge, composé sans lui, laisse entre ses tours et son pied : il
 ne réduit ni le nom, ni les tours, ni l'organisation, ni le pied, et ne les
 déplace pas, le pied excepté. Il rapetisse jusqu'à un plancher lisible à la
@@ -5224,7 +5251,8 @@ un débordement.
   comme sur l'A6 ; une ligne sans titre ni libellé qui ne tient pas se
   refuse.
 - **Un caractère que la police n'a pas** — un nom écrit hors de l'alphabet latin,
-  par exemple. La police le dessinerait comme une case vide, et l'opérateur ne le
+  par exemple, ou un caractère du texte du pied TechnoLibre saisi sur la
+  machine (§ 8.5). La police le dessinerait comme une case vide, et l'opérateur ne le
   verrait qu'au cou de l'invité. Le logiciel nomme ces caractères dans l'annonce,
   **avant de produire** ; la feuille de contrôle les liste par leur point de code
   — « U+674E » — et n'en écrit jamais un tel quel. La planche se produit : le
@@ -5263,7 +5291,10 @@ un débordement.
   tours. ». Ce n'est jamais un refus : la planche se produit. Mesuré sur la
   police embarquée, sous un nom d'une ligne et son organisation, avec des
   lignes de tour sans siège ni titre, il tient au corps de départ jusqu'à
-  cinq tours sur la carte Avery 5392 et treize sur l'A6. Sous un logo de
+  cinq tours sur la carte Avery 5392 et treize sur l'A6. Un texte que la
+  machine garde à la place de la phrase d'origine (§ 8.5) suit la même
+  règle : plus long, il rapetisse plus tôt et se retire plus tôt ; vide, le
+  bloc n'est que le logo. Sous un logo de
   participant, il se compte d'abord à son plancher, puis reprend le plus grand
   palier que le logo laisse, et se retire quand le logo ne trouve qu'ainsi sa
   place : le retrait se compte de même.

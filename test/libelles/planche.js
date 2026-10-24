@@ -37,7 +37,8 @@ export const TEXTES = [
   // Une ligne de tour : la place, « pas de table » en réserve, « absente » à
   // un tour d'absence, où ni table, ni siège, ni titre ne s'écrivent.
   ['planche.absente', {}, 'absente'],
-  // Le pied TechnoLibre, mot pour mot.
+  // Le pied TechnoLibre d'origine, mot pour mot : celui d'une machine qui
+  // n'en garde pas d'autre, dont les octets de la planche dépendent.
   [
     'planche.technolibre',
     {},

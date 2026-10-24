@@ -14,16 +14,17 @@
 // série éprouve le dossier de l'événement : la borne qu'il impose, sa
 // disparition, « Ouvrir le dossier », l'écriture ailleurs.
 //
-// La série surveillée borne le coût (§ 14.4, contrainte 31) : vingt-trois
+// La série surveillée borne le coût (§ 14.4, contrainte 31) : vingt-quatre
 // productions de l'A6 au plus dans ce fichier, sur une soirée de quatre
 // personnes — trois pour les trois modes, deux pour la stabilité des octets,
 // une réédition, deux refus d'écriture et l'enregistrement sous, une sous
 // web, deux propositions de la même génération, deux sous le pied
-// TechnoLibre, quatre pour le dossier de l'événement, cinq sous les cases
-// de ce que le badge imprime —, et quatorze d'Avery 5392, de deux
-// documents chacune — une déposée, une de sept badges en pile demandée, une
-// au libellé de table le plus long, deux refusées et trois enregistrements
-// sous, une sous web, trois pour le pied TechnoLibre, deux sous les cases.
+// TechnoLibre, une sous son texte, quatre pour le dossier de l'événement,
+// cinq sous les cases de ce que le badge imprime —, et dix-neuf d'Avery
+// 5392, de deux documents chacune — une déposée, une de sept badges en pile
+// demandée, une au libellé de table le plus long, deux refusées et trois
+// enregistrements sous, une sous web, trois pour le pied TechnoLibre, cinq
+// pour son texte, deux sous les cases.
 // Les épreuves de l'A6 choisissent ce modèle ; celles d'Avery 5392 n'en
 // choisissent aucun, comme une machine neuve. La
 // case du pied TechnoLibre se décoche au montage, sauf pour les épreuves qui
@@ -68,6 +69,7 @@ import {
 import { VERSION } from '../version.genere.js';
 import { NOM_EVENEMENT_MAX } from './commandes.js';
 import { libelle } from './libelles.js';
+import { creerPlanches } from './planche_seance.js';
 import { creerSeance } from './seance.js';
 
 const V1 = VERSION.affichee;
@@ -81,6 +83,9 @@ const ICI = `${BASE}/`;
 const POLICES = lirePolices();
 const LOGO = lireLogo();
 const FILIGRANE = libelle('planche.brouillon');
+// La phrase d'origine du pied TechnoLibre, celle d'une machine qui n'y a pas
+// touché.
+const PROMOTION = libelle('planche.technolibre');
 // Les cases de ce que le badge imprime d'une machine qui n'y a pas touché.
 const TOUTES_COCHEES = Object.freeze({ organisation: true, evenement: true, date: true, horodatage: true, identifiant: true });
 
@@ -282,6 +287,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           nom: attendu,
           nomControle: null,
           piedTechnolibre: false,
+          textePiedTechnolibre: PROMOTION,
           donneesBadge: TOUTES_COCHEES,
           sansTechnolibre: null,
           logos: null,
@@ -403,6 +409,7 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       nom: null,
       nomControle: null,
       piedTechnolibre: false,
+      textePiedTechnolibre: PROMOTION,
       donneesBadge: TOUTES_COCHEES,
       sansTechnolibre: null,
       logos: null,
@@ -716,6 +723,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
       nom: nomCartes,
       nomControle: nomFeuille,
       piedTechnolibre: false,
+      textePiedTechnolibre: PROMOTION,
       donneesBadge: TOUTES_COCHEES,
       sansTechnolibre: null,
       logos: null,
@@ -990,7 +998,6 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
 // cartes Avery 5392 comme sur l'A6 ; la feuille de contrôle ne le porte
 // jamais. L'annonce compte les badges d'où il se retire.
 describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
-  const PROMOTION = libelle('planche.technolibre');
   const COULEURS_LOGO = [[0x24, 0x37, 0x42], [255, 255, 255], [0xff, 0xd1, 0x66]];
   const lu = (pdf) => pdf.pages.map((page) => textesDe(page).join(' ')).join(' ');
   const zones = (pdf) => pdf.pages.flatMap((page) => page.zonesRemplies);
@@ -1050,6 +1057,95 @@ describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
     const { seance } = await monter(chargeLucioles({ plan: null, etat: 'propose' }), { piedTechnolibre: true });
     const annonce = await seance.preparerPlanche();
     assert.deepEqual([annonce.refus.code, annonce.piedTechnolibre, annonce.sansTechnolibre], ['PLANCHE_SANS_PLACEMENT', true, null]);
+  });
+});
+
+// Le texte du pied TechnoLibre (§ 8.5, § 11.4, § 11.5) : la phrase
+// d'origine tant que la machine n'en garde pas d'autre, et alors les octets
+// d'avant, empreintes comprises ; un texte choisi se pose sous chaque badge,
+// sans toucher la feuille de contrôle ; vide, le logo seul ; un caractère
+// que la police n'a pas se nomme comme ceux des badges.
+describe('planche dans la séance : le texte du pied TechnoLibre (§ 8.5, § 11.4, § 11.5)', () => {
+  const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
+  const lu = (pdf) => pdf.pages.map((page) => textesDe(page).join(' ')).join(' ').replace(/\s+/g, ' ');
+  const zones = (pdf) => pdf.pages.flatMap((page) => page.zonesRemplies);
+  // Les empreintes des octets que la planche rendait avant que le texte ne
+  // se choisisse, le pied TechnoLibre coché : les cartes Avery 5392 et leur
+  // feuille de contrôle d'une machine neuve, puis l'A6 sur A4.
+  const EMPREINTE_CARTES_PIED = '846fb854b2cddf8aa13c3d2ddbef8f354a3311146f6915edc674cbe79aca1f9d';
+  const EMPREINTE_CONTROLE_PIED = 'd845ef7cbbb84a91b5de2e480ea426d498505f93305b5f2fa1f8d7d2a868332d';
+  const EMPREINTE_A6_PIED = 'b54a46711c1aab291392c3310d5337a78d98e5541a011a12df318d428cf34141';
+  const CHOISI = 'Atelier coopératif des Hérons cendrés : menuiserie et réparation de vélos';
+
+  test('la phrase d’origine, gardée ou choisie de nouveau entre des blancs : l’annonce la porte, et les PDF gardent leurs octets, empreintes comprises', async () => {
+    const neuve = await monter(chargeLucioles(), { papier: null, modeleBadge: null, piedTechnolibre: true });
+    assert.equal(neuve.seance.etat().textePiedTechnolibre, PROMOTION);
+    assert.equal((await neuve.seance.preparerPlanche()).textePiedTechnolibre, PROMOTION);
+    const cartes = await neuve.seance.produirePlanche();
+    assert.equal(sha256(neuve.fs.octets('documents', ICI + cartes.nom)), EMPREINTE_CARTES_PIED);
+    assert.equal(sha256(neuve.fs.octets('documents', ICI + cartes.controle.nom)), EMPREINTE_CONTROLE_PIED);
+
+    const reprise = await monter(chargeLucioles(), { papier: null, modeleBadge: null, piedTechnolibre: true });
+    await reprise.seance.choisirTextePiedTechnolibre(CHOISI);
+    await reprise.seance.choisirTextePiedTechnolibre(`\n  ${PROMOTION.replaceAll(' ', '  ')} \t`);
+    assert.equal(reprise.seance.etat().textePiedTechnolibre, PROMOTION);
+    const deNouveau = await reprise.seance.produirePlanche();
+    assert.equal(sha256(reprise.fs.octets('documents', ICI + deNouveau.nom)), EMPREINTE_CARTES_PIED);
+
+    const a6 = await monter(chargeLucioles(), { piedTechnolibre: true });
+    const { nom } = await a6.seance.produirePlanche();
+    assert.equal(sha256(a6.fs.octets('documents', ICI + nom)), EMPREINTE_A6_PIED);
+  });
+
+  test('un texte choisi se pose sous chaque carte, à la place de la phrase d’origine, avec le logo ; l’annonce le porte, la feuille de contrôle garde ses octets', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { papier: null, modeleBadge: null, piedTechnolibre: true });
+    await seance.choisirTextePiedTechnolibre(`  ${CHOISI}\n`);
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.textePiedTechnolibre, annonce.sansTechnolibre, annonce.absents], [null, CHOISI, 0, []]);
+    const { nom, controle } = await seance.produirePlanche();
+    const cartes = await lirePdf(fs.octets('documents', ICI + nom));
+    assert.ok(lu(cartes).includes(CHOISI.split(' ').slice(-4).join(' ')), lu(cartes));
+    assert.ok(!lu(cartes).includes('technolibre.ca'), lu(cartes));
+    assert.equal(zones(cartes).length, 3 * 4);
+    assert.equal(sha256(fs.octets('documents', ICI + controle.nom)), EMPREINTE_CONTROLE_PIED);
+  });
+
+  test('un texte vide : chaque carte porte le logo seul, sans retrait ; décochée, la case ne pose ni l’un ni l’autre', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { papier: null, modeleBadge: null, piedTechnolibre: true });
+    await seance.choisirTextePiedTechnolibre(' \n ');
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.textePiedTechnolibre, annonce.sansTechnolibre], [null, '', 0]);
+    const { nom } = await seance.produirePlanche();
+    const cartes = await lirePdf(fs.octets('documents', ICI + nom));
+    assert.equal(zones(cartes).length, 3 * 4);
+    for (const mot of ['Demander', 'technolibre.ca', 'entreprise']) assert.ok(!lu(cartes).includes(mot), lu(cartes));
+    await seance.choisirPiedTechnolibre(false);
+    const decochee = await seance.preparerPlanche();
+    assert.deepEqual([decochee.piedTechnolibre, decochee.textePiedTechnolibre, decochee.sansTechnolibre], [false, '', null]);
+  });
+
+  test('un caractère que la police n’a pas, dans le texte choisi : l’annonce le nomme, la feuille de contrôle l’écrit par son point de code, et la planche se produit', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { papier: null, modeleBadge: null, piedTechnolibre: true });
+    await seance.choisirTextePiedTechnolibre('Atelier des Hérons \u{674E}');
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.absents], [null, ['\u{674E}']]);
+    const { controle } = await seance.produirePlanche();
+    const feuille = lu(await lirePdf(fs.octets('documents', ICI + controle.nom)));
+    assert.ok(feuille.includes(libelle('planche.controle.absents', { points: ['U+674E'] })), feuille);
+    assert.ok(!feuille.includes('\u{674E}'), feuille);
+  });
+
+  test('la lecture porte le texte : absent ou null, la phrase d’origine ; normalisé sinon ; une valeur qui n’est pas une chaîne est une faute du code, TypeError', async () => {
+    const planches = creerPlanches({ polices: async () => POLICES, logo: async () => LOGO, provenance: 'production', version: V1 });
+    const lecture = { charge: chargeLucioles({ plan: null, etat: 'propose' }), papier: null, piedTechnolibre: true };
+    const texteLu = async (champs) => (await planches.preparer({ ...lecture, ...champs })).textePiedTechnolibre;
+    assert.equal(await texteLu({}), PROMOTION);
+    assert.equal(await texteLu({ textePiedTechnolibre: null }), PROMOTION);
+    assert.equal(await texteLu({ textePiedTechnolibre: ' Atelier\ndes  Hérons ' }), 'Atelier des Hérons');
+    assert.equal(await texteLu({ textePiedTechnolibre: '' }), '');
+    for (const faute of [3, true, ['texte'], {}]) {
+      await assert.rejects(texteLu({ textePiedTechnolibre: faute }), (erreur) => erreur instanceof TypeError && /textePiedTechnolibre/.test(erreur.message), JSON.stringify(faute));
+    }
   });
 });
 

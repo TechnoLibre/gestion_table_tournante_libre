@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3) :
-// ses réglages — modèle de badge, case du pied TechnoLibre, cases de ce que le
-// badge imprime, source, imposition, ordre —, ses commandes, les phrases de
-// l'annonce que rend phrasesAnnonce (badges/modele.js), logos des participants
-// compris, la planche et la liste produites, et la réédition. Chaque clé
-// commence par « badges. ». Les refus de la planche sont des textes de
-// l'application (application/libelles/planche.js), le nom d'un papier un
-// libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit par texte.
-// Le chemin d'un fichier produit est une donnée : l'écran le pose dans son
-// propre nœud, à côté de son intitulé.
+// ses réglages — modèle de badge, case du pied TechnoLibre et son texte, cases
+// de ce que le badge imprime, source, imposition, ordre —, ses commandes, les
+// phrases de l'annonce que rend phrasesAnnonce (badges/modele.js), logos des
+// participants compris, la planche et la liste produites, et la réédition.
+// Chaque clé commence par « badges. ». Les refus de la planche sont des
+// textes de l'application (application/libelles/planche.js), le nom d'un
+// papier un libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit
+// par texte. Le chemin d'un fichier produit est une donnée : l'écran le pose
+// dans son propre nœud, à côté de son intitulé.
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
@@ -34,6 +34,16 @@ export const TABLE = new Map([
   [
     'badges.technolibre.nonRetenu',
     'La case vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
+  // Le texte du pied TechnoLibre (§ 8.5, § 11.4), sous sa case : le champ,
+  // son aide, la commande qui remet la phrase d'origine, et l'annonce d'un
+  // texte que le poste ne retient pas.
+  ['badges.technolibre.texte', 'Texte du pied TechnoLibre'],
+  ['badges.technolibre.texteAide', 'Laissé vide, le pied ne porte que le logo. Le texte se replie seul sur le badge.'],
+  ['badges.technolibre.texteDefaut', 'Texte par défaut'],
+  [
+    'badges.technolibre.texteNonRetenu',
+    'Le texte vaut pour cette séance, sans être retenu sur ce poste : les réglages locaux ne se sont pas écrits.',
   ],
   // Les cases de ce que le badge imprime (§ 11.4), une par donnée de
   // DONNEES_BADGE, sous l'intitulé du groupe qui porte aussi celle du pied

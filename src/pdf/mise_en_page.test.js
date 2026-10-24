@@ -1140,8 +1140,8 @@ describe('mise en page : le pied TechnoLibre', () => {
     }
   });
 
-  test('un pied TechnoLibre mal formé lève TypeError : texte vide ou absent, rapport du logo qui n’est pas un nombre positif fini', () => {
-    for (const faute of [{ texte: '', rapport: 5 }, { texte: '   ', rapport: 5 }, { rapport: 5 }, { texte: PROMOTION, rapport: 0 }, { texte: PROMOTION, rapport: Infinity }, { texte: PROMOTION }, 'texte']) {
+  test('un pied TechnoLibre mal formé lève TypeError : texte absent ou qui n’est pas une chaîne, rapport du logo qui n’est pas un nombre positif fini', () => {
+    for (const faute of [{ rapport: 5 }, { texte: null, rapport: 5 }, { texte: 3, rapport: 5 }, { texte: PROMOTION, rapport: 0 }, { texte: PROMOTION, rapport: Infinity }, { texte: PROMOTION }, 'texte']) {
       assert.throws(() => mettreEnPage(textes(), NOTO, 'a6', faute), TypeError, JSON.stringify(faute));
     }
   });
@@ -1149,6 +1149,34 @@ describe('mise en page : le pied TechnoLibre', () => {
   test('le même badge, deux fois, rend la même page', () => {
     assert.deepEqual(mettreEnPage(textes(), NOTO, 'avery5392', TECHNOLIBRE), mettreEnPage(textes(), NOTO, 'avery5392', TECHNOLIBRE));
   });
+
+  for (const [nomModele, modele, cadre] of MODELES) {
+    test(`${nomModele} : un texte vide pose le logo seul, au corps de départ, sur le bas du cadre, le pied remonté de la seule hauteur du logo ; un texte d’espaces fait la même page`, () => {
+      const sans = mettreEnPage(textes(), NOTO, modele);
+      const seul = mettreEnPage(textes(), NOTO, modele, { texte: '', rapport: 5 });
+      assert.equal(seul.technolibre.corps, DEPART);
+      assert.equal(seul.blocs.length, sans.blocs.length, 'aucune ligne de texte TechnoLibre');
+      const { logo } = seul.technolibre;
+      assert.ok(Math.abs(logo.hauteur - hauteurLogo(DEPART)) < TOLERANCE);
+      assert.ok(Math.abs(logo.y + logo.hauteur - cadre.hauteur) < TOLERANCE);
+      const dernier = sans.blocs.at(-1);
+      assert.ok(Math.abs(dernier.y - seul.blocs.at(-1).y - hauteurLogo(DEPART)) < 1e-6);
+      assert.ok(boite(seul.blocs.at(-1), NOTO).bas <= logo.y + TOLERANCE);
+      assert.deepEqual(mettreEnPage(textes(), NOTO, modele, { texte: '   ', rapport: 5 }), seul);
+    });
+
+    test(`${nomModele} : un texte long se replie et rapetisse comme la phrase d’origine, puis se retire quand même son plancher ne tient pas`, () => {
+      const phrase = 'Atelier coopératif des Hérons cendrés, menuiserie et réparation de vélos';
+      const long = mettreEnPage(textes(), NOTO, modele, { texte: `${phrase} `.repeat(4).trim(), rapport: 5 });
+      assert.ok(long.technolibre.corps !== null && long.technolibre.corps <= DEPART, JSON.stringify(long.technolibre));
+      const sans = mettreEnPage(textes(), NOTO, modele);
+      assert.ok(blocsTechnolibre(long, sans).length >= 2);
+      assert.deepEqual(chevauchements(long, NOTO), []);
+      const tropLong = mettreEnPage(textes(), NOTO, modele, { texte: `${phrase} `.repeat(300).trim(), rapport: 5 });
+      assert.deepEqual(tropLong.technolibre, { corps: null, logo: null });
+      assert.deepEqual(tropLong.blocs, sans.blocs);
+    });
+  }
 });
 
 describe('mise en page : le pied TechnoLibre, la mesure que la spécification cite (§ 11.5)', () => {

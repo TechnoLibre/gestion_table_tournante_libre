@@ -26,7 +26,12 @@
 // Le pied TechnoLibre suit la case de la machine, que la lecture porte : il
 // se pose sous le pied des badges, jamais sur la feuille de contrôle, et
 // l'annonce compte les badges d'où la mise en page le retire faute de
-// place. Son texte vient de libelle, comme le mot du filigrane.
+// place. Son texte est celui de la machine, que la lecture porte aussi,
+// normalisé (normaliserTextePied) ; sans lui, la phrase d'origine, que
+// libelle compose comme le mot du filigrane, et les octets ne changent pas.
+// Un texte vide ne pose que le logo. Les caractères que la police n'a pas
+// s'y nomment comme ceux des badges, dans l'annonce et sur la feuille de
+// contrôle, qui ne change pas autrement.
 //
 // Les cases de ce que le badge imprime suivent aussi la machine, que la
 // lecture porte : une case décochée retire sa donnée — l'organisation, le
@@ -83,7 +88,7 @@ import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js'
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurPng, lirePng } from '../pdf/png.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
-import { DONNEES_BADGE } from '../stockage/reglages_locaux.js';
+import { DONNEES_BADGE, normaliserTextePied } from '../stockage/reglages_locaux.js';
 import { nomControle, nomCsvBadges, nomCsvBadgesExigeListe, nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
 import { cheminAffiche } from '../stockage/systeme_fichiers.js';
 import { ErreurCommande, refus } from './erreurs.js';
@@ -123,6 +128,9 @@ const chargerProduction = () => import('../pdf/planche.js');
  *           réglages locaux ; 'a6' quand la lecture ne le porte pas
  * @property {boolean} [piedTechnolibre]   la case du pied TechnoLibre des
  *           réglages locaux ; faux quand la lecture ne la porte pas
+ * @property {string|null} [textePiedTechnolibre]   le texte du pied
+ *           TechnoLibre des réglages locaux ; la phrase d'origine quand la
+ *           lecture ne le porte pas, ou porte null
  * @property {Object<string, boolean>} [donneesBadge]   les cases de ce que le
  *           badge imprime, un booléen par donnée de DONNEES_BADGE ; toutes
  *           cochées quand la lecture ne les porte pas
@@ -150,6 +158,8 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {string|null} nomControle   le nom de la feuille de contrôle à
  *           part (nomControle) ; null pour l'A6, et sans modèle
  * @property {boolean} piedTechnolibre   la case de la lecture
+ * @property {string} textePiedTechnolibre   le texte du pied TechnoLibre de
+ *           la lecture, normalisé, vide pour le logo seul
  * @property {Object<string, boolean>} donneesBadge   les cases de la lecture,
  *           une par donnée de DONNEES_BADGE, dans leur ordre
  * @property {number|null} sansTechnolibre   le nombre de badges d'où le pied
@@ -197,6 +207,17 @@ function modeleDe({ modeleBadge = 'a6' }) {
 function piedDe({ piedTechnolibre = false }) {
   if (typeof piedTechnolibre !== 'boolean') throw new TypeError(`piedTechnolibre : booléen attendu, reçu ${JSON.stringify(piedTechnolibre)}`);
   return piedTechnolibre;
+}
+
+// Le texte du pied TechnoLibre d'une lecture, normalisé : la phrase
+// d'origine quand elle ne le porte pas, ou porte null ; une valeur qui n'est
+// pas une chaîne est une faute du code.
+function texteDe({ textePiedTechnolibre = null }) {
+  if (textePiedTechnolibre === null) return libelle('planche.technolibre');
+  if (typeof textePiedTechnolibre !== 'string') {
+    throw new TypeError(`textePiedTechnolibre : chaîne attendue, reçu ${JSON.stringify(textePiedTechnolibre)}`);
+  }
+  return normaliserTextePied(textePiedTechnolibre);
 }
 
 // Les cases de ce que le badge imprime d'une lecture, contrôlées : un
@@ -334,12 +355,12 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     return { octets, echecs };
   }
 
-  // Le pied TechnoLibre d'une planche qui le demande : son texte et les
-  // octets du logo, chargés une fois ; null sans la case.
-  async function technolibreDe(pied) {
+  // Le pied TechnoLibre d'une planche qui le demande : le texte donné et
+  // les octets du logo, chargés une fois ; null sans la case.
+  async function technolibreDe(pied, texte) {
     if (!pied) return null;
     if (typeof logo !== 'function') throw new TypeError('logo : la fonction qui charge le logo du pied TechnoLibre attendue');
-    return { texte: libelle('planche.technolibre'), logo: await logoGarde() };
+    return { texte, logo: await logoGarde() };
   }
 
   // L'étude d'une demande : le refus du placement, ou le modèle, ses logos
@@ -353,15 +374,16 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     const { source, proposition, ordre, selection } = lue;
     const modeleBadge = modeleDe(lecture);
     const pied = piedDe(lecture);
+    const texte = texteDe(lecture);
     const donnees = donneesDe(lecture);
     const papier = papierDesBadges(modeleBadge, lecture.papier);
     const imposition = aCartes(modeleBadge) ? 'feuille' : lue.imposition;
     const rejet = refusPlanche(charge, { source, proposition });
-    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, donnees };
+    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, texte, donnees };
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
     const modele = modeleImprime(modelePlanche(charge, { source, proposition, ordre, selection, provenance, version }), donnees);
     const octets = await lesPolices();
-    const technolibre = await technolibreDe(pied);
+    const technolibre = await technolibreDe(pied, texte);
     const { octets: logosParticipants, echecs } = await logosDe(lecture, modele);
     const { analyserPlanche } = await chargerProduction();
     const analyse = await analyserPlanche({ modele, polices: octets, modeleBadge, technolibre, logosParticipants });
@@ -386,6 +408,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       source,
       modeleBadge,
       pied,
+      texte,
       donnees,
       technolibre,
       sansTechnolibre: pied ? analyse.sansTechnolibre : null,
@@ -571,17 +594,17 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * planches et noms null, ni homonymes ni absents, le brouillon de la
      * source. Pour l'A6, les planches des deux papiers sont données ; aucune
      * annonce ne demande le papier. La case du pied TechnoLibre de la lecture
-     * s'y lit, et, quand elle est cochée et le modèle présent, le nombre de
-     * badges d'où il se retire ; les cases de ce que le badge imprime s'y
-     * lisent de même. Les logos des participants s'y comptent quand
-     * un badge en désigne un, les introuvables nommés ; aucun ne refuse la
-     * planche. Le nom est celui que la production donnerait, rang compris ;
-     * sans dossier, donc sans rang, quand le dossier ne se liste pas. Rien ne
-     * s'écrit.
+     * s'y lit, avec son texte, et, quand elle est cochée et le modèle
+     * présent, le nombre de badges d'où il se retire ; les cases de ce que
+     * le badge imprime s'y lisent de même. Les logos des participants s'y
+     * comptent quand un badge en désigne un, les introuvables nommés ; aucun
+     * ne refuse la planche. Le nom est celui que la production donnerait,
+     * rang compris ; sans dossier, donc sans rang, quand le dossier ne se
+     * liste pas. Rien ne s'écrit.
      *
      * @throws {TypeError} une demande hors de son domaine, une séance sans
      *         polices ou sans provenance, une case cochée sans le chargement
-     *         du logo
+     *         du logo, un texte du pied TechnoLibre qui n'est pas une chaîne
      * @throws {ErreurCommande} PROPOSITION_INCONNUE, PARTICIPANT_INCONNU,
      *         PERSONNE_EXCLUE (modelePlanche)
      */
@@ -602,6 +625,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
           nom: null,
           nomControle: null,
           piedTechnolibre: etude.pied,
+          textePiedTechnolibre: etude.texte,
           donneesBadge: etude.donnees,
           sansTechnolibre: null,
           logos: null,
@@ -626,6 +650,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
         nom: nomDe(lecture.base, etude, dossier),
         nomControle: nomControleDe(lecture.base, etude, dossier),
         piedTechnolibre: etude.pied,
+        textePiedTechnolibre: etude.texte,
         donneesBadge: etude.donnees,
         sansTechnolibre: etude.sansTechnolibre,
         logos: etude.logos,

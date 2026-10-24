@@ -22,15 +22,18 @@ import {
   avecPapier,
   avecPiedTechnolibre,
   avecTailleTexte,
+  avecTextePiedTechnolibre,
   cadrageDe,
   creerEcrivainDiffere,
   donneesBadgeDe,
   ecrireReglages,
   lireReglages,
   modeleBadgeDe,
+  normaliserTextePied,
   piedTechnolibreDe,
   serialiserReglages,
   tailleTexteDe,
+  textePiedTechnolibreDe,
 } from './reglages_locaux.js';
 
 const DOC = { id: 'documents', chemin: 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre' };
@@ -645,5 +648,67 @@ describe('réglages locaux : les cases de ce que le badge imprime (§ 8.5, § 11
     const { reglages } = await lireReglages(fs, DOC);
     await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
     assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"donnees_badge":{"date":false},"format":1,"papier":"Lettre"}\n');
+  });
+});
+
+describe('réglages locaux : le texte du pied TechnoLibre (§ 8.5, § 11.4)', () => {
+  test('normaliserTextePied : NFC, blancs de bord retirés, sauts de ligne et tabulations ramenés à une espace, espaces répétées réduites ; le reste tel quel', () => {
+    assert.equal(normaliserTextePied('Caf\u{65}\u{301} des Loutres'), 'Caf\u{E9} des Loutres');
+    assert.equal(normaliserTextePied('  \n Atelier des Hérons\t '), 'Atelier des Hérons');
+    assert.equal(normaliserTextePied('Atelier\r\ndes\n\nHérons\u{2028}du lac'), 'Atelier des Hérons du lac');
+    assert.equal(normaliserTextePied('Atelier   des \t Hérons'), 'Atelier des Hérons');
+    assert.equal(normaliserTextePied('Atelier\u{A0}: les Hérons'), 'Atelier\u{A0}: les Hérons');
+    assert.equal(normaliserTextePied(''), '');
+    assert.equal(normaliserTextePied(' \n\t '), '');
+    for (const mauvais of [null, undefined, 3, ['a'], {}]) assert.throws(() => normaliserTextePied(mauvais), TypeError, String(mauvais));
+  });
+
+  test('texte_pied_technolibre se lit normalisé ; absent, null, sans que la clé s’ajoute aux réglages lus', async () => {
+    const texte = '{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":"Atelier des Hérons"}\n';
+    const { reglages, avertissement } = await lireReglages(disque(texte), DOC);
+    assert.equal(avertissement, null);
+    assert.equal(textePiedTechnolibreDe(reglages), 'Atelier des Hérons');
+    assert.equal(serialiserReglages(reglages), texte);
+    const brut = await lireReglages(disque('{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":" Atelier\\ndes Hérons "}\n'), DOC);
+    assert.equal(brut.avertissement, null);
+    assert.equal(textePiedTechnolibreDe(brut.reglages), 'Atelier des Hérons');
+    const vide = await lireReglages(disque('{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":""}\n'), DOC);
+    assert.equal(textePiedTechnolibreDe(vide.reglages), '');
+    const absent = await lireReglages(disque(), DOC);
+    assert.equal(Object.hasOwn(absent.reglages, 'texte_pied_technolibre'), false);
+    assert.equal(textePiedTechnolibreDe(absent.reglages), null);
+  });
+
+  test('une valeur qui n’est pas une chaîne rend le fichier fautif : les défauts et REGLAGES_ILLISIBLES, raison FORME', async () => {
+    for (const valeur of ['null', 'true', '3', '[]', '{}', '["Atelier"]']) {
+      const fs = disque(`{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":${valeur}}\n`);
+      assert.deepEqual(await lireReglages(fs, DOC), { reglages: DEFAUTS, avertissement: illisibles('FORME') }, valeur);
+      assert.equal(fs.compteurs.ecritures, 0, valeur);
+    }
+    assert.throws(() => serialiserReglages({ ...DEFAUTS, texte_pied_technolibre: 3 }), TypeError);
+  });
+
+  test('avecTextePiedTechnolibre pose le texte normalisé sans toucher au reste ; null retire la clé ; une autre valeur lève TypeError ; le texte canonique range la clé à son rang', () => {
+    const reglages = { ...DEFAUTS, papier: 'A4', pied_technolibre: true, theme: 'sombre' };
+    const avec = avecTextePiedTechnolibre(reglages, '  Atelier\ndes Hérons ');
+    assert.deepEqual(avec, { ...reglages, texte_pied_technolibre: 'Atelier des Hérons' });
+    assert.equal(Object.hasOwn(reglages, 'texte_pied_technolibre'), false);
+    assert.equal(
+      serialiserReglages(avec),
+      '{"cadrages":[],"format":1,"papier":"A4","pied_technolibre":true,"texte_pied_technolibre":"Atelier des Hérons","theme":"sombre"}\n',
+    );
+    assert.deepEqual(avecTextePiedTechnolibre(avec, ''), { ...reglages, texte_pied_technolibre: '' });
+    const sans = avecTextePiedTechnolibre(avec, null);
+    assert.deepEqual(sans, reglages);
+    assert.equal(Object.hasOwn(sans, 'texte_pied_technolibre'), false);
+    assert.deepEqual(avecTextePiedTechnolibre(reglages, null), reglages);
+    for (const mauvais of [undefined, 3, true, ['a'], {}]) assert.throws(() => avecTextePiedTechnolibre(reglages, mauvais), TypeError, String(mauvais));
+  });
+
+  test('un fichier qui porte le texte, relu puis réécrit avec un autre papier, le garde', async () => {
+    const fs = disque('{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":"Atelier des Hérons"}\n');
+    const { reglages } = await lireReglages(fs, DOC);
+    await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"format":1,"papier":"Lettre","texte_pied_technolibre":"Atelier des Hérons"}\n');
   });
 });

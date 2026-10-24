@@ -169,7 +169,9 @@ export const TABLE = new Map([
   ['planche.pied.identifiant', ({ identifiant }) => `Identifiant n° ${identifiant}`],
   ['planche.brouillon', 'BROUILLON'],
   // Le pied TechnoLibre, que le logo de l'éditeur suit, sous le pied du
-  // badge, quand la case de la section le demande.
+  // badge, quand la case de la section le demande : la phrase d'origine,
+  // que remplace le texte que la machine garde quand l'opérateur en choisit
+  // un autre (§ 8.5).
   ['planche.technolibre', 'Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise'],
 
   // --- La feuille de contrôle (§ 11.3, § 11.5, § 11.8) ----------------------

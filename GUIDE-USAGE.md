@@ -1036,6 +1036,15 @@ logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ; le poste
 garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la place
 libre : il rapetisse sur un badge chargé, et s’en retire quand même sa plus
 petite taille ne tient pas, ou que le badge a dû perdre le nom de l’événement.
+Sous la case, un champ porte le **texte du pied TechnoLibre**, prérempli de
+cette invitation : remplacez-le par le vôtre, et le poste le garde, comme la
+case ; « Texte par défaut » remet l’invitation d’origine. Un dossier de
+travail où vous n’avez rien saisi imprime l’invitation d’origine. Le texte
+s’enregistre quand vous quittez le champ. Il se replie seul sur le badge : un
+retour à la ligne saisi y devient une espace. Laissé vide, le pied ne porte
+que le logo. Un texte plus long rapetisse et se retire plus tôt, faute de
+place, et un caractère que la police ne dessine pas s’annonce comme dans un
+nom.
 À côté, cinq autres cases, cochées elles aussi tant que vous ne les décochez
 pas, disent ce que chaque badge imprime en plus du nom et des tours :
 « Organisation », « Nom de l’événement », « Date de l’événement », « Date du

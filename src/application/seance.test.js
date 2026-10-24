@@ -33,7 +33,15 @@ import { FICHIER_REGLAGES } from '../stockage/reglages_locaux.js';
 import { VERSION } from '../version.genere.js';
 import { examenNomme } from './avertissements.js';
 import { libelle } from './libelles.js';
-import { DELAI_REGLAGES_MS, INACTIVITE_MS, LOGO_PARTICIPANT_COTE_MAX, copiePubliee, creerSeance } from './seance.js';
+import {
+  DELAI_REGLAGES_MS,
+  INACTIVITE_MS,
+  LOGO_PARTICIPANT_COTE_MAX,
+  TEXTE_PIED_TECHNOLIBRE_DEFAUT,
+  copiePubliee,
+  creerSeance,
+  normaliserTextePied,
+} from './seance.js';
 
 const V1 = VERSION.affichee;
 
@@ -5081,5 +5089,140 @@ describe('séance : les cases de ce que le badge imprime (§ 8.5, § 11.4)', () 
     await seance.choisirDonneeBadge('horodatage', false);
     const annonce = await seance.preparerPlanche();
     assert.deepEqual([annonce.refus, annonce.donneesBadge], [null, { ...TOUTES, horodatage: false }]);
+  });
+});
+
+describe('séance : le texte du pied TechnoLibre (§ 8.5, § 11.4)', () => {
+  // Le texte que les réglages de la racine portent ; undefined sans la clé.
+  const texteLu = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).texte_pied_technolibre;
+  const CHOISI = 'Atelier coopératif des Hérons cendrés';
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Iris', 'Ombrelle'), personneBadge(2, 'Théo', 'Pervenche')],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+  const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
+
+  test('la phrase d’origine, que l’interface lit ici, avec la normalisation du stockage', () => {
+    assert.equal(TEXTE_PIED_TECHNOLIBRE_DEFAUT, libelle('planche.technolibre'));
+    assert.equal(normaliserTextePied(` ${CHOISI}\n`), CHOISI);
+  });
+
+  test('la phrase d’origine au départ ; choisirTextePiedTechnolibre écrit le texte normalisé dans les seuls réglages, dans tout mode, et l’état le porte ; une séance neuve le relit ; la phrase d’origine choisie retire la clé', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.equal(seance.etat().textePiedTechnolibre, TEXTE_PIED_TECHNOLIBRE_DEFAUT);
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirTextePiedTechnolibre(`  ${CHOISI}\n\n`), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual([texteLu(fs), seance.etat().textePiedTechnolibre], [CHOISI, CHOISI]);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().textePiedTechnolibre, CHOISI);
+    assert.deepEqual(await neuve.seance.choisirTextePiedTechnolibre(''), { retenu: true, avertissements: [] });
+    assert.deepEqual([texteLu(fs), neuve.seance.etat().textePiedTechnolibre], ['', '']);
+    assert.deepEqual(await neuve.seance.choisirTextePiedTechnolibre(`${TEXTE_PIED_TECHNOLIBRE_DEFAUT} `), { retenu: true, avertissements: [] });
+    assert.equal(Object.hasOwn(JSON.parse(fs.contenu('documents', FICHIER_REGLAGES)), 'texte_pied_technolibre'), false);
+    assert.equal(neuve.seance.etat().textePiedTechnolibre, TEXTE_PIED_TECHNOLIBRE_DEFAUT);
+  });
+
+  test('une valeur qui n’est pas une chaîne est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of [null, undefined, 3, true, ['texte']]) {
+      await assert.rejects(seance.choisirTextePiedTechnolibre(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().textePiedTechnolibre, TEXTE_PIED_TECHNOLIBRE_DEFAUT);
+  });
+
+  test('des réglages illisibles : le texte vaut pour la séance, non retenu, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirTextePiedTechnolibre(CHOISI), { retenu: false, avertissements: [avis] });
+    assert.equal(seance.etat().textePiedTechnolibre, CHOISI);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('l’écriture garde la case, le papier et les clés inconnues ; choisir la case garde le texte', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4","zeta":true}\n');
+    const { seance } = monter({ fs });
+    await seance.attendre();
+    await seance.choisirTextePiedTechnolibre(CHOISI);
+    await seance.choisirPiedTechnolibre(false);
+    assert.equal(
+      fs.contenu('documents', FICHIER_REGLAGES),
+      `{"cadrages":[],"format":1,"papier":"A4","pied_technolibre":false,"texte_pied_technolibre":"${CHOISI}","zeta":true}\n`,
+    );
+  });
+
+  test('au changement de racine : le texte que les réglages portent, normalisé ; des réglages lus sans la clé, la phrase d’origine ; des réglages illisibles, celui de la séance', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, `{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":" ${CHOISI}\\n"}\n`);
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().textePiedTechnolibre, CHOISI);
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().textePiedTechnolibre, TEXTE_PIED_TECHNOLIBRE_DEFAUT, 'une racine sans réglages');
+    await seance.changerRacine(DOC);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().textePiedTechnolibre, CHOISI, 'des réglages illisibles');
+    // Les réglages tels que « Texte par défaut » les écrit : la case, sans la clé.
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"pied_technolibre":true}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().textePiedTechnolibre, TEXTE_PIED_TECHNOLIBRE_DEFAUT, 'la phrase d’origine remise sur la racine');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":""}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().textePiedTechnolibre, '', 'un texte écrit sur la racine l’emporte');
+  });
+
+  test('une relecture des réglages partie avant un choix du texte ne l’écrase pas, ni dans l’état ni dans le fichier', async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":"Ancien texte"}\n');
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(prise, true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirTextePiedTechnolibre(CHOISI);
+    await laisser();
+    liberer();
+    await changement;
+    assert.equal(seance.etat().textePiedTechnolibre, CHOISI);
+    assert.deepEqual(await choix, { retenu: true, avertissements: [] });
+    await seance.attendre();
+    assert.deepEqual([texteLu(fs, PORTABLE.id), seance.etat().textePiedTechnolibre], [CHOISI, CHOISI]);
+  });
+
+  test('la planche lit le texte de la séance : l’annonce le porte, la phrase d’origine puis le texte choisi', async () => {
+    const { seance } = await ouvertSur(chargeRetenue(), avecPlanche);
+    assert.equal((await seance.preparerPlanche()).textePiedTechnolibre, TEXTE_PIED_TECHNOLIBRE_DEFAUT);
+    await seance.choisirTextePiedTechnolibre(CHOISI);
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.textePiedTechnolibre, annonce.sansTechnolibre], [null, CHOISI, 0]);
   });
 });
