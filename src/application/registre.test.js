@@ -637,6 +637,25 @@ const EXEMPLES = new Map([
     },
   ],
   [
+    'designerAnimateurs',
+    {
+      accepte: { args: { table: 2, participants: [5], libelle: AUTRE_TITRE } },
+      personne: () => 5,
+      refuse: { args: { table: 2, participants: [5, 1], libelle: AUTRE_TITRE }, code: 'ANIMATEUR_REFUSE' },
+      sansEffet: { args: { table: 1, participants: [1], libelle: TITRE } },
+    },
+  ],
+  [
+    'retirerAnimateur',
+    {
+      accepte: { args: { table: 1, participant: 1 } },
+      personne: () => 1,
+      refuse:
+        "aucun refus propre : qui n'anime pas la table est SANS_EFFET, une personne retirée PARTICIPANT_INCONNU, un plan bloqué PLAN_BLOQUE, comme pour toute commande",
+      sansEffet: { args: { table: 2, participant: 5 } },
+    },
+  ],
+  [
     'convertirEnTous',
     {
       accepte: {
@@ -1055,6 +1074,39 @@ describe('registre : en écriture, un exemple accepté écrit une entrée, et d�
       }
     });
   }
+});
+
+describe('registre : designerAnimateurs en lot, une entrée que défaire rend entière (§ 2.1 étape 6, § 8.3)', () => {
+  test('trois personnes désignées à la table 2 : une entrée qui les nomme dans l’ordre, une réservation « tous les tours » chacune ; défaire rend la charge d’avant', async () => {
+    const ouvert = await ouvrirCopie((await departsPrets()).temoin, { ecriture: true });
+    const { seance } = ouvert;
+    const avant = structuredClone(seance.charge);
+    const reservees = new Set(avant.reservations.map(({ participant }) => participant));
+    const choisies = avant.participants
+      .filter(({ id, exclu }) => !exclu && !reservees.has(id))
+      .slice(0, 3)
+      .map(({ id }) => id)
+      .reverse();
+    assert.equal(choisies.length, 3);
+    const entrees = journalDe(ouvert).entrees.length;
+    const rendu = await seance.executer('designerAnimateurs', { table: 2, participants: choisies, libelle: AUTRE_TITRE });
+    const journal = journalDe(ouvert);
+    assert.equal(journal.entrees.length, entrees + 1, 'une entrée exactement');
+    const attendu = libelle('ENTREE_DESIGNER_ANIMATEURS', {
+      numero: tableDe(avant, 2).numero,
+      personnes: choisies.map((id) => nomAffiche(participantDe(avant, id))),
+    });
+    assert.equal(rendu.libelle, attendu);
+    assert.equal(journal.entrees.at(-1).libelle, attendu);
+    assert.deepEqual(
+      seance.charge.reservations.slice(avant.reservations.length).map(({ participant, table, portee }) => [participant, table, portee]),
+      choisies.map((id) => [id, 2, 'tous']),
+    );
+    await seance.defaire();
+    assert.equal(journalDe(ouvert).entrees.length, entrees + 2);
+    const rendue = seance.charge;
+    assert.equal(serialiserCharge(rendue), serialiserCharge({ ...avant, prochainsIds: rendue.prochainsIds }));
+  });
 });
 
 // --- En écriture : l'exemple refusé et l'exemple sans effet ------------------------------

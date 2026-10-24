@@ -195,6 +195,15 @@ const EXEMPLES_ECRAN = [
   ['qualite.entete.rang1Presence', { tours: [1, 2] }],
   ['qualite.paires.matrice.synthese', { choisies: { paires: 2, fois: 3 }, imposees: { paires: 1, fois: 2 } }],
   // Les tables
+  ['tables.animateurs.statut.absente', { tours: [1, 3] }],
+  [
+    'tables.animateurs.statut.placeeAuRetenu',
+    { placements: [{ table: 1, numero: 1, tours: [1, 2, 3] }, { table: 4, numero: 4, tours: [4] }] },
+  ],
+  [
+    'tables.animateurs.statut.reservee',
+    { reservations: [{ table: 3, numero: 3, siege: null, portee: 'tour', tour: 2 }, { table: 2, numero: 2, siege: 1, portee: 'tous', tour: null }] },
+  ],
   ['tables.defaut.application', { suivent: 3, avant: 8, apres: 10, surchargees: [] }],
   ['tables.defaut.application', { suivent: 3, avant: 8, apres: 10, surchargees: [2, 5] }],
   ['tables.defaut.refusTable', { numero: 3, refus: { code: 'NOM_REQUIS', details: { remede: null } } }],

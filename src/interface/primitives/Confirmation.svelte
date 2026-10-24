@@ -2,8 +2,9 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // La fenêtre à confirmer (§ 2.1) : la seule fenêtre du logiciel, réservée à
-  // la destruction de saisie et au nettoyage des propositions (§ 5.7). Un
+  // La fenêtre à confirmer (§ 2.1), réservée à la destruction de saisie et au
+  // nettoyage des propositions (§ 5.7) ; l'autre fenêtre du logiciel choisit
+  // des animateurs (tables/ChoixAnimateurs.svelte). Un
   // <dialog> modal, ouvert au montage, qui porte le titre — la clé titre
   // traduite — et nomme chaque élément détruit, chacun dans son propre nœud
   // de texte. Annuler a le focus par défaut ; Échap annule. Annuler ferme la

@@ -536,6 +536,23 @@
   l'historique que « Défaire » ou Ctrl+Z retire ; l'avis tombe, et une annonce
   nomme les tables créées. Sous une présence partielle, le compte est celui des
   personnes présentes au plus à un même tour.
+- Dans « Tables et tours », chaque table porte une rangée « Animateurs » : ses
+  animateurs en pastilles, chacun avec un bouton qui le retire, puis
+  « Ajouter… ». Ce bouton ouvre une fenêtre qui cherche les personnes par nom,
+  prénom ou organisation, sans égard aux majuscules ni aux accents, les groupe
+  par organisation, et dit pour chacune si elle anime déjà une table, si elle
+  est absente à un tour, si une place lui est réservée, si elle est exclue ou
+  placée au plan retenu ; celles qu'on ne peut pas choisir ont leur case
+  désactivée, avec la raison. Les personnes cochées sont désignées ensemble
+  sous le titre saisi, « animateur » par défaut, en une seule entrée de
+  l'historique, chacune avec son propre titre, à une place qu'aucune autre
+  personne ne tient (la sienne d'abord, si elle en tient une) : un titre posé
+  avant reste tel quel, et une place réservée à la main est passée. Si une
+  seule est refusée, aucune n'est désignée, et le refus la nomme dans la
+  fenêtre, qui reste ouverte ; son remède abouti, le refus part et le focus
+  revient à « Ajouter ». Retirer un animateur de sa rangée retire sa
+  réservation et son titre ensemble, un seul titre, le reste de la table
+  intact. En lecture, les pastilles restent, sans ces boutons.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

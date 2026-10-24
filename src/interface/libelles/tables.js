@@ -12,7 +12,7 @@
 // table viennent des détails : une fenêtre à confirmer nomme chaque élément
 // détruit dans son propre libellé.
 import { JOINTURE_ETIQUETTES } from '../../application/csv.js';
-import { cite, compte, toursNommes } from '../../application/libelles/aides.js';
+import { auxToursNommes, cite, compte, toursNommes } from '../../application/libelles/aides.js';
 
 // Un accord au nombre : le singulier jusqu'à un, comme compte.
 const accord = (n, singulier, pluriel) => (n <= 1 ? singulier : pluriel);
@@ -198,6 +198,48 @@ export const TABLE = new Map([
   ['tables.presences.colonne.presentes', 'Présentes'],
   ['tables.presences.colonne.places', 'Places'],
   ['tables.presences.colonne.manque', 'Places manquantes'],
+
+  // --- Les animateurs d'une table (§ 2.1 étape 6, § 6.1) ----------------------
+  // La rangée « Animateurs » de chaque table, puis la fenêtre d'ajout : sa
+  // recherche, son groupement, son titre, le statut de chaque personne et
+  // le compte des choisies. Les statuts se disent sans accord de genre : le
+  // fichier ne porte aucun genre de personne.
+  ['tables.animateurs.titre', 'Animateurs'],
+  ['tables.animateurs.aucun', 'Aucun animateur'],
+  ['tables.animateurs.ajouter', 'Ajouter\u{2026}'],
+  ['tables.animateurs.retirer', ({ nom, numero }) => `Retirer ${nom} des animateurs de la table ${numero}`],
+  ['tables.animateurs.fenetre', ({ numero }) => `Ajouter des animateurs à la table ${numero}`],
+  ['tables.animateurs.recherche', 'Rechercher (nom, prénom, organisation)'],
+  ['tables.animateurs.grouper', 'Grouper par organisation'],
+  ['tables.animateurs.sansOrganisation', 'Sans organisation'],
+  ['tables.animateurs.libelle', 'Titre'],
+  ['tables.animateurs.aucunePersonne', 'Aucune personne ne correspond à la recherche.'],
+  [
+    'tables.animateurs.compte',
+    ({ choisies, libres }) =>
+      `${choisies} ${accord(choisies, 'choisie', 'choisies')} \u{00B7} ${compte(libres, 'place libre', 'places libres')} à cette table`,
+  ],
+  ['tables.animateurs.confirmer', 'Ajouter'],
+  ['tables.animateurs.annuler', 'Annuler'],
+  ['tables.animateurs.statut.animeCetteTable', ({ libelle }) => `Anime cette table (${cite(libelle)})`],
+  ['tables.animateurs.statut.animeAutreTable', ({ numero }) => `Anime la table ${numero}`],
+  // Une réservation à la main : sa table, puis son tour ou la soirée.
+  [
+    'tables.animateurs.statut.reservee',
+    ({ reservations }) =>
+      `${reservations.length === 1 ? 'Place réservée' : 'Places réservées'} : ` +
+      reservations.map(({ numero, portee: genre, tour }) => `table ${numero}, ${genre === 'tous' ? 'toute la soirée' : toursNommes([tour])}`).join(' ; '),
+  ],
+  ['tables.animateurs.statut.exclue', 'Personne exclue'],
+  // Ses tours d'absence, croissants : « Absence au tour 3 », « Absence aux
+  // tours 1 et 3 ».
+  ['tables.animateurs.statut.absente', ({ tours }) => `Absence ${auxToursNommes(tours)}`],
+  [
+    'tables.animateurs.statut.placeeAuRetenu',
+    ({ placements }) => `Au plan retenu : ${placements.map(({ numero, tours }) => `table ${numero} ${auxToursNommes(tours)}`).join(' ; ')}`,
+  ],
+  ['tables.animateurs.statut.libre', 'Disponible'],
+  ['tables.animateurs.titrePressenti', ({ libelle }) => `Titre pressenti : ${cite(libelle)}`],
 
   // --- Les objectifs des tables (§ 4.5, § 10.4, D3, D19) ------------------------
   // La règle par défaut de l'événement, réglée avec les places et les tours.

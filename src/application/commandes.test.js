@@ -137,7 +137,7 @@ const AUTRE_LOGO = `logo/${'fedcba9876543210'.repeat(4)}.png`;
 const CSV_DEUX = 'nom;prenom;organisation\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, changerLogo, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, changerLogo, garderMeilleures, changerPresence, les douze des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
       'ajouterConflit',
       'ajouterParticipant',
@@ -151,6 +151,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'deplacerDansRetenu',
       'deplacerReservation',
       'designer',
+      'designerAnimateurs',
       'echangerDansRetenu',
       'effacerPropositions',
       'enregistrerGeneration',
@@ -163,13 +164,14 @@ describe('commandes : le registre (§ 8.2)', () => {
       'reintegrerParticipant',
       'reserver',
       'retenirProposition',
+      'retirerAnimateur',
       'retirerConflit',
       'retirerDuTour',
       'retirerReservation',
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 29);
+    assert.equal(attendues.length, 31);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     assert.deepEqual([...COMMANDES_PRESENCE.keys()], ['changerPresence']);
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
@@ -1656,6 +1658,8 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['poserTitre', { table: 2, siege: 1, libelle: 'accueil' }],
       ['retirerTitre', { table: 1, siege: 1 }],
       ['designer', { participant: 3, table: 2, siege: 2, libelle: 'accueil' }],
+      ['designerAnimateurs', { table: 2, participants: [3, 4], libelle: 'accueil' }],
+      ['retirerAnimateur', { table: 1, participant: 1 }],
       ['convertirEnTous', { participant: 3, table: 2 }],
       ['deplacerDansRetenu', { tour: 1, participant: autre, table: tableAutre, siege: null }],
       ['echangerDansRetenu', { tour: 1, a: voisin, b: autre }],

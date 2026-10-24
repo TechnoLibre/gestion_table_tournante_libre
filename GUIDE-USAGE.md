@@ -454,6 +454,21 @@ panneau, les « Listes de travail » montrent ce qui reste à faire : les titres
 de place non pourvus, et les personnes au titre pressenti qui ne sont
 réservées nulle part.*
 
+Les animateurs se désignent aussi en lot, depuis « Tables et tours » : sous
+chaque table, la rangée « Animateurs » montre ses animateurs en pastilles, puis
+« Ajouter… ». La fenêtre qui s’ouvre cherche les personnes par nom, prénom ou
+organisation, sans égard aux majuscules ni aux accents, et les groupe par
+organisation tant que « Grouper par organisation » est cochée. Chaque personne
+porte son statut en toutes lettres — elle anime déjà une table, elle est
+absente à un tour, une place lui est réservée, elle est exclue, ou elle est
+placée au plan retenu — et la case
+de celles qu’on ne peut pas choisir est désactivée. Cochez les personnes,
+gardez ou changez le titre, « animateur » par défaut, puis « Ajouter » : elles
+sont désignées ensemble, en une seule entrée de l’historique. Si une seule est
+refusée, aucune ne l’est, et le refus la nomme dans la fenêtre. Le bouton de
+retrait d’une pastille retire à la fois la réservation et le titre de cet
+animateur.
+
 Une table peut avoir zéro, un ou plusieurs animateurs, mais jamais plus
 d’animateurs que de sièges. Une table dont tous les sièges sont réservés est
 acceptée et signalée : elle ne tourne plus. Quand les sièges ne sont pas
@@ -1349,6 +1364,8 @@ l’historique ; les noms des exemples sont inventés.
 | `poserTitre` | Posé le titre « accueil » à la table 3, siège 1 |
 | `retirerTitre` | Retiré le titre « accueil » de la table 3, siège 1 |
 | `designer` | Désigné Iris Ombrelle à la table 3, siège 1 : « accueil » |
+| `designerAnimateurs` | Désigné 3 animateurs à la table 5 : Iris Ombrelle, Théo Pervenche, Ondine Lacasse |
+| `retirerAnimateur` | Retiré l'animateur Iris Ombrelle de la table 5 |
 | `convertirEnTous` | Converti en « tous les tours » : Iris Ombrelle, table 3 |
 | `deplacerDansRetenu` | Déplacé Iris Ombrelle de la table 4 à la table 7, tour 2 |
 | `echangerDansRetenu` | Échangé Iris Ombrelle (table 4) et Théo Pervenche (réserve), tour 2 |

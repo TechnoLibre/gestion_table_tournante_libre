@@ -126,6 +126,8 @@ export const TABLE = new Map([
   ['communs.remede.poserTitre', 'Poser le titre'],
   ['communs.remede.retirerTitre', 'Retirer le titre'],
   ['communs.remede.designer', 'Désigner la personne'],
+  ['communs.remede.designerAnimateurs', 'Désigner les animateurs'],
+  ['communs.remede.retirerAnimateur', "Retirer l'animateur"],
   ['communs.remede.convertirEnTous', 'Réserver pour tous les tours'],
   ['communs.remede.deplacerDansRetenu', 'Déplacer dans le placement retenu'],
   ['communs.remede.echangerDansRetenu', 'Échanger les deux places'],

@@ -391,6 +391,8 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   poserTitre: { libelle: 'accueil', numero: 3, siege: 1 },
   retirerTitre: { libelle: 'accueil', numero: 3, siege: 1 },
   designer: { personne: 'Iris Ombrelle', numero: 3, siege: 1, libelle: 'accueil' },
+  designerAnimateurs: { numero: 5, personnes: ['Iris Ombrelle', 'Théo Pervenche', 'Ondine Lacasse'] },
+  retirerAnimateur: { personne: 'Iris Ombrelle', numero: 5 },
   convertirEnTous: { personne: 'Iris Ombrelle', numero: 3 },
   deplacerDansRetenu: { personne: 'Iris Ombrelle', de: 4, vers: 7, siege: null, tour: 2 },
   echangerDansRetenu: { a: 'Iris Ombrelle', deA: 4, b: 'Théo Pervenche', deB: null, tour: 2 },

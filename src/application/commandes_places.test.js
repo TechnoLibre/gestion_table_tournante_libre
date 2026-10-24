@@ -151,15 +151,17 @@ const listes = (charge, tour) => charge.retenu.placement[tour - 1].sieges;
 const reserveDe = (charge, tour) => charge.retenu.placement[tour - 1].reserve;
 
 describe('commandes des places : le registre (§ 8.2)', () => {
-  test('COMMANDES_PLACES porte les dix commandes des places, réunies dans COMMANDES', () => {
+  test('COMMANDES_PLACES porte les douze commandes des places, réunies dans COMMANDES', () => {
     assert.deepEqual([...COMMANDES_PLACES.keys()].sort(), [
       'convertirEnTous',
       'deplacerDansRetenu',
       'deplacerReservation',
       'designer',
+      'designerAnimateurs',
       'echangerDansRetenu',
       'poserTitre',
       'reserver',
+      'retirerAnimateur',
       'retirerDuTour',
       'retirerReservation',
       'retirerTitre',
@@ -177,6 +179,8 @@ describe('commandes des places : le registre (§ 8.2)', () => {
       ['poserTitre', { table: 5, siege: 1, libelle: 'animation' }],
       ['retirerTitre', { table: 5, siege: 1 }],
       ['designer', { participant: 1, table: 5, siege: 1, libelle: 'animation' }],
+      ['designerAnimateurs', { table: 5, participants: [1, 2], libelle: 'animation' }],
+      ['retirerAnimateur', { table: 5, participant: 1 }],
       ['convertirEnTous', { participant: 1, table: 5 }],
       ['deplacerDansRetenu', { tour: 1, participant: 1, table: 8, siege: 7 }],
       ['echangerDansRetenu', { tour: 1, a: 1, b: 7 }],
@@ -187,7 +191,7 @@ describe('commandes des places : le registre (§ 8.2)', () => {
   });
 
   test('sur une charge aux propositions figées, chaque commande des places les partage sans les écrire', () => {
-    const charge = chargeRetenue({ reservations: [resa(3, 5, 3), ...[1, 2, 3].map((tour) => resa(9, 8, null, tour))] });
+    const charge = chargeRetenue({ reservations: [resa(3, 5, 3), resa(10, 8, 2), ...[1, 2, 3].map((tour) => resa(9, 8, null, tour))] });
     charge.titres = [{ table: 8, siege: 2, libelle: 'accueil' }];
     const essais = [
       ['reserver', { participant: 1, table: 5, siege: 1, portee: 'tous', tour: null }],
@@ -196,6 +200,8 @@ describe('commandes des places : le registre (§ 8.2)', () => {
       ['poserTitre', { table: 5, siege: 1, libelle: 'animation' }],
       ['retirerTitre', { table: 8, siege: 2 }],
       ['designer', { participant: 1, table: 5, siege: 1, libelle: 'animation' }],
+      ['designerAnimateurs', { table: 5, participants: [1, 2], libelle: 'animation' }],
+      ['retirerAnimateur', { table: 8, participant: 10 }],
       ['convertirEnTous', { participant: 9, table: 8 }],
       ['deplacerDansRetenu', { tour: 1, participant: 1, table: 8, siege: 7 }],
       ['echangerDansRetenu', { tour: 1, a: 1, b: 7 }],
@@ -332,6 +338,335 @@ describe('commandes des places : titres et désignation (§ 4, § 4.1, § 2.1 é
     const { charge: convertie, libelle } = executer('convertirEnTous', charge, { participant: 1, table: 3 });
     assert.deepEqual(convertie.reservations, [resa(1, 3, 5)]);
     assert.equal(libelle, 'Converti en « tous les tours » : Iris Ombrelle, table 3');
+  });
+});
+
+describe('commandes des places : animateurs en lot et retrait (§ 2.1 étape 6, § 5.8)', () => {
+  // L'en-tête du texte canonique qui compare deux charges.
+  const ESSAI = { revision: 1, produitVersion: 'essai' };
+
+  // Six personnes, trois tours, sans retenu : la table numérotée 5
+  // d'identifiant 2, de trois places, et la table numérotée 3 d'identifiant
+  // 4, de quatre ; Anouk est exclue.
+  function chargeAnimation({ attribuerSieges = false } = {}) {
+    const charge = creerCharge({ id: 'evt-animation', nom: 'Soirée des Lucioles', siegesParDefaut: 4, tours: 3 });
+    charge.reglages.attribuerSieges = attribuerSieges;
+    charge.participants = [1, 2, 3, 4, 5, 6].map((id) => personne(id, id === 5 ? { exclu: true } : {}));
+    charge.tables = [
+      { id: 2, numero: 5, sieges: 3, forme: 'ronde', position: { x: 0, y: 0 } },
+      { id: 4, numero: 3, sieges: null, forme: 'ronde', position: { x: 400, y: 0 } },
+    ];
+    charge.prochainsIds = { participant: 7, table: 5, proposition: 1 };
+    return charge;
+  }
+
+  test('lot de 1 : une réservation « tous les tours » et un titre, une entrée au singulier', () => {
+    const charge = figer(chargeAnimation());
+    const { charge: apres, libelle, avertissements } = executer('designerAnimateurs', charge, {
+      table: 2,
+      participants: [1],
+      libelle: 'animateur',
+    });
+    assert.deepEqual(apres.reservations, [resa(1, 2, 1)]);
+    assert.deepEqual(apres.titres, [{ table: 2, siege: 1, libelle: 'animateur' }]);
+    assert.equal(libelle, 'Désigné 1 animateur à la table 5 : Iris Ombrelle');
+    assert.deepEqual(avertissements, []);
+  });
+
+  test('lot de 3 : designer pour chacune dans l’ordre reçu, une seule entrée qui les nomme ; k_t = c_t signalé une fois', () => {
+    const charge = figer(chargeAnimation());
+    const { charge: apres, libelle, avertissements } = executer('designerAnimateurs', charge, {
+      table: 2,
+      participants: [3, 1, 2],
+      libelle: '  Animation ',
+    });
+    let attendue = charge;
+    for (const participant of [3, 1, 2]) {
+      attendue = executer('designer', attendue, { participant, table: 2, siege: null, libelle: 'Animation' }).charge;
+    }
+    assert.equal(serialiser(apres, ESSAI), serialiser(attendue, ESSAI));
+    assert.deepEqual(apres.reservations, [resa(3, 2, 1), resa(1, 2, 2), resa(2, 2, 3)]);
+    assert.deepEqual(
+      apres.titres.map(({ siege, libelle: texte }) => [siege, texte]),
+      [
+        [1, 'Animation'],
+        [2, 'Animation'],
+        [3, 'Animation'],
+      ],
+    );
+    assert.equal(libelle, 'Désigné 3 animateurs à la table 5 : Ondine Lacasse, Iris Ombrelle, Théo Pervenche');
+    assert.deepEqual(avertissements, [{ code: 'TABLE_GELEE', details: { table: 2 } }]);
+  });
+
+  test('un titre non pourvu posé avant reste non pourvu : chacune reçoit son propre titre, au plus petit siège sans titre', () => {
+    const charge = figer(executer('poserTitre', chargeAnimation(), { table: 4, siege: 1, libelle: 'hôte' }).charge);
+    const { charge: apres, libelle: texte } = executer('designerAnimateurs', charge, { table: 4, participants: [1, 2], libelle: 'animateur' });
+    assert.deepEqual(apres.titres, [
+      { table: 4, siege: 1, libelle: 'hôte' },
+      { table: 4, siege: 2, libelle: 'animateur' },
+      { table: 4, siege: 3, libelle: 'animateur' },
+    ]);
+    assert.deepEqual(apres.reservations, [resa(1, 4, 2), resa(2, 4, 3)]);
+    assert.equal(texte, 'Désigné 2 animateurs à la table 3 : Iris Ombrelle, Théo Pervenche');
+  });
+
+  test('quand chaque siège porte déjà un titre, la règle de designer demeure : le titre non pourvu est pourvu, sans second titre', () => {
+    const titres = [
+      { table: 2, siege: 1, libelle: 'veille' },
+      { table: 2, siege: 2, libelle: 'hôte' },
+      { table: 2, siege: 3, libelle: 'relève' },
+    ];
+    const charge = figer({ ...chargeAnimation(), reservations: [resa(3, 2, 1)], titres });
+    const { charge: apres } = executer('designerAnimateurs', charge, { table: 2, participants: [1], libelle: 'animateur' });
+    assert.deepEqual(apres.titres, titres);
+    assert.deepEqual(apres.reservations, [resa(3, 2, 1), resa(1, 2, 2)]);
+  });
+
+  test('un siège sans titre que tient la réservation d’une autre personne est passé : la personne du lot reçoit le suivant, avec son titre', () => {
+    // Iris tient le siège 1 de la table 5, à la main, sans titre : pour la
+    // soirée, puis pour le seul tour 2 ; dans les deux modes de sièges.
+    for (const attribuerSieges of [false, true]) {
+      for (const tenue of [resa(1, 2, 1), resa(1, 2, 1, 2)]) {
+        const charge = figer({ ...chargeAnimation({ attribuerSieges }), reservations: [tenue] });
+        const { charge: apres } = executer('designerAnimateurs', charge, { table: 2, participants: [2], libelle: 'animateur' });
+        assert.deepEqual(apres.reservations, [tenue, resa(2, 2, 2)]);
+        assert.deepEqual(apres.titres, [{ table: 2, siege: 2, libelle: 'animateur' }]);
+      }
+    }
+    // La réservation d'une personne exclue ne tient aucun siège.
+    const exclue = figer({ ...chargeAnimation(), reservations: [resa(5, 2, 1)] });
+    const { charge: libre } = executer('designerAnimateurs', exclue, { table: 2, participants: [2], libelle: 'animateur' });
+    assert.deepEqual(libre.titres, [{ table: 2, siege: 1, libelle: 'animateur' }]);
+    // La réservation de la personne du lot elle-même ne l'écarte pas de son
+    // siège : Théo, qui tient le siège 1, y reçoit le titre.
+    const sienne = figer({ ...chargeAnimation(), reservations: [resa(2, 2, 1)] });
+    const { charge: titree } = executer('designerAnimateurs', sienne, { table: 2, participants: [2], libelle: 'animateur' });
+    assert.deepEqual(titree.reservations, [resa(2, 2, 1)]);
+    assert.deepEqual(titree.titres, [{ table: 2, siege: 1, libelle: 'animateur' }]);
+    // Son propre siège passe avant le plus petit siège libre : Théo, au
+    // siège 2, y reçoit son titre, et Iris prend le siège 1.
+    const deuxieme = figer({ ...chargeAnimation(), reservations: [resa(2, 2, 2)] });
+    const { charge: chacun } = executer('designerAnimateurs', deuxieme, { table: 2, participants: [2, 1], libelle: 'animateur' });
+    assert.deepEqual(chacun.reservations, [resa(2, 2, 2), resa(1, 2, 1)]);
+    assert.deepEqual(chacun.titres, [
+      { table: 2, siege: 2, libelle: 'animateur' },
+      { table: 2, siege: 1, libelle: 'animateur' },
+    ]);
+    // Une réservation suspendue ne tient pas son siège : Iris, réservée au
+    // siège 1 pour le seul tour 2 où elle est absente, ne l'écarte pas, et le
+    // titre non pourvu du siège 2 reste non pourvu.
+    const suspendue = chargeAnimation();
+    suspendue.participants[0] = personne(1, { presence: [1, 3] });
+    const avecVeille = figer({ ...suspendue, reservations: [resa(1, 2, 1, 2)], titres: [{ table: 2, siege: 2, libelle: 'veille' }] });
+    const { charge: libreAuTour } = executer('designerAnimateurs', avecVeille, { table: 2, participants: [2], libelle: 'animateur' });
+    assert.deepEqual(libreAuTour.titres, [
+      { table: 2, siege: 2, libelle: 'veille' },
+      { table: 2, siege: 1, libelle: 'animateur' },
+    ]);
+    // Chaque siège sans titre tenu : la règle de designer choisit, et
+    // pourvoit le titre non pourvu du siège 2 plutôt que de buter sur le 1.
+    const veille = [
+      { table: 2, siege: 2, libelle: 'veille' },
+      { table: 2, siege: 3, libelle: 'hôte' },
+    ];
+    const tenus = figer({ ...chargeAnimation(), reservations: [resa(1, 2, 1)], titres: veille });
+    const { charge: pourvue } = executer('designerAnimateurs', tenus, { table: 2, participants: [2], libelle: 'animateur' });
+    assert.deepEqual(pourvue.titres, veille);
+    assert.deepEqual(pourvue.reservations, [resa(1, 2, 1), resa(2, 2, 2)]);
+  });
+
+  test('une personne absente à un tour est refusée avant toute désignation, nommée, première ou au milieu du lot ; rien n’est posé', () => {
+    const absente = (charge) => {
+      charge.participants[5] = personne(6, { presence: [1, 2] });
+      return figer(charge);
+    };
+    const attendus = {
+      participant: 6,
+      personne: 'Capucine Sarcelle',
+      refus: { code: 'ABSENT_AU_TOUR', details: { participant: 6, personne: 'Capucine Sarcelle', tour: 3 } },
+      remede: { commande: 'changerPresence', arguments: { id: 6, tours: [1, 2, 3] } },
+    };
+    for (const participants of [
+      [6, 1, 2],
+      [1, 6, 2],
+    ]) {
+      const charge = absente(chargeAnimation());
+      const leve = refuse(() => executer('designerAnimateurs', charge, { table: 2, participants, libelle: 'animateur' }), 'ANIMATEUR_REFUSE', attendus);
+      assert.equal(
+        libelle(leve.code, leve.details),
+        "Refus pour Capucine Sarcelle, aucun animateur n'est désigné. " +
+          "Cette personne n'est pas présente au tour 3 : une table ne s'anime que par une personne présente à tous les tours.",
+      );
+      assert.deepEqual(charge.reservations, []);
+      assert.deepEqual(charge.titres, []);
+    }
+    // Avant toute désignation : Théo, réservé ailleurs au tour 2, vient
+    // d'abord, et c'est l'absente que le refus nomme.
+    const ailleurs = absente({ ...chargeAnimation(), reservations: [resa(2, 4, null, 2)] });
+    refuse(() => executer('designerAnimateurs', ailleurs, { table: 2, participants: [2, 6], libelle: 'animateur' }), 'ANIMATEUR_REFUSE', attendus);
+    // Absente au tour 1 et 3 : le premier tour d'absence est nommé.
+    const deux = chargeAnimation();
+    deux.participants[5] = personne(6, { presence: [2] });
+    const premier = refuse(() => executer('designerAnimateurs', figer(deux), { table: 2, participants: [6], libelle: 'animateur' }), 'ANIMATEUR_REFUSE');
+    assert.equal(premier.details.refus.details.tour, 1);
+    assert.deepEqual(premier.details.remede.arguments.tours, [1, 2, 3]);
+  });
+
+  test('une personne du lot tient déjà la réservation au siège choisi : TABLE_GELEE ne vient qu’une fois, au rang de la première désignation qui la signale', () => {
+    // Table 5 de deux places : Théo, réservé « tous les tours » au siège 2
+    // sans titre, tient déjà une place. Iris prend le siège 1 et gèle la
+    // table ; Théo reçoit le titre de son siège, et la table reste gelée.
+    const charge = figer({ ...chargeAnimation(), tables: [{ ...chargeAnimation().tables[0], sieges: 2 }, chargeAnimation().tables[1]] });
+    const reservee = figer({ ...charge, reservations: [resa(2, 2, 2)] });
+    const { charge: apres, avertissements, libelle: texte } = executer('designerAnimateurs', reservee, {
+      table: 2,
+      participants: [1, 2],
+      libelle: 'animateur',
+    });
+    assert.deepEqual(apres.reservations, [resa(2, 2, 2), resa(1, 2, 1)]);
+    assert.deepEqual(apres.titres, [
+      { table: 2, siege: 1, libelle: 'animateur' },
+      { table: 2, siege: 2, libelle: 'animateur' },
+    ]);
+    assert.deepEqual(avertissements, [{ code: 'TABLE_GELEE', details: { table: 2 } }]);
+    assert.equal(texte, 'Désigné 2 animateurs à la table 5 : Iris Ombrelle, Théo Pervenche');
+  });
+
+  test('une seule personne refusée : rien n’est posé, et le refus la nomme, avec la cause et son remède', () => {
+    const charge = figer(chargeAnimation());
+    const exclue = refuse(() => executer('designerAnimateurs', charge, { table: 2, participants: [1, 5, 2], libelle: 'animateur' }), 'ANIMATEUR_REFUSE', {
+      participant: 5,
+      personne: 'Anouk Bruyère',
+      refus: { code: 'PERSONNE_EXCLUE', details: { participant: 5, autres: [] } },
+      remede: { commande: 'reintegrerParticipant', arguments: { id: 5 } },
+    });
+    assert.equal(
+      libelle(exclue.code, exclue.details),
+      "Refus pour Anouk Bruyère, aucun animateur n'est désigné. " +
+        "Cette personne est exclue : elle n'est placée nulle part tant qu'elle n'est pas réintégrée.",
+    );
+  });
+
+  test('k_t > c_t refusé : la personne qui ferait déborder la table est nommée, rien n’est posé', () => {
+    // Capucine, réservée à la main pour la soirée sans titre, tient déjà
+    // une des trois places : la troisième animatrice déborde.
+    const charge = figer({ ...chargeAnimation(), reservations: [resa(6, 2, null)] });
+    const leve = refuse(() => executer('designerAnimateurs', charge, { table: 2, participants: [1, 2, 3], libelle: 'animateur' }), 'ANIMATEUR_REFUSE', {
+      participant: 3,
+      personne: 'Ondine Lacasse',
+      remede: { commande: 'changerPlacesTable', arguments: { id: 2, sieges: 4, origine: 'champ' } },
+    });
+    assert.equal(leve.details.refus.code, 'SURRESERVATION');
+    assert.deepEqual(charge.reservations, [resa(6, 2, null)]);
+    // Trois titres déjà posés : la quatrième ne trouve aucun siège.
+    const pleine = figer({ ...chargeAnimation(), titres: [1, 2, 3].map((siege) => ({ table: 2, siege, libelle: 'veille' })) });
+    const titres = refuse(
+      () => executer('designerAnimateurs', pleine, { table: 2, participants: [1, 2, 3, 4], libelle: 'animateur' }),
+      'ANIMATEUR_REFUSE',
+      { participant: 4, personne: 'Grisaille' },
+    );
+    assert.equal(titres.details.refus.code, 'AUCUN_SIEGE_SANS_TITRE');
+  });
+
+  test('une personne réservée ailleurs pour un tour est refusée, nommée, et le remède déplace sa réservation', () => {
+    const charge = figer({ ...chargeAnimation(), reservations: [resa(2, 4, null, 2)] });
+    const leve = refuse(() => executer('designerAnimateurs', charge, { table: 2, participants: [1, 2], libelle: 'animateur' }), 'ANIMATEUR_REFUSE', {
+      participant: 2,
+      personne: 'Théo Pervenche',
+    });
+    assert.equal(leve.details.refus.code, 'DEUX_PLACES_MEME_TOUR');
+    assert.equal(leve.details.remede.commande, 'deplacerReservation');
+    assert.match(libelle(leve.code, leve.details), /^Refus pour Théo Pervenche, aucun animateur n'est désigné\. Cette personne a déjà une place au tour 2/);
+  });
+
+  test('refus de forme : liste vide, doublon, autre chose qu’une liste ; libellé vide, personne inconnue, plan bloqué refusés tels quels', () => {
+    const charge = figer(chargeAnimation());
+    for (const participants of [[], [1, 2, 1], 3, undefined]) {
+      assert.throws(() => executer('designerAnimateurs', charge, { table: 2, participants, libelle: 'animateur' }), TypeError);
+    }
+    assert.throws(() => executer('designerAnimateurs', charge, { table: 9, participants: [1], libelle: 'animateur' }), TypeError);
+    refuse(() => executer('designerAnimateurs', charge, { table: 2, participants: [1], libelle: '  ' }), 'LIBELLE_VIDE', { remede: null });
+    refuse(() => executer('designerAnimateurs', charge, { table: 2, participants: [1, 42], libelle: 'animateur' }), 'PARTICIPANT_INCONNU', { id: 42 });
+    const bloquee = figer({ ...chargeAnimation(), evenement: { ...chargeAnimation().evenement, etat: 'bloque' } });
+    refuse(() => executer('designerAnimateurs', bloquee, { table: 2, participants: [1], libelle: 'animateur' }), 'PLAN_BLOQUE');
+  });
+
+  test('qui anime déjà cette table est passé ; quand toutes l’animent déjà, SANS_EFFET', () => {
+    const une = executer('designerAnimateurs', chargeAnimation(), { table: 2, participants: [1], libelle: 'animateur' }).charge;
+    refuse(() => executer('designerAnimateurs', une, { table: 2, participants: [1], libelle: 'animateur' }), 'SANS_EFFET', {
+      commande: 'designerAnimateurs',
+    });
+    const { charge: deux, libelle: texte } = executer('designerAnimateurs', une, { table: 2, participants: [1, 2], libelle: 'animateur' });
+    assert.deepEqual(deux.reservations, [resa(1, 2, 1), resa(2, 2, 2)]);
+    assert.equal(texte, 'Désigné 1 animateur à la table 5 : Théo Pervenche');
+  });
+
+  test('retirerAnimateur : la réservation « tous les tours » et le titre partent ensemble, une entrée ; la table redevient comme avant', () => {
+    const charge = chargeAnimation({ attribuerSieges: true });
+    const designee = executer('designerAnimateurs', charge, { table: 2, participants: [1], libelle: 'animateur' }).charge;
+    const { charge: retiree, libelle: texte, avertissements } = executer('retirerAnimateur', figer(designee), { table: 2, participant: 1 });
+    assert.equal(serialiser(retiree, ESSAI), serialiser(charge, ESSAI));
+    assert.equal(texte, "Retiré l'animateur Iris Ombrelle de la table 5");
+    assert.deepEqual(avertissements, []);
+  });
+
+  test('retirerAnimateur ne retire que ce qui appartient à la désignation : les autres titres et réservations de la table restent', () => {
+    let charge = executer('designerAnimateurs', chargeAnimation(), { table: 4, participants: [3, 1, 2], libelle: 'animateur' }).charge;
+    charge = executer('reserver', charge, { participant: 1, table: 4, siege: null, portee: 'tour', tour: 2 }).charge;
+    charge = executer('reserver', charge, { participant: 4, table: 4, siege: null, portee: 'tous', tour: null }).charge;
+    charge = executer('poserTitre', charge, { table: 4, siege: 4, libelle: 'veille' }).charge;
+    const { charge: retiree } = executer('retirerAnimateur', figer(charge), { table: 4, participant: 1 });
+    assert.deepEqual(retiree.reservations, [resa(3, 4, 1), resa(2, 4, 3), resa(1, 4, null, 2), resa(4, 4, null)]);
+    assert.deepEqual(retiree.titres, [
+      { table: 4, siege: 1, libelle: 'animateur' },
+      { table: 4, siege: 3, libelle: 'animateur' },
+      { table: 4, siege: 4, libelle: 'veille' },
+    ]);
+  });
+
+  test('retirerAnimateur après un titre posé avant la désignation : ce titre reste, seul part celui que la désignation a posé', () => {
+    const charge = figer(executer('poserTitre', chargeAnimation(), { table: 4, siege: 1, libelle: 'hôte' }).charge);
+    const designee = executer('designerAnimateurs', charge, { table: 4, participants: [1], libelle: 'animateur' }).charge;
+    const { charge: retiree } = executer('retirerAnimateur', figer(designee), { table: 4, participant: 1 });
+    assert.equal(serialiser(retiree, ESSAI), serialiser(charge, ESSAI));
+    assert.deepEqual(retiree.titres, [{ table: 4, siege: 1, libelle: 'hôte' }]);
+  });
+
+  test('retirerAnimateur, deux titres au siège de la réservation retirée : un seul part, le premier par libellé ; l’autre reste, non pourvu', () => {
+    const charge = figer({
+      ...chargeAnimation(),
+      reservations: [resa(1, 4, 2)],
+      titres: [
+        { table: 4, siege: 2, libelle: 'veille' },
+        { table: 4, siege: 2, libelle: 'accueil' },
+        { table: 4, siege: 3, libelle: 'relève' },
+      ],
+    });
+    const { charge: retiree, libelle: texte } = executer('retirerAnimateur', charge, { table: 4, participant: 1 });
+    assert.deepEqual(retiree.reservations, []);
+    assert.deepEqual(retiree.titres, [
+      { table: 4, siege: 2, libelle: 'veille' },
+      { table: 4, siege: 3, libelle: 'relève' },
+    ]);
+    assert.equal(texte, "Retiré l'animateur Iris Ombrelle de la table 3");
+  });
+
+  test('retirerAnimateur refuse SANS_EFFET qui n’anime pas la table : réservée sans titre, animatrice ailleurs, libre ; plan bloqué refusé', () => {
+    let charge = executer('designerAnimateurs', chargeAnimation(), { table: 2, participants: [1], libelle: 'animateur' }).charge;
+    charge = executer('reserver', charge, { participant: 2, table: 2, siege: null, portee: 'tous', tour: null }).charge;
+    charge = figer(charge);
+    for (const [table, participant] of [
+      [2, 2],
+      [4, 1],
+      [2, 3],
+    ]) {
+      refuse(() => executer('retirerAnimateur', charge, { table, participant }), 'SANS_EFFET', { commande: 'retirerAnimateur', remede: null });
+    }
+    refuse(() => executer('retirerAnimateur', charge, { table: 2, participant: 42 }), 'PARTICIPANT_INCONNU');
+    assert.throws(() => executer('retirerAnimateur', charge, { table: 9, participant: 1 }), TypeError);
+    const bloquee = figer({ ...charge, evenement: { ...charge.evenement, etat: 'bloque' } });
+    refuse(() => executer('retirerAnimateur', bloquee, { table: 2, participant: 1 }), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+    assert.deepEqual(bloquee.reservations, charge.reservations);
   });
 });
 
@@ -1091,6 +1426,15 @@ describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
     // Le refus du dépôt sur le sol et de « Retirer du tour » sous le
     // retenu, pour une réservation de ce tour.
     ['RESERVATION_CE_TOUR', [{ participant: 1, table: 3, tour: 2 }, 'au tour 2']],
+    // La cause du refus d'une personne absente à un tour, dans un lot de
+    // designerAnimateurs.
+    ['ABSENT_AU_TOUR', [{ participant: 6, personne: 'Capucine Sarcelle', tour: 2 }, 'présente au tour 2']],
+    // Le refus d'une personne d'un lot de designerAnimateurs : son nom, puis
+    // le texte de sa cause.
+    [
+      'ANIMATEUR_REFUSE',
+      [{ participant: 3, personne: 'Ondine Lacasse', refus: { code: 'PERSONNE_EXCLUE', details: { participant: 3 } } }, 'Ondine Lacasse'],
+    ],
   ]);
 
   test('chaque code de la table des places a son texte, composé de ses détails', () => {

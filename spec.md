@@ -156,6 +156,30 @@ affiche « titre *animateur* non pourvu » (§ 4.1). Le statut d'« ancré » du
 en découle comme un fait calculé : le logiciel ne porte aucune case « est
 animateur ».
 
+La désignation se fait aussi **en lot**, depuis la rangée « Animateurs » de
+chaque table dans « Tables et tours » (§ 6.1) : les personnes choisies sont
+désignées ensemble sous un même titre, en une seule entrée d'historique, et si
+une seule est refusée, aucune n'est désignée. Une personne absente à un tour est
+refusée avant toute désignation (§ 5.9) : sa réservation « tous les tours » ne
+pourvoirait aucun titre pour la soirée. Chaque personne du lot reçoit **son
+propre titre** : au siège sans titre qu'elle tient déjà à cette table, s'il en
+est un, sinon au plus petit siège de la table qui n'en porte aucun et que ne
+tient, à aucun tour, la réservation active d'une autre personne — une
+réservation suspendue par une exclusion ou une absence ne tient rien (§ 4.4) :
+un titre non pourvu posé avant le lot reste tel quel, à sa place, et
+une place réservée à la main n'arrête pas le lot tant qu'il reste une place
+libre. Quand aucun siège n'est à la fois sans titre et libre, le lot suit la
+règle de la désignation au plan et pourvoit le premier titre non pourvu de la
+table.
+
+Le retrait d'un animateur depuis cette rangée retire **ensemble** sa
+réservation « tous les tours » et **un seul** titre, celui qu'elle pourvoit, en
+une entrée ; les autres réservations et titres de la table restent. Le fichier
+ne garde pas quel geste a posé un titre : deux titres au même siège, et le
+premier par libellé part, l'autre reste non pourvu ; un titre posé avant une
+désignation qui l'a pourvu — au plan, ou par un lot sans siège à la fois libre
+et sans titre — part avec elle.
+
 **« La place » se lit de deux façons, et le logiciel tranche** : c'est un
 **siège** quand l'attribution des sièges est active (§ 5.3), la **table** sinon.
 Dans le second cas, une table porte un **compte de titres**, pourvus ou non —
@@ -1948,6 +1972,11 @@ dans l'outil.
 - Réserver plus de places qu'une table n'en a ; un siège inexistant ; la même
   personne à deux places sur un même tour ; une personne exclue ; une personne
   à un tour où elle est absente (`PERSONNE_ABSENTE_AU_TOUR`).
+- Désigner en lot (§ 2.1 étape 6) une personne absente à un tour : refusé
+  avant toute désignation (`ANIMATEUR_REFUSE`, cause `ABSENT_AU_TOUR`), le
+  refus nommant la personne et son premier tour d'absence, le remède la disant
+  présente à tous les tours ; rien du lot n'est posé. Le refus d'une seule
+  personne du lot, pour toute autre cause, refuse de même le lot entier.
 - Déposer, au plan, une personne absente au tour montré, la déplacer ou
   l'échanger dans le retenu à un tour d'absence : refusé sur la place
   (`PERSONNE_ABSENTE_AU_TOUR`), le refus proposant de la dire présente à ce
@@ -2288,6 +2317,36 @@ en **une seule entrée d'historique** ; une table à la taille du défaut le
 suit, une autre est surchargée. Elle se refuse en lecture et sur un plan
 bloqué comme tout geste sur les tables, et quand plus rien ne manque. Après,
 l'avertissement tombe, et le focus passe à l'annonce des tables créées.
+
+**Les animateurs d'une table.** Chaque table de la liste porte une rangée
+« Animateurs » : ses animateurs (§ 2.1 étape 6) en pastilles, chacun suivi d'un
+bouton de retrait, nommé « Retirer *personne* des animateurs de la table *n* »,
+puis « Ajouter… ». Être animateur se calcule — une réservation « tous les
+tours » qui pourvoit pour la soirée un titre de la table — et la rangée ne lit
+rien d'autre. « Ajouter… » ouvre une fenêtre modale, « Ajouter des animateurs
+à la table *n* », le focus dans sa recherche : la recherche porte sur le nom,
+le prénom et l'organisation, sans égard à la casse ni aux accents ; la case
+« Grouper par organisation », cochée à l'ouverture, range les personnes par
+organisation, « Sans organisation » en dernier, chaque groupe dans l'ordre de
+la grille des participants ; le champ « Titre », prérempli d'« animateur »,
+vaut pour toutes les personnes choisies. Chaque personne a sa case et son
+statut **en texte** : elle anime cette table (case cochée et désactivée), elle
+anime une autre table, elle est absente à un tour — ses tours d'absence,
+« Absence au tour 3 » —, une place lui est réservée à la main — sa table, puis
+son tour ou la soirée —, elle est exclue — case désactivée dans ces quatre cas
+—, elle est placée au plan retenu sans réservation — ses tables et leurs
+tours, et elle se choisit : le retenu passera en dérive comme sous toute
+réservation (§ 9) —, ou elle est disponible ; son titre pressenti s'y lit en
+information. Un compte dit « 2 choisies · 3 places libres à cette table ».
+« Ajouter », désactivé sans choix, désigne les personnes choisies, dans
+l'ordre de la liste, en une entrée ; un refus se pose dans la fenêtre, qui
+reste ouverte, et « Ajouter » le nomme dans sa description : son remède abouti,
+le refus part et le focus revient à « Ajouter ». Pendant l'écriture, un second
+« Ajouter », « Annuler » et Échap ne font rien. Une recherche ne renomme pas
+un groupe : il garde l'orthographe de la liste entière. « Annuler » et
+Échap ferment sans rien écrire ; Entrée dans la recherche ne valide rien ; la
+fenêtre fermée, le focus revient à « Ajouter… ». En lecture et sur un plan
+bloqué, les pastilles restent, sans retrait ni « Ajouter… ».
 
 **Un changement de défaut est une seule entrée d'historique**, quel que soit le
 nombre de tables touchées. **Baisser le défaut** subit les refus du § 6.2, et

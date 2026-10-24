@@ -72,6 +72,24 @@ export const TABLE = new Map([
       "une réservation « tous les tours » l'y tient déjà, ou la personne est exclue.",
   ],
 
+  // --- Les animateurs (§ 2.1 étape 6) ---------------------------------------
+  // ABSENT_AU_TOUR {participant, personne, tour} : la cause du refus d'une
+  // personne d'un lot de designerAnimateurs qui n'est pas présente à chaque
+  // tour, tour son premier tour d'absence.
+  [
+    'ABSENT_AU_TOUR',
+    ({ tour }) =>
+      `Cette personne n'est pas présente au tour ${tour} : une table ne s'anime que par une personne présente à tous les tours.`,
+  ],
+  // ANIMATEUR_REFUSE {participant, personne, refus: {code, details}} : le
+  // refus d'une personne d'un lot de designerAnimateurs, que son nom affiché
+  // nomme, suivi du texte de sa cause.
+  [
+    'ANIMATEUR_REFUSE',
+    ({ personne, refus }, texte) =>
+      `Refus pour ${personne}, aucun animateur n'est désigné. ${texte(refus.code, refus.details)}`,
+  ],
+
   // --- Le retenu (§ 5.8, § 7.1) ----------------------------------------------
   [
     'PROPOSITION_MONTREE',
@@ -123,6 +141,16 @@ export const TABLE = new Map([
   [
     'ENTREE_DESIGNER',
     ({ personne, numero, siege, libelle }) => `Désigné ${personne} à la table ${numero}, siège ${siege} : ${cite(libelle)}`,
+  ],
+  [
+    'ENTREE_DESIGNER_ANIMATEURS',
+    ({ numero, personnes }) =>
+      `Désigné ${personnes.length} ${personnes.length === 1 ? 'animateur' : 'animateurs'} à la table ${numero} : ` +
+      personnes.join(', '),
+  ],
+  [
+    'ENTREE_RETIRER_ANIMATEUR',
+    ({ personne, numero }) => `Retiré l'animateur ${personne} de la table ${numero}`,
   ],
   [
     'ENTREE_CONVERTIR_EN_TOUS',

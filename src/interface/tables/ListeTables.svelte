@@ -25,6 +25,16 @@
   // page. Une frappe dans le champ, ou Échap, retire le
   // complément d'un refus avec le refus que le champ retire.
   //
+  // Chaque table porte la rangée « Animateurs » (§ 2.1 étape 6) : ses
+  // animateurs en pastilles, par siège (animateursNommes), chacun avec son
+  // retrait, puis « Ajouter… », qui ouvre la fenêtre d'ajout
+  // (ChoixAnimateurs). Le retrait exécute retirerAnimateur, l'ajout
+  // designerAnimateurs, en une entrée chacun, par executerSurTable : leurs
+  // avertissements se lisent contre la ligne. La fenêtre fermée, ou le
+  // retrait abouti, le focus passe à « Ajouter… » de la table. En lecture
+  // et sur un plan bloqué — le refus courant de la séance —, les pastilles
+  // restent, sans retrait ni « Ajouter… ».
+  //
   // Supprimer une table qui porte une réservation, un titre ou un objectif
   // ouvre la fenêtre à confirmer, qui les nomme (bilanSuppressionTable) ;
   // une table nue part sans fenêtre.
@@ -78,6 +88,7 @@
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { effetDe } from '../raccourcis.js';
+  import ChoixAnimateurs from './ChoixAnimateurs.svelte';
   import ChoixRegle from './ChoixRegle.svelte';
   import {
     basculerTable,
@@ -89,6 +100,7 @@
     regleParDefaut,
   } from './objectifs.js';
   import {
+    animateursNommes,
     annonceSuppression,
     avertissementsNommes,
     cleForme,
@@ -131,6 +143,13 @@
   // ouverte : la table et ce qu'elle nomme.
   let complements = $state({});
   let suppression = $state.raw(null);
+
+  // La fenêtre d'ajout des animateurs ouverte : la table {id, numero}. Les
+  // gestes sur les animateurs s'offrent tant que la séance n'a aucun refus
+  // courant.
+  let ajout = $state.raw(null);
+  let listeTables = $state(null);
+  const gestesAnimateurs = $derived($seance.refus === null);
 
   const complementDe = (id) => {
     const complement = complements[id];
@@ -183,6 +202,23 @@
   async function confirmerSuppression() {
     await seance.executer('supprimerTable', { id: suppression.id });
     suppression = null;
+  }
+
+  // Le focus passe à « Ajouter… » de la table id, une fois le rendu fait.
+  async function rendreFocusAjout(id) {
+    await tick();
+    listeTables?.querySelector(`[data-table="${id}"] [data-commande="ajouterAnimateurs"]`)?.focus();
+  }
+
+  function fermerAjout() {
+    const { id } = ajout;
+    ajout = null;
+    return rendreFocusAjout(id);
+  }
+
+  async function retirerAnimateur(table, participant) {
+    await executerSurTable(table.id, 'retirerAnimateur', { table: table.id, participant });
+    await rendreFocusAjout(table.id);
   }
 
   // Les orthographes retenues du dernier geste sur l'objectif de clé donnée,
@@ -365,13 +401,15 @@
   {#if tables.length === 0}
     <p class="aucune">{t('tables.liste.aucune')}</p>
   {:else}
-    <ul class="tables">
+    <ul class="tables" bind:this={listeTables}>
       {#each tables as table (table.id)}
         {@const etat = etatTable(table, charge.evenement.siegesParDefaut)}
         {@const complement = complementDe(table.id)}
         {@const vues = objectifsDeLaTable(charge, table)}
         {@const ouverte = ouvertes.has(table.id)}
         {@const idTours = `${uid}-tours-${table.id}`}
+        {@const animateurs = animateursNommes(charge, table.id)}
+        {@const idAnimateurs = `${uid}-animateurs-${table.id}`}
         <li data-table={table.id}>
           <div class="entete">
             <span class="numero"><span>{t('tables.liste.table')}</span> <span>{table.numero}</span></span>
@@ -413,6 +451,37 @@
               nomAccessible={nomDeTable(table.numero, 'tables.liste.supprimer')}
               executer={() => supprimer(table)}
             />
+          </div>
+          <div class="animateurs" role="group" aria-labelledby={idAnimateurs}>
+            <span class="titre-animateurs" id={idAnimateurs}>{t('tables.animateurs.titre')}</span>
+            {#if animateurs.length === 0}
+              <span class="aucun-animateur">{t('tables.animateurs.aucun')}</span>
+            {:else}
+              <ul class="pastilles">
+                {#each animateurs as animateur (animateur.participant)}
+                  <li data-participant={animateur.participant}>
+                    <Pastille sorte="statut" valeur="neutre" libelle={animateur.nom} />
+                    {#if gestesAnimateurs}
+                      <Commande
+                        cle="tables.animateurs.retirer"
+                        details={{ nom: animateur.nom, numero: table.numero }}
+                        nom="retirerAnimateur"
+                        variante="retrait"
+                        executer={() => retirerAnimateur(table, animateur.participant)}
+                      />
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if gestesAnimateurs}
+              <Commande
+                cle="tables.animateurs.ajouter"
+                nom="ajouterAnimateurs"
+                nomAccessible={nomDeTable(table.numero, 'tables.animateurs.ajouter')}
+                executer={() => (ajout = { id: table.id, numero: table.numero })}
+              />
+            {/if}
           </div>
           {#if complement !== null && complement.retires.length > 0}
             <div class="message refus">
@@ -468,6 +537,16 @@
     </ul>
   {/if}
 </Carte>
+
+{#if ajout !== null}
+  <ChoixAnimateurs
+    {charge}
+    table={ajout.id}
+    numero={ajout.numero}
+    executer={(args) => executerSurTable(ajout.id, 'designerAnimateurs', { table: ajout.id, ...args })}
+    surFermer={fermerAjout}
+  />
+{/if}
 
 {#if suppression !== null}
   <Confirmation
@@ -536,6 +615,40 @@
     flex-wrap: wrap;
     gap: var(--espace-2);
     margin-left: auto;
+  }
+
+  /* La rangée des animateurs : sous la ligne, sur toute la largeur ; son
+     titre, les pastilles, chacune suivie de son retrait, puis « Ajouter… ». */
+  .animateurs {
+    display: flex;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espace-2) var(--espace-3);
+  }
+
+  .titre-animateurs {
+    font-weight: bold;
+  }
+
+  .aucun-animateur {
+    color: var(--couleur-page-texte-secondaire);
+  }
+
+  .pastilles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espace-2) var(--espace-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pastilles li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espace-1);
   }
 
   /* Un message de ligne : son signe, un texte de l'encre de la page, sur

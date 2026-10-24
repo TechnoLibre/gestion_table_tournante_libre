@@ -36,6 +36,7 @@ import { composantes, visible } from '../../../test/navigateur/rendu.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { demanderCreationTables } from './CreerTables.svelte';
+import ChoixAnimateurs from './ChoixAnimateurs.svelte';
 import SectionTables from './SectionTables.svelte';
 import { comptesTables } from './modele.js';
 
@@ -1518,3 +1519,385 @@ describe('créer les tables qui manquent (§ 6.1)', () => {
     return donnees;
   }
 });
+
+describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
+  const fiche = (id, nom, prenom, organisation, autres = {}) => ({
+    id,
+    nom,
+    prenom,
+    organisation,
+    courriel: null,
+    titrePressenti: null,
+    notes: null,
+    exclu: false,
+    ...autres,
+  });
+
+  // Trois tables, trois tours : les tables 1 et 2 suivent un défaut de 4,
+  // la table 3 est surchargée à 2. Iris anime la table 1, Théo la table 2
+  // sous le titre « hôte » ; Ondine est réservée à la table 3 au tour 2,
+  // Grisaille à la table 2 pour la soirée ; Anouk est exclue ; Capucine,
+  // libre, porte un titre pressenti ; Élodie est libre, ou placée au
+  // retenu à la table 1 quand retenu est vrai.
+  function chargeAnimateurs({ retenu = false } = {}) {
+    const donnees = chargeDe({ tables: [{ id: 1 }, { id: 2 }, { id: 3, sieges: 2 }], tours: 3, defaut: 4 });
+    donnees.participants = [
+      fiche(1, 'Ombrelle', 'Iris', 'Tisserands du Lichen'),
+      fiche(2, 'Pervenche', 'Théo', 'Gréement Prêle'),
+      fiche(3, 'Lacasse', 'Ondine', null),
+      fiche(4, 'Grisaille', null, 'tisserands du lichen'),
+      fiche(5, 'Bruyère', 'Anouk', 'Gréement Prêle', { exclu: true }),
+      fiche(6, 'Sarcelle', 'Capucine', null, { titrePressenti: 'animatrice' }),
+      fiche(7, 'Églantine', 'Élodie', 'Gréement Prêle'),
+    ];
+    donnees.reservations = [resa(1, 1, 1), resa(2, 2, 1), resa(3, 3, null, 2), resa(4, 2, null)];
+    donnees.titres = [
+      { table: 1, siege: 1, libelle: 'animateur' },
+      { table: 2, siege: 1, libelle: 'hôte' },
+    ];
+    donnees.prochainsIds.participant = 8;
+    if (retenu) {
+      const tour = [[1, 7], [2, 4], [3]];
+      placer(donnees, [tour, tour, tour], { id: 1, retenu: true });
+    }
+    return donnees;
+  }
+
+  // La rangée des animateurs est le seul groupe de la ligne ; ses
+  // pastilles et les personnes de la fenêtre portent data-participant.
+  const rangee = (m, id) => ligne(m, id).querySelector('[role="group"]');
+  const pastilles = (m, id) => [...rangee(m, id).querySelectorAll('[data-participant]')].map((li) => li.textContent.trim());
+  const ajouter = (m, id) => commande(rangee(m, id), 'ajouterAnimateurs');
+  const recherche = () => fenetre().querySelector('input[data-champ="rechercheAnimateurs"]');
+  const grouper = () => fenetre().querySelector('input[data-champ="grouperAnimateurs"]');
+  const titre = () => fenetre().querySelector('input[data-champ="titreAnimateurs"]');
+  const idsDans = (racine) => [...racine.querySelectorAll('[data-participant]')].map((li) => Number(li.dataset.participant));
+  const vues = () => idsDans(fenetre());
+  const caseDe = (id) => fenetre().querySelector(`[data-participant="${id}"] input[type="checkbox"]`);
+  // Le statut est la première description de la case ; le titre pressenti,
+  // la seconde.
+  const descriptions = (id) => caseDe(id).getAttribute('aria-describedby').split(' ').map((idTexte) => document.getElementById(idTexte).textContent.trim());
+  const statutDe = (id) => descriptions(id)[0];
+  // Les groupes : chaque région de la fenêtre, nommée par son titre.
+  const groupes = () => [...fenetre().querySelectorAll('section[aria-labelledby]')].map((g) => [document.getElementById(g.getAttribute('aria-labelledby')).textContent.trim(), idsDans(g)]);
+  const compteFenetre = () => fenetre().querySelector('[data-compte]').textContent.trim();
+
+  // Remplace le texte de la recherche, touche par touche, sans valider.
+  async function chercher(m, texte) {
+    await cliquer(m, recherche());
+    recherche().select();
+    await touche('Backspace');
+    for (const caractere of texte) await touche(caractere);
+    await attendre(m);
+  }
+
+  test('« Ajouter\u{2026} » ouvre la fenêtre modale, titrée, le focus dans la recherche ; chaque statut en texte, la case de qui ne se choisit pas désactivée', async () => {
+    const m = await preparer(chargeAnimateurs({ retenu: true }));
+    expect(t('tables.animateurs.titre')).toBe('Animateurs');
+    expect(rangee(m, 1).textContent).toContain(t('tables.animateurs.titre'));
+    expect(pastilles(m, 1)).toEqual(['Iris Ombrelle']);
+    expect(pastilles(m, 3)).toEqual([]);
+    expect(rangee(m, 3).textContent).toContain(t('tables.animateurs.aucun'));
+    expect(ajouter(m, 1).textContent).toBe(t('tables.animateurs.ajouter'));
+    expect(ajouter(m, 1)).toHaveAccessibleName(t('tables.nom.table', { cle: 'tables.animateurs.ajouter', numero: 1 }));
+    const avant = ecritures(m);
+
+    await cliquer(m, ajouter(m, 1));
+    expect(fenetre()).not.toBeNull();
+    expect(fenetre()).toHaveAccessibleName('Ajouter des animateurs à la table 1');
+    await vi.waitFor(() => expect(document.activeElement).toBe(recherche()));
+    expect(titre().value).toBe('animateur');
+    expect(grouper().checked).toBe(true);
+
+    expect(statutDe(1)).toBe('Anime cette table (« animateur »)');
+    expect(statutDe(2)).toBe('Anime la table 2');
+    expect(statutDe(3)).toBe('Place réservée : table 3, tour 2');
+    expect(statutDe(4)).toBe('Place réservée : table 2, toute la soirée');
+    expect(statutDe(5)).toBe('Personne exclue');
+    expect(statutDe(6)).toBe('Disponible');
+    expect(statutDe(7)).toBe('Au plan retenu : table 1 aux tours 1 à 3');
+    expect(descriptions(6)).toEqual(['Disponible', 'Titre pressenti : « animatrice »']);
+    expect(descriptions(7)).toEqual(['Au plan retenu : table 1 aux tours 1 à 3']);
+    expect([1, 2, 3, 4, 5, 6, 7].map((id) => [caseDe(id).disabled, caseDe(id).checked])).toEqual([
+      [true, true],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [false, false],
+      [false, false],
+    ]);
+    expect(caseDe(6)).toHaveAccessibleName('Capucine Sarcelle');
+    expect(compteFenetre()).toBe('0 choisie \u{00B7} 3 places libres à cette table');
+    expect(commande(fenetre(), 'confirmerAnimateurs').disabled).toBe(true);
+    expect(ecritures(m)).toBe(avant);
+  });
+
+  test('une personne absente à un tour se lit « Absence au tour 3 », sa case désactivée', async () => {
+    const donnees = chargeAnimateurs();
+    donnees.participants[6].presence = [1, 2];
+    const m = await preparer(donnees);
+    await cliquer(m, ajouter(m, 1));
+    expect(statutDe(7)).toBe('Absence au tour 3');
+    expect(caseDe(7).disabled).toBe(true);
+    expect(caseDe(7).checked).toBe(false);
+  });
+
+  test('la recherche qui cache la première orthographe d’une organisation ne renomme pas son groupe', async () => {
+    const m = await preparer(chargeAnimateurs());
+    await cliquer(m, ajouter(m, 1));
+    await chercher(m, 'grisaille');
+    expect(groupes()).toEqual([['Tisserands du Lichen', [4]]]);
+  });
+
+  test('chercher : la casse, les accents, l’organisation ; grouper par organisation, puis non ; Entrée dans la recherche ou le titre ne valide rien', async () => {
+    const m = await preparer(chargeAnimateurs());
+    const avant = ecritures(m);
+    await cliquer(m, ajouter(m, 1));
+    expect(groupes()).toEqual([
+      ['Gréement Prêle', [2, 5, 7]],
+      ['Tisserands du Lichen', [1, 4]],
+      [t('tables.animateurs.sansOrganisation'), [3, 6]],
+    ]);
+    await cliquer(m, grouper());
+    expect(grouper().checked).toBe(false);
+    expect(fenetre().querySelectorAll('section')).toHaveLength(0);
+    expect(vues()).toEqual([1, 2, 3, 4, 5, 6, 7]);
+
+    await chercher(m, 'ELODIE');
+    expect(vues()).toEqual([7]);
+    await chercher(m, 'greement');
+    expect(vues()).toEqual([2, 5, 7]);
+    await chercher(m, 'lichen');
+    expect(vues()).toEqual([1, 4]);
+    await cliquer(m, grouper());
+    expect(groupes()).toEqual([['Tisserands du Lichen', [1, 4]]]);
+    await chercher(m, 'zzz');
+    expect(vues()).toEqual([]);
+    expect(fenetre().textContent).toContain(t('tables.animateurs.aucunePersonne'));
+    // Entrée dans la recherche, puis dans le titre, ne valide rien, une
+    // personne choisie : « Ajouter » est actif, la fenêtre reste ouverte.
+    await chercher(m, 'sarcelle');
+    await cliquer(m, caseDe(6));
+    expect(commande(fenetre(), 'confirmerAnimateurs').disabled).toBe(false);
+    for (const champTexte of [recherche, titre]) {
+      await cliquer(m, champTexte());
+      await touche('Enter');
+      await attendre(m);
+      // Rien d'écrit d'abord : une validation fermerait la fenêtre, puis
+      // l'Entrée relâchée sur « Ajouter\u{2026} » en rouvrirait une neuve.
+      expect(ecritures(m)).toBe(avant);
+      expect(fenetre()).not.toBeNull();
+      expect(document.activeElement).toBe(champTexte());
+      expect(vues()).toEqual([6]);
+      expect(caseDe(6).checked).toBe(true);
+    }
+    expect(pastilles(m, 1)).toEqual(['Iris Ombrelle']);
+  });
+
+  test('deux personnes choisies, au clavier et à la souris : une entrée, les pastilles, la fenêtre fermée, le focus rendu à « Ajouter\u{2026} » ; le × retire réservation et titre en une entrée', async () => {
+    const m = await preparer(chargeAnimateurs());
+    const r0 = revision(m);
+    await cliquer(m, ajouter(m, 1));
+    caseDe(6).focus();
+    await touche(' ');
+    await attendre(m);
+    expect(caseDe(6).checked).toBe(true);
+    expect(compteFenetre()).toBe('1 choisie \u{00B7} 3 places libres à cette table');
+    await cliquer(m, caseDe(7));
+    expect(compteFenetre()).toBe('2 choisies \u{00B7} 3 places libres à cette table');
+    // Une personne choisie reste choisie quand la recherche la cache.
+    await chercher(m, 'iris');
+    await chercher(m, '');
+    expect(caseDe(6).checked).toBe(true);
+    await cliquer(m, commande(fenetre(), 'confirmerAnimateurs'));
+    await attendre(m);
+    expect(fenetre()).toBeNull();
+    expect(revision(m)).toBe(r0 + 1);
+    expect(charge(m).reservations).toEqual(expect.arrayContaining([resa(6, 1, 2), resa(7, 1, 3)]));
+    expect(charge(m).titres).toEqual(
+      expect.arrayContaining([
+        { table: 1, siege: 2, libelle: 'animateur' },
+        { table: 1, siege: 3, libelle: 'animateur' },
+      ]),
+    );
+    expect(pastilles(m, 1)).toEqual(['Iris Ombrelle', 'Capucine Sarcelle', 'Élodie Églantine']);
+    await vi.waitFor(() => expect(document.activeElement).toBe(ajouter(m, 1)));
+
+    const retrait = commande(rangee(m, 1).querySelector('[data-participant="1"]'), 'retirerAnimateur');
+    expect(retrait).toHaveAccessibleName('Retirer Iris Ombrelle des animateurs de la table 1');
+    await cliquer(m, retrait);
+    expect(revision(m)).toBe(r0 + 2);
+    expect(charge(m).reservations.some((r) => r.participant === 1)).toBe(false);
+    expect(charge(m).titres.some((titreDeTable) => titreDeTable.table === 1 && titreDeTable.siege === 1)).toBe(false);
+    expect(pastilles(m, 1)).toEqual(['Capucine Sarcelle', 'Élodie Églantine']);
+    await vi.waitFor(() => expect(document.activeElement).toBe(ajouter(m, 1)));
+  });
+
+  test('un titre saisi vaut pour toutes les personnes choisies ; la table pleine est signalée contre sa ligne', async () => {
+    const m = await preparer(chargeAnimateurs());
+    await cliquer(m, ajouter(m, 2));
+    await cliquer(m, caseDe(6));
+    await cliquer(m, caseDe(7));
+    await cliquer(m, titre());
+    titre().select();
+    for (const caractere of 'accueil') await touche(caractere);
+    await cliquer(m, commande(fenetre(), 'confirmerAnimateurs'));
+    await attendre(m);
+    expect(fenetre()).toBeNull();
+    expect(charge(m).titres.filter(({ table }) => table === 2).map(({ libelle }) => libelle)).toEqual(['hôte', 'accueil', 'accueil']);
+    expect(ligne(m, 2).querySelector('[data-avertissement="TABLE_GELEE"]')).not.toBeNull();
+  });
+
+  test('un refus se pose dans la fenêtre, qui reste ouverte, et rien n’est écrit', async () => {
+    const m = await preparer(chargeAnimateurs());
+    const avant = ecritures(m);
+    await cliquer(m, ajouter(m, 3));
+    expect(compteFenetre()).toBe('0 choisie \u{00B7} 1 place libre à cette table');
+    await cliquer(m, caseDe(6));
+    await cliquer(m, caseDe(7));
+    await cliquer(m, commande(fenetre(), 'confirmerAnimateurs'));
+    await attendre(m);
+    expect(fenetre()).not.toBeNull();
+    const refus = fenetre().querySelector('[data-refus="ANIMATEUR_REFUSE"]');
+    expect(refus).not.toBeNull();
+    expect(refus.textContent).toContain('Élodie Églantine');
+    expect(ecritures(m)).toBe(avant);
+    expect(caseDe(6).checked).toBe(true);
+    expect(pastilles(m, 3)).toEqual([]);
+  });
+
+  test('le refus est décrit par « Ajouter » ; son remède abouti, le refus part et le focus revient à « Ajouter », qui désigne ensuite le lot', async () => {
+    const m = await preparer(chargeAnimateurs());
+    await cliquer(m, ajouter(m, 3));
+    await cliquer(m, caseDe(6));
+    await cliquer(m, caseDe(7));
+    const confirmer = () => commande(fenetre(), 'confirmerAnimateurs');
+    expect(confirmer().hasAttribute('aria-describedby')).toBe(false);
+    await cliquer(m, confirmer());
+    await attendre(m);
+    const refus = fenetre().querySelector('[data-refus="ANIMATEUR_REFUSE"]');
+    expect(refus).not.toBeNull();
+    expect(refus.id).not.toBe('');
+    expect(confirmer().getAttribute('aria-describedby')).toBe(refus.id);
+    expect(confirmer()).toHaveAccessibleDescription(refus.textContent.trim().replace(/\s+/g, ' '));
+    // Le remède agrandit la table 3 d'une place : il passe, le refus part,
+    // et le focus, qui était sur le remède, revient à « Ajouter ».
+    const remede = refus.querySelector('button');
+    expect(remede).not.toBeNull();
+    await cliquer(m, remede);
+    await attendre(m);
+    expect(capacite(charge(m), charge(m).tables[2])).toBe(3);
+    expect(fenetre().querySelector('[data-refus]')).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(confirmer()));
+    expect(confirmer().hasAttribute('aria-describedby')).toBe(false);
+    expect(compteFenetre()).toBe('2 choisies \u{00B7} 2 places libres à cette table');
+    await cliquer(m, confirmer());
+    await attendre(m);
+    expect(fenetre()).toBeNull();
+    expect(pastilles(m, 3)).toEqual(['Capucine Sarcelle', 'Élodie Églantine']);
+  });
+
+  test('les personnes partent dans l’ordre de la liste, non dans celui des clics : Élodie cochée avant Capucine', async () => {
+    const m = await preparer(chargeAnimateurs());
+    await cliquer(m, ajouter(m, 1));
+    await cliquer(m, caseDe(7));
+    await cliquer(m, caseDe(6));
+    await cliquer(m, commande(fenetre(), 'confirmerAnimateurs'));
+    await attendre(m);
+    expect(fenetre()).toBeNull();
+    expect(charge(m).reservations.filter(({ table }) => table === 1)).toEqual([resa(1, 1, 1), resa(6, 1, 2), resa(7, 1, 3)]);
+    expect(m.seance.historique().lignes.at(-1).libelle).toBe('Désigné 2 animateurs à la table 1 : Capucine Sarcelle, Élodie Églantine');
+  });
+
+  test('pendant l’attente d’« Ajouter », un second « Ajouter », « Annuler » et Échap ne font rien ; la promesse aboutie, la fenêtre se ferme une fois', async () => {
+    let aboutir = null;
+    const executer = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          aboutir = resolve;
+        }),
+    );
+    const surFermer = vi.fn();
+    const cible = document.createElement('div');
+    document.body.prepend(cible);
+    const props = { charge: chargeAnimateurs(), table: 1, numero: 1, executer, surFermer };
+    const composant = mount(ChoixAnimateurs, { target: cible, props, context: new Map([['t', t]]) });
+    flushSync();
+    montes.push({ composant, cible });
+    const confirmer = () => commande(fenetre(), 'confirmerAnimateurs');
+    const rendre = async () => {
+      await tick();
+      flushSync();
+    };
+    await pointerSur(caseDe(7));
+    await pointerSur(caseDe(6));
+    await rendre();
+    await pointerSur(confirmer());
+    await rendre();
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer.mock.calls[0][0]).toEqual({ participants: [6, 7], libelle: 'animateur' });
+    expect(fenetre().getAttribute('aria-busy')).toBe('true');
+    expect(confirmer().getAttribute('aria-disabled')).toBe('true');
+    await pointerSur(confirmer());
+    await pointerSur(commande(fenetre(), 'annulerAnimateurs'));
+    await touche('Escape');
+    await rendre();
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(fenetre()).not.toBeNull();
+    expect(surFermer).not.toHaveBeenCalled();
+    aboutir();
+    await vi.waitFor(() => expect(fenetre()).toBeNull());
+    expect(surFermer).toHaveBeenCalledTimes(1);
+  });
+
+  test('Échap, depuis une case ou depuis la recherche remplie, puis Annuler ferment la fenêtre d’une seule pression sans rien écrire, et rendent le focus à « Ajouter\u{2026} »', async () => {
+    const m = await preparer(chargeAnimateurs());
+    const avant = ecritures(m);
+    // Échap depuis la recherche remplie : une seule pression ferme, la
+    // recherche n'est pas d'abord vidée.
+    const depuisRecherche = async () => {
+      await chercher(m, 'iris');
+      expect(document.activeElement).toBe(recherche());
+      await touche('Escape');
+    };
+    for (const fermer of [() => touche('Escape'), depuisRecherche, () => pointerSur(commande(fenetre(), 'annulerAnimateurs'))]) {
+      await cliquer(m, ajouter(m, 1));
+      await cliquer(m, caseDe(6));
+      await fermer();
+      await attendre(m);
+      expect(fenetre()).toBeNull();
+      await vi.waitFor(() => expect(document.activeElement).toBe(ajouter(m, 1)));
+    }
+    expect(ecritures(m)).toBe(avant);
+    expect(pastilles(m, 1)).toEqual(['Iris Ombrelle']);
+  });
+
+  test('en lecture, les pastilles restent, sans × ni « Ajouter\u{2026} » ; passée en écriture, les gestes reviennent ; sur un plan bloqué, aucun geste non plus', async () => {
+    const m = await preparer(chargeAnimateurs(), { mode: 'lecture' });
+    expect(pastilles(m, 1)).toEqual(['Iris Ombrelle']);
+    expect(rangee(m, 1).querySelector('button')).toBeNull();
+    expect(ajouter(m, 2)).toBeNull();
+    await m.seance.passerEnEcriture();
+    await attendre(m);
+    expect(commande(rangee(m, 1), 'retirerAnimateur')).not.toBeNull();
+    expect(ajouter(m, 2)).not.toBeNull();
+
+    // Un plan bloqué ne passe pas en écriture : la séance le tient en
+    // lecture seule (LECTURE_SEULE), les pastilles sans geste.
+    const donnees = chargeAnimateurs({ retenu: true });
+    donnees.evenement.etat = 'bloque';
+    const bloque = await preparer(donnees, { mode: 'lecture' });
+    expect(bloque.seance.etat().refus?.code).toBe('LECTURE_SEULE');
+    expect(pastilles(bloque, 1)).toEqual(['Iris Ombrelle']);
+    expect(pastilles(bloque, 2)).toEqual(['Théo Pervenche']);
+    for (const id of [1, 2, 3]) expect(rangee(bloque, id).querySelector('button')).toBeNull();
+  });
+});
+
+// Un clic réel au centre de l'élément, sans attendre la séance.
+async function pointerSur(element) {
+  const boite = element.getBoundingClientRect();
+  await pointer('presser', boite.left + boite.width / 2, boite.top + boite.height / 2);
+  await pointer('relacher', boite.left + boite.width / 2, boite.top + boite.height / 2);
+}

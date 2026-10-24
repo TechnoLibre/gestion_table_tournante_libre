@@ -14,8 +14,10 @@ import { controlerCapacite } from '../../application/capacite.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { creerCharge } from '../../stockage/document.js';
+import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
+  animateursNommes,
   annonceSuppression,
   annonceTours,
   avertissementsNommes,
@@ -25,6 +27,9 @@ import {
   elementsTours,
   enonceDefaut,
   etatTable,
+  groupesParOrganisation,
+  personnesPourAnimation,
+  placesLibresPourAnimer,
   refusDeCommande,
   refusDuChampDefaut,
   siegesRetiresNommes,
@@ -460,5 +465,219 @@ describe('la présence par tour dans les tables (§ 6.1, § 2.1 étape 5)', () =
     const bilan = bilanChangementDefaut(charge, 2);
     assert.ok(bilan.refus.length > 0);
     assert.deepEqual(enonceDefaut(bilan, charge.tables, { partielle: true }), enonceDefaut(bilan, charge.tables));
+  });
+});
+
+describe('les animateurs d’une table et la fenêtre d’ajout (§ 2.1 étape 6, § 6.1)', () => {
+  const fiche = (id, nom, prenom, organisation, autres = {}) => ({
+    id,
+    nom,
+    prenom,
+    organisation,
+    courriel: null,
+    titrePressenti: null,
+    notes: null,
+    exclu: false,
+    ...autres,
+  });
+
+  // Trois tables de quatre places, trois tours. Iris anime la table 1,
+  // Théo la table 2 sous le titre « hôte » ; Ondine est réservée à la
+  // table 3 au tour 2, Grisaille à la table 2 pour la soirée, sans titre ;
+  // Anouk est exclue ; Capucine, libre, porte un titre pressenti ; Élodie
+  // est libre. Les participants ne sont pas rangés par identifiant.
+  function chargeAnimateurs() {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }, { id: 3 }], tours: 3, defaut: 4 });
+    charge.participants = [
+      fiche(7, 'Églantine', 'Élodie', 'Gréement Prêle'),
+      fiche(1, 'Ombrelle', 'Iris', 'Tisserands du Lichen'),
+      fiche(2, 'Pervenche', 'Théo', 'Gréement Prêle'),
+      fiche(3, 'Lacasse', 'Ondine', null),
+      fiche(4, 'Grisaille', null, 'tisserands du lichen'),
+      fiche(5, 'Bruyère', 'Anouk', 'Gréement Prêle', { exclu: true }),
+      fiche(6, 'Sarcelle', 'Capucine', null, { titrePressenti: 'animatrice' }),
+    ];
+    charge.reservations = [resa(1, 1, 1), resa(2, 2, 1), resa(3, 3, null, 2), resa(4, 2, null)];
+    charge.titres = [
+      { table: 1, siege: 1, libelle: 'animateur' },
+      { table: 2, siege: 1, libelle: 'hôte' },
+    ];
+    charge.prochainsIds.participant = 8;
+    return charge;
+  }
+
+  // La même charge, la proposition 1 retenue : Élodie à la table 1 aux trois
+  // tours, Capucine à la table 3 au tour 1 puis en réserve.
+  function chargeRetenue() {
+    const charge = chargeAnimateurs();
+    const plan = {
+      siegesAttribues: false,
+      tables: [1, 2, 3],
+      capacites: [4, 4, 4],
+      tours: 3,
+      participants: [1, 2, 3, 4, 6, 7],
+      placement: [
+        { sieges: [[1, 7], [2, 4], [3, 6]], reserve: [] },
+        { sieges: [[1, 7], [2, 4], [3]], reserve: [6] },
+        { sieges: [[1, 7], [2, 4], [3]], reserve: [6] },
+      ],
+    };
+    charge.propositions = [{ id: 1, graine: 3, arret: 40, historique: 10, produitVersion: VERSION.affichee, ...plan }];
+    charge.retenu = { proposition: 1, ...structuredClone(plan) };
+    charge.evenement.etat = 'retenu';
+    charge.prochainsIds.proposition = 2;
+    return charge;
+  }
+
+  const ids = (personnes) => personnes.map(({ participant }) => participant);
+  const textes = (personnes) => personnes.map(({ nom, statut }) => `${nom} — ${t(statut.cle, statut.details)}`);
+
+  test('animateursNommes : les animateurs de la table, nommés, dans l’ordre de leur siège ; aucun ailleurs', () => {
+    const charge = chargeAnimateurs();
+    charge.reservations.push(resa(7, 1, 2));
+    charge.titres.push({ table: 1, siege: 2, libelle: 'animateur' });
+    assert.deepEqual(animateursNommes(charge, 1), [
+      { participant: 1, nom: 'Iris Ombrelle', libelle: 'animateur' },
+      { participant: 7, nom: 'Élodie Églantine', libelle: 'animateur' },
+    ]);
+    assert.deepEqual(animateursNommes(charge, 2), [{ participant: 2, nom: 'Théo Pervenche', libelle: 'hôte' }]);
+    assert.deepEqual(animateursNommes(charge, 3), []);
+  });
+
+  test('personnesPourAnimation : une entrée par personne, dans l’ordre de la grille, son statut en texte, ce qui se choisit', () => {
+    const charge = chargeAnimateurs();
+    const avant = structuredClone(charge);
+    const personnes = personnesPourAnimation(charge, 1, '');
+    assert.deepEqual(ids(personnes), [1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(textes(personnes), [
+      'Iris Ombrelle — Anime cette table (« animateur »)',
+      'Théo Pervenche — Anime la table 2',
+      'Ondine Lacasse — Place réservée : table 3, tour 2',
+      'Grisaille — Place réservée : table 2, toute la soirée',
+      'Anouk Bruyère — Personne exclue',
+      'Capucine Sarcelle — Disponible',
+      'Élodie Églantine — Disponible',
+    ]);
+    assert.deepEqual(
+      personnes.map(({ choisissable, anime }) => [choisissable, anime]),
+      [[false, true], [false, false], [false, false], [false, false], [false, false], [true, false], [true, false]],
+    );
+    assert.deepEqual(personnes[5], {
+      participant: 6,
+      nom: 'Capucine Sarcelle',
+      organisation: null,
+      choisissable: true,
+      anime: false,
+      statut: { cle: 'tables.animateurs.statut.libre', details: {} },
+      titre: { cle: 'tables.animateurs.titrePressenti', details: { libelle: 'animatrice' } },
+    });
+    assert.equal(t(personnes[5].titre.cle, personnes[5].titre.details), 'Titre pressenti : « animatrice »');
+    assert.deepEqual(personnes.filter(({ titre }) => titre !== null).map(({ participant }) => participant), [6]);
+    // Vue depuis la table 2 : Théo l'anime, Iris anime la table 1.
+    assert.deepEqual(textes(personnesPourAnimation(charge, 2, '')).slice(0, 2), [
+      'Iris Ombrelle — Anime la table 1',
+      'Théo Pervenche — Anime cette table (« hôte »)',
+    ]);
+    assert.deepEqual(charge, avant);
+  });
+
+  test('une absente à un tour au moins : ses tours d’absence en texte, non choisissable, avant sa réservation', () => {
+    const charge = chargeAnimateurs();
+    charge.participants[3].presence = [2];
+    charge.participants[6].presence = [1, 2];
+    const de = (id) => personnesPourAnimation(charge, 1, '').find(({ participant }) => participant === id);
+    // Ondine, réservée au tour 2, absente aux tours 1 et 3.
+    assert.deepEqual(de(3).statut, { cle: 'tables.animateurs.statut.absente', details: { tours: [1, 3] } });
+    assert.equal(t(de(3).statut.cle, de(3).statut.details), 'Absence aux tours 1 et 3');
+    assert.equal(t(de(6).statut.cle, de(6).statut.details), 'Absence au tour 3');
+    assert.deepEqual([de(3).choisissable, de(6).choisissable, de(6).anime], [false, false, false]);
+    assert.deepEqual(de(6).titre, { cle: 'tables.animateurs.titrePressenti', details: { libelle: 'animatrice' } });
+  });
+
+  test('plusieurs réservations à la main se disent toutes, dans l’ordre canonique', () => {
+    const charge = chargeAnimateurs();
+    charge.reservations.push(resa(3, 2, null, 3));
+    const ondine = personnesPourAnimation(charge, 1, '').find(({ participant }) => participant === 3);
+    assert.equal(t(ondine.statut.cle, ondine.statut.details), 'Places réservées : table 2, tour 3 ; table 3, tour 2');
+  });
+
+  test('placée au plan retenu sans réservation : choisissable, ses tables et leurs tours dits', () => {
+    const personnes = personnesPourAnimation(chargeRetenue(), 1, '');
+    const de = (id) => personnes.find(({ participant }) => participant === id);
+    assert.equal(t(de(7).statut.cle, de(7).statut.details), 'Au plan retenu : table 1 aux tours 1 à 3');
+    assert.equal(t(de(6).statut.cle, de(6).statut.details), 'Au plan retenu : table 3 au tour 1');
+    assert.equal(de(7).choisissable, true);
+    assert.equal(de(6).choisissable, true);
+    assert.equal(
+      t('tables.animateurs.statut.placeeAuRetenu', { placements: [{ table: 1, numero: 1, tours: [1, 2] }, { table: 3, numero: 3, tours: [3] }] }),
+      'Au plan retenu : table 1 aux tours 1 et 2 ; table 3 au tour 3',
+    );
+  });
+
+  test('la recherche : nom, prénom, nom affiché ou organisation, sans égard à la casse ni aux accents ; vide, tout le monde', () => {
+    const charge = chargeAnimateurs();
+    const cherche = (texte) => ids(personnesPourAnimation(charge, 1, texte));
+    assert.deepEqual(cherche('IRIS'), [1]);
+    assert.deepEqual(cherche('eglantine'), [7]);
+    assert.deepEqual(cherche('ÉLODIE'), [7]);
+    assert.deepEqual(cherche('greement prele'), [2, 5, 7]);
+    assert.deepEqual(cherche('Lichen'), [1, 4]);
+    assert.deepEqual(cherche('théo perv'), [2]);
+    assert.deepEqual(cherche('  '), [1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(cherche('zzz'), []);
+  });
+
+  test('groupesParOrganisation : par organisation, deux orthographes ensemble sous la première, « sans organisation » en dernier, l’ordre de la grille dans chaque groupe', () => {
+    const groupes = groupesParOrganisation(personnesPourAnimation(chargeAnimateurs(), 1, ''));
+    assert.deepEqual(
+      groupes.map(({ organisation, personnes }) => [organisation, ids(personnes)]),
+      [
+        ['Gréement Prêle', [2, 5, 7]],
+        ['Tisserands du Lichen', [1, 4]],
+        [null, [3, 6]],
+      ],
+    );
+    assert.deepEqual(groupesParOrganisation([]), []);
+    const sansAucune = groupesParOrganisation(personnesPourAnimation(chargeAnimateurs(), 1, 'Lacasse'));
+    assert.deepEqual(sansAucune.map(({ organisation }) => organisation), [null]);
+    assert.equal(t('tables.animateurs.sansOrganisation'), 'Sans organisation');
+  });
+
+  test('groupesParOrganisation nomme chaque groupe par la liste entière : la recherche qui cache la première orthographe ne renomme pas le groupe', () => {
+    const toutes = personnesPourAnimation(chargeAnimateurs(), 1, '');
+    const filtrees = personnesPourAnimation(chargeAnimateurs(), 1, 'Grisaille');
+    assert.deepEqual(ids(filtrees), [4]);
+    assert.deepEqual(groupesParOrganisation(filtrees, toutes).map(({ organisation, personnes }) => [organisation, ids(personnes)]), [
+      ['Tisserands du Lichen', [4]],
+    ]);
+    // Sans la liste entière, la liste reçue nomme seule.
+    assert.deepEqual(groupesParOrganisation(filtrees).map(({ organisation }) => organisation), ['tisserands du lichen']);
+    // Un groupe que la liste entière ne connaît pas garde son orthographe.
+    const etrangere = [{ participant: 9, organisation: 'Héron Cendré' }];
+    assert.deepEqual(groupesParOrganisation(etrangere, toutes).map(({ organisation }) => organisation), ['Héron Cendré']);
+  });
+
+  test('placesLibresPourAnimer : la capacité moins le plus grand nombre de personnes réservées à un même tour', () => {
+    const charge = chargeAnimateurs();
+    assert.deepEqual([1, 2, 3].map((id) => placesLibresPourAnimer(charge, id)), [3, 2, 3]);
+    charge.tables[0].sieges = 1;
+    assert.equal(placesLibresPourAnimer(charge, 1), 0);
+  });
+
+  test('les libellés de la rangée et de la fenêtre, mot pour mot', () => {
+    assert.equal(t('tables.animateurs.titre'), 'Animateurs');
+    assert.equal(t('tables.animateurs.aucun'), 'Aucun animateur');
+    assert.equal(t('tables.animateurs.ajouter'), 'Ajouter\u{2026}');
+    assert.equal(t('tables.animateurs.retirer', { nom: 'Iris Ombrelle', numero: 5 }), 'Retirer Iris Ombrelle des animateurs de la table 5');
+    assert.equal(t('tables.animateurs.fenetre', { numero: 5 }), 'Ajouter des animateurs à la table 5');
+    assert.equal(t('tables.animateurs.recherche'), 'Rechercher (nom, prénom, organisation)');
+    assert.equal(t('tables.animateurs.grouper'), 'Grouper par organisation');
+    assert.equal(t('tables.animateurs.libelle'), 'Titre');
+    assert.equal(t('tables.animateurs.confirmer'), 'Ajouter');
+    assert.equal(t('tables.animateurs.annuler'), 'Annuler');
+    assert.equal(t('tables.animateurs.aucunePersonne'), 'Aucune personne ne correspond à la recherche.');
+    assert.equal(t('tables.animateurs.compte', { choisies: 2, libres: 3 }), '2 choisies \u{00B7} 3 places libres à cette table');
+    assert.equal(t('tables.animateurs.compte', { choisies: 1, libres: 1 }), '1 choisie \u{00B7} 1 place libre à cette table');
+    assert.equal(t('tables.animateurs.compte', { choisies: 0, libres: 0 }), '0 choisie \u{00B7} 0 place libre à cette table');
   });
 });

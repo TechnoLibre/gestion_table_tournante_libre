@@ -1,9 +1,10 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le registre des commandes des places — réservations, titres, pose (§ 5.8,
-// § 5.9, § 8.2), que commandes.js réunit aux autres. Ses imports n'atteignent
-// jamais commandes.js : le registre réuni dépend de lui, non l'inverse.
+// Le registre des commandes des places — réservations, titres, désignation
+// des animateurs, pose (§ 5.8, § 5.9, § 8.2), que commandes.js réunit aux
+// autres. Ses imports n'atteignent jamais commandes.js : le registre réuni
+// dépend de lui, non l'inverse.
 //
 // Chaque commande suit le contrat de commandes.js : une fonction pure
 // (charge, arguments) → { charge, libelle, avertissements }, la charge reçue
@@ -36,12 +37,13 @@ import { capacite } from '../stockage/document.js';
 import { estPresentAuTour, toursDePresence } from '../moteur/presence.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { fautes } from '../stockage/placements.js';
+import { animateursDeLaTable, avertissementsDuLot, designations, toursDAbsence } from './animateurs.js';
 import { violationsDuRetenu } from './avertissements.js';
-import { refus } from './erreurs.js';
+import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { conversionsPossibles } from './listes_travail.js';
 import { nomAffiche } from './personnes.js';
-import { etatPlaces, instanceDe, presents } from './places.js';
+import { etatPlaces, instanceDe, presents, reservationsCouvrantes } from './places.js';
 import { controlerPose, leverRefus } from './pose.js';
 import { enReserve, lieuDans, oter, sansNullDeFin } from './retenu_lieux.js';
 
@@ -348,6 +350,182 @@ function designer(charge, { participant, table: idTable, siege = null, libelle: 
       libelle: titre?.libelle ?? texte,
     }),
     avertissements: avertissementsDe(signaux),
+  };
+}
+
+// --- Les animateurs d'une table (§ 2.1 étape 6, § 5.8) ----------------------
+
+// La liste des participants d'un lot : une liste non vide d'identifiants
+// distincts ; toute autre forme est une faute de l'appelant.
+function exigerLot(participants) {
+  if (!Array.isArray(participants) || participants.length === 0) {
+    throw new TypeError(`participants : liste non vide attendue, reçu ${JSON.stringify(participants)}`);
+  }
+  if (new Set(participants).size !== participants.length) {
+    throw new TypeError(`participants : identifiants distincts attendus, reçu ${JSON.stringify(participants)}`);
+  }
+}
+
+// Le siège où designerAnimateurs désigne la personne d'identifiant
+// participant : d'abord un siège sans titre que la personne tient déjà à
+// cette table, le plus petit, pour qu'elle reçoive le titre de sa propre
+// place ; sinon le plus petit siège de la table, de 1 à places, qu'aucun
+// titre ne porte et qu'aucune réservation d'une autre personne ne tient. Une
+// réservation tient son siège à un tour qu'elle couvre et où sa personne,
+// non exclue, est présente (reservationsCouvrantes) : une réservation
+// suspendue n'écarte rien. Chaque personne reçoit ainsi son propre titre à
+// une place libre, et un titre posé avant elle reste tel quel. null quand
+// aucun siège n'est à la fois sans titre et libre : designer choisit alors
+// par sa propre règle.
+function siegeDuLot(charge, idTable, places, participant) {
+  const titres = new Set(charge.titres.filter(({ table }) => table === idTable).map(({ siege }) => siege));
+  const admis = (siege) => siege !== null && siege >= 1 && siege <= places && !titres.has(siege);
+  const siens = charge.reservations
+    .filter((r) => r.table === idTable && r.participant === participant && admis(r.siege))
+    .map(({ siege }) => siege)
+    .sort((a, b) => a - b);
+  if (siens.length > 0) return siens[0];
+  const tenus = new Set();
+  for (let tour = 1; tour <= charge.evenement.tours; tour += 1) {
+    for (const r of reservationsCouvrantes(charge, tour)) {
+      if (r.table === idTable && r.siege !== null && r.participant !== participant) tenus.add(r.siege);
+    }
+  }
+  for (let siege = 1; siege <= places; siege += 1) if (admis(siege) && !tenus.has(siege)) return siege;
+  return null;
+}
+
+// ANIMATEUR_REFUSE pour la personne, sa cause {code, details} et le remède
+// de la cause, qui devient celui du lot.
+const animateurRefuse = (personne, cause, remede) =>
+  refus('ANIMATEUR_REFUSE', { participant: personne.id, personne: nomAffiche(personne), refus: cause }, remede);
+
+/**
+ * designerAnimateurs {table, participants: [id…], libelle} (§ 2.1 étape 6,
+ * § 5.8) : designer, sous le même libellé, pour chaque personne dans l'ordre
+ * reçu, chacune sur la charge que la précédente laisse, en une entrée qui
+ * les nomme. Une personne qui anime déjà cette table (animateursDeLaTable)
+ * est passée ; quand toutes l'animent déjà, SANS_EFFET.
+ *
+ * Le siège de chaque personne est celui que rend siegeDuLot — un siège sans
+ * titre qu'elle tient déjà à la table, sinon le plus petit siège sans titre
+ * qu'aucune réservation active d'une autre personne ne tient : elle y reçoit
+ * une réservation « tous les tours » et son propre titre, un titre non pourvu
+ * posé avant le lot reste non pourvu, à sa place, et une place réservée à la
+ * main ne fait pas refuser le lot PLACE_RESERVEE tant qu'un siège reste
+ * libre. Quand aucun siège n'est à la fois sans titre et libre, designer
+ * choisit sans siège, par sa règle : il pourvoit le premier titre non pourvu
+ * de la table, et ce titre est alors celui que retirerAnimateur retire.
+ *
+ * Refus, dans cet ordre : PLAN_BLOQUE ; LIBELLE_VIDE ; PARTICIPANT_INCONNU ;
+ * puis, avant toute désignation, la première personne non exclue du lot qui
+ * n'est pas présente à chaque tour : ANIMATEUR_REFUSE qui la nomme, cause
+ * ABSENT_AU_TOUR {participant, personne, tour}, tour son premier tour
+ * d'absence, remède sa présence étendue à tous les tours ; sa réservation
+ * « tous les tours » ne pourvoirait aucun titre pour la soirée. Puis le
+ * refus de designer pour une personne — table pleine, exclue, réservée
+ * ailleurs… — refuse le lot entier : ANIMATEUR_REFUSE {participant,
+ * personne, refus: {code, details}}, la personne nommée par son nom affiché,
+ * la cause et ses détails sans le remède, qui devient celui du lot. Rien
+ * n'est posé quand le lot est refusé.
+ *
+ * Avertissements : ceux des désignations, cumulés dans leur ordre, chaque
+ * paire (code, détails) une fois, à son premier rang (avertissementsDuLot) :
+ * une personne qui tient déjà la réservation de son siège laisse la table
+ * gelée sans l'agrandir, et TABLE_GELEE y revient sinon.
+ * Une liste vide, ou qui porte deux fois un identifiant, lève TypeError.
+ */
+function designerAnimateurs(charge, { table: idTable, participants, libelle: saisi } = {}) {
+  exigerModifiable(charge);
+  const table = tableDe(charge, idTable);
+  exigerLot(participants);
+  const texte = libelleSaisi(saisi);
+  const personnes = participants.map((id) => personneDe(charge, id));
+  const animent = new Set(animateursDeLaTable(charge, idTable).map(({ participant }) => participant));
+  const nouvelles = personnes.filter(({ id }) => !animent.has(id));
+  if (nouvelles.length === 0) throw refus('SANS_EFFET', { commande: 'designerAnimateurs' });
+  const R = charge.evenement.tours;
+  for (const personne of nouvelles) {
+    if (personne.exclu) continue;
+    const [tour] = toursDAbsence(personne, R);
+    if (tour === undefined) continue;
+    const tous = Array.from({ length: R }, (_, rang) => rang + 1);
+    throw animateurRefuse(
+      personne,
+      { code: 'ABSENT_AU_TOUR', details: { participant: personne.id, personne: nomAffiche(personne), tour } },
+      { commande: 'changerPresence', arguments: { id: personne.id, tours: tous } },
+    );
+  }
+  const places = capacite(charge, table);
+  let courante = charge;
+  const listes = [];
+  for (const personne of nouvelles) {
+    let rendu;
+    try {
+      const siege = siegeDuLot(courante, idTable, places, personne.id);
+      rendu = designer(courante, { participant: personne.id, table: idTable, siege, libelle: texte });
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurCommande)) throw erreur;
+      const { remede = null, ...details } = erreur.details;
+      throw animateurRefuse(personne, { code: erreur.code, details }, remede);
+    }
+    courante = rendu.charge;
+    listes.push(rendu.avertissements);
+  }
+  return {
+    charge: courante,
+    libelle: libelle('ENTREE_DESIGNER_ANIMATEURS', { numero: table.numero, personnes: nouvelles.map(nomAffiche) }),
+    avertissements: avertissementsDuLot(listes),
+  };
+}
+
+// Le premier de titres dans l'ordre canonique : le plus petit siège, puis
+// le libellé, comparé unité UTF-16 par unité, puis le rang dans
+// charge.titres.
+const premierTitre = (titres) =>
+  [...titres].sort(
+    (a, b) =>
+      a.titre.siege - b.titre.siege ||
+      (a.titre.libelle < b.titre.libelle ? -1 : a.titre.libelle > b.titre.libelle ? 1 : 0) ||
+      a.rang - b.rang,
+  )[0];
+
+/**
+ * retirerAnimateur {table, participant} (§ 2.1 étape 6) : la personne cesse
+ * d'animer la table. Part, en une entrée, chaque réservation « tous les
+ * tours » de la personne qui pourvoit pour la soirée un titre de la table
+ * (designations), et avec elle un seul titre : le fichier ne garde pas quel
+ * geste a posé un titre, si bien que le titre retiré est le premier, dans
+ * l'ordre canonique (premierTitre), de ceux qu'elle pourvoit — celui de son
+ * siège, quand elle en porte un. designerAnimateurs pose le titre de chaque
+ * personne au siège de sa réservation : ce titre part, et un titre posé avant
+ * la désignation, à un autre siège, reste. Un second titre au même siège
+ * reste, non pourvu. Les autres réservations de la personne, et les titres
+ * et réservations des autres personnes, restent. Refus : PLAN_BLOQUE ;
+ * PARTICIPANT_INCONNU ; une personne qui n'anime pas la table, SANS_EFFET.
+ */
+function retirerAnimateur(charge, { table: idTable, participant } = {}) {
+  exigerModifiable(charge);
+  const personne = personneDe(charge, participant);
+  const table = tableDe(charge, idTable);
+  const siennes = designations(charge).filter(({ titre, reservation }) => titre.table === idTable && reservation.participant === participant);
+  if (siennes.length === 0) throw refus('SANS_EFFET', { commande: 'retirerAnimateur' });
+  const pourvoyeuses = [];
+  for (const { reservation } of siennes) {
+    if (!pourvoyeuses.some((connue) => ordreDesReservations(connue, reservation) === 0)) pourvoyeuses.push(reservation);
+  }
+  const rangs = new Set(
+    pourvoyeuses.map(
+      (reservation) => premierTitre(siennes.filter((d) => ordreDesReservations(d.reservation, reservation) === 0)).rang,
+    ),
+  );
+  const suivante = copieDeTravail(charge);
+  suivante.titres = suivante.titres.filter((_, rang) => !rangs.has(rang));
+  suivante.reservations = suivante.reservations.filter((r) => !pourvoyeuses.some((p) => ordreDesReservations(r, p) === 0));
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_RETIRER_ANIMATEUR', { personne: nomAffiche(personne), numero: table.numero }),
+    avertissements: [],
   };
 }
 
@@ -755,6 +933,8 @@ export const COMMANDES_PLACES = new Map([
   ['poserTitre', poserTitre],
   ['retirerTitre', retirerTitre],
   ['designer', designer],
+  ['designerAnimateurs', designerAnimateurs],
+  ['retirerAnimateur', retirerAnimateur],
   ['convertirEnTous', convertirEnTous],
   ['deplacerDansRetenu', deplacerDansRetenu],
   ['echangerDansRetenu', echangerDansRetenu],

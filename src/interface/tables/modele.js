@@ -8,8 +8,11 @@
 // jamais un texte : la traduction les compose. Il ne refait aucun contrôle :
 // un refus vient d'un bilan ou de la commande elle-même, essayée sur la
 // charge sans rien écrire. Aucune fonction ne modifie ce qu'elle reçoit.
+import { animateursDeLaTable, statutsPourAnimation } from '../../application/animateurs.js';
 import { appliquerCommande } from '../../application/commandes.js';
+import { cleNormalisee } from '../../application/csv.js';
 import { nomAffiche } from '../../application/personnes.js';
+import { reservationsParTour } from '../../application/pose.js';
 
 const parNumero = (a, b) => a.numero - b.numero || a.id - b.id;
 
@@ -321,4 +324,141 @@ export function refusDeCommande(charge, nom, args) {
     if (typeof erreur?.code !== 'string') throw erreur;
     return { code: erreur.code, details: erreur.details };
   }
+}
+
+// --- Les animateurs d'une table (§ 2.1 étape 6, § 6.1) ----------------------
+
+// Deux chaînes, comparées unité UTF-16 par unité.
+const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Les animateurs de la table idTable, dans l'ordre d'animateursDeLaTable,
+ * chacun nommé par son nom affiché : la rangée « Animateurs » de la liste.
+ *
+ * @param {Object} charge
+ * @param {number} idTable
+ * @returns {Array<{participant: number, nom: string, libelle: string}>}
+ */
+export function animateursNommes(charge, idTable) {
+  return animateursDeLaTable(charge, idTable).map(({ participant, libelle }) => ({ participant, nom: nomDe(charge, participant), libelle }));
+}
+
+// Le statut d'une personne (statutsPourAnimation) en clé de libellé et
+// détails : chaque genre a sa clé ; les détails gardent ce que le texte lit.
+function statutAffiche(entree) {
+  const cle = `tables.animateurs.statut.${entree.statut}`;
+  switch (entree.statut) {
+    case 'animeCetteTable':
+      return { cle, details: { siege: entree.siege, libelle: entree.libelle } };
+    case 'animeAutreTable':
+      return { cle, details: { table: entree.table, numero: entree.numero } };
+    case 'absente':
+      return { cle, details: { tours: entree.tours } };
+    case 'reservee':
+      return { cle, details: { reservations: entree.reservations } };
+    case 'placeeAuRetenu':
+      return { cle, details: { placements: entree.placements } };
+    case 'exclue':
+    case 'libre':
+      return { cle, details: {} };
+    default:
+      throw new RangeError(`statut inconnu : ${JSON.stringify(entree.statut)}`);
+  }
+}
+
+/**
+ * Les personnes que la fenêtre d'ajout des animateurs de la table idTable
+ * montre : celles dont la clé normalisée (cleNormalisee) du nom, du prénom,
+ * du nom affiché ou de l'organisation contient celle de recherche — une
+ * recherche dont la clé est vide les garde toutes —, dans l'ordre de la
+ * grille des participants sans tri, par identifiant croissant. Chacune porte
+ * son nom affiché, son organisation, son statut en clé de libellé
+ * (tables.animateurs.statut.*), choisissable, anime — vrai pour une personne
+ * qui anime déjà cette table — et titre, la clé de son titre pressenti, null
+ * sans lui.
+ *
+ * @param {Object} charge
+ * @param {number} idTable
+ * @param {string} recherche
+ * @returns {Array<{participant: number, nom: string, organisation: string|null, choisissable: boolean, anime: boolean,
+ *   statut: {cle: string, details: Object}, titre: null|{cle: string, details: Object}}>}
+ * @throws {TypeError} une table inconnue
+ */
+export function personnesPourAnimation(charge, idTable, recherche) {
+  const statuts = new Map(statutsPourAnimation(charge, idTable).map((entree) => [entree.participant, entree]));
+  const cherche = cleNormalisee(recherche);
+  const retient = (personne) =>
+    cherche === '' ||
+    [personne.nom, personne.prenom, personne.organisation, nomAffiche(personne)].some(
+      (texte) => texte !== null && cleNormalisee(texte).includes(cherche),
+    );
+  return charge.participants
+    .filter(retient)
+    .sort((a, b) => a.id - b.id)
+    .map((personne) => {
+      const entree = statuts.get(personne.id);
+      return {
+        participant: personne.id,
+        nom: nomAffiche(personne),
+        organisation: personne.organisation,
+        choisissable: entree.choisissable,
+        anime: entree.statut === 'animeCetteTable',
+        statut: statutAffiche(entree),
+        titre: entree.titrePressenti === null ? null : { cle: 'tables.animateurs.titrePressenti', details: { libelle: entree.titrePressenti } },
+      };
+    });
+}
+
+/**
+ * Les personnes reçues groupées par organisation : deux orthographes de
+ * même clé normalisée forment un groupe ; les groupes par clé croissante,
+ * comparée unité UTF-16 par unité, puis celui des personnes sans
+ * organisation, organisation null, en dernier. Chaque groupe garde l'ordre
+ * reçu. Un groupe se nomme par la première orthographe de sa clé dans
+ * toutes — la liste d'avant la recherche, qui contient celles reçues —,
+ * comme les groupes de la grille (groupesGrille) : cacher une personne ne
+ * renomme pas son groupe. Une clé que toutes ne porte pas se nomme par la
+ * première orthographe reçue.
+ *
+ * @param {Array<{organisation: string|null}>} personnes
+ * @param {Array<{organisation: string|null}>} [toutes]  personnes par défaut
+ * @returns {Array<{organisation: string|null, personnes: Array<Object>}>}
+ */
+export function groupesParOrganisation(personnes, toutes = personnes) {
+  const noms = new Map();
+  for (const { organisation } of toutes) {
+    if (organisation === null) continue;
+    const cle = cleNormalisee(organisation);
+    if (!noms.has(cle)) noms.set(cle, organisation);
+  }
+  const groupes = new Map();
+  const sans = [];
+  for (const personne of personnes) {
+    if (personne.organisation === null) {
+      sans.push(personne);
+      continue;
+    }
+    const cle = cleNormalisee(personne.organisation);
+    if (!groupes.has(cle)) groupes.set(cle, { organisation: noms.get(cle) ?? personne.organisation, personnes: [] });
+    groupes.get(cle).personnes.push(personne);
+  }
+  const ranges = [...groupes.keys()].sort(comparerTextes).map((cle) => groupes.get(cle));
+  return sans.length === 0 ? ranges : [...ranges, { organisation: null, personnes: sans }];
+}
+
+/**
+ * Les places de la table idTable qu'une réservation « tous les tours » peut
+ * encore prendre : sa capacité moins le plus grand nombre de personnes
+ * qu'une réservation y tient à un même tour (reservationsParTour), zéro au
+ * moins.
+ *
+ * @param {Object} charge
+ * @param {number} idTable
+ * @returns {number}
+ */
+export function placesLibresPourAnimer(charge, idTable) {
+  const table = charge.tables.find((candidate) => candidate.id === idTable);
+  if (table === undefined) throw new TypeError(`table inconnue : ${JSON.stringify(idTable)}`);
+  const { capacite } = etatTable(table, charge.evenement.siegesParDefaut);
+  return Math.max(0, capacite - Math.max(0, ...reservationsParTour(charge, idTable)));
 }
