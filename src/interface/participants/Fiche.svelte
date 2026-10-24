@@ -16,8 +16,16 @@
   // Le statut est celui de statuts (src/application/places.js), lu dans
   // l'instance du moteur ; l'itinéraire, celui d'itineraire (grille.js), lu
   // tour par tour dans etatPlaces : la fiche ne recalcule ni l'un ni
-  // l'autre. Ses contrôles de saisie sont le champ des étiquettes, les cases
-  // des conflits et celles de la présence.
+  // l'autre. Ses contrôles de saisie sont le formulaire des informations,
+  // le champ des étiquettes, les cases des conflits et celles de la
+  // présence.
+  //
+  // Le bloc des informations (InformationsFiche.svelte,
+  // data-informations-fiche), en tête : les six valeurs de texte et le
+  // statut, puis « Modifier », qui ouvre à leur place le formulaire qui les
+  // change en une entrée. Il se recrée à chaque personne ({#key}) : un
+  // formulaire ouvert se referme sans rien écrire quand la fiche passe à
+  // une autre.
   //
   // La rubrique « Logo » (LogoFiche.svelte, data-logo-fiche), entre les
   // valeurs et les étiquettes : la vignette du logo et sa vue grande,
@@ -117,9 +125,10 @@
   import { cleNormalisee } from '../../application/csv.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
+  import InformationsFiche from './InformationsFiche.svelte';
   import LogoFiche from './LogoFiche.svelte';
   import { ajoutEtiquettes, etiquettesDeLaFiche, retraitEtiquette, saisieApresAjout, signauxOrthographe } from './etiquettes.js';
-  import { cleDeColonne, cleDeStatut, commandeDeCellule, itineraire, ligneVoisine, reservationsDe } from './grille.js';
+  import { cleDeStatut, commandeDeCellule, itineraire, ligneVoisine, reservationsDe } from './grille.js';
   import { choixDeConflits, commandeDeConflits, lectureConflits, saisieApresBasculeConflit, saisieConflitsEnregistree } from './liste_conflits.js';
   import { affichagePresence, casesDeSaisie, lecturePresence, saisieApresBascule, saisieEnregistree, saisiePleine } from './presence.js';
 
@@ -130,9 +139,6 @@
   const seance = getContext('seance');
   const uid = $props.id();
   const geste = creerGeste(seance);
-
-  // Les valeurs de la fiche, sous l'étiquette de leur colonne.
-  const CHAMPS = ['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes'];
 
   const statut = $derived.by(() => {
     if (participant.exclu) return t('participants.fiche.statutExclue');
@@ -416,16 +422,8 @@
     </button>
   </div>
 
-  <dl>
-    {#each CHAMPS as cle (cle)}
-      <dt>{t(cleDeColonne(cle))}</dt>
-      <dd>{participant[cle] ?? t('participants.fiche.vide')}</dd>
-    {/each}
-    <dt>{t('participants.fiche.statut')}</dt>
-    <dd>{statut}</dd>
-  </dl>
-
   {#key participant.id}
+    <InformationsFiche {participant} {charge} {statut} />
     <LogoFiche {participant} />
   {/key}
 
@@ -710,15 +708,6 @@
     font-size: var(--taille-titre-carte);
   }
 
-  dl {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    align-items: baseline;
-    gap: var(--espace-2) var(--espace-3);
-    margin: var(--espace-3) 0;
-  }
-
-  dt,
   caption,
   h4 {
     color: var(--couleur-page-texte-secondaire);
@@ -726,12 +715,6 @@
     font-weight: bold;
     letter-spacing: var(--interlettre-capitales);
     text-transform: uppercase;
-  }
-
-  dd {
-    min-width: 0;
-    margin: 0;
-    white-space: pre-wrap;
   }
 
   table {

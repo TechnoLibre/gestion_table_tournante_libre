@@ -210,6 +210,18 @@ l’ouvre peut prendre pour une formule une cellule qui commence par « = »,
 « + », « - » ou « @ ». Si une valeur commence ainsi, ouvrez le fichier par la
 commande d’import de texte du tableur, colonnes en texte.
 
+La fiche d’une personne, ouverte par « Fiche » dans la grille, montre en tête
+son nom, son prénom, son organisation, son courriel, son titre pressenti et ses
+notes, « — » pour une valeur absente. « Modifier » les remplace par un
+formulaire prérempli, le curseur dans le nom ; « Enregistrer », ou Entrée,
+écrit les seuls champs changés en un seul geste, que « Défaire » ou Ctrl+Z
+reprend, et ne fait rien quand rien n’a changé ; « Annuler », ou Échap,
+referme sans rien écrire. Tapée « FINANCE » quand une autre personne porte
+« Finance », l’organisation s’enregistre sous « Finance », et la fiche le dit.
+Un nom vidé est refusé sous le champ, le formulaire gardé. En lecture et sur
+un plan bloqué, « Modifier » refuse à côté du bouton, en nommant le geste qui
+lève le refus.
+
 Chaque personne peut porter des **étiquettes** — « finance », « bénévole »,
 « Montréal » —, que les objectifs des tables attendent (étape 4). Une colonne
 « Étiquettes » du fichier les importe ; la fiche d’une personne, ouverte par

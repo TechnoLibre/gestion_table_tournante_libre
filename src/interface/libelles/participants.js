@@ -37,8 +37,13 @@
 // agrandit, l'image agrandie, nommée par la personne, son « Fermer », et la
 // phrase d'un logo dont l'image manque au dossier de l'événement ou ne se
 // lit pas.
+// participants.informations.* porte le bloc des informations de la fiche
+// (InformationsFiche.svelte) : « Modifier », nommée par la personne, le
+// formulaire, nommé de même, « Enregistrer », « Annuler », et l'avis de ce
+// que les listes de conflits ont suivi (suiviDesConflits, informations.js),
+// ses parties séparées d'un point-virgule.
 
-import { toursNommes } from '../../application/libelles/aides.js';
+import { cite, enumeration, toursNommes } from '../../application/libelles/aides.js';
 
 // Un nombre suivi de son nom, au singulier pour 0 et 1.
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
@@ -209,6 +214,25 @@ export const TABLE = new Map([
   ['participants.fiche.absente', 'absente'],
   ['participants.fiche.logo', 'Logo'],
   ['participants.fiche.aucunLogo', 'Aucun logo.'],
+
+  // --- Les informations de la fiche et leur formulaire (§ 10.2) ------------
+  ['participants.informations.modifier', 'Modifier'],
+  ['participants.informations.modifierNomme', ({ nom }) => `Modifier les informations de ${nom}`],
+  ['participants.informations.formulaire', ({ nom }) => `Informations de ${nom}`],
+  ['participants.informations.enregistrer', 'Enregistrer'],
+  ['participants.informations.annuler', 'Annuler'],
+  [
+    'participants.informations.conflitsSuivis',
+    ({ renommee, retirees, propres }) => {
+      const parties = [];
+      if (renommee !== null) parties.push(`${cite(renommee.de)} devient ${cite(renommee.vers)}`);
+      if (retirees.length > 0) parties.push(`${enumeration(retirees.map(cite))} ${retirees.length === 1 ? 'les quitte' : 'les quittent'}`);
+      if (propres > 0) {
+        parties.push(compte(propres, 'conflit avec sa propre organisation retiré', 'conflits avec leur propre organisation retirés'));
+      }
+      return `Les conflits d'organisation suivent ce changement : ${parties.join(' ; ')}.`;
+    },
+  ],
 
   // --- Le logo de la fiche (§ 8.9, § 10.2) ----------------------------------
   ['participants.logo.choisir', 'Logo'],

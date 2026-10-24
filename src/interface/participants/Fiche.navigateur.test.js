@@ -23,10 +23,19 @@
 // côté de « Logo » — en lecture et sur un plan bloqué avant que le dialogue
 // s'ouvre —, le geste tenu tant que le dialogue est ouvert, le passage à
 // une autre personne pendant une conversion, et l'écriture venue
-// d'ailleurs ; chaque image se compose dans l'épreuve. Chaque épreuve
+// d'ailleurs ; chaque image se compose dans l'épreuve. Puis les
+// informations de la fiche (§ 4, § 10.2) : les six valeurs en lecture,
+// « Modifier » et son formulaire prérempli, le focus au nom puis rendu à
+// « Modifier », une seule entrée des seuls champs changés, aucune quand
+// rien ne change, « Annuler » et Échap, NOM_REQUIS contre le nom,
+// l'orthographe d'organisation retenue et son signal, l'avis des conflits
+// qui suivent, le refus en lecture et sur un plan bloqué, le formulaire
+// refermé au passage à une autre personne, Ctrl+Z, et les conflits
+// atteignables pendant la saisie. Chaque épreuve
 // monte App par monterApp, au cadre de 1 366 × 700, ouvre la section des
 // participants et la fiche, et lit le rendu par le texte et les attributs
-// data-…, jamais par une classe ; la dernière monte la fiche seule, sur
+// data-…, jamais par une classe ; celle de la rubrique « Rencontres » qui
+// suit le plan monte la fiche seule, sur
 // une séance en lecture simulée, et change la proposition demandée au
 // plan. Les noms d'épreuve sont inventés.
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -1099,5 +1108,411 @@ describe('la rubrique « Logo » de la fiche (§ 8.9, § 10.2)', () => {
     await m.seance.defaire();
     await attendre(() => expect(texteDe(rubriqueLogo(ficheDe(m, 3)).querySelector('[data-logo-absent]'))).toBe('Aucun logo.'));
     expect(vignette(ficheDe(m, 3))).toBeNull();
+  });
+});
+
+describe('les informations de la fiche et « Modifier » (§ 4, § 10.2)', () => {
+  const bloc = (fiche) => fiche.querySelector('[data-informations-fiche]');
+  const formulaire = (fiche) => bloc(fiche).querySelector('form');
+  const champ = (fiche, cle) => formulaire(fiche).querySelector(`[data-champ="${cle}"]`);
+  const modifier = (fiche) => bloc(fiche).querySelector('[data-commande="modifierInformations"]');
+  const enregistrer = (fiche) => formulaire(fiche).querySelector('[data-commande="enregistrerInformations"]');
+  const annuler = (fiche) => formulaire(fiche).querySelector('[data-commande="annulerInformations"]');
+  const ficheDe = (m, id) => m.racine.querySelector(`[data-fiche="${id}"]`);
+  const personneDe = (m, id) => m.seance.etat().charge.participants.find((p) => p.id === id);
+  // Les valeurs du bloc en lecture : [intitulé, valeur] par ligne.
+  const valeurs = (fiche) => [...bloc(fiche).querySelectorAll('dt')].map((dt) => [texteDe(dt), texteDe(dt.nextElementSibling)]);
+  // Les entrées « Modifié … » du journal, une par « Enregistrer » qui écrit.
+  const libelles = (m) => {
+    const texte = m.fs.contenu('documents', `${BASE}/${BASE}${SUFFIXES.journal}`);
+    const tous = texte === null ? [] : lireJournal(texte).entrees.map(({ libelle }) => libelle);
+    return tous.filter((libelle) => libelle.startsWith('Modifié '));
+  };
+
+  // Tape texte dans le champ, comme une saisie : la valeur, puis l'événement
+  // que suit la liaison.
+  function remplir(element, texte) {
+    element.value = texte;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+  }
+
+  // Ouvre le formulaire par « Modifier », et rend la fiche, le focus posé.
+  async function ouvrirFormulaire(m, id) {
+    modifier(ficheDe(m, id)).click();
+    await attendre(() => expect(formulaire(ficheDe(m, id))).not.toBeNull());
+    return ficheDe(m, id);
+  }
+
+  // Douze personnes, trois organisations : la douzième, seule au Club des
+  // Merles, que la liste d'Ondine Lacasse nomme.
+  function chargeConflit() {
+    const charge = chargeDouze();
+    charge.participants[11].organisation = 'Club des Merles';
+    charge.participants[2].conflits = ['Club des Merles'];
+    return charge;
+  }
+
+  test('en lecture, les six valeurs sous leur intitulé, « — » quand vide, puis le statut ; « Modifier », nommée par la personne, avant le logo', async () => {
+    const charge = chargeDouze();
+    Object.assign(charge.participants[2], { courriel: 'ondine@exemple.invalid', notes: 'Arrive tard\nAllergie aux noix' });
+    const { fiche } = await ouvrirFiche(charge, 3);
+    expect(bloc(fiche)).not.toBeNull();
+    expect(valeurs(fiche)).toEqual([
+      [t('participants.colonne.nom'), 'Lacasse'],
+      [t('participants.colonne.prenom'), 'Ondine'],
+      [t('participants.colonne.organisation'), 'Coopérative Aubier'],
+      [t('participants.colonne.courriel'), 'ondine@exemple.invalid'],
+      [t('participants.colonne.titrePressenti'), '\u{2014}'],
+      [t('participants.colonne.notes'), 'Arrive tard Allergie aux noix'],
+      [t('participants.fiche.statut'), expect.any(String)],
+    ]);
+    expect([...bloc(fiche).querySelectorAll('dd')][5].textContent).toBe('Arrive tard\nAllergie aux noix');
+    expect(texteDe(modifier(fiche))).toBe(t('participants.informations.modifier'));
+    expect(modifier(fiche).getAttribute('aria-label')).toBe(tEcran('participants.informations.modifierNomme', { nom: 'Ondine Lacasse' }));
+    expect(formulaire(fiche)).toBeNull();
+    expect(bloc(fiche).compareDocumentPosition(fiche.querySelector('[data-logo-fiche]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('« Modifier » ouvre à la place du bloc un formulaire prérempli, les notes en zone de texte, le focus sur le nom ; rien ne s’écrit', async () => {
+    const charge = chargeDouze();
+    charge.participants[2].notes = 'Arrive tard';
+    const { m } = await ouvrirFiche(charge, 3);
+    const trace = m.trace.length;
+    const fiche = await ouvrirFormulaire(m, 3);
+    expect(bloc(fiche).querySelector('dl')).toBeNull();
+    expect(modifier(fiche)).toBeNull();
+    expect(formulaire(fiche).getAttribute('aria-label')).toBe(tEcran('participants.informations.formulaire', { nom: 'Ondine Lacasse' }));
+    const cles = ['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes'];
+    expect(cles.map((cle) => champ(fiche, cle).value)).toEqual(['Lacasse', 'Ondine', 'Coopérative Aubier', '', '', 'Arrive tard']);
+    expect(cles.map((cle) => texteDe(formulaire(fiche).querySelector(`label[for="${champ(fiche, cle).id}"]`)))).toEqual(
+      cles.map((cle) => t(`participants.colonne.${cle}`)),
+    );
+    expect(champ(fiche, 'notes').localName).toBe('textarea');
+    // Les organisations de l'événement, proposées au champ.
+    const liste = document.getElementById(champ(fiche, 'organisation').getAttribute('list'));
+    expect([...liste.querySelectorAll('option')].map((option) => option.value)).toEqual(['Atelier Ressac', 'Coopérative Aubier']);
+    await attendre(() => expect(document.activeElement).toBe(champ(fiche, 'nom')));
+    expect(texteDe(enregistrer(fiche))).toBe(t('participants.informations.enregistrer'));
+    expect(texteDe(annuler(fiche))).toBe(t('participants.informations.annuler'));
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(m.trace.length).toBe(trace);
+  });
+
+  test('changer le nom et l’organisation : une seule entrée qui nomme les deux champs, le bloc montre les nouvelles valeurs, le focus revient à « Modifier » ; Ctrl+Z défait l’entrée', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'nom'), 'Lacasse-Varech');
+    remplir(champ(fiche, 'organisation'), 'Fonds Grisaille');
+    expect(m.seance.gesteEnCours).toBe(true);
+    enregistrer(fiche).click();
+    await attendre(() => expect(personneDe(m, 3).organisation).toBe('Fonds Grisaille'));
+    await attendre(() => expect(libelles(m)).toHaveLength(1));
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('modifierParticipant', { id: 3, champs: { nom: 'Lacasse-Varech', organisation: 'Fonds Grisaille' } });
+    expect(libelles(m)[0]).toBe('Modifié Ondine Lacasse : nom, organisation (désormais Ondine Lacasse-Varech)');
+    const apres = await attendre(() => {
+      const trouvee = ficheDe(m, 3);
+      expect(formulaire(trouvee)).toBeNull();
+      return trouvee;
+    });
+    expect(valeurs(apres).slice(0, 3).map(([, valeur]) => valeur)).toEqual(['Lacasse-Varech', 'Ondine', 'Fonds Grisaille']);
+    await attendre(() => expect(document.activeElement).toBe(modifier(apres)));
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(bloc(apres).querySelector('[data-avertissement]')).toBeNull();
+
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(personneDe(m, 3).nom).toBe('Lacasse'));
+    expect(personneDe(m, 3).organisation).toBe('Coopérative Aubier');
+    await attendre(() => expect(valeurs(ficheDe(m, 3)).slice(0, 3).map(([, valeur]) => valeur)).toEqual(['Lacasse', 'Ondine', 'Coopérative Aubier']));
+    expect(executer).toHaveBeenCalledTimes(1);
+  });
+
+  test('rien de changé, ou des blancs de bord seulement : « Enregistrer » referme sans écrire ni refuser, le focus à « Modifier »', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const trace = m.trace.length;
+    let fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'prenom'), '  Ondine ');
+    expect(m.seance.gesteEnCours).toBe(false);
+    enregistrer(fiche).click();
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+    await attendre(() => expect(document.activeElement).toBe(modifier(ficheDe(m, 3))));
+    fiche = await ouvrirFormulaire(m, 3);
+    await touche('Enter');
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+    expect(executer).not.toHaveBeenCalled();
+    expect(m.racine.querySelector('[data-refus]')).toBeNull();
+    expect(m.trace.length).toBe(trace);
+  });
+
+  test('une organisation voisine de celle d’une autre, que la saisie ne touche pas : « Enregistrer » sans changement n’écrit rien, les notes seules ne font partir qu’elles', async () => {
+    const charge = chargeDouze();
+    charge.participants[2].organisation = 'atelier ressac';
+    const { m } = await ouvrirFiche(charge, 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const trace = m.trace.length;
+    let fiche = await ouvrirFormulaire(m, 3);
+    expect(m.seance.gesteEnCours).toBe(false);
+    enregistrer(fiche).click();
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+    expect(executer).not.toHaveBeenCalled();
+    expect(m.trace.length).toBe(trace);
+
+    fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'notes'), 'arrive tard');
+    enregistrer(fiche).click();
+    await attendre(() => expect(personneDe(m, 3).notes).toBe('arrive tard'));
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('modifierParticipant', { id: 3, champs: { notes: 'arrive tard' } });
+    expect(personneDe(m, 3).organisation).toBe('atelier ressac');
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+    expect(bloc(ficheDe(m, 3)).querySelector('[data-avertissement]')).toBeNull();
+  });
+
+  test('une écriture venue d’ailleurs pendant la saisie ne tient pas le geste, et « Enregistrer » ne la défait pas : seuls les champs saisis partent', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    await ouvrirFormulaire(m, 3);
+    await m.seance.executer('modifierParticipant', { id: 3, champs: { prenom: 'Zoé' } });
+    flushSync();
+    expect(formulaire(ficheDe(m, 3))).not.toBeNull();
+    const tenuSansFrappe = m.seance.gesteEnCours;
+    const executer = vi.spyOn(m.seance, 'executer');
+    remplir(champ(ficheDe(m, 3), 'notes'), 'arrive tard');
+    expect(m.seance.gesteEnCours).toBe(true);
+    enregistrer(ficheDe(m, 3)).click();
+    await attendre(() => expect(personneDe(m, 3).notes).toBe('arrive tard'));
+    expect(personneDe(m, 3).prenom).toBe('Zoé');
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('modifierParticipant', { id: 3, champs: { notes: 'arrive tard' } });
+    await attendre(() => expect(valeurs(ficheDe(m, 3))[1][1]).toBe('Zoé'));
+    expect(tenuSansFrappe, 'le geste tenu sans frappe').toBe(false);
+  });
+
+  test('dans les notes, Maj+Entrée garde un saut de ligne sans rien écrire ; Entrée envoie le formulaire, les notes avec leur saut de ligne', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const fiche = await ouvrirFormulaire(m, 3);
+    // Le focus que « Modifier » pose au nom d'abord, puis aux notes.
+    await attendre(() => expect(document.activeElement).toBe(champ(fiche, 'nom')));
+    const notes = champ(fiche, 'notes');
+    notes.focus();
+    remplir(notes, 'Arrive tard');
+    notes.setSelectionRange(notes.value.length, notes.value.length);
+    await touche('Enter', { maj: true });
+    for (const lettre of 'noix') await touche(lettre);
+    flushSync();
+    expect(champ(ficheDe(m, 3), 'notes').value).toBe('Arrive tard\nnoix');
+    expect(formulaire(ficheDe(m, 3))).not.toBeNull();
+    expect(executer).not.toHaveBeenCalled();
+    await touche('Enter');
+    await attendre(() => expect(personneDe(m, 3).notes).toBe('Arrive tard\nnoix'));
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('modifierParticipant', { id: 3, champs: { notes: 'Arrive tard\nnoix' } });
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+    expect(libelles(m)).toHaveLength(1);
+  });
+
+  test('un refus de la séance à l’envoi — le plan bloqué pendant la saisie — se pose sous « Enregistrer », avec son remède, hors du nom ; le formulaire reste ouvert avec la saisie, rien ne s’écrit', async () => {
+    const lue = generee(chargeDouze());
+    const retenue = executer(lue, 'retenirProposition', { id: lue.propositions[0].id });
+    const { m } = await ouvrirFiche(structuredClone(retenue), 3);
+    const fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'prenom'), 'Ondine-Rose');
+    await m.seance.executer('changerEtat', { etat: 'bloque' });
+    flushSync();
+    const ecritures = m.trace.length;
+    enregistrer(ficheDe(m, 3)).click();
+    const refus = await attendre(() => {
+      const trouve = formulaire(ficheDe(m, 3)).querySelector('[data-refus]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    // Le refus de la séance sur un plan bloqué, et son remède, « Débloquer ».
+    expect(refus.dataset.refus).toBe(m.seance.etat().refus.code);
+    expect(refus.dataset.refus).not.toBe('NOM_REQUIS');
+    expect(texteDe(refus.querySelector('button'))).toBe(tEcran('communs.remede.debloquer'));
+    expect(enregistrer(ficheDe(m, 3)).compareDocumentPosition(refus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const nom = champ(ficheDe(m, 3), 'nom');
+    expect(nom.hasAttribute('aria-invalid')).toBe(false);
+    expect(nom.hasAttribute('aria-describedby')).toBe(false);
+    expect(champ(ficheDe(m, 3), 'prenom').value).toBe('Ondine-Rose');
+    expect(m.trace.length).toBe(ecritures);
+    expect(personneDe(m, 3).prenom).toBe('Ondine');
+  });
+
+  test('« Annuler » et Échap referment sans rien écrire et rendent le focus à « Modifier » ; une saisie tient le geste, que la fermeture rend', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const trace = m.trace.length;
+    let fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'courriel'), 'ondine@exemple.invalid');
+    expect(m.seance.gesteEnCours).toBe(true);
+    annuler(fiche).click();
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+    await attendre(() => expect(document.activeElement).toBe(modifier(ficheDe(m, 3))));
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(valeurs(ficheDe(m, 3))[3][1]).toBe('\u{2014}');
+
+    fiche = await ouvrirFormulaire(m, 3);
+    expect(champ(fiche, 'courriel').value).toBe('');
+    remplir(champ(fiche, 'notes'), 'végétarienne');
+    champ(fiche, 'notes').focus();
+    await touche('Escape');
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+    await attendre(() => expect(document.activeElement).toBe(modifier(ficheDe(m, 3))));
+    expect(executer).not.toHaveBeenCalled();
+    expect(m.trace.length).toBe(trace);
+    expect(m.seance.gesteEnCours).toBe(false);
+  });
+
+  test('le nom vidé : NOM_REQUIS se pose contre le nom, qu’il décrit, le formulaire reste ouvert avec la saisie ; une frappe retire le refus', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const trace = m.trace.length;
+    const fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'nom'), '   ');
+    remplir(champ(fiche, 'prenom'), 'Ondine-Rose');
+    enregistrer(fiche).click();
+    const refus = await attendre(() => {
+      const trouve = formulaire(ficheDe(m, 3)).querySelector('[data-refus="NOM_REQUIS"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    const nom = champ(ficheDe(m, 3), 'nom');
+    expect(nom.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(nom.getAttribute('aria-describedby'))).toBe(refus);
+    expect(nom.compareDocumentPosition(refus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(refus.compareDocumentPosition(champ(ficheDe(m, 3), 'prenom')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(champ(ficheDe(m, 3), 'prenom').value).toBe('Ondine-Rose');
+    expect(m.trace.length).toBe(trace);
+    expect(personneDe(m, 3).prenom).toBe('Ondine');
+    remplir(nom, 'L');
+    expect(formulaire(ficheDe(m, 3)).querySelector('[data-refus]')).toBeNull();
+    expect(nom.hasAttribute('aria-invalid')).toBe(false);
+  });
+
+  test('une organisation qui ne diffère d’une autre que par la casse et les blancs s’enregistre sous son orthographe, et le signal le dit sous le bloc ; Défaire le retire', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'organisation'), ' atelier  ressac ');
+    enregistrer(fiche).click();
+    await attendre(() => expect(personneDe(m, 3).organisation).toBe('Atelier Ressac'));
+    expect(executer).toHaveBeenCalledWith('modifierParticipant', { id: 3, champs: { organisation: 'Atelier Ressac' } });
+    const signal = await attendre(() => {
+      const trouve = bloc(ficheDe(m, 3)).querySelector('[data-avertissement="ORTHOGRAPHE_RETENUE"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(signal.getAttribute('role')).toBe('status');
+    expect(signal.querySelector('p').textContent).toBe(tEcran('ORTHOGRAPHE_RETENUE', { saisie: 'atelier  ressac', retenue: 'Atelier Ressac' }));
+    expect(modifier(ficheDe(m, 3)).getAttribute('aria-describedby')).toBe(null);
+    await m.seance.defaire();
+    await attendre(() => expect(bloc(ficheDe(m, 3)).querySelector('[data-avertissement]')).toBeNull());
+    expect(personneDe(m, 3).organisation).toBe('Coopérative Aubier');
+  });
+
+  test('la dernière personne d’une organisation en change : la liste qui la nommait suit, et l’avis le dit sous le bloc', async () => {
+    const { m } = await ouvrirFiche(chargeConflit(), 12);
+    const fiche = await ouvrirFormulaire(m, 12);
+    remplir(champ(fiche, 'organisation'), 'Club des Grives');
+    enregistrer(fiche).click();
+    await attendre(() => expect(personneDe(m, 3).conflits).toEqual(['Club des Grives']));
+    expect(libelles(m).at(-1)).toBe(
+      'Modifié Ysaline Fougeraie : organisation ; « Club des Merles » devient « Club des Grives » dans les conflits',
+    );
+    const avis = await attendre(() => {
+      const trouve = bloc(ficheDe(m, 12)).querySelector('[data-avertissement="conflitsSuivis"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(avis.getAttribute('role')).toBe('status');
+    expect(avis.querySelector('p').textContent).toBe(
+      tEcran('participants.informations.conflitsSuivis', { renommee: { de: 'Club des Merles', vers: 'Club des Grives' }, retirees: [], propres: 0 }),
+    );
+    // Une autre personne : l'avis ne la suit pas.
+    m.ui.ouvrirFiche(3);
+    await attendre(() => expect(ficheDe(m, 3)).not.toBeNull());
+    expect(bloc(ficheDe(m, 3)).querySelector('[data-avertissement]')).toBeNull();
+  });
+
+  test('en lecture, et sur un plan bloqué en écriture comme en lecture : « Modifier » refuse à côté du bouton, avec son remède, sans ouvrir le formulaire ni rien écrire', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeDouze(), 3, { mode: 'lecture' });
+    const trace = m.trace.length;
+    modifier(fiche).click();
+    const refus = await attendre(() => {
+      const trouve = bloc(ficheDe(m, 3)).querySelector('[data-refus="MODE_LECTURE"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    expect(refus.querySelector('button')).not.toBeNull();
+    expect(document.getElementById(modifier(ficheDe(m, 3)).getAttribute('aria-describedby'))).toBe(refus);
+    expect(formulaire(ficheDe(m, 3))).toBeNull();
+    expect(m.trace.length).toBe(trace);
+
+    const lue = generee(chargeDouze());
+    const retenue = executer(lue, 'retenirProposition', { id: lue.propositions[0].id });
+    for (const mode of ['ecriture', 'lecture']) {
+      const depart = mode === 'ecriture' ? retenue : executer(retenue, 'changerEtat', { etat: 'bloque' });
+      const { m: bloque } = await ouvrirFiche(structuredClone(depart), 3, { mode });
+      if (mode === 'ecriture') await bloque.seance.executer('changerEtat', { etat: 'bloque' });
+      const ecritures = bloque.trace.length;
+      await attendre(() => expect(modifier(ficheDe(bloque, 3))).not.toBeNull());
+      modifier(ficheDe(bloque, 3)).click();
+      const refusBloque = await attendre(() => {
+        const trouve = bloc(ficheDe(bloque, 3)).querySelector('[data-refus]');
+        expect(trouve).not.toBeNull();
+        return trouve;
+      });
+      expect(refusBloque.dataset.refus, mode).toBe(bloque.seance.etat().refus.code);
+      expect(refusBloque.querySelector('button'), mode).not.toBeNull();
+      expect(formulaire(ficheDe(bloque, 3)), mode).toBeNull();
+      expect(bloque.trace.length, mode).toBe(ecritures);
+    }
+  });
+
+  test('la fiche ouverte sur une autre personne pendant la saisie : le formulaire se referme sans écrire, le geste rendu ; revenir montre le bloc en lecture', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const trace = m.trace.length;
+    const fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'nom'), 'Lacasse-Varech');
+    expect(m.seance.gesteEnCours).toBe(true);
+    m.ui.ouvrirFiche(4);
+    const quatre = await attendre(() => {
+      const trouvee = ficheDe(m, 4);
+      expect(trouvee).not.toBeNull();
+      return trouvee;
+    });
+    expect(formulaire(quatre)).toBeNull();
+    expect(valeurs(quatre)[0][1]).toBe('Tourteau');
+    await attendre(() => expect(m.seance.gesteEnCours).toBe(false));
+    m.ui.ouvrirFiche(3);
+    const trois = await attendre(() => {
+      const trouvee = ficheDe(m, 3);
+      expect(trouvee).not.toBeNull();
+      return trouvee;
+    });
+    expect(formulaire(trois)).toBeNull();
+    expect(valeurs(trois)[0][1]).toBe('Lacasse');
+    expect(executer).not.toHaveBeenCalled();
+    expect(m.trace.length).toBe(trace);
+  });
+
+  test('les conflits restent atteignables pendant la saisie : « Appliquer » écrit sa propre entrée, le formulaire reste ouvert avec la saisie', async () => {
+    const charge = chargeDouze();
+    charge.participants[11].organisation = 'Club des Merles';
+    const { m } = await ouvrirFiche(charge, 3);
+    const fiche = await ouvrirFormulaire(m, 3);
+    remplir(champ(fiche, 'prenom'), 'Ondine-Rose');
+    const conflits = fiche.querySelector('[data-conflits-fiche]');
+    conflits.querySelectorAll('[data-choix]')[1].click();
+    flushSync();
+    conflits.querySelector('[data-commande="appliquerConflits"]').click();
+    await attendre(() => expect(personneDe(m, 3).conflits).toEqual(['Club des Merles']));
+    expect(formulaire(ficheDe(m, 3))).not.toBeNull();
+    expect(champ(ficheDe(m, 3), 'prenom').value).toBe('Ondine-Rose');
+    expect(libelles(m)).toHaveLength(0);
   });
 });

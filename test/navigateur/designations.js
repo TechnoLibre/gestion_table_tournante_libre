@@ -133,6 +133,7 @@ const ENTREES = [
   ['data-homonyme', 'import : une ligne homonyme', null],
   ['data-impression', 'aperçu : le document imprimé', ['']],
   ['data-hors-classement', 'propositions : les lignes hors classement', ['']],
+  ['data-informations-fiche', 'participants : le bloc des informations de la fiche, en lecture ou son formulaire', ['']],
   ['data-issue', 'génération : l’issue de la dernière génération', ['']],
   ['data-itineraire-tour', 'participants : un tour de l’itinéraire d’une personne dans la fiche', null],
   ['data-jalons-seuls', 'événement : la case « Instants nommés seulement » du panneau d’historique', ['']],

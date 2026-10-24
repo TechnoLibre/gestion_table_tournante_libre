@@ -152,6 +152,10 @@ const EXEMPLES_ECRAN = [
   ['participants.conflit.raison.nouvelleTable', { numero: 3, deja: [{ tour: 1 }, { tour: 2 }] }],
   ['participants.presence.tours', { tours: [2, 3, 4] }],
   [
+    'participants.informations.conflitsSuivis',
+    { renommee: { de: 'Atelier Ressac', vers: 'Atelier Embrun' }, retirees: ['Club des Merles', 'Fonds Grisaille'], propres: 2 },
+  ],
+  [
     'participants.fiche.rencontres.toursListe',
     {
       tours: [

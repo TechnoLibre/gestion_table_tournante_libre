@@ -499,6 +499,17 @@
   feuille de contrôle ajoute une ligne qui les compte, « Logos : 12 posés, 2
   sans place, 1 introuvable » par exemple, sans image ; la liste des badges en
   CSV ne porte jamais le logo.
+- La fiche d'une personne montre en tête son nom, son prénom, son
+  organisation, son courriel, son titre pressenti et ses notes, et
+  « Modifier » les change dans un formulaire prérempli : « Enregistrer » écrit
+  les seuls champs changés en une entrée d'historique, que « Défaire »
+  reprend, et rien quand rien n'a changé ; « Annuler » ou Échap referment sans
+  rien écrire. Une organisation tapée autrement que celle d'une autre
+  personne — casse, accents, espaces — s'enregistre sous l'orthographe
+  existante, et la fiche le dit, comme elle dit les conflits d'organisation
+  qui suivent le changement. Un nom vidé est refusé sous le champ ; en lecture
+  et sur un plan bloqué, « Modifier » refuse à côté du bouton, avec son
+  remède.
 - À la création d'un événement, la date facultative se choisit dans un
   sélecteur de date, qui la montre au format du poste ; une date commencée mais
   incomplète, ou absente du calendrier, refuse la création, contre son champ,

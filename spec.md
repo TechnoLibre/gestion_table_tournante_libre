@@ -4542,6 +4542,36 @@ avec le nombre de personnes qui la portent, exclues comprises ; dans la grille,
 l'organisation s'affiche en pastille de sa teinte (§ 12.7), le titre pressenti
 et l'exclusion en pastilles à icône.
 
+**Les informations d'une personne se modifient dans sa fiche.** En tête de la
+fiche, ses six valeurs de texte — nom, prénom, organisation, courriel, titre
+pressenti, notes — se lisent chacune sous l'intitulé de sa colonne, « — » quand
+elle manque, puis son statut calculé et la commande « Modifier ». « Modifier »
+ouvre à leur place un formulaire prérempli, un champ par valeur, les notes en
+zone de texte, l'organisation proposant celles de l'événement ; le focus va au
+nom. « Enregistrer », ou Entrée — Maj+Entrée garde un saut de ligne dans les
+notes —, écrit **une** entrée d'historique, `modifierParticipant` des seuls
+champs que la saisie change depuis l'ouverture et qui diffèrent encore de la
+personne, lus comme la saisie les enregistre, que son libellé nomme ; sans champ
+changé, le formulaire se referme sans rien écrire. Une écriture venue d'ailleurs
+pendant la saisie — une autre fenêtre, Défaire — garde les champs que la saisie
+ne touche pas, et ne tient pas le geste. « Annuler », ou Échap, le referme sans
+rien écrire ; refermé, il rend le focus à « Modifier ». Une organisation saisie
+qui ne diffère de celle d'une autre personne que par la casse, les accents ou
+les blancs s'enregistre sous l'orthographe existante, et un signal le dit sous
+le bloc ; une organisation que la saisie ne touche pas reste la sienne, même
+voisine d'une autre ; la seule personne à porter une organisation en change la
+casse ; une saisie dont l'orthographe retenue est déjà celle de la personne ne
+change rien et ne se signale pas. Quand les listes de conflits suivent le
+changement d'organisation (§ 4), un avis le dit sous le bloc ; signal et avis
+tombent avec la révision qui les a produits. Un refus garde le formulaire ouvert
+et la saisie : un nom vide se refuse contre le nom (`NOM_REQUIS`), tout autre
+refus sous « Enregistrer », avec son remède. En lecture et sur un plan bloqué,
+« Modifier » refuse à côté du bouton, avec son remède, avant d'ouvrir le
+formulaire. Ouvrir la fiche d'une autre personne referme le formulaire sans rien
+écrire. Les conflits d'organisation, la présence et l'exclusion gardent leurs
+commandes, hors du formulaire, et leurs rubriques restent actives pendant la
+saisie.
+
 La fiche d'une personne porte ses étiquettes, en pastilles **neutres** — la
 teinte d'organisation ne sert qu'à l'organisation (§ 12.7) —, chacune suivie,
 en mode écriture seulement, d'une petite croix cerclée rouge qui la retire,
