@@ -3103,7 +3103,7 @@ function empreinteDesJson(valeurs) {
 }
 
 const EMPREINTE_CORRECTIFS_GRANDE = 'd300e73b4c27f6e0c1675d89fbb09b0a07e79260a44f644861548b5296b441b9';
-const EMPREINTE_APPLIQUEES_GRANDE = 'ef635b684977258c764f4b2f47ee0b1402f6dd04b71f2a5e5981ef6b2efa09f9';
+const EMPREINTE_APPLIQUEES_GRANDE = 'eb53baf37af91114da8947d5ce5395cf064adf0c61344924bf5b096d7ee6d946';
 
 // Les retouches de la grande démonstration a, seize charges neuves, deux par
 // j de 0 à 7. La première : dans la proposition de rang j mod 3, la personne

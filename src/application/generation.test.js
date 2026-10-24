@@ -308,13 +308,13 @@ describe('génération : la saisie des réglages (§ 5.7)', () => {
     assert.doesNotMatch(libelle('HORS_DOMAINE', unAuMoins), /null|undefined/);
   });
 
-  test("un historique non saisi vaut celui de la charge : 1 000 sur une charge neuve, 500 après modifierReglage ; les réglages proposés la reprennent", async () => {
+  test("un historique non saisi vaut celui de la charge : 10 000 sur une charge neuve, 500 après modifierReglage ; les réglages proposés la reprennent", async () => {
     const montage = await monter({ charges: [chargeDe({ n: 4, tables: 2, sieges: 2, tours: 2 })] });
     const { controleur, seance } = montage;
     for (const historique of [undefined, null, '', '  ']) {
-      assert.equal(controleur.valider({ graine: '3', nombre: '2', arret: '40', historique }).reglages.historique, 1000);
+      assert.equal(controleur.valider({ graine: '3', nombre: '2', arret: '40', historique }).reglages.historique, 10_000);
     }
-    assert.deepEqual(controleur.reglagesProposes(), { graine: 1, nombre: 5, arret: 200000, historique: 1000 });
+    assert.deepEqual(controleur.reglagesProposes(), { graine: 1, nombre: 500, arret: 200_000, historique: 10_000 });
     await seance.executer('modifierReglage', { cle: 'generation.historique', valeur: 500 });
     await seance.executer('modifierReglage', { cle: 'generation.nombre', valeur: 3 });
     await seance.executer('modifierReglage', { cle: 'generation.arret', valeur: 777 });
@@ -1453,6 +1453,31 @@ describe("génération : l'estimation compte le ralentissement d'un cœur charg�
     await Promise.resolve();
     assert.equal(sous.espion.lancements.length, 1);
     sous.controleur.annuler();
+    await rejet(juste);
+  });
+
+  test('sans mesure, le seuil ne suit pas les réglages d’une charge neuve : ses 500 propositions demandent confirmation sur 16 processeurs logiques, partent sur 20', async () => {
+    // ρ à pleine charge fixé à 2 : ⌈500 / 16⌉ × 200 000 × 2 = 12 800 000
+    // dépasse 10 000 000 ; ⌈500 / 20⌉ × 200 000 × 2 = 10 000 000 ne le dépasse pas.
+    const neuve = () => chargeDe({ n: 4, tables: 2, sieges: 2, tours: 2 });
+    const seize = await monter({ charges: [neuve()], executeur: executeurManuel({ coeursDisponibles: 16 }), lireConstante: lireAvec(2) });
+    const proposes = seize.controleur.reglagesProposes();
+    assert.deepEqual(proposes, { graine: 1, nombre: 500, arret: 200_000, historique: 10_000 });
+    await refuseSansRien(seize, 'CONFIRMATION_REQUISE', { estimation: { inconnue: true }, remede: null }, proposes);
+    const vingt = await monter({ charges: [neuve()], executeur: executeurManuel({ coeursDisponibles: 20 }), lireConstante: lireAvec(2) });
+    const lancee = vingt.controleur.generer(vingt.controleur.reglagesProposes());
+    await Promise.resolve();
+    assert.equal(vingt.espion.lancements.length, 1);
+    vingt.controleur.annuler();
+    await rejet(lancee);
+    // Le seuil est exactement 10 000 000 : sur un seul processeur logique,
+    // une proposition de 10 000 001 mouvements demande, une de 10 000 000 part.
+    const un = await monter({ charges: [neuve()], executeur: executeurManuel(), lireConstante: lireAvec(2) });
+    await refuseSansRien(un, 'CONFIRMATION_REQUISE', { estimation: { inconnue: true }, remede: null }, { ...proposes, nombre: 1, arret: 10_000_001 });
+    const juste = un.controleur.generer({ ...proposes, nombre: 1, arret: 10_000_000 });
+    await Promise.resolve();
+    assert.equal(un.espion.lancements.length, 1);
+    un.controleur.annuler();
     await rejet(juste);
   });
 

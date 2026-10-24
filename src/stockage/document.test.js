@@ -26,6 +26,7 @@ import {
   ENTREE_DE_COURSE,
   FORMAT,
   GENERATION_PAR_DEFAUT,
+  HISTORIQUE_GENERATION_DEFAUT,
   LIBELLE_TABLE_MAX,
   SCHEMA,
   SIEGES_MAX,
@@ -281,7 +282,7 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
         nouvelleTable: true,
         varierOrganisations: true,
         attribuerSieges: false,
-        generation: { nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT },
+        generation: { nombre: 500, arret: 200_000, historique: 10_000 },
       },
       prochainsIds: { participant: 1, table: 1, proposition: 1 },
       participants: [],
@@ -293,13 +294,25 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
     });
   });
 
-  test("GENERATION_PAR_DEFAUT : cinq propositions de 200 000 mouvements, l'historique par défaut du moteur ; figée, copiée dans chaque charge neuve", () => {
-    assert.deepEqual(GENERATION_PAR_DEFAUT, { nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT });
+  test("GENERATION_PAR_DEFAUT : cinq cents propositions de 200 000 mouvements, un historique de 10 000, plus long que le repli du moteur ; figée, copiée dans chaque charge neuve", () => {
+    assert.deepEqual(GENERATION_PAR_DEFAUT, { nombre: 500, arret: 200_000, historique: 10_000 });
+    assert.equal(HISTORIQUE_GENERATION_DEFAUT, 10_000);
+    assert.equal(GENERATION_PAR_DEFAUT.historique, HISTORIQUE_GENERATION_DEFAUT);
+    // Le repli du moteur, référence de ses empreintes dorées, ne suit pas.
+    assert.equal(HISTORIQUE_PAR_DEFAUT, 1_000);
     assert.ok(Object.isFrozen(GENERATION_PAR_DEFAUT));
     const { generation } = creerCharge({ id: 'evt-neuf', nom: 'Atelier', siegesParDefaut: 8, tours: 3 }).reglages;
     assert.deepEqual(generation, GENERATION_PAR_DEFAUT);
     assert.notEqual(generation, GENERATION_PAR_DEFAUT);
     assert.ok(!Object.isFrozen(generation));
+  });
+
+  test('un fichier qui porte ses réglages de génération les garde à la lecture, ceux d’avant les défauts actuels compris : aucune migration', () => {
+    const document = documentValide();
+    document.charge.reglages.generation = { nombre: 5, arret: 200_000, historique: 1_000 };
+    const { charge } = analyser(JSON.stringify(document));
+    assert.deepEqual(charge.reglages.generation, { nombre: 5, arret: 200_000, historique: 1_000 });
+    assert.notDeepEqual(charge.reglages.generation, { ...GENERATION_PAR_DEFAUT });
   });
 
   test('sans date, la date est nulle ; deux charges neuves ne partagent aucun objet', () => {
@@ -309,7 +322,7 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
     premiere.reglages.generation.nombre = 9;
     premiere.prochainsIds.participant = 2;
     premiere.participants.push({ id: 1 });
-    assert.equal(seconde.reglages.generation.nombre, 5);
+    assert.equal(seconde.reglages.generation.nombre, 500);
     assert.equal(seconde.prochainsIds.participant, 1);
     assert.deepEqual(seconde.participants, []);
   });

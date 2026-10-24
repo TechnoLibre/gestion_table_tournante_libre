@@ -533,19 +533,27 @@ Dans la section « Génération », réglez au besoin la **graine**, le nombre d
 « Générer ». Les réservations des étapes 6 et 7 sont honorées ; la recherche
 place les autres personnes autour.
 
+Un événement neuf propose **500 propositions** par génération, un compte
+d’arrêt de 200 000 mouvements et un historique d’acceptation de 10 000 ; un
+événement existant garde les réglages qu’il porte (annexe A).
+
 Les propositions montrées ci-dessous, et les écrans qui en découlent aux
-étapes 10 et 11, viennent d’une génération faite avec la graine 4242 et un
-compte d’arrêt de 300, sous les objectifs de l’étape 4 et l’ordre des
+étapes 10 et 11, viennent d’une génération faite avec la graine 4242,
+5 propositions par génération, un compte d’arrêt de 300 et un historique
+d’acceptation de 1 000, sous les objectifs de l’étape 4 et l’ordre des
 priorités montré ci-dessous ; les autres réglages gardent leur valeur par
 défaut.
-Le compte d’arrêt par défaut, bien plus grand, cherche plus longtemps et donne
-d’autres propositions : écrivez ces deux valeurs pour retrouver les mêmes.
+Les valeurs par défaut, bien plus grandes, cherchent plus longtemps et donnent
+d’autres propositions : écrivez ces quatre valeurs pour retrouver les mêmes.
 
 Les **cœurs de calcul** sont automatiques par défaut, un par processeur
 logique du poste ; vous pouvez aussi en fixer le nombre. Ce réglage vaut pour la
 séance, sur ce poste, et ne s’enregistre pas dans l’événement. Le logiciel
 affiche la durée du dernier calcul et estime celle de la prochaine génération ;
-une génération qui s’annonce longue demande d’abord confirmation.
+une génération qui s’annonce longue demande d’abord confirmation. Tant
+qu’aucune durée n’est mesurée dans la séance, les 500 propositions par défaut
+la demandent aussi sur la plupart des postes (moins d’une vingtaine de
+processeurs logiques).
 
 Chaque génération **ajoute** ses propositions aux précédentes, et un seul
 classement les ordonne toutes. Le logiciel marque dans l’historique l’instant
@@ -1285,9 +1293,9 @@ réglage du poste, pour la séance, automatique par défaut (étape 9).
 
 | Réglage | Écran | Valeur par défaut |
 |---|---|---|
-| Propositions par génération (nombre de propositions) | Génération | 5 |
+| Propositions par génération (nombre de propositions) | Génération | 500 |
 | Compte d'arrêt (mouvements évalués par proposition) | Génération | 200 000 |
-| Historique d'acceptation (longueur, en mouvements) | Génération | 1 000 |
+| Historique d'acceptation (longueur, en mouvements) | Génération | 10 000 |
 | Séparer les organisations | Génération | cochée |
 | Nouveaux voisins à chaque tour | Génération | cochée |
 | Nouvelle table à chaque tour | Génération | cochée |

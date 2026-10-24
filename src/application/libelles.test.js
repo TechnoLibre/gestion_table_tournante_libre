@@ -1021,7 +1021,10 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
     const plafond = libelle('CONFIRMATION_REQUISE', { estimation: { secondes: 7200, longue: true, auDelaDuPlafond: true, mesure }, remede: null });
     assert.match(plafond, /trente minutes/);
     const inconnue = libelle('CONFIRMATION_REQUISE', { estimation: { inconnue: true }, remede: null });
-    assert.match(inconnue, /dix fois le réglage par défaut/);
+    // Le seuil sans mesure est un compte fixe, que le réglage par défaut
+    // d'un événement neuf dépasse lui-même : il ne se dit pas en multiple du défaut.
+    assert.match(inconnue, /plus de dix millions de mouvements par cœur, ralentissement compris/);
+    assert.doesNotMatch(inconnue, /réglage par défaut/);
     for (const texte of [longue, plafond, inconnue]) for (const trace of TRACES) assert.doesNotMatch(texte, trace, texte);
   });
 

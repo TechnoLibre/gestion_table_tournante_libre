@@ -91,10 +91,13 @@ export const SEUIL_GENERATION_LONGUE_S = 60;
 /** Le plafond d'usage d'une génération, en secondes (§ 5.10) : un repère dit, jamais un refus. */
 export const PLAFOND_USAGE_S = 30 * 60;
 
-// Sans durée mesurée, une génération de plus de mouvements que ce compte —
-// dix fois le réglage par défaut —, ralentissement compris, demande
-// confirmation.
-const MOUVEMENTS_SANS_MESURE = 10 * GENERATION_PAR_DEFAUT.nombre * GENERATION_PAR_DEFAUT.arret;
+// Sans durée mesurée, une génération dont le coût — les mouvements qui se
+// suivent sur un même cœur, ralentissement compris — dépasse ce compte
+// demande confirmation (§ 5.10). Le compte s'écrit en clair et ne suit pas
+// les réglages d'une charge neuve : leurs cinq cents propositions le
+// dépassent dès que le poste a peu de cœurs, et la première génération d'une
+// séance, sans mesure, demande alors confirmation.
+const MOUVEMENTS_SANS_MESURE = 10_000_000;
 
 // Le ralentissement d'un cœur quand tous les processeurs logiques
 // travaillent, nommé dans le registre des constantes mesurées (§ 14.1) : un
@@ -388,8 +391,8 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
   }
 
   // Longue : au-delà du seuil estimé, ou, sans mesure, quand le coût — les
-  // mouvements qui se suivent sur un même cœur, ralentis de ρ — dépasse dix
-  // fois le réglage par défaut.
+  // mouvements qui se suivent sur un même cœur, ralentis de ρ — dépasse
+  // MOUVEMENTS_SANS_MESURE.
   function estLongue(reglages, estimation) {
     if (estimation.inconnue === true) {
       return cout(reglages.nombre, reglages.arret, coeursPour(reglages.nombre)) > MOUVEMENTS_SANS_MESURE;

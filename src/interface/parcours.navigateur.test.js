@@ -140,6 +140,11 @@ const GRAINE = 4242;
 // d'historique (capture 21).
 const NOM_INSTANT = 'Avant l\u{2019}accueil';
 const ARRET = 300;
+// Le nombre de propositions et l'historique d'acceptation que le parcours
+// écrit dès l'écriture, à la place de ceux d'un événement neuf : les
+// propositions, les états et la documentation (étape 9) en dépendent.
+const NOMBRE = 5;
+const HISTORIQUE = 1_000;
 
 // L'écart de l'horloge pilotée entre la génération et la retenue : plus
 // d'une minute, la précision d'un horodatage mis en forme.
@@ -1142,6 +1147,23 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(charge().tables[0].sieges).toBeNull();
   });
 
+  test('01b les réglages de génération du parcours : ceux d’un événement neuf, puis 5 propositions et un historique de 1 000, une entrée chacun', async () => {
+    expect(charge().reglages.generation).toEqual({ nombre: 500, arret: 200_000, historique: 10_000 });
+    await ouvrirSection('generation');
+    // L'écran montre ces défauts dans leurs champs.
+    const champGeneration = (nom) => dans(`[data-section="generation"] input[data-champ="generation.${nom}"]`);
+    expect(champGeneration('nombre').value).toBe('500');
+    expect(champGeneration('historique').value).toBe('10000');
+    for (const [nom, valeur] of [['nombre', NOMBRE], ['historique', HISTORIQUE]]) {
+      const r = revision();
+      await sansFenetre('modifierReglage', async () => {
+        await saisir(dans(`[data-section="generation"] input[data-champ="generation.${nom}"]`), String(valeur));
+        await uneEntree(r, `le réglage ${nom}`);
+      });
+    }
+    expect(charge().reglages.generation).toEqual({ nombre: NOMBRE, arret: 200_000, historique: HISTORIQUE });
+  });
+
   test('02 l’aperçu des cas limites : encodage et séparateur de l’analyseur ; un groupe fondu, une ligne refusée', async () => {
     await ouvrirSection('import');
     const octets = await octetsCasLimites();
@@ -1939,7 +1961,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       await saisir(dans('[data-section="generation"] input[data-champ="generation.arret"]'), String(ARRET));
       await uneEntree(r, 'le compte réduit');
     });
-    expect(charge().reglages.generation.arret).toBe(ARRET);
+    expect(charge().reglages.generation).toEqual({ nombre: NOMBRE, arret: ARRET, historique: HISTORIQUE });
     const configuration = configurationDe(charge());
     const { nombre, historique } = charge().reglages.generation;
     const attendues = rechercher(configuration, { graine: GRAINE, nombre, arret: ARRET, historique });
@@ -3179,16 +3201,20 @@ async function passerEnEcriture() {
   await attendre('l’écriture', () => etat().mode === 'ecriture');
 }
 
-// Génère sous la graine écrite, au compte d'arrêt donné, ou au compte de
-// l'événement quand arret est null : une entrée, la question d'une
-// génération longue confirmée si elle vient.
+// Génère sous la graine écrite, NOMBRE propositions sous un historique de
+// HISTORIQUE, au compte d'arrêt donné, ou au compte de l'événement quand
+// arret est null. Chaque réglage que l'événement porte autrement — ceux
+// d'un événement neuf — s'écrit d'abord, une entrée chacun ; puis une
+// entrée, la question d'une génération longue confirmée si elle vient.
 async function generer(arret = null) {
   await ouvrirSection('generation');
   await taper(dans('[data-section="generation"] input[data-champ="graine"]'), String(GRAINE));
-  if (arret !== null && charge().reglages.generation.arret !== arret) {
+  const reglages = [['nombre', NOMBRE], ['historique', HISTORIQUE], ...(arret === null ? [] : [['arret', arret]])];
+  for (const [nom, valeur] of reglages) {
+    if (charge().reglages.generation[nom] === valeur) continue;
     const r = revision();
-    await saisir(dans('[data-section="generation"] input[data-champ="generation.arret"]'), String(arret));
-    await uneEntree(r, 'le compte d’arrêt');
+    await saisir(dans(`[data-section="generation"] input[data-champ="generation.${nom}"]`), String(valeur));
+    await uneEntree(r, `le réglage ${nom}`);
   }
   const r = revision();
   await cliquer('[data-section="generation"] [data-commande="generer"]');

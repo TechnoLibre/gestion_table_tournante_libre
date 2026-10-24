@@ -190,6 +190,11 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
       Object.fromEntries(reglagesDuGenre(generation, 'champ').map(({ nom, defaut }) => [nom, defaut])),
       { ...GENERATION_PAR_DEFAUT },
     );
+    // Les valeurs que l'écran et l'annexe A montrent pour un événement neuf.
+    assert.deepEqual(
+      reglagesDuGenre(generation, 'champ').map(({ nom, defaut }) => [nom, defaut]),
+      [['nombre', 500], ['arret', 200_000], ['historique', 10_000]],
+    );
     assert.deepEqual(
       reglagesDuGenre(generation, 'bascule').map(({ defaut }) => defaut),
       [true, true, true, true, true, false, false],

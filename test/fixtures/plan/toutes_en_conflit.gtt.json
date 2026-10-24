@@ -2,7 +2,7 @@
   "entete": {"format":3,"produitVersion":"epreuve","revision":1,"comptes":{"participants":12,"tables":4,"reservations":0,"titres":0,"propositions":1,"retenu":0}},
   "charge": {
     "evenement": {"id":"epreuve:toutes-en-conflit","nom":"Toutes en conflit","date":null,"siegesParDefaut":3,"tours":4,"unite":"cm","etat":"propose","filiation":null},
-    "reglages": {"separerOrganisations":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierOrganisations":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
+    "reglages": {"separerOrganisations":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierOrganisations":true,"attribuerSieges":false,"generation":{"nombre":500,"arret":200000,"historique":10000}},
     "prochainsIds": {"participant":13,"table":5,"proposition":2},
     "participants": [
       {"id":1,"nom":"Ombrelle","prenom":"Iris","organisation":"Club des Merles","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},

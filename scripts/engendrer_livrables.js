@@ -35,8 +35,8 @@
 //   noms d'une table, de toute sa largeur, tienne entre deux colonnes —
 //   aucune liste ne passe sur une autre table (§ 7.4) —, ses rangées de
 //   300 cm au moins ;
-// - les contraintes de la configuration, les sièges non attribués, la
-//   génération par défaut de la recherche ;
+// - les contraintes de la configuration, les sièges non attribués, les
+//   réglages de génération GENERATION_DES_DEMONSTRATIONS ;
 // - chaque réservation, celle d'un animateur, au siège 1 de sa table pour
 //   tous les tours, ce siège titré « animation », et le titre pressenti
 //   « animation » porté par l'animateur ;
@@ -74,6 +74,15 @@ const VIRGULE = ',';
 // Le siège de l'animateur, et le titre qu'il porte.
 const SIEGE_ANIMATEUR = 1;
 const ANIMATION = 'animation';
+
+/**
+ * Les réglages de génération de chaque démonstration livrée : cinq
+ * propositions de 200 000 mouvements, un historique d'acceptation de 1 000.
+ * Ils s'écrivent en clair et ne suivent pas GENERATION_PAR_DEFAUT, celui
+ * d'une charge neuve : un changement de ce défaut ne réécrit aucun fichier
+ * livré.
+ */
+export const GENERATION_DES_DEMONSTRATIONS = Object.freeze({ nombre: 5, arret: 200_000, historique: 1_000 });
 
 const USAGE = 'usage : node scripts/engendrer_livrables.js [destination]';
 
@@ -140,7 +149,14 @@ export function chargeDeDemonstration({ cle, nom, construire }) {
   const { separerOrganisations, nouveauxVoisins, nouvelleTable, varierOrganisations } = contraintes;
   return {
     ...neuve,
-    reglages: { ...neuve.reglages, separerOrganisations, nouveauxVoisins, nouvelleTable, varierOrganisations },
+    reglages: {
+      ...neuve.reglages,
+      separerOrganisations,
+      nouveauxVoisins,
+      nouvelleTable,
+      varierOrganisations,
+      generation: { ...GENERATION_DES_DEMONSTRATIONS },
+    },
     prochainsIds: { participant: plusGrandId(participants) + 1, table: plusGrandId(tables) + 1, proposition: 1 },
     participants: participants.map((participant) => ({
       id: participant.id,

@@ -574,6 +574,14 @@
   de produire et se nomme sur la feuille de contrôle, qui ne change pas
   autrement ; la liste en CSV non plus. Avec l'invitation d'origine, la
   planche sort identique à celle d'avant.
+- Un événement neuf propose 500 propositions par génération et un historique
+  d'acceptation de 10 000 mouvements, au lieu de 5 et de 1 000 ; le compte
+  d'arrêt reste 200 000. Une génération à ces réglages dure bien plus
+  longtemps, et tant qu'aucune durée n'est mesurée dans la séance, elle
+  demande d'abord confirmation sur la plupart des postes (moins d'une
+  vingtaine de processeurs logiques). Un événement existant garde les
+  réglages que son fichier porte, et les démonstrations livrées gardent les
+  leurs.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

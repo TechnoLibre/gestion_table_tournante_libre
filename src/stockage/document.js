@@ -56,7 +56,6 @@
 // du moteur, l'état qu'impose son contenu, la capacité d'une table et la
 // valeur d'un réglage facultatif. Aucune ne modifie ce qu'elle reçoit.
 import { CRITERES, POIDS_MAX, PRIORITES_PAR_DEFAUT, completerPriorites, verifierPriorites } from '../moteur/criteres.js';
-import { HISTORIQUE_PAR_DEFAUT } from '../moteur/recherche.js';
 import { ETIQUETTES_MAX, estEtiquetteBienFormee } from './etiquettes.js';
 import { ErreurStockage } from './erreurs.js';
 import { estCheminLogo } from './logos.js';
@@ -88,11 +87,20 @@ export const SIEGES_MAX = 1000;
 export const TOURS_MAX = 100;
 
 /**
- * Réglages de génération d'une charge neuve : cinq propositions de 200 000
- * mouvements, valeurs de départ non mesurées (§ 5.10), et l'historique
- * d'acceptation que le moteur prend par défaut.
+ * La longueur de l'historique d'acceptation d'une charge neuve, en
+ * mouvements (§ 5.7). Elle diffère de HISTORIQUE_PAR_DEFAUT, le repli du
+ * moteur quand l'appelant n'en donne pas : ce repli reste la référence des
+ * empreintes dorées du moteur, et seule la charge neuve prend celle-ci.
  */
-export const GENERATION_PAR_DEFAUT = Object.freeze({ nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT });
+export const HISTORIQUE_GENERATION_DEFAUT = 10_000;
+
+/**
+ * Réglages de génération d'une charge neuve (§ 5.7, § 5.10) : cinq cents
+ * propositions de 200 000 mouvements, sous un historique d'acceptation de
+ * HISTORIQUE_GENERATION_DEFAUT. Seule la charge neuve les copie : une charge
+ * lue garde les réglages de génération que son fichier porte.
+ */
+export const GENERATION_PAR_DEFAUT = Object.freeze({ nombre: 500, arret: 200_000, historique: HISTORIQUE_GENERATION_DEFAUT });
 
 /**
  * Le plus grand nombre de points de code du libellé d'une table (§ 4) :

@@ -104,4 +104,14 @@ describe('libellés : les tables des écrans (§ 14.6)', () => {
       assert.equal(t(`coquille.provenance.${mode}`), libelleProvenance(mode), mode);
     }
   });
+
+  // La question que pose l'écran avant une génération longue, sans mesure :
+  // le seuil est un compte fixe, que le réglage par défaut d'un événement neuf
+  // dépasse lui-même, et la question ne le dit pas en multiple du défaut.
+  test("la question d'une génération longue sans mesure dit le compte fixe, jamais le réglage par défaut (§ 5.10)", () => {
+    const { t } = creerTraduction(TABLES_INTERFACE);
+    const question = t('generation.longue.question', { estimation: { inconnue: true } });
+    assert.match(question, /plus de dix millions de mouvements par cœur, ralentissement compris/);
+    assert.doesNotMatch(question, /réglage par défaut/);
+  });
 });

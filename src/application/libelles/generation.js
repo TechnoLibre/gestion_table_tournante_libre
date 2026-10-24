@@ -30,7 +30,7 @@ function phraseEstimation(estimation, texte) {
   if (estimation.inconnue === true) {
     return (
       "Aucune durée n'est encore mesurée sur ce poste dans cette séance, et ce réglage demande plus de " +
-      'dix fois le réglage par défaut'
+      'dix millions de mouvements par cœur, ralentissement compris'
     );
   }
   const format = creerFormat(texte);

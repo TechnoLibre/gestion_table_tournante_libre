@@ -269,7 +269,7 @@ export const TABLE = new Map([
       if (estimation.inconnue === true) {
         return (
           "Aucune durée n'est encore mesurée sur ce poste pendant cette séance, et ce réglage demande plus de dix " +
-          'fois le réglage par défaut. La lancer quand même ?'
+          'millions de mouvements par cœur, ralentissement compris. La lancer quand même ?'
         );
       }
       const format = creerFormat(texte);

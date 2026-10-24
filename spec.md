@@ -1351,13 +1351,14 @@ remède » cesse de relancer en espérant mieux.
 ### 5.7 Plusieurs propositions, pas une
 
 Une génération produit **plusieurs placements distincts et comparables**, en
-nombre réglable. Les générations **s'accumulent** : relancer avec d'autres
-réglages ajoute des candidats plutôt que d'effacer les précédents, et un
-classement unique les ordonne tous. Une commande efface la liste en épargnant
-celui qui est retenu. Une génération **écarte la proposition dont le placement
-est déjà celui** d'une proposition comparable de la liste, ou d'une qu'elle
-vient de garder, et l'annonce comme identique : deux lignes du classement sont
-toujours deux placements. Effacer épargne la seule proposition d'où vient le
+nombre réglable : cinq cents par défaut pour un événement neuf (§ 5.10). Les
+générations **s'accumulent** : relancer avec d'autres réglages ajoute des
+candidats plutôt que d'effacer les précédents, et un classement unique les
+ordonne tous. Une commande efface la liste en épargnant celui qui est retenu.
+Une génération **écarte la proposition dont le placement est déjà celui** d'une
+proposition comparable de la liste, ou d'une qu'elle vient de garder, et
+l'annonce comme identique : deux lignes du classement sont toujours deux
+placements. Effacer épargne la seule proposition d'où vient le
 retenu ; il emporte le départ d'une proposition dérivée comme toute autre
 proposition, et la dérivée gardée nomme alors un départ qui n'est plus dans la
 liste (§ 8.9).
@@ -1437,7 +1438,9 @@ fait disparaître la page montrée —, et amène la proposition visée à chaqu
 demande au plan, même répétée.
 
 **La commande prend une graine entière et un compte d'arrêt**, et une longueur
-d'historique d'acceptation dont l'algorithme fixe la valeur par défaut. Chaque
+d'historique d'acceptation : celle des réglages de l'événement, 10 000
+mouvements pour un événement neuf. Le moteur, quand l'appelant ne la donne pas,
+en prend 1 000, la longueur de ses empreintes de référence (§ 14.10). Chaque
 proposition conserve sa graine dérivée, ce compte et cette longueur (§ 8.9).
 C'est le support de « à graine et entrée égales, placement identique » ; sans
 eux, une proposition retenue cesse d'être régénérable.
@@ -2132,7 +2135,12 @@ cœurs qu'il a employés, qui est la seule façon d'étalonner un compte. Elle v
 pour la séance et ne se garde pas au-delà — rien ne survit à la séance hors du
 dossier de travail (§ 8.6) : au premier calcul d'un lancement, aucune mesure
 n'existe, et l'estimation se dit inconnue. Le réglage livré par défaut est celui
-qui, sur la machine de référence, reste bien en deçà de ce plafond.
+qui, sur la machine de référence, reste bien en deçà de ce plafond : un
+événement neuf reçoit **cinq cents propositions de 200 000 mouvements, sous un
+historique d'acceptation de 10 000**. Seul l'événement neuf les reçoit : un
+événement dont le fichier porte ses réglages de génération les garde, et un
+changement de ces défauts ne réécrit aucun fichier ; les démonstrations livrées
+portent les leurs, cinq propositions sous un historique de 1 000.
 
 **Une génération longue s'annonce avant de partir.** À partir de la dernière
 durée mesurée, le logiciel énonce l'ordre de grandeur attendu — « environ vingt
@@ -2143,13 +2151,16 @@ cœurs⌉ vagues de propositions calculées ensemble —, chaque vague ralentie 
 **ρ(W)**, le ralentissement d'un cœur quand W cœurs calculent ensemble : un cœur
 va moins vite quand ses voisins travaillent aussi. ρ croît en ligne droite de 1,
 sur un cœur seul, au **ralentissement à pleine charge** quand les L processeurs
-logiques travaillent — `ρ(W) = 1 + (ρ_max − 1)(W − 1)/(L − 1)`, et 1 sur un poste
-d'un seul processeur logique —, une constante du banc (§ 19.10) que l'estimation
-lit au registre à chaque appel. Les mouvements de la dernière mesure se ramènent
-de même aux cœurs qu'elle a employés. Sans mesure, il demande dès que ces
-mouvements, ralentissement compris, dépassent dix fois ceux du réglage par
-défaut. Une recherche d'une demi-heure lancée par mégarde est une demi-heure de
-soirée perdue, et aucun réglage par défaut ne protège de cela.
+logiques travaillent — `ρ(W) = 1 + (ρ_max − 1)(W − 1)/(L − 1)`, et 1 sur un
+poste d'un seul processeur logique —, une constante du banc (§ 19.10) que
+l'estimation lit au registre à chaque appel. Les mouvements de la dernière
+mesure se ramènent de même aux cœurs qu'elle a employés. Sans mesure, il demande
+dès que ces mouvements, ralentissement compris, dépassent **dix millions**, un
+compte fixe qui ne suit pas le réglage par défaut : les cinq cents propositions
+d'un événement neuf le dépassent sur la plupart des postes, ceux de moins d'une
+vingtaine de processeurs logiques, et la première génération d'une séance y
+demande confirmation. Une recherche d'une demi-heure lancée par mégarde est une
+demi-heure de soirée perdue, et aucun réglage par défaut ne protège de cela.
 
 **Pendant la recherche, l'application reste vivante.** Le calcul ne tient pas le
 fil d'exécution de l'interface : le plan reste lisible, la page de qualité des

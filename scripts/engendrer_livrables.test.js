@@ -27,6 +27,7 @@ import { VERSION } from '../src/version.genere.js';
 import { describe, test } from '../test/lanceur.js';
 import { versionVoisine } from '../test/version_voisine.js';
 import {
+  GENERATION_DES_DEMONSTRATIONS,
   chargeDeDemonstration,
   enWindows1252,
   livrables,
@@ -187,13 +188,18 @@ describe("engendrer_livrables : la charge d'une démonstration (§ 15)", () => {
     }
   });
 
-  test('les réglages : les contraintes de la configuration, une à une, les sièges non attribués, la génération par défaut', () => {
+  test('les réglages : les contraintes de la configuration, une à une, les sièges non attribués, la génération des démonstrations, figée, distincte de celle d’une charge neuve', () => {
+    assert.deepEqual(GENERATION_DES_DEMONSTRATIONS, { nombre: 5, arret: 200_000, historique: 1_000 });
+    assert.ok(Object.isFrozen(GENERATION_DES_DEMONSTRATIONS));
+    assert.notDeepEqual({ ...GENERATION_DES_DEMONSTRATIONS }, { ...GENERATION_PAR_DEFAUT });
     for (const entree of CATALOGUE) {
+      const { reglages } = chargeDeDemonstration(entree);
       assert.deepEqual(
-        chargeDeDemonstration(entree).reglages,
-        { ...entree.construire().contraintes, attribuerSieges: false, generation: { ...GENERATION_PAR_DEFAUT } },
+        reglages,
+        { ...entree.construire().contraintes, attribuerSieges: false, generation: { nombre: 5, arret: 200_000, historique: 1_000 } },
         entree.cle,
       );
+      assert.notEqual(reglages.generation, GENERATION_DES_DEMONSTRATIONS);
     }
     const contraintes = {
       separerOrganisations: false,
@@ -205,7 +211,7 @@ describe("engendrer_livrables : la charge d'une démonstration (§ 15)", () => {
     assert.deepEqual(chargeDeDemonstration(entree).reglages, {
       ...contraintes,
       attribuerSieges: false,
-      generation: { ...GENERATION_PAR_DEFAUT },
+      generation: { nombre: 5, arret: 200_000, historique: 1_000 },
     });
   });
 

@@ -25,8 +25,13 @@
 // (releve.js) que verifierReleve accepte : la configuration ne nomme pas
 // la machine, seulement ses processeurs logiques. Elle porte la courbe
 // t(W), ρ(W) et le ρ du modèle de l'estimation à la même pleine charge, le
-// ρ proposé, et la durée de la génération par défaut sur min(5, L) cœurs,
-// qui situe le « bien en deçà » du plafond d'usage (§ 5.10).
+// ρ proposé, et la durée de la génération de référence sur min(5, L)
+// cœurs. Ses réglages, GENERATION_DE_REFERENCE, s'écrivent ici en clair et
+// ne suivent pas ceux d'une charge neuve : la garde
+// DUREE_GENERATION_PAR_DEFAUT garde son nom et mesure la même génération
+// d'un relevé à l'autre. Une génération aux réglages d'une charge neuve
+// compte ⌈nombre / cœurs⌉ vagues de celle-ci, ralenties de ρ, qui la situent
+// sous le plafond d'usage (§ 5.10).
 //
 // Une horloge réelle se lit ici, performance.now, pour mesurer seulement :
 // la sortie ne porte que des durées.
@@ -37,13 +42,19 @@ import { creerExecuteurTravailleur } from '../../src/application/executeur_trava
 import { coeursDe, ralentissement } from '../../src/application/generation.js';
 import { texteLivre } from '../../src/demo/livrees.js';
 import Travailleur from '../../src/interface/generation/travailleur.js?worker&inline';
-import { GENERATION_PAR_DEFAUT, analyser } from '../../src/stockage/document.js';
+import { analyser } from '../../src/stockage/document.js';
 import { controlerCadre, ecrireSortie, ralentirCpu } from './navigateur.js';
 import { verifierReleve } from './releve.js';
 
-// Le compte d'arrêt et la graine de chaque génération mesurée.
+// Le compte d'arrêt et la graine de chaque génération mesurée, et la
+// longueur de l'historique d'acceptation.
 const ARRET = 200_000;
 const GRAINE = 1;
+const HISTORIQUE = 1_000;
+
+// La génération de référence : cinq propositions de ARRET mouvements sous
+// un historique de HISTORIQUE, une vague sur cinq cœurs.
+const GENERATION_DE_REFERENCE = Object.freeze({ nombre: 5, arret: ARRET, historique: HISTORIQUE });
 
 // Les rondes de mesure, et la ronde de plus d'une mesure bruitée.
 const REPETITIONS = 3;
@@ -58,7 +69,7 @@ let cadre = null;
 // Par W, les durées de ses répétitions, en ms, dans l'ordre des rondes.
 const durees = new Map();
 let bruite = false;
-let parDefaut = null;
+let reference = null;
 
 /**
  * Les nombres de cœurs mesurés : les puissances de 2 sous L, puis L.
@@ -108,7 +119,7 @@ async function dureeGeneration(coeurs, reglages) {
   return duree;
 }
 
-const reglagesSur = (nombre) => ({ graine: GRAINE, nombre, arret: ARRET, historique: GENERATION_PAR_DEFAUT.historique });
+const reglagesSur = (nombre) => ({ graine: GRAINE, nombre, arret: ARRET, historique: HISTORIQUE });
 
 // Une ronde : chaque W une fois, dans l'ordre croissant.
 async function ronde() {
@@ -152,17 +163,17 @@ describe('banc : le gain parallèle de la génération (§ 5.10, Q14)', () => {
     for (const w of coeursMesures(L)) expect(durees.get(w).length).toBe(bruite ? REPETITIONS + 1 : REPETITIONS);
   });
 
-  test('la génération par défaut, sur min(nombre, L) cœurs : sa durée médiane', async () => {
-    const coeurs = Math.min(GENERATION_PAR_DEFAUT.nombre, L);
-    const reglages = { ...GENERATION_PAR_DEFAUT, graine: GRAINE };
+  test('la génération de référence, sur min(nombre, L) cœurs : sa durée médiane', async () => {
+    const coeurs = Math.min(GENERATION_DE_REFERENCE.nombre, L);
+    const reglages = { ...GENERATION_DE_REFERENCE, graine: GRAINE };
     const releves = [];
     for (let rang = 0; rang < REPETITIONS; rang += 1) releves.push(await dureeGeneration(coeurs, reglages));
-    parDefaut = { coeurs, dureesMs: releves.map(dixieme), medianeMs: dixieme(mediane(releves)) };
-    expect(parDefaut.medianeMs).toBeGreaterThan(0);
+    reference = { coeurs, dureesMs: releves.map(dixieme), medianeMs: dixieme(mediane(releves)) };
+    expect(reference.medianeMs).toBeGreaterThan(0);
   });
 
   test('parallele.json : un relevé que verifierReleve accepte, écrit dans scripts/banc/sorties et relu tel quel', async () => {
-    expect(parDefaut).not.toBeNull();
+    expect(reference).not.toBeNull();
     const t = medianes();
     const rhoPleineCharge = t.at(-1) / t[0];
     const courbe = coeursMesures(L).map((w, rang) => ({
@@ -197,11 +208,12 @@ describe('banc : le gain parallèle de la génération (§ 5.10, Q14)', () => {
         {
           nom: 'DUREE_GENERATION_PAR_DEFAUT',
           unite: 'ms',
-          valeurProposee: parDefaut.medianeMs,
+          valeurProposee: reference.medianeMs,
           critere:
-            `médiane de ${REPETITIONS} générations au réglage par défaut, ${GENERATION_PAR_DEFAUT.nombre} × ` +
-            `${GENERATION_PAR_DEFAUT.arret} mouvements sur ${parDefaut.coeurs} travailleurs, grande démonstration`,
-          courbe: [parDefaut],
+            `médiane de ${REPETITIONS} générations au réglage de référence, ${GENERATION_DE_REFERENCE.nombre} × ` +
+            `${GENERATION_DE_REFERENCE.arret} mouvements, historique ${GENERATION_DE_REFERENCE.historique}, ` +
+            `sur ${reference.coeurs} travailleurs, grande démonstration`,
+          courbe: [reference],
         },
       ],
       parallele: courbe,
