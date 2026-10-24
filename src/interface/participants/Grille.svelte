@@ -89,7 +89,20 @@
   // propre nœud ; la cellule du nom d'une personne en conflit nomme ses
   // règles. Aucune couleur ne les distingue : la teinte de conflit reste au
   // plan.
+  //
+  // La colonne « Conflits du placement » (MESURES, grille.js), groupée ou
+  // non, écrit les conflits de chaque personne dans le placement que le plan
+  // montre — la proposition demandée, ui.proposition, sinon le retenu —,
+  // que la grille lit elle-même par conflitsDuPlacement
+  // (src/application/conflits_placement.js), les mêmes que ceux des groupes
+  // et des pastilles du plan : une ligne de texte par tour où la personne
+  // est en conflit, « tour 2 : » puis le texte court de chaque règle
+  // (conflitsParTour, conflits.js), ou un tiret sans conflit comme sans
+  // placement montré. Elle se lit seulement : sa cellule prend le focus,
+  // Entrée et F2 n'y ouvrent rien, son en-tête ne trie pas, elle ne se
+  // groupe ni ne se filtre, et l'export ne l'écrit pas.
   import { getContext, onDestroy, tick } from 'svelte';
+  import { conflitsDuPlacement } from '../../application/conflits_placement.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
   import { cleNormalisee } from '../../application/csv.js';
   import { nomAffiche } from '../../application/personnes.js';
@@ -101,9 +114,11 @@
   import { effetDe } from '../raccourcis.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
-  import { cleDeRaison } from './conflits.js';
+  import { cleDeRaison, cleDeRegleCourte, conflitsParTour } from './conflits.js';
   import {
     COLONNES,
+    MESURES,
+    TRIABLES,
     basculerGroupe,
     celluleSuivante,
     cheminDe,
@@ -157,6 +172,18 @@
   // Les organisations de l'événement, exclus compris : celles qu'un conflit
   // peut nommer. La grille ne reçoit que ses lignes, que le filtre réduit.
   const organisations = $derived($seance.charge === null ? new Set() : organisationsDe($seance.charge));
+
+  // Les conflits du placement montré de chaque personne, tour par tour ;
+  // une table vide sans placement montré. Un placement montré — proposition
+  // ou retenu — dont les conflits ne se comptent pas (en dérive) n'est pas
+  // « sans conflit » : sa colonne le dit (nonCompte).
+  const conflitsBruts = $derived(
+    $seance.charge === null ? null : conflitsDuPlacement($seance.charge, { proposition: $ui.proposition }),
+  );
+  const conflitsDesPersonnes = $derived(conflitsParTour(conflitsBruts));
+  const nonCompte = $derived(
+    $seance.charge !== null && conflitsBruts === null && ($ui.proposition !== null || $seance.charge.retenu !== null),
+  );
 
   // Les lignes que la grille montre, dans leur ordre, et le rang de chacune
   // parmi elles, par identifiant.
@@ -445,6 +472,7 @@
       if (deplacer(rang, colonne, touche)) evenement.preventDefault();
     } else if (effet === 'editer') {
       evenement.preventDefault();
+      if (MESURES.includes(COLONNES[colonne])) return;
       if (COLONNES[colonne] === 'exclu') basculerExclusion(personne);
       else ouvrirEdition(personne, COLONNES[colonne]);
     } else if (effet === 'effacer') {
@@ -551,6 +579,21 @@
                 </li>
               {/each}
             </ul>
+          {/if}
+        {:else if colonne === 'conflitsPlacement'}
+          {#if conflitsDesPersonnes.has(personne.id)}
+            <ul class="conflits-placement">
+              {#each conflitsDesPersonnes.get(personne.id) as { tour, regles } (tour)}
+                <li>
+                  <span class="tour">{t('participants.conflit.tour', { tour })}</span>
+                  <span>{regles.map((regle) => t(cleDeRegleCourte(regle))).join(', ')}</span>
+                </li>
+              {/each}
+            </ul>
+          {:else if nonCompte}
+            <span class="sans-conflit">{t('participants.conflit.nonCompte')}</span>
+          {:else}
+            <span class="sans-conflit">{t('participants.conflit.aucun')}</span>
           {/if}
         {:else if colonne === 'organisation' && personne.organisation !== null}
           <span class="donnee-pastille">
@@ -662,14 +705,18 @@
     <thead>
       <tr>
         {#each COLONNES as colonne (colonne)}
-          <th scope="col" class:etroite={colonne === 'exclu' || colonne === 'presence'} aria-sort={ariaSort(colonne)}>
-            <button type="button" data-commande="trier" data-cible={colonne} onclick={() => trier(colonne)}>
-              <span>{t(cleDeColonne(colonne))}</span>
-              {#if tri !== null && tri.colonne === colonne}
-                <span class="sens">{t(tri.sens === 'croissant' ? 'participants.grille.croissant' : 'participants.grille.decroissant')}</span>
-              {/if}
-            </button>
-          </th>
+          {#if TRIABLES.includes(colonne)}
+            <th scope="col" class:etroite={colonne === 'exclu' || colonne === 'presence'} aria-sort={ariaSort(colonne)}>
+              <button type="button" data-commande="trier" data-cible={colonne} onclick={() => trier(colonne)}>
+                <span>{t(cleDeColonne(colonne))}</span>
+                {#if tri !== null && tri.colonne === colonne}
+                  <span class="sens">{t(tri.sens === 'croissant' ? 'participants.grille.croissant' : 'participants.grille.decroissant')}</span>
+                {/if}
+              </button>
+            </th>
+          {:else}
+            <th scope="col" class="mesure">{t(cleDeColonne(colonne))}</th>
+          {/if}
         {/each}
         <th scope="col">{t('participants.grille.actions')}</th>
       </tr>
@@ -732,16 +779,19 @@
     padding-right: var(--espace-5);
   }
 
-  /* Sous 80rem de place, un en-tête se replie entre ses mots : celui des
-     conflits d'organisation, le plus long, sur deux lignes. */
+  /* Les en-têtes en petit corps : les dix colonnes, dont chacune prend au
+     moins la largeur de son plus long mot d'en-tête, tiennent dans les
+     cartes décrites plus bas. Sous 80rem de place, un en-tête se replie
+     entre ses mots : celui des conflits d'organisation sur deux lignes. */
   thead th {
+    font-size: var(--taille-texte-petit);
     border-top: 1px solid var(--couleur-carte-filet);
     border-bottom-color: var(--couleur-page-filet);
     background-color: var(--couleur-carte-fond-sourd);
   }
 
   /* Sous 86rem de place, les cellules se serrent, les bords de la ligne
-     aussi : les neuf colonnes et les actions tiennent dans la carte pleine
+     aussi : les dix colonnes et les actions tiennent dans la carte pleine
      largeur d'une fenêtre de 1024 px, sans défiler, et dans celle d'une
      fenêtre de 1 366 px avec leurs en-têtes sur une ligne. */
   @container (max-width: 86rem) {
@@ -772,7 +822,7 @@
   }
 
   /* L'exclusion et la présence, qui disent qui vient, en mots courts ou en
-     pastille : un retrait plus étroit leur suffit, et les neuf colonnes
+     pastille : un retrait plus étroit leur suffit, et les dix colonnes
      tiennent dans la carte pleine largeur d'une fenêtre de 1024 px. */
   th.etroite,
   td[data-champ='exclu'],
@@ -812,6 +862,20 @@
     list-style: none;
   }
 
+  /* Les conflits du placement d'une personne : une ligne par tour, le tour
+     en gras ; le tiret d'une personne sans conflit en encre secondaire. Le
+     texte seul les dit : aucune teinte ne s'y ajoute. */
+  .conflits-placement {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .conflits-placement .tour {
+    font-weight: bold;
+  }
+
+  .sans-conflit,
   .presente,
   .presence-tous {
     color: var(--couleur-page-texte-secondaire);
@@ -978,14 +1042,16 @@
   }
 
   /* À partir de 80rem de place, celle de la carte d'une fenêtre de
-     1 366 px, chaque en-tête tient sur une ligne, les quatre actions d'une
+     1 366 px, chaque en-tête tient sur une ligne — hors de celui des
+     conflits du placement, une mesure, qui se replie toujours entre ses
+     mots : sur une ligne, il ferait déborder la grille —, les quatre actions d'une
      ligne vont sur deux rangées de deux, en colonnes alignées d'une ligne à
      l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés
      de la présence ne se coupent pas. En deçà, les en-têtes se replient
      entre leurs mots, et les actions passent à la ligne quand leur colonne
      est étroite. */
   @container (min-width: 80rem) {
-    thead th {
+    thead th:not(.mesure) {
       white-space: nowrap;
     }
 

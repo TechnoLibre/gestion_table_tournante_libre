@@ -234,6 +234,7 @@ const ENTREES = [
   ['data-retenu', 'propositions : la ligne du retenu', null],
   ['data-revision', 'événement : une ligne du panneau d’historique, par la révision de son instant', null],
   ['data-role', 'à propos : le rôle de l’auteur', ['']],
+  ['data-rubrique-conflits-placement', 'participants : la rubrique « Conflits du placement » de la fiche', ['']],
   ['data-rubrique-rencontres', 'participants : la rubrique « Rencontres » de la fiche', ['']],
   ['data-secours', 'récupération : une source de secours', null],
   ['data-segment', 'qualité : un segment de barre, par son genre', null],

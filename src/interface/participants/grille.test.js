@@ -17,6 +17,8 @@ import {
   CHAMP_DE_COLONNE,
   COLONNES,
   GROUPEMENTS,
+  MESURES,
+  TRIABLES,
   basculerGroupe,
   celluleSuivante,
   cheminDe,
@@ -168,6 +170,20 @@ describe('lignesGrille : tri et filtre (§ 10.2)', () => {
     assert.throws(() => lignesGrille(participants, { tri: { colonne: 'id', sens: 'croissant' }, filtre: '' }, cleNormalisee), RangeError);
     assert.throws(() => lignesGrille(participants, { tri: { colonne: 'nom', sens: 'haut' }, filtre: '' }, cleNormalisee), RangeError);
   });
+
+  test('les conflits du placement, une mesure, ne se trient ni ne se filtrent : TRIABLES les écarte, et leur tri lève', () => {
+    assert.deepEqual(MESURES, ['conflitsPlacement']);
+    assert.ok(Object.isFrozen(MESURES));
+    assert.deepEqual(TRIABLES, COLONNES.filter((colonne) => colonne !== 'conflitsPlacement'));
+    assert.ok(Object.isFrozen(TRIABLES));
+    for (const sens of ['croissant', 'decroissant']) {
+      assert.throws(() => lignesGrille(participants, { tri: { colonne: 'conflitsPlacement', sens }, filtre: '' }, cleNormalisee), RangeError);
+    }
+    // Une propriété de ce nom, que la grille n'écrit jamais, n'est pas lue
+    // par le filtre.
+    const porteuse = [personne(1, 'Ombrelle', { conflitsPlacement: 'tour 2' })];
+    assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'tour' }, cleNormalisee), []);
+  });
 });
 
 describe('la colonne de la présence : filtre, tri, groupes, commande', () => {
@@ -249,6 +265,8 @@ describe('la colonne de la présence : filtre, tri, groupes, commande', () => {
       args: { id: 2, champs: { courriel: 'iris@exemple.test' } },
     });
     assert.deepEqual(commandeDeCellule('notes', 9, ''), { nom: 'modifierParticipant', args: { id: 9, champs: { notes: '' } } });
+    // Les conflits du placement se lisent, ne s'écrivent pas.
+    assert.throws(() => commandeDeCellule('conflitsPlacement', 9, 'tour 2'), RangeError);
   });
 });
 
@@ -425,13 +443,14 @@ describe('reservationsDe : les réservations d’une personne, pour la fiche (§
 });
 
 describe("les colonnes de la grille s'associent à l'export par leur champ (§ 10.2)", () => {
-  test('neuf colonnes, les conflits juste après l’organisation, la présence juste après l’exclusion ; chacune a son champ d’export, sous son en-tête', () => {
-    assert.deepEqual(COLONNES, ['nom', 'prenom', 'organisation', 'conflits', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+  test('dix colonnes, les conflits juste après l’organisation, ceux du placement juste après, la présence juste après l’exclusion ; chacune, hors des mesures, a son champ d’export, sous son en-tête', () => {
+    assert.deepEqual(COLONNES, ['nom', 'prenom', 'organisation', 'conflits', 'conflitsPlacement', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
     assert.ok(Object.isFrozen(COLONNES));
-    assert.deepEqual([...CHAMP_DE_COLONNE.keys()], COLONNES);
+    assert.deepEqual([...CHAMP_DE_COLONNE.keys()], COLONNES.filter((colonne) => !MESURES.includes(colonne)));
+    assert.equal(CHAMP_DE_COLONNE.has('conflitsPlacement'), false);
     assert.equal(CHAMP_DE_COLONNE.get('titrePressenti'), 'titre_pressenti');
     assert.equal(CHAMP_DE_COLONNE.get('conflits'), 'conflit_organisation');
-    for (const colonne of COLONNES.filter((c) => c !== 'titrePressenti' && c !== 'conflits')) assert.equal(CHAMP_DE_COLONNE.get(colonne), colonne);
+    for (const colonne of [...CHAMP_DE_COLONNE.keys()].filter((c) => c !== 'titrePressenti' && c !== 'conflits')) assert.equal(CHAMP_DE_COLONNE.get(colonne), colonne);
   });
 
   test('la cellule exportée sous l’en-tête du champ de chaque colonne égale celle de la grille : exclu écrit « non », la présence écrite par ecrirePresence', () => {
@@ -453,7 +472,7 @@ describe("les colonnes de la grille s'associent à l'export par leur champ (§ 1
       const [entete, ligne] = texte.split('\r\n');
       const colonnesExport = entete.split(';');
       const cellules = ligne.split(';');
-      for (const colonne of COLONNES) {
+      for (const colonne of CHAMP_DE_COLONNE.keys()) {
         const rang = colonnesExport.indexOf(CHAMP_DE_COLONNE.get(colonne));
         assert.ok(rang >= 0, colonne);
         const attendues = new Map([['exclu', 'non'], ['presence', ecrirePresence(p.presence)], ['conflits', 'Atelier Ressac']]);
@@ -481,13 +500,15 @@ describe("les colonnes de la grille s'associent à l'export par leur champ (§ 1
     const { texte } = decoder(exporterParticipants([p]));
     const [entete, ligne] = texte.split('\r\n');
     const cellules = ligne.split(';');
-    assert.equal(cellules.length, COLONNES.length);
+    assert.equal(cellules.length, COLONNES.length - MESURES.length);
     assert.deepEqual(entete.split(';').slice(-2), ['etiquettes', 'presence']);
     assert.deepEqual(cellules.slice(-2), ['Montréal, finance', '2, 3']);
     assert.ok(!COLONNES.includes('etiquettes'));
     const avec = decoder(exporterParticipants([{ ...p, conflits: ['Atelier Ressac'] }])).texte.split('\r\n');
     assert.deepEqual(avec[0].split(';').slice(-3), ['etiquettes', 'presence', 'conflit_organisation']);
-    assert.equal(avec[1].split(';').length, COLONNES.length + 1);
+    assert.equal(avec[1].split(';').length, COLONNES.length - MESURES.length + 1);
+    // Les conflits du placement, une mesure, ne s'exportent pas.
+    assert.ok(!avec[0].split(';').some((champ) => champ.includes('placement')));
   });
 
   test('le nom proposé à l’enregistrement : ‹base›-participants.csv', () => {
@@ -539,8 +560,9 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
   ];
 
   test('les colonnes groupables : celles de la grille hors des conflits, une liste, puis le statut calculé, chacune avec sa clé de libellé', () => {
-    assert.deepEqual(GROUPEMENTS, [...COLONNES.filter((colonne) => colonne !== 'conflits'), 'statut']);
+    assert.deepEqual(GROUPEMENTS, [...COLONNES.filter((colonne) => colonne !== 'conflits' && colonne !== 'conflitsPlacement'), 'statut']);
     assert.throws(() => groupesGrille([], ['conflits'], { tri: null, cleNormalisee, statuts: null }), RangeError);
+    assert.throws(() => groupesGrille([], ['conflitsPlacement'], { tri: null, cleNormalisee, statuts: null }), RangeError);
     assert.ok(GROUPEMENTS.length > 0);
     for (const colonne of COLONNES) assert.equal(cleDeGroupement(colonne), cleDeColonne(colonne), colonne);
     assert.equal(cleDeGroupement('statut'), 'participants.groupe.statut');
@@ -612,7 +634,7 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
   });
 
   test('chaque colonne de texte groupe par sa clé normalisée, le vide après toute valeur, dans les deux sens', () => {
-    const textes = COLONNES.filter((colonne) => !['conflits', 'exclu', 'presence', 'nom'].includes(colonne));
+    const textes = COLONNES.filter((colonne) => !['conflits', 'conflitsPlacement', 'exclu', 'presence', 'nom'].includes(colonne));
     assert.ok(textes.length > 0);
     for (const colonne of textes) {
       const liste = [

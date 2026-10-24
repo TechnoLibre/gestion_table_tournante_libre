@@ -3,29 +3,50 @@
 
 // Les modules purs de la liste des participants (§ 4, § 7.4, § 10.2), que
 // câblent SectionParticipants, Grille, Formulaire et Fiche : les colonnes de
-// la grille, ses lignes triées et filtrées, la cellule qu'atteint une
-// touche, la commande qu'exécute une cellule validée, les groupes,
-// imbriqués, de la liste groupée par une colonne ou plusieurs et les lignes
-// que laissent voir les groupes repliés, l'orthographe d'organisation à
-// reprendre, l'itinéraire d'une personne dans le retenu et ses
-// réservations. La présence par tour se lit par presenceSaisie
-// (src/application/places.js) et se range par clePresence (presence.js) ;
-// les conflits d'organisation se rangent par cleTriConflits
-// (liste_conflits.js).
-// Aucune fonction ne modifie ce qu'elle reçoit ; la clé normalisée vient de
-// l'appelant, qui la tient de src/application/csv.js.
+// la grille, celles qui ne font que lire une mesure, ses lignes triées et
+// filtrées, la cellule qu'atteint une touche, la commande qu'exécute une
+// cellule validée, les groupes, imbriqués, de la liste groupée par une
+// colonne ou plusieurs et les lignes que laissent voir les groupes repliés,
+// l'orthographe d'organisation à reprendre, l'itinéraire d'une personne dans
+// le retenu et ses réservations. La présence par tour se lit par
+// presenceSaisie (src/application/places.js) et se range par clePresence
+// (presence.js) ; les conflits d'organisation se rangent par cleTriConflits
+// (liste_conflits.js). Aucune fonction ne modifie ce qu'elle reçoit ; la clé
+// normalisée vient de l'appelant, qui la tient de src/application/csv.js.
 
 import { presenceSaisie } from '../../application/places.js';
 import { effetDe } from '../raccourcis.js';
 import { cleTriConflits, commandeDeConflits } from './liste_conflits.js';
 import { affichagePresence, clePresence } from './presence.js';
 
-/** Les colonnes de la grille, propriétés d'un participant. Elles s'associent
- *  à l'export par leur champ (CHAMP_DE_COLONNE), non par leur rang : la
- *  grille ne montre pas les étiquettes, les conflits d'organisation y
- *  suivent l'organisation, et la présence, l'exclusion. Le collage en bloc
- *  suit l'ordre des champs de l'export, non celui-ci. */
-export const COLONNES = Object.freeze(['nom', 'prenom', 'organisation', 'conflits', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+/** Les colonnes de la grille : les propriétés d'un participant, et les
+ *  mesures de MESURES. Les propriétés s'associent à l'export par leur champ
+ *  (CHAMP_DE_COLONNE), non par leur rang : la grille ne montre pas les
+ *  étiquettes, les conflits d'organisation y suivent l'organisation, ceux
+ *  du placement les suivent, et la présence suit l'exclusion. Le collage en
+ *  bloc suit l'ordre des champs de l'export, non celui-ci. */
+export const COLONNES = Object.freeze([
+  'nom',
+  'prenom',
+  'organisation',
+  'conflits',
+  'conflitsPlacement',
+  'courriel',
+  'titrePressenti',
+  'exclu',
+  'presence',
+  'notes',
+]);
+
+/** Les colonnes qui écrivent une mesure, non une propriété : les conflits du
+ *  placement montré (conflitsParTour, conflits.js), que la grille lit dans
+ *  conflitsDuPlacement. Elles se lisent seulement : ni saisie, ni tri, ni
+ *  filtre, ni groupement, ni export. */
+export const MESURES = Object.freeze(['conflitsPlacement']);
+
+/** Les colonnes dont l'en-tête trie : COLONNES hors des mesures, que
+ *  lignesGrille ne reçoit pas. */
+export const TRIABLES = Object.freeze(COLONNES.filter((colonne) => !MESURES.includes(colonne)));
 
 // Le champ de l'export d'une colonne dont le nom diffère du sien.
 const CHAMPS_RENOMMES = new Map([
@@ -34,13 +55,18 @@ const CHAMPS_RENOMMES = new Map([
 ]);
 
 /** Le champ de l'export CSV (CHAMPS, src/application/csv.js) de chaque
- *  colonne, dans l'ordre de COLONNES : l'en-tête sous lequel l'export écrit
- *  sa cellule. */
-export const CHAMP_DE_COLONNE = new Map(COLONNES.map((colonne) => [colonne, CHAMPS_RENOMMES.get(colonne) ?? colonne]));
+ *  colonne hors des mesures, dans l'ordre de COLONNES : l'en-tête sous
+ *  lequel l'export écrit sa cellule. */
+export const CHAMP_DE_COLONNE = new Map(
+  COLONNES.filter((colonne) => !MESURES.includes(colonne)).map((colonne) => [colonne, CHAMPS_RENOMMES.get(colonne) ?? colonne]),
+);
 
-// Les colonnes de texte : toutes, hors des conflits, de l'exclusion et de
-// la présence, qui ne sont pas des textes saisis : le filtre ne les lit pas.
-const TEXTES = COLONNES.filter((colonne) => colonne !== 'conflits' && colonne !== 'exclu' && colonne !== 'presence');
+// Les colonnes de texte : toutes, hors des conflits, des mesures, de
+// l'exclusion et de la présence, qui ne sont pas des textes saisis : le
+// filtre ne les lit pas.
+const TEXTES = COLONNES.filter(
+  (colonne) => colonne !== 'conflits' && !MESURES.includes(colonne) && colonne !== 'exclu' && colonne !== 'presence',
+);
 
 // La clé du libellé de chaque colonne, et celle de chaque statut calculé.
 const CLES_COLONNES = new Map([
@@ -48,6 +74,7 @@ const CLES_COLONNES = new Map([
   ['prenom', 'participants.colonne.prenom'],
   ['organisation', 'participants.colonne.organisation'],
   ['conflits', 'participants.colonne.conflits'],
+  ['conflitsPlacement', 'participants.colonne.conflitsPlacement'],
   ['courriel', 'participants.colonne.courriel'],
   ['titrePressenti', 'participants.colonne.titrePressenti'],
   ['exclu', 'participants.colonne.exclu'],
@@ -105,17 +132,18 @@ const SENS = new Map([
  * conflits : cleTriConflits), un champ null ou une personne sans conflit
  * après toute valeur dans les deux sens, départagé par
  * identifiant croissant. Sans tri, l'ordre est celui des identifiants
- * croissants ; un filtre dont la clé est vide garde tout.
+ * croissants ; un filtre dont la clé est vide garde tout. Les mesures ne se
+ * lisent ni au filtre ni au tri.
  *
  * @param {Array<Object>} participants
  * @param {{tri: null|{colonne: string, sens: 'croissant'|'decroissant'}, filtre: string}} vue
  * @param {(texte: string) => string} cleNormalisee
  * @returns {Array<Object>}   les participants reçus, dans l'ordre de la grille
- * @throws {RangeError} une colonne hors de COLONNES, un autre sens
+ * @throws {RangeError} une colonne hors de TRIABLES, un autre sens
  */
 export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
   const signe = tri === null ? 1 : SENS.get(tri.sens);
-  if (tri !== null && (!COLONNES.includes(tri.colonne) || signe === undefined)) {
+  if (tri !== null && (!TRIABLES.includes(tri.colonne) || signe === undefined)) {
     throw new RangeError(`tri inconnu : ${JSON.stringify(tri)}`);
   }
   const cherche = cleNormalisee(filtre ?? '');
@@ -150,23 +178,26 @@ export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
 
 /** Les colonnes par lesquelles la liste se groupe : celles de la grille,
  *  dans leur ordre, hors des conflits — une liste, dont une personne porte
- *  plusieurs noms, ne range pas chacune dans un seul groupe —, puis le
- *  statut calculé (§ 4.2), qui n'est pas une colonne. */
-export const GROUPEMENTS = Object.freeze([...COLONNES.filter((colonne) => colonne !== 'conflits'), 'statut']);
+ *  plusieurs noms, ne range pas chacune dans un seul groupe — et des
+ *  mesures, puis le statut calculé (§ 4.2), qui n'est pas une colonne. */
+export const GROUPEMENTS = Object.freeze([...COLONNES.filter((colonne) => colonne !== 'conflits' && !MESURES.includes(colonne)), 'statut']);
 
 /**
  * La commande qu'exécute la validation d'une cellule de la grille : celle de
  * la présence, changerPresence de ses tours (null pour tous) ; celle des
  * conflits, changerConflits de la liste saisie (commandeDeConflits,
  * liste_conflits.js) ; toute autre, modifierParticipant sur ce seul champ.
+ * Une mesure ne se saisit pas.
  *
  * @param {string} colonne   une colonne de COLONNES, hors exclu, qui se
- *   bascule
+ *   bascule, et hors des mesures
  * @param {number} id
  * @param {unknown} valeur   la valeur lue de la saisie
  * @returns {{nom: string, args: Object}}
+ * @throws {RangeError} une mesure
  */
 export function commandeDeCellule(colonne, id, valeur) {
+  if (MESURES.includes(colonne)) throw new RangeError(`colonne en lecture seule : ${JSON.stringify(colonne)}`);
   if (colonne === 'presence') return { nom: 'changerPresence', args: { id, tours: valeur } };
   if (colonne === 'conflits') return commandeDeConflits(id, valeur);
   return { nom: 'modifierParticipant', args: { id, champs: { [colonne]: valeur } } };

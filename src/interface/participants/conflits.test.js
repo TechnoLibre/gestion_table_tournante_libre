@@ -1,17 +1,18 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Les conflits du placement montré dans la liste groupée (§ 7.5, § 10.2) :
-// les conflits de chaque groupe, de tout niveau, les règles de chaque
-// personne, les lignes de conflit nommées et leurs textes. Les noms
-// d'épreuve sont inventés.
+// Les conflits du placement montré dans la liste (§ 7.5, § 10.2) : les
+// conflits de chaque groupe, de tout niveau, les règles de chaque personne,
+// les lignes de conflit nommées et leurs textes, puis ceux de chaque
+// personne, tour par tour — la colonne « Conflits du placement » — et ligne
+// par ligne — la rubrique de sa fiche. Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { cleNormalisee } from '../../application/csv.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { REGLES, cleDeRaison, conflitsDesGroupes, lignesDeConflit, reglesParPersonne } from './conflits.js';
+import { REGLES, cleDeRaison, cleDeRegleCourte, conflitsDesGroupes, conflitsParTour, lignesDeConflit, lignesDePersonne, reglesParPersonne } from './conflits.js';
 import { groupesGrille, lignesGrille } from './grille.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -156,5 +157,119 @@ describe('les textes des conflits', () => {
       t('participants.conflit.personne', { regles: ['separerOrganisations', 'nouveauxVoisins', 'nouvelleTable'] }),
       'en conflit : même organisation, se revoient, revient à une table',
     );
+  });
+});
+
+describe('conflitsParTour : les conflits de chaque personne, tour par tour (colonne « Conflits du placement »)', () => {
+  test('par personne, les tours croissants, les règles de chaque tour sans doublon dans l’ordre de REGLES ; une personne sans conflit n’a pas d’entrée', () => {
+    const conflits = [
+      C1,
+      conflit(2, 1, 4, 'nouvelleTable', [1], [{ tour: 1, numero: 4 }]),
+      conflit(2, 1, 4, 'nouveauxVoisins', [1, 5], [{ tour: 1, numero: 4 }]),
+      conflit(2, 1, 4, 'conflitsOrganisation', [1, 5]),
+      conflit(2, 1, 4, 'conflitsOrganisation', [1, 4]),
+      C2,
+    ];
+    const parPersonne = conflitsParTour(conflits);
+    assert.deepEqual(
+      [...parPersonne].sort(([a], [b]) => a - b),
+      [
+        [1, [{ tour: 1, regles: ['separerOrganisations'] }, { tour: 2, regles: ['conflitsOrganisation', 'nouveauxVoisins', 'nouvelleTable'] }]],
+        [2, [{ tour: 1, regles: ['separerOrganisations'] }, { tour: 2, regles: ['nouveauxVoisins'] }]],
+        [3, [{ tour: 2, regles: ['nouveauxVoisins'] }]],
+        [4, [{ tour: 2, regles: ['conflitsOrganisation'] }]],
+        [5, [{ tour: 2, regles: ['conflitsOrganisation', 'nouveauxVoisins'] }]],
+      ],
+    );
+  });
+
+  test('l’ordre reçu ne décide pas de celui des tours : un conflit du tour 1 reçu après ceux du tour 3 le précède', () => {
+    const parPersonne = conflitsParTour([conflit(3, 2, 1, 'nouveauxVoisins', [1, 2]), conflit(1, 1, 4, 'separerOrganisations', [1, 2])]);
+    assert.deepEqual(parPersonne.get(1).map(({ tour }) => tour), [1, 3]);
+  });
+
+  test('aucun conflit, ou null — aucun placement montré — : aucune entrée', () => {
+    assert.equal(conflitsParTour([]).size, 0);
+    assert.equal(conflitsParTour(null).size, 0);
+  });
+
+  test('le texte court de chaque règle est celui de la marque d’une personne ; une autre règle lève', () => {
+    for (const regle of REGLES) {
+      assert.equal(cleDeRegleCourte(regle), `participants.conflit.regle.${regle}`);
+      assert.equal(t('participants.conflit.personne', { regles: [regle] }), `en conflit : ${t(cleDeRegleCourte(regle))}`);
+    }
+    assert.throws(() => cleDeRegleCourte('varierOrganisations'), RangeError);
+    assert.equal(t('participants.conflit.tour', { tour: 2 }), 'tour 2 :');
+    assert.equal(t('participants.conflit.aucun'), '\u{2014}');
+    assert.equal(t('participants.colonne.conflitsPlacement'), 'Conflits du placement');
+  });
+});
+
+describe('lignesDePersonne : les conflits d’une personne, ligne par ligne (rubrique de la fiche)', () => {
+  const MESANGE = personne(6, 'Mésange', 'Léon', 'Club des Merles');
+  const SIX = [...PERSONNES, MESANGE];
+
+  test('une ligne par conflit qui la touche, dans l’ordre reçu — celui des tours —, qui nomme les autres personnes ; nouvelle table n’en nomme aucune', () => {
+    assert.deepEqual(lignesDePersonne(CONFLITS, PERSONNES, 2), [
+      { cle: '1:1:separerOrganisations:', tour: 1, numero: 4, regle: 'separerOrganisations', avec: ['Iris Ombrelle'], deja: [] },
+      { cle: '2:2:nouveauxVoisins:1.4', tour: 2, numero: 1, regle: 'nouveauxVoisins', avec: ['Théo Pervenche'], deja: [{ tour: 1, numero: 4 }] },
+    ]);
+    assert.deepEqual(lignesDePersonne(CONFLITS, PERSONNES, 5), [
+      { cle: '2:1:nouvelleTable:1.4', tour: 2, numero: 4, regle: 'nouvelleTable', avec: [], deja: [{ tour: 1, numero: 4 }] },
+    ]);
+    assert.deepEqual(lignesDePersonne(CONFLITS, PERSONNES, 4), []);
+  });
+
+  test('les paires d’une même règle, à la même table au même tour, se réunissent en une ligne, les autres dans l’ordre des paires', () => {
+    const conflits = [
+      conflit(1, 1, 4, 'separerOrganisations', [1, 2]),
+      conflit(1, 1, 4, 'separerOrganisations', [1, 6]),
+      conflit(1, 1, 4, 'separerOrganisations', [2, 6]),
+      conflit(1, 1, 4, 'conflitsOrganisation', [1, 3]),
+      conflit(2, 2, 1, 'separerOrganisations', [1, 6]),
+    ];
+    assert.deepEqual(
+      lignesDePersonne(conflits, SIX, 1).map(({ tour, regle, avec }) => [tour, regle, avec]),
+      [
+        [1, 'separerOrganisations', ['Noé Fontaine', 'Léon Mésange']],
+        [1, 'conflitsOrganisation', ['Théo Pervenche']],
+        [2, 'separerOrganisations', ['Léon Mésange']],
+      ],
+    );
+    assert.deepEqual(lignesDePersonne(conflits, SIX, 6).map(({ avec }) => avec), [['Iris Ombrelle', 'Noé Fontaine'], ['Iris Ombrelle']]);
+  });
+
+  test('deux paires revues à la même table, aux rencontres antérieures différentes, restent deux lignes : chacune dit les siennes', () => {
+    const conflits = [
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 2], [{ tour: 1, numero: 4 }]),
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 3], [{ tour: 2, numero: 1 }]),
+      conflit(3, 1, 4, 'nouveauxVoisins', [1, 6], [{ tour: 1, numero: 4 }]),
+    ];
+    assert.deepEqual(
+      lignesDePersonne(conflits, SIX, 1).map(({ cle, avec, deja }) => [cle, avec, deja]),
+      [
+        ['3:1:nouveauxVoisins:1.4', ['Noé Fontaine', 'Léon Mésange'], [{ tour: 1, numero: 4 }]],
+        ['3:1:nouveauxVoisins:2.1', ['Théo Pervenche'], [{ tour: 2, numero: 1 }]],
+      ],
+    );
+  });
+
+  test('deux homonymes à la même table font deux noms dans la ligne', () => {
+    const homonymes = [...PERSONNES, personne(6, 'Fontaine', 'Noé', 'Club des Merles')];
+    const conflits = [conflit(1, 1, 4, 'separerOrganisations', [1, 2]), conflit(1, 1, 4, 'separerOrganisations', [1, 6])];
+    assert.deepEqual(lignesDePersonne(conflits, homonymes, 1)[0].avec, ['Noé Fontaine', 'Noé Fontaine']);
+  });
+
+  test('une personne que la liste n’a pas n’est pas nommée ; null — aucun placement montré — rend null', () => {
+    assert.deepEqual(lignesDePersonne([conflit(1, 1, 4, 'separerOrganisations', [1, 9])], PERSONNES, 1)[0].avec, []);
+    assert.equal(lignesDePersonne(null, PERSONNES, 1), null);
+  });
+
+  test('les textes de la rubrique', () => {
+    assert.equal(t('participants.conflit.avec'), 'avec');
+    assert.equal(t('participants.fiche.conflitsPlacement.titre'), 'Conflits du placement');
+    assert.equal(t('participants.fiche.conflitsPlacement.aucun'), 'Aucun conflit dans ce placement.');
+    assert.equal(t('participants.fiche.conflitsPlacement.sansPlacement'), 'Aucun placement à mesurer.');
+    assert.equal(typeof t('participants.fiche.conflitsPlacement.nonEvalue'), 'string');
   });
 });

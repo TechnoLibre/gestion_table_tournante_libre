@@ -1090,7 +1090,7 @@ describe("les conflits d'organisation dans la grille (§ 4, § 10.2)", () => {
     expect(pastilles(m, id)).toEqual([]);
   });
 
-  test('Échap rend la liste enregistrée sans rien écrire ; cocher puis décocher, puis Entrée, n’exécute rien ; Tab valide une fois et mène au courriel', async () => {
+  test('Échap rend la liste enregistrée sans rien écrire ; cocher puis décocher, puis Entrée, n’exécute rien ; Tab valide une fois et mène aux conflits du placement', async () => {
     const m = await evenementOuvert({ personnes: QUATRE });
     const id = idDe(m, 'Pervenche');
     await m.seance.executer('ajouterConflit', { id, organisation: CLUB });
@@ -1128,7 +1128,8 @@ describe("les conflits d'organisation dans la grille (§ 4, § 10.2)", () => {
     expect(executer).toHaveBeenCalledWith('changerConflits', { id, organisations: [] });
     expect(entrees(m)).toHaveLength(avant + 1);
     expect(conflitsDe(m, id)).toBeUndefined();
-    expect(document.activeElement).toBe(cellule(m, id, 'courriel'));
+    // La cellule voisine, en lecture seule, prend le focus.
+    expect(document.activeElement).toBe(cellule(m, id, 'conflitsPlacement'));
   });
 
   test('sans autre organisation, le groupe le dit et prend le focus ; Échap le referme', async () => {
@@ -2495,6 +2496,129 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
       expect(texteDe(marqueDePersonne(m, 1))).toBe('en conflit : revient à une table');
     });
 
+    // La colonne « Conflits du placement » : une ligne de texte par tour où
+    // la personne est en conflit, ou le tiret.
+    const toursDe = (m, id) => [...cellule(m, id, 'conflitsPlacement').querySelectorAll('li')].map(texteDe);
+    const COLONNE_SOUS_LE_PLAN_1 = new Map([
+      [1, ['tour 1 : même organisation', 'tour 2 : revient à une table']],
+      [2, ['tour 1 : même organisation', 'tour 2 : se revoient']],
+      [3, ['tour 2 : se revoient']],
+      [4, ['tour 2 : se revoient']],
+      [5, ['tour 2 : se revoient']],
+      [6, ['tour 2 : revient à une table']],
+      [7, []],
+    ]);
+    function attendreColonneSousLePlan1(m) {
+      for (const [id, attendus] of COLONNE_SOUS_LE_PLAN_1) {
+        expect(toursDe(m, id), String(id)).toEqual(attendus);
+        if (attendus.length === 0) expect(texteDe(cellule(m, id, 'conflitsPlacement')), String(id)).toBe(TIRET);
+        else expect(texteDe(cellule(m, id, 'conflitsPlacement')), String(id)).not.toContain(TIRET);
+      }
+    }
+
+    test('sans groupement, la colonne après les conflits d’organisation écrit les règles de chaque personne par tour, le tiret sans conflit ; sans tri, sans écriture', async () => {
+      const m = await ouvrirSept();
+      await gesteDeProposition(m, 1, 'voir');
+      expect(selecteur(m).value).toBe('');
+      const avant = { journal: texteJournal(m), etat: texteEtat(m) };
+      expect(COLONNES.indexOf('conflitsPlacement')).toBe(COLONNES.indexOf('conflits') + 1);
+      const entetes = [...grille(m).tHead.rows[0].cells];
+      const entete = entetes[COLONNES.indexOf('conflitsPlacement')];
+      expect(texteDe(entete)).toBe('Conflits du placement');
+      expect(entete.getAttribute('scope')).toBe('col');
+      expect(entete.querySelector('button')).toBeNull();
+      expect(entete.hasAttribute('aria-sort')).toBe(false);
+      expect(texteDe(entetes[COLONNES.indexOf('conflits')])).toContain("Conflit d'organisation");
+      attendreColonneSousLePlan1(m);
+      // Les marques de la liste groupée restent à la liste groupée.
+      expect(toutesLesMarques(m)).toHaveLength(0);
+      expect({ journal: texteJournal(m), etat: texteEtat(m) }).toEqual(avant);
+    });
+
+    test('la cellule se lit au clavier, la flèche y mène, et ne s’édite pas : Entrée et F2 n’ouvrent rien', async () => {
+      const m = await ouvrirSept();
+      await gesteDeProposition(m, 1, 'voir');
+      const trace = m.trace.length;
+      cellule(m, 2, 'conflits').focus();
+      await touche('ArrowRight');
+      await rendu();
+      const mesure = cellule(m, 2, 'conflitsPlacement');
+      expect(document.activeElement).toBe(mesure);
+      expect(mesure.getAttribute('role')).toBe('gridcell');
+      // F2, que l'entrée simulée ne connaît pas, arrive en évènement du
+      // document, comme la grille le lit.
+      for (const cle of ['Enter', 'F2']) {
+        if (cle === 'Enter') await touche(cle);
+        else mesure.dispatchEvent(new KeyboardEvent('keydown', { key: cle, bubbles: true, cancelable: true }));
+        await rendu();
+        expect(mesure.querySelector('input, textarea, [role="group"]'), cle).toBeNull();
+        expect(document.activeElement, cle).toBe(mesure);
+      }
+      expect(toursDe(m, 2)).toEqual(COLONNE_SOUS_LE_PLAN_1.get(2));
+      await touche('ArrowRight');
+      await rendu();
+      expect(document.activeElement).toBe(cellule(m, 2, 'courriel'));
+      await attendreSeance(m);
+      expect(m.trace.length).toBe(trace);
+    });
+
+    test('la colonne suit le placement montré : le retenu, puis la proposition 2 ; groupée, elle reste', async () => {
+      const m = await ouvrirSept();
+      await gesteDeProposition(m, 1, 'retenir');
+      expect(m.ui.etat().proposition).toBeNull();
+      attendreColonneSousLePlan1(m);
+
+      await gesteDeProposition(m, 2, 'voir');
+      expect(toursDe(m, 1)).toEqual(['tour 1 : même organisation']);
+      expect(toursDe(m, 3)).toEqual(['tour 2 : se revoient, revient à une table']);
+      expect(toursDe(m, 4)).toEqual(['tour 2 : se revoient, revient à une table']);
+      expect(toursDe(m, 6)).toEqual([]);
+
+      await grouperPar(m, 'organisation');
+      expect(toursDe(m, 3)).toEqual(['tour 2 : se revoient, revient à une table']);
+      expect(texteDe(marqueDePersonne(m, 3))).toBe('en conflit : se revoient, revient à une table');
+    });
+
+    test('à 1366 et 1024 de large, la colonne remplie tient dans la grille, la grille dans son conteneur', async () => {
+      const avant = { largeur: innerWidth, hauteur: innerHeight };
+      try {
+        for (const largeur of [1366, 1024]) {
+          await fixerCadre(largeur, 700);
+          const m = await ouvrirSept();
+          await gesteDeProposition(m, 1, 'voir');
+          attendreColonneSousLePlan1(m);
+          const defilement = grille(m).parentElement;
+          expect(defilement.scrollWidth, `${largeur}`).toBeLessThanOrEqual(defilement.clientWidth);
+          const mesure = cellule(m, 1, 'conflitsPlacement').getBoundingClientRect();
+          for (const li of cellule(m, 1, 'conflitsPlacement').querySelectorAll('li')) {
+            expect(li.getBoundingClientRect().right, `${largeur}`).toBeLessThanOrEqual(mesure.right);
+          }
+          m.demonter();
+          montes.splice(montes.indexOf(m), 1);
+        }
+      } finally {
+        await fixerCadre(avant.largeur, avant.hauteur);
+      }
+    });
+
+    test('une règle désactivée quitte la colonne ; ni proposition montrée ni retenu : le tiret partout', async () => {
+      const m = await ouvrirSept();
+      for (const id of COLONNE_SOUS_LE_PLAN_1.keys()) expect(texteDe(cellule(m, id, 'conflitsPlacement'))).toBe(TIRET);
+      await gesteDeProposition(m, 1, 'voir');
+      await m.seance.executer('modifierReglage', { cle: 'separerOrganisations', valeur: false });
+      await attendreSeance(m);
+      expect(toursDe(m, 1)).toEqual(['tour 2 : revient à une table']);
+      expect(toursDe(m, 2)).toEqual(['tour 2 : se revoient']);
+      // Une personne placée exclue : la proposition montrée dérive, ses
+      // conflits ne se comptent pas, et la colonne le dit au lieu du tiret.
+      await m.seance.executer('exclureParticipant', { id: 3 });
+      await attendreSeance(m);
+      for (const id of COLONNE_SOUS_LE_PLAN_1.keys()) {
+        if (id === 3) continue;
+        expect(texteDe(cellule(m, id, 'conflitsPlacement'))).toBe(t('participants.conflit.nonCompte'));
+      }
+    });
+
     test('ni proposition montrée ni retenu : aucune marque ; sans groupement, rien ne change', async () => {
       const m = await ouvrirSept();
       expect(m.ui.etat().proposition).toBeNull();
@@ -2750,10 +2874,14 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
       const defilement = grille(m).parentElement;
       expect(defilement.scrollWidth, 'le tableau défile en largeur dans son conteneur').toBeLessThanOrEqual(defilement.clientWidth);
       // L'en-tête garde la hauteur d'une ligne : aucun intitulé ne se
-      // replie, celui des conflits d'organisation compris.
+      // replie, celui des conflits d'organisation compris, hors de celui des
+      // conflits du placement, une mesure, sur deux lignes entre ses mots.
       const entetes = [...grille(m).tHead.rows[0].cells];
       expect(entetes.map(texteDe)).toContain(t('participants.colonne.conflits'));
-      for (const entete of entetes) expect(rangeesDeTexte(entete), texteDe(entete)).toBe(1);
+      const mesure = entetes[COLONNES.indexOf('conflitsPlacement')];
+      expect(texteDe(mesure)).toBe(t('participants.colonne.conflitsPlacement'));
+      expect(rangeesDeTexte(mesure)).toBe(2);
+      for (const entete of entetes.filter((e) => e !== mesure)) expect(rangeesDeTexte(entete), texteDe(entete)).toBe(1);
       // Les quatre actions de chaque ligne, sur deux rangées au plus, chacune
       // sur une ligne ; « Réintégrer » sur celle de la personne exclue.
       for (const rangee of lignes(m)) {
@@ -2835,7 +2963,12 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
       expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingRight)).toBe(espace(m, '--espace-2'));
       expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingLeft)).toBe(espace(m, '--espace-2'));
       expect(parseFloat(getComputedStyle(ligne(m, id).firstElementChild).paddingLeft)).toBe(espace(m, '--espace-3'));
-      for (const entete of grille(m).tHead.rows[0].cells) expect(getComputedStyle(entete).whiteSpace, texteDe(entete)).toBe('nowrap');
+      // Chaque en-tête sur une ligne, hors de celui des conflits du
+      // placement, qui se replie toujours entre ses mots.
+      for (const [rang, entete] of [...grille(m).tHead.rows[0].cells].entries()) {
+        const attendu = COLONNES[rang] === 'conflitsPlacement' ? 'normal' : 'nowrap';
+        expect(getComputedStyle(entete).whiteSpace, texteDe(entete)).toBe(attendu);
+      }
     });
     // Une fenêtre de plus de 80 rem dont la carte en a moins : les en-têtes
     // se replient entre leurs mots, les actions ne forment pas de grille.

@@ -360,6 +360,158 @@ describe('la rubrique suit le placement que le plan montre (§ 12.5, D25)', () =
   });
 });
 
+describe('la rubrique « Conflits du placement » de la fiche (§ 7.5, § 10.2)', () => {
+  const MERLES = 'Club des Merles';
+  const PINSONS = 'Cercle des Pinsons';
+  const TIRET = '\u{2014}';
+  // Deux tables de trois places, numérotées 4 (identifiant 1) et 1
+  // (identifiant 2), deux tours. 1 et 2 des Merles, 3 et 4 des Pinsons — 3
+  // des Merles quand collegues —, 5 et 6 sans organisation, 7 exclue.
+  // Proposition 1 : au tour 1, 1, 2 et 3 à la table 4 ; au tour 2, 4 et 5
+  // se revoient à la table 4, 2 et 3 à la table 1, 1 revient à la table 4
+  // et 6 à la table 1. Proposition 2 : au tour 2, 2 et 3 se revoient à la
+  // table 4 et y reviennent.
+  const PLANS = [
+    [
+      [[1, 2, 3], [4, 5, 6]],
+      [[1, 4, 5], [2, 3, 6]],
+    ],
+    [
+      [[1, 2, 3], [4, 5, 6]],
+      [[2, 3, 6], [1, 4, 5]],
+    ],
+  ];
+  const SEPT = [
+    ['Ombrelle', 'Iris', MERLES],
+    ['Fontaine', 'Noé', MERLES],
+    ['Pervenche', 'Théo', PINSONS],
+    ['Lacasse', 'Ondine', PINSONS],
+    ['Grisaille', null, null],
+    ['Bruyère', 'Anouk', null],
+    ['Sarcelle', 'Capucine', PINSONS],
+  ];
+
+  function chargeSept({ collegues = false, retenue = false } = {}) {
+    const charge = creerCharge({ id: 'evt-conflits-fiche', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 2 });
+    charge.participants = SEPT.map(([nom, prenom, organisation], rang) => ({
+      id: rang + 1,
+      nom,
+      prenom,
+      organisation: collegues && rang === 2 ? MERLES : organisation,
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: rang === 6,
+    }));
+    charge.tables = [
+      { id: 1, numero: 4, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
+      { id: 2, numero: 1, sieges: null, forme: 'ronde', position: { x: 300, y: 0 } },
+    ];
+    charge.propositions = PLANS.map((tours, rang) => ({
+      id: rang + 1,
+      graine: rang + 1,
+      arret: 40,
+      historique: 1000,
+      produitVersion: V1,
+      siegesAttribues: false,
+      tables: [1, 2],
+      capacites: [3, 3],
+      tours: tours.length,
+      participants: [1, 2, 3, 4, 5, 6],
+      placement: tours.map((listes) => ({ sieges: structuredClone(listes), reserve: [] })),
+    }));
+    charge.prochainsIds = { participant: 8, table: 3, proposition: 3 };
+    charge.evenement.etat = 'propose';
+    return retenue ? executer(charge, 'retenirProposition', { id: 1 }) : charge;
+  }
+
+  const rubriqueConflits = (fiche) => fiche.querySelector('[data-rubrique-conflits-placement]');
+  const lignesConflits = (fiche) => [...rubriqueConflits(fiche).querySelectorAll('li')].map(texteDe);
+  const source = (cle, details = {}) => `${t('participants.fiche.rencontres.intitule')} ${t(cle, details)}`;
+
+  test('sous la ligne de source, une ligne par conflit de la personne, rangée par tour : le lieu, les autres personnes, la raison', async () => {
+    const { fiche } = await ouvrirFiche(chargeSept(), 2, { montrer: 1 });
+    const section = rubriqueConflits(fiche);
+    expect(section).not.toBeNull();
+    expect(texteDe(section.querySelector('h4'))).toBe('Conflits du placement');
+    expect(texteDe(section.querySelector('.source'))).toBe(source('participants.fiche.rencontres.proposition', { proposition: 1 }));
+    expect(lignesConflits(fiche)).toEqual([
+      `Tour 1, table 4 : avec Iris Ombrelle ${TIRET} même organisation`,
+      `Tour 2, table 1 : avec Théo Pervenche ${TIRET} se revoient (déjà à la table 4 au tour 1)`,
+    ]);
+    // Chaque nom dans son propre nœud de texte.
+    expect([...section.querySelectorAll('li > span')].map(texteDe)).toEqual([
+      'Tour 1, table 4 :',
+      'avec',
+      'Iris Ombrelle',
+      `${TIRET} même organisation`,
+      'Tour 2, table 1 :',
+      'avec',
+      'Théo Pervenche',
+      `${TIRET} se revoient (déjà à la table 4 au tour 1)`,
+    ]);
+    // Près des rencontres, avant elles.
+    const rencontres = rubrique(fiche);
+    expect(section.compareDocumentPosition(rencontres) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('une personne revenue à sa table se nomme elle-même ; trois collègues à une table : une ligne qui nomme les deux autres', async () => {
+    const { fiche } = await ouvrirFiche(chargeSept(), 1, { montrer: 1 });
+    expect(lignesConflits(fiche)).toEqual([
+      `Tour 1, table 4 : avec Noé Fontaine ${TIRET} même organisation`,
+      `Tour 2, table 4 : Iris Ombrelle ${TIRET} revient à la table 4 (déjà au tour 1)`,
+    ]);
+    const { fiche: collegue } = await ouvrirFiche(chargeSept({ collegues: true }), 1, { montrer: 1 });
+    expect(lignesConflits(collegue)[0]).toBe(`Tour 1, table 4 : avec Noé Fontaine et Théo Pervenche ${TIRET} même organisation`);
+  });
+
+  test('sans proposition montrée, le retenu ; une proposition demandée l’emporte ; lue en lecture, sans commande ni écriture', async () => {
+    const { m, fiche } = await ouvrirFiche(chargeSept({ retenue: true }), 3, { mode: 'lecture' });
+    const ecritures = m.trace.length;
+    expect(texteDe(rubriqueConflits(fiche).querySelector('.source'))).toBe(source('participants.fiche.rencontres.retenu'));
+    expect(lignesConflits(fiche)).toEqual([`Tour 2, table 1 : avec Noé Fontaine ${TIRET} se revoient (déjà à la table 4 au tour 1)`]);
+    expect(rubriqueConflits(fiche).querySelector('button, input, [data-refus]')).toBeNull();
+    m.ui.montrerProposition(2);
+    const lignes = await attendre(() => {
+      const lues = lignesConflits(m.racine.querySelector('[data-fiche="3"]'));
+      expect(lues).toHaveLength(2);
+      return lues;
+    });
+    expect(lignes).toEqual([
+      `Tour 2, table 4 : avec Noé Fontaine ${TIRET} se revoient (déjà à la table 4 au tour 1)`,
+      `Tour 2, table 4 : Théo Pervenche ${TIRET} revient à la table 4 (déjà au tour 1)`,
+    ]);
+    expect(texteDe(rubriqueConflits(m.racine.querySelector('[data-fiche="3"]')).querySelector('.source'))).toBe(
+      source('participants.fiche.rencontres.proposition', { proposition: 2 }),
+    );
+    expect(m.trace.length).toBe(ecritures);
+  });
+
+  test('sans conflit, la phrase qui le dit ; une personne exclue de même', async () => {
+    const charge = chargeSept();
+    for (const personne of [6, 7]) {
+      const { fiche } = await ouvrirFiche(charge, personne, { montrer: 2 });
+      expect(rubriqueConflits(fiche).querySelector('li')).toBeNull();
+      expect(texteDe(rubriqueConflits(fiche))).toContain('Aucun conflit dans ce placement.');
+    }
+  });
+
+  test('ni proposition ni retenu : la rubrique dit qu’aucun placement ne se mesure, sans ligne de source ; une source en dérive : la phrase qui le dit', async () => {
+    const { fiche } = await ouvrirFiche(chargeDouze(), 1);
+    const section = rubriqueConflits(fiche);
+    expect(section).not.toBeNull();
+    expect(texteDe(section)).toBe(`Conflits du placement ${t('participants.fiche.conflitsPlacement.sansPlacement')}`);
+    expect(section.querySelector('.source')).toBeNull();
+    expect(texteDe(section)).toContain('Aucun placement à mesurer.');
+
+    const derive = chargeSept();
+    derive.participants[2].exclu = true;
+    const { fiche: autre } = await ouvrirFiche(derive, 1, { montrer: 1 });
+    expect(texteDe(rubriqueConflits(autre))).toContain(t('participants.fiche.conflitsPlacement.nonEvalue'));
+    expect(rubriqueConflits(autre).querySelector('li')).toBeNull();
+  });
+});
+
 describe('la rubrique « Présence » de la fiche (§ 10.2)', () => {
   const presence = (fiche) => fiche.querySelector('[data-presence-fiche]');
   const cases = (fiche) => [...presence(fiche).querySelectorAll('[data-presence-tour]')];

@@ -109,7 +109,24 @@
   // exclue : une phrase le dit. Sans placement, la rubrique est absente,
   // sans phrase. Elle n'a aucune commande : elle se lit en lecture et sur un
   // plan bloqué comme en écriture.
+  //
+  // La rubrique « Conflits du placement » (§ 7.5, data-rubrique-conflits-
+  // placement), juste avant « Rencontres », porte les conflits de la
+  // personne dans le même placement, lus par conflitsDuPlacement
+  // (src/application/conflits_placement.js) — ceux des groupes de la liste
+  // et des pastilles du plan — et rangés par lignesDePersonne (conflits.js) :
+  // la ligne de source des rencontres, puis une ligne par conflit, dans
+  // l'ordre des tours, « Tour 2, table 4 : » puis « avec » et les autres
+  // personnes, chaque nom dans son propre nœud, puis la raison
+  // (participants.conflit.raison.*) ; une nouvelle table nomme la personne
+  // elle-même. Sans conflit, une phrase le dit ; un placement dont les
+  // conflits ne se comptent pas — en dérive, ou une configuration
+  // incohérente — aussi. Sans placement, la rubrique reste, sans ligne de
+  // source, et dit qu'aucun placement ne se mesure. Du texte seul : aucune
+  // couleur, aucune commande, en lecture et sur un plan bloqué comme en
+  // écriture.
   import { getContext, onDestroy, tick, untrack } from 'svelte';
+  import { conflitsDuPlacement } from '../../application/conflits_placement.js';
   import { nomAffiche } from '../../application/personnes.js';
   import { etatPlaces, presenceSaisie, statuts } from '../../application/places.js';
   import { cleDeMode } from '../mode.js';
@@ -125,6 +142,7 @@
   import { cleNormalisee } from '../../application/csv.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
+  import { cleDeRaison, lignesDePersonne } from './conflits.js';
   import InformationsFiche from './InformationsFiche.svelte';
   import LogoFiche from './LogoFiche.svelte';
   import { ajoutEtiquettes, etiquettesDeLaFiche, retraitEtiquette, saisieApresAjout, signauxOrthographe } from './etiquettes.js';
@@ -149,6 +167,11 @@
   const reservations = $derived(reservationsDe(charge, participant.id));
   const etapes = $derived(itineraire(participant.id, charge.evenement.tours, (tour) => etatPlaces(charge, { tour })));
   const rencontres = $derived(rubriqueRencontres(charge, $ui.proposition, participant.id));
+  // Les conflits de la personne dans le même placement, ligne par ligne ;
+  // null quand aucun tour ne s'y évalue.
+  const conflitsPlacement = $derived(
+    lignesDePersonne(conflitsDuPlacement(charge, { proposition: $ui.proposition }), charge.participants, participant.id),
+  );
 
   // La fiche et son champ d'ajout, montés : le défilement vise la fiche,
   // le focus d'après un retrait ses commandes de retrait ou le champ.
@@ -626,6 +649,40 @@
     </table>
   {/if}
 
+  <section class="rencontres" data-rubrique-conflits-placement aria-labelledby={`${uid}-titre-conflits-placement`}>
+    <h4 id={`${uid}-titre-conflits-placement`}>{t('participants.fiche.conflitsPlacement.titre')}</h4>
+    {#if rencontres.source === null}
+      <p>{t('participants.fiche.conflitsPlacement.sansPlacement')}</p>
+    {:else}
+      <p class="source">
+        <span>{t('participants.fiche.rencontres.intitule')}</span>
+        <span class="placement">{t(rencontres.source.cle, rencontres.source.details)}</span>
+      </p>
+      {#if conflitsPlacement === null}
+        <p>{t('participants.fiche.conflitsPlacement.nonEvalue')}</p>
+      {:else if conflitsPlacement.length === 0}
+        <p>{t('participants.fiche.conflitsPlacement.aucun')}</p>
+      {:else}
+        <ul class="conflits-placement">
+          {#each conflitsPlacement as conflit (conflit.cle)}
+            <li>
+              <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero })}</span>
+              {#if conflit.avec.length === 0}
+                <span class="valeur">{nomAffiche(participant)}</span>
+              {:else}
+                <span>{t('participants.conflit.avec')}</span>
+                {#each conflit.avec as nom, rang (rang)}{#if rang > 0}{rang === conflit.avec.length - 1 ? ' ' : ', '}{#if rang === conflit.avec.length - 1}<span
+                        >{t('participants.conflit.et')}</span
+                      >{' '}{/if}{/if}<span class="valeur">{nom}</span>{/each}
+              {/if}
+              <span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja })}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
+  </section>
+
   {#if rencontres.statut !== 'sansPlacement'}
     <section class="rencontres" data-rubrique-rencontres aria-labelledby={`${uid}-titre-rencontres`}>
       <h4 id={`${uid}-titre-rencontres`}>{t('participants.fiche.rencontres.titre')}</h4>
@@ -863,6 +920,11 @@
   .placement {
     color: var(--couleur-page-texte);
     font-weight: bold;
+  }
+
+  .conflits-placement {
+    margin: 0;
+    padding-left: var(--espace-5);
   }
 
   .rencontres tbody th {

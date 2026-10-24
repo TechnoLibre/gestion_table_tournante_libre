@@ -15,28 +15,31 @@
 // l'étiquette qu'il ôte.
 //
 // participants.colonne.* nomme chaque colonne de COLONNES (grille.js), dans
-// l'en-tête de la grille, l'étiquette d'un champ du formulaire et celle
-// d'une valeur de la fiche ; participants.statut.* nomme chaque statut
-// calculé (§ 4.2), par cleDeStatut ; participants.groupe.* porte le
-// groupement de la liste : le sélecteur de chaque niveau, l'en-tête d'un
-// groupe et ses commandes ; participants.conflit.* les conflits du
-// placement montré dans la liste groupée : la marque d'un groupe et celle
-// d'une personne, puis chaque ligne de conflit — son lieu, la liaison de
-// deux noms, sa raison par règle. participants.presence.* porte la présence
-// par tour (participants/presence.js) : la cellule et l'en-tête de groupe
-// — « tous », ou les tours nommés par toursNommes —, puis les cases d'une
-// saisie, leur groupe et ses commandes ; participants.fiche.presence* la
-// rubrique de la fiche, et participants.fiche.absente l'étape d'un tour
-// d'absence dans l'itinéraire. participants.conflits.* porte la saisie des
-// conflits d'organisation (participants/liste_conflits.js) : le groupe de
-// ses cases, sa légende, le groupe sans choix et sa commande ;
+// l'en-tête de la grille, l'étiquette d'un champ du formulaire et celle d'une
+// valeur de la fiche ; participants.statut.* nomme chaque statut calculé
+// (§ 4.2), par cleDeStatut ; participants.groupe.* porte le groupement de la
+// liste : le sélecteur de chaque niveau, l'en-tête d'un groupe et ses
+// commandes ; participants.conflit.* les conflits du placement montré : dans
+// la liste groupée, la marque d'un groupe et celle d'une personne, puis
+// chaque ligne de conflit — son lieu, la liaison de deux noms, sa raison par
+// règle — ; dans la colonne « Conflits du placement », le tour et le texte
+// court de chaque règle, le tiret d'une personne sans conflit ; dans la
+// rubrique du même nom de la fiche (participants.fiche.conflitsPlacement.*),
+// son titre, le « avec » qui précède les autres personnes d'une ligne, et les
+// phrases sans ligne. participants.presence.* porte la présence par tour
+// (participants/presence.js) : la cellule et l'en-tête de groupe — « tous »,
+// ou les tours nommés par toursNommes —, puis les cases d'une saisie, leur
+// groupe et ses commandes ; participants.fiche.presence* la rubrique de la
+// fiche, et participants.fiche.absente l'étape d'un tour d'absence dans
+// l'itinéraire. participants.conflits.* porte la saisie des conflits
+// d'organisation (participants/liste_conflits.js) : le groupe de ses cases,
+// sa légende, le groupe sans choix et sa commande ;
 // participants.fiche.conflits* la rubrique de la fiche.
-// participants.fiche.logo et participants.fiche.aucunLogo portent la
-// rubrique « Logo » de la fiche ; participants.logo.* ses commandes —
-// « Logo », nommée par la personne, « Retirer le logo » —, sa vignette, qui
-// agrandit, l'image agrandie, nommée par la personne, son « Fermer », et la
-// phrase d'un logo dont l'image manque au dossier de l'événement ou ne se
-// lit pas.
+// participants.fiche.logo et participants.fiche.aucunLogo portent la rubrique
+// « Logo » de la fiche ; participants.logo.* ses commandes — « Logo », nommée
+// par la personne, « Retirer le logo » —, sa vignette, qui agrandit, l'image
+// agrandie, nommée par la personne, son « Fermer », et la phrase d'un logo
+// dont l'image manque au dossier de l'événement ou ne se lit pas.
 // participants.informations.* porte le bloc des informations de la fiche
 // (InformationsFiche.svelte) : « Modifier », nommée par la personne, le
 // formulaire, nommé de même, « Enregistrer », « Annuler », et l'avis de ce
@@ -65,7 +68,8 @@ function dejaAux(tours) {
 const dejaReunis = (deja) =>
   deja.length === 0 ? '' : ` (déjà ${deja.map(({ tour, numero }) => `à la table ${numero} au tour ${tour}`).join(', ')})`;
 
-// Le texte court de chaque règle dans la marque d'une personne en conflit.
+// Le texte court de chaque règle dans la marque d'une personne en conflit
+// et dans la colonne « Conflits du placement ».
 const REGLES_COURTES = new Map([
   ['conflitsOrganisation', "conflit d'organisation"],
   ['separerOrganisations', 'même organisation'],
@@ -79,6 +83,7 @@ export const TABLE = new Map([
   ['participants.colonne.prenom', 'Prénom'],
   ['participants.colonne.organisation', 'Organisation'],
   ['participants.colonne.conflits', "Conflit d'organisation"],
+  ['participants.colonne.conflitsPlacement', 'Conflits du placement'],
   ['participants.colonne.courriel', 'Courriel'],
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
   ['participants.colonne.exclu', 'Exclusion'],
@@ -157,6 +162,12 @@ export const TABLE = new Map([
   ['participants.conflit.personne', ({ regles }) => `en conflit : ${regles.map((regle) => REGLES_COURTES.get(regle)).join(', ')}`],
   ['participants.conflit.lieu', ({ tour, numero }) => `Tour ${tour}, table ${numero} :`],
   ['participants.conflit.et', 'et'],
+  ['participants.conflit.avec', 'avec'],
+  ['participants.conflit.tour', ({ tour }) => `tour ${tour} :`],
+  ...[...REGLES_COURTES].map(([regle, texte]) => [`participants.conflit.regle.${regle}`, texte]),
+  ['participants.conflit.aucun', '\u{2014}'],
+  // Un placement montré en dérive : ses conflits ne se comptent pas.
+  ['participants.conflit.nonCompte', 'non compté'],
   ['participants.conflit.raison.conflitsOrganisation', "\u{2014} conflit d'organisation"],
   ['participants.conflit.raison.separerOrganisations', '\u{2014} même organisation'],
   [
@@ -266,6 +277,17 @@ export const TABLE = new Map([
     'Ce placement ne se mesure pas : la page Qualité en donne les raisons.',
   ],
   ['participants.fiche.rencontres.exclue', 'Exclue : elle ne rencontre personne dans les mesures.'],
+
+  // --- La rubrique « Conflits du placement » de la fiche (§ 7.5, § 10.2) ---
+  // Les conflits de la personne dans le placement que le plan montre, sous
+  // la ligne de source de la rubrique « Rencontres ».
+  ['participants.fiche.conflitsPlacement.titre', 'Conflits du placement'],
+  ['participants.fiche.conflitsPlacement.aucun', 'Aucun conflit dans ce placement.'],
+  ['participants.fiche.conflitsPlacement.sansPlacement', 'Aucun placement à mesurer.'],
+  [
+    'participants.fiche.conflitsPlacement.nonEvalue',
+    'Les conflits de ce placement ne se comptent pas : il ne décrit plus la soirée, ou la configuration est incohérente.',
+  ],
 
   // --- Les étiquettes de la fiche (§ 4.5, § 10.2) ---------------------------
   ['participants.etiquettes.champ', 'Ajouter des étiquettes, séparées par une virgule'],

@@ -1,18 +1,22 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Les conflits du placement montré dans la liste groupée (§ 7.5, § 10.2) :
-// ceux de conflitsDuPlacement (src/application/conflits_placement.js), que
-// SectionParticipants lit et que Grille range sous ses groupes. Un groupe,
-// de tout niveau, porte chaque conflit qui touche l'une de ses lignes ; une
-// personne, les règles de ses conflits. Aucune fonction ne modifie ce
-// qu'elle reçoit.
+// Les conflits du placement montré dans la liste (§ 7.5, § 10.2) : ceux de
+// conflitsDuPlacement (src/application/conflits_placement.js). Groupée, la
+// liste les range sous ses groupes, que SectionParticipants lit et que
+// Grille écrit : un groupe, de tout niveau, porte chaque conflit qui touche
+// l'une de ses lignes ; une personne, les règles de ses conflits. Groupée ou
+// non, la colonne « Conflits du placement » de Grille écrit ceux de chaque
+// personne tour par tour (conflitsParTour), et la rubrique du même nom de
+// sa fiche, ligne par ligne (lignesDePersonne). Aucune fonction ne modifie
+// ce qu'elle reçoit.
 import { nomAffiche } from '../../application/personnes.js';
 
 /** Les règles qui se localisent à une table, dans l'ordre de conflitsParTable. */
 export const REGLES = Object.freeze(['conflitsOrganisation', 'separerOrganisations', 'nouveauxVoisins', 'nouvelleTable']);
 
 const CLES_RAISONS = new Map(REGLES.map((regle) => [regle, `participants.conflit.raison.${regle}`]));
+const CLES_COURTES = new Map(REGLES.map((regle) => [regle, `participants.conflit.regle.${regle}`]));
 
 /**
  * La clé du texte qui dit la raison d'un conflit de la règle donnée.
@@ -23,6 +27,20 @@ const CLES_RAISONS = new Map(REGLES.map((regle) => [regle, `participants.conflit
  */
 export function cleDeRaison(regle) {
   const cle = CLES_RAISONS.get(regle);
+  if (cle === undefined) throw new RangeError(`règle inconnue : ${JSON.stringify(regle)}`);
+  return cle;
+}
+
+/**
+ * La clé du texte court d'une règle, celui de la marque d'une personne en
+ * conflit et de la colonne « Conflits du placement ».
+ *
+ * @param {string} regle   l'une de REGLES
+ * @returns {string}
+ * @throws {RangeError} une autre règle
+ */
+export function cleDeRegleCourte(regle) {
+  const cle = CLES_COURTES.get(regle);
   if (cle === undefined) throw new RangeError(`règle inconnue : ${JSON.stringify(regle)}`);
   return cle;
 }
@@ -95,4 +113,77 @@ export function lignesDeConflit(conflits, participants) {
     noms: personnes.filter((id) => parId.has(id)).map((id) => nomAffiche(parId.get(id))),
     deja,
   }));
+}
+
+/**
+ * Les conflits de chaque personne qui en a un, tour par tour, que la colonne
+ * « Conflits du placement » écrit : par identifiant, un élément par tour où
+ * elle est en conflit, les tours croissants quel que soit l'ordre reçu,
+ * chacun avec les règles de ses conflits à ce tour, sans doublon, dans
+ * l'ordre de REGLES. Une personne sans conflit n'a pas d'entrée ; null,
+ * aucun placement montré, rend une table vide.
+ *
+ * @param {Array<{tour: number, regle: string, personnes: number[]}>|null} conflits   ceux de conflitsDuPlacement
+ * @returns {Map<number, Array<{tour: number, regles: string[]}>>}
+ */
+export function conflitsParTour(conflits) {
+  // Par personne, puis par tour, l'ensemble des règles vues.
+  const vues = new Map();
+  for (const { tour, regle, personnes } of conflits ?? []) {
+    for (const id of personnes) {
+      if (!vues.has(id)) vues.set(id, new Map());
+      const parTour = vues.get(id);
+      if (!parTour.has(tour)) parTour.set(tour, new Set());
+      parTour.get(tour).add(regle);
+    }
+  }
+  return new Map(
+    [...vues].map(([id, parTour]) => [
+      id,
+      [...parTour]
+        .sort(([a], [b]) => a - b)
+        .map(([tour, regles]) => ({ tour, regles: REGLES.filter((regle) => regles.has(regle)) })),
+    ]),
+  );
+}
+
+/**
+ * Les lignes de la rubrique « Conflits du placement » de la fiche de la
+ * personne id : une par conflit qui la nomme, dans l'ordre reçu — celui des
+ * tours, puis des tables —, avec sa clé, le tour, le numéro affiché de la
+ * table, la règle, le nom affiché de chaque autre personne du conflit et
+ * les rencontres antérieures. Les conflits d'une même règle, à la même
+ * table et au même tour, aux mêmes rencontres antérieures, se réunissent
+ * en une ligne, qui nomme leurs autres personnes dans l'ordre des paires :
+ * trois collègues à une table font, pour chacune, une ligne qui nomme les
+ * deux autres. Deux paires revues aux rencontres différentes restent deux
+ * lignes, chacune avec les siennes. Une nouvelle table ne nomme personne ;
+ * une personne que participants n'a pas n'est pas nommée. La clé, unique
+ * parmi les lignes de la personne, joint le tour, l'identifiant de la
+ * table, la règle et les rencontres antérieures. null, aucun placement
+ * montré, rend null.
+ *
+ * @param {Array<Object>|null} conflits   ceux de conflitsDuPlacement
+ * @param {Array<{id: number, nom: string, prenom: string|null}>} participants
+ * @param {number} id
+ * @returns {Array<{cle: string, tour: number, numero: number, regle: string, avec: string[],
+ *          deja: Array<{tour: number, numero: number}>}>|null}
+ */
+export function lignesDePersonne(conflits, participants, id) {
+  if (conflits === null) return null;
+  const parId = new Map(participants.map((p) => [p.id, p]));
+  // Par clé, la ligne : chaque autre personne s'y nomme par son
+  // identifiant, si bien que deux homonymes y font deux noms.
+  const parCle = new Map();
+  for (const { tour, table, numero, regle, personnes, deja } of conflits) {
+    if (!personnes.includes(id)) continue;
+    const cle = `${tour}:${table}:${regle}:${deja.map((rencontre) => `${rencontre.tour}.${rencontre.numero}`).join(',')}`;
+    if (!parCle.has(cle)) parCle.set(cle, { ligne: { cle, tour, numero, regle, avec: [], deja } });
+    const { ligne } = parCle.get(cle);
+    for (const autre of personnes) {
+      if (autre === id || !parId.has(autre)) continue;
+      ligne.avec.push(nomAffiche(parId.get(autre)));
+    }
+  }
+  return [...parCle.values()].map(({ ligne }) => ligne);
 }
