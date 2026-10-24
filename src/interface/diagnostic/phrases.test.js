@@ -4,9 +4,11 @@
 // Épreuves des énoncés du diagnostic (§ 5.4, § 5.5, § 5.6, § 12.10.4,
 // § 15.1, § 15.3, § 15.4) : chaque énoncé porte les chiffres que rend
 // diagnostiquer, sollicité une seconde fois (§ 19.1), et la clé de son
-// remède ; le texte se lit par la même traduction que celle de
-// l'application. Les charges partent des démonstrations livrées ou se
-// construisent ici, sur des noms inventés.
+// remède ; son explication, « Concrètement » et « Pour changer cela », ne
+// lit que ces chiffres et les capacités, présents et tours du diagnostic ;
+// le texte se lit par la même traduction que celle de l'application. Les
+// charges partent des démonstrations livrées ou se construisent ici, sur
+// des noms inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { diagnostiquerCharge } from '../../application/diagnostic.js';
@@ -17,7 +19,7 @@ import { texteLivre } from '../../demo/livrees.js';
 import { diagnostiquer } from '../../moteur/diagnostic.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { cartesDiagnostic, criteresDuDiagnostic, enonces, numeroDeCharge } from './phrases.js';
+import { cartesDiagnostic, criteresDuDiagnostic, enonces, expliquer, numeroDeCharge, remedeAgit } from './phrases.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const TIRET = '\u{2014}';
@@ -776,5 +778,319 @@ describe('enonces : la présence par tour', () => {
       t('diagnostic.placesManquantes', { placesManquantes: 2, tours: [{ tour: 1, manque: 2 }, { tour: 2, manque: 1 }, { tour: 4, manque: 2 }] }),
       '2 places manquent aux tours 1 et 4 et 1 place manque au tour 2',
     );
+  });
+});
+
+describe('expliquer : « Concrètement » et « Pour changer cela » (§ 5.6)', () => {
+  // Le diagnostic d'une charge, ses énoncés et l'explication de chacun.
+  function explique(charge) {
+    const { diagnostic, liste } = lire(charge);
+    const contexte = { diagnostic, tours: charge.evenement.tours };
+    return { diagnostic, liste, explications: liste.map((enonce) => expliquer(enonce, contexte)) };
+  }
+  // L'explication du premier énoncé de clé donnée.
+  const explicationDe = ({ liste, explications }, cle) => explications[liste.findIndex((enonce) => enonce.cle === cle)];
+
+  // 157 personnes inventées, 20 tables de 8, une personne ancrée à chaque
+  // table pour la soirée, quatre tours : 160 places.
+  const soireeDeCentCinquanteSept = () =>
+    chargeDe({
+      organisations: fois(157, null),
+      capacites: fois(20, 8),
+      ancres: Array.from({ length: 20 }, (_, t) => [t + 1, t + 1]),
+    });
+
+  // Dix personnes, quatre tables de 3, quatre tours ; la neuvième vient aux
+  // tours 1 et 2, la dixième au tour 1 : 10, 9, 8 et 8 présentes.
+  function chargeAbsences() {
+    const charge = chargeDe({ organisations: fois(10, null), capacites: fois(4, 3) });
+    charge.participants[8].presence = [1, 2];
+    charge.participants[9].presence = [1];
+    return charge;
+  }
+
+  // Six personnes, deux tables de 3, la première réservée à la table 1 aux
+  // tours 1 et 2 seulement : un retour imposé, par une personne.
+  function chargeRetourPartiel() {
+    const charge = chargeDe({ organisations: fois(6, null), capacites: [3, 3] });
+    charge.reservations = [1, 2].map((tour) => ({ participant: 1, table: 1, siege: null, portee: 'tour', tour }));
+    return charge;
+  }
+
+  test('157 personnes pour 160 places, tables de 8, quatre tours : le plafond par la table, les places vides, le geste ; les retours des ancrés', () => {
+    const lu = explique(soireeDeCentCinquanteSept());
+    assert.deepEqual(lu.diagnostic.plafondAPriori.repartition, [{ valeur: 28, ancres: 20, mobiles: 137 }]);
+    const plafond = explicationDe(lu, 'diagnostic.plafond');
+    assert.deepEqual(plafond, {
+      concretement: [
+        { cle: 'diagnostic.concretement.plafond.tables', details: { capacite: 8, parTour: 7, valeur: 28, tours: 4 } },
+        { cle: 'diagnostic.concretement.placesVides', details: { placesVides: 3, places: 160, presents: 157 } },
+      ],
+      levier: { cle: 'diagnostic.levier.plafond', details: {} },
+    });
+    assert.equal(
+      texte(plafond.concretement[0]),
+      "à une table de 8, on rencontre 7 personnes par tour ; sur les 4 tours, 28 personnes différentes au plus, et seulement sans jamais revoir quelqu'un.",
+    );
+    assert.equal(
+      texte(plafond.concretement[1]),
+      '3 places restent vides à chaque tour, 157 personnes pour 160 places : une personne assise à une table incomplète y rencontre ' +
+        'une personne de moins par place vide, et ce plafond, compté sur des tables pleines, peut alors lui échapper.',
+    );
+    assert.equal(texte(plafond.levier), 'des tables plus grandes, ou un tour de plus.');
+    const imposes = explicationDe(lu, 'diagnostic.imposes');
+    assert.deepEqual(imposes, {
+      concretement: [{ cle: 'diagnostic.concretement.imposes.ancres', details: { personnes: 20, tours: 4, retours: 3 } }],
+      levier: null,
+    });
+    assert.equal(
+      texte(imposes.concretement[0]),
+      'chacune des 20 personnes réservées à une table y reste aux 4 tours, et y revient donc 3 fois ; ' +
+        'ces retours sont voulus par les réservations et ne comptent pas contre les propositions.',
+    );
+  });
+
+  test('la grande : tables de 7 et de 8, le plafond par les capacités, sans geste ; l\u{2019}écart d\u{2019}itinéraire, 24 mobiles et 1 rencontre', () => {
+    const lu = explique(CONFIGURATIONS.grande());
+    const plafonds = lu.explications.filter((_, rang) => lu.liste[rang].cle === 'diagnostic.plafond');
+    assert.deepEqual(plafonds, [
+      { concretement: [{ cle: 'diagnostic.concretement.plafond.capacites', details: { valeur: 24, tours: 4, ancres: true } }], levier: null },
+      { concretement: [{ cle: 'diagnostic.concretement.plafond.capacites', details: { valeur: 28, tours: 4, ancres: true } }], levier: null },
+    ]);
+    assert.match(texte(plafonds[0].concretement[0]), /ancrés des autres tables/);
+    assert.deepEqual(explicationDe(lu, 'diagnostic.ecartItineraire').concretement, [
+      { cle: 'diagnostic.concretement.ecartItineraire', details: { plancher: 1, mobilesAuMoins: 24 } },
+    ]);
+    assert.match(texte(explicationDe(lu, 'diagnostic.ecartItineraire').concretement[0]), /au moins 24 mobiles .* au moins 1 rencontre sous/);
+    assert.deepEqual(explicationDe(lu, 'diagnostic.imposes').concretement[0].details, { personnes: 33, tours: 4, retours: 3 });
+  });
+
+  test('la petite : tables de 3, plafond 8 sous les 11 autres, le geste ; six personnes à deux tables de 3 : toutes les autres, sans geste', () => {
+    const petite = explicationDe(explique(CONFIGURATIONS.petite()), 'diagnostic.plafond');
+    assert.deepEqual(petite, {
+      concretement: [{ cle: 'diagnostic.concretement.plafond.tables', details: { capacite: 3, parTour: 2, valeur: 8, tours: 4 } }],
+      levier: { cle: 'diagnostic.levier.plafond', details: {} },
+    });
+    const six = explicationDe(explique(chargeDe({ organisations: fois(6, null), capacites: [3, 3] })), 'diagnostic.plafond');
+    assert.deepEqual(six, { concretement: [{ cle: 'diagnostic.concretement.plafond.tous', details: { valeur: 5 } }], levier: null });
+    assert.match(texte(six.concretement[0]), /toutes les autres personnes présentes/);
+  });
+
+  test('sous absence : les places vides selon le tour, sur la première ligne du plafond seule ; les présents de 8 à 10', () => {
+    const lu = explique(chargeAbsences());
+    const lignes = lu.explications.filter((_, rang) => lu.liste[rang].cle === 'diagnostic.plafond');
+    assert.ok(lignes.length > 1);
+    assert.deepEqual(lignes[0].concretement.at(-1), { cle: 'diagnostic.concretement.placesVidesSelonTour', details: { placesVides: 4 } });
+    // Sous absence, une valeur sous N − 1 peut venir des places comme des
+    // présents : la phrase nomme les deux bornes sans trancher.
+    assert.deepEqual(
+      lignes.map(({ concretement }) => concretement[0]),
+      [
+        { cle: 'diagnostic.concretement.plafond.presence', details: { valeur: 2, ancres: false } },
+        { cle: 'diagnostic.concretement.plafond.presence', details: { valeur: 4, ancres: false } },
+        { cle: 'diagnostic.concretement.plafond.tables', details: { capacite: 3, parTour: 2, valeur: 8, tours: 4 } },
+      ],
+    );
+    assert.equal(
+      texte(lignes[0].concretement[0]),
+      "2 personnes différentes au plus, en ne revoyant jamais personne : chaque tour où l'on est présent n'ajoute au plus " +
+        "que les autres personnes de la table où l'on s'assoit, selon sa capacité, et parmi celles qui sont présentes à ce tour seulement.",
+    );
+    assert.doesNotMatch(texte(lignes[0].concretement[0]), /ancrés des autres tables/);
+    for (const ligne of lignes.slice(1)) {
+      assert.ok(ligne.concretement.every(({ cle }) => !cle.startsWith('diagnostic.concretement.placesVides')));
+    }
+    assert.ok(lignes.every(({ levier }) => levier === null));
+    assert.deepEqual(explicationDe(lu, 'diagnostic.planchersRetires'), {
+      concretement: [{ cle: 'diagnostic.concretement.planchersRetires', details: { moins: 8, plus: 10 } }],
+      levier: null,
+    });
+    assert.equal(texte(lignes[0].concretement.at(-1)).startsWith("Jusqu'à 4 places restent vides"), true);
+    assert.equal(
+      texte(explicationDe(lu, 'diagnostic.planchersRetires').concretement[0]),
+      "de 8 à 10 personnes sont présentes selon le tour : une personne absente à un tour n'y rencontre personne, " +
+        'et son plafond a priori ne compte que ses tours de présence.',
+    );
+  });
+
+  test('sous absence, une valeur égale aux N \u{2212} 1 autres personnes : toutes les autres, sans geste ni capacité', () => {
+    // Six personnes, deux tables de 3, la sixième présente aux tours 2 à 4 :
+    // les places permettraient 4 × 2 = 8 rencontres, la population en borne 5.
+    const charge = chargeDe({ organisations: fois(6, null), capacites: [3, 3] });
+    charge.participants[5].presence = [2, 3, 4];
+    const lu = explique(charge);
+    assert.deepEqual(lu.diagnostic.plafondAPriori.repartition, [{ valeur: 5, ancres: 0, mobiles: 6 }]);
+    const plafond = explicationDe(lu, 'diagnostic.plafond');
+    assert.deepEqual(plafond, {
+      concretement: [
+        { cle: 'diagnostic.concretement.plafond.tous', details: { valeur: 5 } },
+        { cle: 'diagnostic.concretement.placesVidesSelonTour', details: { placesVides: 1 } },
+      ],
+      levier: null,
+    });
+    assert.doesNotMatch(texte(plafond.concretement[0]), /capacité/);
+  });
+
+  test('sans absence ni ancré, des tables de 4 et de 5 : le plafond par les capacités, sans ancrés', () => {
+    // Vingt personnes, quatre tables de 4 et une de 5, deux tours : au plus
+    // 2 × 4 = 8 rencontres, sous les 19 autres.
+    const lu = explique(chargeDe({ organisations: fois(20, null), capacites: [4, 4, 4, 4, 5], tours: 2 }));
+    const plafonds = lu.explications.filter((_, rang) => lu.liste[rang].cle === 'diagnostic.plafond');
+    assert.ok(plafonds.length > 0);
+    for (const { concretement } of plafonds) {
+      assert.equal(concretement[0].cle, 'diagnostic.concretement.plafond.capacites');
+      assert.equal(concretement[0].details.ancres, false);
+      assert.doesNotMatch(texte(concretement[0]), /ancrés des autres tables/);
+    }
+  });
+
+  test('neuf personnes à trois tables de 3, quatre tours : 8 est à la fois les autres et 4 × 2 — toutes les autres, sans geste', () => {
+    // Ni des tables plus grandes ni un tour de plus ne relèvent un plafond
+    // que la population borne déjà.
+    const plafond = explicationDe(explique(chargeDe({ organisations: fois(9, null), capacites: [3, 3, 3] })), 'diagnostic.plafond');
+    assert.deepEqual(plafond, { concretement: [{ cle: 'diagnostic.concretement.plafond.tous', details: { valeur: 8 } }], levier: null });
+  });
+
+  test('une table de 5 dont 3 places sont ancrées : à moitié ancrée, 2 places seulement changent d\u{2019}occupant', () => {
+    const lu = explique(chargeDe({ organisations: fois(10, null), capacites: [5, 5], ancres: [[1, 1], [2, 1], [3, 1]] }));
+    const moitie = explicationDe(lu, 'diagnostic.ancrage.moitie');
+    assert.deepEqual(moitie.concretement, [
+      { cle: 'diagnostic.concretement.ancrage.moitie', details: { numero: 1, ancres: 3, capacite: 5, libres: 2 } },
+    ]);
+    assert.match(texte(moitie.concretement[0]), /3 des 5 places de la table 1 .* seules 2 places y reçoivent/);
+  });
+
+  test('onze personnes présentes à chaque tour, pas toujours les mêmes : le plancher retiré le dit', () => {
+    // Douze personnes, quatre tables de 3 ; chacune des quatre dernières
+    // manque un tour différent : 11 présentes à chaque tour.
+    const charge = chargeDe({ organisations: fois(12, null), capacites: fois(4, 3) });
+    [[2, 3, 4], [1, 3, 4], [1, 2, 4], [1, 2, 3]].forEach((presence, rang) => {
+      charge.participants[11 - rang].presence = presence;
+    });
+    const planchers = explicationDe(explique(charge), 'diagnostic.planchersRetires');
+    assert.deepEqual(planchers.concretement, [{ cle: 'diagnostic.concretement.planchersRetires', details: { moins: 11, plus: 11 } }]);
+    assert.equal(
+      texte(planchers.concretement[0]),
+      "11 personnes sont présentes à chaque tour, pas toujours les mêmes : une personne absente à un tour n'y rencontre " +
+        'personne, et son plafond a priori ne compte que ses tours de présence.',
+    );
+  });
+
+  test('les collisions par le manque de tables, ou par les réservations ; l\u{2019}excédent ; les tables gelée et à moitié ancrée ; les animateurs', () => {
+    const conflit = explique(CONFIGURATIONS.petiteConflit());
+    const enonce = avecCle(conflit.liste, 'diagnostic.collisions')[0];
+    const { groupe, ...chiffres } = enonce.details;
+    assert.equal(typeof groupe, 'string');
+    assert.deepEqual(explicationDe(conflit, 'diagnostic.collisions'), {
+      concretement: [{ cle: 'diagnostic.concretement.collisions', details: { ...chiffres, parReservations: false } }],
+      levier: null,
+    });
+    assert.match(texte(explicationDe(conflit, 'diagnostic.collisions').concretement[0]), /les tables ne suffisent pas/);
+    const memeTable = explicationDe(explique(CONFIGURATIONS.memeTable()), 'diagnostic.collisions');
+    assert.equal(memeTable.concretement[0].details.parReservations, true);
+    assert.match(texte(memeTable.concretement[0]), /des réservations assoient/);
+
+    const excedent = explique(CONFIGURATIONS.excedent());
+    assert.deepEqual(explicationDe(excedent, 'diagnostic.excedent').concretement, [
+      { cle: 'diagnostic.concretement.excedent', details: { plancherExcedent: avecCle(excedent.liste, 'diagnostic.excedent')[0].details.plancherExcedent } },
+    ]);
+
+    const ancrage = explique(CONFIGURATIONS.ancrage());
+    assert.deepEqual(explicationDe(ancrage, 'diagnostic.ancrage.gelee').concretement, [
+      { cle: 'diagnostic.concretement.ancrage.gelee', details: { numero: 7, capacite: 3, autres: 2, tours: 4 } },
+    ]);
+    assert.deepEqual(explicationDe(ancrage, 'diagnostic.ancrage.moitie').concretement, [
+      { cle: 'diagnostic.concretement.ancrage.moitie', details: { numero: 8, ancres: 2, capacite: 4, libres: 2 } },
+    ]);
+    assert.equal(
+      t('diagnostic.concretement.ancrage.gelee', { numero: 2, capacite: 1, autres: 0, tours: 4 }),
+      'la personne ancrée à la table 2 y reste seule aux 4 tours : elle ne rencontre personne.',
+    );
+
+    assert.deepEqual(explicationDe(explique(CONFIGURATIONS.animateurs()), 'diagnostic.animateurs').concretement, [
+      { cle: 'diagnostic.concretement.animateurs', details: { redondances: 3, tables: 4 } },
+    ]);
+  });
+
+  test('le manque de places, les retours imposés d\u{2019}une réservation partielle', () => {
+    assert.deepEqual(explicationDe(explique(CONFIGURATIONS.manque()), 'diagnostic.placesManquantes').concretement, [
+      { cle: 'diagnostic.concretement.placesManquantes', details: { places: 12, presents: 13, varie: false } },
+    ]);
+    assert.match(texte(explicationDe(explique(CONFIGURATIONS.manque()), 'diagnostic.placesManquantes').concretement[0]), /^13 personnes pour 12 places à chaque tour : /);
+    // Treize personnes, quatre tables de 3, la treizième aux tours 2 et 3
+    // seulement : le manque varie, le tour le plus chargé n'est pas le premier.
+    const variable = chargeDe({ organisations: fois(13, null), capacites: fois(4, 3) });
+    variable.participants[12].presence = [2, 3];
+    const manque = explicationDe(explique(variable), 'diagnostic.placesManquantes');
+    assert.deepEqual(manque.concretement, [{ cle: 'diagnostic.concretement.placesManquantes', details: { places: 12, presents: 13, varie: true } }]);
+    assert.equal(
+      texte(manque.concretement[0]),
+      "au tour le plus chargé, 13 personnes pour 12 places : il faudrait asseoir plus de personnes qu'il n'y a de places, " +
+        'et aucune proposition ne se génère avant que chacune ait la sienne.',
+    );
+    const partiel = explicationDe(explique(chargeRetourPartiel()), 'diagnostic.imposes');
+    assert.deepEqual(partiel.concretement, [{ cle: 'diagnostic.concretement.imposes', details: { personnes: 1, retoursImposes: 1 } }]);
+  });
+
+  test('sur toutes les configurations, chaque énoncé a son « Concrètement », chaque texte se compose, et chaque clé d\u{2019}explication sert', () => {
+    const cles = new Set(
+      creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE])
+        .cles()
+        .filter((cle) => cle.startsWith('diagnostic.concretement.') || cle.startsWith('diagnostic.levier.')),
+    );
+    assert.ok(cles.size > 0);
+    const servies = new Set();
+    const charges = [
+      ...Object.values(CONFIGURATIONS).map((construire) => construire()),
+      soireeDeCentCinquanteSept(),
+      chargeAbsences(),
+      chargeRetourPartiel(),
+      chargeDe({ organisations: fois(6, null), capacites: [3, 3] }),
+      chargeDe({ organisations: [], capacites: [] }),
+      chargeObjectifs(40, fois(4, 8), { mode: 'chacun' }),
+      chargeObjectifs(40, fois(4, 8), { mode: 'minimum' }),
+    ];
+    for (const charge of charges) {
+      const { liste, explications } = explique(charge);
+      liste.forEach((enonce, rang) => {
+        const { concretement, levier } = explications[rang];
+        assert.ok(concretement.length > 0, enonce.cle);
+        for (const phrase of [...concretement, ...(levier === null ? [] : [levier])]) {
+          servies.add(phrase.cle);
+          const rendu = texte(phrase);
+          assert.equal(typeof rendu, 'string', phrase.cle);
+          assert.doesNotMatch(rendu, /undefined|NaN|null/, phrase.cle);
+          assert.match(rendu, /\.$/, phrase.cle);
+        }
+      });
+    }
+    assert.deepEqual([...cles].filter((cle) => !servies.has(cle)), []);
+  });
+
+  test('remedeAgit : vrai pour un remède qui dit un geste, faux pour un constat ou l\u{2019}absence de remède', () => {
+    for (const cle of [
+      'diagnostic.remede.separation',
+      'diagnostic.remede.tables',
+      'diagnostic.remede.redistribuer',
+      'diagnostic.remede.tours',
+      'diagnostic.remede.animateurs',
+      'diagnostic.remede.ancrage',
+      'diagnostic.remede.places',
+      'diagnostic.remede.objectifs',
+      'diagnostic.remede.conflitsImposes',
+    ]) {
+      assert.equal(remedeAgit({ cle, details: {} }), true, cle);
+    }
+    for (const cle of ['diagnostic.remede.organisations', 'diagnostic.remede.ecartItineraire', 'diagnostic.remede.plafond', 'diagnostic.remede.imposes']) {
+      assert.equal(remedeAgit({ cle, details: {} }), false, cle);
+    }
+    assert.equal(remedeAgit(null), false);
+  });
+
+  test('expliquer ne modifie ni l\u{2019}énoncé ni le diagnostic', () => {
+    const { diagnostic, liste } = lire(CONFIGURATIONS.grande());
+    const avant = structuredClone({ diagnostic, liste });
+    for (const enonce of liste) expliquer(enonce, { diagnostic, tours: 4 });
+    assert.deepEqual({ diagnostic, liste }, avant);
   });
 });

@@ -1345,6 +1345,113 @@ séparation des organisations vidée de son sens, une carte par organisation en
 collision, titrée de sa pastille d'organisation (§ 12.7), puis ce qui vaut pour
 tout l'événement.
 
+**Chaque énoncé s'explique, toujours visible.** Dans la section du
+diagnostic — le panneau compact à côté du plan garde les énoncés seuls —,
+chaque énoncé est suivi d'une phrase « Concrètement : … » qui dit ce qu'il
+signifie avec les chiffres de l'événement, puis de son remède. Un remède qui
+dit un geste s'ouvre sur « Pour changer cela : » ; un remède qui dit un
+constat — ce qu'aucune relance ne change, ce que les réservations veulent —
+reste sans amorce. Rien ne s'y invente : chaque phrase se compose des
+chiffres de l'énoncé et de ceux que le diagnostic porte déjà — capacités et
+ancrés de chaque table, présents de chaque tour, nombre de tours —, et une
+formule ne s'écrit que lorsque le chiffre de l'énoncé l'égale. Sur 4 tours
+à des tables de 8 :
+
+- le **plafond a priori** se dit par la table quand toutes les tables ont la
+  même capacité c et que le plafond vaut R × (c − 1) : « à une table de 8, on
+  rencontre 7 personnes par tour ; sur les 4 tours, 28 personnes différentes
+  au plus, et seulement sans jamais revoir quelqu'un », suivi, sans absence et
+  tant qu'il reste des personnes à rencontrer, du geste « Pour changer cela :
+  des tables plus grandes, ou un tour de plus. » ; son remède, un constat,
+  dit que seuls les capacités, le nombre de tours et les réservations le
+  changent. Égal aux N − 1 autres personnes de l'événement, absence ou non,
+  il se dit tel, sans geste ni capacité ; ailleurs, sans absence, il se dit
+  par les capacités, sans formule ; sous absence, par les capacités et par
+  les seules personnes présentes à chaque tour, sans trancher laquelle des
+  deux bornes le fixe : le diagnostic ne donne pas les tours de présence
+  d'une ligne. Sa première ligne porte aussi les **places vides**, quand des
+  places restent vides à un tour — sur la grande démonstration sans
+  exception : « 4 places restent vides à chaque tour, 260 personnes pour 264
+  places : une personne assise à une table incomplète y rencontre une
+  personne de moins par place vide, et ce plafond, compté sur des tables
+  pleines, peut alors lui échapper » — sous présence partielle, « Jusqu'à 4
+  places restent vides selon le tour ». C'est la source de l'écart
+  d'itinéraire que le diagnostic ne chiffre pas d'avance quand des places
+  restent vides ;
+- les **retours imposés**, quand chaque personne qui en porte revient R − 1
+  fois : « chacune des 33 personnes réservées à une table y reste aux 4
+  tours, et y revient donc 3 fois ; ces retours sont voulus par les
+  réservations et ne comptent pas contre les propositions » ; sinon leur
+  compte et le nombre de personnes ;
+- les **collisions** d'une organisation disent si les tables manquent ou si
+  des réservations réunissent ses membres, et combien de fois deux d'entre eux
+  partagent une table ; l'**excédent**, que deux collègues déjà assis ensemble
+  se retrouvent ; l'**écart d'itinéraire**, que des tables plus petites ou
+  plus ancrées se remplissent quand même ; une table **gelée** ou **à moitié
+  ancrée**, qui y reste et combien de places s'y renouvellent ; les
+  **animateurs** d'une même organisation, combien de fois un mobile la
+  recroise ; la **redondance**, les **objectifs**, le **manque de places**,
+  les **conflits imposés** et la **présence par tour**, chacun de ses propres
+  chiffres.
+
+**La proposition choisie, expliquée.** Sous la carte de tout l'événement,
+la section — le panneau compact ne la porte pas — pose une carte « La
+proposition choisie », toujours visible. Elle explique un placement : la
+proposition demandée au plan quand la liste la porte, sinon le retenu,
+sinon la première du classement, comme la source de la page de qualité
+(§ 12) puis la meilleure proposition de la section Génération ; elle dit
+laquelle — « Proposition n° 4, montrée au plan », « Le placement retenu »,
+« La meilleure du classement, n° 7 ». Sans proposition, elle dit d'en
+générer une ; aucune ne se classant, elle le dit ; une proposition en
+dérive ou fautive se dit telle, sans chiffres. Une configuration refusée
+n'a pas de carte. Ses phrases lisent la ligne d'évaluation du placement —
+les valeurs mêmes des colonnes du tableau des propositions (§ 5.7) — et le
+diagnostic que la table porte, sans rien mesurer à nouveau, en trois blocs
+titrés :
+
+- **Ce qui est atteint** : le minimum des rencontres, rapporté au plafond a
+  priori des personnes qui l'atteignent — « Le moins bien servi rencontre 23
+  personnes différentes, sur les 28 que son plafond a priori permet », leur
+  étendue quand ces plafonds diffèrent —, les minimums des mobiles et des
+  ancrés quand les deux populations existent ; puis, chacun quand son
+  critère compte (§ 5.3) — coché, avec un objet —, les conflits
+  d'organisation, les collisions — « 9 fois, deux personnes d'une même
+  organisation partagent une table, toujours des paires différentes :
+  aucune paire de collègues ne se retrouve deux fois » à excédent nul —,
+  les retours choisis sous « nouvelle table », la diversité, les objectifs
+  et les animateurs. Un plancher du diagnostic ne se dit égalé que sur un
+  plan qui honore les réservations ;
+- **Ce qui manque, et pourquoi** : l'écart au plafond a priori maximal,
+  décomposé en ses deux parts (§ 12.10.5) — la place, par l'écart
+  d'itinéraire maximal, les places vides de chaque tour et le plancher que
+  le diagnostic prouve, et les revoirs, par le plus grand manque,
+  l'effectif du manque et les rencontres répétées choisies, avec le plus
+  grand nombre de rencontres d'une paire quand aucune paire imposée par
+  les réservations n'y entre —, puis, quand les deux plus
+  grands ne tombent pas sur la même personne — leur somme dépasse le plus
+  grand écart —, la phrase qui le dit ; puis, quand le certificat ne conclut
+  pas, « hors d'atteinte » si le diagnostic prouve un plancher d'écart
+  d'itinéraire — au moins tant de mobiles finissent sous leur plafond a
+  priori quel que soit le placement, aucun placement n'atteint donc celui
+  de chacun —, « atteignabilité inconnue » sinon ; à écart nul, une phrase
+  seule, le minimum atteint (§ 5.5) ;
+- **Ce qu'on peut tenter**, des gestes qui existent seulement : « Repartir
+  d'elle » — « Générer » pour le retenu, qui ne l'offre pas — avec un
+  compte d'arrêt plus élevé que le réglage, quand des revoirs coûtent des
+  rencontres, quand une règle active reste au-dessus de ce que le
+  diagnostic prouve inévitable — des conflits au-delà des conflits imposés,
+  des collisions au-delà de leur plancher, un excédent —, ou quand l'écart
+  d'itinéraire dépasse l'inévitable : le plancher prouvé, ou, sans lui, une
+  rencontre dès que des places restent vides, car qui s'assoit à une table
+  incomplète y en perd au moins une ; accorder les places des tables aux
+  présents quand des places vides coûtent des rencontres — des tables
+  pleines retirent les places vides, et si leurs capacités diffèrent alors,
+  le diagnostic dit l'écart d'itinéraire qui demeure ; les capacités ou les
+  ancrages qui diffèrent quand l'écart d'itinéraire a un plancher prouvé ;
+  au minimum atteint, « Rien pour les rencontres », suivi de « Repartir
+  d'elle » si une règle reste au-dessus de son plancher. Un bloc sans
+  phrase ne s'écrit pas.
+
 Un opérateur à qui l'on dit « c'est impossible, voici pourquoi, voici le
 remède » cesse de relancer en espérant mieux.
 

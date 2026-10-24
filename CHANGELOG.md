@@ -593,6 +593,27 @@
   « Rencontres », une ligne par conflit : « Tour 2, table 5 : avec Iris
   Ombrelle — même organisation ». Les en-têtes de la grille passent en petit
   corps, pour que les dix colonnes tiennent.
+- La section « Diagnostic » explique chaque ligne, toujours visible : une
+  phrase « Concrètement : » dit ce qu'elle signifie avec les chiffres de
+  l'événement — « à une table de 8, on rencontre 7 personnes par tour ; sur
+  les 4 tours, 28 personnes différentes au plus, et seulement sans jamais
+  revoir quelqu'un » —, nomme les places qui restent vides à chaque tour et ce
+  qu'elles coûtent à qui s'assoit à une table incomplète, et dit des retours
+  imposés que chaque personne réservée reste à sa table, des retours voulus
+  qui ne comptent pas contre les propositions. Le remède qui dit un geste
+  s'ouvre sur « Pour changer cela : », et le plafond reçoit le sien : des
+  tables plus grandes, ou un tour de plus. Le panneau à côté du plan garde les
+  lignes seules.
+- Sous « Tout l'événement », le diagnostic explique la proposition choisie
+  — celle que montre le plan, sinon le placement retenu, sinon la meilleure
+  du classement — en trois blocs : ce qui est atteint (le moins bien servi
+  rapporté à son plafond a priori, les collisions, les retours, la diversité,
+  chacun sous sa règle cochée), ce qui manque et pourquoi (la part des places
+  vides et celle des revoirs, puis « hors d'atteinte » quand le diagnostic
+  prouve qu'aucun placement n'atteint le plafond de chacun), et ce qu'on peut
+  tenter (« Repartir d'elle » avec un compte d'arrêt plus élevé quand une
+  part du manque ou une règle cochée dépasse l'inévitable, les tables, ou
+  rien pour les rencontres au minimum atteint).
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

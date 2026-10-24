@@ -20,10 +20,23 @@
   // compact : la forme du panneau latéral du plan, que SectionPlan monte
   // dans [data-panneau-diagnostic] — une carte titrée, dont les groupes se
   // suivent sous un filet, et les énoncés seuls. Sinon, la section,
-  // [data-section="diagnostic"] : une carte par groupe, chaque énoncé suivi
-  // du texte de son remède et, quand une commande le réalise, de la Commande
-  // qui l'exécute par la séance ; un refus de la séance — mode lecture, plan
-  // bloqué — s'affiche à côté du bouton, avec son propre remède.
+  // [data-section="diagnostic"] : une carte par groupe, chaque énoncé suivi,
+  // toujours visibles, de son explication (expliquer) — « Concrètement : »
+  // et ses phrases, [data-explication] —, du texte de son remède, précédé
+  // de « Pour changer cela : » quand il dit un geste (remedeAgit), du geste
+  // propre à l'énoncé quand il en a un, [data-levier], et, quand une
+  // commande réalise le remède, de la Commande qui l'exécute par la séance ;
+  // un refus de la séance — mode lecture, plan bloqué — s'affiche à côté du
+  // bouton, avec son propre remède.
+  //
+  // Sous les cartes des énoncés, la section seule pose la carte de la
+  // proposition choisie (propositionChoisie, proposition.js) :
+  // [data-proposition-choisie], son genre, nommée par son intitulé, puis ses
+  // blocs [data-bloc-proposition] — laquelle et son statut, puis ce qui est
+  // atteint, ce qui manque et ce qu'on peut tenter, chacun sous son
+  // intitulé —, toujours visibles. Elle suit la proposition demandée au plan
+  // (ui.proposition) et se relit à chaque charge écrite ; une configuration
+  // refusée n'en a pas.
   //
   // Les planchers des objectifs (A10) s'énoncent selon le mode réglé : ils
   // lisent l'état des critères, criteresDuDiagnostic, qui ne s'évalue que
@@ -44,7 +57,8 @@
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
-  import { cartesDiagnostic, criteresDuDiagnostic, enonces, numeroDeCharge } from './phrases.js';
+  import { cartesDiagnostic, criteresDuDiagnostic, enonces, expliquer, numeroDeCharge, remedeAgit } from './phrases.js';
+  import { propositionChoisie } from './proposition.js';
 
   let { compact = false } = $props();
 
@@ -66,11 +80,28 @@
         }),
   );
   const cartes = $derived(cartesDiagnostic(liste));
+  // La proposition choisie, expliquée ; null dans le panneau compact, sans
+  // charge et quand la configuration est refusée.
+  const demandee = $derived(ui === null ? null : ($ui?.proposition ?? null));
+  const choisie = $derived(
+    compact || resultat === null || resultat.erreur !== null ? null : propositionChoisie(charge, { demandee }),
+  );
   // Le rang de teinte de chaque organisation, sur tous les participants.
   const rangs = $derived(charge === null ? new Map() : teintesOrganisations(charge.participants));
   // L'intitulé d'un groupe est un h3 dans la section, un h4 sous le titre
   // du panneau.
   const balise = $derived(compact ? 'h4' : 'h3');
+
+  // L'explication d'un énoncé, ses phrases « Concrètement » jointes en un
+  // texte, vide quand elle n'en a aucune, et son geste traduit, null sans
+  // lui.
+  function explicationDe(enonce) {
+    const { concretement, levier } = expliquer(enonce, { diagnostic: resultat.diagnostic, tours: charge.evenement.tours });
+    return {
+      concretement: concretement.map(({ cle, details }) => t(cle, details)).join(' '),
+      levier: levier === null ? null : t(levier.cle, levier.details),
+    };
+  }
 
   // L'action d'un remède que réalise une commande ; null pour un remède de
   // texte seul.
@@ -88,11 +119,30 @@
     {#each carte.enonces as enonce, n (n)}
       <li data-enonce={enonce.cle} data-plancher-objectifs={enonce.grandeur}>
         <p class="enonce"><span data-phrase>{t(enonce.cle, enonce.details)}</span></p>
-        {#if !compact && enonce.remede !== null}
-          {@const action = actionDe(enonce.remede)}
-          <p class="remede" data-remede>{t(enonce.remede.cle, enonce.remede.details)}</p>
-          {#if action !== null}
-            <Commande cle={action.cle} details={action.details} nom={action.nom} confirmer={action.confirmer} executer={action.executer} />
+        {#if !compact}
+          {@const explication = explicationDe(enonce)}
+          {#if explication.concretement !== ''}
+            <p class="explication" data-explication>
+              <span class="amorce">{t('diagnostic.amorce.concretement')}</span>
+              {explication.concretement}
+            </p>
+          {/if}
+          {#if enonce.remede !== null}
+            {@const action = actionDe(enonce.remede)}
+            <p class="remede">
+              {#if remedeAgit(enonce.remede)}<span class="amorce">{t('diagnostic.amorce.pourChanger')}</span>{' '}{/if}<span data-remede
+                >{t(enonce.remede.cle, enonce.remede.details)}</span
+              >
+            </p>
+            {#if action !== null}
+              <Commande cle={action.cle} details={action.details} nom={action.nom} confirmer={action.confirmer} executer={action.executer} />
+            {/if}
+          {/if}
+          {#if explication.levier !== null}
+            <p class="remede" data-levier>
+              <span class="amorce">{t('diagnostic.amorce.pourChanger')}</span>
+              {explication.levier}
+            </p>
           {/if}
         {/if}
       </li>
@@ -129,6 +179,27 @@
           <Carte>{@render groupe(carte, rang)}</Carte>
         {/each}
       </div>
+    {/if}
+    {#if choisie !== null}
+      <Carte>
+        <div class="choisie" role="group" aria-labelledby="{uid}-choisie" data-proposition-choisie={choisie.genre}>
+          <h3 id="{uid}-choisie" class="intitule intertitre">{t('diagnostic.carte.proposition')}</h3>
+          <div class="bloc" data-bloc-proposition="laquelle">
+            <p>{t(choisie.laquelle.cle, choisie.laquelle.details)}</p>
+            {#if choisie.statut !== null}
+              <p>{t(choisie.statut.cle, choisie.statut.details)}</p>
+            {/if}
+          </div>
+          {#each choisie.blocs as bloc (bloc.nom)}
+            <div class="bloc" data-bloc-proposition={bloc.nom}>
+              <h4 class="titre-bloc">{t(bloc.titre)}</h4>
+              {#each bloc.phrases as phrase, n (n)}
+                <p>{t(phrase.cle, phrase.details)}</p>
+              {/each}
+            </div>
+          {/each}
+        </div>
+      </Carte>
     {/if}
   </section>
 {/if}
@@ -196,6 +267,35 @@
 
   .remede {
     color: var(--couleur-page-texte-secondaire);
+  }
+
+  /* L'amorce d'une explication ou d'un geste : en gras, de l'encre du
+     paragraphe qui la porte. */
+  .amorce {
+    font-weight: bold;
+  }
+
+  /* La carte de la proposition choisie : ses blocs l'un sous l'autre,
+     chacun sous un intitulé en gras de la taille du texte. */
+  .choisie,
+  .bloc {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-1);
+  }
+
+  .choisie {
+    gap: var(--espace-3);
+  }
+
+  .choisie .intitule {
+    margin: 0;
+  }
+
+  .titre-bloc {
+    margin: 0;
+    font-size: var(--taille-texte);
+    font-weight: bold;
   }
 
   /* Le panneau compact : une carte titrée ; ses groupes se suivent, chacun

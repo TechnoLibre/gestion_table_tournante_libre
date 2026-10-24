@@ -537,6 +537,44 @@ réservations, comptés à part de ceux que choisit la recherche, et le
 **plancher de l’écart d’itinéraire**. Chaque ligne dit ce qui la ferait bouger,
 et ce qu’aucune relance ne changera.*
 
+Sous chaque ligne, une phrase **« Concrètement : »** dit ce qu’elle signifie
+avec les chiffres de votre événement. Sur 4 tours à des tables de 8 : « à une
+table de 8, on rencontre 7 personnes par tour ; sur les 4 tours, 28 personnes
+différentes au plus, et seulement sans jamais revoir quelqu’un ». Quand des
+places restent vides, la même phrase le dit — « 4 places restent vides à
+chaque tour, 260 personnes pour 264 places » sur la grande démonstration sans
+exception — et rappelle qu’une personne assise à une table incomplète y
+rencontre une personne de moins. Les retours imposés se lisent de même :
+chacune des personnes réservées reste à sa table à chaque tour, et ces
+retours, voulus, ne comptent pas contre les propositions. Quand un geste
+change la ligne, il suit, précédé de **« Pour changer cela : »** — des tables
+plus grandes, ou un tour de plus, pour le plafond, une table de plus pour une
+organisation trop nombreuse. Une ligne qu’aucun geste ne change le dit sans
+amorce.
+
+Sous la carte « Tout l’événement », une dernière carte, **« La proposition
+choisie »**, explique un placement : la proposition que vous montrez au plan,
+sinon le placement retenu, sinon la meilleure du classement ; elle dit
+laquelle. Ses phrases reprennent les chiffres de sa ligne au tableau des
+propositions, en trois blocs. **Ce qui est atteint** : le moins bien servi et
+son plafond a priori — par exemple « Le moins bien servi rencontre 23
+personnes différentes, sur les 28 que son plafond a priori permet » —, puis,
+pour chaque règle cochée, les collisions, les retours choisis, la diversité,
+les objectifs et les animateurs ; une collision sans retrouvailles se dit
+« toujours des paires différentes ». **Ce qui manque, et pourquoi** : ce qui
+sépare quelqu’un de son plafond a priori, partagé entre la place — une table
+incomplète, le nombre de places vides à chaque tour — et les revoirs — les
+personnes à qui il manque une rencontre, les paires qui se croisent deux fois.
+Quand le diagnostic prouve qu’aucun placement n’atteint le plafond a priori
+de tout le monde, la carte le dit « hors d’atteinte ».
+**Ce qu’on peut tenter** : « Repartir d’elle » avec un compte d’arrêt plus
+élevé quand des revoirs, la place ou une règle cochée coûtent plus que
+l’inévitable, les tables quand ce sont les places vides — des tables pleines
+les retirent, et si leurs capacités diffèrent alors, le diagnostic dit ce
+qui demeure —, et « Rien pour les rencontres » quand la proposition atteint
+le plafond de chacun. Sans proposition, comme sur la capture, la carte invite
+à en générer une ; une proposition en dérive le dit, sans chiffres.
+
 Le même diagnostic s’affiche à côté du plan, pendant que vous préparez les
 tables : chaque organisation trop nombreuse pour ses tables y annonce les
 retrouvailles qu’elle imposera.

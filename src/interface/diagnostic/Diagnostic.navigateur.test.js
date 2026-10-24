@@ -12,10 +12,13 @@
 // la boîte, les attributs data-… — jamais une classe.
 //
 // Un énoncé porte data-enonce (sa clé), son texte data-phrase, une
-// organisation data-donnee, un remède data-remede. La valeur attendue vient
-// de diagnostiquer, sollicité une seconde fois sur la configuration de la
-// charge ouverte (§ 19.1) ; le texte, de la même traduction que celle de
-// l'application. Les noms d'épreuve sont inventés.
+// organisation data-donnee, un remède data-remede ; dans la section, son
+// explication data-explication et, quand il en a un, son geste data-levier ;
+// la carte de la proposition choisie porte data-proposition-choisie, son
+// genre, et chacun de ses blocs data-bloc-proposition, son nom. La valeur
+// attendue vient de diagnostiquer, sollicité une seconde fois sur la
+// configuration de la charge ouverte (§ 19.1) ; le texte, de la même
+// traduction que celle de l'application. Les noms d'épreuve sont inventés.
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { flushSync } from 'svelte';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
@@ -29,12 +32,14 @@ import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import TEXTE_TOUTES_EN_CONFLIT from '../../../test/fixtures/plan/toutes_en_conflit.gtt.json?raw';
+import TEXTE_HUIT_TABLES_RETENU from '../../../test/fixtures/plan/huit_tables_retenu.gtt.json?raw';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { cartesDiagnostic, enonces, numeroDeCharge } from './phrases.js';
+import { cartesDiagnostic, enonces, expliquer, numeroDeCharge, remedeAgit } from './phrases.js';
+import { propositionChoisie } from './proposition.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const { t: tEcran } = traductionEcran();
@@ -609,5 +614,149 @@ describe('la présence par tour (§ 5.6)', () => {
     sans.ui.allerA('diagnostic');
     await attendre(() => expect(section(sans).querySelector('[data-enonce]')).not.toBeNull());
     expect(section(sans).querySelector('[data-enonce="diagnostic.planchersRetires"]')).toBeNull();
+  });
+});
+
+describe('chaque énoncé expliqué, dans la section seulement (§ 5.6)', () => {
+  // Ce que la section doit écrire sous chaque énoncé, du moteur sollicité
+  // une seconde fois, par la traduction de l'écran : « Concrètement : » et
+  // ses phrases, le paragraphe du remède — précédé de « Pour changer cela : »
+  // quand il dit un geste —, et le geste propre à l'énoncé, null sans lui.
+  const espaces = (texte) => texte.replace(/\s+/g, ' ').trim();
+  function explicationsAttendues(chargeLue) {
+    const diagnostic = diagnostiquer(configurationDepuisCharge(chargeLue));
+    const contexte = { diagnostic, tours: chargeLue.evenement.tours };
+    return enonces(diagnostic, { numeroDe: numeroDeCharge(chargeLue), tours: chargeLue.evenement.tours }).map((enonce) => {
+      const { concretement, levier } = expliquer(enonce, contexte);
+      const remede = enonce.remede === null ? null : tEcran(enonce.remede.cle, enonce.remede.details);
+      return {
+        cle: enonce.cle,
+        explication: espaces([tEcran('diagnostic.amorce.concretement'), ...concretement.map(({ cle, details }) => tEcran(cle, details))].join(' ')),
+        remede: remede === null ? null : espaces(remedeAgit(enonce.remede) ? `${tEcran('diagnostic.amorce.pourChanger')} ${remede}` : remede),
+        levier: levier === null ? null : espaces(`${tEcran('diagnostic.amorce.pourChanger')} ${tEcran(levier.cle, levier.details)}`),
+      };
+    });
+  }
+
+  // Les mêmes lectures, sur le rendu : le paragraphe qui porte le remède.
+  const explicationsLues = (racine) =>
+    [...racine.querySelectorAll('[data-enonce]')].map((li) => {
+      const explication = li.querySelector('[data-explication]');
+      const remede = li.querySelector('[data-remede]');
+      const levier = li.querySelector('[data-levier]');
+      return {
+        cle: li.dataset.enonce,
+        explication: explication === null ? null : texteDe(explication),
+        remede: remede === null ? null : texteDe(remede.closest('p')),
+        levier: levier === null ? null : texteDe(levier),
+      };
+    });
+
+  test('la petite au conflit inévitable : « Concrètement » sous chaque énoncé, « Pour changer cela » devant les gestes et sous le plafond ; le panneau du plan n\u{2019}en porte aucun', async () => {
+    const m = await demonstration('petite-conflit');
+    m.ui.allerA('diagnostic');
+    const attendue = explicationsAttendues(charge(m));
+    expect(attendue.some(({ levier }) => levier !== null)).toBe(true);
+    expect(attendue.some(({ remede }) => remede?.startsWith(espaces(tEcran('diagnostic.amorce.pourChanger'))))).toBe(true);
+    await attendre(() => expect(explicationsLues(section(m))).toEqual(attendue));
+    for (const noeud of section(m).querySelectorAll('[data-explication], [data-levier]')) expect(visible(noeud)).toBe(true);
+    m.ui.allerA('plan');
+    await attendre(() => expect(panneau(m).querySelectorAll('[data-enonce]').length).toBeGreaterThan(0));
+    expect(panneau(m).querySelectorAll('[data-explication], [data-levier]').length).toBe(0);
+  });
+
+  test('la grande sans exception, 264 places pour 260 personnes : le plafond de 28 par la table de 8, puis les 4 places vides à chaque tour', async () => {
+    const m = await demonstration('grande-sans-exception');
+    m.ui.allerA('diagnostic');
+    const attendue = explicationsAttendues(charge(m));
+    await attendre(() => expect(explicationsLues(section(m))).toEqual(attendue));
+    const plafond = section(m).querySelector('[data-enonce="diagnostic.plafond"] [data-explication]');
+    expect(texteDe(plafond)).toContain(espaces(tEcran('diagnostic.concretement.placesVides', { placesVides: 4, places: 264, presents: 260 })));
+    expect(texteDe(plafond)).toMatch(/à une table de 8, on rencontre 7 personnes par tour/);
+  });
+});
+
+describe('la proposition choisie, expliquée sous tout l\u{2019}événement (§ 5.5, § 5.6, § 12.10)', () => {
+  // Ce que la carte doit écrire, de propositionChoisie sollicitée une
+  // seconde fois sur la charge ouverte, par la traduction de l'écran : son
+  // genre, puis chaque bloc, laquelle d'abord — la phrase qui la nomme, et
+  // celle de son statut —, puis ceux de l'explication, leur titre en tête.
+  const espaces = (texte) => texte.replace(/\s+/g, ' ').trim();
+  function choisieAttendue(chargeLue, demandee = null) {
+    const choisie = propositionChoisie(chargeLue, { demandee });
+    const traduire = ({ cle, details }) => espaces(tEcran(cle, details));
+    return {
+      genre: choisie.genre,
+      blocs: [
+        { nom: 'laquelle', textes: [choisie.laquelle, ...(choisie.statut === null ? [] : [choisie.statut])].map(traduire) },
+        ...choisie.blocs.map(({ nom, titre, phrases }) => ({ nom, textes: [espaces(tEcran(titre)), ...phrases.map(traduire)] })),
+      ],
+    };
+  }
+
+  // Les mêmes lectures, sur le rendu ; null sans carte.
+  function choisieLue(racine) {
+    const carte = racine.querySelector('[data-proposition-choisie]');
+    if (carte === null) return null;
+    return {
+      genre: carte.dataset.propositionChoisie,
+      blocs: [...carte.querySelectorAll('[data-bloc-proposition]')].map((bloc) => ({
+        nom: bloc.dataset.blocProposition,
+        textes: [...bloc.children].map(texteDe),
+      })),
+    };
+  }
+
+  test('sans proposition, la petite : la carte dit d\u{2019}en générer une, sous la carte de tout l\u{2019}événement ; le panneau du plan ne la porte pas', async () => {
+    const m = await demonstration('petite');
+    m.ui.allerA('diagnostic');
+    const attendue = choisieAttendue(charge(m));
+    expect(attendue.genre).toBe('aucune');
+    await attendre(() => expect(choisieLue(section(m))).toEqual(attendue));
+    const carte = section(m).querySelector('[data-proposition-choisie]');
+    carte.scrollIntoView({ block: 'center' });
+    expect(visible(carte)).toBe(true);
+    // Sous la dernière carte des énoncés, dans une carte à elle.
+    const enonces = [...section(m).querySelectorAll('[data-enonce]')];
+    const derniere = enonces.at(-1);
+    expect(derniere.compareDocumentPosition(carte) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(carteDe(carte)).not.toBeNull();
+    expect(carteDe(carte)).not.toBe(carteDe(derniere));
+    expect(intituleDe(derniere).textContent).toContain(tEcran('diagnostic.carte.ensemble'));
+    m.ui.allerA('plan');
+    await attendre(() => expect(panneau(m).querySelectorAll('[data-enonce]').length).toBeGreaterThan(0));
+    expect(panneau(m).querySelector('[data-proposition-choisie]')).toBeNull();
+  });
+
+  test('toutes en conflit : la meilleure du classement sans demande, puis la proposition montrée au plan, ses blocs titrés et chiffrés', async () => {
+    const m = await ouvrirTexte(TEXTE_TOUTES_EN_CONFLIT, 'toutes_en_conflit');
+    m.ui.allerA('diagnostic');
+    const meilleure = choisieAttendue(charge(m));
+    expect(meilleure.genre).toBe('meilleure');
+    await attendre(() => expect(choisieLue(section(m))).toEqual(meilleure));
+    m.ui.montrerProposition(1);
+    const montree = choisieAttendue(charge(m), 1);
+    expect(montree.genre).toBe('montree');
+    expect(montree.blocs.map(({ nom }) => nom)).toEqual(['laquelle', 'atteint', 'manque', 'tenter']);
+    await attendre(() => expect(choisieLue(section(m))).toEqual(montree));
+    // Chaque bloc de l'explication s'ouvre sur un intitulé, sous celui de
+    // la carte.
+    const carte = section(m).querySelector('[data-proposition-choisie]');
+    expect(document.getElementById(carte.getAttribute('aria-labelledby')).tagName).toBe('H3');
+    for (const bloc of carte.querySelectorAll('[data-bloc-proposition]:not([data-bloc-proposition="laquelle"])')) {
+      expect(bloc.firstElementChild.tagName).toBe('H4');
+      bloc.scrollIntoView({ block: 'center' });
+      expect(visible(bloc.firstElementChild)).toBe(true);
+    }
+  });
+
+  test('un placement retenu, sans demande : la carte l\u{2019}explique, en lecture, sans rien écrire', async () => {
+    const m = await ouvrirTexte(TEXTE_HUIT_TABLES_RETENU, 'huit_tables_retenu');
+    const avant = revision(m);
+    m.ui.allerA('diagnostic');
+    const attendue = choisieAttendue(charge(m));
+    expect(attendue.genre).toBe('retenu');
+    await attendre(() => expect(choisieLue(section(m))).toEqual(attendue));
+    expect(revision(m)).toBe(avant);
   });
 });

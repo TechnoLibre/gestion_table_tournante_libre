@@ -312,3 +312,174 @@ export function cartesDiagnostic(liste) {
   }
   return cartes;
 }
+
+// --- Les explications : « Concrètement » et « Pour changer cela » ------------
+//
+// Sous chaque énoncé, la section dit ce qu'il signifie avec les chiffres de
+// l'événement, et, quand un geste le change, ce geste. Une explication ne
+// lit que les chiffres de l'énoncé et ceux que le diagnostic porte déjà :
+// les capacités de son ancrage, les présents de chaque tour, le nombre de
+// tours. Elle ne refait aucun calcul du moteur et n'en invente aucun ; une
+// soustraction ou une somme de ces chiffres reste dans la phrase qui la
+// nomme. Une phrase qui ne se chiffrerait pas honnêtement se tait : une
+// formule ne s'écrit que quand le chiffre de l'énoncé l'égale.
+
+// Les remèdes qui disent un constat, non un geste : la section ne les fait
+// pas précéder de « Pour changer cela ».
+const REMEDES_CONSTATS = new Set([
+  'diagnostic.remede.organisations',
+  'diagnostic.remede.ecartItineraire',
+  'diagnostic.remede.plafond',
+  'diagnostic.remede.imposes',
+]);
+
+/**
+ * Vrai quand le remède dit un geste qui change l'énoncé ; faux pour un
+ * constat — ce qu'aucune relance ne change, ce que les réservations
+ * veulent — et pour l'absence de remède.
+ *
+ * @param {null|{cle: string}} remede
+ * @returns {boolean}
+ */
+export const remedeAgit = (remede) => remede !== null && !REMEDES_CONSTATS.has(remede.cle);
+
+// Une phrase neuve de la clé donnée.
+const phrase = (cle, details = {}) => ({ cle, details });
+
+// Les grandeurs de l'événement que lisent plusieurs explications : le
+// nombre de places, la capacité commune des tables (null quand elles
+// diffèrent ou qu'il n'y en a aucune), les présents de chaque tour, et les
+// places vides de chaque tour, que seul un tour où quelqu'un est présent
+// compte.
+function grandeurs(diagnostic) {
+  const capacites = diagnostic.ancrage.map(({ capacite }) => capacite);
+  const places = capacites.reduce((somme, capacite) => somme + capacite, 0);
+  const commune = capacites.length > 0 && capacites.every((capacite) => capacite === capacites[0]) ? capacites[0] : null;
+  const presents = diagnostic.presence.presentsParTour;
+  const vides = presents.map((n) => (n > 0 ? Math.max(0, places - n) : 0));
+  return { places, commune, presents, vides, absences: diagnostic.presence.absences };
+}
+
+// Les places vides : le même nombre à chaque tour, avec les présents et les
+// places ; sinon le plus grand d'un tour. Rien quand aucune ne reste vide.
+function placesVides({ places, presents, vides }) {
+  const plus = Math.max(0, ...vides);
+  if (plus === 0) return [];
+  if (vides.every((n) => n === vides[0])) {
+    return [phrase('diagnostic.concretement.placesVides', { placesVides: plus, places, presents: presents[0] })];
+  }
+  return [phrase('diagnostic.concretement.placesVidesSelonTour', { placesVides: plus })];
+}
+
+// Le plafond a priori d'une ligne de la répartition. Une valeur égale à
+// N − 1, N les personnes de l'événement, se dit « toutes les autres » :
+// seule la population la borne. Sa formule par la table ne s'écrit que si
+// la valeur égale tours × (capacité − 1) sur des tables toutes de même
+// capacité : chaque tour en ajoute alors capacité − 1, présence comprise.
+// Ailleurs, sans absence, la valeur reste sous N − 1 par les capacités et
+// l'ancrage, et la phrase le dit. Sous absence, elle peut aussi venir des
+// seules personnes présentes aux tours de chacun, que le diagnostic ne
+// donne pas par ligne : la phrase nomme les deux bornes sans trancher. Le
+// geste — des tables plus grandes, un tour de plus — ne s'écrit que sous
+// la formule par la table, sans absence, quand il reste des personnes à
+// rencontrer. La première ligne porte aussi les places vides : le plafond
+// se compte sur des tables pleines.
+function explicationPlafond({ valeur, ancres: ancresDeLaLigne }, diagnostic, tours, g) {
+  const tous = valeur === diagnostic.plafondAPriori.parPersonne.length - 1;
+  const parLaTable = g.commune !== null && valeur === tours * (g.commune - 1);
+  const ancres = ancresDeLaLigne > 0;
+  let premiere;
+  if (tous) premiere = phrase('diagnostic.concretement.plafond.tous', { valeur });
+  else if (parLaTable) premiere = phrase('diagnostic.concretement.plafond.tables', { capacite: g.commune, parTour: g.commune - 1, valeur, tours });
+  else if (g.absences > 0) premiere = phrase('diagnostic.concretement.plafond.presence', { valeur, ancres });
+  else premiere = phrase('diagnostic.concretement.plafond.capacites', { valeur, tours, ancres });
+  const vides = valeur === diagnostic.plafondAPriori.repartition[0].valeur ? placesVides(g) : [];
+  const levier = !tous && parLaTable && g.absences === 0 ? phrase('diagnostic.levier.plafond') : null;
+  return { concretement: [premiere, ...vides], levier };
+}
+
+// Les retours imposés : quand chacune des personnes qui en portent revient
+// tours − 1 fois, chacune reste à sa table à chaque tour, et la phrase le
+// dit ; sinon, le compte seul.
+function explicationImposes({ retoursImposes, ancragesImposantRetours: personnes }, tours) {
+  if (tours > 1 && retoursImposes === personnes * (tours - 1)) {
+    return phrase('diagnostic.concretement.imposes.ancres', { personnes, tours, retours: tours - 1 });
+  }
+  return phrase('diagnostic.concretement.imposes', { personnes, retoursImposes });
+}
+
+// La phrase « Concrètement » d'un énoncé autre que le plafond, par sa clé.
+const CONCRETEMENT = new Map([
+  ['diagnostic.uneSeuleOrganisation', () => phrase('diagnostic.concretement.uneSeuleOrganisation')],
+  ['diagnostic.collisionPartout', (_, { tours }) => phrase('diagnostic.concretement.collisionPartout', { tours })],
+  [
+    'diagnostic.collisions',
+    ({ details }, { diagnostic }) => {
+      const { groupe, ...chiffres } = details;
+      const ligne = diagnostic.collisions.find((candidate) => candidate.groupe === groupe);
+      return phrase('diagnostic.concretement.collisions', { ...chiffres, parReservations: ligne.tablesManquantes === null });
+    },
+  ],
+  ['diagnostic.excedent', ({ details }) => phrase('diagnostic.concretement.excedent', { plancherExcedent: details.plancherExcedent })],
+  [
+    'diagnostic.planchersRetires',
+    (_, { g }) => phrase('diagnostic.concretement.planchersRetires', { moins: Math.min(...g.presents), plus: Math.max(...g.presents) }),
+  ],
+  ['diagnostic.redondance', ({ details }) => phrase('diagnostic.concretement.redondance', { ...details })],
+  [
+    'diagnostic.animateurs',
+    ({ details }) =>
+      phrase('diagnostic.concretement.animateurs', {
+        redondances: details.redondanceImposeeParAnimateurs,
+        tables: details.redondanceImposeeParAnimateurs + 1,
+      }),
+  ],
+  [
+    'diagnostic.ancrage.gelee',
+    ({ details: { numero, capacite } }, { tours }) =>
+      phrase('diagnostic.concretement.ancrage.gelee', { numero, capacite, autres: capacite - 1, tours }),
+  ],
+  [
+    'diagnostic.ancrage.moitie',
+    ({ details: { numero, ancres, capacite } }) =>
+      phrase('diagnostic.concretement.ancrage.moitie', { numero, ancres, capacite, libres: capacite - ancres }),
+  ],
+  ['diagnostic.ecartItineraire', ({ details }) => phrase('diagnostic.concretement.ecartItineraire', { ...details })],
+  [
+    'diagnostic.placesManquantes',
+    ({ details }, { g }) =>
+      phrase('diagnostic.concretement.placesManquantes', {
+        places: g.places,
+        presents: Math.max(...g.presents),
+        varie: details.tours !== undefined,
+      }),
+  ],
+  ['diagnostic.objectifs.toursHorsObjectif', ({ details }) => phrase('diagnostic.concretement.objectifs.toursHorsObjectif', { ...details })],
+  ['diagnostic.objectifs.jamaisServies', ({ details }) => phrase('diagnostic.concretement.objectifs.jamaisServies', { ...details })],
+  ['diagnostic.objectifs.horsObjectifMax', ({ details }) => phrase('diagnostic.concretement.objectifs.horsObjectifMax', { ...details })],
+  ['diagnostic.plafondInconnu', () => phrase('diagnostic.concretement.plafondInconnu')],
+  ['diagnostic.imposes', ({ details }, { tours }) => explicationImposes(details, tours)],
+  ['diagnostic.conflitsImposes', ({ details }) => phrase('diagnostic.concretement.conflitsImposes', { ...details })],
+]);
+
+/**
+ * L'explication d'un énoncé (§ 5.6) : concretement, les phrases
+ * « Concrètement », dans l'ordre où elles se lisent ; levier, la phrase
+ * « Pour changer cela » propre à l'énoncé, null quand son remède dit déjà
+ * le geste ou qu'aucun geste ne le change. Chaque phrase est {cle, details},
+ * que l'écran traduit. Ne modifie ni l'énoncé ni le diagnostic.
+ *
+ * @param {{cle: string, details: Object}} enonce   un énoncé d'enonces
+ * @param {{diagnostic: Object, tours: number}} contexte
+ *        diagnostic : celui dont l'énoncé vient ; tours : le nombre de tours
+ *        de l'événement
+ * @returns {{concretement: Array<{cle: string, details: Object}>, levier: null|{cle: string, details: Object}}}
+ *   lève RangeError pour une clé d'énoncé inconnue
+ */
+export function expliquer(enonce, { diagnostic, tours }) {
+  const g = grandeurs(diagnostic);
+  if (enonce.cle === 'diagnostic.plafond') return explicationPlafond(enonce.details, diagnostic, tours, g);
+  const composer = CONCRETEMENT.get(enonce.cle);
+  if (composer === undefined) throw new RangeError(`énoncé inconnu : ${JSON.stringify(enonce.cle)}`);
+  return { concretement: [composer(enonce, { diagnostic, tours, g })], levier: null };
+}
