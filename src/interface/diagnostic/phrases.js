@@ -20,8 +20,20 @@
 // passe à enonces, qui en pose un énoncé par étoile, après les collisions de
 // chaque groupe ; leurs chiffres sont ceux que l'application rend.
 //
-// L'ordre est celui du § 5.6 — collisions et excédent, conflits en étoile,
-// redondance, animateurs, ancrage, écart d'itinéraire, manque de places,
+// Les planchers exacts du solveur (planchers_exacts.js), que le travailleur
+// calcule après coup, arrivent de même, assemblés, ou null tant qu'ils
+// manquent. Quand aucun plan sans conflit n'existe, l'énoncé de
+// l'impossibilité nomme les tours sans issue — hors de ceux que des
+// réservations en conflit imposent, que l'énoncé des conflits imposés dit
+// déjà —, et les étoiles se taisent : leur promesse « tant qu'aucun conflit
+// ne se produit » est vide. Sinon, le plancher exact des collisions
+// cumulées s'énonce quand il dépasse la somme des planchers par groupe
+// renforcée par les étoiles : exact, ou « au moins » quand un tour a
+// atteint sa limite de temps. Sans gain, il n'apprend rien et se tait.
+//
+// L'ordre est celui du § 5.6 — collisions et excédent, conflits en étoile
+// ou leur impossibilité, plancher exact, redondance, animateurs, ancrage,
+// écart d'itinéraire, manque de places,
 // objectifs hors d'atteinte —, précédé de ce qui vide la séparation de son
 // sens (§ 15.4, § 7.5) et suivi du plafond a priori (§ 5.5), des retours
 // imposés (§ 5.4) et des conflits d'organisation que les réservations
@@ -42,6 +54,7 @@
 // Un critère décoché ou sans objet ne compare rien : ses planchers se
 // taisent.
 import { evaluer } from '../../application/evaluation.js';
+import { plancherCollisionsTotal } from '../../application/planchers_conflits.js';
 
 // Désactiver la séparation : le seul remède que réalise une commande. Un
 // objet neuf à chaque appel.
@@ -98,6 +111,48 @@ const conflitsEtoile = (conflits, tours) =>
     details: { organisations: [...organisations], plancherCumulees, parTour: [...parTour], gain, tours },
     remede: remede('diagnostic.remede.conflitsEtoile'),
   }));
+
+// L'impossibilité de tout plan sans conflit, que le solveur prouve : les
+// tours sans issue hors réservations, sans énoncé quand il n'y en a aucun.
+function conflitsInevitables({ toursSansIssue }) {
+  if (toursSansIssue.length === 0) return [];
+  return [
+    {
+      cle: 'diagnostic.conflitsInevitables',
+      details: { toursSansIssue: [...toursSansIssue] },
+      remede: remede('diagnostic.remede.conflitsInevitables'),
+    },
+  ];
+}
+
+// Le plancher exact des collisions cumulées des plans sans conflit, quand il
+// dépasse la somme des planchers par groupe renforcée par les étoiles :
+// exact, ou « au moins » avec les tours arrêtés à leur limite. Le plancher
+// d'un tour est son minimum, sinon sa borne, sinon 0, comme dans la somme.
+function collisionsExactes(diagnostic, etoiles, exacts, tours) {
+  const { plancherCumulees, exact, parTour, toursALimite } = exacts;
+  if (plancherCumulees === null || plancherCumulees <= plancherCollisionsTotal(diagnostic.collisions, etoiles)) return [];
+  const details = { plancher: plancherCumulees, tours, parTour: parTour.map(({ minimum, auMoins }) => minimum ?? auMoins ?? 0) };
+  return [
+    exact
+      ? { cle: 'diagnostic.collisionsExactes', details, remede: remede('diagnostic.remede.collisionsExactes') }
+      : {
+          cle: 'diagnostic.collisionsAuMoins',
+          details: { ...details, toursALimite: [...toursALimite] },
+          remede: remede('diagnostic.remede.collisionsExactes'),
+        },
+  ];
+}
+
+// Les énoncés des conflits et des planchers exacts : sans planchers exacts,
+// les étoiles ; quand aucun plan sans conflit n'existe, l'impossibilité à
+// leur place ; sinon les étoiles, puis le plancher exact quand il apprend
+// quelque chose.
+function conflitsEtExacts(diagnostic, conflits, exacts, tours) {
+  if (exacts === null) return conflitsEtoile(conflits, tours);
+  if (exacts.sansConflit === false) return conflitsInevitables(exacts);
+  return [...conflitsEtoile(conflits, tours), ...collisionsExactes(diagnostic, conflits, exacts, tours)];
+}
 
 // La redondance minimale, quand elle est positive, et le nombre de tours qui
 // l'annule ; sans lui, ce qui la fait tenir.
@@ -254,22 +309,24 @@ function conflitsImposes({ conflitsImposes: conflits }) {
  * @param {{numeroDe: (table: number) => number, tours: number,
  *          criteres?: Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>,
  *          absentes?: number,
- *          conflits?: Array<{organisations: string[], plancherCumulees: number, parTour: number[], gain: number}>}} options
+ *          conflits?: Array<{organisations: string[], plancherCumulees: number, parTour: number[], gain: number}>,
+ *          exacts?: import('../../application/planchers_exacts.js').PlanchersExacts|null}} options
  *        numeroDe : le numéro affiché d'un identifiant de table ; tours : le
  *        nombre de tours de l'événement ; criteres : l'état des critères
  *        (criteresDuDiagnostic), vide par défaut, et aucun plancher des
  *        objectifs ne s'écrit alors ; absentes : le nombre de personnes non
  *        exclues qui manquent un tour (presencesPartielles), 0 par défaut ;
  *        conflits : les planchers des conflits en étoile (planchersConflits),
- *        aucun par défaut
+ *        aucun par défaut ; exacts : les planchers exacts du solveur
+ *        (assemblerPlanchers), null par défaut, tant qu'ils manquent
  * @returns {Array<{cle: string, details: Object, remede: null|{cle: string, details: Object,
  *           commande?: string, arguments?: Object}, grandeur?: string}>}
  */
-export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes = 0, conflits = [] }) {
+export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes = 0, conflits = [], exacts = null }) {
   return [
     ...separation(diagnostic),
     ...collisions(diagnostic, tours),
-    ...conflitsEtoile(conflits, tours),
+    ...conflitsEtExacts(diagnostic, conflits, exacts, tours),
     ...planchersRetires(absentes),
     ...redondance(diagnostic, tours),
     ...animateurs(diagnostic),
@@ -303,10 +360,13 @@ export function numeroDeCharge(charge) {
 // séparation.
 const CLES_SEPARATION = new Set(['diagnostic.uneSeuleOrganisation', 'diagnostic.collisionPartout']);
 
+// Les énoncés que porte la carte des organisations en conflit.
+const CLES_CONFLITS = new Set(['diagnostic.conflitsEtoile', 'diagnostic.conflitsInevitables']);
+
 // Le genre et le groupe de la carte d'un énoncé.
 function carteDe({ cle, details }) {
   if (details.groupe !== undefined) return { genre: 'organisation', groupe: details.groupe };
-  if (cle === 'diagnostic.conflitsEtoile') return { genre: 'conflits', groupe: null };
+  if (CLES_CONFLITS.has(cle)) return { genre: 'conflits', groupe: null };
   return { genre: CLES_SEPARATION.has(cle) ? 'separation' : 'ensemble', groupe: null };
 }
 
@@ -314,10 +374,11 @@ function carteDe({ cle, details }) {
  * Les cartes du diagnostic (§ 5.6) : les énoncés regroupés, sans en changer
  * l'ordre, par suites d'énoncés voisins de même carte — la séparation vidée
  * de son sens ('separation'), une organisation, celle de details.groupe
- * ('organisation'), les conflits en étoile ('conflits'), ou le reste de
- * l'événement ('ensemble'). Dans l'ordre d'enonces, la séparation vient
+ * ('organisation'), les conflits en étoile ou leur impossibilité
+ * ('conflits'), ou le reste de l'événement ('ensemble'), que le plancher
+ * exact ouvre quand il s'énonce. Dans l'ordre d'enonces, la séparation vient
  * d'abord, puis une carte par organisation en collision — ses collisions et
- * son excédent —, puis une carte des étoiles, puis l'événement : les
+ * son excédent —, puis une carte des conflits, puis l'événement : les
  * cartes mises bout à bout redonnent la liste reçue, énoncé pour énoncé, les
  * mêmes objets. Ne modifie pas la liste.
  *
@@ -450,6 +511,12 @@ const CONCRETEMENT = new Map([
     'diagnostic.conflitsEtoile',
     ({ details: { organisations, plancherCumulees, gain } }) =>
       phrase('diagnostic.concretement.conflitsEtoile', { organisations: [...organisations], parGroupe: plancherCumulees - gain, gain }),
+  ],
+  ['diagnostic.conflitsInevitables', ({ details }) => phrase('diagnostic.concretement.conflitsInevitables', { toursSansIssue: [...details.toursSansIssue] })],
+  ['diagnostic.collisionsExactes', () => phrase('diagnostic.concretement.collisionsExactes')],
+  [
+    'diagnostic.collisionsAuMoins',
+    ({ details }) => phrase('diagnostic.concretement.collisionsAuMoins', { toursALimite: [...details.toursALimite] }),
   ],
   [
     'diagnostic.planchersRetires',

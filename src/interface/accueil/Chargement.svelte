@@ -2,13 +2,15 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // Le signe d'une valeur de la liste qui se calcule encore (§ 8.1) : un arc
-  // de cercle dessiné en SVG (§ 7.6), que porte une cellule qui se dit
-  // occupée (aria-busy). Il est décoratif (aria-hidden) : la liste annonce
-  // son chargement une seule fois, dans sa région d'état
-  // (ListeEvenements.svelte), et non une fois par valeur. Il tourne d'un
-  // tour par seconde : c'est la seule animation de l'interface, et aucun
-  // état n'en dépend — rien n'attend sa fin, rien ne lit son rendu. Il reste
+  // Le signe d'un calcul qui se poursuit : une valeur de la liste qui se
+  // calcule encore (§ 8.1), dans une cellule qui se dit occupée
+  // (aria-busy), ou le calcul exact du diagnostic (§ 5.6), dans la ligne qui
+  // le dit. C'est un arc de cercle dessiné en SVG (§ 7.6), décoratif
+  // (aria-hidden) : la liste annonce son chargement une seule fois, dans sa
+  // région d'état (ListeEvenements.svelte), et non une fois par valeur ; le
+  // diagnostic, dans la région d'état de sa ligne. Il tourne d'un tour par
+  // seconde, et aucun état n'en dépend — rien n'attend sa fin, rien ne lit
+  // son rendu. Il reste
   // immobile sous prefers-reduced-motion: reduce, et la feuille qui annule
   // les animations des captures (§ 19.2) l'arrête comme toute autre. L'arc
   // est peint de l'encre secondaire de la page, sans opacité partielle

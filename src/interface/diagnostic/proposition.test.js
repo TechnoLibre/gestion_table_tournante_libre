@@ -564,3 +564,96 @@ describe('propositionChoisie : les phrases à l’écran (§ 5.6)', () => {
     );
   });
 });
+
+describe('propositionChoisie : les planchers exacts du solveur (§ 5.6)', () => {
+  // Trois collègues du Club des Merles, un membre du Cercle des Hérons, deux
+  // personnes sans organisation ; deux tables de 3, un tour. enConflit : le
+  // Club nomme le Cercle. La 1 assoit le Club seul à une table, sans
+  // conflit : 3 collisions ; la 2 mêle le Cercle au Club : 1 collision et
+  // des conflits.
+  const organisations = ['Club des Merles', 'Club des Merles', 'Club des Merles', 'Cercle des Hérons', null, null];
+  function chargeDeux(enConflit) {
+    const nue = () => {
+      const charge = chargeDe({ organisations, capacites: [3, 3], tours: 1 });
+      if (enConflit) charge.participants[0].conflits = ['Cercle des Hérons'];
+      return charge;
+    };
+    return avecPropositions(nue(), [propositionDe(nue(), 1, [[[1, 2, 3], [4, 5, 6]]]), propositionDe(nue(), 2, [[[1, 2, 4], [3, 5, 6]]])]);
+  }
+  const phrases = (choisie, nom) => choisie.blocs.find((b) => b.nom === nom)?.phrases ?? [];
+  const cles = (liste) => liste.map(({ cle }) => cle);
+  // Des planchers exacts synthétiques d'un tour : minimum, ou { auMoins }.
+  const exactsDe = (valeur, { sansConflit = true, toursSansIssue = [] } = {}) => {
+    const ligne = typeof valeur === 'number' ? { minimum: valeur, auMoins: null } : { minimum: null, auMoins: valeur.auMoins };
+    return {
+      sansConflit,
+      toursSansIssue,
+      plancherCumulees: sansConflit === false ? null : (ligne.minimum ?? ligne.auMoins),
+      exact: ligne.minimum !== null,
+      parTour: sansConflit === false ? [] : [ligne],
+      toursALimite: ligne.minimum === null ? [1] : [],
+    };
+  };
+
+  test('sans conflit, des collisions égales au plancher exact sont au minimum, même sous limite, et « Repartir d’elle » ne les vise plus', () => {
+    const charge = chargeDeux(false);
+    const sans = propositionChoisie(charge, { demandee: 1 });
+    assert.ok(!cles(phrases(sans, 'atteint')).includes(`${P}.collisions.minimum`));
+    assert.ok(cles(phrases(sans, 'tenter')).includes(`${P}.tenter.repartir`));
+    for (const exacts of [exactsDe(3), exactsDe({ auMoins: 3 })]) {
+      const avec = propositionChoisie(charge, { demandee: 1, exacts });
+      const atteint = phrases(avec, 'atteint');
+      const rang = cles(atteint).indexOf(`${P}.collisions`);
+      assert.deepEqual(atteint.slice(rang, rang + 2), [
+        phrase('collisions', { collisions: 3, paires: 3, excedent: 0, plancher: false }),
+        phrase('collisions.minimum'),
+      ]);
+      assert.deepEqual(phrases(avec, 'tenter'), [phrase('tenter.rien')]);
+    }
+    // Un plancher exact sous les collisions ne certifie rien.
+    const dessous = propositionChoisie(charge, { demandee: 1, exacts: exactsDe(2) });
+    assert.ok(!cles(phrases(dessous, 'atteint')).includes(`${P}.collisions.minimum`));
+    assert.ok(cles(phrases(dessous, 'tenter')).includes(`${P}.tenter.repartir`));
+  });
+
+  test('une proposition à conflits : le plancher exact ne s’applique jamais, ni au certificat ni à « Repartir d’elle »', () => {
+    const charge = chargeDeux(true);
+    const melee = propositionChoisie(charge, { demandee: 2, exacts: exactsDe(5) });
+    assert.ok(phrases(melee, 'atteint').some((p) => p.cle === `${P}.conflits` && p.details.conflits > 0));
+    assert.ok(phrases(melee, 'atteint').some((p) => p.cle === `${P}.collisions` && p.details.plancher === true));
+    assert.ok(!cles(phrases(melee, 'atteint')).includes(`${P}.collisions.minimum`));
+    assert.ok(!cles(phrases(melee, 'manque')).includes(`${P}.conflits.inevitables`));
+    assert.ok(cles(phrases(melee, 'tenter')).includes(`${P}.tenter.repartir`));
+
+    // Hors de toute étoile : la 4, sans organisation, nomme le Club, que le
+    // plancher des étoiles ne voit pas ; tables de 4 et de 2. Le plan assoit
+    // la 4 avec les trois collègues : 3 collisions, autant qu'un plancher
+    // exact de 3, et 3 conflits. Seule la somme par groupe, 1, vaut pour lui.
+    const horsEtoile = chargeDe({ organisations: ['Club des Merles', 'Club des Merles', 'Club des Merles', null, null, null], capacites: [4, 2], tours: 1 });
+    horsEtoile.participants[3].conflits = ['Club des Merles'];
+    avecPropositions(horsEtoile, [propositionDe(horsEtoile, 1, [[[1, 2, 3, 4], [5, 6]]])]);
+    const assise = propositionChoisie(horsEtoile, { demandee: 1, exacts: exactsDe(3) });
+    assert.ok(phrases(assise, 'atteint').some((p) => p.cle === `${P}.conflits` && p.details.conflits === 3));
+    assert.ok(phrases(assise, 'atteint').some((p) => p.cle === `${P}.collisions` && p.details.collisions === 3));
+    assert.ok(!cles(phrases(assise, 'atteint')).includes(`${P}.collisions.minimum`));
+  });
+
+  test('aucun plan sans conflit : la proposition à conflits le dit dans « manque », et « tenter » ne propose plus de repartir pour les conflits', () => {
+    const charge = chargeDeux(true);
+    const exacts = exactsDe(0, { sansConflit: false, toursSansIssue: [1] });
+    const melee = propositionChoisie(charge, { demandee: 2, exacts });
+    assert.deepEqual(phrases(melee, 'manque')[0], phrase('conflits.inevitables'));
+    assert.equal(
+      t(`${P}.conflits.inevitables`),
+      "Aucun plan n'évite tous les conflits d'organisation : une relance ne les fera pas tomber à zéro.",
+    );
+    assert.ok(!cles(phrases(melee, 'tenter')).includes(`${P}.tenter.repartir`));
+    // Sans les planchers exacts, les conflits se reprennent par « Repartir
+    // d’elle ».
+    assert.ok(cles(phrases(propositionChoisie(charge, { demandee: 2 }), 'tenter')).includes(`${P}.tenter.repartir`));
+    // Des tours sans issue tous imposés par des réservations : la phrase
+    // des conflits imposés le dit déjà, rien ne s’ajoute.
+    const imposes = propositionChoisie(charge, { demandee: 2, exacts: exactsDe(0, { sansConflit: false, toursSansIssue: [] }) });
+    assert.ok(!cles(phrases(imposes, 'manque')).includes(`${P}.conflits.inevitables`));
+  });
+});

@@ -1582,21 +1582,34 @@ function releverPaquetsDeclares(racine, liste = DEPENDANCES_DE_DEVELOPPEMENT) {
 }
 
 // Les paquets réservés à une place : chacun ne se charge que dans les lieux
-// admis, relatifs à la racine — un arbre et tout ce qu'il contient, ou un
-// fichier nommé par son chemin exact. pdf-lib et fontkit dessinent la
+// admis, relatifs à la racine — un arbre et tout ce qu'il contient, un
+// fichier nommé par son chemin exact, ou un fichier nommé pour ses seuls
+// spécificateurs, { lieu, specificateurs }. pdf-lib et fontkit dessinent la
 // planche dans src/pdf, seule couche de la page qui les importe ; les
 // épreuves les relisent. pdfjs-dist, lecteur qui relit le PDF comme un
 // lecteur réel, ne sert qu'aux épreuves et aux commandes de Vitest, sous
 // test/ : un module livré qui l'importerait l'emporterait dans la page.
 // highs, le solveur du plancher exact du diagnostic, ne se charge que dans
 // src/application/solveur_travailleur.js, seul module de src/ qui l'importe,
-// et dans src/main.js, pour désigner son actif wasm (highs/runtime?url) ; le
-// reste de src/application n'y touche pas.
+// et dans src/main.js, par le seul spécificateur highs/runtime?url, qui
+// désigne son actif wasm sans charger le solveur ; le reste de
+// src/application n'y touche pas.
 const PAQUETS_RESERVES = [
   { paquets: ['pdf-lib', '@pdf-lib/fontkit'], admis: ['src/pdf', 'test'] },
   { paquets: ['pdfjs-dist'], admis: ['test'] },
-  { paquets: ['highs'], admis: ['src/application/solveur_travailleur.js', 'src/main.js', 'test'] },
+  {
+    paquets: ['highs'],
+    admis: ['src/application/solveur_travailleur.js', { lieu: 'src/main.js', specificateurs: ['highs/runtime?url'] }, 'test'],
+  },
 ];
+
+// Vrai quand le lieu admis couvre le chargement du spécificateur par le
+// fichier nom : un arbre, un fichier exact, ou un fichier exact pour ses
+// seuls spécificateurs.
+function lieuAdmet(lieu, nom, specificateur) {
+  if (typeof lieu !== 'string') return nom === lieu.lieu && lieu.specificateurs.includes(specificateur);
+  return nom === lieu || nom.startsWith(`${lieu}/`);
+}
 
 // Relevé « fichier:ligne spécificateur » des chargements d'un paquet
 // réservé hors de ses lieux admis, dans le périmètre des dépendances
@@ -1614,7 +1627,7 @@ function releverPaquetsReserves(racine, reserves = PAQUETS_RESERVES) {
       .filter(({ indice, specificateur }) => estDuCode(code, indice) && estNu(specificateur))
       .filter(({ specificateur }) => {
         const reserve = reserves.find(({ paquets }) => paquets.includes(nomDePaquet(specificateur)));
-        return reserve !== undefined && !reserve.admis.some((lieu) => nom === lieu || nom.startsWith(`${lieu}/`));
+        return reserve !== undefined && !reserve.admis.some((lieu) => lieuAdmet(lieu, nom, specificateur));
       })
       .map(({ indice, specificateur }) => `${nom}:${ligneDe(texte, indice)} ${specificateur}`);
   });
@@ -1819,7 +1832,7 @@ describe('arborescence : les sorties — PDF, impression, police (§ 11.1, § 13
     );
   });
 
-  test('pdf-lib et fontkit ne se chargent que sous src/pdf et test/, pdfjs-dist que sous test/, highs que dans solveur_travailleur.js, src/main.js et test/', () => {
+  test('pdf-lib et fontkit ne se chargent que sous src/pdf et test/, pdfjs-dist que sous test/, highs que dans solveur_travailleur.js, dans src/main.js par highs/runtime?url seul, et sous test/', () => {
     assert.deepEqual(releverPaquetsReserves(RACINE), []);
   });
 
@@ -1848,10 +1861,14 @@ describe('arborescence : les sorties — PDF, impression, police (§ 11.1, § 13
     ]);
   });
 
-  test('la garde des paquets réservés admet un fichier nommé par son chemin exact : highs ne se charge que dans src/application/solveur_travailleur.js, src/main.js et test/', () => {
+  test('la garde des paquets réservés admet un fichier nommé par son chemin exact, et un fichier pour ses seuls spécificateurs : highs ne se charge que dans src/application/solveur_travailleur.js, dans src/main.js par highs/runtime?url seul, et sous test/', () => {
     const fichiers = {
       'src/application/solveur_travailleur.js': "import highs from 'highs';\n",
-      'src/main.js': "import urlHighs from 'highs/runtime?url';\n",
+      'src/main.js': [
+        "import urlHighs from 'highs/runtime?url';",
+        "const charger = () => import('highs');",
+        "import urlAutre from 'highs/runtime';",
+      ].join('\n'),
       'src/application/modele_tour.js': "const charger = () => import('highs');\n",
       'src/application/solveur_travailleur.js.mjs': "import highs from 'highs';\n",
       'src/application/solveur_travailleur.js.bak/charge.js': "import highs from 'highs';\n",
@@ -1865,6 +1882,8 @@ describe('arborescence : les sorties — PDF, impression, police (§ 11.1, § 13
       'src/application/solveur_travailleur.js.bak/charge.js:1 highs',
       'src/application/solveur_travailleur.js.mjs:1 highs',
       'src/interface/diagnostic/travailleur_solveur.js:1 highs',
+      'src/main.js:2 highs',
+      'src/main.js:3 highs/runtime',
       'src/main.js.d/reste.js:1 highs',
     ]);
   });

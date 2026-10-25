@@ -22,6 +22,11 @@
 // sous le séparateur du système ; un fichier posé à même data, plus profond,
 // ou nommé autrement que son dossier se nomme.
 //
+// Le plancher exact du diagnostic (§ 5.6, § 5.10) : l'état que porte la
+// ligne du calcul, [data-solveur], et les erreurs recueillies disent si le
+// travailleur du solveur a chargé HiGHS et rendu son calcul ; tant que la
+// ligne n'est ni prête ni en faute, l'essai attend.
+//
 // Les commandes de l'explorateur (§ 8.6) : hors de Windows et de macOS, un
 // faux xdg-open en tête du PATH consigne ce qu'il reçoit, et chaque commande
 // doit lui donner le seul dossier attendu ; chaque écart se nomme.
@@ -46,6 +51,7 @@ import {
   OUVREUR_FACTICE,
   environnementAvecOuvreur,
   fautesDOuverture,
+  issueDuSolveur,
   parOuvreurDuBureau,
 } from './essai_demarrage.js';
 
@@ -413,5 +419,24 @@ describe('essai de démarrage : les commandes de l’explorateur (§ 8.6)', () =
     } finally {
       rmSync(dossier, { recursive: true, force: true });
     }
+  });
+});
+
+describe('essai de démarrage : le plancher exact du diagnostic (§ 5.6, § 5.10)', () => {
+  test('prêt sans erreur : fini et conforme ; absent, en attente ou en cours : l’essai attend', () => {
+    assert.deepEqual(issueDuSolveur('pret', []), { fini: true, conforme: true, detail: 'pret' });
+    for (const etat of [null, 'absent', 'enCours']) {
+      assert.deepEqual(issueDuSolveur(etat, []), { fini: false, conforme: false, detail: String(etat) }, String(etat));
+    }
+  });
+
+  test('indisponible, annulé, ou une erreur recueillie : fini et non conforme, l’erreur nommée', () => {
+    for (const etat of ['indisponible', 'annule']) {
+      assert.deepEqual(issueDuSolveur(etat, []), { fini: true, conforme: false, detail: etat }, etat);
+    }
+    const erreurs = [{ message: 'wasm refusé' }];
+    assert.deepEqual(issueDuSolveur('pret', erreurs), { fini: true, conforme: false, detail: JSON.stringify(erreurs) });
+    assert.deepEqual(issueDuSolveur('enCours', erreurs), { fini: true, conforme: false, detail: JSON.stringify(erreurs) });
+    assert.deepEqual(issueDuSolveur('pret', null), { fini: true, conforme: false, detail: 'collecteur absent' });
   });
 });

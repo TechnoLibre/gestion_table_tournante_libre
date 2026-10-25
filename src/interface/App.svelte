@@ -8,7 +8,8 @@
   // identifiants, langue, provenance, démonstrations, format courant, version
   // du produit et sa forme Windows, chargement de la police embarquée,
   // imprimante de la plateforme, chargement de la section de la qualité, et en
-  // option le thème de départ — que src/main.js construit pour la machine et
+  // option le chargement du solveur du plancher exact et le thème de départ
+  // — que src/main.js construit pour la machine et
   // monterApp pour une épreuve : App ne choisit aucune plateforme, et ne lit
   // la version que dans ses propriétés, la même au bandeau, au titre, à
   // l'accueil et dans le bloc « À propos ».
@@ -20,10 +21,22 @@
   // l'événement : le morceau ne se charge qu'à la première ouverture de la
   // section, et une fois.
   //
+  // Le solveur du plancher exact du diagnostic (§ 5.6, § 5.10) : src/main.js
+  // passe chargerSolveur, qui importe en différé le travailleur du solveur et
+  // rend sa fabrique et l'adresse du module WebAssembly de HiGHS. App en
+  // fait le suivi (suivi_solveur.js) sur l'exécuteur (executeur_solveur.js)
+  // et son horloge, le pose au contexte sous 'solveur', lui demande la
+  // charge de l'état observable à chaque changement — le calcul ne part
+  // qu'après un délai, et seulement quand le modèle change —, et le termine
+  // au démontage. Une faute du solveur va au collecteur (reportError). Sans
+  // chargerSolveur, aucun suivi : le diagnostic garde ses planchers
+  // instantanés seuls.
+  //
   // À son initialisation, App crée une fois chacun la séance, sans racine,
   // le contrôleur de génération et la façade, et les donne aux composants par
   // le contexte de Svelte — clés 'seance', 'facade', 'generation', 'ui', 't',
-  // 'format', 'horloge', 'imprimante' et 'relireListe' —, posé de façon
+  // 'format', 'horloge', 'imprimante' et 'relireListe', et 'solveur' quand
+  // le solveur se charge —, posé de façon
   // synchrone avant que la détermination du dossier de travail, asynchrone,
   // ne rende. La façade pose la racine de la séance par changerRacine :
   // aussitôt sans question, après la réponse sinon. App lit la liste du
@@ -94,6 +107,8 @@
   import { creerPas } from './accueil/chargement.js';
   import Bandeau from './Bandeau.svelte';
   import { creerChargeurSection } from './evenement/differe.js';
+  import { creerExecuteurSolveur } from './diagnostic/executeur_solveur.js';
+  import { creerSuiviSolveur } from './diagnostic/suivi_solveur.js';
   import Evenement from './evenement/Evenement.svelte';
   import Apercu from './impression/Apercu.svelte';
   import Activite from './primitives/Activite.svelte';
@@ -136,6 +151,10 @@
     // () => Component | PromiseLike<Component> : le composant de la section
     // de la qualité, ou la promesse de son morceau.
     sectionQualite,
+    // () => Promise<{fabrique: () => Worker, urlWasm: string}> : le
+    // travailleur du solveur du plancher exact et l'adresse de son module
+    // WebAssembly ; null, aucun calcul exact.
+    chargerSolveur = null,
     themeInitial,
   } = untrack(() => dependances);
 
@@ -229,6 +248,18 @@
   setContext('format', format);
   setContext('horloge', horloge);
   setContext('imprimante', imprimante);
+  const suiviSolveur =
+    chargerSolveur === null
+      ? null
+      : creerSuiviSolveur(
+          async () => {
+            const { fabrique, urlWasm } = await chargerSolveur();
+            return creerExecuteurSolveur(fabrique, { urlWasm, horloge });
+          },
+          { horloge, signaler: (erreur) => reportError(erreur) },
+        );
+  if (suiviSolveur !== null) setContext('solveur', suiviSolveur);
+  onDestroy(() => suiviSolveur?.terminer());
 
   // Un refus de la séance ou de la façade porte un code, que l'écran
   // traduit ; toute autre erreur est une faute, qui remonte.
@@ -327,6 +358,12 @@
 
   $effect(() => {
     document.documentElement.setAttribute('data-theme', $uiApp.theme);
+  });
+
+  // Chaque charge de l'état observable va au suivi du solveur, qui ne
+  // relance rien tant que le modèle ne change pas.
+  $effect(() => {
+    suiviSolveur?.demander(etatSeance.charge);
   });
   $effect(() => {
     document.documentElement.style.fontSize = taillePoliceRacine(etatSeance.tailleTexte);

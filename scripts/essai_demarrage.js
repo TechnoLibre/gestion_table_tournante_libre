@@ -7,8 +7,10 @@
 // qu'Electron démarre sur ce système, avec ses bibliothèques, y charge la
 // page, que l'application y monte, que la détermination du dossier de
 // travail retient le mode portable, qu'un travailleur de génération naît et
-// rend son issue dans la page chargée sous file://, que la police de
-// l'interface s'y charge, que l'aperçu s'y imprime une page par feuille, que
+// rend son issue dans la page chargée sous file://, que le travailleur du
+// solveur du diagnostic y charge HiGHS et rend le plancher exact, que la
+// police de l'interface s'y charge, que l'aperçu s'y imprime une page par
+// feuille, que
 // les commandes de l'explorateur y lancent l'ouvreur du bureau sur le bon
 // dossier, et que la sortie rend les verrous.
 //
@@ -35,7 +37,13 @@
 //     feuille de style) : une page par feuille de l'aperçu, chacune aux
 //     dimensions de la sienne à TOLERANCE_PAGE_MM près ; l'aperçu se ferme ;
 //     hors de Windows et de macOS, Badges › « Ouvrir le dossier » lance
-//     xdg-open sur le dossier de la démonstration, sans refus ;
+//     xdg-open sur le dossier de la démonstration, sans refus ; la section
+//     Diagnostic de la démonstration voit sa ligne du calcul exact,
+//     [data-solveur], passer à « pret », sans erreur recueillie : le
+//     travailleur du solveur, servi depuis blob:, a chargé le module
+//     WebAssembly de HiGHS depuis file:// et rendu le calcul. Aucune
+//     démonstration ne porte de conflit d'organisation, et le plancher exact
+//     n'y apprend rien : l'essai attend l'état, non une phrase ;
 //  4. « Modifier » prend un verrou dans le dossier de l'événement, sous
 //     exe/data ; le compte d'arrêt passe à 2 000 mouvements par son champ,
 //     puis « Générer », dans la page chargée sous file://, fait naître un
@@ -422,6 +430,25 @@ async function ouvrirParLOuvreur(conteneur, commande, journal) {
 
 class EchecDEssai extends Error {}
 
+/**
+ * L'issue du calcul exact du diagnostic, lue dans la page : etat, l'état
+ * que porte la ligne [data-solveur] (null sans elle) ; erreurs, ce que le
+ * collecteur a recueilli (null sans collecteur). Fini et conforme quand la
+ * ligne est prête sans erreur ; fini et non conforme sur une erreur, un
+ * collecteur absent, un état indisponible ou annulé ; sinon pas fini,
+ * l'essai attend.
+ * @param {string|null} etat
+ * @param {unknown[]|null} erreurs
+ * @returns {{fini: boolean, conforme: boolean, detail: string}}
+ */
+export function issueDuSolveur(etat, erreurs) {
+  if (erreurs === null) return { fini: true, conforme: false, detail: 'collecteur absent' };
+  if (erreurs.length > 0) return { fini: true, conforme: false, detail: JSON.stringify(erreurs) };
+  if (etat === 'pret') return { fini: true, conforme: true, detail: etat };
+  if (etat === 'indisponible' || etat === 'annule') return { fini: true, conforme: false, detail: etat };
+  return { fini: false, conforme: false, detail: String(etat) };
+}
+
 // Imprime un constat ; un constat faux arrête la séance.
 function constater(libelle, vrai, detail) {
   console.log(`${vrai ? '[conforme]' : '[ÉCHEC]   '} ${libelle}${detail === undefined ? '' : ` : ${detail}`}`);
@@ -545,6 +572,22 @@ async function seance(application, dossiers, journalOuvreur) {
       fautes.length === 0 ? recus.join(', ') : fautes.join(' ; '),
     );
   }
+
+  // Le plancher exact de la démonstration : la section Diagnostic, puis
+  // l'état de sa ligne du calcul exact, jusqu'à « pret » ou une faute.
+  await fenetre.locator('[data-commande="section"][data-cible="diagnostic"]').click();
+  const diagnostic = fenetre.locator('[data-section="diagnostic"]');
+  await diagnostic.waitFor({ timeout: ATTENTE_MS });
+  const solveur = await attendre(async () => {
+    const etat = await diagnostic.locator('[data-solveur]').first().getAttribute('data-solveur', { timeout: ATTENTE_MS });
+    const issue = issueDuSolveur(etat, await collecteur());
+    return issue.fini ? issue : null;
+  });
+  constater(
+    'plancher exact du diagnostic calculé par le travailleur du solveur, sans erreur recueillie',
+    solveur?.conforme === true,
+    solveur?.detail ?? `rien en ${ATTENTE_MS} ms`,
+  );
 
   // 4. « Modifier », le compte d'arrêt, « Générer ».
   await fenetre.locator('[data-commande="modifier"]').first().click();

@@ -28,6 +28,15 @@ function parTourEntreParentheses(parTour) {
   return moins === plus ? ` (${plus} par tour)` : ` (de ${moins} à ${plus} selon le tour)`;
 }
 
+// Le plancher exact des collisions cumulées d'un plan sans conflit, et
+// celui de chaque tour entre parenthèses.
+const plancherExact = ({ plancher, tours, parTour }) =>
+  "tant qu'aucun conflit ne se produit, les tables imposent au moins " +
+  `${compte(plancher, 'collision cumulée', 'collisions cumulées')} ${surLesTours(tours)}${parTourEntreParentheses(parTour)}`;
+
+// « au tour 3 » ou « aux tours 2 et 3 » ; rien pour une liste vide.
+const auxToursListes = (tours) => (tours.length === 0 ? '' : ` ${auxToursNommes(tours)}`);
+
 // « au tour » ou « aux R tours ».
 const auxTours = (tours) => (tours === 1 ? 'au tour' : `aux ${tours} tours`);
 
@@ -78,6 +87,24 @@ export const TABLE = new Map([
   ['diagnostic.carte.separation', 'Séparation des organisations'],
   ['diagnostic.carte.conflits', 'Organisations en conflit'],
   ['diagnostic.carte.ensemble', "Tout l'événement"],
+  // La ligne du calcul exact sous les cartes de la section (Diagnostic.svelte)
+  // : ce qui se calcule, au tour près, et pourquoi, puis la commande qui
+  // l'arrête ; après l'arrêt, ce que le diagnostic garde.
+  [
+    'diagnostic.solveur.enCours',
+    ({ tour, tours }) => `Calcul exact du plancher des collisions… tour ${tour} sur ${tours}.`,
+  ],
+  [
+    'diagnostic.solveur.pourquoi',
+    "Il prouve le minimum de collisions cumulées qu'un plan sans conflit d'organisation peut atteindre ; " +
+      "d'ici là, le diagnostic montre les planchers instantanés.",
+  ],
+  ['diagnostic.solveur.barre', 'Tours du calcul exact résolus'],
+  ['diagnostic.solveur.annuler', 'Annuler le calcul exact'],
+  [
+    'diagnostic.solveur.annule',
+    'Calcul exact annulé : le diagnostic garde les planchers instantanés, et le calcul reprendra quand la configuration changera.',
+  ],
 
   // --- La séparation vidée de son sens (§ 7.5, § 15.4) -----------------------
   [
@@ -113,6 +140,17 @@ export const TABLE = new Map([
       ` : tant qu'aucun conflit ne se produit, au moins ${compte(plancherCumulees, 'collision cumulée', 'collisions cumulées')} ` +
       `${surLesTours(tours)}${parTourEntreParentheses(parTour)}`,
   ],
+
+  // --- Les planchers exacts du solveur (§ 5.6) --------------------------------
+  // toursSansIssue : les tours où aucun placement n'évite tout conflit
+  // d'organisation ; parTour, le plancher de chaque tour ; toursALimite,
+  // ceux que la limite de temps a arrêtés.
+  [
+    'diagnostic.conflitsInevitables',
+    ({ toursSansIssue }) => `aucun plan ne peut éviter tout conflit d'organisation ${auxToursNommes(toursSansIssue)}`,
+  ],
+  ['diagnostic.collisionsExactes', (details) => `${plancherExact(details)} : c'est le minimum exact, qu'au moins un plan sans conflit atteint`],
+  ['diagnostic.collisionsAuMoins', (details) => plancherExact(details)],
 
   // --- La redondance et les animateurs (§ 5.6) -------------------------------
   [
@@ -256,6 +294,22 @@ export const TABLE = new Map([
       (parGroupe === 0 ? "Sans le conflit, rien n'en imposerait" : `Sans le conflit, leurs planchers par organisation en prouvent ${parGroupe}`) +
       ` ; le partage des tables en impose au moins ${gain}${parGroupe === 0 ? '' : ' de plus'}, ` +
       'quel que soit le placement qui évite le conflit.',
+  ],
+  [
+    'diagnostic.concretement.conflitsInevitables',
+    ({ toursSansIssue }) =>
+      'les places des tables, une fois les réservations assises, ne suffisent pas à séparer les organisations en conflit ' +
+      `${auxToursNommes(toursSansIssue)}.`,
+  ],
+  [
+    'diagnostic.concretement.collisionsExactes',
+    "ce minimum vaut tour par tour, toutes organisations comprises ; le classement fait passer l'excédent et les rencontres " +
+      'répétées avant les collisions cumulées : la meilleure proposition peut rester au-dessus.',
+  ],
+  [
+    'diagnostic.concretement.collisionsAuMoins',
+    ({ toursALimite }) =>
+      `le calcul exact a atteint sa limite de temps${auxToursListes(toursALimite)} : ce nombre est prouvé, mais peut-être pas atteignable.`,
   ],
   // moins et plus : le plus petit et le plus grand nombre de présents d'un
   // tour.
@@ -461,6 +515,11 @@ export const TABLE = new Map([
       `${compte(conflits, 'fois', 'fois')}, deux personnes en conflit d'organisation partagent une table` +
       (imposes ? " : ce sont les conflits que les réservations imposent, et aucun placement qui les honore n'en compte moins." : '.'),
   ],
+  // Aucun plan sans conflit n'existe, et la proposition en compte.
+  [
+    'diagnostic.proposition.conflits.inevitables',
+    "Aucun plan n'évite tous les conflits d'organisation : une relance ne les fera pas tomber à zéro.",
+  ],
   // Les collisions égalent le plancher renforcé par les conflits en étoile,
   // sans aucun conflit : seul un conflit les abaisserait.
   [
@@ -656,6 +715,8 @@ export const TABLE = new Map([
     "ajouter des tables abaisse ce plancher, jusqu'à l'annuler ; lever le conflit entre ces organisations, dans la colonne " +
       "« Conflit d'organisation » des participants, le ramène aux planchers de chacune",
   ],
+  ['diagnostic.remede.conflitsInevitables', 'ajouter des tables, lever un conflit ou retirer une réservation'],
+  ['diagnostic.remede.collisionsExactes', "ajouter des tables ou des places abaisse ce plancher, lever un conflit d'organisation aussi"],
   [
     'diagnostic.remede.conflitsImposes',
     'des personnes en conflit sont réservées à une même table ; déplacer ou retirer l’une de ces réservations les sépare',

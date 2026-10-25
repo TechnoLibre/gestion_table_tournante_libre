@@ -632,10 +632,27 @@
   chaque organisation seule. La carte de la proposition choisie dit d'une
   proposition sans conflit qui l'atteint que ses collisions sont au minimum,
   et ne propose plus « Repartir d'elle » pour elles.
+- Le diagnostic calcule de lui-même le plancher exact des collisions, tour
+  par tour, toutes organisations, capacités et réservations comprises, 400
+  millisecondes après chaque changement de la configuration ; changer un nom
+  ou générer des propositions ne le relance pas. Pendant le calcul, une
+  ligne sous les cartes dit « Calcul exact du plancher des collisions… tour
+  2 sur 4. », pourquoi, et où il en est, avec un bouton « Annuler le calcul
+  exact » ; annulé, le diagnostic garde ses planchers habituels jusqu'au
+  prochain changement. Quand ce plancher dépasse ceux de chaque
+  organisation, la carte « Tout l'événement » s'ouvre sur « tant qu'aucun
+  conflit ne se produit, les tables imposent au moins 216 collisions
+  cumulées sur les 4 tours (54 par tour) : c'est le minimum exact, qu'au
+  moins un plan sans conflit atteint » ; un tour trop long à prouver, au-delà
+  de 30 secondes, donne un nombre « au moins ». Quand aucun placement ne peut
+  séparer des organisations en conflit à un tour, la carte « Organisations
+  en conflit » dit « aucun plan ne peut éviter tout conflit d'organisation
+  au tour 2 » à la place de son plancher, et la carte de la proposition
+  choisie dit qu'une relance ne fera pas tomber ses conflits à zéro.
 - Les avis des tiers livrés avec l'application, `licences/TIERS.txt`,
-  nomment le solveur HiGHS, qui servira au calcul exact du plancher des
-  collisions du diagnostic, et chaque œuvre que son module WebAssembly
-  compile, chacune avec le texte entier de sa licence.
+  nomment le solveur HiGHS, qui calcule le plancher exact des collisions du
+  diagnostic, et chaque œuvre que son module WebAssembly compile, chacune
+  avec le texte entier de sa licence.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

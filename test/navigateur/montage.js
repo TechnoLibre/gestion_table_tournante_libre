@@ -32,6 +32,13 @@
 // tel quel, et la section se monte sans état de chargement, au rendu même
 // qui l'ouvre. Une épreuve de ce chargement passe sa propre fonction, qui
 // rend une promesse.
+//
+// Le solveur du plancher exact, que src/main.js passe à App, ne l'est ici
+// que sur demande : sans l'option chargerSolveur, App n'a aucun suivi du
+// solveur, le diagnostic garde ses planchers instantanés seuls, et chaque
+// épreuve, capture comprise, se rend comme avant le solveur. Une épreuve du
+// calcul exact passe chargerSolveurReel (test/navigateur/solveur.js), ou
+// son propre chargement.
 import { mount, unmount } from 'svelte';
 import { creerExecuteurDirect } from '../../src/application/generation.js';
 import { creerHorlogePilotee } from '../../src/application/horloge.js';
@@ -131,6 +138,9 @@ export function tracer(fs) {
  * @param {() => Function | PromiseLike<Function>} [options.sectionQualite]
  *        le chargement de la section de la qualité qu'App reçoit ; sinon une
  *        fonction qui rend le composant importé d'emblée
+ * @param {null | (() => Promise<{fabrique: () => Worker, urlWasm: string}>)} [options.chargerSolveur]
+ *        le chargement du solveur du plancher exact qu'App reçoit ; null par
+ *        défaut, aucun calcul exact
  * @returns {Promise<Object>} { app, racine, fs, disque, trace, choix,
  *   horloge, presse, polices, imprimante, seance, facade, ui, erreurs(),
  *   demonter() } — choix porte, dans l'ordre, les options reçues par
@@ -155,6 +165,7 @@ export async function monterApp({
   polices = chargerPolices,
   imprimante = creerImprimanteSimulee(),
   sectionQualite = () => SectionQualite,
+  chargerSolveur = null,
 } = {}) {
   await installerCollecteur();
   await attendrePolices(document);
@@ -209,6 +220,7 @@ export async function monterApp({
       polices,
       imprimante,
       sectionQualite,
+      chargerSolveur,
       ...(theme === null ? {} : { themeInitial: theme }),
     },
   });

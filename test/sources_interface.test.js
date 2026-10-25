@@ -887,7 +887,8 @@ const ANIMATIONS_ADMISES = [
     images: 'rotation',
     mouvement: true,
     raison:
-      "le signe du chargement des résumés de la liste (§ 8.1) tourne pour dire qu'un calcul se poursuit : aucun état " +
+      "le signe du chargement des résumés de la liste (§ 8.1) et du calcul exact du diagnostic (§ 5.6) tourne pour " +
+      "dire qu'un calcul se poursuit : aucun état " +
       "n'en dépend ni n'attend sa fin, et rien ne lit son rendu",
   },
   {

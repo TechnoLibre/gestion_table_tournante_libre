@@ -28,7 +28,10 @@ module.exports = {
   directories: { output: 'dist-electron' },
   // La page construite, la coquille, et package.json, dont electron-builder
   // tire le point d'entrée. package.json ne déclarant aucune dépendance
-  // d'exécution, aucun node_modules n'entre dans le paquet.
+  // d'exécution, aucun node_modules n'entre dans le paquet. Le module
+  // WebAssembly du solveur (www/assets/highs-*.wasm) voyage avec la page :
+  // le travailleur du solveur, servi depuis blob:, le charge par son adresse
+  // file://, sans asarUnpack, canal ni protocole propre.
   files: ['www/**', 'electron/**', 'package.json'],
   artifactName: deriver(lireJson('version.json').version).nomFichier,
   // Les traductions des textes propres à Chromium (locales/*.pak) gardées

@@ -22,12 +22,32 @@
 // qu'il tire — pako, tslib, les polices standard, upng — de l'autre. La
 // police embarquée, elle, forme deux morceaux différés sans groupe : un par
 // graisse, puisque chacune a son module (src/polices).
+//
+// Le travailleur du solveur du plancher exact (src/main.js, chargerSolveur)
+// forme un morceau différé, que la page ne charge qu'au premier calcul : il
+// porte le travailleur incrusté, et highs avec lui. Le module WebAssembly de
+// HiGHS reste un actif à part, émis une fois, que highs/runtime?url et le
+// chargeur d'Emscripten désignent tous deux. Ce chargeur importe en différé
+// le module node:module de node, sous une garde qui ne vaut que sous node,
+// fausse dans la page, dans le travailleur et dans le rendu d'Electron :
+// worker.rolldownOptions.external laisse cet import inerte tel quel, sans
+// quoi le module de remplacement de Vite pour le navigateur entrerait dans
+// les modules du travailleur. Sous le serveur de développement, celui des
+// épreuves du navigateur, highs se pré-assemble dès le départ
+// (optimizeDeps.include) : découvert au premier chargement du travailleur,
+// il ferait recharger la page au milieu d'une épreuve.
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 export default defineConfig({
   base: './',
   plugins: [svelte()],
+  worker: {
+    rolldownOptions: { external: ['node:module'] },
+  },
+  optimizeDeps: {
+    include: ['highs'],
+  },
   build: {
     outDir: 'www',
     emptyOutDir: true,

@@ -124,6 +124,16 @@ const EXEMPLES_ECRAN = [
     'diagnostic.concretement.conflitsEtoile',
     { organisations: ['Club des Grèbes', 'Cercle des Pluviers', 'Atelier des Sternes'], parGroupe: 3, gain: 40 },
   ],
+  // Les planchers exacts du solveur, et la ligne du calcul exact
+  ['diagnostic.conflitsInevitables', { toursSansIssue: [2] }],
+  ['diagnostic.conflitsInevitables', { toursSansIssue: [1, 3] }],
+  ['diagnostic.concretement.conflitsInevitables', { toursSansIssue: [2, 4] }],
+  ['diagnostic.collisionsExactes', { plancher: 216, tours: 4, parTour: [54, 54, 54, 54] }],
+  ['diagnostic.collisionsExactes', { plancher: 1, tours: 1, parTour: [1] }],
+  ['diagnostic.collisionsAuMoins', { plancher: 212, tours: 4, parTour: [54, 54, 50, 54] }],
+  ['diagnostic.concretement.collisionsAuMoins', { toursALimite: [3] }],
+  ['diagnostic.concretement.collisionsAuMoins', { toursALimite: [] }],
+  ['diagnostic.solveur.enCours', { tour: 2, tours: 4 }],
   // La génération
   ['generation.avancement.texte', { fait: 1500, total: 20_000 }],
   ['generation.coeurs.disponibles', { disponibles: 8 }],

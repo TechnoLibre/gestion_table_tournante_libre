@@ -15,7 +15,12 @@
 // organisation data-donnee, un remède data-remede ; dans la section, son
 // explication data-explication et, quand il en a un, son geste data-levier ;
 // la carte de la proposition choisie porte data-proposition-choisie, son
-// genre, et chacun de ses blocs data-bloc-proposition, son nom. La valeur
+// genre, et chacun de ses blocs data-bloc-proposition, son nom ; la ligne du
+// calcul exact, data-solveur, son état. Le vrai solveur ne se monte que dans
+// les épreuves du plancher exact, qui passent chargerSolveurReel, sauf celle
+// de la progression, dont le travailleur factice ne remet un tour qu'à son
+// ordre ; les autres montent App sans solveur, sur les planchers instantanés
+// seuls. La valeur
 // attendue vient de diagnostiquer, sollicité une seconde fois sur la
 // configuration de la charge ouverte (§ 19.1), et des planchers des
 // conflits en étoile que l'application rend pour elle ; le texte, de la même
@@ -37,6 +42,7 @@ import TEXTE_TOUTES_EN_CONFLIT from '../../../test/fixtures/plan/toutes_en_confl
 import TEXTE_HUIT_TABLES_RETENU from '../../../test/fixtures/plan/huit_tables_retenu.gtt.json?raw';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { chargerSolveurReel } from '../../../test/navigateur/solveur.js';
 import { composantes, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -81,7 +87,10 @@ function quatreReserveesSurTrois() {
 
 // --- Le montage --------------------------------------------------------------------
 
+// Les montages de l'épreuve, démontés après elle. Le collecteur n'a reçu,
+// pendant l'épreuve, que les erreurs qu'elle annonce dans attendues.
 let montes = [];
+let attendues = [];
 beforeEach(async () => {
   await fixerCadre(1366, 700);
 });
@@ -90,7 +99,9 @@ afterEach(() => {
   for (const m of montes.reverse()) m.demonter();
   montes = [];
   window.scrollTo(0, 0);
-  expect(erreurs, 'erreurs reçues par le collecteur').toEqual([]);
+  const annoncees = attendues;
+  attendues = [];
+  expect(erreurs, 'erreurs reçues par le collecteur').toEqual(annoncees);
 });
 
 // Attend que l'assertion passe, le rendu de Svelte à jour.
@@ -810,5 +821,333 @@ describe('la proposition choisie, expliquée sous tout l\u{2019}événement (§ 
     expect(attendue.genre).toBe('retenu');
     await attendre(() => expect(choisieLue(section(m))).toEqual(attendue));
     expect(revision(m)).toBe(avant);
+  });
+});
+
+describe('le plancher exact du solveur (§ 5.6, § 5.10)', () => {
+  // Une charge de membres par organisation, sur des tables de capacités
+  // données ; conflits, [rang, organisations nommées].
+  function chargeOrganisations({ effectifs, capacites, tours, conflits }) {
+    const nouvelle = creerCharge({ id: 'evt-exact', nom: 'Soirée des Grèbes', siegesParDefaut: 8, tours });
+    nouvelle.participants = effectifs
+      .flatMap(([organisation, n]) => Array(n).fill(organisation))
+      .map((organisation, rang) => ({
+        id: rang + 1,
+        nom: `Grèbe${rang + 1}`,
+        prenom: 'Iris',
+        organisation,
+        courriel: null,
+        titrePressenti: null,
+        notes: null,
+        exclu: false,
+      }));
+    for (const [rang, nommees] of conflits) nouvelle.participants[rang].conflits = nommees;
+    nouvelle.tables = capacites.map((sieges, t) => ({ id: t + 1, numero: t + 1, sieges, forme: 'ronde', position: { x: 300 * t, y: 0 } }));
+    nouvelle.prochainsIds = { participant: nouvelle.participants.length + 1, table: capacites.length + 1, proposition: 1 };
+    return nouvelle;
+  }
+
+  // Trois organisations de 12, toutes en conflit, sur 9 tables de 8, quatre
+  // tours : le plancher des étoiles se tait, la somme par groupe dit 9 par
+  // tour, le solveur 54.
+  const triangle = () =>
+    chargeOrganisations({
+      effectifs: [['Club des Merles', 12], ['Cercle des Hérons', 12], ['Atelier des Loutres', 12]],
+      capacites: Array(9).fill(8),
+      tours: 4,
+      conflits: [[0, ['Cercle des Hérons', 'Atelier des Loutres']], [12, ['Atelier des Loutres']]],
+    });
+
+  // Trente-trois personnes, vingt du Club et treize du Cercle, sur des tables
+  // de 11, 11, 6 et 5 places, deux tours ; le Club nomme le Cercle, et aucune
+  // table ne les mêle sans conflit. Les 33 places sont toutes prises et
+  // aucune somme de tables ne vaut 13 : aucun plan n'évite tout conflit.
+  const vingtContreTreize = () =>
+    chargeOrganisations({
+      effectifs: [['Club des Merles', 20], ['Cercle des Hérons', 13]],
+      capacites: [11, 11, 6, 5],
+      tours: 2,
+      conflits: [[0, ['Cercle des Hérons']]],
+    });
+
+  // La charge, sa proposition n° 1 posée, écrite à la main : listes[r], les
+  // personnes de chaque table au tour r + 1, dans l'ordre des tables.
+  function avecProposition(chargeLue, listes) {
+    chargeLue.evenement.etat = 'propose';
+    chargeLue.propositions = [
+      {
+        id: 1,
+        graine: 1,
+        arret: 40,
+        historique: 1000,
+        produitVersion: V1,
+        siegesAttribues: false,
+        tables: chargeLue.tables.map(({ id }) => id),
+        capacites: chargeLue.tables.map(({ sieges }) => sieges),
+        tours: listes.length,
+        participants: chargeLue.participants.map(({ id }) => id),
+        placement: listes.map((tables) => ({ sieges: tables.map((liste) => [...liste]), reserve: [] })),
+      },
+    ];
+    chargeLue.prochainsIds.proposition = 2;
+    return chargeLue;
+  }
+
+  // Les identifiants de debut à fin, bornes comprises.
+  const ids = (debut, fin) => Array.from({ length: fin - debut + 1 }, (_, rang) => debut + rang);
+
+  // Un solveur factice : son travailleur garde chaque demande reçue et ne
+  // répond qu'à l'ordre de l'épreuve, repondre(message), au numéro de la
+  // dernière demande.
+  function solveurFactice() {
+    const demandes = [];
+    const etat = { terminaisons: 0 };
+    let travailleur = null;
+    const charger = async () => ({
+      fabrique: () => {
+        travailleur = {
+          onmessage: null,
+          onerror: null,
+          postMessage: (message) => demandes.push(message),
+          terminate: () => {
+            etat.terminaisons += 1;
+          },
+        };
+        return travailleur;
+      },
+      urlWasm: 'highs-factice.wasm',
+    });
+    const repondre = (message) => travailleur.onmessage({ data: { numero: demandes.at(-1).numero, ...message } });
+    return { charger, demandes, repondre, etat };
+  }
+
+  // La charge ouverte en lecture, App monté avec le solveur — le vrai par
+  // défaut —, sur la section du diagnostic.
+  async function ouvrirAvecSolveur(chargeLue, chargerSolveur = chargerSolveurReel) {
+    const texte = serialiser(chargeLue, { revision: 1, produitVersion: V1 });
+    const m = await monter({
+      fichiers: [{ racine: 'documents', chemin: `soiree/soiree${SUFFIXES.etat}`, texte }],
+      chargerSolveur,
+    });
+    await m.seance.ouvrir('soiree/soiree');
+    m.ui.allerA('diagnostic');
+    flushSync();
+    return m;
+  }
+
+  const ligne = (m) => section(m).querySelector('[data-solveur]');
+  const enonceDe = (racine, cle) => racine.querySelector(`[data-enonce="${cle}"]`);
+  const ecran = (cle, details) => texteDe({ textContent: tEcran(cle, details) });
+
+  // Attend un état de la ligne du calcul, le travailleur répondant hors de
+  // toute image : jusqu'à 30 s.
+  async function attendreEtat(m, etat) {
+    for (let essai = 0; essai < 1800; essai += 1) {
+      flushSync();
+      if (ligne(m).dataset.solveur === etat) return;
+      await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    }
+    expect(ligne(m).dataset.solveur).toBe(etat);
+  }
+
+  test('le triangle : rien pendant le délai, puis le calcul en cours — ce qui se calcule, pourquoi, la barre, « Annuler » —, puis la phrase exacte, au panneau comme dans la section', async () => {
+    const m = await ouvrirAvecSolveur(triangle());
+    expect(planchersConflits(charge(m))).toEqual([]);
+    expect(ligne(m).dataset.solveur).toBe('absent');
+    expect(texteDe(ligne(m))).toBe('');
+    m.horloge.avancer(399);
+    flushSync();
+    expect(ligne(m).dataset.solveur).toBe('absent');
+
+    m.horloge.avancer(1);
+    flushSync();
+    expect(ligne(m).dataset.solveur).toBe('enCours');
+    const etat = ligne(m).querySelector('[role="status"]');
+    expect(etat.getAttribute('aria-live')).toBe('polite');
+    expect(texteDe(etat)).toBe(`${ecran('diagnostic.solveur.enCours', { tour: 1, tours: 4 })} ${ecran('diagnostic.solveur.pourquoi')}`);
+    ligne(m).scrollIntoView({ block: 'center' });
+    expect(visible(etat)).toBe(true);
+    const barre = ligne(m).querySelector('[role="progressbar"]');
+    expect([barre.getAttribute('aria-valuemin'), barre.getAttribute('aria-valuemax')]).toEqual(['0', '4']);
+    expect(barre.getAttribute('aria-label')).toBe(ecran('diagnostic.solveur.barre'));
+    const annuler = ligne(m).querySelector('[data-commande="annulerSolveur"]');
+    expect(texteDe(annuler)).toBe(ecran('diagnostic.solveur.annuler'));
+    expect(enonceDe(section(m), 'diagnostic.collisionsExactes')).toBeNull();
+
+    await attendreEtat(m, 'pret');
+    expect(texteDe(ligne(m))).toBe('');
+    expect(ligne(m).querySelector('[data-commande]')).toBeNull();
+    const attendu = ecran('diagnostic.collisionsExactes', { plancher: 216, tours: 4, parTour: [54, 54, 54, 54] });
+    const li = enonceDe(section(m), 'diagnostic.collisionsExactes');
+    expect(texteDe(li.querySelector('[data-phrase]'))).toBe(attendu);
+    expect(texteDe(li.querySelector('[data-explication]'))).toContain(ecran('diagnostic.concretement.collisionsExactes', {}));
+    expect(texteDe(li.querySelector('[data-remede]'))).toBe(ecran('diagnostic.remede.collisionsExactes', {}));
+
+    // Le panneau du plan : la phrase seule, sans ligne du calcul.
+    m.ui.allerA('plan');
+    await attendre(() => expect(panneau(m)).not.toBeNull());
+    const compact = enonceDe(panneau(m), 'diagnostic.collisionsExactes');
+    expect(texteDe(compact.querySelector('[data-phrase]'))).toBe(attendu);
+    expect(compact.querySelectorAll('[data-explication], [data-remede]').length).toBe(0);
+    expect(panneau(m).querySelector('[data-solveur]')).toBeNull();
+  }, 60_000);
+
+  test('aucun plan sans conflit : la phrase de l’impossibilité remplace l’étoile des planchers instantanés', async () => {
+    const m = await ouvrirAvecSolveur(vingtContreTreize());
+    expect(planchersConflits(charge(m)).length).toBe(1);
+    await attendre(() => expect(enonceDe(section(m), 'diagnostic.conflitsEtoile')).not.toBeNull());
+    m.horloge.avancer(400);
+    await attendreEtat(m, 'pret');
+    expect(enonceDe(section(m), 'diagnostic.conflitsEtoile')).toBeNull();
+    const li = enonceDe(section(m), 'diagnostic.conflitsInevitables');
+    expect(texteDe(li.querySelector('[data-phrase]'))).toBe(ecran('diagnostic.conflitsInevitables', { toursSansIssue: [1, 2] }));
+    expect(texteDe(intituleDe(li))).toBe(ecran('diagnostic.carte.conflits'));
+    expect(texteDe(li.querySelector('[data-remede]').closest('p'))).toMatch(/^Pour changer cela/);
+  }, 60_000);
+
+  test('« Annuler » : le calcul s’arrête, la ligne le dit et prend le focus, les planchers instantanés restent, et rien ne relance tant que le modèle ne change pas', async () => {
+    const m = await ouvrirAvecSolveur(triangle());
+    m.horloge.avancer(400);
+    flushSync();
+    expect(ligne(m).dataset.solveur).toBe('enCours');
+    const avant = lus(section(m));
+    ligne(m).querySelector('[data-commande="annulerSolveur"]').click();
+    flushSync();
+    expect(ligne(m).dataset.solveur).toBe('annule');
+    expect(texteDe(ligne(m).querySelector('[role="status"]'))).toBe(ecran('diagnostic.solveur.annule'));
+    expect(ligne(m).querySelector('[data-commande]')).toBeNull();
+    // La commande disparue, le focus passe à la ligne qui dit l'annulation.
+    await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    expect(document.activeElement).toBe(ligne(m).querySelector('[role="status"]'));
+    m.horloge.avancer(60_000);
+    for (let image = 0; image < 30; image += 1) await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    flushSync();
+    expect(ligne(m).dataset.solveur).toBe('annule');
+    expect(enonceDe(section(m), 'diagnostic.collisionsExactes')).toBeNull();
+    expect(lus(section(m))).toEqual(avant);
+  }, 60_000);
+
+  test('le calcul avance : « tour k sur R », la valeur de la barre et son remplissage suivent chaque tour reçu du travailleur', async () => {
+    const factice = solveurFactice();
+    const m = await ouvrirAvecSolveur(triangle(), factice.charger);
+    m.horloge.avancer(400);
+    await attendre(() => expect(factice.demandes.length).toBe(1));
+    const { tours } = factice.demandes[0];
+    expect(tours.length).toBe(4);
+    const issue = { faisable: true, minimum: 54, auMoins: null, cause: null, duree: 1, cache: false };
+    const barre = () => ligne(m).querySelector('[role="progressbar"]');
+    ligne(m).scrollIntoView({ block: 'center' });
+    for (let faits = 0; faits <= 4; faits += 1) {
+      if (faits > 0) factice.repondre({ type: 'tour', r: tours[faits - 1].r, issue });
+      flushSync();
+      expect(ligne(m).dataset.solveur).toBe('enCours');
+      expect(texteDe(ligne(m).querySelector('[role="status"]'))).toBe(
+        `${ecran('diagnostic.solveur.enCours', { tour: Math.min(faits + 1, 4), tours: 4 })} ${ecran('diagnostic.solveur.pourquoi')}`,
+      );
+      expect(barre().getAttribute('aria-valuenow')).toBe(String(faits));
+      // Le remplissage, premier enfant de la barre, couvre faits quarts de
+      // sa largeur intérieure, au pixel près.
+      const plein = barre().firstElementChild.getBoundingClientRect().width;
+      expect(Math.abs(plein - (barre().clientWidth * faits) / 4)).toBeLessThanOrEqual(1);
+    }
+    factice.repondre({ type: 'fini' });
+    await attendreEtat(m, 'pret');
+    const li = enonceDe(section(m), 'diagnostic.collisionsExactes');
+    expect(texteDe(li.querySelector('[data-phrase]'))).toBe(ecran('diagnostic.collisionsExactes', { plancher: 216, tours: 4, parTour: [54, 54, 54, 54] }));
+  });
+
+  test('App envoie au collecteur la faute de chargement du solveur, qui devient indisponible', async () => {
+    const factice = solveurFactice();
+    const m = await ouvrirAvecSolveur(triangle(), factice.charger);
+    m.horloge.avancer(400);
+    await attendre(() => expect(factice.demandes.length).toBe(1));
+    const message = 'module WebAssembly refusé par la plateforme';
+    factice.repondre({ type: 'faute', etape: 'chargement', message, pile: '' });
+    await attendreEtat(m, 'indisponible');
+    // Le collecteur reçoit l'erreur rapportée ; le lanceur des épreuves, qui
+    // voit un écouteur d'erreurs posé, la recopie en console.error, que le
+    // collecteur reçoit aussi. Toute entrée nomme la faute.
+    expect(m.erreurs()).toContainEqual({ type: 'error', message: `solveur du plancher exact (chargement) : ${message}` });
+    for (const entree of m.erreurs()) expect(entree.message).toContain(message);
+    attendues = m.erreurs();
+  });
+
+  test('le démontage d’App en plein calcul termine le travailleur du solveur', async () => {
+    const factice = solveurFactice();
+    const m = await ouvrirAvecSolveur(triangle(), factice.charger);
+    m.horloge.avancer(400);
+    await attendre(() => expect(factice.demandes.length).toBe(1));
+    expect(ligne(m).dataset.solveur).toBe('enCours');
+    expect(factice.etat.terminaisons).toBe(0);
+    montes = montes.filter((monte) => monte !== m);
+    expect(m.erreurs()).toEqual([]);
+    m.demonter();
+    expect(factice.etat.terminaisons).toBe(1);
+  });
+
+  // Les phrases rendues d'un bloc de la carte de la proposition choisie,
+  // intitulé exclu ; [] sans ce bloc.
+  const phrasesDuBloc = (m, nom) => {
+    const bloc = section(m).querySelector(`[data-bloc-proposition="${nom}"]`);
+    return bloc === null ? [] : [...bloc.querySelectorAll('p')].map(texteDe);
+  };
+  // Les phrases d'un bloc de la proposition choisie sur les planchers
+  // instantanés seuls, comme propositionChoisie les rend sans exacts.
+  const phrasesInstantanees = (m, nom) => propositionChoisie(charge(m), { demandee: null }).blocs.find((bloc) => bloc.nom === nom)?.phrases ?? [];
+
+  test('la carte de la proposition choisie lit le plancher exact : aucun plan sans conflit, la proposition à conflits le dit dans « manque », et « tenter » ne propose plus de repartir', async () => {
+    // Quatre du Club, un du Cercle, une personne sans organisation, deux
+    // tables de 3, un tour ; le Club nomme le Cercle. Le Club, à quatre, se
+    // partage les deux tables, et le Cercle s'assoit avec deux autres :
+    // aucun plan n'évite tout conflit. Le plan assoit deux membres du Club
+    // avec le Cercle, deux avec la personne sans organisation : 2 conflits,
+    // 2 collisions, la somme par groupe ; seuls les conflits restent à
+    // reprendre.
+    const quatreContreUn = chargeOrganisations({
+      effectifs: [['Club des Merles', 4], ['Cercle des Hérons', 1], [null, 1]],
+      capacites: [3, 3],
+      tours: 1,
+      conflits: [[0, ['Cercle des Hérons']]],
+    });
+    const m = await ouvrirAvecSolveur(avecProposition(quatreContreUn, [[[1, 2, 5], [3, 4, 6]]]));
+    m.horloge.avancer(400);
+    flushSync();
+    // « Repartir d’elle », que les planchers instantanés proposent.
+    const relance = phrasesInstantanees(m, 'tenter').find(({ cle }) => cle === 'diagnostic.proposition.tenter.repartir');
+    expect(relance).toBeDefined();
+    const repartir = ecran(relance.cle, relance.details);
+    // Pendant le calcul, les planchers instantanés seuls.
+    expect(section(m).querySelector('[data-proposition-choisie]')).not.toBeNull();
+    expect(phrasesDuBloc(m, 'manque')).not.toContain(ecran('diagnostic.proposition.conflits.inevitables'));
+    expect(phrasesDuBloc(m, 'tenter')).toContain(repartir);
+
+    await attendreEtat(m, 'pret');
+    expect(phrasesDuBloc(m, 'manque')[0]).toBe(ecran('diagnostic.proposition.conflits.inevitables'));
+    expect(phrasesDuBloc(m, 'tenter')).not.toContain(repartir);
+  }, 60_000);
+
+  test('la carte de la proposition choisie lit le plancher exact : le triangle sans conflit, 54 collisions par tour, est au minimum', async () => {
+    // Chaque organisation par quatre à trois tables, aux quatre tours :
+    // 3 × 3 × 6 = 54 collisions par tour, aucun conflit.
+    const tour = Array.from({ length: 9 }, (_, table) => ids(4 * table + 1, 4 * table + 4));
+    const m = await ouvrirAvecSolveur(avecProposition(triangle(), [tour, tour, tour, tour]));
+    m.horloge.avancer(400);
+    flushSync();
+    const minimum = ecran('diagnostic.proposition.collisions.minimum');
+    expect(phrasesInstantanees(m, 'atteint').map(({ cle }) => cle)).not.toContain('diagnostic.proposition.collisions.minimum');
+    expect(phrasesDuBloc(m, 'atteint')).not.toContain(minimum);
+
+    await attendreEtat(m, 'pret');
+    expect(phrasesDuBloc(m, 'atteint')).toContain(minimum);
+  }, 60_000);
+
+  test('sans chargerSolveur, aucune ligne du calcul exact', async () => {
+    const m = await ouvrirCharge(triangle());
+    m.ui.allerA('diagnostic');
+    flushSync();
+    m.horloge.avancer(10_000);
+    flushSync();
+    expect(section(m).querySelector('[data-solveur]')).toBeNull();
+    expect(enonceDe(section(m), 'diagnostic.collisionsExactes')).toBeNull();
   });
 });

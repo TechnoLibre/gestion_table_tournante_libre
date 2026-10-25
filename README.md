@@ -198,8 +198,9 @@ L'application embarque la police **Noto Sans** (Regular et Bold), sous la
 planche de badges et à l'interface. Son texte est dans
 `public/licences/NotoSans-OFL.txt`, sa provenance dans `src/polices/PROVENANCE`.
 Les avis des paquets que la page incorpore — Svelte, pdf-lib, fontkit et ce
-qu'ils tirent, et le solveur **HiGHS** (paquet `highs`), avec les œuvres que
-son module WebAssembly compile — sont dans `public/licences/TIERS.txt`. Ces
+qu'ils tirent, et le solveur **HiGHS** (paquet `highs`), qui calcule le
+plancher exact des collisions du diagnostic, avec les œuvres que son module
+WebAssembly compile — sont dans `public/licences/TIERS.txt`. Ces
 fichiers voyagent avec la page, dans `www/licences/`.
 
 Le logo de TechnoLibre, `src/actifs/full_logo_technolibre_2023.svg` et `.png`,

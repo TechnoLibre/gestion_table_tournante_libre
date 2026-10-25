@@ -14,7 +14,9 @@
 // les modules et le code de ses morceaux, qui passent par les mêmes relevés.
 //
 // Les sorties (§ 11.1, § 14.15) : la police embarquée voyage dans deux
-// morceaux différés, un par graisse, incrustée octet pour octet ; le logo de
+// morceaux différés, un par graisse, incrustée octet pour octet ; le
+// travailleur du solveur du diagnostic, dans un morceau différé, et le
+// module WebAssembly de HiGHS, émis une fois, octet pour octet ; le logo de
 // TechnoLibre et les textes des deux licences du logiciel voyagent chacun dans
 // leur morceau différé, le PNG du logo incrusté octet pour octet ; pdf-lib et
 // fontkit, quand la page les importe, tiennent chacun leur morceau, sous le
@@ -520,7 +522,7 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
     );
   });
 
-  test('la police voyage dans deux morceaux différés, octet pour octet, et ses deux fichiers sont émis dans www/, nommés par la feuille construite ; le logo et les textes des licences voyagent chacun dans un morceau différé, le PNG octet pour octet ; aucun morceau des sorties n’est chargé ni préchargé au lancement ; les avis et les textes des licences sont dans www/licences/, et chaque paquet construit y a le sien', async () => {
+  test('la police voyage dans deux morceaux différés, octet pour octet, et ses deux fichiers sont émis dans www/, nommés par la feuille construite ; le logo et les textes des licences voyagent chacun dans un morceau différé, le PNG octet pour octet ; le travailleur du solveur voyage dans un morceau différé, et highs.wasm est émis une fois, octet pour octet ; aucun morceau des sorties n’est chargé ni préchargé au lancement ; les avis et les textes des licences sont dans www/licences/, et chaque paquet construit y a le sien', async () => {
     const sortie = mkdtempSync(join(tmpdir(), 'construction-sorties-'));
     const travailleur = releveDuTravailleur();
     try {
@@ -589,7 +591,25 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
         assert.ok(basename(morceau.fileName).startsWith(`${attendu}-`), `${morceau.fileName} : ${[...nomsDePaquets]}`);
         assert.ok(!(nomsDePaquets.has('@pdf-lib/fontkit') && nomsDePaquets.has('pdf-lib')), morceau.fileName);
       }
-      const desSorties = new Set([...morceauxDePolice, ...morceauxDActifs, ...deLaProduction.map((m) => m.fileName)]);
+      // Le travailleur du solveur du plancher exact (§ 5.6, § 5.10) : un seul
+      // morceau, différé, que src/main.js importe au premier calcul ; il
+      // incruste le travailleur, construit à part, dont les modules portent
+      // solveur_travailleur.js et le chargeur de highs.
+      const idSolveur = join(RACINE, 'src', 'interface', 'diagnostic', 'travailleur_solveur.js');
+      const duSolveur = morceaux.filter((m) => m.moduleIds.some((id) => sansRequete(id) === idSolveur));
+      assert.equal(duSolveur.length, 1, `travailleur_solveur.js dans ${duSolveur.length} morceaux`);
+      const [morceauDuSolveur] = duSolveur;
+      assert.ok(morceauDuSolveur.isDynamicEntry && !morceauDuSolveur.isEntry, `${morceauDuSolveur.fileName} n'est pas un morceau différé`);
+      const modulesDesTravailleurs = travailleur.morceaux.flatMap((m) => m.moduleIds.map(sansRequete));
+      for (const module of [join(RACINE, 'src', 'application', 'solveur_travailleur.js'), join(RACINE, 'node_modules', 'highs', 'build', 'highs.mjs')]) {
+        assert.ok(modulesDesTravailleurs.includes(module), `${relative(RACINE, module)} absent des modules des travailleurs`);
+      }
+      const desSorties = new Set([
+        ...morceauxDePolice,
+        ...morceauxDActifs,
+        ...deLaProduction.map((m) => m.fileName),
+        morceauDuSolveur.fileName,
+      ]);
 
       // Au lancement, la page charge les scripts du HTML et les imports
       // statiques de son point d'entrée, et précharge les modulepreload.
@@ -663,6 +683,15 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
         }
       }
       assert.deepEqual([...nommees].sort(), [...polices].sort(), 'polices que les feuilles nomment');
+
+      // Le module WebAssembly de HiGHS : émis une seule fois, octet pour
+      // octet celui du paquet, et aucun autre .wasm ; highs/runtime?url,
+      // dans le point d'entrée, le désigne.
+      const wasms = fichiers.filter((f) => extname(f) === '.wasm');
+      assert.equal(wasms.length, 1, `modules WebAssembly émis : ${wasms.map((f) => relative(sortie, f)).join(', ') || 'aucun'}`);
+      assert.equal(sha256(readFileSync(wasms[0])), sha256(readFileSync(join(RACINE, 'node_modules', 'highs', 'build', 'highs.wasm'))), 'highs.wasm');
+      const nomDuWasm = basename(wasms[0]);
+      assert.ok(entrees.some((m) => m.code.includes(nomDuWasm)), `${nomDuWasm} que le point d'entrée ne désigne pas`);
     } finally {
       rmSync(sortie, { recursive: true, force: true });
     }

@@ -866,9 +866,22 @@ describe('enonces : la présence par tour', () => {
 });
 
 describe('expliquer : « Concrètement » et « Pour changer cela » (§ 5.6)', () => {
-  // Le diagnostic d'une charge, ses énoncés et l'explication de chacun.
-  function explique(charge) {
-    const { diagnostic, liste } = lire(charge);
+  // Le diagnostic d'une charge, ses énoncés et l'explication de chacun ;
+  // exacts, les planchers exacts que reçoit enonces, null par défaut.
+  function explique(charge, exacts = null) {
+    const lu = lire(charge);
+    const { diagnostic } = lu;
+    const liste =
+      exacts === null
+        ? lu.liste
+        : enonces(diagnostic, {
+            numeroDe: numeroDeCharge(charge),
+            tours: charge.evenement.tours,
+            criteres: criteresDuDiagnostic(charge, diagnostic),
+            absentes: presencesPartielles(charge).length,
+            conflits: lu.conflits,
+            exacts,
+          });
     const contexte = { diagnostic, tours: charge.evenement.tours };
     return { diagnostic, liste, explications: liste.map((enonce) => expliquer(enonce, contexte)) };
   }
@@ -1134,8 +1147,19 @@ describe('expliquer : « Concrètement » et « Pour changer cela » (§ 5.6)', 
       chargeObjectifs(40, fois(4, 8), { mode: 'chacun' }),
       chargeObjectifs(40, fois(4, 8), { mode: 'minimum' }),
     ];
-    for (const charge of charges) {
-      const { liste, explications } = explique(charge);
+    // Les planchers exacts synthétiques de l'étoile : aucun plan sans
+    // conflit, un plancher exact, un plancher sous limite.
+    const ligne = (minimum, auMoins = null) => ({ minimum, auMoins });
+    const avecExacts = [
+      { sansConflit: false, toursSansIssue: [2], plancherCumulees: null, exact: false, parTour: [], toursALimite: [] },
+      { sansConflit: true, toursSansIssue: [], plancherCumulees: 40, exact: true, parTour: fois(4, ligne(10)), toursALimite: [] },
+      { sansConflit: true, toursSansIssue: [], plancherCumulees: 39, exact: false, parTour: [...fois(3, ligne(10)), ligne(null, 9)], toursALimite: [4] },
+    ];
+    const lus = [
+      ...charges.map((charge) => explique(charge)),
+      ...avecExacts.map((exacts) => explique(CONFIGURATIONS.conflitsEtoile(), exacts)),
+    ];
+    for (const { liste, explications } of lus) {
       liste.forEach((enonce, rang) => {
         const { concretement, levier } = explications[rang];
         assert.ok(concretement.length > 0, enonce.cle);
@@ -1186,6 +1210,8 @@ describe('expliquer : « Concrètement » et « Pour changer cela » (§ 5.6)', 
       'diagnostic.remede.objectifs',
       'diagnostic.remede.conflitsImposes',
       'diagnostic.remede.conflitsEtoile',
+      'diagnostic.remede.conflitsInevitables',
+      'diagnostic.remede.collisionsExactes',
     ]) {
       assert.equal(remedeAgit({ cle, details: {} }), true, cle);
     }
@@ -1200,5 +1226,187 @@ describe('expliquer : « Concrètement » et « Pour changer cela » (§ 5.6)', 
     const avant = structuredClone({ diagnostic, liste });
     for (const enonce of liste) expliquer(enonce, { diagnostic, tours: 4 });
     assert.deepEqual({ diagnostic, liste }, avant);
+  });
+});
+
+describe('enonces : les planchers exacts du solveur (§ 5.6)', () => {
+  // Les planchers exacts synthétiques, comme assemblerPlanchers les rend :
+  // parTour, le minimum de chaque tour, ou { auMoins } pour un tour arrêté
+  // à sa limite.
+  function exactsDe({ sansConflit = true, toursSansIssue = [], parTour = [], toursALimite = [] } = {}) {
+    const lus = parTour.map((valeur) => (typeof valeur === 'number' ? { minimum: valeur, auMoins: null } : { minimum: null, auMoins: valeur.auMoins }));
+    const exact = lus.every(({ minimum }) => minimum !== null);
+    return {
+      sansConflit,
+      toursSansIssue,
+      plancherCumulees: sansConflit === false ? null : lus.reduce((somme, { minimum, auMoins }) => somme + (minimum ?? auMoins ?? 0), 0),
+      exact,
+      parTour: lus,
+      toursALimite,
+    };
+  }
+
+  // Trois organisations de 12, toutes en conflit, sur 9 tables de 8, quatre
+  // tours : le plancher des étoiles se tait, la somme par groupe dit 9 par
+  // tour, le solveur 54.
+  const triangle = () =>
+    chargeDe({
+      organisations: [...fois(12, 'Club des Merles'), ...fois(12, 'Cercle des Hérons'), ...fois(12, 'Atelier des Loutres')],
+      capacites: fois(9, 8),
+      conflits: [['Cercle des Hérons', 'Atelier des Loutres'], ...fois(11, null), ['Atelier des Loutres']],
+    });
+
+  const lireAvec = (charge, exacts) => {
+    const lu = lire(charge);
+    return {
+      ...lu,
+      liste: enonces(lu.diagnostic, {
+        numeroDe: numeroDeCharge(charge),
+        tours: charge.evenement.tours,
+        criteres: criteresDuDiagnostic(charge, lu.diagnostic),
+        absentes: presencesPartielles(charge).length,
+        conflits: lu.conflits,
+        exacts,
+      }),
+    };
+  };
+
+  test('le triangle : un plancher exact au-dessus de la somme par groupe s’énonce, sa phrase, son remède, après les collisions de chaque groupe', () => {
+    const charge = triangle();
+    const { diagnostic, conflits, liste } = lireAvec(charge, exactsDe({ parTour: [54, 54, 54, 54] }));
+    assert.deepEqual(conflits, []);
+    assert.equal(diagnostic.collisions.reduce((somme, { plancherCumulees }) => somme + plancherCumulees, 0), 36);
+    const [enonce] = avecCle(liste, 'diagnostic.collisionsExactes');
+    assert.deepEqual(enonce, {
+      cle: 'diagnostic.collisionsExactes',
+      details: { plancher: 216, tours: 4, parTour: [54, 54, 54, 54] },
+      remede: { cle: 'diagnostic.remede.collisionsExactes', details: {} },
+    });
+    assert.equal(
+      texte(enonce),
+      "tant qu'aucun conflit ne se produit, les tables imposent au moins 216 collisions cumulées sur les 4 tours (54 par tour) : " +
+        "c'est le minimum exact, qu'au moins un plan sans conflit atteint",
+    );
+    assert.equal(remedeAgit(enonce.remede), true);
+    assert.match(texte(enonce.remede), /^ajouter des tables ou des places abaisse ce plancher/);
+    const ordre = cles(liste);
+    assert.ok(ordre.lastIndexOf('diagnostic.collisions') < ordre.indexOf('diagnostic.collisionsExactes'));
+    assert.deepEqual(avecCle(liste, 'diagnostic.collisionsAuMoins'), []);
+  });
+
+  test('sans gain sur la somme par groupe renforcée par les étoiles, aucun plancher exact ne s’écrit', () => {
+    const charge = CONFIGURATIONS.conflitsEtoile();
+    const { conflits } = lire(charge);
+    assert.equal(conflits[0].plancherCumulees, 32);
+    for (const parTour of [[8, 8, 8, 8], [7, 8, 8, 8]]) {
+      const { liste } = lireAvec(charge, exactsDe({ parTour }));
+      assert.deepEqual(avecCle(liste, 'diagnostic.collisionsExactes'), [], JSON.stringify(parTour));
+      assert.equal(avecCle(liste, 'diagnostic.conflitsEtoile').length, 1);
+    }
+    const { liste } = lireAvec(charge, exactsDe({ parTour: [9, 8, 8, 8] }));
+    assert.deepEqual(avecCle(liste, 'diagnostic.collisionsExactes')[0].details, { plancher: 33, tours: 4, parTour: [9, 8, 8, 8] });
+  });
+
+  test('un tour arrêté à sa limite : « au moins », la phrase sans le minimum exact, et les tours à la limite', () => {
+    const charge = triangle();
+    const exacts = exactsDe({ parTour: [54, 54, { auMoins: 50 }, 54], toursALimite: [3] });
+    const { liste } = lireAvec(charge, exacts);
+    assert.deepEqual(avecCle(liste, 'diagnostic.collisionsExactes'), []);
+    const [enonce] = avecCle(liste, 'diagnostic.collisionsAuMoins');
+    assert.deepEqual(enonce, {
+      cle: 'diagnostic.collisionsAuMoins',
+      details: { plancher: 212, tours: 4, parTour: [54, 54, 50, 54], toursALimite: [3] },
+      remede: { cle: 'diagnostic.remede.collisionsExactes', details: {} },
+    });
+    assert.equal(
+      texte(enonce),
+      "tant qu'aucun conflit ne se produit, les tables imposent au moins 212 collisions cumulées sur les 4 tours (de 50 à 54 selon le tour)",
+    );
+    // Un tour arrêté avant toute borne compte pour 0.
+    const sansBorne = lireAvec(charge, exactsDe({ parTour: [54, 54, { auMoins: null }, 54], toursALimite: [3] }));
+    assert.deepEqual(avecCle(sansBorne.liste, 'diagnostic.collisionsAuMoins')[0].details.parTour, [54, 54, 0, 54]);
+  });
+
+  test('aucun plan sans conflit : l’impossibilité s’énonce dans la carte des conflits, et les étoiles de P1 se taisent', () => {
+    const charge = CONFIGURATIONS.conflitsEtoile();
+    const { liste } = lireAvec(charge, exactsDe({ sansConflit: false, toursSansIssue: [2], parTour: [] }));
+    assert.deepEqual(avecCle(liste, 'diagnostic.conflitsEtoile'), []);
+    assert.deepEqual(avecCle(liste, 'diagnostic.collisionsExactes'), []);
+    const [enonce] = avecCle(liste, 'diagnostic.conflitsInevitables');
+    assert.deepEqual(enonce, {
+      cle: 'diagnostic.conflitsInevitables',
+      details: { toursSansIssue: [2] },
+      remede: { cle: 'diagnostic.remede.conflitsInevitables', details: {} },
+    });
+    assert.equal(texte(enonce), "aucun plan ne peut éviter tout conflit d'organisation au tour 2");
+    assert.equal(texte({ ...enonce, details: { toursSansIssue: [1, 3] } }), "aucun plan ne peut éviter tout conflit d'organisation aux tours 1 et 3");
+    assert.equal(texte(enonce.remede), 'ajouter des tables, lever un conflit ou retirer une réservation');
+    assert.equal(remedeAgit(enonce.remede), true);
+    const cartes = cartesDiagnostic(liste).map(({ genre, enonces: dedans }) => [genre, cles(dedans)]);
+    assert.deepEqual(cartes[1], ['conflits', ['diagnostic.conflitsInevitables']]);
+  });
+
+  test('aucun plan sans conflit, seulement par des réservations en conflit : aucune carte neuve, et les étoiles se taisent', () => {
+    const charge = CONFIGURATIONS.conflitsEtoile();
+    const { liste } = lireAvec(charge, exactsDe({ sansConflit: false, toursSansIssue: [] }));
+    assert.deepEqual(avecCle(liste, 'diagnostic.conflitsInevitables'), []);
+    assert.deepEqual(avecCle(liste, 'diagnostic.conflitsEtoile'), []);
+  });
+
+  test('faisabilité inconnue, ou échec : la somme prouvée s’énonce seulement quand elle existe, et les étoiles restent', () => {
+    const charge = triangle();
+    const inconnue = { ...exactsDe({ parTour: [54, 54, { auMoins: 60 }, 54], toursALimite: [3] }), sansConflit: null };
+    assert.equal(avecCle(lireAvec(charge, inconnue).liste, 'diagnostic.collisionsAuMoins').length, 1);
+    const echec = { ...exactsDe({ parTour: [54, 54, 54, 54] }), plancherCumulees: null, exact: false };
+    const { liste } = lireAvec(charge, echec);
+    assert.deepEqual([...avecCle(liste, 'diagnostic.collisionsExactes'), ...avecCle(liste, 'diagnostic.collisionsAuMoins')], []);
+  });
+
+  test('cartesDiagnostic : le plancher exact ouvre la carte de tout l’événement', () => {
+    const { liste } = lireAvec(triangle(), exactsDe({ parTour: [54, 54, 54, 54] }));
+    const cartes = cartesDiagnostic(liste);
+    const ensemble = cartes.find(({ genre }) => genre === 'ensemble');
+    assert.equal(ensemble.enonces[0].cle, 'diagnostic.collisionsExactes');
+  });
+
+  test('expliquer : le minimum tour par tour et le classement ; la limite et ses tours ; les places des tables après les réservations', () => {
+    const charge = triangle();
+    const { diagnostic, liste } = lireAvec(charge, exactsDe({ parTour: [54, 54, 54, 54] }));
+    const exactes = expliquer(avecCle(liste, 'diagnostic.collisionsExactes')[0], { diagnostic, tours: 4 });
+    assert.deepEqual(exactes, { concretement: [{ cle: 'diagnostic.concretement.collisionsExactes', details: {} }], levier: null });
+    assert.equal(
+      texte(exactes.concretement[0]),
+      "ce minimum vaut tour par tour, toutes organisations comprises ; le classement fait passer l'excédent et les rencontres " +
+        'répétées avant les collisions cumulées : la meilleure proposition peut rester au-dessus.',
+    );
+
+    const limite = lireAvec(charge, exactsDe({ parTour: [54, { auMoins: 50 }, { auMoins: 50 }, 54], toursALimite: [2, 3] }));
+    const auMoins = expliquer(avecCle(limite.liste, 'diagnostic.collisionsAuMoins')[0], { diagnostic, tours: 4 });
+    assert.deepEqual(auMoins.concretement, [{ cle: 'diagnostic.concretement.collisionsAuMoins', details: { toursALimite: [2, 3] } }]);
+    assert.equal(
+      texte(auMoins.concretement[0]),
+      'le calcul exact a atteint sa limite de temps aux tours 2 et 3 : ce nombre est prouvé, mais peut-être pas atteignable.',
+    );
+    assert.match(texte({ cle: 'diagnostic.concretement.collisionsAuMoins', details: { toursALimite: [4] } }), /au tour 4 :/);
+
+    const impossible = lireAvec(CONFIGURATIONS.conflitsEtoile(), exactsDe({ sansConflit: false, toursSansIssue: [2, 4] }));
+    const inevitables = expliquer(avecCle(impossible.liste, 'diagnostic.conflitsInevitables')[0], {
+      diagnostic: impossible.diagnostic,
+      tours: 4,
+    });
+    assert.deepEqual(inevitables.concretement, [{ cle: 'diagnostic.concretement.conflitsInevitables', details: { toursSansIssue: [2, 4] } }]);
+    assert.equal(
+      texte(inevitables.concretement[0]),
+      'les places des tables, une fois les réservations assises, ne suffisent pas à séparer les organisations en conflit aux tours 2 et 4.',
+    );
+    assert.match(texte({ cle: 'diagnostic.concretement.conflitsInevitables', details: { toursSansIssue: [1] } }), /en conflit au tour 1\.$/);
+  });
+
+  test('sans planchers exacts reçus, rien ne change', () => {
+    for (const [nom, fabrique] of Object.entries(CONFIGURATIONS)) {
+      const charge = fabrique();
+      const { liste } = lire(charge);
+      assert.deepEqual(lireAvec(charge, null).liste, liste, nom);
+    }
   });
 });

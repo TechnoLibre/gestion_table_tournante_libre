@@ -1332,7 +1332,26 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   aucun plan n'existe, et ce manque ne doit pas se dire conflit inévitable —, ni
   sous séparation décochée. Le plancher des étoiles reste le repli instantané,
   et l'épreuve croisée : sur des charges tirées, il ne dépasse jamais la somme
-  des (AC), et chaque (AC) égale le minimum d'une recherche exhaustive ;
+  des (AC), et chaque (AC) égale le minimum d'une recherche exhaustive. Le
+  diagnostic l'écrit, en tête de la carte de tout l'événement, **seulement
+  quand il dépasse** la somme des planchers par groupe renforcée par les
+  étoiles : « tant qu'aucun conflit ne se produit, les tables imposent au
+  moins 216 collisions cumulées sur les 4 tours (54 par tour) : c'est le
+  minimum exact, qu'au moins un plan sans conflit atteint », et, sous une
+  limite, la même phrase sans le minimum exact, que son explication dit
+  prouvée mais peut-être pas atteignable. Quand (A) tombe à un tour, hors
+  des tours où des personnes en conflit sont réservées à une même table —
+  l'énoncé des conflits imposés les dit déjà —, la carte « Organisations en
+  conflit » énonce « aucun plan ne peut éviter tout conflit d'organisation
+  au tour 2 », avec son remède — des tables de plus, lever un conflit ou
+  retirer une réservation —, et les étoiles se taisent : leur promesse
+  « tant qu'aucun conflit ne se produit » est vide. La carte de la
+  proposition choisie lit ses collisions contre le plus fort des deux
+  planchers pour une proposition sans conflit — au minimum quand elles
+  l'égalent, même sous une limite, une borne valide égalée étant minimale —,
+  contre la somme par groupe seule pour une proposition qui en a, et, quand
+  aucun plan n'évite tout conflit, dit qu'une relance ne les fera pas tomber
+  à zéro et ne propose plus de relancer pour eux ;
 - redondance minimale `r_min(p) = max(0, |F(p)| − G)` → « au moins 6
   organisations recroisées par personne ; avec 3 tours au lieu de 4, aucune ne
   le serait » ;
@@ -2393,6 +2412,34 @@ jamais plus de cœurs que de propositions demandées. L'avancement reste une seu
 barre, la somme des mouvements évalués de toutes les propositions ; l'annulation
 arrête tous les fils à la fois, et l'échec de l'un les arrête tous, sans
 résultat partiel.
+
+**Le plancher exact se calcule à part, et s'annule.** Les résolutions de
+HiGHS (§ 5.6) tournent dans un travailleur à part de ceux de la génération :
+une résolution est synchrone et retiendrait les résumés de la liste, et le
+solveur, chargé à la demande, n'alourdit pas le lancement. Le calcul part
+seul, **400 millisecondes après une charge qui change le modèle** — ni un
+plan, ni une proposition, ni un nom ne le relancent, et une saisie qui le
+change à chaque frappe ne lance que le dernier. Chaque résolution dispose de
+30 secondes, et un tour identique à un autre ne se résout qu'une fois.
+Pendant le calcul, la section Diagnostic dit ce qui se calcule et pourquoi —
+« Calcul exact du plancher des collisions… tour 2 sur 4. », puis ce qu'il
+prouve —, dans une région d'état que lit un lecteur d'écran, avec le signe
+d'un calcul en cours, immobile sous la préférence de mouvement réduit, une
+barre des tours résolus et la commande « Annuler le calcul exact ». Annuler
+termine le travailleur : une résolution synchrone ne s'interrompt pas
+autrement, et file:// ne donne pas la mémoire partagée qui permettrait de
+la prévenir. Le diagnostic garde alors les planchers instantanés, dit que
+le calcul exact est annulé, et ne le relance pas tant que le modèle ne
+change pas. Un modèle qui change pendant un calcul termine de même le
+travailleur, et un neuf reprend. Un filet, réarmé à chaque tour reçu, de
+deux limites plus cinq secondes, termine un calcul dont une limite ne serait
+pas tenue. Un solveur qui ne se charge pas — un module WebAssembly refusé
+par la plateforme — est indisponible pour la séance, sans nouvel essai à
+chaque frappe ; une faute de calcul ne l'est que pour sa configuration.
+Chacune va au collecteur d'erreurs, et le diagnostic garde ses planchers
+instantanés. Le calcul n'est pas suspendu pendant une génération : il
+n'occupe qu'un cœur, borné par le nombre de tours et la limite, et une
+génération, qui ne change pas le modèle, ne le relance pas.
 
 **Une commande annule une génération en cours, et elle écarte le résultat
 partiel.** L'annulation est immédiate — elle n'attend pas la fin d'une itération
@@ -7258,12 +7305,22 @@ en deux endroits, une suite de tests peut prouver qu'ils s'accordent **sans
 jamais prouver qu'ils ont raison** : les deux dérivent ensemble et les tests
 restent verts. Une seule implémentation rend ce mode de défaillance impossible.
 
-**Une exception, nommée, et une seule** : le calcul incrémental des indicateurs
-du § 5.10. Elle tient à une condition écrite — **le recalcul complet est la
-mesure**, celle dont sortent les chiffres affichés ; **l'incrémental n'existe que
-dans la boucle de recherche**, où il sert de score et ne s'affiche jamais — et à
-une épreuve qui lie les deux à la fin de chaque recherche, à cinq ordres de
-grandeur de mouvements (§ 14.10).
+**Deux exceptions, nommées, et elles seules.** La première est le calcul
+incrémental des indicateurs du § 5.10. Elle tient à une condition écrite — **le
+recalcul complet est la mesure**, celle dont sortent les chiffres affichés ;
+**l'incrémental n'existe que dans la boucle de recherche**, où il sert de score et
+ne s'affiche jamais — et à une épreuve qui lie les deux à la fin de chaque
+recherche, à cinq ordres de grandeur de mouvements (§ 14.10).
+
+La seconde est la borne des collisions d'un plan sans conflit (§ 5.6), qui
+existe en deux endroits : le plancher des conflits en étoile, calculé en
+JavaScript et instantané, et le plancher exact de chaque tour, que résout
+HiGHS. Le texte de chaque modèle s'engendre en JavaScript, et HiGHS est un
+solveur externe, comme `pdf-lib` est un écrivain externe : aucune
+arithmétique du logiciel n'est réécrite dans un second langage. Une épreuve
+recoupe les deux bornes sur des charges tirées — le plancher des étoiles ne
+dépasse jamais la somme exacte — et confronte chaque minimum exact à une
+recherche exhaustive.
 
 **La présence a une règle de lecture et une grammaire, chacune en un seul
 lieu.** Une seule fonction décide qu'une personne est présente à un tour — une
@@ -7408,7 +7465,17 @@ ainsi que s'éprouve un résultat indépendant de l'ordre d'achèvement (§ 5.7)
 importe `highs` (§ 5.6), et une garde le tient. Le texte de chaque modèle
 s'engendre en JavaScript pur (`modele_tour.js`), sans paquet, et ce que
 l'interface lit des planchers exacts (`planchers_exacts.js`) n'importe pas le
-solveur.
+solveur. Le point d'entrée de son travailleur
+(`src/interface/diagnostic/travailleur_solveur.js`) n'importe que
+l'application ; l'exécuteur qui lui parle et le suivi que le Diagnostic lit
+(`executeur_solveur.js`, `suivi_solveur.js`) n'importent pas `highs`. Seul le
+point d'entrée de la page importe ce travailleur, par un import différé : il
+forme un morceau que la page ne charge qu'au premier calcul. Il désigne aussi
+le module WebAssembly du solveur, par `highs/runtime?url` et par ce seul
+spécificateur — la garde relève tout autre import de `highs` qu'il ferait —,
+et App reçoit la fabrique du travailleur et cette adresse, comme les autres
+plateformes, par ses propriétés ; une épreuve monte App sans elles, sur les
+planchers instantanés seuls.
 
 **La frontière des couches est gardée mécaniquement**, et pas seulement par
 discipline : un test du **graphe d'imports** refuse qu'un module de `src/moteur`
@@ -8588,6 +8655,17 @@ réellement :
 Ces trois pièces sont du code de production, tenu par les mêmes épreuves que le
 reste. Ce qui reste dehors est le harnais, jamais la vérification.
 
+**Le solveur du diagnostic voyage avec la page.** Le module WebAssembly de
+HiGHS (§ 5.6), `highs.wasm`, d'environ 3,5 Mo, est émis une seule fois dans
+`www/assets/`, octet pour octet celui du paquet, et l'exécutable l'emporte
+avec la page ; le travailleur qui le charge forme un morceau différé, jamais
+chargé ni préchargé au lancement. Le test de construction tient les trois.
+Aucun canal ni protocole de la coquille n'y sert : le travailleur, incrusté
+et servi depuis `blob:`, charge le module par son adresse absolue `file://`.
+L'essai de démarrage le prouve sous la vraie coquille. Une politique de
+sécurité du contenu, que la page n'a pas aujourd'hui, devra admettre
+`'wasm-unsafe-eval'` et `worker-src blob: data:`.
+
 ---
 
 ## 15. Les configurations de démonstration
@@ -8961,8 +9039,8 @@ sa valeur soit encore relevée ; un seul reste entièrement ouvert.
    producteur — la date du document est l'horodatage du placement (§ 14.7).
    `pdfjs-dist` lit sous `node` la couche de texte, les traits et les boîtes dont
    le test dépend entièrement, et trame les pages des captures d'écran du
-   § 19.6. Le solveur destiné au plancher exact du diagnostic, `highs`
-   (highs-js, qui compile HiGHS en WebAssembly), les rejoint aux mêmes
+   § 19.6. Le solveur du plancher exact du diagnostic, `highs` (highs-js,
+   qui compile HiGHS en WebAssembly), les rejoint aux mêmes
    conditions. Toutes sont des dépendances de développement épinglées à leur
    version exacte : Vite incorpore au paquet ce que la page importe, et rien
    d'autre. Leurs avis, et ceux des œuvres que leur construction publiée

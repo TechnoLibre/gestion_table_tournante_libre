@@ -564,6 +564,29 @@ la colonne « Conflit d’organisation ». Le diagnostic se tait quand un membre
 de ces organisations est réservé à une table, et quand les conflits de plus
 de deux organisations ne passent pas tous par une seule d’entre elles.
 
+Le diagnostic va plus loin quand il le peut : 400 millisecondes après chaque
+changement de la configuration, il lance un **calcul exact** du plancher des
+collisions, tour par tour, qui tient compte de toutes les organisations, des
+capacités des tables et des réservations. Pendant ce calcul, une ligne sous
+les cartes dit « Calcul exact du plancher des collisions… tour 2 sur 4. »,
+pourquoi il se fait, et où il en est ; le bouton **« Annuler le calcul
+exact »** l’arrête, et le diagnostic garde alors ses planchers habituels
+jusqu’au prochain changement de la configuration. Changer un nom ou générer
+des propositions ne le relance pas. Quand le calcul trouve plus que les
+planchers de chaque organisation, la carte « Tout l’événement » s’ouvre sur
+une ligne comme « tant qu’aucun conflit ne se produit, les tables imposent
+au moins 216 collisions cumulées sur les 4 tours (54 par tour) : c’est le
+minimum exact, qu’au moins un plan sans conflit atteint ». Ce minimum ne
+promet pas que la meilleure proposition l’atteindra : le classement fait
+passer l’excédent et les rencontres répétées avant les collisions. Un tour
+trop long à prouver — chaque résolution dispose de 30 secondes — donne un
+nombre « au moins », prouvé mais peut-être pas atteignable. Et quand aucun
+placement ne peut séparer les organisations en conflit à un tour, la carte
+« Organisations en conflit » le dit à la place de son plancher — « aucun
+plan ne peut éviter tout conflit d’organisation au tour 2 » —, avec ce qui
+le changerait : des tables de plus, lever un conflit ou retirer une
+réservation.
+
 Sous la carte « Tout l’événement », une dernière carte, **« La proposition
 choisie »**, explique un placement : la proposition que vous montrez au plan,
 sinon le placement retenu, sinon la meilleure du classement ; elle dit
@@ -574,8 +597,10 @@ personnes différentes, sur les 28 que son plafond a priori permet » —, puis,
 pour chaque règle cochée, les collisions, les retours choisis, la diversité,
 les objectifs et les animateurs ; une collision sans retrouvailles se dit
 « toujours des paires différentes », et des collisions au plancher des
-organisations en conflit, sans aucun conflit, se disent au minimum : aucune
-relance ne les fera baisser sans créer de conflit. **Ce qui manque, et
+organisations en conflit ou au plancher exact, sans aucun conflit, se disent
+au minimum : aucune relance ne les fera baisser sans créer de conflit. Quand
+aucun plan ne peut éviter tout conflit, une proposition qui en compte le dit
+aussi : une relance ne les fera pas tomber à zéro. **Ce qui manque, et
 pourquoi** : ce qui sépare quelqu’un de son plafond a priori, partagé entre la
 place — une table incomplète, le nombre de places vides à chaque tour — et les
 revoirs — les personnes à qui il manque une rencontre, les paires qui se

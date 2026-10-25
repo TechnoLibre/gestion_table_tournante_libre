@@ -13,31 +13,41 @@
 //
 // Ce qui s'en dit se lit dans sa ligne de la table d'évaluation (evaluation,
 // propositions/modele.js), la même que le tableau des propositions écrit,
-// dans le diagnostic que la table porte et dans les planchers des conflits
-// en étoile de la charge (planchers_conflits.js) : aucune mesure ne se
-// refait ici. Les seules opérations sont des comparaisons de ces chiffres
-// entre eux, un minimum et un maximum sur les plafonds a priori des
-// personnes au minimum, la soustraction présents − places du diagnostic et
-// le plancher total des collisions, renforcé par les étoiles. Trois blocs :
+// dans le diagnostic que la table porte, dans les planchers des conflits
+// en étoile de la charge (planchers_conflits.js) et dans les planchers
+// exacts du solveur que le Diagnostic reçoit (planchers_exacts.js) : aucune
+// mesure ne se refait ici. Les seules opérations sont des comparaisons de
+// ces chiffres entre eux, un minimum et un maximum sur les plafonds a priori
+// des personnes au minimum, la soustraction présents − places du diagnostic
+// et le plancher retenu des collisions (plancherRetenu) : pour un plan sans
+// conflit d'organisation, le plus fort de la somme par groupe renforcée par
+// les étoiles et du plancher exact ; pour un plan qui en a, la somme par
+// groupe seule, ces deux planchers ne valant que sans conflit. Aucune phrase
+// ne promet que le moteur atteindra le plancher exact. Trois blocs :
 // - atteint : les rencontres minimales, puis, chacun quand sa règle compte
 //   — cochée et avec un objet, comme l'état des critères de la table le dit
 //   —, les conflits d'organisation, les collisions, les retours choisis, la
 //   diversité, les objectifs et les animateurs ; des collisions au minimum
-//   quand elles égalent le plancher renforcé par les conflits en étoile, sans
-//   aucun conflit ;
+//   quand elles égalent le plancher retenu, au-dessus de la somme par
+//   groupe, sans aucun conflit — sous une limite de temps aussi : des
+//   collisions égales à une borne valide sont minimales ;
 // - manque : l'écart au plafond a priori décomposé en ses deux parts, la
 //   place — écart d'itinéraire, places vides, plancher prouvé — et les
 //   revoirs — plus grand manque, rencontres répétées —, puis ce qui se sait
 //   de l'atteignabilité : hors d'atteinte quand le diagnostic prouve un
-//   plancher d'écart d'itinéraire, inconnue sinon ;
+//   plancher d'écart d'itinéraire, inconnue sinon ; en tête, quand le
+//   solveur prouve qu'aucun plan n'évite tout conflit hors réservations, et
+//   que la proposition en a, qu'une relance ne les fera pas tomber à zéro ;
 // - tenter : les seuls gestes qui existent, « Repartir d'elle » ou
 //   « Générer » quand une recherche peut encore réduire ce qui manque ou ce
-//   qu'une règle active compte au-dessus de son plancher, les tables quand
+//   qu'une règle active compte au-dessus de son plancher — jamais pour des
+//   conflits qu'aucun plan n'évite —, les tables quand
 //   des places vides ou des capacités différentes coûtent des rencontres ;
 //   « rien » pour les rencontres au minimum atteint.
 // Un bloc sans phrase ne s'écrit pas.
 import { premiereDuClassement } from '../../application/evaluation.js';
 import { plancherCollisionsTotal, planchersConflits } from '../../application/planchers_conflits.js';
+import { plancherRetenu } from '../../application/planchers_exacts.js';
 import { evaluation } from '../propositions/modele.js';
 
 const P = 'diagnostic.proposition';
@@ -92,19 +102,33 @@ function rencontres(mesures, plafondsAPriori) {
   return [de === a ? phrase('rencontres', { minimum, plafond: a }) : phrase('rencontres.entre', { minimum, de, a })];
 }
 
-// Le plancher des collisions cumulées contre lequel se lit la ligne : sans
-// conflit d'organisation, celui que renforcent les conflits en étoile ;
-// sinon la somme des planchers par groupe, qui vaut pour tout plan.
-function plancherCollisions(mesures, table, etoiles) {
-  return plancherCollisionsTotal(table.diagnostic.collisions, mesures.conflitsOrganisation === 0 ? etoiles : []);
+// Le plancher des collisions cumulées contre lequel se lit la ligne
+// (plancherRetenu) : sans conflit d'organisation, le plus fort de celui que
+// renforcent les conflits en étoile et du plancher exact ; sinon la somme
+// des planchers par groupe, qui vaut pour tout plan. Des conflits null —
+// aucune paire de présents en conflit — valent zéro : tout plan en est
+// exempt.
+function plancherCollisions(mesures, table, etoiles, exacts) {
+  return plancherRetenu(table.diagnostic.collisions, etoiles, exacts, { conflitsDuPlan: mesures.conflitsOrganisation ?? 0 });
 }
+
+// Vrai quand le solveur prouve qu'aucun plan n'évite tout conflit
+// d'organisation hors réservations et que la ligne compte des conflits,
+// règle comptée : une relance ne les fera pas tomber à zéro. Des tours sans
+// issue tous imposés par des réservations laissent la phrase des conflits
+// imposés le dire.
+const conflitsInevitables = (mesures, comptent, exacts) =>
+  exacts?.sansConflit === false &&
+  exacts.toursSansIssue.length > 0 &&
+  comptent.has('conflitsOrganisation') &&
+  (mesures.conflitsOrganisation ?? 0) > 0;
 
 // Ce qui est atteint. comptent : les noms des critères cochés et avec un
 // objet ; etoiles : les planchers des conflits en étoile. Un plancher du
 // diagnostic ne se dit égalé que sur un plan qui honore les réservations,
 // le domaine où il vaut. Le plancher par groupe se dit sans condition ; le
 // plancher renforcé ne vaut que sans conflit, et la phrase le dit.
-function atteint(ligne, table, charge, comptent, etoiles) {
+function atteint(ligne, table, charge, comptent, etoiles, exacts) {
   const { mesures } = ligne;
   const honore = ligne.violations.length === 0;
   const liste = [...rencontres(mesures, table.plafondsAPriori)];
@@ -123,7 +147,7 @@ function atteint(ligne, table, charge, comptent, etoiles) {
         ? phrase('collisions.aucune')
         : phrase('collisions', { collisions, paires, excedent, plancher: honore && plancher > 0 && collisions === plancher }),
     );
-    const renforce = plancherCollisions(mesures, table, etoiles);
+    const renforce = plancherCollisions(mesures, table, etoiles, exacts);
     if (honore && renforce > plancher && collisions === renforce) liste.push(phrase('collisions.minimum'));
   }
   if (comptent.has('rencontresRepetees') && charge.reglages.nouvelleTable) liste.push(phrase('retours', { retours: mesures.totalRetoursChoisis }));
@@ -203,16 +227,18 @@ function manque(ligne, table, parts, vides) {
 // quand le plan n'a aucun conflit —, ou un excédent. Au plancher renforcé, un
 // excédent garde la relance : elle vise alors les retrouvailles, que la
 // phrase des collisions chiffre, et non les collisions. Un plancher ne vaut
-// que sur un plan qui honore les réservations.
-function reglesAuDessus(ligne, table, comptent, etoiles) {
+// que sur un plan qui honore les réservations. Des conflits qu'aucun plan
+// n'évite ne gardent pas la relance : le minimum des conflits n'est pas
+// connu, et la relance ne promet rien.
+function reglesAuDessus(ligne, table, comptent, etoiles, exacts) {
   const { mesures } = ligne;
   const honore = ligne.violations.length === 0;
   const conflits = mesures.conflitsOrganisation;
-  if (comptent.has('conflitsOrganisation') && conflits !== null && conflits > 0) {
+  if (comptent.has('conflitsOrganisation') && conflits !== null && conflits > 0 && !conflitsInevitables(mesures, comptent, exacts)) {
     if (!honore || conflits !== table.diagnostic.conflitsImposes) return true;
   }
   if (comptent.has('collisionsCumulees') && mesures.collisionsCumulees > 0) {
-    const plancher = plancherCollisions(mesures, table, etoiles);
+    const plancher = plancherCollisions(mesures, table, etoiles, exacts);
     if (!honore || mesures.collisionsCumulees !== plancher || mesures.excedentCollisions > 0) return true;
   }
   return false;
@@ -228,14 +254,14 @@ function reglesAuDessus(ligne, table, comptent, etoiles) {
 // génération. Des tables pleines retirent les places vides ; le plancher
 // prouvé tient aux capacités et aux ancrages, qu'aucune relance ne
 // franchit. Au minimum atteint, « rien » ne vaut que pour les rencontres.
-function tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles) {
+function tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles, exacts) {
   if (parts === null) return [];
   const { itineraire, manque: plusGrand } = parts;
   const prouve = table.diagnostic.ecartItineraire;
   const inevitable = prouve !== null ? prouve.plancher : vides.plus > 0 ? 1 : 0;
   const parLaPlace = itineraire > inevitable;
   const liste = ligne.minimumAtteint === true ? [phrase('tenter.rien')] : [];
-  if (plusGrand > 0 || parLaPlace || reglesAuDessus(ligne, table, comptent, etoiles)) {
+  if (plusGrand > 0 || parLaPlace || reglesAuDessus(ligne, table, comptent, etoiles, exacts)) {
     const { arret } = charge.reglages.generation;
     liste.push(choisie.genre === 'retenu' ? phrase('tenter.generer', { arret }) : phrase('tenter.repartir', { proposition: choisie.id, arret }));
   }
@@ -249,8 +275,9 @@ function tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles) 
  * La proposition choisie et son explication. Ne modifie pas la charge.
  *
  * @param {Object|null} charge  la charge de l'état observable de la séance
- * @param {{demandee?: number|null}} [demande]  demandee : la proposition
- *        demandée au plan (ui.proposition)
+ * @param {{demandee?: number|null, exacts?: import('../../application/planchers_exacts.js').PlanchersExacts|null}} [demande]
+ *        demandee : la proposition demandée au plan (ui.proposition) ;
+ *        exacts : les planchers exacts du solveur, null tant qu'ils manquent
  * @returns {null|{genre: 'montree'|'retenu'|'meilleure'|'aucune'|'aucuneClassee',
  *   id: number|'retenu'|null, laquelle: {cle: string, details: Object},
  *   statut: null|{cle: string, details: Object},
@@ -262,7 +289,7 @@ function tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles) 
  *   ou fautive, null sinon ; blocs : ceux qui ont une phrase au moins, dans
  *   l'ordre atteint, manque, tenter, vides sauf pour une ligne comparable
  */
-export function propositionChoisie(charge, { demandee = null } = {}) {
+export function propositionChoisie(charge, { demandee = null, exacts = null } = {}) {
   if (charge === null) return null;
   const { table, refus } = evaluation(charge);
   if (refus !== null) return null;
@@ -276,9 +303,12 @@ export function propositionChoisie(charge, { demandee = null } = {}) {
   const vides = placesVides(table.diagnostic);
   const etoiles = planchersConflits(charge);
   const blocs = [
-    ['atteint', atteint(ligne, table, charge, comptent, etoiles)],
-    ['manque', manque(ligne, table, parts, vides)],
-    ['tenter', tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles)],
+    ['atteint', atteint(ligne, table, charge, comptent, etoiles, exacts)],
+    [
+      'manque',
+      [...(conflitsInevitables(ligne.mesures, comptent, exacts) ? [phrase('conflits.inevitables')] : []), ...manque(ligne, table, parts, vides)],
+    ],
+    ['tenter', tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles, exacts)],
   ];
   return {
     ...resultat,

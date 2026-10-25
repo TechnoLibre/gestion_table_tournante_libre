@@ -10,11 +10,11 @@
 // comme le système de fichiers, ne s'importe que d'ici. Il construit les
 // dépendances d'App — l'horloge du système, l'exécuteur de la génération sur
 // le travailleur, l'exécuteur de la vue d'ensemble de la liste sur le sien,
-// les identifiants tirés par crypto.randomUUID, les
-// démonstrations livrées nommées par le catalogue, le chargement de la
-// police embarquée, l'imprimante, le chargement de la section de la
-// qualité — et monte App dans le corps du document. Le thème de départ est
-// laissé à App, qui lit la préférence du système.
+// les identifiants tirés par crypto.randomUUID, les démonstrations livrées
+// nommées par le catalogue, le chargement de la police embarquée,
+// l'imprimante, le chargement de la section de la qualité, celui du solveur
+// du plancher exact — et monte App dans le corps du document. Le thème de
+// départ est laissé à App, qui lit la préférence du système.
 //
 // Il est le seul module qui importe le travailleur de génération, par
 // « ?worker&inline » : Vite l'inclut dans la page, que la coquille charge
@@ -42,12 +42,24 @@
 // l'application : l'erreur va au collecteur (reportError), et App se monte
 // sur les replis du système.
 //
+// Le solveur du plancher exact du diagnostic (§ 5.6, § 5.10) vit dans un
+// travailleur à part de celui de la génération, que chargerSolveur importe
+// en différé, par « ?worker&inline » : il forme un morceau que la page ne
+// télécharge qu'au premier calcul du plancher exact, jamais au lancement.
+// Son module WebAssembly, que highs/runtime?url désigne, est un actif à part
+// que la construction émet une fois : son adresse, absolue dans la page
+// construite, est la seule que le travailleur, servi depuis blob:, sache
+// charger. chargerSolveur rend la fabrique du travailleur et cette adresse,
+// dont App fait l'exécuteur du solveur. C'est le seul import de highs hors
+// de src/application/solveur_travailleur.js : il ne désigne que l'actif.
+//
 // La section de la qualité forme son propre morceau dans la construction,
 // que la page ne télécharge qu'à la première ouverture de la section :
 // chargerSectionQualite l'importe par un import différé et rend son
 // composant. L'interface ne charge aucun module elle-même ; App reçoit
 // cette fonction, et le montage des épreuves lui en passe une qui rend le
 // composant importé d'emblée.
+import urlHighs from 'highs/runtime?url';
 import { mount } from 'svelte';
 import { creerExecuteurApercu } from './application/executeur_apercu.js';
 import { creerExecuteurTravailleur } from './application/executeur_travailleur.js';
@@ -72,6 +84,10 @@ const pressePapiers = sousElectron
   : { copier: (texte) => navigator.clipboard.writeText(texte) };
 const imprimante = sousElectron ? creerImprimanteElectron(pont) : creerImprimanteWeb(window);
 const chargerSectionQualite = async () => (await import('./interface/qualite/SectionQualite.svelte')).default;
+const chargerSolveur = async () => {
+  const { default: TravailleurSolveur } = await import('./interface/diagnostic/travailleur_solveur.js?worker&inline');
+  return { fabrique: () => new TravailleurSolveur(), urlWasm: urlHighs };
+};
 
 try {
   await attendrePolices(document);
@@ -98,5 +114,6 @@ mount(App, {
     polices: chargerPolices,
     imprimante,
     sectionQualite: chargerSectionQualite,
+    chargerSolveur,
   },
 });
