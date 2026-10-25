@@ -15,11 +15,17 @@
 // tours détruit les réservations d'un tour retiré : le remède en tours reste
 // un texte.
 //
-// L'ordre est celui du § 5.6 — collisions et excédent, redondance,
-// animateurs, ancrage, écart d'itinéraire, manque de places, objectifs hors
-// d'atteinte —, précédé de ce qui vide la séparation de son sens (§ 15.4,
-// § 7.5) et suivi du plafond a priori (§ 5.5), des retours imposés (§ 5.4)
-// et des conflits d'organisation que les réservations imposent. Un plancher ne s'énonce que strictement positif : un plancher nul
+// Les planchers des conflits en étoile (planchers_conflits.js) ne sont pas
+// des champs du diagnostic : l'écran les calcule par l'application et les
+// passe à enonces, qui en pose un énoncé par étoile, après les collisions de
+// chaque groupe ; leurs chiffres sont ceux que l'application rend.
+//
+// L'ordre est celui du § 5.6 — collisions et excédent, conflits en étoile,
+// redondance, animateurs, ancrage, écart d'itinéraire, manque de places,
+// objectifs hors d'atteinte —, précédé de ce qui vide la séparation de son
+// sens (§ 15.4, § 7.5) et suivi du plafond a priori (§ 5.5), des retours
+// imposés (§ 5.4) et des conflits d'organisation que les réservations
+// imposent. Un plancher ne s'énonce que strictement positif : un plancher nul
 // laisserait croire qu'un plancher a été calculé là où il n'y en a pas.
 //
 // La présence par tour : quand une personne au moins manque un tour,
@@ -81,6 +87,17 @@ function collisions(diagnostic, tours) {
     return liste;
   });
 }
+
+// Chaque étoile de conflits d'organisation : ses organisations, centre en
+// tête, son plancher de collisions cumulées et celui de chaque tour, son
+// gain sur les planchers par groupe, et le nombre de tours. Les listes sont
+// neuves : l'énoncé ne partage rien avec ce qu'il reçoit.
+const conflitsEtoile = (conflits, tours) =>
+  conflits.map(({ organisations, plancherCumulees, parTour, gain }) => ({
+    cle: 'diagnostic.conflitsEtoile',
+    details: { organisations: [...organisations], plancherCumulees, parTour: [...parTour], gain, tours },
+    remede: remede('diagnostic.remede.conflitsEtoile'),
+  }));
 
 // La redondance minimale, quand elle est positive, et le nombre de tours qui
 // l'annule ; sans lui, ce qui la fait tenir.
@@ -236,19 +253,23 @@ function conflitsImposes({ conflitsImposes: conflits }) {
  * @param {Object} diagnostic   celui que rend diagnostiquerCharge
  * @param {{numeroDe: (table: number) => number, tours: number,
  *          criteres?: Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>,
- *          absentes?: number}} options
+ *          absentes?: number,
+ *          conflits?: Array<{organisations: string[], plancherCumulees: number, parTour: number[], gain: number}>}} options
  *        numeroDe : le numéro affiché d'un identifiant de table ; tours : le
  *        nombre de tours de l'événement ; criteres : l'état des critères
  *        (criteresDuDiagnostic), vide par défaut, et aucun plancher des
  *        objectifs ne s'écrit alors ; absentes : le nombre de personnes non
- *        exclues qui manquent un tour (presencesPartielles), 0 par défaut
+ *        exclues qui manquent un tour (presencesPartielles), 0 par défaut ;
+ *        conflits : les planchers des conflits en étoile (planchersConflits),
+ *        aucun par défaut
  * @returns {Array<{cle: string, details: Object, remede: null|{cle: string, details: Object,
  *           commande?: string, arguments?: Object}, grandeur?: string}>}
  */
-export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes = 0 }) {
+export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes = 0, conflits = [] }) {
   return [
     ...separation(diagnostic),
     ...collisions(diagnostic, tours),
+    ...conflitsEtoile(conflits, tours),
     ...planchersRetires(absentes),
     ...redondance(diagnostic, tours),
     ...animateurs(diagnostic),
@@ -285,6 +306,7 @@ const CLES_SEPARATION = new Set(['diagnostic.uneSeuleOrganisation', 'diagnostic.
 // Le genre et le groupe de la carte d'un énoncé.
 function carteDe({ cle, details }) {
   if (details.groupe !== undefined) return { genre: 'organisation', groupe: details.groupe };
+  if (cle === 'diagnostic.conflitsEtoile') return { genre: 'conflits', groupe: null };
   return { genre: CLES_SEPARATION.has(cle) ? 'separation' : 'ensemble', groupe: null };
 }
 
@@ -292,14 +314,15 @@ function carteDe({ cle, details }) {
  * Les cartes du diagnostic (§ 5.6) : les énoncés regroupés, sans en changer
  * l'ordre, par suites d'énoncés voisins de même carte — la séparation vidée
  * de son sens ('separation'), une organisation, celle de details.groupe
- * ('organisation'), ou le reste de l'événement ('ensemble'). Dans l'ordre
- * d'enonces, la séparation vient d'abord, puis une carte par organisation
- * en collision — ses collisions et son excédent —, puis l'événement : les
+ * ('organisation'), les conflits en étoile ('conflits'), ou le reste de
+ * l'événement ('ensemble'). Dans l'ordre d'enonces, la séparation vient
+ * d'abord, puis une carte par organisation en collision — ses collisions et
+ * son excédent —, puis une carte des étoiles, puis l'événement : les
  * cartes mises bout à bout redonnent la liste reçue, énoncé pour énoncé, les
  * mêmes objets. Ne modifie pas la liste.
  *
  * @param {Array<{cle: string, details: Object}>} liste  celle que rend enonces
- * @returns {Array<{genre: 'separation'|'organisation'|'ensemble', groupe: string|null,
+ * @returns {Array<{genre: 'separation'|'organisation'|'conflits'|'ensemble', groupe: string|null,
  *           enonces: Array<Object>}>}
  */
 export function cartesDiagnostic(liste) {
@@ -421,6 +444,13 @@ const CONCRETEMENT = new Map([
     },
   ],
   ['diagnostic.excedent', ({ details }) => phrase('diagnostic.concretement.excedent', { plancherExcedent: details.plancherExcedent })],
+  // parGroupe : le plancher que le diagnostic prouve pour ces organisations
+  // une à une, sans le conflit ; le gain s'y ajoute.
+  [
+    'diagnostic.conflitsEtoile',
+    ({ details: { organisations, plancherCumulees, gain } }) =>
+      phrase('diagnostic.concretement.conflitsEtoile', { organisations: [...organisations], parGroupe: plancherCumulees - gain, gain }),
+  ],
   [
     'diagnostic.planchersRetires',
     (_, { g }) => phrase('diagnostic.concretement.planchersRetires', { moins: Math.min(...g.presents), plus: Math.max(...g.presents) }),

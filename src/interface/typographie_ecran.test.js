@@ -111,6 +111,19 @@ const EXEMPLES_ECRAN = [
       ],
     },
   ],
+  [
+    'diagnostic.conflitsEtoile',
+    { organisations: ['Club des Grèbes', 'Cercle des Pluviers'], plancherCumulees: 44, parTour: [11, 11, 11, 11], gain: 44, tours: 4 },
+  ],
+  [
+    'diagnostic.conflitsEtoile',
+    { organisations: ['Club des Grèbes', 'Cercle des Pluviers', 'Atelier des Sternes'], plancherCumulees: 43, parTour: [11, 10, 11, 11], gain: 40, tours: 4 },
+  ],
+  ['diagnostic.concretement.conflitsEtoile', { organisations: ['Club des Grèbes', 'Cercle des Pluviers'], parGroupe: 0, gain: 44 }],
+  [
+    'diagnostic.concretement.conflitsEtoile',
+    { organisations: ['Club des Grèbes', 'Cercle des Pluviers', 'Atelier des Sternes'], parGroupe: 3, gain: 40 },
+  ],
   // La génération
   ['generation.avancement.texte', { fait: 1500, total: 20_000 }],
   ['generation.coeurs.disponibles', { disponibles: 8 }],

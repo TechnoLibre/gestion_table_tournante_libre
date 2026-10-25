@@ -406,6 +406,78 @@ describe('propositionChoisie : ce qui est atteint, ce qui manque, ce qu’on peu
     assert.deepEqual(propositionChoisie(charge, { demandee: 1 }).blocs[0].phrases[1], phrase('collisions', { collisions: 3, paires: 3, excedent: 0, plancher: true }));
   });
 
+  test('deux organisations en conflit : au plancher renforcé sans conflit, ses collisions sont au minimum et « Repartir d’elle » ne les vise plus ; un conflit les abaisse au plancher par groupe', () => {
+    // Trois collègues du Club des Merles, qui nomme le Cercle des Hérons, un
+    // membre ; deux tables de 3, un tour. Seul, le Club porte au moins 1
+    // collision ; séparé du Cercle, il n'a qu'une table : au moins 3.
+    const organisations = ['Club des Merles', 'Club des Merles', 'Club des Merles', 'Cercle des Hérons', null, null];
+    const enConflit = () => {
+      const charge = chargeDe({ organisations, capacites: [3, 3], tours: 1 });
+      charge.participants[0].conflits = ['Cercle des Hérons'];
+      return charge;
+    };
+    const charge = avecPropositions(enConflit(), [
+      propositionDe(enConflit(), 1, [[[1, 2, 3], [4, 5, 6]]]),
+      propositionDe(enConflit(), 2, [[[1, 2, 4], [3, 5, 6]]]),
+    ]);
+    const phrases = (choisie, nom) => choisie.blocs.find((b) => b.nom === nom).phrases;
+    const cles = (liste) => liste.map(({ cle }) => cle);
+
+    const separee = propositionChoisie(charge, { demandee: 1 });
+    const atteint = phrases(separee, 'atteint');
+    const rang = cles(atteint).indexOf(`${P}.collisions`);
+    assert.deepEqual(atteint.slice(rang, rang + 2), [
+      phrase('collisions', { collisions: 3, paires: 3, excedent: 0, plancher: false }),
+      phrase('collisions.minimum'),
+    ]);
+    assert.ok(cles(atteint).includes(`${P}.conflits.aucun`));
+    assert.deepEqual(phrases(separee, 'tenter'), [phrase('tenter.rien')]);
+
+    // Deux conflits : 1 collision, le plancher par groupe, qui vaut pour tout
+    // placement ; les conflits se reprennent par « Repartir d’elle ».
+    const melee = propositionChoisie(charge, { demandee: 2 });
+    assert.ok(phrases(melee, 'atteint').some((p) => p.cle === `${P}.collisions` && p.details.plancher === true));
+    assert.ok(!cles(phrases(melee, 'atteint')).includes(`${P}.collisions.minimum`));
+    assert.ok(cles(phrases(melee, 'tenter')).includes(`${P}.tenter.repartir`));
+
+    // Sans le conflit, le plancher reste celui du groupe : 3 collisions le
+    // dépassent, et « Repartir d’elle » les vise.
+    const sansConflit = chargeDe({ organisations, capacites: [3, 3], tours: 1 });
+    avecPropositions(sansConflit, [propositionDe(sansConflit, 1, [[[1, 2, 3], [4, 5, 6]]])]);
+    const libre = propositionChoisie(sansConflit, { demandee: 1 });
+    assert.ok(!cles(phrases(libre, 'atteint')).includes(`${P}.collisions.minimum`));
+    assert.ok(cles(phrases(libre, 'tenter')).includes(`${P}.tenter.repartir`));
+  });
+
+  test('un plan qui porte des conflits, à collisions égales au plancher renforcé : jamais « au minimum », ce plancher ne vaut que sans conflit', () => {
+    // Trois membres du Club des Merles, qui nomme le Cercle des Hérons, un
+    // membre ; deux personnes sans organisation ; tables de 4 et de 2, un
+    // tour. Séparé du Cercle, le Club n'a qu'une table : au moins 3
+    // collisions. Le plan assoit les quatre ensemble : 3 collisions, autant
+    // que ce plancher, et 3 conflits.
+    const charge = chargeDe({ organisations: ['Club des Merles', 'Club des Merles', 'Club des Merles', 'Cercle des Hérons', null, null], capacites: [4, 2], tours: 1 });
+    charge.participants[0].conflits = ['Cercle des Hérons'];
+    avecPropositions(charge, [propositionDe(charge, 1, [[[1, 2, 3, 4], [5, 6]]])]);
+    const atteint = propositionChoisie(charge, { demandee: 1 }).blocs.find((b) => b.nom === 'atteint').phrases;
+    assert.ok(atteint.some((p) => p.cle === `${P}.conflits` && p.details.conflits === 3));
+    assert.ok(atteint.some((p) => p.cle === `${P}.collisions` && p.details.collisions === 3));
+    assert.ok(!atteint.some(({ cle }) => cle === `${P}.collisions.minimum`));
+  });
+
+  test('un plan sans conflit, au plancher renforcé, qui viole une réservation hors de l’étoile : jamais « au minimum », la phrase ne vaut que sur un plan qui honore les réservations', () => {
+    // La charge du Club des Merles contre le Cercle des Hérons, tables de 3 ;
+    // la personne 5, sans organisation, est réservée à la table 1, et le plan
+    // l'assoit à la table 2.
+    const charge = chargeDe({ organisations: ['Club des Merles', 'Club des Merles', 'Club des Merles', 'Cercle des Hérons', null, null], capacites: [3, 3], tours: 1 });
+    charge.participants[0].conflits = ['Cercle des Hérons'];
+    charge.reservations = [{ participant: 5, table: 1, siege: null, portee: 'tous', tour: null }];
+    avecPropositions(charge, [propositionDe(charge, 1, [[[1, 2, 3], [4, 5, 6]]])]);
+    const atteint = propositionChoisie(charge, { demandee: 1 }).blocs.find((b) => b.nom === 'atteint').phrases;
+    assert.ok(atteint.some(({ cle }) => cle === `${P}.conflits.aucun`));
+    assert.ok(atteint.some((p) => p.cle === `${P}.collisions` && p.details.collisions === 3));
+    assert.ok(!atteint.some(({ cle }) => cle === `${P}.collisions.minimum`));
+  });
+
   test('un objectif et des animateurs, critères comptés : leur phrase chacun ; critère décoché, la phrase se tait, la mesure restant dans la ligne', () => {
     const objectifs = (respecterObjectifs) => {
       const charge = chargeDe({ organisations: sans(6), capacites: [3, 3], tours: 2, reglages: { respecterObjectifs } });
@@ -480,6 +552,10 @@ describe('propositionChoisie : les phrases à l’écran (§ 5.6)', () => {
     assert.match(t(`${P}.tenter.repartir`, { proposition: 7, arret: 150000 }), /150\u{202F}000|150\u{00A0}000|150 000/u);
     assert.doesNotMatch(t(`${P}.tenter.tables`), /aucune relance/);
     assert.match(t(`${P}.tenter.tables`), /si leurs capacités diffèrent alors, le diagnostic dit l'écart d'itinéraire qui demeure/);
+    assert.equal(
+      t(`${P}.collisions.minimum`),
+      "Ses collisions sont au minimum : aucune relance ne les fera baisser sans créer de conflit d'organisation.",
+    );
     assert.match(t(`${P}.manque.horsAtteinte`, { mobiles: 5 }), /au moins 5 mobiles/);
     assert.doesNotMatch(t(`${P}.manque.horsAtteinte`, { mobiles: 5 }), /ni le contraire/);
     assert.equal(

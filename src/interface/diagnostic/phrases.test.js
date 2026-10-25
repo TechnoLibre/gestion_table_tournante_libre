@@ -14,6 +14,7 @@ import { describe, test } from '../../../test/lanceur.js';
 import { diagnostiquerCharge } from '../../application/diagnostic.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { presencesPartielles } from '../../application/places.js';
+import { planchersConflits } from '../../application/planchers_conflits.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { diagnostiquer } from '../../moteur/diagnostic.js';
@@ -80,13 +81,19 @@ function chargeObjectifs(n, autres, { mode = null, respecter = true } = {}) {
 }
 
 // Le diagnostic d'une charge, par l'application, et ses énoncés, sous l'état
-// des critères que l'écran lit pour les objectifs.
+// des critères que l'écran lit pour les objectifs et les planchers des
+// conflits en étoile que l'écran lui passe.
 function lire(charge) {
   const { diagnostic, erreur } = diagnostiquerCharge(charge);
   assert.equal(erreur, null);
   const criteres = criteresDuDiagnostic(charge, diagnostic);
   const absentes = presencesPartielles(charge).length;
-  return { diagnostic, liste: enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours, criteres, absentes }) };
+  const conflits = planchersConflits(charge);
+  return {
+    diagnostic,
+    conflits,
+    liste: enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours, criteres, absentes, conflits }),
+  };
 }
 
 const cles = (liste) => liste.map(({ cle }) => cle);
@@ -143,6 +150,16 @@ const CONFIGURATIONS = {
       organisations: ['Club des Merles', 'Cercle des Hérons', ...fois(4, null)],
       capacites: [3, 3],
       ancres: [[1, 1], [2, 1]],
+      conflits: [['Cercle des Hérons']],
+    }),
+  // Le Club des Merles, six membres, nomme le Cercle des Hérons, quatre :
+  // quatre tables de 3, quatre tours. Seules, les deux organisations
+  // portent au moins 2 collisions par tour ; séparées par le conflit, au
+  // moins 8 (deux tables pour le Club, deux pour le Cercle : 6 + 2).
+  conflitsEtoile: () =>
+    chargeDe({
+      organisations: [...fois(6, 'Club des Merles'), ...fois(4, 'Cercle des Hérons')],
+      capacites: fois(4, 3),
       conflits: [['Cercle des Hérons']],
     }),
   // Douze personnes d'une seule organisation, séparation active.
@@ -208,6 +225,18 @@ const CHAMPS = [
           details: { groupe: ligne.groupe, plancherExcedent: ligne.plancherExcedent },
           remede: remedeCollisions(ligne),
         })),
+  },
+  {
+    // Les planchers des conflits en étoile, que l'application calcule à
+    // part du diagnostic : une ligne par étoile, après les collisions de
+    // chaque groupe.
+    champ: 'planchersConflits',
+    attendus: (_d, tours, _numeroDe, conflits) =>
+      conflits.map(({ organisations, plancherCumulees, parTour, gain }) => ({
+        cle: 'diagnostic.conflitsEtoile',
+        details: { organisations, plancherCumulees, parTour, gain, tours },
+        remede: { cle: 'diagnostic.remede.conflitsEtoile', details: {} },
+      })),
   },
   {
     champ: 'redondanceMinimale',
@@ -339,8 +368,9 @@ describe('enonces : chaque champ a son énoncé', () => {
       const numeroDe = numeroDeCharge(charge);
       // Le moteur, sollicité une seconde fois, sur la même configuration.
       const moteur = diagnostiquer(configurationDepuisCharge(charge));
+      const conflits = planchersConflits(charge);
       const attendue = CHAMPS.flatMap(({ champ, attendus }) => {
-        const lignes = attendus(moteur, charge.evenement.tours, numeroDe);
+        const lignes = attendus(moteur, charge.evenement.tours, numeroDe, conflits);
         if (lignes.length > 0 && !(champ === 'plafondAPriori' && moteur.plafondAPriori.repartition.length === 0)) {
           exerces.add(champ);
         }
@@ -441,6 +471,50 @@ describe('enonces : les phrases du § 5.6', () => {
       assert.equal(lu.diagnostic.collisions.length > 0, avecCollisions, cle);
       for (const ligne of lu.diagnostic.collisions) assert.equal(ligne.plancherExcedent, null, `${cle} : ${ligne.groupe}`);
     }
+  });
+
+  test('conflits en étoile : deux organisations de 20 et 13, 22 tables de 8 — au moins 44 collisions cumulées, 11 par tour, et leur remède', () => {
+    const charge = chargeDe({
+      organisations: [...fois(20, 'Club des Merles'), ...fois(13, 'Cercle des Hérons')],
+      capacites: fois(22, 8),
+      conflits: [['Cercle des Hérons']],
+    });
+    const { liste } = lire(charge);
+    const [enonce] = avecCle(liste, 'diagnostic.conflitsEtoile');
+    assert.deepEqual(enonce, {
+      cle: 'diagnostic.conflitsEtoile',
+      details: { organisations: ['Club des Merles', 'Cercle des Hérons'], plancherCumulees: 44, parTour: [11, 11, 11, 11], gain: 44, tours: 4 },
+      remede: { cle: 'diagnostic.remede.conflitsEtoile', details: {} },
+    });
+    assert.equal(
+      texte(enonce),
+      "les organisations « Club des Merles » et « Cercle des Hérons » ne peuvent jamais partager une table : tant qu'aucun conflit " +
+        'ne se produit, au moins 44 collisions cumulées sur les 4 tours (11 par tour)',
+    );
+    assert.match(texte(enonce.remede), /^ajouter des tables abaisse ce plancher/);
+    assert.match(texte(enonce.remede), /lever le conflit entre ces organisations/);
+    assert.equal(remedeAgit(enonce.remede), true);
+    // Aucun groupe n'a de plancher : l'étoile est le seul énoncé de
+    // collisions.
+    assert.deepEqual(avecCle(liste, 'diagnostic.collisions'), []);
+  });
+
+  test('conflits en étoile : un centre et trois branches, un plancher qui varie selon le tour, un seul tour', () => {
+    const etoile = (details) => texte({ cle: 'diagnostic.conflitsEtoile', details });
+    assert.equal(
+      etoile({ organisations: ['Club des Merles', 'Cercle des Hérons', 'Atelier des Loutres', 'Société des Castors'], plancherCumulees: 96, parTour: [24, 24, 24, 24], gain: 76, tours: 4 }),
+      "l'organisation « Club des Merles » ne peut jamais partager une table avec « Cercle des Hérons », « Atelier des Loutres » ou " +
+        "« Société des Castors » : tant qu'aucun conflit ne se produit, au moins 96 collisions cumulées sur les 4 tours (24 par tour)",
+    );
+    assert.match(etoile({ organisations: ['Club des Merles', 'Cercle des Hérons'], plancherCumulees: 43, parTour: [11, 10, 11, 11], gain: 43, tours: 4 }), /au moins 43 collisions cumulées sur les 4 tours \(de 10 à 11 selon le tour\)$/);
+    assert.match(etoile({ organisations: ['Club des Merles', 'Cercle des Hérons'], plancherCumulees: 1, parTour: [1], gain: 1, tours: 1 }), /au moins 1 collision cumulée sur le tour$/);
+  });
+
+  test('sans planchers des conflits reçus, aucun énoncé en étoile', () => {
+    const charge = CONFIGURATIONS.conflitsEtoile();
+    const { diagnostic } = diagnostiquerCharge(charge);
+    assert.deepEqual(avecCle(enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: 4 }), 'diagnostic.conflitsEtoile'), []);
+    assert.equal(avecCle(lire(charge).liste, 'diagnostic.conflitsEtoile').length, 1);
   });
 
   test('deux membres réservés à une même table : le remède redistribue, aucune table ne suffit', () => {
@@ -668,6 +742,16 @@ describe('cartesDiagnostic : une carte par organisation (§ 5.6, § 12.7)', () =
       ]),
       ['ensemble', null, reste],
     ]);
+  });
+
+  test('conflits en étoile : une carte à eux, après celles des organisations, avant tout l\u{2019}événement', () => {
+    const { liste } = lire(CONFIGURATIONS.conflitsEtoile());
+    const cartes = formes(cartesDiagnostic(liste));
+    assert.deepEqual(cartes.slice(0, 2), [
+      ['organisation', 'Club des Merles', ['diagnostic.collisions']],
+      ['conflits', null, ['diagnostic.conflitsEtoile']],
+    ]);
+    assert.deepEqual(cartes.slice(2).map(([genre]) => genre), ['ensemble']);
   });
 
   test('l\u{2019}excédent suit les collisions de son groupe, dans la même carte', () => {
@@ -1067,6 +1151,29 @@ describe('expliquer : « Concrètement » et « Pour changer cela » (§ 5.6)', 
     assert.deepEqual([...cles].filter((cle) => !servies.has(cle)), []);
   });
 
+  test('conflits en étoile : le partage des tables, le plancher de chaque organisation seule, puis ce que le conflit ajoute', () => {
+    const lu = explique(CONFIGURATIONS.conflitsEtoile());
+    const { concretement, levier } = explicationDe(lu, 'diagnostic.conflitsEtoile');
+    assert.deepEqual(concretement, [
+      { cle: 'diagnostic.concretement.conflitsEtoile', details: { organisations: ['Club des Merles', 'Cercle des Hérons'], parGroupe: 8, gain: 24 } },
+    ]);
+    assert.equal(levier, null);
+    assert.equal(
+      texte(concretement[0]),
+      "aucun membre de « Club des Merles » ne s'assoit à une table où se trouve un membre de « Cercle des Hérons » : à chaque tour, " +
+        'les tables se partagent entre les deux organisations, et chacune se serre sur sa part. Sans le conflit, leurs planchers par ' +
+        "organisation en prouvent 8 ; le partage des tables en impose au moins 24 de plus, quel que soit le placement qui évite le conflit.",
+    );
+    const etoile = (details) => texte({ cle: 'diagnostic.concretement.conflitsEtoile', details });
+    assert.equal(
+      etoile({ organisations: ['Club des Merles', 'Cercle des Hérons', 'Atelier des Loutres'], parGroupe: 0, gain: 1 }),
+      "aucun membre de « Club des Merles » ne s'assoit à une table où se trouve un membre de « Cercle des Hérons » ou " +
+        "« Atelier des Loutres » : à chaque tour, les tables se partagent entre « Club des Merles » d'un côté et les autres, qui " +
+        "peuvent s'y mêler, de l'autre, et chaque côté se serre sur sa part. Sans le conflit, rien n'en imposerait ; le partage " +
+        'des tables en impose au moins 1, quel que soit le placement qui évite le conflit.',
+    );
+  });
+
   test('remedeAgit : vrai pour un remède qui dit un geste, faux pour un constat ou l\u{2019}absence de remède', () => {
     for (const cle of [
       'diagnostic.remede.separation',
@@ -1078,6 +1185,7 @@ describe('expliquer : « Concrètement » et « Pour changer cela » (§ 5.6)', 
       'diagnostic.remede.places',
       'diagnostic.remede.objectifs',
       'diagnostic.remede.conflitsImposes',
+      'diagnostic.remede.conflitsEtoile',
     ]) {
       assert.equal(remedeAgit({ cle, details: {} }), true, cle);
     }

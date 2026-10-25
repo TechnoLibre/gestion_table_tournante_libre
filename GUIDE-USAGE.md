@@ -552,6 +552,18 @@ plus grandes, ou un tour de plus, pour le plafond, une table de plus pour une
 organisation trop nombreuse. Une ligne qu’aucun geste ne change le dit sans
 amorce.
 
+Quand des **organisations en conflit** ne peuvent jamais partager une table,
+une carte « Organisations en conflit » chiffre ce que ce partage coûte. Avec
+deux organisations de 20 et 13 personnes sur 22 tables de 8 : « les
+organisations « A » et « B » ne peuvent jamais partager une table : tant
+qu’aucun conflit ne se produit, au moins 44 collisions cumulées sur les 4
+tours (11 par tour) », alors que chacune, seule, s’assoirait sans collision.
+Concrètement, chaque tour partage les tables entre elles, et chacune se serre
+sur sa part ; pour changer cela, des tables de plus, ou lever le conflit dans
+la colonne « Conflit d’organisation ». Le diagnostic se tait quand un membre
+de ces organisations est réservé à une table, et quand les conflits de plus
+de deux organisations ne passent pas tous par une seule d’entre elles.
+
 Sous la carte « Tout l’événement », une dernière carte, **« La proposition
 choisie »**, explique un placement : la proposition que vous montrez au plan,
 sinon le placement retenu, sinon la meilleure du classement ; elle dit
@@ -561,12 +573,14 @@ son plafond a priori — par exemple « Le moins bien servi rencontre 23
 personnes différentes, sur les 28 que son plafond a priori permet » —, puis,
 pour chaque règle cochée, les collisions, les retours choisis, la diversité,
 les objectifs et les animateurs ; une collision sans retrouvailles se dit
-« toujours des paires différentes ». **Ce qui manque, et pourquoi** : ce qui
-sépare quelqu’un de son plafond a priori, partagé entre la place — une table
-incomplète, le nombre de places vides à chaque tour — et les revoirs — les
-personnes à qui il manque une rencontre, les paires qui se croisent deux fois.
-Quand le diagnostic prouve qu’aucun placement n’atteint le plafond a priori
-de tout le monde, la carte le dit « hors d’atteinte ».
+« toujours des paires différentes », et des collisions au plancher des
+organisations en conflit, sans aucun conflit, se disent au minimum : aucune
+relance ne les fera baisser sans créer de conflit. **Ce qui manque, et
+pourquoi** : ce qui sépare quelqu’un de son plafond a priori, partagé entre la
+place — une table incomplète, le nombre de places vides à chaque tour — et les
+revoirs — les personnes à qui il manque une rencontre, les paires qui se
+croisent deux fois. Quand le diagnostic prouve qu’aucun placement n’atteint le
+plafond a priori de tout le monde, la carte le dit « hors d’atteinte ».
 **Ce qu’on peut tenter** : « Repartir d’elle » avec un compte d’arrêt plus
 élevé quand des revoirs, la place ou une règle cochée coûtent plus que
 l’inévitable, les tables quand ce sont les places vides — des tables pleines

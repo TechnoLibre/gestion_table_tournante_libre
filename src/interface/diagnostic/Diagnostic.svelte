@@ -5,17 +5,18 @@
   // Le diagnostic de la configuration (§ 2.1 étape 8, § 5.6) : ce que la
   // configuration rend inévitable, combien, et ce qui le rendrait évitable.
   // Il se calcule sur la charge de l'état observable à chaque charge écrite,
-  // par diagnostiquerCharge, et s'énonce par phrases.js : le composant ne
-  // fait que traduire. Regarder n'écrit jamais (§ 8.4) : il se lit en
-  // lecture comme sur un plan bloqué.
+  // par diagnostiquerCharge, avec les planchers des conflits en étoile
+  // (planchersConflits), et s'énonce par phrases.js : le composant ne fait
+  // que traduire. Regarder n'écrit jamais (§ 8.4) : il se lit en lecture
+  // comme sur un plan bloqué.
   //
-  // Les énoncés se regroupent par cartesDiagnostic, sans changer d'ordre :
-  // la séparation vidée de son sens, une carte par organisation en
-  // collision, puis le reste de l'événement. Chaque groupe a son intitulé,
-  // qui nomme sa liste (aria-labelledby) : celui d'une organisation est sa
-  // pastille, de la teinte que teintesOrganisations donne à son rang sur
-  // toute la liste des participants, exclus compris, et porte la donnée
-  // [data-donnee] ; les autres, un intertitre.
+  // Les énoncés se regroupent par cartesDiagnostic, sans changer d'ordre : la
+  // séparation vidée de son sens, une carte par organisation en collision,
+  // celle des organisations en conflit, puis le reste de l'événement. Chaque
+  // groupe a son intitulé, qui nomme sa liste (aria-labelledby) : celui d'une
+  // organisation est sa pastille, de la teinte que teintesOrganisations donne
+  // à son rang sur toute la liste des participants, exclus compris, et porte
+  // la donnée [data-donnee] ; les autres, un intertitre.
   //
   // compact : la forme du panneau latéral du plan, que SectionPlan monte
   // dans [data-panneau-diagnostic] — une carte titrée, dont les groupes se
@@ -51,6 +52,7 @@
   import { getContext } from 'svelte';
   import { diagnostiquerCharge } from '../../application/diagnostic.js';
   import { presencesPartielles } from '../../application/places.js';
+  import { planchersConflits } from '../../application/planchers_conflits.js';
   import { teintesOrganisations } from '../organisations.js';
   import Carte from '../primitives/Carte.svelte';
   import { actionRemede } from '../primitives/commande.js';
@@ -61,6 +63,13 @@
   import { propositionChoisie } from './proposition.js';
 
   let { compact = false } = $props();
+
+  // L'intertitre de chaque carte que ne nomme pas une organisation.
+  const INTERTITRES = new Map([
+    ['separation', 'diagnostic.carte.separation'],
+    ['conflits', 'diagnostic.carte.conflits'],
+    ['ensemble', 'diagnostic.carte.ensemble'],
+  ]);
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -77,6 +86,7 @@
           tours: charge.evenement.tours,
           criteres: criteresDuDiagnostic(charge, resultat.diagnostic),
           absentes: presencesPartielles(charge).length,
+          conflits: planchersConflits(charge),
         }),
   );
   const cartes = $derived(cartesDiagnostic(liste));
@@ -113,7 +123,7 @@
   <svelte:element this={balise} {id} class="intitule" class:intertitre={carte.genre !== 'organisation'}>
     {#if carte.genre === 'organisation'}<span class="donnee" data-donnee
         ><Pastille sorte="organisation" valeur={rangs.get(carte.groupe) ?? null} libelle={carte.groupe} /></span
-      >{:else if carte.genre === 'separation'}{t('diagnostic.carte.separation')}{:else}{t('diagnostic.carte.ensemble')}{/if}
+      >{:else}{t(INTERTITRES.get(carte.genre))}{/if}
   </svelte:element>
   <ul aria-labelledby={id}>
     {#each carte.enonces as enonce, n (n)}

@@ -17,11 +17,13 @@
 // la carte de la proposition choisie porte data-proposition-choisie, son
 // genre, et chacun de ses blocs data-bloc-proposition, son nom. La valeur
 // attendue vient de diagnostiquer, sollicité une seconde fois sur la
-// configuration de la charge ouverte (§ 19.1) ; le texte, de la même
+// configuration de la charge ouverte (§ 19.1), et des planchers des
+// conflits en étoile que l'application rend pour elle ; le texte, de la même
 // traduction que celle de l'application. Les noms d'épreuve sont inventés.
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { flushSync } from 'svelte';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
+import { planchersConflits } from '../../application/planchers_conflits.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { diagnostiquer } from '../../moteur/diagnostic.js';
@@ -158,11 +160,16 @@ function lus(racine) {
   });
 }
 
-// Les énoncés attendus pour la charge, du moteur sollicité une seconde fois ;
-// avecRemede : la forme complète, qui écrit le texte du remède.
+// Les énoncés de la charge, du moteur sollicité une seconde fois, avec les
+// planchers des conflits en étoile que l'écran passe.
+const enoncesDe = (chargeLue, diagnostic) =>
+  enonces(diagnostic, { numeroDe: numeroDeCharge(chargeLue), tours: chargeLue.evenement.tours, conflits: planchersConflits(chargeLue) });
+
+// Les énoncés attendus pour la charge ; avecRemede : la forme complète, qui
+// écrit le texte du remède.
 function attendus(chargeLue, { avecRemede }) {
   const diagnostic = diagnostiquer(configurationDepuisCharge(chargeLue));
-  const liste = enonces(diagnostic, { numeroDe: numeroDeCharge(chargeLue), tours: chargeLue.evenement.tours });
+  const liste = enoncesDe(chargeLue, diagnostic);
   return liste.map(({ cle, details, remede }) => ({
     cle,
     groupe: details.groupe ?? null,
@@ -198,7 +205,7 @@ function carteDe(element) {
 // sollicité une seconde fois.
 function cartesAttendues(chargeLue) {
   const diagnostic = diagnostiquer(configurationDepuisCharge(chargeLue));
-  const liste = enonces(diagnostic, { numeroDe: numeroDeCharge(chargeLue), tours: chargeLue.evenement.tours });
+  const liste = enoncesDe(chargeLue, diagnostic);
   return cartesDiagnostic(liste).map(({ genre, groupe, enonces: dedans }) => ({ genre, groupe, cles: dedans.map(({ cle }) => cle) }));
 }
 
@@ -472,6 +479,51 @@ describe('le diagnostic en cartes (§ 5.6, § 12.7)', () => {
   });
 });
 
+describe('les conflits en étoile (§ 5.6)', () => {
+  // Six membres du Club des Merles, qui nomme le Cercle des Hérons, quatre
+  // membres, et deux personnes sans organisation : quatre tables de 3.
+  function chargeEtoile() {
+    const etoile = chargeDouze((p) => (p < 6 ? 'Club des Merles' : p < 10 ? 'Cercle des Hérons' : null));
+    etoile.participants[0].conflits = ['Cercle des Hérons'];
+    return etoile;
+  }
+
+  test('une carte « Organisations en conflit » après celle du Club, avant tout l’événement : l’énoncé seul au panneau du plan, expliqué dans la section', async () => {
+    const m = await ouvrirCharge(chargeEtoile());
+    const conflits = planchersConflits(charge(m));
+    expect(conflits.map(({ organisations }) => organisations)).toEqual([['Club des Merles', 'Cercle des Hérons']]);
+    const attendues = cartesAttendues(charge(m));
+    expect(attendues.map(({ genre }) => genre)).toEqual(['organisation', 'conflits', 'ensemble']);
+    const sansGenre = attendues.map(({ groupe, cles }) => ({ groupe, cles }));
+    const selecteur = '[data-enonce="diagnostic.conflitsEtoile"]';
+
+    // Le panneau du plan, dès l'ouverture : l'énoncé sous son intertitre,
+    // sans explication ni remède.
+    await attendre(() => expect(cartesLues(panneau(m))).toEqual(sansGenre));
+    expect(lus(panneau(m))).toEqual(attendus(charge(m), { avecRemede: false }));
+    const compact = panneau(m).querySelector(selecteur);
+    expect(texteDe(intituleDe(compact))).toBe(texteDe({ textContent: tEcran('diagnostic.carte.conflits') }));
+    expect(visible(compact.querySelector('[data-phrase]'))).toBe(true);
+    expect(compact.querySelectorAll('[data-explication], [data-remede]').length).toBe(0);
+
+    // La section : la carte à elle, l'énoncé, son « Concrètement » et son
+    // remède, précédé de « Pour changer cela : ».
+    m.ui.allerA('diagnostic');
+    await attendre(() => expect(cartesLues(section(m))).toEqual(sansGenre));
+    expect(lus(section(m))).toEqual(attendus(charge(m), { avecRemede: true }));
+    const li = section(m).querySelector(selecteur);
+    const [enonce] = enoncesDe(charge(m), diagnostiquer(configurationDepuisCharge(charge(m)))).filter(({ cle }) => cle === 'diagnostic.conflitsEtoile');
+    expect(texteDe(li.querySelector('[data-phrase]'))).toBe(texteDe({ textContent: tEcran(enonce.cle, enonce.details) }));
+    expect(texteDe(li.querySelector('[data-explication]'))).toContain('le partage des tables en impose au moins 24 de plus');
+    expect(texteDe(li.querySelector('[data-remede]').closest('p'))).toMatch(/^Pour changer cela/);
+    li.scrollIntoView({ block: 'center' });
+    expect(visible(li.querySelector('[data-explication]'))).toBe(true);
+    const collisions = section(m).querySelector('[data-enonce="diagnostic.collisions"]');
+    expect(carteDe(li)).not.toBeNull();
+    expect(carteDe(li)).not.toBe(carteDe(collisions));
+  });
+});
+
 describe('le rang de teinte d’une carte se compte sur tous les participants, exclus compris (§ 12.7)', () => {
   test('une personne exclue dont l’organisation se range avant les autres décale les deux cartes aux rangs 2 et 3', async () => {
     // La charge « toutes en conflit » et une treizième personne, exclue,
@@ -626,7 +678,7 @@ describe('chaque énoncé expliqué, dans la section seulement (§ 5.6)', () => 
   function explicationsAttendues(chargeLue) {
     const diagnostic = diagnostiquer(configurationDepuisCharge(chargeLue));
     const contexte = { diagnostic, tours: chargeLue.evenement.tours };
-    return enonces(diagnostic, { numeroDe: numeroDeCharge(chargeLue), tours: chargeLue.evenement.tours }).map((enonce) => {
+    return enoncesDe(chargeLue, diagnostic).map((enonce) => {
       const { concretement, levier } = expliquer(enonce, contexte);
       const remede = enonce.remede === null ? null : tEcran(enonce.remede.cle, enonce.remede.details);
       return {

@@ -1267,6 +1267,36 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   forcées, et l'excédent ne descend pas sous `C − C(g, 2)`. Le diagnostic l'écrit
   **quand il est strictement positif**, et se tait sinon — annoncer un plancher
   nul laisserait croire qu'un plancher a été calculé là où il n'y en a pas ;
+- **le plancher des conflits en étoile**, quand des conflits d'organisation
+  (§ 4) empêchent des organisations de partager une table. Le graphe relie
+  deux organisations en conflit ; une personne sans organisation n'y entre
+  pas, seule de son unité. Une composante est **en étoile** quand une
+  organisation, le centre, est en conflit avec chacune des autres, ses
+  branches, et qu'aucune autre paire ne l'est — deux organisations seules en
+  conflit forment une étoile à une branche. Dans tout plan sans conflit, une
+  table d'un tour reçoit des membres du centre ou des membres des branches,
+  jamais des deux, et les branches se partagent les mêmes tables. Soit
+  f(n, k) le plus petit Σ C(xⱼ, 2) de n personnes sur k tables, celui de la
+  répartition la plus égale (infini pour n > 0 et k = 0) : au tour r, n₀ et
+  nᵢ les présents du centre et de chaque branche, le plancher du tour vaut
+  `min sur a ∈ [0, T] de f(n₀, a) + Σᵢ f(nᵢ, T − a)`, et celui de la
+  composante la somme sur les tours. Les capacités sont relâchées : la borne
+  ne dépasse jamais le minimum de tout plan sans conflit. Deux organisations
+  de 20 et 13 personnes en conflit, sur 22 tables de 8 et 4 tours : « les
+  organisations « A » et « B » ne peuvent jamais partager une table : tant
+  qu'aucun conflit ne se produit, au moins 44 collisions cumulées sur les 4
+  tours (11 par tour) », là où chacune seule n'en impose aucune ; un centre
+  de 27 contre trois branches de 10, 13 et 13 : 24 par tour, 96 en tout. Le
+  diagnostic l'écrit, sous séparation active, dans une carte « Organisations
+  en conflit », **seulement quand il dépasse la somme des planchers par
+  groupe** de ses organisations — sinon il n'apprend rien. Il se tait quand
+  un membre de la composante est réservé à une table, ne serait-ce qu'à un
+  tour — les tables bloquées ne sont pas modélisées —, quand la composante
+  n'est pas une étoile, et quand un tour ne laisse aucun plan sans conflit,
+  une seule table pour le centre et une branche présents. Son remède : des
+  tables de plus, jusqu'à l'annuler, ou lever le conflit, qui le ramène aux
+  planchers de chaque organisation. Ce plancher ne vaut que sans conflit : un
+  plan qui en accepte peut compter moins de collisions ;
 - redondance minimale `r_min(p) = max(0, |F(p)| − G)` → « au moins 6
   organisations recroisées par personne ; avec 3 tours au lieu de 4, aucune ne
   le serait » ;
@@ -1342,8 +1372,9 @@ d'itinéraire perd le sien.
 
 À l'écran, les énoncés se regroupent en cartes, sans changer d'ordre : la
 séparation des organisations vidée de son sens, une carte par organisation en
-collision, titrée de sa pastille d'organisation (§ 12.7), puis ce qui vaut pour
-tout l'événement.
+collision, titrée de sa pastille d'organisation (§ 12.7), celle des
+organisations en conflit, une ligne par étoile, puis ce qui vaut pour tout
+l'événement.
 
 **Chaque énoncé s'explique, toujours visible.** Dans la section du
 diagnostic — le panneau compact à côté du plan garde les énoncés seuls —,
@@ -1392,7 +1423,9 @@ formule ne s'écrit que lorsque le chiffre de l'énoncé l'égale. Sur 4 tours
   **animateurs** d'une même organisation, combien de fois un mobile la
   recroise ; la **redondance**, les **objectifs**, le **manque de places**,
   les **conflits imposés** et la **présence par tour**, chacun de ses propres
-  chiffres.
+  chiffres ; une **étoile de conflits**, que chaque tour partage les tables
+  entre le centre et ses branches, le plancher de ses organisations une à
+  une, sans le conflit, et ce que le partage y ajoute.
 
 **La proposition choisie, expliquée.** Sous la carte de tout l'événement,
 la section — le panneau compact ne la porte pas — pose une carte « La
@@ -1420,7 +1453,14 @@ titrés :
   aucune paire de collègues ne se retrouve deux fois » à excédent nul —,
   les retours choisis sous « nouvelle table », la diversité, les objectifs
   et les animateurs. Un plancher du diagnostic ne se dit égalé que sur un
-  plan qui honore les réservations ;
+  plan qui honore les réservations. Le plancher des collisions qui vaut pour
+  tout plan est la somme des planchers par groupe ; pour un plan sans
+  conflit, chaque étoile de conflits y remplace la somme de ses
+  organisations par son propre plancher. Des collisions qui égalent ce
+  plancher renforcé, sans aucun conflit, se disent au minimum : « Ses
+  collisions sont au minimum : aucune relance ne les fera baisser sans créer
+  de conflit d'organisation. » Le minimum atteint du § 5.5, qui se lit sur
+  les rencontres, n'en change pas ;
 - **Ce qui manque, et pourquoi** : l'écart au plafond a priori maximal,
   décomposé en ses deux parts (§ 12.10.5) — la place, par l'écart
   d'itinéraire maximal, les places vides de chaque tour et le plancher que
@@ -1440,7 +1480,8 @@ titrés :
   compte d'arrêt plus élevé que le réglage, quand des revoirs coûtent des
   rencontres, quand une règle active reste au-dessus de ce que le
   diagnostic prouve inévitable — des conflits au-delà des conflits imposés,
-  des collisions au-delà de leur plancher, un excédent —, ou quand l'écart
+  des collisions au-delà de leur plancher, renforcé par les étoiles pour un
+  plan sans conflit, un excédent —, ou quand l'écart
   d'itinéraire dépasse l'inévitable : le plancher prouvé, ou, sans lui, une
   rencontre dès que des places restent vides, car qui s'assoit à une table
   incomplète y en perd au moins une ; accorder les places des tables aux

@@ -7,12 +7,26 @@
 // unité : une collision se compte en occurrences, une paire distincte à
 // part (§ 5.4). L'organisation d'un groupe est une donnée : l'écran la pose
 // dans son propre nœud, avant le texte, qu'aucune entrée de cette table ne
-// lui fait porter.
+// lui fait porter. Seules les phrases des conflits en étoile citent leurs
+// organisations : plusieurs à la fois, elles n'ont pas de carte qui les
+// porte.
 import { creerFormat } from '../../application/format.js';
-import { auxToursNommes, compte, enumeration } from '../../application/libelles/aides.js';
+import { auxToursNommes, cite, compte, enumeration } from '../../application/libelles/aides.js';
 
 // « sur le tour » ou « sur les R tours ».
 const surLesTours = (tours) => (tours === 1 ? 'sur le tour' : `sur les ${tours} tours`);
+
+// Une énumération que « ou » ferme : « a », « a ou b », « a, b ou c ».
+const ouBien = (termes) => (termes.length <= 1 ? termes.join('') : `${termes.slice(0, -1).join(', ')} ou ${termes.at(-1)}`);
+
+// Le plancher de chaque tour d'une étoile, entre parenthèses : le même à
+// chaque tour, ou son étendue ; rien sur un seul tour.
+function parTourEntreParentheses(parTour) {
+  if (parTour.length <= 1) return '';
+  const moins = Math.min(...parTour);
+  const plus = Math.max(...parTour);
+  return moins === plus ? ` (${plus} par tour)` : ` (de ${moins} à ${plus} selon le tour)`;
+}
 
 // « au tour » ou « aux R tours ».
 const auxTours = (tours) => (tours === 1 ? 'au tour' : `aux ${tours} tours`);
@@ -59,8 +73,10 @@ export const TABLE = new Map([
   ['diagnostic.enonces', 'Ce que la configuration impose'],
   ['diagnostic.nonCalcule', 'La configuration ne se normalise pas : le diagnostic ne se calcule pas.'],
   // Les intitulés des cartes que ne nomme pas une organisation
-  // (cartesDiagnostic) : la séparation vidée de son sens, puis le reste.
+  // (cartesDiagnostic) : la séparation vidée de son sens, les conflits en
+  // étoile, puis le reste.
   ['diagnostic.carte.separation', 'Séparation des organisations'],
+  ['diagnostic.carte.conflits', 'Organisations en conflit'],
   ['diagnostic.carte.ensemble', "Tout l'événement"],
 
   // --- La séparation vidée de son sens (§ 7.5, § 15.4) -----------------------
@@ -83,6 +99,19 @@ export const TABLE = new Map([
     'diagnostic.excedent',
     ({ plancherExcedent }) =>
       `excédent d'au moins ${compte(plancherExcedent, 'collision', 'collisions')} : des retrouvailles sont forcées`,
+  ],
+
+  // --- Les conflits en étoile (§ 5.6) ------------------------------------------
+  // organisations : le centre, puis ses branches ; les libellés y sont cités,
+  // l'énoncé n'ayant pas de carte d'organisation qui les porte.
+  [
+    'diagnostic.conflitsEtoile',
+    ({ organisations: [centre, ...branches], plancherCumulees, parTour, tours }) =>
+      (branches.length === 1
+        ? `les organisations ${cite(centre)} et ${cite(branches[0])} ne peuvent jamais partager une table`
+        : `l'organisation ${cite(centre)} ne peut jamais partager une table avec ${ouBien(branches.map(cite))}`) +
+      ` : tant qu'aucun conflit ne se produit, au moins ${compte(plancherCumulees, 'collision cumulée', 'collisions cumulées')} ` +
+      `${surLesTours(tours)}${parTourEntreParentheses(parTour)}`,
   ],
 
   // --- La redondance et les animateurs (§ 5.6) -------------------------------
@@ -213,6 +242,20 @@ export const TABLE = new Map([
       'ces collègues ne forment pas assez de paires différentes pour que chaque collision en réunisse une nouvelle : ' +
       `au moins ${compte(plancherExcedent, 'fois', 'fois')}, deux collègues déjà assis ensemble à un tour se retrouvent ` +
       'à la même table à un autre tour.',
+  ],
+  // parGroupe : le plancher des organisations de l'étoile une à une, sans le
+  // conflit ; gain, ce que le partage des tables y ajoute.
+  [
+    'diagnostic.concretement.conflitsEtoile',
+    ({ organisations: [centre, ...branches], parGroupe, gain }) =>
+      `aucun membre de ${cite(centre)} ne s'assoit à une table où se trouve un membre de ${ouBien(branches.map(cite))} : ` +
+      (branches.length === 1
+        ? 'à chaque tour, les tables se partagent entre les deux organisations, et chacune se serre sur sa part. '
+        : `à chaque tour, les tables se partagent entre ${cite(centre)} d'un côté et les autres, qui peuvent s'y mêler, de ` +
+          "l'autre, et chaque côté se serre sur sa part. ") +
+      (parGroupe === 0 ? "Sans le conflit, rien n'en imposerait" : `Sans le conflit, leurs planchers par organisation en prouvent ${parGroupe}`) +
+      ` ; le partage des tables en impose au moins ${gain}${parGroupe === 0 ? '' : ' de plus'}, ` +
+      'quel que soit le placement qui évite le conflit.',
   ],
   // moins et plus : le plus petit et le plus grand nombre de présents d'un
   // tour.
@@ -418,6 +461,12 @@ export const TABLE = new Map([
       `${compte(conflits, 'fois', 'fois')}, deux personnes en conflit d'organisation partagent une table` +
       (imposes ? " : ce sont les conflits que les réservations imposent, et aucun placement qui les honore n'en compte moins." : '.'),
   ],
+  // Les collisions égalent le plancher renforcé par les conflits en étoile,
+  // sans aucun conflit : seul un conflit les abaisserait.
+  [
+    'diagnostic.proposition.collisions.minimum',
+    "Ses collisions sont au minimum : aucune relance ne les fera baisser sans créer de conflit d'organisation.",
+  ],
   ['diagnostic.proposition.collisions.aucune', "Aucune paire de collègues d'une même organisation ne partage une table."],
   // plancher : les collisions égalent le plancher que le diagnostic prouve.
   [
@@ -602,6 +651,11 @@ export const TABLE = new Map([
     "ajouter des places aux tables qui portent un objectif, ou donner un objectif à d'autres tables, abaisse ce plancher",
   ],
   ['diagnostic.remede.imposes', 'les réservations les imposent : ils ne comptent pas parmi les retours que choisit le moteur'],
+  [
+    'diagnostic.remede.conflitsEtoile',
+    "ajouter des tables abaisse ce plancher, jusqu'à l'annuler ; lever le conflit entre ces organisations, dans la colonne " +
+      "« Conflit d'organisation » des participants, le ramène aux planchers de chacune",
+  ],
   [
     'diagnostic.remede.conflitsImposes',
     'des personnes en conflit sont réservées à une même table ; déplacer ou retirer l’une de ces réservations les sépare',

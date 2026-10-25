@@ -622,6 +622,16 @@
   tenter (« Repartir d'elle » avec un compte d'arrêt plus élevé quand une
   part du manque ou une règle cochée dépasse l'inévitable, les tables, ou
   rien pour les rencontres au minimum atteint).
+- Le diagnostic chiffre ce que coûtent des organisations en conflit qui ne
+  peuvent jamais partager une table : une carte « Organisations en conflit »
+  dit, par exemple pour deux organisations de 20 et 13 personnes sur 22
+  tables de 8, « au moins 44 collisions cumulées sur les 4 tours (11 par
+  tour) » tant qu'aucun conflit ne se produit, explique que chaque tour
+  partage les tables entre elles, et propose des tables de plus ou de lever
+  le conflit. Elle ne s'écrit que lorsque ce plancher dépasse celui de
+  chaque organisation seule. La carte de la proposition choisie dit d'une
+  proposition sans conflit qui l'atteint que ses collisions sont au minimum,
+  et ne propose plus « Repartir d'elle » pour elles.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
