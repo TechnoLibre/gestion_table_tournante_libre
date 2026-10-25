@@ -193,7 +193,7 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
     // Les valeurs que l'écran et l'annexe A montrent pour un événement neuf.
     assert.deepEqual(
       reglagesDuGenre(generation, 'champ').map(({ nom, defaut }) => [nom, defaut]),
-      [['nombre', 500], ['arret', 200_000], ['historique', 10_000]],
+      [['nombre', 20], ['arret', 2_000_000], ['historique', 1_000]],
     );
     assert.deepEqual(
       reglagesDuGenre(generation, 'bascule').map(({ defaut }) => defaut),

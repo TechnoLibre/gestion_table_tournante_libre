@@ -1458,7 +1458,7 @@ remède » cesse de relancer en espérant mieux.
 ### 5.7 Plusieurs propositions, pas une
 
 Une génération produit **plusieurs placements distincts et comparables**, en
-nombre réglable : cinq cents par défaut pour un événement neuf (§ 5.10). Les
+nombre réglable : vingt par défaut pour un événement neuf (§ 5.10). Les
 générations **s'accumulent** : relancer avec d'autres réglages ajoute des
 candidats plutôt que d'effacer les précédents, et un classement unique les
 ordonne tous. Une commande efface la liste en épargnant celui qui est retenu.
@@ -1545,12 +1545,14 @@ fait disparaître la page montrée —, et amène la proposition visée à chaqu
 demande au plan, même répétée.
 
 **La commande prend une graine entière et un compte d'arrêt**, et une longueur
-d'historique d'acceptation : celle des réglages de l'événement, 10 000
+d'historique d'acceptation : celle des réglages de l'événement, 1 000
 mouvements pour un événement neuf. Le moteur, quand l'appelant ne la donne pas,
-en prend 1 000, la longueur de ses empreintes de référence (§ 14.10). Chaque
-proposition conserve sa graine dérivée, ce compte et cette longueur (§ 8.9).
-C'est le support de « à graine et entrée égales, placement identique » ; sans
-eux, une proposition retenue cesse d'être régénérable.
+en prend 1 000, la longueur de ses empreintes de référence (§ 14.10) : les deux
+valeurs coïncident sans dépendre l'une de l'autre, et changer le défaut d'un
+événement neuf ne déplace pas ces empreintes. Chaque proposition conserve sa
+graine dérivée, ce compte et cette longueur (§ 8.9). C'est le support de « à
+graine et entrée égales, placement identique » ; sans eux, une proposition
+retenue cesse d'être régénérable.
 
 **L'identifiant entier d'une proposition vient de sa place dans la suite de
 graines dérivées, jamais de son ordre d'achèvement.** Quand plusieurs
@@ -2243,11 +2245,12 @@ pour la séance et ne se garde pas au-delà — rien ne survit à la séance hor
 dossier de travail (§ 8.6) : au premier calcul d'un lancement, aucune mesure
 n'existe, et l'estimation se dit inconnue. Le réglage livré par défaut est celui
 qui, sur la machine de référence, reste bien en deçà de ce plafond : un
-événement neuf reçoit **cinq cents propositions de 200 000 mouvements, sous un
-historique d'acceptation de 10 000**. Seul l'événement neuf les reçoit : un
+événement neuf reçoit **vingt propositions de 2 000 000 mouvements, sous un
+historique d'acceptation de 1 000**. Seul l'événement neuf les reçoit : un
 événement dont le fichier porte ses réglages de génération les garde, et un
 changement de ces défauts ne réécrit aucun fichier ; les démonstrations livrées
-portent les leurs, cinq propositions sous un historique de 1 000.
+portent les leurs, cinq propositions de 200 000 mouvements sous un historique
+de 1 000.
 
 **Une génération longue s'annonce avant de partir.** À partir de la dernière
 durée mesurée, le logiciel énonce l'ordre de grandeur attendu — « environ vingt
@@ -2263,12 +2266,11 @@ poste d'un seul processeur logique —, une constante du banc (§ 19.10) que
 l'estimation lit au registre à chaque appel. Les mouvements de la dernière
 mesure se ramènent de même aux cœurs qu'elle a employés. Sans mesure, il demande
 dès que ces mouvements, ralentissement compris, dépassent **dix millions**, un
-compte fixe qui ne suit pas le réglage par défaut : les cinq cents propositions
-d'un événement neuf le dépassent sur la plupart des postes, ceux de moins d'une
-vingtaine de processeurs logiques, et la première génération d'une séance y
-demande confirmation. Une recherche d'une demi-heure lancée par mégarde est une
-demi-heure de soirée perdue, et aucun réglage par défaut ne protège de cela.
-
+compte fixe qui ne suit pas le réglage par défaut : les vingt propositions d'un
+événement neuf le dépassent sur les postes de moins de dix processeurs logiques,
+et la première génération d'une séance y demande confirmation. Une recherche
+d'une demi-heure lancée par mégarde est une demi-heure de soirée perdue, et
+aucun réglage par défaut ne protège de cela.
 **Pendant la recherche, l'application reste vivante.** Le calcul ne tient pas le
 fil d'exécution de l'interface : le plan reste lisible, la page de qualité des
 propositions déjà obtenues reste ouverte, et l'avancement est visible. Une

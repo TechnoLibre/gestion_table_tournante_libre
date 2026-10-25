@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { exporterParticipants } from '../src/csv/export.js';
 import { decouper } from '../src/csv/lecture.js';
 import { CATALOGUE } from '../src/demo/catalogue.js';
+import { LIVREES } from '../src/demo/livrees.js';
 import { serialiser } from '../src/stockage/canonique.js';
 import { GENERATION_PAR_DEFAUT, analyser, configurationDepuisCharge } from '../src/stockage/document.js';
 import { VERSION } from '../src/version.genere.js';
@@ -200,6 +201,10 @@ describe("engendrer_livrables : la charge d'une démonstration (§ 15)", () => {
         entree.cle,
       );
       assert.notEqual(reglages.generation, GENERATION_DES_DEMONSTRATIONS);
+    }
+    // Les fichiers livrés portent ces réglages, et non ceux d'une charge neuve.
+    for (const { cle, texte } of LIVREES) {
+      assert.deepEqual(analyser(texte).charge.reglages.generation, { nombre: 5, arret: 200_000, historique: 1_000 }, cle);
     }
     const contraintes = {
       separerOrganisations: false,

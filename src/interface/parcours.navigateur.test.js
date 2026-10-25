@@ -140,11 +140,15 @@ const GRAINE = 4242;
 // d'historique (capture 21).
 const NOM_INSTANT = 'Avant l\u{2019}accueil';
 const ARRET = 300;
-// Le nombre de propositions et l'historique d'acceptation que le parcours
-// écrit dès l'écriture, à la place de ceux d'un événement neuf : les
-// propositions, les états et la documentation (étape 9) en dépendent.
+// Le nombre de propositions et l'historique d'acceptation des générations du
+// parcours, écrits dès l'écriture quand ceux d'un événement neuf diffèrent :
+// les propositions, les états et la documentation (étape 9) en dépendent.
 const NOMBRE = 5;
 const HISTORIQUE = 1_000;
+// Le compte d'arrêt que le parcours écrit dès l'écriture, avant le compte
+// réduit de sa génération (ARRET) : les états des étapes qui précèdent
+// celle-ci, et leurs captures, en dépendent.
+const ARRET_DE_DEPART = 200_000;
 
 // L'écart de l'horloge pilotée entre la génération et la retenue : plus
 // d'une minute, la précision d'un horodatage mis en forme.
@@ -1147,21 +1151,27 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(charge().tables[0].sieges).toBeNull();
   });
 
-  test('01b les réglages de génération du parcours : ceux d’un événement neuf, puis 5 propositions et un historique de 1 000, une entrée chacun', async () => {
-    expect(charge().reglages.generation).toEqual({ nombre: 500, arret: 200_000, historique: 10_000 });
+  test('01b les réglages de génération : ceux d’un événement neuf, puis ceux du parcours, une entrée pour chacun qui diffère', async () => {
+    expect(charge().reglages.generation).toEqual({ nombre: 20, arret: 2_000_000, historique: 1_000 });
     await ouvrirSection('generation');
     // L'écran montre ces défauts dans leurs champs.
     const champGeneration = (nom) => dans(`[data-section="generation"] input[data-champ="generation.${nom}"]`);
-    expect(champGeneration('nombre').value).toBe('500');
-    expect(champGeneration('historique').value).toBe('10000');
-    for (const [nom, valeur] of [['nombre', NOMBRE], ['historique', HISTORIQUE]]) {
+    expect(champGeneration('nombre').value).toBe('20');
+    expect(champGeneration('arret').value).toBe('2000000');
+    expect(champGeneration('historique').value).toBe('1000');
+    // Seul un réglage que l'événement porte autrement s'écrit : une entrée
+    // chacun, aucune pour l'historique, déjà celui du parcours.
+    const parcours = [['nombre', NOMBRE], ['arret', ARRET_DE_DEPART], ['historique', HISTORIQUE]];
+    const aEcrire = parcours.filter(([nom, valeur]) => charge().reglages.generation[nom] !== valeur);
+    expect(aEcrire.map(([nom]) => nom)).toEqual(['nombre', 'arret']);
+    for (const [nom, valeur] of aEcrire) {
       const r = revision();
       await sansFenetre('modifierReglage', async () => {
-        await saisir(dans(`[data-section="generation"] input[data-champ="generation.${nom}"]`), String(valeur));
+        await saisir(champGeneration(nom), String(valeur));
         await uneEntree(r, `le réglage ${nom}`);
       });
     }
-    expect(charge().reglages.generation).toEqual({ nombre: NOMBRE, arret: 200_000, historique: HISTORIQUE });
+    expect(charge().reglages.generation).toEqual({ nombre: NOMBRE, arret: ARRET_DE_DEPART, historique: HISTORIQUE });
   });
 
   test('02 l’aperçu des cas limites : encodage et séparateur de l’analyseur ; un groupe fondu, une ligne refusée', async () => {

@@ -12,14 +12,14 @@
 // sa sortie, jamais dans le registre (décision 6).
 //
 // Chaque génération part de la grande démonstration, graine 1, arret
-// 200 000 : la configuration et le compte que l'opérateur emploie. Les
-// répétitions alternent les W — une ronde passe chaque W une fois —, de
-// sorte qu'une dérive de la machine pèse sur tous ; t(W) est la médiane de
-// ses répétitions. Un ralentissement ne décroît pas quand W croît : des
-// médianes qui décroissent disent une mesure bruitée, qui gagne une ronde
-// de plus et se signale « bruite » dans la sortie. La durée d'une génération
-// d'un travailleur neuf compte sa naissance : c'est celle que l'opérateur
-// attend.
+// 200 000 : la configuration de l'opérateur, au compte de la génération de
+// référence. Les répétitions alternent les W — une ronde passe chaque W une
+// fois —, de sorte qu'une dérive de la machine pèse sur tous ; t(W) est la
+// médiane de ses répétitions. Un ralentissement ne décroît pas quand W
+// croît : des médianes qui décroissent disent une mesure bruitée, qui gagne
+// une ronde de plus et se signale « bruite » dans la sortie. La durée d'une
+// génération d'un travailleur neuf compte sa naissance : c'est celle que
+// l'opérateur attend.
 //
 // La sortie, scripts/banc/sorties/parallele.json, a la forme d'un relevé
 // (releve.js) que verifierReleve accepte : la configuration ne nomme pas
@@ -29,9 +29,10 @@
 // cœurs. Ses réglages, GENERATION_DE_REFERENCE, s'écrivent ici en clair et
 // ne suivent pas ceux d'une charge neuve : la garde
 // DUREE_GENERATION_PAR_DEFAUT garde son nom et mesure la même génération
-// d'un relevé à l'autre. Une génération aux réglages d'une charge neuve
-// compte ⌈nombre / cœurs⌉ vagues de celle-ci, ralenties de ρ, qui la situent
-// sous le plafond d'usage (§ 5.10).
+// d'un relevé à l'autre. Une génération aux réglages d'une charge neuve,
+// nombre propositions de arret mouvements, compte ⌈nombre / cœurs⌉ vagues,
+// chacune arret / ARRET fois la vague de celle-ci et ralentie de ρ, qui la
+// situent sous le plafond d'usage (§ 5.10).
 //
 // Une horloge réelle se lit ici, performance.now, pour mesurer seulement :
 // la sortie ne porte que des durées.

@@ -88,19 +88,21 @@ export const TOURS_MAX = 100;
 
 /**
  * La longueur de l'historique d'acceptation d'une charge neuve, en
- * mouvements (§ 5.7). Elle diffère de HISTORIQUE_PAR_DEFAUT, le repli du
- * moteur quand l'appelant n'en donne pas : ce repli reste la référence des
- * empreintes dorées du moteur, et seule la charge neuve prend celle-ci.
+ * mouvements (§ 5.7). Elle s'écrit en clair et ne se lit pas dans
+ * HISTORIQUE_PAR_DEFAUT, le repli du moteur quand l'appelant n'en donne
+ * pas : les deux ont la même longueur sans dépendre l'une de l'autre. Le
+ * repli reste la référence des empreintes dorées du moteur, et changer le
+ * défaut d'une charge neuve ne le déplace pas.
  */
-export const HISTORIQUE_GENERATION_DEFAUT = 10_000;
+export const HISTORIQUE_GENERATION_DEFAUT = 1_000;
 
 /**
- * Réglages de génération d'une charge neuve (§ 5.7, § 5.10) : cinq cents
- * propositions de 200 000 mouvements, sous un historique d'acceptation de
+ * Réglages de génération d'une charge neuve (§ 5.7, § 5.10) : vingt
+ * propositions de 2 000 000 mouvements, sous un historique d'acceptation de
  * HISTORIQUE_GENERATION_DEFAUT. Seule la charge neuve les copie : une charge
  * lue garde les réglages de génération que son fichier porte.
  */
-export const GENERATION_PAR_DEFAUT = Object.freeze({ nombre: 500, arret: 200_000, historique: HISTORIQUE_GENERATION_DEFAUT });
+export const GENERATION_PAR_DEFAUT = Object.freeze({ nombre: 20, arret: 2_000_000, historique: HISTORIQUE_GENERATION_DEFAUT });
 
 /**
  * Le plus grand nombre de points de code du libellé d'une table (§ 4) :

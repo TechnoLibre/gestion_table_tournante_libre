@@ -94,9 +94,10 @@ export const PLAFOND_USAGE_S = 30 * 60;
 // Sans durée mesurée, une génération dont le coût — les mouvements qui se
 // suivent sur un même cœur, ralentissement compris — dépasse ce compte
 // demande confirmation (§ 5.10). Le compte s'écrit en clair et ne suit pas
-// les réglages d'une charge neuve : leurs cinq cents propositions le
-// dépassent dès que le poste a peu de cœurs, et la première génération d'une
-// séance, sans mesure, demande alors confirmation.
+// les réglages d'une charge neuve : leurs vingt propositions de 2 000 000
+// mouvements le dépassent sur un poste de moins de dix processeurs logiques,
+// et la première génération d'une séance, sans mesure, y demande alors
+// confirmation.
 const MOUVEMENTS_SANS_MESURE = 10_000_000;
 
 // Le ralentissement d'un cœur quand tous les processeurs logiques

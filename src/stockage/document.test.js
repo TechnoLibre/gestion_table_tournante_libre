@@ -282,7 +282,7 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
         nouvelleTable: true,
         varierOrganisations: true,
         attribuerSieges: false,
-        generation: { nombre: 500, arret: 200_000, historique: 10_000 },
+        generation: { nombre: 20, arret: 2_000_000, historique: 1_000 },
       },
       prochainsIds: { participant: 1, table: 1, proposition: 1 },
       participants: [],
@@ -294,12 +294,17 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
     });
   });
 
-  test("GENERATION_PAR_DEFAUT : cinq cents propositions de 200 000 mouvements, un historique de 10 000, plus long que le repli du moteur ; figée, copiée dans chaque charge neuve", () => {
-    assert.deepEqual(GENERATION_PAR_DEFAUT, { nombre: 500, arret: 200_000, historique: 10_000 });
-    assert.equal(HISTORIQUE_GENERATION_DEFAUT, 10_000);
+  test("GENERATION_PAR_DEFAUT : vingt propositions de 2 000 000 mouvements, un historique de 1 000 écrit en clair, sans lien au repli du moteur ; figée, copiée dans chaque charge neuve", () => {
+    assert.deepEqual(GENERATION_PAR_DEFAUT, { nombre: 20, arret: 2_000_000, historique: 1_000 });
+    assert.equal(HISTORIQUE_GENERATION_DEFAUT, 1_000);
     assert.equal(GENERATION_PAR_DEFAUT.historique, HISTORIQUE_GENERATION_DEFAUT);
-    // Le repli du moteur, référence de ses empreintes dorées, ne suit pas.
+    // Le repli du moteur, référence de ses empreintes dorées, a la même
+    // longueur sans en être la source : le document ne lit pas le moteur de
+    // recherche, et un changement de l'un ne déplace pas l'autre.
     assert.equal(HISTORIQUE_PAR_DEFAUT, 1_000);
+    const source = readFileSync(new URL('./document.js', import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /^import\s[^;]*\bHISTORIQUE_PAR_DEFAUT\b/m);
+    assert.doesNotMatch(source, /^import\s[^;]*['"][^'"]*moteur\/recherche\.js['"]/m);
     assert.ok(Object.isFrozen(GENERATION_PAR_DEFAUT));
     const { generation } = creerCharge({ id: 'evt-neuf', nom: 'Atelier', siegesParDefaut: 8, tours: 3 }).reglages;
     assert.deepEqual(generation, GENERATION_PAR_DEFAUT);
@@ -308,11 +313,16 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
   });
 
   test('un fichier qui porte ses réglages de génération les garde à la lecture, ceux d’avant les défauts actuels compris : aucune migration', () => {
-    const document = documentValide();
-    document.charge.reglages.generation = { nombre: 5, arret: 200_000, historique: 1_000 };
-    const { charge } = analyser(JSON.stringify(document));
-    assert.deepEqual(charge.reglages.generation, { nombre: 5, arret: 200_000, historique: 1_000 });
-    assert.notDeepEqual(charge.reglages.generation, { ...GENERATION_PAR_DEFAUT });
+    for (const anciens of [
+      { nombre: 5, arret: 200_000, historique: 1_000 },
+      { nombre: 500, arret: 200_000, historique: 10_000 },
+    ]) {
+      const document = documentValide();
+      document.charge.reglages.generation = { ...anciens };
+      const { charge } = analyser(JSON.stringify(document));
+      assert.deepEqual(charge.reglages.generation, anciens);
+      assert.notDeepEqual(charge.reglages.generation, { ...GENERATION_PAR_DEFAUT });
+    }
   });
 
   test('sans date, la date est nulle ; deux charges neuves ne partagent aucun objet', () => {
@@ -322,7 +332,7 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
     premiere.reglages.generation.nombre = 9;
     premiere.prochainsIds.participant = 2;
     premiere.participants.push({ id: 1 });
-    assert.equal(seconde.reglages.generation.nombre, 500);
+    assert.equal(seconde.reglages.generation.nombre, 20);
     assert.equal(seconde.prochainsIds.participant, 1);
     assert.deepEqual(seconde.participants, []);
   });
