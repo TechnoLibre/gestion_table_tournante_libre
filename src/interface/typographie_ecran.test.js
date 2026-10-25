@@ -99,6 +99,9 @@ const EXEMPLES_ECRAN = [
       ],
     },
   ],
+  // Les composants tiers d'« À propos » : une œuvre sans version, puis avec
+  ['coquille.apropos.tiers.designation', { nom: 'oeuvre inventée', version: null }],
+  ['coquille.apropos.tiers.designation', { nom: 'oeuvre inventée', version: '1.2.3' }],
   // Le diagnostic
   ['diagnostic.placesManquantes', { placesManquantes: 2 }],
   [

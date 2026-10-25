@@ -5,11 +5,11 @@
 // l'application, le titre du bandeau et de la fenêtre, la provenance de la
 // construction par mode de Vite, le libellé de mode, l'annonce de format, le
 // réglage de thème, « Liste des événements », le panneau « Paramètres », le
-// panneau « À propos » — son bloc, le logo, les liens, la licence,
-// l'attribution et le sommaire des fonctionnalités —, et le titre de chaque
-// section de l'événement, que la navigation et chaque section reprennent. Un
-// mode sans clé s'affiche sous son propre nom (libelles.js). Chaque clé
-// commence par « coquille. ».
+// panneau « À propos » — son bloc, le logo, les liens, la licence, les
+// composants tiers, l'attribution et le sommaire des fonctionnalités —, et
+// le titre de chaque section de l'événement, que la navigation et chaque
+// section reprennent. Un mode sans clé s'affiche sous son propre nom
+// (libelles.js). Chaque clé commence par « coquille. ».
 export const TABLE = new Map([
   ['coquille.nom', 'Gestion table tournante Libre'],
   ['coquille.titre', ({ version }, texte) => `${texte('coquille.nom')} \u{2014} ${version}`],
@@ -127,6 +127,29 @@ export const TABLE = new Map([
   ['coquille.apropos.licence.lireAgpl', 'Lire l\u{2019}AGPL-3.0-or-later'],
   ['coquille.apropos.licence.lireLiliq', 'Lire la LiLiQ-R+ 1.1'],
   ['coquille.apropos.licence.fermerTexte', 'Fermer le texte'],
+
+  // Les composants tiers, tirés de TIERS.txt : le titre de la carte, ce
+  // qu'elle montre et pourquoi, l'attente et l'échec du chargement, puis,
+  // par entrée, sa désignation — le nom, suivi de la version quand elle en
+  // a une —, sa licence, l'intitulé des œuvres qu'un paquet incorpore et la
+  // commande qui ouvre le texte, nommée avec le composant.
+  ['coquille.apropos.tiers.titre', 'Composants tiers et leurs licences'],
+  [
+    'coquille.apropos.tiers.explication',
+    'Ce logiciel incorpore les œuvres suivantes, chacune sous sa propre licence ; leurs avis voyagent avec ' +
+      'l\u{2019}application, dans le fichier licences/TIERS.txt.',
+  ],
+  ['coquille.apropos.tiers.chargement', 'Chargement de la liste des composants\u{2026}'],
+  [
+    'coquille.apropos.tiers.echec',
+    'La liste des composants ne s\u{2019}est pas chargée ; le fichier licences/TIERS.txt, livré avec ' +
+      'l\u{2019}application, porte les mêmes avis.',
+  ],
+  ['coquille.apropos.tiers.designation', ({ nom, version }) => (version === null ? nom : `${nom} ${version}`)],
+  ['coquille.apropos.tiers.licence', ({ licence }) => `Licence : ${licence}`],
+  ['coquille.apropos.tiers.incorpores', ({ hote }) => `Incorporés à ${hote} :`],
+  ['coquille.apropos.tiers.lire', 'Lire la licence'],
+  ['coquille.apropos.tiers.lireNomme', ({ composant }) => `Lire la licence de ${composant}`],
 
   // L'attribution, une demande de courtoisie.
   ['coquille.apropos.attribution.titre', 'Attribution'],

@@ -653,6 +653,11 @@
   nomment le solveur HiGHS, qui calcule le plancher exact des collisions du
   diagnostic, et chaque œuvre que son module WebAssembly compile, chacune
   avec le texte entier de sa licence.
+- « À propos » porte une carte « Composants tiers et leurs licences » : chaque
+  œuvre que l'application incorpore, avec sa version et sa licence, celles
+  qu'un paquet incorpore à son tour en retrait sous lui. « Lire la licence »
+  en montre le texte sur place, sans réseau, un seul à la fois. La liste est
+  celle de `licences/TIERS.txt`, livré avec l'application.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

@@ -32,15 +32,31 @@
   // s'affiche sous les commandes qui l'ouvrent, un seul à la fois ; « Fermer
   // le texte » le retire.
   //
+  // La carte des composants tiers tient sa liste de chargerTiers, appelée
+  // une fois au montage — chargerComposantsTiers par défaut, qui lit
+  // TIERS.txt dans le morceau différé des textes. Pendant le chargement, une
+  // phrase d'attente ; un rejet est une faute, qui va au collecteur de la
+  // page (reportError), et laisse, à la place de la liste, une phrase dans
+  // l'encre du refus, qui renvoie au fichier livré. Chaque paquet porte
+  // les œuvres qu'il incorpore dans une liste en retrait, sous un intitulé
+  // qui nomme le paquet. « Lire la licence », nommée avec le composant,
+  // montre son texte sous son entrée, dans un bloc pareil à celui des
+  // licences du logiciel, qu'il remplace : un seul texte à la fois dans tout
+  // le panneau. Le « Fermer le texte » de l'entrée le retire et rend le focus à
+  // sa commande.
+  //
   // Habillage : le titre de l'écran, puis une carte qui porte le logo,
   // l'éditeur, l'auteur en gras et son rôle dans l'encre secondaire, le
   // bloc, sur le fond sourd de la carte, et les commandes — « Copier »,
   // l'action principale, et « Fermer ». Une copie refusée se dit dans
-  // l'encre du refus. Suivent les cartes titrées de la licence, de
-  // l'attribution et du sommaire, une colonne par catégorie quand la largeur
-  // le permet, chaque numéro dans l'encre secondaire devant son intitulé.
+  // l'encre du refus. Suivent les cartes titrées de la licence, des
+  // composants tiers — la désignation en gras, la licence et l'intitulé des
+  // œuvres incorporées dans l'encre secondaire, chaque sous-liste marquée
+  // d'un filet à gauche —, de l'attribution et du sommaire, une colonne par
+  // catégorie quand la largeur le permet, chaque numéro dans l'encre
+  // secondaire devant son intitulé.
   import { getContext, onMount } from 'svelte';
-  import { chargerTexteLicence } from '../actifs/licences.js';
+  import { chargerComposantsTiers, chargerTexteLicence } from '../actifs/licences.js';
   import { FICHIERS_LOGO, chargerLogo } from '../actifs/logo.js';
   import { LIENS, cleDeLien } from './apropos.js';
   import { CATEGORIES, cleDeCategorie, cleDeFonctionnalite } from './fonctionnalites.js';
@@ -52,7 +68,7 @@
   const t = getContext('t');
   const facade = getContext('facade');
 
-  let { bloc, pressePapiers, fermer } = $props();
+  let { bloc, pressePapiers, fermer, chargerTiers = chargerComposantsTiers } = $props();
 
   const uid = $props.id();
   const idMenuLogo = `${uid}-menu-logo`;
@@ -69,11 +85,32 @@
   // Le refus du dernier enregistrement du logo : { code, details }, null
   // sans lui.
   let refusLogo = $state(null);
-  // Le texte de licence affiché : { nom, contenu }, null sans lui.
+  // Le texte de licence affiché : { nom, contenu, tiers }, null sans lui ;
+  // nom est celui de LICENCES, ou la clé d'un composant tiers quand tiers
+  // est vrai.
   let texteLicence = $state(null);
+  // Les composants tiers (actifs/tiers.js), null avant leur chargement ;
+  // echecTiers dit que le chargement a rejeté.
+  let composants = $state.raw(null);
+  let echecTiers = $state(false);
+  let listeTiers = $state(null);
+  // Les paquets, dans l'ordre de l'index, chacun avec les œuvres qu'il
+  // incorpore, dans le même ordre.
+  const paquets = $derived(
+    (composants ?? [])
+      .filter((composant) => composant.hote === null)
+      .map((paquet) => ({ paquet, incorpores: composants.filter((composant) => composant.hote === paquet.nom) })),
+  );
 
   onMount(() => {
     chargerLogo().then((logo) => (image = logo.image));
+    chargerTiers().then(
+      (lus) => (composants = lus),
+      (erreur) => {
+        echecTiers = true;
+        reportError(erreur);
+      },
+    );
   });
 
   async function copier() {
@@ -111,9 +148,45 @@
   }
 
   async function lireLicence(nom) {
-    texteLicence = { nom, contenu: await chargerTexteLicence(nom) };
+    texteLicence = { nom, contenu: await chargerTexteLicence(nom), tiers: false };
+  }
+
+  function lireTiers({ cle, texte }) {
+    texteLicence = { nom: cle, contenu: texte, tiers: true };
+  }
+
+  // Retire le texte d'un composant et rend le focus à la commande de son
+  // entrée, qui reste montée.
+  function fermerTexteTiers(cle) {
+    texteLicence = null;
+    const entree = [...(listeTiers?.querySelectorAll('[data-composant]') ?? [])].find((li) => li.dataset.composant === cle);
+    entree?.querySelector(':scope > .ligne-tiers [data-commande="lireTiers"]')?.focus();
   }
 </script>
+
+{#snippet texte()}
+  <pre class="texte-licence" data-texte-licence={texteLicence.nom}>{texteLicence.contenu}</pre>
+{/snippet}
+
+{#snippet composant(entree)}
+  {@const designation = t('coquille.apropos.tiers.designation', { nom: entree.nom, version: entree.version })}
+  <div class="ligne-tiers">
+    <span class="designation">{designation}</span>
+    <span class="licence-tiers">{t('coquille.apropos.tiers.licence', { licence: entree.licence })}</span>
+    <Commande
+      cle="coquille.apropos.tiers.lire"
+      nom="lireTiers"
+      nomAccessible={t('coquille.apropos.tiers.lireNomme', { composant: designation })}
+      executer={() => lireTiers(entree)}
+    />
+  </div>
+  {#if texteLicence?.tiers && texteLicence.nom === entree.cle}
+    {@render texte()}
+    <div class="commandes">
+      <Commande cle="coquille.apropos.licence.fermerTexte" executer={() => fermerTexteTiers(entree.cle)} />
+    </div>
+  {/if}
+{/snippet}
 
 {#snippet lien(nom)}
   <a href={LIENS[nom]} target="_blank" rel="noopener noreferrer" data-lien={nom}>{t(cleDeLien(nom))}</a>
@@ -198,14 +271,38 @@
       <div class="commandes">
         <Commande cle="coquille.apropos.licence.lireAgpl" executer={() => lireLicence('agpl')} />
         <Commande cle="coquille.apropos.licence.lireLiliq" executer={() => lireLicence('liliq')} />
-        {#if texteLicence !== null}
+        {#if texteLicence !== null && !texteLicence.tiers}
           <Commande cle="coquille.apropos.licence.fermerTexte" executer={() => (texteLicence = null)} />
         {/if}
       </div>
-      {#if texteLicence !== null}
-        <pre class="texte-licence" data-texte-licence={texteLicence.nom}>{texteLicence.contenu}</pre>
+      {#if texteLicence !== null && !texteLicence.tiers}
+        {@render texte()}
       {/if}
     </div>
+  </Carte>
+
+  <Carte titre={t('coquille.apropos.tiers.titre')} sousTitre={t('coquille.apropos.tiers.explication')}>
+    {#if composants !== null}
+      <ul class="tiers" bind:this={listeTiers}>
+        {#each paquets as { paquet, incorpores }, rang (paquet.cle)}
+          <li data-composant={paquet.cle}>
+            {@render composant(paquet)}
+            {#if incorpores.length > 0}
+              <p class="incorpores" id={`${uid}-incorpores-${rang}`}>{t('coquille.apropos.tiers.incorpores', { hote: paquet.nom })}</p>
+              <ul class="tiers sous-liste" data-incorpores={paquet.nom} aria-labelledby={`${uid}-incorpores-${rang}`}>
+                {#each incorpores as oeuvre (oeuvre.cle)}
+                  <li data-composant={oeuvre.cle}>{@render composant(oeuvre)}</li>
+                {/each}
+              </ul>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {:else if echecTiers}
+      <p role="status" class="refus" data-echec-tiers>{t('coquille.apropos.tiers.echec')}</p>
+    {:else}
+      <p role="status" data-chargement-tiers>{t('coquille.apropos.tiers.chargement')}</p>
+    {/if}
   </Carte>
 
   <Carte titre={t('coquille.apropos.attribution.titre')}>
@@ -314,7 +411,9 @@
 
   .role,
   .note,
-  .numero {
+  .numero,
+  .licence-tiers,
+  .incorpores {
     color: var(--couleur-page-texte-secondaire);
   }
 
@@ -376,6 +475,47 @@
     font: inherit;
     font-size: var(--taille-texte-petit);
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* La liste des composants tiers : une entrée par ligne, sans puce ; la
+     désignation, la licence et la commande se suivent et passent à la ligne
+     plutôt que de déborder. Une sous-liste se décale d'un filet à gauche. */
+  .tiers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-3);
+    padding: 0;
+    list-style: none;
+  }
+
+  .tiers li {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+    min-width: 0;
+  }
+
+  .sous-liste {
+    padding-left: var(--espace-4);
+    border-left: 2px solid var(--couleur-carte-filet);
+  }
+
+  .ligne-tiers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espace-1) var(--espace-3);
+  }
+
+  .designation {
+    font-weight: bold;
+    overflow-wrap: anywhere;
+  }
+
+  .licence-tiers,
+  .incorpores {
+    font-size: var(--taille-texte-petit);
     overflow-wrap: anywhere;
   }
 

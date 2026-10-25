@@ -7,8 +7,11 @@
 // octets reçus. Le bloc copié est celui qu'on lui passe ; l'ouverture depuis
 // le bandeau et la composition du bloc s'éprouvent dans App.navigateur.test.js.
 // Les octets du logo et les textes des licences se comparent aux fichiers,
-// lus par le disque par la commande readFile du lanceur. Aucune épreuve ne
-// suit un lien : le navigateur d'épreuve n'a pas de réseau (§ 19.2).
+// lus par le disque par la commande readFile du lanceur ; la liste des
+// composants tiers aussi, que composantsDesTiers tire de TIERS.txt lu de la
+// même façon. Le panneau se monte sous le t de l'écran, celui d'App, dont
+// les attendus se tirent. Aucune épreuve ne suit un lien : le navigateur
+// d'épreuve n'a pas de réseau (§ 19.2).
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
@@ -18,17 +21,15 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { commands } from 'vitest/browser';
 import { LICENCES } from '../actifs/licences.js';
 import { FICHIERS_LOGO } from '../actifs/logo.js';
+import { composantsDesTiers } from '../actifs/tiers.js';
 import { creerHorlogePilotee } from '../application/horloge.js';
-import { TABLES_APPLICATION } from '../application/libelles.js';
-import { creerTraduction } from '../application/traduction.js';
 import { couleurDeJeton } from '../../test/navigateur/captures.js';
-import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme } from '../../test/navigateur/rendu.js';
+import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme, traductionEcran } from '../../test/navigateur/rendu.js';
 import APropos from './APropos.svelte';
 import { LIENS, cleDeLien } from './apropos.js';
 import { CATEGORIES, cleDeCategorie, cleDeFonctionnalite } from './fonctionnalites.js';
-import { TABLES_INTERFACE } from './libelles.js';
 
-const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+const { t } = traductionEcran();
 
 // Un bloc inventé, de la forme d'une ligne d'« À propos ».
 const BLOC = 'Logiciel témoin \u{00B7} forme d\u{2019}épreuve \u{00B7} plateforme simulée';
@@ -356,6 +357,228 @@ describe('« À propos » : la licence et l’attribution (§ 18.6)', () => {
   });
 });
 
+// La liste attendue des composants tiers : composantsDesTiers sur TIERS.txt
+// et NotoSans-OFL.txt lus par le disque.
+async function composantsDuDisque() {
+  const [tiers, police] = await Promise.all([
+    commands.readFile('public/licences/TIERS.txt'),
+    commands.readFile('public/licences/NotoSans-OFL.txt'),
+  ]);
+  return composantsDesTiers(tiers, { 'NotoSans-OFL.txt': police });
+}
+
+// La carte des composants tiers, par son titre ; undefined sans elle.
+const carteTiers = (conteneur) =>
+  [...conteneur.querySelectorAll('section[aria-labelledby]')].find(
+    (s) => s.querySelector('h2')?.textContent === t('coquille.apropos.tiers.titre'),
+  );
+
+// L'entrée d'un composant, par sa clé, et sa commande « Lire la licence » —
+// celle de sa ligne, non celles des œuvres qu'il incorpore.
+const entree = (conteneur, cle) => [...conteneur.querySelectorAll('[data-composant]')].find((li) => li.dataset.composant === cle);
+const commandeLire = (conteneur, cle) =>
+  [...entree(conteneur, cle).querySelectorAll('[data-commande="lireTiers"]')].find((c) => c.closest('[data-composant]').dataset.composant === cle);
+
+// Le panneau monté, sa liste des composants tiers chargée.
+async function monterListeChargee(options) {
+  const conteneur = monter({ bloc: BLOC, pressePapiers: pressePapiersDEpreuve(), fermer: () => {}, ...options });
+  await vi.waitFor(() => {
+    flushSync();
+    expect(conteneur.querySelector('[data-composant]')).not.toBeNull();
+  });
+  return conteneur;
+}
+
+// L'élément le plus profond de racine dont le texte est texte ; null sans
+// lui.
+const porteur = (racine, texte) =>
+  [...racine.querySelectorAll('*')].reverse().find((e) => e.textContent.trim() === texte) ?? null;
+
+const designationDe = ({ nom, version }) => t('coquille.apropos.tiers.designation', { nom, version });
+
+describe('« À propos » : les composants tiers et leurs licences (§ 18.6)', () => {
+  test('la carte suit la licence et dit pourquoi ; chaque composant de TIERS.txt, les œuvres incorporées en retrait sous leur paquet', async () => {
+    const conteneur = await monterListeChargee();
+    const composants = await composantsDuDisque();
+    const titres = [...conteneur.querySelectorAll('section[aria-labelledby] h2')].map((h) => h.textContent);
+    expect(titres.slice(0, 3)).toEqual([
+      t('coquille.apropos.licence.titre'),
+      t('coquille.apropos.tiers.titre'),
+      t('coquille.apropos.attribution.titre'),
+    ]);
+    const carte = carteTiers(conteneur);
+    expect(carte.textContent).toContain(t('coquille.apropos.tiers.explication'));
+    expect(t('coquille.apropos.tiers.explication').endsWith('.')).toBe(true);
+
+    // Les paquets au premier niveau, dans l'ordre de l'index ; sous chacun,
+    // les œuvres qu'il incorpore, dans le même ordre.
+    const liste = carte.querySelector('ul');
+    const paquets = composants.filter((c) => c.hote === null);
+    expect([...liste.children].map((li) => [li.tagName, li.dataset.composant])).toEqual(paquets.map((p) => ['LI', p.cle]));
+    expect([...carte.querySelectorAll('[data-composant]')].map((li) => li.dataset.composant)).toEqual(
+      paquets.flatMap((p) => [p.cle, ...composants.filter((c) => c.hote === p.nom).map((c) => c.cle)]),
+    );
+    for (const hote of ['highs', '@pdf-lib/fontkit']) {
+      const incorpores = composants.filter((c) => c.hote === hote);
+      const sousListe = entree(conteneur, hote).querySelector(':scope > ul');
+      expect(sousListe.dataset.incorpores, hote).toBe(hote);
+      expect([...sousListe.children].map((li) => li.dataset.composant), hote).toEqual(incorpores.map((c) => c.cle));
+      const intitule = document.getElementById(sousListe.getAttribute('aria-labelledby'));
+      expect(intitule?.textContent, hote).toBe(t('coquille.apropos.tiers.incorpores', { hote }));
+    }
+
+    // Une entrée de chaque sorte : sa désignation, sa licence et sa commande,
+    // nommée avec le composant ; l'œuvre incorporée en retrait du paquet.
+    const svelte = composants.find((c) => c.cle === 'svelte');
+    const highs = composants.find((c) => c.cle === 'highs : HiGHS');
+    for (const composant of [svelte, highs]) {
+      const ligne = entree(conteneur, composant.cle);
+      expect(designationDe(composant), composant.cle).toContain(composant.version);
+      expect(ligne.textContent, composant.cle).toContain(designationDe(composant));
+      expect(ligne.textContent, composant.cle).toContain(t('coquille.apropos.tiers.licence', { licence: composant.licence }));
+      const commande = commandeLire(conteneur, composant.cle);
+      expect(commande.textContent.trim(), composant.cle).toBe(t('coquille.apropos.tiers.lire'));
+      expect(commande.getAttribute('aria-label'), composant.cle).toBe(t('coquille.apropos.tiers.lireNomme', { composant: designationDe(composant) }));
+    }
+    // Une œuvre sans version se désigne par son seul nom, à l'écran comme
+    // dans le nom de sa commande.
+    const sansVersion = composants.filter((c) => c.version === null);
+    expect(sansVersion.map((c) => c.cle)).toContain('highs : cuPDLP-C');
+    for (const composant of sansVersion) {
+      const ligne = entree(conteneur, composant.cle);
+      expect(ligne.querySelector('.designation').textContent, composant.cle).toBe(composant.nom);
+      expect(ligne.textContent, composant.cle).not.toContain('null');
+      const commande = commandeLire(conteneur, composant.cle);
+      expect(commande.getAttribute('aria-label'), composant.cle).toBe(t('coquille.apropos.tiers.lireNomme', { composant: composant.nom }));
+    }
+    const gauche = (cle) => commandeLire(conteneur, cle).closest('[data-composant]').getBoundingClientRect().left;
+    expect(gauche('highs : HiGHS')).toBeGreaterThan(gauche('highs') + 8);
+    expect(conteneur.querySelector('[data-chargement-tiers]')).toBeNull();
+  });
+
+  test('« Lire la licence » montre le texte de la section sous l’entrée, un seul à la fois ; « Fermer le texte » rend le focus', async () => {
+    const conteneur = await monterListeChargee();
+    const composants = await composantsDuDisque();
+    const textes = () => [...conteneur.querySelectorAll('[data-texte-licence]')];
+
+    commandeLire(conteneur, 'svelte').click();
+    flushSync();
+    expect(textes().map((pre) => pre.dataset.texteLicence)).toEqual(['svelte']);
+    const [svelte] = textes();
+    expect(svelte.tagName).toBe('PRE');
+    expect(getComputedStyle(svelte).whiteSpace).toBe('pre-wrap');
+    expect(svelte.textContent).toBe(composants.find((c) => c.cle === 'svelte').texte);
+    expect(svelte.textContent.trim()).toBe((await commands.readFile('node_modules/svelte/LICENSE.md')).trim());
+    expect(svelte.closest('[data-composant]').dataset.composant).toBe('svelte');
+
+    commandeLire(conteneur, 'Noto Sans').click();
+    flushSync();
+    expect(textes().map((pre) => pre.dataset.texteLicence)).toEqual(['Noto Sans']);
+    expect(textes()[0].textContent).toBe(await commands.readFile('public/licences/NotoSans-OFL.txt'));
+
+    // Une licence du logiciel remplace le texte d'un tiers, et l'inverse.
+    conteneur.querySelector('[data-commande="lireAgpl"]').click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(textes().map((pre) => pre.dataset.texteLicence)).toEqual(['agpl']);
+    });
+    const cle = 'highs : HiGHS';
+    commandeLire(conteneur, cle).click();
+    flushSync();
+    expect(textes().map((pre) => pre.dataset.texteLicence)).toEqual([cle]);
+    const [highs] = textes();
+    expect(highs.textContent).toBe(composants.find((c) => c.cle === cle).texte);
+    expect(highs.textContent.startsWith('MIT License')).toBe(true);
+    expect(highs.closest('[data-composant]').dataset.composant).toBe(cle);
+    expect(highs.scrollWidth).toBeLessThanOrEqual(highs.clientWidth + 1);
+
+    const fermer = conteneur.querySelectorAll('[data-commande="fermerTexte"]');
+    expect(fermer.length).toBe(1);
+    expect(fermer[0].closest('[data-composant]')?.dataset.composant).toBe(cle);
+    fermer[0].click();
+    flushSync();
+    expect(textes()).toEqual([]);
+    expect(conteneur.querySelector('[data-commande="fermerTexte"]')).toBeNull();
+    expect(document.activeElement).toBe(commandeLire(conteneur, cle));
+  });
+
+  test('le chargement se dit ; un morceau qui ne se charge pas se dit à la place de la liste, dans l’encre du refus, et va au collecteur', async () => {
+    let rejeter = null;
+    const appels = [];
+    const chargerTiers = () => {
+      appels.push(1);
+      return new Promise((_, rejet) => (rejeter = rejet));
+    };
+    const conteneur = monter({ bloc: BLOC, pressePapiers: pressePapiersDEpreuve(), fermer: () => {}, chargerTiers });
+    expect(appels.length).toBe(1);
+    const carte = carteTiers(conteneur);
+    const attente = carte.querySelector('[data-chargement-tiers]');
+    expect(attente?.getAttribute('role')).toBe('status');
+    expect(attente.textContent).toBe(t('coquille.apropos.tiers.chargement'));
+    expect(carte.querySelector('[data-composant]')).toBeNull();
+
+    // Le rejet est rapporté par reportError, qui le lève sur la fenêtre.
+    const panne = new Error('morceau des textes introuvable');
+    const rapportees = [];
+    const ecouter = (evenement) => rapportees.push(evenement.error);
+    window.addEventListener('error', ecouter);
+    rejeter(panne);
+    try {
+      await vi.waitFor(() => {
+        flushSync();
+        expect(carte.querySelector('[data-echec-tiers]')).not.toBeNull();
+      });
+    } finally {
+      window.removeEventListener('error', ecouter);
+    }
+    expect(rapportees).toEqual([panne]);
+    const echec = carte.querySelector('[data-echec-tiers]');
+    expect(echec.getAttribute('role')).toBe('status');
+    expect(echec.textContent).toBe(t('coquille.apropos.tiers.echec'));
+    expect(t('coquille.apropos.tiers.echec').endsWith('.')).toBe(true);
+    expect(couleurTexte(echec).join()).toBe(couleurDeJeton('--couleur-refus').join());
+    expect(carte.querySelector('[data-chargement-tiers]')).toBeNull();
+    expect(carte.querySelector('[data-composant]')).toBeNull();
+    expect(appels.length).toBe(1);
+  });
+
+  test('à 320 px, dans les deux thèmes : tout tient dans la largeur, lisible, licence et intitulés dans l’encre secondaire', async () => {
+    const conteneur = await monterListeChargee();
+    const composants = await composantsDuDisque();
+    conteneur.style.width = '320px';
+    // Le texte de LLVM, qui trace ses propres filets, par sa clé du disque.
+    const llvm = composants.find((c) => c.hote === 'highs' && c.nom.startsWith('libc++'));
+    commandeLire(conteneur, llvm.cle).click();
+    flushSync();
+    const carte = carteTiers(conteneur);
+    const pre = carte.querySelector('[data-texte-licence]');
+    expect(pre).not.toBeNull();
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        expect(carte.scrollWidth, theme).toBeLessThanOrEqual(carte.clientWidth + 1);
+        expect(carte.getBoundingClientRect().width, theme).toBeLessThanOrEqual(321);
+        expect(pre.scrollWidth, theme).toBeLessThanOrEqual(pre.clientWidth + 1);
+        for (const element of carte.querySelectorAll('[data-composant]')) {
+          expect(element.getBoundingClientRect().right, theme).toBeLessThanOrEqual(carte.getBoundingClientRect().right + 1);
+        }
+        const ligne = entree(conteneur, 'highs');
+        const highs = composants.find((c) => c.cle === 'highs');
+        // Le fond peint se lit au centre d'un élément, dans la fenêtre.
+        const designation = porteur(ligne, designationDe(highs));
+        designation.scrollIntoView({ block: 'center' });
+        const [fond] = fondPeintSous(designation);
+        expect(contraste(couleurTexte(designation), fond), theme).toBeGreaterThanOrEqual(4.5);
+        const intitule = document.getElementById(ligne.querySelector(':scope > ul').getAttribute('aria-labelledby'));
+        for (const secondaire of [porteur(ligne, t('coquille.apropos.tiers.licence', { licence: highs.licence })), intitule]) {
+          secondaire.scrollIntoView({ block: 'center' });
+          expect(couleurTexte(secondaire).join(), theme).toBe(couleurDeJeton('--couleur-page-texte-secondaire').join());
+          expect(contraste(couleurTexte(secondaire), fondPeintSous(secondaire)[0]), theme).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+    }
+  });
+});
+
 describe('« À propos » : le sommaire des fonctionnalités (§ 2.2)', () => {
   test('chaque catégorie, dans l’ordre, sous son libellé, puis chacune de ses fonctionnalités, son numéro avant son intitulé', () => {
     const conteneur = monterSeul(facadeDEpreuve());
@@ -368,7 +591,10 @@ describe('« À propos » : le sommaire des fonctionnalités (§ 2.2)', () => {
       expect(lignes.map((l) => l.dataset.fonctionnalite), code).toEqual(fonctionnalites.map(({ numero }) => numero));
       for (const ligne of lignes) {
         const numero = ligne.dataset.fonctionnalite;
-        expect(ligne.textContent.replace(/\s+/gu, ' ').trim(), numero).toBe(`${numero} ${t(cleDeFonctionnalite(numero))}`);
+        // Les blancs se comparent réduits à une espace, des deux côtés : le t
+        // de l'écran pose des espaces insécables.
+        const blancs = (texte) => texte.replace(/\s+/gu, ' ').trim();
+        expect(blancs(ligne.textContent), numero).toBe(blancs(`${numero} ${t(cleDeFonctionnalite(numero))}`));
       }
     }
   });

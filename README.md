@@ -201,7 +201,9 @@ Les avis des paquets que la page incorpore — Svelte, pdf-lib, fontkit et ce
 qu'ils tirent, et le solveur **HiGHS** (paquet `highs`), qui calcule le
 plancher exact des collisions du diagnostic, avec les œuvres que son module
 WebAssembly compile — sont dans `public/licences/TIERS.txt`. Ces
-fichiers voyagent avec la page, dans `www/licences/`.
+fichiers voyagent avec la page, dans `www/licences/`, et ces avis se lisent
+aussi dans « À propos », carte « Composants tiers et leurs licences », que
+l'application tire de ce seul fichier.
 
 Le logo de TechnoLibre, `src/actifs/full_logo_technolibre_2023.svg` et `.png`,
 est la marque de l'éditeur ; « À propos » l'affiche et le donne à télécharger.

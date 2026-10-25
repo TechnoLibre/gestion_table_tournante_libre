@@ -552,14 +552,26 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
       assert.notEqual(morceauxDePolice[0], morceauxDePolice[1]);
 
       // Le logo et les textes des licences (§ 18.6) : chacun dans un seul
-      // morceau, différé, que chargerLogo et chargerTexteLicence importent à
-      // la demande, avec les fichiers qu'il incruste ; le PNG du logo y est
-      // une URL data:, dont le décodage est le fichier de src/actifs.
+      // morceau, différé, que chargerLogo, chargerTexteLicence et
+      // chargerComposantsTiers importent à la demande, avec les fichiers qu'il
+      // incruste — les textes des tiers et de la police compris ; le PNG du
+      // logo y est une URL data:, dont le décodage est le fichier de
+      // src/actifs. L'analyse de TIERS.txt, tiers.js, que
+      // chargerComposantsTiers importe avec les textes, est différée de même.
       const sansRequete = (id) => id.replace(/\?.*$/, '');
       const morceauxDActifs = [];
       for (const [module, incrustes] of [
         ['src/actifs/donnees_logo.js', ['src/actifs/full_logo_technolibre_2023.svg', 'src/actifs/full_logo_technolibre_2023.png']],
-        ['src/actifs/textes_licences.js', ['public/licences/AGPL-3.0-or-later.txt', 'public/licences/LiLiQ-Rplus-1.1.txt']],
+        [
+          'src/actifs/textes_licences.js',
+          [
+            'public/licences/AGPL-3.0-or-later.txt',
+            'public/licences/LiLiQ-Rplus-1.1.txt',
+            'public/licences/TIERS.txt',
+            'public/licences/NotoSans-OFL.txt',
+          ],
+        ],
+        ['src/actifs/tiers.js', []],
       ]) {
         const id = join(RACINE, ...module.split('/'));
         const porteurs = morceaux.filter((m) => m.moduleIds.includes(id));

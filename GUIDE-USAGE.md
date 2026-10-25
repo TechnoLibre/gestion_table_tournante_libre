@@ -1246,6 +1246,22 @@ personne (étape 2 ou 3) avant de générer ; il faut avoir retenu un placement
 (étape 10) pour qu’une impression ne sorte pas en brouillon. Tout le reste est
 facultatif, et se reprend dans n’importe quel ordre.
 
+## Le panneau « À propos »
+
+La commande « À propos » du bandeau ouvre un panneau qui remplace l’écran ;
+« Fermer » rend celui d’où vous l’avez ouvert. Il donne la ligne de version à
+copier dans un signalement, l’éditeur et l’auteur, la licence du logiciel et
+ses deux textes complets, l’attribution demandée et le sommaire des
+fonctionnalités.
+
+Sa carte **« Composants tiers et leurs licences »** nomme chaque œuvre que le
+logiciel incorpore — Svelte, pdf-lib, le solveur HiGHS, la police Noto Sans,
+entre autres —, avec sa version et sa licence ; les œuvres qu’un paquet
+incorpore à son tour suivent en retrait, sous lui. « Lire la licence » montre
+le texte de l’une sous son nom, sans réseau ; un seul texte s’affiche à la
+fois dans le panneau, et « Fermer le texte » le retire. La liste vient du
+fichier `licences/TIERS.txt`, livré avec le logiciel, qui porte les mêmes avis.
+
 ## Comment le logiciel cherche
 
 Cette section répond à deux questions : pourquoi deux propositions issues du

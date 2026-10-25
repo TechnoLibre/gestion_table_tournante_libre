@@ -9390,7 +9390,7 @@ chemin écrit se dit sous le logo ; un enregistrement refusé — un dossier où
 rien ne s'écrit — s'y dit aussi, comme tout refus d'écriture, et le
 téléchargement suivant le retire. Le logo se charge à part, et le lancement ne
 le lit pas. Sous l'éditeur, le lien vers son site, `https://technolibre.ca` ;
-sous l'auteur, le lien vers le code source du projet. Suivent trois cartes :
+sous l'auteur, le lien vers le code source du projet. Suivent quatre cartes :
 
 - la **licence** : le choix entre l'AGPL-3.0-or-later et la LiLiQ-R+,
   l'identifiant SPDX `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1` — celui que
@@ -9399,6 +9399,15 @@ sous l'auteur, le lien vers le code source du projet. Suivent trois cartes :
   licence choisie, les liens vers les deux textes officiels, et les deux textes
   complets, livrés avec le logiciel et lisibles sur place, sans réseau, un à la
   fois ;
+- les **composants tiers et leurs licences** : chaque œuvre que la page
+  incorpore, tirée de `public/licences/TIERS.txt` et de lui seul — aucune
+  liste n'est recopiée —, son nom, sa version et sa licence, les œuvres
+  qu'un paquet incorpore regroupées en retrait sous lui ; « Lire la licence »
+  montre le texte de sa section — celui de `NotoSans-OFL.txt` pour la
+  police — sous son entrée, dans un bloc pareil à celui des licences du
+  logiciel, un seul texte à la fois dans tout le panneau. La liste se charge à l'ouverture du panneau,
+  dans le morceau des textes de licence, que le lancement ne lit pas ; un
+  chargement qui échoue le dit et renvoie au fichier livré ;
 - l'**attribution**, une demande de courtoisie — afficher le logo de
   TechnoLibre sur les badges, puis un lien vers son site — qui n'ajoute aucune
   condition à la licence ;
