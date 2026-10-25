@@ -32,6 +32,7 @@
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
     "fast-check": "^4.10.2",
+    "highs": "1.15.4",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "6.4.299",
     "playwright": "^1.63.0",

@@ -8918,8 +8918,12 @@ sa valeur soit encore relevée ; un seul reste entièrement ouvert.
    producteur — la date du document est l'horodatage du placement (§ 14.7).
    `pdfjs-dist` lit sous `node` la couche de texte, les traits et les boîtes dont
    le test dépend entièrement, et trame les pages des captures d'écran du
-   § 19.6. Toutes sont des dépendances de développement épinglées à leur version
-   exacte : Vite incorpore au paquet ce que la page importe, et rien d'autre.
+   § 19.6. Le solveur destiné au plancher exact du diagnostic, `highs`
+   (highs-js, qui compile HiGHS en WebAssembly), les rejoint aux mêmes
+   conditions. Toutes sont des dépendances de développement épinglées à leur
+   version exacte : Vite incorpore au paquet ce que la page importe, et rien
+   d'autre. Leurs avis, et ceux des œuvres que leur construction publiée
+   incorpore, vont dans `public/licences/TIERS.txt`, qui voyage avec la page.
 3. **TRANCHÉ — la désignation des animateurs est manuelle.** Il n'existe aucune
    commande qui les répartit : § 5.8 et § 2.1, étape 6.
 4. **TRANCHÉ — mesuré : le coût de la maximisation du plafond a priori** sur

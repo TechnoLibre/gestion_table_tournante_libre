@@ -681,20 +681,48 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
       })
       .map(({ nom, version, licence }) => `${nom} ${version} — ${licence}`);
     assert.deepEqual(fautes, []);
-    // Les paquets de la production PDF ont leur avis, même quand aucune
-    // page ne les importe encore.
-    for (const nom of ['pdf-lib', '@pdf-lib/fontkit', '@pdf-lib/standard-fonts', '@pdf-lib/upng', 'pako', 'tslib']) {
+    // Les paquets de la production PDF et le solveur du diagnostic ont leur
+    // avis, même quand aucune page ne les importe encore.
+    for (const nom of ['pdf-lib', '@pdf-lib/fontkit', '@pdf-lib/standard-fonts', '@pdf-lib/upng', 'pako', 'tslib', 'highs']) {
       assert.ok(tiers.some((s) => s.nom === nom), `${nom} sans avis`);
     }
+    // La section de highs porte, sous son filet de « - », le LICENSE du
+    // paquet tel quel ; chaque section a sa ligne d'index, « nom version »
+    // pour un paquet, « incorporé à P : nom » pour une œuvre incorporée, et
+    // l'index ne nomme rien qui n'ait sa section.
+    const texte = readFileSync(join(RACINE, 'public', 'licences', 'TIERS.txt'), 'utf8');
+    const sections = texte.split(/^={72}$/m);
+    const highs = sections.find((s) => /^\s*paquet : highs /.test(s));
+    assert.equal(highs.split(/^-{72}\n/m)[1].trim(), readFileSync(join(RACINE, 'node_modules', 'highs', 'LICENSE'), 'utf8').trim());
+    const debut = texte.indexOf('\nIndex\n');
+    const index = texte.slice(debut, texte.indexOf('\n\n', debut + 7)).split('\n').slice(3);
+    const entete = (s) => /^\s*(paquet : (\S+ \S+)|incorporé à (\S+) : (.+))/.exec(s);
+    const nomme = sections
+      .map(entete)
+      .filter(Boolean)
+      .map(([, , paquet, hote, oeuvre]) => (paquet === undefined ? `incorporé à ${hote} : ${oeuvre}` : paquet));
+    assert.deepEqual(
+      nomme.filter((n) => !index.some((ligne) => ligne.trim().startsWith(`${n} — `))),
+      [],
+      'sections sans ligne d’index',
+    );
+    assert.deepEqual(
+      index.filter((ligne) => !/^Noto Sans /.test(ligne) && !nomme.some((n) => ligne.trim().startsWith(`${n} — `))),
+      [],
+      'lignes d’index sans section',
+    );
   });
 
   // La construction minifiée retire les commentaires ordinaires : l'avis
   // qu'un code incorporé porte en tête n'arrive dans www/ que par TIERS.txt.
   // Chaque ligne « Copyright … » d'un commentaire de la construction publiée
   // de fontkit y figure donc telle quelle, et une section « incorporé » qui
-  // nomme Apache porte le texte entier de l'Apache License 2.0. Une ligne
-  // « Copyright » est le texte du titulaire : aucune incise française n'y
-  // entre, elle va dans l'en-tête de la section.
+  // nomme Apache porte le texte entier de l'Apache License 2.0. Les sections
+  // se coupent à la ligne de 72 « = » qui les sépare, et à elle seule : un
+  // texte amont qui trace ses propres filets de « = », comme le LICENSE.TXT
+  // de LLVM, reste entier dans sa section. Une ligne « Copyright » est le
+  // texte du titulaire : aucune incise française n'y entre, elle va dans
+  // l'en-tête de la section.
   test('TIERS.txt porte mot pour mot les avis que les commentaires de fontkit incorporent, et le texte de leur licence', () => {
     const tiers = readFileSync(join(RACINE, 'public', 'licences', 'TIERS.txt'), 'utf8');
     const lignes = new Set(tiers.split('\n').map((l) => l.trim()));
@@ -707,7 +735,7 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
     assert.ok(avis.length > 0, `aucun avis dans ${entree}`);
     assert.deepEqual([...new Set(avis)].filter((ligne) => !lignes.has(ligne)), []);
 
-    const incorporees = tiers.split(/^=+$/m).filter((section) => /^\s*incorporé à /.test(section));
+    const incorporees = tiers.split(/^={72}$/m).filter((section) => /^\s*incorporé à /.test(section));
     assert.ok(incorporees.length > 0, 'aucune section « incorporé »');
     const TERMES_APACHE = [
       'Version 2.0, January 2004',

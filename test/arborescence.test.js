@@ -1501,11 +1501,12 @@ describe('arborescence : dépendances déclarées', () => {
 });
 
 // Les paquets de développement, liste fermée : ceux de l'outillage, puis
-// ceux des sorties — pdf-lib et fontkit, que la page incorpore pour la
-// planche, pdfjs-dist, outil d'épreuve qui relit le PDF (§ 11.1, § 17,
-// point 2). Le projet n'a aucune dépendance d'exécution : Vite incorpore ce
-// que la page importe. Les paquets des sorties sont épinglés à une version
-// exacte, et ni eux ni ce qu'ils tirent ne portent de script d'installation.
+// ceux que la page incorpore et leur outil d'épreuve — pdf-lib et fontkit,
+// pour la planche, pdfjs-dist, qui relit le PDF (§ 11.1, § 17, point 2), et
+// highs, le solveur destiné au plancher exact du diagnostic, module et actif
+// wasm. Le projet n'a aucune dépendance d'exécution : Vite incorpore ce que
+// la page importe. Ces paquets sont épinglés à une version exacte, et ni eux
+// ni ce qu'ils tirent ne portent de script d'installation.
 const DEPENDANCES_DE_DEVELOPPEMENT = [
   '@capacitor/cli',
   '@capacitor/core',
@@ -1516,6 +1517,7 @@ const DEPENDANCES_DE_DEVELOPPEMENT = [
   'electron',
   'electron-builder',
   'fast-check',
+  'highs',
   'pdf-lib',
   'pdfjs-dist',
   'playwright',
@@ -1523,7 +1525,7 @@ const DEPENDANCES_DE_DEVELOPPEMENT = [
   'vite',
   'vitest',
 ];
-const PAQUETS_EPINGLES = ['pdf-lib', '@pdf-lib/fontkit', 'pdfjs-dist'];
+const PAQUETS_EPINGLES = ['pdf-lib', '@pdf-lib/fontkit', 'pdfjs-dist', 'highs'];
 const SCRIPTS_ADMIS = { 'electron-winstaller': false };
 const VERSION_EXACTE = /^\d+\.\d+\.\d+$/;
 
@@ -1579,19 +1581,25 @@ function releverPaquetsDeclares(racine, liste = DEPENDANCES_DE_DEVELOPPEMENT) {
   return refus;
 }
 
-// Les paquets réservés à une place : chacun ne se charge que sous les arbres
-// admis, relatifs à la racine. pdf-lib et fontkit dessinent la planche dans
-// src/pdf, seule couche de la page qui les importe ; les épreuves les
-// relisent. pdfjs-dist, lecteur qui relit le PDF comme un lecteur réel, ne
-// sert qu'aux épreuves et aux commandes de Vitest, sous test/ : un module
-// livré qui l'importerait l'emporterait dans la page.
+// Les paquets réservés à une place : chacun ne se charge que dans les lieux
+// admis, relatifs à la racine — un arbre et tout ce qu'il contient, ou un
+// fichier nommé par son chemin exact. pdf-lib et fontkit dessinent la
+// planche dans src/pdf, seule couche de la page qui les importe ; les
+// épreuves les relisent. pdfjs-dist, lecteur qui relit le PDF comme un
+// lecteur réel, ne sert qu'aux épreuves et aux commandes de Vitest, sous
+// test/ : un module livré qui l'importerait l'emporterait dans la page.
+// highs, le solveur du plancher exact du diagnostic, ne se charge que dans
+// src/application/solveur_travailleur.js, seul module de src/ qui l'importe,
+// et dans src/main.js, pour désigner son actif wasm (highs/runtime?url) ; le
+// reste de src/application n'y touche pas.
 const PAQUETS_RESERVES = [
   { paquets: ['pdf-lib', '@pdf-lib/fontkit'], admis: ['src/pdf', 'test'] },
   { paquets: ['pdfjs-dist'], admis: ['test'] },
+  { paquets: ['highs'], admis: ['src/application/solveur_travailleur.js', 'src/main.js', 'test'] },
 ];
 
 // Relevé « fichier:ligne spécificateur » des chargements d'un paquet
-// réservé hors de ses arbres admis, dans le périmètre des dépendances
+// réservé hors de ses lieux admis, dans le périmètre des dépendances
 // (sourcesDuProjet), par fichier puis par ligne. Un chargement écrit dans
 // une chaîne, donnée d'épreuve, n'en est pas un. Lève quand le périmètre ne
 // porte aucun fichier.
@@ -1606,7 +1614,7 @@ function releverPaquetsReserves(racine, reserves = PAQUETS_RESERVES) {
       .filter(({ indice, specificateur }) => estDuCode(code, indice) && estNu(specificateur))
       .filter(({ specificateur }) => {
         const reserve = reserves.find(({ paquets }) => paquets.includes(nomDePaquet(specificateur)));
-        return reserve !== undefined && !reserve.admis.some((arbre) => nom.startsWith(`${arbre}/`));
+        return reserve !== undefined && !reserve.admis.some((lieu) => nom === lieu || nom.startsWith(`${lieu}/`));
       })
       .map(({ indice, specificateur }) => `${nom}:${ligneDe(texte, indice)} ${specificateur}`);
   });
@@ -1769,7 +1777,7 @@ describe('arborescence : la validation des placements (§ 8.9)', () => {
 });
 
 describe('arborescence : les sorties — PDF, impression, police (§ 11.1, § 13.4, § 17 point 2)', () => {
-  test('les paquets de développement sont ceux de la liste fermée, les trois paquets des sorties épinglés exacts, sans script d’installation ; aucune dépendance d’exécution', () => {
+  test('les paquets de développement sont ceux de la liste fermée, les paquets des sorties et le solveur épinglés exacts, sans script d’installation ; aucune dépendance d’exécution', () => {
     assert.deepEqual(releverPaquetsDeclares(RACINE), []);
   });
 
@@ -1783,32 +1791,35 @@ describe('arborescence : les sorties — PDF, impression, police (§ 11.1, § 13
         'node_modules/pako': {},
         'node_modules/pdfjs-dist': { optionalDependencies: { canevas: '1.0.0' } },
         'node_modules/canevas': { hasInstallScript: true },
+        'node_modules/highs': { hasInstallScript: true },
         'node_modules/sans-rapport': { hasInstallScript: true },
       },
     };
     const fichiers = {
       'package.json': JSON.stringify({
         dependencies: { 'pdf-lib': '1.17.1' },
-        devDependencies: { vite: '^8.3.2', 'pdf-lib': '^1.17.1', 'pdfjs-dist': '6.4.299', 'outil-de-trop': '1.0.0' },
+        devDependencies: { vite: '^8.3.2', 'pdf-lib': '^1.17.1', 'pdfjs-dist': '6.4.299', highs: '^1.15.4', 'outil-de-trop': '1.0.0' },
         allowScripts: { 'electron-winstaller': false, canevas: true },
       }),
       'package-lock.json': JSON.stringify(verrou),
     };
     assert.deepEqual(
-      avecArbre(fichiers, (racine) => releverPaquetsDeclares(racine, ['vite', 'pdf-lib', 'pdfjs-dist', 'svelte'])),
+      avecArbre(fichiers, (racine) => releverPaquetsDeclares(racine, ['vite', 'pdf-lib', 'pdfjs-dist', 'highs', 'svelte'])),
       [
         'devDependencies outil-de-trop : hors de la liste',
         'devDependencies svelte : absent',
         'dependencies pdf-lib',
         "devDependencies pdf-lib : ^1.17.1 n'est pas une version exacte",
+        "devDependencies highs : ^1.15.4 n'est pas une version exacte",
         'allowScripts : {"electron-winstaller":false,"canevas":true}',
+        "node_modules/highs : script d'installation",
         "node_modules/pdf-lib/node_modules/tslib : script d'installation",
         "node_modules/canevas : script d'installation",
       ],
     );
   });
 
-  test('pdf-lib et fontkit ne se chargent que sous src/pdf et test/, pdfjs-dist que sous test/', () => {
+  test('pdf-lib et fontkit ne se chargent que sous src/pdf et test/, pdfjs-dist que sous test/, highs que dans solveur_travailleur.js, src/main.js et test/', () => {
     assert.deepEqual(releverPaquetsReserves(RACINE), []);
   });
 
@@ -1834,6 +1845,27 @@ describe('arborescence : les sorties — PDF, impression, police (§ 11.1, § 13
       'src/application/planche.js:2 pdfjs-dist/legacy/build/pdf.mjs',
       'src/interface/Badges.svelte:2 pdf-lib',
       'src/pdf/planche.test.js:1 pdfjs-dist',
+    ]);
+  });
+
+  test('la garde des paquets réservés admet un fichier nommé par son chemin exact : highs ne se charge que dans src/application/solveur_travailleur.js, src/main.js et test/', () => {
+    const fichiers = {
+      'src/application/solveur_travailleur.js': "import highs from 'highs';\n",
+      'src/main.js': "import urlHighs from 'highs/runtime?url';\n",
+      'src/application/modele_tour.js': "const charger = () => import('highs');\n",
+      'src/application/solveur_travailleur.js.mjs': "import highs from 'highs';\n",
+      'src/application/solveur_travailleur.js.bak/charge.js': "import highs from 'highs';\n",
+      'src/main.js.d/reste.js': "import highs from 'highs';\n",
+      'src/interface/diagnostic/travailleur_solveur.js': "import loadHighs from 'highs';\n",
+      'test/solveur.js': "import highs from 'highs';\nimport urlHighs from 'highs/runtime?url';\n",
+      'vite.config.js': "import { defineConfig } from 'vite';\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverPaquetsReserves), [
+      'src/application/modele_tour.js:1 highs',
+      'src/application/solveur_travailleur.js.bak/charge.js:1 highs',
+      'src/application/solveur_travailleur.js.mjs:1 highs',
+      'src/interface/diagnostic/travailleur_solveur.js:1 highs',
+      'src/main.js.d/reste.js:1 highs',
     ]);
   });
 

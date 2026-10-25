@@ -632,6 +632,10 @@
   chaque organisation seule. La carte de la proposition choisie dit d'une
   proposition sans conflit qui l'atteint que ses collisions sont au minimum,
   et ne propose plus « Repartir d'elle » pour elles.
+- Les avis des tiers livrés avec l'application, `licences/TIERS.txt`,
+  nomment le solveur HiGHS, qui servira au calcul exact du plancher des
+  collisions du diagnostic, et chaque œuvre que son module WebAssembly
+  compile, chacune avec le texte entier de sa licence.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
