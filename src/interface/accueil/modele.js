@@ -156,14 +156,18 @@ export function signalementsDe(ligne) {
  * l'identifiant de meilleureDuClassement, par format, la valeur absente sans
  * proposition classée. Sans resume, la ligne est enAttente : son résumé se
  * calcule encore, et les trois valeurs valent la valeur absente, que le
- * composant remplace par le signe du chargement.
+ * composant remplace par le signe du chargement. Un resume dont aJour vaut
+ * false — l'ancien chiffre d'un aperçu périmé, que la liste recalcule — rend
+ * la ligne aVerifier : ses trois valeurs se lisent comme celles d'un résumé
+ * à jour, et le composant les atténue à côté du signe du chargement. aJour
+ * absent ou vrai : la ligne n'est pas à vérifier.
  *
  * @param {Object} ligne   LigneListe (evenements.js)
  * @param {ReturnType<import('../../application/format.js').creerFormat>} format
  * @param {{mesuresDuRetenu: {collisionsCumulees: number, rencontresRepetees: number}|null,
- *          meilleureDuClassement: {id: number}|null}} [resume]
+ *          meilleureDuClassement: {id: number}|null, aJour?: boolean}} [resume]
  * @returns {{nom: string, date: string, etat: string, participants: string,
- *            modification: string, chemin: string, enAttente: boolean,
+ *            modification: string, chemin: string, enAttente: boolean, aVerifier: boolean,
  *            collisionsCumulees: string, rencontresRepetees: string,
  *            meilleure: {id: string},
  *            signalements: Array<{cle: string, details: Object, noms: string[]}>}}
@@ -177,6 +181,7 @@ export function ligneAffichee(ligne, format, resume) {
     modification: ligne.derniereModification === null ? format.nombre(null) : format.horodatage(ligne.derniereModification),
     chemin: ligne.chemin,
     enAttente: resume === undefined,
+    aVerifier: resume !== undefined && resume.aJour === false,
     collisionsCumulees: format.nombre(resume?.mesuresDuRetenu?.collisionsCumulees ?? null),
     rencontresRepetees: format.nombre(resume?.mesuresDuRetenu?.rencontresRepetees ?? null),
     meilleure: { id: format.nombre(resume?.meilleureDuClassement?.id ?? null) },

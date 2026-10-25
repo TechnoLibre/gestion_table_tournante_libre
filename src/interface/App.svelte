@@ -3,14 +3,15 @@
 
 <script>
   // Racine de l'interface (§ 13.4). Ses propriétés sont les dépendances de
-  // l'application — système de fichiers, horloge, exécuteur de génération,
-  // presse-papiers, identifiants, langue, provenance, démonstrations, format
-  // courant, version du produit et sa forme Windows, chargement de la police
-  // embarquée, imprimante de la plateforme, chargement de la section de la
-  // qualité, et en option le thème de départ — que src/main.js construit
-  // pour la machine et monterApp pour une épreuve : App ne choisit aucune
-  // plateforme, et ne lit la version que dans ses propriétés, la même au
-  // bandeau, au titre, à l'accueil et dans le bloc « À propos ».
+  // l'application — système de fichiers, horloge, exécuteur de génération, en
+  // option l'exécuteur de la vue d'ensemble de la liste, presse-papiers,
+  // identifiants, langue, provenance, démonstrations, format courant, version
+  // du produit et sa forme Windows, chargement de la police embarquée,
+  // imprimante de la plateforme, chargement de la section de la qualité, et en
+  // option le thème de départ — que src/main.js construit pour la machine et
+  // monterApp pour une épreuve : App ne choisit aucune plateforme, et ne lit
+  // la version que dans ses propriétés, la même au bandeau, au titre, à
+  // l'accueil et dans le bloc « À propos ».
   //
   // La section de la qualité forme son propre morceau dans la construction :
   // src/main.js passe une fonction qui la charge par un import différé,
@@ -31,8 +32,11 @@
   // question au démarrage, après la réponse sinon : pret se résout quand la
   // détermination est faite, la liste lue quand aucune question n'attend, et
   // le premier écran — les lignes de la liste, ou la question — rendu. Les
-  // résumés des lignes n'en sont pas : ils se calculent ensuite, un
-  // événement après l'autre, et l'accueil montre chacun dès qu'il arrive.
+  // résumés des lignes n'en sont pas : ceux des aperçus se lisent ensuite,
+  // puis ceux des aperçus absents ou périmés se calculent, un événement
+  // après l'autre, par l'exécuteur de la vue d'ensemble — sur le fil sans
+  // lui —, et l'accueil montre chacun dès qu'il arrive. App termine cet
+  // exécuteur à son démontage, après avoir abandonné le flux des résumés.
   //
   // L'écran suit la séance : la liste sans événement ouvert, l'événement
   // sinon ; le panneau « À propos » ou le panneau « Paramètres » les
@@ -107,6 +111,10 @@
     fs,
     horloge,
     executeur,
+    // { calculer(charge) → Promise<résumés>, terminer() } : l'exécuteur de
+    // la vue d'ensemble de la liste (executeur_apercu.js), que la façade
+    // reçoit ; null, le calcul se fait sur le fil.
+    executeurApercu = null,
     pressePapiers,
     identifiant,
     langue = 'fr',
@@ -184,6 +192,7 @@
     creer: (champs) => seanceApp.creer(champs),
     racine: () => seanceApp.etat().racine,
     changerRacine: (racine) => seanceApp.changerRacine(racine),
+    executeurApercu,
   });
   // La façade que reçoivent les composants, et que rend l'export facade :
   // celle de creerFacade, dont demarrer et repondre relisent la liste une
@@ -237,17 +246,19 @@
   let lecture = Promise.resolve();
   let lectures = 0;
 
-  // Les résumés des lignes lues, par clé, que facade.resumer rend un
-  // événement après l'autre, chaque pas attendant l'image puis l'horloge
-  // (creerPas) ; chargement est son flux en cours, ou null. Une lecture qui
-  // commence abandonne le flux de la précédente, comme l'ouverture d'un
-  // événement et le démontage : un résumé calculé pour une liste ne se pose
-  // jamais sur une plus récente. Une lecture qui s'achève sous un événement
-  // ouvert pose ses lignes sans lancer de flux : la fermeture relit la
-  // liste, et ses résumés avec elle. Le flux lit dans le dossier de travail de
-  // sa liste, et un changement de dossier relit la liste. Une faute d'un
-  // calcul rejette fin, que rien ne retient : la page la reçoit comme toute
-  // faute, et la ligne écrit « — ».
+  // Les résumés des lignes lues, par clé, que facade.resumer rend un événement
+  // après l'autre, chaque pas attendant l'image puis l'horloge (creerPas) ;
+  // chargement est son flux en cours, ou null. Chaque résumé se range avec sa
+  // marque, aJour : faux pour l'ancien chiffre d'un aperçu périmé, que la
+  // ligne montre atténué jusqu'à son recalcul ; une marque absente vaut à
+  // jour. Une lecture qui commence abandonne le flux de la précédente, comme
+  // l'ouverture d'un événement et le démontage : un résumé calculé pour une
+  // liste ne se pose jamais sur une plus récente. Une lecture qui s'achève
+  // sous un événement ouvert pose ses lignes sans lancer de flux : la
+  // fermeture relit la liste, et ses résumés avec elle. Le flux lit dans le
+  // dossier de travail de sa liste, et un changement de dossier relit la
+  // liste. Une faute d'un calcul rejette fin, que rien ne retient : la page la
+  // reçoit comme toute faute, et la ligne écrit « — ».
   const resumes = new SvelteMap();
   let chargement = null;
   function abandonnerResumes() {
@@ -258,10 +269,13 @@
     resumes.clear();
     chargement = facadeContexte.resumer(lues, {
       ceder: creerPas(horloge, (rappel) => requestAnimationFrame(rappel)),
-      recevoir: (cle, resume) => resumes.set(cle, resume),
+      recevoir: (cle, resume, marque) => resumes.set(cle, { ...resume, aJour: marque?.aJour !== false }),
     });
   }
   onDestroy(abandonnerResumes);
+  // terminer() ne règle pas le calcul en cours : le flux, abandonné au même
+  // démontage, ne le reçoit pas.
+  onDestroy(() => executeurApercu?.terminer());
 
   async function lireListe() {
     lectures += 1;

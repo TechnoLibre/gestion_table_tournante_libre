@@ -32,15 +32,17 @@ import { ErreurStockage } from './erreurs.js';
 import { cheminLogo } from './logos.js';
 
 // Suffixes des fichiers d'un événement, que précède la base de son nom :
-// l'état, son .precedent, le journal, le verrou, et le compagnon des
-// courses, qui garde la course de la recherche de chaque proposition à
-// côté de l'état (courses.js).
+// l'état, son .precedent, le journal, le verrou, le compagnon des courses,
+// qui garde la course de la recherche de chaque proposition à côté de l'état
+// (courses.js), et l'aperçu de la liste, qui garde les deux résumés que la
+// liste montre et l'empreinte des textes d'où ils viennent (apercu.js).
 export const SUFFIXES = Object.freeze({
   etat: '.gtt.json',
   precedent: '.gtt.json.precedent',
   journal: '.gtt-journal.jsonl',
   verrou: '.gtt.verrou',
   courses: '.gtt-courses.json',
+  apercu: '.gtt-apercu.json',
 });
 
 // Ajouté au nom d'un fichier pendant son écriture atomique, puis renommé
@@ -549,7 +551,14 @@ function composerCsv(base, options = {}) {
 // PAPIERS et de MODELES_BADGE ne décident d'aucun ordre : seul leur maximum
 // compte. Un suffixe ajouté à SUFFIXES s'ajoute aussi à ce maximum.
 function suffixePlusLong() {
-  const fixes = [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou, SUFFIXES.courses];
+  const fixes = [
+    SUFFIXES.etat,
+    SUFFIXES.precedent,
+    SUFFIXES.journal,
+    SUFFIXES.verrou,
+    SUFFIXES.courses,
+    SUFFIXES.apercu,
+  ];
   const base = 'b';
   const reedition = { ids: new Array(REEDITION_MAX) };
   const dates = ['2000-01-01T00:00:00+00:00', null];

@@ -18,6 +18,7 @@
 
 // [attribut, porteur, valeurs], dans l'ordre des attributs.
 const ENTREES = [
+  ['data-a-verifier', 'accueil : une valeur de la liste tirée d’un aperçu périmé, en cours de vérification', ['']],
   ['data-absentes', 'plan : les absentes d’un tour sur la fiche d’une place ou d’une table, par tour', null],
   ['data-activite', 'la pastille de l’indicateur d’activité, pendant une opération longue', ['']],
   ['data-affichee', 'import : la valeur affichée d’une cellule de l’aperçu', ['']],

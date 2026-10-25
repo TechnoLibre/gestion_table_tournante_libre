@@ -19,10 +19,17 @@
 // Lister ne fait que lire, et n'évalue rien : la liste paraît sans attendre
 // aucune évaluation. Les deux résumés d'une
 // ligne — celui de son retenu (resumeDuRetenu, evaluation.js) et la
-// meilleure proposition de son classement (resumeDuMeilleur) — se calculent
-// ensuite, un événement après l'autre, par resumer : chacun relit l'état de
-// son événement une fois, examine sa charge comme l'ouverture l'examine, et
-// rend la main entre deux événements.
+// meilleure proposition de son classement (resumeDuMeilleur) — viennent
+// ensuite de resumer. Il lit d'abord l'aperçu de chaque événement,
+// <base>.gtt-apercu.json (apercu.js), et le rend aussitôt : à jour quand son
+// empreinte est celle des textes sur le disque, à vérifier sinon. Puis,
+// pour les seuls événements sans aperçu à jour, un après l'autre, il relit
+// l'état, examine la charge comme l'ouverture l'examine, la confie à
+// l'exécuteur d'aperçu, qui calcule les deux résumés hors du fil de
+// l'interface, écrit l'aperçu et rend la main entre deux événements. La
+// liste n'écrit que l'aperçu, jamais l'état, le journal ni le verrou, y
+// compris pour un événement qu'une autre séance tient : c'est un cache, que
+// l'empreinte juge.
 //
 // Une opération qui écrit dérive ses refus lisibles sans écrire — nom vide,
 // plan bloqué, format plus récent — avant toute écriture, sonde de verrou
@@ -41,7 +48,15 @@
 // d'une démonstration, jalon de création, reprise — se composent par
 // libelle, en français ; aucune autre chaîne visible n'en sort : refus, avis
 // et questions sont des codes et leurs détails.
-import { deverrouiller, lister as listerDepot, ouvrir as ouvrirDepot, verrouiller } from '../stockage/depot.js';
+import { lireApercu, texteApercu } from '../stockage/apercu.js';
+import {
+  deverrouiller,
+  empreinteDeLaCharge,
+  lister as listerDepot,
+  ouvrirAvecEmpreinte,
+  ouvrir as ouvrirDepot,
+  verrouiller,
+} from '../stockage/depot.js';
 import { determinerDossierTravail } from '../stockage/dossier_travail.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { decoderJournal, horodatageFinal } from '../stockage/journal.js';
@@ -171,14 +186,65 @@ const AUCUN_RESUME = Object.freeze({ mesuresDuRetenu: null, meilleureDuClassemen
 // 3) en écarte une proposition fautive, dont l'identifiant se répète ou
 // atteint le compteur — le classement lève sur un identifiant répété. La
 // liste nomme ainsi la proposition au rang 1 que le bloc de génération de
-// l'événement ouvert nomme (§ 8.1). null pour un état absent ou qui ne
-// s'ouvre pas.
+// l'événement ouvert nomme (§ 8.1). Rend { charge, empreinte }, empreinte
+// celle des textes d'où vient cette charge (ouvrirAvecEmpreinte) ; null pour
+// un état absent ou qui ne s'ouvre pas.
 async function chargeExaminee(fs, racine, cle) {
   try {
-    return (await ouvrirDepot(fs, racine, cle)).charge;
+    const { ouvert, empreinte } = await ouvrirAvecEmpreinte(fs, racine, cle);
+    return { charge: ouvert.charge, empreinte };
   } catch (erreur) {
     if (erreur instanceof ErreurStockage) return null;
     throw erreur;
+  }
+}
+
+// L'exécuteur d'aperçu sans travailleur : les deux résumés calculés sur le
+// fil, par les fonctions d'evaluation.js.
+const CALCUL_SUR_LE_FIL = Object.freeze({
+  calculer: async (charge) => ({ mesuresDuRetenu: resumeDuRetenu(charge), meilleureDuClassement: resumeDuMeilleur(charge) }),
+  terminer() {},
+});
+
+// L'aperçu de l'événement de clé cle, dans racine, pour la construction
+// produitVersion : { resume, aJour } — resume, ses deux résumés ; aJour,
+// vrai quand son empreinte est celle des textes sur le disque
+// (empreinteDeLaCharge). null quand l'aperçu manque ou vaut absent
+// (lireApercu), ou que sa lecture est refusée : l'empreinte ne se lit alors
+// pas. Un refus du stockage pendant la lecture de l'empreinte rend l'aperçu
+// à vérifier. Toute autre erreur remonte.
+async function apercuLu(fs, racine, cle, produitVersion) {
+  let texte;
+  try {
+    const { dossier, base } = decouperCle(cle);
+    texte = await vueDossier(fs, dossier).lireTexte(racine, base + SUFFIXES.apercu);
+  } catch (erreur) {
+    if (erreur instanceof ErreurStockage) return null;
+    throw erreur;
+  }
+  const apercu = lireApercu(texte, produitVersion);
+  if (apercu === null) return null;
+  let empreinte;
+  try {
+    empreinte = await empreinteDeLaCharge(fs, racine, cle);
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+    empreinte = null;
+  }
+  const { mesuresDuRetenu, meilleureDuClassement } = apercu;
+  return { resume: { mesuresDuRetenu, meilleureDuClassement }, aJour: empreinte !== null && empreinte === apercu.empreinte };
+}
+
+// Écrit le texte d'aperçu de l'événement de clé cle dans son dossier, par
+// une écriture atomique. Un refus du stockage — dossier en lecture seule,
+// support retiré — se tait : l'aperçu n'est qu'un cache. Toute autre erreur
+// remonte.
+async function ecrireApercu(fs, racine, cle, texte) {
+  try {
+    const { dossier, base } = decouperCle(cle);
+    await vueDossier(fs, dossier).ecrireAtomique(racine, base + SUFFIXES.apercu, texte);
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
   }
 }
 
@@ -241,6 +307,10 @@ async function verrouDe(fs, racine, base) {
  *        celle de la séance, qui juge nom et date et ouvre l'événement créé
  * @param {() => Racine|null} parametres.racine          le dossier de travail
  * @param {(racine: Racine) => Promise<unknown>} parametres.changerRacine
+ * @param {{calculer: (charge: Object) => Promise<{mesuresDuRetenu: Object|null, meilleureDuClassement: Object|null}>, terminer: () => void}|null} [parametres.executeurApercu]
+ *        calcule les deux résumés d'une charge examinée hors du fil de
+ *        l'interface, et rejette par une faute ; terminer appartient à
+ *        celui qui l'a créé. Absent ou null, le calcul se fait sur le fil
  */
 export function creerFacade({
   fs,
@@ -254,8 +324,10 @@ export function creerFacade({
   creer,
   racine,
   changerRacine,
+  executeurApercu = null,
 }) {
   const seance = identifiant();
+  const calcul = executeurApercu ?? CALCUL_SUR_LE_FIL;
   const libelleReprise = libelle('ENTREE_REPRISE');
   const nomJalon = libelle('JALON_CREATION');
 
@@ -350,42 +422,99 @@ export function creerFacade({
     return lignes;
   }
 
-  // Les résumés des lignes, dans le dossier de travail de l'appel : ceux des
-  // états illisibles aussitôt, puis un événement lisible par pas, dans
-  // l'ordre des lignes. Chaque pas attend ceder(), lit l'état, puis calcule ;
-  // abandonné, le flux ne lit ni ne calcule plus rien, et le calcul en cours
-  // ne se reçoit pas. Une faute d'un événement lui donne AUCUN_RESUME, le
-  // flux continue, et fin la rejette une fois le flux arrêté.
+  // Les résumés des lignes, dans le dossier de travail de l'appel. Ceux des
+  // états illisibles se reçoivent aussitôt, à jour. Puis, après une
+  // microtâche, l'aperçu de chaque ligne lisible, dans l'ordre des lignes,
+  // sans pas : un aperçu présent se reçoit tout de suite, à jour ou à
+  // vérifier. Puis chaque ligne sans aperçu à jour, un pas chacune : le pas
+  // attend ceder(), lit la charge et son empreinte, confie la charge à
+  // l'exécuteur, compose l'aperçu, l'écrit, puis reçoit le résumé, à jour.
+  // Abandonné, le flux ne lit, ne calcule, n'écrit ni ne reçoit plus rien ;
+  // le calcul ou l'écriture en cours s'achève sans se recevoir. Une faute
+  // d'un événement — lecture, calcul, résumé que l'aperçu refuse — lui donne
+  // AUCUN_RESUME, à jour, sans aperçu ; le flux continue, et fin rejette la
+  // première une fois le flux arrêté. Une faute de l'écriture laisse le
+  // résumé se recevoir.
+  // Les flux de resumer en cours, chacun avec l'écriture d'aperçu qu'il
+  // attend, ou null. renommer et supprimer les arrêtent (arreterResumes)
+  // avant de toucher au disque : un aperçu ne s'écrit jamais dans un dossier
+  // que l'opération vide.
+  const flux = new Set();
+
+  // Abandonne chaque flux en cours, puis attend l'écriture d'aperçu que
+  // chacun a déjà lancée ; une écriture fautive ne retient pas l'opération,
+  // le flux la rejette par fin.
+  async function arreterResumes() {
+    const enCours = [...flux];
+    for (const suivi of enCours) suivi.abandonner();
+    await Promise.all(enCours.map(({ ecriture }) => ecriture?.catch(() => undefined)));
+  }
+
   function resumer(lignes, { ceder, recevoir }) {
     const courante = racine();
     if (courante === null) throw new RangeError("resumer : aucun dossier de travail, demarrer n'a pas abouti");
     let abandonne = false;
-    for (const { cle, illisible } of lignes) if (illisible !== null) recevoir(cle, AUCUN_RESUME);
+    const suivi = {
+      ecriture: null,
+      abandonner() {
+        abandonne = true;
+      },
+    };
+    flux.add(suivi);
+    for (const { cle, illisible } of lignes) if (illisible !== null) recevoir(cle, AUCUN_RESUME, { aJour: true });
     const lisibles = lignes.filter(({ illisible }) => illisible === null).map(({ cle }) => cle);
     async function parcourir() {
       let faute = null;
+      // Une microtâche d'abord : un abandon qui suit l'appel ne lit rien.
+      await Promise.resolve();
+      const aCalculer = [];
       for (const cle of lisibles) {
+        if (abandonne) break;
+        let lu = null;
+        try {
+          lu = await apercuLu(fs, courante, cle, produitVersion);
+        } catch (erreur) {
+          faute ??= erreur;
+        }
+        if (abandonne) break;
+        if (lu !== null) recevoir(cle, lu.resume, { aJour: lu.aJour });
+        if (lu === null || !lu.aJour) aCalculer.push(cle);
+      }
+      for (const cle of abandonne ? [] : aCalculer) {
         await ceder();
         if (abandonne) break;
         let resume = AUCUN_RESUME;
+        let texte = null;
         try {
-          const charge = await chargeExaminee(fs, courante, cle);
-          if (!abandonne && charge !== null) {
-            resume = { mesuresDuRetenu: resumeDuRetenu(charge), meilleureDuClassement: resumeDuMeilleur(charge) };
+          const lue = await chargeExaminee(fs, courante, cle);
+          if (abandonne) break;
+          if (lue !== null) {
+            const { mesuresDuRetenu, meilleureDuClassement } = await calcul.calculer(lue.charge);
+            texte = texteApercu({ produitVersion, empreinte: lue.empreinte, mesuresDuRetenu, meilleureDuClassement });
+            resume = { mesuresDuRetenu, meilleureDuClassement };
           }
         } catch (erreur) {
           faute ??= erreur;
         }
         if (abandonne) break;
-        recevoir(cle, resume);
+        if (texte !== null) {
+          try {
+            suivi.ecriture = ecrireApercu(fs, courante, cle, texte);
+            await suivi.ecriture;
+          } catch (erreur) {
+            faute ??= erreur;
+          } finally {
+            suivi.ecriture = null;
+          }
+        }
+        if (abandonne) break;
+        recevoir(cle, resume, { aJour: true });
       }
       if (faute !== null) throw faute;
     }
     return {
-      abandonner() {
-        abandonne = true;
-      },
-      fin: parcourir(),
+      abandonner: suivi.abandonner,
+      fin: parcourir().finally(() => flux.delete(suivi)),
     };
   }
 
@@ -473,6 +602,7 @@ export function creerFacade({
     const texte = nomSaisi(nom);
     const courante = await exigerDossier();
     exigerModifiable(await ouvrirDepot(fs, courante, cle));
+    await arreterResumes();
     const etaitOuvert = ouvert() === cle;
     if (etaitOuvert) await fermer();
     // Le verrou de l'événement, dans son dossier, par sa vue.
@@ -521,6 +651,7 @@ export function creerFacade({
 
   async function supprimer(cle) {
     const courante = await exigerDossier();
+    await arreterResumes();
     const etaitOuvert = ouvert() === cle;
     if (etaitOuvert) await fermer();
     try {
@@ -601,20 +732,30 @@ export function creerFacade({
      */
     lister,
     /**
-     * Les résumés des lignes de lister (§ 8.1), un événement après l'autre,
-     * sans rien écrire : recevoir(cle, { mesuresDuRetenu,
-     * meilleureDuClassement }) une fois par ligne — resumeDuRetenu et
-     * resumeDuMeilleur de sa charge examinée, chacun null sans retenu
+     * Les résumés des lignes de lister (§ 8.1) : recevoir(cle, {
+     * mesuresDuRetenu, meilleureDuClassement }, { aJour }) — resumeDuRetenu
+     * et resumeDuMeilleur de sa charge examinée, chacun null sans retenu
      * mesurable ou sans proposition classée, l'un et l'autre null pour un
-     * état illisible. Une ligne illisible reçoit le sien avant le retour ;
-     * chaque ligne lisible attend la promesse de ceder(), puis relit son
-     * état et se calcule. abandonner() arrête le flux : plus rien ne se lit,
-     * ne se calcule ni ne se reçoit. fin se résout quand le flux s'arrête, et
-     * rejette par la première faute d'un calcul, dont la ligne a reçu les
-     * deux résumés à null. RangeError sans dossier de travail.
+     * état illisible. Une ligne illisible reçoit le sien avant le retour, à
+     * jour. Chaque ligne lisible dont l'aperçu existe reçoit ensuite le sien
+     * sans attendre de pas : aJour vrai quand son empreinte est celle des
+     * textes sur le disque, faux sinon — l'ancien chiffre, à vérifier ; sans
+     * aperçu, rien avant son pas. Chaque ligne sans aperçu à jour attend
+     * ensuite la promesse de ceder(), relit son état, se calcule par
+     * l'exécuteur d'aperçu, écrit son aperçu, seule écriture de la liste,
+     * puis reçoit son résumé, à jour : une ligne à vérifier reçoit ainsi
+     * deux fois. Un aperçu à jour ne se recalcule jamais. Une écriture
+     * refusée par le stockage se tait. abandonner() arrête le flux : plus
+     * rien ne se lit, ne se calcule, ne s'écrit ni ne se reçoit ; renommer
+     * et supprimer arrêtent ainsi chaque flux en cours, et attendent
+     * l'écriture déjà lancée, avant de toucher au disque. fin se résout
+     * quand le flux s'arrête, et rejette par la première faute : celle d'un
+     * calcul, dont la ligne a reçu les deux résumés à null, sans aperçu
+     * écrit, ou celle d'une lecture ou d'une écriture d'aperçu, qui ne
+     * retient pas le résumé. RangeError sans dossier de travail.
      *
      * @param {Array<{cle: string, illisible: object|null}>} lignes
-     * @param {{ceder: () => Promise<unknown>, recevoir: (cle: string, resume: Object) => void}} rappels
+     * @param {{ceder: () => Promise<unknown>, recevoir: (cle: string, resume: Object, marque: {aJour: boolean}) => void}} rappels
      * @returns {{abandonner: () => void, fin: Promise<void>}}
      */
     resumer,

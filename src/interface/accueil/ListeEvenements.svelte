@@ -35,17 +35,23 @@
   // base.
   //
   // lignes : LigneListe[] de la façade ; resumes : les résumés reçus de
-  // facade.resumer, par clé — une ligne sans le sien attend, et chacune de
-  // ses trois valeurs de résumé porte le signe du chargement (Chargement),
+  // facade.resumer, par clé — une ligne sans le sien attend, et chacune de ses
+  // trois valeurs de résumé porte le signe du chargement (Chargement),
   // décoratif, dans une cellule qui se dit occupée (aria-busy), jusqu'à ce
-  // qu'il arrive. La région d'état qui suit le tableau
-  // (data-chargement-liste) existe tant que la liste a des lignes, et écrit
-  // « accueil.chargement » tant qu'une ligne attend : le chargement
-  // s'annonce une fois pour la liste, et sa fin la vide. vue : { filtre,
-  // groupement } de l'accueil ; grouper(groupement) : le geste du choix ;
-  // ouvrir(ligne) : le geste de l'accueil ; refusOuverture : { cle, refus }
-  // du dernier échec, ou null ; apresOperation(avertissements) : à appeler
-  // quand une opération a changé le dossier, avec ceux qu'elle rend.
+  // qu'il arrive. Un résumé à vérifier — l'ancien chiffre d'un aperçu périmé,
+  // que la liste recalcule — montre chaque valeur dans son propre nœud
+  // (data-a-verifier), à l'encre secondaire de la page, sans opacité partielle
+  // (§ 14.5), le signe du chargement à côté, dans une cellule qui se dit
+  // occupée ; l'aide « accueil.verification » s'y lit par les technologies
+  // d'assistance, et au survol de la valeur. La région d'état qui suit le
+  // tableau (data-chargement-liste) existe tant que la liste a des lignes, et
+  // écrit « accueil.chargement » tant qu'une ligne attend ou se vérifie : le
+  // chargement s'annonce une fois pour la liste, et sa fin la vide.
+  // vue : { filtre, groupement } de l'accueil ; grouper(groupement) : le
+  // geste du choix ; ouvrir(ligne) : le geste de l'accueil ;
+  // refusOuverture : { cle, refus } du dernier échec, ou null ;
+  // apresOperation(avertissements) : à appeler quand une opération a changé
+  // le dossier, avec ceux qu'elle rend.
   //
   // L'intitulé de chaque mesure du retenu et le titre de la meilleure
   // proposition s'expliquent dans l'infobulle de la liste, une seule
@@ -71,8 +77,13 @@
   const t = getContext('t');
   const format = getContext('format');
 
-  // Une ligne au moins attend son résumé.
-  const enChargement = $derived(lignes.some((ligne) => ligneAffichee(ligne, format, resumes.get(ligne.cle)).enAttente));
+  // Une ligne au moins attend son résumé, ou le vérifie.
+  const enChargement = $derived(
+    lignes.some((ligne) => {
+      const { enAttente, aVerifier } = ligneAffichee(ligne, format, resumes.get(ligne.cle));
+      return enAttente || aVerifier;
+    }),
+  );
   const groupes = $derived(groupesDeLaListe(lignes, vue.filtre, vue.groupement));
   // Le nombre de colonnes du tableau, que l'intitulé d'un groupe couvre :
   // les quatre de l'événement, les deux du retenu, celle de la meilleure
@@ -96,9 +107,14 @@
 </script>
 
 <!-- Une valeur de résumé : le signe du chargement tant que la ligne
-     attend, sa valeur ensuite. -->
+     attend ; à vérifier, sa valeur atténuée, le signe à côté et l'aide ;
+     sa valeur seule ensuite. -->
 {#snippet resume(affichee, valeur)}
-  {#if affichee.enAttente}<Chargement />{:else}{valeur}{/if}
+  {#if affichee.enAttente}<Chargement />{:else if affichee.aVerifier}<span
+      class="a-verifier"
+      data-a-verifier
+      title={t('accueil.verification')}>{valeur}</span
+    ><Chargement /><span class="cache">{t('accueil.verification')}</span>{:else}{valeur}{/if}
 {/snippet}
 
 <!-- Un terme expliqué : nom est son data-terme, cle son intitulé,
@@ -191,7 +207,7 @@
               {#each groupe.lignes as ligne, rangLigne (ligne.cle)}
                 {@const affichee = ligneAffichee(ligne, format, resumes.get(ligne.cle))}
                 {@const idLigne = `${uid}-ligne-${rangGroupe}-${rangLigne}`}
-                {@const occupee = affichee.enAttente ? 'true' : undefined}
+                {@const occupee = affichee.enAttente || affichee.aVerifier ? 'true' : undefined}
                 <tr data-evenement={ligne.cle}>
                   <th scope="row" class="evenement">
                     <span class="nom" id="{idLigne}-nom" data-colonne="nom">{affichee.nom}</span>
@@ -368,6 +384,13 @@
   .nombre {
     text-align: end;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Une valeur à vérifier : à l'encre secondaire, sans opacité partielle,
+     le signe du chargement après elle. */
+  .a-verifier {
+    margin-inline-end: var(--espace-1);
+    color: var(--couleur-page-texte-secondaire);
   }
 
   /* L'intitulé d'un groupe de lignes, sur le fond sourd de la carte. */

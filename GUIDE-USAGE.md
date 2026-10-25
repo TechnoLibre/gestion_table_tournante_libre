@@ -758,6 +758,17 @@ La liste des événements résume ensuite le retenu par ses collisions cumulées
 (paire et tour) et ses rencontres répétées choisies (paires), les nombres du
 tableau des propositions.
 
+Ces chiffres, et la meilleure proposition de chaque événement, paraissent dès
+l’ouverture de la liste : la dernière vue d’ensemble de chaque événement est
+gardée à côté de son fichier d’état, dans `<nom>.gtt-apercu.json`. Quand
+l’événement a changé depuis, son ancien chiffre paraît atténué, le signe de
+chargement qui tourne à côté — « Chiffre de la dernière vue d’ensemble, en
+cours de vérification » au survol —, le temps que la liste le recalcule en
+arrière-plan, sans bloquer la page ; un événement qui n’a pas encore de vue
+d’ensemble montre le signe seul. Ce fichier n’est qu’un raccourci : l’effacer
+ne perd rien, la liste le refait. Copier ou importer un événement ne le
+recopie pas.
+
 Retenir n’est pas obligatoire, mais tout ce qui s’imprime sans placement retenu
 porte la mention BROUILLON (étape 12).
 

@@ -17,6 +17,7 @@ import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
 import { VERSION } from '../version.genere.js';
+import { empreinteApercu } from './apercu.js';
 import { canoniser, serialiser, serialiserCharge } from './canonique.js';
 import { appliquer, difference } from './correctifs.js';
 import {
@@ -24,11 +25,13 @@ import {
   copierLogos,
   creer,
   deverrouiller,
+  empreinteDeLaCharge,
   enregistrer,
   enregistrerAilleurs,
   lister,
   nommer,
   ouvrir,
+  ouvrirAvecEmpreinte,
   ouvrirSecours,
   verrouiller,
 } from './depot.js';
@@ -66,6 +69,7 @@ const PRECEDENT = `${BASE}${SUFFIXES.precedent}`;
 const JOURNAL = `${BASE}${SUFFIXES.journal}`;
 const VERROU = `${BASE}${SUFFIXES.verrou}`;
 const COURSES = `${BASE}${SUFFIXES.courses}`;
+const APERCU = `${BASE}${SUFFIXES.apercu}`;
 
 const REPRISE = "Reprise de l'état trouvé sur le disque";
 
@@ -4033,5 +4037,119 @@ describe('dépôt : les logos recopiés dans un autre dossier (§ 8.7)', () => {
     await enregistrerAilleurs(sans.ouvert, sans.documents, { existantes: [] });
     assert.deepEqual(appelsSans.filter(([, , chemin]) => chemin.includes('logo')), []);
     assert.deepEqual(await logosDe(sans.fs, sans.documents, BASE), []);
+  });
+});
+
+// --- L'aperçu de la liste (§ 8.1, § 8.6) ------------------------------------
+
+// Un Ouvert sans ses deux systèmes de fichiers, que chaque ouverture crée :
+// ce qui reste se compare en profondeur.
+const sansSystemes = (ouvert) => ({ ...ouvert, fs: null, systeme: null });
+
+// L'empreinte des textes du dossier de BASE qu'un processus neuf lit :
+// empreinteDeLaCharge, puis celle d'ouvrirAvecEmpreinte, qui doit valoir la
+// même, sans rien écrire.
+async function empreinteSur(disque) {
+  const fs = creerFichiersSimules({ disque });
+  const seule = await empreinteDeLaCharge(fs, DOC, EVT);
+  const { empreinte } = await ouvrirAvecEmpreinte(fs, DOC, EVT);
+  assert.equal(empreinte, seule);
+  assert.equal(fs.compteurs.ecritures, 0, 'une empreinte écrit');
+  return seule;
+}
+
+describe("dépôt : l'empreinte de l'aperçu de la liste (§ 8.1, § 8.6)", () => {
+  test("ouvrirAvecEmpreinte rend l'Ouvert d'ouvrir et l'empreinte de l'état et du journal qu'il lit, celle que rend empreinteDeLaCharge, sans rien écrire", async () => {
+    const { disque, fs } = nouveauDisque();
+    const cree = await creer(fs, DOC, chargeEssai(), CREATION);
+    await enregistrer(cree, modifier(cree.charge, 2), geste(2));
+    const lecteur = creerFichiersSimules({ disque });
+    const { ouvert, empreinte } = await ouvrirAvecEmpreinte(lecteur, DOC, EVT);
+    assert.deepEqual(sansSystemes(ouvert), sansSystemes(await ouvrir(lecteur, DOC, EVT)));
+    assert.equal(ouvert.revision, 2);
+    assert.equal(empreinte, empreinteApercu(fs.contenu('documents', dans(ETAT)), fs.contenu('documents', dans(JOURNAL))));
+    assert.equal(await empreinteDeLaCharge(lecteur, DOC, EVT), empreinte);
+    assert.equal(lecteur.compteurs.ecritures, 0);
+  });
+
+  test("l'empreinte change avec l'état, et avec le journal en avance d'une entrée que l'ouverture rattrape ; ni le .precedent, ni le compagnon des courses, ni le verrou, ni l'aperçu ne la changent", async () => {
+    const { disque, fs } = nouveauDisque();
+    const cree = await creer(fs, DOC, chargeEssai(), CREATION);
+    const etatUn = fs.contenu('documents', dans(ETAT));
+    const depart = await empreinteSur(disque);
+    const { apres, courses } = generation(cree.charge);
+    await enregistrer(cree, apres, geste(2, { courses }));
+    const apresGeste = await empreinteSur(disque);
+    assert.notEqual(apresGeste, depart, 'un geste');
+
+    for (const [nom, texte] of [
+      [PRECEDENT, 'autre'],
+      [COURSES, compagnon([])],
+      [VERROU, '{}'],
+      [APERCU, '{}'],
+    ]) {
+      fs.deposer('documents', dans(nom), texte);
+      assert.equal(await empreinteSur(disque), apresGeste, nom);
+    }
+
+    // L'état de la révision 1 remis à côté du journal de la révision 2 : la
+    // coupure entre le journal et l'état d'un geste, que l'ouverture rattrape.
+    fs.deposer('documents', dans(ETAT), etatUn);
+    assert.deepEqual((await rouvrir(disque, BASE)).avertissements, [{ code: 'JOURNAL_REPRIS', details: {} }]);
+    const enAvance = await empreinteSur(disque);
+    assert.notEqual(enAvance, depart, 'le journal en avance');
+    assert.notEqual(enAvance, apresGeste, "l'état de la révision 1");
+  });
+
+  test("le journal d'un autre événement sous la base ne compte pas ; le journal apparié sous une autre base compte", async () => {
+    const etat = etatTexte(chargeEssai());
+    const etranger = disqueAvec([
+      [ETAT, etat],
+      [JOURNAL, await journalEtranger()],
+    ]);
+    assert.equal(await empreinteSur(etranger.disque), empreinteApercu(etat, null));
+
+    const { disque, fs } = nouveauDisque();
+    await creer(fs, DOC, chargeEssai(), CREATION);
+    const journal = fs.contenu('documents', dans(JOURNAL));
+    const ailleurs = 'Lucioles, historique';
+    fs.deplacer(DOC, dans(JOURNAL), dans(`${ailleurs}${SUFFIXES.journal}`));
+    assert.equal((await rouvrir(disque, BASE)).baseJournal, ailleurs);
+    assert.equal(await empreinteSur(disque), empreinteApercu(fs.contenu('documents', dans(ETAT)), journal));
+  });
+
+  test("un état illisible ou absent n'a pas d'empreinte : empreinteDeLaCharge rend null, ouvrirAvecEmpreinte lève comme ouvrir", async () => {
+    const { disque, fs } = nouveauDisque();
+    await creer(fs, DOC, chargeEssai(), CREATION);
+    fs.deposer('documents', dans(ETAT), '{"format":');
+    const lecteur = creerFichiersSimules({ disque });
+    assert.equal(await empreinteDeLaCharge(lecteur, DOC, EVT), null);
+    const refus = await echec(ouvrirAvecEmpreinte(lecteur, DOC, EVT), 'ETAT_ILLISIBLE');
+    assert.deepEqual(refus.details, (await echec(ouvrir(lecteur, DOC, EVT), 'ETAT_ILLISIBLE')).details);
+    fs.supprimer(DOC, dans(ETAT));
+    assert.equal(await empreinteDeLaCharge(lecteur, DOC, EVT), null);
+    assert.equal(lecteur.compteurs.ecritures, 0);
+  });
+
+  test("un aperçu seul ne fait pas de ligne ; à côté d'un état, il ne change pas la liste ; la base qu'il porte n'est pas libre pour un journal", async () => {
+    const seul = nouveauDisque();
+    seul.fs.deposer('documents', 'Gala des Saules/Gala des Saules.gtt-apercu.json', '{}');
+    assert.deepEqual(await lister(seul.fs, DOC), []);
+
+    const { disque, fs } = nouveauDisque();
+    await creer(fs, DOC, chargeEssai(), CREATION);
+    const liste = await lister(fs, DOC);
+    fs.deposer('documents', dans(APERCU), '{}');
+    assert.deepEqual(await lister(fs, DOC), liste);
+
+    // Le journal d'un autre événement sous la base : le premier geste écrit
+    // l'historique sous une base libre, que l'aperçu resté seul de « (2) »
+    // ne laisse pas libre.
+    fs.deposer('documents', dans(JOURNAL), await journalEtranger());
+    fs.deposer('documents', dans(`${BASE} (2)${SUFFIXES.apercu}`), '{}');
+    const ouvert = await rouvrir(disque, BASE);
+    const trace = tracer(ouvert.systeme);
+    await enregistrer(ouvert, modifier(ouvert.charge, 2), geste(2, { libelleReprise: REPRISE }));
+    assert.deepEqual(trace[0], ['ecrireAtomique', `${BASE} (3)${SUFFIXES.journal}`]);
   });
 });

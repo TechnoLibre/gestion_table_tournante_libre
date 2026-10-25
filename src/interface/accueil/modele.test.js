@@ -80,6 +80,7 @@ describe('ligneAffichee : les six informations (§ 8.1)', () => {
   test('une ligne lisible : nom, date, état, participants, dernière modification et chemin, mis en forme', () => {
     const affichee = ligneAffichee(ligne(), format);
     assert.deepEqual(Object.keys(affichee).sort(), [
+      'aVerifier',
       'chemin',
       'collisionsCumulees',
       'date',
@@ -434,9 +435,40 @@ describe('ligneAffichee : les résumés en attente (§ 8.1)', () => {
     assert.deepEqual(recu.meilleure, { id: format.nombre(3) });
   });
 
-  test('les six informations ne dépendent pas des résumés : en attente ou non, elles sont les mêmes', () => {
-    const sans = ({ enAttente, collisionsCumulees, rencontresRepetees, meilleure, ...reste }) => reste;
+  test('les six informations ne dépendent pas des résumés : en attente, à vérifier ou non, elles sont les mêmes', () => {
+    const sans = ({ enAttente, aVerifier, collisionsCumulees, rencontresRepetees, meilleure, ...reste }) => reste;
     assert.deepEqual(sans(ligneAffichee(ligne(), format)), sans(ligneAffichee(ligne(), format, AUCUN)));
+    assert.deepEqual(sans(ligneAffichee(ligne(), format)), sans(ligneAffichee(ligne(), format, { ...AUCUN, aJour: false })));
+  });
+});
+
+describe('ligneAffichee : les résumés à vérifier (§ 8.1)', () => {
+  const PERIME = Object.freeze({
+    mesuresDuRetenu: { collisionsCumulees: 417, rencontresRepetees: 23 },
+    meilleureDuClassement: { id: 9 },
+    aJour: false,
+  });
+
+  test('un résumé reçu à vérifier — l’ancien chiffre d’un aperçu périmé — montre ses trois valeurs, sans attente, et se dit à vérifier', () => {
+    const affichee = ligneAffichee(ligne(), format, PERIME);
+    assert.equal(affichee.enAttente, false);
+    assert.equal(affichee.aVerifier, true);
+    assert.equal(affichee.collisionsCumulees, format.nombre(417));
+    assert.equal(affichee.rencontresRepetees, format.nombre(23));
+    assert.deepEqual(affichee.meilleure, { id: format.nombre(9) });
+  });
+
+  test('à jour, sans marque ou sans résumé, la ligne n’est pas à vérifier ; à vérifier, ses valeurs sont celles du même résumé à jour', () => {
+    assert.equal(ligneAffichee(ligne(), format).aVerifier, false);
+    assert.equal(ligneAffichee(ligne(), format, AUCUN).aVerifier, false);
+    assert.equal(ligneAffichee(ligne(), format, { ...PERIME, aJour: true }).aVerifier, false);
+    const valeurs = ({ collisionsCumulees, rencontresRepetees, meilleure }) => ({ collisionsCumulees, rencontresRepetees, meilleure });
+    assert.deepEqual(valeurs(ligneAffichee(ligne(), format, PERIME)), valeurs(ligneAffichee(ligne(), format, { ...PERIME, aJour: true })));
+    assert.equal(ligneAffichee(ligne(), format, { ...AUCUN, aJour: false }).collisionsCumulees, VIDE);
+  });
+
+  test('l’aide d’une valeur à vérifier existe dans la traduction et dit le chiffre de la dernière vue d’ensemble', () => {
+    assert.equal(t('accueil.verification'), 'Chiffre de la dernière vue d\u{2019}ensemble, en cours de vérification');
   });
 });
 

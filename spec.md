@@ -3013,9 +3013,9 @@ cumulées du retenu, puis « Rencontres répétées choisies (paires) », les pa
 réunies plus d'une fois que le placement a choisies, sans celles que les
 réservations imposent (§ 5.4) — dans chacune, le nombre que la colonne du même
 intitulé du tableau des propositions porte sur la ligne du retenu. Les deux se
-lisent dans une seule mesure du retenu, celle du tableau, sans rien écrire ; un
-événement sans retenu, ou dont le retenu est fautif ou en dérive (§ 8.9, § 9),
-porte « — » dans l'une et l'autre.
+lisent dans une seule mesure du retenu, celle du tableau, sans rien écrire dans
+l'événement ; un événement sans retenu, ou dont le retenu est fautif ou en
+dérive (§ 8.9, § 9), porte « — » dans l'une et l'autre.
 Chaque ligne porte aussi la **« Meilleure proposition du classement »**, sous
 les libellés du bloc que la section de la génération montre en tête :
 l'identifiant de la proposition au rang 1 du classement (§ 5.7) — la même
@@ -3026,13 +3026,35 @@ encore la configuration —, elle vaut « — ». La liste ne montre pas les
 collisions cumulées de la meilleure proposition : le tableau des propositions et
 le bloc de la génération les portent. Chaque intitulé s'explique dans une
 infobulle, posée sur l'en-tête de sa colonne. **La liste paraît avant ses
-colonnes calculées** : ses lignes s'affichent dès le relevé du dossier, et les
-mesures du retenu et la meilleure proposition, qui évaluent chaque événement, se
-calculent ensuite, un événement après l'autre, la main rendue au navigateur
-entre deux. Tant que celles d'une ligne se calculent, chacune de ses valeurs
-porte un signe de chargement qui tourne ; chaque ligne montre les siennes dès
-qu'elles sont obtenues, et une liste relue abandonne les calculs de la
-précédente. **Un répertoire vide n'affiche pas une liste vide** : il présente la
+colonnes calculées** : ses lignes s'affichent dès le relevé du dossier, puis les
+mesures du retenu et la meilleure proposition viennent de l'**aperçu** de chaque
+événement (§ 8.6), qui garde les chiffres de la dernière vue d'ensemble avec
+l'empreinte des textes dont ils viennent — le fichier d'état et la dernière
+ligne complète du journal. Un aperçu dont l'empreinte est celle des fichiers sur
+le disque donne ses chiffres aussitôt, sans rien évaluer, et ne se recalcule
+pas. Un aperçu périmé — l'événement a changé depuis qu'il s'est écrit — donne
+aussitôt son ancien chiffre, à l'encre secondaire de la page, sans opacité
+partielle (§ 14.5), le signe de chargement qui tourne à côté, et l'aide
+« Chiffre de la dernière vue d'ensemble, en cours de vérification », au survol
+et pour les technologies d'assistance. Sans aperçu lisible — absent, d'une autre
+forme, d'un autre format ou d'une autre construction du logiciel —, chaque
+valeur porte le signe seul. Les événements sans aperçu à jour, eux seuls, se
+recalculent ensuite, un événement après l'autre, la main rendue au navigateur
+entre deux : la page relit l'état comme l'ouverture l'examine, une instance
+propre du travailleur de la génération (§ 5.10) évalue la charge hors du fil de
+l'interface, puis la liste réécrit l'aperçu et montre les chiffres recalculés.
+Sans travailleur, l'évaluation se fait sur le fil, par les mêmes fonctions ; un
+travailleur dont le script ne se charge pas compte comme une faute du calcul, et
+la ligne porte « — ». Tant que celles d'une ligne attendent ou se vérifient, la
+région d'état de la liste annonce le calcul, une fois pour toutes les lignes ;
+une liste relue abandonne les calculs de la précédente, et renommer ou supprimer
+un événement les arrête, puis attend l'aperçu qui s'écrit, avant de toucher au
+disque ; le démontage de l'application termine le travailleur, qui ne retient
+jamais la fermeture. L'aperçu est la seule écriture de la liste — jamais l'état,
+le journal ni le verrou, y compris pour un événement qu'une autre séance tient
+—, et un refus de l'écrire se tait : c'est un cache, que son empreinte juge. Un
+état changé pendant son calcul laisse un aperçu périmé, que la liste suivante
+recalcule. **Un répertoire vide n'affiche pas une liste vide** : il présente la
 commande de création et les démonstrations — ni tuiles, ni tableau, ni résumé —,
 car une liste vide sans issue est le premier écran que voit un opérateur qui
 lance l'exécutable. Un filtre qui ne retient aucune ligne le dit, sans laisser
@@ -3517,17 +3539,38 @@ dans un dossier ou dans deux, se signalent doublons l'un de l'autre, et un
 journal sans état se tait quand un état lisible d'un dossier porte son
 identifiant.
 
-**Deux fichiers par événement, et le compagnon des courses**, dans son
-dossier :
+**Deux fichiers par événement, le compagnon des courses et l'aperçu de la
+liste**, dans son dossier :
 
 | fichier | contenu | écriture |
 |---|---|---|
 | `<nom>/<nom>.gtt.json` | l'état courant, complet | réécrit en entier à chaque entrée |
 | `<nom>/<nom>.gtt-journal.jsonl` | les entrées d'historique | **ajout en fin**, une ligne par entrée ; réécrit en entier, de façon atomique, après des lignes écartées |
 | `<nom>/<nom>.gtt-courses.json` | la course de la recherche de chaque proposition (§ 5.10) : ses mouvements évalués et les placements de ses points de relevé | réécrit en entier, de façon atomique, après l'état, **seulement quand les propositions changent** — une génération, un effacement, un retour qui en rend ou en retire — ; jamais à un autre geste |
+| `<nom>/<nom>.gtt-apercu.json` | les deux résumés que la liste des événements montre (§ 8.1), avec l'empreinte des textes dont ils viennent | écrit en entier, de façon atomique, **par la liste seule**, quand elle recalcule un aperçu absent ou périmé ; jamais par un geste |
 
 Les deux portent **l'identifiant interne de l'événement**, et c'est lui qui les
 apparie — jamais leurs noms.
+
+**L'aperçu de la liste** suit le nom du fichier d'état et ne porte que des
+nombres : aucun nom, aucun identifiant d'événement. Il tient en une ligne de
+JSON, `{"format":1,"produit":…,"empreinte":…,"mesuresDuRetenu":…,
+"meilleureDuClassement":…}` — son propre format, la construction du logiciel
+qui l'a calculé, l'empreinte, `mesuresDuRetenu`, `{collisionsCumulees,
+rencontresRepetees}` ou null, et `meilleureDuClassement`, `{id}` ou null,
+les valeurs que la liste montre (§ 8.1). L'empreinte est FNV-1a 64 bits sur
+les octets UTF-8 du texte de l'état, puis sur ceux de la dernière ligne
+complète du journal que l'ouverture lit, « - » sans elle, deux moitiés jointes
+par « : » : un geste réécrit l'état, et un journal en avance d'une entrée, que
+l'ouverture rattrape, change sa dernière ligne. Ni le compagnon des courses, ni
+l'état précédent, ni le verrou n'y entrent : les deux résumés n'en dépendent
+pas. Elle n'est pas cryptographique, et se calcule sans interface
+asynchrone, aussi hors d'un contexte sécurisé. **L'aperçu ne bloque jamais
+rien** : illisible, d'une autre forme, d'un autre format ou d'une autre
+construction, il vaut absent, sans erreur ni avis, et la liste le recalcule ;
+un aperçu resté seul dans un dossier ne fait pas une ligne et ne passe jamais à
+un autre événement ; le relevé du dossier de travail l'ignore comme le
+compagnon des courses.
 
 **Le compagnon des courses** suit le nom du fichier d'état, et porte lui aussi
 l'identifiant de l'événement. Il garde ce que la recherche a rapporté
@@ -3653,10 +3696,10 @@ caractères, la corbeille de treize à trente-deux, le dossier de l'événement
 au-delà. Le logo pose ainsi un plancher : une racine de plus de cent
 cinquante-deux caractères ne laisse tenir aucun nom, et la plus longue qui en
 laisse un lui en donne treize ; l'empreinte reste entière, car raccourcie elle
-laisserait deux images différentes prendre le même nom.
-`.gtt.json.precedent` ne compte que dix-neuf caractères,
-`.gtt-journal.jsonl` dix-huit, `.gtt-courses.json` dix-sept, et `.gtt.json`
-neuf : une borne posée sur l'état, sur le journal ou sur le nom compté une fois
+laisserait deux images différentes prendre le même nom. `.gtt.json.precedent` ne
+compte que dix-neuf caractères, `.gtt-journal.jsonl` dix-huit,
+`.gtt-courses.json` dix-sept, `.gtt-apercu.json` seize, et `.gtt.json` neuf :
+une borne posée sur l'état, sur le journal ou sur le nom compté une fois
 laisserait déborder tout le reste. Sous une racine de soixante et un caractères,
 celle du dossier `data` des *Documents* d'un compte au nom court, la borne
 laisse 68 caractères au nom, la borne de la saisie (§ 8.1). Une racine plus
@@ -3736,6 +3779,13 @@ avec les autres fichiers. **Importer de l'autre emplacement** le recopie tel
 quel après l'état, quand il se lit ; l'ouverture le revalide entrée par entrée,
 et un refus de l'écrire ne refuse pas l'import. Un **fichier d'état venu
 d'ailleurs** n'en a pas : ses courses ne sont pas connues.
+
+L'aperçu de la liste suit aussi : **renommer** le déplace sous le nouveau nom,
+avec les autres fichiers ; un déplacement refusé l'efface, pour que l'ancien
+dossier se retire, et un effacement refusé l'y laisse, sans rien refuser.
+**Supprimer** le met à la corbeille avec les autres fichiers. **Copier** et
+**importer** ne le recopient pas : l'état de la copie n'est pas celui de
+l'original, et la liste suivante calcule l'aperçu de l'événement neuf.
 
 Les logos suivent aussi, fichier par fichier, une fois l'événement neuf
 écrit : seuls les fichiers de `logo/` nommés comme un logo passent, un fichier

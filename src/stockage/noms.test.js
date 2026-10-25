@@ -55,11 +55,19 @@ const DOSSIERS = [
 
 // Le dossier daté de la corbeille au rang de collision le plus long, à deux
 // chiffres, et les suffixes des fichiers d'un événement : le journal en compte
-// 18, l'état 9, le compagnon des courses 17, et la planche sans marque la
-// plus longue, d'une réédition de 9 999 badges, 51.
+// 18, l'état 9, le compagnon des courses 17, l'aperçu de la liste 16, et la
+// planche sans marque la plus longue, d'une réédition de 9 999 badges, 51.
 const CORBEILLE_RANG_99 = 'corbeille/2026-10-06_19-02-11_99';
 const SUFFIXE_BADGES = '.badges-9999_Lettre_feuille_2026-10-06_19-02-11.pdf';
-const SUFFIXES_ECRITS = ['.gtt.json', '.gtt.json.precedent', '.gtt-journal.jsonl', '.gtt.verrou', '.gtt-courses.json', SUFFIXE_BADGES];
+const SUFFIXES_ECRITS = [
+  '.gtt.json',
+  '.gtt.json.precedent',
+  '.gtt-journal.jsonl',
+  '.gtt.verrou',
+  '.gtt-courses.json',
+  '.gtt-apercu.json',
+  SUFFIXE_BADGES,
+];
 
 // Le logo d'une personne, sous le dossier logo/ de l'événement, nommé par
 // l'empreinte de son contenu en 64 chiffres hexadécimaux : 73 unités, qui ne
@@ -201,6 +209,7 @@ describe('noms.js : valeurs du contrat', () => {
       journal: '.gtt-journal.jsonl',
       verrou: '.gtt.verrou',
       courses: '.gtt-courses.json',
+      apercu: '.gtt-apercu.json',
     });
     assert.ok(Object.isFrozen(SUFFIXES));
     assert.equal(SUFFIXE_ECRITURE, '.ecriture');
@@ -208,12 +217,12 @@ describe('noms.js : valeurs du contrat', () => {
     assert.equal(LONGUEUR_CHEMIN_MAX, 259);
   });
 
-  test("longueurs des suffixes : l'état 9, le journal 18, l'état précédent 19, le compagnon des courses 17, et 28 avec le suffixe d'écriture", () => {
+  test("longueurs des suffixes : l'état 9, le journal 18, l'état précédent 19, le compagnon des courses 17, l'aperçu de la liste 16, et 28 avec le suffixe d'écriture", () => {
     assert.deepEqual(
-      [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou, SUFFIXES.courses].map(
+      [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou, SUFFIXES.courses, SUFFIXES.apercu].map(
         (suffixe) => suffixe.length,
       ),
-      [9, 19, 18, 11, 17],
+      [9, 19, 18, 11, 17, 16],
     );
     assert.equal(SUFFIXE_ECRITURE.length, 9);
     assert.equal(`${SUFFIXES.precedent}${SUFFIXE_ECRITURE}`.length, 28);

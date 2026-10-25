@@ -126,7 +126,8 @@ export async function chargerResumes(m) {
 
 /** Suit les résumés que la liste du montage reçoit à partir de cet appel :
  *  chaque flux que l'application lance par m.facade.resumer rapporte, en
- *  plus, la clé de chaque ligne dont il pose le résumé. Rend
+ *  plus, la clé de chaque ligne dont il pose le résumé à jour ; l'ancien
+ *  chiffre d'un aperçu périmé, à vérifier, ne compte pas. Rend
  *  resumeRecu(base), qui attend, l'horloge pilotée avancée d'un pas à chaque
  *  image, que la liste ait reçu le résumé de l'événement de base, dans le
  *  dossier de cette base, depuis le suivi, le rendu à jour : un résumé posé
@@ -137,9 +138,9 @@ export function suivreResumes(m) {
   m.facade.resumer = (lues, options) =>
     resumer(lues, {
       ...options,
-      recevoir(cle, resume) {
-        options.recevoir(cle, resume);
-        recues.add(cle);
+      recevoir(cle, resume, marque) {
+        options.recevoir(cle, resume, marque);
+        if (marque?.aJour !== false) recues.add(cle);
       },
     });
   return (base) =>

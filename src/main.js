@@ -9,7 +9,8 @@
 // du navigateur. L'imprimante (src/impression), frontière de plateforme
 // comme le système de fichiers, ne s'importe que d'ici. Il construit les
 // dépendances d'App — l'horloge du système, l'exécuteur de la génération sur
-// le travailleur, les identifiants tirés par crypto.randomUUID, les
+// le travailleur, l'exécuteur de la vue d'ensemble de la liste sur le sien,
+// les identifiants tirés par crypto.randomUUID, les
 // démonstrations livrées nommées par le catalogue, le chargement de la
 // police embarquée, l'imprimante, le chargement de la section de la
 // qualité — et monte App dans le corps du document. Le thème de départ est
@@ -24,6 +25,12 @@
 // hyperthreads compris : l'exécuteur l'annonce au contrôleur, qui en fait
 // la valeur des cœurs automatiques ; une épreuve donne le sien à
 // l'exécuteur qu'elle monte.
+//
+// Le même travailleur sert la vue d'ensemble de la liste : les deux résumés
+// de chaque ligne dont l'aperçu manque ou est périmé s'y calculent, hors du
+// fil de l'interface (§ 8.1), dans une instance à part, née au premier
+// calcul, qui sert la séance (executeur_apercu.js) ; App la termine à son
+// démontage.
 //
 // La police embarquée (src/polices) n'est importée que d'ici et du montage
 // des épreuves : App reçoit chargerPolices, dont les deux import() différés
@@ -42,6 +49,7 @@
 // cette fonction, et le montage des épreuves lui en passe une qui rend le
 // composant importé d'emblée.
 import { mount } from 'svelte';
+import { creerExecuteurApercu } from './application/executeur_apercu.js';
 import { creerExecuteurTravailleur } from './application/executeur_travailleur.js';
 import { creerHorlogeSysteme } from './application/horloge.js';
 import { demonstrationsLivrees } from './demo/livrees.js';
@@ -79,6 +87,7 @@ mount(App, {
     executeur: creerExecuteurTravailleur(() => new Travailleur(), {
       coeursDisponibles: navigator.hardwareConcurrency,
     }),
+    executeurApercu: creerExecuteurApercu(() => new Travailleur()),
     pressePapiers,
     identifiant: () => crypto.randomUUID(),
     langue: 'fr',

@@ -290,9 +290,16 @@ async function deplacerSiPossible(fs, racine, de, vers) {
   }
 }
 
-// Les suffixes des fichiers d'un événement. Aucun ne finit un autre : un nom
-// en porte un au plus.
-const SUFFIXES_EVENEMENT = [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou, SUFFIXES.courses];
+// Les suffixes des fichiers d'un événement, compagnon des courses et aperçu
+// de la liste compris. Aucun ne finit un autre : un nom en porte un au plus.
+const SUFFIXES_EVENEMENT = [
+  SUFFIXES.etat,
+  SUFFIXES.precedent,
+  SUFFIXES.journal,
+  SUFFIXES.verrou,
+  SUFFIXES.courses,
+  SUFFIXES.apercu,
+];
 
 // Vrai quand nom est celui d'un fichier d'événement, du sien ou d'un autre :
 // une base non vide suivie d'un suffixe de SUFFIXES, prolongé ou non de
@@ -476,7 +483,11 @@ async function deplacerEtrangers(ouvert, nouvelle) {
 // neuf a été refusée (nouvelle.compagnon null), l'ancien ne se supprime pas :
 // il se déplace sous la nouvelle base, dans le dossier neuf, qui retrouve
 // ainsi ses courses à la réouverture, ou reste où il est quand le déplacement
-// est refusé ; ni l'un ni l'autre ne lève. Une ErreurStockage reçoit dans ses
+// est refusé ; ni l'un ni l'autre ne lève. L'aperçu de la liste, quand la
+// liste du dossier le porte, se déplace ensuite sous la nouvelle base, dans
+// le dossier neuf : la liste y lit l'ancien chiffre, que son empreinte juge
+// périmé. Un déplacement refusé l'efface, un effacement refusé le laisse où
+// il est, sans lever : ce n'est qu'un cache. Une ErreurStockage reçoit dans ses
 // détails ouvert, l'Ouvert de la nouvelle paire, d'où continuer, puis
 // remonte : celui que tient l'appelant décrit l'ancienne, et un geste parti
 // de lui ferait diverger deux paires du même événement.
@@ -493,6 +504,12 @@ async function supprimerAncienne(ouvert, nouvelle) {
     if (compagnon !== null && nouvelle.compagnon === null) {
       const ancien = `${ouvert.dossier}/${compagnon}`;
       await deplacerSiPossible(ouvert.systeme, racine, ancien, cheminDe(nouvelle, SUFFIXES.courses));
+    }
+    const apercu = nomSurDisque(noms, base + SUFFIXES.apercu, insensibleCasse);
+    if (apercu !== null) {
+      const ancien = `${ouvert.dossier}/${apercu}`;
+      const deplace = await deplacerSiPossible(ouvert.systeme, racine, ancien, cheminDe(nouvelle, SUFFIXES.apercu));
+      if (!deplace) await effacerSiPossible(fs, racine, apercu);
     }
   } catch (erreur) {
     if (erreur instanceof ErreurStockage) erreur.details.ouvert = nouvelle;
@@ -517,7 +534,8 @@ async function supprimerAncienne(ouvert, nouvelle) {
  * sans lever. Il supprime enfin l'ancienne paire, dans l'ancien dossier :
  * son état, son .precedent, le journal de l'événement et son compagnon quand
  * il existe, jamais l'inverse ; un compagnon neuf refusé laisse l'ancien se
- * déplacer sous la nouvelle base, dans le dossier neuf. Le verrou, les
+ * déplacer sous la nouvelle base, dans le dossier neuf. L'aperçu de la liste
+ * s'y déplace en dernier, sous la nouvelle base ; refusé, il s'efface. Le verrou, les
  * écritures restées de l'ancienne paire et les fichiers d'un autre événement
  * restent dans l'ancien dossier, que retirerDossier retire ensuite quand il
  * est vide : la façade l'appelle une fois le verrou rendu. Rien de
@@ -814,7 +832,8 @@ async function baseDuJournal(fs, racine, cle, insensibleCasse) {
  * sorties de la planche, fichiers posés à la main, sous-dossiers avec ce
  * qu'ils portent (deplacerDossier) —, puis les fichiers de l'événement :
  * chacun des fichiers d'écriture atomique restés, le verrou, le compagnon
- * des courses, le journal de l'événement (baseDuJournal), jamais celui d'un
+ * des courses, l'aperçu de la liste, le journal de l'événement
+ * (baseDuJournal), jamais celui d'un
  * autre, le .precedent, et l'état en dernier. Une entrée qui n'est d'aucun
  * événement et dont le déplacement, ou la création de son sous-dossier
  * daté, est refusé par une ErreurStockage — un fichier qu'un autre
@@ -823,8 +842,9 @@ async function baseDuJournal(fs, racine, cle, insensibleCasse) {
  * eux. Sur un système de fichiers qui ignore la casse, un fichier se
  * reconnaît à la clé de son nom, la majuscule de sa NFC, comme deriverBase
  * compare les bases, et part sous son nom sur le disque : un journal, un
- * .precedent, un compagnon ou un verrou d'une autre casse est le même
- * fichier. Sur un système sensible à la casse, seul le nom exact compte.
+ * .precedent, un compagnon, un aperçu ou un verrou d'une autre casse est le
+ * même fichier. Sur un système sensible à la casse, seul le nom exact
+ * compte.
  * Chaque déplacement porte un fichier entier : une coupure laisse chacun à
  * sa place ou dans la corbeille, jamais perdu, et l'événement se liste
  * encore tant que son état n'est pas parti ; une nouvelle suppression
@@ -879,6 +899,7 @@ export async function supprimer(fs, racine, cle, { horodatage, seance }) {
   const fichiers = [
     verrou,
     base + SUFFIXES.courses,
+    base + SUFFIXES.apercu,
     ...(journal === null ? [] : [journal + SUFFIXES.journal]),
     base + SUFFIXES.precedent,
     base + SUFFIXES.etat,

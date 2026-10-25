@@ -24,21 +24,24 @@
 // (voir src/interface/App.navigateur.test.js).
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cdp } from 'vitest/browser';
-import { flushSync, tick } from 'svelte';
+import { flushSync, mount, tick, unmount } from 'svelte';
 import { appliquerCommande } from '../../application/commandes.js';
-import { evaluer } from '../../application/evaluation.js';
+import { evaluer, resumeDuMeilleur, resumeDuRetenu } from '../../application/evaluation.js';
+import { brancherTravailleurApercu, creerExecuteurApercu } from '../../application/executeur_apercu.js';
 import { creerFormat } from '../../application/format.js';
+import { creerExecuteurDirect } from '../../application/generation.js';
 import { creerHorlogePilotee } from '../../application/horloge.js';
 import { TABLES_APPLICATION, libelle } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { CATALOGUE } from '../../demo/catalogue.js';
-import { LIVREES, texteLivre } from '../../demo/livrees.js';
+import { LIVREES, demonstrationsLivrees, texteLivre } from '../../demo/livrees.js';
 import { indexerPlan, normaliser } from '../../moteur/configuration.js';
 import { mesurer } from '../../moteur/indicateurs.js';
 import { rechercher } from '../../moteur/recherche.js';
+import { lireApercu, texteApercu } from '../../stockage/apercu.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { creer as creerDansLeDepot, ouvrir as ouvrirDansLeDepot } from '../../stockage/depot.js';
-import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
+import { FORMAT, analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { ErreurStockage } from '../../stockage/erreurs.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { cheminLogo, empreinteSha256 } from '../../stockage/logos.js';
@@ -47,6 +50,7 @@ import { libelleDeLInstant } from '../../stockage/operations.js';
 import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
+import { creerImprimanteSimulee } from '../../../test/imprimante_simulee.js';
 import { centre, chargerResumes, suivreResumes } from '../../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
@@ -59,6 +63,8 @@ import {
   traductionEcran,
   visible as visibleDansLaFenetre,
 } from '../../../test/navigateur/rendu.js';
+import { versionVoisine } from '../../../test/version_voisine.js';
+import App from '../App.svelte';
 import { TABLES_INTERFACE } from '../libelles.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -1765,7 +1771,7 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
     }
   };
 
-  test('la liste paraît avant ses résumés, un signe muet par valeur, une seule annonce ; chaque pas de l’horloge résout une ligne, dans l’ordre, aux valeurs de l’évaluation ; rien d’écrit', async () => {
+  test('la liste paraît avant ses résumés, un signe muet par valeur, une seule annonce ; chaque pas de l’horloge résout une ligne, dans l’ordre, aux valeurs de l’évaluation ; rien d’écrit que l’aperçu de chacune', async () => {
     const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
     const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}/${base}${SUFFIXES.etat}`, etat(charge))) });
     const avant = ecritures(m);
@@ -1794,7 +1800,9 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
     // La fin du chargement vide la région, qui reste là pour le suivant.
     expect(regionEtat(m)).toBe(region);
     expect(region.textContent).toBe('');
-    expect(ecritures(m)).toBe(avant);
+    expect(m.trace.slice(avant)).toEqual(
+      ['alpha', 'beta'].map((base) => ['ecrireAtomique', 'documents', `${base}/${base}${SUFFIXES.apercu}`]),
+    );
   });
 
   test('deux dossiers sous une même base, « gala » et sa copie à la main « gala - Copie » : deux lignes, chacune son résumé ; le refus d’ouvrir l’une ne paraît que sous elle', async () => {
@@ -1901,6 +1909,214 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
         }
       });
     }
+  });
+
+  // --- L'aperçu de la liste (§ 8.1, § 8.6) ---------------------------------------
+
+  // Les fichiers d'état de deux événements résumés, alpha et beta.
+  const fichiersResumes = (charges) =>
+    Object.entries(charges).map(([base, charge]) => fichier(`${base}/${base}${SUFFIXES.etat}`, etat(charge)));
+  // Le texte d'un aperçu d'empreinte périmée, aux chiffres inventés, de la
+  // construction produit.
+  const ANCIENS = Object.freeze({ collisionsCumulees: 417, rencontresRepetees: 23, id: 9 });
+  const apercuPerime = (produit = VERSION.affichee) =>
+    texteApercu({
+      produitVersion: produit,
+      empreinte: 'empreinte-perimee',
+      mesuresDuRetenu: { collisionsCumulees: ANCIENS.collisionsCumulees, rencontresRepetees: ANCIENS.rencontresRepetees },
+      meilleureDuClassement: { id: ANCIENS.id },
+    });
+  // Chaque valeur de la ligne se vérifie : l'ancien chiffre dans son propre
+  // nœud, que l'aide nomme au survol, le signe muet à côté, l'aide lue par
+  // les technologies d'assistance, la cellule occupée.
+  function aVerifier(ligne, valeurs) {
+    const aide = tEcran('accueil.verification');
+    cellules(ligne).forEach((cellule, rang) => {
+      expect(cellule.getAttribute('aria-busy')).toBe('true');
+      const valeur = cellule.querySelectorAll('[data-a-verifier]');
+      expect(valeur.length).toBe(1);
+      expect(valeur[0].textContent).toBe(valeurs[rang]);
+      expect(valeur[0].getAttribute('title')).toBe(aide);
+      const signe = cellule.querySelectorAll('[data-chargement]');
+      expect(signe.length).toBe(1);
+      expect(signe[0].getAttribute('aria-hidden')).toBe('true');
+      expect(cellule.textContent).toBe(`${valeurs[rang]}${aide}`);
+    });
+  }
+
+  test('une liste relue d’un disque dont les aperçus sont à jour paraît avec ses chiffres, sans pas de l’horloge, sans rien recalculer ni écrire', async () => {
+    const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta', 9) };
+    const premier = await monter({ fichiers: fichiersResumes(charges) });
+    await chargerResumes(premier);
+    const disque = premier.disque;
+    premier.demonter();
+    montes = montes.filter((monte) => monte !== premier);
+
+    const m = await monter({ systeme: { disque } });
+    const avant = ecritures(m);
+    // Aucun pas de l'horloge : les chiffres viennent des aperçus seuls.
+    await vi.waitFor(() => {
+      resolue(ligneDe(m, 'alpha'), attendues(charges.alpha));
+      resolue(ligneDe(m, 'beta'), attendues(charges.beta));
+    });
+    expect(tous(m, '[data-a-verifier]')).toEqual([]);
+    expect(regionEtat(m).textContent).toBe('');
+    for (let pas = 0; pas < 3; pas += 1) {
+      await uneImage();
+      m.horloge.avancer(0);
+    }
+    await uneImage();
+    expect(ecritures(m)).toBe(avant);
+  });
+
+  test('un aperçu périmé : l’ancien chiffre atténué, le signe à côté et l’aide ; le pas suivant le remplace par le chiffre recalculé et réécrit l’aperçu ; un aperçu d’une autre construction vaut absent', async () => {
+    const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta', 9) };
+    const m = await monter({
+      fichiers: [
+        ...fichiersResumes(charges),
+        fichier(`alpha/alpha${SUFFIXES.apercu}`, apercuPerime()),
+        fichier(`beta/beta${SUFFIXES.apercu}`, apercuPerime(versionVoisine(VERSION.affichee))),
+      ],
+    });
+    const anciens = [ANCIENS.collisionsCumulees, ANCIENS.rencontresRepetees, ANCIENS.id].map((n) => format.nombre(n));
+    expect(anciens).not.toEqual(attendues(charges.alpha));
+    await vi.waitFor(() => aVerifier(ligneDe(m, 'alpha'), anciens));
+    enAttente(ligneDe(m, 'beta'));
+    expect(regionEtat(m).textContent).toBe(t('accueil.chargement'));
+    // L'atténuation est l'encre secondaire de la page, sans opacité
+    // partielle ni filtre, qui tient 4,5:1 sur son fond dans les deux thèmes.
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        for (const valeur of tous(m, '[data-a-verifier]')) {
+          valeur.scrollIntoView({ block: 'center' });
+          expect(attenuations(valeur), theme).toEqual([]);
+          const couleur = composantes(getComputedStyle(valeur).color);
+          expect(couleur, theme).toEqual(jeton('--couleur-page-texte-secondaire'));
+          const autour = fondPeintSous(valeur);
+          expect(autour.length, theme).toBeGreaterThan(0);
+          for (const fond of autour) expect(contraste(couleur, fond), theme).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+    }
+
+    await chargerResumes(m);
+    resolue(ligneDe(m, 'alpha'), attendues(charges.alpha));
+    resolue(ligneDe(m, 'beta'), attendues(charges.beta));
+    expect(tous(m, '[data-a-verifier]')).toEqual([]);
+    for (const base of ['alpha', 'beta']) {
+      const relu = lireApercu(m.fs.contenu('documents', `${base}/${base}${SUFFIXES.apercu}`), VERSION.affichee);
+      expect(relu).not.toBeNull();
+      expect(relu.empreinte).not.toBe('empreinte-perimee');
+      expect(relu.mesuresDuRetenu).toEqual(resumeDuRetenu(charges[base]));
+      expect(relu.meilleureDuClassement).toEqual(resumeDuMeilleur(charges[base]));
+    }
+  });
+
+  test('des aperçus tous périmés : aucune ligne n’attend, chacune se vérifie, et la région d’état annonce le calcul ; elle se vide quand le dernier chiffre est recalculé', async () => {
+    const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta', 9) };
+    const m = await monter({
+      fichiers: [
+        ...fichiersResumes(charges),
+        fichier(`alpha/alpha${SUFFIXES.apercu}`, apercuPerime()),
+        fichier(`beta/beta${SUFFIXES.apercu}`, apercuPerime()),
+      ],
+    });
+    const anciens = [ANCIENS.collisionsCumulees, ANCIENS.rencontresRepetees, ANCIENS.id].map((n) => format.nombre(n));
+    await vi.waitFor(() => {
+      aVerifier(ligneDe(m, 'alpha'), anciens);
+      aVerifier(ligneDe(m, 'beta'), anciens);
+    });
+    // Chaque signe accompagne un ancien chiffre : aucune valeur n'attend
+    // sans lui, seule la vérification occupe la région.
+    expect(signes(m).length).toBe(6);
+    expect(tous(m, '[data-a-verifier]').length).toBe(6);
+    const region = regionEtat(m);
+    expect(region.textContent).toBe(t('accueil.chargement'));
+
+    await chargerResumes(m);
+    resolue(ligneDe(m, 'alpha'), attendues(charges.alpha));
+    resolue(ligneDe(m, 'beta'), attendues(charges.beta));
+    expect(regionEtat(m)).toBe(region);
+    expect(region.textContent).toBe('');
+  });
+
+  test('App confie chaque calcul de la liste à l’exécuteur de la vue d’ensemble qu’il reçoit, et le termine à son démontage', async () => {
+    const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta', 9) };
+    const fs = creerFichiersSimules();
+    for (const { racine, chemin, texte } of fichiersResumes(charges)) fs.deposer(racine, chemin, texte);
+    // Un travailleur dans la page : le côté travailleur branché sur une
+    // portée, chaque message cloné dans les deux sens et remis à la
+    // microtâche suivante, comme le ferait le navigateur.
+    const travailleurDansLaPage = () => {
+      const portee = { onmessage: null, postMessage: null };
+      const travailleur = {
+        onmessage: null,
+        onerror: null,
+        termine: false,
+        postMessage(message) {
+          const clone = structuredClone(message);
+          queueMicrotask(() => travailleur.termine || portee.onmessage({ data: clone }));
+        },
+        terminate() {
+          travailleur.termine = true;
+        },
+      };
+      portee.postMessage = (message) => {
+        const clone = structuredClone(message);
+        queueMicrotask(() => travailleur.termine || travailleur.onmessage?.({ data: clone }));
+      };
+      brancherTravailleurApercu(portee);
+      return travailleur;
+    };
+    const reel = creerExecuteurApercu(travailleurDansLaPage);
+    const calculs = [];
+    let terminaisons = 0;
+    const executeurApercu = {
+      calculer(charge) {
+        calculs.push(charge.evenement.id);
+        return reel.calculer(charge);
+      },
+      terminer() {
+        terminaisons += 1;
+        reel.terminer();
+      },
+    };
+    const horloge = creerHorlogePilotee();
+    const cible = document.createElement('div');
+    document.body.append(cible);
+    const app = mount(App, {
+      target: cible,
+      props: {
+        fs,
+        horloge,
+        executeur: creerExecuteurDirect(),
+        executeurApercu,
+        pressePapiers: { copier: async () => {} },
+        identifiant: () => 'epreuve-apercu',
+        langue: 'fr',
+        provenance: 'test',
+        demonstrations: demonstrationsLivrees(),
+        formatCourant: FORMAT,
+        produitVersion: VERSION.affichee,
+        polices: () => Promise.reject(new Error('aucune police dans cette épreuve')),
+        imprimante: creerImprimanteSimulee(),
+        sectionQualite: () => new Promise(() => {}),
+        themeInitial: 'clair',
+      },
+    });
+    try {
+      await app.pret;
+      const m = { racine: cible, horloge };
+      await chargerResumes(m);
+      resolue(ligneDe(m, 'alpha'), attendues(charges.alpha));
+      resolue(ligneDe(m, 'beta'), attendues(charges.beta));
+      expect(calculs).toEqual(['evt-alpha', 'evt-beta']);
+      expect(terminaisons).toBe(0);
+    } finally {
+      unmount(app);
+      cible.remove();
+    }
+    expect(terminaisons).toBe(1);
   });
 });
 

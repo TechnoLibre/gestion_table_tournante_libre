@@ -55,6 +55,7 @@ const PRECEDENT = `${BASE}${SUFFIXES.precedent}`;
 const JOURNAL = `${BASE}${SUFFIXES.journal}`;
 const VERROU = `${BASE}${SUFFIXES.verrou}`;
 const COURSES = `${BASE}${SUFFIXES.courses}`;
+const APERCU = `${BASE}${SUFFIXES.apercu}`;
 
 const REPRISE = "Reprise de l'état trouvé sur le disque";
 
@@ -2596,6 +2597,105 @@ describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31
     });
     const deplaces = [`${COURSES}.ecriture`, VERROU, COURSES, JOURNAL, PRECEDENT, ETAT];
     assert.deepEqual(trace.filter(([primitive]) => primitive === 'deplacer'), deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`]));
+    assert.deepEqual(
+      (await arbre(disque)).map(([chemin]) => chemin).filter((chemin) => !chemin.startsWith(DATE)),
+      [],
+    );
+  });
+});
+
+// --- L'aperçu de la liste (§ 8.1, § 8.6, § 8.7) ------------------------------
+
+// Le texte d'aperçu que les épreuves posent : son contenu ne compte pas, les
+// opérations ne le lisent jamais.
+const TEXTE_APERCU = '{"format":1}\n';
+
+// L'événement d'avecUneCourse, son aperçu posé à côté de l'état.
+async function avecUnApercu() {
+  const cas = await avecUneCourse();
+  cas.fs.deposer('documents', dans(APERCU), TEXTE_APERCU);
+  return cas;
+}
+
+describe("opérations : l'aperçu de la liste suit l'événement (§ 8.7)", () => {
+  test("renommer déplace l'aperçu sous la nouvelle base, dans le dossier neuf, une fois l'ancienne paire supprimée ; celui d'une autre base reste où il est", async () => {
+    const { fs, ouvert } = await avecUnApercu();
+    const autre = `Gala des Ifs${SUFFIXES.apercu}`;
+    fs.deposer('documents', dans(autre), TEXTE_APERCU);
+    const nouvelle = 'Gala des Saules';
+    const trace = tracer(fs);
+    await renommer(ouvert, renommage(nouvelle, 3));
+    assert.deepEqual(trace.slice(-2), [
+      ['supprimer', COURSES],
+      ['deplacer', APERCU, `${nouvelle}/${nouvelle}${SUFFIXES.apercu}`],
+    ]);
+    assert.equal(fs.contenu('documents', `${nouvelle}/${nouvelle}${SUFFIXES.apercu}`), TEXTE_APERCU);
+    assert.equal(fs.contenu('documents', dans(APERCU)), null);
+    assert.equal(fs.contenu('documents', dans(autre)), TEXTE_APERCU);
+    assert.equal(fs.contenu('documents', `${nouvelle}/${autre}`), null);
+  });
+
+  test("renommer dont le déplacement de l'aperçu est refusé l'efface ; refusé aussi à l'effacement, il reste, sans lever", async () => {
+    const nouvelle = 'Gala des Saules';
+    const refuser = (fs, primitive) => {
+      const faire = fs[primitive];
+      fs[primitive] = (racine, chemin, ...reste) =>
+        chemin === dans(APERCU) || chemin === APERCU
+          ? Promise.reject(new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EBUSY' }))
+          : faire(racine, chemin, ...reste);
+    };
+    const efface = await avecUnApercu();
+    refuser(efface.fs, 'deplacer');
+    const renomme = await renommer(efface.ouvert, renommage(nouvelle, 3));
+    assert.equal(renomme.base, nouvelle);
+    assert.equal(efface.fs.contenu('documents', dans(APERCU)), null);
+    assert.equal(efface.fs.contenu('documents', `${nouvelle}/${nouvelle}${SUFFIXES.apercu}`), null);
+
+    const reste = await avecUnApercu();
+    refuser(reste.fs, 'deplacer');
+    refuser(reste.fs, 'supprimer');
+    assert.equal((await renommer(reste.ouvert, renommage(nouvelle, 3))).base, nouvelle);
+    assert.equal(reste.fs.contenu('documents', dans(APERCU)), TEXTE_APERCU);
+  });
+
+  test("renommer en place garde l'aperçu tel quel", async () => {
+    const { fs, ouvert } = await avecUnApercu();
+    const trace = tracer(fs);
+    assert.equal((await renommer(ouvert, renommage(BASE.toUpperCase(), 3))).base, BASE);
+    assert.deepEqual(trace.filter(([, chemin]) => chemin === APERCU), []);
+    assert.equal(fs.contenu('documents', dans(APERCU)), TEXTE_APERCU);
+  });
+
+  test("copier et importerDepuis ne recopient pas l'aperçu, que la copie rendrait périmé ; l'original garde le sien", async () => {
+    const { disque, fs, ouvert } = await avecUnApercu();
+    const variante = 'Variante des Lucioles';
+    await copier(ouvert, optionsCopie(variante));
+    assert.equal(fs.contenu('documents', `${variante}/${variante}${SUFFIXES.apercu}`), null);
+    assert.equal(fs.contenu('documents', dans(APERCU)), TEXTE_APERCU);
+
+    const PORTABLE = { executable: 'E:\\soirees' };
+    const ailleurs = creerFichiersSimules({ disque, ...PORTABLE });
+    ailleurs.deposerDossier('portable');
+    const { portable, documents } = await ailleurs.racines();
+    const trace = tracer(ailleurs);
+    const rendu = await importerDepuis(ailleurs, documents, portable, [EVT]);
+    assert.deepEqual(rendu.refuses, []);
+    assert.deepEqual(trace.filter(([, chemin]) => chemin.endsWith(SUFFIXES.apercu)), []);
+    assert.equal(ailleurs.contenu('portable', dans(APERCU)), null);
+    assert.equal(ailleurs.contenu('documents', dans(APERCU)), TEXTE_APERCU);
+  });
+
+  test("supprimer emporte l'aperçu et son écriture restée dans le dossier daté, après le compagnon et avant le journal", async () => {
+    const { disque, fs } = await avecUnApercu();
+    fs.deposer('documents', dans(`${APERCU}.ecriture`), 'partiel');
+    const trace = tracer(fs);
+    assert.deepEqual(await supprimer(fs, DOC, dans(BASE), { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), {
+      dossier: DATE,
+      nonRetire: null,
+    });
+    const deplaces = [`${APERCU}.ecriture`, VERROU, COURSES, APERCU, JOURNAL, PRECEDENT, ETAT];
+    assert.deepEqual(trace.filter(([primitive]) => primitive === 'deplacer'), deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`]));
+    assert.equal(fs.contenu('documents', `${DATE}/${APERCU}`), TEXTE_APERCU);
     assert.deepEqual(
       (await arbre(disque)).map(([chemin]) => chemin).filter((chemin) => !chemin.startsWith(DATE)),
       [],

@@ -119,6 +119,15 @@
 // le compagnon après l'état, et seulement quand les courses connues des
 // propositions écrites ne sont plus celles qu'il porte (poserCompagnon) ;
 // un refus d'écrire le compagnon ne refuse pas l'écriture.
+//
+// L'aperçu de la liste, <base>.gtt-apercu.json (apercu.js), est un cache que
+// la façade écrit et relit ; ce module ne l'écrit jamais, et lister ne le lit
+// pas. Il rend seulement l'empreinte des textes dont dépend la charge
+// qu'ouvrir rend : celui de l'état et celui du journal que l'ouverture lit
+// (empreinteDeLaCharge, ouvrirAvecEmpreinte). Rien d'autre n'entre dans
+// cette charge : le .precedent ne s'y lit qu'au refus d'un état illisible,
+// et le compagnon des courses ne donne que les courses de l'Ouvert.
+import { empreinteApercu } from './apercu.js';
 import { canoniser, canoniserPartagee, serialiser, serialiserCanonique } from './canonique.js';
 import { avecCourses, cleDeCourse, entreesPour, heriterEmpreintes, lireCourses, texteDesCourses } from './courses.js';
 import { FORMAT, analyser } from './document.js';
@@ -266,15 +275,17 @@ import { cheminAffiche, vueDossier } from './systeme_fichiers.js';
  *           ou d'un autre, porte le même identifiant
  */
 
-// Suffixes des fichiers d'un événement, compagnon des courses compris : une
-// base que l'un d'eux porte dans un dossier n'est pas libre. Un compagnon
-// resté seul ne passe ainsi jamais à un autre événement.
+// Suffixes des fichiers d'un événement, compagnon des courses et aperçu de
+// la liste compris : une base que l'un d'eux porte dans un dossier n'est pas
+// libre. Un compagnon ou un aperçu resté seul ne passe ainsi jamais à un
+// autre événement.
 const SUFFIXES_EVENEMENT = [
   SUFFIXES.etat,
   SUFFIXES.precedent,
   SUFFIXES.journal,
   SUFFIXES.verrou,
   SUFFIXES.courses,
+  SUFFIXES.apercu,
 ];
 
 // Deux chaînes, comparées unité UTF-16 par unité.
@@ -983,6 +994,13 @@ export async function lister(fs, racine) {
  *         l'événement n'existe
  */
 export async function ouvrir(fs, racine, cle) {
+  return (await ouvrirParVue(fs, racine, cle)).ouvert;
+}
+
+// Ce qu'ouvrir lit et rend, depuis une même vue : { ouvert, empreinte },
+// empreinte celle de l'état et du journal que cette vue a lus (empreinteDe).
+// Lève comme ouvrir.
+async function ouvrirParVue(fs, racine, cle) {
   const { local, base } = dansDossier(fs, cle);
   const vue = vueDe(local, racine);
   const etat = await vue.lecture(base + SUFFIXES.etat);
@@ -991,7 +1009,58 @@ export async function ouvrir(fs, racine, cle) {
   const source = depuisLecture(etat.lecture, surDisque(etat.texte, etat));
   const texteCourses = await vue.texteSiLisible(base + SUFFIXES.courses);
   const instant = instantDe(trouve.lu);
-  return assembler({ fs: local, racine, base, source, trouve, instant, avecRattrapage: true, texteCourses });
+  const ouvert = assembler({ fs: local, racine, base, source, trouve, instant, avecRattrapage: true, texteCourses });
+  return { ouvert, empreinte: await empreinteDe(vue, etat.texte, trouve) };
+}
+
+// L'empreinte de l'aperçu (empreinteApercu) du texte d'un état lisible et du
+// journal que journalDe a trouvé pour lui : le texte lisible de ce journal
+// (journalLisible) quand l'ouverture le lit, null sinon — aucun journal, ou
+// celui de la base d'un format plus récent, d'un format plus ancien, aux
+// octets hors UTF-8 dès son ouverture, ou d'un autre événement. La vue a
+// déjà lu ce journal : rien ne se relit.
+async function empreinteDe(vue, texteEtat, trouve) {
+  const texteJournal = trouve.lu === null ? null : (await vue.journal(trouve.base + SUFFIXES.journal)).texte;
+  return empreinteApercu(texteEtat, texteJournal);
+}
+
+/**
+ * Ouvre l'événement de clé cle comme ouvrir, sans rien écrire, et rend avec
+ * l'Ouvert l'empreinte des textes d'où vient sa charge, lus par la même vue
+ * (§ 8.1, apercu.js) : l'état, et le journal que l'ouverture lit, qui
+ * rattrape une entrée en avance. Deux textes identiques donnent la même
+ * charge, et donc les mêmes résumés.
+ *
+ * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
+ * @param {import('./systeme_fichiers.js').Racine} racine
+ * @param {string} cle   cleEvenement(dossier, base)
+ * @returns {Promise<{ouvert: Ouvert, empreinte: string}>}
+ * @throws {ErreurStockage} comme ouvrir
+ */
+export async function ouvrirAvecEmpreinte(fs, racine, cle) {
+  return ouvrirParVue(fs, racine, cle);
+}
+
+/**
+ * L'empreinte que rendrait ouvrirAvecEmpreinte sur les mêmes fichiers, sans
+ * examiner ni restituer la charge (§ 8.1) : l'état se lit et s'apparie à son
+ * journal comme à l'ouverture, sans rien écrire. null quand l'état manque ou
+ * ne se lit pas : aucune charge ne s'ouvre.
+ *
+ * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
+ * @param {import('./systeme_fichiers.js').Racine} racine
+ * @param {string} cle   cleEvenement(dossier, base)
+ * @returns {Promise<string|null>}
+ * @throws {ErreurStockage} CHEMIN_REFUSE {chemin: cle}, comme ouvrir ; une
+ *         lecture que le système refuse autrement que par un fichier absent
+ *         ou des octets hors UTF-8
+ */
+export async function empreinteDeLaCharge(fs, racine, cle) {
+  const { local, base } = dansDossier(fs, cle);
+  const vue = vueDe(local, racine);
+  const etat = await vue.lecture(base + SUFFIXES.etat);
+  if (etat.lecture === null) return null;
+  return empreinteDe(vue, etat.texte, await journalDe(vue, base, etat.lecture.charge.evenement.id));
 }
 
 /**

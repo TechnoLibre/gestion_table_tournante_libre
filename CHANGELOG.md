@@ -254,6 +254,15 @@
   qui ne servait qu'à cette ancienne colonne, quitte la section des
   propositions : un fichier qui le porte s'ouvre sans message, et le perd au
   premier enregistrement.
+- La liste des événements s'ouvre avec ses chiffres : les mesures du placement
+  retenu et la meilleure proposition de chaque événement viennent d'un petit
+  fichier à côté de son état, `<nom>.gtt-apercu.json`, la dernière vue
+  d'ensemble, sans rien recalculer tant que l'événement n'a pas changé. Un
+  événement modifié depuis montre son ancien chiffre atténué, le signe de
+  chargement qui tourne à côté, le temps que la liste le recalcule en
+  arrière-plan, hors du fil de la page, puis réécrive le fichier. Renommer et
+  supprimer l'emportent avec l'événement ; copier et importer ne le recopient
+  pas.
 - La section « Propositions » offre « Garder les 10 meilleures » : les dix
   premières du classement restent, et celle d'où vient le placement retenu
   aussi, les autres s'effacent. Le nombre se règle dans le champ voisin. Une
