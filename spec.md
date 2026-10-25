@@ -1297,6 +1297,42 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   tables de plus, jusqu'à l'annuler, ou lever le conflit, qui le ramène aux
   planchers de chaque organisation. Ce plancher ne vaut que sans conflit : un
   plan qui en accepte peut compter moins de collisions ;
+- **le plancher exact de chaque tour**, qu'un solveur en nombres entiers,
+  HiGHS, calcule hors du fil de l'interface. Les contraintes dures d'un plan —
+  capacités, présence, réservations, ancrés — portent chacune sur un seul tour,
+  et conflits comme collisions cumulées sont des sommes par tour : les tours se
+  découplent, et chacun se résout seul. Au tour r, **(A)** dit si un placement
+  du tour sans conflit d'organisation existe — zéro conflit est possible si et
+  seulement si (A) vaut à chaque tour — et **(AC)** donne le minimum exact des
+  collisions du tour parmi ces placements, toutes organisations comprises : les
+  capacités les lient même sans conflit — 20 et 13 personnes sans conflit sur
+  des tables de 11, 11, 6 et 5 places en imposent 63 par tour, là où la somme
+  par groupe en dit 55. Les optimums des tours se recollent en un plan : la
+  somme des (AC) est le minimum exact des collisions cumulées des plans sans
+  conflit, un plancher qu'un plan atteint. Le modèle agrège chaque
+  organisation : à chaque table, le nombre de ses membres libres, ses réservés
+  en constante, ses collisions par les cordes de C(x, 2), exactes aux valeurs
+  entières ; une personne sans organisation qui porte un conflit forme son
+  unité, les autres remplissent les sièges restants. Égal au plancher des
+  étoiles sur les étoiles éprouvées, il est strictement plus fort ailleurs :
+  trois organisations de 12, toutes en conflit, sur 9 tables de 8, en imposent
+  54 par tour, là où le plancher des étoiles se tait et la somme par groupe dit
+  9. **Ce qu'il ne couvre pas** : il ne vaut que pour un plan sans conflit,
+  comme celui des étoiles ; et la meilleure proposition du moteur ne l'atteint
+  pas forcément — l'excédent et les rencontres répétées, qui lient les tours,
+  passent avant les collisions cumulées dans l'ordre par défaut (§ 5.7) —, si
+  bien qu'aucun énoncé ne promet que le moteur l'atteindra. **Chaque résolution
+  dispose de 30 secondes** ; un tour arrêté sans placement en enchaîne une
+  seconde, de faisabilité seule. Un tour qui atteint sa limite ne donne qu'une
+  borne prouvée : le plancher se dit alors « au moins », prouvé mais peut-être
+  pas atteignable ; un tour arrêté avant toute borne y compte pour zéro, et une
+  limite qui tait aussi la faisabilité du tour ne laisse rien affirmer sur zéro
+  conflit. Un échec du solveur n'est jamais lu comme une preuve. Le calcul ne se
+  fait ni sur une configuration refusée, ni quand un tour manque de places —
+  aucun plan n'existe, et ce manque ne doit pas se dire conflit inévitable —, ni
+  sous séparation décochée. Le plancher des étoiles reste le repli instantané,
+  et l'épreuve croisée : sur des charges tirées, il ne dépasse jamais la somme
+  des (AC), et chaque (AC) égale le minimum d'une recherche exhaustive ;
 - redondance minimale `r_min(p) = max(0, |F(p)| − G)` → « au moins 6
   organisations recroisées par personne ; avec 3 tours au lieu de 4, aucune ne
   le serait » ;
@@ -7366,6 +7402,13 @@ en faire naître et le nombre de processeurs logiques du poste ; seul le point
 d'entrée de la page lit ce nombre de la plateforme. Les épreuves donnent le leur,
 et des fils simulés qui s'achèvent dans l'ordre qu'elles choisissent : c'est
 ainsi que s'éprouve un résultat indépendant de l'ordre d'achèvement (§ 5.7).
+
+**Le solveur du plancher exact ne se charge qu'à un endroit.**
+`src/application/solveur_travailleur.js` est le seul module de `src/` qui
+importe `highs` (§ 5.6), et une garde le tient. Le texte de chaque modèle
+s'engendre en JavaScript pur (`modele_tour.js`), sans paquet, et ce que
+l'interface lit des planchers exacts (`planchers_exacts.js`) n'importe pas le
+solveur.
 
 **La frontière des couches est gardée mécaniquement**, et pas seulement par
 discipline : un test du **graphe d'imports** refuse qu'un module de `src/moteur`

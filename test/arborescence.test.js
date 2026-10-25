@@ -3931,9 +3931,12 @@ function releverFixturesLivrees(racine) {
 // Les seules épreuves qui chargent fast-check (§ 14.12) : la formule du
 // plafond et la détection du séparateur, qui gagnent au rétrécissement ;
 // deux propriétés du stockage, sur des paires de charges et des séances
-// tirées, dont le contre-exemple rétréci tient en quelques opérations ; et
-// la découpe du plan en pages, dont les tuiles se juxtaposent à l'égalité
-// exacte sur des englobants, papiers et seuils tirés.
+// tirées, dont le contre-exemple rétréci tient en quelques opérations ; la
+// découpe du plan en pages, dont les tuiles se juxtaposent à l'égalité
+// exacte sur des englobants, papiers et seuils tirés ; et le plancher exact
+// de chaque tour, que HiGHS rend, arbitré sur des charges tirées par une
+// recherche exhaustive, dont le contre-exemple rétréci tient en quelques
+// personnes.
 const CHARGEURS_DE_FAST_CHECK = [
   { fichier: 'src/moteur/plafond.test.js', raison: 'la formule du plafond, arbitrée par énumération exhaustive' },
   { fichier: 'src/moteur/plafond.long.test.js', raison: 'la grande grille du plafond, sous la même graine écrite' },
@@ -3949,6 +3952,10 @@ const CHARGEURS_DE_FAST_CHECK = [
   {
     fichier: 'src/geometrie/pages.test.js',
     raison: 'les tuiles de la découpe, contiguës à l’égalité exacte, sur des englobants tirés',
+  },
+  {
+    fichier: 'src/application/solveur_travailleur.long.test.js',
+    raison: 'le minimum de chaque tour par HiGHS contre une recherche exhaustive, sous une graine écrite',
   },
 ];
 
