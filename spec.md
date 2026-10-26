@@ -178,7 +178,10 @@ une entrée ; les autres réservations et titres de la table restent. Le fichier
 ne garde pas quel geste a posé un titre : deux titres au même siège, et le
 premier par libellé part, l'autre reste non pourvu ; un titre posé avant une
 désignation qui l'a pourvu — au plan, ou par un lot sans siège à la fois libre
-et sans titre — part avec elle.
+et sans titre — part avec elle. Il ne garde pas non plus quel geste a posé une
+réservation : chaque réservation « tous les tours » de la personne qui pourvoit
+un titre de la table part au retrait, y compris celle posée à la main avant le
+lot, au siège où le lot a mis son titre, et aucun avis ne le signale.
 
 **« La place » se lit de deux façons, et le logiciel tranche** : c'est un
 **siège** quand l'attribution des sièges est active (§ 5.3), la **table** sinon.
@@ -348,6 +351,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PRO-06` | Imprimer une feuille par table | § 11.7 |
 | `PRO-07` | Imprimer le plan de salle, tour par tour | § 11.7 |
 | `PRO-08` | Marquer BROUILLON ce qui n'est pas retenu | § 11.7 |
+| `PRO-09` | Produire la liste des badges en CSV, pour un tableur | § 11.6 |
 
 **Fichiers et sécurité** — `FIC`
 
@@ -4361,6 +4365,18 @@ au-delà de chaque identifiant qu'elle lit. Les générations s'accumulent ainsi
 sans qu'un identifiant se répète ni revienne, et le retenu désigne toujours la
 même proposition d'origine.
 
+**Un identifiant entier tient de 1 à 2³¹ − 1** — celui d'un participant, d'une
+table, d'une proposition, ou de ce qu'une réservation, un titre ou un placement
+désigne —, dans un entier signé de 32 bits, la largeur des tableaux du moteur.
+Chaque compteur de `prochainsIds` suit la même borne : relevé au-delà d'un
+identifiant lu, il reste ainsi loin de 2⁵³, où l'analyse ne le relirait plus.
+Une valeur au-delà sort de sa règle, comme toute valeur que le format refuse.
+Chaque identifiant attribué reste sous son compteur (`id < prochainsIds`), qui
+ne passe pas 2³¹ − 1 : un identifiant attribué vaut donc au plus 2³¹ − 2. Un
+compteur arrivé à 2³¹ − 1 est saturé : la création d'un participant, d'une
+table ou d'une proposition qui demanderait un identifiant de plus est refusée,
+et rien ne se crée.
+
 Chaque proposition déclare, **une fois** :
 
 - la **liste ordonnée des identifiants de table** sur laquelle elle est bâtie ;
@@ -4430,6 +4446,8 @@ identifiant croissant dans tous les cas : ce sont des ensembles.
 propositions: [
   { id: 3,
     graine: 48271, arret: 20000, historique: 1000,
+    produitVersion: "...",             la construction qui l'a produite (§ 8.8)
+    siegesAttribues: true,             listes de table rangées par siège (§ 5.3)
     tables:    [7, 12, 2, ...],        identifiants de table (§ 4)
     capacites: [8, 8, 7, ...],
     tours: 4,
@@ -6026,11 +6044,13 @@ regardée avant d'être envoyée à l'imprimante — là où l'aperçu d'une mis
 PDF en serait une seconde, avec le défaut que les deux dérivent et que les tests
 des deux restent verts. C'est cette vue que le guide photographie (§ 19.6).
 
-**Ce qu'une feuille porte hors de sa zone de contenu se mesure sur le rendu** —
-le pied et, sur le plan, ses mentions, son échelle graphique et son cartouche —,
-à chaque ouverture de l'aperçu. La zone de contenu prend le reste de la page,
-marges ôtées, et la découpe du plan reçoit la même hauteur. Le registre n'en
-écrit aucune valeur (§ 14.1) : elle suit la police et le rendu.
+**La hauteur de ce qu'une feuille porte hors de sa zone de contenu se mesure
+sur le rendu** — le pied et, sur le plan, ses mentions, son échelle graphique
+et son cartouche —, à chaque ouverture de l'aperçu. La zone de contenu prend
+le reste de la page, marges et hauteur mesurée ôtées, et la découpe du plan
+reçoit cette même hauteur mesurée, qu'elle ôte de chaque orientation qu'elle
+essaie. Le registre n'écrit aucune valeur de la hauteur mesurée (§ 14.1) :
+elle suit la police et le rendu.
 
 **Fiches participants : la sortie imprimée est supprimée.** Son contenu — nom,
 organisation, titre, table et siège par tour — est exactement celui du badge.
@@ -7434,10 +7454,17 @@ message d'erreur**.
       │
   application        les états, les commandes, l'historique
       │
-  moteur             le placement : pur, sans DOM, sans API de plateforme
+  csv                l'import et l'export des listes, sur le modèle du stockage
       │
   stockage           lecture et écriture de fichiers
+      │
+  moteur             le placement : pur, sans DOM, sans API de plateforme
 ```
+
+Une couche n'importe que des couches placées plus bas, hors du générateur
+pseudo-aléatoire `src/demo/prng.js`, que le moteur partage avec le générateur
+de démonstrations ; l'interface n'atteint le CSV, le stockage et le moteur que
+par l'application.
 
 **Le moteur ne connaît ni le DOM, ni Capacitor, ni Electron.** Il reçoit des
 nombres et des listes, il rend des placements. C'est ce qui le rend testable sous
@@ -7537,16 +7564,17 @@ planchers instantanés seuls.
 **La frontière des couches est gardée mécaniquement**, et pas seulement par
 discipline : un test du **graphe d'imports** refuse qu'un module de `src/moteur`
 ou de `src/geometrie` importe de `src/interface`, de `src/application`, de
-`src/stockage` ou d'une interface de plateforme. Il refuse de même que
-`src/stockage` importe de `src/csv`, de `src/application`, de `src/interface` ou
-d'une plateforme, ou touche le navigateur hors de ses deux implémentations du
-système de fichiers, qu'aucun autre de ses modules n'importe ; que `src/csv`,
-qui lit le modèle du stockage, importe de `src/application`, de `src/interface`
-ou d'une plateforme ; que `src/geometrie` importe en outre du moteur, de
-`src/csv` ou de `src/demo` ; que `src/application` importe de `src/interface` ou
-de Svelte ; et que `src/interface` importe autre chose que Svelte, ses propres
-modules, `src/application` et `src/geometrie` — elle atteint le CSV et le moteur
-par l'application, jamais en direct. Un type que la documentation d'un module
+`src/stockage`, de `src/csv` ou d'une interface de plateforme. Il refuse de même
+que `src/stockage` importe de `src/csv`, de `src/application`, de
+`src/interface` ou d'une plateforme, ou touche le navigateur hors de ses deux
+implémentations du système de fichiers, qu'aucun autre de ses modules
+n'importe ; que `src/csv`, qui lit le modèle du stockage, importe de
+`src/application`, de `src/interface` ou d'une plateforme ; que
+`src/geometrie` importe en outre du moteur ou de `src/demo` ; que
+`src/application` importe de `src/interface` ou de Svelte ; et que
+`src/interface` importe autre chose que Svelte, ses propres modules,
+`src/application` et `src/geometrie` — elle atteint le CSV et le moteur par
+l'application, jamais en direct. Un type que la documentation d'un module
 importe compte comme un import. Le projet `node` ne chargeant pas le greffon
 Svelte (§ 14.8), un test de moteur qui importerait un composant échoue au
 chargement — mais cette garde-là ne couvre que les composants, et un module qui
@@ -7591,8 +7619,8 @@ l'alphabet visé, pas sur une moyenne. Un seuil moyen laisse déborder les noms
 Chaque constante du registre porte, à son entrée, **ce qu'elle mesure,
 pourquoi, et sur quelle configuration elle a été relevée** — ses champs `mesure`,
 `raison` et `configuration` —, afin que personne ne la « corrige » plus tard par
-le calcul. Un seuil propre à une épreuve, comme le coût d'un enregistrement
-(§ 8.2), porte les trois en commentaire à côté de sa valeur.
+le calcul. Un seuil mesuré propre à une épreuve, comme le coût d'un
+enregistrement (§ 8.2), porte les trois en commentaire à côté de sa valeur.
 
 **Chaque seuil dit « mesuré » a un propriétaire nommé** — le banc de mesure du
 § 19.10, le niveau `node`, le **niveau manuel**, ou l'**exécution**, qui le relève
@@ -8568,8 +8596,10 @@ modules faciles pendant que les branches qui comptent restent nues : le plafond
 d'un participant partiellement fixé, la frontière d'instantané, le renommage qui
 échoue. Le chiffre monte, et c'est le chiffre qui cache.
 
-**La couverture se mesure et se publie par module**, jamais agrégée. Sa valeur est
-de **désigner ce qui n'est jamais exécuté** ; c'est une liste à lire, pas une note.
+**La couverture se mesure et se publie par module.** Les lignes d'ensemble et
+de dossier que le tableau imprime aussi ne décident de rien : aucun seuil ne
+les lit. La couverture vaut parce qu'elle **désigne ce qui n'est jamais
+exécuté** ; c'est une liste à lire, pas une note.
 
 **Des seuils durs, en branches, sur dix modules.** Le module des indicateurs
 et du plafond, les chemins de reprise du stockage, le registre des critères

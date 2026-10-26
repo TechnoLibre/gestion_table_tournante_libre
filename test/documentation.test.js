@@ -714,7 +714,8 @@ function configurationLivree(cle) {
  * l'ensemble des nombres cités ne change pas.
  *  - les façons d'asseoir la petite démonstration pour un tour, tables
  *    numérotées : n! divisé par le produit des factorielles des capacités ;
- *  - la plus petite puissance de dix que ce nombre dépasse sur tous les tours ;
+ *  - la plus grande puissance de dix que ce nombre atteint sur tous les
+ *    tours, 10 à la puissance (nombre de chiffres − 1) ;
  *  - le plafond a priori de la petite, tours × (capacité − 1) ;
  *  - le plafond d'un mobile de la grande, sur les tables de la plus grande capacité ;
  *  - le plafond des animateurs ancrés aux tables de la plus petite capacité.
@@ -810,10 +811,9 @@ const VOCABULAIRE_SAVANT = [
  * Les fautes de la section sur l'algorithme : absente ; pas neuf points ;
  * un nombre écrit en chiffres que l'arithmétique ne recalcule pas, ou un
  * nombre recalculé qu'elle ne cite pas ; une phrase qui affirme un nombre
- * absente ; un
- * bloc de code, un passage en code, un nom de fichier .js ou un chemin de
- * src/ ; un identifiant exporté de src/ ; un mot savant ; ni le diagnostic
- * ni les propositions en image.
+ * absente ; un bloc de code, un passage en code, un nom de fichier .js ou
+ * un chemin de src/ ; un identifiant exporté de src/ ; un mot savant ; ni
+ * le diagnostic ni les propositions en image.
  */
 function fautesAlgorithme(texteGuide, { attendus, exportes }) {
   const section = sectionNommee(texteGuide, TITRE_ALGORITHME);

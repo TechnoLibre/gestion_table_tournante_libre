@@ -46,7 +46,7 @@ function lettreColonne(n) {
   return lettres;
 }
 
-// Vrai quand les deux rectangles ont une intérieur commun : un rectangle
+// Vrai quand les deux rectangles ont un intérieur commun : un rectangle
 // qui ne fait que toucher le bord d'une tuile ne la coupe pas.
 const coupe = (a, b) => a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY;
 

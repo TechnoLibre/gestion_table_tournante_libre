@@ -182,7 +182,7 @@ describe('decouperPlan : les cartouches', () => {
     );
   });
 
-  test('au-delà de Z, les colonnes continuent en AA, AB… ', () => {
+  test('au-delà de Z, les colonnes continuent en AA, AB…', () => {
     // 4 000 × 10 cm. Paysage : ⌈8000/277⌉ = 29 colonnes ; portrait : 43.
     const plan = decouperPlan(boite(0, 0, 4000, 10), OPTIONS);
     assert.equal(plan.colonnes, 29);

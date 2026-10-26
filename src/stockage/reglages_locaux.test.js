@@ -686,6 +686,13 @@ describe('réglages locaux : le texte du pied TechnoLibre (§ 8.5, § 11.4)', ()
     for (const mauvais of [null, undefined, 3, ['a'], {}]) assert.throws(() => normaliserTextePied(mauvais), TypeError, String(mauvais));
   });
 
+  test('normaliserTextePied : l’insécable et les espaces typographiques restent entre deux mots, et partent aux deux bords comme tout blanc', () => {
+    assert.equal(normaliserTextePied('\u{A0}Atelier des Hérons\u{A0}'), 'Atelier des Hérons');
+    assert.equal(normaliserTextePied('\u{202F}\u{2009} Atelier\u{A0}des Hérons \u{202F}'), 'Atelier\u{A0}des Hérons');
+    assert.equal(normaliserTextePied('\u{A0}\u{202F}'), '');
+    assert.equal(normaliserTextePied('Atelier\u{202F}des\u{2009}Hérons'), 'Atelier\u{202F}des\u{2009}Hérons');
+  });
+
   test('texte_pied_technolibre se lit normalisé ; absent, null, sans que la clé s’ajoute aux réglages lus', async () => {
     const texte = '{"cadrages":[],"format":1,"papier":null,"texte_pied_technolibre":"Atelier des Hérons"}\n';
     const { reglages, avertissement } = await lireReglages(disque(texte), DOC);

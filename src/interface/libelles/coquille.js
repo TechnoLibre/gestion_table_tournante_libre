@@ -225,6 +225,7 @@ export const TABLE = new Map([
   ['coquille.apropos.fonctionnalite.pro06', 'Imprimer une feuille par table'],
   ['coquille.apropos.fonctionnalite.pro07', 'Imprimer le plan de salle, tour par tour'],
   ['coquille.apropos.fonctionnalite.pro08', 'Marquer BROUILLON ce qui n\u{2019}est pas retenu'],
+  ['coquille.apropos.fonctionnalite.pro09', 'Produire la liste des badges en CSV, pour un tableur'],
   ['coquille.apropos.fonctionnalite.fic01', 'Garder chaque événement dans des fichiers ordinaires, listés au premier écran'],
   ['coquille.apropos.fonctionnalite.fic02', 'Enregistrer chaque geste avec son entrée d\u{2019}historique'],
   ['coquille.apropos.fonctionnalite.fic03', 'Revenir à un instant de l\u{2019}historique'],

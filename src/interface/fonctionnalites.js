@@ -68,6 +68,7 @@ export const CATEGORIES = Object.freeze([
     f('PRO-06', '11.7'),
     f('PRO-07', '11.7'),
     f('PRO-08', '11.7'),
+    f('PRO-09', '11.6'),
   ),
   categorie(
     'FIC',

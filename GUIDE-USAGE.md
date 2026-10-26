@@ -498,7 +498,12 @@ gardez ou changez le titre, « animateur » par défaut, puis « Ajouter » : el
 sont désignées ensemble, en une seule entrée de l’historique. Si une seule est
 refusée, aucune ne l’est, et le refus la nomme dans la fenêtre. Le bouton de
 retrait d’une pastille retire à la fois la réservation et le titre de cet
-animateur.
+animateur. Ce retrait emporte aussi la réservation « tous les tours » que vous
+aviez posée vous-même à cette personne avant de la désigner en lot, au siège
+où le lot a mis son titre : aucun message ne le signale, et « Défaire » la
+rend. Un animateur devenu absent à un tour garde sa pastille, suivie de ses
+tours d’absence, « Absence au tour 3 », et son bouton de retrait, tant que sa
+réservation et son titre existent.
 
 Une table peut avoir zéro, un ou plusieurs animateurs, mais jamais plus
 d’animateurs que de sièges. Une table dont tous les sièges sont réservés est

@@ -59,7 +59,6 @@ const ENTREES = [
   ['data-colonne', 'une colonne d’un tableau, par son nom', null],
   ['data-colonne-comparaison', 'qualité : l’en-tête et chaque cellule d’une colonne côte à côte de la comparaison, par son côté', ['a', 'b']],
   ['data-colonnes', 'import : l’association des colonnes', ['']],
-  ['data-contenu', 'aperçu : la zone de contenu d’une feuille imprimée', ['']],
   ['data-commande', 'un bouton de commande, par son nom', null],
   ['data-comparer-a', 'qualité : la liste « Comparer à : » de la vue de comparaison', ['']],
   ['data-composant', 'à propos : un composant tiers de la liste, par sa clé (composantsDesTiers)', null],
@@ -74,6 +73,7 @@ const ENTREES = [
   ['data-conflits-restants', 'propositions : les conflits d’organisation qu’une ligne laisse, sous son identifiant', ['']],
   ['data-conflits-resume', 'participants : le résumé des conflits d’organisation de la fiche', ['']],
   ['data-conflits-table', 'plan : les paires en conflit d’organisation du panneau d’une table', ['']],
+  ['data-contenu', 'aperçu : la zone de contenu d’une feuille imprimée', ['']],
   ['data-conversion', 'plan : une conversion offerte par une liste de travail', null],
   ['data-corbeille', 'accueil : la corbeille', ['']],
   ['data-corbeille-dossier', 'accueil : un dossier de la corbeille', null],
@@ -119,10 +119,10 @@ const ENTREES = [
   ['data-fautive', 'événement : une proposition fautive', null],
   ['data-feuille', 'aperçu : une feuille du document imprimé, une page, par son rang', null],
   ['data-fiche', 'participants : la fiche d’une personne', null],
+  ['data-fichier', 'import : le fichier lu', ['']],
   ['data-fil', 'événement : une ligne du panneau d’historique, par son fil — courant, abandonne ou retour', null],
   ['data-filiation', 'propositions : la phrase qui rattache une dérivée à son départ, sous son numéro ; qualité : la même sur la ligne de source', ['']],
   ['data-filigrane', 'aperçu : le filigrane BROUILLON d’une feuille', ['']],
-  ['data-fichier', 'import : le fichier lu', ['']],
   ['data-focus-initial', 'plan : le siège qui reçoit le focus à l’ouverture du panneau', null],
   ['data-fonctionnalite', 'à propos : une fonctionnalité du sommaire, par son numéro', null],
   ['data-fusion', 'import : un groupe d’orthographes fondu', ['']],
@@ -138,8 +138,8 @@ const ENTREES = [
   ['data-groupe-ligne', 'participants : le groupe qui compte une ligne', null],
   ['data-historique', 'événement : la commande de l’historique', ['']],
   ['data-homonyme', 'import : une ligne homonyme', null],
-  ['data-impression', 'aperçu : le document imprimé', ['']],
   ['data-hors-classement', 'propositions : les lignes hors classement', ['']],
+  ['data-impression', 'aperçu : le document imprimé', ['']],
   ['data-incorpores', 'à propos : la liste des œuvres qu’un paquet tiers incorpore, par le nom du paquet', null],
   ['data-informations-fiche', 'participants : le bloc des informations de la fiche, en lecture ou son formulaire', ['']],
   ['data-issue', 'génération : l’issue de la dernière génération', ['']],
@@ -239,8 +239,8 @@ const ENTREES = [
   ['data-reglages', 'génération : les réglages', ['']],
   ['data-regle-objectifs', 'tables : la règle par défaut des objectifs', ['']],
   ['data-remede', 'diagnostic : un remède', ['']],
-  ['data-reprise', 'événement : l’annonce du panneau d’historique quand lui et l’état sur le disque ne finissent pas au même instant', ['']],
   ['data-repere', 'qualité : le tracé d’un repère — plafond, borne ou règle à 100 % (cent) —, par son genre', null],
+  ['data-reprise', 'événement : l’annonce du panneau d’historique quand lui et l’état sur le disque ne finissent pas au même instant', ['']],
   ['data-reserve', 'plan : la réserve d’un tour', null],
   ['data-retenu', 'propositions : la ligne du retenu', null],
   ['data-revision', 'événement : une ligne du panneau d’historique, par la révision de son instant', null],
@@ -248,8 +248,8 @@ const ENTREES = [
   ['data-rubrique-conflits-placement', 'participants : la rubrique « Conflits du placement » de la fiche', ['']],
   ['data-rubrique-rencontres', 'participants : la rubrique « Rencontres » de la fiche', ['']],
   ['data-secours', 'récupération : une source de secours', null],
-  ['data-segment', 'qualité : un segment de barre, par son genre', null],
   ['data-section', 'une section de l’événement', ['badges', 'diagnostic', 'generation', 'import', 'participants', 'plan', 'propositions', 'qualite', 'tables']],
+  ['data-segment', 'qualité : un segment de barre, par son genre', null],
   ['data-separateur', 'import : le séparateur nommé', ['']],
   ['data-serie', 'qualité : le tracé d’une série et son libellé, par sa clé — serie1, serie2, ou a et b d’une comparaison', null],
   ['data-siege', 'plan : un siège, par sa table et son numéro', null],
@@ -291,6 +291,11 @@ const ENTREES = [
     ['entete', 'profil', 'comparaison', 'collisions', 'tables', 'paires', 'objectifs', 'animateurs', 'diversite', 'performance'],
   ],
 ];
+
+// L'ordre des attributs, comparés unité par unité : une entrée hors de son
+// rang lève au chargement du module, et se nomme avec sa voisine.
+const horsRang = ENTREES.findIndex(([attribut], rang) => rang > 0 && ENTREES[rang - 1][0] >= attribut);
+if (horsRang !== -1) throw new TypeError(`DESIGNATIONS : ${ENTREES[horsRang][0]} suit ${ENTREES[horsRang - 1][0]}, hors de l'ordre des attributs`);
 
 // La Map des entrées, gelée : Object.freeze ne gèle pas le contenu d'une
 // Map, et ses modificateurs lèvent ici.

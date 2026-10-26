@@ -4,36 +4,37 @@
 // Gardes de l'arborescence, lues dans le texte des sources : le moteur, la
 // géométrie du plan, le générateur de démonstrations, le stockage,
 // l'analyseur CSV et la production PDF n'appellent aucune source non
-// reproductible (§ 14.7), et ne
-// parcourent les clés d'un objet que par exception nommée (§ 15.5, point 4) ;
-// le graphe d'imports de chaque couche, l'interface et ses composants compris,
-// ne rejoint que ce que le § 13.4 lui permet, et ni le moteur, ni la
-// géométrie, ni le générateur ne lisent la version engendrée (§ 14.7) ; seuls
-// deux lecteurs nommés touchent le pont de la coquille (§ 13.1) ; hors de
-// l'horloge, l'interface et l'application n'arment aucune minuterie et ne
-// lisent ni l'heure, ni l'aléa, ni la langue (§ 19.4) ; seul le point
-// d'entrée lit le nombre de processeurs logiques (§ 13.4) ; seul l'aperçu lit
-// le contexte 'imprimante' et appelle imprimer, et ni l'interface ni
-// l'application ne touchent print (§ 11.7) ; chaque paquet importé est déclaré dans devDependencies, et aucun
-// paquet refusé ne l'est (§ 13.3, § 14.8) ; une valeur du contrat de données
-// n'a qu'une définition, celle de configuration.js ; la mesure de la
-// couverture joue la série node sous le seul rapporteur default, publie
-// chaque module et tient ses seuils durs sur des modules qui existent
-// (§ 14.13) ; les épreuves s'écrivent selon le § 14.8, la série surveillée
-// n'attend ni n'écrit hors d'un temporaire, et ses motifs de surveillance ne
-// retirent aucune relance (§ 14.14) ; dans le moteur, deux modules nommés
-// lisent les réservations (§ 5.2) ; src/, electron/ et scripts/ n'ont qu'une
-// langue (§ 13.2) ; une épreuve de src/ vit à côté de son module, et aucune
-// donnée d'épreuve ne double un fichier livré (§ 14.9) ; fast-check ne se
-// charge que dans les épreuves nommées (§ 14.12). Chaque relevé lit le texte
-// entier, commentaires et chaînes compris, hors ceux qui disent le contraire —
-// les accès au navigateur et au pont, et les relevés des épreuves, sautent les
-// chaînes littérales ; les lectures du nombre de processeurs et de
-// l'imprimante sautent chaînes et commentaires : un commentaire qui nomme un appel refusé fait échouer
-// la garde comme l'appel lui-même. Chaque garde déclare son périmètre, refuse
-// de passer sur un balayage vide (§ 14.2), et d'autres épreuves la font
-// tourner sur des arbres temporaires qui portent, à plus d'un niveau de
-// profondeur, les formes qu'elle refuse et des formes voisines qu'elle admet.
+// reproductible (§ 14.7), et ne parcourent les clés d'un objet que par
+// exception nommée (§ 15.5, point 4) ; le graphe d'imports de chaque couche,
+// l'interface et ses composants compris, ne rejoint que ce que le § 13.4 lui
+// permet, et ni le moteur, ni la géométrie, ni le générateur ne lisent la
+// version engendrée (§ 14.7) ; seuls deux lecteurs nommés touchent le pont de
+// la coquille (§ 13.1) ; hors de l'horloge, l'interface et l'application
+// n'arment aucune minuterie et ne lisent ni l'heure, ni l'aléa, ni la langue
+// (§ 19.4) ; seul le point d'entrée lit le nombre de processeurs logiques
+// (§ 13.4) ; seul l'aperçu lit le contexte 'imprimante' et appelle imprimer,
+// et ni l'interface ni l'application ne touchent print (§ 11.7) ; chaque
+// paquet importé est déclaré dans devDependencies, et aucun paquet refusé ne
+// l'est (§ 13.3, § 14.8) ; une valeur du contrat de données n'a qu'une
+// définition, celle de configuration.js ; la mesure de la couverture joue la
+// série node sous le seul rapporteur default, publie chaque module et tient
+// ses seuils durs sur des modules qui existent (§ 14.13) ; les épreuves
+// s'écrivent selon le § 14.8, la série surveillée n'attend ni n'écrit hors
+// d'un temporaire, et ses motifs de surveillance ne retirent aucune relance
+// (§ 14.14) ; dans le moteur, deux modules nommés lisent les réservations
+// (§ 5.2) ; src/, electron/ et scripts/ n'ont qu'une langue (§ 13.2) ; une
+// épreuve de src/ vit à côté de son module, et aucune donnée d'épreuve ne
+// double un fichier livré (§ 14.9) ; fast-check ne se charge que dans les
+// épreuves nommées (§ 14.12). Chaque relevé lit le texte entier, commentaires
+// et chaînes compris : un commentaire qui nomme un appel refusé fait échouer
+// la garde comme l'appel lui-même. Seuls les relevés qui disent le contraire
+// en sautent une part : les accès au navigateur et au pont, et les relevés
+// des épreuves, sautent les chaînes littérales ; les lectures du nombre de
+// processeurs et de l'imprimante sautent chaînes et commentaires. Chaque
+// garde déclare son périmètre, refuse de passer sur un balayage vide
+// (§ 14.2), et d'autres épreuves la font tourner sur des arbres temporaires
+// qui portent, à plus d'un niveau de profondeur, les formes qu'elle refuse et
+// des formes voisines qu'elle admet.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
@@ -551,10 +552,12 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // couche, lus par leurs blocs de script et les import() de leur gabarit.
 //
 // Le moteur et la géométrie ne connaissent ni l'écran, ni les fichiers, ni ce
-// qui les commande. La géométrie est une couche à part, plus bas que le
-// moteur : des fonctions pures du plan, qui n'importent ni le moteur, ni
-// l'analyseur CSV, ni le générateur de démonstrations. Le stockage lit et
-// écrit par le système de fichiers qu'il reçoit ; seules ses deux
+// qui les commande. Le moteur n'importe pas l'analyseur CSV, placé plus haut
+// que lui ; il partage avec le générateur de démonstrations son générateur
+// pseudo-aléatoire, src/demo/prng.js. La géométrie est une couche à part,
+// plus bas que le moteur : des fonctions pures du plan, qui n'importent ni le
+// moteur, ni l'analyseur CSV, ni le générateur de démonstrations. Le stockage
+// lit et écrit par le système de fichiers qu'il reçoit ; seules ses deux
 // implémentations de plateforme touchent le navigateur, par l'OPFS sous web
 // et par le pont window.gtt sous Electron.
 // L'analyseur CSV lit le modèle du stockage. L'application câble le moteur,
@@ -586,7 +589,7 @@ const COUCHES = [
   {
     arbres: ['src/moteur'],
     requis: ['src/moteur'],
-    exterieures: ['src/interface', 'src/application', 'src/stockage', ...SORTIES, VERSION_ENGENDREE],
+    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/csv', ...SORTIES, VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
@@ -1331,6 +1334,23 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
       'src/demo/catalogue.js:7 import node:fs',
       'src/demo/catalogue.js:8 navigator.',
       'src/demo/catalogue.js → src/stockage/canonique.js:1 import ../version.genere.js',
+    ]);
+  });
+
+  test('le moteur n’importe pas l’analyseur CSV, placé plus haut que lui (§ 13.4), ni en direct ni par un type de sa JSDoc', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/moteur/recherche.js': [
+        "import { lireLignes } from '../csv/lecture.js';",
+        '/** @param {import("../csv/modele.js").Ligne} ligne */',
+        'export const rien = (ligne) => ligne;',
+      ].join('\n'),
+      'src/csv/lecture.js': 'export const lireLignes = () => [];\n',
+      'src/csv/modele.js': 'export const MODELE = 1;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/moteur/recherche.js:1 import ../csv/lecture.js',
+      'src/moteur/recherche.js:2 import ../csv/modele.js',
     ]);
   });
 

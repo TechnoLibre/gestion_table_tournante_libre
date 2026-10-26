@@ -718,6 +718,10 @@
 - Un dossier dont le fichier d'essai se relit autrement qu'il s'est écrit
   nomme cette cause en clair dans l'application de bureau, comme dans le
   navigateur, et non par un code.
+- Le sommaire des fonctionnalités d'« À propos » nomme la liste des badges en
+  CSV, sous « Produire », avec son numéro, PRO-09.
+- Dans « À propos », l'avis du composant tiers @pdf-lib/fontkit porte une
+  ligne de copyright par titulaire, sans incise.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

@@ -330,17 +330,17 @@ describe('rapport de mutation : la relecture du JSON écrit', () => {
   });
 
   test('relire refuse un survivant que la série longue tue, laissé parmi les survivants', () => {
-    // L'ancien compte : le mutant tué par la série longue rangé avec les
-    // survivants, bilan, fichier et opérateur ajustés pour que seuls les
-    // listes et la règle du compte le trahissent.
-    const ancien = modifie((lu) => {
+    // Un rapport range parmi les survivants le mutant que la série longue
+    // tue, bilan, fichier et opérateur ajustés : seules les listes et la
+    // règle du compte le trahissent.
+    const malRange = modifie((lu) => {
       lu.survivants.splice(1, 0, ...lu.tuesSerieLongue.splice(0));
       for (const compte of [lu.bilan, lu.parFichier[0], lu.parOperateur[0]]) {
         compte.survivants += 1;
         compte.tuesSerieLongue -= 1;
       }
     });
-    assert.throws(() => relire(ancien), /série longue/);
+    assert.throws(() => relire(malRange), /série longue/);
   });
 });
 

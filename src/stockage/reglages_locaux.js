@@ -59,7 +59,9 @@ const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
 // Une suite de blancs que le texte du pied TechnoLibre ramène à une espace :
 // espaces, tabulations, sauts de ligne et de page, séparateurs de ligne et
 // de paragraphe. L'espace insécable et les autres espaces typographiques
-// n'en sont pas : ce sont des caractères que la police dessine.
+// n'en sont pas : ce sont des caractères que la police dessine, gardés
+// entre deux mots. Aux deux bords du texte, trim les retire comme tout
+// autre blanc d'Unicode.
 const BLANCS_DU_PIED = /[ \t\n\v\f\r\u{85}\u{2028}\u{2029}]+/gu;
 
 /**

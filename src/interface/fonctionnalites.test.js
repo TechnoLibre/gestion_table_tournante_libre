@@ -139,6 +139,13 @@ describe('le sommaire des fonctionnalités : les numéros (§ 2.2)', () => {
     }
   });
 
+  test('la liste des badges en CSV (§ 11.6) a son numéro, PRO-09, après les sorties imprimées', () => {
+    const produire = CATEGORIES.find(({ code }) => code === 'PRO');
+    assert.equal(produire.fonctionnalites.at(-1)?.numero, 'PRO-09');
+    assert.deepEqual(produire.fonctionnalites.at(-1).renvois, ['11.6']);
+    assert.match(t(cleDeFonctionnalite('PRO-09')), /\bCSV\b/u);
+  });
+
   test('le sommaire, ses catégories et leurs listes sont gelés', () => {
     assert.ok(Object.isFrozen(CATEGORIES) && Object.isFrozen(RETIRES));
     for (const categorie of CATEGORIES) {
