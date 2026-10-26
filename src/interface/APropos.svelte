@@ -5,9 +5,9 @@
   // Le panneau « À propos » (§ 2.2, § 18.6) : le logo de TechnoLibre,
   // l'éditeur et l'auteur du logiciel, ses liens, puis le bloc d'une ligne
   // que l'opérateur copie dans un courriel, tel que blocAPropos l'a composé,
-  // et sa copie dans le presse-papiers de la plateforme ; la licence, ses
-  // textes complets à lire sur place, l'attribution, et le sommaire des
-  // fonctionnalités. « Copier » remet exactement le texte du bloc, sans
+  // et sa copie dans le presse-papiers de la plateforme ; l'attribution, la
+  // licence et ses textes complets à lire sur place, les composants tiers,
+  // et le sommaire des fonctionnalités. « Copier » remet exactement le texte du bloc, sans
   // l'éditeur ni l'auteur ; l'issue de la copie se lit sous les commandes.
   //
   // Le logo se charge à la demande (actifs/logo.js), au montage : il
@@ -49,10 +49,10 @@
   // l'éditeur, l'auteur en gras et son rôle dans l'encre secondaire, le
   // bloc, sur le fond sourd de la carte, et les commandes — « Copier »,
   // l'action principale, et « Fermer ». Une copie refusée se dit dans
-  // l'encre du refus. Suivent les cartes titrées de la licence, des
-  // composants tiers — la désignation en gras, la licence et l'intitulé des
-  // œuvres incorporées dans l'encre secondaire, chaque sous-liste marquée
-  // d'un filet à gauche —, de l'attribution et du sommaire, une colonne par
+  // l'encre du refus. Suivent les cartes titrées de l'attribution, de la
+  // licence, des composants tiers — la désignation en gras, la licence et
+  // l'intitulé des œuvres incorporées dans l'encre secondaire, chaque
+  // sous-liste marquée d'un filet à gauche — et du sommaire, une colonne par
   // catégorie quand la largeur le permet, chaque numéro dans l'encre
   // secondaire devant son intitulé.
   import { getContext, onMount } from 'svelte';
@@ -249,6 +249,10 @@
     </div>
   </Carte>
 
+  <Carte titre={t('coquille.apropos.attribution.titre')}>
+    <p>{t('coquille.apropos.attribution.texte')}</p>
+  </Carte>
+
   <Carte titre={t('coquille.apropos.licence.titre')}>
     <div class="contenu">
       <p>{t('coquille.apropos.licence.choix')}</p>
@@ -303,10 +307,6 @@
     {:else}
       <p role="status" data-chargement-tiers>{t('coquille.apropos.tiers.chargement')}</p>
     {/if}
-  </Carte>
-
-  <Carte titre={t('coquille.apropos.attribution.titre')}>
-    <p>{t('coquille.apropos.attribution.texte')}</p>
   </Carte>
 
   <Carte titre={t('coquille.apropos.fonctionnalites.titre')} sousTitre={t('coquille.apropos.fonctionnalites.explication')}>

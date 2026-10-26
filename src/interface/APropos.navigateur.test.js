@@ -316,8 +316,8 @@ describe('« À propos » : les liens (§ 2, § 18.6)', () => {
   });
 });
 
-describe('« À propos » : la licence et l’attribution (§ 18.6)', () => {
-  test('la licence dit le choix entre les deux licences, l’identifiant SPDX et ce que demande la licence choisie ; l’attribution suit', () => {
+describe('« À propos » : l’attribution et la licence (§ 18.6)', () => {
+  test('l’attribution précède la licence, qui dit le choix entre les deux licences, l’identifiant SPDX et ce que demande la licence choisie', () => {
     const conteneur = monterSeul(facadeDEpreuve());
     const licence = [...conteneur.querySelectorAll('section[aria-labelledby]')].find(
       (s) => s.querySelector('h2')?.textContent === t('coquille.apropos.licence.titre'),
@@ -334,6 +334,7 @@ describe('« À propos » : la licence et l’attribution (§ 18.6)', () => {
       (s) => s.querySelector('h2')?.textContent === t('coquille.apropos.attribution.titre'),
     );
     expect(attribution?.textContent.includes(t('coquille.apropos.attribution.texte'))).toBe(true);
+    expect(attribution.compareDocumentPosition(licence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test('chaque texte complet se lit dans le panneau, à la demande, tel que son fichier ; un seul à la fois, que « Fermer le texte » retire', async () => {
@@ -401,10 +402,11 @@ describe('« À propos » : les composants tiers et leurs licences (§ 18.6)', (
     const conteneur = await monterListeChargee();
     const composants = await composantsDuDisque();
     const titres = [...conteneur.querySelectorAll('section[aria-labelledby] h2')].map((h) => h.textContent);
-    expect(titres.slice(0, 3)).toEqual([
+    expect(titres.slice(0, 4)).toEqual([
+      t('coquille.apropos.attribution.titre'),
       t('coquille.apropos.licence.titre'),
       t('coquille.apropos.tiers.titre'),
-      t('coquille.apropos.attribution.titre'),
+      t('coquille.apropos.fonctionnalites.titre'),
     ]);
     const carte = carteTiers(conteneur);
     expect(carte.textContent).toContain(t('coquille.apropos.tiers.explication'));

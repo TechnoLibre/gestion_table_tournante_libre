@@ -658,6 +658,8 @@
   qu'un paquet incorpore à son tour en retrait sous lui. « Lire la licence »
   en montre le texte sur place, sans réseau, un seul à la fois. La liste est
   celle de `licences/TIERS.txt`, livré avec l'application.
+- Dans « À propos », la carte « Attribution » passe au-dessus de celle de la
+  licence, juste sous l'éditeur et l'auteur.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

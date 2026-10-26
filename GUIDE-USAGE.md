@@ -1250,8 +1250,8 @@ facultatif, et se reprend dans n’importe quel ordre.
 
 La commande « À propos » du bandeau ouvre un panneau qui remplace l’écran ;
 « Fermer » rend celui d’où vous l’avez ouvert. Il donne la ligne de version à
-copier dans un signalement, l’éditeur et l’auteur, la licence du logiciel et
-ses deux textes complets, l’attribution demandée et le sommaire des
+copier dans un signalement, l’éditeur et l’auteur, l’attribution demandée, la
+licence du logiciel et ses deux textes complets, et le sommaire des
 fonctionnalités.
 
 Sa carte **« Composants tiers et leurs licences »** nomme chaque œuvre que le

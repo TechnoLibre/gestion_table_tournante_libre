@@ -9392,6 +9392,9 @@ téléchargement suivant le retire. Le logo se charge à part, et le lancement n
 le lit pas. Sous l'éditeur, le lien vers son site, `https://technolibre.ca` ;
 sous l'auteur, le lien vers le code source du projet. Suivent quatre cartes :
 
+- l'**attribution**, une demande de courtoisie — afficher le logo de
+  TechnoLibre sur les badges, puis un lien vers son site — qui n'ajoute aucune
+  condition à la licence ;
 - la **licence** : le choix entre l'AGPL-3.0-or-later et la LiLiQ-R+,
   l'identifiant SPDX `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1` — celui que
   déclarent `package.json` et l'en-tête de chaque fichier source, et dont le
@@ -9408,9 +9411,6 @@ sous l'auteur, le lien vers le code source du projet. Suivent quatre cartes :
   logiciel, un seul texte à la fois dans tout le panneau. La liste se charge à l'ouverture du panneau,
   dans le morceau des textes de licence, que le lancement ne lit pas ; un
   chargement qui échoue le dit et renvoie au fichier livré ;
-- l'**attribution**, une demande de courtoisie — afficher le logo de
-  TechnoLibre sur les badges, puis un lien vers son site — qui n'ajoute aucune
-  condition à la licence ;
 - le **sommaire des fonctionnalités** du § 2.2, par catégorie, chaque numéro
   devant son intitulé.
 
