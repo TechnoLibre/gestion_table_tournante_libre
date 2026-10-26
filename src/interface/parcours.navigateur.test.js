@@ -3846,7 +3846,13 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     const { bulle, cellule } = await pointerLeRang1(comptes);
     expect(cellule('qualite.profil.colonne.nom')).toBe(plat(nomAffiche(seule)));
     expect(cellule('qualite.profil.colonne.plafondRealise')).toBe('0');
-    expect(cellule('qualite.profil.colonne.marque')).toBe(plat(t('qualite.profil.marque.plafondNul')));
+    // Sa marque renvoie à son écart d'itinéraire, le plafond a priori moins un
+    // plafond réalisé nul. La table 1, entièrement ancrée, ne lui laisse que
+    // la table 2, où personne d'autre n'est mobile : son plafond a priori est
+    // nul, son écart aussi.
+    const ecart = Number(cellule('qualite.profil.colonne.plafondAPriori'));
+    expect(ecart).toBe(0);
+    expect(cellule('qualite.profil.colonne.marque')).toBe(plat(t('qualite.profil.marqueLigne.plafondNul', { ecart })));
     expect(texteDe(bulle.querySelector('[data-pourcentage]'))).toBe(t('format.vide'));
     // Au second graphique, aucun point au rang 1 : la série commence après
     // son signe, posé au pied de l'axe.

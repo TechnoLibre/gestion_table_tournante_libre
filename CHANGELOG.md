@@ -758,6 +758,15 @@
 - Ouvrir une version de secours, depuis la récupération d'un fichier abîmé ou
   par « Ouvrir la version précédente », montre la pastille « Traitement en
   cours… » comme toute ouverture d'un événement.
+- Dans la page de qualité, « Diversité par animateur » cède la place à sa
+  phrase quand personne n'est concerné par les animateurs, comme « Animateurs
+  rencontrés », même si un animateur anime un tour où personne d'autre n'est
+  présent.
+- La marque d'une personne au plafond réalisé nul, dans l'infobulle et le
+  tableau du profil, écrit son écart d'itinéraire : « plafond réalisé nul ;
+  écart d'itinéraire de 3 personnes ».
+- La phrase qui décrit la grille des organisations à chaque table dit aussi
+  combien de cases atteignent le compte le plus haut.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

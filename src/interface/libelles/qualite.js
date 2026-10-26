@@ -161,6 +161,16 @@ export const TABLE = new Map([
   ['qualite.profil.marque.reserve', 'en réserve à un tour au moins'],
   ['qualite.profil.marque.absente', 'absente à un tour au moins'],
   ['qualite.profil.marque.plafondNul', 'plafond réalisé nul'],
+  // La marque d'un rang à plafond réalisé nul dans sa ligne, à l'infobulle
+  // et au jumeau : elle renvoie à son écart d'itinéraire, le plafond a priori
+  // moins un plafond réalisé nul ; ecart null quand il est inconnu.
+  [
+    'qualite.profil.marqueLigne.plafondNul',
+    ({ ecart }) =>
+      ecart === null
+        ? "plafond réalisé nul ; écart d'itinéraire inconnu"
+        : `plafond réalisé nul ; écart d'itinéraire de ${compte(ecart, 'personne', 'personnes')}`,
+  ],
   ['qualite.profil.colonne.rang', 'Rang'],
   ['qualite.profil.colonne.nom', 'Personne'],
   ['qualite.profil.colonne.organisation', 'Organisation'],
@@ -368,9 +378,14 @@ export const TABLE = new Map([
   ['qualite.tables.colonne.affilies', 'Affiliés'],
   ['qualite.tables.colonne.capacite', 'Capacité'],
   ['qualite.tables.sansAffilie', 'aucun affilié à ce tour'],
+  // La synthèse de la grille : la pire table, sa case la plus haute, puis le
+  // nombre de cases de la grille à ce compte, l'effectif du pire cas.
   [
     'qualite.tables.synthese',
-    ({ numero, valeur }) => `La table ${numero} porte la case la plus haute : ${valeur}.`,
+    ({ numero, valeur, cases }) =>
+      cases === 1
+        ? `La table ${numero} porte la case la plus haute : ${valeur}, seule à ce compte.`
+        : `La table ${numero} porte la case la plus haute : ${valeur} ; ${cases} cases sont à ce compte.`,
   ],
   ['qualite.tables.tropLarge', 'La grille ne tient pas dans la largeur de la carte : son tableau jumeau la remplace.'],
   ['qualite.tables.aucuneOrganisation', "Aucune organisation : aucune table n'a d'organisation à mélanger."],
@@ -544,7 +559,10 @@ export const TABLE = new Map([
     'qualite.diversite.rien',
     "Ni étiquette, ni plus d'une organisation : la diversité par animateur n'a rien à dessiner. Son tableau jumeau garde les tours animés et les personnes rencontrées en animant.",
   ],
-  ['qualite.diversite.aucunAnimateur', "Aucun animateur n'est désigné : la vue n'a rien à montrer."],
+  [
+    'qualite.diversite.aucun',
+    "Aucune personne n'est concernée par les animateurs, ou aucun animateur n'est désigné : la vue n'a rien à montrer.",
+  ],
   // Le texte secondaire d'une ligne : ses tours animés et ses personnes
   // rencontrées en animant.
   [

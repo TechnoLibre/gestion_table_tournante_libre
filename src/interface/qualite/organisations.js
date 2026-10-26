@@ -180,7 +180,8 @@ function jumeauTables(detail, position, t) {
  * comptes, les occupants, les affiliés, la capacité. Le jumeau porte les
  * trois comptes de chaque table à chaque tour, dans l'ordre de la position.
  * La synthèse nomme la pire table et sa case la plus haute sous la
- * position.
+ * position, puis le nombre de cases de la grille à ce compte, que le détail
+ * porte (casesAuPire).
  *
  * Lève RangeError sur une position hors de POSITIONS_MELANGE.
  *
@@ -242,7 +243,11 @@ export function modeleTables(detail, position, { t }) {
       synthese:
         tete.ligne.pire === null
           ? t('qualite.tables.aucuneOrganisation')
-          : t('qualite.tables.synthese', { numero: detail.numerosTables[tetes[0]], valeur: tete.ligne.pire[position] }),
+          : t('qualite.tables.synthese', {
+              numero: detail.numerosTables[tetes[0]],
+              valeur: tete.ligne.pire[position],
+              cases: detail.tables.casesAuPire[position],
+            }),
       phrase: t('qualite.tables.tropLarge'),
       lignes: lignes.map(({ libelle }) => ({ libelle })),
       colonnes: Array.from({ length: detail.R }, (_, r) => ({ libelle: t('qualite.tables.tour', { tour: r + 1 }) })),

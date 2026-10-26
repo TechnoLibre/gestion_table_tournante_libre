@@ -430,7 +430,9 @@ export function nettoyage(table, n) {
  *           ceux de detailler (qualite.js), chaque personne et chaque table
  *           par son identifiant (id, a, b, table), chaque tour par son index
  *           à partir de 0 ; objectifs porte en plus critere, {coche,
- *           sansObjet} du critère des objectifs
+ *           sansObjet} du critère des objectifs, et tables casesAuPire,
+ *           {sieges, assis, doublons}, par position le nombre de cases au
+ *           plus grand compte de la grille, null sans case
  * @property {string[]|null} planchersRetires   ceux du diagnostic : les
  *           planchers que la présence par tour retire, ['ecartItineraire']
  *           dès qu'une personne non exclue manque un tour, [] sinon
@@ -661,12 +663,32 @@ function violationNommee(instance, violation) {
   return nommee;
 }
 
+// L'effectif du pire cas de la grille des tables (§ 12.7, § 12.11) : par
+// position, le nombre de cases non null qui portent le plus grand compte de
+// la grille, lu au pire de chaque ligne de mixTables ; null quand aucune
+// case ne l'est. Les positions sont les clés des comptes du moteur.
+function casesAuPire(lignes) {
+  const avecCase = lignes.filter(({ pire }) => pire !== null);
+  if (avecCase.length === 0) return null;
+  const effectifs = {};
+  for (const position of Object.keys(avecCase[0].pire)) {
+    const plus = Math.max(...avecCase.map(({ pire }) => pire[position]));
+    let cases = 0;
+    for (const { tours } of avecCase) {
+      for (const cellule of tours) if (cellule !== null && cellule.comptes[position] === plus) cases += 1;
+    }
+    effectifs[position] = cases;
+  }
+  return effectifs;
+}
+
 // Le détail du moteur (detailler) rendu en identifiants : chaque index de
 // personne p, q, a, b devient l'identifiant de la personne, sous id quand
 // il désignait la ligne, chaque index de table t devient table,
 // l'identifiant de la table ; l'index de groupe g des collisions, que le
 // libellé groupe double, se retire. Les tours restent des index, à partir
-// de 0.
+// de 0. Les tables portent en plus casesAuPire, l'effectif de leur pire
+// cas.
 function enIdentifiants(instance, brut, critere) {
   const { ids, idsTables } = instance;
   const avecId = (element) => {
@@ -697,6 +719,7 @@ function enIdentifiants(instance, brut, critere) {
     tables: {
       lignes: brut.tables.lignes.map(({ t, ...reste }) => ({ table: idsTables[t], ...reste })),
       ordres: brut.tables.ordres,
+      casesAuPire: casesAuPire(brut.tables.lignes),
     },
     paires: { choisies: brut.paires.choisies.map(paire), imposees: brut.paires.imposees.map(paire) },
     matrice: matrice === null ? null : { ordre: matrice.ordre.map((p) => ids[p]), comptes: matrice.comptes },

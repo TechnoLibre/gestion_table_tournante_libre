@@ -1033,9 +1033,10 @@ pour un plan qui assoit chacun à chaque tour, et une phrase le dit.*
 *Cinq personnes, une table de quatre et une de deux, deux tours ; quatre
 sont réservées à la table de quatre. La cinquième, assise seule à la table
 de deux, ne peut rencontrer personne : son plafond réalisé est nul. Au
-premier rang du profil, son infobulle écrit le plafond réalisé 0 et le
-pourcentage « — » ; au second graphique, plus bas, ce rang n’a pas de
-point.*
+premier rang du profil, son infobulle écrit le plafond réalisé 0, le
+pourcentage « — » et, dans sa marque, son écart d’itinéraire, nul ici : son
+plafond a priori l’est aussi, aucun plan ne l’assied avec quelqu’un. Au
+second graphique, plus bas, ce rang n’a pas de point.*
 
 Une personne absente à un tour ne compte pas ce tour : ses rencontres, son
 plafond et ses tours servis se lisent sur ses tours de présence. Le profil la

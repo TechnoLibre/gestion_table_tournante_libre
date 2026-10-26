@@ -6645,7 +6645,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | le second placement disparaît | la vue revient à son défaut et nomme les deux placements qu'elle compare ; sans candidat, elle écrit sa phrase |
 | la source est une proposition dérivée | la ligne de source porte « dérivée de n° X », et la performance dit que la course part du plan de son départ (§ 12.14) |
 | populations mesurées différentes entre deux placements | ne survient pas entre deux placements comparables d'un même état, qui mesurent la population de la configuration courante, la dérive les écartant avant toute mesure (§ 9) ; la garde reste : si elle tombe, ni courbe ni dominance, la page nomme les personnes mesurées d'un seul côté et dit **non comparable** |
-| le plafond réalisé d'une personne vaut 0 | son manque vaut 0 et n'enseigne rien : la page marque le point et renvoie à l'écart d'itinéraire. Un manque nul n'est jamais lu comme « bien servi » sans son plafond à côté |
+| le plafond réalisé d'une personne vaut 0 | son manque vaut 0 et n'enseigne rien : la page marque le point et renvoie à l'écart d'itinéraire, que la marque de sa ligne écrit, à l'infobulle et au jumeau — son plafond a priori, ou « inconnu ». Un manque nul n'est jamais lu comme « bien servi » sans son plafond à côté |
 | le plafond a priori n'a pas pu être maximisé | l'écart d'itinéraire s'écrit **« inconnu »**, jamais 0, et sans plancher (§ 12.2) ; le certificat reste hors d'atteinte (§ 5.5) et le départage du § 5.7 qui en dépend est sauté, la page nommant le palier suivant |
 | des propositions, aucune montrée | une phrase, et la commande qui montre la première proposition comparable du classement ; sans proposition comparable, la phrase seule |
 | la source est en dérive ou fautive | ses raisons, comme au tableau des propositions ; aucune vue |
@@ -6656,7 +6656,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | une table sans affilié à un tour | sa case écrit « — » sous les trois positions du sélecteur, sans couleur, et se range après les tables qui portent un compte |
 | aucune personne concernée par les objectifs | la vue des objectifs cède la place à sa phrase |
 | un tour sans couple possible | sa ligne écrit « — », sans barre ni pourcentage ; ses assis sans table possible restent écrits |
-| aucune personne concernée par les animateurs, ou aucun animateur | les deux vues des animateurs cèdent la place à leur phrase |
+| aucune personne concernée par les animateurs, ou aucun animateur | les deux vues des animateurs cèdent la place à leur phrase, la diversité par animateur même quand un animateur anime un tour où personne ne peut le rencontrer |
 | aucune étiquette portée | la diversité par animateur n'a que la colonne des organisations, et la phrase le dit |
 | aucune organisation, ou une seule, mais des étiquettes | la diversité par animateur n'a que la colonne des étiquettes, triée sur E_f |
 | ni étiquette, ni plus d'une organisation | la diversité par animateur cède la place à sa phrase ; son jumeau garde les tours animés et les personnes rencontrées en animant |
@@ -7255,7 +7255,9 @@ case écrit.
 le plus grand compte d'une case, puis la somme des comptes sur les tours, puis
 l'ordre des tables ; une table dont toutes les cases écrivent « — » vient en
 dernier. La pire case est donc dans la première ligne. Le moteur rend les trois
-ordres ; l'écran lit celui de la position.
+ordres ; l'écran lit celui de la position. La synthèse de la grille (§ 12.7)
+nomme la première table, sa case la plus haute, et le nombre de cases de la
+grille à ce compte : le pire cas et son effectif.
 
 La vue décrit **la sortie**, pas les entrées : elle ne dit jamais combien chaque
 organisation compte de membres (§ 12.8, le camembert). Elle complète la vue des

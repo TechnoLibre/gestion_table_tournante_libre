@@ -17,7 +17,8 @@
   // Chaque ligne porte en encre secondaire ses tours animés et ses personnes
   // rencontrées en animant. Le jumeau porte la soirée de chaque animateur,
   // puis une ligne par tour animé ; sans colonne à dessiner, il reste seul
-  // sous la phrase. Sans animateur, la vue cède la place à sa phrase.
+  // sous la phrase. Sans animateur ou sans personne concernée, la vue cède
+  // la place à sa phrase.
   //
   // Désignations : data-vue-qualite sur le <div> qui enveloppe la carte, que
   // la carte ne transmet pas ; data-equite sur les trois nombres d'une
@@ -46,8 +47,8 @@
 <div data-vue-qualite="diversite">
   <Carte titre={t('qualite.vue.diversite.titre')} sousTitre={t('qualite.vue.diversite.question')} niveau={3}>
     {#if modele !== null}
-      {#if modele.cas === 'aucunAnimateur'}
-        <p data-phrase-qualite="diversite.aucunAnimateur">{t('qualite.diversite.aucunAnimateur')}</p>
+      {#if modele.cas === 'aucun'}
+        <p data-phrase-qualite="diversite.aucun">{t('qualite.diversite.aucun')}</p>
       {:else}
         <div class="vue">
           {#if modele.phrase !== null}
