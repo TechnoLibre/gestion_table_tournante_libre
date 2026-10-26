@@ -559,6 +559,10 @@
   l'historique que « Défaire » ou Ctrl+Z retire ; l'avis tombe, et une annonce
   nomme les tables créées. Sous une présence partielle, le compte est celui des
   personnes présentes au plus à un même tour.
+- Le formulaire « Créer les tables… » offre le choix de la forme, « Rondes » ou
+  « Carrées » : celle de la table la plus récemment créée est cochée d'abord,
+  « Rondes » quand l'événement n'a aucune table. Le fichier de l'événement ne
+  change pas.
 - Dans « Tables et tours », chaque table porte une rangée « Animateurs » : ses
   animateurs en pastilles, chacun avec un bouton qui le retire, puis
   « Ajouter… ». Ce bouton ouvre une fenêtre qui cherche les personnes par nom,

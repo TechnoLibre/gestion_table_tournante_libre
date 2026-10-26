@@ -411,14 +411,16 @@ Quand il y a plus de participants que de places, inutile de compter les
 tables à ajouter : « Créer les tables… », offert dans la section tant que des
 places manquent, et à côté de « Ouvrir les tables » dans l’avis des places
 manquantes, déplie un petit formulaire. Saisissez le nombre de places par
-table — le défaut y est déjà —, et le formulaire dit ce que la création fera,
-par exemple « 22 tables de 8 places : 176 places pour 171 participants ».
-« Créer » ajoute juste assez de tables de cette taille, numérotées à la suite
-des vôtres, rondes, en une seule entrée de l’historique : « Défaire » ou
-Ctrl+Z les retire toutes. Des tables à la taille du défaut le suivent ; d’une
-autre taille, elles sont surchargées. Sous une présence partielle, le compte
-est celui des personnes présentes au plus à un même tour. « Annuler » replie
-le formulaire sans rien créer.
+table — le défaut y est déjà —, choisissez la forme, « Rondes » ou
+« Carrées » — celle de votre dernière table créée est déjà cochée, et
+« Rondes » si vous n’en avez aucune —, et le formulaire dit ce que la
+création fera, par exemple « 22 tables de 8 places : 176 places pour
+171 participants ». « Créer » ajoute juste assez de tables de cette taille
+et de cette forme, numérotées à la suite des vôtres, en une seule entrée de
+l’historique : « Défaire » ou Ctrl+Z les retire toutes. Des tables à la
+taille du défaut le suivent ; d’une autre taille, elles sont surchargées.
+Sous une présence partielle, le compte est celui des personnes présentes au
+plus à un même tour. « Annuler » replie le formulaire sans rien créer.
 
 La section « Plan » montre les tables à l’échelle :
 

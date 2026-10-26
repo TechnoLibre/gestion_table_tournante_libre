@@ -41,12 +41,14 @@
   // le manque de l'avis PLACES_MANQUANTES, lu par bilanTablesManquantes —,
   // la commande « Créer les tables… » ; elle déplie en place un petit
   // formulaire : le nombre de places par table, pré-rempli du défaut de
-  // l'événement et borné comme une table (PLACES_TABLE), puis l'aperçu
-  // chiffré de ce que la création fera, puis « Créer » et « Annuler ». Une
-  // taille validée ne s'applique pas : elle change l'aperçu, et une taille
-  // que la commande refuserait reçoit son refus sur le champ (refusDeCommande),
-  // l'aperçu gardant la taille précédente. « Créer » exécute creerTable
-  // {forme: 'ronde', combler}, une seule entrée ; le formulaire se replie,
+  // l'événement et borné comme une table (PLACES_TABLE), puis la forme des
+  // tables, « Rondes » ou « Carrées », un bouton radio chacune, cochée
+  // d'abord à celle de la table la plus récemment créée (formeParDefaut), puis
+  // l'aperçu chiffré de ce que la création fera, puis « Créer » et
+  // « Annuler ». Une taille validée ne s'applique pas : elle change l'aperçu,
+  // et une taille que la commande refuserait reçoit son refus sur le champ
+  // (refusDeCommande), l'aperçu gardant la taille précédente. Une forme choisie n'écrit rien non plus. « Créer » exécute
+  // creerTable {forme, combler}, une seule entrée ; le formulaire se replie,
   // et l'annonce des tables créées reçoit le focus tant que la révision qui
   // les a créées est la courante : hors de tout champ, Ctrl+Z y défait le
   // geste. « Annuler » replie le formulaire et rend le focus à la commande.
@@ -56,7 +58,7 @@
   // champ reçoit alors le focus, comme à l'ouverture par la commande.
   import { getContext, tick } from 'svelte';
   import { lireEntier } from '../../application/capacite.js';
-  import { PLACES_TABLE, bilanTablesManquantes } from '../../application/commandes_mobilier.js';
+  import { PLACES_TABLE, bilanTablesManquantes, formeParDefaut } from '../../application/commandes_mobilier.js';
   import { ErreurCommande } from '../../application/erreurs.js';
   import { aDesAbsences } from '../../application/places.js';
   import Champ from '../primitives/Champ.svelte';
@@ -67,15 +69,22 @@
 
   const t = getContext('t');
   const seance = getContext('seance');
+  const uid = $props.id();
 
-  // Le formulaire déplié ; la taille validée, null pour le défaut ; les
-  // tables créées par le dernier geste, {revision, premier, dernier}.
+  // Les formes offertes, dans l'ordre des boutons.
+  const FORMES = ['ronde', 'carree'];
+
+  // Le formulaire déplié ; la taille validée et la forme choisie, null pour
+  // le défaut ; les tables créées par le dernier geste, {revision, premier,
+  // dernier}.
   let ouvert = $state(false);
   let taille = $state(null);
+  let choix = $state(null);
   let creees = $state.raw(null);
   let racine = $state(null);
 
   const sieges = $derived(taille ?? charge.evenement.siegesParDefaut);
+  const forme = $derived(choix ?? formeParDefaut(charge));
   const bilan = $derived(bilanTablesManquantes(charge, sieges));
   const montre = $derived(ouvert && bilan.manque > 0);
   // Plus aucune place ne manque : le formulaire se replie, et un manque
@@ -89,6 +98,7 @@
   async function ouvrir() {
     ouvert = true;
     taille = null;
+    choix = null;
     await tick();
     racine?.querySelector('input[data-champ="siegesParTable"]')?.focus();
   }
@@ -98,14 +108,14 @@
   // Une taille lue : celle que la commande refuserait reçoit son refus sur
   // le champ ; sinon elle devient celle de l'aperçu.
   function demander(valeur) {
-    const refus = refusDeCommande(charge, 'creerTable', { forme: 'ronde', combler: valeur });
+    const refus = refusDeCommande(charge, 'creerTable', { forme, combler: valeur });
     if (refus !== null && refus.code !== 'PLACES_SUFFISANTES') throw new ErreurCommande(refus.code, refus.details);
     taille = valeur;
   }
 
   async function creer() {
     const avant = charge.prochainsIds.table;
-    await seance.executer('creerTable', { forme: 'ronde', combler: sieges });
+    await seance.executer('creerTable', { forme, combler: sieges });
     const etat = seance.etat();
     const numeros = etat.charge.tables.filter(({ id }) => id >= avant).map(({ numero }) => numero);
     creees = { revision: etat.evenement.revision, premier: numeros[0], dernier: numeros.at(-1) };
@@ -141,6 +151,24 @@
           lire={lireEntier}
           executer={demander}
         />
+        <fieldset class="formes">
+          <legend>{t('tables.manque.forme')}</legend>
+          <div class="options">
+            {#each FORMES as valeur (valeur)}
+              <label class="option">
+                <input
+                  type="radio"
+                  name={`${uid}-forme`}
+                  value={valeur}
+                  data-champ="formeTables"
+                  checked={forme === valeur}
+                  onchange={() => (choix = valeur)}
+                />
+                <span>{t(`tables.manque.forme.${valeur}`)}</span>
+              </label>
+            {/each}
+          </div>
+        </fieldset>
         <p role="status">
           <span data-phrase
             >{t('tables.manque.apercu', {
@@ -192,6 +220,41 @@
   .formulaire p,
   .annonce {
     margin: 0;
+  }
+
+  .formes {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .formes legend {
+    margin-bottom: var(--espace-1);
+    padding: 0;
+  }
+
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-3);
+  }
+
+  .option {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espace-1);
+    min-height: var(--cible-minimale);
+    cursor: pointer;
+  }
+
+  .option input {
+    margin: 0;
+  }
+
+  .option input:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
   }
 
   .issues {

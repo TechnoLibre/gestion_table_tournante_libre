@@ -1389,6 +1389,7 @@ describe('créer les tables qui manquent (§ 6.1)', () => {
   const formulaire = (m) => section(m).querySelector('[data-enonce="creerTables"]');
   const apercu = (m) => formulaire(m).querySelector('[data-phrase]').textContent;
   const ouvrir = (m) => commande(section(m), 'creerTablesManquantes');
+  const forme = (m, valeur) => formulaire(m).querySelector(`input[type="radio"][data-champ="formeTables"][value="${valeur}"]`);
 
   test('l’aperçu dit ce que la commande fera, verbatim : « 22 tables de 8 places : 176 places pour 171 participants »', async () => {
     assert171();
@@ -1432,6 +1433,72 @@ describe('créer les tables qui manquent (§ 6.1)', () => {
     expect(charge(m).tables.map(({ id }) => id)).toEqual([1, 2]);
     expect(ouvrir(m)).not.toBeNull();
     expect(section(m).querySelector('[data-enonce="tablesCreees"]')).toBeNull();
+  });
+
+  test('la forme : « Rondes » et « Carrées » sous leur légende, rondes sans table ; « Carrées » choisie, chaque table créée est carrée', async () => {
+    const m = await preparer(chargeDe({ n: 12 }));
+    await cliquer(m, ouvrir(m));
+    const groupe = forme(m, 'ronde').closest('fieldset');
+    expect(groupe.querySelector('legend').textContent).toBe(t('tables.manque.forme'));
+    expect([...groupe.querySelectorAll('label')].map((etiquette) => etiquette.textContent.trim())).toEqual([
+      t('tables.manque.forme.ronde'),
+      t('tables.manque.forme.carree'),
+    ]);
+    // Le texte verbatim, tel que l'écran d'App le rend : la forme stockée
+    // et dessinée est carrée.
+    const { t: tEcran } = traductionEcran();
+    expect([tEcran('tables.manque.forme'), tEcran('tables.manque.forme.ronde'), tEcran('tables.manque.forme.carree')]).toEqual([
+      'Forme',
+      'Rondes',
+      'Carrées',
+    ]);
+    expect(forme(m, 'ronde').checked).toBe(true);
+    expect(forme(m, 'carree').checked).toBe(false);
+    // Choisir la forme n'écrit rien : seul « Créer » l'applique.
+    const ecrites = ecritures(m);
+    await cliquer(m, forme(m, 'carree'));
+    expect(forme(m, 'carree').checked).toBe(true);
+    expect(ecritures(m)).toBe(ecrites);
+    await cliquer(m, commande(formulaire(m), 'creerTables'));
+    expect(charge(m).tables.map(({ numero, forme: f }) => [numero, f])).toEqual([[1, 'carree'], [2, 'carree']]);
+  });
+
+  test('le défaut tiré de l’événement : la forme de la table la plus récemment créée ; une forme choisie puis « Annuler » revient au défaut à la réouverture ; « Créer » sans choix crée des tables de ce défaut ; « Rondes » choisie, elles sont rondes', async () => {
+    // La table d'identifiant 2, la plus récente, est carrée, bien que
+    // numérotée avant la table ronde d'identifiant 1.
+    const chargeCarree = () => chargeDe({ tables: [{ id: 1, numero: 2 }, { id: 2, numero: 1, forme: 'carree' }], n: 30 });
+    const m = await preparer(chargeCarree());
+    await cliquer(m, ouvrir(m));
+    expect(forme(m, 'carree').checked).toBe(true);
+    expect(forme(m, 'ronde').checked).toBe(false);
+    await cliquer(m, forme(m, 'ronde'));
+    await cliquer(m, commande(formulaire(m), 'annulerCreationTables'));
+    await cliquer(m, ouvrir(m));
+    expect(forme(m, 'carree').checked).toBe(true);
+    // Les boutons laissés tels quels, « Créer » applique le défaut coché.
+    await cliquer(m, commande(formulaire(m), 'creerTables'));
+    expect(charge(m).tables.slice(2).map(({ forme: f }) => f)).toEqual(['carree', 'carree']);
+    // Sur le même défaut carré, « Rondes » cochée l'emporte.
+    const autre = await preparer(chargeCarree());
+    await cliquer(autre, ouvrir(autre));
+    await cliquer(autre, forme(autre, 'ronde'));
+    await cliquer(autre, commande(formulaire(autre), 'creerTables'));
+    expect(charge(autre).tables.slice(2).map(({ forme: f }) => f)).toEqual(['ronde', 'ronde']);
+  });
+
+  test('le défaut suit l’événement après le montage : une table carrée ajoutée à un événement sans table, le formulaire ouvert coche « Carrées »', async () => {
+    // Le formulaire est monté avec la section, l'événement sans table : le
+    // défaut suit la charge courante, pas celle du montage.
+    const m = await preparer(chargeDe({ n: 30 }));
+    await cliquer(m, ouvrir(m));
+    expect(forme(m, 'ronde').checked).toBe(true);
+    await cliquer(m, commande(formulaire(m), 'annulerCreationTables'));
+    await m.seance.executer('creerTable', { forme: 'carree' });
+    await attendre(m);
+    expect(charge(m).tables.map(({ forme: f }) => f)).toEqual(['carree']);
+    await cliquer(m, ouvrir(m));
+    expect(forme(m, 'carree').checked).toBe(true);
+    expect(forme(m, 'ronde').checked).toBe(false);
   });
 
   test('le formulaire ouvert, un geste ailleurs comble le manque : il se replie, et le manque revenu par « Défaire » ne montre que la commande', async () => {

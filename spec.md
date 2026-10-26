@@ -2557,18 +2557,22 @@ présents non exclus moins la somme des capacités —, l'avertissement offre,
 à côté de « Ouvrir les tables », « Créer les tables… », et la section des
 tables offre la même commande tant qu'il en manque. Elle déplie en place un
 petit formulaire, sans fenêtre : le nombre de places par table, pré-rempli
-du défaut, borné comme une table (§ 6.2), puis la conséquence chiffrée avant
-d'appliquer :
+du défaut, borné comme une table (§ 6.2), puis la forme des tables,
+« Rondes » ou « Carrées » — cochée d'abord à la forme de la dernière table
+créée dans l'événement, celle qui porte le plus grand identifiant, et à
+« Rondes » s'il n'y en a aucune ; le fichier ne porte aucun champ pour
+elle —, puis la conséquence chiffrée avant d'appliquer :
 
 > « 22 tables de 8 places : 176 places pour 171 participants »
 
 — sous une présence partielle, « … pour 112 personnes présentes au plus à un
 même tour ». Elle ajoute aux tables existantes ⌈manque / taille⌉ tables
-rondes de cette taille, numérotées à la suite, posées sur des cases libres,
-en **une seule entrée d'historique** ; une table à la taille du défaut le
-suit, une autre est surchargée. Elle se refuse en lecture et sur un plan
-bloqué comme tout geste sur les tables, et quand plus rien ne manque. Après,
-l'avertissement tombe, et le focus passe à l'annonce des tables créées.
+de cette taille et de la forme cochée, numérotées à la suite, posées sur des
+cases libres, en **une seule entrée d'historique** ; une table à la taille
+du défaut le suit, une autre est surchargée. Elle se refuse en lecture et
+sur un plan bloqué comme tout geste sur les tables, et quand plus rien ne
+manque. Après, l'avertissement tombe, et le focus passe à l'annonce des
+tables créées.
 
 **Les animateurs d'une table.** Chaque table de la liste porte une rangée
 « Animateurs » : ses animateurs (§ 2.1 étape 6) en pastilles, chacun suivi d'un

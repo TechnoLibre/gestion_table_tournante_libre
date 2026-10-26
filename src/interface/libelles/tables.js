@@ -126,6 +126,10 @@ export const TABLE = new Map([
   ['tables.manque.ouvrir', 'Créer les tables\u{2026}'],
   ['tables.manque.titre', 'Créer les tables qui manquent'],
   ['tables.manque.places', 'Places par table'],
+  // Le choix de la forme des tables créées, un bouton radio par forme.
+  ['tables.manque.forme', 'Forme'],
+  ['tables.manque.forme.ronde', 'Rondes'],
+  ['tables.manque.forme.carree', 'Carrées'],
   [
     'tables.manque.apercu',
     ({ tables, sieges, placesApres, presentes, partielle = false }) =>

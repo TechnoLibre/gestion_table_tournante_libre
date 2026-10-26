@@ -39,7 +39,7 @@ import { derive, examiner, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { invariantViole } from './avertissements.js';
 import { COMMANDES, appliquerCommande } from './commandes.js';
-import { COMMANDES_MOBILIER, PLACES_TABLE, bilanTablesManquantes } from './commandes_mobilier.js';
+import { COMMANDES_MOBILIER, PLACES_TABLE, bilanTablesManquantes, formeParDefaut } from './commandes_mobilier.js';
 import { ErreurCommande } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { etatPlaces } from './places.js';
@@ -683,6 +683,23 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     const une = accepter('creerTable', chargeDe({ tables: [{ id: 1 }], n: 9 }), { forme: 'ronde', combler: 8 });
     assert.equal(une.libelle, 'Ajouté la table 2, de 8 places');
     assert.deepEqual(une.charge.tables.map(({ numero }) => numero), [1, 2]);
+  });
+
+  test('la forme proposée est celle de la table de plus grand identifiant, la plus récemment créée, quels que soient son numéro et son rang ; ronde sans table', () => {
+    assert.equal(formeParDefaut(chargeDe({ n: 9 })), 'ronde');
+    // L'identifiant 9 n'est ni le premier ni le dernier de la liste, ni le
+    // plus grand numéro : seul l'identifiant le désigne.
+    const charge = chargeDe({ tables: [{ id: 4, numero: 1 }, { id: 9, numero: 2 }, { id: 6, numero: 7 }], n: 9 });
+    charge.tables[1].forme = 'carree';
+    assert.equal(formeParDefaut(charge), 'carree');
+    for (const table of charge.tables) table.forme = table.id === 9 ? 'ronde' : 'carree';
+    assert.equal(formeParDefaut(charge), 'ronde');
+    // Des tables carrées créées d'un geste deviennent les plus récentes ; la
+    // dernière supprimée, la précédente décide.
+    const { charge: apres } = accepter('creerTable', chargeDe({ tables: [{ id: 1 }], n: 12 }), { forme: 'carree', combler: 8 });
+    assert.equal(formeParDefaut(apres), 'carree');
+    const { charge: sans } = accepter('supprimerTable', apres, { id: 2 });
+    assert.equal(formeParDefaut(sans), 'ronde');
   });
 
   test('sous une présence partielle, le manque est celui de l’avis : le plus grand manque d’un même tour, présents non exclus seuls', () => {

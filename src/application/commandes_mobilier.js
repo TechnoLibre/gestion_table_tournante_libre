@@ -237,6 +237,22 @@ export function bilanTablesManquantes(charge, sieges) {
   return { manque, presentes, places, tables, sieges, placesApres: places + tables * sieges };
 }
 
+/**
+ * La forme que « Créer les tables » propose (§ 6.1) : celle de la table la
+ * plus récemment créée de l'événement — le plus grand identifiant, qui ne
+ * revient jamais, quels que soient son numéro et son rang dans la liste —,
+ * 'ronde' sans table. Elle se lit dans les tables : le fichier ne la porte
+ * pas.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {'ronde'|'carree'}
+ */
+export function formeParDefaut(charge) {
+  let derniere = null;
+  for (const table of charge.tables) if (derniere === null || table.id > derniere.id) derniere = table;
+  return derniere === null ? 'ronde' : derniere.forme;
+}
+
 // creerTable {forme, combler} : les tables de combler places qui
 // assoient chacun (bilanTablesManquantes), en une entrée. combler se lit
 // par lireEntier et se borne comme une capacité (PLACES_TABLE) :
