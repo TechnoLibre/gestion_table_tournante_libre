@@ -274,6 +274,13 @@ describe('licence', () => {
       assert.ok(notice.includes(`LICENSES/${identifiant}.txt`), `LICENSES/${identifiant}.txt non nommé`);
       assert.ok(notice.includes(NOMS[identifiant]), `${identifiant} non nommée en clair`);
     }
+    // La permission additionnelle à la LiLiQ-R+ : le titulaire y autorise la
+    // combinaison avec des composants sous licence libre permissive, dont
+    // l'Apache-2.0 avec l'exception LLVM que le module de HiGHS incorpore.
+    assert.ok(lignes.includes('Permission additionnelle à la LiLiQ-R+'), 'titre de la permission absent');
+    for (const attendu of ['TechnoLibre Inc., titulaire', 'licence libre permissive', 'Apache-2.0 avec ou sans l\'exception LLVM']) {
+      assert.ok(notice.replace(/\s+/g, ' ').includes(attendu), `permission : « ${attendu} » absent`);
+    }
     // Une notice, et non le texte d'une des licences : la recopier ici la
     // donnerait seule pour licence du dépôt.
     for (const identifiant of IDENTIFIANTS) {

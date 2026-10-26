@@ -172,6 +172,12 @@ sous l'une des licences suivantes :
 - GNU Affero General Public License v3.0 ou ultérieure (AGPL-3.0-or-later) ;
 - Licence Libre du Québec – Réciprocité forte v1.1 (LiLiQ-R+).
 
+Sous la LiLiQ-R+, une permission additionnelle de TechnoLibre Inc., écrite
+dans la notice `LICENSE`, permet de distribuer le logiciel combiné à des
+composants sous licence libre permissive — MIT, BSD, ISC, Zlib, Apache-2.0
+avec ou sans l'exception LLVM, SIL Open Font License pour les polices —,
+comme ceux qu'il incorpore ; ces composants restent sous leur propre licence.
+
 Identifiant SPDX : `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1`, que portent
 l'en-tête de chaque fichier source et le champ `license` de `package.json`.
 Textes complets : dossier `LICENSES/`, auquel renvoie la notice `LICENSE` de la
@@ -191,7 +197,8 @@ Pour respecter la licence choisie :
 - sous l'AGPL, si vous offrez une version modifiée à des utilisateurs par un
   réseau (SaaS, instance web), vous devez leur donner accès à son code source.
 
-Les contributions à ce projet sont acceptées sous ces deux licences.
+Les contributions à ce projet sont acceptées sous ces deux licences et avec
+cette permission additionnelle.
 
 L'application embarque la police **Noto Sans** (Regular et Bold), sous la
 **SIL Open Font License 1.1**, sans nom de police réservé : elle sert à la
@@ -204,6 +211,13 @@ WebAssembly compile — sont dans `public/licences/TIERS.txt`. Ces
 fichiers voyagent avec la page, dans `www/licences/`, et ces avis se lisent
 aussi dans « À propos », carte « Composants tiers et leurs licences », que
 l'application tire de ce seul fichier.
+
+Le module `highs.wasm` et son chargeur sont la construction publiée du paquet
+npm `highs`, à la version que fixe `package-lock.json` ; leur source est le
+dépôt highs-js (https://github.com/lovasoa/highs-js) à cette version, et
+`public/licences/TIERS.txt` nomme les versions de HiGHS
+(https://github.com/ERGO-Code/HiGHS) et d'Emscripten que cette construction
+compile.
 
 Le logo de TechnoLibre, `src/actifs/full_logo_technolibre_2023.svg` et `.png`,
 est la marque de l'éditeur ; « À propos » l'affiche et le donne à télécharger.

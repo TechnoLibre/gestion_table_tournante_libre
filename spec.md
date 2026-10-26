@@ -9404,9 +9404,12 @@ sous l'auteur, le lien vers le code source du projet. Suivent quatre cartes :
   l'identifiant SPDX `AGPL-3.0-or-later OR LiLiQ-Rplus-1.1` — celui que
   déclarent `package.json` et l'en-tête de chaque fichier source, et dont le
   dossier `LICENSES/` des sources porte les deux textes —, ce que demande la
-  licence choisie, les liens vers les deux textes officiels, et les deux textes
-  complets, livrés avec le logiciel et lisibles sur place, sans réseau, un à la
-  fois ;
+  licence choisie, la permission additionnelle à la LiLiQ-R+ — écrite dans la
+  notice `LICENSE`, par laquelle TechnoLibre Inc., titulaire du droit
+  d'auteur, permet de distribuer le logiciel combiné à des composants sous
+  licence libre permissive, comme ceux qu'il incorpore —, les liens vers les
+  deux textes officiels, et les deux textes complets, livrés avec le logiciel
+  et lisibles sur place, sans réseau, un à la fois ;
 - les **composants tiers et leurs licences** : chaque œuvre que la page
   incorpore, tirée de `public/licences/TIERS.txt` et de lui seul — aucune
   liste n'est recopiée —, son nom, sa version et sa licence, les œuvres

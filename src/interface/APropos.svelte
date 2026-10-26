@@ -270,6 +270,7 @@
         <li>{t('coquille.apropos.licence.obligation4')}</li>
         <li>{t('coquille.apropos.licence.obligation5')}</li>
       </ul>
+      <p>{t('coquille.apropos.licence.permission')}</p>
       <p>{t('coquille.apropos.licence.contributions')}</p>
       <p class="liens">{@render lien('agpl')}{@render lien('liliq')}</p>
       <div class="commandes">

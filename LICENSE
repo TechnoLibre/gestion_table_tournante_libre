@@ -17,3 +17,16 @@ Textes officiels : https://www.gnu.org/licenses/agpl-3.0.fr.html et
 https://forge.gouv.qc.ca/licence/liliq-r+/. Ce que demande la licence choisie,
 et la demande d'attribution, sont dans README.md, sections « Licence » et
 « Attribution ».
+
+Permission additionnelle à la LiLiQ-R+
+--------------------------------------
+
+En plus des droits que lui accorde la LiLiQ-R+, TechnoLibre Inc., titulaire
+du droit d'auteur sur ce logiciel, permet à tout licencié de distribuer le
+logiciel, un logiciel modifié ou un logiciel dérivé combiné à des composants
+de tiers placés sous une licence libre permissive approuvée par l'Open Source
+Initiative ou la Free Software Foundation — notamment MIT, BSD, ISC, Zlib,
+Apache-2.0 avec ou sans l'exception LLVM, et la SIL Open Font License 1.1
+pour les polices —, à condition de respecter la licence de chacun de ces
+composants. Ces composants restent sous leur propre licence ; la réciprocité
+de la LiLiQ-R+ s'applique à tout le reste.

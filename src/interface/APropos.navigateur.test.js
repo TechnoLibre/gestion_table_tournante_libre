@@ -324,7 +324,7 @@ describe('« À propos » : l’attribution et la licence (§ 18.6)', () => {
     );
     expect(licence, 'carte Licence').toBeDefined();
     const texte = licence.textContent;
-    for (const cle of ['choix', 'agpl', 'liliq', 'spdx', 'textes', 'respecter', 'contributions']) {
+    for (const cle of ['choix', 'agpl', 'liliq', 'spdx', 'textes', 'respecter', 'permission', 'contributions']) {
       expect(texte.includes(t(`coquille.apropos.licence.${cle}`)), cle).toBe(true);
     }
     for (const rang of [1, 2, 3, 4, 5]) expect(texte.includes(t(`coquille.apropos.licence.obligation${rang}`)), rang).toBe(true);

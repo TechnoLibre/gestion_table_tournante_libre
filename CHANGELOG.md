@@ -664,6 +664,10 @@
   commande du bandeau, sans chercher « Fermer » : la commande du panneau
   ouvert reste en surbrillance, et l'écran d'où il s'est ouvert revient
   tel quel.
+- Sous la LiLiQ-R+, une permission additionnelle de TechnoLibre Inc., dans la
+  notice `LICENSE`, permet de distribuer l'application avec des composants
+  sous licence libre permissive, comme ceux qu'elle incorpore ; la carte
+  « Licence » d'« À propos » le dit.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

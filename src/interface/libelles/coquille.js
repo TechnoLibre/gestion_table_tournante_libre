@@ -98,7 +98,8 @@ export const TABLE = new Map([
   ['coquille.apropos.liens.note', 'Un lien s\u{2019}ouvre dans votre navigateur ; le logiciel n\u{2019}envoie rien.'],
 
   // La licence : le choix entre les deux, l'identifiant SPDX, où lire les
-  // textes complets, ce que la licence choisie demande, les contributions ;
+  // textes complets, ce que la licence choisie demande, la permission
+  // additionnelle à la LiLiQ-R+, les contributions ;
   // puis la lecture des textes complets, livrés avec le logiciel.
   ['coquille.apropos.licence.titre', 'Licence'],
   ['coquille.apropos.licence.choix', 'Ce projet est distribué, au choix de l\u{2019}utilisateur, sous l\u{2019}une des licences suivantes :'],
@@ -123,7 +124,16 @@ export const TABLE = new Map([
     'sous l\u{2019}AGPL, si vous offrez une version modifiée à des utilisateurs par un réseau (SaaS, instance web), ' +
       'vous devez leur donner accès à son code source.',
   ],
-  ['coquille.apropos.licence.contributions', 'Les contributions à ce projet sont acceptées sous ces deux licences.'],
+  [
+    'coquille.apropos.licence.permission',
+    'Sous la LiLiQ-R+, une permission additionnelle de TechnoLibre Inc., dans la notice LICENSE, permet de ' +
+      'distribuer le logiciel combiné à des composants sous licence libre permissive, comme ceux de la liste des ' +
+      'composants tiers.',
+  ],
+  [
+    'coquille.apropos.licence.contributions',
+    'Les contributions à ce projet sont acceptées sous ces deux licences et avec cette permission additionnelle.',
+  ],
   ['coquille.apropos.licence.lireAgpl', 'Lire l\u{2019}AGPL-3.0-or-later'],
   ['coquille.apropos.licence.lireLiliq', 'Lire la LiLiQ-R+ 1.1'],
   ['coquille.apropos.licence.fermerTexte', 'Fermer le texte'],

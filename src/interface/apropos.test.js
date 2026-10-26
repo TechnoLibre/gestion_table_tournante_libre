@@ -103,7 +103,7 @@ describe('les liens du panneau « À propos » (§ 2, § 18.6)', () => {
 });
 
 describe('la licence et l’attribution du panneau « À propos » (§ 18.6)', () => {
-  test('la licence nomme les deux licences, l’identifiant SPDX, et les obligations sous la licence choisie', () => {
+  test('la licence nomme les deux licences, l’identifiant SPDX, les obligations sous la licence choisie et la permission additionnelle à la LiLiQ-R+', () => {
     const texte = [
       t('coquille.apropos.licence.choix'),
       ...['agpl', 'liliq'].map((nom) => t(`coquille.apropos.licence.${nom}`)),
@@ -112,6 +112,7 @@ describe('la licence et l’attribution du panneau « À propos » (§ 18.6)', (
       t('coquille.apropos.licence.textes'),
       t('coquille.apropos.licence.respecter'),
       ...[1, 2, 3, 4, 5].map((rang) => t(`coquille.apropos.licence.obligation${rang}`)),
+      t('coquille.apropos.licence.permission'),
       t('coquille.apropos.licence.contributions'),
     ].join('\n');
     for (const attendu of [
@@ -123,6 +124,9 @@ describe('la licence et l’attribution du panneau « À propos » (§ 18.6)', (
       'code source',
       'réseau',
       'ces deux licences',
+      'permission additionnelle',
+      'licence libre permissive',
+      'LICENSE',
     ]) {
       assert.ok(texte.includes(attendu), attendu);
     }
