@@ -37,14 +37,14 @@
 //   8. en mode mettreAJour, les lignes ajoutées à côté d'un existant de même
 //      nom se nomment ; dans chaque mode, les cellules qui s'étendent sur
 //      plusieurs lignes du texte et portent le séparateur.
-// Une ligne valide dont l'option noms donne le nom le prend dès le point 6 :
-// tout ce qui suit se lit sur ce nom.
+// Une ligne valide dont l'option noms donne le nom le prend dès le point 6,
+// avec la marque du nom numéroté : tout ce qui suit se lit sur ce nom.
 // Une ligne refusée ne refuse pas le texte : le reste s'importe, et la ligne
 // revient dans le CSV des refus (§ 10.1). Un conflit fautif, lui, refuse le
 // texte entier : importer le reste ferait d'un conflit mal écrit un conflit
 // perdu, sans que rien ne le dise.
 
-import { TOURS_MAX } from '../stockage/document.js';
+import { SUFFIXE_NUMERO, TOURS_MAX } from '../stockage/document.js';
 import { ETIQUETTES_MAX, lireEtiquettes } from '../stockage/etiquettes.js';
 import { associer, reconnaitre } from './colonnes.js';
 import { contientNul } from './encodage.js';
@@ -114,6 +114,11 @@ export const VALEURS_EXCLU = new Map([
  *           —, une seule par clé normalisée ; null pour une colonne absente
  *           ou une cellule qui n'en nomme aucune, qui laisse la liste d'une
  *           personne mise à jour
+ * @property {true} [nomNumerote]          présent sur la seule ligne dont le
+ *           nom vient de l'option noms, celui que « Rendre les noms
+ *           uniques » numérote : une personne créée de cette ligne porte la
+ *           marque du nom numéroté (§ 8.9). Aucune colonne ne le donne, et
+ *           un nom qui finit par un numéro dans sa cellule ne le porte pas
  *
  * @typedef {Object} Apercu
  * @property {'ajouter'|'mettreAJour'|'remplacer'} mode   le mode pour lequel
@@ -682,16 +687,19 @@ function multilignesDe(lignes, separateur) {
  *   lequel la présence se lit ; TOURS_MAX par défaut, qui ne refuse qu'un
  *   tour au-delà du plus grand nombre de tours admis
  * @param {Map<number, string>} [options.noms]  rang → nom, ceux que rend
- *   rendreNomsUniques (noms_uniques.js) : la ligne valide de ce rang prend
- *   ce nom à la place de celui de sa cellule, dès sa lecture, si bien que
- *   réconciliation, doublons, conflits et mise à jour se calculent sur lui.
- *   Le texte n'est pas réécrit : brut garde la cellule. Un rang qui n'est
- *   pas celui d'une ligne valide est ignoré
+ *   rendreNomsUniques (noms_uniques.js), chacun fini par une espace et un
+ *   numéro de deux chiffres ou plus (SUFFIXE_NUMERO) : la ligne valide de ce
+ *   rang prend ce nom à la place de celui de sa cellule, dès sa lecture, si
+ *   bien que réconciliation, doublons, conflits et mise à jour se calculent
+ *   sur lui, et porte la marque nomNumerote. Le texte n'est pas réécrit :
+ *   brut garde la cellule. Un rang qui n'est pas celui d'une ligne valide
+ *   est ignoré
  * @returns {Apercu}
  * @throws {TypeError} quand texte n'est pas une chaîne : des octets passent
  *   d'abord par decoder ; pour un mode inconnu ; pour un nombre de tours qui
  *   n'est pas un entier de 1 à TOURS_MAX ; pour des noms qui ne sont pas une
- *   Map
+ *   Map, ou dont le nom d'une ligne valide ne finit pas par un numéro
+ *   (SUFFIXE_NUMERO) : la marque l'exige
  */
 export function apercevoir(
   texte,
@@ -745,7 +753,11 @@ export function apercevoir(
     if (lus === undefined) {
       refusees.push({ ligne, ...refus, brut });
     } else if (noms.has(ligne)) {
-      valides.push({ ligne, champs: { ...lus, nom: noms.get(ligne) }, brut });
+      const nom = noms.get(ligne);
+      if (typeof nom !== 'string' || !SUFFIXE_NUMERO.test(nom)) {
+        throw new TypeError(`noms : nom fini par un numéro attendu à la ligne ${ligne}, reçu ${JSON.stringify(nom)}`);
+      }
+      valides.push({ ligne, champs: { ...lus, nom, nomNumerote: true }, brut });
       renommes.push(ligne);
     } else {
       valides.push({ ligne, champs: lus, brut });

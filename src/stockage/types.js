@@ -23,9 +23,10 @@
  * Le fichier d'état, au format courant, FORMAT (§ 8.8, § 8.9). Deux régions :
  * l'en-tête et la charge. Des champs facultatifs, chacun absent à son défaut
  * et écrit après les clés toujours présentes de son objet : les
- * étiquettes et la présence par tour d'un participant, les objectifs d'une
- * table, des réglages, la dérivation d'une proposition et les absents d'un
- * tour de placement. Aucun format plus ancien que FORMAT ne se lit : un tel
+ * étiquettes, la présence par tour, les conflits, le logo et la marque du
+ * nom numéroté d'un participant, le libellé et les objectifs d'une table,
+ * des réglages, la dérivation d'une proposition et les absents d'un tour
+ * de placement. Aucun format plus ancien que FORMAT ne se lit : un tel
  * fichier se refuse, raison FORMAT_TROP_ANCIEN. Les comparaisons qui
  * traversent les constructions — empreinte des démonstrations, aller-retour
  * des fichiers livrés — portent sur la charge seule. Toute clé hors de ces
@@ -190,6 +191,17 @@
  *                                          minuscules, puis .png
  *                                          (logos.js) ; absent, aucun
  *                                          logo (§ 8.9)
+ * @property {true} [nomNumerote]          facultatif : le numéro final du
+ *                                          nom, une espace puis deux
+ *                                          chiffres ou plus
+ *                                          (SUFFIXE_NUMERO), est celui
+ *                                          qu'a ajouté « Rendre les noms
+ *                                          uniques » (§ 10.1) ; absent, le
+ *                                          nom est tel que reçu. Jamais
+ *                                          faux ; ni montré, ni saisi, ni
+ *                                          écrit dans une colonne CSV ;
+ *                                          renommer la personne le
+ *                                          retire (§ 8.9)
  *
  * @typedef {Object} Table
  * @property {number} id            identifiant, unique

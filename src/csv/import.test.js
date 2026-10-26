@@ -9,8 +9,10 @@
 // et qu'une mise à jour remplace sans jamais l'effacer ; la colonne de la
 // présence, écrite canonique, gardée par une cellule vide en mise à jour,
 // et refusée sous un aperçu calculé pour un autre nombre de tours ; les
-// titres que pourvoient les seules personnes présentes. Les marques
-// combinantes s'écrivent par leur point de code.
+// titres que pourvoient les seules personnes présentes ; la marque du nom
+// numéroté, que porte la seule personne créée d'une ligne renommée par
+// « Rendre les noms uniques ». Les marques combinantes s'écrivent par leur
+// point de code.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { serialiser } from '../stockage/canonique.js';
@@ -23,6 +25,7 @@ import { ErreurCsv } from './erreurs.js';
 import { exporterParticipants } from './export.js';
 import { appliquerImport, bilanRemplacement, exporterRefus, pourvoyeursDesTitres } from './import.js';
 import { decouper } from './lecture.js';
+import { rendreNomsUniques } from './noms_uniques.js';
 
 const MARQUE = '\u{FEFF}';
 
@@ -905,6 +908,79 @@ describe("appliquerImport : la colonne des conflits d'organisation (§ 10.1)", (
         mode,
       );
       assert.deepEqual(charge, avant, mode);
+    }
+  });
+});
+
+describe('appliquerImport : la marque du nom numéroté (§ 8.9, § 10.1)', () => {
+  // Aperçu du texte dans le mode, ses doublons rendus uniques comme le fait
+  // « Rendre les noms uniques », puis import dans ce même mode.
+  function importerRendu(charge, texte, mode) {
+    const options = { participants: charge.participants, tables: charge.tables, mode, tours: charge.evenement.tours };
+    const apercu = apercevoir(texte, options);
+    return appliquerImport(charge, apercevoir(texte, { ...options, noms: rendreNomsUniques(apercu, charge.participants) }), mode);
+  }
+  const relue = (charge) => analyser(serialiser(charge, { revision: 1, produitVersion: VERSION.affichee })).charge;
+  const DOUBLONS = csv('nom;prenom', 'Galet;Roger', 'Galet;Roger');
+
+  test('ajouter : chaque personne créée d’une ligne renommée porte la marque, en dernière clé ; les autres non', () => {
+    const charge = chargeDe({ participants: [personne(1, 'Galet', 'Roger')] });
+    const { charge: apres, resume } = importerRendu(charge, csv('nom;prenom', 'Galet;Roger', 'Houle;Iris', 'Galet;Roger'), 'ajouter');
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Galet', 'Roger'),
+      personne(2, 'Galet 01', 'Roger', null, { nomNumerote: true }),
+      personne(3, 'Houle', 'Iris'),
+      personne(4, 'Galet 02', 'Roger', null, { nomNumerote: true }),
+    ]);
+    assert.equal(Object.keys(apres.participants[1]).at(-1), 'nomNumerote');
+    assert.deepEqual(resume, resumeDe({ ajoutes: 3 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('mettre à jour : la ligne ajoutée sous un nom rendu porte la marque ; la personne mise à jour ne la reçoit ni ne la perd', () => {
+    const charge = chargeDe({
+      participants: [personne(1, 'Galet', 'Roger'), personne(2, 'Houle 01', 'Iris', null, { nomNumerote: true })],
+    });
+    const texte = csv('nom;prenom;courriel', 'Galet;Roger;roger@exemple.test', 'Galet;Roger;', 'HOULE 01;Iris;iris@exemple.test');
+    const { charge: apres, resume } = importerRendu(charge, texte, 'mettreAJour');
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Galet', 'Roger', null, { courriel: 'roger@exemple.test' }),
+      personne(2, 'HOULE 01', 'Iris', null, { courriel: 'iris@exemple.test', nomNumerote: true }),
+      personne(3, 'Galet 01', 'Roger', null, { nomNumerote: true }),
+    ]);
+    assert.deepEqual(resume, resumeDe({ ajoutes: 1, misAJour: 2 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('mettre à jour : un nom posé qui ne finit plus par une espace et un numéro fait tomber la marque, et le fichier reste lisible', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Houle 01', 'Iris', null, { nomNumerote: true }),
+        personne(2, 'Galet 02', 'Roger', null, { nomNumerote: true }),
+      ],
+    });
+    const texte = csv('nom;prenom', 'Houle\u{A0}01;Iris', 'Galet 0\u{301}2;Roger');
+    const { charge: apres, resume } = importer(charge, texte, 'mettreAJour');
+    assert.deepEqual(apres.participants, [personne(1, 'Houle\u{A0}01', 'Iris'), personne(2, 'Galet 0\u{301}2', 'Roger')]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 2 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('remplacer : la marque d’une personne retirée part avec elle ; la ligne renommée la porte', () => {
+    const charge = chargeDe({ participants: [personne(1, 'Galet 01', 'Roger', null, { nomNumerote: true })] });
+    const { charge: apres, resume } = importerRendu(charge, DOUBLONS, 'remplacer');
+    assert.deepEqual(apres.participants, [
+      personne(2, 'Galet', 'Roger'),
+      personne(3, 'Galet 01', 'Roger', null, { nomNumerote: true }),
+    ]);
+    assert.deepEqual(resume, resumeDe({ ajoutes: 2, retires: 1 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('dans chaque mode, un nom qui finit par un numéro dans sa cellule ne porte pas la marque', () => {
+    for (const mode of MODES) {
+      const { charge: apres } = importer(chargeDe(), csv('nom;prenom', 'Galet 01;Roger', 'Galet 02;Lise'), mode);
+      assert.deepEqual(apres.participants.map((participant) => Object.hasOwn(participant, 'nomNumerote')), [false, false], mode);
     }
   });
 });

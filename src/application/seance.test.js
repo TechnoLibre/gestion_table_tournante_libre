@@ -19,6 +19,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { lireLogo } from '../../test/logo.js';
 import { lirePolices } from '../../test/polices.js';
 import { apercevoir } from '../csv/apercu.js';
+import { rendreNomsUniques } from '../csv/noms_uniques.js';
 import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { CRITERES } from '../moteur/criteres.js';
 import { rechercher } from '../moteur/recherche.js';
@@ -1476,6 +1477,28 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
     const avant = montage.fs.compteurs.ecritures;
     await refus(montage.seance.defaire(), 'RIEN_A_DEFAIRE');
     assert.equal(montage.fs.compteurs.ecritures, avant);
+  });
+
+  test('la marque du nom numéroté : l’import la pose, renommer la retire, défaire la rend, et chaque état écrit la porte ou non (§ 8.9, § 10.1)', async () => {
+    const montage = monter();
+    const { fs, seance } = montage;
+    await enEcriture(montage);
+    const texte = 'nom;prenom\nGalet;Roger\nGalet;Roger\n';
+    const apercu = apercevoir(texte, { participants: seance.charge.participants });
+    const rendus = rendreNomsUniques(apercu, seance.charge.participants);
+    const renomme = apercevoir(texte, { participants: seance.charge.participants, noms: rendus });
+    await seance.executer('importerParticipants', { apercu: renomme, mode: 'ajouter' });
+    const marques = (charge) => charge.participants.map(({ nom, nomNumerote }) => [nom, nomNumerote]);
+    assert.deepEqual(marques(seance.charge), [['Galet', undefined], ['Galet 01', true]]);
+    assert.deepEqual(marques(etatDe(fs).charge), marques(seance.charge));
+    await seance.executer('modifierParticipant', { id: 2, champs: { nom: 'Galet-Houle' } });
+    assert.deepEqual(marques(seance.charge), [['Galet', undefined], ['Galet-Houle', undefined]]);
+    assert.deepEqual(marques(etatDe(fs).charge), marques(seance.charge));
+    await seance.defaire();
+    assert.deepEqual(marques(seance.charge), [['Galet', undefined], ['Galet 01', true]]);
+    assert.deepEqual(marques(etatDe(fs).charge), marques(seance.charge));
+    await seance.refaire();
+    assert.deepEqual(marques(etatDe(fs).charge), [['Galet', undefined], ['Galet-Houle', undefined]]);
   });
 
   test('après un retour de la révision 6 à la 3, défaire vise le prédécesseur de 3 sur le fil, non la ligne précédente', async () => {

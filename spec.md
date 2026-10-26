@@ -430,6 +430,12 @@ en réserve — la réserve tient une personne présente qui attend une table
 (§ 7.1). « Personne présente », sans tour, désigne une personne non exclue,
 présente à un tour au moins ; « présente au tour r » désigne ce tour.
 
+Un participant que « Rendre les noms uniques » a renommé à l'import (§ 10.1)
+porte la **marque du nom numéroté**, cachée : elle dit que le numéro final de
+son nom — « Galet 01 » — vient de l'import, et non de la liste reçue. Ni la
+fiche ni la grille ne la montrent, aucune colonne CSV ne la porte, et renommer
+la personne la retire (§ 8.9, § 10.2).
+
 **Table** — un **identifiant entier**, unique dans l'événement et jamais
 réutilisé, exactement comme un participant ; un **numéro affiché** à partir
 de 1 ; éventuellement un **libellé** — « Table d'honneur », « Coin des
@@ -4262,7 +4268,7 @@ facultatif, absent quand elle n'en nomme aucun :
 
 | champ | où | absent, il vaut | forme |
 |---|---|---|---|
-| `conflits` | chaque participant, en dernier, après `presence` | aucun conflit | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
+| `conflits` | chaque participant, après `presence`, avant `logo` | aucun conflit | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
 
 Une liste vide, un doublon, une valeur qui n'est pas un texte non vide sont des
 fautes de forme ; la propre organisation de la personne aussi, nommée par le
@@ -4316,7 +4322,7 @@ porte pas :
 
 | champ | où | absent, il vaut | forme |
 |---|---|---|---|
-| `logo` | chaque participant, en dernier, après `conflits` | aucun logo | `logo/`, puis les 64 chiffres hexadécimaux minuscules du SHA-256 des octets de l'image, puis `.png` : un chemin relatif au dossier de l'événement |
+| `logo` | chaque participant, après `conflits`, avant `nomNumerote` | aucun logo | `logo/`, puis les 64 chiffres hexadécimaux minuscules du SHA-256 des octets de l'image, puis `.png` : un chemin relatif au dossier de l'événement |
 
 Une autre forme — des capitales, une autre longueur, un autre dossier ou une
 autre extension, une remontée `..`, un chemin absolu, un blanc, `null` — est une
@@ -4346,6 +4352,35 @@ Le CSV des participants ne porte pas de logo : un import qui remplace la liste
 retire les logos avec les personnes : la fenêtre à confirmer compte les logos
 qui partiront, quand il y en a, et l'avis d'après le geste les compte encore ;
 mettre à jour les garde (§ 10.1). Le moteur ne lit pas le champ : la
+configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
+mêmes. Le champ fait partie du format 3.
+
+#### Un champ facultatif : le nom numéroté
+
+La marque du nom numéroté d'une personne (§ 4) s'écrit dans un champ
+facultatif, absent quand son nom est celui qu'elle a reçu :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `nomNumerote` | chaque participant, en dernier, après `logo` | aucun numéro ajouté au nom | `true` ; le nom finit alors par une espace (U+0020) et deux chiffres ASCII ou plus |
+
+`false`, `null` ou toute autre valeur que `true` est une faute de forme ; une
+marque posée sur un nom qui ne finit pas ainsi — un seul chiffre, un autre
+blanc, des chiffres d'une autre écriture, un mot après — aussi, nommée par le
+chemin de la marque et contrôlée après les conflits (§ 8.8). Une personne sans
+marque s'écrit octet pour octet comme sans ce champ, démonstrations comprises.
+**La marque ne se déduit jamais du nom** : « Galet 01 » écrit tel quel dans un
+CSV ne la porte pas.
+
+Aucune commande de saisie ne la pose ni ne la montre. L'import la pose sur
+chaque personne qu'il crée d'une ligne que « Rendre les noms uniques » a
+renommée, dans les trois modes (§ 10.1) ; une mise à jour la garde, sauf quand
+le nom qu'elle pose ne finit plus par le numéro. `modifierParticipant` la retire
+dès qu'il change le nom, par la fiche comme par la grille (§ 10.2), et garde la
+marque quand il change un autre champ. Un correctif du journal la pose et la
+retire comme tout champ : « Défaire » la rend avec l'ancien nom. Le CSV des
+participants ne la porte pas : un export puis un réimport rendent le nom entier,
+numéro compris, sans la marque (§ 10.2). Le moteur ne lit pas le champ : la
 configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
 mêmes. Le champ fait partie du format 3.
 
@@ -4847,10 +4882,13 @@ changerait en création ; sous « Remplacer », la liste retirée ne compte pas.
 Le fichier n'est jamais réécrit : l'aperçu se recalcule sur les noms rendus, le
 bloc des doublons se vide — sauf, en mise à jour, les lignes qui mettent à jour
 leur personne —, et l'import applique ces noms ; l'aperçu, puis le rapport
-d'import, comptent les noms rendus uniques, en information. La commande n'est
-offerte que lorsqu'elle rend un nom au moins, et vaut pour le texte ouvert,
-sous chaque mode et chaque choix de colonnes, jusqu'à ce qu'un autre texte ou
-une autre nature l'ouvre de nouveau.
+d'import, comptent les noms rendus uniques, en information. Chaque personne
+créée sous un nom rendu porte la marque du nom numéroté (§ 8.9), **cachée** : la
+fiche ne la montre ni ne la saisit, et aucune colonne CSV ne la porte, ni à
+l'import ni à l'export ; un nom que le fichier écrit déjà suivi d'un numéro ne
+la reçoit pas. La commande n'est offerte que lorsqu'elle rend un nom au moins,
+et vaut pour le texte ouvert, sous chaque mode et chaque choix de colonnes,
+jusqu'à ce qu'un autre texte ou une autre nature l'ouvre de nouveau.
 
 **Mettre à jour n'efface pas** : un champ vide dans le fichier laisse la valeur
 existante. Un fichier ne portant que les noms effacerait sinon tous les
@@ -4936,6 +4974,13 @@ formulaire. Ouvrir la fiche d'une autre personne referme le formulaire sans rien
 écrire. Les conflits d'organisation, la présence et l'exclusion gardent leurs
 commandes, hors du formulaire, et leurs rubriques restent actives pendant la
 saisie.
+
+**Renommer une personne retire la marque du nom numéroté** (§ 8.9) : un
+`modifierParticipant` qui change le nom, par la fiche ou par la cellule de la
+grille, la retire dans la même entrée, même quand le nom saisi finit par un
+numéro — un nom retapé est voulu tel quel —, et « Défaire » la rend avec
+l'ancien nom. Changer un autre champ la garde ; le libellé de l'entrée ne la
+nomme pas.
 
 La fiche d'une personne porte ses étiquettes, en pastilles **neutres** — la
 teinte d'organisation ne sert qu'à l'organisation (§ 12.7) —, chacune suivie,
@@ -5073,11 +5118,12 @@ personne sans conflit. Quand une organisation de la liste porte elle-même
 lu comme une seule organisation de ce nom —, les noms se joignent par ` | `,
 puis par une fin de ligne : la première jointure que la lecture de l'import
 rend en la même liste. Sans conflit dans la liste, la colonne manque, et son
-réimport en mise à jour ne touche aucune liste. Le collage en bloc suit le
-même ordre de colonnes, la huitième étant celle des étiquettes, la neuvième
-celle de la présence, la dixième celle des conflits. Les
-objectifs des tables s'exportent par leur propre CSV, dans la forme exacte qu'il
-importe (§ 10.4).
+réimport en mise à jour ne touche aucune liste. Comme le logo, la marque du nom
+numéroté (§ 8.9) n'a pas de colonne : le nom s'écrit entier, numéro compris, et
+se réimporte sans elle. Le collage en bloc suit le même ordre de colonnes, la
+huitième étant celle des étiquettes, la neuvième celle de la présence, la
+dixième celle des conflits. Les objectifs des tables s'exportent par leur propre
+CSV, dans la forme exacte qu'il importe (§ 10.4).
 
 ### 10.3 Les fichiers d'exemple livrés
 

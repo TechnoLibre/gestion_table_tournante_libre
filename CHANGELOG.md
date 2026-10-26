@@ -540,7 +540,10 @@
   « Rendre les noms uniques », dans le bloc des doublons, garde le nom de la
   première personne et numérote les suivantes, « Galet 01 », « Galet 02 », en
   sautant un nom déjà pris ; le fichier n'est pas modifié, l'aperçu se
-  recalcule, et le rapport d'import compte les noms rendus uniques.
+  recalcule, et le rapport d'import compte les noms rendus uniques. Chaque
+  personne ainsi numérotée garde une marque cachée qui dit que le numéro vient
+  de l'import : ni la fiche ni le CSV ne la montrent, renommer la personne la
+  retire, et « Défaire » la rend.
 - Dans la section « Badges », à côté du pied TechnoLibre, cinq cases disent ce
   que chaque badge imprime en plus du nom et des tours : « Organisation »,
   « Nom de l'événement », « Date de l'événement », « Date du placement » et
@@ -733,8 +736,9 @@ placement nomme ses absents, `absents`, seulement quand il en a. Le libellé
 d'une table, `libelle`, est absent quand elle n'en porte pas ; les conflits
 d'organisation d'une personne, `conflits`, quand elle n'en nomme aucun ; son
 logo, `logo`, le chemin de son image dans le dossier de l'événement, quand
-elle n'en a pas. Un
-fichier de format 1 ou 2, écrit par une version de développement, est refusé :
+elle n'en a pas ; la marque de son nom numéroté, `nomNumerote`, quand
+« Rendre les noms uniques » ne l'a pas renommée. Un fichier de format 1 ou 2,
+écrit par une version de développement, est refusé :
 il ne s'ouvre pas, ne s'importe pas, et l'application dit que son format, trop
 ancien, n'est plus pris en charge, sans rien écrire par-dessus. La course de
 la recherche ne va ni dans le fichier de l'événement ni dans son historique :

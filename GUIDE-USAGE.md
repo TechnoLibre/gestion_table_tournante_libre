@@ -128,7 +128,9 @@ logiciel ne fusionne jamais deux personnes : s’il s’agit bien de deux conviv
 un numéro, « Galet 01 », « Galet 02 », en sautant un numéro déjà pris. Votre
 fichier n’est pas modifié : l’aperçu se recalcule sur ces noms, et le rapport
 compte les noms rendus uniques. En mise à jour, une ligne qui met à jour une
-personne de la liste garde son nom.
+personne de la liste garde son nom. Le logiciel retient, sans l’afficher, que
+ce numéro vient de l’import ; renommer ensuite la personne dans sa fiche ou
+dans la grille efface ce souvenir, et « Défaire » le rend.
 
 Un fichier enregistré par un tableur sous Windows n’est souvent pas en UTF-8.
 Le logiciel le reconnaît et le dit :

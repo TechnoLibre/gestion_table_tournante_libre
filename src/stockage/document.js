@@ -21,7 +21,8 @@
 // puis des rangs (FORME) ; les identifiants des participants et des tables,
 // le tour des réservations, la portée et le tour des objectifs de table, la
 // présence de chaque personne, sa propre organisation nommée dans ses
-// conflits, l'ordre des priorités sous le mode des objectifs et les titres
+// conflits, le numéro final de son nom quand elle porte la marque du nom
+// numéroté, l'ordre des priorités sous le mode des objectifs et les titres
 // répétés à l'identique (FORME) ; les comptes de la saisie dans l'en-tête —
 // participants, tables, réservations, titres — (COMPTES) ; les références,
 // dont chaque organisation que nomment les conflits d'une personne
@@ -128,6 +129,15 @@ export function estLibelleTable(valeur) {
     [...valeur].length <= LIBELLE_TABLE_MAX
   );
 }
+
+/**
+ * Le numéro final d'un nom numéroté (§ 8.9, § 10.1) : une espace U+0020,
+ * puis deux chiffres ASCII ou plus, rien après — la forme qu'écrit
+ * rendreNomsUniques (noms_uniques.js). Une personne marquée nomNumerote
+ * porte un nom qui y répond ; un autre blanc, des chiffres d'une autre
+ * écriture ou un seul chiffre n'y répondent pas.
+ */
+export const SUFFIXE_NUMERO = / [0-9]{2,}$/;
 
 // AAAA-MM-JJTHH:MM:SS±HH:MM, la forme que rend l'horloge de l'application.
 // Le calendrier ne se contrôle pas : un horodatage ne décide d'aucun ordre.
@@ -361,11 +371,16 @@ const PARTICIPANT = objet([
   // examinerReferences une organisation que nul participant ne porte. logo
   // absent : la personne ne porte aucun logo ; présent, le chemin de son
   // image dans le dossier de l'événement, logo/<empreinte>.png
-  // (estCheminLogo), que le moteur ne lit pas.
+  // (estCheminLogo), que le moteur ne lit pas. nomNumerote absent : le nom
+  // est celui que la personne a reçu ; présent, toujours vrai, le numéro
+  // final de son nom est celui qu'y a ajouté « Rendre les noms uniques » à
+  // l'import ; examinerNomsNumerotes exige ce numéro, et le moteur ne lit
+  // pas la marque.
   ['etiquettes', regle('liste', { ...ETIQUETTES, optionnel: true })],
   ['presence', liste(entier(1, TOURS_MAX), { min: 1, distincts: true, tri: croissant, optionnel: true })],
   ['conflits', liste(CHAINE, { min: 1, distincts: true, tri: comparerTextes, optionnel: true })],
   ['logo', regle('logo', { optionnel: true })],
+  ['nomNumerote', horsDuDefaut(true)],
 ]);
 
 const TABLE = objet([
@@ -897,6 +912,16 @@ function examinerConflits({ participants }, faute) {
   });
 }
 
+// La marque du nom numéroté de chaque personne qui la porte, exclues
+// comprises, dans l'ordre des personnes : un nom qui ne finit pas par un
+// numéro (SUFFIXE_NUMERO) la rend fautive, nommée par la marque. La forme
+// garantit qu'une marque présente vaut vrai. faute(chemin) lève l'écart.
+function examinerNomsNumerotes({ participants }, faute) {
+  participants.forEach(({ nom, nomNumerote }, rang) => {
+    if (nomNumerote === true && !SUFFIXE_NUMERO.test(nom)) faute(`charge.participants[${rang}].nomNumerote`);
+  });
+}
+
 // L'ordre des priorités, quand les réglages le portent, chaque palier rangé
 // dans l'ordre du registre : la liste se juge par verifierPriorites sous le
 // mode des objectifs de la charge, et l'ordre par défaut écrit est une faute
@@ -1037,6 +1062,7 @@ export function analyser(texte) {
   examinerObjectifs(charge, faute);
   examinerPresences(charge, faute);
   examinerConflits(charge, faute);
+  examinerNomsNumerotes(charge, faute);
   examinerPriorites(charge, faute);
   examinerTitres(charge, faute);
   const manquants = examinerComptes(entete.comptes, charge, plus);

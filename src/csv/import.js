@@ -24,6 +24,7 @@
 // le texte entier, à son rang, par le choix du séparateur.
 
 import { estPresentAuTour, presenceCanonique } from '../moteur/presence.js';
+import { SUFFIXE_NUMERO } from '../stockage/document.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { MODES, issuesDeMiseAJour } from './apercu.js';
 import { ErreurCsv } from './erreurs.js';
@@ -263,10 +264,10 @@ const memePresence = (a, b) =>
 
 // Participant créé d'une ligne de l'aperçu, sous tours tours, ses clés dans
 // l'ordre du fichier d'état : un exclu vide vaut non ; les étiquettes,
-// rangées, la présence canonique, puis les conflits, rangés, en dernier,
-// chaque clé absente quand la ligne n'en porte pas (§ 8.9). Une présence
-// vide ou qui nomme chaque tour laisse le champ absent : la personne vient à
-// tous les tours.
+// rangées, la présence canonique, les conflits, rangés, puis la marque du
+// nom numéroté, en dernier, chaque clé absente quand la ligne n'en porte
+// pas (§ 8.9). Une présence vide ou qui nomme chaque tour laisse le champ
+// absent : la personne vient à tous les tours.
 function creer(id, champs, tours) {
   const { nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits } = champs;
   const participant = { id, nom, prenom, organisation, courriel, titrePressenti, notes, exclu: exclu ?? false };
@@ -274,6 +275,7 @@ function creer(id, champs, tours) {
   const canonique = presence === null ? undefined : presenceCanonique(presence, tours);
   if (canonique !== undefined) participant.presence = canonique;
   if (conflits !== null) participant.conflits = rangees(conflits);
+  if (champs.nomNumerote === true) participant.nomNumerote = true;
   return participant;
 }
 
@@ -285,8 +287,13 @@ function creer(id, champs, tours) {
 // champ ; une cellule de conflits non vide remplace la liste, une cellule
 // vide la garde. Les listes se comparent élément par élément, les
 // étiquettes et les conflits une fois rangés, la présence sous sa forme
-// canonique : un fichier réimporté ne compte aucun modifié. Rend vrai quand
-// une valeur a changé.
+// canonique : un fichier réimporté ne compte aucun modifié. La marque du
+// nom numéroté n'est pas un champ lu : la personne garde la sienne, la
+// ligne qui la désigne portant le même nom à la casse, aux accents et aux
+// blancs près. Elle ne tombe que si le nom posé ne finit plus par un numéro
+// (SUFFIXE_NUMERO) — un autre blanc devant lui, une marque combinante entre
+// ses chiffres —, faute de quoi le fichier écrit se refuserait. Rend vrai
+// quand une valeur a changé.
 function poser(participant, champs, tours) {
   let change = false;
   for (const champ of CHAMPS_LUS) {
@@ -295,6 +302,7 @@ function poser(participant, champs, tours) {
       change = true;
     }
   }
+  if (participant.nomNumerote === true && !SUFFIXE_NUMERO.test(participant.nom)) delete participant.nomNumerote;
   if (champs.etiquettes !== null) {
     const etiquettes = rangees(champs.etiquettes);
     if (!memesListes(etiquettes, participant.etiquettes ?? [])) {
@@ -374,11 +382,14 @@ function mettreAJour(participants, lignes, tours) {
  *   jour garde le sien.
  * Une personne créée prend les champs de sa ligne, exclu vide valant non,
  * ses étiquettes rangées par unités de code, absentes quand la ligne n'en
- * porte pas, sa présence canonique, absente quand la cellule est vide ou
- * nomme chaque tour ; les identifiants partent de prochainsIds.participant,
- * dans l'ordre du fichier, et le compteur avance d'autant. La charge et l'aperçu
- * reçus ne sont pas modifiés ; la charge rendue n'en partage aucun objet, les
- * propositions figées (gel.js) exceptées, qu'elle reprend telles quelles.
+ * porte pas, sa présence canonique, absente quand la cellule est vide ou nomme
+ * chaque tour, et la marque du nom numéroté quand l'aperçu a renommé sa ligne
+ * (option noms) ; une personne mise à jour garde la sienne tant que son nom
+ * finit par un numéro (SUFFIXE_NUMERO) ; les identifiants partent de
+ * prochainsIds.participant, dans l'ordre du fichier, et le compteur avance
+ * d'autant. La charge et l'aperçu reçus ne sont pas modifiés ; la charge rendue
+ * n'en partage aucun objet, les propositions figées (gel.js) exceptées, qu'elle
+ * reprend telles quelles.
  *
  * Le résumé (ResumeImport) compte les participants ajoutés, mis à jour,
  * inchangés et retirés, les réservations retirées et les liens de logo

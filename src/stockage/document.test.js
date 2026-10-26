@@ -1454,8 +1454,8 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
       ],
     );
     assert.deepEqual(
-      PARTICIPANT.champs.slice(-5).map(([cle, regle]) => [cle, regle.optionnel]),
-      [['exclu', false], ['etiquettes', true], ['presence', true], ['conflits', true], ['logo', true]],
+      PARTICIPANT.champs.slice(-6).map(([cle, regle]) => [cle, regle.optionnel]),
+      [['exclu', false], ['etiquettes', true], ['presence', true], ['conflits', true], ['logo', true], ['nomNumerote', true]],
     );
     assert.deepEqual(
       TABLE.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
@@ -1765,6 +1765,94 @@ describe('le logo d’une personne : un champ facultatif, absent quand elle n’
   test('la configuration du moteur ne lit pas le logo : une personne qui en porte un donne la même configuration', () => {
     const sans = analyser(JSON.stringify(documentValide())).charge;
     const avec = analyser(abime((d) => { d.charge.participants[0].logo = LOGO; })).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
+// --- Le nom numéroté d'une personne (§ 8.9, § 10.1) --------------------------
+
+describe('le nom numéroté : une marque facultative, absente quand le nom n’a pas reçu de numéro (§ 8.9)', () => {
+  // Le document valide, la personne de rang 1 renommée nom et marquée de
+  // valeur.
+  const marque = (nom, valeur = true) => (d) => {
+    d.charge.participants[1].nom = nom;
+    d.charge.participants[1].nomNumerote = valeur;
+  };
+
+  test('elle s’écrit en dernier, après le logo, et se relit à l’identique ; absente, elle ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.participants[0].logo = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+    d.charge.participants[0].nom = 'Brindille 01';
+    d.charge.participants[0].nomNumerote = true;
+    marque('Sarrasin 02')(d);
+    const lu = analyser(JSON.stringify(d));
+    assert.equal(lu.charge.participants[0].nomNumerote, true);
+    assert.equal(Object.hasOwn(lu.charge.participants[2], 'nomNumerote'), false);
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(texte.includes('.png","nomNumerote":true}'), texte);
+    assert.ok(texte.includes('"exclu":false,"nomNumerote":true}'), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    // Sans marque, la personne s'écrit comme avant elle, même sous un nom
+    // qui finit par un numéro : la marque ne se déduit jamais du nom.
+    const sans = serialiser(analyser(abime((x) => { x.charge.participants[1].nom = 'Sarrasin 02'; })).charge, {
+      revision: 12,
+      produitVersion: VERSION.affichee,
+    });
+    assert.ok(!sans.includes('"nomNumerote"'), sans);
+  });
+
+  test('un nom qui finit par une espace et deux chiffres ou plus se lit marqué', () => {
+    for (const nom of ['Sarrasin 01', 'Sarrasin 100', 'Sarrasin 01 01', 'de la Combe 07']) {
+      assert.equal(analyser(abime(marque(nom))).charge.participants[1].nomNumerote, true, nom);
+    }
+  });
+
+  test('une autre valeur que vrai est une faute de forme ; un nom marqué sans numéro final aussi, nommée par la marque', () => {
+    const chemin = 'charge.participants[1].nomNumerote';
+    assert.deepEqual(ecartsDeRefus([
+      ['faux', abime(marque('Sarrasin 01', false)), 'FORME', chemin],
+      ['nul', abime(marque('Sarrasin 01', null)), 'FORME', chemin],
+      ['une chaîne', abime(marque('Sarrasin 01', 'oui')), 'FORME', chemin],
+      ['un nombre', abime(marque('Sarrasin 01', 1)), 'FORME', chemin],
+      ['sans numéro', abime(marque('Sarrasin')), 'FORME', chemin],
+      ['un seul chiffre', abime(marque('Sarrasin 1')), 'FORME', chemin],
+      ['sans espace', abime(marque('Sarrasin01')), 'FORME', chemin],
+      ['une tabulation', abime(marque('Sarrasin\t01')), 'FORME', chemin],
+      ['un mot après', abime(marque('Sarrasin 01 bis')), 'FORME', chemin],
+      ['des chiffres pleine chasse', abime(marque('Sarrasin ０１')), 'FORME', chemin],
+    ]), []);
+  });
+
+  test('le contrôle de la marque suit celui des conflits : une personne fautive des deux est nommée par ses conflits', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['les deux', abime((d) => {
+        marque('Sarrasin')(d);
+        d.charge.participants[1].conflits = ['Chorale du Vallon'];
+      }), 'FORME', 'charge.participants[1].conflits[0]'],
+    ]), []);
+  });
+
+  test('un fichier d’un format plus récent garde la marque, et lève FORMAT_PLUS_RECENT sur une marque que le format courant refuse', () => {
+    const lu = analyser(abime((d) => {
+      d.entete.format = FORMAT + 1;
+      marque('Sarrasin 01')(d);
+    }));
+    assert.equal(lu.formatPlusRecent, true);
+    assert.equal(lu.charge.participants[1].nomNumerote, true);
+    const plus = { format: FORMAT + 1 };
+    assert.deepEqual(ecartsDeRefus([
+      ['faux', abime((d) => { d.entete.format = FORMAT + 1; marque('Sarrasin 01', false)(d); }),
+        'FORMAT_PLUS_RECENT', 'charge.participants[1].nomNumerote', plus],
+      ['sans numéro', abime((d) => { d.entete.format = FORMAT + 1; marque('Sarrasin')(d); }),
+        'FORMAT_PLUS_RECENT', 'charge.participants[1].nomNumerote', plus],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne lit pas la marque : une personne marquée donne la même configuration', () => {
+    const sans = analyser(abime((d) => { d.charge.participants[1].nom = 'Sarrasin 01'; })).charge;
+    const avec = analyser(abime(marque('Sarrasin 01'))).charge;
     assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
   });
 });

@@ -15,6 +15,7 @@ import { rechercher, repartir } from '../moteur/recherche.js';
 import { serialiser, serialiserCharge } from '../stockage/canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { cleDeCourse, courseDe, lireCourses, texteDesCourses } from '../stockage/courses.js';
+import { appliquer, difference } from '../stockage/correctifs.js';
 import { gelerPropositions } from '../stockage/gel.js';
 import { deriverBase } from '../stockage/noms.js';
 import {
@@ -371,6 +372,48 @@ describe('commandes : le logo d’une personne (§ 8.9)', () => {
     assert.deepEqual(configurationDepuisCharge(posee), configurationDepuisCharge(charge));
     assert.deepEqual(derive(posee.propositions[0], posee), derive(charge.propositions[0], charge));
     assert.deepEqual(posee.retenu, charge.retenu);
+  });
+});
+
+describe('commandes : la marque du nom numéroté (§ 8.9, § 10.1, § 10.2)', () => {
+  // La charge d'essai, Ondine Lacasse renommée « Lacasse 01 » et marquée,
+  // comme l'aurait créée « Rendre les noms uniques ».
+  function chargeMarquee() {
+    const charge = chargeEssai();
+    charge.participants[3] = { ...charge.participants[3], nom: 'Lacasse 01', nomNumerote: true };
+    return charge;
+  }
+  const relue = (charge) => analyser(serialiser(charge, { revision: 2, produitVersion: V1 })).charge;
+
+  test('renommer retire la marque, même pour un autre numéro ; le libellé ne la nomme pas, et la charge se relit', () => {
+    for (const nom of ['Lacasse', 'Lacasse 02', 'LACASSE 01']) {
+      const { charge, libelle } = executer('modifierParticipant', figer(chargeMarquee()), { id: 4, champs: { nom } });
+      assert.deepEqual(charge.participants[3], personne(4, nom, 'Ondine', 'Société Alpha'), nom);
+      assert.equal(libelle, `Modifié Ondine Lacasse 01 : nom (désormais Ondine ${nom})`);
+      assert.deepEqual(relue(charge), charge);
+    }
+  });
+
+  test('modifier un autre champ que le nom garde la marque ; un nom retapé à l’identique est SANS_EFFET', () => {
+    const { charge } = executer('modifierParticipant', chargeMarquee(), { id: 4, champs: { prenom: 'Odile', notes: 'arrive tard' } });
+    assert.equal(charge.participants[3].nomNumerote, true);
+    assert.equal(Object.keys(charge.participants[3]).at(-1), 'nomNumerote');
+    assert.deepEqual(relue(charge), charge);
+    refuse(() => executer('modifierParticipant', chargeMarquee(), { id: 4, champs: { nom: ' Lacasse 01 ' } }), 'SANS_EFFET');
+  });
+
+  test('le correctif du renommage retire la marque, et Défaire, qui rend la charge d’avant, la rend', () => {
+    const avant = figer(chargeMarquee());
+    const { charge: apres } = executer('modifierParticipant', avant, { id: 4, champs: { nom: 'Lacasse' } });
+    assert.deepEqual(appliquer(avant, difference(avant, apres)), apres);
+    assert.deepEqual(appliquer(apres, difference(apres, avant)), avant);
+    assert.equal(avant.participants[3].nomNumerote, true);
+  });
+
+  test('la saisie ne pose ni ne retire la marque : le champ est refusé comme une faute du code', () => {
+    assert.throws(() => executer('modifierParticipant', chargeMarquee(), { id: 4, champs: { nomNumerote: false } }), TypeError);
+    assert.throws(() => executer('modifierParticipant', chargeEssai(), { id: 4, champs: { nomNumerote: true } }), TypeError);
+    assert.throws(() => executer('ajouterParticipant', chargeEssai(), { champs: { nom: 'Bruyère 01', nomNumerote: true } }), TypeError);
   });
 });
 

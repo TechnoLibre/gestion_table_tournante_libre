@@ -235,16 +235,19 @@ const conflitsSuivis = (suivi) => (rienASuivre(suivi) ? null : suivi);
 /**
  * modifierParticipant {id, champs} : les champs de texte donnés ; l'exclusion
  * a ses deux commandes. Le libellé nomme la personne d'avant et chaque champ
- * changé, puis le nouveau nom quand il change. Une organisation changée
- * fait suivre les listes de conflits (suivreOrganisations) : quand la
- * personne était la dernière de son organisation et en prend une autre, la
- * référence suit ce renommage ; sans organisation, l'ancienne quitte les
- * listes. Le libellé le dit.
+ * changé, puis le nouveau nom quand il change. Un nom changé retire la
+ * marque du nom numéroté (§ 8.9) : le nom saisi est voulu tel quel, numéro
+ * compris, et Défaire, qui rend la charge d'avant, rend la marque. Une
+ * organisation changée fait suivre les listes de conflits
+ * (suivreOrganisations) : quand la personne était la dernière de son
+ * organisation et en prend une autre, la référence suit ce renommage ; sans
+ * organisation, l'ancienne quitte les listes. Le libellé le dit.
  */
 function modifierParticipant(charge, { id, champs }) {
   exigerModifiable(charge);
   const avant = participantDe(charge, id);
   const apres = { ...avant, ...lireChamps(champs, { admisExclu: false }) };
+  if (apres.nom !== avant.nom) delete apres.nomNumerote;
   exigerParticipant(apres);
   const changes = CHAMPS_DE_SAISIE.filter((champ) => apres[champ] !== avant[champ]);
   if (changes.length === 0) throw refus('SANS_EFFET', { commande: 'modifierParticipant' });
