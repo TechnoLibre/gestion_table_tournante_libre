@@ -16,6 +16,7 @@ import { ErreurStockage } from './erreurs.js';
 import {
   DONNEES_BADGE,
   FICHIER_REGLAGES,
+  avecCacherNumero,
   avecCadrage,
   avecDonneeBadge,
   avecModeleBadge,
@@ -23,6 +24,7 @@ import {
   avecPiedTechnolibre,
   avecTailleTexte,
   avecTextePiedTechnolibre,
+  cacherNumeroDe,
   cadrageDe,
   creerEcrivainDiffere,
   donneesBadgeDe,
@@ -613,6 +615,54 @@ describe('réglages locaux : le pied TechnoLibre des badges (§ 8.5, § 11.4)', 
     const { reglages } = await lireReglages(fs, DOC);
     await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
     assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"format":1,"papier":"Lettre","pied_technolibre":false}\n');
+  });
+});
+
+describe('réglages locaux : la case qui cache le numéro des doublons (§ 8.5, § 11.4)', () => {
+  test('cacher_numero_doublon se lit tel quel ; absent, il vaut vrai sans que la clé s’ajoute aux réglages lus', async () => {
+    for (const valeur of [true, false]) {
+      const texte = `{"cacher_numero_doublon":${valeur},"cadrages":[],"format":1,"papier":null}\n`;
+      const { reglages, avertissement } = await lireReglages(disque(texte), DOC);
+      assert.equal(avertissement, null);
+      assert.deepEqual(reglages, { format: 1, papier: null, cadrages: [], cacher_numero_doublon: valeur });
+      assert.equal(cacherNumeroDe(reglages), valeur);
+      assert.equal(serialiserReglages(reglages), texte);
+    }
+    const absent = await lireReglages(disque(), DOC);
+    assert.equal(Object.hasOwn(absent.reglages, 'cacher_numero_doublon'), false);
+    assert.equal(cacherNumeroDe(absent.reglages), true);
+    // Une autre case touchée ne la touche pas.
+    const autre = await lireReglages(disque('{"cadrages":[],"donnees_badge":{"identifiant":false},"format":1,"papier":null,"pied_technolibre":false}\n'), DOC);
+    assert.equal(cacherNumeroDe(autre.reglages), true);
+  });
+
+  test('une valeur qui n’est pas un booléen rend le fichier fautif : les défauts et REGLAGES_ILLISIBLES, raison FORME', async () => {
+    for (const valeur of ['"true"', '1', '0', 'null', '[]', '{}']) {
+      const fs = disque(`{"cacher_numero_doublon":${valeur},"cadrages":[],"format":1,"papier":null}\n`);
+      assert.deepEqual(await lireReglages(fs, DOC), { reglages: DEFAUTS, avertissement: illisibles('FORME') }, valeur);
+      assert.equal(fs.compteurs.ecritures, 0, valeur);
+    }
+  });
+
+  test('avecCacherNumero pose la clé sans toucher au reste ; un non-booléen lève TypeError ; le texte canonique la range à son rang', () => {
+    const reglages = { ...DEFAUTS, papier: 'A4', pied_technolibre: false, theme: 'sombre' };
+    const sans = avecCacherNumero(reglages, false);
+    assert.deepEqual(sans, { ...reglages, cacher_numero_doublon: false });
+    assert.equal(Object.hasOwn(reglages, 'cacher_numero_doublon'), false);
+    assert.equal(
+      serialiserReglages(sans),
+      '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":"A4","pied_technolibre":false,"theme":"sombre"}\n',
+    );
+    assert.deepEqual(avecCacherNumero(sans, true), { ...reglages, cacher_numero_doublon: true });
+    for (const mauvais of ['true', 1, 0, null, undefined]) assert.throws(() => avecCacherNumero(reglages, mauvais), TypeError, String(mauvais));
+    assert.throws(() => serialiserReglages({ ...DEFAUTS, cacher_numero_doublon: 'non' }), TypeError);
+  });
+
+  test('un fichier qui porte la case, relu puis réécrit avec un autre papier, la garde', async () => {
+    const fs = disque('{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":null}\n');
+    const { reglages } = await lireReglages(fs, DOC);
+    await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":"Lettre"}\n');
   });
 });
 

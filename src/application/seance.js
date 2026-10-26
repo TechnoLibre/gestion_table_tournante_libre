@@ -63,22 +63,22 @@
 // l'état observable, calculé par la même fonction que celle qui refuse
 // (exigerEcriture) : aucun composant ne refait ce contrôle.
 //
-// La séance est observable : etat() rend un instantané figé en profondeur,
-// neuf à chaque changement et le même entre deux, et subscribe suit le
-// contrat des magasins de Svelte. Le cadrage de l'événement ouvert se range
-// hors du fichier, dans reglages_locaux.json, par un écrivain différé
-// (§ 8.5) : regarder n'écrit jamais l'événement. Le papier des planches, de
-// la machine et non du plan, s'y range aussi, dans tout mode, avec ou sans
-// événement (§ 8.5, § 11.2), et de même le modèle des badges, la case du pied
-// TechnoLibre et la taille du texte de l'écran (§ 18.6) ; une seule file y
-// écrit, que le cadrage, le papier, le modèle, la case et la taille
-// partagent. Des réglages que la lecture ne prend pas ne s'écrasent jamais :
-// le cadrage attend, et le papier choisi vaut pour la séance, en mémoire,
-// sans être retenu sur la machine. Il en va de même du papier d'une écriture
-// que le dossier refuse : ni des réglages illisibles ni un dossier en lecture
-// seule ne bloquent le choix du papier, et les sorties écrivent là où le
-// dossier l'accepte — un dossier qui refuse l'écriture refuse aussi le PDF
-// des planches.
+// La séance est observable : etat() rend un instantané figé en profondeur, neuf
+// à chaque changement et le même entre deux, et subscribe suit le contrat des
+// magasins de Svelte. Le cadrage de l'événement ouvert se range hors du
+// fichier, dans reglages_locaux.json, par un écrivain différé (§ 8.5) :
+// regarder n'écrit jamais l'événement. Le papier des planches, de la machine et
+// non du plan, s'y range aussi, dans tout mode, avec ou sans événement (§ 8.5,
+// § 11.2), et de même le modèle des badges, ses cases — celle du pied
+// TechnoLibre, celle qui cache le numéro des doublons — et la taille du texte
+// de l'écran (§ 18.6) ; une seule file y écrit, que le cadrage, le papier, le
+// modèle, les cases et la taille partagent. Des réglages que la lecture ne
+// prend pas ne s'écrasent jamais : le cadrage attend, et le papier choisi vaut
+// pour la séance, en mémoire, sans être retenu sur la machine. Il en va de même
+// du papier d'une écriture que le dossier refuse : ni des réglages illisibles
+// ni un dossier en lecture seule ne bloquent le choix du papier, et les sorties
+// écrivent là où le dossier l'accepte — un dossier qui refuse l'écriture refuse
+// aussi le PDF des planches.
 //
 // Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
 // date aussi le placement qu'il change (§ 8.9, § 11.8).
@@ -125,6 +125,7 @@ import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import {
   DONNEES_BADGE,
   FICHIER_REGLAGES,
+  avecCacherNumero,
   avecCadrage,
   avecDonneeBadge,
   avecModeleBadge,
@@ -132,6 +133,7 @@ import {
   avecPiedTechnolibre,
   avecTailleTexte,
   avecTextePiedTechnolibre,
+  cacherNumeroDe,
   cadrageDe,
   creerEcrivainDiffere,
   donneesBadgeDe,
@@ -392,7 +394,8 @@ export function creerSeance({
   // ni l'autre n'est venu et pour des réglages relus sans la clé ;
   // donneesBadge : les cases de ce que le badge imprime, une par donnée de
   // DONNEES_BADGE, de même, chacune lue ou choisie pour elle-même, cochées
-  // tant que rien n'est venu.
+  // tant que rien n'est venu ; cacherNumero : la case qui cache le numéro
+  // des doublons sur les badges, comme celle du pied TechnoLibre.
   const etat = {
     racine,
     ouvert: null,
@@ -416,6 +419,7 @@ export function creerSeance({
     piedTechnolibre: true,
     textePiedTechnolibre: TEXTE_PIED_TECHNOLIBRE_DEFAUT,
     donneesBadge: donneesBadgeDe({}),
+    cacherNumero: true,
   };
 
   // --- L'observation ------------------------------------------------------------
@@ -509,6 +513,7 @@ export function creerSeance({
       piedTechnolibre: etat.piedTechnolibre,
       textePiedTechnolibre: etat.textePiedTechnolibre,
       donneesBadge: etat.donneesBadge,
+      cacherNumero: etat.cacherNumero,
     });
     return figer({
       racine: petit.racine,
@@ -529,6 +534,7 @@ export function creerSeance({
       piedTechnolibre: petit.piedTechnolibre,
       textePiedTechnolibre: petit.textePiedTechnolibre,
       donneesBadge: petit.donneesBadge,
+      cacherNumero: petit.cacherNumero,
     });
   }
 
@@ -673,14 +679,16 @@ export function creerSeance({
   }
 
   // Le rang du dernier choix de la taille du texte, celui du modèle de badge,
-  // celui de la case du pied TechnoLibre, celui de son texte et celui des
-  // cases de ce que le badge imprime : une relecture des réglages partie
-  // avant un choix ne pose pas sa valeur, plus ancienne.
+  // celui de la case du pied TechnoLibre, celui de son texte, celui des
+  // cases de ce que le badge imprime et celui de la case du numéro des
+  // doublons : une relecture des réglages partie avant un choix ne pose pas
+  // sa valeur, plus ancienne.
   let choixTaille = 0;
   let choixModele = 0;
   let choixPied = 0;
   let choixTexte = 0;
   let choixDonnees = 0;
+  let choixCacher = 0;
 
   // À son tour dans la file des réglages, lit une fois les réglages de dossier
   // et pose dans l'état ce que la machine y garde, quand dossier est encore la
@@ -690,22 +698,23 @@ export function creerSeance({
   // dossier. La taille du texte : celle que les réglages portent, à défaut
   // celle de la séance — sans taille, pour des réglages que la lecture ne prend
   // pas, sans dossier, et quand un choix a suivi le départ de la relecture. Le
-  // modèle de badge et la case du pied TechnoLibre, de même ; les cases de ce
-  // que le badge imprime aussi, chacune pour elle-même : une case que les
-  // réglages ne portent pas garde celle de la séance. Le texte du pied, celui
-  // que les réglages portent, à défaut la phrase d'origine
-  // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) — la clé absente la désigne ; celui de la
-  // séance seulement pour des réglages que la lecture ne prend pas, sans
-  // dossier, et quand un choix a suivi le départ de la relecture. Le papier
-  // posé, dossier devient la racine du papier (racineDuPapier), et publier
-  // reprend. Ne lève jamais ; ne publie pas : l'appelant est un travail de la
-  // file des appels, qui publie en finissant.
+  // modèle de badge, la case du pied TechnoLibre et celle du numéro des
+  // doublons, de même ; les cases de ce que le badge imprime aussi, chacune
+  // pour elle-même : une case que les réglages ne portent pas garde celle de
+  // la séance. Le texte du pied, celui que les réglages portent, à défaut la
+  // phrase d'origine (TEXTE_PIED_TECHNOLIBRE_DEFAUT) — la clé absente la
+  // désigne ; celui de la séance seulement pour des réglages que la lecture
+  // ne prend pas, sans dossier, et quand un choix a suivi le départ de la
+  // relecture. Le papier posé, dossier devient la racine du papier
+  // (racineDuPapier), et publier reprend. Ne lève jamais ; ne publie pas :
+  // l'appelant est un travail de la file des appels, qui publie en finissant.
   function relireReglagesMachine(dossier) {
     const rang = choixTaille;
     const rangModele = choixModele;
     const rangPied = choixPied;
     const rangTexte = choixTexte;
     const rangDonnees = choixDonnees;
+    const rangCacher = choixCacher;
     return enFileReglages(async () => {
       let lus = null;
       if (dossier !== null) {
@@ -723,6 +732,7 @@ export function creerSeance({
       if (lus !== null && Object.hasOwn(lus, 'taille_texte') && rang === choixTaille) etat.tailleTexte = tailleTexteDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'modele_badge') && rangModele === choixModele) etat.modeleBadge = modeleBadgeDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'pied_technolibre') && rangPied === choixPied) etat.piedTechnolibre = piedTechnolibreDe(lus);
+      if (lus !== null && Object.hasOwn(lus, 'cacher_numero_doublon') && rangCacher === choixCacher) etat.cacherNumero = cacherNumeroDe(lus);
       // Sans la clé, les réglages lus disent la phrase d'origine : la
       // séance ne l'écrit pas, elle la retire.
       if (lus !== null && rangTexte === choixTexte) {
@@ -1677,8 +1687,9 @@ export function creerSeance({
 
   // Ce que la planche lit de l'événement ouvert, à son tour dans la file des
   // appels, une fois faites les écritures de réglages déjà demandées : le
-  // papier, le modèle de badge, la case du pied TechnoLibre, son texte et les
-  // cases de ce que le badge imprime qu'un choix vient de poser comptent.
+  // papier, le modèle de badge, la case du pied TechnoLibre, son texte, les
+  // cases de ce que le badge imprime et celle du numéro des doublons qu'un
+  // choix vient de poser comptent.
   // AUCUN_EVENEMENT sans événement. Le système de fichiers est la vue du
   // dossier de l'événement, sous la racine de l'Ouvert : la planche se pose
   // dans ce dossier.
@@ -1697,6 +1708,7 @@ export function creerSeance({
       piedTechnolibre: etat.piedTechnolibre,
       textePiedTechnolibre: etat.textePiedTechnolibre,
       donneesBadge: etat.donneesBadge,
+      cacherNumero: etat.cacherNumero,
     };
   }
 
@@ -1949,6 +1961,31 @@ export function creerSeance({
       etat.donneesBadge = { ...etat.donneesBadge, [donnee]: coche };
       publier();
       const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecDonneeBadge(reglages, donnee, coche));
+      return { retenu: ecrit, avertissements };
+    },
+    /**
+     * Coche ou décoche la case qui cache le numéro des doublons sur les
+     * badges (§ 8.5, § 11.4) : EtatSeance.cacherNumero la porte aussitôt, et
+     * le choix s'écrit dans reglages_locaux.json de la racine sous
+     * cacher_numero_doublon, comme la case du pied TechnoLibre, dans tout
+     * mode, avec ou sans événement.
+     *
+     * Rend {retenu, avertissements}, aux règles de choisirPiedTechnolibre :
+     * sans dossier, des réglages que la lecture ne prend pas, ou une
+     * écriture que le dossier refuse, la case vaut pour la séance, en
+     * mémoire.
+     *
+     * @param {boolean} coche
+     * @returns {Promise<{retenu: boolean, avertissements: Array<{code: string, details: Object}>}>}
+     * @throws {TypeError} une valeur qui n'est pas un booléen, sans rien lire
+     *         ni écrire
+     */
+    async choisirCacherNumero(coche) {
+      avecCacherNumero({ format: 1, papier: null, cadrages: [] }, coche);
+      choixCacher += 1;
+      etat.cacherNumero = coche;
+      publier();
+      const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecCacherNumero(reglages, coche));
       return { retenu: ecrit, avertissements };
     },
     /**

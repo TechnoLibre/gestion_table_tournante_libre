@@ -15,7 +15,8 @@
 // la section l'offre, Avery 5392 d'abord. Un modèle qui impose son papier
 // n'offre ni imposition ni papier. La case du pied TechnoLibre en est un
 // autre (EtatSeance.piedTechnolibre), et l'annonce nomme les badges d'où il
-// se retire.
+// se retire ; la case qui cache le numéro des doublons aussi
+// (EtatSeance.cacherNumero).
 //
 // La liste des badges en CSV se tire du même placement que la planche : un
 // refus du placement la bloque comme la planche, un refus de la mise en
@@ -60,21 +61,24 @@ export function modeleImposeSonPapier(modele) {
 }
 
 /**
- * Vrai quand l'annonce reçue est celle du modèle, du papier et de la case
- * du pied TechnoLibre de la machine : son modèle est celui de la séance,
- * son papier celui que ce modèle prend (papierDesBadges), sa case celle de
- * la séance. Une annonce sans modèle est celle de l'A6 ; une annonce ou une
- * machine sans case vaut décochée.
+ * Vrai quand l'annonce reçue est celle du modèle, du papier, de la case du
+ * pied TechnoLibre et de celle du numéro des doublons de la machine : son
+ * modèle est celui de la séance, son papier celui que ce modèle prend
+ * (papierDesBadges), chaque case celle de la séance. Une annonce sans
+ * modèle est celle de l'A6 ; une case que l'annonce ou la machine ne porte
+ * pas vaut décochée.
  *
  * @param {import('../../application/planche_seance.js').Annonce} annonce
- * @param {{modeleBadge: string, papier: string|null, piedTechnolibre?: boolean}} machine   EtatSeance
+ * @param {{modeleBadge: string, papier: string|null, piedTechnolibre?: boolean, cacherNumero?: boolean}} machine
+ *        EtatSeance
  */
-export function annonceDeLaMachine(annonce, { modeleBadge, papier, piedTechnolibre = false }) {
+export function annonceDeLaMachine(annonce, { modeleBadge, papier, piedTechnolibre = false, cacherNumero = false }) {
   const modele = annonce.modeleBadge ?? 'a6';
   return (
     modele === modeleBadge &&
     annonce.papier === papierDesBadges(modeleBadge, papier) &&
-    (annonce.piedTechnolibre ?? false) === piedTechnolibre
+    (annonce.piedTechnolibre ?? false) === piedTechnolibre &&
+    (annonce.cacherNumero ?? false) === cacherNumero
   );
 }
 /** La source que désigne une demande sans source offerte : le retenu, que

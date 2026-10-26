@@ -3,7 +3,7 @@
 
 // Les réglages locaux (§ 8.5) : le fichier reglages_locaux.json, à la racine
 // du dossier de travail, à côté des dossiers d'événement et hors d'eux. Il
-// porte sept choses, et sept seulement : le cadrage de chaque événement,
+// porte huit choses, et huit seulement : le cadrage de chaque événement,
 // indexé par son identifiant — le zoom k en pixels par centimètre, la
 // translation tx, ty en pixels —, le format de papier des sorties, global
 // à la machine (§ 11.2), null tant que l'opérateur ne l'a pas choisi, le
@@ -17,8 +17,11 @@
 // compose, les cases de ce que le badge imprime, globales à la machine, sous
 // la clé donnees_badge, un objet d'un booléen par donnée de DONNEES_BADGE,
 // absent tant que l'opérateur n'a touché à aucune et ne portant que celles
-// qu'il a touchées : une case absente vaut cochée, et la taille du texte de
-// l'écran, globale à la machine, sous la clé taille_texte, absente tant que
+// qu'il a touchées : une case absente vaut cochée, la case qui cache le
+// numéro des doublons sur les badges, globale à la machine, sous la clé
+// cacher_numero_doublon, un booléen, absente tant que l'opérateur n'y a pas
+// touché : la case vaut alors cochée, et la taille du texte de l'écran,
+// globale à la machine, sous la clé taille_texte, absente tant que
 // l'opérateur ne l'a pas choisie : le défaut de l'échelle s'applique alors
 // (src/geometrie/taille_texte.js). Aucun ne voyage avec un événement ni ne
 // revient par un retour arrière.
@@ -82,6 +85,9 @@ const BLANCS_DU_PIED = /[ \t\n\v\f\r\u{85}\u{2028}\u{2029}]+/gu;
  * @property {Object<string, boolean>} [donnees_badge]   les cases de ce que
  *           le badge imprime, par donnée de DONNEES_BADGE, celles que
  *           l'opérateur a touchées ; absent tant qu'il n'en a touché aucune
+ * @property {boolean} [cacher_numero_doublon]   la case qui cache le numéro
+ *           des doublons sur les badges ; absente tant que l'opérateur n'y a
+ *           pas touché
  * @property {number} [taille_texte]      l'un de PALIERS_TAILLE_TEXTE ; absente
  *           tant que l'opérateur ne l'a pas choisie. Toute autre clé, à tout
  *           niveau, se garde telle quelle
@@ -130,7 +136,8 @@ function fauteDeDonnees(donnees) {
 // même événement est fautif ; un modèle de badge présent est une clé de
 // MODELES_BADGE, une case du pied TechnoLibre présente un booléen, son texte
 // présent une chaîne, les cases de ce que le badge imprime présentes un objet
-// de booléens, une taille du texte présente l'un des paliers.
+// de booléens, la case du numéro des doublons présente un booléen, une
+// taille du texte présente l'un des paliers.
 function fauteDeReglages(reglages) {
   if (!estObjet(reglages)) return '';
   const { format, papier, cadrages } = reglages;
@@ -144,6 +151,9 @@ function fauteDeReglages(reglages) {
   if (Object.hasOwn(reglages, 'donnees_badge')) {
     const faute = fauteDeDonnees(reglages.donnees_badge);
     if (faute !== null) return faute;
+  }
+  if (Object.hasOwn(reglages, 'cacher_numero_doublon') && typeof reglages.cacher_numero_doublon !== 'boolean') {
+    return 'cacher_numero_doublon';
   }
   if (Object.hasOwn(reglages, 'taille_texte') && !estPalierTailleTexte(reglages.taille_texte)) return 'taille_texte';
   if (!Array.isArray(cadrages)) return 'cadrages';
@@ -188,8 +198,9 @@ const illisibles = (raison, cause = null) => {
  * modèle de badge présent hors des clés de MODELES_BADGE, une case du pied
  * TechnoLibre présente qui n'est pas un booléen, un texte de ce pied présent
  * qui n'est pas une chaîne, des cases de ce que le badge imprime qui ne sont
- * pas un objet, ou dont une donnée connue n'est pas un booléen, un cadrage
- * fautif ou en double, une taille du texte présente hors des paliers ; le
+ * pas un objet, ou dont une donnée connue n'est pas un booléen, une case du
+ * numéro des doublons présente qui n'est pas un booléen, un cadrage fautif
+ * ou en double, une taille du texte présente hors des paliers ; le
  * code d'une lecture que le système de fichiers refuse autrement que par
  * ABSENT, et cause, celle de ses détails quand ils en portent une — EACCES,
  * ou UTF8_INVALIDE pour des octets qui ne sont pas de l'UTF-8. Une marque
@@ -399,6 +410,31 @@ export function avecDonneeBadge(reglages, donnee, coche) {
   if (typeof coche !== 'boolean') throw new TypeError(`avecDonneeBadge : un booléen attendu, reçu ${JSON.stringify(coche)}`);
   const portees = Object.hasOwn(reglages, 'donnees_badge') ? reglages.donnees_badge : {};
   return { ...reglages, donnees_badge: { ...portees, [donnee]: coche } };
+}
+
+/**
+ * La case qui cache le numéro des doublons sur les badges (§ 8.5, § 11.4)
+ * que les réglages portent, à défaut cochée.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @returns {boolean}
+ */
+export function cacherNumeroDe(reglages) {
+  return Object.hasOwn(reglages, 'cacher_numero_doublon') ? reglages.cacher_numero_doublon : true;
+}
+
+/**
+ * Les réglages reçus, la case qui cache le numéro des doublons remplacée ;
+ * ceux reçus ne changent pas.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @param {boolean} coche
+ * @returns {ReglagesLocaux}
+ * @throws {TypeError} une valeur qui n'est pas un booléen
+ */
+export function avecCacherNumero(reglages, coche) {
+  if (typeof coche !== 'boolean') throw new TypeError(`avecCacherNumero : un booléen attendu, reçu ${JSON.stringify(coche)}`);
+  return { ...reglages, cacher_numero_doublon: coche };
 }
 
 /**

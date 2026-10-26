@@ -58,6 +58,13 @@ export const TABLE = new Map([
     'badges.donnees.nonRetenues',
     'Les cases valent pour cette séance, sans être retenues sur ce poste : les réglages locaux ne se sont pas écrits.',
   ],
+  // La case qui cache le numéro des doublons (§ 8.5, § 11.4), dans le même
+  // groupe, et l'annonce d'une case que le poste ne retient pas.
+  ['badges.doublons.case', 'Cacher le numéro des doublons'],
+  [
+    'badges.doublons.nonRetenu',
+    'La case « Cacher le numéro des doublons » vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
   ['badges.source.titre', 'Placement imprimé'],
   ['badges.source.retenu', 'Le placement retenu'],
   ['badges.source.proposition', ({ id }) => `La proposition n° ${id}`],

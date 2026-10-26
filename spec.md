@@ -3462,7 +3462,7 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **sept choses, et sept seulement** :
+Ce fichier porte **huit choses, et huit seulement** :
 
 | réglage | portée |
 |---|---|
@@ -3472,6 +3472,7 @@ Ce fichier porte **sept choses, et sept seulement** :
 | la **case du pied TechnoLibre** des badges (§ 11.4), clé `pied_technolibre` | globale à la machine |
 | le **texte du pied TechnoLibre** (§ 11.4), clé `texte_pied_technolibre` | global à la machine |
 | les **cases de ce que le badge imprime** (§ 11.4), clé `donnees_badge` | globales à la machine |
+| la **case qui cache le numéro des doublons** (§ 11.4), clé `cacher_numero_doublon` | globale à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
@@ -3489,9 +3490,10 @@ mode portable (§ 8.6), ce fichier suit la clé avec les événements.
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
 cadrage, le papier, le modèle de badge, la case du pied TechnoLibre et son
-texte, les cases de ce que le badge imprime et la taille du texte passent par
-une même file, qui relit le fichier avant chaque écriture : deux écrivains qui
-le liraient chacun avant que l'autre l'ait écrit perdraient le réglage de l'un.
+texte, les cases de ce que le badge imprime, celle du numéro des doublons et
+la taille du texte passent par une même file, qui relit le fichier avant
+chaque écriture : deux écrivains qui le liraient chacun avant que l'autre
+l'ait écrit perdraient le réglage de l'un.
 Un fichier que la lecture ne prend pas ne s'écrase pas ; son avertissement
 dit pourquoi en clair — un texte qui n'est pas du JSON, une valeur hors de sa
 règle, des octets qui ne sont pas de l'UTF-8, un lien qui mène hors du dossier
@@ -3573,6 +3575,19 @@ réglages, que les cases ne sont pas retenues sur ce poste. Chaque écriture ne
 porte que sa case : une écriture qui réussit pour une case n'en retient pas une
 autre, et l'avertissement reste tant qu'une case non retenue garde la valeur
 choisie, jusqu'à ce qu'un choix de cette case soit retenu.
+
+**La case qui cache le numéro des doublons** — « Cacher le numéro des
+doublons » (§ 11.4) — est, comme celle du pied TechnoLibre, un choix de la
+machine qui imprime, et non une sixième donnée de `donnees_badge` : cochée,
+elle retire un numéro du badge au lieu d'y garder une donnée. Le fichier ne
+la porte que touchée, un booléen sous `cacher_numero_doublon` ; sans elle,
+la case est cochée. Une valeur présente qui n'est pas un booléen rend le
+fichier illisible, comme un papier inconnu. Elle se coche et se décoche dans
+la section des badges, sous les deux modèles, s'écrit au geste, dans tout
+mode, par la même file, et se relit comme la case du pied TechnoLibre ; un
+fichier que la lecture ne prend pas, ou un dossier qui refuse de l'écrire, ne
+bloque pas le choix : la case vaut pour la séance, et la section dit, sous
+ses réglages, qu'elle n'est pas retenue sur ce poste.
 
 **La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
 (§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
@@ -5506,8 +5521,9 @@ planche cesserait alors de pouvoir s'annoncer A6, et **une sortie qui ment sur s
 format est pire qu'une sortie qui coûte une coupe**.
 
 **La feuille de contrôle de l'A6 est la page 1 du document**, et les pages qui
-la suivent quand ses lignes — la liste des noms d'une réédition — ne tiennent
-pas sur une page ; **elle ne se découpe pas**, ses pages de suite non plus.
+la suivent quand ses lignes — la liste des noms entiers d'une réédition, numéro
+des doublons compris (§ 11.4) — ne tiennent pas sur une page ; **elle ne se
+découpe pas**, ses pages de suite non plus.
 **Celle d'Avery 5392 est un second PDF**, écrit à côté du premier sous le même
 nom, `.controle` à la place de `.badges` (§ 11.6) : une feuille de cartes gâchée
 pour une règle coûterait six badges, et la feuille de contrôle s'imprime sur
@@ -5580,6 +5596,20 @@ permet. La feuille de contrôle nomme les données retirées, d'une ligne
 « Identifiant » décoché compris, et l'opérateur décide. La liste des badges en
 CSV (§ 11.6) ne lit aucune case : elle ne change pas. Toutes les cases
 cochées, la planche garde exactement ses octets.
+
+**Une case cache le numéro des doublons.** Juste avant celle du pied
+TechnoLibre, la case « Cacher le numéro des doublons », **cochée par défaut**
+et **gardée sur le poste** comme elle (§ 8.5), vise les personnes que
+« Rendre les noms uniques » a numérotées à l'import et dont la marque cachée
+tient encore (§ 8.9, § 10.1) : cochée, le badge d'une telle personne imprime
+son nom sans le numéro final — « Roger Galet 01 » devient « Roger Galet » —,
+un seul numéro, celui que la marque désigne ; un nom que ce retrait
+laisserait vide ou blanc s'imprime entier. Un nom sans marque garde ses
+chiffres, saisis à la main ou importés tels quels. Seul le nom du badge
+change : le plan, les listes, la liste des badges en CSV et la feuille de
+contrôle gardent le nom entier, comme l'ordre de la pile (§ 11.6) et le
+refus d'un nom trop long, qui nomme la personne (§ 11.5). Sans personne
+marquée, la planche garde exactement ses octets, la case cochée ou non.
 
 **Le logo du participant passe après tout le texte.** La place du badge se
 donne dans cet ordre : le nom et les tours toujours ; puis l'organisation et
@@ -5676,7 +5706,11 @@ deux personnes passent la soirée aux tables l'une de l'autre, sans que rien ne 
 signale. Le logiciel **compte ces collisions avant de produire, les nomme, et
 porte l'identifiant en pied des seuls badges concernés** — sauf quand la case
 « Identifiant » est décochée : l'annonce les nomme encore, et aucun badge ne le
-porte.
+porte. Les homonymes se comptent sur le nom entier : le numéro que cache la
+case des doublons n'en fait pas, si bien que « Roger Galet 01 » et
+« Roger Galet 02 », sans organisation, sortent en deux badges au même nom,
+« Roger Galet », sans ligne « Identifiant n° … », et l'annonce ne les nomme
+pas.
 
 ### 11.5 Les cas qui cassent la mise en page
 
@@ -5696,22 +5730,24 @@ un débordement.
 
 > nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre
 
-- **Un nom très long.** Le nom **ne s'abrège jamais**. Le logiciel réduit le
-  corps par paliers jusqu'à un plancher de lisibilité **mesuré sur les métriques
-  de la police embarquée**, puis replie sur une seconde ligne, puis sur une
-  troisième — aux espaces, et entre deux lettres seulement quand un mot seul ne
-  tient pas, jamais entre une lettre et son accent. Si, le nom au plancher, le
-  badge ne tient toujours pas, il se dépouille dans l'ordre de sacrifice : le
-  nom de l'événement quitte le pied, sa date restant, puis l'organisation part.
-  **Au-delà de trois lignes, le nom continue de se replier** au corps plancher,
-  sur autant de lignes qu'il lui faut, et le badge perd d'emblée le nom de
-  l'événement, puis l'organisation s'il le faut ; si les lignes de tour ne
-  tiennent plus sous lui, le logiciel **refuse de produire la planche** et nomme
-  la personne, dont le nom se corrige dans la liste des participants.
-  L'horodatage ne quitte jamais le pied ; seule sa case le retire (§ 11.4). Le
-  seuil se cale sur le **glyphe le plus large** de l'alphabet visé, jamais sur
-  une moyenne (§ 14.1) : un nom en capitales larges déborde sinon par-dessus la
-  première ligne de tour, en silence.
+- **Un nom très long.** Le nom **ne s'abrège jamais**. Le numéro que la case des
+  doublons cache (§ 11.4) n'est pas une abréviation : la case choisit le nom que
+  le badge imprime, et c'est lui que la mise en page mesure. Le logiciel réduit
+  le corps par paliers jusqu'à un plancher de lisibilité **mesuré sur les
+  métriques de la police embarquée**, puis replie sur une seconde ligne, puis
+  sur une troisième — aux espaces, et entre deux lettres seulement quand un mot
+  seul ne tient pas, jamais entre une lettre et son accent. Si, le nom au
+  plancher, le badge ne tient toujours pas, il se dépouille dans l'ordre de
+  sacrifice : le nom de l'événement quitte le pied, sa date restant, puis
+  l'organisation part. **Au-delà de trois lignes, le nom continue de se
+  replier** au corps plancher, sur autant de lignes qu'il lui faut, et le badge
+  perd d'emblée le nom de l'événement, puis l'organisation s'il le faut ; si les
+  lignes de tour ne tiennent plus sous lui, le logiciel **refuse de produire la
+  planche** et nomme la personne, dont le nom se corrige dans la liste des
+  participants. L'horodatage ne quitte jamais le pied ; seule sa case le retire
+  (§ 11.4). Le seuil se cale sur le **glyphe le plus large** de l'alphabet visé,
+  jamais sur une moyenne (§ 14.1) : un nom en capitales larges déborde sinon
+  par-dessus la première ligne de tour, en silence.
 - **Une organisation très longue.** Elle **s'abrège** avec une marque, sur une
   seule ligne. C'est une étiquette de contexte, pas une identité, et un
   repliement sur trois lignes mange les tours.
@@ -5812,7 +5848,9 @@ un débordement.
 **L'ordre est alphabétique**, sur la **forme normalisée** du § 10.1 — espaces
 réduits, casse et accents ignorés — appliquée au couple (nom, prénom), et
 départagée par identifiant entier pour que deux productions de la même planche
-soient identiques.
+soient identiques. Le nom est le nom entier, numéro compris, même quand la case
+des doublons le cache sur le badge (§ 11.4) : « Roger Galet 01 » se range
+après « Zoé Galet », et non à côté de « Roger Galet ».
 
 **La comparaison n'emploie pas `localeCompare`** : le § 15.5 l'interdit pour la
 même raison qu'ici, l'ordre dépendrait de la langue du système et deux machines
@@ -5877,21 +5915,20 @@ rang n d'un nom déjà pris dans le dossier. Il ne contient aucun deux-points,
 que Windows refuse.
 
 **Le nom est injectif sur ce qui change la pile.** Une génération date toutes
-les propositions qu'elle ajoute du même instant (§ 8.9) : sans leur
-identifiant, deux propositions donneraient le même nom, et la seconde planche
-remplacerait la première sans rien dire. L'ordre par table change la pile
-autant que l'imposition, et se lit donc dans le nom de la même façon. Même
-événement, même source, même papier, même imposition, même ordre, même
-placement : même nom, et la planche entière remplace la sienne, qui imprime la
-même pile. Le logo d'une personne et la case du pied TechnoLibre n'entrent pas
-dans le nom : une planche refaite après un changement de logo remplace celle
-du même placement. **Une réédition ne remplace jamais un fichier** : deux
-rééditions de trois personnes différentes partagent tout le reste du nom, et
-la seconde prend le premier rang libre, `_2`, `_3`…, comme le dossier daté de
-la corbeille (§ 8.7). Une planche dont la base se raccourcit (ci-dessous) prend
-aussi le premier rang libre : la base d'un événement et celle de sa copie
-(§ 8.7), qui partagent propositions et horodatages, peuvent se raccourcir en une
-même tête.
+les propositions qu'elle ajoute du même instant (§ 8.9) : sans leur identifiant,
+deux propositions donneraient le même nom, et la seconde planche remplacerait la
+première sans rien dire. L'ordre par table change la pile autant que
+l'imposition, et se lit donc dans le nom de la même façon. Même événement, même
+source, même papier, même imposition, même ordre, même placement : même nom, et
+la planche entière remplace la sienne, qui imprime la même pile. Le logo d'une
+personne, la case du pied TechnoLibre et celle des doublons n'entrent pas dans
+le nom : une planche refaite après un changement de logo remplace celle du même
+placement. **Une réédition ne remplace jamais un fichier** : deux rééditions de
+trois personnes différentes partagent tout le reste du nom, et la seconde prend
+le premier rang libre, `_2`, `_3`…, comme le dossier daté de la corbeille
+(§ 8.7). Une planche dont la base se raccourcit (ci-dessous) prend aussi le
+premier rang libre : la base d'un événement et celle de sa copie (§ 8.7), qui
+partagent propositions et horodatages, peuvent se raccourcir en une même tête.
 Une base lue sur le disque qui finit par un point — celle d'un fichier
 « Gala..gtt.json » déposé dans le dossier — prend aussi le premier rang libre :
 son nom entier est celui qu'une base plus longue raccourcit en la même tête.
@@ -5953,7 +5990,8 @@ reprend pas pour elle, puisque le retenu est sain.
 garder : la liste se tire de la même source et dans le même ordre que la
 planche, pour toute la soirée ; une réédition ne produit que la planche. Un
 enregistrement par badge, sous l'en-tête `Nom;Prénom;Organisation;Tours` : le
-nom et le prénom de la personne — le prénom vide quand elle n'en a pas —,
+nom entier et le prénom de la personne — le numéro que la case des doublons
+cache sur le badge compris (§ 11.4), le prénom vide quand elle n'en a pas —,
 l'organisation telle que le badge l'imprime, vide sans elle, et, dans une seule
 cellule, les lignes de tour du badge, **texte pour texte**, une par ligne —
 « Toute la soirée — table 13 — animation », « Tour 1 — table 5 (Terrasse) » —,
@@ -6119,8 +6157,9 @@ jamais.
   celui de la première planche — c'est ce qu'on attend d'un badge perdu ; si le
   placement a bougé, l'horodatage diffère, et c'est ce qu'on attend d'un badge
   refait. Un logo changé change le badge sans faire dériver le placement : il
-  ne garde pas la planche. Une case de ce que le badge imprime (§ 11.4)
-  changée sur le poste le change de même.
+  ne garde pas la planche. Une case de ce que le badge imprime (§ 11.4), ou
+  celle des doublons pour une personne numérotée, changée sur le poste le
+  change de même.
 
 ---
 

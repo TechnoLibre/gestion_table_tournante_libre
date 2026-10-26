@@ -47,6 +47,13 @@
   // des autres, et l'annonce le dit tant qu'une case non retenue garde dans
   // la séance la valeur choisie.
   //
+  // Juste avant la case du pied TechnoLibre, la case « Cacher le numéro des
+  // doublons », autre réglage de la machine (EtatSeance.cacherNumero,
+  // seance.choisirCacherNumero), cochée tant que l'opérateur ne l'a pas
+  // décochée : le badge d'une personne que l'import a numérotée imprime son
+  // nom sans le numéro. Une case que la machine ne retient pas s'annonce
+  // tant qu'elle est celle de la séance, comme celle du pied.
+  //
   // Les réglages d'une demande : la source — le retenu s'il existe, sinon la
   // proposition demandée au plan depuis les propositions, choisie quand les
   // deux sont offertes (sourcesOffertes) —, l'imposition, feuille par
@@ -137,6 +144,7 @@
   const piedTechnolibre = $derived($seance.piedTechnolibre);
   const textePiedTechnolibre = $derived($seance.textePiedTechnolibre);
   const donneesBadge = $derived($seance.donneesBadge);
+  const cacherNumero = $derived($seance.cacherNumero);
   const cartes = $derived(modeleImposeSonPapier(modeleBadge));
   const offertes = $derived(charge === null ? [] : sourcesOffertes(charge, $ui.proposition));
 
@@ -190,9 +198,11 @@
   let liste = $state(null);
   let derniereListe = null;
   // Le dernier modèle choisi que la machine n'a pas retenu, ou null ; de
-  // même, la dernière valeur de la case du pied TechnoLibre.
+  // même, la dernière valeur de la case du pied TechnoLibre, et celle de la
+  // case du numéro des doublons.
   let modeleNonRetenu = $state(null);
   let piedNonRetenu = $state(null);
+  let cacherNonRetenu = $state(null);
   // Les cases que la machine n'a pas retenues, chacune avec la valeur de son
   // dernier choix : une donnée y entre quand son choix n'est pas retenu, en
   // sort quand un choix d'elle l'est. Vide tant que tout est retenu.
@@ -309,6 +319,13 @@
     piedNonRetenu = retenu ? null : coche;
   }
 
+  // La case du numéro des doublons s'écrit sur la machine, comme celle du
+  // pied TechnoLibre.
+  async function choisirCacher(coche) {
+    const { retenu } = await seance.choisirCacherNumero(coche);
+    cacherNonRetenu = retenu ? null : coche;
+  }
+
   // Le texte quitté s'écrit sur la machine, comme la case, quand sa forme
   // normalisée diffère de celui de la séance ; le champ montre ensuite le
   // texte de la séance, normalisé. Quitter le champ sans changement — une
@@ -394,6 +411,16 @@
           </div>
           <div class="case">
             <input
+              id={`${uid}-doublons`}
+              type="checkbox"
+              data-champ="cacherNumero"
+              checked={cacherNumero}
+              onchange={(evenement) => choisirCacher(evenement.currentTarget.checked)}
+            />
+            <label for={`${uid}-doublons`}>{t('badges.doublons.case')}</label>
+          </div>
+          <div class="case">
+            <input
               id={`${uid}-technolibre`}
               type="checkbox"
               data-champ="piedTechnolibre"
@@ -431,6 +458,9 @@
           {/if}
           {#if piedNonRetenu !== null && piedNonRetenu === piedTechnolibre}
             <Message ton="avis"><p data-avertissement="piedNonRetenu">{t('badges.technolibre.nonRetenu')}</p></Message>
+          {/if}
+          {#if cacherNonRetenu !== null && cacherNonRetenu === cacherNumero}
+            <Message ton="avis"><p data-avertissement="cacherNonRetenu">{t('badges.doublons.nonRetenu')}</p></Message>
           {/if}
           {#if texteNonRetenu !== null && texteNonRetenu === textePiedTechnolibre}
             <Message ton="avis"><p data-avertissement="texteNonRetenu">{t('badges.technolibre.texteNonRetenu')}</p></Message>

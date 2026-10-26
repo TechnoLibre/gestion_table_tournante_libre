@@ -44,6 +44,13 @@
 // ligne ; l'annonce nomme toujours les homonymes, et la liste en CSV ne lit
 // aucune case.
 //
+// La case qui cache le numéro des doublons suit aussi la machine, que la
+// lecture porte : cochée, le badge d'une personne marquée nomNumerote
+// imprime son nom sans le numéro final (modelePlanche). Le nom entier reste
+// celui du refus PLANCHE_NOM_TROP_LONG, des logos introuvables, des
+// homonymes et de la liste de réédition ; la liste en CSV ne la lit pas.
+// Sans personne marquée, les octets ne changent pas.
+//
 // Le logo d'un participant arrive en octets, lus du dossier de l'événement
 // par lireOctets au chemin que porte son badge : chaque chemin distinct se
 // lit une fois par étude, dans l'ordre de la pile, et ses octets se
@@ -134,6 +141,9 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {Object<string, boolean>} [donneesBadge]   les cases de ce que le
  *           badge imprime, un booléen par donnée de DONNEES_BADGE ; toutes
  *           cochées quand la lecture ne les porte pas
+ * @property {boolean} [cacherNumero]   la case qui cache le numéro des
+ *           doublons des réglages locaux ; faux quand la lecture ne la porte
+ *           pas
  *
  * @typedef {Object} DemandePlanche
  * @property {'retenu'|'proposition'} [source]   'retenu' par défaut
@@ -162,6 +172,8 @@ const chargerProduction = () => import('../pdf/planche.js');
  *           la lecture, normalisé, vide pour le logo seul
  * @property {Object<string, boolean>} donneesBadge   les cases de la lecture,
  *           une par donnée de DONNEES_BADGE, dans leur ordre
+ * @property {boolean} cacherNumero   la case du numéro des doublons de la
+ *           lecture
  * @property {number|null} sansTechnolibre   le nombre de badges d'où le pied
  *           TechnoLibre se retire, faute de place ; null sans la case, et
  *           sans modèle
@@ -229,6 +241,14 @@ function donneesDe({ donneesBadge = null }) {
   const bien = typeof donneesBadge === 'object' && DONNEES_BADGE.every((donnee) => typeof donneesBadge[donnee] === 'boolean');
   if (!bien) throw new TypeError(`donneesBadge : un booléen par donnée de ${DONNEES_BADGE.join(', ')} attendu, reçu ${JSON.stringify(donneesBadge)}`);
   return Object.fromEntries(DONNEES_BADGE.map((donnee) => [donnee, donneesBadge[donnee]]));
+}
+
+// La case qui cache le numéro des doublons d'une lecture, contrôlée, fausse
+// quand elle ne la porte pas ; une valeur qui n'est pas un booléen est une
+// faute du code.
+function cacherDe({ cacherNumero = false }) {
+  if (typeof cacherNumero !== 'boolean') throw new TypeError(`cacherNumero : booléen attendu, reçu ${JSON.stringify(cacherNumero)}`);
+  return cacherNumero;
 }
 
 // Les données que les cases retirent, dans l'ordre de DONNEES_BADGE.
@@ -366,8 +386,9 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
   // L'étude d'une demande : le refus du placement, ou le modèle, ses logos
   // lus, son analyse par la mise en page et le refus qu'elle porte. Un refus
   // de mise en page reçoit la personne du badge refusé, que src/pdf ne
-  // connaît pas. logos : null quand aucun badge ne désigne de logo, sinon
-  // les comptes de l'annonce. Rien ne s'écrit.
+  // connaît pas, par son nom entier (Badge.nom). logos : null quand aucun
+  // badge ne désigne de logo, sinon les comptes de l'annonce. Rien ne
+  // s'écrit.
   async function etudier(lecture, demande) {
     const { charge } = lecture;
     const lue = demandeLue(demande);
@@ -376,12 +397,18 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     const pied = piedDe(lecture);
     const texte = texteDe(lecture);
     const donnees = donneesDe(lecture);
+    const cacher = cacherDe(lecture);
     const papier = papierDesBadges(modeleBadge, lecture.papier);
     const imposition = aCartes(modeleBadge) ? 'feuille' : lue.imposition;
     const rejet = refusPlanche(charge, { source, proposition });
-    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, texte, donnees };
+    if (rejet !== null) {
+      return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, texte, donnees, cacher };
+    }
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
-    const modele = modeleImprime(modelePlanche(charge, { source, proposition, ordre, selection, provenance, version }), donnees);
+    const modele = modeleImprime(
+      modelePlanche(charge, { source, proposition, ordre, selection, cacherNumero: cacher, provenance, version }),
+      donnees,
+    );
     const octets = await lesPolices();
     const technolibre = await technolibreDe(pied, texte);
     const { octets: logosParticipants, echecs } = await logosDe(lecture, modele);
@@ -410,6 +437,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       pied,
       texte,
       donnees,
+      cacher,
       technolibre,
       sansTechnolibre: pied ? analyse.sansTechnolibre : null,
       logosParticipants,
@@ -596,11 +624,12 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * annonce ne demande le papier. La case du pied TechnoLibre de la lecture
      * s'y lit, avec son texte, et, quand elle est cochée et le modèle
      * présent, le nombre de badges d'où il se retire ; les cases de ce que
-     * le badge imprime s'y lisent de même. Les logos des participants s'y
-     * comptent quand un badge en désigne un, les introuvables nommés ; aucun
-     * ne refuse la planche. Le nom est celui que la production donnerait,
-     * rang compris ; sans dossier, donc sans rang, quand le dossier ne se
-     * liste pas. Rien ne s'écrit.
+     * le badge imprime et celle du numéro des doublons s'y lisent de même ;
+     * les homonymes restent ceux du nom entier. Les logos des participants
+     * s'y comptent quand un badge en désigne un, les introuvables nommés ;
+     * aucun ne refuse la planche. Le nom est celui que la production
+     * donnerait, rang compris ; sans dossier, donc sans rang, quand le
+     * dossier ne se liste pas. Rien ne s'écrit.
      *
      * @throws {TypeError} une demande hors de son domaine, une séance sans
      *         polices ou sans provenance, une case cochée sans le chargement
@@ -627,6 +656,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
           piedTechnolibre: etude.pied,
           textePiedTechnolibre: etude.texte,
           donneesBadge: etude.donnees,
+          cacherNumero: etude.cacher,
           sansTechnolibre: null,
           logos: null,
         };
@@ -652,6 +682,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
         piedTechnolibre: etude.pied,
         textePiedTechnolibre: etude.texte,
         donneesBadge: etude.donnees,
+        cacherNumero: etude.cacher,
         sansTechnolibre: etude.sansTechnolibre,
         logos: etude.logos,
       };

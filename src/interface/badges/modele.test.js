@@ -417,6 +417,46 @@ describe('le pied TechnoLibre (§ 8.5, § 11.4)', () => {
   });
 });
 
+describe('le numéro des doublons caché (§ 8.5, § 11.4)', () => {
+  // L'annonce de la séance sur la soirée retenue, la case donnée.
+  const annoncerAvecCase = (charge, cacherNumero) =>
+    planches.preparer({ charge, base: 'lucioles', fs: fsVide, racine: { id: 'documents', chemin: '/d' }, papier: 'A4', modeleBadge: 'a6', cacherNumero });
+
+  test('une annonce est celle de la machine quand sa case est celle de la machine ; une annonce ou une machine qui ne la porte pas vaut décochée', async () => {
+    const cochee = await annoncerAvecCase(retenue(), true);
+    const decochee = await annoncerAvecCase(retenue(), false);
+    assert.deepEqual([cochee.cacherNumero, decochee.cacherNumero], [true, false]);
+    const machine = { modeleBadge: 'a6', papier: 'A4' };
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, cacherNumero: true }), true);
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, cacherNumero: false }), false);
+    assert.equal(annonceDeLaMachine(cochee, machine), false);
+    assert.equal(annonceDeLaMachine(decochee, { ...machine, cacherNumero: true }), false);
+    assert.equal(annonceDeLaMachine(decochee, { ...machine, cacherNumero: false }), true);
+    assert.equal(annonceDeLaMachine(decochee, machine), true);
+    const { cacherNumero: _case, ...sansCase } = cochee;
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, cacherNumero: false }), true);
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, cacherNumero: true }), false);
+    // La case du pied TechnoLibre se compare à part.
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, cacherNumero: true, piedTechnolibre: true }), false);
+  });
+
+  test('l’annonce ne dit rien de plus : mêmes phrases, cochée ou décochée', async () => {
+    assert.deepEqual(phrasesAnnonce(await annoncerAvecCase(retenue(), true)), phrasesAnnonce(await annoncerAvecCase(retenue(), false)));
+  });
+
+  test('la case et son avertissement ont leur libellé', () => {
+    const textes = composer([
+      { cle: 'badges.doublons.case', details: {} },
+      { cle: 'badges.doublons.nonRetenu', details: {} },
+    ]);
+    assert.equal(textes[0], 'Cacher le numéro des doublons');
+    assert.match(textes[1], /retenue sur ce poste/);
+    // Les deux cases du groupe ont chacune leur avis : celui-ci nomme la
+    // sienne, pour ne pas se confondre avec celui du pied TechnoLibre.
+    assert.ok(textes[1].includes(textes[0]));
+  });
+});
+
 describe('les logos des participants (§ 11.4, § 11.5, § 5.9)', () => {
   const avecLogos = async (logos) => ({ ...(await annoncer(retenue(), 'A4')), logos });
 

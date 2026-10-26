@@ -24,10 +24,17 @@
 // et la planche la dessine. La liste en CSV ne le porte jamais, et la
 // feuille de contrôle ne dit des logos que leurs comptes, quand la séance
 // les lui donne.
+//
+// Le nom que le badge imprime est le nom affiché de sa personne, ou, sous
+// l'option cacherNumero, celui d'une personne marquée nomNumerote privé de
+// son numéro final (§ 11.4). Tout le reste lit le nom entier : le badge
+// lui-même (Badge.nom), l'ordre de la pile, les homonymes, la liste de
+// réédition de la feuille de contrôle et la liste en CSV.
 import { SEPARATEUR, ecrireCsv } from '../csv/export.js';
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { cleNormalisee } from '../csv/normalisation.js';
 import { MODELES_BADGE, PAPIERS, PAPIER_BADGES_DEFAUT, estModeleBadge } from '../geometrie/papiers.js';
+import { SUFFIXE_NUMERO } from '../stockage/document.js';
 import { derive, fautes } from '../stockage/placements.js';
 import { raisonsNommees } from './avertissements.js';
 import { formeNommeeDe } from './commandes.js';
@@ -55,7 +62,8 @@ import { versionVisible } from './version.js';
  *                                  tour jamais null
  * @typedef {Object} Badge
  * @property {number} participant
- * @property {string} nom                 le nom affiché, en NFC
+ * @property {string} nom                 le nom affiché, en NFC, entier :
+ *                                        numéro final compris
  * @property {string|null} organisation   en NFC ; null : la ligne n'existe pas
  * @property {LigneTour[]} lignes
  * @property {number|null} identifiant    celui d'un homonyme que rien ne sépare
@@ -64,9 +72,10 @@ import { versionVisible } from './version.js';
  *                                        null sans logo
  * @property {{nom: string, lignes: string[], abregeables: Array<Array<{debut: number, fin: number}>>,
  *             organisation: string|null, pied: string[], piedReduit: string[]}} textes
- *           abregeables : pour chaque ligne de tour, les textes libres que la
- *           mise en page abrège au plancher — le libellé de la table, puis le
- *           titre —, par leurs positions en unités UTF-16, dans cet ordre
+ *           nom : celui que le badge imprime (nomImprime) ; abregeables : pour
+ *           chaque ligne de tour, les textes libres que la mise en page abrège
+ *           au plancher — le libellé de la table, puis le titre —, par leurs
+ *           positions en unités UTF-16, dans cet ordre
  * @typedef {Object} ModelePlanche
  * @property {Badge[]} badges             dans l'ordre de la pile
  * @property {'retenu'|'proposition'} source   le placement imprimé
@@ -380,6 +389,17 @@ function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodat
   };
 }
 
+// Le nom que le badge d'une personne imprime (§ 11.4), en NFC : son nom
+// affiché ; sous cacherNumero, celui d'une personne marquée nomNumerote
+// perd le numéro final de son nom (SUFFIXE_NUMERO), un seul :
+// « Galet 01 01 » imprime « Galet 01 ». Un nom que le retrait laisserait
+// vide ou blanc s'imprime entier.
+function nomImprime(personne, cacherNumero) {
+  if (!cacherNumero || personne.nomNumerote !== true) return nomAffiche(personne).normalize('NFC');
+  const nom = personne.nom.replace(SUFFIXE_NUMERO, '');
+  return nomAffiche({ ...personne, nom: nom.trim() === '' ? personne.nom : nom }).normalize('NFC');
+}
+
 // L'ordre alphabétique de la pile (§ 11.6, § 15.5) : la clé normalisée du
 // nom, puis celle du prénom, par points de code, puis l'identifiant.
 const ordreAlphabetique = (a, b) =>
@@ -430,7 +450,10 @@ function selectionLue(charge, selection) {
  * feuille de contrôle nomme ; horodatage : horodatagePlacement de la source ;
  * brouillon : estBrouillon sur toute la soirée, toujours vrai pour une
  * proposition ; version : versionVisible, que la feuille de contrôle
- * imprime et le badge jamais. Les comptes sont ceux de la soirée, produits
+ * imprime et le badge jamais. cacherNumero, faux par défaut, retire des
+ * textes de chaque badge le numéro final d'un nom marqué nomNumerote
+ * (nomImprime) ; le badge garde son nom entier, et l'ordre de la pile et les
+ * homonymes se lisent sur lui. Les comptes sont ceux de la soirée, produits
  * celui des badges du modèle. La charge n'est pas modifiée.
  *
  * @param {import('../stockage/types.js').Charge} charge
@@ -439,6 +462,7 @@ function selectionLue(charge, selection) {
  * @param {number|null} [options.proposition]   la proposition imprimée
  * @param {Ordre} [options.ordre]
  * @param {number[]|null} [options.selection]   les personnes à rééditer
+ * @param {boolean} [options.cacherNumero]      le numéro des doublons caché
  * @param {string} options.provenance           le mode de construction
  * @param {string} options.version              la version affichée
  * @returns {ModelePlanche}
@@ -449,9 +473,10 @@ function selectionLue(charge, selection) {
  */
 export function modelePlanche(
   charge,
-  { source = 'retenu', proposition = null, ordre = 'alphabetique', selection = null, provenance, version },
+  { source = 'retenu', proposition = null, ordre = 'alphabetique', selection = null, cacherNumero = false, provenance, version },
 ) {
   if (!ORDRES.includes(ordre)) throw new TypeError(`ordre : ${ORDRES.join(' ou ')} attendu, reçu ${JSON.stringify(ordre)}`);
+  if (typeof cacherNumero !== 'boolean') throw new TypeError(`cacherNumero : booléen attendu, reçu ${JSON.stringify(cacherNumero)}`);
   if (typeof provenance !== 'string' || typeof version !== 'string') {
     throw new TypeError('modelePlanche : provenance et version, deux chaînes, attendues');
   }
@@ -481,7 +506,8 @@ export function modelePlanche(
       lignes: lignesDe(personne.id, places, titres),
       identifiant: identifiants.has(personne.id) ? personne.id : null,
     };
-    return { ...badge, logo: personne.logo ?? null, textes: textesDe(badge, evenement, horodatage) };
+    const textes = textesDe({ ...badge, nom: nomImprime(personne, cacherNumero) }, evenement, horodatage);
+    return { ...badge, logo: personne.logo ?? null, textes };
   });
 
   const exclus = charge.participants.filter(({ exclu }) => exclu).length;
@@ -516,10 +542,10 @@ const sansAbsents = (texte, absents) => [...texte].map((c) => (absents.has(c) ? 
  * consigne d'impression, puis, pour Avery 5392, celle de la feuille à part,
  * sur papier ordinaire ; quand logos est donné, les comptes des logos des
  * participants, posés, sans place et introuvables ; BROUILLON s'il y a
- * lieu ; pour une réédition, son compte puis les noms réédités dans l'ordre
- * de la pile ; les caractères absents de la police, quand il y en a, par
- * leur point de code. Dans toutes les lignes, un caractère absent s'écrit
- * « U+674E », jamais tel quel.
+ * lieu ; pour une réédition, son compte puis les noms réédités, entiers
+ * (Badge.nom), dans l'ordre de la pile ; les caractères absents de la
+ * police, quand il y en a, par leur point de code. Dans toutes les lignes,
+ * un caractère absent s'écrit « U+674E », jamais tel quel.
  *
  * @param {ModelePlanche} modele
  * @param {Object} options
@@ -581,7 +607,7 @@ export function textesControle(modele, { papier, imposition, planches, absents =
   ];
   if (brouillon) lignes.push(libelle('planche.brouillon'));
   if (reedition !== null) {
-    lignes.push(libelle('planche.controle.reedition', { n: reedition.ids.length }), ...badges.map(({ textes }) => textes.nom));
+    lignes.push(libelle('planche.controle.reedition', { n: reedition.ids.length }), ...badges.map(({ nom }) => nom));
   }
   const uniques = new Set(absents);
   const ecrites = lignes.map((ligne) => sansAbsents(ligne, uniques));

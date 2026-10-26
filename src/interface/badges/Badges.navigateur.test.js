@@ -1080,6 +1080,68 @@ describe('les cases de ce que le badge imprime : gardées sur le poste (§ 8.5, 
   });
 });
 
+describe('le numéro des doublons caché : une case gardée sur le poste (§ 8.5, § 11.4)', () => {
+  const caseCacher = (m) => dans(m, '[data-section="badges"] [data-champ="cacherNumero"]');
+  const avisNonRetenu = (m) => dans(m, '[data-section="badges"] [data-avertissement="cacherNonRetenu"]');
+  const caseEcrite = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).cacher_numero_doublon;
+
+  test('une machine neuve : la case cochée, dans le groupe des cases, juste avant celle du pied TechnoLibre, son libellé lié', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const element = caseCacher(m);
+    expect(element).not.toBeNull();
+    expect(element.type).toBe('checkbox');
+    expect(element.checked).toBe(true);
+    expect(m.seance.etat().cacherNumero).toBe(true);
+    expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran('badges.doublons.case')));
+    const technolibre = dans(m, '[data-section="badges"] [data-champ="piedTechnolibre"]');
+    expect(technolibre.closest('[role="group"]').contains(element)).toBe(true);
+    expect(element.closest('.case').nextElementSibling.contains(technolibre)).toBe(true);
+    choisirReglage(m, 'modeleBadge', 'a6');
+    await attendre('l’A6', () => dans(m, '[data-section="badges"] [data-champ="imposition"]'), IMAGES);
+    expect(caseCacher(m).checked).toBe(true);
+  });
+
+  test('décocher l’écrit sur la machine et retire l’annonce montrée ; l’annonce suivante se prépare sur la case ; recocher l’écrit de nouveau', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    const lues = [];
+    const originale = m.seance.preparerPlanche;
+    m.seance.preparerPlanche = async (demande) => {
+      const rendue = await originale(demande);
+      lues.push(rendue.cacherNumero);
+      return rendue;
+    };
+    caseCacher(m).click();
+    await attendre('la case écrite', () => caseEcrite(m) === false, IMAGES);
+    expect(m.seance.etat().cacherNumero).toBe(false);
+    expect(caseCacher(m).checked).toBe(false);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce sur la case', () => annonce(m), IMAGES);
+    expect(lues).toEqual([false]);
+    caseCacher(m).click();
+    await attendre('la case écrite', () => caseEcrite(m) === true, IMAGES);
+    expect(avisNonRetenu(m)).toBeNull();
+  });
+
+  test('l’écriture des réglages refusée : la case vaut pour la séance, et une annonce le dit sous les réglages, dans un rôle d’état ; une case retenue ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisNonRetenu(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    caseCacher(m).click();
+    const avis = await attendre('l’annonce de la case non retenue', () => avisNonRetenu(m), IMAGES);
+    expect(m.seance.etat().cacherNumero).toBe(false);
+    expect(caseCacher(m).checked).toBe(false);
+    expect(texte(avis)).toBe(plat(tEcran('badges.doublons.nonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirCacherNumero;
+    m.seance.choisirCacherNumero = async (coche) => ({ ...(await originale(coche)), retenu: true });
+    caseCacher(m).click();
+    await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
+  });
+});
+
 describe('le texte du pied TechnoLibre : un champ gardé sur le poste (§ 8.5, § 11.4)', () => {
   const champTexte = (m) => dans(m, '[data-section="badges"] [data-champ="textePiedTechnolibre"]');
   const boutonDefaut = (m) => dans(m, '[data-section="badges"] [data-commande="texteParDefaut"]');

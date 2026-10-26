@@ -38,7 +38,9 @@
 // annonce. Les logos des participants ajoutent quatre productions de l'A6
 // — logos lus et posés, logo introuvable, une réédition sans logo sous des
 // voisins qui en portent et la même sans aucun logo —, sur des PNG composés
-// ici. Les noms sont inventés ; la version vient du module engendré.
+// ici ; la case qui cache le numéro des doublons, trois — cochée, décochée,
+// une réédition. Les noms sont inventés ; la version vient du module
+// engendré.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
@@ -289,6 +291,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           piedTechnolibre: false,
           textePiedTechnolibre: PROMOTION,
           donneesBadge: TOUTES_COCHEES,
+          cacherNumero: true,
           sansTechnolibre: null,
           logos: null,
         },
@@ -411,6 +414,7 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       piedTechnolibre: false,
       textePiedTechnolibre: PROMOTION,
       donneesBadge: TOUTES_COCHEES,
+      cacherNumero: true,
       sansTechnolibre: null,
       logos: null,
     });
@@ -725,6 +729,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
       piedTechnolibre: false,
       textePiedTechnolibre: PROMOTION,
       donneesBadge: TOUTES_COCHEES,
+      cacherNumero: true,
       sansTechnolibre: null,
       logos: null,
     });
@@ -1628,5 +1633,72 @@ describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.
     const date = libelle('planche.pied.date', { date: '2031-05-17' });
     assert.equal(badges.filter((texte) => texte === date).length, charge.participants.length, badges.join(' | '));
     assert.ok(!badges.some((texte) => texte.includes(BASE)), badges.join(' | '));
+  });
+});
+
+describe('planche dans la séance : le numéro des doublons caché (§ 8.5, § 11.4, § 11.6)', () => {
+  const lu = (pdf, depuis = 0) => pdf.pages.slice(depuis).flatMap((page) => textesDe(page));
+  const NUMEROTES = ['Louis Arc 14', 'Zoé Galet', 'Roger Galet', 'Roger Galet 01', 'Roger Galet 02'];
+  // Deux « Roger Galet » numérotés par l'import, une « Zoé Galet » et un
+  // « Louis Arc 14 » dont le numéro est saisi à la main, sans marque.
+  const numerotes = () =>
+    chargeLucioles({
+      personnes: [
+        personne(1, 'Roger', 'Galet 01', { nomNumerote: true }),
+        personne(2, 'Roger', 'Galet 02', { nomNumerote: true }),
+        personne(3, 'Zoé', 'Galet'),
+        personne(4, 'Louis', 'Arc 14'),
+      ],
+    });
+
+  test('cochée par défaut, chaque badge marqué imprime le nom sans son numéro, à la place que le nom entier lui donne dans la pile, sans ligne « Identifiant » ; décochée, le nom entier ; la liste en CSV garde ses octets', async () => {
+    const { fs, seance } = await monter(numerotes());
+    const cochee = await seance.preparerPlanche();
+    assert.deepEqual([cochee.refus, cochee.cacherNumero, cochee.homonymes], [null, true, []]);
+    const liste = fs.octets('documents', ICI + (await seance.produireListeBadges()).nom);
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4', NUMEROTES), ['Louis Arc 14', 'Zoé Galet', 'Roger Galet', 'Roger Galet']);
+    assert.ok(!lu(pdf, 1).some((texte) => texte.startsWith('Identifiant')), lu(pdf, 1).join(' | '));
+
+    await seance.choisirCacherNumero(false);
+    const decochee = await seance.preparerPlanche();
+    assert.deepEqual([decochee.refus, decochee.cacherNumero, decochee.homonymes], [null, false, []]);
+    const entier = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    assert.deepEqual(nomsParCellule(entier.pages[1], 'A4', NUMEROTES), ['Louis Arc 14', 'Zoé Galet', 'Roger Galet 01', 'Roger Galet 02']);
+    assert.deepEqual(fs.octets('documents', ICI + (await seance.produireListeBadges()).nom), liste);
+  });
+
+  test('le nom entier reste celui du refus PLANCHE_NOM_TROP_LONG, des logos introuvables et de la liste de réédition', async () => {
+    const long = `Galet${'w'.repeat(1990)} 01`;
+    const trop = numerotes();
+    trop.participants[0].nom = long;
+    const annonceTrop = await (await monter(trop)).seance.preparerPlanche();
+    assert.deepEqual(annonceTrop.refus, {
+      code: 'PLANCHE_NOM_TROP_LONG',
+      details: { participant: 1, personne: `Roger ${long}`, remede: { geste: 'ouvrirSection', section: 'participants' } },
+    });
+
+    const charge = numerotes();
+    charge.participants[1].logo = `logo/${'7'.repeat(64)}.png`;
+    const { fs, seance } = await monter(charge);
+    const annonce = await seance.preparerPlanche({ selection: [2, 1] });
+    assert.deepEqual([annonce.refus, annonce.cacherNumero], [null, true]);
+    assert.deepEqual(annonce.logos.introuvables, [{ participant: 2, nom: 'Roger Galet 02', cause: 'ABSENT' }]);
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche({ selection: [2, 1] })).nom));
+    const controle = textesDe(pdf.pages[0]);
+    assert.ok(controle.includes('Roger Galet 01') && controle.includes('Roger Galet 02'), controle.join(' | '));
+    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4', NUMEROTES), ['Roger Galet', 'Roger Galet', null, null]);
+  });
+
+  test('la lecture porte la case : absente, décochée ; un booléen tel quel ; une valeur qui n’est pas un booléen est une faute du code, TypeError', async () => {
+    const planches = creerPlanches({ polices: async () => POLICES, logo: async () => LOGO, provenance: 'production', version: V1 });
+    const lecture = { charge: chargeLucioles({ plan: null, etat: 'propose' }), papier: null, piedTechnolibre: true };
+    const cacherLu = async (champs) => (await planches.preparer({ ...lecture, ...champs })).cacherNumero;
+    assert.equal(await cacherLu({}), false);
+    assert.equal(await cacherLu({ cacherNumero: true }), true);
+    assert.equal(await cacherLu({ cacherNumero: false }), false);
+    for (const faute of ['oui', 1, null, {}]) {
+      await assert.rejects(cacherLu({ cacherNumero: faute }), (erreur) => erreur instanceof TypeError && /cacherNumero/.test(erreur.message), JSON.stringify(faute));
+    }
   });
 });

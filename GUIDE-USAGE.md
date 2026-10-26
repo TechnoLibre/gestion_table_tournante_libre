@@ -129,8 +129,9 @@ un numéro, « Galet 01 », « Galet 02 », en sautant un numéro déjà pris. V
 fichier n’est pas modifié : l’aperçu se recalcule sur ces noms, et le rapport
 compte les noms rendus uniques. En mise à jour, une ligne qui met à jour une
 personne de la liste garde son nom. Le logiciel retient, sans l’afficher, que
-ce numéro vient de l’import ; renommer ensuite la personne dans sa fiche ou
-dans la grille efface ce souvenir, et « Défaire » le rend.
+ce numéro vient de l’import, et les badges le cachent par défaut (étape 12) ;
+renommer ensuite la personne dans sa fiche ou dans la grille efface ce
+souvenir, et « Défaire » le rend.
 
 Un fichier enregistré par un tableur sous Windows n’est souvent pas en UTF-8.
 Le logiciel le reconnaît et le dit :
@@ -1189,6 +1190,15 @@ libérée revient au reste ; le nom et la date de l’événement partagent une
 ligne, qui disparaît quand les deux sont décochés. La feuille de contrôle
 ajoute alors une ligne « Données retirées des badges : … » qui les nomme ; la
 liste en CSV, elle, ne change pas.
+Juste avant la case du pied TechnoLibre, la case « Cacher le numéro des
+doublons », cochée elle aussi tant que vous ne la décochez pas, et gardée par
+le poste, vise les personnes que « Rendre les noms uniques » a numérotées à
+l’import (étape 2) : leur badge imprime « Roger Galet » au lieu de
+« Roger Galet 01 ». Le plan, les listes, la liste en CSV et la feuille de
+contrôle gardent le nom entier, et les badges restent rangés sur lui. Le
+numéro caché ne fait pas d’homonymes : deux « Roger Galet » sans organisation
+sortent en deux badges au même nom, sans ligne « Identifiant n° … ». Un nom
+que vous avez renommé depuis l’import garde ses chiffres.
 
 Le badge d’une personne qui porte un logo (étape 3) le pose entre ses tours et
 le pied, dans la place que le texte laisse : le logo ne rapetisse ni ne retire

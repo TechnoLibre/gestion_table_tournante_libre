@@ -5168,6 +5168,128 @@ describe('séance : le pied TechnoLibre des badges (§ 8.5, § 11.4)', () => {
   });
 });
 
+describe('séance : la case qui cache le numéro des doublons (§ 8.5, § 11.4)', () => {
+  const caseLue = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).cacher_numero_doublon;
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Roger', 'Galet 01', { nomNumerote: true }), personneBadge(2, 'Roger', 'Galet 02', { nomNumerote: true })],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+  const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
+
+  test('cochée au départ ; choisirCacherNumero écrit les seuls réglages, dans tout mode, et l’état la porte ; une séance neuve la relit', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.equal(seance.etat().cacherNumero, true);
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirCacherNumero(false), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual([caseLue(fs), seance.etat().cacherNumero], [false, false]);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().cacherNumero, false);
+    assert.deepEqual(await neuve.seance.choisirCacherNumero(true), { retenu: true, avertissements: [] });
+    assert.deepEqual([caseLue(fs), neuve.seance.etat().cacherNumero], [true, true]);
+  });
+
+  test('une valeur qui n’est pas un booléen est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of ['false', 0, 1, null, undefined]) {
+      await assert.rejects(seance.choisirCacherNumero(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().cacherNumero, true);
+  });
+
+  test('des réglages illisibles : la case vaut pour la séance, non retenue, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirCacherNumero(false), { retenu: false, avertissements: [avis] });
+    assert.equal(seance.etat().cacherNumero, false);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('l’écriture garde les autres réglages et les clés inconnues ; choisir la case du pied TechnoLibre garde celle-ci', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4","taille_texte":115,"zeta":true}\n');
+    const { seance } = monter({ fs });
+    await seance.attendre();
+    await seance.choisirCacherNumero(false);
+    await seance.choisirPiedTechnolibre(false);
+    assert.equal(
+      fs.contenu('documents', FICHIER_REGLAGES),
+      '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":"A4","pied_technolibre":false,"taille_texte":115,"zeta":true}\n',
+    );
+  });
+
+  test('au changement de racine : la case que les réglages portent, à défaut celle de la séance', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":null}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().cacherNumero, false);
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().cacherNumero, false, 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,"papier":"A4","cadr');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().cacherNumero, false, 'des réglages illisibles');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cacher_numero_doublon":true,"cadrages":[],"format":1,"papier":null}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().cacherNumero, true, 'une case écrite sur la racine l’emporte');
+  });
+
+  test('une relecture des réglages partie avant un choix de la case ne l’écrase pas, ni dans l’état ni dans le fichier', async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cacher_numero_doublon":true,"cadrages":[],"format":1,"papier":null}\n');
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(prise, true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirCacherNumero(false);
+    await laisser();
+    liberer();
+    await changement;
+    assert.equal(seance.etat().cacherNumero, false);
+    assert.deepEqual(await choix, { retenu: true, avertissements: [] });
+    await seance.attendre();
+    assert.deepEqual([caseLue(fs, PORTABLE.id), seance.etat().cacherNumero], [false, false]);
+  });
+
+  test('la planche lit la case de la séance : l’annonce la porte, cochée puis décochée, les homonymes inchangés', async () => {
+    const { seance } = await ouvertSur(chargeRetenue(), avecPlanche);
+    await seance.choisirPiedTechnolibre(false);
+    const cochee = await seance.preparerPlanche();
+    assert.deepEqual([cochee.refus, cochee.cacherNumero, cochee.homonymes], [null, true, []]);
+    await seance.choisirCacherNumero(false);
+    const decochee = await seance.preparerPlanche();
+    assert.deepEqual([decochee.refus, decochee.cacherNumero, decochee.homonymes], [null, false, []]);
+  });
+});
+
 describe('séance : les cases de ce que le badge imprime (§ 8.5, § 11.4)', () => {
   const casesLues = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).donnees_badge;
   const TOUTES = { organisation: true, evenement: true, date: true, horodatage: true, identifiant: true };
