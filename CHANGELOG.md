@@ -23,6 +23,9 @@
   machine le retient ; il se change d'un clic. Les badges ne le demandent
   pas : les cartes Avery 5392 n'existent qu'en Lettre, et les badges A6
   partent sur Lettre tant qu'un autre papier n'est pas choisi.
+- Après un changement de dossier de travail, ou une écriture ailleurs, réussie
+  ou refusée par le nouveau support, l'application montre le papier que ce
+  dossier retient, jamais celui de l'ancien, même un instant.
 - Avant de produire, l'application annonce le nombre de badges et de feuilles,
   nomme les homonymes que rien ne distingue et les caractères que la police ne
   sait pas dessiner ; un placement qui ne décrit plus la soirée est refusé, avec

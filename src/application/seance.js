@@ -425,6 +425,12 @@ export function creerSeance({
   const abonnes = new Set();
   const annulations = new Set();
   let instantane = null;
+  // La racine dont EtatSeance.papier est le papier, celle que la dernière
+  // relecture des réglages a posée (relireReglagesMachine) ; la racine
+  // reçue au départ, dont le papier n'est pas encore lu mais n'est pas
+  // celui d'une autre. Tant qu'elle n'est pas la racine de la séance,
+  // publier se tait (changerDeRacine).
+  let racineDuPapier = racine;
   // Par Ouvert, sa charge et son examen figés (copiePubliee), et
   // INVARIANT_VIOLE : un Ouvert ne change jamais, ses copies se font une
   // fois. La charge publiée est neuve pour chaque Ouvert, et partage ses
@@ -532,8 +538,12 @@ export function creerSeance({
   }
 
   // Un changement a pu avoir lieu : l'instantané se refait, et chaque abonné
-  // reçoit le nouveau.
+  // reçoit le nouveau. Pendant un changement de racine, tant que le papier
+  // de la racine nouvelle n'est pas relu, rien ne se publie et l'instantané
+  // figé avant le changement reste (changerDeRacine) : l'appel en file qui
+  // a changé la racine publie en finissant.
   function publier() {
+    if (!memeRacine(racineDuPapier, etat.racine)) return;
     instantane = null;
     if (abonnes.size === 0) return;
     const courant = lireEtat();
@@ -686,9 +696,10 @@ export function creerSeance({
   // que les réglages portent, à défaut la phrase d'origine
   // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) — la clé absente la désigne ; celui de la
   // séance seulement pour des réglages que la lecture ne prend pas, sans
-  // dossier, et quand un choix a suivi le départ de la relecture. Ne lève
-  // jamais ; ne publie pas : l'appelant est un travail de la file des appels,
-  // qui publie en finissant.
+  // dossier, et quand un choix a suivi le départ de la relecture. Le papier
+  // posé, dossier devient la racine du papier (racineDuPapier), et publier
+  // reprend. Ne lève jamais ; ne publie pas : l'appelant est un travail de la
+  // file des appels, qui publie en finissant.
   function relireReglagesMachine(dossier) {
     const rang = choixTaille;
     const rangModele = choixModele;
@@ -708,6 +719,7 @@ export function creerSeance({
       const papier = dossier === null ? null : (papierDuChoix(dossier) ?? lus?.papier ?? choixSeance?.papier ?? null);
       if (!memeRacine(dossier, etat.racine)) return;
       etat.papier = papier;
+      racineDuPapier = dossier;
       if (lus !== null && Object.hasOwn(lus, 'taille_texte') && rang === choixTaille) etat.tailleTexte = tailleTexteDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'modele_badge') && rangModele === choixModele) etat.modeleBadge = modeleBadgeDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'pied_technolibre') && rangPied === choixPied) etat.piedTechnolibre = piedTechnolibreDe(lus);
@@ -724,6 +736,25 @@ export function creerSeance({
         );
       }
     });
+  }
+
+  // Fait de nouvelle la racine de la séance, du dedans d'un appel en file :
+  // fige d'abord l'instantané de l'état observable, puis poser() — qui peut
+  // attendre et lever — pose la racine nouvelle et ce qui l'accompagne, puis
+  // le papier s'en relit (relireReglagesMachine), même quand poser() lève.
+  // Entre les deux, publier se tait et etat() rend l'instantané figé : ni un
+  // abonné ni un lecteur ne voit la racine nouvelle avec le papier de
+  // l'ancienne, pas même quand une écriture des réglages de l'ancienne
+  // racine, déjà dans la file, publie en finissant. seance.racine, elle, est
+  // la nouvelle dès poser() : un papier choisi pendant la relecture s'écrit
+  // là.
+  async function changerDeRacine(nouvelle, poser) {
+    lireEtat();
+    try {
+      await poser();
+    } finally {
+      await relireReglagesMachine(nouvelle);
+    }
   }
 
   // Le cadrage demandé, écrit par la file dans les réglages de sa racine. Un
@@ -1524,20 +1555,22 @@ export function creerSeance({
   // (§ 8.6) : la paire alignée de l'Ouvert gardé (enregistrerAilleurs), puis
   // les logos de son dossier, recopiés un à un dans le dossier neuf — un logo
   // que l'ancien support ne rend plus ne refuse rien, et LOGOS_NON_COPIES
-  // s'annonce parmi les avertissements de l'Ouvert (§ 8.7) —, puis
-  // le verrou rendu là où il était, puis, en écriture, pris là-bas. La séance
-  // s'y poursuit, son support rétabli. Un dossier qui porte déjà
-  // l'événement (dejaPresent), celui de la séance compris, se refuse
-  // IDENTIFIANT_PRESENT, sans rien écrire : la paire s'y poserait sous une
-  // seconde base. Un état que le support refuse là-bas, le journal écrit, y
-  // transporte la séance : l'Ouvert avancé du refus et la racine nouvelle, en
-  // lecture, le support rompu par ce refus, le verrou rendu là où il était ;
-  // un nouvel essai y trouve ce journal, et se refuse. Tout autre échec
-  // laisse tout en l'état, le support toujours rompu. Réussi, il demande le
-  // type du support de la racine nouvelle, et SUPPORT_AMOVIBLE {dossier}
-  // annonce la garantie affaiblie d'un support amovible, comme la règle du
-  // dossier de travail au démarrage (§ 8.8). Le cadrage de l'événement se
-  // demande alors pour les réglages de la racine nouvelle (§ 8.5).
+  // s'annonce parmi les avertissements de l'Ouvert (§ 8.7) —, puis le verrou
+  // rendu là où il était, puis, en écriture, pris là-bas. La séance s'y
+  // poursuit, son support rétabli. Un dossier qui porte déjà l'événement
+  // (dejaPresent), celui de la séance compris, se refuse IDENTIFIANT_PRESENT,
+  // sans rien écrire : la paire s'y poserait sous une seconde base. Un état que
+  // le support refuse là-bas, le journal écrit, y transporte la séance :
+  // l'Ouvert avancé du refus et la racine nouvelle, en lecture, le support
+  // rompu par ce refus, le verrou rendu là où il était ; un nouvel essai y
+  // trouve ce journal, et se refuse. Réussi ou ainsi refusé, il ne publie la
+  // racine nouvelle qu'avec son papier, relu avant toute publication
+  // (changerDeRacine). Tout autre échec laisse tout en l'état, le support
+  // toujours rompu. Réussi, il demande le type du support de la racine
+  // nouvelle, et SUPPORT_AMOVIBLE {dossier} annonce la garantie affaiblie d'un
+  // support amovible, comme la règle du dossier de travail au démarrage
+  // (§ 8.8). Le cadrage de l'événement se demande alors pour les réglages de la
+  // racine nouvelle (§ 8.5).
   //
   // Sans racine, le dossier se demande à l'opérateur par fs.choisirDossier ;
   // son annulation ne change rien, et rend null.
@@ -1560,23 +1593,26 @@ export function creerSeance({
     } catch (erreur) {
       if (erreur instanceof ErreurStockage && erreur.code === 'ETAT_NON_ECRIT') {
         suspendre();
-        etat.mode = 'lecture';
-        etat.racine = nouvelle;
-        await rompre(erreur, erreur.details.ouvert);
-        etat.avertissementsGeste = await rendreVerrou(ouvert);
+        await changerDeRacine(nouvelle, async () => {
+          etat.mode = 'lecture';
+          etat.racine = nouvelle;
+          await rompre(erreur, erreur.details.ouvert);
+          etat.avertissementsGeste = await rendreVerrou(ouvert);
+        });
       }
       throw erreur;
     }
     const avertissements = await rendreVerrou(ouvert);
-    Object.assign(etat, {
-      ouvert: ailleurs,
-      source: null,
-      racine: nouvelle,
-      supportRompu: false,
-      refusSupport: null,
-      ailleurs: null,
+    await changerDeRacine(nouvelle, () => {
+      Object.assign(etat, {
+        ouvert: ailleurs,
+        source: null,
+        racine: nouvelle,
+        supportRompu: false,
+        refusSupport: null,
+        ailleurs: null,
+      });
     });
-    await relireReglagesMachine(nouvelle);
     // Le cadrage de l'événement suit la séance : demandé de nouveau pour la
     // racine nouvelle, il y remplace celui qui attendait l'ancienne, que son
     // support refuse.
@@ -1736,7 +1772,9 @@ export function creerSeance({
     /**
      * L'état observable (EtatSeance), figé en profondeur : le même objet
      * entre deux changements, un objet neuf à chaque changement, ses
-     * propositions figées partagées d'un état au suivant.
+     * propositions figées partagées d'un état au suivant. Pendant un
+     * changement de racine, celui d'avant, jusqu'à ce que le papier de la
+     * racine nouvelle soit relu (changerDeRacine).
      */
     etat: () => lireEtat(),
     /**
@@ -1964,14 +2002,16 @@ export function creerSeance({
     /**
      * Ferme l'événement ouvert, comme fermer, puis fait de racine le dossier
      * de travail, où la séance ouvre et crée désormais, et relit le papier
-     * de ses réglages ; rien ne s'écrit sans événement ouvert.
+     * de ses réglages avant de rien publier (changerDeRacine) ; rien ne
+     * s'écrit sans événement ouvert.
      */
     changerRacine: (nouvelle, quitter) =>
       enFile(async () => {
         exigerSauve(quitter);
         const avertissements = await fermerEvenement();
-        etat.racine = nouvelle;
-        await relireReglagesMachine(nouvelle);
+        await changerDeRacine(nouvelle, () => {
+          etat.racine = nouvelle;
+        });
         return { avertissements };
       }),
     passerEnEcriture: () => enFile(passerEnEcriture),

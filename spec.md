@@ -3468,7 +3468,11 @@ qui refuse de l'écrire, ne bloque le choix du papier : le papier choisi vaut
 pour la séance sur ce dossier de travail, sans être retenu sur la machine, et un
 avertissement nomme le fichier et dit que le choix n'est pas retenu ; la
 première écriture des réglages qui y réussit le retient, et l'avertissement se
-retire. Le cadrage attend.
+retire. Le cadrage attend. Le papier se relit à chaque changement de dossier de
+travail, écrire ailleurs compris, que l'écriture y réussisse ou que le support
+y refuse l'état (§ 8.6) : l'écran ne montre le nouveau dossier qu'avec son
+papier, jamais avec celui de l'ancien, pas même quand un choix fait pour
+l'ancien finit de s'écrire pendant le changement.
 
 **Le modèle de badge** décrit le support que la machine garnit — des cartes
 Avery 5392 prédécoupées, ou des A6 à découper (§ 11.2) —, pas le plan. Le

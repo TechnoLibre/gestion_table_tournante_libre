@@ -3762,6 +3762,12 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   const papierLu = (fs) => JSON.parse(fs.contenu('documents', FICHIER_REGLAGES)).papier;
   // Le texte de l'état et du journal sur le disque, null pour un absent.
   const evenementSurDisque = (fs) => [fs.contenu('documents', ETAT), fs.contenu('documents', JOURNAL)];
+  // Des réglages lisibles qui portent déjà un papier, A4 ou Lettre, à
+  // déposer sur une racine.
+  const REGLAGES_A4 = '{"cadrages":[],"format":1,"papier":"A4"}\n';
+  const REGLAGES_LETTRE = '{"cadrages":[],"format":1,"papier":"Lettre"}\n';
+  const sansReglages = (seance) =>
+    seance.etat().avertissements.filter(({ code }) => code === 'REGLAGES_NON_ECRITS' || code === 'REGLAGES_ILLISIBLES');
 
   test("null au départ ; choisirPapier écrit les seuls réglages, et une séance neuve sur la même racine le lit, jamais redemandé", async () => {
     const { fs, seance } = await ouvertSur();
@@ -3897,7 +3903,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     fs.deposerDossier(PORTABLE.id);
     await seance.changerRacine(PORTABLE);
     assert.equal(seance.etat().papier, 'A4', 'une racine sans réglages : le choix de la séance');
-    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"Lettre"}\n');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_LETTRE);
     await seance.changerRacine(DOC);
     await seance.changerRacine(PORTABLE);
     assert.equal(seance.etat().papier, 'Lettre', 'un papier écrit sur la racine l’emporte');
@@ -3925,7 +3931,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     fs.deposer('documents', FICHIER_REGLAGES, texte);
     const { seance, planificateur } = await ouvertSur(chargeEssai(), { fs });
     await seance.choisirPapier('A4');
-    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"Lettre"}\n');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_LETTRE);
     seance.demanderCadrage({ k: 2, tx: 0, ty: 0 });
     await planificateur.avancer(DELAI_REGLAGES_MS);
     await laisser();
@@ -4009,12 +4015,6 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     assert.equal(seance.etat().papier, 'Lettre');
   });
 
-  // Des réglages lisibles qui portent déjà un papier, sur la racine des
-  // documents.
-  const REGLAGES_A4 = '{"cadrages":[],"format":1,"papier":"A4"}\n';
-  const sansReglages = (seance) =>
-    seance.etat().avertissements.filter(({ code }) => code === 'REGLAGES_NON_ECRITS' || code === 'REGLAGES_ILLISIBLES');
-
   test("une écriture refusée une fois : le papier de la séance l'emporte sur celui du fichier, le cadrage écrit ensuite l'écrit avec lui, et l'avis se retire", async () => {
     const fs = creerFichiersSimules();
     fs.deposerDossier('documents');
@@ -4087,9 +4087,13 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   test("un papier écrit pour l'ancienne racine, dans la file pendant un changement de racine, ne se publie jamais sur la nouvelle", async () => {
     const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
     await seance.attendre();
-    // Un fichier présent : sa lecture se retient, celle d'un absent non.
-    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null}\n');
+    // Un fichier présent : sa lecture se retient, celle d'un absent non. Le
+    // papier de départ, A4, est celui que la nouvelle racine ne doit pas
+    // montrer.
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
     fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().papier, 'A4', 'papier de départ');
     const publies = [];
     seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
     const lecture = retenirLectureReglages(fs);
@@ -4142,6 +4146,167 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     assert.equal(seance.etat().papier, null);
   });
 
+  // La fenêtre d'un changement de racine vers les Documents, ouverte depuis
+  // une séance sur le portable au papier A4 : la racine a changé, la
+  // relecture de son papier attend derrière le choix retenu par lecture.
+  // Retient la relecture du papier des Documents, libère le choix, qui
+  // publie en finissant, puis lit etat() avant et après ce choix : tant que
+  // la relecture attend, etat() rend le portable avec l'A4, jamais les
+  // Documents avec l'ancien papier. Libère enfin la relecture.
+  async function papierDansLaFenetre(fs, seance, lecture, choix) {
+    const relecture = retenirLectureReglages(fs, DOC.id);
+    const paire = () => [seance.etat().racine.id, seance.etat().papier];
+    assert.deepEqual(paire(), [PORTABLE.id, 'A4'], 'etat() avant le choix');
+    lecture.liberer();
+    await choix;
+    for (let pas = 0; pas < 50 && !relecture.prise(); pas += 1) await laisser();
+    assert.equal(relecture.prise(), true, 'la relecture du papier attend');
+    assert.deepEqual(paire(), [PORTABLE.id, 'A4'], 'etat() après le choix');
+    relecture.liberer();
+  }
+
+  // Un abonné refait l'instantané à chaque publication ; sans abonné, il
+  // reste à refaire depuis la dernière, et seul celui que changerDeRacine
+  // fige protège etat() pendant la fenêtre.
+  const ABONNES = [
+    [true, 'un abonné'],
+    [false, 'sans abonné'],
+  ];
+
+  for (const [abonne, quiEcoute] of ABONNES) {
+    test(`écrire ailleurs réussi, ${quiEcoute}, un papier de l'ancienne racine dans la file : ni une publication ni etat() ne montrent la racine nouvelle avec l'ancien papier`, async () => {
+      const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+      fs.deposerDossier(PORTABLE.id);
+      fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_A4);
+      fs.deposerDossier('documents');
+      fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_LETTRE);
+      const montage = monter({ fs, racine: PORTABLE });
+      const { seance } = montage;
+      await enEcriture(montage);
+      assert.equal(seance.etat().papier, 'A4', 'papier de départ');
+      // L'état d'un geste refusé rompt le support.
+      fs.pannes.renommage(PORTABLE.id, 11);
+      await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Achillée' } }), 'ETAT_NON_ECRIT');
+      assert.equal(seance.supportRompu, true);
+      // Le même papier choisi de nouveau pour l'ancienne racine : sa lecture
+      // des réglages attend, et le choix reste dans la file.
+      const lecture = retenirLectureReglages(fs);
+      const choix = seance.choisirPapier('A4');
+      await laisser();
+      assert.equal(lecture.prise(), true, 'la lecture du choix est partie');
+      const publies = [];
+      if (abonne) seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+      const ailleurs = seance.ecrireAilleurs(DOC);
+      for (let pas = 0; pas < 50 && seance.racine.id !== DOC.id; pas += 1) await laisser();
+      assert.equal(seance.racine.id, DOC.id, 'la racine a changé, le choix attend');
+      await papierDansLaFenetre(fs, seance, lecture, choix);
+      await ailleurs;
+      await seance.attendre();
+      assert.equal(seance.supportRompu, false);
+      assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== 'Lettre'), []);
+      assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [DOC.id, 'Lettre']);
+    });
+  }
+
+  // Une séance en écriture sur le portable, papier A4, dont le support s'est
+  // rompu ; les Documents portent le papier Lettre, et y écrire ailleurs
+  // pose le journal mais voit l'état refusé, ETAT_NON_ECRIT.
+  async function rompuSurPortable() {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_A4);
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_LETTRE);
+    const montage = monter({ fs, racine: PORTABLE });
+    await enEcriture(montage);
+    const { seance } = montage;
+    await seance.executer('ajouterParticipant', { champs: { nom: 'Achillée' } });
+    assert.equal(seance.etat().papier, 'A4', 'papier de départ');
+    fs.pannes.ecriture('portable');
+    await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Camomille' } }), 'ECRITURE');
+    // La deuxième écriture atomique dans les Documents, l'état qui suit le
+    // journal, voit refusés tous ses renommages.
+    const ecrireAtomique = fs.ecrireAtomique;
+    let ecritures = 0;
+    fs.ecrireAtomique = async (racine, chemin, texte) => {
+      if (racine.id === 'documents') {
+        ecritures += 1;
+        if (ecritures === 2) fs.pannes.renommage('documents', 11);
+      }
+      return ecrireAtomique(racine, chemin, texte);
+    };
+    return montage;
+  }
+
+  test("écrire ailleurs en échec ETAT_NON_ECRIT : la séance relit le papier de la racine nouvelle avant de la publier", async () => {
+    const { seance } = await rompuSurPortable();
+    const publies = [];
+    seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+    await refus(seance.ecrireAilleurs(DOC), 'ETAT_NON_ECRIT');
+    assert.deepEqual([seance.racine.id, seance.supportRompu], [DOC.id, true]);
+    assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== 'Lettre'), []);
+    assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [DOC.id, 'Lettre']);
+  });
+
+  for (const [abonne, quiEcoute] of ABONNES) {
+    test(`écrire ailleurs en échec ETAT_NON_ECRIT, ${quiEcoute}, un papier de l'ancienne racine dans la file : ni une publication ni etat() ne montrent la racine nouvelle avec l'ancien papier`, async () => {
+      const { fs, seance } = await rompuSurPortable();
+      // Le papier A4 choisi de nouveau pour l'ancienne racine : sa lecture
+      // des réglages attend, et le choix reste dans la file.
+      const lecture = retenirLectureReglages(fs);
+      const choix = seance.choisirPapier('A4');
+      await laisser();
+      assert.equal(lecture.prise(), true, 'la lecture du choix est partie');
+      const publies = [];
+      if (abonne) seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+      const ailleurs = refus(seance.ecrireAilleurs(DOC), 'ETAT_NON_ECRIT');
+      for (let pas = 0; pas < 50 && seance.racine.id !== DOC.id; pas += 1) await laisser();
+      assert.equal(seance.racine.id, DOC.id, 'la racine a changé, le choix attend');
+      await papierDansLaFenetre(fs, seance, lecture, choix);
+      await ailleurs;
+      await seance.attendre();
+      assert.equal(seance.supportRompu, true);
+      assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== 'Lettre'), []);
+      assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [DOC.id, 'Lettre']);
+    });
+  }
+
+  test("écrire ailleurs refusé ETAT_NON_ECRIT puis par une faute du code au rendu du verrou : le papier de la racine nouvelle se relit quand même, et l'état se publie", async () => {
+    const { fs, seance } = await rompuSurPortable();
+    fs.deverrouiller = async () => {
+      throw new PanneSimulee();
+    };
+    const publies = [];
+    seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+    await assert.rejects(seance.ecrireAilleurs(DOC), PanneSimulee);
+    assert.equal(seance.racine.id, DOC.id);
+    assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== 'Lettre'), []);
+    assert.deepEqual(publies.at(-1), [DOC.id, 'Lettre']);
+    assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [DOC.id, 'Lettre']);
+  });
+
+  test("pendant la relecture du papier d'un changement de racine, etat() rend l'état d'avant, racine et papier ensemble", async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_LETTRE);
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().papier, 'A4', 'papier de départ');
+    // Un appel de la file publie : sans abonné, l'instantané est à refaire.
+    await seance.passerEnLecture();
+    const lecture = retenirLectureReglages(fs);
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(lecture.prise(), true, 'la relecture du changement de racine est partie');
+    assert.equal(seance.racine.id, PORTABLE.id);
+    const pendant = seance.etat();
+    assert.deepEqual([pendant.racine.id, pendant.papier], [DOC.id, 'A4']);
+    lecture.liberer();
+    await changement;
+    assert.deepEqual([seance.etat().racine.id, seance.etat().papier], [PORTABLE.id, 'Lettre']);
+  });
+
   test("un cadrage différé et le choix du papier écrits ensemble : les deux restent, l'un après l'autre", async () => {
     const { fs, seance, planificateur } = await ouvertSur();
     seance.demanderCadrage({ k: 1.5, tx: 3, ty: 4 });
@@ -4169,8 +4334,9 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   });
 
   // Retient la réponse de la première lecture de reglages_locaux.json qui
-  // suit : la lecture se fait aussitôt, sa réponse attend liberer().
-  function retenirLectureReglages(fs) {
+  // suit, sur la racine idRacine quand elle est donnée, sur toute racine
+  // sinon : la lecture se fait aussitôt, sa réponse attend liberer().
+  function retenirLectureReglages(fs, idRacine) {
     const lireTexte = fs.lireTexte;
     let liberer = null;
     const retenue = new Promise((resolve) => {
@@ -4178,7 +4344,8 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     });
     let prise = false;
     fs.lireTexte = async (racine, chemin) => {
-      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      const autre = idRacine !== undefined && racine.id !== idRacine;
+      if (prise || chemin !== FICHIER_REGLAGES || autre) return lireTexte(racine, chemin);
       prise = true;
       const reponse = await lireTexte(racine, chemin);
       await retenue;
@@ -4190,7 +4357,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
   test("une relecture du papier partie avant un choix ne l'écrase pas : à la création, l'état suit le fichier", async () => {
     const fs = creerFichiersSimules();
     fs.deposerDossier('documents');
-    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4"}\n');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
     const lecture = retenirLectureReglages(fs);
     const { seance } = monter({ fs });
     await laisser();
@@ -4207,7 +4374,7 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
     await seance.attendre();
     fs.deposerDossier(PORTABLE.id);
-    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4"}\n');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_A4);
     const lecture = retenirLectureReglages(fs);
     const changement = seance.changerRacine(PORTABLE);
     await laisser();
