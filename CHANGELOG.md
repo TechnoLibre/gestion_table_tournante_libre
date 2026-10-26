@@ -671,6 +671,22 @@
   notice `LICENSE`, permet de distribuer l'application avec des composants
   sous licence libre permissive, comme ceux qu'elle incorpore ; la carte
   « Licence » d'« À propos » le dit.
+- « Ouvrir le dossier » et « Ouvrir dans l'explorateur », quand l'explorateur
+  ne s'ouvre pas, disent que l'ouverture a échoué, avec la raison que donne le
+  système, au lieu de « Cette commande n'est pas offerte ici ».
+- Sous Linux, les liens d'« À propos » s'ouvrent par le même ouvreur du bureau
+  que « Ouvrir le dossier ». Sous tout système, un lien qui ne s'ouvre pas le
+  dit sous les liens de sa carte, avec la raison, au lieu de se taire.
+- Des réglages locaux qui ne se lisent pas en disent la raison en clair, sans le
+  code interne du refus entre parenthèses. Un fichier qui n'est pas en UTF-8
+  le dit, au lieu d'annoncer que le système en refuse la lecture ; un lien qui
+  mène hors du dossier de travail le dit aussi ; une lecture que le système
+  refuse cite entre parenthèses la cause qu'il donne, comme « EACCES ».
+- Un dossier de travail qui refuse l'écriture ne propose plus d'y importer les
+  événements de l'autre emplacement : la copie y échouerait.
+- Un dossier dont le fichier d'essai se relit autrement qu'il s'est écrit
+  nomme cette cause en clair dans l'application de bureau, comme dans le
+  navigateur, et non par un code.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

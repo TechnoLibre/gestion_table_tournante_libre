@@ -8,7 +8,8 @@
 // un canal de plus, gtt:copier, remet un texte au presse-papiers du système
 // (window.gtt.copier) ; un dernier, gtt:imprimer, imprime la page sur le
 // papier et dans l'orientation qu'elle demande (electron/impression.js,
-// window.gtt.imprimer).
+// window.gtt.imprimer). Dans l'autre sens, le canal gtt:lien porte à la
+// page l'issue d'un lien qu'elle a fait ouvrir au navigateur du système.
 //
 // La page n'a ni Node ni accès au disque : isolation de contexte active,
 // intégration de Node coupée, rendu en bac à sable. Elle n'atteint le
@@ -21,7 +22,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { creerFichiers, decrireSysteme, processusVivant, servir } from './fichiers.js';
+import { CANAL_LIEN, creerFichiers, decrireSysteme, ouvrirAdresse, processusVivant, servir } from './fichiers.js';
 import { servirImpression } from './impression.js';
 
 // Chemins relatifs à ce module : ils valent dans le dépôt comme dans
@@ -111,6 +112,19 @@ servirImpression((canal, gestionnaire) => ipcMain.handle(canal, gestionnaire));
 // seulement s'il porte encore la séance qui l'a pris.
 app.on('quit', () => fichiers.rendreVerrousTenus());
 
+// Ouvre une adresse admise et envoie son issue à la page, sur CANAL_LIEN :
+// { adresse, raison }, raison vide quand l'ouverture est lancée, sinon
+// celle de son échec, que la page dit sous les liens d'« À propos ». Une
+// fenêtre fermée entre-temps ne reçoit rien.
+async function annoncerIssue(contenu, adresse) {
+  const raison = await ouvrirAdresse(adresse, { shell });
+  try {
+    contenu.send(CANAL_LIEN, { adresse, raison });
+  } catch {
+    // Le contenu détruit : plus personne à qui le dire.
+  }
+}
+
 function creerFenetre() {
   fenetre = new BrowserWindow({
     width: 1366,
@@ -125,10 +139,12 @@ function creerFenetre() {
   // La page ne quitte jamais www/ : toute nouvelle fenêtre est refusée, toute
   // navigation annulée, quelle que soit sa cible. Un lien que la page ouvre
   // dans une nouvelle fenêtre, et dont l'adresse est exactement l'une des
-  // ADRESSES_EXTERNES, passe au navigateur du système ; la fenêtre reste
-  // refusée.
-  fenetre.webContents.setWindowOpenHandler(({ url }) => {
-    if (ADRESSES_EXTERNES.has(url)) shell.openExternal(url).catch(() => {});
+  // ADRESSES_EXTERNES, passe au navigateur du système par ouvrirAdresse —
+  // l'ouvreur du bureau hors de Windows et de macOS, comme pour un dossier ;
+  // la fenêtre reste refusée.
+  const contenu = fenetre.webContents;
+  contenu.setWindowOpenHandler(({ url }) => {
+    if (ADRESSES_EXTERNES.has(url)) annoncerIssue(contenu, url);
     return { action: 'deny' };
   });
   fenetre.webContents.on('will-navigate', (evenement) => evenement.preventDefault());

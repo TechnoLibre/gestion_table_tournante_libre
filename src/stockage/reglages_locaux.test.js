@@ -50,8 +50,12 @@ function disque(texte = null) {
   return fs;
 }
 
-// L'avertissement d'un fichier illisible, de raison donnée.
-const illisibles = (raison) => ({ code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison } });
+// L'avertissement d'un fichier illisible, de raison donnée, et de la cause
+// que porte le refus de lecture, quand il en porte une.
+const illisibles = (raison, cause = null) => ({
+  code: 'REGLAGES_ILLISIBLES',
+  details: { chemin: FICHIER_REGLAGES, raison, ...(cause === null ? {} : { cause }) },
+});
 
 // Trois réglages successifs : le papier, puis un cadrage, puis ce cadrage
 // zoomé et déplacé.
@@ -149,12 +153,31 @@ describe('réglages locaux : lire, jamais bloquant (§ 8.5)', () => {
     }
   });
 
-  test('une lecture refusée par le système de fichiers donne les défauts et son code pour raison ; une panne du processus remonte', async () => {
+  test('une lecture refusée par le système de fichiers donne les défauts, son code pour raison et sa cause ; une panne du processus remonte', async () => {
     const fs = disque('{"cadrages":[],"format":1,"papier":"A4"}\n');
     fs.lireTexte = async (racine, chemin) => {
       throw new ErreurStockage('LECTURE', { chemin, dossier: racine.chemin, cause: 'EACCES' });
     };
-    assert.deepEqual(await lireReglages(fs, DOC), { reglages: DEFAUTS, avertissement: illisibles('LECTURE') });
+    assert.deepEqual(await lireReglages(fs, DOC), {
+      reglages: DEFAUTS,
+      avertissement: illisibles('LECTURE', 'EACCES'),
+    });
+
+    // Des octets hors UTF-8 : le système a lu le fichier, la cause le dit ;
+    // les octets du refus ne passent pas dans l'avertissement.
+    const latin = disque();
+    latin.deposerOctets('documents', FICHIER_REGLAGES, Uint8Array.of(0x7b, 0xe9, 0x7d));
+    assert.deepEqual(await lireReglages(latin, DOC), {
+      reglages: DEFAUTS,
+      avertissement: illisibles('LECTURE', 'UTF8_INVALIDE'),
+    });
+
+    // Un refus sans cause ne lui en invente pas.
+    const lien = disque();
+    lien.lireTexte = async (_racine, chemin) => {
+      throw new ErreurStockage('CHEMIN_REFUSE', { chemin });
+    };
+    assert.deepEqual(await lireReglages(lien, DOC), { reglages: DEFAUTS, avertissement: illisibles('CHEMIN_REFUSE') });
 
     const coupe = disque('{"cadrages":[],"format":1,"papier":"A4"}\n');
     coupe.pannes.couperApres(0);

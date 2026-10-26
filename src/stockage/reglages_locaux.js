@@ -168,27 +168,31 @@ function rangee(valeur) {
 }
 
 // Ce que rend lireReglages d'un fichier illisible : les défauts, et
-// l'avertissement qui nomme le fichier et la raison.
-const illisibles = (raison) => ({
-  reglages: defauts(),
-  avertissement: { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison } },
-});
+// l'avertissement qui nomme le fichier, la raison, et la cause du refus de
+// lecture quand il en porte une, chaîne.
+const illisibles = (raison, cause = null) => {
+  const details = { chemin: FICHIER_REGLAGES, raison };
+  if (typeof cause === 'string') details.cause = cause;
+  return { reglages: defauts(), avertissement: { code: 'REGLAGES_ILLISIBLES', details } };
+};
 
 /**
  * Lit les réglages locaux de racine (§ 8.5), sans rien écrire ni jamais
  * bloquer. Un fichier absent rend les défauts, sans avertissement. Un fichier
  * illisible rend les défauts et l'avertissement REGLAGES_ILLISIBLES {chemin,
- * raison} : raison JSON pour un texte qui ne se lit pas, vide compris ; FORME
- * pour une valeur connue hors de sa règle — un format qui n'est pas un entier
- * ≥ 1, un papier hors de null et des clés de PAPIERS, un modèle de badge
- * présent hors des clés de MODELES_BADGE, une case du pied TechnoLibre
- * présente qui n'est pas un booléen, un texte de ce pied présent qui n'est
- * pas une chaîne, des cases de ce que le badge imprime qui ne sont pas un
- * objet, ou dont une donnée connue n'est pas un booléen, un cadrage fautif ou
- * en double, une taille du texte présente hors des paliers ; le code d'une
- * lecture que le système de fichiers refuse autrement que par ABSENT. Une
- * marque d'ordre d'octets en tête est ignorée. Les réglages lus gardent leurs
- * clés inconnues et leur format ; leurs cadrages sont triés par identifiant
+ * raison, cause?} : raison JSON pour un texte qui ne se lit pas, vide
+ * compris ; FORME pour une valeur connue hors de sa règle — un format qui
+ * n'est pas un entier ≥ 1, un papier hors de null et des clés de PAPIERS, un
+ * modèle de badge présent hors des clés de MODELES_BADGE, une case du pied
+ * TechnoLibre présente qui n'est pas un booléen, un texte de ce pied présent
+ * qui n'est pas une chaîne, des cases de ce que le badge imprime qui ne sont
+ * pas un objet, ou dont une donnée connue n'est pas un booléen, un cadrage
+ * fautif ou en double, une taille du texte présente hors des paliers ; le
+ * code d'une lecture que le système de fichiers refuse autrement que par
+ * ABSENT, et cause, celle de ses détails quand ils en portent une — EACCES,
+ * ou UTF8_INVALIDE pour des octets qui ne sont pas de l'UTF-8. Une marque
+ * d'ordre d'octets en tête est ignorée. Les réglages lus gardent leurs clés
+ * inconnues et leur format ; leurs cadrages sont triés par identifiant
  * d'événement.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
@@ -203,7 +207,7 @@ export async function lireReglages(fs, racine) {
   } catch (erreur) {
     if (!(erreur instanceof ErreurStockage)) throw erreur;
     if (erreur.code === 'ABSENT') return { reglages: defauts(), avertissement: null };
-    return illisibles(erreur.code);
+    return illisibles(erreur.code, erreur.details?.cause);
   }
   let lu;
   try {

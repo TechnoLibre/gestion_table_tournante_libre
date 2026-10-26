@@ -126,6 +126,11 @@ const DOSSIER_DONNEES = 'data';
 // de l'ASCII, qu'un support qui altère les octets ne rend pas tel quel.
 const TEXTE_TEMOIN = 'T\u{E9}moin d\u{2019}\u{E9}criture de Gestion table tournante Libre.\n';
 
+// La cause d'une sonde dont le témoin relu diffère de ce qui vient d'y être
+// écrit, recopiée : celle des deux autres systèmes de fichiers, dont la table
+// des textes (src/application/libelles/stockage.js) porte la phrase.
+const RELECTURE_DIFFERENTE = 'RELECTURE_DIFFERENTE';
+
 /**
  * Un appel système qu'un antivirus ou un agent de synchronisation peut
  * refuser sous Windows, tant qu'il tient le fichier ouvert (EPERM, EBUSY,
@@ -460,6 +465,44 @@ export function lancerOuvreur(commande, arguments_, { variables = {}, delai = DE
     ouvreur.on('exit', (code, signal) => rendre(code === 0 ? '' : raisonDeSortie(code, signal)));
     minuterie = setTimeout(() => rendre(''), delai);
   });
+}
+
+/**
+ * Le canal par lequel le processus principal envoie à la page l'issue d'un
+ * lien qu'il a passé au navigateur du système : { adresse, raison }, raison
+ * celle d'ouvrirAdresse. electron/preload.cjs le recopie, et porte chaque
+ * issue à la page par window.postMessage, sous ce même nom pour type.
+ */
+export const CANAL_LIEN = 'gtt:lien';
+
+/**
+ * Passe une adresse au navigateur du système et rend l'issue, sans jamais
+ * lever : '' quand l'ouverture est lancée, sinon la raison de son échec,
+ * jamais vide. Sous Windows et macOS, shell.openExternal l'ouvre, et son
+ * rejet donne sa raison : son message, à défaut « openExternal : » suivi de
+ * ce qu'il a rejeté. Ailleurs, il rend un succès sans attendre l'ouvreur du
+ * bureau, dont l'échec ne laisse aucune trace : l'adresse passe par ce même
+ * ouvreur, comme un dossier (ouvrirDansExplorateur), et son issue est celle
+ * de lancerOuvreur. La liste des adresses admises n'est pas jugée ici : le
+ * processus principal la juge avant.
+ *
+ * @param {string} adresse
+ * @param {Object} reglages
+ * @param {Object} reglages.shell  le module shell d'Electron
+ * @param {string} [reglages.plateforme]  process.platform
+ * @param {Function} [reglages.lancerOuvreur]  celui de ce module
+ * @returns {Promise<string>}
+ */
+export async function ouvrirAdresse(adresse, { shell, plateforme = process.platform, lancerOuvreur: ouvrir = lancerOuvreur }) {
+  if (parOuvreurDuBureau(plateforme)) {
+    return ouvrir(OUVREUR_BUREAU, [adresse], { variables: { MM_NOTTTY: '1' }, delai: DELAI_OUVREUR_MS });
+  }
+  try {
+    await shell.openExternal(adresse);
+    return '';
+  } catch (erreur) {
+    return erreur instanceof Error && erreur.message !== '' ? erreur.message : `openExternal : ${String(erreur)}`;
+  }
 }
 
 // Vrai pour une erreur du système, telle que node:fs la lève : un code et
@@ -906,7 +949,8 @@ export function creerFichiers({
     // Crée la racine et ses parents, efface un témoin resté — ou un lien posé
     // sous son nom, que l'effacement ne suit pas —, écrit le témoin en
     // exclusif, le vide sur le disque, le relit et l'efface. Un échec rend sa
-    // cause, et le témoin s'efface.
+    // cause, RELECTURE_DIFFERENTE pour un témoin relu autrement qu'écrit, et
+    // le témoin s'efface.
     async sonder(racine) {
       const loc = localiser(racine, '');
       const temoin = chemins.join(loc.absolu, TEMOIN);
@@ -916,7 +960,9 @@ export function creerFichiers({
         await ecrireDans(await fs.open(temoin, 'wx'), TEXTE_TEMOIN);
         const relu = (await fs.readFile(temoin)).toString('utf8');
         await fs.unlink(temoin);
-        return relu === TEXTE_TEMOIN ? { inscriptible: true, cause: null } : { inscriptible: false, cause: 'RELECTURE' };
+        return relu === TEXTE_TEMOIN
+          ? { inscriptible: true, cause: null }
+          : { inscriptible: false, cause: RELECTURE_DIFFERENTE };
       } catch (erreur) {
         if (!estErreurSysteme(erreur)) throw erreur;
         await effacer(temoin).catch(() => {});

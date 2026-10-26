@@ -3463,7 +3463,11 @@ cadrage, le papier, le modèle de badge, la case du pied TechnoLibre et son
 texte, les cases de ce que le badge imprime et la taille du texte passent par
 une même file, qui relit le fichier avant chaque écriture : deux écrivains qui
 le liraient chacun avant que l'autre l'ait écrit perdraient le réglage de l'un.
-Un fichier que la lecture ne prend pas ne s'écrase pas. Ni lui, ni un dossier
+Un fichier que la lecture ne prend pas ne s'écrase pas ; son avertissement
+dit pourquoi en clair — un texte qui n'est pas du JSON, une valeur hors de sa
+règle, des octets qui ne sont pas de l'UTF-8, un lien qui mène hors du dossier
+de travail, une lecture que le système refuse, la cause qu'il donne entre
+parenthèses —, jamais par le code interne du refus. Ni lui, ni un dossier
 qui refuse de l'écrire, ne bloque le choix du papier : le papier choisi vaut
 pour la séance sur ce dossier de travail, sans être retenu sur la machine, et un
 avertissement nomme le fichier et dit que le choix n'est pas retenu ; la
@@ -3628,12 +3632,20 @@ avant d'ouvrir la liste, puisqu'aucun geste ne s'y écrirait.
   contient des événements, le logiciel le dit et propose de les importer (§ 8.7)
   plutôt que d'ouvrir sur la commande de création (§ 8.1). L'import **copie** :
   le logiciel annonce que les originaux restent où ils sont, sinon deux copies du
-  même événement dérivent sous le même identifiant interne.
+  même événement dérivent sous le même identifiant interne. Un dossier de
+  travail qui refuse l'écriture ne le propose pas : la copie y échouerait, et
+  la question posée avant d'ouvrir la liste, ou à défaut la première écriture
+  refusée, nomme ce refus.
 - **Le mode portable affaiblit une garantie du § 8.8** sur un support amovible,
   et le logiciel l'annonce.
 
 **Dans les deux modes, le logiciel affiche le chemin du dossier de travail en
 clair dans la liste des événements**, et une commande l'ouvre dans l'explorateur.
+Sous `electron`, hors de Windows et de macOS, l'explorateur s'ouvre par
+l'ouvreur du bureau, dont la coquille attend l'issue. Une ouverture qui échoue
+le dit à côté de la commande — l'ouverture a échoué, avec la raison que donne
+le système —, et la commande reste offerte : elle n'est pas absente, comme
+sous `web`.
 
 Ce que cette section défend n'est pas l'emplacement *Documents* : c'est que
 l'opérateur puisse copier un événement sur une clé, le joindre à un courriel et
@@ -9431,7 +9443,13 @@ dans une nouvelle fenêtre, sans ouvreur ni référent : un nouvel onglet sur
 `web` ; sous `electron`, la coquille refuse toute fenêtre et toute navigation,
 et passe au navigateur du système l'adresse cliquée quand elle est exactement
 l'une des quatre adresses https du panneau (§ 2). Une autre adresse n'ouvre
-rien.
+rien. Hors de Windows et de macOS, l'adresse passe par l'ouvreur du bureau,
+celui qui montre un dossier (§ 8.6), dont la coquille attend l'issue ; ailleurs,
+par le navigateur que désigne le système. Dans les deux cas, l'issue revient à
+la page : une ouverture qui échoue se dit dans le panneau, sous les liens de la
+carte qui porte le lien, par le texte de l'explorateur qui ne s'ouvre pas —
+l'ouverture a échoué, avec sa raison —, et le même lien ouvert ensuite le
+retire.
 
 **Le panneau « Paramètres »** s'ouvre du bandeau, par la commande placée juste à
 gauche de « À propos », et remplace l'écran comme lui ; les deux ne sont jamais

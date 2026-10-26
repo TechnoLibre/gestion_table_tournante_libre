@@ -11,7 +11,8 @@
 // composants tiers aussi, que composantsDesTiers tire de TIERS.txt lu de la
 // même façon. Le panneau se monte sous le t de l'écran, celui d'App, dont
 // les attendus se tirent. Aucune épreuve ne suit un lien : le navigateur
-// d'épreuve n'a pas de réseau (§ 19.2).
+// d'épreuve n'a pas de réseau (§ 19.2) ; l'issue d'un lien que la coquille
+// rapporte se poste à la fenêtre comme electron/preload.cjs la poste.
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
@@ -313,6 +314,103 @@ describe('« À propos » : les liens (§ 2, § 18.6)', () => {
         expect(getComputedStyle(lien).textDecorationLine, theme).toContain('underline');
       });
     }
+  });
+
+  test('un lien que la coquille n’ouvre pas : l’échec se dit sous les liens de sa carte, sa raison citée ; le lien ouvert le retire', async () => {
+    const conteneur = monterSeul(facadeDEpreuve());
+    // Ce que electron/preload.cjs poste à la page pour chaque issue.
+    const issue = (nom, raison) => window.postMessage({ type: 'gtt:lien', adresse: LIENS[nom], raison }, '*');
+    const refusDe = (nom) => conteneur.querySelector(`[data-lien-non-ouvert="${nom}"] [data-refus="NON_DISPONIBLE"]`);
+    const attendreRefus = (nom) =>
+      vi.waitFor(() => {
+        flushSync();
+        const refus = refusDe(nom);
+        expect(refus, nom).not.toBeNull();
+        return refus;
+      });
+    // Un message qui attend son tour : les messages se reçoivent dans
+    // l'ordre où ils sont postés.
+    const temoin = () =>
+      new Promise((resoudre) => window.addEventListener('message', () => resoudre(), { once: true }));
+
+    const raison = `xdg-open: no method available for opening '${LIENS.site}'`;
+    issue('site', raison);
+    const refusSite = await attendreRefus('site');
+    expect(refusSite.textContent).toContain(t('NON_DISPONIBLE', { cause: raison }));
+    expect(refusSite.closest('[data-credits]')).not.toBeNull();
+    const lienSite = conteneur.querySelector('[data-lien="site"]');
+    expect(refusSite.getBoundingClientRect().top).toBeGreaterThanOrEqual(lienSite.getBoundingClientRect().bottom);
+
+    // L'échec d'un lien de la licence se dit sous les liens de la licence, et
+    // remplace le précédent.
+    issue('agpl', 'xdg-open : statut 3');
+    const refusAgpl = await attendreRefus('agpl');
+    const lienAgpl = conteneur.querySelector('[data-lien="agpl"]');
+    expect(refusAgpl.closest('[data-credits]')).toBeNull();
+    expect(refusAgpl.getBoundingClientRect().top).toBeGreaterThanOrEqual(lienAgpl.getBoundingClientRect().bottom);
+    expect(refusDe('site')).toBeNull();
+
+    // Ni un autre type, ni une adresse hors des liens, ni une raison qui
+    // n'est pas une chaîne ne disent rien ; le lien ouvert retire le refus.
+    for (const message of [
+      { type: 'autre', adresse: LIENS.site, raison },
+      { type: 'gtt:lien', adresse: 'https://exemple.invalid/', raison },
+      { type: 'gtt:lien', adresse: LIENS.projet, raison: 3 },
+    ]) {
+      const recu = temoin();
+      window.postMessage(message, '*');
+      await recu;
+    }
+    flushSync();
+    expect(conteneur.querySelectorAll('[data-lien-non-ouvert]').length).toBe(1);
+    expect(refusDe('agpl')).not.toBeNull();
+    issue('agpl', '');
+    await vi.waitFor(() => {
+      flushSync();
+      expect(conteneur.querySelector('[data-lien-non-ouvert]')).toBeNull();
+    });
+  });
+
+  test('un message d’une autre fenêtre ne change rien, même de la forme que poste la coquille : ni un échec, ni le retrait d’un échec', async () => {
+    const conteneur = monterSeul(facadeDEpreuve());
+    const refusDe = (nom) => conteneur.querySelector(`[data-lien-non-ouvert="${nom}"] [data-refus="NON_DISPONIBLE"]`);
+    const raison = 'xdg-open : statut 3';
+    window.postMessage({ type: 'gtt:lien', adresse: LIENS.site, raison }, '*');
+    await vi.waitFor(() => {
+      flushSync();
+      expect(refusDe('site')).not.toBeNull();
+    });
+
+    // Un cadre monté dans la page poste, de son propre script, l'échec d'un
+    // lien de la licence, puis l'ouverture du lien en échec : la source de
+    // ces messages est le cadre, non la fenêtre du panneau.
+    const cadre = document.createElement('iframe');
+    document.body.append(cadre);
+    try {
+      const recus = new Promise((resoudre) => {
+        let compte = 0;
+        const ecouter = ({ source }) => {
+          if (source !== cadre.contentWindow || ++compte < 2) return;
+          window.removeEventListener('message', ecouter);
+          resoudre();
+        };
+        window.addEventListener('message', ecouter);
+      });
+      const messages = [
+        { type: 'gtt:lien', adresse: LIENS.agpl, raison },
+        { type: 'gtt:lien', adresse: LIENS.site, raison: '' },
+      ];
+      const script = cadre.contentDocument.createElement('script');
+      const appels = messages.map((message) => `parent.postMessage(${JSON.stringify(message)}, '*');`);
+      script.textContent = appels.join('\n');
+      cadre.contentDocument.body.append(script);
+      await recus;
+    } finally {
+      cadre.remove();
+    }
+    flushSync();
+    expect(refusDe('site')).not.toBeNull();
+    expect(refusDe('agpl')).toBeNull();
   });
 });
 

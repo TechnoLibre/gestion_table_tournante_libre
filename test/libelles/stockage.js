@@ -171,4 +171,39 @@ export const TEXTES = [
       "il n'est plus pris en charge. Il est laissé tel quel, et le prochain geste commence l'historique " +
       'dans un nouveau fichier.',
   ],
+  // L'ouvreur du système en échec dit que l'ouverture a échoué, sa cause
+  // citée ; une commande que la plateforme n'offre pas se dit absente.
+  ['NON_DISPONIBLE', { cause: 'xdg-open : statut 3' }, "L'ouverture a échoué (xdg-open : statut 3)."],
+  ['NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' }, "Cette commande n'est pas offerte ici."],
+  // Des réglages locaux qui ne se lisent pas disent la raison en clair :
+  // LECTURE ne se cite jamais, la cause du système se cite ; des octets hors
+  // UTF-8 et un lien qui sort du dossier ont leur phrase.
+  [
+    'REGLAGES_ILLISIBLES',
+    { chemin: 'reglages_locaux.json', raison: 'LECTURE' },
+    'Les réglages locaux « reglages_locaux.json » ne se lisent pas. Le système en refuse la lecture. ' +
+      'Le fichier reste tel quel : le papier choisi vaut pour cette séance, sans être retenu sur cette ' +
+      "machine, et le cadrage n'est pas retenu.",
+  ],
+  [
+    'REGLAGES_ILLISIBLES',
+    { chemin: 'reglages_locaux.json', raison: 'LECTURE', cause: 'EACCES' },
+    'Les réglages locaux « reglages_locaux.json » ne se lisent pas. Le système en refuse la lecture (EACCES). ' +
+      'Le fichier reste tel quel : le papier choisi vaut pour cette séance, sans être retenu sur cette ' +
+      "machine, et le cadrage n'est pas retenu.",
+  ],
+  [
+    'REGLAGES_ILLISIBLES',
+    { chemin: 'reglages_locaux.json', raison: 'LECTURE', cause: 'UTF8_INVALIDE' },
+    "Les réglages locaux « reglages_locaux.json » ne se lisent pas. Le fichier n'est pas encodé en UTF-8 : " +
+      'réenregistré en UTF-8, il se relit. Le fichier reste tel quel : le papier choisi vaut pour cette ' +
+      "séance, sans être retenu sur cette machine, et le cadrage n'est pas retenu.",
+  ],
+  [
+    'REGLAGES_ILLISIBLES',
+    { chemin: 'reglages_locaux.json', raison: 'CHEMIN_REFUSE' },
+    'Les réglages locaux « reglages_locaux.json » ne se lisent pas. Le fichier mène hors du dossier de ' +
+      "travail, par un lien : l'application ne le suit pas. Le fichier reste tel quel : le papier choisi " +
+      "vaut pour cette séance, sans être retenu sur cette machine, et le cadrage n'est pas retenu.",
+  ],
 ];

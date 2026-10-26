@@ -153,6 +153,7 @@ const ENTREES = [
   ['data-levier', 'diagnostic : le geste « Pour changer cela » propre à un énoncé, dans la section', ['']],
   ['data-libelle-table', 'plan : le libellé inscrit sur le plateau d’une table, par son identifiant', null],
   ['data-lien', 'à propos : un lien vers l’extérieur, par son nom dans LIENS', null],
+  ['data-lien-non-ouvert', 'à propos : le refus d’un lien que la coquille n’a pas ouvert, par son nom dans LIENS', null],
   ['data-ligne', 'import : une ligne de l’aperçu, par son rang', null],
   ['data-ligne-graphique', 'qualité : une ligne de barres, par l’identifiant de ce qu’elle porte', null],
   ['data-ligne-imprimee', 'aperçu : une ligne d’une liste imprimée, par son rang dans la liste', null],

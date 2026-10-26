@@ -442,10 +442,13 @@
  *
  * Avertissement de la lecture des réglages locaux, qui ne lève jamais :
  *
- *   REGLAGES_ILLISIBLES  {chemin, raison}       le fichier ne se lit pas, et
- *                                               les défauts s'appliquent ;
+ *   REGLAGES_ILLISIBLES  {chemin, raison,       le fichier ne se lit pas, et
+ *                         cause?}               les défauts s'appliquent ;
  *                                               raison JSON, FORME, ou le code
- *                                               du refus de lecture
+ *                                               du refus de lecture, dont
+ *                                               cause est alors celle des
+ *                                               détails du refus, quand ils
+ *                                               en portent une
  */
 
 /**

@@ -755,6 +755,25 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     await attendreEvenement(m);
   });
 
+  test('réglages locaux dont les octets ne sont pas de l’UTF-8 : l’avis dit la raison en clair, jamais le code du refus', async () => {
+    // Des octets qui ne sont pas de l'UTF-8 : la lecture lève LECTURE, cause
+    // UTF8_INVALIDE, que l'avis porte pour raison et cause. Son texte ne cite
+    // ni ce code, ni un détail manquant (« undefined »), ni rien entre
+    // parenthèses ; le système a lu le fichier, et l'avis ne dit pas qu'il en
+    // refuse la lecture.
+    const disque = new Map();
+    creerFichiersSimules({ disque }).deposerOctets('documents', 'reglages_locaux.json', new Uint8Array([0xff, 0xfe, 0xfd]));
+    const m = await monter({ systeme: { disque } });
+    const avis = dans(m, '[data-avertissement="REGLAGES_ILLISIBLES"]');
+    expect(avis).not.toBeNull();
+    const { avis: attendus } = await m.facade.demarrer();
+    const reglages = attendus.find(({ code }) => code === 'REGLAGES_ILLISIBLES');
+    expect(reglages.details).toEqual({ chemin: 'reglages_locaux.json', raison: 'LECTURE', cause: 'UTF8_INVALIDE' });
+    expect(avis.textContent).toBe(tEcran(reglages.code, reglages.details));
+    expect(avis.textContent).not.toMatch(/\bLECTURE\b|undefined|\(/);
+    expect(avis.textContent).not.toBe(tEcran(reglages.code, { chemin: reglages.details.chemin, raison: 'LECTURE' }));
+  });
+
   test('publié, sonde réussie : la liste affiche le dossier data en entier ; non publié : celui des Documents', async () => {
     const portable = await monter({ systeme: { executable: PUBLIE } });
     expect(dans(portable, '[data-dossier-travail]').textContent).toBe(DATA);
@@ -823,7 +842,7 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     expect(web.erreurs()).toEqual([]);
   });
 
-  test('explorateur : un ouvreur du système en échec se refuse NON_DISPONIBLE à côté de la commande, sa raison citée, et la commande reste offerte', async () => {
+  test('explorateur : un ouvreur du système en échec dit, à côté de la commande, que l’ouverture a échoué, sa raison citée, et la commande reste offerte', async () => {
     const m = await monter();
     const cause = "xdg-open: no method available for opening '/poste/essai/data'";
     m.fs.ouvrirDansExplorateur = async () => {
@@ -837,6 +856,10 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     });
     expect(visible(refus)).toBe(true);
     expect(refus.textContent.replace(/\s+/g, ' ')).toContain(tEcran('NON_DISPONIBLE', { cause }).replace(/\s+/g, ' '));
+    // L'ouverture qui échoue a son propre texte : la commande existe, et ne
+    // se dit pas absente comme celle qu'une plateforme n'offre pas.
+    const nonOfferte = tEcran('NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' }).replace(/\.$/, '');
+    expect(refus.textContent.replace(/\s+/g, ' ')).not.toContain(nonOfferte.replace(/\s+/g, ' '));
     const commande = dans(m, '[data-dossier] [data-commande="explorateur"]');
     expect(commande.getAttribute('aria-disabled')).toBeNull();
     expect(m.erreurs()).toEqual([]);

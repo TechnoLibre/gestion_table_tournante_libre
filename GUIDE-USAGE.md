@@ -54,7 +54,8 @@ restent utilisables en lecture.
 Le premier écran est la liste des événements. Quand elle est vide, elle n’est
 jamais une page blanche : elle offre de créer un événement et de charger l’une
 des démonstrations livrées. Elle affiche aussi le dossier de travail, avec la
-commande qui l’ouvre dans l’explorateur.
+commande qui l’ouvre dans l’explorateur. Si l’explorateur ne s’ouvre pas, un
+message le dit à côté de la commande, avec la raison que donne le système.
 
 ![Le premier écran : le dossier de travail, la création d’un événement, les démonstrations](doc/captures/01-premier-ecran.png)
 
@@ -1265,7 +1266,8 @@ elle reste en surbrillance tant qu’il est ouvert. « Fermer », ou un second
 clic sur la commande, rend l’écran d’où vous l’avez ouvert. Le panneau donne
 la ligne de version à copier dans un signalement, l’éditeur et l’auteur,
 l’attribution demandée, la licence du logiciel et ses deux textes complets, et
-le sommaire des fonctionnalités.
+le sommaire des fonctionnalités. Ses liens s’ouvrent dans votre navigateur ; un
+lien qui ne s’ouvre pas le dit sous les liens de sa carte, avec la raison.
 
 Sa carte **« Composants tiers et leurs licences »** nomme chaque œuvre que le
 logiciel incorpore — Svelte, pdf-lib, le solveur HiGHS, la police Noto Sans,

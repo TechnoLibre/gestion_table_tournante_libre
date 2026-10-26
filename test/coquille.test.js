@@ -7,9 +7,11 @@
 // primitive du système de fichiers, un canal par fonction, la copie dans
 // le presse-papiers et l'impression —, ce que le processus principal y
 // répond : emplacements, racines, dialogues, explorateur, presse-papiers,
-// impression (§ 11.7, § 13.4) ; et les verrous que la page a pris, effacés
-// à la sortie (§ 8.8). La page elle-même, index.html, charge le collecteur
-// d'erreurs avant son module d'entrée (§ 19.2).
+// impression (§ 11.7, § 13.4) ; les liens d'« À propos » qu'il fait ouvrir,
+// et l'issue de chacun, qu'il envoie à la page (§ 18.6) ; et les verrous que
+// la page a pris, effacés à la sortie (§ 8.8). La page elle-même,
+// index.html, charge le collecteur d'erreurs avant son module d'entrée
+// (§ 19.2).
 //
 // electron/main.js s'exécute sous Node, dans un processus à part, contre
 // test/electron_factice.js, qui consigne ce que la coquille demande à
@@ -24,7 +26,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { GENRES_A_IMPORTER, PRIMITIVES, parOuvreurDuBureau } from '../electron/fichiers.js';
+import { CANAL_LIEN, GENRES_A_IMPORTER, PRIMITIVES, parOuvreurDuBureau } from '../electron/fichiers.js';
 import { CANAL_IMPRESSION, FORMATS_DE_PAGE, imprimer, optionsImpression, servirImpression } from '../electron/impression.js';
 import { PAPIERS } from '../src/geometrie/papiers.js';
 import { LIENS } from '../src/interface/apropos.js';
@@ -90,13 +92,29 @@ const ADRESSES_VOISINES = [
 ];
 const ADRESSES_DE_LA_PAGE = [...LIENS_DE_LA_PAGE, ...ADRESSES_VOISINES];
 
+// Ce que l'ouvreur factice a reçu, séparé : les adresses, et les dossiers.
+// Les ouvreurs des liens tournent ensemble, et consignent dans l'ordre où
+// ils démarrent : leurs adresses se comparent triées.
+const estAdresse = (argument) => /^[a-z]+:/.test(argument);
+const adressesOuvertes = (ouvreur) => ouvreur.filter(estAdresse).sort();
+const dossiersOuverts = (ouvreur) => ouvreur.filter((argument) => !estAdresse(argument));
+
+// L'issue de chaque lien que le processus principal envoie à la page,
+// triée par adresse.
+const issuesDesLiens = (journal) =>
+  journal.envois
+    .filter(([canal]) => canal === CANAL_LIEN)
+    .map(([, issue]) => issue)
+    .sort((a, b) => (a.adresse < b.adresse ? -1 : a.adresse > b.adresse ? 1 : 0));
+
 // Délai de l'exécution de la coquille. Le factice ne joue la page qu'une
 // fois le processus sans rien à faire ; un minuteur ou un écouteur laissé
 // actif l'en empêche, et l'exécution ne finit jamais. Le délai reste sous
 // celui d'une épreuve de Vitest, 5 s, qui n'interrompt pas un appel
 // synchrone : l'épreuve échoue en le disant, au lieu de figer la série. Le
 // délai écoulé, le processus reçoit KILL, qu'aucun gestionnaire de signal
-// ne retient.
+// ne retient. Il couvre aussi l'attente des issues du factice, que l'ouvreur
+// borne à DELAI_OUVREUR_MS plus une marge (test/electron_factice.js).
 const DELAI_MS = 4_000;
 
 // Le pid d'un processus terminé : aucun processus de ce poste n'y répond
@@ -157,6 +175,7 @@ function executerLaCoquille(scenario) {
         TEMP: temporaire,
         TMP: temporaire,
         GTT_ADRESSES_DE_LA_PAGE: JSON.stringify(ADRESSES_DE_LA_PAGE),
+        GTT_ISSUES_ATTENDUES: String(LIENS_DE_LA_PAGE.length),
         PATH: `${ouvreur}${delimiter}${environnement.PATH ?? ''}`,
         GTT_JOURNAL_OUVREUR: journalOuvreur,
         ...SCENARIOS[scenario],
@@ -253,9 +272,23 @@ describe('coquille : processus principal', () => {
     assert.deepEqual(navigations, navigations.map(() => true));
   });
 
-  test('les liens du panneau « À propos », et eux seuls, passent au navigateur du système, dans leur ordre (§ 2, § 18.6)', () => {
+  test('les liens du panneau « À propos », et eux seuls, passent au navigateur du système : par xdg-open hors de Windows et de macOS, par shell.openExternal sinon, dans leur ordre (§ 2, § 18.6)', () => {
     assert.equal(LIENS_DE_LA_PAGE.length, 4);
-    assert.deepEqual(journalDeLaCoquille().externes, LIENS_DE_LA_PAGE);
+    const { journal, ouvreur } = coquille();
+    assert.deepEqual(
+      { ouvreur: adressesOuvertes(ouvreur), externes: journal.externes },
+      PAR_OUVREUR
+        ? { ouvreur: [...LIENS_DE_LA_PAGE].sort(), externes: [] }
+        : { ouvreur: [], externes: LIENS_DE_LA_PAGE },
+    );
+  });
+
+  test("l'issue de chaque lien revient à la page sur gtt:lien, et rien d'autre : une raison vide quand il s'ouvre, celle de l'ouvreur en échec sinon (§ 18.6)", () => {
+    const attendues = (raison) => [...LIENS_DE_LA_PAGE].sort().map((adresse) => ({ adresse, raison }));
+    const { envois } = journalDeLaCoquille();
+    assert.deepEqual(envois.map(([canal]) => canal), LIENS_DE_LA_PAGE.map(() => CANAL_LIEN));
+    assert.deepEqual(issuesDesLiens(journalDeLaCoquille()), attendues(''));
+    if (PAR_OUVREUR) assert.deepEqual(issuesDesLiens(journalDeLaCoquille('ouvreurEnEchec')), attendues(RAISON_OUVREUR));
   });
 
   test('les adresses que la coquille ouvre sont exactement les liens du panneau « À propos »', () => {
@@ -310,11 +343,12 @@ describe('coquille : processus principal', () => {
 });
 
 describe('coquille : préchargement', () => {
-  test("n'expose que window.gtt.fichiers, une fonction par primitive, gtt.copier et gtt.imprimer, deux fonctions ; ne requiert qu'electron", () => {
+  test("n'expose que window.gtt.fichiers, une fonction par primitive, gtt.copier et gtt.imprimer, deux fonctions ; n'écoute que gtt:lien ; ne requiert qu'electron", () => {
     const { prechargement } = journalDeLaCoquille();
     assert.equal(prechargement.erreur, undefined, prechargement.erreur);
     assert.deepEqual(prechargement.requis, ['electron']);
     assert.deepEqual(prechargement.exposes, [{ cle: 'gtt', membres: ['copier', 'fichiers', 'imprimer'] }]);
+    assert.deepEqual(prechargement.ecoutes, [CANAL_LIEN]);
     assert.equal(prechargement.copie.type, 'function');
     assert.equal(prechargement.impression.type, 'function');
     assert.deepEqual(prechargement.fichiers, [...PRIMITIVES]);
@@ -466,7 +500,7 @@ describe('coquille : préchargement', () => {
     const { journal, ouvreur } = coquille();
     const data = join(journal.chemins.documents, NOM_PRODUIT, 'data');
     assert.deepEqual(
-      { ouvreur, explorateur: journal.explorateur },
+      { ouvreur: dossiersOuverts(ouvreur), explorateur: journal.explorateur },
       PAR_OUVREUR ? { ouvreur: [data], explorateur: [] } : { ouvreur: [], explorateur: [data] },
     );
     // La réponse porte valeur: undefined, que le journal en JSON ne garde pas.
@@ -475,7 +509,7 @@ describe('coquille : préchargement', () => {
 
   test("hors de Windows et de macOS, un xdg-open en échec répond NON_DISPONIBLE à la page, la raison qu'il écrit en cause, au lieu d'un succès muet", { skip: !PAR_OUVREUR }, () => {
     const { journal, ouvreur } = coquille('ouvreurEnEchec');
-    assert.deepEqual(ouvreur, [join(journal.chemins.documents, NOM_PRODUIT, 'data')]);
+    assert.deepEqual(dossiersOuverts(ouvreur), [join(journal.chemins.documents, NOM_PRODUIT, 'data')]);
     assert.deepEqual(appelDe(journal, 'ouvrirDansExplorateur').reponse, {
       ok: false,
       code: 'NON_DISPONIBLE',

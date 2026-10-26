@@ -45,13 +45,21 @@
 // chaque texte qu'il reçoit ; le print d'une fenêtre consigne ses options et
 // répond à son rappel, dans une microtâche, par l'issue suivante
 // d'ISSUES_DE_PRINT. Un appel de la page parvient à son gestionnaire avec,
-// pour expéditeur, le contenu de la fenêtre.
+// pour expéditeur, le contenu de la fenêtre. Ce que le processus principal
+// envoie au contenu d'une fenêtre se consigne, sans parvenir au
+// préchargement, dont on ne relève que les canaux qu'il écoute ; le journal
+// attend, avant de s'écrire, les GTT_ISSUES_ATTENDUES envois que l'épreuve
+// annonce — les issues des liens, que des ouvreurs lancés en parallèle
+// rendent dans l'ordre de leur sortie —, au plus un peu plus que le délai
+// au bout duquel la coquille tient pour lancé un ouvreur qui n'a pas fini
+// (DELAI_OUVREUR_MS).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileFunction } from 'node:vm';
+import { DELAI_OUVREUR_MS } from '../electron/fichiers.js';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -98,6 +106,13 @@ const NOM_PRODUIT = JSON.parse(readFileSync(new URL('../package.json', import.me
 // que l'épreuve pose, ou à défaut une adresse externe inventée.
 const ADRESSES_DE_LA_PAGE =
   process.env.GTT_ADRESSES_DE_LA_PAGE === undefined ? ['https://exemple.invalid/'] : JSON.parse(process.env.GTT_ADRESSES_DE_LA_PAGE);
+// Le nombre d'envois au contenu d'une fenêtre que le journal attend avant de
+// s'écrire, et le temps qu'il leur laisse au plus : l'issue d'un ouvreur qui
+// ne sort pas arrive au bout de DELAI_OUVREUR_MS, que l'attente dépasse. Le
+// délai de la coquille dans test/coquille.test.js (DELAI_MS) borne l'attente
+// à son tour, d'où une marge courte.
+const ENVOIS_ATTENDUS = Number(process.env.GTT_ISSUES_ATTENDUES ?? 0);
+const ATTENTE_ENVOIS_MS = DELAI_OUVREUR_MS + 500;
 
 // Ce que rend app.getPath, par nom.
 const TEMPORAIRE = tmpdir();
@@ -167,6 +182,8 @@ const journal = {
   ouvertures: [],
   // Adresse de chaque shell.openExternal.
   externes: [],
+  // Chaque webContents.send : [canal, ...arguments].
+  envois: [],
   // Pour chaque écouteur de will-navigate et chacune des
   // ADRESSES_DE_LA_PAGE : la navigation est-elle annulée ?
   navigations: [],
@@ -240,6 +257,9 @@ export class BrowserWindow {
       },
       on(evenement, ecouteur) {
         page.ecouteurs.push({ evenement, ecouteur });
+      },
+      send(canal, ...arguments_) {
+        journal.envois.push([canal, ...arguments_]);
       },
       print(options, rappel) {
         journal.sequence.push('webContents.print');
@@ -316,7 +336,7 @@ export const clipboard = {
 // Côté page : ce que require('electron') rend au préchargement. invoke se
 // consigne, atteint le gestionnaire posé par le processus principal pour ce
 // canal, et rejette comme Electron quand il n'y en a pas.
-function electronDuRendu(exposes) {
+function electronDuRendu(exposes, ecoutes) {
   return {
     contextBridge: {
       exposeInMainWorld(cle, api) {
@@ -329,6 +349,9 @@ function electronDuRendu(exposes) {
         const gestionnaire = gestionnaires.get(canal);
         if (gestionnaire === undefined) throw new Error(`No handler registered for '${canal}'`);
         return gestionnaire({ sender: pageDeFenetre[0]?.contenu ?? null }, ...arguments_);
+      },
+      on(canal) {
+        ecoutes.push(canal);
       },
     },
   };
@@ -372,7 +395,8 @@ async function appelerUne(fonction, parametres) {
 async function jouerLePrechargement() {
   const requis = [];
   const exposes = [];
-  const electron = electronDuRendu(exposes);
+  const ecoutes = [];
+  const electron = electronDuRendu(exposes, ecoutes);
   const requerir = (nom) => {
     requis.push(nom);
     if (nom === 'electron') return electron;
@@ -412,6 +436,7 @@ async function jouerLePrechargement() {
   return {
     requis,
     exposes: exposes.map(({ cle, api }) => ({ cle, membres: Object.keys(api).sort() })),
+    ecoutes,
     fichiers: fichiers === undefined ? null : Object.keys(fichiers),
     appels,
     copie,
@@ -446,6 +471,10 @@ async function jouerLaPage() {
     journal.prechargement = await jouerLePrechargement();
   } catch (erreur) {
     journal.prechargement = { erreur: erreur.message };
+  }
+  const limite = performance.now() + ATTENTE_ENVOIS_MS;
+  while (journal.envois.length < ENVOIS_ATTENDUS && performance.now() < limite) {
+    await new Promise((resoudre) => setTimeout(resoudre, 10));
   }
   const profil = journal.setPath.find(({ nom }) => nom === 'userData')?.chemin;
   const avant = profil !== undefined && existsSync(profil);

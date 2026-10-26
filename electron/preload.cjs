@@ -12,12 +12,24 @@
 // page ne reçoit jamais ipcRenderer lui-même, ni une fonction qui
 // invoquerait un canal de son choix.
 //
+// Dans l'autre sens, un seul canal : gtt:lien, par lequel le processus
+// principal envoie l'issue d'un lien d'« À propos » qu'il a passé au
+// navigateur du système, { adresse, raison } — raison vide quand
+// l'ouverture est lancée, sinon celle de son échec. Le préchargement la
+// porte à la page par window.postMessage, sous { type: 'gtt:lien', adresse,
+// raison }, que le panneau « À propos » écoute : un message traverse
+// l'isolation de contexte, là où la page n'a aucune fonction à offrir au
+// préchargement. Une issue d'une autre forme ne passe pas, ni un autre
+// champ.
+//
 // Un préchargement exécuté en bac à sable est un script CommonJS, d'où
 // l'extension .cjs dans un paquet de type module. Son require ne connaît
 // qu'electron et quelques modules de Node, et non les fichiers du projet :
 // les primitives et les noms des canaux s'écrivent donc ici, les primitives
 // dans l'ordre de l'interface, et test/coquille.test.js éprouve qu'ils sont
-// ceux des canaux que pose le processus principal.
+// ceux des canaux que pose le processus principal ; le canal des liens est
+// CANAL_LIEN d'electron/fichiers.js, que test/fichiers_electron.long.test.js
+// compare à celui-ci.
 const { contextBridge, ipcRenderer } = require('electron');
 
 const PRIMITIVES = [
@@ -54,3 +66,11 @@ const copier = (texte) => ipcRenderer.invoke('gtt:copier', texte);
 const imprimer = (demande) => ipcRenderer.invoke('gtt:imprimer', demande);
 
 contextBridge.exposeInMainWorld('gtt', { fichiers, copier, imprimer });
+
+const CANAL_LIEN = 'gtt:lien';
+
+ipcRenderer.on(CANAL_LIEN, (_evenement, issue) => {
+  const { adresse, raison } = issue ?? {};
+  if (typeof adresse !== 'string' || typeof raison !== 'string') return;
+  window.postMessage({ type: CANAL_LIEN, adresse, raison }, '*');
+});

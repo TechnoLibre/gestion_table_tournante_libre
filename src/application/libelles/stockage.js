@@ -88,6 +88,24 @@ function megaoctets(octets) {
   return `${texte} Mo`;
 }
 
+// La lecture refusée des réglages locaux, en une phrase : raison est le code
+// du refus (reglages_locaux.js), cause celle de ses détails, quand ils en
+// portent une. Des octets qui ne sont pas de l'UTF-8 (cause UTF8_INVALIDE)
+// et un lien qui mène hors du dossier de travail (CHEMIN_REFUSE) ont leur
+// phrase : le système a lu le fichier, ou l'application ne l'a pas suivi.
+// Un autre code de l'application, que les tables connaissent — LECTURE —,
+// ne se cite jamais : la phrase dit le refus du système, et cite sa cause
+// entre parenthèses ; un code que les tables ne connaissent pas se cite à
+// la place de la cause.
+function lectureRefusee(raison, cause, texte) {
+  if (cause === 'UTF8_INVALIDE') return "Le fichier n'est pas encodé en UTF-8 : réenregistré en UTF-8, il se relit.";
+  if (raison === 'CHEMIN_REFUSE') {
+    return "Le fichier mène hors du dossier de travail, par un lien : l'application ne le suit pas.";
+  }
+  const citee = texte.existe(raison) ? cause : raison;
+  return `Le système en refuse la lecture${causeEntreParentheses(citee, texte)}.`;
+}
+
 // Les noms des filtres du dialogue d'import, par genre de
 // GENRES_A_IMPORTER, puis celui du filtre qui montre tous les fichiers. La
 // coquille (electron/fichiers.js) n'importe rien de src/ et en garde une
@@ -188,7 +206,17 @@ export const TABLE = new Map([
       `Les numéros ${compteur === 'proposition' ? 'de proposition' : `du compteur ${cite(compteur)}`} sont épuisés : ` +
       'rien de neuf ne se numérote plus dans cet événement.',
   ],
-  ['NON_DISPONIBLE', ({ cause }, texte) => `Cette commande n'est pas offerte ici${causeEntreParentheses(cause, texte)}.`],
+  // Une commande que la plateforme n'offre pas porte la primitive ; un
+  // ouvreur du système qui échoue — explorateur ou navigateur — porte la
+  // raison de son échec en cause : la commande existe, et c'est l'ouverture
+  // qui a échoué.
+  [
+    'NON_DISPONIBLE',
+    ({ cause }, texte) =>
+      typeof cause === 'string' && cause !== ''
+        ? `L'ouverture a échoué${causeEntreParentheses(cause, texte)}.`
+        : "Cette commande n'est pas offerte ici.",
+  ],
 
   // --- Les raisons d'un fichier illisible ------------------------------------
   ['VIDE', () => 'Le fichier est vide.'],
@@ -406,9 +434,8 @@ export const TABLE = new Map([
   ],
   [
     'REGLAGES_ILLISIBLES',
-    ({ chemin, raison }, texte) => {
-      const pourquoi =
-        raison === 'JSON' || raison === 'FORME' ? texte(raison) : `La lecture est refusée (${raison}).`;
+    ({ chemin, raison, cause = null }, texte) => {
+      const pourquoi = raison === 'JSON' || raison === 'FORME' ? texte(raison) : lectureRefusee(raison, cause, texte);
       return (
         `Les réglages locaux ${cite(chemin)} ne se lisent pas. ${pourquoi} Le fichier reste tel quel : ` +
         'le papier choisi vaut pour cette séance, sans être retenu sur cette machine, ' +
