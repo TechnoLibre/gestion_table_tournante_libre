@@ -17,7 +17,7 @@ import { texteLivre } from '../demo/livrees.js';
 import { VERSION } from '../version.genere.js';
 import { serialiser, serialiserCharge } from './canonique.js';
 import { courseDe, entreeDeCourse, texteDesCourses } from './courses.js';
-import { creer, enregistrer, lister, ouvrir, ouvrirSecours, verrouiller } from './depot.js';
+import { creer, enregistrer, enregistrerAilleurs, lister, ouvrir, ouvrirSecours, verrouiller } from './depot.js';
 import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { lireJournal, reconstruire } from './journal.js';
@@ -2877,7 +2877,7 @@ describe('opérations : les logos suivent la copie et l’import (§ 8.7, § 8.8
     assert.equal((await rouvrir(disque, base, base)).charge.participants[1].logo, logoDe(IMAGE_DEUX));
   });
 
-  test("une coupure à chaque écriture d'une copie ou d'un import qui recopient logo/ laisse l'original intact, octet pour octet ; un logo n'arrive là-bas qu'après l'état, et chacun y est entier ; achevée, chaque logo y est", async () => {
+  test("une coupure à chaque écriture d'une copie, d'un import ou d'une écriture ailleurs qui recopient logo/ laisse l'original intact, octet pour octet ; un logo n'arrive là-bas qu'après l'état, et chacun y est entier ; achevée, chaque logo y est", async () => {
     const PORTABLE = { executable: 'E:\\soirees' };
     const cas = [
       [
@@ -2901,6 +2901,28 @@ describe('opérations : les logos suivent la copie et l’import (§ 8.7, § 8.8
           fs.deposer('portable', dans(JOURNAL), lucioles.journal);
           poserLogos(fs, 'portable');
           return { disque, fs, source: portable, vers: documents, dossier: BASE, faire: () => importerDepuis(fs, portable, documents, [EVT]) };
+        },
+      ],
+      [
+        'enregistrerAilleurs',
+        async () => {
+          const disque = new Map();
+          const fs = creerFichiersSimules({ disque, ...PORTABLE });
+          fs.deposerDossier('portable');
+          const { portable, documents } = await fs.racines();
+          const lucioles = await paireDe(chargeAvecLogos());
+          fs.deposer('portable', dans(ETAT), lucioles.etat);
+          fs.deposer('portable', dans(JOURNAL), lucioles.journal);
+          poserLogos(fs, 'portable');
+          const ouvert = await ouvrir(fs, portable, EVT);
+          return {
+            disque,
+            fs,
+            source: portable,
+            vers: documents,
+            dossier: BASE,
+            faire: () => enregistrerAilleurs(ouvert, documents, { existantes: [], logos: true }),
+          };
         },
       ],
     ];

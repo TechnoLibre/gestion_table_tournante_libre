@@ -28,6 +28,7 @@ import { creerHorlogePilotee, creerHorlogeSysteme } from '../../src/application/
 import { libelle } from '../../src/application/libelles.js';
 import { dater } from '../../src/application/libelles/aides.js';
 import { PRENOMS } from '../../src/demo/noms.js';
+import { nomPlanche } from '../../src/stockage/noms.js';
 import { VERSION } from '../../src/version.genere.js';
 import { CHEMIN_MANIFESTE, DOSSIER_CAPTURES, lireEntetePng } from '../../scripts/documentation/manifeste.js';
 import {
@@ -47,6 +48,7 @@ import {
   tramer,
   tramerPdf,
 } from './commandes_documentation.js';
+import { traductionEcran } from './rendu.js';
 
 const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
 const enBase64 = (octets) => Buffer.from(octets).toString('base64');
@@ -468,6 +470,10 @@ describe('publierCaptures : ni l’hôte, ni l’utilisateur, ni un instant étr
     const format = creerFormat(libelle);
     const systeme = creerHorlogeSysteme().horodatage();
     const dansUnTexte = (fichier) => new RegExp(`doc/captures/${fichier}\\.png : instant « [^»]+ » dans un texte, hors de l’horloge pilotée`);
+    // La ligne « Planche déposée : … » d'une planche produite à l'instant
+    // donné, son nom tel que le dépôt le compose.
+    const planche = (horodatage) =>
+      `${traductionEcran().t('badges.produite.chemin')} ${nomPlanche('soiree-des-hiboux', { papier: 'A4', imposition: 'feuille', horodatage })}`;
     const refus = [
       [{ texte: ['Aperçu', format.horodatage(systeme)] }, {}, dansUnTexte('01-premier-ecran')],
       [{}, { texte: [libelle('planche.pied.horodatage', { horodatage: systeme })] }, dansUnTexte('24-badges-controle')],
@@ -476,6 +482,11 @@ describe('publierCaptures : ni l’hôte, ni l’utilisateur, ni un instant étr
       [{ styles: { clair: [{ releve: '2026-10-10T18:03:00.000Z' }], sombre: [] } }, {}, dansUnTexte('01-premier-ecran')],
       [{ texte: [format.horodatage('2026-10-06T18:59:00-04:00')] }, {}, /instant « 6 octobre 2026, 18 h 59 » dans un texte/],
       [{}, { texte: [libelle('planche.pied.horodatage', { horodatage: '2026-10-07T19:00:01-04:00' })] }, /instant « 7 octobre 2026 à 19:00:01 » dans un texte/],
+      // Le nom de fichier daté que montre « Planche déposée : … », à l'heure
+      // locale sans décalage.
+      [{ texte: [planche(systeme)] }, {}, dansUnTexte('01-premier-ecran')],
+      [{ texte: [planche('2026-10-06T18:59:59-04:00')] }, {}, /instant « 2026-10-06_18-59-59 » dans un texte/],
+      [{}, { texte: [planche('2026-10-07T19:00:01-04:00')] }, /instant « 2026-10-07_19-00-01 » dans un texte/],
     ];
     for (const [remplacer, pdf, motif] of refus) {
       await dansUnDossier(async (racine) => {
@@ -491,7 +502,7 @@ describe('publierCaptures : ni l’hôte, ni l’utilisateur, ni un instant étr
       const instant = horloge.horodatage();
       const bilan = await publier(
         racine,
-        { texte: [format.horodatage(instant), `Modifié ${dater(instant, libelle)}`, instant, 'Soirée du 17 mai 2031'] },
+        { texte: [format.horodatage(instant), `Modifié ${dater(instant, libelle)}`, instant, 'Soirée du 17 mai 2031', planche(instant)] },
         { texte: [libelle('planche.pied.horodatage', { horodatage: instant })] },
       );
       assert.deepEqual(bilan.ecrites, declarees);

@@ -256,10 +256,11 @@ const versionDuManifeste = (version) => {
 describe('documentation : les documents n’affichent que les captures, telles que le manifeste les inscrit (§ 19.1, § 19.7)', () => {
   test('le guide d’usage et README.md ne citent aucune image hors de doc/captures', () => {
     for (const document of [GUIDE_USAGE, README]) assert.deepEqual(fautesImagesCitees(document, lire(document)), [], document);
-    // Le relevé n'est pas vide : il voit chaque image que l'appariement voit.
+    // Le relevé n'est pas vide : il voit chaque image que l'appariement voit,
+    // une par capture publiée ; une capture à venir n'a pas d'image à citer.
     const cibles = imagesCitees(lire(GUIDE_USAGE)).map((citee) => citee.cible);
     assert.deepEqual([...new Set(cibles)].sort(), [...imagesReferencees(lire(GUIDE_USAGE))].sort());
-    assert.equal(new Set(cibles).size, CAPTURES.length);
+    assert.equal(new Set(cibles).size, CAPTURES.length - A_VENIR.length);
   });
 
   test('rouge : une image hors de doc/captures, ou qui n’y est pas un PNG, se relève en mémoire, chacune nommée', () => {
@@ -796,10 +797,13 @@ function modulesSource(dossier = join(RACINE, 'src')) {
 const formeDeCode = (nom) => /[a-z][A-Z]/.test(nom) || /[_\d$]/.test(nom) || /^[A-Z]{2,}$/.test(nom);
 
 // Les familles d'algorithmes et les marques de complexité que la section ne
-// nomme pas (§ 19.9), cherchées sans égard à la casse.
+// nomme pas (§ 19.9), cherchées sans égard à la casse. La famille du moteur
+// admet entre ses deux mots un caractère quelconque ou aucun : le drapeau s
+// laisse le point prendre le retour à la ligne d'une prose repliée.
 const VOCABULAIRE_SAVANT = [
   /heuristique/i, /recuit/i, /tabou/i, /glouton/i, /génétique/i, /recherche locale/i, /local search/i,
-  /hill.?climbing/i, /annealing/i, /\bO\(/, /complexité/i, /NP-/,
+  /hill.?climbing/i, /annealing/i, /acceptations?.?tardives?/is, /late.?acceptance/is, /\bO\(/,
+  /complexité/i, /NP-/,
 ];
 
 /**
@@ -894,6 +898,15 @@ describe('documentation : la section sur l’algorithme (§ 19.9)', () => {
     assert.deepEqual(avec('Le diagnostic vit dans le fichier diagnostic.js.'), ['nom de fichier .js']);
     assert.deepEqual(avec('```\nfaire tant que mieux\n```'), ['bloc de code', 'passage en code']);
     assert.deepEqual(avec('C’est une heuristique.'), ['vocabulaire savant : /heuristique/i']);
+    // La famille que le moteur emploie, en français comme en anglais.
+    assert.deepEqual(avec('Chaque proposition sort d’une Acceptation tardive.'), ['vocabulaire savant : /acceptations?.?tardives?/is']);
+    assert.deepEqual(avec('Le moteur suit le principe late acceptance.'), ['vocabulaire savant : /late.?acceptance/is']);
+    // Les deux mots se relèvent quel que soit le séparateur, retour à la
+    // ligne d'une prose repliée compris.
+    for (const separe of ['acceptation-tardive', 'acceptations\ntardives', 'acceptation_tardive']) {
+      assert.deepEqual(avec(`Une ${separe} décide.`), ['vocabulaire savant : /acceptations?.?tardives?/is'], separe);
+    }
+    assert.deepEqual(avec('Le principe late\nacceptance décide.'), ['vocabulaire savant : /late.?acceptance/is']);
     // Un mot de la langue qu'un module exporte aussi ne se relève pas en prose.
     assert.deepEqual(avec('Le logiciel sait diagnostiquer une configuration.'), []);
   });

@@ -2437,7 +2437,14 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       // Des cartes prédécoupées : aucun trait sur la feuille (§ 11.3).
       expect(lue.segments).toEqual([]);
       const texte = texteDePage(lue);
-      for (const nomBadge of premiers) expect(texte, nomBadge).toContain(plat(nomBadge));
+      // Les six noms, dans l'ordre de la feuille : chacun se cherche après
+      // celui qui le précède.
+      let depuis = 0;
+      for (const nomBadge of premiers) {
+        const position = texte.indexOf(plat(nomBadge), depuis);
+        expect(position, `${nomBadge}, après le nom qui le précède`).toBeGreaterThanOrEqual(0);
+        depuis = position + plat(nomBadge).length;
+      }
       // La table libellée se lit avec son libellé, entre parenthèses après
       // son numéro (§ 11.4).
       const libellee = charge().tables.find(({ libelle: texteLibelle }) => texteLibelle === LIBELLE_TABLE);

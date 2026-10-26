@@ -120,6 +120,8 @@ describe('avertissementsOrdonnes (§ 8.6, § 8.8, § 8.9, § 9)', () => {
     'PROPOSITIONS_FAUTIVES',
     'PROPOSITIONS_MANQUANTES',
     'DERIVE',
+    // Celui d'une écriture ailleurs finit les avertissements de l'Ouvert.
+    'LOGOS_NON_COPIES',
     'INVARIANT_VIOLE',
     'VERROU_REPRIS',
     'EVENEMENT_CHANGE',

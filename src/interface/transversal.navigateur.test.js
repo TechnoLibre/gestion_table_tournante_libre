@@ -1344,12 +1344,16 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
       '<p>12,5 s</p><p>20\u{A0}h 30</p><p>proposition n° 4</p><p>le 17 mai</p><p>en mai 2031</p>' +
         '<p>12,5\u{A0}s, 20\u{A0}h\u{A0}30, 3\u{A0}min 4\u{A0}s, 2\u{A0}h 15\u{A0}min, n°\u{A0}4, 17\u{A0}mai\u{A0}2031, 12\u{202F}%, ' +
         'du 3\u{A0}mai-5\u{A0}juin, de 20\u{A0}h\u{A0}30-22\u{A0}h\u{A0}00</p>' +
-        "<p>3 sièges, 4 tours, 2 places, 100\u{202F}000 mouvements, 3 s'y rangent, 21:42, A4 m</p>",
+        "<p>3 sièges, 4 tours, 2 places, 100\u{202F}000 mouvements, 3 s'y rangent, 21:42, A4 m</p>" +
+        '<p>3 s\u{2019}y rangent</p><p>3 s-bornes</p><p>xn° 4</p>',
       (c) => fautesTypographie(c),
     );
-    // Sept paragraphes : une faute par place de la garde, chacune nommée par
-    // son extrait.
-    expect(lus).toBe(7);
+    // Dix paragraphes : une faute par place de la garde, chacune nommée par
+    // son extrait. Les cinq derniers ne portent que des formes qui passent ;
+    // les trois derniers, une seule chacun, pour que chacune se nomme : une
+    // unité que suit une apostrophe typographique, une unité que suit un
+    // trait d'union, un « n° » collé à la lettre qui le précède.
+    expect(lus).toBe(10);
     expect(fautes).toEqual([
       'p : « 12,5 s » (« 12,5 s »)',
       'p : « 20 h 30 » (« h 30 »)',

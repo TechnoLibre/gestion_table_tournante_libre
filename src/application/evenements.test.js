@@ -145,6 +145,13 @@ function monter({
     get seance() {
       return seance;
     },
+    // Le dossier de travail que lit racine(), et son changement sans
+    // passer par la façade, comme un changement de dossier pendant une
+    // opération en cours. Des fonctions, que la copie d'un montage garde.
+    racineCourante: () => racine,
+    poserRacine: (nouvelle) => {
+      racine = nouvelle;
+    },
   };
 }
 
@@ -554,6 +561,36 @@ describe('lister (§ 8.1, § 19.4)', () => {
       },
     ]);
     assert.ok(petite.participants.length > 0);
+  });
+
+  test("lister lit le dossier de travail de l'appel : un dossier changé pendant le listage ne détourne ni les lectures — date, état illisible, verrou — ni les chemins", async () => {
+    const montage = await deuxEvenements();
+    const { fs, facade } = montage;
+    // Un état vide à côté de son journal, un .gtt.verrou lisible : leur
+    // lecture dans un autre dossier rendrait un secours et un verrou null.
+    fs.deposer('portable', `${GALA}/soiree-a${SUFFIXES.etat}`, '');
+    const verrou = { seance: 'seance-voisine', depuis: '2031-05-17T09:30:00-04:00' };
+    fs.deposer('portable', `petite/petite${SUFFIXES.verrou}`, `${JSON.stringify(verrou)}\n`);
+    const attendues = await facade.lister();
+    assert.deepEqual(
+      attendues.map(({ base, illisible, verrou: pris }) => [base, illisible?.secours ?? null, pris]),
+      [
+        ['petite', null, verrou],
+        ['soiree-a', { precedent: null, journal: 1 }, null],
+      ],
+    );
+    const portable = montage.racineCourante();
+    // Le dossier change entre le listage du dépôt et la lecture des lignes.
+    const emplacements = fs.emplacements;
+    fs.emplacements = (...parametres) => {
+      montage.poserRacine(DOC);
+      return emplacements.apply(fs, parametres);
+    };
+    const lignes = await facade.lister();
+    assert.equal(montage.racineCourante(), DOC);
+    assert.notEqual(portable, DOC);
+    assert.equal(attendues.length, 2);
+    assert.deepEqual(lignes, attendues);
   });
 
   test('deux exécutions rendent la même liste ; la date des fichiers n’y change rien', async () => {
@@ -1184,6 +1221,54 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.equal(pasSecond, 0);
     assert.equal(calcul.charges.length, lisibles.length);
     assert.equal(ecritures(fs), ecrites);
+  });
+
+  test("le flux lit, calcule et écrit dans le dossier de travail de l'appel : un dossier changé après l'appel ne détourne ni les aperçus lus, ni les charges, ni les aperçus écrits", async () => {
+    const calcul = espion();
+    const montage = await dossierAResumer({ executeurApercu: calcul });
+    const { fs, horloge, facade, textes } = montage;
+    const portable = montage.racineCourante();
+    const lignes = await facade.lister();
+    const lisibles = lignes.filter(({ illisible }) => illisible === null).map(({ cle }) => cle);
+    assert.equal(lisibles.length, 4);
+    // Sans aperçu encore : chaque ligne lisible se calcule, sur la charge du
+    // dossier de l'appel, et son aperçu s'y écrit.
+    const recus = [];
+    const flux = facade.resumer(lignes, {
+      ceder: pasDe(horloge),
+      recevoir: (cle, resume, marque) => recus.push([cle, resume, marque]),
+    });
+    montage.poserRacine(DOC);
+    for (let n = 0; n <= lignes.length; n += 1) await unPas(horloge);
+    await flux.fin;
+    assert.equal(calcul.charges.length, lisibles.length);
+    assert.deepEqual(
+      recus.map(([cle, , marque]) => [cle, marque]),
+      [enDossier('tronquee'), ...lisibles].map((cle) => [cle, A_JOUR]),
+    );
+    assert.deepEqual(new Map(recus.map(([cle, resume]) => [cle, resume])).get(enDossier('retenue')), resumesAttendus(textes.retenue));
+    for (const cle of lisibles) {
+      assert.notEqual(apercuDe(fs, cle), null, cle);
+      assert.equal(fs.contenu(DOC.id, cle + SUFFIXES.apercu), null, cle);
+    }
+    // Les aperçus écrits, le flux suivant reçoit chaque ligne à jour avant
+    // tout pas : il les lit dans le dossier de l'appel, non dans celui posé
+    // après.
+    montage.poserRacine(portable);
+    const relues = await facade.lister();
+    const seconds = [];
+    let pas = 0;
+    const second = facade.resumer(relues, {
+      ceder: async () => {
+        pas += 1;
+      },
+      recevoir: (cle, resume, marque) => seconds.push([cle, resume, marque]),
+    });
+    montage.poserRacine(DOC);
+    await second.fin;
+    assert.equal(pas, 0);
+    assert.equal(calcul.charges.length, lisibles.length);
+    assert.deepEqual(seconds, recus);
   });
 
   test("un aperçu périmé par l'état se reçoit aussitôt, l'ancien chiffre à vérifier, puis se recalcule et se récrit ; d'une autre construction, d'un autre format ou cassé, il vaut absent : rien n'est reçu avant son pas", async () => {

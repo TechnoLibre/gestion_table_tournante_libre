@@ -354,6 +354,37 @@ describe('lancer : executer, sur des effets factices', () => {
     assert.ok(texte.includes(accord), accord);
   });
 
+  test('une constante du banc relevée sans valeur ne se dit pas « à adopter » : rien à adopter', async () => {
+    const fichiers = sorties();
+    const qualite = fichiers.get('qualite');
+    qualite.mesures = qualite.mesures.map((mesure) =>
+      mesure.nom === 'SEUIL_MATRICE_PARTICIPANTS' ? { ...mesure, valeurProposee: null } : mesure,
+    );
+    const p = passage({ fichiers });
+    await executer(p.effets);
+    const ligne = p.lignes.find((texte) => texte.startsWith('- SEUIL_MATRICE_PARTICIPANTS : '));
+    assert.notEqual(ligne, undefined);
+    assert.match(ligne, /, relevé aucune valeur — rien à adopter$/);
+    // Les autres constantes gardent leur suite : une valeur relevée reste
+    // à adopter.
+    assert.ok(p.lignes.some((texte) => /^- SEUIL_SIEGES_LISIBLES : .*relevé 17 places — à adopter$/.test(texte)));
+  });
+
+  test('une constante relevée sans adoption et sans valeur : rien à adopter prime sur « relevé, non adopté »', async () => {
+    const fichiers = sorties();
+    const parallele = fichiers.get('parallele');
+    parallele.mesures = parallele.mesures.map((mesure) =>
+      mesure.nom === 'RALENTISSEMENT_PLEINE_CHARGE' ? { ...mesure, valeurProposee: null } : mesure,
+    );
+    const p = passage({ fichiers });
+    await executer(p.effets);
+    const ligne = p.lignes.find((texte) => texte.startsWith('- RALENTISSEMENT_PLEINE_CHARGE : '));
+    assert.notEqual(ligne, undefined);
+    // Sans valeur relevée, rien n'est relevé : la suite ne le prétend pas.
+    assert.match(ligne, /, relevé aucune valeur — rien à adopter$/);
+    assert.doesNotMatch(ligne, /non adopté/);
+  });
+
   test('une épreuve du banc tombée (un contrôle du harnais) : code 1, aucun relevé écrit', async () => {
     const p = passage({ codeVitest: 1 });
     assert.equal(await executer(p.effets), 1);

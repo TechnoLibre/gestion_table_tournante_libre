@@ -3737,6 +3737,27 @@ describe('dépôt : un événement d’un format plus ancien se refuse, FORMAT_T
     assert.notEqual(suite.baseJournal, BASE);
     assert.equal(fs.contenu('documents', dans(JOURNAL)), texteDe(poses, JOURNAL));
   });
+
+  test('un .precedent trop ancien à côté d’un état et d’un journal au format courant : l’état s’ouvre sans avertissement, le secours du .precedent se refuse FORMAT_TROP_ANCIEN, et le premier geste le remplace par l’état d’avant', async () => {
+    const { fichiers, courants } = await troisRevisionsAuFormat(FORMAT - 1);
+    const poses = remplacer(courants, PRECEDENT, texteDe(fichiers, PRECEDENT));
+    assert.notEqual(texteDe(poses, PRECEDENT), texteDe(courants, PRECEDENT));
+    const { disque, fs } = disqueAvec(poses);
+    const ouvert = await ouvrir(fs, DOC, dans(BASE));
+    assert.equal(fs.compteurs.ecritures, 0);
+    assert.deepEqual([ouvert.revision, ouvert.baseJournal, ouvert.journalAReecrire, ouvert.avertissements], [3, BASE, false, []]);
+    assert.deepEqual(await resumes(fs), [[BASE, 'evt-lucioles', null, BASE]]);
+    const refus = await echec(ouvrirSecours(fs, DOC, dans(BASE), 'precedent'), 'ETAT_ILLISIBLE');
+    assert.deepEqual(refus.details, { raison: 'FORMAT_TROP_ANCIEN', chemin: 'entete.format', format: FORMAT - 1 });
+    assert.equal(fs.compteurs.ecritures, 0);
+
+    const etatAvant = fs.contenu('documents', dans(ETAT));
+    const suite = await enregistrer(ouvert, modifier(ouvert.charge, 4), geste(4));
+    assert.equal(suite.baseJournal, BASE);
+    assert.equal(fs.contenu('documents', dans(PRECEDENT)), etatAvant);
+    const rouvert = await rouvrir(disque, BASE);
+    assert.deepEqual([rouvert.revision, rouvert.avertissements], [4, []]);
+  });
 });
 
 describe('dépôt : la présence par tour (§ 8.8, § 8.9)', () => {

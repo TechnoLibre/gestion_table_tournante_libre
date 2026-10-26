@@ -955,6 +955,26 @@ export const ECRANS = Object.freeze([
   },
   ...SECTIONS_EVENEMENT.flatMap((section) => ['lecture', 'ecriture', 'bloque'].map((mode) => ecranDeSection(section, mode))),
   {
+    nom: 'evenement.historique',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // Le panneau d'historique ouvert après un geste qui s'inscrit au
+      // journal : ses lignes portent le libellé de chaque instant dans sa
+      // forme affichée, que chaque garde lit avec le reste du panneau. Le
+      // retrait d'un objectif s'inscrit « Table 1 : … », dont la forme
+      // affichée lie les deux-points par une insécable.
+      let charge = chargePrincipale();
+      charge = executer(charge, 'changerEtiquettes', { id: 1, ajouter: 'finance' });
+      charge = executer(charge, 'poserObjectif', { table: 1, tour: null, etiquettes: 'finance', regle: null });
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'tables' });
+      await cliquer(m, '[data-section="tables"] [data-objectif="1"] [data-commande="retirerObjectif"]');
+      await attendre('l’objectif de la table 1 retiré', () => m.racine.querySelector('[data-objectif="1"] [data-commande="retirerObjectif"]') === null);
+      await cliquer(m, '[data-historique] [data-commande="historique"]');
+      await element(m, '[data-panneau="historique"] li[data-revision] .libelle');
+      return m.racine;
+    },
+  },
+  {
     nom: 'plan.tableGelee',
     mode: 'ecriture',
     async atteindre(contexte) {

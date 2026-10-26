@@ -365,10 +365,12 @@ function instantPilote(instant) {
 
 // Un instant écrit dans un texte, sous les formes de l'application : un
 // horodatage ISO, millisecondes et « Z » compris, que seul instantPilote
-// admet ; en lettres, la date de format.date suivie, après « , » ou « à »,
-// de l'heure de format.heure (format.horodatage, dater) ou de HH:MM:SS
-// (planche.pied.horodatage).
+// admet ; dans un nom de fichier, AAAA-MM-JJ_HH-MM-SS, le jour et l'heure
+// locale sans décalage (la planche, la corbeille) ; en lettres, la date de
+// format.date suivie, après « , » ou « à », de l'heure de format.heure
+// (format.horodatage, dater) ou de HH:MM:SS (planche.pied.horodatage).
 const INSTANT_ISO = /(?<!\d)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?(?!\d)/gu;
+const INSTANT_FICHIER = /(?<!\d)(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})(?!\d)/gu;
 const INSTANT_EN_LETTRES =
   /(?<![\p{L}\p{N}])(1er|\d{1,2})\s(\p{L}+)\s(\d{4})(?:,\s|\sà\s)(?:(\d{1,2})\sh\s(\d{2})|(\d{2}):(\d{2}):(\d{2}))(?!\p{N})/gu;
 
@@ -392,15 +394,20 @@ function cleEnLettres([, jourEcrit, nomDuMois, anneeEcrite, heureH, minuteH, heu
 }
 
 // Le premier instant d'un texte que l'horloge pilotée n'atteint pas, tel
-// qu'il s'écrit, ou null. Un instant en lettres se lit à l'heure locale du
-// départ, à la minute ou à la seconde qu'il porte : sa clé se compare au
-// même préfixe de début et de fin.
+// qu'il s'écrit, ou null. Un instant d'un nom de fichier ou en lettres se
+// lit à l'heure locale du départ, à la minute ou à la seconde qu'il porte :
+// sa clé AAAA-MM-JJTHH:MM[:SS] se compare au même préfixe de début et de
+// fin.
 function instantEtranger(texte) {
   for (const [ecrit] of texte.matchAll(INSTANT_ISO)) if (!instantPilote(ecrit)) return ecrit;
   const { debut, fin } = INSTANTS_PILOTES;
+  const horsPortee = (cle) => cle < debut.slice(0, cle.length) || cle > fin.slice(0, cle.length);
+  for (const [ecrit, jour, heure, minute, seconde] of texte.matchAll(INSTANT_FICHIER)) {
+    if (horsPortee(`${jour}T${heure}:${minute}:${seconde}`)) return ecrit;
+  }
   for (const morceaux of texte.matchAll(INSTANT_EN_LETTRES)) {
     const cle = cleEnLettres(morceaux.map((m) => m?.replace(/\s/gu, ' ')));
-    if (cle !== null && (cle < debut.slice(0, cle.length) || cle > fin.slice(0, cle.length))) return morceaux[0];
+    if (cle !== null && horsPortee(cle)) return morceaux[0];
   }
   return null;
 }
