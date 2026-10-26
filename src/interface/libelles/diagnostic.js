@@ -648,7 +648,8 @@ export const TABLE = new Map([
       `Hors d'atteinte, et c'est prouvé : quel que soit le placement, au moins ${compte(mobiles, 'mobile finit', 'mobiles finissent')} ` +
       `sous ${mobiles <= 1 ? 'son' : 'leur'} plafond a priori ; aucun placement n'atteint le plafond a priori de chacun.`,
   ],
-  // Ce qu'on peut tenter. arret : le compte d'arrêt réglé.
+  // Ce qu'on peut tenter. arret : pour « Repartir d'elle », le compte d'arrêt
+  // qui a produit la proposition ; pour « Générer », le compte d'arrêt réglé.
   [
     'diagnostic.proposition.tenter.repartir',
     ({ proposition, arret }, texte) =>

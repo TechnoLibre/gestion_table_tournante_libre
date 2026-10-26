@@ -12,6 +12,7 @@ import { creerCharge } from '../stockage/document.js';
 import { fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { animateursDeLaTable, avertissementsDuLot, designations, statutsPourAnimation } from './animateurs.js';
+import { appliquerCommande } from './commandes.js';
 
 const NOMS = [
   ['Ombrelle', 'Iris'],
@@ -104,17 +105,73 @@ function chargeRetenue() {
 const statutDe = (statuts, id) => statuts.find(({ participant }) => participant === id);
 
 describe('animateurs : qui anime une table se calcule (§ 2.1 étape 6, § 4.1)', () => {
-  test('designations : chaque titre que pourvoit pour la soirée une réservation « tous les tours », dans l’ordre des titres', () => {
+  test('designations : chaque titre que pourvoit pour la soirée une réservation « tous les tours », ou que pourvoit la désignation suspendue d’une absente, dans l’ordre des titres', () => {
     const charge = chargeAnimee();
+    // Capucine, absente au tour 3 : sa réservation « tous les tours » au
+    // siège 4 de la table 5, suspendue à ce tour, tient sa désignation.
     assert.deepEqual(designations(charge), [
       { rang: 0, titre: charge.titres[0], reservation: resa(1, 2, 2) },
       { rang: 1, titre: charge.titres[1], reservation: resa(2, 4, 1) },
+      { rang: 2, titre: charge.titres[2], reservation: resa(6, 2, 4) },
     ]);
+    // Présente à chaque tour, elle anime pour la soirée : la même entrée.
+    charge.participants[5] = personne(6);
+    assert.deepEqual(designations(charge)[2], { rang: 2, titre: charge.titres[2], reservation: resa(6, 2, 4) });
+    // Exclue, rien ne la désigne : l'exclusion suspend toute réservation.
+    charge.participants[5] = personne(6, { exclu: true, presence: [1, 2] });
+    assert.deepEqual(designations(charge).map(({ rang }) => rang), [0, 1]);
   });
 
-  test('animateursDeLaTable : la personne et le titre qu’elle pourvoit, par siège ; ni réservation sans titre, ni absente à un tour, ni exclue', () => {
+  test('designations : la désignation d’une absente ne prend jamais le titre qu’une présente pourvoit pour la soirée', () => {
+    // En mode table, deux réservations « tous » sans siège à la table 3, un
+    // seul titre : Théo, présent, le pourvoit ; Capucine, absente au tour 3
+    // et d'identifiant plus grand, ne le prend pas, et n'anime pas.
     const charge = chargeAnimee();
-    assert.deepEqual(animateursDeLaTable(charge, 2), [{ participant: 1, siege: 2, libelle: 'animatrice' }]);
+    charge.reglages.attribuerSieges = false;
+    charge.reservations = [resa(2, 4, null), resa(6, 4, null)];
+    charge.titres = [{ table: 4, siege: 1, libelle: 'animation' }];
+    assert.deepEqual(designations(charge), [{ rang: 0, titre: charge.titres[0], reservation: resa(2, 4, null) }]);
+    // Deux titres, Théo absent au tour 1, Capucine présente : elle pourvoit
+    // pour la soirée le premier titre, qu'elle garde ; la désignation
+    // suspendue de Théo se répartit sur le seul titre resté sans
+    // pourvoyeur, le second, qu'il reçoit.
+    const deux = chargeAnimee();
+    deux.reglages.attribuerSieges = false;
+    deux.participants[1] = personne(2, { presence: [2, 3] });
+    deux.participants[5] = personne(6);
+    deux.reservations = [resa(2, 4, null), resa(6, 4, null)];
+    deux.titres = [
+      { table: 4, siege: 1, libelle: 'animation' },
+      { table: 4, siege: 2, libelle: 'relève' },
+    ];
+    assert.deepEqual(designations(deux), [
+      { rang: 0, titre: deux.titres[0], reservation: resa(6, 4, null) },
+      { rang: 1, titre: deux.titres[1], reservation: resa(2, 4, null) },
+    ]);
+    // Les mêmes deux titres, Théo présent, Capucine absente au tour 3 et
+    // d'identifiant plus grand : Théo garde le premier titre, et lui seul ;
+    // la répartition du second ne lit que les réservations « tous » des
+    // absentes, où Théo, présent, n'entre pas : Capucine le reçoit.
+    const inverse = chargeAnimee();
+    inverse.reglages.attribuerSieges = false;
+    inverse.reservations = [resa(2, 4, null), resa(6, 4, null)];
+    inverse.titres = deux.titres;
+    assert.deepEqual(designations(inverse), [
+      { rang: 0, titre: inverse.titres[0], reservation: resa(2, 4, null) },
+      { rang: 1, titre: inverse.titres[1], reservation: resa(6, 4, null) },
+    ]);
+    // Théo absent à son tour, Capucine aussi : la première dans l'ordre des
+    // réservations tient le titre, et elle seule.
+    charge.participants[1] = personne(2, { presence: [2, 3] });
+    assert.deepEqual(designations(charge), [{ rang: 0, titre: charge.titres[0], reservation: resa(2, 4, null) }]);
+  });
+
+  test('animateursDeLaTable : la personne et le titre qu’elle pourvoit, par siège, absente à un tour comprise ; ni réservation sans titre, ni exclue', () => {
+    const charge = chargeAnimee();
+    assert.deepEqual(animateursDeLaTable(charge, 2), [
+      { participant: 1, siege: 2, libelle: 'animatrice' },
+      { participant: 6, siege: 4, libelle: 'veille' },
+    ]);
     assert.deepEqual(animateursDeLaTable(charge, 4), [{ participant: 2, siege: 1, libelle: 'animation' }]);
     // Une seconde animatrice au siège 1 passe devant Iris ; l'exclue ne
     // pourvoit rien.
@@ -124,8 +181,18 @@ describe('animateurs : qui anime une table se calcule (§ 2.1 étape 6, § 4.1)'
     assert.deepEqual(animateursDeLaTable(deux, 2), [
       { participant: 7, siege: 1, libelle: 'accueil' },
       { participant: 1, siege: 2, libelle: 'animatrice' },
+      { participant: 6, siege: 4, libelle: 'veille' },
     ]);
     assert.throws(() => animateursDeLaTable(charge, 9), TypeError);
+  });
+
+  test('l’animatrice absente à un tour se retire comme une autre : sa réservation « tous les tours » et son titre partent, en une entrée', () => {
+    const charge = chargeAnimee();
+    const { charge: apres, libelle } = appliquerCommande('retirerAnimateur', charge, { table: 2, participant: 6 });
+    assert.deepEqual(apres.reservations, [resa(1, 2, 2), resa(2, 4, 1), resa(3, 2, null, 2), resa(4, 4, null)]);
+    assert.deepEqual(apres.titres, charge.titres.slice(0, 2));
+    assert.equal(libelle, "Retiré l'animateur Capucine Sarcelle de la table 5");
+    assert.deepEqual(animateursDeLaTable(apres, 2), [{ participant: 1, siege: 2, libelle: 'animatrice' }]);
   });
 
   test('la charge reçue reste intacte', () => {
@@ -271,7 +338,10 @@ describe('animateurs : le statut de chaque personne pour animer une table (§ 2.
   test('deux titres au même siège : le premier par libellé, comparé unité UTF-16 par unité, nomme l’animatrice', () => {
     const charge = chargeAnimee();
     charge.titres.push({ table: 2, siege: 2, libelle: 'Accueil' });
-    assert.deepEqual(animateursDeLaTable(charge, 2), [{ participant: 1, siege: 2, libelle: 'Accueil' }]);
+    assert.deepEqual(animateursDeLaTable(charge, 2), [
+      { participant: 1, siege: 2, libelle: 'Accueil' },
+      { participant: 6, siege: 4, libelle: 'veille' },
+    ]);
     const statut = statutDe(statutsPourAnimation(charge, 2), 1);
     assert.equal(statut.libelle, 'Accueil');
     assert.equal(statut.siege, 2);

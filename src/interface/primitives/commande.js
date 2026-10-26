@@ -35,7 +35,9 @@
 // régler un choix de la navigation — le départ d'une génération dérivée —, ou
 // par un geste que l'écran fournit : choisirPlace se choisit sur le plan,
 // enregistrerSous reprend la planche que l'écran a demandée. renommer ferme
-// l'événement : la liste des événements porte « Renommer » sur chacun.
+// l'événement : la liste des événements porte « Renommer » sur chacun, et
+// l'accueil y porte le focus sur la ligne de l'événement fermé, dont il
+// prend la clé par prendreRenommage.
 
 import { COMMANDES } from '../../application/commandes.js';
 import { suivre } from '../activite.js';
@@ -179,6 +181,37 @@ export function libelleRemede(remede) {
   return { cle: `communs.remede.${geste}`, details: {} };
 }
 
+// La clé de l'événement que le remède renommer a fermé, par séance, jusqu'à
+// ce que l'accueil la prenne.
+const RENOMMAGES = new WeakMap();
+
+/**
+ * La clé de l'événement dont le remède renommer demande le renommage sur la
+ * séance, posée avant la fermeture — la liste se monte pendant elle ; null
+ * sans demande. La demande se prend une seule fois.
+ *
+ * @param {object} seance
+ * @returns {string|null}
+ */
+export function prendreRenommage(seance) {
+  const cle = RENOMMAGES.get(seance) ?? null;
+  RENOMMAGES.delete(seance);
+  return cle;
+}
+
+// renommer : la clé de l'événement ouvert retenue, puis la fermeture ; une
+// fermeture refusée oublie la clé, l'événement restant ouvert.
+async function fermerPourRenommer(seance) {
+  const cle = seance.etat().evenement?.cle ?? null;
+  if (cle !== null) RENOMMAGES.set(seance, cle);
+  try {
+    return await seance.fermer();
+  } catch (erreur) {
+    RENOMMAGES.delete(seance);
+    throw erreur;
+  }
+}
+
 // Ce que fait un geste du remède, par la séance ou par l'état de navigation ;
 // null quand ce qui le ferait manque.
 function executionDuGeste(remede, seance, ui) {
@@ -192,7 +225,7 @@ function executionDuGeste(remede, seance, ui) {
     case 'ecrireAilleurs':
       return () => suivre(() => seance.ecrireAilleurs(remede.racine ?? null));
     case 'renommer':
-      return () => seance.fermer();
+      return () => fermerPourRenommer(seance);
     case 'afficherTour':
       if (ui === null) return null;
       return () => {
@@ -225,7 +258,8 @@ function executionDuGeste(remede, seance, ui) {
  * passerEnEcriture pour modifier, la clé de l'événement ouvert pour
  * ouvrirSecours, l'indicateur d'activité pour ecrireAilleurs, qui recopie
  * l'événement (activite.js) ; renommer par seance.fermer, qui rend la liste
- * des événements, où chacun se renomme ; afficherTour et ouvrirSection par
+ * des événements, où chacun se renomme, la clé de l'événement fermé retenue
+ * pour l'accueil (prendreRenommage) ; afficherTour et ouvrirSection par
  * l'état de navigation, ui, comme les deux gestes d'un départ refusé :
  * repartirDeZero retire le départ (ui.retirerDepart), libererTour décoche son
  * tour des tours figés du départ (ui.reglerToursFiges), et ne change rien

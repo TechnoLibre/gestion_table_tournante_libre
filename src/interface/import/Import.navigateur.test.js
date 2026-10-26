@@ -912,6 +912,35 @@ describe('remplacer annonce ce qu’il détruit (§ 10.1)', () => {
   });
 });
 
+describe('remplacer annonce les logos qu’il retire (§ 10.1, § 8.9)', () => {
+  // Deux chemins de logo de la forme du schéma, logo/<empreinte>.png, que
+  // rien ne dépose : seul le lien compte ici.
+  const LOGO_A = `logo/${'a1'.repeat(32)}.png`;
+  const LOGO_B = `logo/${'b2'.repeat(32)}.png`;
+
+  test('deux personnes à logo : la fenêtre dit « 2 logos seront retirés » après les quatre comptes ; l’avis d’après le geste reste', async () => {
+    const e = await ouvrir({
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', { logo: LOGO_A }),
+        personne(2, 'Pervenche', 'Théo', { logo: LOGO_B }),
+        personne(3, 'Lacasse', 'Ondine'),
+      ],
+    });
+    await choisir(e, 'remplace.csv', enUtf8('nom;prenom\r\nTisserin;Basilie\r\n'));
+    choisirMode(e, 'remplacer');
+    commande(e, 'importer').click();
+    await vi.waitFor(() => expect(dans(e, 'dialog')?.open).toBe(true));
+    const elements = [...dans(e, 'dialog').querySelectorAll('li')].map((li) => li.textContent);
+    expect(elements).toHaveLength(5);
+    expect(elements.at(-1)).toBe(t('import.remplacer.logos', { n: 2 }));
+    expect(elements.at(-1)).toBe('2 logos seront retirés');
+    dans(e, 'dialog [data-commande="confirmer"]').click();
+    await vi.waitFor(() => expect(dans(e, '[data-rapport]')).not.toBeNull());
+    const { avertissements } = await e.espion.mock.results.at(-1).value;
+    expect(avertissements).toContainEqual({ code: 'IMPORT_LOGOS_RETIRES', details: { logos: 2 } });
+  });
+});
+
 describe('importer selon l’état (§ 10.1, § 9)', () => {
   const FICHIER = 'nom;prenom\r\nMorillon;Aurèle\r\n';
 

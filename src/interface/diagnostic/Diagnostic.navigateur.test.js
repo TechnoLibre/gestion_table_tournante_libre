@@ -1115,6 +1115,10 @@ describe('le plancher exact du solveur (§ 5.6, § 5.10)', () => {
     // « Repartir d’elle », que les planchers instantanés proposent.
     const relance = phrasesInstantanees(m, 'tenter').find(({ cle }) => cle === 'diagnostic.proposition.tenter.repartir');
     expect(relance).toBeDefined();
+    // Le compte d'arrêt nommé est celui de la proposition, 40, et non celui
+    // des réglages, que la charge laisse à son défaut.
+    expect(relance.details.arret).toBe(40);
+    expect(charge(m).reglages.generation.arret).not.toBe(40);
     const repartir = ecran(relance.cle, relance.details);
     // Pendant le calcul, les planchers instantanés seuls.
     expect(section(m).querySelector('[data-proposition-choisie]')).not.toBeNull();

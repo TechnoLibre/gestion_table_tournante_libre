@@ -244,14 +244,20 @@ function reglesAuDessus(ligne, table, comptent, etoiles, exacts) {
   return false;
 }
 
+// Le compte d'arrêt qui a produit la proposition id de la charge : celui
+// que « Repartir d'elle » doit dépasser, quels que soient les réglages
+// courants.
+const arretDe = (charge, id) => charge.propositions.find((proposition) => proposition.id === id).arret;
+
 // Ce qu'on peut tenter. Une recherche plus longue vise ce qu'un placement
 // peut reprendre : les revoirs, l'écart d'itinéraire au-dessus de ce qui
 // est inévitable, et les règles actives au-dessus de leur plancher. Est
 // inévitable le plancher prouvé ; sinon, une perte de 1 quand des places
 // restent vides, car qui s'assoit à une table incomplète y perd au moins
 // une rencontre et chaque tour en compte une. Une proposition se reprend
-// par « Repartir d'elle », le retenu, qui ne l'offre pas, par une
-// génération. Des tables pleines retirent les places vides ; le plancher
+// par « Repartir d'elle », au-delà du compte d'arrêt qui l'a produite ; le
+// retenu, qui ne l'offre pas, par une génération, au-delà du compte des
+// réglages. Des tables pleines retirent les places vides ; le plancher
 // prouvé tient aux capacités et aux ancrages, qu'aucune relance ne
 // franchit. Au minimum atteint, « rien » ne vaut que pour les rencontres.
 function tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles, exacts) {
@@ -262,8 +268,8 @@ function tenter(choisie, ligne, table, charge, parts, vides, comptent, etoiles, 
   const parLaPlace = itineraire > inevitable;
   const liste = ligne.minimumAtteint === true ? [phrase('tenter.rien')] : [];
   if (plusGrand > 0 || parLaPlace || reglesAuDessus(ligne, table, comptent, etoiles, exacts)) {
-    const { arret } = charge.reglages.generation;
-    liste.push(choisie.genre === 'retenu' ? phrase('tenter.generer', { arret }) : phrase('tenter.repartir', { proposition: choisie.id, arret }));
+    if (choisie.genre === 'retenu') liste.push(phrase('tenter.generer', { arret: charge.reglages.generation.arret }));
+    else liste.push(phrase('tenter.repartir', { proposition: choisie.id, arret: arretDe(charge, choisie.id) }));
   }
   if (ligne.minimumAtteint === true) return liste;
   if (itineraire > 0 && vides.plus > 0) liste.push(phrase('tenter.tables'));

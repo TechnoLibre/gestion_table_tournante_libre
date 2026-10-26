@@ -66,6 +66,7 @@ import {
 import { versionVoisine } from '../../../test/version_voisine.js';
 import App from '../App.svelte';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { actionRemede } from '../primitives/commande.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 // Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
@@ -459,10 +460,11 @@ describe('créer et ouvrir', () => {
     aucuneFenetre();
   });
 
-  test('la date se choisit dans un sélecteur de date, à l’année de quatre chiffres, sous l’étiquette sans format', async () => {
+  test('la date se choisit dans un sélecteur de date, à l’année de quatre chiffres, de 1900 à 9999, sous l’étiquette sans format', async () => {
     const m = await monter();
     const champ = dans(m, '[data-champ="date"]');
     expect(champ.type).toBe('date');
+    expect(champ.min).toBe('1900-01-01');
     expect(champ.max).toBe('9999-12-31');
     expect(champ.labels[0].textContent.trim()).toBe(t('accueil.creation.date'));
     expect(t('accueil.creation.date')).toBe('Date, facultative');
@@ -560,6 +562,52 @@ describe('créer et ouvrir', () => {
     expect(creerFacade).not.toHaveBeenCalled();
     expect(ecritures(m)).toBe(avant);
     expect(m.seance.etat().evenement).toBeNull();
+  });
+
+  test('une année avant 1900, tapée sur trois chiffres : un refus qui nomme l’année minimale, contre le champ, le focus sur lui, rien au relevé', async () => {
+    const m = await monter();
+    const avant = ecritures(m);
+    saisir(dans(m, '[data-champ="nom"]'), 'Bal des Grisailles');
+    const champ = dans(m, '[data-champ="date"]');
+    // Le 17 mai 0203, tapé segment par segment dans l'ordre de la langue du
+    // navigateur : le sélecteur lit une date complète, sous son minimum.
+    const segments = { day: '17', month: '05', year: '0203' };
+    const ordre = new Intl.DateTimeFormat(navigator.language, { year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(0)
+      .map(({ type }) => type)
+      .filter((type) => type in segments);
+    champ.focus();
+    for (const chiffre of ordre.map((type) => segments[type]).join('')) await touche(chiffre);
+    flushSync();
+    expect(champ.value).toBe('0203-05-17');
+    expect(champ.validity.badInput).toBe(false);
+    expect(champ.validity.rangeUnderflow).toBe(true);
+    const creer = dans(m, '[data-commande="creer"]');
+    const creerFacade = vi.spyOn(m.facade, 'creer');
+    creer.focus();
+    await cliquer(creer);
+    const message = await vi.waitFor(() => {
+      const element = dans(m, '[data-refus="accueil.creation.anneeAvantMinimum"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(visible(message)).toBe(true);
+    expect(message.textContent).toContain(tEcran('accueil.creation.anneeAvantMinimum', { minimum: 1900, remede: null }));
+    expect(message.textContent).toContain('1900 au plus tôt');
+    expect(dans(m, '[data-refus="DATE_INCOMPLETE"]')).toBeNull();
+    expect(champ.getAttribute('aria-invalid')).toBe('true');
+    expect(champ.getAttribute('aria-describedby')).toBe(message.id);
+    expect(document.activeElement).toBe(champ);
+    expect(creerFacade).not.toHaveBeenCalled();
+    expect(ecritures(m)).toBe(avant);
+    expect(m.seance.etat().evenement).toBeNull();
+    // Le 1er janvier 1900, le minimum, crée l'événement.
+    saisir(champ, '1900-01-01');
+    await cliquer(dans(m, '[data-commande="creer"]'));
+    const cree = await attendreEvenement(m);
+    expect(creerFacade).toHaveBeenCalledTimes(1);
+    const lue = analyser(m.fs.contenu('documents', `${cree.cle}${SUFFIXES.etat}`));
+    expect(lue.charge.evenement.date).toBe('1900-01-01');
   });
 
   test('un seul événement ouvert : A en écriture, « Liste des événements » le ferme sans question ni verrou ; B s’ouvre en lecture', async () => {
@@ -1003,6 +1051,36 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     expect(ligne.querySelector('[data-champ="nomCopie"]').getAttribute('aria-invalid')).toBe('true');
     expect(ecritures(m)).toBe(avant);
     expect([...m.disque.keys()].some((cle) => cle.includes('(COPIE)'))).toBe(false);
+  });
+
+  test('le remède « Renommer » d’un événement ouvert : la liste revient, le focus sur « Renommer » de sa ligne, le filtre qui la cachait levé', async () => {
+    const { disque } = await disqueAvec([
+      { id: 'evt-pervenches', nom: 'Gala des Pervenches' },
+      { id: 'evt-grisailles', nom: 'Bal des Grisailles' },
+    ]);
+    const m = await monter({ systeme: { disque } });
+    // Un filtre qu'aucune ligne ne passe : la ligne à renommer y est cachée,
+    // et l'événement s'ouvre par la séance.
+    const tuile = (filtre) => dans(m, `[data-commande="filtrer"][data-cible="${filtre}"]`);
+    await cliquer(tuile('bloque'));
+    expect(ligneDe(m, 'Bal des Grisailles')).toBeNull();
+    await m.seance.ouvrir('Bal des Grisailles/Bal des Grisailles');
+    await attendreEvenement(m, ({ base }) => base === 'Bal des Grisailles');
+    await actionRemede({ geste: 'renommer' }, { seance: m.seance }).executer();
+    const commande = await vi.waitFor(() => {
+      const element = ligneDe(m, 'Bal des Grisailles')?.querySelector('[data-commande="renommer"]');
+      expect(element).toBeTruthy();
+      expect(document.activeElement).toBe(element);
+      return element;
+    });
+    expect(m.seance.etat().evenement).toBeNull();
+    expect(tuile('tous').getAttribute('aria-pressed')).toBe('true');
+    expect(tuile('bloque').getAttribute('aria-pressed')).toBe('false');
+    expect(lignes(m).length).toBe(2);
+    // La commande focalisée ouvre la saisie du nouveau nom de cette ligne.
+    await cliquer(commande);
+    expect(ligneDe(m, 'Bal des Grisailles').querySelector('[data-champ="nouveauNom"]').value).toBe('Bal des Grisailles');
+    expect(ligneDe(m, 'Gala des Pervenches').querySelector('[data-champ="nouveauNom"]')).toBeNull();
   });
 
   test('renommer : le nouveau nom et le nouveau chemin dans la liste ; ce que l’ancien dossier portait suit, et il se retire sans rien dire', async () => {

@@ -40,6 +40,7 @@ import {
   NATURE_PAR_DEFAUT,
   SEPARATEURS,
   SORTES_DE_MESSAGE,
+  annonceRemplacementParticipants,
   apercevoirSelon,
   avecEntetesDeLaGrille,
   comptesDuRapport,
@@ -838,6 +839,21 @@ describe('le rapport et la fenêtre de « Remplacer » selon la nature', () => {
     assert.equal(t('import.remplacer.tables', { n: 2 }), '2 tables perdront leurs objectifs');
     assert.equal(t('import.remplacer.tables', { n: 1 }), '1 table perdra ses objectifs');
     assert.ok(t('import.remplacer.titreObjectifs').length > 0);
+  });
+
+  test('remplacer des participants annonce les quatre comptes du bilan, puis les logos que l’essai retire, seulement quand il y en a', () => {
+    const bilan = { participants: 4, reservations: 2, titresPourvus: 1, propositions: 3 };
+    const quatre = [
+      { cle: 'import.remplacer.participants', details: { n: 4 } },
+      { cle: 'import.remplacer.reservations', details: { n: 2 } },
+      { cle: 'import.remplacer.titres', details: { n: 1 } },
+      { cle: 'import.remplacer.propositions', details: { n: 3 } },
+    ];
+    assert.deepEqual(annonceRemplacementParticipants(bilan, 0), quatre);
+    assert.deepEqual(annonceRemplacementParticipants(bilan, 2), [...quatre, { cle: 'import.remplacer.logos', details: { n: 2 } }]);
+    assert.deepEqual(annonceRemplacementParticipants(bilan, 1).at(-1), { cle: 'import.remplacer.logos', details: { n: 1 } });
+    assert.equal(t('import.remplacer.logos', { n: 1 }), '1 logo sera retiré');
+    assert.equal(t('import.remplacer.logos', { n: 2 }), '2 logos seront retirés');
   });
 });
 

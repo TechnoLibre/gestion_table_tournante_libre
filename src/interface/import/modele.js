@@ -303,6 +303,27 @@ export function comptesDuRapport(nature) {
   return COMPTES_DU_RAPPORT.get(exigerNature(nature)).map(([nom, cle]) => ({ nom, cle }));
 }
 
+/**
+ * Ce que la fenêtre de « Remplacer » des participants nomme détruit, en clés
+ * de libellé et leurs détails : les quatre comptes du bilan
+ * (bilanRemplacement) — personnes, réservations, titres pourvus,
+ * propositions —, toujours, puis les logos que le remplacement retire,
+ * seulement quand il en retire : le CSV ne porte aucun logo (§ 8.9).
+ *
+ * @param {{participants: number, reservations: number, titresPourvus: number, propositions: number}} bilan
+ * @param {number} logosRetires  le compte du résumé de l'essai de l'import
+ * @returns {Array<{cle: string, details: {n: number}}>}
+ */
+export function annonceRemplacementParticipants(bilan, logosRetires) {
+  return [
+    { cle: 'import.remplacer.participants', details: { n: bilan.participants } },
+    { cle: 'import.remplacer.reservations', details: { n: bilan.reservations } },
+    { cle: 'import.remplacer.titres', details: { n: bilan.titresPourvus } },
+    { cle: 'import.remplacer.propositions', details: { n: bilan.propositions } },
+    ...(logosRetires > 0 ? [{ cle: 'import.remplacer.logos', details: { n: logosRetires } }] : []),
+  ];
+}
+
 // Le remède d'un refus de decoder : le code que ses détails portent, que le
 // texte du refus compose déjà (contrat « Refus et avertissements »).
 const REFUS_DE_DECODER = new Set(['UTF16_SANS_MARQUE', 'UTF16_INVALIDE', 'UTF8_INVALIDE', 'CARACTERE_NUL']);

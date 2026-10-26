@@ -22,6 +22,7 @@ import { VERSION } from '../../version.genere.js';
 import { meilleureProposition } from '../generation/meilleure.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
+  ANNEE_MINIMALE,
   COLONNES_DU_RETENU,
   ETATS,
   FILTRES,
@@ -301,12 +302,13 @@ describe('surLaListe : une opération de la liste et son refus', () => {
 });
 
 describe('champDuRefus : le champ contre lequel un refus se pose', () => {
-  test('le nom pour NOM_REQUIS et un nom trop long, la date pour DATE_INVALIDE et DATE_INCOMPLETE, aucun sinon', () => {
+  test('le nom pour NOM_REQUIS et un nom trop long, la date pour DATE_INVALIDE, DATE_INCOMPLETE et une année trop ancienne, aucun sinon', () => {
     assert.equal(champDuRefus({ code: 'NOM_REQUIS', details: {} }), 'nom');
     // Le refus même que la création, la copie et le renommage lèvent.
     assert.equal(champDuRefus(refusNomEvenement('h'.repeat(NOM_EVENEMENT_MAX + 1))), 'nom');
     assert.equal(champDuRefus({ code: 'DATE_INVALIDE', details: { date: '2031-02-30' } }), 'date');
     assert.equal(champDuRefus({ code: 'DATE_INCOMPLETE', details: { remede: null } }), 'date');
+    assert.equal(champDuRefus({ code: 'accueil.creation.anneeAvantMinimum', details: { minimum: 1900, remede: null } }), 'date');
     assert.equal(champDuRefus({ code: 'CHEMIN_TROP_LONG', details: {} }), null);
     assert.equal(champDuRefus(null), null);
   });
@@ -323,9 +325,28 @@ describe('refusDeLaDate : une date commencée mais incomplète refuse la créati
     );
   });
 
+  test('une date sous le minimum du sélecteur rend un refus qui nomme l’année minimale, contre le champ de la date', () => {
+    // « 0203 » tapé dans l'année : le sélecteur lit une date complète, sous
+    // son attribut min, et le dit par validity.rangeUnderflow.
+    assert.equal(ANNEE_MINIMALE, 1900);
+    const refus = refusDeLaDate({ value: '0203-05-17', validity: { badInput: false, rangeUnderflow: true } });
+    assert.deepEqual(refus, { code: 'accueil.creation.anneeAvantMinimum', details: { minimum: 1900, remede: null } });
+    assert.equal(champDuRefus(refus), 'date');
+    assert.equal(
+      t(refus.code, refus.details),
+      'L\u{2019}année de la date est 1900 au plus tôt : corrigez-la, ou videz le champ pour créer sans date.',
+    );
+    // Une saisie illisible l'emporte : son refus est DATE_INCOMPLETE.
+    // Une année complète sur quatre chiffres, avant le minimum : même refus.
+    assert.deepEqual(refusDeLaDate({ value: '1899-12-31', validity: { badInput: false, rangeUnderflow: true } }), refus);
+    const illisible = refusDeLaDate({ value: '', validity: { badInput: true, rangeUnderflow: true } });
+    assert.equal(illisible.code, 'DATE_INCOMPLETE');
+  });
+
   test('un champ vide ou une date lue par le sélecteur ne refusent rien : la commande juge la date', () => {
-    assert.equal(refusDeLaDate({ value: '', validity: { badInput: false } }), null);
-    assert.equal(refusDeLaDate({ value: '2031-05-17', validity: { badInput: false } }), null);
+    assert.equal(refusDeLaDate({ value: '', validity: { badInput: false, rangeUnderflow: false } }), null);
+    assert.equal(refusDeLaDate({ value: '2031-05-17', validity: { badInput: false, rangeUnderflow: false } }), null);
+    assert.equal(refusDeLaDate({ value: '1900-01-01', validity: { badInput: false, rangeUnderflow: false } }), null);
   });
 });
 

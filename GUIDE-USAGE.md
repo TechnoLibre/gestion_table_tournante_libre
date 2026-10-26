@@ -62,8 +62,8 @@ message le dit à côté de la commande, avec la raison que donne le système.
 *Regardez la partie « Démonstrations » : chacune se charge comme un nouvel
 événement, ouvert en lecture, sans toucher aux autres. Sous « Créer un
 événement », seul le nom est exigé ; la date est facultative, choisie dans le
-calendrier du champ ; une date commencée doit être complète et exister au
-calendrier.*
+calendrier du champ ; une date commencée doit être complète, exister au
+calendrier et ne pas précéder 1900.*
 
 Ouvrir un événement existant ne réécrit jamais son fichier. Créer un événement,
 ou charger une démonstration, en écrit un nouveau. Le nom d’un événement compte
@@ -343,8 +343,9 @@ dans le sous-dossier `logo`, elle paraît quand on rouvre la fiche.
 
 Le fichier des participants ne porte pas de logo : l’export n’en écrit pas, et
 un import « Mettre à jour » garde ceux des personnes. « Remplacer » retire
-chaque personne avec son logo ; après l’import, un avertissement compte les
-logos retirés, et « Défaire » les rend.
+chaque personne avec son logo : la fenêtre à confirmer dit combien de logos
+seront retirés, après l’import un avertissement les compte encore, et
+« Défaire » les rend.
 
 ## Étape 4 — Préparer les tables
 
@@ -608,12 +609,13 @@ revoirs — les personnes à qui il manque une rencontre, les paires qui se
 croisent deux fois. Quand le diagnostic prouve qu’aucun placement n’atteint le
 plafond a priori de tout le monde, la carte le dit « hors d’atteinte ».
 **Ce qu’on peut tenter** : « Repartir d’elle » avec un compte d’arrêt plus
-élevé quand des revoirs, la place ou une règle cochée coûtent plus que
-l’inévitable, les tables quand ce sont les places vides — des tables pleines
-les retirent, et si leurs capacités diffèrent alors, le diagnostic dit ce
-qui demeure —, et « Rien pour les rencontres » quand la proposition atteint
-le plafond de chacun. Sans proposition, comme sur la capture, la carte invite
-à en générer une ; une proposition en dérive le dit, sans chiffres.
+élevé que celui qui a produit la proposition quand des revoirs, la place ou
+une règle cochée coûtent plus que l’inévitable, les tables quand ce sont les
+places vides — des tables pleines les retirent, et si leurs capacités
+diffèrent alors, le diagnostic dit ce qui demeure —, et « Rien pour les
+rencontres » quand la proposition atteint le plafond de chacun. Sans
+proposition, comme sur la capture, la carte invite à en générer une ; une
+proposition en dérive le dit, sans chiffres.
 
 Le même diagnostic s’affiche à côté du plan, pendant que vous préparez les
 tables : chaque organisation trop nombreuse pour ses tables y annonce les
@@ -1571,7 +1573,7 @@ l’historique ; les noms des exemples sont inventés.
 | Menu ouvert | Fin | Va à la dernière action. |
 | Menu ouvert | Échap | Ferme le menu et rend le focus à son bouton. |
 | Menu ouvert | Tab | Ferme le menu ; le focus passe au contrôle suivant. |
-| Geste en cours | Échap | Annule le geste en cours : la table revient où elle était. |
+| Geste en cours | Échap | Annule le geste en cours : table ou personne déplacée, capacité changée à la poignée, vue glissée, tout reprend sa place et rien ne s'écrit. |
 | Écran de l’événement, hors saisie | Ctrl+Z | Défait le dernier geste. |
 | Écran de l’événement, hors saisie | Ctrl+Maj+Z ou Ctrl+Y | Refait le dernier retour. |
 | Panneau ou infobulle | Échap | Ferme le panneau ou l'infobulle. |

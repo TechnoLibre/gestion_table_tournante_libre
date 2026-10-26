@@ -599,6 +599,17 @@ describe('commandes des places : animateurs en lot et retrait (§ 2.1 étape 6, 
     const { charge: deux, libelle: texte } = executer('designerAnimateurs', une, { table: 2, participants: [1, 2], libelle: 'animateur' });
     assert.deepEqual(deux.reservations, [resa(1, 2, 1), resa(2, 2, 2)]);
     assert.equal(texte, 'Désigné 1 animateur à la table 5 : Théo Pervenche');
+    // Capucine, désignée puis absente au tour 3 : sa désignation suspendue
+    // la garde animatrice de la table, si bien qu'elle est passée comme les
+    // autres, sans le refus ABSENT_AU_TOUR, et seule, SANS_EFFET.
+    const designee = executer('designerAnimateurs', chargeAnimation(), { table: 2, participants: [6], libelle: 'animateur' }).charge;
+    designee.participants[5] = personne(6, { presence: [1, 2] });
+    const absente = figer(designee);
+    refuse(() => executer('designerAnimateurs', absente, { table: 2, participants: [6], libelle: 'animateur' }), 'SANS_EFFET', {
+      commande: 'designerAnimateurs',
+    });
+    const { charge: avecTheo } = executer('designerAnimateurs', absente, { table: 2, participants: [6, 2], libelle: 'animateur' });
+    assert.deepEqual(avecTheo.reservations, [resa(6, 2, 1), resa(2, 2, 2)]);
   });
 
   test('retirerAnimateur : la réservation « tous les tours » et le titre partent ensemble, une entrée ; la table redevient comme avant', () => {

@@ -203,6 +203,9 @@ export const TABLE = new Map([
     'import.remplacer.propositions',
     ({ n }) => `${n} ${accorde(n, 'proposition deviendra périmée', 'propositions deviendront périmées')}`,
   ],
+  // Les logos des personnes retirées, que le CSV ne porte pas : l'élément
+  // ne s'affiche qu'à partir de 1.
+  ['import.remplacer.logos', ({ n }) => `${n} ${accorde(n, 'logo sera retiré', 'logos seront retirés')}`],
 
   // --- La fenêtre de « Remplacer » des objectifs (§ 10.4) ----------------------
   ['import.remplacer.titreObjectifs', 'Remplacer les objectifs des tables'],

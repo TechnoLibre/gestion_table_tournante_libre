@@ -6,8 +6,11 @@
 // s'écrit : anime une table la personne dont une réservation « tous les
 // tours » pourvoit pour la soirée un titre de cette table, selon la règle
 // unique des titres pourvus (pourvoyeursDesTitres, csv/import.js). Une
-// personne exclue, ou absente à un tour, ne pourvoit rien pour la soirée, et
-// n'anime donc aucune table.
+// personne exclue ne pourvoit rien et n'anime aucune table. Une personne
+// absente à un tour ne pourvoit rien pour la soirée, mais sa désignation
+// tient tant que sa réservation et son titre existent : sa réservation
+// « tous les tours » est suspendue à ses tours d'absence (§ 4.4), et elle
+// reste animatrice de la table, que son retrait libère.
 //
 // Les commandes des places (designerAnimateurs, retirerAnimateur) et la
 // fenêtre d'ajout des animateurs lisent ces fonctions. Elles ne modifient
@@ -31,20 +34,50 @@ function tableDe(charge, id) {
 // libellé, comparé unité UTF-16 par unité.
 const parSiege = (a, b) => a.siege - b.siege || (a.libelle < b.libelle ? -1 : a.libelle > b.libelle ? 1 : 0);
 
+// Une personne absente à un tour, sa présence rendue à chaque tour : la
+// copie que lit la répartition des désignations suspendues.
+function presenceRendue(personne) {
+  const { presence: _presence, ...presente } = personne;
+  return presente;
+}
+
 /**
- * Les désignations de la charge : chaque titre qu'une réservation « tous les
- * tours » pourvoit pour la soirée, dans l'ordre de charge.titres. rang est
- * celui du titre dans charge.titres ; reservation, celle de charge.reservations
- * qui le pourvoit.
+ * Les désignations de la charge, dans l'ordre de charge.titres : chaque
+ * titre qu'une réservation « tous les tours » pourvoit pour la soirée, puis,
+ * sur les titres restés sans pourvoyeur pour la soirée seulement, la
+ * désignation suspendue de chaque personne non exclue absente à un tour.
+ * Celles-ci se répartissent selon les règles de pourvoyeursDesTitres sur une
+ * charge réduite : ces titres, les réservations « tous les tours » de ces
+ * absentes, et ces absentes rendues présentes à chaque tour. Un titre déjà
+ * pourvu n'entre donc pas dans la répartition : une désignation suspendue ne
+ * prend jamais le titre d'une présente, ni ne se décale devant elle. rang est
+ * celui du titre dans charge.titres ; reservation, celle de
+ * charge.reservations qui le pourvoit.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @returns {Array<{rang: number, titre: Object, reservation: Object}>}
  */
 export function designations(charge) {
   const pourvoyeurs = pourvoyeursDesTitres(charge);
+  const R = charge.evenement.tours;
+  const absentes = charge.participants.filter((personne) => !personne.exclu && toursDAbsence(personne, R).length > 0);
+  const restants = charge.titres.flatMap((_titre, rang) => (pourvoyeurs[rang].soiree === null ? [rang] : []));
+  const suspendues = new Map();
+  if (absentes.length > 0 && restants.length > 0) {
+    const ids = new Set(absentes.map(({ id }) => id));
+    const repartis = pourvoyeursDesTitres({
+      ...charge,
+      participants: absentes.map(presenceRendue),
+      reservations: charge.reservations.filter(({ participant, portee }) => portee === 'tous' && ids.has(participant)),
+      titres: restants.map((rang) => charge.titres[rang]),
+    });
+    restants.forEach((rang, i) => {
+      if (repartis[i].soiree !== null) suspendues.set(rang, repartis[i].soiree);
+    });
+  }
   return charge.titres.flatMap((titre, rang) => {
-    const { soiree } = pourvoyeurs[rang];
-    return soiree === null ? [] : [{ rang, titre, reservation: soiree }];
+    const reservation = pourvoyeurs[rang].soiree ?? suspendues.get(rang) ?? null;
+    return reservation === null ? [] : [{ rang, titre, reservation }];
   });
 }
 
@@ -136,8 +169,10 @@ export function avertissementsDuLot(listes) {
  * - 'exclue' : non choisissable ;
  * - 'absente' {tours} : absente à un tour au moins, ses tours d'absence
  *   croissants ; non choisissable, puisque sa réservation « tous les tours »
- *   ne pourvoirait aucun titre pour la soirée. Une absente n'anime aucune
- *   table : le cas passe avant chacun des suivants ;
+ *   ne pourvoit aucun titre pour la soirée. Le cas passe avant
+ *   'animeCetteTable' et 'animeAutreTable' : une animatrice absente, que
+ *   designations garde par sa désignation suspendue, se lit absente dans la
+ *   fenêtre ;
  * - 'animeCetteTable' {siege, libelle} : déjà animatrice ici, son premier
  *   titre ; non choisissable ;
  * - 'animeAutreTable' {table, numero} : animatrice d'une autre table, la

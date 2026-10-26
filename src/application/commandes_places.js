@@ -405,7 +405,8 @@ const animateurRefuse = (personne, cause, remede) =>
  * § 5.8) : designer, sous le même libellé, pour chaque personne dans l'ordre
  * reçu, chacune sur la charge que la précédente laisse, en une entrée qui
  * les nomme. Une personne qui anime déjà cette table (animateursDeLaTable)
- * est passée ; quand toutes l'animent déjà, SANS_EFFET.
+ * est passée, absente à un tour comprise quand sa désignation suspendue l'y
+ * garde ; quand toutes l'animent déjà, SANS_EFFET.
  *
  * Le siège de chaque personne est celui que rend siegeDuLot — un siège sans
  * titre qu'elle tient déjà à la table, sinon le plus petit siège sans titre
@@ -493,8 +494,9 @@ const premierTitre = (titres) =>
 /**
  * retirerAnimateur {table, participant} (§ 2.1 étape 6) : la personne cesse
  * d'animer la table. Part, en une entrée, chaque réservation « tous les
- * tours » de la personne qui pourvoit pour la soirée un titre de la table
- * (designations), et avec elle un seul titre : le fichier ne garde pas quel
+ * tours » de la personne qui pourvoit pour la soirée un titre de la table,
+ * ou qui en pourvoit un par sa désignation suspendue quand elle est absente
+ * à un tour (designations), et avec elle un seul titre : le fichier ne garde pas quel
  * geste a posé un titre, si bien que le titre retiré est le premier, dans
  * l'ordre canonique (premierTitre), de ceux qu'elle pourvoit — celui de son
  * siège, quand elle en porte un. designerAnimateurs pose le titre de chaque

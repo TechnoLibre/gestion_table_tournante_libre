@@ -46,6 +46,7 @@
   import { versionVisible } from '../apropos.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
+  import { prendreRenommage } from '../primitives/commande.js';
   import Refus from '../primitives/Refus.svelte';
   import Corbeille from './Corbeille.svelte';
   import Demonstrations from './Demonstrations.svelte';
@@ -56,6 +57,7 @@
   import MessagesDossier from './MessagesDossier.svelte';
   import Recuperation from './Recuperation.svelte';
   import {
+    ANNEE_MINIMALE,
     champDuRefus,
     premiereAnnonce,
     refusDeLaDate,
@@ -116,10 +118,33 @@
   // Le champ du nom de la création, où mène « Créer un événement », et
   // celui de la date, où revient le focus d'une date refusée. La date se
   // choisit dans un sélecteur, que max borne à une année de quatre
-  // chiffres : la règle du champ date du schéma veut AAAA-MM-JJ.
+  // chiffres : la règle du champ date du schéma veut AAAA-MM-JJ. min le
+  // borne au 1er janvier d'ANNEE_MINIMALE : une année antérieure, par exemple
+  // tapée sur deux ou trois chiffres, « 0203 », se lit comme une date
+  // complète que le schéma admettrait, et le champ la signale sous son
+  // minimum.
   let champNom = $state(null);
   let champDate = $state(null);
   const allerALaCreation = () => champNom?.focus();
+
+  // Le remède « Renommer » d'un événement ouvert le ferme (commande.js) : sa
+  // clé attend que la liste porte sa ligne, puis le focus va à la commande
+  // « Renommer » de cette ligne. Un filtre qui la cache se lève d'abord ; la
+  // demande se tient jusqu'à ce que la ligne soit là.
+  let ecranAccueil = $state(null);
+  let aRenommer = $state(prendreRenommage(seance));
+  $effect(() => {
+    const cle = aRenommer;
+    const { filtre } = vue;
+    if (cle === null || ecranAccueil === null || !lignes.some((ligne) => ligne.cle === cle)) return;
+    const commande = ecranAccueil.querySelector(`[data-evenement="${CSS.escape(cle)}"] [data-commande="renommer"]`);
+    if (commande === null) {
+      if (filtre !== 'tous') untrack(() => filtrer('tous'));
+      return;
+    }
+    aRenommer = null;
+    commande.focus();
+  });
 
   let detruit = false;
   const desabonner = seance.subscribe((etat) => {
@@ -248,8 +273,10 @@
   }
 
   // La création : une date que le sélecteur ne lit pas, incomplète ou
-  // absente du calendrier, se refuse contre son champ, qui reprend le focus,
-  // avant tout appel à la façade ; le reste se juge par la commande.
+  // absente du calendrier, et une date sous le minimum du champ se refusent
+  // contre lui, chacune sous son refus (refusDeLaDate lit la validité du
+  // champ), avant tout appel à la façade ; le champ reprend le focus. Le
+  // reste se juge par la commande.
   async function creer(evenement) {
     evenement.preventDefault();
     if (creationEnCours) return;
@@ -275,7 +302,7 @@
 {#if recuperation !== null}
   <Recuperation {...recuperation} retour={() => (recuperation = null)} />
 {:else}
-  <section class="accueil" data-ecran="accueil">
+  <section class="accueil" data-ecran="accueil" bind:this={ecranAccueil}>
     <header class="entete">
       <div class="titres">
         <h1>{t('coquille.liste')}</h1>
@@ -346,6 +373,7 @@
             <input
               id={`${uid}-date`}
               type="date"
+              min={`${ANNEE_MINIMALE}-01-01`}
               max="9999-12-31"
               data-champ="date"
               bind:this={champDate}

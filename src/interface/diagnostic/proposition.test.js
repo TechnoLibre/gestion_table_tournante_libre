@@ -51,13 +51,17 @@ function chargeDe({ organisations, capacites, tours = 4, presence = {}, reglages
   return charge;
 }
 
+// Le compte d'arrêt de chaque proposition écrite ici, loin de celui des
+// réglages par défaut : « Repartir d'elle » le nomme, non celui des réglages.
+const ARRET_PROPOSITION = 40;
+
 // Une proposition écrite à la main, sur les tables de la charge ; ses listes
 // données tour par tour, absents[r] les absents du tour r + 1.
 function propositionDe(charge, id, tours, absents = []) {
   return {
     id,
     graine: id,
-    arret: 40,
+    arret: ARRET_PROPOSITION,
     historique: 1000,
     produitVersion: VERSION.affichee,
     siegesAttribues: false,
@@ -169,7 +173,7 @@ describe('propositionChoisie : laquelle (§ 5.6)', () => {
       id: 2,
       laquelle: phrase('laquelle.montree', { proposition: 2 }),
       statut: null,
-      blocs: [...BLOCS_SEPARES, bloc('tenter', [phrase('tenter.repartir', { proposition: 2, arret: ARRET })])],
+      blocs: [...BLOCS_SEPARES, bloc('tenter', [phrase('tenter.repartir', { proposition: 2, arret: ARRET_PROPOSITION })])],
     });
   });
 
@@ -193,6 +197,20 @@ describe('propositionChoisie : laquelle (§ 5.6)', () => {
     const demandee = propositionChoisie(retenue, { demandee: 1 });
     assert.equal(demandee.genre, 'montree');
     assert.equal(demandee.id, 1);
+  });
+
+  test('« Repartir d’elle » nomme le compte d’arrêt qui a produit la proposition, même quand les réglages ont changé depuis', () => {
+    const charge = chargeSix();
+    charge.reglages.generation = { ...charge.reglages.generation, arret: 500 };
+    charge.propositions[1] = { ...charge.propositions[1], arret: 7_000 };
+    const tenter = (choisie, cle) => choisie.blocs.find(({ nom }) => nom === 'tenter').phrases.find((p) => p.cle === `${P}.tenter.${cle}`);
+    const relance = (choisie) => tenter(choisie, 'repartir');
+    assert.deepEqual(relance(propositionChoisie(charge, { demandee: 2 })).details, { proposition: 2, arret: 7_000 });
+    assert.deepEqual(relance(propositionChoisie(charge, { demandee: 1 })).details, { proposition: 1, arret: ARRET_PROPOSITION });
+    // Le retenu, que « Générer » reprend, garde le compte des réglages.
+    const retenue = executer(charge, 'retenirProposition', { id: 2 });
+    const generer = tenter(propositionChoisie(retenue), 'generer');
+    assert.deepEqual(generer.details, { arret: 500 });
   });
 
   test('une proposition en dérive, demandée : elle le dit, sans chiffres ; sans demande, aucune ne se classe', () => {
@@ -237,7 +255,7 @@ describe('propositionChoisie : ce qui est atteint, ce qui manque, ce qu’on peu
         phrase('diversite', { organisations: 1, redondance: 4, diversite: 0.5 }),
       ]),
       bloc('manque', [phrase('manque.aucun')]),
-      bloc('tenter', [phrase('tenter.rien'), phrase('tenter.repartir', { proposition: 1, arret: ARRET })]),
+      bloc('tenter', [phrase('tenter.rien'), phrase('tenter.repartir', { proposition: 1, arret: ARRET_PROPOSITION })]),
     ]);
   });
 
@@ -303,7 +321,7 @@ describe('propositionChoisie : ce qui est atteint, ce qui manque, ce qu’on peu
         phrase('manque.revoirsNul'),
         phrase('manque.inconnue'),
       ]),
-      bloc('tenter', [phrase('tenter.repartir', { proposition: 1, arret: ARRET }), phrase('tenter.tables')]),
+      bloc('tenter', [phrase('tenter.repartir', { proposition: 1, arret: ARRET_PROPOSITION }), phrase('tenter.tables')]),
     ]);
   });
 
@@ -321,7 +339,7 @@ describe('propositionChoisie : ce qui est atteint, ce qui manque, ce qu’on peu
         phrase('manque.revoirsNul'),
         phrase('manque.horsAtteinte', { mobiles: 2 }),
       ]),
-      bloc('tenter', [phrase('tenter.repartir', { proposition: 1, arret: ARRET }), phrase('tenter.capacites')]),
+      bloc('tenter', [phrase('tenter.repartir', { proposition: 1, arret: ARRET_PROPOSITION }), phrase('tenter.capacites')]),
     ]);
   });
 
@@ -342,7 +360,7 @@ describe('propositionChoisie : ce qui est atteint, ce qui manque, ce qu’on peu
         phrase('manque.nonAdditifs'),
         phrase('manque.inconnue'),
       ]),
-      bloc('tenter', [phrase('tenter.repartir', { proposition: 1, arret: ARRET }), phrase('tenter.tables')]),
+      bloc('tenter', [phrase('tenter.repartir', { proposition: 1, arret: ARRET_PROPOSITION }), phrase('tenter.tables')]),
     ]);
   });
 

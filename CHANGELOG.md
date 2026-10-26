@@ -671,6 +671,27 @@
   notice `LICENSE`, permet de distribuer l'application avec des composants
   sous licence libre permissive, comme ceux qu'elle incorpore ; la carte
   « Licence » d'« À propos » le dit.
+- La date d'un événement créé commence en 1900 : une année tapée sur deux ou
+  trois chiffres, comme « 0203 », est refusée contre le champ de la date
+  par un message qui nomme ce minimum, et ne crée plus d'événement.
+- L'aide de la touche Échap pendant un geste sur le plan décrit chaque geste
+  qu'elle annule — une table ou une personne déplacée, une capacité changée à
+  la poignée, la vue glissée —, et plus seulement la table.
+- Le conseil « Repartir d'elle » de la carte de la proposition choisie nomme
+  le compte d'arrêt qui a produit cette proposition, même quand les réglages
+  de la génération ont changé depuis.
+- Le remède « Renommer » d'un nom d'événement trop long ramène à la liste, le
+  focus sur « Renommer » de la ligne de cet événement, même si un filtre la
+  cachait.
+- La fenêtre à confirmer de « Remplacer », à l'import des participants, dit
+  combien de logos seront retirés, quand des personnes en portent ; l'avis
+  d'après le geste reste.
+- Une personne désignée animatrice, devenue absente à un tour, reste dans la
+  rangée « Animateurs » de sa table, marquée « Absence au tour 3 », avec son
+  × pour la retirer, tant que sa réservation et son titre existent. Quand
+  une personne présente pourvoit l'un des titres de la table, l'absente garde
+  un titre resté libre, au lieu de quitter la rangée, sans jamais prendre
+  celui de la présente.
 - « Ouvrir le dossier » et « Ouvrir dans l'explorateur », quand l'explorateur
   ne s'ouvre pas, disent que l'ouverture a échoué, avec la raison que donne le
   système, au lieu de « Cette commande n'est pas offerte ici ».

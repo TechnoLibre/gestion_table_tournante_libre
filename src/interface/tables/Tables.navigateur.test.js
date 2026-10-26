@@ -32,7 +32,7 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
 import { pointer, touche } from '../../../test/navigateur/entrees.js';
-import { composantes, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { demanderCreationTables } from './CreerTables.svelte';
@@ -1641,6 +1641,34 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     expect(statutDe(7)).toBe('Absence au tour 3');
     expect(caseDe(7).disabled).toBe(true);
     expect(caseDe(7).checked).toBe(false);
+  });
+
+  test('une animatrice devenue absente à un tour reste dans la rangée, marquée « Absence au tour 3 » ; son × retire sa réservation et son titre en une entrée', async () => {
+    const donnees = chargeAnimateurs();
+    donnees.participants[0].presence = [1, 2];
+    const m = await preparer(donnees);
+    const r0 = revision(m);
+    const iris = rangee(m, 1).querySelector('[data-participant="1"]');
+    expect(iris, 'Iris dans la rangée de la table 1').not.toBeNull();
+    expect(iris.textContent).toContain('Iris Ombrelle');
+    // La marque, d'abord par la traduction de l'écran, puis en toutes
+    // lettres.
+    const { t: tEcran } = traductionEcran();
+    const marque = iris.querySelector('[data-absence]');
+    expect(marque.textContent.trim()).toBe(tEcran('tables.animateurs.statut.absente', { tours: [3] }));
+    expect(marque.textContent.trim()).toBe('Absence au tour 3');
+    expect(visible(marque)).toBe(true);
+    // Théo, présent à chaque tour, n'en porte aucune.
+    expect(rangee(m, 2).querySelector('[data-participant="2"]')).not.toBeNull();
+    expect(rangee(m, 2).querySelector('[data-absence]')).toBeNull();
+    const retrait = commande(iris, 'retirerAnimateur');
+    expect(retrait).toHaveAccessibleName('Retirer Iris Ombrelle des animateurs de la table 1');
+    await cliquer(m, retrait);
+    expect(revision(m)).toBe(r0 + 1);
+    expect(charge(m).reservations.some((r) => r.participant === 1)).toBe(false);
+    expect(charge(m).titres.some((titreDeTable) => titreDeTable.table === 1 && titreDeTable.siege === 1)).toBe(false);
+    expect(pastilles(m, 1)).toEqual([]);
+    expect(rangee(m, 1).textContent).toContain(t('tables.animateurs.aucun'));
   });
 
   test('la recherche qui cache la première orthographe d’une organisation ne renomme pas son groupe', async () => {

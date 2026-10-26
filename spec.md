@@ -595,9 +595,16 @@ ne peut asseoir quelqu'un qui n'est pas là.
 suspend toutes celles de la personne : une portée « tous les tours » ne vaut
 plus qu'aux tours de présence, une réservation de tour désigné sur un tour
 d'absence est suspendue, sa place rendue aux mobiles et son titre non pourvu à
-ce tour, et le logiciel le dit. Rendre la présence les rend. La présence d'une
-personne exclue se garde, suspendue : ni la recherche, ni le placement, ni les
-titres ne la lisent, et la réintégration la rend. **Retirer une personne après
+ce tour, et le logiciel le dit. Rendre la présence les rend. Une animatrice
+absente à un tour reste animatrice de sa table tant que sa réservation et son
+titre existent : sa désignation est suspendue. Les désignations suspendues se
+répartissent, par la règle des titres pourvus (§ 2.1 étape 6), sur les seuls
+titres restés sans pourvoyeur pour la soirée, entre les réservations « tous
+les tours » des absentes non exclues : elles ne prennent jamais le titre
+d'une présente. La rangée « Animateurs » la garde, marquée de ses tours
+d'absence, avec son retrait (§ 6.1). La présence d'une personne exclue se
+garde, suspendue : ni la recherche, ni le placement, ni les titres ne la
+lisent, et la réintégration la rend. **Retirer une personne après
 des tours joués se fait par sa présence**, non par l'exclusion : elle garde sa
 place aux tours où elle était là, et ses rencontres y comptent (§ 5.4) ;
 l'exclusion et la suppression la retirent de toute la soirée, tours joués
@@ -1532,7 +1539,8 @@ titrés :
   seule, le minimum atteint (§ 5.5) ;
 - **Ce qu'on peut tenter**, des gestes qui existent seulement : « Repartir
   d'elle » — « Générer » pour le retenu, qui ne l'offre pas — avec un
-  compte d'arrêt plus élevé que le réglage, quand des revoirs coûtent des
+  compte d'arrêt plus élevé que celui qui a produit la proposition — que
+  le réglage, pour le retenu —, quand des revoirs coûtent des
   rencontres, quand une règle active reste au-dessus de ce que le
   diagnostic prouve inévitable — des conflits au-delà des conflits imposés,
   des collisions au-delà de leur plancher, renforcé par les étoiles pour un
@@ -2566,8 +2574,12 @@ l'avertissement tombe, et le focus passe à l'annonce des tables créées.
 « Animateurs » : ses animateurs (§ 2.1 étape 6) en pastilles, chacun suivi d'un
 bouton de retrait, nommé « Retirer *personne* des animateurs de la table *n* »,
 puis « Ajouter… ». Être animateur se calcule — une réservation « tous les
-tours » qui pourvoit pour la soirée un titre de la table — et la rangée ne lit
-rien d'autre. « Ajouter… » ouvre une fenêtre modale, « Ajouter des animateurs
+tours » qui pourvoit pour la soirée un titre de la table, ou la désignation
+suspendue d'une absente à un tour qui en pourvoit un resté sans pourvoyeur
+(§ 4.4) — et la rangée ne lit rien d'autre. Une animatrice devenue absente à
+un tour y reste donc, avec son retrait, tant que sa réservation et son titre
+existent, et sa pastille est suivie de ses tours d'absence, « Absence au
+tour 3 ». « Ajouter… » ouvre une fenêtre modale, « Ajouter des animateurs
 à la table *n* », le focus dans sa recherche : la recherche porte sur le nom,
 le prénom et l'organisation, sans égard à la casse ni aux accents ; la case
 « Grouper par organisation », cochée à l'ouverture, range les personnes par
@@ -3130,18 +3142,21 @@ en-têtes de colonnes se groupent en « Événement », « Placement retenu » e
 l'en-tête, la date et le chemin en petite ligne dessous. Sous le tableau, des
 cartes offrent la création, le dossier de travail et les démonstrations. Le
 formulaire de la création exige un nom ; la date, facultative, se choisit dans
-un sélecteur de date, et une date commencée mais incomplète, ou complète mais
-absente du calendrier, refuse la création (`DATE_INCOMPLETE`), contre le champ
-de la date, sans rien écrire. Deux
-colonnes résument en plus le **placement retenu**, sous l'en-tête du groupe qui
-les couvre toutes deux : « Collisions cumulées (paire et tour) », les collisions
-cumulées du retenu, puis « Rencontres répétées choisies (paires) », les paires
-réunies plus d'une fois que le placement a choisies, sans celles que les
-réservations imposent (§ 5.4) — dans chacune, le nombre que la colonne du même
-intitulé du tableau des propositions porte sur la ligne du retenu. Les deux se
-lisent dans une seule mesure du retenu, celle du tableau, sans rien écrire dans
-l'événement ; un événement sans retenu, ou dont le retenu est fautif ou en
-dérive (§ 8.9, § 9), porte « — » dans l'une et l'autre.
+un sélecteur de date, borné de 1900 à 9999. Une date commencée mais
+incomplète, ou complète mais absente du calendrier, refuse la création
+(`DATE_INCOMPLETE`) ; une date d'une année avant 1900 — par exemple tapée sur
+deux ou trois chiffres — la refuse aussi, sous un refus qui nomme ce
+minimum, « L'année de la date est 1900 au plus tôt » ; l'un et l'autre se
+posent contre le champ de la date, sans rien écrire. Deux colonnes résument
+en plus le **placement retenu**, sous l'en-tête du groupe qui les couvre
+toutes deux : « Collisions cumulées (paire et tour) », les collisions
+cumulées du retenu, puis « Rencontres répétées choisies (paires) », les
+paires réunies plus d'une fois que le placement a choisies, sans celles que
+les réservations imposent (§ 5.4) — dans chacune, le nombre que la colonne
+du même intitulé du tableau des propositions porte sur la ligne du retenu.
+Les deux se lisent dans une seule mesure du retenu, celle du tableau, sans
+rien écrire dans l'événement ; un événement sans retenu, ou dont le retenu
+est fautif ou en dérive (§ 8.9, § 9), porte « — » dans l'une et l'autre.
 Chaque ligne porte aussi la **« Meilleure proposition du classement »**, sous
 les libellés du bloc que la section de la génération montre en tête :
 l'identifiant de la proposition au rang 1 du classement (§ 5.7) — la même
@@ -4320,7 +4335,8 @@ s'efface (§ 8.3). L'image d'un chemin se lit dans tout mode, et un chemin dont
 le fichier manque se lit comme absent, sans faute du fichier.
 
 Le CSV des participants ne porte pas de logo : un import qui remplace la liste
-retire les logos avec les personnes, et le dit en comptant les logos retirés ;
+retire les logos avec les personnes : la fenêtre à confirmer compte les logos
+qui partiront, quand il y en a, et l'avis d'après le geste les compte encore ;
 mettre à jour les garde (§ 10.1). Le moteur ne lit pas le champ : la
 configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
 mêmes. Le champ fait partie du format 3.
@@ -4820,6 +4836,9 @@ courriels, d'un geste qui s'annonce comme une mise à jour.
 
 **Remplacer annonce ce qu'il détruit**, réservations et titres compris :
 « 260 personnes seront supprimées » laisse croire qu'on ne perd que des noms.
+La fenêtre à confirmer compte les personnes, les réservations, les titres qui
+perdront leur réservation et les propositions qui deviendront périmées, puis
+les logos que le remplacement retire, seulement quand il en retire.
 
 **Importer selon l'état** : sans avertissement en brouillon et proposé ; en
 retenu, avec l'avertissement que le placement retenu suit la présence de chacun,
@@ -5942,8 +5961,9 @@ Le pied porte le nom entier, jamais tronqué. Un nom qui passe la borne du § 8.
 ne s'imprime pas : l'aperçu le refuse avant de mettre une page en forme, dans
 aucune vue, et pose sur « Imprimer » le refus `NOM_EVENEMENT_TROP_LONG` avec le
 remède « Renommer ». Ce remède ferme l'événement et rend la liste des
-événements, où il se renomme. « Imprimer » rend ce refus sans appeler
-l'imprimante.
+événements, où il se renomme : la liste lue, le focus va à la commande
+« Renommer » de sa ligne, un filtre qui la cachait levé. « Imprimer » rend ce
+refus sans appeler l'imprimante.
 
 **Toute page imprimée porte la mention BROUILLON en filigrane, sauf dans un seul
 cas** : celle qui imprime le placement retenu, quand le plan est retenu ou
