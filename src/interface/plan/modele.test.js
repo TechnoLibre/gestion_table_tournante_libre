@@ -242,9 +242,9 @@ describe('modeleDessin : le bandeau énonce le diagnostic (§ 7.5)', () => {
     assert.deepEqual(bandeau, [
       { cle: 'plan.bandeau.toutesEnConflit', details: {} },
       { cle: 'plan.bandeau.collisionPartout', details: {} },
-      ...diagnostic.collisions.map(({ groupe, effectif, plancherCumulees }) => ({
+      ...diagnostic.collisions.map(({ groupe, effectif, plancherCumulees, plancherPairesDistinctes }) => ({
         cle: 'plan.bandeau.plancherGroupe',
-        details: { groupe, effectif, plancherCumulees },
+        details: { groupe, effectif, plancherCumulees, plancherPairesDistinctes },
       })),
     ]);
     assert.deepEqual(
@@ -252,6 +252,19 @@ describe('modeleDessin : le bandeau énonce le diagnostic (§ 7.5)', () => {
       [6, 6],
     );
     for (const { cle, details } of bandeau) assert.equal(typeof t(cle, details), 'string');
+  });
+
+  test('un plancher de groupe nomme ses deux unités : collisions cumulées et paires distinctes (§ 5.4)', () => {
+    const plusieurs = { groupe: 'Club des Merles', effectif: 6, plancherCumulees: 8, plancherPairesDistinctes: 2 };
+    assert.equal(
+      t('plan.bandeau.plancherGroupe', plusieurs),
+      '6 personnes, au moins 8 collisions cumulées sur la soirée, portées par au moins 2 paires distinctes',
+    );
+    const une = { groupe: 'Club des Merles', effectif: 2, plancherCumulees: 1, plancherPairesDistinctes: 1 };
+    assert.equal(
+      t('plan.bandeau.plancherGroupe', une),
+      '2 personnes, au moins 1 collision cumulée sur la soirée, portée par au moins 1 paire distincte',
+    );
   });
 
   test('une seule organisation : l\u{2019}entrée uneSeuleOrganisation, sans plancher par groupe', () => {

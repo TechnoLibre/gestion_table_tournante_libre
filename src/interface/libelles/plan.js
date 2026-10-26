@@ -68,8 +68,11 @@ export const TABLE = new Map([
   ],
   [
     'plan.bandeau.plancherGroupe',
-    ({ effectif, plancherCumulees }) =>
-      `${compte(effectif, 'personne', 'personnes')}, au moins ${compte(plancherCumulees, 'collision', 'collisions')} sur la soirée`,
+    ({ effectif, plancherCumulees, plancherPairesDistinctes }) =>
+      `${compte(effectif, 'personne', 'personnes')}, au moins ` +
+      `${compte(plancherCumulees, 'collision cumulée', 'collisions cumulées')} sur la soirée, ` +
+      `${plancherCumulees === 1 ? 'portée' : 'portées'} par au moins ` +
+      compte(plancherPairesDistinctes, 'paire distincte', 'paires distinctes'),
   ],
   ['plan.bandeau.sansPlancher', 'le diagnostic ne prouve aucun plancher de collisions'],
 

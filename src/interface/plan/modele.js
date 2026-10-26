@@ -362,8 +362,9 @@ export function libelleLongueur(longueurCm) {
 
 // Le bandeau du plan (§ 7.5) : vide tant qu'une table au moins est saine ;
 // sinon la phrase, puis collisionPartout quand le diagnostic le prouve, puis
-// les planchers — une seule organisation, ou chaque groupe de collisions,
-// ou l'absence de plancher prouvé. Les chiffres sont ceux du moteur, tels
+// les planchers — une seule organisation, ou chaque groupe de collisions
+// avec ses deux unités, collisions cumulées et paires distinctes (§ 5.4), ou
+// l'absence de plancher prouvé. Les chiffres sont ceux du moteur, tels
 // quels, sans somme ; sans diagnostic, la phrase seule.
 function bandeauDe(toutesEnConflit, diagnostic) {
   if (!toutesEnConflit) return [];
@@ -373,8 +374,8 @@ function bandeauDe(toutesEnConflit, diagnostic) {
   if (diagnostic.uneSeuleOrganisation) {
     entrees.push({ cle: 'plan.bandeau.uneSeuleOrganisation', details: {} });
   } else if (diagnostic.collisions.length > 0) {
-    for (const { groupe, effectif, plancherCumulees } of diagnostic.collisions) {
-      entrees.push({ cle: 'plan.bandeau.plancherGroupe', details: { groupe, effectif, plancherCumulees } });
+    for (const { groupe, effectif, plancherCumulees, plancherPairesDistinctes } of diagnostic.collisions) {
+      entrees.push({ cle: 'plan.bandeau.plancherGroupe', details: { groupe, effectif, plancherCumulees, plancherPairesDistinctes } });
     }
   } else {
     entrees.push({ cle: 'plan.bandeau.sansPlancher', details: {} });

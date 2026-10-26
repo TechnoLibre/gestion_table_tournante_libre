@@ -767,6 +767,12 @@
   écart d'itinéraire de 3 personnes ».
 - La phrase qui décrit la grille des organisations à chaque table dit aussi
   combien de cases atteignent le compte le plus haut.
+- Sur le plan, la chaise d'un titre pourvu se remplit, même quand la personne
+  qui le pourvoit, réservée à la table sans siège, est assise ailleurs ou
+  attend en réserve ; elle reste hachurée tant que rien ne le pourvoit.
+- Quand toutes les tables sont en conflit, le bandeau du plan nomme les deux
+  unités de chaque organisation : « au moins 8 collisions cumulées sur la
+  soirée, portées par au moins 2 paires distinctes ».
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

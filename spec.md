@@ -2957,6 +2957,14 @@ livraison hors ligne ne contrôle pas.
 | pourvue / à pourvoir | remplissage **plein** / **hachuré** |
 | portée « tous les tours » | **anneau** autour de la chaise |
 
+**Une réservation remplit sa chaise quand le placement y assied sa personne ;
+un titre seul, dès qu'une réservation le pourvoit** (§ 4.1). La réservation que
+le placement ne tient pas — chaise vide, ou une autre personne assise — laisse
+sa chaise hachurée, au cadenas fermé. Le titre qu'une réservation pourvoit sans
+que la chaise la porte — une réservation sans siège, sa personne assise ailleurs
+ou nulle part — rend sa chaise pleine, au cadenas ouvert ; hachurée tant que
+rien ne le pourvoit à ce tour.
+
 **La chaise porte au plus deux marques ; la liste porte le texte.** Trois
 glyphes empilés sur une chaise deviennent illisibles au zoom par défaut. La
 liste numérotée énonce l'état en toutes lettres — « 1. (réservée, tous les
