@@ -53,7 +53,8 @@
   //
   // L'écran suit la séance : la liste sans événement ouvert, l'événement
   // sinon ; le panneau « À propos » ou le panneau « Paramètres » les
-  // remplace tant qu'il est ouvert, et
+  // remplace tant qu'il est ouvert — App dit au bandeau lequel est ouvert :
+  // sa commande, bouton bascule, se montre enfoncée et le referme —, et
   // l'aperçu avant impression remplace l'événement tant que l'état de
   // navigation en porte un (§ 11.7). Fermer l'aperçu rend la section d'où il
   // s'est ouvert et le focus à sa commande « Imprimer… ». Chaque ouverture
@@ -450,8 +451,9 @@
     {version}
     provenance={provenanceAffichee}
     {refusListe}
-    ouvrirParametres={() => uiApp.ouvrirParametres()}
-    ouvrirApropos={() => uiApp.ouvrirApropos()}
+    panneau={$uiApp.apropos ? 'apropos' : $uiApp.parametres ? 'parametres' : null}
+    basculerParametres={() => uiApp.basculerParametres()}
+    basculerApropos={() => uiApp.basculerApropos()}
     {revenirALaListe}
   />
   <main class="ecran">

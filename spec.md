@@ -3389,7 +3389,12 @@ d'un signalement sur deux. Le bandeau porte aussi la marque du logiciel,
 « Paramètres » — la taille du texte et le thème (§ 18.6) — et, à sa droite,
 « À propos » ; à la taille du texte par défaut, il garde une hauteur d'une
 ligne de commande, de sorte que la surface de travail ne perd rien ; aux
-paliers plus grands, il peut passer sur deux lignes (§ 18.6).
+paliers plus grands, il peut passer sur deux lignes (§ 18.6). « Paramètres »
+et « À propos » sont des boutons bascule : un clic ouvre le panneau, un
+second le referme. La commande du panneau ouvert est en surbrillance — un
+fond plein, un soulignement épais qui ne tient pas à la couleur seule — et
+se dit enfoncée aux technologies d'assistance ; ouvrir ou refermer un
+panneau ne déplace pas le bandeau d'un pixel.
 
 **Le passage en écriture est une étape nommée du parcours** (§ 2.1, étape 1b),
 et non un sous-entendu : huit des douze étapes sont modifiantes, et toutes sont
@@ -9423,8 +9428,20 @@ rien.
 
 **Le panneau « Paramètres »** s'ouvre du bandeau, par la commande placée juste à
 gauche de « À propos », et remplace l'écran comme lui ; les deux ne sont jamais
-ouverts ensemble, et « Fermer » rend l'écran d'où il s'est ouvert. Il porte deux
-réglages, chacun une carte titrée et expliquée, ses choix en commandes enfoncées :
+ouverts ensemble, et « Fermer » rend l'écran d'où il s'est ouvert, l'événement
+ouvert et sa section compris. La commande du bandeau le rend aussi : chacune
+des deux est un bouton bascule, qui ouvre son panneau fermé et le referme
+ouvert, en laissant le focus sur elle ; celle d'un autre panneau passe de l'un
+à l'autre. Tant que son panneau est ouvert, la commande est en surbrillance —
+le fond plein de la teinte de la marque, le texte de l'encre du bandeau, à
+4,5:1 au moins dans les deux thèmes, souligné d'un trait épais qui la
+distingue sans la couleur, même en couleurs forcées — et porte
+`aria-pressed="true"` ; l'autre porte `aria-pressed="false"`. La surbrillance
+ne change pas la hauteur de la commande : le bandeau garde la sienne
+(§ 8.4).
+
+Le panneau « Paramètres » porte deux réglages, chacun une carte titrée et
+expliquée, ses choix en commandes enfoncées :
 
 - **la taille du texte de l'écran**, un choix par palier, 90, 100, 115, 130 et
   150 %, retenue sur le poste (§ 8.5). Elle se pose en taille de police de la

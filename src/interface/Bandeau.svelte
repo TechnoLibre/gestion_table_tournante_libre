@@ -6,9 +6,19 @@
   // nom, la version — ou la marque de provenance d'une construction de
   // documentation —, la provenance, et, quand un événement est ouvert, le
   // libellé de mode, l'annonce de format du fichier et la commande « Liste
-  // des événements ». Il porte aussi l'ouverture du panneau « Paramètres »,
-  // où se règlent la taille du texte et le thème, et celle du panneau « À
+  // des événements ». Il porte aussi les commandes du panneau « Paramètres »,
+  // où se règlent la taille du texte et le thème, et du panneau « À
   // propos ». Collé en haut de la fenêtre, il ne défile pas.
+  //
+  // Chacune de ces deux commandes est un bouton bascule : elle ouvre son
+  // panneau fermé, et le referme ouvert, comme « Fermer ». La commande du
+  // panneau ouvert porte aria-pressed="true" et se met en surbrillance : le
+  // fond plein de la teinte de la marque, le texte de l'encre du fond du
+  // bandeau, souligné d'un trait épais qui la distingue sans la couleur et
+  // reste visible en couleurs forcées. L'autre porte aria-pressed="false".
+  // Ni le trait ni le fond ne changent la boîte du bouton : le bandeau ne
+  // bouge pas à l'ouverture. Refermer par la commande laisse le focus sur
+  // elle : elle reste montée.
   //
   // Son habillage : la marque — le dessin d'une table ronde et de ses six
   // chaises, caché aux technologies d'assistance —, le nom, la version et la
@@ -20,8 +30,8 @@
   // hauteur ; aux paliers plus grands, il peut passer sur deux lignes.
   //
   // Le bandeau ne décide de rien : App lui donne l'état de la séance, la
-  // version et la provenance telles qu'elles s'affichent et les gestes à
-  // appeler ; mode.js choisit les clés du libellé de mode et de
+  // version et la provenance telles qu'elles s'affichent, le panneau ouvert
+  // et les gestes à appeler ; mode.js choisit les clés du libellé de mode et de
   // l'annonce. Le refus de « Liste des événements » passe par la primitive
   // Refus, qui pose son texte et son remède en Commande — écrire ailleurs
   // sous un support rompu. Ce refus se pose sous les commandes, hors du
@@ -35,7 +45,8 @@
 
   const t = getContext('t');
 
-  let { etat, version, provenance, refusListe, ouvrirParametres, ouvrirApropos, revenirALaListe } = $props();
+  // panneau : 'parametres', 'apropos' ou null, celui qui est ouvert.
+  let { etat, version, provenance, refusListe, panneau, basculerParametres, basculerApropos, revenirALaListe } = $props();
 
   const cleMode = $derived(cleDeMode(etat));
   const cleAnnonce = $derived(cleAnnonceFormat(etat));
@@ -71,8 +82,12 @@
         </div>
       {/if}
     {/if}
-    <button type="button" data-commande="parametres" onclick={ouvrirParametres}>{t('coquille.parametres.titre')}</button>
-    <button type="button" data-commande="apropos" onclick={ouvrirApropos}>{t('coquille.apropos.titre')}</button>
+    <button type="button" data-commande="parametres" aria-pressed={panneau === 'parametres'} onclick={basculerParametres}
+      >{t('coquille.parametres.titre')}</button
+    >
+    <button type="button" data-commande="apropos" aria-pressed={panneau === 'apropos'} onclick={basculerApropos}
+      >{t('coquille.apropos.titre')}</button
+    >
   </div>
 </header>
 
@@ -158,6 +173,19 @@
     color: var(--couleur-bandeau-texte);
     font: inherit;
     cursor: pointer;
+  }
+
+  /* La commande du panneau ouvert : le fond plein de la teinte de la marque,
+     le texte de l'encre du fond du bandeau, souligné d'un trait épais. Le
+     soulignement suit la couleur du texte, que les couleurs forcées gardent
+     lisible quand elles retirent le fond ; le filet de bord garde sa
+     largeur : la boîte, donc la hauteur du bandeau, ne change pas. */
+  button[aria-pressed='true'] {
+    border-color: var(--couleur-bandeau-marque);
+    background-color: var(--couleur-bandeau-marque);
+    color: var(--couleur-bandeau-fond);
+    text-decoration: underline 3px;
+    text-underline-offset: 0.25em;
   }
 
   button:focus-visible {

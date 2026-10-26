@@ -41,7 +41,7 @@ import { FORMAT, analyser, configurationDepuisCharge } from '../stockage/documen
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { VERSION } from '../version.genere.js';
 import COLLECTEUR from '../../public/collecteur.js?raw';
-import { fixerCadre } from '../../test/navigateur/entrees.js';
+import { fixerCadre, touche } from '../../test/navigateur/entrees.js';
 import { monterApp } from '../../test/navigateur/montage.js';
 import {
   attenuations,
@@ -589,6 +589,45 @@ describe('« À propos » (§ 18.6)', () => {
     expect(dans(m, '[data-bloc]').textContent).toBe(attendu);
   });
 
+  test('« À propos » du bandeau bascule : un clic ouvre le panneau et enfonce la commande, un second le referme, et l’événement revient sur sa section ; le bandeau garde sa hauteur', async () => {
+    const m = await avecEvenementOuvert();
+    dans(m, '[data-commande="section"][data-cible="participants"]').click();
+    flushSync();
+    const commande = dans(m, '[data-bandeau] [data-commande="apropos"]');
+    const parametres = dans(m, '[data-bandeau] [data-commande="parametres"]');
+    const hauteur = bandeau(m).getBoundingClientRect().height;
+    expect([commande, parametres].map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false']);
+    commande.click();
+    flushSync();
+    expect(ecran(m).dataset.ecran).toBe('apropos');
+    expect([commande, parametres].map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
+    expect(bandeau(m).getBoundingClientRect().height).toBe(hauteur);
+    commande.click();
+    flushSync();
+    expect(ecran(m).dataset.ecran).toBe('evenement');
+    expect(dans(m, '[data-section]').dataset.section).toBe('participants');
+    expect([commande, parametres].map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false']);
+    expect(bandeau(m).getBoundingClientRect().height).toBe(hauteur);
+  });
+
+  test('au clavier, refermer « À propos » par la commande du bandeau lui laisse le focus ; « Fermer » du panneau referme aussi', async () => {
+    const m = await monter();
+    const commande = dans(m, '[data-bandeau] [data-commande="apropos"]');
+    commande.focus();
+    await touche('Enter');
+    await vi.waitFor(() => expect(panneau(m)).not.toBeNull());
+    expect(document.activeElement).toBe(commande);
+    await touche('Enter');
+    await vi.waitFor(() => expect(ecran(m).dataset.ecran).toBe('accueil'));
+    expect(document.activeElement).toBe(commande);
+    commande.click();
+    flushSync();
+    dans(m, '[data-commande="fermerApropos"]').click();
+    flushSync();
+    expect(ecran(m).dataset.ecran).toBe('accueil');
+    expect(commande.getAttribute('aria-pressed')).toBe('false');
+  });
+
   test('l’éditeur, l’auteur et son rôle s’y lisent, au-dessus du bloc ; « Copier » ne les emporte pas, ni la forme Windows', async () => {
     const m = await monter();
     dans(m, '[data-commande="apropos"]').click();
@@ -1018,6 +1057,38 @@ describe('le bandeau de la maquette (§ 8.4, § 18.6)', () => {
     }
     expect(bandeau(m).querySelector('[data-commande="theme"]')).toBeNull();
     expect(bandeau(m).querySelector(`[role="group"][aria-label="${t('coquille.theme.titre')}"]`)).toBeNull();
+  });
+
+  test('la commande du panneau ouvert en surbrillance, dans les deux thèmes : fond plein, texte à 4,5:1, souligné d’un trait épais, même hauteur', async () => {
+    const m = await avecEvenementOuvert();
+    const commande = (nom) => dans(m, `[data-bandeau] [data-commande="${nom}"]`);
+    const hauteurBandeau = bandeau(m).getBoundingClientRect().height;
+    const hauteurCommande = commande('parametres').getBoundingClientRect().height;
+    for (const [ouvert, repos] of [
+      ['parametres', 'apropos'],
+      ['apropos', 'parametres'],
+    ]) {
+      commande(ouvert).click();
+      flushSync();
+      expect(commande(ouvert).getAttribute('aria-pressed'), ouvert).toBe('true');
+      expect(commande('liste').hasAttribute('aria-pressed'), ouvert).toBe(false);
+      for (const theme of THEMES) {
+        await sousTheme(theme, () => {
+          const enfonce = getComputedStyle(commande(ouvert));
+          const auRepos = getComputedStyle(commande(repos));
+          const fond = composantes(enfonce.backgroundColor);
+          expect(fond[3], `${theme} ${ouvert} : fond plein`).toBe(1);
+          expect(fond, `${theme} ${ouvert}`).not.toEqual(composantes(auRepos.backgroundColor));
+          expect(contraste(couleurTexte(commande(ouvert)), fondPeintSous(commande(ouvert))[0]), `${theme} ${ouvert}`).toBeGreaterThanOrEqual(4.5);
+          expect(auRepos.textDecorationLine, `${theme} ${repos} au repos`).toBe('none');
+          expect(enfonce.textDecorationLine, `${theme} ${ouvert} : soulignement`).toBe('underline');
+          expect(parseFloat(enfonce.textDecorationThickness), `${theme} ${ouvert} : épaisseur du trait`).toBeGreaterThanOrEqual(2);
+          expect(enfonce.textDecorationColor, `${theme} ${ouvert} : trait de la couleur du texte`).toBe(enfonce.color);
+          expect(commande(ouvert).getBoundingClientRect().height, `${theme} ${ouvert}`).toBe(hauteurCommande);
+          expect(bandeau(m).getBoundingClientRect().height, `${theme} ${ouvert}`).toBe(hauteurBandeau);
+        });
+      }
+    }
   });
 
   test('« Liste des événements » et « À propos » : une icône cachée devant le texte de « Liste des événements », le texte inchangé ; le libellé de mode en pilule, en gras', async () => {

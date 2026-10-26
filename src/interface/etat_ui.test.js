@@ -132,6 +132,46 @@ describe('état de navigation : chaque transition', () => {
     assert.deepEqual(ui.etat(), DEPART);
   });
 
+  test('basculerParametres ouvre « Paramètres » fermé, et le referme ouvert : l’état d’avant revient, section, tour et thème compris', () => {
+    const { ui, recus } = suivi();
+    ui.allerA('tables');
+    ui.montrerTour(3);
+    ui.choisirTheme('sombre');
+    const avant = ui.etat();
+    const publies = recus.length;
+    ui.basculerParametres();
+    assert.deepEqual(ui.etat(), { ...avant, parametres: true });
+    ui.basculerParametres();
+    assert.deepEqual(ui.etat(), avant);
+    assert.equal(recus.length, publies + 2);
+  });
+
+  test('basculerApropos ouvre « À propos » fermé, et le referme ouvert : l’état d’avant revient, section, tour et thème compris', () => {
+    const ui = creerEtatUi();
+    ui.allerA('participants');
+    ui.montrerTour(2);
+    ui.choisirTheme('sombre');
+    const avant = ui.etat();
+    ui.basculerApropos();
+    assert.deepEqual(ui.etat(), { ...avant, apropos: true });
+    ui.basculerApropos();
+    assert.deepEqual(ui.etat(), avant);
+  });
+
+  test('basculer l’autre panneau passe de l’un à l’autre : un seul est ouvert, et rien d’autre ne change', () => {
+    const ui = creerEtatUi();
+    ui.allerA('generation');
+    const avant = ui.etat();
+    ui.basculerParametres();
+    ui.basculerApropos();
+    assert.deepEqual(ui.etat(), { ...avant, apropos: true, parametres: false });
+    ui.basculerParametres();
+    assert.deepEqual(ui.etat(), { ...avant, apropos: false, parametres: true });
+    ui.basculerApropos();
+    ui.basculerApropos();
+    assert.deepEqual(ui.etat(), avant);
+  });
+
   test('reinitialiser garde le panneau « Paramètres » et le thème : ils ne tiennent pas à l’événement', () => {
     const ui = creerEtatUi();
     ui.allerA('plan');

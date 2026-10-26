@@ -1246,13 +1246,26 @@ personne (étape 2 ou 3) avant de générer ; il faut avoir retenu un placement
 (étape 10) pour qu’une impression ne sorte pas en brouillon. Tout le reste est
 facultatif, et se reprend dans n’importe quel ordre.
 
+## Le panneau « Paramètres »
+
+La commande « Paramètres » du bandeau, juste à gauche de « À propos », ouvre
+un panneau qui remplace l’écran. Il règle la taille du texte de l’écran, de 90
+à 150 %, que le poste retient, et le thème, clair ou sombre, pour la séance.
+
+Tant que le panneau est ouvert, sa commande reste en surbrillance dans le
+bandeau. Un second clic sur elle le referme, comme « Fermer » au bas du
+panneau : l’écran d’où vous l’avez ouvert revient tel quel, l’événement et sa
+section compris. « À propos » passe directement de l’un à l’autre : un seul
+panneau est ouvert à la fois.
+
 ## Le panneau « À propos »
 
 La commande « À propos » du bandeau ouvre un panneau qui remplace l’écran ;
-« Fermer » rend celui d’où vous l’avez ouvert. Il donne la ligne de version à
-copier dans un signalement, l’éditeur et l’auteur, l’attribution demandée, la
-licence du logiciel et ses deux textes complets, et le sommaire des
-fonctionnalités.
+elle reste en surbrillance tant qu’il est ouvert. « Fermer », ou un second
+clic sur la commande, rend l’écran d’où vous l’avez ouvert. Le panneau donne
+la ligne de version à copier dans un signalement, l’éditeur et l’auteur,
+l’attribution demandée, la licence du logiciel et ses deux textes complets, et
+le sommaire des fonctionnalités.
 
 Sa carte **« Composants tiers et leurs licences »** nomme chaque œuvre que le
 logiciel incorpore — Svelte, pdf-lib, le solveur HiGHS, la police Noto Sans,

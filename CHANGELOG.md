@@ -660,6 +660,10 @@
   celle de `licences/TIERS.txt`, livré avec l'application.
 - Dans « À propos », la carte « Attribution » passe au-dessus de celle de la
   licence, juste sous l'éditeur et l'auteur.
+- « Paramètres » et « À propos » se referment d'un second clic sur leur
+  commande du bandeau, sans chercher « Fermer » : la commande du panneau
+  ouvert reste en surbrillance, et l'écran d'où il s'est ouvert revient
+  tel quel.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

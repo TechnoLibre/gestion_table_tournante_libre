@@ -22,6 +22,10 @@
 // façade, ni un système de fichiers, et rien de ce qu'il tient ne quitte la
 // mémoire. Le thème part du clair ; App y pose celui du lancement, puis le
 // réglage de l'opérateur le change pour la séance (§ 19.2).
+// Un panneau à la fois : ouvrir l'un ferme l'autre. Les commandes du
+// bandeau basculent le leur — l'ouvrent fermé, le referment ouvert — et la
+// fermeture, par le bandeau comme par « Fermer », ne touche qu'au panneau :
+// l'écran d'où il s'est ouvert revient tel qu'il était (§ 18.6).
 //
 // Il suit le contrat des magasins de Svelte : subscribe(fn) appelle fn(etat)
 // tout de suite, puis à chaque nouvel état ; un état est figé, et une
@@ -194,7 +198,8 @@ function choixValide(choix) {
  *
  * @returns {{subscribe: Function, etat: () => EtatUi, allerA: Function,
  *   reinitialiser: Function, ouvrirApropos: Function, fermerApropos: Function,
- *   ouvrirParametres: Function, fermerParametres: Function, choisirTheme: Function,
+ *   ouvrirParametres: Function, fermerParametres: Function,
+ *   basculerApropos: Function, basculerParametres: Function, choisirTheme: Function,
  *   montrerTour: Function, mettreEnEvidence: Function,
  *   montrerProposition: Function, ouvrirImport: Function,
  *   prendreImport: () => null|{texte: string, origine: string},
@@ -255,6 +260,18 @@ export function creerEtatUi() {
     },
     fermerParametres() {
       changer({ parametres: false });
+    },
+    /** La commande « Paramètres » du bandeau : fermé, ouvre le panneau, comme
+     *  ouvrirParametres ; ouvert, le referme, comme fermerParametres. */
+    basculerParametres() {
+      if (etat.parametres) changer({ parametres: false });
+      else changer({ parametres: true, apropos: false });
+    },
+    /** La commande « À propos » du bandeau : fermé, ouvre le panneau, comme
+     *  ouvrirApropos ; ouvert, le referme, comme fermerApropos. */
+    basculerApropos() {
+      if (etat.apropos) changer({ apropos: false });
+      else changer({ apropos: true, parametres: false });
     },
     /** Pose le thème de la séance, l'un de THEMES ; RangeError sinon, sans
      *  rien changer. */

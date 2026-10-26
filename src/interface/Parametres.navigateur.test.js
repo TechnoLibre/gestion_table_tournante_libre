@@ -24,7 +24,7 @@ import { PALIERS_TAILLE_TEXTE, TAILLE_TEXTE_DEFAUT } from '../geometrie/taille_t
 import { FICHIER_REGLAGES, serialiserReglages } from '../stockage/reglages_locaux.js';
 import { couleurDeJeton } from '../../test/navigateur/captures.js';
 import { attendre, chargePrincipale, cliquer, creerContexte, ouvrirApercu, ouvrirEvenement } from '../../test/navigateur/ecrans.js';
-import { fixerCadre } from '../../test/navigateur/entrees.js';
+import { fixerCadre, touche } from '../../test/navigateur/entrees.js';
 import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme, visible } from '../../test/navigateur/rendu.js';
 import { creerEtatUi } from './etat_ui.js';
 import { TABLES_INTERFACE } from './libelles.js';
@@ -244,6 +244,57 @@ describe('« Paramètres » dans l’application (§ 8.4, § 8.5, § 18.6, § 19
     await cliquer(m, '[data-ecran="parametres"] [data-commande="fermerParametres"]');
     expect(ecran(m).dataset.ecran).toBe('evenement');
     expect(m.racine.querySelector('[data-section="participants"]')).not.toBeNull();
+  });
+
+  // L'état enfoncé des deux commandes de panneau du bandeau, dans l'ordre
+  // « Paramètres », « À propos ».
+  const enfoncees = (m) =>
+    ['parametres', 'apropos'].map((nom) => bandeau(m).querySelector(`[data-commande="${nom}"]`).getAttribute('aria-pressed'));
+
+  test('« Paramètres » du bandeau bascule : un clic ouvre le panneau et enfonce la commande, un second le referme, et l’événement revient sur sa section ; le bandeau garde sa hauteur', async () => {
+    contexte = creerContexte();
+    const m = await ouvrirEvenement(contexte, chargePrincipale(), { section: 'participants' });
+    const hauteur = bandeau(m).getBoundingClientRect().height;
+    expect(enfoncees(m)).toEqual(['false', 'false']);
+
+    await cliquer(m, '[data-bandeau] [data-commande="parametres"]');
+    expect(ecran(m).dataset.ecran).toBe('parametres');
+    expect(enfoncees(m)).toEqual(['true', 'false']);
+    expect(bandeau(m).getBoundingClientRect().height).toBe(hauteur);
+
+    await cliquer(m, '[data-bandeau] [data-commande="parametres"]');
+    expect(ecran(m).dataset.ecran).toBe('evenement');
+    expect(m.racine.querySelector('[data-section="participants"]')).not.toBeNull();
+    expect(enfoncees(m)).toEqual(['false', 'false']);
+    expect(bandeau(m).getBoundingClientRect().height).toBe(hauteur);
+  });
+
+  test('« Paramètres » ouvert, « À propos » du bandeau l’échange : seule la commande d’« À propos » est enfoncée ; « Fermer » relâche la commande', async () => {
+    contexte = creerContexte();
+    const m = await contexte.monter();
+    await cliquer(m, '[data-bandeau] [data-commande="parametres"]');
+    await cliquer(m, '[data-bandeau] [data-commande="apropos"]');
+    expect(ecran(m).dataset.ecran).toBe('apropos');
+    expect(enfoncees(m)).toEqual(['false', 'true']);
+    await cliquer(m, '[data-bandeau] [data-commande="parametres"]');
+    expect(enfoncees(m)).toEqual(['true', 'false']);
+    await cliquer(m, '[data-ecran="parametres"] [data-commande="fermerParametres"]');
+    expect(ecran(m).dataset.ecran).toBe('accueil');
+    expect(enfoncees(m)).toEqual(['false', 'false']);
+  });
+
+  test('au clavier, refermer « Paramètres » par la commande du bandeau lui laisse le focus', async () => {
+    contexte = creerContexte();
+    const m = await ouvrirEvenement(contexte, chargePrincipale(), { section: 'participants' });
+    const commande = bandeau(m).querySelector('[data-commande="parametres"]');
+    commande.focus();
+    await touche('Enter');
+    await attendre('le panneau ouvert', () => m.racine.querySelector('[data-ecran="parametres"]'));
+    expect(document.activeElement).toBe(commande);
+    await touche('Enter');
+    await attendre('l’événement rendu', () => m.racine.querySelector('[data-section="participants"]'));
+    expect(document.activeElement).toBe(commande);
+    expect(commande.getAttribute('aria-pressed')).toBe('false');
   });
 
   test('chaque palier pose sa taille de police sur la racine, et un texte de l’écran la suit dans sa proportion', async () => {

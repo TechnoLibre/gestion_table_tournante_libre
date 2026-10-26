@@ -909,6 +909,9 @@ export const ECRANS = Object.freeze([
       const m = await contexte.monter();
       await cliquer(m, '[data-bandeau] [data-commande="apropos"]');
       await element(m, '[data-ecran="apropos"]');
+      // Les relevés des deux thèmes voient la commande enfoncée, en
+      // surbrillance, dans le bandeau.
+      await element(m, '[data-bandeau] [data-commande="apropos"][aria-pressed="true"]');
       return m.racine;
     },
   },
@@ -919,6 +922,9 @@ export const ECRANS = Object.freeze([
       const m = await contexte.monter();
       await cliquer(m, '[data-bandeau] [data-commande="parametres"]');
       await element(m, '[data-ecran="parametres"]');
+      // Les relevés des deux thèmes voient la commande enfoncée, en
+      // surbrillance, dans le bandeau.
+      await element(m, '[data-bandeau] [data-commande="parametres"][aria-pressed="true"]');
       return m.racine;
     },
   },
