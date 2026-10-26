@@ -734,6 +734,12 @@
   CSV, sous « Produire », avec son numéro, PRO-09.
 - Dans « À propos », l'avis du composant tiers @pdf-lib/fontkit porte une
   ligne de copyright par titulaire, sans incise.
+- Un import de participants qui épuiserait les numéros de l'événement est
+  refusé entier, avec la raison, sans créer personne, comme l'ajout d'une
+  seule personne ; il ne laisse plus un événement qui ne s'enregistre pas.
+- L'import d'objectifs de table dont l'aperçu a été lu avant un changement du
+  nombre de tours est refusé, et dit de relire le fichier, comme celui des
+  participants : un objectif ne se pose plus à un tour que la soirée n'a pas.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

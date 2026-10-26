@@ -4424,8 +4424,10 @@ Une valeur au-delà sort de sa règle, comme toute valeur que le format refuse.
 Chaque identifiant attribué reste sous son compteur (`id < prochainsIds`), qui
 ne passe pas 2³¹ − 1 : un identifiant attribué vaut donc au plus 2³¹ − 2. Un
 compteur arrivé à 2³¹ − 1 est saturé : la création d'un participant, d'une
-table ou d'une proposition qui demanderait un identifiant de plus est refusée,
-et rien ne se crée.
+table ou d'une proposition qui demanderait un identifiant de plus est refusée
+(`COMPTEUR_SATURE`), et rien ne se crée. Un geste qui en crée plusieurs — un
+import, une génération, « Créer les tables… » — est refusé entier quand son
+dernier identifiant passerait 2³¹ − 2 : aucun ne se crée.
 
 Chaque proposition déclare, **une fois** :
 
@@ -4872,7 +4874,11 @@ valide, **un guillemet resté ouvert** jusqu'à la fin du texte
 tiendrait dans un seul champ, et deux personnes se fondraient en une —, et
 **un conflit d'organisation fautif**, vu plus haut.
 
-**L'import entier est une seule entrée d'historique.**
+**L'import entier est une seule entrée d'historique.** Les personnes qu'il crée
+prennent leurs identifiants à la suite du compteur, dans l'ordre du fichier ;
+quand la dernière demanderait plus que 2³¹ − 2, l'import est refusé entier
+(`COMPTEUR_SATURE`, § 8.9) avant qu'aucune ne soit numérotée. En mise à jour,
+seule une ligne qui ne désigne personne en demande un.
 
 **Les doublons** se repèrent sur le triplet (nom, prénom, organisation)
 normalisé, et le logiciel **ne fusionne jamais tout seul** : deux personnes
@@ -5231,6 +5237,12 @@ objectif vide sous une règle écrite ; étiquette mal formée ou vingt-et-uniè
 défaut ; deuxième ligne pour un même couple (table, tour), qui nomme la
 première. **Avis** : après l'import, un objectif écrit par le fichier auquel
 aucune personne présente ne correspond ; l'aperçu ne le calcule pas.
+
+**Un aperçu lu avant un changement du nombre de tours ne s'applique pas**
+(`APERCU_TOURS_CHANGES`, § 10.1) quand une colonne est associée à `tour` : un
+tour admis sous l'ancien nombre sortirait de la soirée, et un tour refusé ne le
+serait peut-être plus. Relire le fichier refait l'aperçu. Sans colonne `tour`,
+le fichier ne parle que de la soirée, et l'aperçu s'applique.
 
 **La ligne à remplir.** Une ligne dont la cellule `objectif` ne porte aucune
 étiquette — vide, ou faite de blancs et de séparateurs — et dont la cellule

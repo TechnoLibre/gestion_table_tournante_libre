@@ -593,9 +593,11 @@ function avertissementsDExclusion(avant, suivante) {
 /**
  * importerParticipants {apercu, mode} (§ 10.1) : l'aperçu appliqué selon le
  * mode (appliquerImport), en une seule entrée. Le refus du CSV — un aperçu
- * refusé ou ambigu — devient le refus de la commande, sous le même code. Le
- * résumé suit le rendu, pour le rapport d'import et le CSV des refus. Selon
- * l'état : sans avertissement en brouillon et proposé ; en retenu,
+ * refusé, ambigu ou lu sous un autre nombre de tours, un compteur qui ne
+ * suffit pas aux personnes créées, COMPTEUR_SATURE comme pour une personne
+ * saisie — devient le refus de la commande, sous le même code, remède null.
+ * Le résumé suit le rendu, pour le rapport d'import et le CSV des refus.
+ * Selon l'état : sans avertissement en brouillon et proposé ; en retenu,
  * l'avertissement de dérive IMPORT_EN_RETENU, quel que soit le mode, sur le
  * signal resume.derive d'appliquerImport ; refusé en bloqué, PLAN_BLOQUE.
  * Un remplacement qui retire des liens de logo le dit ensuite,
@@ -662,14 +664,15 @@ const REMEDES_DES_OBJECTIFS = new Map([['OBJECTIFS_SANS_TABLE', { geste: 'ouvrir
 /**
  * importerObjectifs {apercu, mode} (§ 10.4) : l'aperçu du CSV des objectifs
  * appliqué selon le mode, mettreAJour ou remplacer (appliquerImportObjectifs),
- * en une seule entrée. Le refus du CSV — un aperçu refusé ou ambigu — devient
- * le refus de la commande, sous le même code, remède null sauf OBJECTIFS_SANS_TABLE,
- * qui mène à la section des tables. Le résumé suit le rendu, pour le rapport
- * d'import et le CSV des refus. Selon l'état : sans avertissement en
- * brouillon et proposé ; en retenu, IMPORT_OBJECTIFS_RECLASSE, le classement
- * des propositions pouvant changer, sans qu'aucune passe en dérive (§ 8.9) ;
- * refusé en bloqué, PLAN_BLOQUE. Suivent, dans l'ordre d'avisObjectifs, les
- * avis OBJECTIF_SANS_CORRESPONDANT des seuls objectifs que le fichier écrit.
+ * en une seule entrée. Le refus du CSV — un aperçu refusé, ambigu ou lu sous
+ * un autre nombre de tours — devient le refus de la commande, sous le même
+ * code, remède null sauf OBJECTIFS_SANS_TABLE, qui mène à la section des
+ * tables. Le résumé suit le rendu, pour le rapport d'import et le CSV des
+ * refus. Selon l'état : sans avertissement en brouillon et proposé ; en
+ * retenu, IMPORT_OBJECTIFS_RECLASSE, le classement des propositions pouvant
+ * changer, sans qu'aucune passe en dérive (§ 8.9) ; refusé en bloqué,
+ * PLAN_BLOQUE. Suivent, dans l'ordre d'avisObjectifs, les avis
+ * OBJECTIF_SANS_CORRESPONDANT des seuls objectifs que le fichier écrit.
  *
  * Un import dont la charge ne change pas, mais qui refuse des lignes, rend la
  * charge reçue, un libellé null — aucune entrée ne s'écrit —, aucun

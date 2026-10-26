@@ -621,6 +621,22 @@ describe("commandes : l'import (§ 10.1)", () => {
     refuse(() => executer('importerParticipants', bloquee, ajout(bloquee)), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
   });
 
+  test("un compteur de participants qui ne suffit pas à l'import le refuse entier, COMPTEUR_SATURE {compteur}, remède null, comme une personne saisie", () => {
+    const avant = chargeEssai();
+    avant.prochainsIds.participant = 2 ** 31 - 2;
+    const apercu = apercevoir(CSV_DEUX, { participants: avant.participants });
+    const texte = JSON.stringify(avant);
+    refuse(() => executer('importerParticipants', avant, { apercu, mode: 'ajouter' }), 'COMPTEUR_SATURE', {
+      compteur: 'participant',
+      remede: null,
+    });
+    assert.equal(JSON.stringify(avant), texte);
+    const une = apercevoir('nom\nBruyère\n', { participants: avant.participants });
+    const { charge } = executer('importerParticipants', avant, { apercu: une, mode: 'ajouter' });
+    assert.equal(charge.participants.at(-1).id, 2 ** 31 - 2);
+    assert.equal(charge.prochainsIds.participant, 2 ** 31 - 1);
+  });
+
   test("un aperçu refusé ou ambigu est refusé sous son code ; un plan bloqué nomme le remède « Débloquer »", () => {
     const avant = chargeEssai();
     const sansNom = apercevoir('prenom;courriel\nIris;i@exemple.test\n', { participants: avant.participants });
@@ -764,6 +780,16 @@ describe("commandes : l'import des objectifs de table (§ 10.4)", () => {
     refuse(() => importer(sansTable, 'table;objectif\n1;finance\n'), 'OBJECTIFS_SANS_TABLE', {
       ligne: null,
       remede: { geste: 'ouvrirSection', section: 'tables' },
+    });
+  });
+
+  test("un aperçu calculé pour un autre nombre de tours est refusé, APERCU_TOURS_CHANGES, remède null : relire le fichier refait l'aperçu", () => {
+    const avant = etiquetee();
+    const apercu = apercevoirObjectifs('table;tour;objectif\n2;3;finance\n', { ...avant, evenement: { ...avant.evenement, tours: 3 } });
+    refuse(() => appliquerCommande('importerObjectifs', avant, { apercu, mode: 'mettreAJour' }), 'APERCU_TOURS_CHANGES', {
+      tours: 2,
+      toursApercu: 3,
+      remede: null,
     });
   });
 

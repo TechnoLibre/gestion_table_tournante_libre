@@ -3,16 +3,16 @@
 
 // Épreuves de l'import appliqué (§ 10.1, § 14.10) : ajouter, mettre à jour,
 // remplacer, et ce que remplacer annonce avant d'agir ; l'import selon l'état
-// du plan ; les refus globaux ; les identifiants jamais réutilisés ; le CSV
-// des lignes refusées, sa forme, et la boucle qui le corrige et le réimporte
-// tel quel ; la colonne des étiquettes, qu'une personne créée porte rangée
-// et qu'une mise à jour remplace sans jamais l'effacer ; la colonne de la
-// présence, écrite canonique, gardée par une cellule vide en mise à jour,
-// et refusée sous un aperçu calculé pour un autre nombre de tours ; les
-// titres que pourvoient les seules personnes présentes ; la marque du nom
-// numéroté, que porte la seule personne créée d'une ligne renommée par
-// « Rendre les noms uniques ». Les marques combinantes s'écrivent par leur
-// point de code.
+// du plan ; les refus globaux, et celui d'un compteur qui ne suffit pas aux
+// personnes créées ; les identifiants jamais réutilisés ; le CSV des lignes
+// refusées, sa forme, et la boucle qui le corrige et le réimporte tel quel ;
+// la colonne des étiquettes, qu'une personne créée porte rangée et qu'une
+// mise à jour remplace sans jamais l'effacer ; la colonne de la présence,
+// écrite canonique, gardée par une cellule vide en mise à jour, et refusée
+// sous un aperçu calculé pour un autre nombre de tours ; les titres que
+// pourvoient les seules personnes présentes ; la marque du nom numéroté, que
+// porte la seule personne créée d'une ligne renommée par « Rendre les noms
+// uniques ». Les marques combinantes s'écrivent par leur point de code.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { serialiser } from '../stockage/canonique.js';
@@ -1041,6 +1041,34 @@ describe('appliquerImport : les refus globaux (§ 10.1)', () => {
     assert.deepEqual(apercu.doublons, []);
     const { charge: apres } = appliquerImport(charge, apercu, 'remplacer');
     assert.deepEqual(apres.participants, [personne(2, 'Ombrelle', 'Iris', 'club des merles')]);
+  });
+
+  test("un compteur qui ne suffit pas aux personnes créées refuse l'import entier, COMPTEUR_SATURE, après l'ambiguïté ; 2^31 − 2, le dernier identifiant, s'attribue, et la charge rendue se relit", () => {
+    const DERNIER = 2 ** 31 - 2;
+    const SATURE = refus('COMPTEUR_SATURE', { compteur: 'participant' });
+    for (const mode of MODES) {
+      const charge = chargeDe({ participants: [personne(1, 'Ombrelle', 'Iris')], prochain: DERNIER });
+      const { charge: apres, resume } = importer(charge, csv('nom', 'Bruyère'), mode);
+      assert.equal(resume.ajoutes, 1, mode);
+      assert.equal(apres.participants.at(-1).id, DERNIER, mode);
+      assert.equal(apres.prochainsIds.participant, DERNIER + 1, mode);
+      const relue = analyser(serialiser(apres, { revision: 2, produitVersion: VERSION.affichee })).charge;
+      assert.deepEqual(relue.participants, apres.participants, mode);
+      const avant = structuredClone(charge);
+      assert.throws(() => importer(charge, csv('nom', 'Bruyère', 'Lacasse'), mode), SATURE, mode);
+      assert.deepEqual(charge, avant, mode);
+      const saturee = chargeDe({ participants: [personne(1, 'Ombrelle', 'Iris')], prochain: DERNIER + 1 });
+      assert.throws(() => importer(saturee, csv('nom', 'Bruyère'), mode), SATURE, mode);
+      const ambigu = csv('nom;organisation;entreprise', 'Bruyère;Club des Merles;Société Alpha');
+      assert.throws(() => importer(saturee, ambigu, mode), refus('AMBIGUITE', { champs: ['organisation'] }), mode);
+    }
+    // En mise à jour, seule une ligne qui ne désigne personne demande un
+    // identifiant : sous un compteur saturé, la personne désignée change.
+    const saturee = chargeDe({ participants: [personne(1, 'Ombrelle', 'Iris')], prochain: DERNIER + 1 });
+    const { charge: apres, resume } = importer(saturee, csv('nom;prenom;notes', 'Ombrelle;Iris;au fond'), 'mettreAJour');
+    assert.deepEqual(resume, resumeDe({ misAJour: 1 }));
+    assert.equal(apres.participants[0].notes, 'au fond');
+    assert.throws(() => importer(saturee, csv('nom;prenom', 'Ombrelle;Iris', 'Bruyère;Anouk'), 'mettreAJour'), SATURE);
   });
 
   test('un mode inconnu lève TypeError', () => {

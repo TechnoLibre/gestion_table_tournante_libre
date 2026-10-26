@@ -5,15 +5,15 @@
 // d'agir ; l'aperçu appliqué à une charge, selon le mode ; le CSV des lignes
 // refusées, qui se corrige et se réimporte tel quel.
 //
-// appliquerImport n'agit que sur un plan qui n'est pas bloqué, sur un
-// aperçu dont la présence est lue sous le nombre de tours de l'événement, et
-// sans refus global ni ambiguïté. Il rend une charge neuve, qui ne
-// partage avec celle qu'il reçoit que ses propositions figées (gel.js) :
-// l'import entier tient dans une seule entrée d'historique, que la commande
-// d'import écrit (§ 8.2). Les personnes ajoutées prennent leurs
-// identifiants à partir de prochainsIds.participant, dans l'ordre du
-// fichier, et le compteur ne recule jamais : un identifiant retiré ne revient
-// pas (§ 4).
+// appliquerImport n'agit que sur un plan qui n'est pas bloqué, sur un aperçu
+// dont la présence est lue sous le nombre de tours de l'événement, et sans
+// refus global ni ambiguïté. Il rend une charge neuve, qui ne partage avec
+// celle qu'il reçoit que ses propositions figées (gel.js) : l'import entier
+// tient dans une seule entrée d'historique, que la commande d'import écrit
+// (§ 8.2). Les personnes ajoutées prennent leurs identifiants à partir de
+// prochainsIds.participant, dans l'ordre du fichier, et le compteur ne
+// recule jamais : un identifiant retiré ne revient pas (§ 4). Un compteur
+// qui ne suffit pas à toutes refuse l'import entier (§ 8.9).
 //
 // Le CSV des refus reprend chaque ligne refusée telle que découpée, sous
 // l'en-tête d'origine, et ajoute deux colonnes, ligne et motif, qu'aucun
@@ -24,7 +24,7 @@
 // le texte entier, à son rang, par le choix du séparateur.
 
 import { estPresentAuTour, presenceCanonique } from '../moteur/presence.js';
-import { SUFFIXE_NUMERO } from '../stockage/document.js';
+import { SCHEMA, SUFFIXE_NUMERO } from '../stockage/document.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { MODES, issuesDeMiseAJour } from './apercu.js';
 import { ErreurCsv } from './erreurs.js';
@@ -36,6 +36,12 @@ import { enregistrementVide } from './lecture.js';
 // n'est pas vide. Les étiquettes, la présence et les conflits, des listes,
 // se posent à part (poser).
 const CHAMPS_LUS = Object.freeze(['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu']);
+
+// Le plus grand identifiant de participant qu'admet la règle du schéma : le
+// compteur, qui la suit, n'aurait plus de valeur au-delà de lui. Un import
+// attribue donc au plus IDENTIFIANT_MAX − 1.
+const regleDuChamp = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+const IDENTIFIANT_MAX = regleDuChamp(regleDuChamp(regleDuChamp(SCHEMA, 'charge'), 'participants').element, 'id').max;
 
 // En-têtes des deux colonnes qu'ajoute le CSV des refus, inconnues de
 // l'association des colonnes.
@@ -382,14 +388,16 @@ function mettreAJour(participants, lignes, tours) {
  *   jour garde le sien.
  * Une personne créée prend les champs de sa ligne, exclu vide valant non,
  * ses étiquettes rangées par unités de code, absentes quand la ligne n'en
- * porte pas, sa présence canonique, absente quand la cellule est vide ou nomme
- * chaque tour, et la marque du nom numéroté quand l'aperçu a renommé sa ligne
- * (option noms) ; une personne mise à jour garde la sienne tant que son nom
- * finit par un numéro (SUFFIXE_NUMERO) ; les identifiants partent de
+ * porte pas, sa présence canonique, absente quand la cellule est vide ou
+ * nomme chaque tour, et la marque du nom numéroté quand l'aperçu a renommé
+ * sa ligne (option noms) ; une personne mise à jour garde la sienne tant que
+ * son nom finit par un numéro (SUFFIXE_NUMERO) ; les identifiants partent de
  * prochainsIds.participant, dans l'ordre du fichier, et le compteur avance
- * d'autant. La charge et l'aperçu reçus ne sont pas modifiés ; la charge rendue
- * n'en partage aucun objet, les propositions figées (gel.js) exceptées, qu'elle
- * reprend telles quelles.
+ * d'autant, sans passer IDENTIFIANT_MAX : un compteur qui ne suffit pas à
+ * chaque personne créée refuse l'import entier avant d'en numéroter aucune
+ * (§ 8.9). La charge et l'aperçu reçus ne sont pas modifiés ; la charge
+ * rendue n'en partage aucun objet, les propositions figées (gel.js)
+ * exceptées, qu'elle reprend telles quelles.
  *
  * Le résumé (ResumeImport) compte les participants ajoutés, mis à jour,
  * inchangés et retirés, les réservations retirées et les liens de logo
@@ -415,8 +423,11 @@ function mettreAJour(participants, lignes, tours) {
  *   relire le fichier refait l'aperçu ; le refus global de l'aperçu, son
  *   code, détails { ligne }, le rang que nomme l'aperçu ou null, plus
  *   { organisation } quand l'aperçu en nomme une — un conflit fautif ;
- *   AMBIGUITE, détails { champs }, les champs
- *   que l'en-tête laisse ambigus, tant que le choix ne les tranche pas
+ *   AMBIGUITE, détails { champs }, les champs que l'en-tête laisse ambigus,
+ *   tant que le choix ne les tranche pas ; COMPTEUR_SATURE, détails
+ *   { compteur: 'participant' }, quand une personne créée demanderait un
+ *   identifiant de IDENTIFIANT_MAX ou plus — une ligne qui désigne une
+ *   personne existante n'en demande aucun
  * @throws {TypeError} pour un mode inconnu, et pour un aperçu calculé pour un
  *   autre mode : l'aperçu montré à l'opérateur est celui que l'import
  *   applique
@@ -452,6 +463,9 @@ export function appliquerImport(charge, apercu, mode) {
   } else if (mode === 'mettreAJour') {
     suite = mettreAJour(resultat.participants, apercu.lignes, tours);
     aAjouter = suite.nouvelles;
+  }
+  if (resultat.prochainsIds.participant + aAjouter.length - 1 >= IDENTIFIANT_MAX) {
+    throw new ErreurCsv('COMPTEUR_SATURE', { compteur: 'participant' });
   }
   for (const { champs } of aAjouter) {
     resultat.participants.push(creer(resultat.prochainsIds.participant, champs, tours));
