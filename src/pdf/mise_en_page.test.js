@@ -1177,6 +1177,208 @@ describe('mise en page : le pied TechnoLibre', () => {
       assert.deepEqual(tropLong.blocs, sans.blocs);
     });
   }
+
+  // Le repli du texte TechnoLibre ne laisse un mot seul sur sa dernière ligne
+  // que si ses deux derniers mots, le dernier morceau d'un mot coupé compris,
+  // ne tiennent pas ensemble sur une ligne (§ 11.4). Le repli glouton, en
+  // mots entiers : chaque ligne prend autant de mots que la largeur du cadre
+  // en laisse.
+  const replisGloutons = (mots, metriques, corps, largeur) => {
+    const lignes = [];
+    for (const mot of mots) {
+      const avecMot = lignes.length === 0 ? mot : `${lignes.at(-1)} ${mot}`;
+      if (lignes.length > 0 && metriques.largeur(avecMot, corps, false) <= largeur + TOLERANCE) lignes[lignes.length - 1] = avecMot;
+      else lignes.push(mot);
+    }
+    return lignes;
+  };
+  // La plus petite largeur de la plus large ligne, parmi toutes les
+  // découpes des mots en `nombre` lignes qui tiennent chacune dans la
+  // largeur et dont la dernière porte deux mots au moins ; Infinity sans
+  // aucune. Une recherche exhaustive, bornée par les lignes qui tiennent.
+  function meilleureLargeur(mots, nombre, metriques, corps, largeur) {
+    const mesure = (debut, fin) => metriques.largeur(mots.slice(debut, fin).join(' '), corps, false);
+    const parcourir = (debut, restantes) => {
+      if (restantes === 1) {
+        const derniere = mesure(debut, mots.length);
+        return mots.length - debut >= 2 && derniere <= largeur + TOLERANCE ? derniere : Infinity;
+      }
+      let meilleure = Infinity;
+      for (let fin = debut + 1; fin <= mots.length - restantes + 1; fin += 1) {
+        const ligne = mesure(debut, fin);
+        if (ligne > largeur + TOLERANCE) break;
+        meilleure = Math.min(meilleure, Math.max(ligne, parcourir(fin, restantes - 1)));
+      }
+      return meilleure;
+    };
+    return parcourir(0, nombre);
+  }
+  const INVENTE = 'Jardin partagé des Hérons cendrés : semis, compost, troc de graines, réparation de vélos et soupe';
+  const TEXTES_REPLIS = [
+    ['la phrase d’origine', PROMOTION],
+    ['un texte inventé', INVENTE],
+    ['le texte inventé trois fois', `${INVENTE} `.repeat(3).trim()],
+  ];
+
+  for (const [nomModele, modele, cadre] of MODELES) {
+    for (const [jeu, metriques] of JEUX) {
+      test(`${nomModele}, ${jeu} : le texte TechnoLibre ne laisse aucun mot seul sur sa dernière ligne — au même nombre de lignes, le repli le plus équilibré dont la dernière porte deux mots ; un repli glouton sans mot seul reste tel quel`, () => {
+        const vus = new Set();
+        for (const [quoi, texte] of TEXTES_REPLIS) {
+          const mots = texte.split(' ');
+          for (let n = 1; n <= 24; n += 1) {
+            const champs = textes({ lignes: toursAuxSieges(n) });
+            const sans = mettreEnPage(champs, metriques, modele);
+            if ('refus' in sans) continue;
+            const avec = mettreEnPage(champs, metriques, modele, { texte, rapport: 5 });
+            const { corps } = avec.technolibre;
+            if (corps === null) continue;
+            const lignes = blocsTechnolibre(avec, sans).map((b) => b.texte);
+            const glouton = replisGloutons(mots, metriques, corps, cadre.largeur);
+            const ici = `${quoi}, ${n} tours, ${corps} pt : ${JSON.stringify(lignes)}`;
+            assert.equal(lignes.length, glouton.length, ici);
+            assert.ok(rejoint(lignes, texte), ici);
+            if (glouton.length === 1 || glouton.at(-1).includes(' ')) {
+              vus.add('inchangé');
+              assert.deepEqual(lignes, glouton, ici);
+              continue;
+            }
+            vus.add('équilibré');
+            assert.ok(lignes.at(-1).includes(' '), `mot seul : ${ici}`);
+            const largeurs = lignes.map((ligne) => metriques.largeur(ligne, corps, false));
+            assert.ok(largeurs.every((l) => l <= cadre.largeur + TOLERANCE), ici);
+            const attendue = meilleureLargeur(mots, lignes.length, metriques, corps, cadre.largeur);
+            assert.ok(Math.abs(Math.max(...largeurs) - attendue) < 1e-6, `${ici}, ${Math.max(...largeurs)} contre ${attendue}`);
+          }
+        }
+        assert.deepEqual([...vus].sort(), ['inchangé', 'équilibré']);
+      });
+    }
+  }
+
+  test('Noto Sans : la phrase d’origine, sur deux lignes au corps de départ, ne laisse plus « entreprise » seul, sur A6 comme sur la carte', () => {
+    for (const [nomModele, modele] of MODELES) {
+      const sans = mettreEnPage(textes(), NOTO, modele);
+      const avec = mettreEnPage(textes(), NOTO, modele, TECHNOLIBRE);
+      assert.equal(avec.technolibre.corps, DEPART, nomModele);
+      const lignes = blocsTechnolibre(avec, sans).map((b) => b.texte);
+      assert.equal(lignes.length, 2, `${nomModele} : ${JSON.stringify(lignes)}`);
+      assert.notEqual(lignes[1], 'entreprise', nomModele);
+      assert.ok(lignes[1].endsWith(' pour votre entreprise'), `${nomModele} : ${JSON.stringify(lignes)}`);
+    }
+  });
+
+  test('A6, chasse fixe : quand les deux derniers mots ne tiennent pas ensemble sur une ligne, ou qu’un dernier mot trop large se coupe, le dernier morceau reste seul, le repli glouton tel quel', () => {
+    const parGrappe = FACTICES.largeur('x', DEPART, false);
+    const long = 'x'.repeat(Math.floor(CADRE.largeur / parGrappe));
+    assert.ok(FACTICES.largeur(long, DEPART, false) <= CADRE.largeur && FACTICES.largeur(`Hérons ${long}`, DEPART, false) > CADRE.largeur);
+    const sans = mettreEnPage(textes(), FACTICES, 'a6');
+    const lignesDe = (texte) => {
+      const avec = mettreEnPage(textes(), FACTICES, 'a6', { texte, rapport: 5 });
+      assert.equal(avec.technolibre.corps, DEPART);
+      return blocsTechnolibre(avec, sans).map((b) => b.texte);
+    };
+    assert.deepEqual(lignesDe(`Jardin partagé des Hérons ${long}`), ['Jardin partagé des Hérons', long]);
+    assert.deepEqual(lignesDe(`Jardin ${long}${long}`), ['Jardin', long, long]);
+  });
+
+  // Les lignes qui précèdent celle du dernier morceau du mot coupé restent
+  // celles du repli glouton ; ce morceau compte pour un mot, et les mots à
+  // partir de sa ligne se répartissent sur les lignes restantes, la
+  // dernière de deux mots au moins.
+  test('A6, chasse fixe : un mot coupé avant la fin ne laisse pas pour autant le dernier mot seul : les lignes avant son dernier morceau restent, la suite se répartit', () => {
+    const parGrappe = FACTICES.largeur('x', DEPART, false);
+    const C = Math.floor((CADRE.largeur + TOLERANCE) / parGrappe);
+    const sans = mettreEnPage(textes(), FACTICES, 'a6');
+    const lignesDe = (texte) => {
+      const avec = mettreEnPage(textes(), FACTICES, 'a6', { texte, rapport: 5 });
+      assert.equal(avec.technolibre.corps, DEPART);
+      return blocsTechnolibre(avec, sans).map((b) => b.texte);
+    };
+    // Les mots courts emplissent une ligne : « soupe » n'y entre plus.
+    const tientLigne = (mots) => FACTICES.largeur(mots.join(' '), DEPART, false) <= CADRE.largeur + TOLERANCE;
+    const remplir = (...debut) => {
+      const mots = [];
+      while (tientLigne([...debut, ...mots, 'ab'])) mots.push('ab');
+      assert.ok(!tientLigne([...debut, ...mots, 'soupe']));
+      return mots;
+    };
+    const verifier = (texte, fixes, suite, nombre = 2) => {
+      const lignes = lignesDe(texte);
+      const ici = JSON.stringify(lignes);
+      assert.equal(lignes.length, fixes.length + nombre, ici);
+      assert.deepEqual(lignes.slice(0, fixes.length), fixes, ici);
+      assert.ok(rejoint(lignes, texte), ici);
+      assert.ok(lignes.at(-1).includes(' '), `mot seul : ${ici}`);
+      const largeurs = lignes.slice(fixes.length).map((ligne) => FACTICES.largeur(ligne, DEPART, false));
+      assert.ok(largeurs.every((l) => l <= CADRE.largeur + TOLERANCE), ici);
+      const attendue = meilleureLargeur(suite, nombre, FACTICES, DEPART, CADRE.largeur);
+      assert.ok(Math.abs(Math.max(...largeurs) - attendue) < 1e-6, `${ici}, ${Math.max(...largeurs)} contre ${attendue}`);
+    };
+    // Le mot coupé en tête, sur deux lignes pleines, puis des mots entiers.
+    const plein = 'x'.repeat(C);
+    const courts = remplir();
+    verifier(`${plein}${plein} ${courts.join(' ')} soupe`, [plein, plein], [...courts, 'soupe']);
+    // Le mot coupé au milieu : son dernier morceau ouvre une ligne de mots.
+    const entre = remplir('xxx');
+    verifier(`Jardin ${plein}xxx ${entre.join(' ')} soupe`, ['Jardin', plein], ['xxx', ...entre, 'soupe']);
+    // Sans mot coupé, toutes les lignes se répartissent, la première aussi :
+    // deux lignes pleines de mots courts, puis « soupe ».
+    const deuxPleines = [...courts, ...courts];
+    verifier(`${deuxPleines.join(' ')} soupe`, [], [...deuxPleines, 'soupe'], 3);
+    // Les lignes avant le mot coupé restent celles du repli glouton, même
+    // plus larges que les morceaux : le premier morceau, de « W » qui
+    // comptent double, laisse une colonne vide, la première ligne aucune.
+    const tete = `${'y'.repeat(C - 2)} a`;
+    const morceau = `${C % 2 === 0 ? 'x' : ''}${'W'.repeat(Math.floor(C / 2) - (C % 2 === 0 ? 1 : 0))}`;
+    assert.ok(tientLigne([tete]) && tientLigne([morceau]) && !tientLigne([`${morceau}W`]));
+    assert.ok(FACTICES.largeur(tete, DEPART, false) > FACTICES.largeur(morceau, DEPART, false));
+    const apres = remplir('W');
+    verifier(`${tete} b ${morceau}W ${apres.join(' ')} soupe`, [tete, 'b', morceau], ['W', ...apres, 'soupe']);
+  });
+
+  // En chasse fixe, sans capitale large, la largeur d'une ligne suit son
+  // nombre de caractères : une ligne en tient `C` au plus.
+  test('A6, chasse fixe : un dernier mot plus large que tout le reste garde un mot avec lui ; à largeur égale, la première ligne la plus longue, les suivantes réparties de même entre elles', () => {
+    const parGrappe = FACTICES.largeur('x', DEPART, false);
+    const C = Math.floor((CADRE.largeur + TOLERANCE) / parGrappe);
+    const sans = mettreEnPage(textes(), FACTICES, 'a6');
+    const lignesDe = (texte) => {
+      const avec = mettreEnPage(textes(), FACTICES, 'a6', { texte, rapport: 5 });
+      assert.equal(avec.technolibre.corps, DEPART);
+      return blocsTechnolibre(avec, sans).map((b) => b.texte);
+    };
+    // Seul, le dernier mot ferait la ligne la plus large plus étroite : la
+    // règle du mot seul l'emporte.
+    const large = 'x'.repeat(C - 6);
+    assert.deepEqual(lignesDe(`Jardin des ${large}`), ['Jardin', `des ${large}`]);
+    // La dernière ligne, « pp » et le mot large, est la plus large de toute
+    // découpe : les deux premières se partagent les mots courts à égalité,
+    // et la première en prend le plus qu'elle peut sans la dépasser.
+    const premiere = Math.floor(C / 3);
+    const courts = Array.from({ length: premiere + 2 }, () => 'ab');
+    const dernier = 'z'.repeat(C - 4);
+    assert.deepEqual(lignesDe(`${courts.join(' ')} pp ${dernier}`), [
+      courts.slice(0, premiere).join(' '),
+      courts.slice(premiere).join(' '),
+      `pp ${dernier}`,
+    ]);
+    // La première ligne, un mot de C - 1 caractères, est la plus large de
+    // toute découpe : les deux suivantes se partagent les « ab » et
+    // « soupe » entre elles, leur plus large la plus étroite possible, puis
+    // leur première la plus longue — et non la deuxième ligne la plus longue
+    // sous la largeur de la première.
+    const nombreAb = Math.floor(C / 3);
+    assert.ok(nombreAb % 2 === 1 && 3 * nombreAb - 1 <= C && 3 * nombreAb + 5 > C);
+    const abs = Array.from({ length: nombreAb }, () => 'ab');
+    const milieu = (nombreAb + 3) / 2;
+    const tete = 'y'.repeat(C - 1);
+    assert.deepEqual(lignesDe(`${tete} ${abs.join(' ')} soupe`), [
+      tete,
+      abs.slice(0, milieu).join(' '),
+      `${abs.slice(milieu).join(' ')} soupe`,
+    ]);
+  });
 });
 
 describe('mise en page : le pied TechnoLibre, la mesure que la spécification cite (§ 11.5)', () => {

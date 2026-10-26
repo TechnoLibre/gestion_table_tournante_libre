@@ -5531,9 +5531,21 @@ qui la portent.
 centré, replié comme le pied, puis du logo, centré, posé sur le bord bas du
 cadre utile, le pied remontant d'autant. Le texte est la phrase d'origine, ou
 celui que la machine garde à sa place (§ 8.5), sans borne de longueur : il se
-replie et rapetisse comme elle. Un texte vide ne pose que le logo, à la même
-taille. La phrase d'origine, que la machine n'en garde pas d'autre ou qu'elle
-y soit revenue, laisse la planche exactement à ses octets. Il ne prend que
+replie et rapetisse comme elle. Le repli ne laisse un mot seul sur la dernière
+ligne que si les deux derniers mots, le dernier morceau d'un mot coupé compris,
+ne tiennent pas ensemble sur une ligne. Il garde le nombre de lignes du repli
+mot à mot, et quand celui-ci finit sur un mot seul, les mots se répartissent
+sur autant de lignes, la dernière de deux mots au moins, la plus large ligne la
+plus étroite possible ; à largeur égale, la première ligne la plus longue, les
+lignes suivantes se répartissant de même entre elles (leur plus large ligne la
+plus étroite possible, puis leur première ligne la plus longue) — la phrase
+d'origine, sur deux lignes, finit par « avec https://technolibre.ca pour votre
+entreprise ». Un mot plus large qu'une ligne se coupe comme au pied : les
+lignes qui précèdent celle du dernier morceau du dernier mot coupé restent
+celles du repli mot à mot, ce morceau compte pour un mot, et lui et la suite se
+répartissent sur les lignes restantes. Un texte vide ne pose que le logo, à la
+même taille. La phrase d'origine donne la même planche, octet pour octet, que
+la machine n'en garde pas d'autre ou qu'elle y soit revenue. Il ne prend que
 l'écart que le badge, composé sans lui, laisse entre ses tours et son pied : il
 ne réduit ni le nom, ni les tours, ni l'organisation, ni le pied, et ne les
 déplace pas, le pied excepté. Il rapetisse jusqu'à un plancher lisible à la

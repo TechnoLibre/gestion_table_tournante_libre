@@ -29,14 +29,17 @@
 //
 // Le pied TechnoLibre, quand il est demandé, vient en dernier : un texte,
 // puis le logo, sous le pied, le logo posé sur le bord du cadre ; un texte
-// vide, ou fait d'espaces, ne pose que le logo. Il ne prend
-// que la place que le badge entier laisse entre ses tours et son pied, et ne
-// change rien à ce qui le précède : le badge se compose d'abord sans lui, le
-// pied remonte ensuite de la hauteur du bloc. Il rapetisse de son corps de
-// départ à son plancher, par paliers d'un point ; quand même le plancher ne
-// tient pas, il se retire, et le badge est celui qu'il serait sans lui. Il
-// se retire aussi d'un badge qui a perdu le nom de l'événement : il le suit
-// dans l'ordre de sacrifice.
+// vide, ou fait d'espaces, ne pose que le logo. Son texte se replie sans
+// laisser un mot seul sur sa dernière ligne, au même nombre de lignes que le
+// repli glouton (sansMotSeul), sauf quand ses deux derniers mots, le dernier
+// morceau d'un mot coupé compris, ne tiennent pas ensemble sur une ligne : le
+// dernier reste alors seul. Il ne prend que la place que le badge entier
+// laisse entre ses tours et son pied, et ne change rien à ce qui le précède :
+// le badge se compose d'abord sans lui, le pied remonte ensuite de la hauteur
+// du bloc. Il rapetisse de son corps de départ à son plancher, par paliers
+// d'un point ; quand même le plancher ne tient pas, il se retire, et le badge
+// est celui qu'il serait sans lui. Il se retire aussi d'un badge qui a perdu
+// le nom de l'événement : il le suit dans l'ordre de sacrifice.
 //
 // Le logo du participant, quand il est demandé, passe avant le pied
 // TechnoLibre et après tout le texte : il ne prend que l'écart entre les
@@ -594,10 +597,82 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     return null;
   }
 
+  // Le repli du texte TechnoLibre au corps donné, à partir de son repli
+  // glouton : tel quel, sauf quand sa dernière ligne porte un mot seul.
+  // Alors, quand un mot est coupé, les lignes qui précèdent celle du
+  // dernier morceau du dernier mot coupé restent celles du repli glouton,
+  // et ce morceau compte pour un mot ; sans mot coupé, toutes les lignes se
+  // répartissent. Les mots à répartir vont sur autant de lignes qu'il en
+  // reste, chacune dans la largeur, la dernière de deux mots au moins, la
+  // plus large ligne la plus étroite possible ; à largeur égale, la première
+  // ligne la plus longue, les suivantes se répartissant de même entre elles
+  // (leur plus large ligne la plus étroite possible, puis leur première ligne
+  // la plus longue). Le repli glouton reste quand aucune découpe n'existe :
+  // les deux derniers mots, le dernier morceau d'un mot coupé compris, ne
+  // tiennent pas ensemble sur une ligne.
+  function sansMotSeul(lignes, corps) {
+    if (lignes.length < 2 || lignes.at(-1).includes(' ')) return lignes;
+    // depart : la ligne qui porte le dernier morceau du dernier mot coupé,
+    // sinon la première. Les lignes se lisent de la fin : tant que leurs
+    // mots sont ceux de la fin du texte, aucun mot n'y est coupé. Un morceau
+    // est plus court que le mot qu'il coupe, et n'est donc jamais égal au
+    // mot de même rang.
+    const entiers = promotion.texte.split(' ').filter((mot) => mot !== '');
+    let depart = lignes.length - 1;
+    for (let reste = entiers.length; depart > 0; depart -= 1) {
+      const jetons = lignes[depart].split(' ');
+      if (!jetons.every((jeton, rang) => jeton === entiers[reste - jetons.length + rang])) break;
+      reste -= jetons.length;
+    }
+    const nombre = lignes.length - depart;
+    const mots = lignes.slice(depart).join(' ').split(' ');
+    const ligne = (debut, fin) => mots.slice(debut, fin).join(' ');
+    // decoupes[k - 1][debut] : la meilleure découpe en k lignes des mots à
+    // partir de debut, {pire, fin}, la plus large de ses lignes et la fin
+    // de la première ; pire vaut Infinity sans découpe. Les largeurs
+    // croissent avec les mots ajoutés : une ligne qui déborde arrête
+    // l'allongement. La dernière ligne part de l'avant-dernier mot au plus
+    // tard.
+    const derniere = mots.map(() => ({ pire: Infinity, fin: mots.length }));
+    for (let debut = mots.length - 2; debut >= 0; debut -= 1) {
+      const texte = ligne(debut, mots.length);
+      if (!tient(texte, corps, false)) break;
+      derniere[debut] = { pire: largeur(texte, corps, false), fin: mots.length };
+    }
+    const decoupes = [derniere];
+    for (let k = 2; k <= nombre; k += 1) {
+      const suite = decoupes.at(-1);
+      decoupes.push(
+        mots.map((_, debut) => {
+          let meilleure = { pire: Infinity, fin: -1 };
+          for (let fin = debut + 1; fin < mots.length; fin += 1) {
+            const premiere = ligne(debut, fin);
+            if (!tient(premiere, corps, false)) break;
+            const pire = Math.max(largeur(premiere, corps, false), suite[fin].pire);
+            if (pire <= meilleure.pire) meilleure = { pire, fin };
+          }
+          return meilleure;
+        }),
+      );
+    }
+    if (decoupes.at(-1)[0].pire === Infinity) return lignes;
+    const equilibrees = lignes.slice(0, depart);
+    let debut = 0;
+    for (let k = nombre; k >= 2; k -= 1) {
+      const { fin } = decoupes[k - 1][debut];
+      equilibrees.push(ligne(debut, fin));
+      debut = fin;
+    }
+    equilibrees.push(ligne(debut, mots.length));
+    return equilibrees;
+  }
+
   // Les paliers du pied TechnoLibre demandé, du corps de départ au plancher,
   // ceux dont le texte se replie et dont le logo tient dans la largeur :
   // chacun {corps, lignes, hauteurLogo, largeurLogo, hauteurBloc}, le bloc
-  // étant ses lignes puis son logo. Aucun sans pied TechnoLibre demandé.
+  // étant ses lignes puis son logo, les lignes celles du repli glouton, dont
+  // poserTechnolibre retire le mot seul quand les deux derniers mots tiennent
+  // ensemble sur une ligne (sansMotSeul). Aucun sans pied TechnoLibre demandé.
   function paliersTechnolibre() {
     if (promotion === null) return [];
     const resultat = [];
@@ -613,13 +688,14 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   }
 
   // La page composée, le bloc TechnoLibre du palier donné posé sous le pied,
-  // le pied remonté de sa hauteur, le logo posé sur le bas du cadre.
+  // ses lignes repliées par sansMotSeul, le pied remonté de sa hauteur, le
+  // logo posé sur le bas du cadre.
   function poserTechnolibre({ blocs, colonnesTours, nombrePied }, { corps, lignes, hauteurLogo, largeurLogo, hauteurBloc }) {
     const pasTexte = pas(corps);
     const debutPied = blocs.length - nombrePied;
     const remonte = blocs.slice(debutPied).map((bloc) => ({ ...bloc, y: bloc.y - hauteurBloc }));
     const hautDuBloc = H - hauteurBloc;
-    const blocsTexte = lignes.map((texte, rang) => ({
+    const blocsTexte = sansMotSeul(lignes, corps).map((texte, rang) => ({
       texte,
       corps,
       gras: false,

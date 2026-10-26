@@ -1061,20 +1061,20 @@ describe('planche dans la séance : le pied TechnoLibre (§ 11.4)', () => {
 });
 
 // Le texte du pied TechnoLibre (§ 8.5, § 11.4, § 11.5) : la phrase
-// d'origine tant que la machine n'en garde pas d'autre, et alors les octets
-// d'avant, empreintes comprises ; un texte choisi se pose sous chaque badge,
+// d'origine tant que la machine n'en garde pas d'autre, et alors les mêmes
+// octets, empreintes comprises ; un texte choisi se pose sous chaque badge,
 // sans toucher la feuille de contrôle ; vide, le logo seul ; un caractère
 // que la police n'a pas se nomme comme ceux des badges.
 describe('planche dans la séance : le texte du pied TechnoLibre (§ 8.5, § 11.4, § 11.5)', () => {
   const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
   const lu = (pdf) => pdf.pages.map((page) => textesDe(page).join(' ')).join(' ').replace(/\s+/g, ' ');
   const zones = (pdf) => pdf.pages.flatMap((page) => page.zonesRemplies);
-  // Les empreintes des octets que la planche rendait avant que le texte ne
-  // se choisisse, le pied TechnoLibre coché : les cartes Avery 5392 et leur
-  // feuille de contrôle d'une machine neuve, puis l'A6 sur A4.
-  const EMPREINTE_CARTES_PIED = '846fb854b2cddf8aa13c3d2ddbef8f354a3311146f6915edc674cbe79aca1f9d';
+  // Les empreintes des octets que rend la phrase d'origine, le pied
+  // TechnoLibre coché : les cartes Avery 5392 et leur feuille de contrôle
+  // d'une machine neuve, puis l'A6 sur A4.
+  const EMPREINTE_CARTES_PIED = 'f77a69dd153dd5a4a836ac52aa5e7d774ee023cb6a5e65ad707c6ce22e470f32';
   const EMPREINTE_CONTROLE_PIED = 'd845ef7cbbb84a91b5de2e480ea426d498505f93305b5f2fa1f8d7d2a868332d';
-  const EMPREINTE_A6_PIED = 'b54a46711c1aab291392c3310d5337a78d98e5541a011a12df318d428cf34141';
+  const EMPREINTE_A6_PIED = '90c05ef6468a8cacdee31d083154d5deea9d29e824cef3a9dc8b544bd174ee05';
   const CHOISI = 'Atelier coopératif des Hérons cendrés : menuiserie et réparation de vélos';
 
   test('la phrase d’origine, gardée ou choisie de nouveau entre des blancs : l’annonce la porte, et les PDF gardent leurs octets, empreintes comprises', async () => {

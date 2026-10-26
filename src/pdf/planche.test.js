@@ -808,6 +808,38 @@ describe('produirePlanche : le pied TechnoLibre (§ 11.4)', () => {
     }
   });
 
+  // Les fragments lus se regroupent par ligne, à la même ordonnée, rejoints
+  // de gauche à droite : la dernière ligne du texte TechnoLibre porte au
+  // moins deux mots, sur la carte comme sur l'A4 debout.
+  test('le texte TechnoLibre ne laisse aucun mot seul sur sa dernière ligne', () => {
+    for (const { nom, lu: document, cases, pages } of PRODUCTIONS_T.slice(0, 2)) {
+      let vus = 0;
+      for (const page of pages.map((p) => document.pages[p - 1])) {
+        for (let i = 0; i < page.zonesRemplies.length; i += 3) {
+          const fond = page.zonesRemplies[i];
+          const cellule = cases.find((c) => dans([fond.x + 1, fond.y + 1], c));
+          const dedans = page.textes.filter((t) => dans(centre(t), cellule));
+          const placement = dedans.find((d) => d.texte.startsWith('Placement'));
+          const promotion = dedans.filter((t) => t.y > placement.y && t.y < fond.y);
+          const ordonnees = [...new Set(promotion.map((t) => t.y.toFixed(2)))].sort((a, b) => a - b);
+          const lignes = ordonnees.map((y) =>
+            promotion
+              .filter((t) => t.y.toFixed(2) === y)
+              .sort((a, b) => a.x - b.x)
+              .map((t) => t.texte)
+              .join(' ')
+              .trim(),
+          );
+          assert.equal(lignes.join(' ').replace(/\s+/g, ' '), TECHNOLIBRE.texte, nom);
+          assert.ok(lignes.length >= 2, `${nom} : ${JSON.stringify(lignes)}`);
+          assert.ok(/\S\s+\S/u.test(lignes.at(-1)), `${nom} : ${JSON.stringify(lignes)}`);
+          vus += 1;
+        }
+      }
+      assert.ok(vus > 0, nom);
+    }
+  });
+
   // Ces planches ne portent aucun logo de participant : le pied TechnoLibre
   // y est la seule couleur.
   test('le logo est la seule couleur : chaque texte de la planche se montre en noir, celui qui suit un logo compris', () => {

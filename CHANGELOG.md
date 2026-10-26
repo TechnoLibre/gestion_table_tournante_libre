@@ -548,7 +548,7 @@
   Une case décochée retire sa donnée de chaque badge, A6 comme Avery 5392, et
   la place libérée revient au reste ; la feuille de contrôle nomme alors les
   données retirées. La liste en CSV ne change pas, et toutes cochées, la
-  planche sort identique à celle d'avant.
+  planche porte les mêmes données qu'avant.
 - Quand les places manquent, l'avis qui offre « Ouvrir les tables » offre aussi
   « Créer les tables… », et la section « Tables et tours » offre la même
   commande tant qu'il en manque. Elle déplie un petit formulaire : le nombre de
@@ -584,8 +584,14 @@
   puis se retire faute de place, comme l'invitation. Laissé vide, le pied ne
   porte que le logo. Un caractère que la police ne dessine pas s'annonce avant
   de produire et se nomme sur la feuille de contrôle, qui ne change pas
-  autrement ; la liste en CSV non plus. Avec l'invitation d'origine, la
-  planche sort identique à celle d'avant.
+  autrement ; la liste en CSV non plus. Garder l'invitation d'origine ou y
+  revenir donne la même planche, octet pour octet.
+- Le texte du pied TechnoLibre ne laisse plus un mot seul sur sa dernière ligne,
+  sauf quand ses deux derniers mots ne tiennent pas ensemble sur une ligne (le
+  dernier bout d'un mot coupé, trop long pour une ligne, compte pour un mot) :
+  ses lignes s'équilibrent, sans en ajouter une, et l'invitation d'origine, sur
+  deux lignes, finit par « avec https://technolibre.ca pour votre entreprise ».
+  Un texte remplacé suit la même règle.
 - Un événement neuf propose 20 propositions par génération et un compte
   d'arrêt de 2 000 000 mouvements, au lieu de 5 et de 200 000 ; l'historique
   d'acceptation reste 1 000. Une génération à ces réglages dure bien plus
