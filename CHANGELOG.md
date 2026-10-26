@@ -749,6 +749,15 @@
 - Le nom de l'événement décoché, un caractère de ce nom que la police ne
   dessine pas s'annonce encore, et la feuille de contrôle, qui écrit ce nom,
   le donne par son point de code.
+- Un texte tapé et pas encore pris ne laisse plus le logiciel revenir seul en
+  lecture : le libellé d'un titre dans le panneau d'une place ou d'une table,
+  le nombre de « Garder les N meilleures », la graine, le « Nombre de cœurs »
+  et le texte du pied TechnoLibre comptent, comme les autres champs, pour une
+  saisie en cours. Un « Nombre de cœurs » accepté s'affiche sous sa forme
+  normale : « 02 » devient « 2 ».
+- Ouvrir une version de secours, depuis la récupération d'un fichier abîmé ou
+  par « Ouvrir la version précédente », montre la pastille « Traitement en
+  cours… » comme toute ouverture d'un événement.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

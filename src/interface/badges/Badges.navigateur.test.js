@@ -21,7 +21,7 @@
 // (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { appliquerCommande } from '../../application/commandes.js';
-import { DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT } from '../../application/seance.js';
+import { DONNEES_BADGE, INACTIVITE_MS, TEXTE_PIED_TECHNOLIBRE_DEFAUT } from '../../application/seance.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { listeBadges, modelePlanche } from '../../application/planche.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js';
@@ -1179,6 +1179,26 @@ describe('le texte du pied TechnoLibre : un champ gardé sur le poste (§ 8.5, �
     caseTechnolibre(m).click();
     await attendre('le champ désactivé', () => champTexte(m).disabled, IMAGES);
     expect(boutonDefaut(m).disabled).toBe(true);
+  });
+
+  test('en écriture, une frappe non quittée tient la séance en écriture ; quitter le champ rend le compte, qui ramène en lecture', async () => {
+    const m = await ouvrirBadges(chargePrincipale(), { papier: 'A4', modeleBadge: null, ecriture: true });
+    // L'horloge passe le délai d'inactivité, puis la file de la séance.
+    const laisserPasser = async () => {
+      m.horloge.avancer(INACTIVITE_MS + 1);
+      await m.seance.attendre();
+    };
+    expect(m.seance.etat().mode).toBe('ecriture');
+    expect(m.seance.gesteEnCours).toBe(false);
+    saisir(m, 'Atelier des Grèbes');
+    await attendre('la saisie en cours', () => m.seance.gesteEnCours, IMAGES);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('ecriture');
+    quitter(m);
+    await attendre('le texte écrit', () => texteEcrit(m) === 'Atelier des Grèbes', IMAGES);
+    await attendre('la saisie rendue', () => !m.seance.gesteEnCours, IMAGES);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('lecture');
   });
 
   test('une frappe n’écrit rien ; quitter le champ écrit le texte normalisé et retire l’annonce ; « Texte par défaut » remet la phrase d’origine, la clé retirée', async () => {

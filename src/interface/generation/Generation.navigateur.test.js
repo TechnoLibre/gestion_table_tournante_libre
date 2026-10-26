@@ -32,6 +32,7 @@ import { creerExecuteurTravailleur } from '../../application/executeur_travaille
 import { ErreurAnnulee, ErreurGeneration, creerExecuteurDirect } from '../../application/generation.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
+import { INACTIVITE_MS } from '../../application/seance.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { constante } from '../../geometrie/constantes.js';
 import { rechercher } from '../../moteur/recherche.js';
@@ -271,6 +272,13 @@ async function saisir(m, entree, texte, { fin = 'Tab' } = {}) {
   await passer(m);
 }
 
+// L'horloge passe le délai d'inactivité, puis la file de la séance passée.
+async function laisserPasser(m) {
+  m.horloge.avancer(INACTIVITE_MS + 1);
+  await m.seance.attendre();
+  await passer(m);
+}
+
 // Vrai tant que le contrôleur publie une génération en cours.
 function enCours(m) {
   let lu;
@@ -370,6 +378,29 @@ describe('les réglages (§ 5.7, § 5.10)', () => {
     await attendre(() => expect(charge(m).propositions.length).toBe(2));
     expect(lancements.map(({ reglages }) => reglages.graine)).toEqual([1]);
     await attendre(() => expect(champ(m, 'graine').value).toBe('2'));
+  });
+
+  test('exécuteur direct, relevé : une graine tapée et non lancée tient la séance en écriture ; « Générer » la prend et rend le compte, qui ramène en lecture', async () => {
+    const { executeur, lancements } = releve(creerExecuteurDirect());
+    const m = await demonstration('petite', { executeur });
+    await regler(m, { nombre: 2, arret: 2000 });
+    expect(m.seance.gesteEnCours).toBe(false);
+    await saisir(m, champ(m, 'graine'), '5');
+    expect(m.seance.gesteEnCours).toBe(true);
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('ecriture');
+    // Revenue à la graine proposée, la saisie n'est plus en cours.
+    await saisir(m, champ(m, 'graine'), '1');
+    expect(m.seance.gesteEnCours).toBe(false);
+    await saisir(m, champ(m, 'graine'), '5');
+    expect(m.seance.gesteEnCours).toBe(true);
+    await cliquer(m, generer(m));
+    await attendre(() => expect(charge(m).propositions.length).toBe(2));
+    await attendre(() => expect(champ(m, 'graine').value).toBe('6'));
+    expect(lancements.map(({ reglages }) => reglages.graine)).toEqual([5]);
+    expect(m.seance.gesteEnCours).toBe(false);
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('lecture');
   });
 
   test('exécuteur direct, relevé : graine -1, 1,5 ou 2^32 — refus sur le champ, rien n’est lancé ni écrit', async () => {
@@ -721,6 +752,30 @@ describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
     expect(champCoeurs(m).hasAttribute('aria-invalid')).toBe(false);
     expect(controleur(m).coeurs()).toEqual({ automatique: false, manuel: 2, disponibles: 4, nombre: 2 });
     expect(m.trace.length).toBe(ecritures);
+  });
+
+  test('« Nombre de cœurs » tapé et non validé tient la séance en écriture ; Entrée le valide et rend le compte ; refusé, il reste en cours, et Échap le rend', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect({ coeursDisponibles: 4 }) });
+    await cliquer(m, bascule(m, 'coeursAutomatiques'));
+    expect(m.seance.gesteEnCours).toBe(false);
+    await saisir(m, champCoeurs(m), '02', { fin: null });
+    expect(m.seance.gesteEnCours).toBe(true);
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('ecriture');
+    await touche('Enter');
+    await passer(m);
+    expect(controleur(m).coeurs().nombre).toBe(2);
+    expect(champCoeurs(m).value).toBe('2');
+    expect(m.seance.gesteEnCours).toBe(false);
+    await saisir(m, champCoeurs(m), '9', { fin: 'Enter' });
+    expect(refusPres(champCoeurs(m), 'HORS_DOMAINE')).not.toBeNull();
+    expect(m.seance.gesteEnCours).toBe(true);
+    await touche('Escape');
+    await passer(m);
+    expect(champCoeurs(m).value).toBe('2');
+    expect(m.seance.gesteEnCours).toBe(false);
+    await laisserPasser(m);
+    expect(m.seance.etat().mode).toBe('lecture');
   });
 
   test('en lecture, le réglage se change sans refus ni écriture ; il survit au départ de la section', async () => {

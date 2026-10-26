@@ -3,10 +3,10 @@
 
 // L'indicateur d'activité (§ 5.10, § 19.2) : la pastille « Traitement en
 // cours… » que primitives/Activite.svelte montre pendant une opération
-// longue — ouvrir un événement, charger une démonstration, défaire,
-// refaire, revenir à un instant, appliquer un import, la fin d'une
-// génération, l'aperçu avant impression, la planche de badges, écrire
-// ailleurs. Un geste ordinaire du plan n'y passe pas.
+// longue — ouvrir un événement ou l'une de ses versions de secours, charger
+// une démonstration, défaire, refaire, revenir à un instant, appliquer un
+// import, la fin d'une génération, l'aperçu avant impression, la planche de
+// badges, écrire ailleurs. Un geste ordinaire du plan n'y passe pas.
 //
 // Le travail long tourne sur le fil du rendu, en blocs synchrones entre
 // deux attentes : aucun rappel ne part pendant un bloc, et ce que le DOM

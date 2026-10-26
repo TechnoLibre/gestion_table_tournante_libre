@@ -26,17 +26,18 @@
   // la machine ne retient pas vaut pour la séance, et une annonce le dit
   // sous les réglages tant qu'elle est celle de la séance, comme le modèle.
   //
-  // Sous la case, un champ de quelques lignes porte le texte de ce pied,
-  // autre réglage de la machine (EtatSeance.textePiedTechnolibre,
+  // Sous la case, un champ de quelques lignes porte le texte de ce pied, autre
+  // réglage de la machine (EtatSeance.textePiedTechnolibre,
   // seance.choisirTextePiedTechnolibre), prérempli de la phrase d'origine
-  // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) ; la case décochée le désactive. La
-  // frappe ne vit que dans le champ, en brouillon ; le texte s'écrit quand
-  // le champ se quitte — l'événement change —, normalisé, et seulement
-  // quand il diffère de celui de la séance. « Texte par défaut » remet la
-  // phrase d'origine ; il est désactivé quand le champ la porte déjà, à la
-  // normalisation près, ou que la case est décochée. Un texte que la
-  // machine ne retient pas s'annonce tant qu'il est celui de la séance,
-  // comme la case.
+  // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) ; la case décochée le désactive. La frappe
+  // ne vit que dans le champ, en brouillon ; le texte s'écrit quand le champ se
+  // quitte — l'événement change —, normalisé, et seulement quand il diffère de
+  // celui de la séance. Le brouillon est une saisie non validée : un geste
+  // ouvert (geste.js), qui suspend le compte d'inactivité de la séance (§ 8.4).
+  // « Texte par défaut » remet la phrase d'origine ; il est désactivé quand le
+  // champ la porte déjà, à la normalisation près, ou que la case est décochée.
+  // Un texte que la machine ne retient pas s'annonce tant qu'il est celui de la
+  // séance, comme la case.
   //
   // À côté d'elle, dans le même groupe, cinq cases de la machine disent ce
   // que le badge imprime en plus du nom et des tours, une par donnée de
@@ -104,13 +105,14 @@
   // planche (PDF) » en est l'action principale. L'annonce se pose sur le
   // fond sourd de la carte, les fichiers produits sur le fond de
   // l'information. La réédition est une carte à elle.
-  import { getContext } from 'svelte';
+  import { getContext, onDestroy } from 'svelte';
   import { DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT, normaliserTextePied } from '../../application/seance.js';
   import { PAPIER_BADGES_DEFAUT } from '../../geometrie/papiers.js';
   import Message from '../accueil/Message.svelte';
   import { suivre } from '../activite.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
+  import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
   import Papier from '../sorties/Papier.svelte';
   import Reedition from './Reedition.svelte';
@@ -214,6 +216,9 @@
   // null : le champ montre alors le texte de la séance.
   let brouillon = $state(null);
   const texteMontre = $derived(brouillon ?? textePiedTechnolibre);
+  const gesteTexte = creerGeste(seance);
+  $effect(() => gesteTexte.tenir(brouillon !== null));
+  onDestroy(() => gesteTexte.liberer());
   const texteDejaDefaut = $derived(normaliserTextePied(texteMontre) === TEXTE_PIED_TECHNOLIBRE_DEFAUT);
   // Vrai quand une case non retenue garde, dans la séance, la valeur choisie.
   const annoncerDonnees = $derived(

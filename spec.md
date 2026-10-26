@@ -2394,23 +2394,23 @@ d'inactivité du § 8.4 est suspendu tant qu'un calcul tourne, donc le retour
 automatique en lecture ne tombe jamais au milieu d'une génération.
 
 **Une opération longue s'annonce, et l'écran ne paraît pas figé.** Ouvrir un
-événement, charger une démonstration, défaire, refaire ou revenir à un instant,
-appliquer un import, finir une génération — trier et enregistrer ses
-propositions, après la recherche —, ouvrir l'aperçu avant impression, préparer,
-produire ou enregistrer ailleurs la planche de badges, écrire ailleurs : ces
-opérations calculent sur le fil de l'interface. Une pastille « Traitement en
-cours… », au bas de la fenêtre et centrée, se pose et se peint **avant** que le
-calcul ne parte, et ne se voit qu'au bout d'**une demi-seconde** : une opération
-brève passe sans rien montrer. Son apparition et la rotation de son signe sont
-jouées par le compositeur du navigateur pendant que le calcul tient le fil, sans
-minuterie ; sous la préférence de mouvement réduit, elle apparaît de même et son
-signe reste immobile. Le curseur dit l'attente tant qu'elle est là. Elle se
-retire à la fin de l'opération, aboutie ou refusée, et deux opérations qui se
-chevauchent n'en montrent qu'une. L'attente de la peinture ne change pas
-l'ordre des gestes : un geste fait pendant elle part après l'opération qui
-l'attend — « Défaire » puis un ajout défont le geste d'avant, et l'ajout suit.
-Un geste ordinaire du plan ne la montre jamais, et l'écran au repos ne la porte
-pas.
+événement ou l'une de ses versions de secours (§ 8.8), charger une
+démonstration, défaire, refaire ou revenir à un instant, appliquer un import,
+finir une génération — trier et enregistrer ses propositions, après la
+recherche —, ouvrir l'aperçu avant impression, préparer, produire ou enregistrer
+ailleurs la planche de badges, écrire ailleurs : ces opérations calculent sur le
+fil de l'interface. Une pastille « Traitement en cours… », au bas de la fenêtre
+et centrée, se pose et se peint **avant** que le calcul ne parte, et ne se voit
+qu'au bout d'**une demi-seconde** : une opération brève passe sans rien montrer.
+Son apparition et la rotation de son signe sont jouées par le compositeur du
+navigateur pendant que le calcul tient le fil, sans minuterie ; sous la
+préférence de mouvement réduit, elle apparaît de même et son signe reste
+immobile. Le curseur dit l'attente tant qu'elle est là. Elle se retire à la fin
+de l'opération, aboutie ou refusée, et deux opérations qui se chevauchent n'en
+montrent qu'une. L'attente de la peinture ne change pas l'ordre des gestes : un
+geste fait pendant elle part après l'opération qui l'attend — « Défaire » puis
+un ajout défont le geste d'avant, et l'ajout suit. Un geste ordinaire du plan ne
+la montre jamais, et l'écran au repos ne la porte pas.
 
 **Les propositions d'une génération se calculent en parallèle, sur les cœurs du
 poste.** Chaque proposition ne dépend que de sa graine dérivée — et, pour une

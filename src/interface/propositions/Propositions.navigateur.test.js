@@ -22,6 +22,7 @@ import { configurationDe } from '../../application/configuration.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
+import { INACTIVITE_MS } from '../../application/seance.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { CRITERES, classer } from '../../moteur/classement.js';
@@ -858,6 +859,44 @@ describe('garder les meilleures', () => {
     expect(commande(refus, 'debloquer')).not.toBeNull();
     expect(fenetreOuverte(m)).toBeNull();
     expect(ids(m)).toEqual([3, 2, 1]);
+  });
+
+  test('un nombre tapé et non validé tient la séance en écriture ; Entrée le valide et rend le compte ; refusé, il reste en cours, et Échap le rend', async () => {
+    const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    // L'horloge passe le délai d'inactivité, puis la file se vide.
+    const laisserPasser = async () => {
+      m.horloge.avancer(INACTIVITE_MS + 1);
+      await m.seance.attendre();
+      flushSync();
+    };
+    const taper = (texte) => {
+      const entree = champGardees(m);
+      entree.focus();
+      entree.value = texte;
+      entree.dispatchEvent(new Event('input', { bubbles: true }));
+      flushSync();
+    };
+    expect(m.seance.gesteEnCours).toBe(false);
+    taper('2');
+    expect(m.seance.gesteEnCours).toBe(true);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('ecriture');
+    await touche('Enter');
+    flushSync();
+    expect(texteDe(garder(m))).toBe('Garder les 2 meilleures');
+    expect(m.seance.gesteEnCours).toBe(false);
+
+    taper('0');
+    await touche('Enter');
+    await attendre(() => expect(champGardees(m).getAttribute('aria-invalid')).toBe('true'));
+    expect(m.seance.gesteEnCours).toBe(true);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('ecriture');
+    await touche('Escape');
+    await attendre(() => expect(champGardees(m).value).toBe('2'));
+    expect(m.seance.gesteEnCours).toBe(false);
+    await laisserPasser();
+    expect(m.seance.etat().mode).toBe('lecture');
   });
 });
 
