@@ -1206,8 +1206,10 @@ jamais un texte. Il s’y pose le plus grand possible, proportions gardées ; le
 pied TechnoLibre lui cède d’abord de la place en rapetissant, puis s’en retire
 quand le logo ne tient qu’ainsi. Un logo dont la plus petite dimension
 n’atteindrait pas 8 mm ne se pose pas, et le badge sort tel qu’il serait sans
-logo ; un badge qui a perdu le nom de l’événement n’en porte pas non plus. Une
-image introuvable ou illisible n’arrête rien : son badge s’imprime sans logo.
+logo ; un badge qui a perdu le nom de l’événement ou l’organisation faute de
+place n’en porte pas non plus, mais la case « Nom de l’événement » décochée ne
+l’en prive pas. Une image introuvable ou illisible n’arrête rien : son badge
+s’imprime sans logo.
 « Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
 homonymes, les caractères que la police ne dessine pas, les personnes dont le
 logo est introuvable ou illisible, les badges sans place pour leur logo, les

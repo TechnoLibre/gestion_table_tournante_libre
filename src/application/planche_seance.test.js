@@ -1591,6 +1591,21 @@ describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.
     assert.ok(allegee.sansTechnolibre < toutes.sansTechnolibre, `${allegee.sansTechnolibre} sur ${toutes.sansTechnolibre}`);
   });
 
+  test('le nom de l’événement décoché, ses caractères absents se nomment encore : la feuille de contrôle, qui l’écrit, les donne par leur point de code', async () => {
+    const charge = chargeLucioles();
+    const nomEvenement = `${BASE} \u{674E}`;
+    charge.evenement.nom = nomEvenement;
+    const cle = cleEvenement(nomEvenement, nomEvenement);
+    const { fs, seance } = await monter(charge, { retirees: ['evenement'], cle });
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.absents], [null, ['\u{674E}']]);
+    const pdf = await lirePdf(fs.octets('documents', `${nomEvenement}/${(await seance.produirePlanche()).nom}`));
+    const controle = controleLu(pdf);
+    assert.ok(controle.includes(libelle('planche.controle.absents', { points: ['U+674E'] })), controle);
+    assert.ok(controle.includes(`${BASE} U+674E`) && !controle.includes('\u{674E}'), controle);
+    assert.ok(!lu(pdf, 1).some((texte) => texte.includes(BASE)), lu(pdf, 1).join(' | '));
+  });
+
   test('une case décochée garde au pied ce que les autres gardent : l’identifiant des homonymes, et l’horodatage inconnu d’un retenu qui n’en porte pas', async () => {
     const personnes = [
       personne(1, 'Iris', 'Ombrelle', { organisation: 'Club des Merles' }),
@@ -1633,6 +1648,16 @@ describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.
     const date = libelle('planche.pied.date', { date: '2031-05-17' });
     assert.equal(badges.filter((texte) => texte === date).length, charge.participants.length, badges.join(' | '));
     assert.ok(!badges.some((texte) => texte.includes(BASE)), badges.join(' | '));
+  });
+
+  test('un nom au-delà de trois lignes, le nom de l’événement décoché : le badge n’a rien perdu, et garde le pied TechnoLibre que le nom perdu faute de place lui retire', async () => {
+    const charge = chargeLucioles();
+    charge.participants[2].nom = 'Lacasse-Ombrelle '.repeat(8).trim();
+    const coche = await monter(charge, { piedTechnolibre: true });
+    assert.equal((await coche.seance.preparerPlanche()).sansTechnolibre, 1);
+    const decoche = await monter(charge, { piedTechnolibre: true, retirees: ['evenement'] });
+    const annonce = await decoche.seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.sansTechnolibre], [null, 0]);
   });
 });
 

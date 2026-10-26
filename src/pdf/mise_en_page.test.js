@@ -1707,6 +1707,34 @@ describe('mise en page : un badge dont les cases retirent des données (§ 11.4)
         assert.notEqual(page.technolibre.corps, null);
         assert.ok(PIED_REDUIT.every((ligne) => page.blocs.some(({ texte }) => texte === ligne)));
       });
+
+      test(`${modele}, ${jeu} : un nom au-delà de trois lignes sous un pied sans le nom de l’événement, décoché, garde le logo du participant et le pied TechnoLibre ; l’organisation perdue faute de place les retire, même le logo TechnoLibre seul`, () => {
+        const MOTS_LARGES = 'WWWWWWWWWW MMMMMMMMMM WWWWWWWWWW MMMMMMMMM WWWWWWW';
+        // Le logo TechnoLibre seul, plus bas que la ligne de l'organisation,
+        // peut tenir dans la place que son retrait libère.
+        const LOGO_SEUL = { ...TECHNOLIBRE, texte: '' };
+        const vus = { poses: 0, sansOrganisation: 0 };
+        for (const pied of [SANS_EVENEMENT, SANS_PIED]) {
+          for (let n = 1; n <= 80; n += 1) {
+            const champs = textes({ ...pied, nom: MOTS_LARGES, lignes: tours(n) });
+            const sans = mettreEnPage(champs, metriques, modele);
+            if ('refus' in sans) break;
+            const page = mettreEnPage(champs, metriques, modele, TECHNOLIBRE, CARRE);
+            const quoi = `${pied.pied.length} lignes de pied, ${n} tours`;
+            assert.ok(blocsNom(page).length > 3, quoi);
+            if (page.blocs.some(({ texte }) => texte === 'Club des Merles')) {
+              if (n === 1) assert.ok(page.logoParticipant.boite !== null && page.technolibre.corps !== null, quoi);
+              if (page.logoParticipant.boite !== null) vus.poses += 1;
+              continue;
+            }
+            vus.sansOrganisation += 1;
+            const retire = { technolibre: { corps: null, logo: null } };
+            assert.deepEqual(page, { ...sans, ...retire, logoParticipant: { boite: null } }, quoi);
+            assert.deepEqual(mettreEnPage(champs, metriques, modele, LOGO_SEUL), { ...sans, ...retire }, `${quoi}, logo seul`);
+          }
+        }
+        for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
+      });
     }
   }
 });

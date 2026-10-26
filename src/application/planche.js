@@ -310,10 +310,11 @@ function titresImprimes(charge, places, siegesAttribues) {
 
 // Les lignes de tour d'une personne : une par tour, ou une seule « Toute la
 // soirée » quand R ≥ 2, que table, libellé, siège et titre ne changent pas
-// et que la personne est présente à chaque tour. Une ligne d'absence garde
-// son tour : « pas de table » et « absente » ont la même table null, et la
-// réserve d'un tour ne se fond pas avec l'absence d'un autre. Une ligne ne
-// porte libelleTable que quand sa table a un libellé.
+// et que la personne est assise à une table à chaque tour. Une ligne de
+// réserve ou d'absence garde son tour : « pas de table » et « absente » ont
+// la même table null, la réserve n'est pas une table, et la réserve d'un
+// tour ne se fond ni avec celle d'un autre ni avec l'absence d'un autre.
+// Une ligne ne porte libelleTable que quand sa table a un libellé.
 function lignesDe(id, places, titres) {
   const lignes = places.get(id).map((place, indice) => ({
     tour: indice + 1,
@@ -327,6 +328,7 @@ function lignesDe(id, places, titres) {
   const constante = lignes.every(
     ({ table, libelleTable, siege, titre, absente }) =>
       !absente &&
+      table !== null &&
       table === premiere.table &&
       libelleTable === premiere.libelleTable &&
       siege === premiere.siege &&

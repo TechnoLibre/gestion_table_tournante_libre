@@ -740,6 +740,15 @@
 - L'import d'objectifs de table dont l'aperçu a été lu avant un changement du
   nombre de tours est refusé, et dit de relire le fichier, comme celui des
   participants : un objectif ne se pose plus à un tour que la soirée n'a pas.
+- Un badge dont la case « Nom de l'événement » est décochée garde le logo de
+  la personne et le pied TechnoLibre quand la place le permet, même sous un
+  nom de plus de trois lignes : seul ce qui part faute de place, le nom de
+  l'événement, puis l'organisation, les retire.
+- Une personne en réserve à tous les tours lit sur son badge une ligne « pas
+  de table » par tour, et non plus « Toute la soirée — pas de table ».
+- Le nom de l'événement décoché, un caractère de ce nom que la police ne
+  dessine pas s'annonce encore, et la feuille de contrôle, qui écrit ce nom,
+  le donne par son point de code.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

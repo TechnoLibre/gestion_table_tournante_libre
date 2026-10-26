@@ -243,7 +243,10 @@ function logoParticipantLu(logoParticipant) {
  * au plus. Au plancher, ou au-delà de trois lignes, où il se replie au
  * plancher sur autant de lignes qu'il lui faut, le badge perd le nom de
  * l'événement (le pied devient le pied réduit), puis, s'il ne tient
- * toujours pas, l'organisation. Le nom ne s'abrège jamais.
+ * toujours pas, l'organisation. Le nom ne s'abrège jamais. Un badge qui
+ * perd l'un ou l'autre est dépouillé ; un pied égal au pied réduit, celui
+ * dont une case retire déjà le nom de l'événement, ne dépouille pas le
+ * badge en passant au pied réduit.
  *
  * Organisation : une ligne, abrégée par « … » au plus long préfixe qui
  * tient. Pied : chaque ligne se replie comme le nom, rien ne s'y abrège.
@@ -274,9 +277,9 @@ function logoParticipantLu(logoParticipant) {
  * départ à son plancher (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT au registre), où le
  * bloc tient dans l'écart entre les tours et le pied du badge composé sans
  * lui ; technolibre rend alors ce corps et la boîte du logo. Sinon, ou quand le
- * badge a perdu le nom de l'événement, il se retire : technolibre rend {corps:
- * null, logo: null}, et la page est celle du badge sans lui. Non demandé,
- * technolibre rend null.
+ * badge est dépouillé, il se retire : technolibre rend {corps: null, logo:
+ * null}, et la page est celle du badge sans lui. Non demandé, technolibre
+ * rend null.
  *
  * Logo du participant : la boîte la plus grande, au rapport reçu, qui tient
  * dans la largeur du cadre et dans l'écart entre les tours et le pied, moins
@@ -285,9 +288,9 @@ function logoParticipantLu(logoParticipant) {
  * prend le plus grand palier que le logo laisse ; il se retire quand le logo
  * n'atteint qu'ainsi LOGO_PARTICIPANT_PLANCHER_MM sur sa plus petite cote.
  * logoParticipant rend {boite} ; boite null quand même sans pied TechnoLibre
- * le logo n'atteint pas son plancher, ou que le badge a perdu le nom de
- * l'événement : la page est alors celle du badge sans logo. Non demandé,
- * logoParticipant rend null, et la page est celle d'avant le logo.
+ * le logo n'atteint pas son plancher, ou que le badge est dépouillé : la
+ * page est alors celle du badge sans logo. Non demandé, logoParticipant rend
+ * null, et la page est celle d'avant le logo.
  *
  * @param {{nom: string, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
  *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
@@ -710,25 +713,25 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   // TechnoLibre demandé, telle quelle ; sinon, le bloc TechnoLibre au plus
   // grand corps qui tient dans l'écart libre, le pied remonté de sa hauteur.
   // La page reste telle quelle, le bloc retiré, quand même le plancher ne
-  // tient pas, ou que la page a perdu le nom de l'événement : il le suit dans
-  // l'ordre de sacrifice, et l'écart que le dépouillement libère ne lui
-  // revient pas.
-  function avecTechnolibre(page, { evenement }) {
+  // tient pas, ou que la page est dépouillée : il suit dans l'ordre de
+  // sacrifice le nom de l'événement et l'organisation, et l'écart que leur
+  // retrait libère ne lui revient pas.
+  function avecTechnolibre(page, { depouillee }) {
     const { blocs, colonnesTours, libre } = page;
     if (promotion === null) return { blocs, colonnesTours, technolibre: null };
     const retire = { blocs, colonnesTours, technolibre: { corps: null, logo: null } };
-    if (!evenement) return retire;
+    if (depouillee) return retire;
     const palier = paliersTechnolibre().find(({ hauteurBloc }) => hauteurBloc <= libre + TOLERANCE_MM);
     return palier === undefined ? retire : poserTechnolibre(page, palier);
   }
 
   // La page finale d'une page composée, le logo du participant demandé posé
-  // avant le pied TechnoLibre ; null quand il ne se pose pas : page sans le
-  // nom de l'événement, ou plus petite cote sous le plancher même sans pied
+  // avant le pied TechnoLibre ; null quand il ne se pose pas : page
+  // dépouillée, ou plus petite cote sous le plancher même sans pied
   // TechnoLibre. Le logo prend la zone entre les tours et le pied — remonté
   // du bloc TechnoLibre —, moins un dégagement de part et d'autre, centré.
-  function avecLogo(page, { evenement }) {
-    if (!evenement) return null;
+  function avecLogo(page, { depouillee }) {
+    if (depouillee) return null;
     const ecart = constante('LOGO_PARTICIPANT_ECART_MM');
     const plancher = constante('LOGO_PARTICIPANT_PLANCHER_MM');
     const { rapport } = logoDemande;
@@ -767,12 +770,12 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     return poser({ blocs, colonnesTours, technolibre: technolibreRetire }, taille, 0);
   }
 
-  // La page finale d'une page composée : sans logo du participant demandé,
-  // celle du pied TechnoLibre, logoParticipant null ; avec, celle où le logo
-  // se pose, ou celle du badge sans logo, boîte null.
-  function finir(page, niveau) {
-    if (logoDemande === null) return { ...avecTechnolibre(page, niveau), logoParticipant: null };
-    return avecLogo(page, niveau) ?? { ...avecTechnolibre(page, niveau), logoParticipant: { boite: null } };
+  // La page finale d'une page composée, dépouillée ou non : sans logo du
+  // participant demandé, celle du pied TechnoLibre, logoParticipant null ;
+  // avec, celle où le logo se pose, ou celle du badge sans logo, boîte null.
+  function finir(page, etat) {
+    if (logoDemande === null) return { ...avecTechnolibre(page, etat), logoParticipant: null };
+    return avecLogo(page, etat) ?? { ...avecTechnolibre(page, etat), logoParticipant: { boite: null } };
   }
 
   // Les essais, du badge complet au plus dépouillé : chaque forme du nom
@@ -785,9 +788,16 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     { forme: plancherNom, evenement: false, avecOrganisation: true },
     { forme: plancherNom, evenement: false, avecOrganisation: false },
   ];
+  // Un pied égal au pied réduit, celui d'un badge dont une case retire le
+  // nom de l'événement, ne perd rien en passant au pied réduit : le badge
+  // n'est dépouillé que de l'organisation. Sans organisation, l'essai qui la
+  // retire compose la même page que le précédent, et n'est donc jamais
+  // celui qui aboutit.
+  const sansNomEvenement =
+    textes.pied.length === textes.piedReduit.length && textes.pied.every((ligne, rang) => ligne === textes.piedReduit[rang]);
   for (const { forme, ...niveau } of essais) {
     const page = composer(forme, niveau);
-    if (page !== null) return finir(page, niveau);
+    if (page !== null) return finir(page, { depouillee: !niveau.avecOrganisation || (!niveau.evenement && !sansNomEvenement) });
   }
   if (nom.auDela) return refusNom;
   return { refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: textes.lignes.length } } };

@@ -128,6 +128,16 @@ describe('planche : ce que porte un badge (§ 11.4, § 11.5, § 4.1)', () => {
     assert.deepEqual(badgeDe(m, 5).textes.lignes, ['Tour 1 — pas de table', 'Tour 2 — table 7']);
   });
 
+  test('une personne en réserve à tous les tours garde une ligne « pas de table » par tour : la réserve n’est pas une table, ni « Toute la soirée »', () => {
+    const m = modele(aReserve({ plan: [{ sieges: [[1, 2], [3, 4]], reserve: [5] }, { sieges: [[1, 2], [3, 4]], reserve: [5] }] }));
+    assert.deepEqual(badgeDe(m, 5).textes.lignes, ['Tour 1 — pas de table', 'Tour 2 — pas de table']);
+    assert.deepEqual(badgeDe(m, 5).lignes, [
+      { tour: 1, table: null, siege: null, titre: null, absente: false },
+      { tour: 2, table: null, siege: null, titre: null, absente: false },
+    ]);
+    assert.deepEqual(badgeDe(m, 1).textes.lignes, ['Toute la soirée — table 7']);
+  });
+
   test('un itinéraire constant s’écrit en une ligne « Toute la soirée » à R ≥ 2 ; à R = 1, la ligne du tour', () => {
     const quatre = modele(deuxATable7(4));
     assert.deepEqual(badgeDe(quatre, 1).textes.lignes, ['Toute la soirée — table 7']);

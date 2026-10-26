@@ -5631,11 +5631,11 @@ laisse entre les tours et le pied, moins un dégagement au-dessus et
 au-dessous : il ne réduit ni ne retire aucun texte. Il s'y pose le plus grand
 possible, proportions gardées, sans plafond, centré, et ne se pose pas sur un
 badge où sa plus petite cote n'atteindrait pas son plancher, ni sur un badge
-qui a perdu le nom de l'événement (§ 11.5). Son image se lit dans le dossier
-de l'événement, au chemin que porte la fiche, à la première préparation qui
-la demande, puis se garde pour cet événement ; un échec ne se garde pas. La
-planche l'embarque une fois par fichier, quel que soit le nombre de badges
-qui la portent.
+qui a perdu le nom de l'événement ou l'organisation (§ 11.5). Son image se
+lit dans le dossier de l'événement, au chemin que porte la fiche, à la
+première préparation qui la demande, puis se garde pour cet événement ; un
+échec ne se garde pas. La planche l'embarque une fois par fichier, quel que
+soit le nombre de badges qui la portent.
 
 **Le pied TechnoLibre passe après tout le reste.** Il se compose d'un texte,
 centré, replié comme le pied, puis du logo, centré, posé sur le bord bas du
@@ -5787,8 +5787,10 @@ un débordement.
   machine (§ 8.5). La police le dessinerait comme une case vide, et l'opérateur ne le
   verrait qu'au cou de l'invité. Le logiciel nomme ces caractères dans l'annonce,
   **avant de produire** ; la feuille de contrôle les liste par leur point de code
-  — « U+674E » — et n'en écrit jamais un tel quel. La planche se produit : le
-  remède est dans la liste des participants, et l'opérateur décide.
+  — « U+674E » — et n'en écrit jamais un tel quel. Ceux du nom de l'événement,
+  que la feuille de contrôle écrit toujours, se nomment de même, même quand
+  sa case le retire des badges (§ 11.4). La planche se produit : le remède
+  est dans la liste des participants, et l'opérateur décide.
 - **Un participant sans organisation.** La ligne **n'existe pas**. Ni espace
   réservé, ni tiret : le « — » signale une mesure vide dans la page de qualité
   (§ 5.4), et sur un carton il se lit comme une donnée manquante dont la personne
@@ -5797,7 +5799,9 @@ un débordement.
   organisation, ou une ligne de pied, que sa case retire (§ 11.4) s'en va de
   même, et sa place revient au reste.
 - **Une personne en réserve à un tour.** La ligne porte « pas de table » en toutes
-  lettres. Une ligne blanche se lit comme un défaut d'impression.
+  lettres. Une ligne blanche se lit comme un défaut d'impression. En réserve à
+  tous les tours, elle garde une ligne par tour : la réserve n'est pas une
+  table, et son badge n'a jamais la ligne « Toute la soirée ».
 - **Une personne absente à un tour.** La ligne de ce tour porte « absente » en
   toutes lettres — « Tour 3 — absente » —, ni table, ni siège, ni titre, et
   chaque tour garde sa ligne : une personne absente à un tour n'a jamais la
@@ -5814,22 +5818,21 @@ un débordement.
   corps de haut — 4,2 mm au départ, 2,8 mm au plancher —, cinq fois plus en
   largeur. Ces valeurs sont communes aux deux modèles ; le corps de départ et
   le plancher sont au registre des constantes (§ 14.1), défauts de travail
-  jusqu'à leur relevé sur une impression réelle. Il prend le plus grand
-  palier dont le texte et le logo tiennent dans l'écart libre ; quand même le
-  plancher ne tient pas, ou que le badge a perdu le nom de l'événement, qui
-  le précède dans l'ordre de sacrifice, il se retire de ce badge, qui sort
-  tel qu'il serait sans lui, et l'annonce compte les badges concernés —
-  « Pied TechnoLibre : retiré de 3 badges, faute de place sous leurs
-  tours. ». Ce n'est jamais un refus : la planche se produit. Mesuré sur la
-  police embarquée, sous un nom d'une ligne et son organisation, avec des
-  lignes de tour sans siège ni titre, il tient au corps de départ jusqu'à
-  cinq tours sur la carte Avery 5392 et treize sur l'A6. Un texte que la
-  machine garde à la place de la phrase d'origine (§ 8.5) suit la même
-  règle : plus long, il rapetisse plus tôt et se retire plus tôt ; vide, le
-  bloc n'est que le logo. Sous un logo de
-  participant, il se compte d'abord à son plancher, puis reprend le plus grand
-  palier que le logo laisse, et se retire quand le logo ne trouve qu'ainsi sa
-  place : le retrait se compte de même.
+  jusqu'à leur relevé sur une impression réelle. Il prend le plus grand palier
+  dont le texte et le logo tiennent dans l'écart libre ; quand même le
+  plancher ne tient pas, ou que le badge a perdu le nom de l'événement ou
+  l'organisation, qui le précèdent dans l'ordre de sacrifice, il se retire de
+  ce badge, qui sort tel qu'il serait sans lui, et l'annonce compte les badges
+  concernés — « Pied TechnoLibre : retiré de 3 badges, faute de place sous
+  leurs tours. ». Ce n'est jamais un refus : la planche se produit. Mesuré sur
+  la police embarquée, sous un nom d'une ligne et son organisation, avec des
+  lignes de tour sans siège ni titre, il tient au corps de départ jusqu'à cinq
+  tours sur la carte Avery 5392 et treize sur l'A6. Un texte que la machine
+  garde à la place de la phrase d'origine (§ 8.5) suit la même règle : plus
+  long, il rapetisse plus tôt et se retire plus tôt ; vide, le bloc n'est que
+  le logo. Sous un logo de participant, il se compte d'abord à son plancher,
+  puis reprend le plus grand palier que le logo laisse, et se retire quand le
+  logo ne trouve qu'ainsi sa place : le retrait se compte de même.
 - **Un badge sans place pour le logo du participant.** Le logo prend l'écart
   entre les tours et le pied, moins 1,5 mm au-dessus et au-dessous ; sa plus
   petite cote dessinée ne descend pas sous 8 mm. Ces deux valeurs, communes
@@ -5837,12 +5840,12 @@ un débordement.
   (`LOGO_PARTICIPANT_ECART_MM`, `LOGO_PARTICIPANT_PLANCHER_MM`), défauts de
   travail jusqu'à leur relevé sur une impression réelle. Quand même sans le
   pied TechnoLibre il n'atteint pas son plancher, ou que le badge a perdu le
-  nom de l'événement, il ne se pose pas sur ce badge, qui sort tel qu'il
-  serait sans logo, et l'annonce compte les badges concernés — « Logo du
-  participant : retiré de 3 badges, faute de place sous leurs tours. ». Un
-  logo très large bute sur la largeur du cadre, un logo très haut sur la
-  hauteur de l'écart ; l'un et l'autre peuvent ainsi manquer leur plancher
-  sur tous les badges. Ce n'est jamais un refus.
+  nom de l'événement ou l'organisation, il ne se pose pas sur ce badge, qui
+  sort tel qu'il serait sans logo, et l'annonce compte les badges concernés —
+  « Logo du participant : retiré de 3 badges, faute de place sous leurs
+  tours. ». Un logo très large bute sur la largeur du cadre, un logo très haut
+  sur la hauteur de l'écart ; l'un et l'autre peuvent ainsi manquer leur
+  plancher sur tous les badges. Ce n'est jamais un refus.
 - **Un logo introuvable ou illisible.** Le fichier qu'une fiche désigne peut
   manquer au dossier de l'événement — un événement importé d'un seul fichier
   d'état —, ne pas se lire, ou ne pas être un PNG. L'annonce nomme les

@@ -570,6 +570,16 @@ describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
     });
   });
 
+  test('le nom de l’événement, que la feuille de contrôle écrit, nomme ses absents après ceux des badges, même quand aucun badge ne le porte', async () => {
+    const evenement = { nom: 'Souper des Hérons \u{4E00}', date: EVENEMENT.date };
+    const porte = modele([badge(1, 'Ondine 李', { evenement })], { evenement });
+    assert.deepEqual((await analyserPlanche({ modele: porte, polices })).absents, ['李', '\u{4E00}']);
+    // Les badges du modèle portent le pied d'un autre nom, comme sous la case
+    // décochée : l'événement du modèle est le seul à porter le caractère.
+    const retire = modele([badge(1, 'Ondine 李')], { evenement });
+    assert.deepEqual((await analyserPlanche({ modele: retire, polices })).absents, ['李', '\u{4E00}']);
+  });
+
   test('un badge à 100 tours : refus PLANCHE_TROP_DE_TOURS, et son rang dans le modèle', async () => {
     const m = modele([badge(1, 'Iris Ombrelle'), badge(2, 'Théo Pervenche', { tours: 100 }), badge(3, 'Ondine Lacasse', { tours: 100 })]);
     assert.deepEqual(await analyserPlanche({ modele: m, polices }), {

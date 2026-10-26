@@ -276,13 +276,15 @@ const textesDuBadge = ({ textes }, promotion) => [
  *   indice dans modele.badges ; src/pdf ne connaît pas la personne, et
  *   l'appelant complète les détails. absents : les caractères sans glyphe de
  *   tous les textes des badges, celui du pied TechnoLibre demandé compris,
- *   une fois chacun, dans l'ordre de première rencontre, chaque badge lu
- *   avant le pied TechnoLibre qu'il porte. sansTechnolibre : le nombre de
- *   badges mis en page d'où le pied TechnoLibre demandé se retire, faute de
- *   place ; 0 sans pied TechnoLibre. logosParticipants : parmi les badges mis
- *   en page dont la carte porte le logo, ceux où il se pose et ceux où il ne
- *   trouve pas de place ; un badge dont la carte ne porte pas le chemin n'est
- *   compté ni l'un ni l'autre.
+ *   puis du nom de l'événement, que la feuille de contrôle écrit même quand
+ *   aucun badge ne le porte ; une fois chacun, dans l'ordre de première
+ *   rencontre, chaque badge lu avant le pied TechnoLibre qu'il porte, le nom
+ *   de l'événement en dernier. sansTechnolibre : le nombre de badges mis en
+ *   page d'où le pied TechnoLibre demandé se retire, faute de place ; 0 sans
+ *   pied TechnoLibre. logosParticipants : parmi les badges mis en page dont
+ *   la carte porte le logo, ceux où il se pose et ceux où il ne trouve pas
+ *   de place ; un badge dont la carte ne porte pas le chemin n'est compté ni
+ *   l'un ni l'autre.
  * @throws {TypeError} un modèle sans badges, des polices qui ne sont pas des
  *         octets, un modèle de badge inconnu, un pied TechnoLibre ou une
  *         carte de logos mal formés
@@ -297,6 +299,14 @@ export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', tec
   const comptesLogos = { poses: 0, sansPlace: 0 };
   const absents = [];
   const vus = new Set();
+  // Ajoute aux absents ceux des textes donnés, une fois chacun.
+  const nommer = (textes) => {
+    for (const caractere of metriques.absents(textes.join(''))) {
+      if (vus.has(caractere)) continue;
+      vus.add(caractere);
+      absents.push(caractere);
+    }
+  };
   modele.badges.forEach((badge, rang) => {
     if (refus === null) {
       const page = mettreEnPage(badge.textes, metriques, modeleBadge, promotion?.demande ?? null, logoDemande(badge, logos));
@@ -306,12 +316,9 @@ export async function analyserPlanche({ modele, polices, modeleBadge = 'a6', tec
         if (page.logoParticipant !== null) comptesLogos[page.logoParticipant.boite === null ? 'sansPlace' : 'poses'] += 1;
       }
     }
-    for (const caractere of metriques.absents(textesDuBadge(badge, promotion).join(''))) {
-      if (vus.has(caractere)) continue;
-      vus.add(caractere);
-      absents.push(caractere);
-    }
+    nommer(textesDuBadge(badge, promotion));
   });
+  nommer([modele.evenement.nom]);
   return { refus, absents, sansTechnolibre, logosParticipants: comptesLogos };
 }
 
