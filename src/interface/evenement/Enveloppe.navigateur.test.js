@@ -3,7 +3,7 @@
 
 // L'enveloppe de l'événement ouvert dans un vrai moteur de rendu (§ 8.4,
 // § 9, § 12.7, § 14.5) : la bande de mode sous le bandeau, la carte
-// d'en-tête — le nom, le résumé chiffré, « Imprimer… » —, « Modifier » mis
+// d'en-tête — le nom, le résumé chiffré, sans « Imprimer… » —, « Modifier » mis
 // en valeur à sa place fixe, la suite des états du plan, la navigation
 // groupée par phase, les avertissements en messages d'avis dont l'action
 // n'est jamais rognée, le support rompu en message de refus. Chaque épreuve
@@ -215,7 +215,7 @@ describe('la bande de mode et la pleine fenêtre (§ 8.4)', () => {
 });
 
 describe('la carte d’en-tête', () => {
-  test('la barre porte, après la place fixe, la suite des états puis « Imprimer… », principale, calée à droite ; la tête, le nom puis la date, les participants, les tables et leurs sièges, les tours ; le plein écran efface les uns et les autres', async () => {
+  test('la barre porte, après la place fixe, la suite des états, et aucune « Imprimer… » : on imprime depuis la section « Impression » ; la tête, le nom puis la date, les participants, les tables et leurs sièges, les tours ; le plein écran efface les uns et les autres', async () => {
     const m = await neuf({ date: '2031-05-17', siegesParDefaut: 4, tours: 3 });
     await m.seance.passerEnEcriture();
     for (const nom of NOMS) await m.seance.executer('ajouterParticipant', { champs: { nom } });
@@ -234,21 +234,14 @@ describe('la carte d’en-tête', () => {
     expect(lus).toEqual(attendus);
     // Le nom et son résumé tiennent sur une ligne.
     expect(boite(entete.querySelector('h1 ~ *')).top).toBeLessThan(boite(titre).bottom);
-    const imprimer = dans(m, '[data-ecran="evenement"] [data-commande="apercu"]');
-    expect(imprimer.textContent).toBe(t('impression.commande.ouvrir'));
-    expect(entete.contains(imprimer)).toBe(false);
+    expect(dans(m, '[data-commande="apercu"]'), 'plus de « Imprimer… »').toBeNull();
     const place = boite(fixe(m, 'lecture'));
-    const [i, e, c] = [boite(imprimer), boite(etats(m)), boite(surface(m))];
-    expect(i.top).toBe(place.top);
-    expect(i.height).toBeGreaterThanOrEqual(44);
-    expect(c.right - i.right).toBeLessThanOrEqual(24);
+    const e = boite(etats(m));
     expect(e.left).toBeGreaterThan(place.right);
     expect(e.top).toBeGreaterThanOrEqual(place.top);
     expect(e.bottom).toBeLessThanOrEqual(place.bottom);
-    expect(i.left).toBeGreaterThan(e.right);
     for (const theme of THEMES) {
       await sousTheme(theme, () => {
-        expect(fond(imprimer), theme).toEqual(jeton('--couleur-action-fond'));
         expect(fondPeintSous(titre), theme).toEqual([jeton('--couleur-carte-fond')]);
         expect(fondPeintSous(etats(m)), theme).toEqual([jeton('--couleur-carte-fond-sourd')]);
         exigerTextesLisibles(entete, theme);
@@ -257,7 +250,6 @@ describe('la carte d’en-tête', () => {
     m.ui.allerA('plan');
     m.ui.basculerPleinEcran();
     flushSync();
-    expect(dans(m, '[data-commande="apercu"]')).toBeNull();
     expect(etats(m)).toBeNull();
     expect(dans(m, '[data-ecran="evenement"] header')).toBeNull();
   });

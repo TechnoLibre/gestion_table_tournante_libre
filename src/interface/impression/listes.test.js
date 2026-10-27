@@ -22,7 +22,11 @@ import { creerTraduction } from '../../application/traduction.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { feuilleDe } from './modele.js';
 import {
+  ECHELLE_TEXTE_MAX,
+  PAS_ECHELLE,
   blocsAccueil,
+  echelleAjustee,
+  echellesParTable,
   etatsDesTours,
   feuilleDuTour,
   feuillesTables,
@@ -30,6 +34,8 @@ import {
   largeursColonnes,
   libellePlace,
   lignesAccueil,
+  partsDesCellules,
+  plafondEchelle,
   resserrerGroupes,
   textesCellule,
   textesLigneAccueil,
@@ -216,10 +222,16 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
 // Trois personnes à la table 7, sièges attribués, deux tours, une chaise
 // vide au siège 2 du tour 1 ; Iris Ombrelle réservée au siège 1 pour la
 // soirée, qui porte le titre « animateur » ; le siège 2 porte « hôte », que
-// rien ne pourvoit. La table 3, vide, vient avant elle par son numéro.
+// rien ne pourvoit. Théo Pervenche est de la Coopérative des Saules, Ondine
+// Lacasse d'une organisation faite de blancs. La table 3, vide, vient avant
+// elle par son numéro.
 function titree() {
   return soiree({
-    personnes: [personne(1, 'Iris', 'Ombrelle'), personne(2, 'Théo', 'Pervenche'), personne(3, 'Ondine', 'Lacasse')],
+    personnes: [
+      personne(1, 'Iris', 'Ombrelle'),
+      personne(2, 'Théo', 'Pervenche', { organisation: 'Coopérative des Saules' }),
+      personne(3, 'Ondine', 'Lacasse', { organisation: '  ' }),
+    ],
     tables: [table(1, 7, 3), table(2, 3, 2)],
     plan: [
       { sieges: [[1, null, 2], []], reserve: [3] },
@@ -234,63 +246,92 @@ function titree() {
   });
 }
 
-const vide = (tour) => ({ tour, occupant: null, nom: null, titre: null });
+const vide = (tour) => ({ tour, occupant: null, nom: null, organisation: null, titre: null });
+
+// Les personnes de titree, la table 3 occupée au seul tour 2 par Ondine
+// Lacasse, qui attend à la réserve au tour 1.
+function titreeDeuxTables() {
+  return soiree({
+    personnes: titree().participants,
+    tables: [table(1, 7, 3), table(2, 3, 2)],
+    plan: [
+      { sieges: [[1, null, 2], []], reserve: [3] },
+      { sieges: [[1, null, 2], [3]] },
+    ],
+    siegesAttribues: true,
+  });
+}
 
 describe('feuillesTables : la feuille par table (§ 11.7, Q6 c)', () => {
-  test('par défaut une feuille par table, par numéro croissant, les tours en colonnes ; chaque siège listé, une place vide écrite comme telle', () => {
+  test('par défaut une feuille par table occupée, par numéro croissant, les tours en colonnes ; chaque siège listé, une place vide écrite comme telle', () => {
     const charge = titree();
     const feuilles = feuillesTables(charge, etats(charge));
-    assert.deepEqual(feuilles.map(({ table: id, numero, tours }) => ({ id, numero, tours })), [
-      { id: 2, numero: 3, tours: [1, 2] },
-      { id: 1, numero: 7, tours: [1, 2] },
-    ]);
-    assert.deepEqual(feuilles[0].lignes, [
-      { place: 1, cellules: [vide(1), vide(2)] },
-      { place: 2, cellules: [vide(1), vide(2)] },
-    ]);
-    const [siege1, siege2, siege3] = feuilles[1].lignes;
+    assert.deepEqual(feuilles.map(({ table: id, numero, tours }) => ({ id, numero, tours })), [{ id: 1, numero: 7, tours: [1, 2] }]);
+    const [siege1, siege2, siege3] = feuilles[0].lignes;
     assert.deepEqual(siege1, {
       place: 1,
       cellules: [
-        { tour: 1, occupant: 1, nom: 'Iris Ombrelle', titre: { libelle: 'animateur', pourvu: true } },
-        { tour: 2, occupant: 1, nom: 'Iris Ombrelle', titre: { libelle: 'animateur', pourvu: true } },
+        { tour: 1, occupant: 1, nom: 'Iris Ombrelle', organisation: null, titre: { libelle: 'animateur', pourvu: true } },
+        { tour: 2, occupant: 1, nom: 'Iris Ombrelle', organisation: null, titre: { libelle: 'animateur', pourvu: true } },
       ],
     });
     assert.deepEqual(siege2, {
       place: 2,
       cellules: [
-        { tour: 1, occupant: null, nom: null, titre: { libelle: 'hôte', pourvu: false } },
-        { tour: 2, occupant: 3, nom: 'Ondine Lacasse', titre: { libelle: 'hôte', pourvu: false } },
+        { tour: 1, occupant: null, nom: null, organisation: null, titre: { libelle: 'hôte', pourvu: false } },
+        { tour: 2, occupant: 3, nom: 'Ondine Lacasse', organisation: null, titre: { libelle: 'hôte', pourvu: false } },
       ],
     });
     assert.deepEqual(siege3.cellules.map(({ nom }) => nom), ['Théo Pervenche', 'Théo Pervenche']);
   });
 
-  test('sous parTour, une feuille par table et par tour, la table d’abord ; chacune une seule colonne', () => {
+  test('chaque occupant porte son organisation telle que la charge l’écrit ; null sans organisation, pour une organisation de blancs et pour une place vide', () => {
     const charge = titree();
+    const [table7] = feuillesTables(charge, etats(charge));
+    assert.deepEqual(
+      table7.lignes.map(({ cellules }) => cellules.map(({ organisation }) => organisation)),
+      [
+        [null, null],
+        [null, null],
+        ['Coopérative des Saules', 'Coopérative des Saules'],
+      ],
+    );
+  });
+
+  test('une table où personne n’est assis à aucun tour n’a pas de feuille, même quand ses places portent un titre ; une table occupée à un seul tour en a une, ses deux tours en colonnes', () => {
+    const charge = titreeDeuxTables();
+    charge.titres = [{ table: 2, siege: 1, libelle: 'hôte' }];
+    assert.deepEqual(feuillesTables(charge, etats(charge)).map(({ table: id, tours }) => [id, tours]), [
+      [2, [1, 2]],
+      [1, [1, 2]],
+    ]);
+    const vides = soiree({ personnes: charge.participants, tables: [table(1, 7, 3), table(2, 3, 2)], plan: [{ sieges: [[1, 2, 3], []] }] });
+    assert.deepEqual(feuillesTables(vides, etats(vides)).map(({ table: id }) => id), [1]);
+  });
+
+  test('sous parTour, une feuille par table et par tour où quelqu’un y est assis, la table d’abord ; chacune une seule colonne', () => {
+    const charge = titreeDeuxTables();
     const feuilles = feuillesTables(charge, etats(charge), { parTour: true });
     assert.deepEqual(feuilles.map(({ table: id, tours }) => [id, tours]), [
-      [2, [1]],
       [2, [2]],
       [1, [1]],
       [1, [2]],
     ]);
-    assert.deepEqual(feuilles[3].lignes.map(({ place, cellules }) => [place, cellules.map(({ occupant }) => occupant)]), [
+    assert.deepEqual(feuilles[2].lignes.map(({ place, cellules }) => [place, cellules.map(({ occupant }) => occupant)]), [
       [1, [1]],
-      [2, [3]],
+      [2, [null]],
       [3, [2]],
     ]);
   });
 
   test('chaque feuille porte le libellé de sa table, null quand elle n’en a pas, sous parTour comme en colonnes', () => {
-    const charge = titree();
+    const charge = titreeDeuxTables();
     charge.tables.find(({ id }) => id === 1).libelle = 'Coin des invités';
     assert.deepEqual(feuillesTables(charge, etats(charge)).map(({ table, libelle }) => [table, libelle]), [
       [2, null],
       [1, 'Coin des invités'],
     ]);
     assert.deepEqual(feuillesTables(charge, etats(charge), { parTour: true }).map(({ table, libelle }) => [table, libelle]), [
-      [2, null],
       [2, null],
       [1, 'Coin des invités'],
       [1, 'Coin des invités'],
@@ -300,7 +341,7 @@ describe('feuillesTables : la feuille par table (§ 11.7, Q6 c)', () => {
   test('un exclu n’occupe aucune place : la sienne s’écrit vide', () => {
     const charge = titree();
     charge.participants[1].exclu = true;
-    const [, table7] = feuillesTables(charge, etats(charge));
+    const [table7] = feuillesTables(charge, etats(charge));
     assert.deepEqual(table7.lignes[2].cellules, [vide(1), vide(2)]);
   });
 
@@ -573,18 +614,151 @@ describe('les groupes de tours de la feuille par table', () => {
 });
 
 describe('textesCellule : les textes d’une cellule de la feuille par table, dans l’ordre où elle les pose', () => {
-  test('le nom ou la place vide, puis le libellé du titre, puis « non pourvu » ; le texte vide pour ce qui manque', () => {
-    assert.deepEqual(textesCellule({ tour: 1, occupant: 1, nom: 'Iris Ombrelle', titre: { libelle: 'animateur', pourvu: true } }, t), [
+  test('le nom ou la place vide, le séparateur et l’organisation, puis le libellé du titre, puis « non pourvu » ; le texte vide pour ce qui manque', () => {
+    const titre = { libelle: 'animateur', pourvu: true };
+    assert.deepEqual(textesCellule({ tour: 1, occupant: 1, nom: 'Iris Ombrelle', organisation: null, titre }, t), [
       'Iris Ombrelle',
+      '',
+      '',
       'animateur',
       '',
     ]);
-    assert.deepEqual(textesCellule({ tour: 1, occupant: null, nom: null, titre: { libelle: 'hôte', pourvu: false } }, t), [
+    assert.deepEqual(textesCellule({ tour: 1, occupant: 1, nom: 'Iris Ombrelle', organisation: 'Club des Merles', titre }, t), [
+      'Iris Ombrelle',
+      t('feuilles.tables.avantOrganisation'),
+      'Club des Merles',
+      'animateur',
+      '',
+    ]);
+    assert.deepEqual(textesCellule({ tour: 1, occupant: null, nom: null, organisation: null, titre: { libelle: 'hôte', pourvu: false } }, t), [
       t('feuilles.tables.vide'),
+      '',
+      '',
       'hôte',
       t('feuilles.tables.titreNonPourvu'),
     ]);
-    assert.deepEqual(textesCellule({ tour: 2, occupant: 3, nom: 'Théo Pervenche', titre: null }, t), ['Théo Pervenche', '', '']);
+    assert.deepEqual(textesCellule({ tour: 2, occupant: 3, nom: 'Théo Pervenche', organisation: null, titre: null }, t), ['Théo Pervenche', '', '', '', '']);
+  });
+
+  test('le séparateur s’ouvre et se ferme d’un blanc, et ne se réduit pas à des blancs : il a son nœud de texte à lui', () => {
+    const separateur = t('feuilles.tables.avantOrganisation');
+    assert.match(separateur, /^\s\S+\s$/u);
+  });
+});
+
+describe('partsDesCellules : les textes que chaque cellule d’une ligne pose sur une page', () => {
+  const cellules = [
+    { tour: 1, occupant: 1, nom: 'Iris Ombrelle', organisation: 'Club des Merles', titre: null },
+    { tour: 2, occupant: null, nom: null, organisation: null, titre: { libelle: 'hôte', pourvu: false } },
+  ];
+
+  test('sans morceau, les textes entiers de chaque cellule (textesCellule)', () => {
+    assert.deepEqual(partsDesCellules(cellules, t, null), cellules.map((cellule) => textesCellule(cellule, t)));
+  });
+
+  test('un morceau garde de chaque texte ce qui tombe dans ses bornes, les textes mis bout à bout dans l’ordre du document', () => {
+    const bout = textesCellule(cellules[0], t).join('');
+    const parts = partsDesCellules(cellules, t, { debut: 5, fin: bout.length + 5 });
+    assert.deepEqual(parts[0], ['Ombrelle', t('feuilles.tables.avantOrganisation'), 'Club des Merles', '', '']);
+    assert.deepEqual(parts[1], [t('feuilles.tables.vide').slice(0, 5), '', '', '', '']);
+  });
+});
+
+describe('plafondEchelle : l’échelle au-delà de laquelle un mot passerait la largeur de sa colonne', () => {
+  test('la plus petite des deux marges : les colonnes de tour sur la part du plus long mot, la colonne de la place sur la part de sa tête', () => {
+    // 88 % pour deux tours, 44 % chacun ; un mot de 22 % double au plus.
+    assert.equal(plafondEchelle(2, 22, 4), 2);
+    // La place, 12 %, sur une tête de 10 % : 1,2.
+    assert.equal(plafondEchelle(2, 22, 10), 1.2);
+    // Un tour de plus : 88 / 3 / 22 = 4 / 3.
+    assert.ok(Math.abs(plafondEchelle(3, 22, 4) - 4 / 3) < 1e-12);
+  });
+
+  test('décroît quand un mot s’élargit ou qu’un tour s’ajoute', () => {
+    let avant = Infinity;
+    for (const part of [5, 10, 20, 40, 80]) {
+      const plafond = plafondEchelle(2, part, 1);
+      assert.ok(plafond < avant, String(part));
+      avant = plafond;
+    }
+    avant = Infinity;
+    for (let tours = 1; tours <= 6; tours += 1) {
+      const plafond = plafondEchelle(tours, 10, 1);
+      assert.ok(plafond < avant, String(tours));
+      avant = plafond;
+    }
+  });
+
+  test('une part ou un nombre de tours hors du domaine lève RangeError', () => {
+    for (const [tours, partTour, partPlace] of [
+      [0, 10, 1],
+      [1.5, 10, 1],
+      [2, 0, 1],
+      [2, Infinity, 1],
+      [2, 10, -1],
+      [2, 10, Number.NaN],
+    ]) {
+      assert.throws(() => plafondEchelle(tours, partTour, partPlace), RangeError, JSON.stringify([tours, partTour, partPlace]));
+    }
+  });
+});
+
+describe('echelleAjustee : la taille du texte d’une feuille par table, bornée', () => {
+  // Une page de hauteur utile donnée, où la feuille mesure hauteur × échelle.
+  const tientDans = (utile, hauteur) => (echelle) => hauteur * echelle <= utile;
+
+  test('la plus grande échelle du pas, de 1 à ECHELLE_TEXTE_MAX, qui tient ; 1 quand rien au-delà ne tient', () => {
+    assert.equal(ECHELLE_TEXTE_MAX, 1.5);
+    assert.equal(echelleAjustee(Infinity, tientDans(1000, 100)), ECHELLE_TEXTE_MAX, 'une feuille courte s’arrête au plafond');
+    assert.equal(echelleAjustee(Infinity, tientDans(125, 100)), 1.25);
+    assert.equal(echelleAjustee(Infinity, tientDans(100, 100)), 1, 'au plancher');
+    assert.equal(echelleAjustee(Infinity, () => false), 1, 'rien ne tient : le plancher, jamais moins');
+  });
+
+  test('jamais au-delà du plafond reçu, même quand la page laisse de la place ; un plafond sous 1 laisse le plancher', () => {
+    assert.equal(echelleAjustee(1.2, tientDans(1000, 100)), 1.1875);
+    assert.equal(echelleAjustee(1.25, tientDans(1000, 100)), 1.25);
+    assert.equal(echelleAjustee(0.5, tientDans(1000, 100)), 1);
+  });
+
+  test('l’échelle croît avec la hauteur utile, et ne la passe jamais', () => {
+    let avant = 0;
+    for (let utile = 90; utile <= 200; utile += 3) {
+      const echelle = echelleAjustee(Infinity, tientDans(utile, 100));
+      assert.ok(echelle >= avant, String(utile));
+      assert.ok(echelle >= 1 && echelle <= ECHELLE_TEXTE_MAX, String(utile));
+      if (echelle > 1) assert.ok(100 * echelle <= utile, String(utile));
+      assert.ok(echelle + PAS_ECHELLE > Math.min(ECHELLE_TEXTE_MAX, utile / 100) - 1e-12, `la plus grande, ${utile}`);
+      avant = echelle;
+    }
+  });
+
+  test('tient n’est jamais appelée au plancher ni hors des bornes', () => {
+    const essayees = [];
+    echelleAjustee(1.3, (echelle) => {
+      essayees.push(echelle);
+      return echelle < 1.2;
+    });
+    assert.ok(essayees.length > 0);
+    assert.ok(essayees.every((echelle) => echelle > 1 && echelle <= 1.3), JSON.stringify(essayees));
+  });
+
+  test('un plafond qui n’est pas un nombre, ou un prédicat qui n’est pas une fonction, lève', () => {
+    assert.throws(() => echelleAjustee(Number.NaN, () => true), RangeError);
+    assert.throws(() => echelleAjustee('2', () => true), RangeError);
+    assert.throws(() => echelleAjustee(2, null), TypeError);
+  });
+});
+
+describe('echellesParTable : une échelle par table', () => {
+  test('chaque groupe reçoit la plus petite échelle des groupes de sa table, groupes d’autres feuilles compris', () => {
+    const groupes = [{ table: 4 }, { table: 4 }, { table: 9 }, { table: 4 }];
+    assert.deepEqual(echellesParTable(groupes, [1.5, 1.25, 1.375, 1.5]), [1.25, 1.25, 1.375, 1.25]);
+    assert.deepEqual(echellesParTable([], []), []);
+  });
+
+  test('une échelle par groupe, ou RangeError', () => {
+    assert.throws(() => echellesParTable([{ table: 1 }], []), RangeError);
   });
 });
 

@@ -378,19 +378,19 @@ describe('« Paramètres » dans l’application (§ 8.4, § 8.5, § 18.6, § 19
   });
 
   // Le relevé du document de chaque vue de l'aperçu, la racine à la taille
-  // donnée, et la taille calculée du titre de la barre de l'aperçu.
+  // donnée, et la taille calculée d'une commande de la barre de l'aperçu.
   async function documentsImprimes(taille) {
     contexte = creerContexte();
     const m = await ouvrirApercu(contexte, chargePrincipale(), { papier: null, section: 'participants', options: { fichiers: [reglagesA(taille)] } });
     await attendre(`la racine à ${taille} %`, () => Math.abs(racinePx() - (BASE_PX * taille) / 100) < 0.01);
     const vues = {};
     for (const vue of ['plan', 'accueil', 'tables']) {
-      await cliquer(m, `[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`);
+      await cliquer(m, `[data-apercu-impression] [data-commande="vue"][data-cible="${vue}"]`);
       const imprime = await attendre(`la vue ${vue}`, () => m.racine.querySelector(`[data-impression][data-vue-impression="${vue}"]`));
       await attendre(`les feuilles de ${vue}`, () => imprime.querySelector('[data-feuille]'));
       vues[vue] = { feuilles: imprime.querySelectorAll('[data-feuille]').length, releve: releve(imprime) };
     }
-    const barre = taillePx(m.racine.querySelector('[data-ecran="apercu"] h2'));
+    const barre = taillePx(m.racine.querySelector('[data-apercu-impression] [data-commande="vue"]'));
     await contexte.defaire();
     contexte = null;
     return { vues, barre };
@@ -431,7 +431,7 @@ describe('« Paramètres » dans l’application (§ 8.4, § 8.5, § 18.6, § 19
     const m = await ouvrirEvenement(contexte, chargePrincipale());
     const dessin = releveDessin(m);
     expect(dessin.numeros.length).toBe(chargePrincipale().tables.length);
-    const commande = m.racine.querySelector('[data-ecran="evenement"] [data-commande="apercu"]');
+    const commande = m.racine.querySelector('[data-ecran="evenement"] [data-commande="section"][data-cible="plan"]');
     const auDefaut = taillePx(commande);
     for (const palier of [90, 150]) {
       await m.seance.choisirTailleTexte(palier);

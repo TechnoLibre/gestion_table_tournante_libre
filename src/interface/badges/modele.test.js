@@ -1,13 +1,13 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le modèle de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3),
-// sans DOM : les sources offertes et celle qui vaut, les réglages d'une
-// demande, les phrases de l'annonce, ce qui bloque « Produire », les
+// Le modèle des badges de la section de l'impression (§ 11.2, § 11.5, § 11.6,
+// § 11.8, Q3), sans DOM : les sources offertes et celle qui vaut, les réglages
+// d'une demande, les phrases de l'annonce, ce qui bloque « Produire », les
 // personnes d'une réédition. Chaque clé que le modèle désigne existe, en
 // français comme en langue témoin, et se compose sans lever. Une annonce se
-// prend telle que la séance la rend (planche_seance.js), sur de petites
-// soirées construites ; aucune production de PDF.
+// prend telle que la séance la rend (planche_seance.js), sur de petites soirées
+// construites ; aucune production de PDF.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { personne, soiree, table } from '../../../test/fixtures/badges/cas.js';

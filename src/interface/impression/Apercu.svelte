@@ -2,21 +2,24 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // L'écran d'aperçu avant impression (§ 11.7) : la feuille de style
-  // d'impression réelle appliquée au document vivant, la même mise en page
-  // regardée avant d'être envoyée — jamais une seconde. App le monte à la
-  // place de l'événement tant que l'état de navigation porte un aperçu ; il
-  // n'a pour ancêtres que la racine, et son document n'est jamais tronqué à
-  // une page par un ancêtre de hauteur fixe. Toute impression passe par lui.
+  // L'aperçu avant impression (§ 11.7) : la feuille de style d'impression
+  // réelle appliquée au document vivant, la même mise en page regardée avant
+  // d'être envoyée — jamais une seconde. La section de l'impression le monte
+  // sous son titre « Plan », et l'état de navigation porte ses réglages tant
+  // qu'elle est ouverte (EtatUi.apercu). Toute impression passe par lui. À
+  // l'impression, la feuille de style ne peint que son document : ni la
+  // section, ni la navigation, et aucun ancêtre de hauteur fixe ne le
+  // tronque à une page (impression.css).
   //
-  // Sa barre — titre, libellé de mode, vue imprimée, réglages de la vue,
-  // papier, « Imprimer », « Fermer l'aperçu » — ne s'imprime pas. Son
-  // document, [data-impression], est la vue choisie : une feuille par page,
-  // chacune sous le pied et, pour un brouillon (estBrouillon), le filigrane.
+  // Sa barre — vue imprimée, réglages de la vue, papier, « Imprimer » — ne
+  // s'imprime pas. Son document, [data-impression], est la vue choisie : une
+  // feuille par page, chacune sous le pied et, pour un brouillon
+  // (estBrouillon), le filigrane.
   // La sortie est celle du plan à l'écran : le retenu, la proposition
   // montrée, ou les réservations seules ; le pied porte son horodatage
-  // (piedDePage). Sans papier choisi, l'aperçu pose la question du papier
-  // (Papier.svelte) à la place du document.
+  // (piedDePage), et la provenance et la version du bandeau, que le
+  // contexte 'produit' donne. Sans papier choisi, l'aperçu pose la question
+  // du papier (Papier.svelte) à la place du document.
   //
   // Un nom d'événement que le pied ne porte pas (refusApercu) — lu d'un
   // fichier, au-delà de la borne de la saisie — ne monte ni gabarit ni
@@ -37,21 +40,23 @@
   // s'écrit : l'aperçu ne reçoit de la séance que son état, et le papier
   // passe par choisirPapier.
   //
-  // Les réglages du plan : le tour, les listes de noms, l'organisation de
-  // chaque nom — offerte inactive, listes masquées, avec la raison en
-  // titre —, les pages du plan et une colonne de tables par page.
+  // Les réglages du plan : le tour — celui de la sortie, borné aux tours de
+  // l'événement : un retour qui en retire pendant que l'aperçu est à l'écran
+  // fait montrer au choix le dernier qui reste, celui que la page imprime
+  // (sortieApercu) —, les listes de noms, l'organisation de chaque nom —
+  // offerte inactive, listes masquées, avec la raison en titre —, les pages du
+  // plan et une colonne de tables par page. Ceux de la feuille par table : une
+  // feuille par tour, et le dessin de la table en tête de chaque page.
   //
   // Habillage de l'écran : la barre est une carte, ses commandes en groupes
   // nommés, côte à côte — la vue imprimée, en commandes enfoncées ; les
   // réglages de la vue, quand elle en a ; le papier et « Imprimer », l'action
-  // principale — puis « Fermer l'aperçu », à part. Le document imprimé n'en
-  // prend rien.
+  // principale. Le document imprimé n'en prend rien.
   import '../impression.css';
   import { getContext } from 'svelte';
   import { estBrouillon, piedDePage, refusImpression } from '../../application/sorties.js';
   import { constante } from '../../geometrie/constantes.js';
   import { DECOUPES, VUES_IMPRESSION } from '../etat_ui.js';
-  import { cleDeMode } from '../mode.js';
   import Commande from '../primitives/Commande.svelte';
   import Papier from '../sorties/Papier.svelte';
   import FeuillesTables from './FeuillesTables.svelte';
@@ -59,11 +64,9 @@
   import PlanImprime from './PlanImprime.svelte';
   import { bandeDeFeuille, cleDecoupe, cleVue, feuilleDe, optionsApercu, refusApercu, sortieApercu, toursOfferts } from './modele.js';
 
-  // provenance et version : celles du bandeau, que le pied reprend ;
-  // fermer : ferme l'aperçu et rend le focus à « Imprimer… ».
-  let { provenance, version, fermer } = $props();
-
   const t = getContext('t');
+  // { provenance, version } : celles du bandeau, que le pied reprend.
+  const { provenance, version } = getContext('produit');
   const seance = getContext('seance');
   const ui = getContext('ui');
   const imprimante = getContext('imprimante');
@@ -86,7 +89,6 @@
   const feuille = $derived(feuilleDe(pied, estBrouillon(charge, { source: sortie.source, tour: sortie.tour })));
   const refusNom = $derived(refusApercu(pied));
   const Vue = $derived(VUES.get(options.vue));
-  const cleMode = $derived(cleDeMode($seance));
   const tours = $derived(toursOfferts(charge.evenement.tours));
 
   // La bande mesurée sur le gabarit, null avant la première mesure ; ce qui
@@ -122,14 +124,8 @@
   }
 </script>
 
-<div class="apercu" data-ecran="apercu">
+<div class="apercu" data-apercu-impression>
   <div class="barre" role="group" aria-label={t('impression.barre')}>
-    <div class="tete">
-      <h2>{t('impression.titre')}</h2>
-      {#if cleMode !== null}
-        <span class="mode" data-mode-libelle="barre">{t(cleMode)}</span>
-      {/if}
-    </div>
     <div class="groupe vues" role="group" aria-label={t('impression.vue.titre')}>
       {#each VUES_IMPRESSION as vue (vue)}
         <button type="button" data-commande="vue" data-cible={vue} aria-pressed={options.vue === vue} onclick={() => choisirVue(vue)}
@@ -142,7 +138,7 @@
         {#if options.vue === 'plan'}
           <label class="reglage">
             <span>{t('impression.tour.titre')}</span>
-            <select data-champ="tour" value={options.tour} onchange={(evenement) => ui.reglerApercu({ tour: Number(evenement.currentTarget.value) })}>
+            <select data-champ="tour" value={sortie.tour} onchange={(evenement) => ui.reglerApercu({ tour: Number(evenement.currentTarget.value) })}>
               {#each tours as tour (tour)}
                 <option value={tour}>{t('impression.tour.option', { tour })}</option>
               {/each}
@@ -179,6 +175,12 @@
           <button type="button" data-commande="parTour" aria-pressed={options.parTour} onclick={() => ui.reglerApercu({ parTour: !options.parTour })}
             >{t('impression.parTour')}</button
           >
+          <button
+            type="button"
+            data-commande="dessinTable"
+            aria-pressed={options.dessinTable}
+            onclick={() => ui.reglerApercu({ dessinTable: !options.dessinTable })}>{t('impression.dessinTable')}</button
+          >
         {/if}
       </div>
     {/if}
@@ -188,9 +190,6 @@
         <Commande cle="impression.commande.imprimer" nom="imprimer" variante="principale" executer={imprimer} refusExterne={refusNom} />
       </div>
     {/if}
-    <div class="fermer">
-      <Commande cle="impression.commande.fermer" nom="fermerApercu" executer={fermer} />
-    </div>
   </div>
 
   {#if options.question}
@@ -218,8 +217,9 @@
     gap: var(--espace-4);
   }
 
-  /* La barre : une carte, ses groupes côte à côte, chacun ouvert par un
-     filet ; elle se replie à la ligne sous une largeur étroite. */
+  /* La barre : une carte, ses groupes côte à côte, chacun après le
+     premier ouvert par un filet ; elle se replie à la ligne sous une
+     largeur étroite. */
   .barre {
     display: flex;
     flex-wrap: wrap;
@@ -232,27 +232,14 @@
     box-shadow: var(--ombre-carte);
   }
 
-  .tete {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--espace-2) var(--espace-3);
-  }
-
-  h2 {
-    margin: 0;
-    font-size: var(--taille-titre-carte);
-  }
-
-  .mode {
-    font-weight: bold;
-  }
-
   .groupe {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--espace-2) var(--espace-3);
+  }
+
+  .groupe + .groupe {
     padding-left: var(--espace-4);
     border-left: 1px solid var(--couleur-carte-filet);
   }
@@ -274,10 +261,6 @@
   .vues button:not(:last-child) {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
-  }
-
-  .fermer {
-    margin-left: auto;
   }
 
   .reglage {

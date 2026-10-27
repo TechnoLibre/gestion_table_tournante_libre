@@ -11,11 +11,11 @@
 // opération longue part — ouvrir un événement ou une version de secours,
 // charger une démonstration, défaire ou refaire, au clavier comme au clic,
 // revenir à un instant, appliquer un import, le bilan de « Remplacer »,
-// l'aperçu, la planche de badges, écrire ailleurs, la fin d'une
-// génération —, et jamais pour un geste ordinaire du plan. Le curseur
-// d'attente couvre l'application tant qu'elle est là, et un geste fait
-// pendant l'attente de sa peinture atteint la séance après l'opération qui
-// l'attend.
+// l'ouverture de la section de l'impression, la planche de badges, écrire
+// ailleurs, la fin d'une génération —, et jamais pour un geste ordinaire du
+// plan. Le curseur d'attente couvre l'application tant qu'elle est là, et
+// un geste fait pendant l'attente de sa peinture atteint la séance après
+// l'opération qui l'attend.
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
@@ -513,12 +513,12 @@ describe('la pastille d’activité dans l’application : les opérations longu
     expect(refaits.vues).toEqual([PEINTE]);
   });
 
-  test('« Imprimer… » : la pastille est peinte quand l’aperçu s’ouvre', async () => {
+  test('l’onglet « Impression » : la pastille est peinte quand la section s’ouvre, l’aperçu monté sous elle', async () => {
     contexte = creerContexte();
     const m = await ouvrirEvenement(contexte, chargePrincipale(), { section: 'tables', options: { fichiers: [fichierReglages('A4')] } });
-    const releves = guetter(m, m.ui, 'ouvrirApercu');
-    clic(m, '[data-ecran="evenement"] [data-commande="apercu"]');
-    await attendre('l’aperçu', () => releves.fini && m.racine.querySelector('[data-ecran="apercu"]'));
+    const releves = guetter(m, m.ui, 'allerA');
+    clic(m, '[data-ecran="evenement"] [data-commande="section"][data-cible="badges"]');
+    await attendre('l’aperçu', () => releves.fini && m.racine.querySelector('[data-apercu-impression]'));
     expect(releves.vues).toEqual([PEINTE]);
     await attendre('le retrait de la pastille', () => m.racine.querySelector('[data-activite]') === null);
   });

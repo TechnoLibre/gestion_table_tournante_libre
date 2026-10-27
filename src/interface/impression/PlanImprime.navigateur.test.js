@@ -93,7 +93,7 @@ function listesSous(racine) {
 // La bande que l'aperçu a mesurée, relue comme il la mesure : sur la feuille
 // gabarit, la seule feuille hors du document imprimé.
 function bandeDuGabarit(m) {
-  const contenus = tous(m, '[data-ecran="apercu"] [data-contenu]').filter((contenu) => contenu.closest('[data-impression]') === null);
+  const contenus = tous(m, '[data-apercu-impression] [data-contenu]').filter((contenu) => contenu.closest('[data-impression]') === null);
   expect(contenus, 'la feuille gabarit').toHaveLength(1);
   return bandeDeFeuille({
     feuillePx: contenus[0].parentElement.getBoundingClientRect().height,
@@ -143,13 +143,13 @@ function pagesAttendues(m, charge) {
 // Bascule un réglage de l'aperçu par son bouton, et attend le document.
 async function basculer(m, nom) {
   const avant = m.ui.etat().apercu[nom];
-  await cliquer(m, `[data-ecran="apercu"] [data-commande="${nom}"]`);
+  await cliquer(m, `[data-apercu-impression] [data-commande="${nom}"]`);
   await attendre(`${nom} basculé`, () => m.ui.etat().apercu[nom] === !avant && feuilles(m).length > 0, IMAGES);
 }
 
 // Change la découpe du plan par son sélecteur, et attend le document.
 async function decouper(m, decoupe) {
-  const choix = dans(m, '[data-ecran="apercu"] [data-champ="decoupe"]');
+  const choix = dans(m, '[data-apercu-impression] [data-champ="decoupe"]');
   choix.value = decoupe;
   choix.dispatchEvent(new Event('change', { bubbles: true }));
   await attendre(`la découpe ${decoupe}`, () => m.ui.etat().apercu.decoupe === decoupe && feuilles(m).length > 0, IMAGES);
@@ -237,7 +237,7 @@ describe('la troncature des listes, celle de l’écran (§ 7.4)', () => {
     const ecran = new Map(listesSous(dans(m, '[data-plan]')).map(({ table, lignes }) => [table, lignes]));
     const marque = t('plan.liste.abreviation');
     expect([...ecran.values()].flat().filter((ligne) => ligne.includes(marque)).length, 'des lignes abrégées').toBeGreaterThanOrEqual(NOMS_LONGS.length);
-    await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+    await cliquer(m, '[data-commande="section"][data-cible="badges"]');
     await attendre('les listes imprimées', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
     const imprimees = listesSous(dans(m, '[data-impression]'));
     expect(new Set(imprimees.map(({ table }) => table))).toEqual(new Set(ecran.keys()));
@@ -254,10 +254,10 @@ describe('l’organisation dans les listes imprimées (§ 7.4, § 11.7)', () => 
     m.ui.basculerOrganisations();
     await attendre('les organisations du plan', () => tous(m, '[data-plan] [data-liste] [data-partie="organisation"]').length > 0, IMAGES);
     const ecran = new Map(listesSous(dans(m, '[data-plan]')).map(({ table, lignes }) => [table, lignes]));
-    await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+    await cliquer(m, '[data-commande="section"][data-cible="badges"]');
     await attendre('les listes imprimées', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
     expect(m.ui.etat().apercu.organisations).toBe(true);
-    const bouton = () => dans(m, '[data-ecran="apercu"] [data-commande="organisations"]');
+    const bouton = () => dans(m, '[data-apercu-impression] [data-commande="organisations"]');
     expect(bouton().textContent).toBe(t('impression.organisations'));
     expect(bouton().getAttribute('aria-pressed')).toBe('true');
     const imprimees = listesSous(dans(m, '[data-impression]'));
@@ -270,7 +270,7 @@ describe('l’organisation dans les listes imprimées (§ 7.4, § 11.7)', () => 
     await basculer(m, 'listes');
     expect(bouton().getAttribute('aria-disabled')).toBe('true');
     expect(bouton().getAttribute('title')).toBe(t('impression.organisationsSansListes'));
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="organisations"]');
+    await cliquer(m, '[data-apercu-impression] [data-commande="organisations"]');
     expect(m.ui.etat().apercu.organisations, 'inactive, la bascule ne change rien').toBe(false);
   });
 });
@@ -303,11 +303,11 @@ describe('une colonne de tables par page, et aucun texte qui déborde (§ 7.4, �
     const charge = chargeDeuxColonnes();
     const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
     expect(m.ui.etat().apercu.parColonne).toBe(false);
-    const bouton = dans(m, '[data-ecran="apercu"] [data-commande="parColonne"]');
+    const bouton = dans(m, '[data-apercu-impression] [data-commande="parColonne"]');
     expect(bouton.textContent).toBe(t('impression.parColonne'));
     expect(bouton.getAttribute('aria-pressed')).toBe('false');
     await basculer(m, 'parColonne');
-    expect(dans(m, '[data-ecran="apercu"] [data-commande="parColonne"]').getAttribute('aria-pressed')).toBe('true');
+    expect(dans(m, '[data-apercu-impression] [data-commande="parColonne"]').getAttribute('aria-pressed')).toBe('true');
     const attendues = pagesAttendues(m, charge);
     await attendre('les pages par colonne', () => feuilles(m).length === attendues.length, IMAGES);
     const options = optionsApercu(m.ui.etat().apercu, 'A4');
@@ -407,7 +407,7 @@ describe('l’échelle graphique et les mentions de chaque page (§ 7.7)', () =>
       expect(listes.length, `feuille ${feuille.dataset.feuille}`).toBe(portees ? 1 : 0);
       if (portees) expect(plat(listes[0].textContent)).toBe(t('impression.plan.listes'));
     }
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="listes"]');
+    await cliquer(m, '[data-apercu-impression] [data-commande="listes"]');
     await attendre('les listes masquées', () => m.ui.etat().apercu.listes === false && feuilles(m).length > 0, IMAGES);
     await attendre('les mentions des listes retirées', () => tous(m, '[data-impression] [data-mention="listes"]').length === 0, IMAGES);
     expect(tous(m, '[data-impression] [data-liste]')).toHaveLength(0);
@@ -460,8 +460,8 @@ describe('la bande du plan (HAUTEUR_BANDE_IMPRESSION, § 14.1)', () => {
     feuilleDeStyle.textContent = '[data-pied] { padding-bottom: 20mm !important; }';
     document.head.append(feuilleDeStyle);
     try {
-      await cliquer(m, '[data-ecran="apercu"] [data-commande="fermerApercu"]');
-      await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+      await cliquer(m, '[data-commande="section"][data-cible="plan"]');
+      await cliquer(m, '[data-commande="section"][data-cible="badges"]');
       await attendre('le plan', () => feuilles(m).length > 0, IMAGES);
       const apres = mesurer();
       for (const [quand, pages] of [['avant', avant], ['après', apres]]) {
@@ -532,7 +532,7 @@ describe('la commande de la vue', () => {
     const charge = chargePrincipale();
     expect(charge.evenement.tours).toBeGreaterThan(1);
     const m = await ouvrirApercu(contexte, charge);
-    const choix = dans(m, '[data-ecran="apercu"] [data-champ="tour"]');
+    const choix = dans(m, '[data-apercu-impression] [data-champ="tour"]');
     choix.value = '2';
     choix.dispatchEvent(new Event('change', { bubbles: true }));
     await attendre('le tour 2', () => m.ui.etat().apercu.tour === 2 && feuilles(m).length > 0, IMAGES);

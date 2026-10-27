@@ -1,9 +1,11 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Les libellés de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3) :
-// ses réglages — modèle de badge, case du pied TechnoLibre et son texte, cases
-// de ce que le badge imprime, source, imposition, ordre —, ses commandes, les
+// Les libellés de la section de l'impression (§ 11.2, § 11.5, § 11.6, § 11.8,
+// Q3) : les titres de ses deux parties, « Badges » et « Plan », l'aperçu de
+// la seconde ayant ses propres libellés (impression.*) ; les réglages de la
+// planche — modèle de badge, case du pied TechnoLibre et son texte, cases de
+// ce que le badge imprime, source, imposition, ordre —, ses commandes, les
 // phrases de l'annonce que rend phrasesAnnonce (badges/modele.js), logos des
 // participants compris, la planche et la liste produites, et la réédition.
 // Chaque clé commence par « badges. ». Les refus de la planche sont des
@@ -14,6 +16,10 @@
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
+  // --- Les deux parties de la section de l'impression -----------------------
+  ['badges.partie.badges', 'Badges'],
+  ['badges.partie.plan', 'Plan'],
+
   [
     'badges.introduction',
     'Un badge par personne présente, sur des cartes Avery 5392 prédécoupées ou en A6 à découper, ' +

@@ -64,7 +64,7 @@ const plat = (chaine) => chaine.replace(/\s+/g, ' ').trim();
 const texte = (element) => plat(element.textContent);
 const section = (m) => dans(m, '[data-section="badges"]');
 const annonce = (m) => dans(m, '[data-section="badges"] [data-annonce-planche]');
-const question = (m) => dans(m, '[data-section="badges"] [data-papier="question"]');
+const question = (m) => dans(m, '[data-partie-impression="badges"] [data-papier="question"]');
 const produire = (m) => dans(m, '[data-section="badges"] [data-commande="produirePlanche"]');
 const produireListe = (m) => dans(m, '[data-section="badges"] [data-commande="produireListe"]');
 
@@ -178,7 +178,7 @@ async function cheminDocuments(m, nom) {
 
 describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 11.2)', () => {
   // Le papier que la section des badges montre.
-  const papierMontre = (m) => dans(m, '[data-section="badges"] [data-papier="choisi"]');
+  const papierMontre = (m) => dans(m, '[data-partie-impression="badges"] [data-papier="choisi"]');
 
   test('le témoin sans papier choisi : Lettre montré ; « Produire » annonce 65 A4 et 129 Lettre, produit sur Lettre, ne retient rien', async () => {
     const m = await ouvrirBadges(chargeTemoin(), { papier: null });
@@ -206,7 +206,7 @@ describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 1
 
   test('« Changer » pose la question ; le papier choisi s’écrit et vaut ensuite, nouvel événement et App remontée compris', async () => {
     const m = await ouvrirBadges(chargeBloquee(), { papier: null });
-    dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
+    dans(m, '[data-partie-impression="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
     await attendre('la question du papier', () => question(m), IMAGES);
     dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
     await attendre('le papier choisi', () => m.seance.etat().papier === 'A4' && papierMontre(m), IMAGES);
@@ -233,7 +233,7 @@ describe('le papier des badges : Lettre par défaut, sans question (§ 8.5, § 1
     const second = await contexte.monter({ systeme: { disque: m.disque } });
     await cliquer(second, `[data-evenement="${BASE}/${BASE}"] [data-commande="ouvrir"]`);
     await cliquer(second, '[data-commande="section"][data-cible="badges"]');
-    await attendre('le papier relu', () => second.seance.etat().papier === 'A4' && dans(second, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
+    await attendre('le papier relu', () => second.seance.etat().papier === 'A4' && dans(second, '[data-partie-impression="badges"] [data-papier="choisi"]'), IMAGES);
     const avant = second.trace.length;
     await cliquerProduire(second, 'la planche du second montage', () => dans(second, '[data-chemin-planche]'));
     expect(question(second)).toBeNull();
@@ -256,7 +256,7 @@ describe('sortir n’est pas modifier (§ 8.4, § 11.6, contrainte 24)', () => {
     expect(lue).toContain(plat(t('badges.annonce.source.proposition', { id: charge.propositions[0].id })));
     expect(lue).toContain(plat(t('badges.annonce.brouillon.proposition')));
     expect(dans(m, '[data-annonce-planche] [data-refus]')).toBeNull();
-    dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
+    dans(m, '[data-partie-impression="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
     await attendre('la question du papier', () => question(m), IMAGES);
     dans(m, '[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
     await attendre('l’annonce sur A4', () => annonce(m) && m.seance.etat().papier === 'A4', IMAGES);
@@ -570,7 +570,7 @@ describe('la langue témoin (§ 14.6)', () => {
       const m = await ouvrirEvenement(temoin, charge, { section: 'badges', options: { fichiers: reglages } });
       produire(m).click();
       await attendre('la planche et l’annonce', () => dans(m, '[data-chemin-planche]') && annonce(m), IMAGES);
-      dans(m, '[data-section="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
+      dans(m, '[data-partie-impression="badges"] [data-papier="choisi"] [data-commande="changerPapier"]').click();
       await attendre('la question', () => question(m), IMAGES);
       const racine = m.seance.etat().racine.chemin;
       const noms = new Set([...personnesReeditables(charge).flatMap(({ nom, organisation }) => [nom, organisation]), charge.evenement.nom]);
@@ -661,7 +661,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
     const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
     expect(champ(m, 'modeleBadge').value).toBe('avery5392');
     expect(champ(m, 'imposition')).toBeNull();
-    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    expect(dans(m, '[data-partie-impression="badges"] [data-papier]')).toBeNull();
     const depuis = m.trace.length;
     await cliquerProduire(m, 'les deux fichiers', () => dans(m, '[data-chemin-controle]'));
     const ecrites = planchesEcrites(m, depuis).map(([, , nom]) => nom);
@@ -670,7 +670,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
     expect(ecrites[1]).toMatch(/\.controle_avery5392_.*\.pdf$/);
     expect(texte(dans(m, '[data-chemin-planche]'))).toBe(await cheminDocuments(m, ecrites[0]));
     expect(texte(dans(m, '[data-chemin-controle]'))).toBe(await cheminDocuments(m, ecrites[1]));
-    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    expect(dans(m, '[data-partie-impression="badges"] [data-papier]')).toBeNull();
     expect(m.seance.etat().papier).toBeNull();
     const lue = texte(annonce(m));
     // Six cartes par feuille.
@@ -686,7 +686,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
     await attendre('l’annonce Avery', () => annonce(m), IMAGES);
     choisirReglage(m, 'modeleBadge', 'a6');
     await attendre('le modèle écrit', () => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).modele_badge === 'a6', IMAGES);
-    await attendre('l’imposition et le papier', () => champ(m, 'imposition') && dans(m, '[data-section="badges"] [data-papier="choisi"]'), IMAGES);
+    await attendre('l’imposition et le papier', () => champ(m, 'imposition') && dans(m, '[data-partie-impression="badges"] [data-papier="choisi"]'), IMAGES);
     expect(m.seance.etat().modeleBadge).toBe('a6');
     expect(annonce(m)).toBeNull();
     expect(dans(m, '[data-section="badges"] [data-avertissement="modeleNonRetenu"]')).toBeNull();
@@ -697,7 +697,7 @@ describe('le modèle de badge : Avery 5392 par défaut, l’A6 au choix (§ 8.5,
 
     choisirReglage(m, 'modeleBadge', 'avery5392');
     await attendre('l’imposition cachée', () => champ(m, 'imposition') === null, IMAGES);
-    expect(dans(m, '[data-section="badges"] [data-papier]')).toBeNull();
+    expect(dans(m, '[data-partie-impression="badges"] [data-papier]')).toBeNull();
     expect(JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).papier).toBe('A4');
   });
 

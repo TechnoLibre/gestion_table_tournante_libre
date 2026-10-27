@@ -8,12 +8,12 @@
 // noms et les organisations qu'elles portent, le plein écran, la place
 // sélectionnée, la fiche ouverte, le choix en attente du plan, le refus posé
 // sur une place, l'organisation collante du formulaire d'ajout, l'aperçu
-// avant impression, la page du tableau des propositions, la position du
-// sélecteur du mélange des tables de la page de qualité (§ 12.11, D54) — ce
-// que la grille compte : sièges, assis ou doublons —, le départ d'une
-// génération dérivée et ses tours figés (§ 5.7), le second placement de la
-// vue de comparaison (§ 12.10.6) et la vue de la qualité demandée. Ce qu'il
-// tient survit au démontage des sections.
+// de la section de l'impression, la page du tableau des propositions, la
+// position du sélecteur du mélange des tables de la page de qualité
+// (§ 12.11, D54) — ce que la grille compte : sièges, assis ou doublons —, le
+// départ d'une génération dérivée et ses tours figés (§ 5.7), le second
+// placement de la vue de comparaison (§ 12.10.6) et la vue de la qualité
+// demandée. Ce qu'il tient survit au démontage des sections.
 // Le départ et le second placement sont des états de navigation (§ 8.4) :
 // les choisir n'écrit rien, en lecture comme sur un plan bloqué ;
 // oublierAbsents les retire quand ils quittent la liste, et un événement
@@ -31,7 +31,7 @@
 // tout de suite, puis à chaque nouvel état ; un état est figé, et une
 // transition qui ne change rien n'en publie pas de nouveau. L'écran — liste
 // ou événement — ne s'y lit pas : il suit la séance.
-import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
+import { SECTION_IMPRESSION, SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
 import { THEMES } from './theme.js';
 
 /**
@@ -66,12 +66,14 @@ import { THEMES } from './theme.js';
  *           des participants : celle du dernier ajout (§ 10.2), '' au départ
  * @property {null|{vue: 'plan'|'accueil'|'tables', tour: number|'tous', listes: boolean,
  *            organisations: boolean, decoupe: 'auto'|'unePage'|'decoupe', parColonne: boolean,
- *            parTour: boolean, retour: string}} apercu
- *           l'aperçu avant impression ouvert (§ 11.7), null fermé : la vue imprimée ; le
- *           tour du plan, 'tous' pour une vue de la soirée, jamais pour le plan ; les
- *           listes de noms du plan, et les organisations qu'elles portent ; sa découpe
- *           en pages, et une colonne de tables par page ; la feuille par table, une
- *           par tour ou la soirée en colonnes ; la section où l'aperçu se referme
+ *            parTour: boolean, dessinTable: boolean}} apercu
+ *           l'aperçu avant impression (§ 11.7), que la section de l'impression porte sous
+ *           son titre « Plan » : présent tant que cette section est ouverte, null hors
+ *           d'elle. La vue imprimée ; le tour du plan, 'tous' pour une vue de la soirée,
+ *           jamais pour le plan ; les listes de noms du plan, et les organisations
+ *           qu'elles portent ; sa découpe en pages, et une colonne de tables par page ; la
+ *           feuille par table, une par tour ou la soirée en colonnes, et le dessin de la
+ *           table en tête de chaque page
  * @property {number} visee               le numéro de la dernière demande d'une proposition
  *           au plan : chaque montrerProposition d'une proposition l'augmente de 1, même
  *           pour celle déjà demandée ; 0 au départ
@@ -142,6 +144,7 @@ const REGLAGES_APERCU = Object.freeze({
   decoupe: (v) => DECOUPES.includes(v),
   parColonne: (v) => typeof v === 'boolean',
   parTour: (v) => typeof v === 'boolean',
+  dessinTable: (v) => typeof v === 'boolean',
 });
 
 const GENRES_CHOIX = new Set(['personne', 'reservation']);
@@ -178,6 +181,22 @@ function apercuValide(courant, changements) {
   return Object.freeze(suivant);
 }
 
+// L'aperçu de la section de l'impression qui s'ouvre sur l'état suivant : le
+// plan au tour montré, les listes du plan et leurs organisations telles que
+// l'écran les montre, la découpe proposée par défaut, sans une colonne par
+// page, la feuille par table couvrant la soirée, sans le dessin de la table.
+// Le départ passe par apercuValide, comme tout réglage.
+const apercuDeDepart = (suivant) => ({
+  vue: 'plan',
+  tour: suivant.tour,
+  listes: suivant.listes,
+  organisations: suivant.organisations,
+  decoupe: 'auto',
+  parColonne: false,
+  parTour: false,
+  dessinTable: false,
+});
+
 // Le choix du contrat, figé ; RangeError hors du contrat.
 function choixValide(choix) {
   const forme = choix !== null && typeof choix === 'object';
@@ -213,7 +232,7 @@ function choixValide(choix) {
  *   basculerListes: Function, basculerOrganisations: Function, basculerPleinEcran: Function,
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
  *   poserSurPlace: Function, garderOrganisation: Function,
- *   ouvrirApercu: Function, reglerApercu: Function, fermerApercu: Function,
+ *   reglerApercu: Function,
  *   retenirPagePropositions: Function, reglerMelangeTables: Function,
  *   choisirDepart: Function, reglerToursFiges: Function, retirerDepart: Function,
  *   comparerA: Function, demanderVueQualite: Function, vueQualiteAtteinte: Function,
@@ -227,9 +246,14 @@ export function creerEtatUi() {
   // l'une de ses propriétés. Le plein écran ne vaut que pour le plan : hors
   // de lui, il tombe, quelle que soit la transition qui quitte le plan, et
   // la navigation des sections, que le plein écran efface, revient.
+  // L'aperçu ne vaut que pour la section de l'impression : hors d'elle, il
+  // tombe ; elle s'ouvre sans aperçu, il naît de son départ
+  // (apercuDeDepart).
   function changer(changements) {
     const suivant = { ...etat, ...changements };
     if (suivant.section !== 'plan') suivant.pleinEcran = false;
+    if (suivant.section !== SECTION_IMPRESSION) suivant.apercu = null;
+    else if (suivant.apercu === null) suivant.apercu = apercuValide({}, apercuDeDepart(suivant));
     if (Object.keys(suivant).every((cle) => Object.is(suivant[cle], etat[cle]))) return;
     etat = Object.freeze(suivant);
     for (const fn of [...abonnes]) fn(etat);
@@ -434,40 +458,13 @@ export function creerEtatUi() {
       if (typeof texte !== 'string') throw new RangeError(`organisation : chaîne attendue, reçu ${String(texte)}`);
       changer({ organisation: texte });
     },
-    /** Ouvre l'aperçu avant impression sur la vue et le tour reçus : les
-     *  listes du plan et leurs organisations telles que l'écran les montre,
-     *  la découpe proposée par défaut, sans une colonne par page, la feuille
-     *  par table couvrant la soirée ; la section courante est celle où il se
-     *  refermera. RangeError hors du domaine (reglerApercu), sans rien
-     *  changer. */
-    ouvrirApercu(demande) {
-      if (demande === null || typeof demande !== 'object' || !Object.hasOwn(demande, 'vue') || !Object.hasOwn(demande, 'tour')) {
-        throw new RangeError(`aperçu : { vue, tour } attendu, reçu ${JSON.stringify(demande)}`);
-      }
-      const depart = {
-        vue: 'plan',
-        tour: 1,
-        listes: etat.listes,
-        organisations: etat.organisations,
-        decoupe: 'auto',
-        parColonne: false,
-        parTour: false,
-        retour: etat.section,
-      };
-      changer({ apercu: apercuValide(depart, { vue: demande.vue, tour: demande.tour }) });
-    },
-    /** Change les réglages de l'aperçu ouvert — vue, tour, listes,
-     *  organisations, decoupe, parColonne, parTour — chacun dans son
-     *  domaine ; RangeError hors de lui, pour un autre nom, ou sans aperçu
-     *  ouvert, sans rien changer. */
+    /** Change les réglages de l'aperçu de la section de l'impression —
+     *  vue, tour, listes, organisations, decoupe, parColonne, parTour,
+     *  dessinTable — chacun dans son domaine ; RangeError hors de lui, pour
+     *  un autre nom, ou hors de cette section, sans rien changer. */
     reglerApercu(changements) {
       if (etat.apercu === null) throw new RangeError('aperçu : aucun aperçu ouvert');
       changer({ apercu: apercuValide(etat.apercu, changements) });
-    },
-    /** Ferme l'aperçu et rend la section d'où il s'est ouvert. */
-    fermerApercu() {
-      if (etat.apercu === null) return;
-      changer({ apercu: null, section: etat.apercu.retour });
     },
     /** Ouvre la fiche de la personne id, entier positif, dans la section des
      *  participants ; null referme la fiche, la section reste. RangeError

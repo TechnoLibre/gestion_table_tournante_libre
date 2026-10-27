@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
 import { VUES_QUALITE_DEMANDABLES, creerEtatUi } from './etat_ui.js';
-import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
+import { SECTION_IMPRESSION, SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
 import { THEMES } from './theme.js';
 
 const DEPART = {
@@ -36,6 +36,17 @@ const DEPART = {
   comparee: null,
   vueQualite: null,
 };
+
+// Le départ, ouvert sur la section donnée : la section de l'impression porte
+// l'aperçu de son départ, au tour 1, les listes montrées sans organisations.
+const departSur = (section) => ({
+  ...DEPART,
+  section,
+  apercu:
+    section === SECTION_IMPRESSION
+      ? { vue: 'plan', tour: 1, listes: true, organisations: false, decoupe: 'auto', parColonne: false, parTour: false, dessinTable: false }
+      : null,
+});
 
 // Un état et le relevé de ce que reçoit son abonné.
 function suivi() {
@@ -83,7 +94,7 @@ describe('état de navigation : chaque transition', () => {
     assert.ok(SECTIONS.length > 0);
     for (const section of SECTIONS) {
       ui.allerA(section);
-      assert.deepEqual(ui.etat(), { ...DEPART, section });
+      assert.deepEqual(ui.etat(), departSur(section));
     }
     const avant = ui.etat();
     for (const faute of ['accueil', 'apropos', '', undefined, 'Plan', 'constructor']) {
@@ -486,55 +497,49 @@ describe('état de navigation : le choix en attente (§ 5.8, § 7.1)', () => {
   });
 });
 
-describe('état de navigation : l’aperçu avant impression (§ 11.7)', () => {
-  test('ouvrirApercu ouvre la vue demandée au tour demandé, les listes du plan et leurs organisations, la découpe proposée sans une colonne par page, la soirée en colonnes, et retient la section d’origine ; l’état est figé', () => {
+describe('état de navigation : l’aperçu de la section de l’impression (§ 11.7)', () => {
+  // L'aperçu de départ, hors de la vue et du tour.
+  const reglages = { listes: true, organisations: false, decoupe: 'auto', parColonne: false, parTour: false, dessinTable: false };
+
+  test('la section de l’impression s’ouvre sur l’aperçu du plan au tour montré, les listes et leurs organisations telles que l’écran les montre, la découpe proposée, sans une colonne par page, la soirée en colonnes, sans dessin ; l’état est figé', () => {
     const ui = creerEtatUi();
-    ui.allerA('propositions');
+    ui.montrerTour(3);
     ui.basculerListes();
-    ui.ouvrirApercu({ vue: 'plan', tour: 2 });
-    const reglages = { listes: false, organisations: false, decoupe: 'auto', parColonne: false, parTour: false, retour: 'propositions' };
+    ui.allerA(SECTION_IMPRESSION);
     assert.deepEqual(ui.etat(), {
       ...DEPART,
-      section: 'propositions',
+      section: SECTION_IMPRESSION,
+      tour: 3,
       listes: false,
-      apercu: { vue: 'plan', tour: 2, ...reglages },
+      apercu: { vue: 'plan', tour: 3, ...reglages, listes: false },
     });
     assert.ok(Object.isFrozen(ui.etat().apercu));
-    ui.ouvrirApercu({ vue: 'accueil', tour: 'tous' });
-    assert.deepEqual(ui.etat().apercu, { vue: 'accueil', tour: 'tous', ...reglages });
-    ui.basculerListes();
-    ui.basculerOrganisations();
-    ui.ouvrirApercu({ vue: 'plan', tour: 1 });
-    assert.deepEqual(ui.etat().apercu, { vue: 'plan', tour: 1, ...reglages, listes: true, organisations: true });
   });
 
-  test('ouvrirApercu refuse une vue inconnue, un tour qui n’est ni un entier positif ni « tous », et « tous » pour le plan, sans rien changer', () => {
+  test('hors de la section de l’impression, l’aperçu tombe ; elle le reprend de son départ, et la même section ne le touche pas', () => {
     const ui = creerEtatUi();
-    const avant = ui.etat();
-    const fautes = [
-      { vue: 'badges', tour: 1 },
-      { vue: 'Plan', tour: 1 },
-      { vue: 'plan', tour: 0 },
-      { vue: 'plan', tour: 1.5 },
-      { vue: 'plan', tour: '2' },
-      { vue: 'plan', tour: 'tous' },
-      { vue: 'tables', tour: null },
-      { tour: 1 },
-      null,
-      undefined,
-    ];
-    for (const faute of fautes) assert.throws(() => ui.ouvrirApercu(faute), RangeError, JSON.stringify(faute));
-    assert.equal(ui.etat(), avant);
+    assert.equal(ui.etat().apercu, null, 'au départ');
+    ui.allerA(SECTION_IMPRESSION);
+    ui.reglerApercu({ vue: 'accueil', tour: 'tous' });
+    ui.allerA(SECTION_IMPRESSION);
+    assert.equal(ui.etat().apercu.vue, 'accueil', 'la même section');
+    ui.allerA('participants');
+    assert.equal(ui.etat().apercu, null, 'une autre section');
+    ui.basculerOrganisations();
+    ui.allerA(SECTION_IMPRESSION);
+    assert.deepEqual(ui.etat().apercu, { vue: 'plan', tour: 1, ...reglages, organisations: true });
+    ui.ouvrirFiche(4);
+    assert.equal(ui.etat().apercu, null, 'la fiche ouvre les participants');
   });
 
-  test('reglerApercu change la vue, le tour, les listes, les organisations, la découpe, une colonne par page et la feuille par tour, chacun dans son domaine ; hors de lui, ou sans aperçu ouvert, RangeError sans rien changer', () => {
+  test('reglerApercu change la vue, le tour, les listes, les organisations, la découpe, une colonne par page, la feuille par tour et le dessin de la table, chacun dans son domaine ; hors de lui, ou hors de la section, RangeError sans rien changer', () => {
     const ui = creerEtatUi();
     assert.throws(() => ui.reglerApercu({ vue: 'accueil' }), RangeError);
-    ui.ouvrirApercu({ vue: 'plan', tour: 1 });
+    ui.allerA(SECTION_IMPRESSION);
     ui.reglerApercu({ tour: 3 });
     ui.reglerApercu({ listes: false, decoupe: 'unePage' });
     ui.reglerApercu({ organisations: true, parColonne: true });
-    ui.reglerApercu({ vue: 'tables', parTour: true });
+    ui.reglerApercu({ vue: 'tables', parTour: true, dessinTable: true });
     assert.deepEqual(ui.etat().apercu, {
       vue: 'tables',
       tour: 3,
@@ -543,7 +548,7 @@ describe('état de navigation : l’aperçu avant impression (§ 11.7)', () => {
       decoupe: 'unePage',
       parColonne: true,
       parTour: true,
-      retour: DEPART.section,
+      dessinTable: true,
     });
     assert.equal(ui.etat().organisations, false, 'l’aperçu ne touche pas à l’écran');
     assert.ok(Object.isFrozen(ui.etat().apercu));
@@ -556,44 +561,26 @@ describe('état de navigation : l’aperçu avant impression (§ 11.7)', () => {
       { decoupe: 'deux' },
       { parColonne: 'oui' },
       { parTour: 1 },
+      { dessinTable: 'oui' },
       { retour: 'plan' },
       { inconnu: true },
       null,
     ]) {
       assert.throws(() => ui.reglerApercu(faute), RangeError, JSON.stringify(faute));
     }
+    assert.equal(ui.etat(), avant);
     ui.reglerApercu({ vue: 'accueil', tour: 'tous' });
     assert.throws(() => ui.reglerApercu({ vue: 'plan' }), RangeError, 'le plan à « tous »');
     ui.reglerApercu({ vue: 'plan', tour: 2 });
     assert.equal(ui.etat().apercu.vue, 'plan');
-    assert.notEqual(ui.etat(), avant);
   });
 
-  test('fermerApercu ferme l’aperçu et rend la section d’où il s’est ouvert ; fermé, il ne publie rien', () => {
-    const { ui, recus } = suivi();
-    ui.allerA('participants');
-    ui.ouvrirApercu({ vue: 'plan', tour: 1 });
-    ui.fermerApercu();
-    assert.deepEqual(ui.etat(), { ...DEPART, section: 'participants' });
-    const publies = recus.length;
-    ui.fermerApercu();
-    assert.equal(recus.length, publies);
-  });
-
-  test('fermerApercu rend la section d’origine même quand une autre s’est ouverte pendant l’aperçu — par le remède d’un refus', () => {
+  test('reinitialiser retire l’aperçu : un autre événement s’ouvre sur sa section d’ouverture', () => {
     const ui = creerEtatUi();
-    ui.allerA('tables');
-    ui.ouvrirApercu({ vue: 'accueil', tour: 'tous' });
-    ui.allerA('propositions');
-    ui.fermerApercu();
-    assert.equal(ui.etat().section, 'tables');
-    assert.equal(ui.etat().apercu, null);
-  });
-
-  test('reinitialiser ferme l’aperçu : un autre événement s’ouvre sur sa section d’ouverture', () => {
-    const ui = creerEtatUi();
-    ui.ouvrirApercu({ vue: 'tables', tour: 'tous' });
+    ui.allerA(SECTION_IMPRESSION);
+    ui.reglerApercu({ vue: 'tables', tour: 'tous' });
     ui.reinitialiser();
+    assert.equal(ui.etat().section, SECTION_OUVERTURE);
     assert.equal(ui.etat().apercu, null);
   });
 });
@@ -608,7 +595,7 @@ describe('état de navigation : le départ, le second placement et la vue demand
     const tenu = { depart: { id: 4, toursFiges: [1, 2] }, comparee: 7, vueQualite: 'comparaison' };
     for (const section of SECTIONS) {
       ui.allerA(section);
-      assert.deepEqual(ui.etat(), { ...DEPART, section, ...tenu }, section);
+      assert.deepEqual(ui.etat(), { ...departSur(section), ...tenu }, section);
     }
     ui.montrerTour(2);
     ui.montrerProposition(3);

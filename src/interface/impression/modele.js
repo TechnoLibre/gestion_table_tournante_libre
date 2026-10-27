@@ -52,14 +52,15 @@ const nombreFini = (valeur) => typeof valeur === 'number' && Number.isFinite(val
  * ici). Sans papier choisi, question est vrai : l'aperçu pose la question
  * du papier avant de rien mettre en page (§ 8.5, § 11.2). Les organisations
  * des listes et une colonne de tables par page sont des réglages du plan,
- * rendus tels quels.
+ * une feuille par tour et le dessin de la table des réglages de la feuille
+ * par table, rendus tels quels.
  *
  * @param {{vue: string, tour: number|'tous', listes: boolean, organisations: boolean, decoupe: string,
- *          parColonne: boolean, parTour: boolean}} apercu
+ *          parColonne: boolean, parTour: boolean, dessinTable: boolean}} apercu
  * @param {'A4'|'Lettre'|null} papier
  * @returns {{vue: string, papier: string|null, orientation: 'portrait'|null, tour: number|'tous',
  *            listes: boolean, organisations: boolean, decoupe: string, parColonne: boolean,
- *            parTour: boolean, question: boolean}}
+ *            parTour: boolean, dessinTable: boolean, question: boolean}}
  * @throws {TypeError} sans aperçu ouvert
  * @throws {RangeError} une vue ou un papier hors de leur domaine
  */
@@ -78,6 +79,7 @@ export function optionsApercu(apercu, papier) {
     decoupe: apercu.decoupe,
     parColonne: apercu.parColonne,
     parTour: apercu.parTour,
+    dessinTable: apercu.dessinTable,
     question: papier === null,
   };
 }

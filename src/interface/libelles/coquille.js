@@ -254,5 +254,5 @@ export const TABLE = new Map([
   ['coquille.section.generation', 'Génération'],
   ['coquille.section.propositions', 'Propositions'],
   ['coquille.section.qualite', 'Qualité'],
-  ['coquille.section.badges', 'Badges'],
+  ['coquille.section.badges', 'Impression'],
 ]);

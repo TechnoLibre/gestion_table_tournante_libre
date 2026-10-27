@@ -44,7 +44,7 @@ const APERCU = Object.freeze({
   decoupe: 'auto',
   parColonne: true,
   parTour: false,
-  retour: 'plan',
+  dessinTable: false,
 });
 const PIED = Object.freeze({ nom: 'Soirée des Merles', date: '2026-10-09', tour: 2, horodatage: '2026-10-09T19:00:00-04:00', version: 'v' });
 
@@ -79,19 +79,20 @@ describe('optionsApercu : ce que l’aperçu imprime', () => {
   test('le plan : son tour, ses listes et leurs organisations, sa découpe et une colonne par page ; l’orientation, celle que la découpe choisira (null)', () => {
     assert.deepEqual(optionsApercu(APERCU, 'A4'), {
       vue: 'plan', papier: 'A4', orientation: null, tour: 2, listes: true, organisations: true,
-      decoupe: 'auto', parColonne: true, parTour: false, question: false,
+      decoupe: 'auto', parColonne: true, parTour: false, dessinTable: false, question: false,
     });
     const sans = optionsApercu({ ...APERCU, organisations: false, parColonne: false }, 'A4');
     assert.deepEqual([sans.organisations, sans.parColonne], [false, false]);
   });
 
-  test('les listes s’impriment en portrait et couvrent la soirée, quel que soit le tour du plan', () => {
+  test('les listes s’impriment en portrait et couvrent la soirée, quel que soit le tour du plan ; la feuille par tour et le dessin de la table rendus tels quels', () => {
     for (const vue of ['accueil', 'tables']) {
-      const options = optionsApercu({ ...APERCU, vue, parTour: true }, 'Lettre');
+      const options = optionsApercu({ ...APERCU, vue, parTour: true, dessinTable: true }, 'Lettre');
       assert.equal(options.orientation, 'portrait', vue);
       assert.equal(options.tour, 'tous', vue);
       assert.equal(options.papier, 'Lettre', vue);
       assert.equal(options.parTour, true, vue);
+      assert.equal(options.dessinTable, true, vue);
     }
   });
 

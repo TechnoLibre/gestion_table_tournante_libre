@@ -5,8 +5,9 @@
 // cours… » que primitives/Activite.svelte montre pendant une opération
 // longue — ouvrir un événement ou l'une de ses versions de secours, charger
 // une démonstration, défaire, refaire, revenir à un instant, appliquer un
-// import, la fin d'une génération, l'aperçu avant impression, la planche de
-// badges, écrire ailleurs. Un geste ordinaire du plan n'y passe pas.
+// import, la fin d'une génération, l'ouverture de la section de
+// l'impression, la planche de badges, écrire ailleurs. Un geste ordinaire du
+// plan n'y passe pas.
 //
 // Le travail long tourne sur le fil du rendu, en blocs synchrones entre
 // deux attentes : aucun rappel ne part pendant un bloc, et ce que le DOM

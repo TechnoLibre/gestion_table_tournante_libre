@@ -1,8 +1,8 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Le modèle de la section des badges (§ 11.2, § 11.5, § 11.6, § 11.8, Q3),
-// pur : SectionBadges.svelte et Reedition.svelte le câblent.
+// Le modèle des badges de la section de l'impression (§ 11.2, § 11.5, § 11.6,
+// § 11.8, Q3), pur : SectionBadges.svelte et Reedition.svelte le câblent.
 //
 // Une planche se tire du placement retenu, ou d'une proposition — celle que
 // la section des propositions a demandée au plan —, toujours BROUILLON (Q3).

@@ -58,7 +58,7 @@ describe('des réglages locaux illisibles ne bloquent pas l’aperçu (§ 8.5, �
         options: { imprimante, fichiers: [{ racine: 'documents', chemin: FICHIER_REGLAGES, texte }] },
       });
       const octets = m.fs.octets('documents', FICHIER_REGLAGES);
-      expect(dans(m, '[data-ecran="apercu"] [data-papier="question"]')).not.toBeNull();
+      expect(dans(m, '[data-apercu-impression] [data-papier="question"]')).not.toBeNull();
       expect(dans(m, '[data-impression]')).toBeNull();
       const avant = m.trace.length;
 
@@ -70,11 +70,11 @@ describe('des réglages locaux illisibles ne bloquent pas l’aperçu (§ 8.5, �
       expect(Math.abs(dims[0] - PAPIERS.A4.largeur)).toBeLessThanOrEqual(TOLERANCE_MM);
       expect(Math.abs(dims[1] - PAPIERS.A4.hauteur)).toBeLessThanOrEqual(TOLERANCE_MM);
       expect(dans(m, '[data-papier="question"]')).toBeNull();
-      expect(dans(m, '[data-ecran="apercu"] [data-refus]')).toBeNull();
+      expect(dans(m, '[data-apercu-impression] [data-refus]')).toBeNull();
       const avis = m.seance.etat().avertissements.filter(({ code }) => code === 'REGLAGES_ILLISIBLES');
       expect(avis).toEqual([{ code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison } }]);
 
-      await cliquer(m, '[data-ecran="apercu"] [data-commande="imprimer"]');
+      await cliquer(m, '[data-apercu-impression] [data-commande="imprimer"]');
       await attendre("l'impression demandée", () => imprimante.appels().length === 1, IMAGES);
       expect(imprimante.appels()[0].papier).toBe('A4');
       expect(m.trace.slice(avant)).toEqual([]);
@@ -87,7 +87,7 @@ describe('un dossier qui refuse l’écriture des réglages ne bloque pas l’ap
   test('EROFS : le papier choisi, l’aperçu montre le document et « Imprimer » ; un avis le dit, et rien ne s’écrit', async () => {
     const imprimante = creerImprimanteSimulee();
     const m = await ouvrirApercu(contexte, chargePrincipale(), { papier: null, options: { imprimante } });
-    expect(dans(m, '[data-ecran="apercu"] [data-papier="question"]')).not.toBeNull();
+    expect(dans(m, '[data-apercu-impression] [data-papier="question"]')).not.toBeNull();
     m.fs.pannes.ecriture('documents');
     const avant = m.trace.length;
 
@@ -95,13 +95,13 @@ describe('un dossier qui refuse l’écriture des réglages ne bloque pas l’ap
     await attendre('le document sur A4', () => feuilles(m).length > 0, IMAGES);
     expect(m.seance.etat().papier).toBe('A4');
     expect(dans(m, '[data-papier="question"]')).toBeNull();
-    expect(dans(m, '[data-ecran="apercu"] [data-refus]')).toBeNull();
+    expect(dans(m, '[data-apercu-impression] [data-refus]')).toBeNull();
     const avis = m.seance.etat().avertissements.filter(({ code }) => code === 'REGLAGES_NON_ECRITS');
     expect(avis).toEqual([
       { code: 'REGLAGES_NON_ECRITS', details: { chemin: FICHIER_REGLAGES, dossier: expect.any(String), cause: 'EROFS' } },
     ]);
 
-    await cliquer(m, '[data-ecran="apercu"] [data-commande="imprimer"]');
+    await cliquer(m, '[data-apercu-impression] [data-commande="imprimer"]');
     await attendre("l'impression demandée", () => imprimante.appels().length === 1, IMAGES);
     expect(imprimante.appels()[0].papier).toBe('A4');
     expect(m.trace.slice(avant)).toEqual([['ecrireAtomique', 'documents', FICHIER_REGLAGES]]);

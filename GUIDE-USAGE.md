@@ -1173,19 +1173,31 @@ saisie, Ctrl+Z défait le dernier geste, Ctrl+Maj+Z ou Ctrl+Y le refait
 
 ## Étape 12 — Imprimer
 
-La commande « Imprimer… », en haut de l’événement, ouvre l’**aperçu
-d’impression**, qui montre les pages telles qu’elles sortiront : le **plan**
-de salle, la **liste d’accueil** et la **feuille par table**. Le plan se
+Tout s’imprime depuis la section « Impression » de l’événement, la dernière de
+la navigation. Sous son titre « Badges », la planche de badges, sa liste en CSV
+et la réédition ; sous son titre « Plan », l’**aperçu d’impression**, qui montre
+les pages telles qu’elles sortiront : le **plan** de salle, la **liste
+d’accueil** et la **feuille par table**, et le bouton « Imprimer ». Le plan se
 découpe en pages quand il ne tient pas lisiblement sur une seule ; chaque page
-porte son repère et ses voisines. Au premier aperçu, le logiciel demande le
-format du papier, A4 ou Lettre, puis le garde pour ce poste ; il se change
-ensuite à tout moment.
+porte son repère et ses voisines. À la première ouverture de la section,
+l’aperçu demande le format du papier, A4 ou Lettre, puis le garde pour ce
+poste ; il se change ensuite à tout moment. Les badges, eux, partent sur Lettre
+sans rien demander. Seules les pages s’impriment : ni la section, ni la
+navigation.
 
 Les réglages du plan, dans la barre de l’aperçu, ne changent que le papier.
 « Organisation » reprend à l’ouverture le choix de l’écran. « Une colonne par
 page », éteinte par défaut, imprime chaque colonne de tables sur ses propres
 pages : aucune page ne mêle deux colonnes. Toutes les pages gardent la même
 échelle, et chacune son repère.
+
+La feuille par table, celle de l’animateur, donne une page à chaque table où
+quelqu’un est assis — une table vide n’en a pas — et écrit l’organisation de
+chacun après son nom, en gris. Son texte grandit pour remplir la page, sans
+dépasser 18 points ; une table trop longue pour une page garde la taille
+ordinaire et se poursuit sur la suivante. « Dessiner la table », décochée par
+défaut, met en tête de chaque page le dessin de la table — sa forme, ses
+chaises, son numéro et son libellé — à la place de son titre.
 
 La **planche de badges** est le seul document produit en PDF. Par défaut, elle
 s’imprime sur des **cartes Avery 5392** prédécoupées, six par feuille Lettre,
@@ -1220,27 +1232,26 @@ Revenu au placement retenu, l’aperçu sort sans filigrane :
 porte l’instant de ce placement. C’est cette page qui part à l’imprimante pour
 le montage de la salle.*
 
-La planche se produit dans la section « Badges » de l’événement. On y choisit le
-**modèle de badge** — Avery 5392, ou A6 à découper —, que le poste garde d’une
-fois à l’autre, et l’ordre des badges, alphabétique ou par table du premier
-tour. Avec l’A6 seulement, la section montre aussi le papier — Lettre tant que
-le poste n’en a pas choisi d’autre, « Changer » le remplace — et l’imposition —
-feuille par feuille, ou en pile pour un massicot qui tranche toute la rame. Une
-case, cochée tant que vous ne la décochez pas, ajoute sous le pied de chaque
-badge le **pied TechnoLibre** : une invitation à demander un développement
-logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ; le poste
-garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la place
-libre : il rapetisse sur un badge chargé, et s’en retire quand même sa plus
-petite taille ne tient pas, ou que le badge a dû perdre le nom de l’événement.
-Sous la case, un champ porte le **texte du pied TechnoLibre**, prérempli de
-cette invitation : remplacez-le par le vôtre, et le poste le garde, comme la
-case ; « Texte par défaut » remet l’invitation d’origine. Un dossier de
+La planche se produit sous le titre « Badges » de la section « Impression ». On
+y choisit le **modèle de badge** — Avery 5392, ou A6 à découper —, que le poste
+garde d’une fois à l’autre, et l’ordre des badges, alphabétique ou par table du
+premier tour. Avec l’A6 seulement, la section montre aussi le papier — Lettre
+tant que le poste n’en a pas choisi d’autre, « Changer » le remplace — et
+l’imposition — feuille par feuille, ou en pile pour un massicot qui tranche
+toute la rame. Une case, cochée tant que vous ne la décochez pas, ajoute sous le
+pied de chaque badge le **pied TechnoLibre** : une invitation à demander un
+développement logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ;
+le poste garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la
+place libre : il rapetisse sur un badge chargé, et s’en retire quand même sa
+plus petite taille ne tient pas, ou que le badge a dû perdre le nom de
+l’événement. Sous la case, un champ porte le **texte du pied TechnoLibre**,
+prérempli de cette invitation : remplacez-le par le vôtre, et le poste le garde,
+comme la case ; « Texte par défaut » remet l’invitation d’origine. Un dossier de
 travail où vous n’avez rien saisi imprime l’invitation d’origine. Le texte
 s’enregistre quand vous quittez le champ. Il se replie seul sur le badge : un
-retour à la ligne saisi y devient une espace. Laissé vide, le pied ne porte
-que le logo. Un texte plus long rapetisse et se retire plus tôt, faute de
-place, et un caractère que la police ne dessine pas s’annonce comme dans un
-nom.
+retour à la ligne saisi y devient une espace. Laissé vide, le pied ne porte que
+le logo. Un texte plus long rapetisse et se retire plus tôt, faute de place, et
+un caractère que la police ne dessine pas s’annonce comme dans un nom.
 À côté, cinq autres cases, cochées elles aussi tant que vous ne les décochez
 pas, disent ce que chaque badge imprime en plus du nom et des tours :
 « Organisation », « Nom de l’événement », « Date de l’événement », « Date du
@@ -1331,7 +1342,7 @@ dit « absente » au lieu d’une table :
 
 *Sur la petite démonstration, la meilleure dérivée de l’étape 9 retenue :
 les badges de la personne partie après le tour 2 et de celle arrivée au
-tour 3, réédités seuls dans la section « Badges ». Chaque tour garde sa
+tour 3, réédités seuls dans la section « Impression ». Chaque tour garde sa
 ligne ; une personne absente à un tour n’a jamais la ligne « Toute la
 soirée ».*
 

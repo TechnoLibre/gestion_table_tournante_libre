@@ -3,17 +3,14 @@
 
 // Les libellés de l'aperçu avant impression et de la feuille imprimée
 // (§ 11.7, § 8.5, § 11.2, § 18.6), et ceux de la question du papier, que
-// l'aperçu et la section des badges partagent. Chaque clé commence par
+// l'aperçu et la planche de badges partagent. Chaque clé commence par
 // « impression. ». Une donnée — le nom de l'événement, une date, un
 // horodatage, la version — n'entre dans aucun de ces textes : la feuille la
 // pose dans son propre nœud, à côté.
 export const TABLE = new Map([
-  // --- L'écran et sa barre (§ 11.7) ------------------------------------------
-  ['impression.titre', 'Aperçu avant impression'],
+  // --- La barre de l'aperçu (§ 11.7) -----------------------------------------
   ['impression.barre', "Commandes de l'aperçu"],
-  ['impression.commande.ouvrir', 'Imprimer…'],
   ['impression.commande.imprimer', 'Imprimer'],
-  ['impression.commande.fermer', "Fermer l'aperçu"],
   ['impression.groupe.reglages', 'Réglages de la vue'],
   ['impression.groupe.sortie', 'Papier et impression'],
 
@@ -35,6 +32,7 @@ export const TABLE = new Map([
   ['impression.decoupe.decoupe', 'Découper en pages'],
   ['impression.parColonne', 'Une colonne par page'],
   ['impression.parTour', 'Une feuille par tour'],
+  ['impression.dessinTable', 'Dessiner la table'],
 
   // --- La question du papier (§ 8.5, § 11.2) -----------------------------------
   ['impression.papier.question', 'Sur quel papier imprimez-vous ?'],

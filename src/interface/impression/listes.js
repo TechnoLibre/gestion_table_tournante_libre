@@ -15,11 +15,18 @@
 // la clé normalisée injectée, comparée point de code par point de code,
 // jamais la collation de la langue du système ; deux lignes que rien
 // d'autre ne sépare, par identifiant.
+//
+// La feuille par table règle la taille de son texte pour remplir sa page
+// sans exagérer : une échelle de son corps, de 1 — le plancher, la taille
+// de toute liste imprimée — à ECHELLE_TEXTE_MAX, que bornent la largeur de
+// ses colonnes (plafondEchelle) et la hauteur de la page (echelleAjustee),
+// une par table (echellesParTable).
 import { comparerPointsDeCode } from '../../application/planche.js';
 import { nomAffiche } from '../../application/personnes.js';
 import { etatPlaces } from '../../application/places.js';
 import { estBrouillon, horodatagePlacement } from '../../application/sorties.js';
 import { feuilleDe } from './modele.js';
+import { trancher } from './pagination.js';
 
 /**
  * L'état des places de chaque tour de la soirée, de 1 à R, de la source que
@@ -107,33 +114,40 @@ export function libellePlace({ table, siege, absente = false }) {
 /**
  * Les feuilles par table (§ 11.7, Q6 c) : par défaut une feuille par table,
  * les tours de la soirée en colonnes ; sous parTour, une feuille par table
- * et par tour, les tours d'une table à la suite. Les tables se rangent par
- * numéro affiché, puis par identifiant. Une feuille porte le libellé de sa
- * table, null quand elle n'en a pas, et liste chaque place de la
- * table, de 1 à sa capacité, et pour chaque tour de ses colonnes ce que
- * l'état des places y montre : l'occupant et son nom affiché, ou une place
- * vide (null), et le titre de la place, pourvu ou non à ce tour, tel que le
- * plan le montre (§ 4.1) — un titre appartient à la place, l'occupant n'en
- * devient pas titulaire.
+ * et par tour, les tours d'une table à la suite. Une table où personne
+ * n'est assis à aucun des tours d'une feuille n'a pas cette feuille, même
+ * quand ses places portent un titre. Les tables se rangent par numéro
+ * affiché, puis par identifiant. Une feuille porte le libellé de sa table,
+ * null quand elle n'en a pas, et liste chaque place de la table, de 1 à sa
+ * capacité, et pour chaque tour de ses colonnes ce que l'état des places y
+ * montre : l'occupant, son nom affiché et son organisation telle que la
+ * charge l'écrit — null quand elle est absente ou faite de blancs —, ou une
+ * place vide (null), et le titre de la place, pourvu ou non à ce tour, tel
+ * que le plan le montre (§ 4.1) — un titre appartient à la place,
+ * l'occupant n'en devient pas titulaire.
  *
  * @param {Object} charge
  * @param {Object[]} etatsParTour   etatsDesTours
  * @param {{parTour?: boolean}} [options]
  * @returns {Array<{table: number, numero: number, libelle: string|null, tours: number[],
  *            lignes: Array<{place: number, cellules: Array<{tour: number, occupant: number|null,
- *            nom: string|null, titre: {libelle: string, pourvu: boolean}|null}>}>}>}
+ *            nom: string|null, organisation: string|null,
+ *            titre: {libelle: string, pourvu: boolean}|null}>}>}>}
  * @throws {TypeError} parTour hors des booléens
  */
 export function feuillesTables(charge, etatsParTour, { parTour = false } = {}) {
   if (typeof parTour !== 'boolean') throw new TypeError(`feuillesTables : parTour booléen attendu, reçu ${String(parTour)}`);
   const noms = new Map(charge.participants.map((personne) => [personne.id, nomAffiche(personne)]));
+  const organisations = new Map(charge.participants.map(({ id, organisation }) => [id, champPose(organisation ?? null) || null]));
   const tables = [...charge.tables].sort((a, b) => a.numero - b.numero || a.id - b.id);
   // Les chaises de la table id à chaque tour, dans l'ordre des tours reçus.
   const chaisesDe = (id) => etatsParTour.map((etat) => ({ tour: etat.tour, chaises: etat.tables.find((table) => table.id === id).chaises }));
   const cellule = (tour, chaise) =>
     chaise === undefined || chaise.occupant === null
-      ? { tour, occupant: null, nom: null, titre: chaise?.titre ?? null }
-      : { tour, occupant: chaise.occupant, nom: noms.get(chaise.occupant), titre: chaise.titre };
+      ? { tour, occupant: null, nom: null, organisation: null, titre: chaise?.titre ?? null }
+      : { tour, occupant: chaise.occupant, nom: noms.get(chaise.occupant), organisation: organisations.get(chaise.occupant), titre: chaise.titre };
+  // Vrai quand quelqu'un est assis à la table à l'un des tours des colonnes.
+  const occupee = (colonnes) => colonnes.some(({ chaises }) => chaises.some(({ occupant }) => occupant !== null));
   const feuille = (table, colonnes) => {
     const places = Math.max(0, ...colonnes.map(({ chaises }) => chaises.length));
     return {
@@ -149,28 +163,57 @@ export function feuillesTables(charge, etatsParTour, { parTour = false } = {}) {
   };
   return tables.flatMap((table) => {
     const colonnes = chaisesDe(table.id);
-    return parTour ? colonnes.map((colonne) => feuille(table, [colonne])) : [feuille(table, colonnes)];
+    const parFeuille = parTour ? colonnes.map((colonne) => [colonne]) : [colonnes];
+    return parFeuille.filter(occupee).map((deLaFeuille) => feuille(table, deLaFeuille));
   });
 }
 
 /**
  * Les textes qu'une cellule de la feuille par table pose, dans l'ordre du
- * document : le nom de l'occupant, ou la place vide ; le libellé du titre
- * de la place ; « non pourvu » quand rien ne le pourvoit. Le texte vide
- * pour ce que la cellule ne porte pas. Une ligne plus haute qu'une page se
+ * document : le nom de l'occupant, ou la place vide ; le séparateur et
+ * l'organisation de l'occupant, quand il en a une ; le libellé du titre de
+ * la place ; « non pourvu » quand rien ne le pourvoit. Le texte vide pour
+ * ce que la cellule ne porte pas. Une ligne plus haute qu'une page se
  * continue sur les suivantes par morceaux de cette suite (couperTexte,
- * trancher).
+ * partsDesCellules).
  *
- * @param {{nom: string|null, titre: {libelle: string, pourvu: boolean}|null}} cellule
+ * @param {{nom: string|null, organisation?: string|null, titre: {libelle: string, pourvu: boolean}|null}} cellule
  * @param {(cle: string) => string} t
- * @returns {[string, string, string]}
+ * @returns {[string, string, string, string, string]}
  */
-export function textesCellule({ nom, titre }, t) {
+export function textesCellule({ nom, organisation = null, titre }, t) {
+  const avecOrganisation = nom !== null && organisation !== null;
   return [
     nom ?? t('feuilles.tables.vide'),
+    avecOrganisation ? t('feuilles.tables.avantOrganisation') : '',
+    avecOrganisation ? organisation : '',
     titre?.libelle ?? '',
     titre !== null && !titre.pourvu ? t('feuilles.tables.titreNonPourvu') : '',
   ];
+}
+
+/**
+ * Les textes que chaque cellule d'une ligne de la feuille par table pose
+ * sur une page : sans morceau, ses textes entiers (textesCellule) ; avec,
+ * la part de chacun qui tombe dans le morceau {debut, fin}, les textes de
+ * toutes les cellules mis bout à bout dans l'ordre du document, comme
+ * couperLigne les lit (trancher).
+ *
+ * @param {Array<Parameters<typeof textesCellule>[0]>} cellules
+ * @param {(cle: string) => string} t
+ * @param {{debut: number, fin: number}|null} morceau
+ * @returns {string[][]}   une liste de textes par cellule
+ */
+export function partsDesCellules(cellules, t, morceau) {
+  const textes = cellules.map((cellule) => textesCellule(cellule, t));
+  if (morceau === null) return textes;
+  const parts = trancher(textes.flat(), morceau.debut, morceau.fin);
+  let debut = 0;
+  return textes.map(({ length }) => {
+    const deLaCellule = parts.slice(debut, debut + length);
+    debut += length;
+    return deLaCellule;
+  });
 }
 
 // Un champ de la liste d'accueil tel qu'une ligne le pose : le texte vide
@@ -351,9 +394,11 @@ export function blocsAccueil(lignes, tours, taille) {
   });
 }
 
-// La part de la largeur que les colonnes de tour de la feuille par table
-// se partagent, en pour cent : ce que le numéro de la place laisse.
-const PART_TOURS_TABLES = 100 - COLONNES_FIXES.get('tables').reduce((a, b) => a + b, 0);
+// La part de la largeur que la colonne du numéro de la place prend dans la
+// feuille par table, et celle que les colonnes de tour se partagent, en
+// pour cent.
+const PART_PLACE_TABLES = COLONNES_FIXES.get('tables').reduce((a, b) => a + b, 0);
+const PART_TOURS_TABLES = 100 - PART_PLACE_TABLES;
 
 /**
  * Le nombre de colonnes de tour qu'une feuille par table garde côte à côte
@@ -449,4 +494,86 @@ export function resserrerGroupes(parGroupe, groupes, pages) {
     }
   }
   return change ? suivants : null;
+}
+
+/** L'échelle la plus grande du texte d'une feuille par table : le corps
+ *  des noms, de 16 px (12 pt) au plancher, monte au plus à 24 px (18 pt),
+ *  les titres dans la même proportion. */
+export const ECHELLE_TEXTE_MAX = 1.5;
+
+/** Le pas des échelles qu'essaie echelleAjustee : un trente-deuxième, soit
+ *  un demi-pixel du corps des noms. */
+export const PAS_ECHELLE = 1 / 32;
+
+const partValide = (part) => typeof part === 'number' && Number.isFinite(part) && part > 0;
+
+/**
+ * L'échelle au-delà de laquelle un mot d'une feuille par table passerait la
+ * largeur de sa colonne et se couperait : les largeurs des colonnes restent
+ * celles du plancher (largeursColonnes), et un texte s'élargit comme son
+ * corps. La plus petite de deux marges : la part de chaque colonne de tour
+ * sur celle du plus long mot de ses cellules et de ses têtes, et la part de
+ * la colonne de la place sur celle de sa tête et de son plus grand numéro,
+ * chacune mesurée au plancher, retraits compris (mesurerPlace).
+ *
+ * @param {number} tours   le nombre de colonnes de tour, entier ≥ 1
+ * @param {number} partTour   en pour cent, finie, > 0
+ * @param {number} partPlace   en pour cent, finie, > 0
+ * @returns {number}
+ * @throws {RangeError} un nombre de tours ou une part hors du domaine
+ */
+export function plafondEchelle(tours, partTour, partPlace) {
+  if (!Number.isSafeInteger(tours) || tours < 1) throw new RangeError(`plafondEchelle : tours entier ≥ 1 attendu, reçu ${String(tours)}`);
+  if (!partValide(partTour) || !partValide(partPlace)) {
+    throw new RangeError(`plafondEchelle : parts finies > 0 attendues, reçu ${String(partTour)} et ${String(partPlace)}`);
+  }
+  return Math.min(PART_TOURS_TABLES / tours / partTour, PART_PLACE_TABLES / partPlace);
+}
+
+/**
+ * L'échelle du texte d'une feuille par table : la plus grande de la forme
+ * 1 + k × PAS_ECHELLE, au plus ECHELLE_TEXTE_MAX et plafond, pour laquelle
+ * la feuille tient sur sa page (tient) ; 1, le plancher, quand aucune plus
+ * grande ne tient. tient n'est appelée qu'au-delà de 1 et jamais au-delà
+ * des bornes ; la recherche est dichotomique, et tient doit décroître avec
+ * l'échelle — une feuille qui tient, son texte réduit, tient encore.
+ *
+ * @param {number} plafond   plafondEchelle, ou Infinity ; un nombre
+ * @param {(echelle: number) => boolean} tient
+ * @returns {number}
+ * @throws {RangeError} un plafond qui n'est pas un nombre
+ * @throws {TypeError} un prédicat qui n'est pas une fonction
+ */
+export function echelleAjustee(plafond, tient) {
+  if (typeof plafond !== 'number' || Number.isNaN(plafond)) throw new RangeError(`echelleAjustee : plafond attendu, reçu ${String(plafond)}`);
+  if (typeof tient !== 'function') throw new TypeError('echelleAjustee : un prédicat tient attendu');
+  const borne = Math.min(plafond, ECHELLE_TEXTE_MAX);
+  const pas = borne < 1 ? 0 : Math.floor((borne - 1) / PAS_ECHELLE + BRUIT);
+  let bas = 0;
+  let haut = pas;
+  while (bas < haut) {
+    const milieu = (bas + haut + 1) >> 1;
+    if (tient(1 + milieu * PAS_ECHELLE)) bas = milieu;
+    else haut = milieu - 1;
+  }
+  return 1 + bas * PAS_ECHELLE;
+}
+
+/**
+ * Une échelle par table : chaque groupe de feuille par table (grouperTours)
+ * reçoit la plus petite des échelles des groupes de sa table, ceux des
+ * autres feuilles de la même table compris — une feuille par tour aussi.
+ *
+ * @param {Array<{table: number}>} groupes
+ * @param {number[]} echelles   une par groupe
+ * @returns {number[]}
+ * @throws {RangeError} un compte qui n'est pas celui des groupes
+ */
+export function echellesParTable(groupes, echelles) {
+  if (!Array.isArray(echelles) || echelles.length !== groupes.length) {
+    throw new RangeError(`echellesParTable : une échelle par groupe attendue, ${groupes.length} groupe(s)`);
+  }
+  const plusPetites = new Map();
+  groupes.forEach(({ table }, rang) => plusPetites.set(table, Math.min(plusPetites.get(table) ?? Infinity, echelles[rang])));
+  return groupes.map(({ table }) => plusPetites.get(table));
 }

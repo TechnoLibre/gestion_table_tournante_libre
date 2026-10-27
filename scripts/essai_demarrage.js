@@ -31,12 +31,12 @@
 //  3. le mode portable : leurs deux .gtt.json sous exe/data, aucun sous home
 //     ni sous temp, chacun avec son journal dans le dossier de son
 //     événement, exe/data/<nom>/<nom>.gtt.json, aucun à même exe/data
-//     (§ 8.6) ; puis « Imprimer… » ouvre l'aperçu, le papier A4
-//     choisi, et le processus principal imprime en PDF le plan, puis la
+//     (§ 8.6) ; puis la section « Impression » montre l'aperçu, le papier
+//     A4 choisi, et le processus principal imprime en PDF le plan, puis la
 //     feuille par table (webContents.printToPDF, à la taille de page de la
 //     feuille de style) : une page par feuille de l'aperçu, chacune aux
-//     dimensions de la sienne à TOLERANCE_PAGE_MM près ; l'aperçu se ferme ;
-//     hors de Windows et de macOS, Badges › « Ouvrir le dossier » lance
+//     dimensions de la sienne à TOLERANCE_PAGE_MM près ; hors de Windows et
+//     de macOS, Impression › « Ouvrir le dossier » lance
 //     xdg-open sur le dossier de la démonstration, sans refus ; la section
 //     Diagnostic de la démonstration voit sa ligne du calcul exact,
 //     [data-solveur], passer à « pret », sans erreur recueillie : le
@@ -529,12 +529,12 @@ async function seance(application, dossiers, journalOuvreur) {
     disposition.length === 0,
     disposition.length === 0 ? [...etats, ...journaux].join(', ') : disposition.join(' ; '),
   );
-  // L'aperçu, imprimé par le processus principal : le plan, puis la
-  // feuille par table.
-  await fenetre.locator('[data-ecran="evenement"] [data-commande="apercu"]').click();
-  await fenetre.locator('[data-ecran="apercu"] [data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
+  // L'aperçu de la section de l'impression, imprimé par le processus
+  // principal : le plan, puis la feuille par table.
+  await fenetre.locator('[data-commande="section"][data-cible="badges"]').click();
+  await fenetre.locator('[data-apercu-impression] [data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
   for (const vue of VUES_IMPRIMEES) {
-    await fenetre.locator(`[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`).click();
+    await fenetre.locator(`[data-apercu-impression] [data-commande="vue"][data-cible="${vue}"]`).click();
     await fenetre.locator(`[data-impression][data-vue-impression="${vue}"] [data-feuille]`).first().waitFor({ timeout: ATTENTE_MS });
     await fenetre.evaluate(() => document.fonts.ready.then(() => undefined));
     const feuilles = await fenetre.evaluate(releverFeuilles, MM_PAR_PX);
@@ -551,9 +551,7 @@ async function seance(application, dossiers, journalOuvreur) {
       fautesImpression.length === 0 ? `${lu.pages} page(s) : ${lu.mediaBox.map(dimensions).join(', ')}` : fautesImpression.join(' ; '),
     );
   }
-  await fenetre.locator('[data-ecran="apercu"] [data-commande="fermerApercu"]').click();
-  await fenetre.locator('[data-ecran="evenement"]').waitFor({ timeout: ATTENTE_MS });
-  // Badges › « Ouvrir le dossier », sur le dossier de la démonstration
+  // Impression › « Ouvrir le dossier », sur le dossier de la démonstration
   // ouverte : celui de l'état qui ne porte pas l'événement créé.
   if (journalOuvreur !== null) {
     const demonstration = etats.find((f) => {
@@ -567,7 +565,7 @@ async function seance(application, dossiers, journalOuvreur) {
     const { recus, refus } = await ouvrirParLOuvreur(badges, badges.locator('[data-commande="ouvrirDossier"]'), journalOuvreur);
     const fautes = [...fautesDOuverture(recus, join(data, dirname(demonstration))), ...refus];
     constater(
-      `Badges › « Ouvrir le dossier » lance ${OUVREUR_BUREAU} sur le dossier de l’événement, sans refus`,
+      `Impression › « Ouvrir le dossier » lance ${OUVREUR_BUREAU} sur le dossier de l’événement, sans refus`,
       fautes.length === 0,
       fautes.length === 0 ? recus.join(', ') : fautes.join(' ; '),
     );

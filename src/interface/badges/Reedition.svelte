@@ -40,7 +40,7 @@
 </script>
 
 <div class="reedition" role="group" aria-labelledby={`${uid}-titre`}>
-  <h3 id={`${uid}-titre`}>{t('badges.reedition.titre')}</h3>
+  <h4 id={`${uid}-titre`}>{t('badges.reedition.titre')}</h4>
   <p>{t('badges.reedition.explication')}</p>
   <label class="filtre">
     <span>{t('badges.reedition.filtre')}</span>
@@ -83,7 +83,7 @@
     box-shadow: var(--ombre-carte);
   }
 
-  h3 {
+  h4 {
     margin: 0;
     font-size: var(--taille-titre-carte);
   }

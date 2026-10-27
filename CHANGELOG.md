@@ -5,8 +5,8 @@
 **Ce qui change pour vous**
 - L'application s'ouvre et affiche sa version dans un bandeau permanent et dans
   le titre de sa fenêtre.
-- La section « Badges » produit la planche de badges en PDF, sur deux modèles
-  au choix, que la machine retient : par défaut, des cartes Avery 5392
+- La section « Impression » produit la planche de badges en PDF, sur deux
+  modèles au choix, que la machine retient : par défaut, des cartes Avery 5392
   prédécoupées, six par feuille Lettre, sans rien à couper, leur feuille de
   contrôle en un second PDF à imprimer sur papier ordinaire, qui montre aussi
   le contour des six cartes pour vérifier l'alignement sur une feuille de
@@ -53,9 +53,12 @@
   il rapetisse sur un badge chargé, s'en retire quand même sa plus petite
   taille ne tient pas ou quand le badge perd le nom de l'événement, et
   l'annonce compte ces badges. La feuille de contrôle ne le porte pas.
-- « Imprimer… » ouvre un aperçu de la page imprimée : le plan, découpé en pages
-  repérées quand il ne se lit plus sur une seule ; la liste d'accueil ; la
-  feuille par table, une pour la soirée ou une par tour. Les listes imprimées
+- Tout s'imprime depuis la section « Impression », la dernière de la
+  navigation : sous son titre « Badges », la planche, sa liste et la
+  réédition ; sous son titre « Plan », l'aperçu de la page imprimée et son
+  bouton « Imprimer » — le plan, découpé en pages repérées quand il ne se lit
+  plus sur une seule ; la liste d'accueil ; la feuille par table, une pour la
+  soirée ou une par tour. Seules les pages s'impriment. Les listes imprimées
   replient les noms longs au lieu de les couper.
 - « Organisation », à droite de « Listes de noms » dans la barre du plan, ajoute
   après chaque nom l'organisation de la personne, en gris : « 3. Iris Ombrelle ·
@@ -67,6 +70,12 @@
   s'imprime sur ses propres pages, toutes à la même échelle, sans jamais mêler
   deux colonnes sur une page. Une ligne d'une liste de noms ne déborde plus de
   son bloc, l'arrondi du rendu compris, à l'écran comme sur le papier.
+- La feuille par table donne une page à chaque table où quelqu'un est assis,
+  et aucune à une table vide. Chaque nom y porte son organisation, en gris :
+  « Iris Ombrelle — Club des Merles ». Le texte grandit pour remplir la page,
+  jusqu'à 18 points, sans couper un mot ; une table trop longue pour une page
+  garde la taille ordinaire. « Dessiner la table », décochée par défaut, met
+  en tête de chaque page le dessin de la table à la place de son titre.
 - L'aperçu et la planche restent disponibles en lecture et sur un plan bloqué,
   et n'écrivent rien dans l'événement.
 - Ce qui n'est pas le placement retenu s'imprime avec le filigrane BROUILLON,
@@ -428,11 +437,11 @@
   événement qui porte beaucoup de propositions : celles qui ne changent pas ne
   se recopient ni ne se recontrôlent plus. Les fichiers écrits restent les
   mêmes, octet pour octet.
-- Pendant une opération longue — ouvrir un événement, charger une
-  démonstration, défaire, importer un fichier, finir une génération, ouvrir
-  l'aperçu, produire la planche —, une pastille « Traitement en cours… »
-  apparaît au bas de la fenêtre au bout d'une demi-seconde : l'application
-  n'est pas figée.
+- Pendant une opération longue — ouvrir un événement, charger une démonstration,
+  défaire, importer un fichier, finir une génération, ouvrir la section
+  « Impression », produire la planche —, une pastille « Traitement en cours… »
+  apparaît au bas de la fenêtre au bout d'une demi-seconde : l'application n'est
+  pas figée.
 - Chaque table du plan porte son numéro en grand au centre du plateau, affiché
   même au zoom où les listes de noms disparaissent, à l'écran comme sur le plan
   imprimé. Un numéro de trois chiffres ou plus s'écrit un peu plus petit sur les
@@ -574,24 +583,24 @@
   personne ainsi numérotée garde une marque cachée qui dit que le numéro vient
   de l'import : ni la fiche ni le CSV ne la montrent, renommer la personne la
   retire, et « Défaire » la rend.
-- Dans la section « Badges », à côté du pied TechnoLibre, cinq cases disent ce
-  que chaque badge imprime en plus du nom et des tours : « Organisation »,
+- Dans la section « Impression », à côté du pied TechnoLibre, cinq cases disent
+  ce que chaque badge imprime en plus du nom et des tours : « Organisation »,
   « Nom de l'événement », « Date de l'événement », « Date du placement » et
   « Identifiant ». Toutes cochées par défaut, elles sont gardées sur le poste.
-  Une case décochée retire sa donnée de chaque badge, A6 comme Avery 5392, et
-  la place libérée revient au reste ; la feuille de contrôle nomme alors les
-  données retirées. La liste en CSV ne change pas, et toutes cochées, la
-  planche porte les mêmes données qu'avant.
-- Dans la section « Badges », juste avant le pied TechnoLibre, la case
+  Une case décochée retire sa donnée de chaque badge, A6 comme Avery 5392, et la
+  place libérée revient au reste ; la feuille de contrôle nomme alors les
+  données retirées. La liste en CSV ne change pas, et toutes cochées, la planche
+  porte les mêmes données qu'avant.
+- Dans la section « Impression », juste avant le pied TechnoLibre, la case
   « Laisser le nom des doublons en blanc », cochée par défaut et gardée sur le
   poste, laisse vide, prénom compris, la place du nom sur le badge d'une
   personne que « Rendre les noms uniques » a numérotée, pour l'écrire à la
-  main ; une note sous la case le dit. La place garde la hauteur du nom
-  entier, et le reste de la carte ne bouge pas. Décochée, le badge imprime le
-  nom entier, « Roger Galet 01 ». Le plan, les listes, la liste des badges en
-  CSV et la feuille de contrôle gardent le nom entier, et l'ordre de la pile
-  ne change pas ; aucune ligne « Identifiant » ne s'ajoute. Sans personne
-  numérotée, la planche ne change pas.
+  main ; une note sous la case le dit. La place garde la hauteur du nom entier,
+  et le reste de la carte ne bouge pas. Décochée, le badge imprime le nom
+  entier, « Roger Galet 01 ». Le plan, les listes, la liste des badges en CSV et
+  la feuille de contrôle gardent le nom entier, et l'ordre de la pile ne change
+  pas ; aucune ligne « Identifiant » ne s'ajoute. Sans personne numérotée, la
+  planche ne change pas.
 - Plus rien ne s'abrège d'un « … » sur les badges : une organisation, un titre
   ou un libellé de table trop long pour sa ligne se replie sur la suivante,
   coupé au dernier espace, comme un paragraphe, et la suite d'une ligne de
@@ -647,14 +656,14 @@
   « Ajouter ». Retirer un animateur de sa rangée retire sa réservation et son
   titre ensemble, un seul titre, le reste de la table intact. En lecture, les
   pastilles restent, sans ces boutons.
-- Dans la section « Badges », sous la case du pied TechnoLibre, un champ porte
-  le texte de ce pied, prérempli de l'invitation d'origine : on le remplace par
-  le sien, et le poste le garde, comme la case ; « Texte par défaut » remet
-  l'invitation. Le texte s'enregistre quand on quitte le champ, se replie seul
-  sur le badge — un retour à la ligne y devient une espace — et rapetisse,
-  puis se retire faute de place, comme l'invitation. Laissé vide, le pied ne
-  porte que le logo. Un caractère que la police ne dessine pas s'annonce avant
-  de produire et se nomme sur la feuille de contrôle, qui ne change pas
+- Dans la section « Impression », sous la case du pied TechnoLibre, un champ
+  porte le texte de ce pied, prérempli de l'invitation d'origine : on le
+  remplace par le sien, et le poste le garde, comme la case ; « Texte par
+  défaut » remet l'invitation. Le texte s'enregistre quand on quitte le champ,
+  se replie seul sur le badge — un retour à la ligne y devient une espace — et
+  rapetisse, puis se retire faute de place, comme l'invitation. Laissé vide, le
+  pied ne porte que le logo. Un caractère que la police ne dessine pas s'annonce
+  avant de produire et se nomme sur la feuille de contrôle, qui ne change pas
   autrement ; la liste en CSV non plus. Garder l'invitation d'origine ou y
   revenir donne la même planche, octet pour octet.
 - Le texte du pied TechnoLibre ne laisse plus un mot seul sur sa dernière ligne,

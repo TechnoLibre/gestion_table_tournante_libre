@@ -575,11 +575,13 @@ export async function ouvrirEvenement(contexte, charge, { ecriture = false, sect
 }
 
 /**
- * Ouvre l'événement de la charge, sur la section donnée, puis l'aperçu
- * avant impression par la commande « Imprimer… » de sa tête (§ 11.7), et
- * rend le montage. Le papier de la machine est posé avant le montage dans
- * les réglages locaux ; null n'en pose aucun, et l'aperçu s'ouvre sur la
- * question du papier. Avec un papier, l'aperçu rend son document.
+ * Ouvre l'événement de la charge, sur la section donnée, puis la section de
+ * l'impression, dont la partie « Plan » porte l'aperçu avant impression
+ * (§ 11.7), et rend le montage. Le papier de la machine est posé avant le
+ * montage dans les réglages locaux ; null n'en pose aucun, et l'aperçu
+ * s'ouvre sur la question du papier. Avec un papier, l'aperçu rend son
+ * document. La section donnée vient d'abord : la proposition montrée et le
+ * tour du plan sont ceux qu'elle laisse.
  *
  * @param {Object} contexte
  * @param {Object} charge
@@ -588,8 +590,8 @@ export async function ouvrirEvenement(contexte, charge, { ecriture = false, sect
 export async function ouvrirApercu(contexte, charge, { papier = 'A4', ecriture = false, section = 'plan', options = {} } = {}) {
   const fichiers = [...(papier === null ? [] : [fichierReglages(papier)]), ...(options.fichiers ?? [])];
   const m = await ouvrirEvenement(contexte, charge, { ecriture, section, options: { ...options, fichiers } });
-  await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
-  await element(m, '[data-ecran="apercu"]');
+  await cliquer(m, '[data-commande="section"][data-cible="badges"]');
+  await element(m, '[data-apercu-impression]');
   if (papier !== null) await element(m, '[data-impression] [data-feuille]');
   return m;
 }

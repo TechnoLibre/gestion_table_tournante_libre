@@ -9,6 +9,9 @@
 // de sa liste. mesurerListes lit, sur une feuille rendue hors de la vue, ce
 // que la pagination reçoit.
 //
+// tientEnCopie essaie, sur une copie d'une liste rendue, la taille du texte
+// d'une feuille par table (echelleAjustee, listes.js).
+//
 // Une ligne plus haute qu'une page ne se coupe pas au bord de la page : son
 // texte se partage en morceaux qui tiennent chacun sur une page sous
 // l'en-tête (couperTexte), coupés au début d'un mot, et chaque morceau
@@ -333,5 +336,30 @@ export function couperLigne(ligne, hauteur) {
     });
   } finally {
     essai.remove();
+  }
+}
+
+/**
+ * Vrai quand une liste rendue [data-liste-imprimee] tient dans hauteur une
+ * fois préparée : une copie de la liste, posée à côté d'elle — même
+ * largeur, mêmes colonnes —, reçoit ce que preparer y change — la taille
+ * de son texte —, et sa hauteur, du haut de la liste au bas de son corps de
+ * tableau — l'en-tête et ses lignes, comme paginer les somme —, ne passe
+ * pas hauteur. La copie se retire avant le retour.
+ *
+ * @param {Element} liste
+ * @param {number} hauteur   en px CSS, la hauteur utile de la page
+ * @param {(copie: Element) => void} preparer
+ * @returns {boolean}
+ */
+export function tientEnCopie(liste, hauteur, preparer) {
+  const copie = liste.cloneNode(true);
+  preparer(copie);
+  liste.after(copie);
+  try {
+    const bas = copie.querySelector('tbody').getBoundingClientRect().bottom;
+    return bas - copie.getBoundingClientRect().top <= hauteur + BRUIT;
+  } finally {
+    copie.remove();
   }
 }

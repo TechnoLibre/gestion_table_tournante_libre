@@ -41,10 +41,12 @@ import { estBrouillon } from '../../application/sorties.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { analyser } from '../../stockage/document.js';
+import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
+import { composantes } from '../../../test/navigateur/rendu.js';
 import { attendre, chargeBloquee, chargePrincipale, cliquer, creerContexte, ouvrirApercu } from '../../../test/navigateur/ecrans.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { etatsDesTours, feuillesTables, lignesAccueil, textesCellule, textesLigneAccueil } from './listes.js';
+import { ECHELLE_TEXTE_MAX, etatsDesTours, feuillesTables, lignesAccueil, textesCellule, textesLigneAccueil } from './listes.js';
 import { paginer } from './pagination.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -88,13 +90,13 @@ const boite = (element) => element.getBoundingClientRect();
 
 // Choisit une vue de l'aperçu par sa commande, et attend son document.
 async function choisirVue(m, vue) {
-  await cliquer(m, `[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`);
+  await cliquer(m, `[data-apercu-impression] [data-commande="vue"][data-cible="${vue}"]`);
   await attendre(`la vue ${vue}`, () => dans(m, `[data-impression][data-vue-impression="${vue}"] [data-feuille]`), IMAGES);
 }
 
 // Bascule « Une feuille par tour » et attend le document qui en suit.
 async function basculerParTour(m, voulu) {
-  await cliquer(m, '[data-ecran="apercu"] [data-commande="parTour"]');
+  await cliquer(m, '[data-apercu-impression] [data-commande="parTour"]');
   await attendre(`parTour ${voulu}`, () => m.ui.etat().apercu.parTour === voulu, IMAGES);
   await attendre('le document', () => feuilles(m).length > 0, IMAGES);
 }
@@ -221,11 +223,11 @@ describe('aucune troncature : les listes imprimées replient (§ 7.4)', () => {
     const noms = tous(m.racine, '[data-impression] [data-nom-imprime]');
     const longs = noms.filter((noeud) => noeud.textContent === attendu);
     expect(longs.length, 'le nom entier à chaque tour où la personne est assise').toBeGreaterThan(0);
-    const ligne = longs[0].closest('[data-ligne-imprimee]');
-    // Une autre table : ses lignes ne portent pas le nom long, à aucun tour.
+    // Le nom long replie sur plus de lignes qu'un nom d'une autre table, que
+    // chaque table imprime pourtant à sa propre taille.
     const tableDuNom = longs[0].closest('[data-liste-imprimee]').dataset.table;
     const autre = noms.find((noeud) => noeud.closest('[data-liste-imprimee]').dataset.table !== tableDuNom);
-    expect(boite(ligne).height, 'la ligne du nom long replie').toBeGreaterThan(1.5 * boite(autre.closest('[data-ligne-imprimee]')).height);
+    expect(lignesDeTexte(longs[0]), 'la ligne du nom long replie').toBeGreaterThan(lignesDeTexte(autre) + 1);
     expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
   });
 });
@@ -378,21 +380,29 @@ describe('la liste d’accueil : des tours trop nombreux pour la page, en blocs 
 });
 
 describe('la feuille par table (§ 11.7, Q6 c)', () => {
-  test('une feuille par table, les tours en colonnes : chaque place listée, une place vide écrite comme telle', async () => {
-    const charge = appliquerCommande('creerTable', chargePrincipale(), { forme: 'ronde' }).charge;
-    const nouvelle = charge.tables.at(-1);
+  test('une feuille par table occupée, les tours en colonnes : chaque place listée, une place vide écrite comme telle ; une table où personne n’est assis n’a pas de feuille', async () => {
+    const creee = appliquerCommande('creerTable', chargePrincipale(), { forme: 'ronde' }).charge;
+    const nouvelle = creee.tables.at(-1);
+    // La personne du plus grand identifiant exclue, la dernière de sa table
+    // et loin des places titrées : sa place s'écrit vide à chaque tour.
+    const derniere = Math.max(...creee.participants.map(({ id }) => id));
+    const charge = appliquerCommande('exclureParticipant', creee, { id: derniere }).charge;
     const m = await ouvrirApercu(contexte, charge);
     await choisirVue(m, 'tables');
-    expect(verifierPagination(m)).toBe(charge.tables.length);
+    const occupees = charge.tables.filter(({ id }) => id !== nouvelle.id);
+    expect(verifierPagination(m)).toBe(occupees.length);
     const blocs = tous(m.racine, '[data-impression] [data-liste-imprimee]');
-    expect(blocs.map((bloc) => Number(bloc.dataset.table)).sort((a, b) => a - b)).toEqual(charge.tables.map(({ id }) => id).sort((a, b) => a - b));
-    const bloc = blocs.find((candidat) => Number(candidat.dataset.table) === nouvelle.id);
-    const places = charge.evenement.siegesParDefaut;
-    expect(tous(bloc, '[data-ligne-imprimee]')).toHaveLength(places);
-    const vides = tous(bloc, '[data-place-vide]');
-    expect(vides).toHaveLength(places * charge.evenement.tours);
+    expect(blocs.map((bloc) => Number(bloc.dataset.table)).sort((a, b) => a - b)).toEqual(occupees.map(({ id }) => id).sort((a, b) => a - b));
+    expect(blocs.some((bloc) => Number(bloc.dataset.table) === nouvelle.id), 'la table vide').toBe(false);
+    const vides = tous(dans(m, '[data-impression]'), '[data-place-vide]');
+    expect(vides.length).toBeGreaterThanOrEqual(charge.evenement.tours);
     for (const vide of vides) expect(texte(vide)).toBe(t('feuilles.tables.vide'));
-    expect(texte(bloc)).toContain(t('feuilles.tables.titre', { table: nouvelle.numero }));
+    const modele = feuillesTables(charge, etatsDesTours(charge, m.ui.etat().proposition));
+    for (const bloc of blocs) {
+      const attendue = modele.find(({ table }) => table === Number(bloc.dataset.table));
+      expect(tous(bloc, '[data-ligne-imprimee]'), `table ${attendue.numero}`).toHaveLength(attendue.lignes.length);
+      expect(texte(bloc)).toContain(t('feuilles.tables.titre', { table: attendue.numero }));
+    }
     for (const feuille of feuilles(m)) expect(texte(feuille.querySelector('[data-pied]'))).toContain(t('impression.pied.tousLesTours'));
 
     // Les titres nommés : « hôte », pourvu, à la table 1, place 1 ;
@@ -471,9 +481,13 @@ describe('la feuille par table (§ 11.7, Q6 c)', () => {
     for (const feuille of feuilles(m)) expect(feuille.querySelectorAll('[data-filigrane]'), 'en colonnes').toHaveLength(1);
     await basculerParTour(m, true);
     const blocs = tous(m.racine, '[data-impression] [data-liste-imprimee]');
-    expect(blocs).toHaveLength(charge.tables.length * R);
+    // Une feuille par table et par tour où quelqu'un y est assis : au tour
+    // que le retenu ne porte pas, les seules réservations.
+    const attendues = feuillesTables(charge, etatsDesTours(charge, null), { parTour: true });
+    expect(blocs.map((bloc) => Number(bloc.dataset.table))).toEqual(attendues.map(({ table }) => table));
+    expect(attendues.some(({ tours }) => tours[0] === R), `une feuille au tour ${R}`).toBe(true);
     blocs.forEach((bloc, rang) => {
-      const tour = (rang % R) + 1;
+      const [tour] = attendues[rang].tours;
       const feuille = bloc.closest('[data-feuille]');
       expect(feuille.querySelectorAll('[data-filigrane]'), `tour ${tour}`).toHaveLength(tour === R ? 1 : 0);
     });
@@ -698,5 +712,124 @@ describe('la liste d’accueil : une ligne plus haute qu’une page (§ 7.4)', (
     expect(vus, 'chaque tour une fois, dans l’ordre').toEqual(Array.from({ length: 7 }, (_, rang) => rang + 1));
     expect(tailles.at(-1), 'le dernier bloc plus court').toBeLessThan(tailles[0]);
     expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
+  });
+});
+
+describe('la feuille par table : l’organisation, une page par table, le texte ajusté, le dessin (§ 11.7)', () => {
+  // La feuille par table de la principale, sur le papier donné.
+  async function feuillesDeTables(papier = 'A4') {
+    const charge = chargePrincipale();
+    const m = await ouvrirApercu(contexte, charge, { papier });
+    await choisirVue(m, 'tables');
+    return { m, charge, modele: feuillesTables(charge, etatsDesTours(charge, m.ui.etat().proposition)) };
+  }
+
+  // Vérifie que chaque liste tient dans sa page, à sa taille : son corps
+  // de tableau au-dessus du bas de la zone de contenu, aucun mot coupé ni
+  // aucune cellule plus large que sa colonne.
+  function verifierTaille(m) {
+    for (const feuille of feuilles(m)) {
+      const liste = feuille.querySelector('[data-liste-imprimee]');
+      const bas = boite(feuille.querySelector('[data-contenu]')).bottom;
+      expect(boite(liste.querySelector('tbody')).bottom, `liste ${liste.dataset.listeImprimee}`).toBeLessThanOrEqual(bas + JEU_PX);
+      for (const cellule of tous(liste, 'td, th')) {
+        expect(motsCoupes(cellule), `liste ${liste.dataset.listeImprimee} : ${texte(cellule)}`).toEqual([]);
+        expect(cellule.scrollWidth, texte(cellule)).toBeLessThanOrEqual(cellule.clientWidth);
+      }
+    }
+  }
+
+  test('chaque occupant porte son organisation après son nom, à l’encre secondaire, séparée d’un tiret ; aucune sans organisation', async () => {
+    const { m, modele } = await feuillesDeTables();
+    const secondaire = couleurDeJeton('--couleur-page-texte-secondaire', dans(m, '[data-impression]')).join();
+    let vues = 0;
+    for (const bloc of tous(m.racine, '[data-impression] [data-liste-imprimee]')) {
+      const feuille = modele.find(({ table }) => table === Number(bloc.dataset.table));
+      for (const ligne of tous(bloc, '[data-ligne-imprimee]')) {
+        const cellules = [...ligne.cells].slice(1);
+        feuille.lignes[Number(ligne.dataset.ligneImprimee)].cellules.forEach((donnee, rang) => {
+          const organisation = cellules[rang].querySelector('[data-organisation-imprimee]');
+          if (donnee.organisation === null) {
+            expect(organisation, `${donnee.nom}`).toBeNull();
+            return;
+          }
+          vues += 1;
+          expect(organisation.textContent).toBe(`${t('feuilles.tables.avantOrganisation')}${donnee.organisation}`);
+          expect(organisation.previousElementSibling?.hasAttribute('data-nom-imprime')).toBe(true);
+          expect(composantes(getComputedStyle(organisation).color).join()).toBe(secondaire);
+          expect(getComputedStyle(organisation).fontWeight).not.toBe('700');
+        });
+      }
+    }
+    expect(vues, 'des organisations imprimées').toBeGreaterThan(0);
+  });
+
+  for (const papier of ['A4', 'Lettre']) {
+    test(`${papier} : une table par page, son texte grandi au-delà du plancher et au plus de moitié, sans rien qui déborde ni mot coupé`, async () => {
+      const { m, modele } = await feuillesDeTables(papier);
+      const listes = tous(m.racine, '[data-impression] [data-liste-imprimee]');
+      expect(feuilles(m)).toHaveLength(modele.length);
+      expect(listes.map((liste) => Number(liste.dataset.table))).toEqual(modele.map(({ table }) => table));
+      for (const feuille of feuilles(m)) expect(feuille.querySelectorAll('[data-liste-imprimee]')).toHaveLength(1);
+      for (const liste of listes) {
+        const echelle = Number(liste.dataset.echelle);
+        expect(echelle, `table ${liste.dataset.table}`).toBeGreaterThan(1);
+        expect(echelle).toBeLessThanOrEqual(ECHELLE_TEXTE_MAX);
+        const corps = Number.parseFloat(getComputedStyle(liste.querySelector('td')).fontSize);
+        expect(Math.abs(corps - 16 * echelle), `table ${liste.dataset.table}`).toBeLessThan(0.01);
+        const titre = Number.parseFloat(getComputedStyle(liste.querySelector('.titre, p')).fontSize);
+        expect(Math.abs(titre - 20 * echelle), `titre de la table ${liste.dataset.table}`).toBeLessThan(0.01);
+      }
+      verifierTaille(m);
+    });
+  }
+
+  test('une table dont une ligne passe une page garde le plancher ; les autres grandissent chacune à sa taille', async () => {
+    const charge = chargeNomDePages(2);
+    const m = await ouvrirApercu(contexte, charge);
+    await choisirVue(m, 'tables');
+    const listes = tous(m.racine, '[data-impression] [data-liste-imprimee]');
+    const tableDuNom = tous(m.racine, '[data-impression] [data-nom-imprime]')
+      .find((noeud) => noeud.textContent.includes('Ombrelle Pervenche Ombrelle'))
+      .closest('[data-liste-imprimee]').dataset.table;
+    for (const liste of listes) {
+      const echelle = Number(liste.dataset.echelle);
+      if (liste.dataset.table === tableDuNom) expect(echelle, 'la table du nom').toBe(1);
+      else expect(echelle, `table ${liste.dataset.table}`).toBeGreaterThan(1);
+    }
+    verifierDansLesZones(m);
+  });
+
+  test('« Dessiner la table », décochée par défaut : cochée, chaque page porte en tête le dessin de sa table au lieu du titre, une image nommée ; le texte se règle sur ce qui reste, sans rien écrire', async () => {
+    const { m, charge, modele } = await feuillesDeTables();
+    const bouton = () => dans(m, '[data-apercu-impression] [data-commande="dessinTable"]');
+    expect(texte(bouton())).toBe(t('impression.dessinTable'));
+    expect(bouton().getAttribute('aria-pressed')).toBe('false');
+    expect(dans(m, '[data-impression] [data-dessin-table]')).toBeNull();
+    const sans = new Map(tous(m.racine, '[data-impression] [data-liste-imprimee]').map((liste) => [liste.dataset.table, Number(liste.dataset.echelle)]));
+    const avant = m.trace.length;
+    await cliquer(m, '[data-apercu-impression] [data-commande="dessinTable"]');
+    await attendre('les dessins', () => feuilles(m).length > 0 && dans(m, '[data-impression] [data-dessin-table]'), IMAGES);
+    expect(m.ui.etat().apercu.dessinTable).toBe(true);
+    expect(bouton().getAttribute('aria-pressed')).toBe('true');
+    const listes = tous(m.racine, '[data-impression] [data-liste-imprimee]');
+    expect(listes.map((liste) => Number(liste.dataset.table))).toEqual(modele.map(({ table }) => table));
+    for (const liste of listes) {
+      const numero = charge.tables.find(({ id }) => id === Number(liste.dataset.table)).numero;
+      const dessin = liste.querySelector('[data-dessin-table]');
+      expect(dessin, `table ${numero}`).not.toBeNull();
+      expect(liste.firstElementChild).toBe(dessin);
+      expect(dessin.getAttribute('role')).toBe('img');
+      expect(dessin.getAttribute('aria-label')).toContain(t('feuilles.tables.titre', { table: numero }));
+      expect(liste.querySelector('p'), 'plus de titre').toBeNull();
+      expect(dessin.querySelectorAll('[data-chaise], circle, rect').length, `table ${numero} : son dessin`).toBeGreaterThan(0);
+      expect(boite(dessin).height).toBeGreaterThan(0);
+      expect(Number(liste.dataset.echelle)).toBeLessThanOrEqual(sans.get(liste.dataset.table));
+    }
+    verifierTaille(m);
+    expect(m.trace.slice(avant)).toEqual([]);
+    // Hors de la feuille par table, la commande n'est pas offerte.
+    await choisirVue(m, 'accueil');
+    expect(bouton()).toBeNull();
   });
 });

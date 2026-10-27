@@ -30,8 +30,12 @@ export const TABLE = new Map([
   // Ce qui sépare le titre d'une feuille du libellé de sa table, que la
   // feuille pose dans son propre nœud.
   ['feuilles.tables.avantLibelle', ' \u{2014} '],
+  // Ce qui sépare le nom d'un occupant de son organisation, que la cellule
+  // pose dans son propre nœud, à l'encre secondaire.
+  ['feuilles.tables.avantOrganisation', ' \u{2014} '],
   ['feuilles.tables.place', 'Place'],
   ['feuilles.tables.vide', 'Place vide'],
   ['feuilles.tables.titreNonPourvu', '(titre non pourvu)'],
-  ['feuilles.tables.aucune', 'Aucune table'],
+  // Aucune table, ou personne d'assis à aucune.
+  ['feuilles.tables.aucune', 'Aucune table occupée'],
 ]);

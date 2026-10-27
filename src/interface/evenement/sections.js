@@ -19,12 +19,12 @@ const CLES = new Map([
   ['badges', 'coquille.section.badges'],
 ]);
 
-/** Les sections de l'événement, dans l'ordre du § 2.1 : import,
- *  participants, tables, plan, diagnostic, generation, propositions,
- *  qualite — la page de qualité, lue avant de retenir (§ 2.1 étape 10) —,
- *  badges — la planche, dernière étape (§ 2.1 étape 12). Aucune n'en exige
- *  une autre. Le titre et le nom de navigation de chacune sont la clé
- *  coquille.section.<nom> de coquille.js. */
+/** Les sections de l'événement, dans l'ordre du § 2.1 : import, participants,
+ *  tables, plan, diagnostic, generation, propositions, qualite — la page de
+ *  qualité, lue avant de retenir (§ 2.1 étape 10) —, badges — l'impression : la
+ *  planche, dernière étape (§ 2.1 étape 12), et l'aperçu des autres sorties
+ *  (§ 11.7). Aucune n'en exige une autre. Le titre et le nom de navigation de
+ *  chacune sont la clé coquille.section.<nom> de coquille.js. */
 export const SECTIONS = Object.freeze([...CLES.keys()]);
 
 // Les phases de la navigation, chacune avec ses sections, dans l'ordre du
@@ -45,6 +45,12 @@ export const PHASES = Object.freeze(
 
 /** La section qu'un événement montre à son ouverture. */
 export const SECTION_OUVERTURE = 'plan';
+
+/** La section de l'impression, que la navigation nomme « Impression » : la
+ *  planche de badges, puis l'aperçu avant impression du plan, de la liste
+ *  d'accueil et de la feuille par table (§ 11.7). Son identifiant reste
+ *  celui de la planche, qu'aucun fichier n'écrit. */
+export const SECTION_IMPRESSION = 'badges';
 
 /**
  * La clé du titre d'une section, coquille.section.<nom>.

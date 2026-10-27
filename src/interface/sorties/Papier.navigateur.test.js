@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La question du papier dans un vrai moteur de rendu (§ 8.5, § 11.2) : le
-// composant que l'aperçu et la section des badges partagent. Sans papier,
-// il pose la question, un choix par papier de PAPIERS ; avec un papier, il
-// le montre, « Papier : A4 », et offre de le changer. Choisir passe par
-// seance.choisirPapier ; un refus s'affiche sur le choix, la question reste
+// composant que les badges et l'aperçu de la section de l'impression partagent.
+// Sans papier, il pose la question, un choix par papier de PAPIERS ; avec un
+// papier, il le montre, « Papier : A4 », et offre de le changer. Choisir passe
+// par seance.choisirPapier ; un refus s'affiche sur le choix, la question reste
 // et onChoisi n'est pas appelé. Le composant est monté seul, sur une séance
-// d'épreuve qui suit le contrat de magasin de la séance et relève ce qu'on
-// lui demande ; l'aperçu l'éprouve sur la vraie séance
-// (Apercu.navigateur.test.js).
+// d'épreuve qui suit le contrat de magasin de la séance et relève ce qu'on lui
+// demande ; l'aperçu l'éprouve sur la vraie séance (Apercu.navigateur.test.js).
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).

@@ -53,8 +53,9 @@ moment d'imprimer à ressortir de toutes les étapes pour y revenir, or corriger
 est ce qu'il fait le plus (§ 10.2). La navigation de l'événement groupe ses neuf
 sections en trois phases nommées : **Préparer** (import, participants, tables et
 tours), **Placer** (plan, diagnostic, génération, propositions, qualité),
-**Produire** (badges). Le groupement est une lecture, non un ordre : chaque
-section reste offerte depuis toutes les autres.
+**Produire** (impression : la planche de badges, puis l'aperçu des autres
+sorties). Le groupement est une lecture, non un ordre : chaque section reste
+offerte depuis toutes les autres.
 
 **Deux verrous existent pourtant, et ils sont ailleurs.** L'état **bloqué**
 refuse toute modification, import compris (§ 9, § 10.1) ; le **mode lecture**,
@@ -301,11 +302,13 @@ tours où il est présent, et personne d'autre ne change de place.
 
 **12. Imprimer.** La **planche de badges** (§ 11.1), qui est le seul document
 PDF, et au besoin les vues imprimables : liste d'accueil, feuille par table,
-plan (§ 11.7). La page de qualité se lit à l'écran et ne s'imprime pas. Le
-logiciel n'interdit pas d'imprimer un plan qui n'est ni retenu ni bloqué ; il le
-marque **BROUILLON** en filigrane. **Produire la planche n'est pas une
-modification** : elle reste disponible en mode lecture et sur un plan bloqué.
-L'opérateur bloque ensuite le plan pour le distribuer (§ 9).
+plan (§ 11.7). Tout part de la section « Impression » : sous son titre
+« Badges », la planche, sa liste CSV et la réédition ; sous son titre « Plan »,
+l'aperçu avant impression des trois vues. La page de qualité se lit à l'écran et
+ne s'imprime pas. Le logiciel n'interdit pas d'imprimer un plan qui n'est ni
+retenu ni bloqué ; il le marque **BROUILLON** en filigrane. **Produire la
+planche n'est pas une modification** : elle reste disponible en mode lecture et
+sur un plan bloqué. L'opérateur bloque ensuite le plan pour le distribuer (§ 9).
 
 **Ce qui doit avoir eu lieu.** Les étapes 2, 3, 5, 6, 7, 10 et 11 sont
 facultatives ; 2, 3, 4, 5, 6, 7, 9 et 11 se reprennent indéfiniment, dans
@@ -2471,20 +2474,20 @@ automatique en lecture ne tombe jamais au milieu d'une génération.
 événement ou l'une de ses versions de secours (§ 8.8), charger une
 démonstration, défaire, refaire ou revenir à un instant, appliquer un import,
 finir une génération — trier et enregistrer ses propositions, après la
-recherche —, ouvrir l'aperçu avant impression, préparer, produire ou enregistrer
-ailleurs la planche de badges, écrire ailleurs : ces opérations calculent sur le
-fil de l'interface. Une pastille « Traitement en cours… », au bas de la fenêtre
-et centrée, se pose et se peint **avant** que le calcul ne parte, et ne se voit
-qu'au bout d'**une demi-seconde** : une opération brève passe sans rien montrer.
-Son apparition et la rotation de son signe sont jouées par le compositeur du
-navigateur pendant que le calcul tient le fil, sans minuterie ; sous la
-préférence de mouvement réduit, elle apparaît de même et son signe reste
-immobile. Le curseur dit l'attente tant qu'elle est là. Elle se retire à la fin
-de l'opération, aboutie ou refusée, et deux opérations qui se chevauchent n'en
-montrent qu'une. L'attente de la peinture ne change pas l'ordre des gestes : un
-geste fait pendant elle part après l'opération qui l'attend — « Défaire » puis
-un ajout défont le geste d'avant, et l'ajout suit. Un geste ordinaire du plan ne
-la montre jamais, et l'écran au repos ne la porte pas.
+recherche —, ouvrir la section de l'impression, préparer, produire ou
+enregistrer ailleurs la planche de badges, écrire ailleurs : ces opérations
+calculent sur le fil de l'interface. Une pastille « Traitement en cours… », au
+bas de la fenêtre et centrée, se pose et se peint **avant** que le calcul ne
+parte, et ne se voit qu'au bout d'**une demi-seconde** : une opération brève
+passe sans rien montrer. Son apparition et la rotation de son signe sont jouées
+par le compositeur du navigateur pendant que le calcul tient le fil, sans
+minuterie ; sous la préférence de mouvement réduit, elle apparaît de même et son
+signe reste immobile. Le curseur dit l'attente tant qu'elle est là. Elle se
+retire à la fin de l'opération, aboutie ou refusée, et deux opérations qui se
+chevauchent n'en montrent qu'une. L'attente de la peinture ne change pas l'ordre
+des gestes : un geste fait pendant elle part après l'opération qui l'attend —
+« Défaire » puis un ajout défont le geste d'avant, et l'ajout suit. Un geste
+ordinaire du plan ne la montre jamais, et l'écran au repos ne la porte pas.
 
 **Les propositions d'une génération se calculent en parallèle, sur les cœurs du
 poste.** Chaque proposition ne dépend que de sa graine dérivée — et, pour une
@@ -3613,11 +3616,13 @@ Ce fichier porte **huit choses, et huit seulement** :
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
 le fichier d'événement ferait voyager le bac d'un bureau avec le plan. Le
-logiciel le demande au premier aperçu d'impression et ne le redemande plus ; les
-badges ne le demandent jamais, et partent sur Lettre tant qu'aucun papier n'est
-choisi, sans le retenir (§ 11.2). La section des badges, pour l'A6, et l'aperçu
-le montrent, et il se change d'un geste. La question offre chaque papier comme
-un choix distinct, d'un geste. Le redemander chaque fois apprend à cliquer sans
+logiciel le demande au premier aperçu d'impression — la première ouverture de la
+section de l'impression, dont le titre « Plan » porte l'aperçu, même quand on
+n'y vient que pour les badges — et ne le redemande plus ; les badges ne le
+demandent jamais, et partent sur Lettre tant qu'aucun papier n'est choisi, sans
+le retenir (§ 11.2). La section de l'impression, pour l'A6, et l'aperçu le
+montrent, et il se change d'un geste. La question offre chaque papier comme un
+choix distinct, d'un geste. Le redemander chaque fois apprend à cliquer sans
 lire (§ 5.9). Le choix s'écrit dans tout mode, en lecture et sur un plan
 bloqué : c'est un réglage de la machine, pas une modification de l'événement. En
 mode portable (§ 8.6), ce fichier suit la clé avec les événements.
@@ -3648,24 +3653,24 @@ l'ancien finit de s'écrire pendant le changement.
 **Le modèle de badge** décrit le support que la machine garnit — des cartes
 Avery 5392 prédécoupées, ou des A6 à découper (§ 11.2) —, pas le plan. Le
 fichier ne le porte que choisi ; sans lui, les badges partent sur Avery 5392,
-qui impose le papier Lettre, sans rien demander : le papier choisi pour
-l'aperçu ne change pas pour autant, et il reste partagé avec les badges A6.
-Une valeur présente hors des deux modèles rend le fichier illisible, comme un
-papier inconnu, et une construction qui ne connaît pas la clé la garde telle
-quelle. Le modèle se choisit dans la section des badges, s'écrit au geste qui
-le choisit, dans tout mode, par la même file, et se relit comme la taille du
-texte : au lancement, puis à chaque changement de dossier de travail, celui
-que le fichier porte, à défaut celui de la séance. Un fichier que la lecture
-ne prend pas, ou un dossier qui refuse de l'écrire, ne bloque pas le choix : le
+qui impose le papier Lettre, sans rien demander : le papier choisi pour l'aperçu
+ne change pas pour autant, et il reste partagé avec les badges A6. Une valeur
+présente hors des deux modèles rend le fichier illisible, comme un papier
+inconnu, et une construction qui ne connaît pas la clé la garde telle quelle. Le
+modèle se choisit dans la section de l'impression, s'écrit au geste qui le
+choisit, dans tout mode, par la même file, et se relit comme la taille du
+texte : au lancement, puis à chaque changement de dossier de travail, celui que
+le fichier porte, à défaut celui de la séance. Un fichier que la lecture ne
+prend pas, ou un dossier qui refuse de l'écrire, ne bloque pas le choix : le
 modèle vaut pour la séance, et la section dit, sous ses réglages, qu'il n'est
 pas retenu sur ce poste.
 
 **La case du pied TechnoLibre** dit si les badges de la machine portent le pied
 de l'éditeur (§ 11.4) : un choix de la machine qui les imprime, pas du plan. Le
-fichier ne la porte que touchée, un booléen ; sans elle, la case est cochée.
-Une valeur présente qui n'est pas un booléen rend le fichier illisible, comme
-un papier inconnu. Elle se coche et se décoche dans la section des badges, sous
-les deux modèles, s'écrit au geste, dans tout mode, par la même file, et se
+fichier ne la porte que touchée, un booléen ; sans elle, la case est cochée. Une
+valeur présente qui n'est pas un booléen rend le fichier illisible, comme un
+papier inconnu. Elle se coche et se décoche dans la section de l'impression,
+sous les deux modèles, s'écrit au geste, dans tout mode, par la même file, et se
 relit comme le modèle de badge ; un fichier que la lecture ne prend pas, ou un
 dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut pour la
 séance, et la section dit, sous ses réglages, qu'elle n'est pas retenue sur ce
@@ -3673,7 +3678,7 @@ poste.
 
 **Le texte du pied TechnoLibre** remplace, sur les badges de la machine, la
 phrase d'origine du pied (§ 11.4) : un choix de la machine qui les imprime,
-comme la case. Il se saisit dans la section des badges, dans un champ de
+comme la case. Il se saisit dans la section de l'impression, dans un champ de
 quelques lignes sous la case, prérempli de la phrase d'origine et désactivé
 tant que la case est décochée ; « Texte par défaut » la remet. Il se garde
 **normalisé** : en NFC, chaque suite d'espaces, de tabulations ou de sauts de
@@ -3697,13 +3702,13 @@ pas retenu sur ce poste.
 l'événement », « Date de l'événement », « Date du placement », « Identifiant »
 (§ 11.4) — sont, comme celle du pied TechnoLibre, un choix de la machine qui
 imprime. Le fichier les porte sous `donnees_badge`, un objet d'un booléen par
-donnée — `organisation`, `evenement`, `date`, `horodatage`, `identifiant` —,
-qui n'existe que touché et ne porte que les cases touchées ; une case absente
-est cochée. Un objet qui n'en est pas un, ou une case connue qui n'est pas un
+donnée — `organisation`, `evenement`, `date`, `horodatage`, `identifiant` —, qui
+n'existe que touché et ne porte que les cases touchées ; une case absente est
+cochée. Un objet qui n'en est pas un, ou une case connue qui n'est pas un
 booléen, rend le fichier illisible, comme un papier inconnu ; une clé inconnue
 de l'objet se garde telle quelle. Chaque case se coche et se décoche dans la
-section des badges, sous les deux modèles, s'écrit au geste, dans tout mode,
-par la même file, et se relit comme le modèle de badge, chacune pour
+section de l'impression, sous les deux modèles, s'écrit au geste, dans tout
+mode, par la même file, et se relit comme le modèle de badge, chacune pour
 elle-même : une case que le fichier ne porte pas garde celle de la séance. Un
 fichier que la lecture ne prend pas, ou un dossier qui refuse de l'écrire, ne
 bloque pas le choix : la case vaut pour la séance, et la section dit, sous ses
@@ -3719,7 +3724,7 @@ choix de la machine qui imprime, et non une sixième donnée de
 une donnée. Le fichier ne la porte que touchée, un booléen sous
 `cacher_numero_doublon` ; sans elle, la case est cochée. Une valeur présente
 qui n'est pas un booléen rend le fichier illisible, comme un papier inconnu.
-Elle se coche et se décoche dans la section des badges, sous les deux
+Elle se coche et se décoche dans la section de l'impression, sous les deux
 modèles, s'écrit au geste, dans tout mode, par la même file, et se relit
 comme la case du pied TechnoLibre ; un fichier que la lecture ne prend pas,
 ou un dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut
@@ -5613,7 +5618,7 @@ Conséquences à tenir :
 par défaut est **Avery 5392** : des cartes prédécoupées de 4 po × 3 po, six par
 feuille Lettre, qui n'ont besoin d'aucune coupe. Le second est **l'A6 à
 découper**, sur A4 ou sur Lettre. Le modèle est un réglage local de la
-machine (§ 8.5), choisi dans la section des badges, qui ne voyage pas avec
+machine (§ 8.5), choisi dans la section de l'impression, qui ne voyage pas avec
 l'événement. Avery 5392 impose son papier, le Lettre : la section ne montre
 alors ni l'imposition ni le papier. L'A6 prend le papier de la machine, que
 l'aperçu d'impression partage, et le Lettre tant qu'aucun n'est choisi : les
@@ -5828,25 +5833,25 @@ Le pied des **pages** imprimées porte cinq éléments, la version comprise
 et l'horodatage, **pas le tour** — il les porte tous — et **pas la version**, qui
 ne sert à aucun diagnostic au cou d'un invité et dont la place est comptée.
 
-**Cinq cases retirent des données du badge.** La section des badges porte, à
-côté de la case du pied TechnoLibre, cinq cases, **toutes cochées par défaut**
+**Cinq cases retirent des données du badge.** La section de l'impression porte,
+à côté de la case du pied TechnoLibre, cinq cases, **toutes cochées par défaut**
 et **gardées sur le poste** comme elle (§ 8.5) : « Organisation » (rang 3),
 « Nom de l'événement » et « Date de l'événement » (rang 4), « Date du
-placement » — la ligne « Placement du … à … », rang 5 — et « Identifiant » —
-la ligne « Identifiant n° … » d'un homonyme. Le nom de la personne et ses
-tours s'impriment toujours. Une case décochée retire sa donnée de chaque badge
-du PDF, A6 comme Avery 5392, et la place libérée revient au reste comme celle
-d'une ligne absente (§ 11.5) : au nom et aux tours, puis au logo du
-participant et au pied TechnoLibre. Le nom et la date de l'événement se
-combinent : la date décochée, le nom reste seul sur sa ligne ; le nom décoché,
-la date seule ; les deux décochés, la ligne disparaît. Un nom de l'événement
-que sa case retire n'est pas un nom perdu au sens de l'ordre de sacrifice : le
-logo du participant et le pied TechnoLibre s'y posent encore quand l'écart le
-permet. La feuille de contrôle nomme les données retirées, d'une ligne
-(§ 11.3) ; l'annonce nomme toujours les homonymes que rien ne sépare,
-« Identifiant » décoché compris, et l'opérateur décide. La liste des badges en
-CSV (§ 11.6) ne lit aucune case : elle ne change pas. Toutes les cases
-cochées, la planche garde exactement ses octets.
+placement » — la ligne « Placement du … à … », rang 5 — et « Identifiant » — la
+ligne « Identifiant n° … » d'un homonyme. Le nom de la personne et ses tours
+s'impriment toujours. Une case décochée retire sa donnée de chaque badge du PDF,
+A6 comme Avery 5392, et la place libérée revient au reste comme celle d'une
+ligne absente (§ 11.5) : au nom et aux tours, puis au logo du participant et au
+pied TechnoLibre. Le nom et la date de l'événement se combinent : la date
+décochée, le nom reste seul sur sa ligne ; le nom décoché, la date seule ; les
+deux décochés, la ligne disparaît. Un nom de l'événement que sa case retire
+n'est pas un nom perdu au sens de l'ordre de sacrifice : le logo du participant
+et le pied TechnoLibre s'y posent encore quand l'écart le permet. La feuille de
+contrôle nomme les données retirées, d'une ligne (§ 11.3) ; l'annonce nomme
+toujours les homonymes que rien ne sépare, « Identifiant » décoché compris, et
+l'opérateur décide. La liste des badges en CSV (§ 11.6) ne lit aucune case :
+elle ne change pas. Toutes les cases cochées, la planche garde exactement ses
+octets.
 
 **Une case laisse en blanc le nom des doublons.** Juste avant celle du pied
 TechnoLibre, la case « Laisser le nom des doublons en blanc », **cochée par
@@ -6240,38 +6245,38 @@ l'écriture refusée se dit, et « Enregistrer sous… » dépose la planche ail
 
 **Sous `electron`, le fichier se dépose dans le dossier de l'événement**
 (§ 8.6), `<racine>\<dossier>\<nom>`, par une écriture atomique ; les noms déjà
-pris se lisent dans ce dossier, et le logiciel nomme le chemin de chaque
-fichier — les cartes d'abord, puis la feuille de contrôle à part, chacune
-nommée ; une écriture refusée se dit en nommant le fichier en cause et le
-dossier — une feuille de contrôle refusée après les cartes dit aussi que les
-cartes, elles, sont déposées, et où — et offre « Enregistrer sous… », qui ouvre
-un dialogue par fichier et nomme chaque chemin choisi ; une feuille de contrôle
-refusée au second dialogue se dit de même, le chemin des cartes écrites montré.
-Un dossier d'événement qui disparaît pendant la séance — déplacé, renommé ou
-retiré hors de l'application — ne se recrée pas (§ 8.6) : la production se
-refuse en disant le dossier introuvable, et « Enregistrer sous… » reste offert.
-La section des badges offre **en tout temps « Ouvrir le dossier »**, parmi ses
-commandes, avant toute production comme après : la commande montre dans
-l'explorateur du système le dossier de l'événement, où la planche se dépose,
-sous la racine où l'événement est ouvert — la nouvelle, après l'écriture
-ailleurs (§ 8.6) —, et jamais l'emplacement choisi par « Enregistrer sous… » ;
-un dossier disparu s'y refuse de même, nommé. L'accueil garde « Ouvrir dans
-l’explorateur », qui montre le dossier de travail (§ 8.6). **Sous `web`, la
-planche se télécharge** : le dossier de travail y est invisible à l'opérateur,
-la section nomme le fichier — les deux fichiers d'Avery 5392 —, sans chemin, et
-n'offre pas « Ouvrir le dossier ».
+pris se lisent dans ce dossier, et le logiciel nomme le chemin de chaque fichier
+— les cartes d'abord, puis la feuille de contrôle à part, chacune nommée ; une
+écriture refusée se dit en nommant le fichier en cause et le dossier — une
+feuille de contrôle refusée après les cartes dit aussi que les cartes, elles,
+sont déposées, et où — et offre « Enregistrer sous… », qui ouvre un dialogue par
+fichier et nomme chaque chemin choisi ; une feuille de contrôle refusée au
+second dialogue se dit de même, le chemin des cartes écrites montré. Un dossier
+d'événement qui disparaît pendant la séance — déplacé, renommé ou retiré hors de
+l'application — ne se recrée pas (§ 8.6) : la production se refuse en disant le
+dossier introuvable, et « Enregistrer sous… » reste offert. La section de
+l'impression offre **en tout temps « Ouvrir le dossier »**, parmi ses commandes,
+avant toute production comme après : la commande montre dans l'explorateur du
+système le dossier de l'événement, où la planche se dépose, sous la racine où
+l'événement est ouvert — la nouvelle, après l'écriture ailleurs (§ 8.6) —, et
+jamais l'emplacement choisi par « Enregistrer sous… » ; un dossier disparu s'y
+refuse de même, nommé. L'accueil garde « Ouvrir dans l’explorateur », qui montre
+le dossier de travail (§ 8.6). **Sous `web`, la planche se télécharge** : le
+dossier de travail y est invisible à l'opérateur, la section nomme le fichier —
+les deux fichiers d'Avery 5392 —, sans chemin, et n'offre pas « Ouvrir le
+dossier ».
 
 **La planche se produit depuis le retenu, ou depuis une proposition choisie**
-(§ 2.1, étape 12). La section des badges offre le retenu quand il existe, et la
-proposition choisie dans la section des propositions ; l'annonce nomme la source.
-Une planche tirée d'une proposition sort **toujours** en BROUILLON (§ 11.7), à
-l'horodatage de cette proposition : elle n'est pas le plan retenu. Sans retenu ni
-proposition désignée, la production se refuse et renvoie aux propositions. Une
-proposition qui se contredit se refuse aussi, et renvoie aux propositions : la
-version précédente du fichier, le remède d'un retenu qui se contredit, ne se
-reprend pas pour elle, puisque le retenu est sain.
+(§ 2.1, étape 12). La section de l'impression offre le retenu quand il existe,
+et la proposition choisie dans la section des propositions ; l'annonce nomme la
+source. Une planche tirée d'une proposition sort **toujours** en BROUILLON
+(§ 11.7), à l'horodatage de cette proposition : elle n'est pas le plan retenu.
+Sans retenu ni proposition désignée, la production se refuse et renvoie aux
+propositions. Une proposition qui se contredit se refuse aussi, et renvoie aux
+propositions : la version précédente du fichier, le remède d'un retenu qui se
+contredit, ne se reprend pas pour elle, puisque le retenu est sain.
 
-**La liste des badges, en CSV.** La section des badges offre, à côté de
+**La liste des badges, en CSV.** La section de l'impression offre, à côté de
 « Produire la planche (PDF) », **« Produire la liste (CSV) »**, sans réglage à
 garder : la liste se tire de la même source et dans le même ordre que la
 planche, pour toute la soirée ; la réédition de la section ne produit que la
@@ -6332,34 +6337,63 @@ page ; aucune ne se découpe, aucune ne doit entrer dans une pochette.
 | **feuille par table** | l'animateur de table, à chaque changement de tour | chacun connaît sa table par son badge, donc la rotation se fait ; ce qui disparaît est l'appel nominal, et une place vide ne se remarque plus |
 | **plan de salle** | l'opérateur et le personnel, au montage | il reste à l'écran, où il est interactif ; c'est la vue qui perd le plus à n'être pas sur papier pendant le montage d'une salle sans portable |
 
-**Toute impression passe par un écran d'aperçu**, que la commande « Imprimer… »
-de l'événement ouvre et qui se referme vers la section d'où il vient. Il offre
-**trois vues** : le plan, tour par tour ; la liste d'accueil ; la feuille par
-table. Le tableau des propositions (§ 5.7) et la page de qualité (§ 12) se
-lisent à l'écran, où l'opérateur choisit sa proposition : ils ne s'impriment
-pas, et aucun indicateur ne s'exporte en CSV. L'aperçu imprime la source que le
-plan montre — le retenu, la proposition montrée, ou les seules réservations — et
-n'écrit rien dans l'événement : il vit en lecture et sur un plan bloqué. Sa
-commande « Imprimer » demande à la plateforme le papier et l'orientation de la
-vue : la boîte de dialogue du navigateur sous `web`, celle du système sous
-`electron`. Un échec se dit sur la commande ; une annulation ne dit rien. La
-barre de l'aperçu, qui ne s'imprime pas, groupe ses commandes : la vue imprimée,
-les réglages de la vue, le papier et « Imprimer », puis « Fermer l'aperçu » à
-part.
+**Toute impression passe par l'aperçu**, que la section « Impression » de
+l'événement porte sous son titre « Plan », après la partie « Badges » — la
+planche, sa liste CSV, la réédition. C'est le seul endroit d'où l'on imprime :
+l'événement n'a pas d'autre commande d'impression, et l'aperçu n'a ni écran à
+lui ni commande pour se refermer. Il s'ouvre avec la section, sur le plan au
+tour que le plan montre, et tombe quand une autre section s'ouvre ; ses réglages
+ne s'écrivent nulle part. Il offre **trois vues** : le plan, tour par tour ; la
+liste d'accueil ; la feuille par table. Le tableau des propositions (§ 5.7) et
+la page de qualité (§ 12) se lisent à l'écran, où l'opérateur choisit sa
+proposition : ils ne s'impriment pas, et aucun indicateur ne s'exporte en CSV.
+L'aperçu imprime la source que le plan montre — le retenu, la proposition
+montrée, ou les seules réservations — et n'écrit rien dans l'événement : il vit
+en lecture et sur un plan bloqué. Sa commande « Imprimer » demande à la
+plateforme le papier et l'orientation de la vue : la boîte de dialogue du
+navigateur sous `web`, celle du système sous `electron`. Un échec se dit sur la
+commande ; une annulation ne dit rien. La barre de l'aperçu, qui ne s'imprime
+pas, groupe ses commandes : la vue imprimée, les réglages de la vue, le papier
+et « Imprimer ». À l'impression, la feuille de style ne peint que les pages : ni
+la navigation, ni la partie « Badges », ni les titres de la section, ni la
+barre.
 
 **La feuille par table couvre la soirée** : une feuille par table, une colonne
 par tour, que l'animateur garde d'un tour à l'autre. L'aperçu offre aussi « Une
-feuille par tour », une feuille par table et par tour. Ses colonnes et ses
-lignes suivent le § 7.4 : des tours qui ne tiennent pas côte à côte se scindent
-en groupes de tours consécutifs, et une ligne plus haute qu'une page se poursuit
-sur la suivante. La liste d'accueil couvre aussi la soirée, une colonne par
-tour ; la case d'un tour où la personne est absente porte « absente », ni table,
-ni siège, ni réserve. La feuille par table ne nomme pas une personne absente à
-son tour : l'appel nominal ne la cherche pas. Son titre nomme la table par son
+feuille par tour », une feuille par table et par tour. **Une table où personne
+n'est assis aux tours d'une feuille n'a pas cette feuille**, même quand ses
+places portent un titre ; une soirée sans table occupée imprime une feuille qui
+le dit. **Chaque table commence une page**, et chaque occupant y porte son
+organisation après son nom, séparée d'un tiret, à l'encre secondaire — rien
+quand il n'en a pas. Ses colonnes et ses lignes suivent le § 7.4 : des tours
+qui ne tiennent pas côte à côte se scindent en groupes de tours consécutifs,
+et une ligne plus haute qu'une page se poursuit sur la suivante.
+
+**Le texte d'une feuille par table grandit pour remplir sa page, sans
+exagérer.** Le corps des noms part de celui de toute liste imprimée, 12 pt, et
+monte au plus à 18 pt, titre et retraits dans la même proportion : la plus
+grande taille, par pas d'un trente-deuxième, où la table tient sur sa page —
+mesurée sur les dimensions du papier choisi, jamais sur la fenêtre — et où
+chaque mot tient encore dans sa colonne, sans se couper. Chaque table a sa
+taille, la même sur toutes ses pages. Une table qui ne tient pas sur une page au
+plancher le garde, et se poursuit sur la suivante : jamais de texte tronqué ni
+qui déborde.
+
+**« Dessiner la table »**, décochée par défaut, pose en tête de chaque page de
+la feuille par table, à la place de son titre, le dessin de la table tel que le
+plan imprimé la dessine au premier tour de la feuille — sa forme, ses chaises,
+son numéro et son libellé —, réduit à 40 mm de haut ; la taille du texte se
+règle sur la place qu'il laisse. Décochée, le titre nomme la table par son
 numéro et, quand elle en porte un, par son libellé (§ 4), entier : il replie
-dans la largeur de la page, entre deux caractères au besoin. Des tours trop nombreux pour la
-page se répartissent en blocs de tours consécutifs, chacun sous l'en-tête qui
-nomme ses tours (§ 7.4). **Les listes s'impriment en portrait.**
+dans la largeur de la page, entre deux caractères au besoin. C'est un réglage
+de l'aperçu, que rien n'écrit.
+
+La liste d'accueil couvre aussi la soirée, une colonne par tour ; la case d'un
+tour où la personne est absente porte « absente », ni table, ni siège, ni
+réserve. La feuille par table ne nomme pas une personne absente à son tour :
+l'appel nominal ne la cherche pas. Des tours trop nombreux pour la page se
+répartissent en blocs de tours consécutifs, chacun sous l'en-tête qui nomme ses
+tours (§ 7.4). **Les listes s'impriment en portrait.**
 
 **Chaque page imprimée porte un pied de cinq éléments** : le nom de l'événement,
 sa date, **le tour** — ou la soirée, pour une vue qui les couvre tous —,
@@ -10308,10 +10342,11 @@ les autres captures et les familles reçoivent ; chacune se range à son étape
 par son nom. Le guide les cite aux étapes 2, 3, 9, 10, 11 et 12 ; l'appariement
 les garde (§ 19.7).
 
-**L'aperçu d'impression est plus haut que la fenêtre.** `22` et `23` le
-photographient au défilement où le filigrane et le pied de la première page
-partagent la fenêtre, la barre de l'aperçu hors de l'image ; `23` reprend le
-cadrage de `22` sur le placement retenu.
+**L'aperçu d'impression est plus haut que la surface de l'événement.** `22` et
+`23` le photographient, dans la section « Impression », au défilement de la
+surface où le filigrane et le pied de la première page la partagent, la barre de
+l'aperçu au-dessus d'elle ; `23` reprend le cadrage de `22` sur le placement
+retenu.
 
 **Trois pièges de dénombrement que cette table évite, et qui sont la raison de sa
 forme.**
@@ -10454,7 +10489,7 @@ livré, et non une approximation à l'écran. Sa fraîcheur se contrôle sur
 l'**empreinte canonique du PDF produit**, que l'horloge contrôlée du § 19.4 rend
 stable, et non sur les pixels tramés.
 
-Le PDF tramé est celui que la section des badges vient de produire dans le
+Le PDF tramé est celui que la section de l'impression vient de produire dans le
 parcours — la feuille de contrôle à part pour `24`, la première feuille de
 cartes pour `25` et `25a` —, et non une seconde production : la page le passe
 aux commandes du lanceur, sous `node`, qui le lisent par `pdfjs-dist` — sa
