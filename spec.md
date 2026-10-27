@@ -2648,6 +2648,11 @@ table refuse, l'opération entière est refusée, nommément, et rien ne change.
 
 - **Moins de 2 sièges.** Une table à 1 place est un participant qui ne
   rencontre personne de la soirée — c'est ce que le logiciel existe pour éviter.
+- **Plus de 1 000 sièges** (`TROP_DE_PLACES`, qui dit le maximum). Le plan
+  dessine une chaise par place : au-delà, l'événement deviendrait inaffichable
+  sans rien apporter. La borne vaut au défaut comme en surcharge, et pour
+  « Créer les tables… » (§ 6.1) ; l'analyse d'un fichier refuse de même une
+  capacité ou un défaut au-delà.
 - Une capacité inférieure au nombre de réservations portées par la table.
 - Une réduction qui retire un siège portant une réservation ou un titre — les
   sièges disparaissent par numéro décroissant ; le refus les liste.
@@ -3126,15 +3131,18 @@ jamais nécessaire pour ouvrir.
 
 | | |
 |---|---|
-| participants | avec identifiant entier, titre pressenti, notes, **étiquettes**, **présence** |
-| tables | capacité **et son état** : `sieges: null` (suit le défaut) ou un entier (surcharge) |
+| participants | avec identifiant entier, nom, prénom, organisation, courriel, titre pressenti, notes, **exclusion**, **étiquettes**, **présence**, **conflits d'organisation**, chemin du **logo**, marque du **nom numéroté** |
+| tables | numéro, capacité **et son état** : `sieges: null` (suit le défaut) ou un entier (surcharge) ; **forme**, **libellé** |
 | le **nombre de sièges par défaut** de l'événement | |
 | tours, réglages, réservations avec leur portée, **titres de place** | |
 | **objectifs des tables**, avec leur portée et leur règle propre | |
-| **règle par défaut** et **mode des objectifs**, **ordre des priorités** | dans les réglages, absents tant qu'ils valent leur défaut |
+| **règle par défaut**, case « Respecter les objectifs des tables », **mode des objectifs**, case « Rencontrer le plus d'animateurs différents », **ordre des priorités** | dans les réglages, absents tant qu'ils valent leur défaut |
 | placements engendrés, celui qui est retenu, état du plan | |
 | **positions en centimètres**, et l'unité déclarée | |
 | **filiation** : nom et identifiant de la source, instant d'origine | |
+
+Le § 8.9 donne la forme des placements et celle des champs facultatifs, chacun
+absent tant qu'il vaut son défaut.
 
 **Ce que le fichier ne porte pas : ni le mode, ni le cadrage.** Une liste de ce
 qui est dedans, sans son complément, laisse l'implémenteur ajouter.
@@ -3673,7 +3681,7 @@ règle écrite, et l'affiche :
    le dossier `data` d'un dossier nommé d'après le produit, dans les
    *Documents* de l'opérateur : `Documents\<produit>\data`. Le logiciel **dit
    pourquoi**, une fois par séance, sans bloquer : s'en souvenir d'une séance à
-   l'autre demanderait un réglage local de plus, et le § 8.5 les borne à trois.
+   l'autre demanderait un réglage local de plus, et le § 8.5 les borne à huit.
 
 Dans les deux modes, le dossier de travail s'appelle donc `data`. Il porte les
 événements et, à côté d'eux, la corbeille (§ 8.7), le fichier des réglages
@@ -4107,7 +4115,7 @@ plateforme**.
   prise, que la séance lit à l'horloge unique de l'application (§ 19.4), comme
   toute date qu'elle écrit.
 - **Contrôle de cohérence** : l'en-tête annonce ses comptes, sa révision, sa
-  **version de format** et `produit_version` (§ 18.6) ; l'analyse syntaxique
+  **version de format** et `produitVersion` (§ 18.6) ; l'analyse syntaxique
   seule ne distingue pas un fichier complet d'un fichier plausible. Le contrôle
   **s'étend aux placements** (§ 8.9) : longueurs déclarées contre listes
   écrites, identifiants vérifiés en multiensemble par tour, réserve comprise.
@@ -4120,24 +4128,24 @@ plateforme**.
   sérialiseur dérive de l'horloge ou d'un tirage au moment d'écrire.** La règle
   porte sur le **sérialiseur**, jamais sur la provenance de la donnée : une
   valeur tirée ou horodatée **une fois**, puis devenue partie de l'état — graine
-  d'une proposition, `produit_version`, identifiant d'événement — est une donnée
+  d'une proposition, `produitVersion`, identifiant d'événement — est une donnée
   ordinaire. Lue comme un interdit sur la provenance, cette règle interdirait
   d'enregistrer la graine, et une proposition retenue cesserait d'être
   régénérable. Lue comme un interdit sur le sérialiseur, elle garde tout son
   effet : ce qu'elle empêche est l'horodatage glissé à chaque écriture, qui fait
   enregistrer du bruit à chaque geste.
 - **Le fichier se partage en en-tête et charge utile.** En-tête : comptes,
-  révision, version de format, `produit_version`. Charge utile : tout le reste.
+  révision, version de format, `produitVersion`. Charge utile : tout le reste.
   La canonicité octet pour octet est exigée du **fichier entier**, pour un
   binaire donné ; mais les deux comparaisons qui **traversent les
   constructions** — l'empreinte des fichiers de démonstration (§ 15.5, point 5)
   et l'aller-retour sur les fichiers livrés (§ 8.9) — portent sur la **charge
-  utile seule**. Sans cette restriction, `produit_version` fait échouer
+  utile seule**. Sans cette restriction, `produitVersion` fait échouer
   l'empreinte à **chaque** livraison : le test exigerait alors de régénérer les
   démonstrations à chaque incrément de version, c'est-à-dire exactement la dérive
   que le § 15.5 existe pour empêcher, et le geste conscient qu'il réclame
   deviendrait mécanique, donc aveugle.
-- **Le journal note la construction qui change** : quand `produit_version`
+- **Le journal note la construction qui change** : quand `produitVersion`
   diffère de celle de l'entrée précédente, l'entrée de journal la porte. Le coût
   est d'un champ par remplacement d'exécutable ; sans lui, un fichier transmis
   pour diagnostic annonce la construction qui a écrit **en dernier**, et rien ne
@@ -4480,7 +4488,7 @@ Chaque proposition déclare, **une fois** :
 
 Ces trois champs sont le support de « à graine et entrée égales, placement
 identique » (§ 5.10) : à configuration égale et pour une même version du moteur
-(`produit_version`, § 8.8), la régénération d'une proposition à partir d'eux
+(`produitVersion`, § 8.8), la régénération d'une proposition à partir d'eux
 seuls rend son plan, quel que soit son rang dans sa génération. Sans eux, cette
 phrase n'existe que dans un scénario de pilotage, et une proposition retenue
 cesse d'être régénérable. La longueur de l'historique a une valeur par défaut,
@@ -4758,15 +4766,20 @@ organisations sans rien signaler.
 | `presence` | non | les tours de présence : des tours et des plages — « 1-3 », « 2, 3 », « tours 1 et 2 » ; `tous` ou `tous les tours` valent tous les tours ; vide, voir plus bas ; synonymes : `présence`, `tours de présence` |
 | `conflit_organisation` | non | les organisations que la personne nomme en conflit (§ 4), plusieurs par cellule, séparées par `;`, `\|` ou une fin de ligne — une virgule reste dans le nom ; voir plus bas ; synonymes : `conflits`, `conflit d'organisation` sous ses deux apostrophes |
 
-Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents ni
-des espaces**. **Deux colonnes reconnues sous le même nom** ne se départagent
+Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents,
+des blancs, des traits de soulignement ni des traits d'union** :
+« Titre-Pressenti », « titre pressenti » et « titre_pressenti » désignent la
+même colonne. **Deux colonnes reconnues sous le même nom** ne se départagent
 pas toutes seules : le logiciel n'associe ni l'une ni l'autre et demande.
 
 **La valeur de `exclu`** appartient à une liste fermée : `oui`, `o`, `vrai`,
 `1` ou `x` pour une exclusion ; `non`, `n`, `faux`, `0` ou vide pour aucune ;
-sans égard à la casse, aux accents ni aux espaces. Toute autre valeur **refuse
-la ligne**. Traiter l'inconnu comme `non` placerait dans la salle une personne
-qui s'est désistée, et la chaise vide ne se verrait que le soir même.
+sur la forme normalisée de la clé de doublon (plus bas) — casse et accents
+ignorés, blancs de bord retirés, une suite de blancs réduite à une espace : un
+blanc à l'intérieur d'une valeur compte, et « o u i » n'est pas « oui ». Toute
+autre valeur **refuse la ligne**. Traiter l'inconnu comme `non` placerait dans
+la salle une personne qui s'est désistée, et la chaise vide ne se verrait que le
+soir même.
 
 **La valeur de `presence`** se lit par une seule grammaire, celle que l'aperçu,
 l'export et le modèle emploient (§ 13.2) : sans égard à la casse, chaque morceau
@@ -5250,7 +5263,7 @@ participants arrive sous « participants ».
 | `table` | **oui** | le **numéro affiché** de la table, jamais son identifiant |
 | `tour` | non | vide pour la soirée, sinon un tour de 1 à R |
 | `objectif` | **oui** | les étiquettes, découpées comme la colonne `etiquettes` (§ 10.1) ; synonyme : `objectifs` |
-| `regle` | non | liste fermée, sans égard à la casse, aux accents ni aux espaces, comme `exclu` (§ 10.1) : `ou`, `une`, `au moins une` ; `et`, `toutes` ; vide pour suivre le défaut ; synonyme : `règle` |
+| `regle` | non | liste fermée, sur la forme normalisée, comme `exclu` (§ 10.1) — casse et accents ignorés, blancs réduits, si bien que « Au moins une » se lit et « aumoinsune » non : `ou`, `une`, `au moins une` ; `et`, `toutes` ; vide pour suivre le défaut ; synonyme : `règle` |
 
 **Tout le § 10.1 vaut, sauf ce qui nomme les participants** : aperçu
 obligatoire, encodage en quatre temps, séparateur analysé, colonnes par en-tête,
@@ -6044,22 +6057,25 @@ reprend pas pour elle, puisque le retenu est sain.
 **La liste des badges, en CSV.** La section des badges offre, à côté de
 « Produire la planche (PDF) », **« Produire la liste (CSV) »**, sans réglage à
 garder : la liste se tire de la même source et dans le même ordre que la
-planche, pour toute la soirée ; une réédition ne produit que la planche. Un
-enregistrement par badge, sous l'en-tête `Nom;Prénom;Organisation;Tours` : le
-nom entier et le prénom de la personne — le numéro que la case des doublons
-cache sur le badge compris (§ 11.4), le prénom vide quand elle n'en a pas —,
-l'organisation telle que le badge l'imprime, vide sans elle, et, dans une seule
-cellule, les lignes de tour du badge, **texte pour texte**, une par ligne —
-« Toute la soirée — table 13 — animation », « Tour 1 — table 5 (Terrasse) » —,
-jamais abrégées. Les personnes exclues n'y figurent pas. **Elle ne porte jamais
-le logo** : un logo ne se range pas dans une cellule, ses octets sont les mêmes
-avec et sans logos, et elle ne lit aucun fichier de logo. Le fichier est celui de
-l'export des participants (§ 10.3) : UTF-8 avec marque d'ordre d'octets, `;`,
-CRLF entre les enregistrements, un saut de ligne dans la cellule des tours, qui
-s'écrit alors entre guillemets (RFC 4180). Mêmes entrées, mêmes octets. Il se
-dépose dans le dossier de l'événement, comme la planche, et « Ouvrir le
-dossier » le montre ; sous `web`, il se télécharge. Son nom suit le gabarit de
-la planche, sans papier, imposition ni modèle, qui ne changent pas la liste :
+planche, pour toute la soirée ; la réédition de la section ne produit que la
+planche. La séance accepte aussi une demande de liste qui porte une sélection :
+la liste n'a alors que les badges choisis, et son nom porte leur nombre k, comme
+la planche d'une réédition. Un enregistrement par badge, sous l'en-tête
+`Nom;Prénom;Organisation;Tours` : le nom entier et le prénom de la personne — le
+numéro que la case des doublons cache sur le badge compris (§ 11.4), le prénom
+vide quand elle n'en a pas —, l'organisation telle que le badge l'imprime, vide
+sans elle, et, dans une seule cellule, les lignes de tour du badge, **texte pour
+texte**, une par ligne — « Toute la soirée — table 13 — animation », « Tour 1 —
+table 5 (Terrasse) » —, jamais abrégées. Les personnes exclues n'y figurent pas.
+**Elle ne porte jamais le logo** : un logo ne se range pas dans une cellule, ses
+octets sont les mêmes avec et sans logos, et elle ne lit aucun fichier de logo.
+Le fichier est celui de l'export des participants (§ 10.3) : UTF-8 avec marque
+d'ordre d'octets, `;`, CRLF entre les enregistrements, un saut de ligne dans la
+cellule des tours, qui s'écrit alors entre guillemets (RFC 4180). Mêmes entrées,
+mêmes octets. Il se dépose dans le dossier de l'événement, comme la planche, et
+« Ouvrir le dossier » le montre ; sous `web`, il se télécharge. Son nom suit le
+gabarit de la planche, sans papier, imposition ni modèle, qui ne changent pas la
+liste :
 
 ```
 <base>.badges[-p<id>][-<k>][_table][_BROUILLON]_<AAAA-MM-JJ_HH-MM-SS>[_<n>].csv
@@ -6080,8 +6096,10 @@ refusée nomme la liste et offre « Enregistrer sous… ».
 d'événement et n'ajoute aucune entrée d'historique (§ 8.2), donc elle reste
 disponible en **mode lecture** et sur un plan **bloqué**, où la lecture et
 l'impression restent ouvertes (§ 9). Ses seules écritures sont ses PDF, sa
-liste CSV et, au premier choix, le papier ou le modèle de badge dans les
-réglages locaux (§ 8.5).
+liste CSV et, dans les réglages locaux (§ 8.5), les choix de la section,
+chacun au geste qui le fait : le papier, le modèle de badge, la case du pied
+TechnoLibre et son texte, les cases de ce que le badge imprime et celle qui
+cache le numéro des doublons (§ 11.4).
 
 ### 11.7 Les autres sorties, et ce que porte toute page imprimée
 
@@ -6737,7 +6755,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   d'unités différentes se dessinent en deux graphiques**, chacun son seul axe
   vertical, au même ordre quand ils portent les mêmes rangs : le profil en
   comptes, puis en pourcentages (§ 12.3).
-- **Les couleurs d'état sont réservées** : **les teintes de conflit** — trois,
+- **Les couleurs d'état sont réservées** : **les teintes de conflit** — quatre,
   une par règle que le plan localise (§ 7.5) — ne peignent que le plan de salle,
   et la page de qualité n'en emploie aucune ; chacune ne peint que les marques
   de sa règle. Elles se distinguent entre elles et des autres marques du plan
@@ -9141,7 +9159,7 @@ un fichier vide passe tous les tests sans rien démontrer.
 5. **Le fichier livré est la source de vérité.** Un test rejoue le script
    générateur et compare l'empreinte au fichier livré. **L'empreinte porte sur la
    charge utile, l'en-tête exclu** (§ 8.8) : sans cette restriction,
-   `produit_version` la fait échouer à chaque livraison, et le geste conscient
+   `produitVersion` la fait échouer à chaque livraison, et le geste conscient
    qu'elle réclame devient mécanique, donc aveugle. **La régénération devient un
    geste conscient**, et non une dérive qui change les démonstrations sous les
    pieds de l'opérateur. L'échec nomme ce qui a changé.
@@ -9587,7 +9605,7 @@ de la série `node` surveillée (§ 14.4) **échoue** quand :
 **Le périmètre du balayage du point 6 se pose à l'écriture du contrôle, pas
 après.** Il porte sur **l'arbre des sources, les fichiers de configuration et les
 scripts de construction**, à l'exclusion des **données engendrées** — fichiers de
-démonstration qui portent `produit_version`, manifeste des captures d'écran,
+démonstration qui portent `produitVersion`, manifeste des captures d'écran,
 données d'épreuve —, des guides, des épreuves de la dérivation elle-même qui citent
 des exemples par nécessité, des dépendances et des sorties de construction. Sans
 cette exclusion le contrôle échoue au premier jour, et un contrôle qui échoue en
@@ -9626,7 +9644,7 @@ question. Le logiciel fait donc en sorte qu'on n'ait pas à la chercher.
 | **titre de la fenêtre** | `Gestion table tournante Libre — 2026.10.05.01` |
 | **panneau « À propos »** | un bloc d'une ligne que l'opérateur **copie**, sous l'éditeur et l'auteur |
 | **pied de chaque page imprimée** (§ 11.7) | la version, à côté de l'horodatage du placement |
-| **en-tête du fichier d'état** (§ 8.8) | champ `produit_version` |
+| **en-tête du fichier d'état** (§ 8.8) | champ `produitVersion` |
 
 **Le bandeau d'application est le porteur principal, et le titre de fenêtre son
 complément.** Un signalement arrive le plus souvent sous forme d'image, et une
