@@ -801,14 +801,22 @@ const VOCABULAIRE_SAVANT = [
 ];
 
 // Les captures sur lesquelles la section s'appuie (§ 19.9) : le diagnostic,
-// les propositions classées, les dérivées, le profil trié, la course d'une
-// recherche, « minimum atteint » sur la petite démonstration, la vue de
-// comparaison et son escalier. La course, 15c, appartient au point 3.
+// les propositions classées, les dérivées, le profil trié, les collisions de
+// la variante « conflit inévitable », la course d'une recherche, « minimum
+// atteint » sur la petite démonstration, la vue de comparaison et son
+// escalier. Deux points ont leurs images à eux : la course, 15c, appartient
+// au point 3 ; 16 puis 13, le contraste de la variante, au point 7, puisque
+// c'est ce que relancer ne peut pas effacer.
 const IMAGES_ALGORITHME = Object.freeze([
   '10-diagnostic', '11-propositions', '11b-propositions-derivees', '12-qualite-profil',
-  '15c-qualite-performance', '16-minimum-atteint', '17-comparaison-manque', '18-comparaison-escalier',
+  '13-qualite-collisions', '15c-qualite-performance', '16-minimum-atteint', '17-comparaison-manque',
+  '18-comparaison-escalier',
 ]);
 const IMAGE_DU_POINT_3 = '15c-qualite-performance';
+const IMAGES_DU_POINT_7 = Object.freeze(['16-minimum-atteint', '13-qualite-collisions']);
+// Le numéro de point (le rang du titre « ### » dans la section) → les
+// captures que ce point doit citer lui-même.
+const IMAGES_DES_POINTS = Object.freeze({ 3: [IMAGE_DU_POINT_3], 7: IMAGES_DU_POINT_7 });
 
 /**
  * Les fautes de la section sur l'algorithme : absente ; pas neuf points ;
@@ -816,8 +824,8 @@ const IMAGE_DU_POINT_3 = '15c-qualite-performance';
  * nombre recalculé qu'elle ne cite pas ; une phrase qui affirme un nombre
  * absente ; un bloc de code, un passage en code, un nom de fichier .js ou
  * un chemin de src/ ; un identifiant exporté de src/ ; un mot savant ; une
- * capture de IMAGES_ALGORITHME qu'elle ne cite pas, ou la course d'une
- * recherche citée hors du point 3.
+ * capture de IMAGES_ALGORITHME qu'elle ne cite pas, ou une capture de
+ * IMAGES_DES_POINTS que la section cite, mais pas dans son point.
  */
 function fautesAlgorithme(texteGuide, { attendus, exportes }) {
   const section = sectionNommee(texteGuide, TITRE_ALGORITHME);
@@ -846,9 +854,14 @@ function fautesAlgorithme(texteGuide, { attendus, exportes }) {
   for (const fichier of IMAGES_ALGORITHME) {
     if (!images.includes(cheminImage(fichier))) fautes.push(`la section ne s'appuie pas sur ${fichier}`);
   }
-  const point3 = texte.split(/^### /m)[3] ?? '';
-  if (images.includes(cheminImage(IMAGE_DU_POINT_3)) && !imagesReferencees(point3).includes(cheminImage(IMAGE_DU_POINT_3))) {
-    fautes.push(`le point 3 ne s'appuie pas sur ${IMAGE_DU_POINT_3}`);
+  const parPoint = texte.split(/^### /m);
+  for (const [rang, fichiers] of Object.entries(IMAGES_DES_POINTS)) {
+    const duPoint = imagesReferencees(parPoint[rang] ?? '');
+    for (const fichier of fichiers) {
+      if (images.includes(cheminImage(fichier)) && !duPoint.includes(cheminImage(fichier))) {
+        fautes.push(`le point ${rang} ne s'appuie pas sur ${fichier}`);
+      }
+    }
   }
   return fautes;
 }
@@ -875,7 +888,7 @@ describe('documentation : la section sur l’algorithme (§ 19.9)', () => {
   test('les captures exigées sont publiées, et la section les cite toutes', () => {
     const publiees = new Set(CAPTURES.map(({ fichier }) => fichier));
     for (const fichier of IMAGES_ALGORITHME) assert.ok(publiees.has(fichier), fichier);
-    assert.ok(IMAGES_ALGORITHME.includes(IMAGE_DU_POINT_3));
+    for (const fichier of Object.values(IMAGES_DES_POINTS).flat()) assert.ok(IMAGES_ALGORITHME.includes(fichier), fichier);
   });
 
   test('rouge : une capture exigée retirée de la section, ou la course citée hors du point 3', () => {
@@ -895,6 +908,24 @@ describe('documentation : la section sur l’algorithme (§ 19.9)', () => {
     points[3] = points[3].replace(lien, '');
     const deplacee = texte.slice(0, debut) + points.join('### ') + texte.slice(fin);
     assert.deepEqual(fautesAlgorithme(deplacee, { attendus, exportes }), [`le point 3 ne s'appuie pas sur ${IMAGE_DU_POINT_3}`]);
+  });
+
+  test('rouge : une image du contraste de la variante citée hors du point 7', () => {
+    const texte = lire(GUIDE_USAGE);
+    const section = sectionNommee(texte, TITRE_ALGORITHME);
+    const debut = section.debut;
+    const fin = debut + section.texte.length;
+    for (const fichier of IMAGES_DU_POINT_7) {
+      // Le lien retiré du point 7 et posé au point 8 : la section le cite
+      // encore, mais hors de sa place.
+      const points = section.texte.split(/^### /m);
+      const motif = new RegExp(`\\(\\[[^\\]]*\\]\\(${cheminImage(fichier).replace(/[.]/g, '\\.')}\\)\\)`);
+      const lien = points[7].match(motif)[0];
+      points[8] = points[8].replace(/\n\n/, ` ${lien}\n\n`);
+      points[7] = points[7].replace(lien, '');
+      const deplacee = texte.slice(0, debut) + points.join('### ') + texte.slice(fin);
+      assert.deepEqual(fautesAlgorithme(deplacee, { attendus, exportes }), [`le point 7 ne s'appuie pas sur ${fichier}`], fichier);
+    }
   });
 
   test('rouge : un nombre changé, un nombre de plus en chiffres, une phrase en lettres changée', () => {

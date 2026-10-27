@@ -242,7 +242,6 @@ const MODULE = [
   'export const VERSION = Object.freeze({',
   "  affichee: '2026.10.05.01',",
   "  technique: '2026.1005.1',",
-  "  windows: '2026.1005.1.0',",
   '});',
   '',
 ].join('\n');
@@ -789,14 +788,14 @@ describe('version : engendrement', () => {
     assert.equal(engendrerModule(VERSION), MODULE);
   });
 
-  test('le module engendré porte les formes affichée, technique et Windows de deriver, et elles seules', async () => {
+  test('le module engendré porte les formes affichée et technique de deriver, et elles seules : la forme Windows n’y est pas', async () => {
     const dossier = mkdtempSync(join(tmpdir(), 'version-module-'));
     try {
       const chemin = join(dossier, 'version.genere.js');
       writeFileSync(chemin, engendrerModule('2026.10.06.02'));
       const { VERSION: engendree } = await import(pathToFileURL(chemin).href);
-      const { affichee, technique, windows } = deriver('2026.10.06.02');
-      assert.deepEqual(engendree, { affichee, technique, windows });
+      const { affichee, technique } = deriver('2026.10.06.02');
+      assert.deepEqual(engendree, { affichee, technique });
       assert.ok(Object.isFrozen(engendree));
     } finally {
       rmSync(dossier, { recursive: true, force: true });

@@ -7749,12 +7749,14 @@ solveur. Le point d'entrée de son travailleur
 l'application ; l'exécuteur qui lui parle et le suivi que le Diagnostic lit
 (`executeur_solveur.js`, `suivi_solveur.js`) n'importent pas `highs`. Seul le
 point d'entrée de la page importe ce travailleur, par un import différé : il
-forme un morceau que la page ne charge qu'au premier calcul. Il désigne aussi
-le module WebAssembly du solveur, par `highs/runtime?url` et par ce seul
-spécificateur — la garde relève tout autre import de `highs` qu'il ferait —,
-et App reçoit la fabrique du travailleur et cette adresse, comme les autres
-plateformes, par ses propriétés ; une épreuve monte App sans elles, sur les
-planchers instantanés seuls.
+forme un morceau que la page ne charge qu'au premier calcul. Il désigne aussi le
+module WebAssembly du solveur, par `highs/runtime?url` et par ce seul
+spécificateur — la garde relève tout autre import de `highs` qu'il ferait. App
+reçoit, comme les autres plateformes, une seule propriété, `chargerSolveur` :
+une fonction asynchrone qui fait l'import différé et rend `{fabrique, urlWasm}`,
+la fabrique du travailleur et l'adresse du module, dont App fait l'exécuteur du
+solveur au premier calcul. Une épreuve monte App sans elle, sur les planchers
+instantanés seuls.
 
 **La frontière des couches est gardée mécaniquement**, et pas seulement par
 discipline : un test du **graphe d'imports** refuse qu'un module de `src/moteur`
@@ -8011,9 +8013,9 @@ outils.
 
 | projet | environnement | ce qu'il inclut | greffon Svelte |
 |---|---|---|---|
-| `node` | `node`, aucun DOM | `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`, `src/demo`, `src/pdf`, `src/application`, et les modules purs de `src/interface` | **absent** |
-| `node-long` | `node`, aucun DOM | les épreuves lourdes du niveau `node:long` (§ 14.4), suffixe `.long.test.js`, hors de la série surveillée | **absent** |
-| `navigateur` | un vrai moteur de rendu, piloté par le mode navigateur de Vitest | les composants de `src/interface`, les épreuves de coordonnées et de style calculé, le parcours photographié (§ 19.3) | présent |
+| `node` | `node`, aucun DOM | les fichiers `.test.js` de `src/`, de `scripts/` et de `test/` : le moteur, la géométrie, le stockage, le CSV, les démonstrations, le PDF, l'application, les modules purs de `src/interface`, l'outillage et les gardes du dépôt — hors des suffixes `.long.test.js` et `.navigateur.test.js`, et hors des épreuves lourdes qu'une petite machine passe à `node-long` (§ 14.14) | **absent** |
+| `node-long` | `node`, aucun DOM | les épreuves lourdes du niveau `node:long` (§ 14.4), suffixe `.long.test.js`, de `src/` et de `test/`, hors de la série surveillée, et sur une petite machine les épreuves lourdes qui quittent la série `node` (§ 14.14) | **absent** |
+| `navigateur` | un vrai moteur de rendu, piloté par le mode navigateur de Vitest | les fichiers `.navigateur.test.js` de `src/` et de `test/` : les composants de `src/interface`, les épreuves de coordonnées et de style calculé, le système de fichiers de la page sur l'OPFS, le chargement des polices et des actifs, le travailleur du solveur, le parcours photographié (§ 19.3) | présent |
 
 Un quatrième projet, **le banc de mesure**, vit hors de ces trois : sa
 configuration est un fichier à part, aucun lancement des trois séries ne le
@@ -8077,14 +8079,15 @@ le test qui n'est pas sous les yeux n'est pas étendu. Les tests du niveau
 navigateur portent le suffixe `.navigateur.test.js`, qui est aussi ce qui les
 range dans leur projet.
 
-Les données d'épreuve vivent dans `test/fixtures/`, les fichiers d'exemple livrés
-restant ceux du § 10.3 — une donnée d'épreuve qui double un fichier livré dérive
-de lui. **Les noms inventés d'une donnée d'épreuve sont disjoints du réservoir du
-générateur** : le balayage du § 15.6 refuse qu'un fragment forgé apparaisse hors
-des listes du générateur, des fichiers de démonstration et des CSV d'exemple, et
-une donnée d'épreuve qui emprunte une racine d'organisation plausible le fait
-échouer. Un test vérifie cette disjonction, faute de quoi la garde du § 15.6
-tombe au premier exemple écrit de bonne foi.
+Les données d'épreuve vivent dans `test/fixtures/`, les fichiers d'exemple
+livrés restant ceux du § 10.3 — une donnée d'épreuve qui double un fichier livré
+dérive de lui. **Les noms inventés d'une donnée d'épreuve sont disjoints du
+réservoir du générateur** : le balayage du § 15.6 refuse qu'un fragment forgé
+apparaisse hors des listes du générateur, des fichiers de démonstration, des CSV
+d'exemple et du manifeste des captures, et une donnée d'épreuve qui emprunte une
+racine d'organisation plausible le fait échouer. Un test vérifie cette
+disjonction, faute de quoi la garde du § 15.6 tombe au premier exemple écrit de
+bonne foi.
 
 **La co-localisation se garde.** Un test de la construction affirme que le
 paquet livré ne contient **aucun fichier de test ni aucun import du lanceur**.
@@ -8776,8 +8779,18 @@ contiguës à l'égalité exacte, bord droit contre bord gauche, tiennent dans l
 surface utile, couvrent le plan et portent des cartouches cohérents. L'oracle est
 la construction : chaque bord se compare à celui de sa voisine. Le
 rétrécissement rend un plan de quelques centimètres là où l'échec portait sur
-des centaines de mètres. La liste est fermée : une garde de l'arborescence
-refuse la bibliothèque hors de ces cinq familles.
+des centaines de mètres.
+
+**Le plancher exact l'emploie pour une sixième, nommée** (§ 5.6). Sur des
+charges tirées — deux à cinq organisations, deux à cinq tables de deux à six
+places, des conflits, une réservation, une absence —, le minimum que HiGHS rend
+pour chaque tour égale celui d'une recherche exhaustive sur les tables, et le
+plancher des étoiles, ajouté à la somme par groupe, ne dépasse jamais la somme
+des minimums des tours. L'oracle est l'énumération, comme au plafond ;
+l'épreuve vit dans la série longue parce que chaque charge passe par le
+solveur, et le rétrécissement rend un contre-exemple de quelques personnes. La
+liste est fermée : une garde de l'arborescence refuse la bibliothèque hors de
+ces six familles.
 
 **La bibliothèque tourne sur une graine fixée.** Une bibliothèque de propriétés
 retire par défaut une graine neuve à chaque exécution : le même code échoue une
@@ -8801,28 +8814,35 @@ de dossier que le tableau imprime aussi ne décident de rien : aucun seuil ne
 les lit. La couverture vaut parce qu'elle **désigne ce qui n'est jamais
 exécuté** ; c'est une liste à lire, pas une note.
 
-**Des seuils durs, en branches, sur dix modules.** Le module des indicateurs
-et du plafond, les chemins de reprise du stockage, le registre des critères
-avec la règle de correspondance des objectifs, et les quatre modules qui
-calculent la page de qualité — le détail d'un placement, les paires répétées,
-la diversité par animateur et la géométrie des graphiques — tiennent **100 %
-de branches**. Ils sont petits, purs — les chemins de reprise à la condition
-d'injection du § 13.4 — et chaque branche non couverte y est un cas que
-l'opérateur rencontre au pire moment. Ceux de la page de qualité rendent
+**Des seuils durs, en branches, sur quinze modules.** Le module des indicateurs
+et du plafond, les chemins de reprise du stockage, le registre des critères avec
+la règle de correspondance des objectifs, les quatre modules qui calculent la
+page de qualité — le détail d'un placement, les paires répétées, la diversité
+par animateur et la géométrie des graphiques —, les deux modèles purs qui
+mettent en forme sa vue de comparaison — la vue et ses colonnes côte à côte —,
+le geste « Comparer » du tableau des propositions, et le départ d'une génération
+dérivée, dans l'application comme dans la section de la génération (§ 5.7),
+tiennent **100 % de branches**. Ils sont petits, purs — les chemins de reprise à
+la condition d'injection du § 13.4 — et chaque branche non couverte y est un cas
+que l'opérateur rencontre au pire moment. Ceux de la page de qualité rendent
 chaque nombre qu'elle écrit, l'écran ne faisant que les mettre en forme
-(§ 12.9) : une branche nue y est un chiffre affiché que rien n'éprouve. Une
-branche qu'on ne sait pas couvrir est soit du code mort — on le retire — soit
-un cas que la spécification n'a pas prévu — on l'écrit.
+(§ 12.9) : une branche nue y est un chiffre affiché que rien n'éprouve. Ceux du
+départ décident ce qu'une dérivée garde de sa proposition de départ et ce que le
+lancement refuse : une branche nue y est un refus ou un tour recopié que rien
+n'éprouve. Une branche qu'on ne sait pas couvrir est soit du code mort — on le
+retire — soit un cas que la spécification n'a pas prévu — on l'écrit.
 
 **La mesure est sa propre commande**, `make couverture` : la série `node` sous
 instrumentation, hors des budgets du § 14.14. Elle publie un tableau par couche
 et par module, et un rapport à parcourir qui montre, ligne à ligne, ce qui n'est
-jamais exécuté. Les seuils portent sur dix fichiers —
+jamais exécuté. Les seuils portent sur quinze fichiers —
 `src/moteur/indicateurs.js` et `src/moteur/plafond.js`, `src/stockage/depot.js`
 et `src/stockage/journal.js`, `src/moteur/criteres.js` et
-`src/moteur/correspondance.js`, `src/moteur/qualite.js`,
-`src/moteur/paires.js`, `src/moteur/diversite.js` et
-`src/geometrie/graphique.js` — et la commande échoue en deçà. Un test de
+`src/moteur/correspondance.js`, `src/moteur/qualite.js`, `src/moteur/paires.js`,
+`src/moteur/diversite.js`, `src/geometrie/graphique.js`,
+`src/interface/qualite/comparaison.js` et `src/interface/qualite/colonnes.js`,
+`src/interface/propositions/comparer.js`, `src/application/depart.js` et
+`src/interface/generation/depart.js` — et la commande échoue en deçà. Un test de
 l'arborescence refuse un seuil abaissé, un seuil global, et un seuil posé sur un
 fichier absent ou hors de la mesure : l'outil tiendrait ce dernier pour atteint,
 faute de branche à compter. Il refuse de même une commande qui ne mesure pas —
@@ -9195,14 +9215,16 @@ combinaisons. Le générateur **refuse** de produire une démonstration dont le
 compte de groupes dépasse son réservoir.
 
 Un test vérifie l'unicité et qu'aucun fragment forgé n'apparaît dans le dépôt
-**hors des listes du générateur, des fichiers de démonstration et des CSV
-d'exemple**. Le balayage s'étend aux **données d'épreuve** (§ 14.9), dont les noms
-inventés sont disjoints de ce réservoir : une donnée d'épreuve qui emprunte une
-racine d'organisation plausible fait échouer la garde, et c'est ce qui l'empêche
-de tomber au premier exemple écrit de bonne foi. Il refuse de passer sur un
-balayage vide. **Ce test n'établit rien sur le monde réel** : aucune
-vérification locale ne peut prouver qu'un nom forgé ne désigne nulle part une
-organisation existante.
+**hors des listes du générateur, des fichiers de démonstration, des CSV
+d'exemple et du manifeste des captures** (`doc/captures/manifeste.json`,
+§ 19.7), qui relève les textes visibles du parcours photographié et porte donc
+les noms des démonstrations qu'il joue. Le balayage s'étend aux **données
+d'épreuve** (§ 14.9), dont les noms inventés sont disjoints de ce réservoir :
+une donnée d'épreuve qui emprunte une racine d'organisation plausible fait
+échouer la garde, et c'est ce qui l'empêche de tomber au premier exemple écrit
+de bonne foi. Il refuse de passer sur un balayage vide. **Ce test n'établit rien
+sur le monde réel** : aucune vérification locale ne peut prouver qu'un nom forgé
+ne désigne nulle part une organisation existante.
 
 ---
 
@@ -9214,10 +9236,15 @@ plateformes de Capacitor (§ 13.1). La construction s'exécute dans un conteneur
 sous une image épinglée par empreinte, de sorte que la machine de développement
 n'a rien à installer en dehors du projet. La cible portable n'exige pas Wine :
 `electron-builder` édite lui-même les ressources de l'exécutable. L'image n'en
-porte donc pas, et une cible qui l'exigerait — un installateur — y échoue au lieu
-de produire le livrable que ce paragraphe exclut. Le conteneur ne reçoit aucune
-variable de l'hôte : un numéro de construction d'intégration continue y
-remplacerait le quatrième champ de la version Windows (§ 18.1).
+porte donc pas, et une cible qui l'exigerait — un installateur — y échoue au
+lieu de produire le livrable que ce paragraphe exclut. Le conteneur ne reçoit
+aucune variable de l'hôte, hors des variables de mandataire : un numéro de
+construction d'intégration continue y remplacerait le quatrième champ de la
+version Windows (§ 18.1). Les variables de mandataire (`http_proxy`,
+`https_proxy`, `ftp_proxy`, `no_proxy`, en minuscules comme en majuscules), que
+le moteur de conteneurs relaie de lui-même, ne touchent pas à la version, et
+derrière un mandataire le téléchargement des dépendances et d'Electron en a
+besoin.
 
 **Cette capacité est à vérifier dès la première semaine**, sur un squelette vide,
 au même titre que la publication du dossier d'origine par le lanceur portable
@@ -9483,7 +9510,7 @@ qui a peut-être quitté la machine se décide à la main, ou par l'option.
 
 **Le guide ne cite jamais un nom complet, il cite le gabarit** (§ 16.1).
 
-### 18.3 Une seule source, quatre destinations
+### 18.3 Une seule source, cinq destinations
 
 La version est écrite **à un seul endroit**, un fichier `version.json` à la racine
 du projet :
@@ -9497,6 +9524,7 @@ Tout le reste en dérive, par un script de construction :
 | destination | forme | usage |
 |---|---|---|
 | `package.json` | technique | ce qu'exigent npm et `electron-builder`, qui en tire la ressource de version Windows |
+| `package-lock.json`, champ `version` et celui du paquet racine, `packages[""].version` | technique | ce que npm recopie de `package.json` dans son verrou ; le point 1 du § 18.5 le contrôle comme `package.json` |
 | nom de l'exécutable, posé dans la configuration d'`electron-builder` | soulignés | ce que l'opérateur voit dans son dossier |
 | `src/version.genere.js` | affichée **et** technique | ce que l'application affiche |
 | titre de la section de tête du `CHANGELOG.md` | affichée | ce que l'opérateur lit avant de remplacer |
@@ -9578,9 +9606,10 @@ est une livraison dont l'opérateur ne peut pas décider.
 Chaque endroit où un chiffre se recopie est une occasion de diverger. Un contrôle
 de la série `node` surveillée (§ 14.4) **échoue** quand :
 
-1. la version technique de `package.json` n'est pas celle que la
-   dérivation du § 18.1 produit depuis `version.json`, ou ne se redécompose pas en
-   la version affichée ;
+1. la version technique de `package.json`, ou l'un des deux champs de version
+   de `package-lock.json`, n'est pas celle que la dérivation du § 18.1 produit
+   depuis `version.json`, ou ne se redécompose pas en la version affichée, ou
+   le verrou manque ;
 2. le module engendré ne reproduit pas, caractère pour caractère, ce que le script
    réengendre ;
 3. le titre de la première section du `CHANGELOG.md` n'est pas la version
@@ -9593,7 +9622,10 @@ de la série `node` surveillée (§ 14.4) **échoue** quand :
    contrôle attrape est une année ou un mois tapé de travers, pas une minute ;
 6. une chaîne **de la forme affichée** apparaît ailleurs que dans `version.json`,
    le module engendré et le changelog, ou une chaîne **de la forme technique**
-   ailleurs que dans `package.json` et le module engendré ;
+   ailleurs que dans `package.json`, `package-lock.json` et le module engendré.
+   Le verrou est hors du balayage, comme `version.json`, le module et le
+   changelog, que les points 1 à 3 contrôlent : la version s'y recopie par
+   construction ;
 7. un document construit porte le littéral `#_#`, ou cite un nom d'exécutable qui
    **ne se conforme pas au gabarit** du § 18.2. Un gabarit non substitué se lit
    comme un nom de fichier et envoie l'opérateur chercher un fichier qui n'existe
@@ -9663,12 +9695,13 @@ dit, et le bandeau n'a rien à annoncer. Le changelog annonce le changement de
 format à la livraison ; le bandeau l'annonce au moment où l'opérateur ouvre le
 fichier.
 
-**Le bloc copiable** du panneau « À propos » tient en une ligne — version affichée,
-plateforme, provenance de la construction, version de format des fichiers — et se
-colle dans un courriel. Un chiffre recopié à la main se recopie faux. Il ne porte
-que la version affichée, `2026.10.05.01`, celle du changelog et du nom du
-livrable : la forme Windows, `2026.1005.1.0`, reste dans la fiche de propriétés du
-fichier, et le guide Windows renvoie au nom de l'exécutable pour la version.
+**Le bloc copiable** du panneau « À propos » tient en une ligne — nom du
+produit, version affichée, plateforme, provenance de la construction, version de
+format des fichiers, séparés par « · » — et se colle dans un courriel. Un
+chiffre recopié à la main se recopie faux. Il ne porte que la version affichée,
+`2026.10.05.01`, celle du changelog et du nom du livrable : la forme Windows,
+`2026.1005.1.0`, reste dans la fiche de propriétés du fichier, et le guide
+Windows renvoie au nom de l'exécutable pour la version.
 Au-dessus du bloc, le panneau nomme l'éditeur, **TechnoLibre Inc.**, et l'auteur,
 **Mathieu Benoit**, développeur, concepteur et mainteneur du logiciel ; « Copier »
 ne les emporte pas.
@@ -9908,15 +9941,15 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `02-import-apercu.png` | `participants_cas_limites.csv` | le haut de l'aperçu obligatoire (§ 10.1) : la nature du fichier choisie, « Participants » (§ 10.4), le mode de l'import, le nom du fichier, l'encodage et le séparateur détectés et **nommés** ; le tableau des colonnes, qui porte l'association par en-tête, s'ouvre au bord inférieur et se poursuit sous l'image | l'encodage et le séparateur affichés sont ceux que le module d'import a retenus ; l'aperçu n'est pas contournable ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
 | `02b-import-cp1252.png` | `participants_cas_limites_cp1252.csv` | le haut de l'aperçu du même contenu en windows-1252 (§ 10.1) : la nature du fichier choisie, le nom du fichier, l'encodage détecté et **nommé**, le séparateur, « virgule » ; les cellules accentuées sont sous l'image | l'encodage affiché est celui que le module d'import a retenu ; les cellules accentuées de l'aperçu sont celles que rend le décodage du fichier, sans caractère parasite, et sont affirmées sur l'écran, sous l'image : l'épreuve lit le texte de l'aperçu, non ce que la fenêtre laisse voir |
 | `02c-import-presence.png` | **petite démonstration**, générée, n° 1 retenue (« la présence par tour », plus bas) | l'aperçu, en mise à jour, du modèle de participants téléchargé sous quatre tours, plus une ligne qui désigne une personne inscrite par son nom et son prénom, sa présence vide : la colonne « présence » et ses cellules lues en tours ; « présence inchangée » sur la seule ligne de la personne inscrite (§ 10.1) | la cellule « 1-3 » se lit « tours 1 à 3 » et la cellule « 2, 3 » « tours 2 et 3 », par la grammaire du CSV ; les cellules vides des personnes du modèle, que l'import crée, ne disent rien ; aucune ligne refusée, aucun doublon ; « Fermer l'aperçu » n'écrit rien |
-| `03-import-rapport.png` | idem | le haut du rapport : les comptes de l'import — personnes ajoutées, mises à jour, inchangées, retirées, réservations retirées —, le nom du fichier, l'encodage et le séparateur | le compte des personnes ajoutées égale le nombre de participants de l'événement, et l'import fait une seule entrée d'historique ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
+| `03-import-rapport.png` | `participants_cas_limites.csv`, comme `02` | le haut du rapport : les comptes de l'import — personnes ajoutées, mises à jour, inchangées, retirées, réservations retirées —, le nom du fichier, l'encodage et le séparateur | le compte des personnes ajoutées égale le nombre de participants de l'événement, et l'import fait une seule entrée d'historique ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
 | `04-grille-participants.png` | l'événement en construction | la grille éditable, le tri, le filtre, une personne exclue, la légende des étiquettes, chacune chiffrée (§ 10.2) | le compte affiché égale le compte importé |
 | `04a-etiquettes.png` | l'événement en construction | la fiche d'une personne, sa rubrique « Logo » sans logo — « Aucun logo. » et la commande « Logo » —, puis ses étiquettes en pastilles neutres, le champ d'ajout, et le signal de l'orthographe retenue sous le champ ; la légende des étiquettes, chiffrée, est celle de `04` (§ 10.2) | les étiquettes affichées sont celles de la personne ; une saisie d'une orthographe voisine reçoit l'orthographe existante, et le signal est visible ; la légende compte les porteurs de chaque étiquette, exclues comprises |
-| `04b-presence-grille.png` | idem, l'arrivée ajoutée et dite présente aux tours 3 et 4 par sa fiche | la grille triée par nom, les cases de présence de la partante ouvertes au clavier, tours 1 et 2 cochés, et la ligne de l'arrivée, « tours 3 et 4 » en pastille (§ 10.2) | les cases ouvertes et cochées n'écrivent rien ; Entrée, après l'image, écrit une entrée, et le retenu laisse la chaise de la partante libre aux tours 3 et 4, sans dériver |
+| `04b-presence-grille.png` | idem que `02c`, l'arrivée ajoutée et dite présente aux tours 3 et 4 par sa fiche | la grille triée par nom, les cases de présence de la partante ouvertes au clavier, tours 1 et 2 cochés, et la ligne de l'arrivée, « tours 3 et 4 » en pastille (§ 10.2) | les cases ouvertes et cochées n'écrivent rien ; Entrée, après l'image, écrit une entrée, et le retenu laisse la chaise de la partante libre aux tours 3 et 4, sans dériver |
 | `04c-presence-fiche.png` | idem | la rubrique « Présence » de la fiche de l'arrivée : son résumé, ses cases 3 et 4 cochées, et l'itinéraire du retenu, « absente, absente, en réserve, en réserve » ; la rubrique « Logo », plus haut dans la fiche, hors de l'image (§ 10.2) | le résumé, les cases et l'itinéraire égalent la présence et le retenu de la charge |
-| `05-tables-etat.png` | idem, deux tables posées par le scénario | deux tables à 8 places dont l'une **suit le défaut** et l'autre porte une **surcharge de même valeur** (§ 6.1) | les deux états s'affichent différemment **à valeur égale** |
+| `05-tables-etat.png` | l'événement en construction, deux tables posées par le scénario | deux tables à 8 places dont l'une **suit le défaut** et l'autre porte une **surcharge de même valeur** (§ 6.1) | les deux états s'affichent différemment **à valeur égale** |
 | `05a-objectifs-tables.png` | idem | une table à objectif de soirée qui suit la règle par défaut, que son choix de règle nomme en mots (« selon le réglage général (…) »), une table à objectif de tour à règle propre (§ 4.5) | les deux états de règle s'affichent différemment ; l'objectif auquel personne ne correspond porte son signal ; la règle par défaut, changée puis rendue, n'est pas écrite |
 | `05b-import-objectifs.png` | `objectifs_cas_limites.csv` | l'aperçu des objectifs : lignes refusées avec leur motif, orthographes fondues (§ 10.4) | au moins une ligne refusée et un groupe fondu sont visibles ; la nature du fichier, cochée et nommée, et le séparateur nommé sont affirmés sur l'écran, au-dessus de l'image |
-| `06-defaut-consequence.png` | idem | l'énoncé chiffré avant application — tables suivant le défaut, surchargées épargnées, total des sièges contre nombre de participants | le total annoncé égale celui que recalcule le moteur |
+| `06-defaut-consequence.png` | l'événement en construction | l'énoncé chiffré avant application — tables suivant le défaut, surchargées épargnées, total des sièges contre nombre de participants | le total annoncé égale celui que recalcule le moteur |
 | `07-plan-tables.png` | idem | le plan, ses tables à l'échelle, l'échelle graphique, la mention « disposition relative » (§ 7.7) | la mention est présente tant qu'aucune dimension de salle n'est saisie |
 | `07a-cibles-sieges.png` | **grande démonstration** (celle de la capture `10`) | zoomée jusqu'au régime des sièges : les chaises dessinées une à une, chacune une cible (§ 7.3) | le centre d'une chaise désigne cette chaise |
 | `07a-cibles-tables.png` | idem | au zoom ajusté, sous le seuil de 24 px : la table est la cible, et ses chaises ne se dessinent plus une à une | le même point désigne la table, et aucune chaise |
@@ -9937,7 +9970,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `12e-qualite-sans-collision.png` | **9 personnes de neuf organisations distinctes, 3 tables de 3, 2 tours**, construite, sa génération faite | la phrase de la vue des collisions ; la grille sous la position « par siège », qui reste (§ 12.6, § 12.11) | aucune barre de collision n'est dessinée ; le sélecteur est sur « par siège » et chaque case écrit 0 |
 | `12f-qualite-reserve.png` | **petite démonstration, variante « conflit inévitable »**, sa première proposition retenue puis ajustée au plan : une personne mobile — ni ancrée ni partiellement fixée — mise en réserve au tour 2 | le premier graphique du profil, le point de la personne marqué « en réserve » ; les collisions à un seul segment et la phrase qui dit pourquoi le plancher ne s'applique pas, plus bas, sont affirmées sans l'image (§ 12.4, § 12.6) | aucun segment « prouvé inévitable » n'est dessiné ; le point de la personne porte la marque de la réserve |
 | `12g-qualite-plafond-nul.png` | **5 personnes, une table de 4 et une table de 2, 2 tours**, construite : quatre réservées à la table de 4 aux deux tours, la cinquième sans réservation, que sa génération assoit seule à la table de 2 aux deux tours | le point marqué d'un plafond réalisé nul au rang 1 du profil, son infobulle ouverte ; au second graphique, ce rang sans point (§ 12.3, § 12.6) | la cinquième, ni ancrée, ni partiellement fixée, ni en réserve, porte la marque du plafond réalisé nul ; l'infobulle écrit le plafond réalisé 0 et le pourcentage « — » ; le second graphique n'a pas de point à ce rang |
-| `12h-qualite-absence.png` | idem, la meilleure dérivée montrée | le bas de l'en-tête chiffré : la tuile de l'écart d'itinéraire maximal, « Plancher non prouvé : une personne au moins est absente à un tour. », et ses voisines (§ 12.2) | seule cette tuile le dit ; hors de l'image, les collisions gardent leur segment « prouvé inévitable », égal au plancher du diagnostic — une collision à chacun des tours de l'arrivée, son groupe y comptant une personne de plus que les tables —, et le profil marque d'un losange la partante et l'arrivée, « absente à un tour au moins » |
+| `12h-qualite-absence.png` | idem que `02c`, la meilleure dérivée montrée | le bas de l'en-tête chiffré : la tuile de l'écart d'itinéraire maximal, « Plancher non prouvé : une personne au moins est absente à un tour. », et ses voisines (§ 12.2) | seule cette tuile le dit ; hors de l'image, les collisions gardent leur segment « prouvé inévitable », égal au plancher du diagnostic — une collision à chacun des tours de l'arrivée, son groupe y comptant une personne de plus que les tables —, et le profil marque d'un losange la partante et l'arrivée, « absente à un tour au moins » |
 | `13-qualite-collisions.png` | **petite démonstration, variante « conflit inévitable »** | les barres horizontales à deux segments, « prouvé inévitable » et « reste », en **collisions cumulées**, avec l'effectif, les paires distinctes et l'**excédent** en encre secondaire | le segment prouvé vaut **4 collisions cumulées** et égale le plancher du diagnostic, au chiffre près ; les lignes sont triées sur l'excédent (§ 12.4) |
 | `13a-qualite-tables.png` | **petite démonstration, variante « conflit inévitable »** | le sélecteur à trois positions sur « par siège », la grille tables × tours, chaque case ses sièges sans organisation nouvelle, de 0 ou 1, en deux teintes, la pire table en première ligne, que la phrase sous la grille nomme (§ 12.11) | la première ligne porte le plus grand compte de la position « par siège » ; chaque case écrit le nombre que son niveau colore ; une case sans affilié écrit « — » sans teinte |
 | `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et la première commande de chaque ligne mène au premier tour où la paire se revoit |
@@ -9952,7 +9985,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `18-comparaison-escalier.png` | idem | l'escalier du manque ouvert, jumeau tabulaire de la vue précédente, une colonne d'effectif et une d'effectif cumulé par placement | les effectifs cumulés du tableau reproduisent la courbe ; l'escalier n'écrit aucun pourcentage |
 | `19-ajustement.png` | l'événement retenu | le déplacement d'une personne après la retenue, l'interface disant **lequel des deux gestes** est en cours (§ 5.8) | le libellé de l'état des données est visible |
 | `19a-presence-plan.png` | idem que `02c` | le retenu au tour 3 : la chaise libre de la partante, l'arrivée dans la réserve, la carte « Absentes » qui nomme la partante, et la liste « En réserve dans le placement retenu » (§ 5.8, § 7.1) | une entrée par geste depuis l'ajout, trois en tout ; le retenu ne dérive pas ; la réserve, les absentes et la liste nomment chacune la seule personne attendue |
-| `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
+| `20-mode-lecture.png` | l'événement retenu | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
 | `21-historique.png` | idem | le panneau d'historique ouvert à côté du plan : la liste, la plus récente en haut, chaque ligne sa date et son heure ; un geste défait au clavier, sa ligne « Défait (Ctrl+Z) : … », qui n'est pas abandonnée, et sous elle le geste défait, sur un fil abandonné, en encre secondaire et marqué ; en tête, l'instant courant, nommé « Avant l'accueil » par le champ du panneau (§ 8.2, § 8.3) | au moins un fil abandonné est présent et marqué comme tel ; le libellé du retour nomme la touche ; le jalon est sur l'instant courant, et le nommer ne change pas la révision |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
 | `24-badges-controle.png` / `25-badges-planche.png` | idem, sur une machine qui n'a pas choisi de modèle de badge : Avery 5392 | la **feuille de contrôle à part**, avec son échelle de 100 mm, le contour des six cartes et ses comptes, puis la première **feuille de cartes**, six cartes Avery 5392 sans filet, les six premiers noms de l'ordre alphabétique ; une personne assise à la même table à chaque tour lit une seule ligne, « Toute la soirée — table 1 (Table d’honneur) », le libellé de la table après son numéro (§ 11.4) ; sous le pied de chaque carte, le pied TechnoLibre, son texte puis le logo en couleurs, la case de la machine étant cochée par défaut — la feuille de contrôle ne le porte pas | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle et pose sur une feuille de cartes avant d'engager les cartes, et une feuille de cartes seule ne le montre pas ; produire n'écrit que les deux PDF |
@@ -10350,17 +10383,22 @@ du moteur, et **font croire au lecteur que le texte ne lui est pas destiné** �
 après quoi il ne lit plus la section, qui est la seule réponse écrite à la question
 qu'il posera.
 
-La section s'appuie sur les captures d'écran `10`, `11`, `11b`, `12`, `16`,
-`17` et `18` : le diagnostic, les propositions classées, les dérivées, le
-profil trié, « minimum atteint » sur la petite démonstration, et la vue de
-comparaison et son escalier. La
-comparaison par le manque s'y lit sur `17` et `18`, les colonnes du tableau des
-propositions en donnant les chiffres ; une dérivée s'y lit sur `11b`, qui montre
-qu'elle entre au même classement que son départ. Le point 3 s'appuie en outre
-sur `15c` : la course d'une recherche, et son plateau. Le contraste de la
-variante « conflit inévitable » (§ 15.3) — une personne déplacée d'une
-organisation à l'autre, et la mention bascule — est le plus court exposé de
-toute la section, et il tient en deux images.
+La section s'appuie sur les captures d'écran `10`, `11`, `11b`, `12`, `13`,
+`16`, `17` et `18` : le diagnostic, les propositions classées, les dérivées, le
+profil trié, les collisions de la variante « conflit inévitable », « minimum
+atteint » sur la petite démonstration, et la vue de comparaison et son
+escalier. La comparaison par le manque s'y lit sur `17` et `18`, les colonnes
+du tableau des propositions en donnant les chiffres ; une dérivée s'y lit sur
+`11b`, qui montre qu'elle entre au même classement que son départ. Le point 3
+s'appuie en outre sur `15c` : la course d'une recherche, et son plateau. Le
+contraste de la variante « conflit inévitable » (§ 15.3) — une personne
+déplacée d'une organisation à l'autre, et la mention bascule — est le plus
+court exposé de toute la section, et il tient en deux images : `16`, « minimum
+atteint » sans collision, puis `13`, les quatre collisions cumulées au segment
+« prouvé inévitable ». Le point 7 le porte, puisque c'est ce que relancer ne
+peut pas effacer. Une épreuve du niveau `node` refuse une section qui ne cite
+pas chacune de ces captures, et un point 3 qui ne cite pas `15c` ou un point 7
+qui ne cite pas `16` et `13`.
 
 ### 19.10 Le banc de mesure
 

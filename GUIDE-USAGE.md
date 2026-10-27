@@ -1399,6 +1399,20 @@ la recherche ce qui est hors d’atteinte, et quel changement de configuration l
 lèverait : une table de plus, un tour de moins, une organisation mieux
 répartie.
 
+Deux images le montrent sur la petite démonstration. Ses trois organisations
+comptent quatre personnes chacune, autant que de tables : chacun peut changer
+de voisins à chaque tour sans jamais retrouver quelqu’un de son organisation,
+et la page « Qualité » écrit « minimum atteint », sans aucune collision
+([« minimum atteint » sur la petite démonstration](doc/captures/16-minimum-atteint.png)).
+Faites passer une seule personne d’une organisation à une autre : c’est la
+variante « conflit inévitable », dont les organisations comptent cinq, quatre
+et trois personnes. Cinq personnes ne se répartissent pas sur quatre tables
+sans que deux se retrouvent, à chaque tour : quatre collisions sur la soirée,
+quel que soit le placement. La page « Qualité » les dessine en gris, dans le
+segment « prouvé inévitable »
+([les collisions de la variante « conflit inévitable »](doc/captures/13-qualite-collisions.png)),
+et aucune relance ne les efface.
+
 ### Comparer deux propositions
 
 Comparez par le **manque** : pour chaque personne, l’écart entre ce que son

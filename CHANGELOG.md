@@ -781,6 +781,11 @@
   qualité, les tuiles de ces chiffres écrivent la même ligne, comme les
   colonnes de la comparaison ; celles des tours selon l'objectif et des
   animateurs rencontrés l'écrivent quand des ancrés sont concernés.
+- Le guide d'usage, dans « Comment le logiciel cherche », montre en deux
+  captures ce que relancer ne peut pas effacer : « minimum atteint » sur la
+  petite démonstration, puis, une seule personne passée d'une organisation à
+  une autre, les quatre collisions inévitables de la variante « conflit
+  inévitable ».
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

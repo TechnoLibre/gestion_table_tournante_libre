@@ -6,13 +6,13 @@
   // l'application — système de fichiers, horloge, exécuteur de génération, en
   // option l'exécuteur de la vue d'ensemble de la liste, presse-papiers,
   // identifiants, langue, provenance, démonstrations, format courant, version
-  // du produit et sa forme Windows, chargement de la police embarquée,
-  // imprimante de la plateforme, chargement de la section de la qualité, et en
-  // option le chargement du solveur du plancher exact et le thème de départ
-  // — que src/main.js construit pour la machine et
-  // monterApp pour une épreuve : App ne choisit aucune plateforme, et ne lit
-  // la version que dans ses propriétés, la même au bandeau, au titre, à
-  // l'accueil et dans le bloc « À propos ».
+  // affichée du produit, chargement de la police embarquée, imprimante de la
+  // plateforme, chargement de la section de la qualité, et en option le
+  // chargement du solveur du plancher exact et le thème de départ — que
+  // src/main.js construit pour la machine et monterApp pour une épreuve : App
+  // ne choisit aucune plateforme, et ne lit la version que dans ses
+  // propriétés, la même au bandeau, au titre, à l'accueil et dans le bloc
+  // « À propos ».
   //
   // La section de la qualité forme son propre morceau dans la construction :
   // src/main.js passe une fonction qui la charge par un import différé,

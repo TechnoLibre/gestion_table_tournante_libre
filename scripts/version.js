@@ -170,13 +170,13 @@ const EN_TETE_LICENCE = [
 /**
  * Contenu exact de src/version.genere.js pour une version affichée :
  * l'en-tête de licence, une ligne vide, puis la constante VERSION sous ses
- * formes affichée, technique et Windows — celle que le panneau « À propos »
- * met en regard de l'affichée (§ 18.6), sans la recalculer. Le module ne
- * porte que la version ; la provenance de la construction vient du mode de
- * Vite.
+ * formes affichée et technique (§ 18.3). La forme Windows n'y est pas :
+ * l'application ne l'écrit nulle part, et electron-builder tire la
+ * ressource de version de package.json (§ 18.6). Le module ne porte que la
+ * version ; la provenance de la construction vient du mode de Vite.
  */
 export function engendrerModule(versionAffichee) {
-  const { affichee, technique, windows } = deriver(versionAffichee);
+  const { affichee, technique } = deriver(versionAffichee);
   return [
     ...EN_TETE_LICENCE,
     '',
@@ -184,7 +184,6 @@ export function engendrerModule(versionAffichee) {
     'export const VERSION = Object.freeze({',
     `  affichee: '${affichee}',`,
     `  technique: '${technique}',`,
-    `  windows: '${windows}',`,
     '});',
     '',
   ].join('\n');

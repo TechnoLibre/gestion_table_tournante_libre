@@ -17,6 +17,9 @@ import { LIENS, blocAPropos, cleDeLien } from './apropos.js';
 import { TABLES_INTERFACE, libelleProvenance } from './libelles.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+// La forme Windows de la version (§ 18.1) : la technique suivie de « .0 ».
+// Le module engendré ne la porte pas, et le bloc ne l'écrit pas.
+const FORME_WINDOWS = `${VERSION.technique}.0`;
 const temoin = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue: 'temoin' }).t;
 
 describe('blocAPropos (§ 18.6)', () => {
@@ -25,7 +28,7 @@ describe('blocAPropos (§ 18.6)', () => {
     assert.equal(typeof bloc, 'string');
     assert.doesNotMatch(bloc, /[\n\r\u{2028}\u{2029}]/u);
     assert.match(VERSION.affichee, /^\d{4}\.\d{2}\.\d{2}\.\d{2}$/);
-    assert.equal(bloc.includes(VERSION.windows), false, bloc);
+    assert.equal(bloc.includes(FORME_WINDOWS), false, bloc);
     assert.deepEqual(bloc.split(' \u{00B7} '), [
       t('coquille.nom'),
       VERSION.affichee,
