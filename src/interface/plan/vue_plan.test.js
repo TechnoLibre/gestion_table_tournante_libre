@@ -4,8 +4,9 @@
 // La vue du plan côté interface (§ 7.2, § 8.5, § 13.3) : le cadre lu d'un
 // DOMRect, la vue d'ouverture — cadrage mémorisé borné au cadre, sinon
 // l'ajustement —, la vue d'après un changement de cadre, les zooms de la
-// molette et des boutons, l'englobant d'un tour, le tour montré, les noms
-// et la personne mise en évidence, dite absente au tour où elle l'est.
+// molette et des boutons, l'englobant d'un tour, le tour montré, les noms,
+// le tour où « Voir sur le plan » montre une personne, et la personne mise
+// en évidence, dite absente ou dans la réserve au tour où elle l'est.
 // Les valeurs attendues viennent de src/geometrie/vue.js, la seule
 // implémentation des conversions, sollicitée une seconde fois.
 import assert from 'node:assert/strict';
@@ -36,6 +37,7 @@ import {
   placerBulle,
   sourceMontree,
   tourAffiche,
+  tourPourVoir,
   toursOfferts,
   vueApresCadre,
   vueInitiale,
@@ -269,30 +271,88 @@ describe('l’englobant d’un tour, le tour montré, les noms', () => {
   });
 });
 
+describe('tourPourVoir : le tour où « Voir sur le plan » montre une personne (§ 7.1)', () => {
+  // Un état de places écrit à la main, réduit à ce que lit tourPourVoir :
+  // les occupants de chaque table, null pour une chaise vide.
+  const etat = (...tables) => ({ tables: tables.map((occupants) => ({ chaises: occupants.map((occupant) => ({ occupant })) })) });
+  // Les états des tours 1 à 4 ; chaque lecture se compte.
+  function lecteur(etats) {
+    const lus = [];
+    const etatDuTour = (tour) => {
+      lus.push(tour);
+      return etats[tour - 1];
+    };
+    return { lus, etatDuTour };
+  }
+
+  test('assise au tour montré : le tour montré, seul tour lu', () => {
+    const { lus, etatDuTour } = lecteur([etat([7, 3]), etat([3], [7]), etat([7]), etat([null])]);
+    assert.equal(tourPourVoir(7, 4, 3, etatDuTour), 3);
+    assert.deepEqual(lus, [3]);
+  });
+
+  test('sans chaise au tour montré : le premier tour où elle en a une, même avant le tour montré', () => {
+    const etats = [etat([3, null]), etat([null], [5, 7]), etat([3], [5]), etat([7])];
+    assert.equal(tourPourVoir(7, 4, 1, lecteur(etats).etatDuTour), 2);
+    assert.equal(tourPourVoir(7, 4, 3, lecteur(etats).etatDuTour), 2);
+  });
+
+  test('sans chaise à aucun tour : le tour montré', () => {
+    const etats = [etat([3]), etat([5, null]), etat([])];
+    assert.equal(tourPourVoir(7, 3, 2, lecteur(etats).etatDuTour), 2);
+  });
+
+  test('lu sur l\u{2019}état des places : absente au tour 3, la personne de l\u{2019}épreuve se montre au tour où elle est réservée', () => {
+    const charge = chargeDEpreuve();
+    charge.participants[0].presence = [1, 2];
+    charge.reservations = [{ participant: 1, table: 2, siege: 1, portee: 'tour', tour: 2 }];
+    const etatDuTour = (tour) => etatPlaces(charge, { tour });
+    assert.equal(tourPourVoir(1, 3, 3, etatDuTour), 2);
+    assert.equal(tourPourVoir(1, 3, 1, etatDuTour), 2);
+    assert.equal(tourPourVoir(2, 3, 3, etatDuTour), 3);
+  });
+});
+
 describe('evidenceDe : la personne mise en évidence, que la barre de vue nomme (§ 7.1, § 8.4)', () => {
-  test('présente au tour : son nom affiché, absente faux ; absente au tour : absente vrai', () => {
+  test('dans la réserve au tour : reserve vrai ; absente au tour : absente vrai, reserve faux', () => {
     const charge = chargeDEpreuve();
     charge.participants[0].presence = [1, 2];
     const nomDe = nomDeCharge(charge);
-    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 1 })), { id: 1, nom: 'Iris Ombrelle', absente: false });
-    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 3 })), { id: 1, nom: 'Iris Ombrelle', absente: true });
-    assert.deepEqual(evidenceDe(2, nomDe, etatPlaces(charge, { tour: 3 })), { id: 2, nom: 'Grisaille', absente: false });
+    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 1 })), { id: 1, nom: 'Iris Ombrelle', absente: false, reserve: true });
+    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 3 })), { id: 1, nom: 'Iris Ombrelle', absente: true, reserve: false });
+    assert.deepEqual(evidenceDe(2, nomDe, etatPlaces(charge, { tour: 3 })), { id: 2, nom: 'Grisaille', absente: false, reserve: true });
   });
 
-  test('une personne que la charge n\u{2019}a plus : nom null, et jamais absente au tour', () => {
+  test('assise au tour : ni absente ni en réserve', () => {
     const charge = chargeDEpreuve();
-    assert.deepEqual(evidenceDe(99, nomDeCharge(charge), etatPlaces(charge, { tour: 2 })), { id: 99, nom: null, absente: false });
+    charge.reservations = [{ participant: 1, table: 2, siege: 1, portee: 'tour', tour: 2 }];
+    const nomDe = nomDeCharge(charge);
+    assert.deepEqual(evidenceDe(1, nomDe, etatPlaces(charge, { tour: 2 })), { id: 1, nom: 'Iris Ombrelle', absente: false, reserve: false });
   });
 
-  test('une exclue n\u{2019}est pas dite absente au tour : l\u{2019}état des places ne la nomme pas', () => {
+  test('une personne que la charge n\u{2019}a plus : nom null, et jamais absente ni en réserve au tour', () => {
+    const charge = chargeDEpreuve();
+    assert.deepEqual(evidenceDe(99, nomDeCharge(charge), etatPlaces(charge, { tour: 2 })), {
+      id: 99,
+      nom: null,
+      absente: false,
+      reserve: false,
+    });
+  });
+
+  test('une exclue n\u{2019}est dite ni absente ni en réserve au tour : l\u{2019}état des places ne la nomme pas', () => {
     const charge = chargeDEpreuve();
     charge.participants[0].presence = [1];
     charge.participants[0].exclu = true;
-    assert.equal(evidenceDe(1, nomDeCharge(charge), etatPlaces(charge, { tour: 2 })).absente, false);
+    for (const tour of [1, 2]) {
+      const { absente, reserve } = evidenceDe(1, nomDeCharge(charge), etatPlaces(charge, { tour }));
+      assert.deepEqual({ absente, reserve }, { absente: false, reserve: false });
+    }
   });
 
-  test('les libellés : la barre dit le tour d\u{2019}absence ; la liste de travail des réserves du retenu', () => {
+  test('les libellés : la barre dit le tour d\u{2019}absence, celui de la réserve ; la liste de travail des réserves du retenu', () => {
     assert.equal(t('plan.evidence.absenteAuTour', { tour: 3 }), ' \u{2014} absente au tour 3');
+    assert.equal(t('plan.evidence.reserveAuTour', { tour: 2 }), ' \u{2014} dans la réserve au tour 2');
     assert.equal(t('plan.listesTravail.reserves'), 'En réserve dans le placement retenu');
     assert.equal(t('plan.listesTravail.enReserve', { tours: [3, 4] }), ' \u{2014} en réserve aux tours 3 et 4');
     assert.equal(t('plan.listesTravail.enReserve', { tours: [2] }), ' \u{2014} en réserve au tour 2');

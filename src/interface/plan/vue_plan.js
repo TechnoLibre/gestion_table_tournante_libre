@@ -118,6 +118,32 @@ export function tourAffiche(tour, tours) {
   return Math.min(tour, tours);
 }
 
+// Vrai quand une chaise de l'état des places porte la personne id.
+const assiseDans = (etat, id) => etat.tables.some((table) => table.chaises.some(({ occupant }) => occupant === id));
+
+/**
+ * Le tour où « Voir sur le plan » montre une personne (§ 7.1) : le tour
+ * montré quand elle y a une chaise ; sinon le premier tour, de 1 à tours,
+ * où elle en a une ; le tour montré encore quand elle n'en a à aucun tour
+ * — la barre de vue dit alors l'absence ou la réserve, et ne qualifie pas
+ * une exclue (evidenceDe). tourPourVoir ne lit que etatDuTour(r), l'état
+ * des places du placement que le plan montre au tour r, et ne recalcule
+ * aucun placement ; le tour montré se lit seul quand elle y est assise.
+ *
+ * @param {number} id
+ * @param {number} tours   entier ≥ 1
+ * @param {number} montre  le tour montré, tourAffiche, de 1 à tours
+ * @param {(tour: number) => {tables: Array<{chaises: Array<{occupant: number|null}>}>}} etatDuTour
+ * @returns {number}
+ */
+export function tourPourVoir(id, tours, montre, etatDuTour) {
+  if (assiseDans(etatDuTour(montre), id)) return montre;
+  for (let tour = 1; tour <= tours; tour += 1) {
+    if (tour !== montre && assiseDans(etatDuTour(tour), id)) return tour;
+  }
+  return montre;
+}
+
 /**
  * La fonction nomDe du modèle de dessin : l'identifiant d'un participant de
  * la charge vers son nom affiché (nomAffiche, F1).
@@ -131,17 +157,19 @@ export function nomDeCharge(charge) {
 /**
  * La personne mise en évidence, que la barre de vue nomme : son identifiant,
  * son nom affiché par nomDe — null pour une personne que la charge n'a
- * plus —, et absente, vrai quand l'état des places du tour montré la nomme
- * parmi ses absents (non exclue, absente à ce tour). Une personne que la
- * charge n'a plus, ou une exclue, n'est jamais dite absente au tour.
+ * plus —, absente, vrai quand l'état des places du tour montré la nomme
+ * parmi ses absents (non exclue, absente à ce tour), et reserve, vrai quand
+ * il la nomme dans sa réserve (présente à ce tour, sans chaise). Une
+ * personne que la charge n'a plus, ou une exclue, n'est jamais dite absente
+ * ni en réserve au tour.
  *
  * @param {number} id
  * @param {(id: number) => string|undefined} nomDe   nomDeCharge
- * @param {{absents: number[]}} etat   EtatPlaces du tour montré
- * @returns {{id: number, nom: string|null, absente: boolean}}
+ * @param {{absents: number[], reserve: number[]}} etat   EtatPlaces du tour montré
+ * @returns {{id: number, nom: string|null, absente: boolean, reserve: boolean}}
  */
 export function evidenceDe(id, nomDe, etat) {
-  return { id, nom: nomDe(id) ?? null, absente: etat.absents.includes(id) };
+  return { id, nom: nomDe(id) ?? null, absente: etat.absents.includes(id), reserve: etat.reserve.includes(id) };
 }
 
 /**

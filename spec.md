@@ -2704,8 +2704,16 @@ présence — « Prénom Nom — présente aux tours 1 et 2 » ; elle n'existe p
 le tour n'en a pas. Une absente n'a ni chaise ni place en réserve ; son bouton
 ouvre sa fiche, où sa présence se change (§ 10.2), et ne la choisit pas. Le
 plan n'offre pas de commande qui change une présence : la fiche et la grille
-en sont le lieu. La mise en évidence d'une personne absente au tour montré se
-dit dans la barre de vue : « — absente au tour 3 ».
+en sont le lieu. La mise en évidence marque la chaise que la personne occupe
+au tour montré, quand le plan dessine les chaises (§ 7.3) ; sans chaise à ce
+tour, rien n'est marqué, et la barre de vue dit l'absence ou la réserve :
+« — absente au tour 3 », ou « — dans la réserve au tour 3 ». Une exclue n'a
+de chaise à aucun tour ; la barre la nomme sans la qualifier.
+« Voir sur le plan », depuis la ligne d'une personne dans la grille des
+participants, la met en évidence et ouvre le plan au tour montré quand elle y
+a une chaise, sinon au premier tour où elle en a une : le plan la montre
+assise, sans que l'opérateur cherche son tour. Sans chaise à aucun tour, le
+tour montré reste.
 
 **La poignée pilote le nombre de places, jamais une taille libre.** Chaque table
 est dessinée à l'échelle de son nombre de sièges ; une taille libre permettrait

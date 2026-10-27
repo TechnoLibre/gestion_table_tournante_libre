@@ -12,13 +12,16 @@
   // bouton à bascule dit son état par aria-pressed, le bouton de la légende,
   // qui dévoile, par aria-expanded ; la forme du bouton redit l'un et l'autre.
   //
-  // evidence : la personne mise en évidence, {id, nom, absente} — nom null
-  // pour une personne que la charge n'a plus, absente vrai quand elle est
-  // absente au tour montré (evidenceDe) —, ou null. La barre la nomme et
-  // offre d'ôter la mise en évidence, que la personne soit assise au tour
-  // montré ou non ; le menu de la personne la pose (MenuPersonne). Une
-  // personne que la charge n'a plus se dit telle, sans nom ; une absente au
-  // tour montré, son nom suivi de « absente au tour r ».
+  // evidence : la personne mise en évidence, {id, nom, absente, reserve} —
+  // nom null pour une personne que la charge n'a plus, absente vrai quand
+  // elle est absente au tour montré, reserve quand elle y est dans la
+  // réserve (evidenceDe) —, ou null. La barre la nomme et offre d'ôter la
+  // mise en évidence, que la personne soit assise au tour montré ou non ;
+  // le menu de la personne et « Voir sur le plan » la posent. Une personne
+  // que la charge n'a plus se dit telle, sans nom ; une absente au tour
+  // montré, son nom suivi de « absente au tour r » ; une personne dans la
+  // réserve, de « dans la réserve au tour r » : sans chaise à ce tour, le
+  // plan ne marque rien, et la barre dit pourquoi.
   //
   // legende : vrai quand la légende des conflits est ouverte ; basculerLegende
   // l'ouvre ou la ferme ; idLegende, l'identifiant de la légende, que le
@@ -93,7 +96,9 @@
     <p class="evidence" data-evidence={evidence.id}>
       <span>{t('plan.evidence.personne')}</span>{#if evidence.nom !== null}<span class="donnee">{evidence.nom}</span>{:else}<span
           >{t('plan.evidence.absente')}</span
-        >{/if}{#if evidence.absente}<span>{t('plan.evidence.absenteAuTour', { tour })}</span>{/if}
+        >{/if}{#if evidence.absente}<span>{t('plan.evidence.absenteAuTour', { tour })}</span>{:else if evidence.reserve}<span
+          >{t('plan.evidence.reserveAuTour', { tour })}</span
+        >{/if}
       <button type="button" class="commande" data-commande="oterEvidence" onclick={() => ui.mettreEnEvidence(null)}
         >{t('plan.evidence.oter')}</button
       >

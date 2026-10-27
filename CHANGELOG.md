@@ -792,6 +792,11 @@
   petite démonstration, puis, une seule personne passée d'une organisation à
   une autre, les quatre collisions inévitables de la variante « conflit
   inévitable ».
+- « Voir sur le plan », depuis la grille des participants, ouvre le plan au
+  tour où la personne est assise quand elle est absente ou en réserve au tour
+  montré : sa chaise est mise en évidence tout de suite, sans changer de tour
+  à la main. Une personne en réserve au tour montré se dit telle dans la barre
+  de vue, « — dans la réserve au tour 1 », comme une absente.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

@@ -233,6 +233,9 @@ export const TABLE = new Map([
   ['plan.evidence.absente', 'une personne qui n\u{2019}est plus dans la liste'],
   // La personne mise en évidence, absente au tour montré : la suite de son nom.
   ['plan.evidence.absenteAuTour', ({ tour }) => ` \u{2014} absente au tour ${tour}`],
+  // La personne mise en évidence, dans la réserve au tour montré : sans
+  // chaise à marquer, la suite de son nom le dit.
+  ['plan.evidence.reserveAuTour', ({ tour }) => ` \u{2014} dans la réserve au tour ${tour}`],
   ['plan.evidence.oter', 'Ôter la mise en évidence'],
   ['plan.evidence.voir', 'Voir sur le plan'],
 

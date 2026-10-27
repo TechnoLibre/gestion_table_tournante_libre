@@ -48,8 +48,9 @@
   // remède : celui de la séance, lu dans etat().refus avant d'ouvrir
   // l'édition, ou celui de la commande, la saisie gardée.
   //
-  // « Voir sur le plan » met la personne en évidence et ouvre le plan, au
-  // tour montré (§ 7.1, § 8.4) : un geste de regard, qui n'écrit rien.
+  // « Voir sur le plan » met la personne en évidence et ouvre le plan
+  // (§ 7.1, § 8.4) au tour montré quand elle y a une chaise, sinon au
+  // premier tour où elle en a une : un geste de regard, qui n'écrit rien.
   //
   // L'en-tête trie : un clic sur une colonne la trie croissante, un second
   // décroissante ; le sens se lit en texte et dans aria-sort. Un collage sur
@@ -108,6 +109,8 @@
   import { organisationsDe } from '../../application/conflits_organisation.js';
   import { cleNormalisee } from '../../application/csv.js';
   import { nomAffiche } from '../../application/personnes.js';
+  import { etatPlaces } from '../../application/places.js';
+  import { tourAffiche, tourPourVoir } from '../plan/vue_plan.js';
   import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
@@ -150,7 +153,18 @@
   const seance = getContext('seance');
   const ui = getContext('ui');
 
+  // Met la personne en évidence et ouvre le plan au tour où elle a une
+  // chaise (tourPourVoir), dans le placement que le plan montre ; le tour
+  // montré, et le choix en attente avec lui, ne change que si elle n'y en a
+  // pas.
   function voirSurLePlan(id) {
+    const { charge } = seance.etat();
+    if (charge !== null) {
+      const { tour: demande, proposition } = ui.etat();
+      const montre = tourAffiche(demande, charge.evenement.tours);
+      const tour = tourPourVoir(id, charge.evenement.tours, montre, (r) => etatPlaces(charge, { tour: r, proposition }));
+      if (tour !== montre) ui.montrerTour(tour);
+    }
     ui.mettreEnEvidence(id);
     ui.allerA('plan');
   }

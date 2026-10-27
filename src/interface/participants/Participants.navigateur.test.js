@@ -25,7 +25,7 @@ import { bilanChangementDefaut } from '../../application/bilans.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { apercevoir, cleNormalisee, decoder, exporterParticipants } from '../../application/csv.js';
-import { statuts } from '../../application/places.js';
+import { etatPlaces, statuts } from '../../application/places.js';
 import { STATUT, nombrePlacesManquantes, normaliser } from '../../moteur/configuration.js';
 import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { serialiser } from '../../stockage/canonique.js';
@@ -3052,5 +3052,133 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
       expect(visible(message)).toBe(true);
       expect(participants(m)).toHaveLength(1);
     });
+  });
+});
+
+// --- « Voir sur le plan » depuis la grille (§ 7.1, § 5.8) -------------------
+
+describe('« Voir sur le plan » depuis sa ligne de la grille', () => {
+  // Le plan ne se dessine que dans un cadre qui lui donne une vue : celui
+  // de 1 366 × 700 le temps de l'épreuve, puis celui d'avant.
+  let avant = null;
+  beforeEach(async () => {
+    avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+  });
+  afterEach(async () => {
+    await fixerCadre(avant.largeur, avant.hauteur);
+  });
+
+  // Les chaises marquées [data-marque=miseEnEvidence], « table:siège ».
+  const marquees = (m) =>
+    [...m.racine.querySelectorAll('[data-marque="miseEnEvidence"]')].map((marque) => marque.closest('[data-siege]').dataset.siege);
+  // La place d'une personne au tour donné, « table:siège », ou null hors de
+  // toute chaise : dans le placement que le plan montre, ou dans celui de la
+  // proposition donnée, le retenu pour null.
+  function placeAuTour(m, id, tour, proposition = m.ui.etat().proposition) {
+    const etat = etatPlaces(m.seance.etat().charge, { tour, proposition });
+    for (const table of etat.tables) {
+      const chaise = table.chaises.find(({ occupant }) => occupant === id);
+      if (chaise !== undefined) return `${table.id}:${chaise.siege}`;
+    }
+    return null;
+  }
+
+  // Sept personnes, deux tables de quatre, trois tours, nombre propositions
+  // dont la première est retenue ; rend le montage et l'identifiant de la
+  // personne de NOMS[2]. Le plan montre le tour 1.
+  async function montage({ nombre = 1 } = {}) {
+    const m = await evenementOuvert({ sieges: 4, tours: 3, tables: 2, personnes: NOMS.slice(0, 7).map((nom) => ({ nom })) });
+    await m.seance.executer('modifierReglage', { cle: 'attribuerSieges', valeur: true });
+    await m.app.generation().generer({ graine: 1, nombre, arret: 50, historique: 1000 });
+    const [proposition] = m.seance.etat().charge.propositions;
+    await m.seance.executer('retenirProposition', { id: proposition.id });
+    return { m, id: idDe(m, NOMS[2]) };
+  }
+
+  // Clique « Voir sur le plan » sur la ligne de la personne, attend la vue
+  // et les deux tables ; rend la barre de la mise en évidence.
+  async function voir(m, id) {
+    await cliquer(commandeDeLigne(m, id, 'voirSurLePlan'));
+    expect(m.ui.etat().section).toBe('plan');
+    expect(m.ui.etat().miseEnEvidence).toBe(id);
+    await vi.waitFor(() => expect(m.racine.querySelector('[data-vue]')?.getAttribute('transform') ?? null).not.toBeNull());
+    await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-table]')).toHaveLength(2));
+    await rendu();
+    const barre = m.racine.querySelector('[data-evidence]');
+    expect(barre).not.toBeNull();
+    expect(Number(barre.dataset.evidence)).toBe(id);
+    return barre;
+  }
+
+  // La personne sans chaise au tour 1 — absente, ou laissée dans la
+  // réserve —, assise aux tours 2 et 3.
+  const CAS = [
+    ['absente au tour montré', (m, id) => m.seance.executer('changerPresence', { id, tours: [2, 3] })],
+    ['dans la réserve au tour montré', (m, id) => m.seance.executer('retirerDuTour', { tour: 1, participant: id })],
+  ];
+
+  test.each(CAS)('%s, assise à un autre tour : le plan s’ouvre au premier tour où elle est assise, sa chaise marquée', async (_cas, poser) => {
+    const { m, id } = await montage();
+    await poser(m, id);
+    await rendu();
+    expect(m.ui.etat().tour).toBe(1);
+    expect(placeAuTour(m, id, 1)).toBeNull();
+    expect(placeAuTour(m, id, 2)).not.toBeNull();
+
+    const barre = await voir(m, id);
+    expect(m.ui.etat().tour).toBe(2);
+    expect(marquees(m), 'une chaise marquée au tour où elle est assise').toHaveLength(1);
+    expect(marquees(m)).toEqual([placeAuTour(m, id, 2)]);
+    expect(barre.textContent).not.toContain(tEcran('plan.evidence.absenteAuTour', { tour: 2 }));
+    expect(barre.textContent).not.toContain(tEcran('plan.evidence.reserveAuTour', { tour: 2 }));
+  });
+
+  test('assise au tour montré, qui n’est pas le premier où elle l’est : le tour montré reste', async () => {
+    const { m, id } = await montage();
+    await m.seance.executer('changerPresence', { id, tours: [2, 3] });
+    m.ui.montrerTour(3);
+    await rendu();
+    expect(placeAuTour(m, id, 3)).not.toBeNull();
+
+    await voir(m, id);
+    expect(m.ui.etat().tour).toBe(3);
+    expect(marquees(m)).toEqual([placeAuTour(m, id, 3)]);
+  });
+
+  test('une proposition montrée : le tour se cherche dans ce placement, non dans le retenu', async () => {
+    const { m, id } = await montage({ nombre: 2 });
+    // La seconde proposition, que le retenu ne copie pas.
+    const autre = m.seance.etat().charge.propositions[1];
+    expect(autre.id).not.toBe(m.seance.etat().charge.retenu.proposition);
+    // Absente au tour 1 partout ; le retenu la laisse aussi dans la réserve
+    // au tour 2, la proposition l'y assied.
+    await m.seance.executer('changerPresence', { id, tours: [2, 3] });
+    await m.seance.executer('retirerDuTour', { tour: 2, participant: id });
+    m.ui.montrerProposition(autre.id);
+    await rendu();
+    expect(m.ui.etat().tour).toBe(1);
+    expect(placeAuTour(m, id, 1)).toBeNull();
+    expect(placeAuTour(m, id, 2), 'la proposition l’assied au tour 2').not.toBeNull();
+    expect(placeAuTour(m, id, 2, null), 'le retenu la laisse dans la réserve au tour 2').toBeNull();
+    expect(placeAuTour(m, id, 3, null)).not.toBeNull();
+
+    await voir(m, id);
+    expect(m.ui.etat().proposition).toBe(autre.id);
+    expect(m.ui.etat().tour).toBe(2);
+    expect(marquees(m)).toEqual([placeAuTour(m, id, 2)]);
+  });
+
+  test('dans la réserve à chaque tour : le tour montré reste, rien n’est marqué, la barre dit la réserve', async () => {
+    const { m, id } = await montage();
+    for (const tour of [1, 2, 3]) await m.seance.executer('retirerDuTour', { tour, participant: id });
+    await rendu();
+    expect([1, 2, 3].map((tour) => placeAuTour(m, id, tour))).toEqual([null, null, null]);
+
+    const barre = await voir(m, id);
+    expect(m.ui.etat().tour).toBe(1);
+    expect(marquees(m)).toEqual([]);
+    expect(barre.textContent).toContain(tEcran('plan.evidence.reserveAuTour', { tour: 1 }));
+    expect(barre.textContent).not.toContain(tEcran('plan.evidence.absenteAuTour', { tour: 1 }));
   });
 });
