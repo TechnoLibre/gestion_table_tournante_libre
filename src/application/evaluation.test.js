@@ -894,6 +894,7 @@ const ORDRE_REGLE = [
   [e('animateursNonRencontres')],
   [e('redondance')],
   [e('conflitsOrganisation')],
+  [e('inclusionsNonSatisfaites')],
 ];
 
 // Les noms des valeurs d'un point de relevé : le minimum brut, puis chaque
@@ -1195,7 +1196,7 @@ describe('detaillerQualite : une seule arithmétique (§ 12.9, § 13.2, contrain
     const { charge } = genereeAvecCourses(chargeAObjectifs(), { graine: 3, nombre: 2, arret: 200 });
     const retenue = figer(executer(charge, 'retenirProposition', { id: 1 }));
     const table = evaluer(retenue);
-    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
+    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin', 'inclusions'];
     for (const ligne of [...table.propositions, table.retenu]) assert.deepEqual(Object.keys(ligne), CHAMPS);
     // Le comptage des appels se fait sur le texte du module : la fermeture
     // de ce qu'evaluer atteint, ligneDe comprise et chaque fonction du
@@ -2338,7 +2339,7 @@ describe('evaluer : les deux champs de la configuration que lit la comparaison (
     const instance = normaliser(configurationDe(charge));
     assert.deepEqual(QUALITE.planchersDesColonnes(instance, table.diagnostic), QUALITE.planchersDesColonnes(instance, diagnostic));
     assert.deepEqual(Object.keys(table), ['population', 'propositions', 'retenu', 'classement', 'criteres', 'imposes', 'plafondsAPriori', 'diagnostic']);
-    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
+    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin', 'inclusions'];
     for (const ligne of table.propositions) assert.deepEqual(Object.keys(ligne), CHAMPS);
     assert.equal(evaluer(charge, { plafondsAPriori: null }).plafondsAPriori, null);
   });

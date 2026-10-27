@@ -510,9 +510,10 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
         for (const nom of REGISTRE) for (const valeur of valeursQuiClassent(nom, contraintes, mode)) valeurs.add(valeur);
       }
     }
-    assert.equal(valeurs.size, 11);
+    assert.equal(valeurs.size, 12);
     for (const valeur of valeurs) assert.ok(noms.has(colonneDeValeur(valeur)), valeur);
     assert.equal(colonneDeValeur('conflitsOrganisation'), 'conflitsOrganisation');
+    assert.equal(colonneDeValeur('inclusionsNonSatisfaites'), 'inclusionsNonSatisfaites');
     assert.equal(colonneDeValeur('rencontresRepeteesChoisies'), 'rencontresRepetees');
     assert.equal(colonneDeValeur('retoursChoisis'), 'retoursChoisis');
     assert.equal(colonneDeValeur('redondance'), 'totalRedondance');
@@ -808,15 +809,16 @@ describe('tableau : le sixième groupe, les objectifs des tables et les animateu
       vue.groupes.filter(({ cle }) => cle !== null).map(({ cle }) => cle),
       ['rencontres', 'collisions', 'repetitions', 'diversite', 'manque'].map((nom) => `propositions.groupe.${nom}`),
     );
-    // Sans liste de conflits, le groupe des collisions perd sa première
-    // colonne, celle des conflits d'organisation.
-    const sansConflits = ({ cle, etendue, colonnes }) =>
-      colonnes.includes('conflitsOrganisation')
-        ? { cle, etendue: etendue - 1, colonnes: colonnes.filter((nom) => nom !== 'conflitsOrganisation') }
-        : { cle, etendue, colonnes: [...colonnes] };
+    // Sans liste de conflits ni d'inclusions, le groupe des collisions perd
+    // ses deux premières colonnes, celles des conflits d'organisation et des
+    // inclusions non satisfaites.
+    const sansListes = ({ cle, etendue, colonnes }) => {
+      const gardees = colonnes.filter((nom) => nom !== 'conflitsOrganisation' && nom !== 'inclusionsNonSatisfaites');
+      return { cle, etendue: etendue - (colonnes.length - gardees.length), colonnes: gardees };
+    };
     assert.deepEqual(
-      vue.groupes.map(sansConflits),
-      GROUPES_COLONNES.filter(({ colonnes }) => !SIXIEME.includes(colonnes[0])).map(sansConflits),
+      vue.groupes.map(sansListes),
+      GROUPES_COLONNES.filter(({ colonnes }) => !SIXIEME.includes(colonnes[0])).map(sansListes),
     );
     assert.equal(vue.etendueRaisons, 18);
     exigerCellulesAlignees(vue);
@@ -1426,6 +1428,7 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
     ['rencontresMobiles', 'grand'],
     ['rencontresAncres', 'grand'],
     ['conflitsOrganisation', 'bas'],
+    ['inclusionsNonSatisfaites', 'bas'],
     ['collisionsCumulees', 'bas'],
     ['pairesDistinctes', null],
     ['excedentCollisions', 'bas'],
@@ -1458,7 +1461,7 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
   const phrases = (texte) => texte.split(/(?<=\.)\s+(?=[\p{Lu}\u{00AB}])/u);
 
   test('chaque colonne de COLONNES, sans exception, porte la clé de son explication : elle existe, compte une à trois phrases, et diffère de l’en-tête et des autres explications', () => {
-    assert.equal(COLONNES.length, 28);
+    assert.equal(COLONNES.length, 29);
     assert.deepEqual(COLONNES.map(({ nom }) => nom), [...SENS.keys()]);
     const textes = new Set();
     for (const { nom, cle, explication } of COLONNES) {
@@ -1489,9 +1492,9 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
   test('chaque valeur qui classe, et l’identifiant croissant, partage l’explication de la colonne qu’elle désigne ; seule l’explication d’une valeur qui classe la dit critère du classement', () => {
     const valeurs = ['ecartAuPlafondAPrioriMax', 'excedentCollisions', 'collisionsCumulees', 'jamaisServies', 'horsObjectifMax']
       .concat(['toursHorsObjectif', 'rencontresRepeteesChoisies', 'retoursChoisis', 'animateursNonRencontres', 'redondance'])
-      .concat(['conflitsOrganisation']);
+      .concat(['conflitsOrganisation', 'inclusionsNonSatisfaites']);
     const criteres = new Set(valeurs.map(colonneDeValeur));
-    assert.equal(criteres.size, 11);
+    assert.equal(criteres.size, 12);
     for (const { nom } of COLONNES) {
       const texte = t(explicationDeColonne(nom));
       if (criteres.has(nom)) assert.match(texte, /critère du classement/i, nom);
@@ -1516,7 +1519,7 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
         for (const nom of REGISTRE) for (const valeur of valeursQuiClassent(nom, { nouveauxVoisins }, mode)) valeurs.add(valeur);
       }
     }
-    assert.equal(valeurs.size, 11);
+    assert.equal(valeurs.size, 12);
     for (const valeur of valeurs) {
       const texte = t(explicationDeColonne(colonneDeValeur(valeur)));
       assert.doesNotMatch(texte, /critère du classement (?:après|avant)|(?:premier|dernier) critère/i, valeur);
@@ -1571,7 +1574,7 @@ describe('GROUPES_COLONNES : les en-têtes groupés du tableau', () => {
       groupes.map(({ colonnes }) => colonnes),
       [
         ['rencontresTous', 'rencontresMobiles', 'rencontresAncres'],
-        ['conflitsOrganisation', 'collisionsCumulees', 'pairesDistinctes', 'excedentCollisions'],
+        ['conflitsOrganisation', 'inclusionsNonSatisfaites', 'collisionsCumulees', 'pairesDistinctes', 'excedentCollisions'],
         ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis'],
         ['organisationsVues', 'totalRedondance', 'diversite'],
         ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori'],

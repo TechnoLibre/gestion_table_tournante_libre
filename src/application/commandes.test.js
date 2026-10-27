@@ -1735,6 +1735,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
     [{ critere: 'animateursNonRencontres', poids: 1 }],
     [{ critere: 'redondance', poids: 1 }],
     [{ critere: 'conflitsOrganisation', poids: 1 }],
+    [{ critere: 'inclusionsNonSatisfaites', poids: 1 }],
   ];
 
   // La charge que reçoit chaque commande : la charge riche, sauf debloquer,

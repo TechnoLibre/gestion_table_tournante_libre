@@ -11,6 +11,7 @@
 // grandeur se range et non ce qu'elle vaut.
 import { LIBRE, RESERVE, SANS_GROUPE } from '../src/moteur/configuration.js';
 import { compilationDe, composantesDe } from '../src/moteur/criteres.js';
+import { ciblesDesInclusions } from '../src/moteur/inclusions.js';
 
 // Les tours servis et les tours possibles de chaque personne présente, lus
 // directement sur la configuration (§ 4.5) : à la table t au tour r,
@@ -84,11 +85,34 @@ export function conflitsDirects(configuration, { ids }) {
   return (a, b) => nomme(a, b) || nomme(b, a);
 }
 
+// Les inclusions non satisfaites d'un plan, lues sur les rencontres M[a × N
+// + b] : chaque unité (inclusions.js) que porte une ligne de personne l'est
+// quand la paire n'est jamais réunie ; celle que porte une ligne
+// d'organisation, quand la source ne partage jamais une table avec un
+// présent de cette organisation. Les unités, leur source et leur ligne sont
+// reçues de l'instance, comme ses plafonds : elles disent ce qui est
+// demandé ; la satisfaction se recompte ici.
+function inclusionsNonSatisfaites(instance, M) {
+  const { N, groupe, inclusionCible } = instance;
+  const { uniteLigne, uniteSource } = ciblesDesInclusions(instance);
+  const reunis = (a, b) => M[Math.min(a, b) * N + Math.max(a, b)] > 0;
+  let manquees = 0;
+  uniteLigne.forEach((i, u) => {
+    const p = uniteSource[u];
+    const cible = inclusionCible[i];
+    const satisfaite = cible >= 0
+      ? reunis(p, cible)
+      : Array.from({ length: N }, (_, q) => q).some((q) => q !== p && groupe[q] === -1 - cible && reunis(p, q));
+    if (!satisfaite) manquees += 1;
+  });
+  return manquees;
+}
+
 // Les grandeurs brutes d'un plan indexé, chacune sous son nom, recalculées
 // par énumération directe des paires, des tours servis et des animateurs
-// rencontrés, sans mesurer ni le module éprouvé ; les plafonds a priori et
-// les bornes des animateurs de l'instance sont les seules grandeurs reçues.
-// Les contraintes n'y entrent pas.
+// rencontrés, sans mesurer ni le module éprouvé ; les plafonds a priori, les
+// bornes des animateurs et les unités des inclusions de l'instance sont les
+// seules grandeurs reçues. Les contraintes n'y entrent pas.
 function grandeursBrutes(configuration, instance, tableDe, aPriori) {
   const { N, T, R, groupe, fixe, borneAnimateurs } = instance;
   // M[a × N + b], a < b : le nombre de tours où a et b partagent une table.
@@ -163,6 +187,7 @@ function grandeursBrutes(configuration, instance, tableDe, aPriori) {
     horsObjectifMax,
     personnesAuMax: horsObjectifMax === 0 ? 0 : hors.filter((h) => h === horsObjectifMax).length,
     animateursNonRencontres: Array.from(borneAnimateurs).reduce((somme, B, p) => somme + B - m[p], 0),
+    inclusionsNonSatisfaites: inclusionsNonSatisfaites(instance, M),
   };
 }
 

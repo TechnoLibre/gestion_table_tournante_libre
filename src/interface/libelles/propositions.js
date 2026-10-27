@@ -100,6 +100,7 @@ export const TABLE = new Map([
   ['propositions.colonne.rencontresMobiles', 'Personnes distinctes rencontrées, minimum : mobiles'],
   ['propositions.colonne.rencontresAncres', 'Personnes distinctes rencontrées, minimum : ancrés'],
   ['propositions.colonne.conflitsOrganisation', "Conflits d'organisation (paire et tour)"],
+  ['propositions.colonne.inclusionsNonSatisfaites', 'Inclusions non satisfaites'],
   ['propositions.colonne.collisionsCumulees', 'Collisions cumulées (paire et tour)'],
   ['propositions.colonne.pairesDistinctes', 'Paires distinctes de même organisation'],
   ['propositions.colonne.excedentCollisions', 'Excédent de collisions (retrouvailles au-delà de la première)'],
@@ -176,6 +177,13 @@ export const TABLE = new Map([
       "quand une personne nomme une organisation, chacun de ses collègues évite chacun des membres de celle-ci. Critère du " +
       "classement à la place que lui donne l'ordre écrit au-dessus du tableau ; l'ordre par défaut le lit en premier. " +
       "Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.inclusionsNonSatisfaites',
+    'Les rencontres que demandent les inclusions et que la soirée ne fait pas, une rencontre demandée des deux côtés ' +
+      "comptant une fois : une inclusion est satisfaite dès qu'on partage une table avec la personne ou un membre de " +
+      "l'organisation incluse. Critère du classement à la place que lui donne l'ordre écrit au-dessus du tableau ; " +
+      "l'ordre par défaut le lit après les conflits. Plus il est bas, mieux c'est.",
   ],
   [
     'propositions.explication.collisionsCumulees',

@@ -36,7 +36,8 @@
         "rencontresRepetees",
         "animateursNonRencontres",
         "redondance",
-        "conflitsOrganisation"
+        "conflitsOrganisation",
+        "inclusionsNonSatisfaites"
       ]
     }
   },
@@ -726,6 +727,44 @@
           "redondance": 1277
         }
       }
+    }
+  },
+  "inclusions": {
+    "1": {
+      "empreinte": "b7c5efb8e4e92e8ef2611ee92244cdf688c28b3a6bebfd4aa02ab640213771a4",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 5,
+        "excedentCollisions": 1,
+        "collisionsCumulees": 63,
+        "rencontresRepeteesChoisies": 135,
+        "retoursChoisis": 44,
+        "redondance": 1304
+      },
+      "inclusionsNonSatisfaites": 138
+    },
+    "2": {
+      "empreinte": "a1789df77ab438c72fe2a619eb9f145b2978589b6d018eb3185da751634bb7a8",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 5,
+        "excedentCollisions": 1,
+        "collisionsCumulees": 64,
+        "rencontresRepeteesChoisies": 137,
+        "retoursChoisis": 42,
+        "redondance": 1301
+      },
+      "inclusionsNonSatisfaites": 135
+    },
+    "3": {
+      "empreinte": "7d8bb2d6a9afbc16e4cc51b77ec6b635cf0f4e2508406cb3d088c3978765abb7",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 5,
+        "excedentCollisions": 2,
+        "collisionsCumulees": 60,
+        "rencontresRepeteesChoisies": 121,
+        "retoursChoisis": 33,
+        "redondance": 1297
+      },
+      "inclusionsNonSatisfaites": 131
     }
   }
 }

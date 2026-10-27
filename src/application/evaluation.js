@@ -138,6 +138,13 @@ export { CASES, MODES_OBJECTIFS, PRIORITES_PAR_DEFAUT } from '../moteur/criteres
  * @property {boolean|null} minimumAtteint
  * @property {object[]} refusDessin   verifierIndicateurs, chaque violation
  *           complétée de participant, l'identifiant de son index ; []
+ * @property {{avis: number, nonSatisfaites: Array<{participant: number,
+ *            cible: {participant: number}|{organisation: string},
+ *            reciproque: boolean}>}|null} inclusions
+ *           comparable : les inclusions non satisfaites de la mesure
+ *           (mesures.inclusions), source et cible par identifiant et
+ *           libellé ; null sans ligne active, et quand le statut n'est pas
+ *           comparable
  *
  * @typedef {Object} TableEvaluation
  * @property {number[]} population    identifiants non exclus, croissants
@@ -207,7 +214,24 @@ const nonMesuree = (id, statut, raisons) => ({
   ecartAuPlafondAPrioriMax: null,
   minimumAtteint: null,
   refusDessin: [],
+  inclusions: null,
 });
+
+// Les inclusions non satisfaites d'une mesure, nommées par identifiants : la
+// source, et la cible codée −1 − g (instance.inclusionCible) par le libellé
+// de son organisation, sinon par l'identifiant de la personne, comme le
+// diagnostic les nomme. null quand la mesure n'en porte pas.
+function inclusionsNommees({ ids, groupes }, inclusions) {
+  if (inclusions === null) return null;
+  return {
+    avis: inclusions.avis,
+    nonSatisfaites: inclusions.nonSatisfaites.map(({ p, cible, reciproque }) => ({
+      participant: ids[p],
+      cible: cible < 0 ? { organisation: groupes[-1 - cible] } : { participant: ids[cible] },
+      reciproque,
+    })),
+  };
+}
 
 /**
  * La table d'évaluation d'une charge (contrat de A6). Ne modifie pas la
@@ -261,6 +285,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
         ...violation,
         participant: instance.ids[violation.index],
       })),
+      inclusions: inclusionsNommees(instance, mesures.inclusions),
     };
   }
 
@@ -513,10 +538,12 @@ const CHAMPS_DE_MESURE = [
 // classer la lit. L'écart au plafond a priori se lit comme ligneDe le lit,
 // null sous un a priori inconnu ; une grandeur que les mesures ne portent pas
 // — objectifs ou animateurs sans personne concernée, conflits sans paire en
-// conflit — vaut null. La Map ne sert qu'à retrouver une lecture.
+// conflit, inclusions sans ligne active — vaut null. La Map ne sert qu'à
+// retrouver une lecture.
 const LECTURES_DES_VALEURS = new Map([
   ['minimumBrut', (mesures) => mesures.aggRencontres.tous.min],
   ['conflitsOrganisation', (mesures) => mesures.conflitsOrganisation],
+  ['inclusionsNonSatisfaites', (mesures) => mesures.inclusions?.avis ?? null],
   ['ecartAuPlafondAPrioriMax', (mesures, aPriori) => plusGrand(ecartsAuPlafondAPriori(mesures, aPriori))],
   ['excedentCollisions', (mesures) => mesures.excedentCollisions],
   ['collisionsCumulees', (mesures) => mesures.collisionsCumulees],

@@ -36,13 +36,18 @@ const QUATRE_CASES = { separerOrganisations: true, nouveauxVoisins: true, nouvel
 const e = (critere, poids = 1) => ({ critere, poids });
 
 // Les critères qui n'ont un objet que lorsque avecObjet les nomme.
-const SELON_L_OBJET = ['toursHorsObjectif', 'animateursNonRencontres', 'conflitsOrganisation'];
+const SELON_L_OBJET = ['toursHorsObjectif', 'animateursNonRencontres', 'conflitsOrganisation', 'inclusionsNonSatisfaites'];
+
+// Les critères qu'une liste réglée par une épreuve peut taire : ceux qu'une
+// liste nomme d'une personne à l'autre, sans objet sans elle.
+const SELON_UNE_LISTE = ['conflitsOrganisation', 'inclusionsNonSatisfaites'];
 
 // La compilation d'un ordre réglé sous ces contraintes et ce mode, comme
 // normaliser la donnerait : les tours hors objectif, les animateurs non
-// rencontrés et le conflit d'organisation ont un objet quand avecObjet les
-// nomme, aucun sinon. Une liste qui ne nomme pas le conflit d'organisation
-// le reçoit seul en dernier palier : sans objet, il n'y pose rien.
+// rencontrés, le conflit d'organisation et les inclusions ont un objet quand
+// avecObjet les nomme, aucun sinon. Une liste qui ne nomme pas le conflit
+// d'organisation ou les inclusions les reçoit seuls en derniers paliers :
+// sans objet, ils n'y posent rien.
 function compilationSous(priorites, { contraintes = QUATRE_CASES, mode = 'places', avecObjet = [] } = {}) {
   const etatCriteres = REGISTRE.map((nom) => ({
     nom,
@@ -50,14 +55,15 @@ function compilationSous(priorites, { contraintes = QUATRE_CASES, mode = 'places
     sansObjet: SELON_L_OBJET.includes(nom) && !avecObjet.includes(nom),
     valeurs: valeursQuiClassent(nom, contraintes, mode),
   }));
-  const nommeLesConflits = priorites.some((palier) => palier.some(({ critere }) => critere === 'conflitsOrganisation'));
-  const liste = nommeLesConflits ? priorites : [...priorites, [e('conflitsOrganisation')]];
+  const nomme = (nom) => priorites.some((palier) => palier.some(({ critere }) => critere === nom));
+  const liste = [...priorites, ...SELON_UNE_LISTE.filter((nom) => !nomme(nom)).map((nom) => [e(nom)])];
   return compilationDe({ priorites: liste, etatCriteres, modeObjectifs: mode });
 }
 
 // L'ordre par défaut, écrit en clair, chaque critère seul à son palier.
 const PAR_DEFAUT = [
   'conflitsOrganisation',
+  'inclusionsNonSatisfaites',
   'excedentCollisions',
   'rencontresRepetees',
   'collisionsCumulees',
@@ -84,8 +90,9 @@ function figer(valeur) {
 // (cumulées, distinctes, excédent) du § 5.4 ; repetees et imposees comptent
 // les rencontres répétées que le moteur a choisies et celles qu'imposent les
 // réservations ; redondance est Σ_p r(p), le total que mesurer rend sous le
-// nom totalRedondance ; conflits, les conflits d'organisation. La liste des
-// r(p) n'y figure pas : classer ne la lit pas.
+// nom totalRedondance ; conflits, les conflits d'organisation ; inclusions,
+// les inclusions non satisfaites, null sans ligne active. La liste des r(p)
+// n'y figure pas : classer ne la lit pas.
 function proposition(
   id,
   {
@@ -98,6 +105,7 @@ function proposition(
     objectifs = null,
     nonRencontres = null,
     conflits = 0,
+    inclusions = null,
   } = {},
 ) {
   const [collisionsCumulees, pairesDistinctes, excedentCollisions] = collisions;
@@ -114,6 +122,7 @@ function proposition(
       totalRedondance: redondance,
       objectifs,
       animateurs: nonRencontres === null ? null : { nonRencontres },
+      inclusions: inclusions === null ? null : { avis: inclusions },
     },
     plafondsAPriori: [8, 8, 8],
   };
@@ -165,7 +174,7 @@ describe('classer : les critères et leur ordre (§ 5.7)', () => {
     // pour une, quel que soit le nombre de fois : rangées devant l'excédent,
     // elles mettent le collègue retrouvé quatre fois devant les deux
     // collègues retrouvés deux fois.
-    const repeteesDevant = [[e('rencontresRepetees')], [e('excedentCollisions')], ...PAR_DEFAUT.slice(3)];
+    const repeteesDevant = [[e('rencontresRepetees')], [e('excedentCollisions')], ...PAR_DEFAUT.slice(4)];
     for (const ordreRecu of permutations(entrees)) {
       assert.deepEqual(classer(ordreRecu, compilationSous(repeteesDevant)).ordre, [3, 1, 2]);
     }
@@ -207,6 +216,32 @@ describe('classer : les critères et leur ordre (§ 5.7)', () => {
     // Sans objet, il ne classe pas : l'ordre fixe de référence remet 1 en tête.
     assert.deepEqual(classer(entrees, compilationSous(PAR_DEFAUT)).ordre, [1, 2]);
     assert.deepEqual(classer(entrees).ordre, [1, 2]);
+  });
+
+  test("les inclusions, quand elles ont un objet, classent juste après les conflits sur mesures.inclusions.avis", () => {
+    // 1 : une inclusion non satisfaite de plus que 2, rien d'autre ; 2 :
+    // l'excédent, les rencontres répétées, les cumulées, l'écart et la
+    // redondance au pire. 3 : aucune inclusion manquée, mais un conflit.
+    const entrees = [
+      proposition(1, { inclusions: 2 }),
+      proposition(2, { inclusions: 1, collisions: [4, 1, 3], repetees: 2, rencontres: [5, 6, 7], redondance: 9 }),
+      proposition(3, { conflits: 1, inclusions: 0 }),
+    ];
+    const compilation = compilationSous(PAR_DEFAUT, { avecObjet: ['conflitsOrganisation', 'inclusionsNonSatisfaites'] });
+    const classement = classer(entrees, compilation);
+    assert.deepEqual(classement.ordre, [2, 1, 3]);
+    assert.deepEqual(classement.criteresAppliques.slice(0, 2), [
+      { criteres: [{ nom: 'conflitsOrganisation', valeurs: ['conflitsOrganisation'], poids: 1 }] },
+      { criteres: [{ nom: 'inclusionsNonSatisfaites', valeurs: ['inclusionsNonSatisfaites'], poids: 1 }] },
+    ]);
+    assert.deepEqual(premierPalierQuiDepartage(entrees[0], entrees[1], compilation), { rang: 2, criteres: ['inclusionsNonSatisfaites'] });
+    // Sans objet, elles ne classent pas, et la mesure qui les porte null
+    // n'est pas lue : l'ordre fixe de référence met 1 en tête.
+    const sansLigne = entrees.slice(0, 2).map(({ id, mesures, plafondsAPriori }) => ({
+      id, mesures: { ...mesures, inclusions: null }, plafondsAPriori,
+    }));
+    assert.deepEqual(classer(sansLigne, compilationSous(PAR_DEFAUT)).ordre, [1, 2]);
+    assert.deepEqual(classer(entrees.slice(0, 2)).ordre, [1, 2]);
   });
 
   test("le critère de l'écart lit le plus grand écart au plafond a priori, ni sa somme ni son minimum", () => {

@@ -529,7 +529,26 @@
   l'import entier, la ligne et le nom nommés. L'export avertit quand une
   inclusion vise un homonyme, qu'il ne saurait relire, et « Remplacer »
   compte les inclusions qu'il retire. Le modèle à télécharger et le guide de
-  l'import portent les deux colonnes. La génération ne les lit pas.
+  l'import portent les deux colonnes. La génération les poursuit : les
+  inclusions non satisfaites suivent les conflits d'organisation dans l'ordre
+  des priorités par défaut, seules à leur palier, et s'y déplacent comme les
+  autres critères, si bien qu'un plan qui fait une rencontre demandée de plus
+  passe devant un plan qui évite quelques collisions. Une inclusion est
+  satisfaite dès que les deux personnes, ou la personne et un membre de
+  l'organisation incluse, partagent une table à un tour ; une rencontre
+  demandée des deux côtés compte une fois. Ne comptent pas une liste qui
+  demande plus de personnes que la soirée n'en fait rencontrer à la personne,
+  une inclusion qu'un conflit d'organisation contredit, ni une que les
+  réservations ou la présence rendent impossible. Le tableau des propositions
+  compte les inclusions non satisfaites dans sa colonne « Inclusions non
+  satisfaites », et l'éditeur de l'ordre dit le critère « sans objet » tant
+  qu'aucune inclusion n'est active ; une liste qui dépasse ce que sa personne
+  peut rencontrer lui laisse un objet, à zéro. Sans inclusion active, une
+  graine donne les mêmes propositions qu'avant. Un ordre des priorités réglé
+  avant les inclusions se relit, les inclusions placées juste après les
+  conflits ; une version antérieure refuse un fichier qui porte des
+  inclusions, et aussi un fichier dont cette version a réglé ou réécrit
+  l'ordre des priorités, puisque la liste y nomme les inclusions.
 - **L'animation réservée.** Une personne peut être marquée à désigner animatrice
   d'une table : la case « Animation réservée » de sa fiche la pose ou la retire,
   en une entrée d'historique que « Défaire » reprend, et la colonne

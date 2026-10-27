@@ -1445,7 +1445,7 @@ describe('normaliser : refus des objectifs, du mode et des priorités (A12, A16)
   const base = configuration({ participants: personnes([1, 2, 3]), tables: tablesDe([11, 12], 2), tours: 2 });
   const avec = (modification) => () => normaliser({ ...base, ...modification });
   const ordre = (...paliers) => paliers.map((palier) => palier.map((critere) => ({ critere, poids: 1 })));
-  const [ecart, excedent, collisions, horsObjectif, repetees, animateurs, redondance, conflits] = CRITERES;
+  const [ecart, excedent, collisions, horsObjectif, repetees, animateurs, redondance, conflits, inclusions] = CRITERES;
 
   test('chaque code, sur un cas', () => {
     assert.deepEqual(ecartsDeRefus([
@@ -1479,14 +1479,15 @@ describe('normaliser : refus des objectifs, du mode et des priorités (A12, A16)
   test('une liste incomplète se complète par l’ordre par défaut avant d’être jugée', () => {
     const instance = normaliser({ ...base, priorites: ordre([redondance], [ecart]) });
     // Chaque critère manquant suit celui qui le précède dans l'ordre par
-    // défaut ; le conflit d'organisation, qui l'ouvre, va en tête.
+    // défaut ; le conflit d'organisation, qui l'ouvre, va en tête, et les
+    // inclusions juste après lui.
     assert.deepEqual(
       instance.priorites,
-      ordre([conflits], [excedent], [repetees], [collisions], [redondance], [ecart], [horsObjectif], [animateurs]),
+      ordre([conflits], [inclusions], [excedent], [repetees], [collisions], [redondance], [ecart], [horsObjectif], [animateurs]),
     );
     assert.equal(verifierPriorites(instance.priorites, 'places'), null);
     // Le même partage, sous le mode par défaut, est reçu.
-    const partage = ordre([ecart], [excedent], [collisions, horsObjectif], [repetees], [animateurs], [redondance], [conflits]);
+    const partage = ordre([ecart], [excedent], [collisions, horsObjectif], [repetees], [animateurs], [redondance], [conflits], [inclusions]);
     assert.deepEqual(normaliser({ ...base, priorites: partage }).priorites, partage);
   });
 
@@ -1539,6 +1540,9 @@ describe('normaliser : état des critères (§ 5.3, A8, D10)', () => {
     });
     assert.deepEqual(etat(instance, 'conflitsOrganisation'), {
       nom: 'conflitsOrganisation', coche: true, sansObjet: true, valeurs: ['conflitsOrganisation'],
+    });
+    assert.deepEqual(etat(instance, 'inclusionsNonSatisfaites'), {
+      nom: 'inclusionsNonSatisfaites', coche: true, sansObjet: true, valeurs: ['inclusionsNonSatisfaites'],
     });
   });
 
@@ -2077,6 +2081,9 @@ describe('normaliser : les inclusions, lignes actives et hors d’atteinte (§ 4
     Array.from({ length: N }, (_, p) => Array.from(inclusionCible.subarray(inclusionDebut[p], inclusionDebut[p + 1])));
   const salle = (participants, { tables = tablesDe([11], 8), tours = 1, reservations = [] } = {}) =>
     normaliser(configuration({ participants, tables, tours, reservations }));
+  // Le critère des inclusions dans l'état des critères : sans objet sans
+  // ligne active, même quand des listes sont saisies (D10).
+  const sansObjet = (instance) => instance.etatCriteres.find(({ nom }) => nom === 'inclusionsNonSatisfaites').sansObjet;
 
   test('les lignes actives : organisations par groupe, puis personnes par index, quel que soit l’ordre des listes ; sa propre organisation, un doublon et la liste d’un exclu ne font aucune ligne', () => {
     // Présents par identifiant : 5 (index 0, Rameau, groupe 0), 7 (1,
@@ -2098,6 +2105,7 @@ describe('normaliser : les inclusions, lignes actives et hors d’atteinte (§ 4
     assert.deepEqual(Array.from(instance.inclusionDebut), [0, 4, 4, 4, 4]);
     assert.equal(instance.inclusionsActives, 4);
     assert.deepEqual(instance.inclusionsHorsAtteinte, []);
+    assert.equal(sansObjet(instance), false);
     const renversee = salle(participants((liste) => [...liste].reverse()));
     assert.deepEqual(lignes(renversee), lignes(instance));
   });
@@ -2108,6 +2116,7 @@ describe('normaliser : les inclusions, lignes actives et hors d’atteinte (§ 4
     assert.equal(instance.inclusionCible.length, 0);
     assert.equal(instance.inclusionsActives, 0);
     assert.deepEqual(instance.inclusionsHorsAtteinte, []);
+    assert.equal(sansObjet(instance), true);
   });
 
   test('une personne exclue, une organisation qu’aucun présent ne porte : hors d’atteinte, organisations par nom, personnes par identifiant', () => {
@@ -2137,6 +2146,7 @@ describe('normaliser : les inclusions, lignes actives et hors d’atteinte (§ 4
       membre(5, 'Rameau', { conflits: ['Saule'] }),
     ]);
     assert.equal(instance.inclusionsActives, 0);
+    assert.equal(sansObjet(instance), true);
     assert.deepEqual(instance.inclusionsHorsAtteinte, [
       { p: 0, cible: { organisation: 'Tilleul' }, raison: 'conflit' },
       { p: 0, cible: { participant: 2 }, raison: 'conflit' },

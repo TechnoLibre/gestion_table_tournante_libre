@@ -152,7 +152,9 @@ const e = (critere, poids = 1) => ({ critere, poids });
 // l'autre sous « et ». 10 anime à la table 1 à chaque tour ; 11 et 12
 // tiennent les deux titres de la table 3 au seul tour 2 ; 13 est réservé
 // sans animer. Les conflits d'organisation relient A et B, et la personne 4
-// à C.
+// à C. Inclusions : 1 inclut 7, 8 et C, et 7 inclut 1 ; 12 et 14
+// s'incluent, et 12 inclut A ; 8 inclut B ; 3 inclut 2 ; 9 inclut B, que le
+// conflit de A et B contredit.
 function soireeAObjectifs(mode, priorites) {
   const etiquettes = [
     ['finance'], ['finance'], ['finance'], ['Montréal', 'finance'], ['Montréal', 'finance'],
@@ -160,6 +162,15 @@ function soireeAObjectifs(mode, priorites) {
   ];
   const anime = new Map([[10, [1, 2, 3, 4]], [11, [2]], [12, [2]]]);
   const conflits = new Map([[1, ['B']], [4, ['C']]]);
+  const inclusions = new Map([
+    [1, { inclusionsParticipant: [7, 8], inclusionsOrganisation: ['C'] }],
+    [3, { inclusionsParticipant: [2] }],
+    [7, { inclusionsParticipant: [1] }],
+    [8, { inclusionsOrganisation: ['B'] }],
+    [9, { inclusionsOrganisation: ['B'] }],
+    [12, { inclusionsParticipant: [14], inclusionsOrganisation: ['A'] }],
+    [14, { inclusionsParticipant: [12] }],
+  ]);
   const auTour = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
   return {
     participants: Array.from({ length: 14 }, (_, rang) => ({
@@ -168,6 +179,7 @@ function soireeAObjectifs(mode, priorites) {
       ...(rang < etiquettes.length ? { etiquettes: etiquettes[rang] } : {}),
       ...(anime.has(rang + 1) ? { anime: anime.get(rang + 1) } : {}),
       ...(conflits.has(rang + 1) ? { conflits: conflits.get(rang + 1) } : {}),
+      ...(inclusions.get(rang + 1) ?? {}),
     })),
     tables: [1, 2, 3, 4].map((id) => ({ id, capacite: 4 })),
     tours: 4,
@@ -196,9 +208,10 @@ function soireeAObjectifs(mode, priorites) {
 }
 
 // Les ordres déplacés : sous places, le palier { excédent × 1, tours hors
-// objectif × 3 } en deuxième, le conflit d'organisation en quatrième ; sous
-// les deux autres modes, les tours hors objectif seuls en deuxième, le
-// conflit d'organisation en dernier.
+// objectif × 3 } en deuxième, le conflit d'organisation en quatrième, les
+// inclusions en dernier ; sous les deux autres modes, les inclusions en
+// deuxième, les tours hors objectif seuls en troisième, le conflit
+// d'organisation en dernier.
 const ORDRES_DEPLACES = {
   places: [
     [e('ecartAuPlafondAPrioriMax')],
@@ -208,9 +221,11 @@ const ORDRES_DEPLACES = {
     [e('rencontresRepetees')],
     [e('animateursNonRencontres', 2)],
     [e('redondance')],
+    [e('inclusionsNonSatisfaites')],
   ],
   autres: [
     [e('ecartAuPlafondAPrioriMax')],
+    [e('inclusionsNonSatisfaites')],
     [e('toursHorsObjectif')],
     [e('excedentCollisions')],
     [e('collisionsCumulees')],

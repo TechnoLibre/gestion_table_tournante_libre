@@ -4,7 +4,7 @@
 // Les textes des codes du moteur qui n'ont pas leur table ailleurs, et les
 // libellés de ses critères (§ 5, § 5.7, § 14.6) : les codes d'une
 // ErreurConfiguration, ceux des violations de verifierInvariants et de
-// verifierIndicateurs ; moteur.critere.<nom> pour chacun des sept critères
+// verifierIndicateurs ; moteur.critere.<nom> pour chacun des neuf critères
 // du registre, le nom que la phrase de l'ordre lui donne sous le défaut ;
 // moteur.valeur.<valeur> pour chaque valeur qui classe, le nom que la phrase
 // donne à la valeur appliquée — « rencontres répétées », ou « retours » sous
@@ -321,6 +321,7 @@ export const TABLE = new Map([
   ['moteur.critere.animateursNonRencontres', 'animateurs non rencontrés'],
   ['moteur.critere.redondance', "redondance d'organisation"],
   ['moteur.critere.conflitsOrganisation', "conflits d'organisation"],
+  ['moteur.critere.inclusionsNonSatisfaites', 'inclusions non satisfaites'],
 
   // --- Les valeurs qui classent (§ 5.7, A11, D9, D20) ------------------------------
   ['moteur.valeur.ecartAuPlafondAPrioriMax', 'écart au plafond a priori'],
@@ -334,6 +335,7 @@ export const TABLE = new Map([
   ['moteur.valeur.animateursNonRencontres', 'animateurs non rencontrés'],
   ['moteur.valeur.redondance', "redondance d'organisation"],
   ['moteur.valeur.conflitsOrganisation', "conflits d'organisation"],
+  ['moteur.valeur.inclusionsNonSatisfaites', 'inclusions non satisfaites'],
 
   // --- Un palier partagé (§ 5.7, A11) : « ensemble, », puis chaque critère
   // suivi de son poids.

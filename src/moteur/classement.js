@@ -13,14 +13,16 @@
 //
 // Sans compilation, classer applique l'ordre fixe de référence : l'ordre par
 // défaut sous les quatre cases cochées, sans conflit d'organisation, sans
-// objectif ni case des animateurs, que le registre compile en cinq paliers —
-// excédent, rencontres répétées, cumulées, écart, redondance (A11).
+// inclusion active, sans objectif ni case des animateurs, que le registre
+// compile en cinq paliers — excédent, rencontres répétées, cumulées, écart,
+// redondance (A11).
 //
 // L'excédent de collisions précède les collisions cumulées dans l'ordre par
 // défaut : un plan qui répartit six collisions sur six paires passe devant
 // un plan qui en concentre quatre sur une seule (§ 5.4). Les paires
 // distinctes ne sont pas une clé ; elles valent les cumulées moins l'excédent.
 import {
+  CASES,
   CRITERES as REGISTRE,
   PRIORITES_PAR_DEFAUT,
   compilationDe,
@@ -46,20 +48,22 @@ const CASES_DE_REFERENCE = Object.freeze({
   rencontrerAnimateurs: false,
 });
 
-// Le critère qu'aucune case ne règle et que l'ordre fixe de référence ne
-// compte pas : sans liste de conflits, il est sans objet (D10).
-const CRITERE_DES_CONFLITS = 'conflitsOrganisation';
+// Vrai pour un critère qu'aucune case ne règle, l'écart mis à part : le
+// conflit d'organisation et les inclusions, que l'ordre fixe de référence ne
+// compte pas. Sans liste de conflits ni inclusion, ils sont sans objet
+// (D10).
+const sansListe = (nom) => CASES[nom].length === 0 && nom !== CRITERE_A_PRIORI;
 
 // La compilation de l'ordre fixe de référence, l'état des critères construit
 // comme normaliser le construit (configuration.js), le conflit
-// d'organisation sans objet comme sans aucune liste.
+// d'organisation et les inclusions sans objet comme sans aucune liste.
 const REFERENCE = compilationDe({
   priorites: PRIORITES_PAR_DEFAUT,
   modeObjectifs: 'places',
   etatCriteres: REGISTRE.map((nom) => ({
     nom,
     coche: estCoche(nom, CASES_DE_REFERENCE),
-    sansObjet: nom === CRITERE_DES_CONFLITS,
+    sansObjet: sansListe(nom),
     valeurs: valeursQuiClassent(nom, CASES_DE_REFERENCE, 'places'),
   })),
 });
@@ -86,6 +90,7 @@ function plusGrand(valeurs) {
 // une valeur par son nom ; la compilation en fixe l'ordre.
 const VALEUR = new Map([
   ['conflitsOrganisation', ({ mesures }) => mesures.conflitsOrganisation],
+  ['inclusionsNonSatisfaites', ({ mesures }) => mesures.inclusions.avis],
   ['ecartAuPlafondAPrioriMax', ({ ecarts }) => plusGrand(ecarts)],
   ['excedentCollisions', ({ mesures }) => mesures.excedentCollisions],
   ['collisionsCumulees', ({ mesures }) => mesures.collisionsCumulees],

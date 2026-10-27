@@ -298,6 +298,7 @@ export const TABLE = new Map([
   ['mobilier.critere.animateursNonRencontres', 'animateurs non rencontrés'],
   ['mobilier.critere.redondance', "redondance d'organisation"],
   ['mobilier.critere.conflitsOrganisation', "conflits d'organisation"],
+  ['mobilier.critere.inclusionsNonSatisfaites', 'inclusions non satisfaites'],
 
   // --- Les libellés figés du journal (§ 8.2) ---------------------------------
   ['ENTREE_CREER_TABLE', ({ numero }) => `Ajouté la table ${numero}`],

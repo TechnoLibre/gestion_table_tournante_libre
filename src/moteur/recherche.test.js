@@ -57,6 +57,7 @@ import {
 import { CRITERES, MODES_OBJECTIFS, compilationDe, composantesDe } from './criteres.js';
 import { diagnostiquer } from './diagnostic.js';
 import { ErreurAnnulee, ErreurConfiguration } from './erreurs.js';
+import { ciblesDesInclusions } from './inclusions.js';
 import { mesurer } from './indicateurs.js';
 import { plafondsAPriori } from './plafond.js';
 import {
@@ -1199,8 +1200,9 @@ const canonique = () => CRITERES.map((nom) => [e(nom)]);
 
 // Les ordres déplacés de l'épreuve : sous places, le palier { excédent × 1,
 // tours hors objectif × 3 } en deuxième, le conflit d'organisation en
-// quatrième ; sous les deux autres modes, les tours hors objectif seuls en
-// deuxième, le conflit d'organisation en dernier.
+// quatrième, les inclusions en dernier ; sous les deux autres modes, les
+// inclusions en deuxième, les tours hors objectif seuls en troisième, le
+// conflit d'organisation en dernier.
 const ORDRE_DEPLACE = {
   places: [
     [e('ecartAuPlafondAPrioriMax')],
@@ -1210,9 +1212,11 @@ const ORDRE_DEPLACE = {
     [e('rencontresRepetees')],
     [e('animateursNonRencontres', 2)],
     [e('redondance')],
+    [e('inclusionsNonSatisfaites')],
   ],
   deuxValeurs: [
     [e('ecartAuPlafondAPrioriMax')],
+    [e('inclusionsNonSatisfaites')],
     [e('toursHorsObjectif')],
     [e('excedentCollisions')],
     [e('collisionsCumulees')],
@@ -1236,6 +1240,9 @@ const ordreDeplace = (mode) => (mode === 'places' ? ORDRE_DEPLACE.places : ORDRE
 // à chaque tour ; 11 et 12, deux titres de la table 3 au seul tour 2 ; 13,
 // réservé sans animer. Conflits : 1, de A, nomme B ; 4, sans organisation,
 // nomme C ; 15, exclue, de C, nomme B : sa liste relie encore C et B.
+// Inclusions : 1 inclut 7, 8 et C, et 7 inclut 1, une rencontre demandée des
+// deux côtés ; 12 et 14 de même, et 12 inclut A ; 8 inclut B, dont aucun
+// membre n'est 8 ; 3 inclut 2 et 9 inclut B, que les conflits contredisent.
 function soireeAObjectifs({ mode = 'places', priorites } = {}) {
   const etiquettes = [
     ['finance'], ['finance'], ['finance'], ['Montréal', 'finance'], ['Montréal', 'finance'],
@@ -1243,6 +1250,15 @@ function soireeAObjectifs({ mode = 'places', priorites } = {}) {
   ];
   const anime = new Map([[10, [1, 2, 3, 4]], [11, [2]], [12, [2]]]);
   const conflits = new Map([[1, ['B']], [4, ['C']]]);
+  const inclusions = new Map([
+    [1, { inclusionsParticipant: [7, 8], inclusionsOrganisation: ['C'] }],
+    [3, { inclusionsParticipant: [2] }],
+    [7, { inclusionsParticipant: [1] }],
+    [8, { inclusionsOrganisation: ['B'] }],
+    [9, { inclusionsOrganisation: ['B'] }],
+    [12, { inclusionsParticipant: [14], inclusionsOrganisation: ['A'] }],
+    [14, { inclusionsParticipant: [12] }],
+  ]);
   return {
     participants: Array.from({ length: 14 }, (_, rang) => ({
       id: rang + 1,
@@ -1252,6 +1268,7 @@ function soireeAObjectifs({ mode = 'places', priorites } = {}) {
       ...(rang < etiquettes.length ? { etiquettes: etiquettes[rang] } : {}),
       ...(anime.has(rang + 1) ? { anime: anime.get(rang + 1) } : {}),
       ...(conflits.has(rang + 1) ? { conflits: conflits.get(rang + 1) } : {}),
+      ...(inclusions.get(rang + 1) ?? {}),
     })).concat([{ id: 15, nom: 'P15', organisation: 'C', exclu: true, conflits: ['B'] }]),
     tables: [1, 2, 3, 4].map((id) => ({ id, numero: id, capacite: 4 })),
     tours: 4,
@@ -1309,7 +1326,10 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
         const { nUplet, brutes } = scoreOracle(instance, etat.tableDe, aPriori, configuration);
         assert.deepStrictEqual(scoreComplet(etat), nUplet, `${nom}, ${etiquette} : scoreComplet`);
         assert.deepStrictEqual(scoreIncremental(etat), nUplet, `${nom}, ${etiquette} : scoreIncremental`);
-        for (const grandeur of ['toursHorsObjectif', 'jamaisServies', 'horsObjectifMax', 'personnesAuMax', 'animateursNonRencontres', 'conflitsOrganisation']) {
+        for (const grandeur of [
+          'toursHorsObjectif', 'jamaisServies', 'horsObjectifMax', 'personnesAuMax', 'animateursNonRencontres', 'conflitsOrganisation',
+          'inclusionsNonSatisfaites',
+        ]) {
           if (brutes[grandeur] > 0) nonNulles.add(grandeur);
         }
       };
@@ -1322,7 +1342,7 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
         if (PALIERS.includes(appliques.length)) confronter(`${appliques.length} mouvements`);
       }
       assert.equal(appliques.length, PALIERS.at(-1), nom);
-      assert.equal(nonNulles.size, 6, `${nom} : grandeurs des objectifs, des animateurs et des conflits non nulles ${[...nonNulles]}`);
+      assert.equal(nonNulles.size, 7, `${nom} : grandeurs des objectifs, des animateurs, des conflits et des inclusions non nulles ${[...nonNulles]}`);
       for (const mouvement of appliques.reverse()) defaire(etat, mouvement);
       assert.deepStrictEqual(scoreIncremental(etat), depart, nom);
     }
@@ -1330,7 +1350,7 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
 
   test('chaque composante a la place que la compilation lui donne : un mode à deux et trois valeurs, un palier pondéré, une somme de poids', () => {
     const tailles = JEUX_A_OBJECTIFS.map(({ configuration }) => scoreIncremental(creerEtat(normaliser(configuration), creerPcg32(1, FLUX.RECHERCHE))).length);
-    assert.deepEqual(tailles, [9, 8, 10, 9, 11, 10]);
+    assert.deepEqual(tailles, [10, 9, 11, 10, 12, 11]);
   });
 
   test("l'état tient les grandeurs des objectifs et des animateurs sous les noms de la mesure : tours servis, tours hors objectif, jamais servies, le plus d'une personne et leur nombre, animateurs rencontrés", () => {
@@ -1388,6 +1408,189 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
     assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
     const reglages = { graine: 9, arret: 3_000, nombre: 2 };
     assert.deepEqual(rechercher(decochee, reglages), rechercher(sansAnimateur, reglages));
+  });
+});
+
+// Six personnes, deux tables de 3, deux tours, sans case cochée : 1 de A, 2
+// et 3 de B, 4 de C, 5 et 6 sans organisation. 1 et 2 s'incluent l'un
+// l'autre, 5 inclut B, 6 inclut 4 : trois rencontres demandées, la paire
+// (1, 2), le couple (5, B) et la paire (6, 4).
+const salleAInclusions = () => {
+  const configuration = configurationDe({
+    organisations: ['A', 'B', 'B', 'C', null, null],
+    tables: [{ id: 10, capacite: 3 }, { id: 20, capacite: 3 }],
+    tours: 2,
+  });
+  const listes = new Map([
+    [1, { inclusionsParticipant: [2] }],
+    [2, { inclusionsParticipant: [1] }],
+    [5, { inclusionsOrganisation: ['B'] }],
+    [6, { inclusionsParticipant: [4] }],
+  ]);
+  configuration.participants = configuration.participants.map((personne) => ({ ...personne, ...(listes.get(personne.id) ?? {}) }));
+  return configuration;
+};
+
+// Un plan de salleAInclusions, tour par tour, les deux tables dans l'ordre.
+const planDeLaSalle = (...tours) => ({ tables: [10, 20], tours, reserves: tours.map(() => []) });
+
+// Applique compte mouvements tirés par tirer, puis les défait : après chaque
+// mouvement et chaque retour, les inclusions non satisfaites de l'état
+// égalent les avis que mesurer recompte. Rend les écarts relevés, les
+// valeurs prises et ce qui a changé : une unité de paire et une unité
+// d'organisation satisfaites puis défaites.
+function suivreLesInclusions(instance, etat, tirer, compte) {
+  const { uniteLigne, uniteSource } = ciblesDesInclusions(instance);
+  const genre = (p, cible) => {
+    const u = uniteSource.findIndex((source, k) => source === p && instance.inclusionCible[uniteLigne[k]] === cible);
+    return instance.inclusionCible[uniteLigne[u]] >= 0 ? 'paire' : 'organisation';
+  };
+  const ecarts = [];
+  const valeurs = new Set();
+  const changes = new Set();
+  let avant = null;
+  const confronter = (etiquette) => {
+    const { avis, nonSatisfaites } = mesurer(instance, etat.tableDe).inclusions;
+    const manquees = new Set(nonSatisfaites.map(({ p, cible }) => `${p} ${cible}`));
+    if (avant !== null) {
+      for (const cle of [...manquees, ...avant].filter((c) => manquees.has(c) !== avant.has(c))) {
+        const [p, cible] = cle.split(' ').map(Number);
+        changes.add(`${genre(p, cible)} ${manquees.has(cle) ? 'défaite' : 'satisfaite'}`);
+      }
+    }
+    avant = manquees;
+    valeurs.add(avis);
+    if (etat.inclusionsNonSatisfaites !== avis) ecarts.push(`${etiquette} : état ${etat.inclusionsNonSatisfaites}, mesure ${avis}`);
+  };
+  confronter('départ');
+  const appliques = [];
+  for (let essai = 0; appliques.length < compte && essai < 100 * compte; essai += 1) {
+    const mouvement = tirer();
+    if (mouvement === null) continue;
+    appliques.push(mouvement);
+    confronter(`mouvement ${appliques.length}`);
+  }
+  for (const mouvement of appliques.reverse()) {
+    defaire(etat, mouvement);
+    confronter('défait');
+  }
+  return { ecarts, valeurs, changes };
+}
+
+describe('score : les inclusions, tenues coup par coup (en-tête de recherche.js, § 5.10)', () => {
+  test('salle à inclusions : trois unités, une paire demandée des deux côtés comptée une fois, le critère au deuxième palier', () => {
+    const instance = normaliser(salleAInclusions());
+    assert.equal(instance.inclusionsActives, 4);
+    assert.equal(ciblesDesInclusions(instance).uniteLigne.length, 3);
+    const { paliers } = compilationDe(instance);
+    assert.deepEqual(paliers.map(({ criteres }) => criteres.map(({ nom }) => nom)), [['inclusionsNonSatisfaites'], ['ecartAuPlafondAPrioriMax']]);
+    // (1, 2) jamais réunis : leurs deux lignes manquent, un seul avis. 5
+    // rencontre 3 au tour 1, puis 2 et 3 au tour 2 : B satisfait une fois.
+    // 6 rencontre 4 aux deux tours.
+    const plan = planDeLaSalle([[1, 3, 5], [2, 4, 6]], [[1, 4, 6], [2, 3, 5]]);
+    const etat = creerEtatDuDepart(instance, { plan, toursFiges: [] });
+    assert.equal(etat.suitInclusions, true);
+    assert.equal(etat.inclusionsNonSatisfaites, 1);
+    assert.equal(scoreIncremental(etat)[0], 1);
+    assert.deepStrictEqual(scoreComplet(etat), scoreIncremental(etat));
+    const { inclusions } = mesurer(instance, etat.tableDe);
+    assert.deepEqual(inclusions.nonSatisfaites, [{ p: 0, cible: 1, reciproque: true }]);
+    // Le premier membre de B que 5 rencontre la satisfait, le second n'y
+    // ajoute rien : 5 avec 2 seul, puis avec 2 et 3, donne le même compte.
+    for (const tours of [
+      [[[1, 2, 5], [3, 4, 6]], [[1, 4, 6], [2, 3, 5]]],
+      [[[1, 2, 5], [3, 4, 6]], [[1, 3, 6], [2, 4, 5]]],
+    ]) {
+      const deux = creerEtatDuDepart(instance, { plan: planDeLaSalle(...tours), toursFiges: [] });
+      assert.equal(deux.inclusionsNonSatisfaites, 0, JSON.stringify(tours));
+    }
+    // Personne ne rencontre qui il inclut : trois avis.
+    const aucun = creerEtatDuDepart(instance, { plan: planDeLaSalle([[1, 4, 5], [2, 3, 6]], [[1, 4, 5], [2, 3, 6]]), toursFiges: [] });
+    assert.equal(aucun.inclusionsNonSatisfaites, 3);
+  });
+
+  test('après chaque mouvement et chaque mouvement défait, l’état tient les avis que mesurer recompte : paires et organisations satisfaites puis défaites', () => {
+    const jeux = [
+      ['salle à inclusions', salleAInclusions()],
+      ['soirée à objectifs, places', soireeAObjectifs()],
+      ['soirée à objectifs, minimum, ordre déplacé', soireeAObjectifs({ mode: 'minimum', priorites: ordreDeplace('minimum') })],
+    ];
+    for (const [nom, configuration] of jeux) {
+      const instance = normaliser(configuration);
+      const rng = creerPcg32(29, FLUX.RECHERCHE);
+      const etat = creerEtat(instance, rng);
+      const { ecarts, valeurs, changes } = suivreLesInclusions(instance, etat, () => proposerEtAppliquer(etat, rng), 600);
+      assert.deepEqual(ecarts.slice(0, 3), [], nom);
+      assert.ok(valeurs.size >= 2, `${nom} : valeurs prises ${[...valeurs]}`);
+      assert.deepEqual([...changes].sort(), ['organisation défaite', 'organisation satisfaite', 'paire défaite', 'paire satisfaite'], nom);
+    }
+  });
+
+  test('sous un départ à tours figés et réserves imposées, l’état tient les avis coup par coup, un mouvement après l’autre', () => {
+    const instance = normaliser(soireeAReservesImposees());
+    const reservesImposees = [{ participant: 3, tour: 2 }, { participant: 4, tour: 2 }];
+    const etat = creerEtatDuDepart(instance, { plan: departAReservesImposees(), toursFiges: [2], reservesImposees });
+    // 7 rencontre 2, de B, au tour figé, au siège que laisse 3 : l'unité de
+    // 7 vers B est satisfaite, bien que 6 soit le seul membre de B qu'un
+    // plan qui honore les réservations lui fasse rencontrer. Elle se suit
+    // donc par le couple (7, B), comme mesurer la juge, et non par la paire
+    // (7, 6).
+    const [sept, deux, six] = [7, 2, 6].map((id) => instance.indexDe.get(id));
+    assert.equal(etat.tableDe[sept * instance.R + 1], etat.tableDe[deux * instance.R + 1]);
+    const { uniteLigne, uniteSource, unitePartenaire } = ciblesDesInclusions(instance);
+    const versB = uniteSource.findIndex((p, u) => p === sept && instance.inclusionCible[uniteLigne[u]] < 0);
+    assert.equal(unitePartenaire[versB], six);
+    assert.ok(!mesurer(instance, etat.tableDe).inclusions.nonSatisfaites.some(({ p, cible }) => p === sept && cible < 0));
+    const rng = creerPcg32(37, FLUX.RECHERCHE);
+    const { ecarts, valeurs } = suivreLesInclusions(instance, etat, () => proposerParmi(etat, rng, [0, 2]), 600);
+    assert.deepEqual(ecarts.slice(0, 3), []);
+    assert.ok(valeurs.size >= 2, `valeurs prises ${[...valeurs]}`);
+  });
+
+  test('une dérivée sous inclusions n’en laisse jamais plus que son départ, et ses tours figés ne bougent pas', () => {
+    const configuration = salleAInclusions();
+    const instance = normaliser(configuration);
+    // Personne ne rencontre qui il inclut : trois avis, que le tour 2, libre,
+    // peut tous lever.
+    const plan = planDeLaSalle([[1, 4, 5], [2, 3, 6]], [[1, 4, 5], [2, 3, 6]]);
+    const avisDuDepart = mesurer(instance, indexerPlan(instance, plan)).inclusions.avis;
+    assert.equal(avisDuDepart, 3);
+    for (const graine of [1, 2, 3]) {
+      const [proposition] = repartir(configuration, { graine, arret: 2_000, nombre: 1 }, { plan, toursFiges: [1] });
+      assert.deepEqual(proposition.plan.tours[0].map((liste) => [...liste].sort()), plan.tours[0], `graine ${graine}`);
+      const avis = mesurer(instance, indexerPlan(instance, proposition.plan)).inclusions.avis;
+      assert.ok(avis <= avisDuDepart, `graine ${graine} : ${avis}`);
+      assert.equal(avis, 0, `graine ${graine}`);
+    }
+  });
+
+  test('un fil par proposition rend la génération d’un seul : chaque rang de proposerUne, dans n’importe quel ordre, égale celui de rechercher', () => {
+    const configuration = soireeAObjectifs();
+    const reglages = { graine: 41, arret: 3_000, nombre: 4 };
+    const toutes = rechercher(configuration, reglages);
+    for (const rang of [3, 1, 4, 2]) assert.deepStrictEqual(proposerUne(configuration, reglages, rang), toutes[rang - 1], `rang ${rang}`);
+  });
+
+  test("sans ligne active, l'état ne tient rien des inclusions et la recherche rend les plans d'une salle sans liste, mêmes tirages", () => {
+    // 1, de A, inclut B, que 3, de B, oppose à A : la seule ligne est
+    // contredite. 2 inclut 4, exclu.
+    const avecListes = configurationDe({
+      organisations: ['A', null, 'B', null, 'B', 'A'],
+      tables: [{ id: 10, capacite: 3 }, { id: 20, capacite: 3 }],
+      tours: 3,
+      exclus: [4],
+    });
+    const sansListe = structuredClone(avecListes);
+    const listes = new Map([[1, { inclusionsOrganisation: ['B'] }], [2, { inclusionsParticipant: [4] }], [3, { conflits: ['A'] }]]);
+    avecListes.participants = avecListes.participants.map((personne) => ({ ...personne, ...(listes.get(personne.id) ?? {}) }));
+    sansListe.participants[2].conflits = ['A'];
+    const instance = normaliser(avecListes);
+    assert.equal(instance.inclusionsActives, 0);
+    assert.equal(instance.inclusionsHorsAtteinte.length, 2);
+    const etat = creerEtat(instance, creerPcg32(3, FLUX.RECHERCHE));
+    assert.deepEqual([etat.suitInclusions, etat.inclusionsNonSatisfaites, etat.inclusionSatisfaite, etat.inclusions], [false, null, null, null]);
+    const reglages = { graine: 5, arret: 4_000, nombre: 3 };
+    assert.deepEqual(rechercher(avecListes, reglages), rechercher(sansListe, reglages));
   });
 });
 
@@ -3177,14 +3380,19 @@ describe('repartir : le départ ajusté à la présence (§ 5.7)', () => {
 // la table 1 sont réservées à 2 et à 3, et 4, réservée à la table 3, y anime.
 // 3 l'est aussi à la table 1 au tour 1. La table 1 porte l'objectif « x »
 // pour la soirée, que 7 porte. 2, de B, nomme A : les deux organisations
-// sont en conflit.
+// sont en conflit. 2 n'est présente qu'au tour 2, où sa table n'a aucun
+// siège libre : 7, qui inclut B, ne peut rencontrer que 6 dans un plan qui
+// honore les réservations, et rencontre pourtant 2 au siège fixé que laisse
+// 3. 7 et 8 s'incluent l'un l'autre, et 6 inclut 3.
 const soireeAReservesImposees = () => ({
   participants: Array.from({ length: 8 }, (_, rang) => ({
     id: rang + 1,
     organisation: ['A', 'B', null, 'A'][rang % 4],
-    ...(rang + 1 === 7 ? { etiquettes: ['x'] } : {}),
+    ...(rang + 1 === 7 ? { etiquettes: ['x'], inclusionsOrganisation: ['B'], inclusionsParticipant: [8] } : {}),
     ...(rang + 1 === 4 ? { anime: [2] } : {}),
-    ...(rang + 1 === 2 ? { conflits: ['A'] } : {}),
+    ...(rang + 1 === 2 ? { conflits: ['A'], presence: [2] } : {}),
+    ...(rang + 1 === 8 ? { inclusionsParticipant: [7] } : {}),
+    ...(rang + 1 === 6 ? { inclusionsParticipant: [3] } : {}),
   })),
   tables: [
     { id: 1, numero: 1, capacite: 2 },

@@ -915,12 +915,14 @@ function lirePriorites(priorites, mode) {
 // L'état de chaque critère, dans l'ordre de CRITERES (§ 5.3, D10) : coché
 // selon ses cases, sans objet quand l'événement ne lui donne rien à mesurer —
 // aucune paire de présents en conflit pour les conflits d'organisation,
-// aucun couple possible pour les tours hors objectif, aucune borne des
-// animateurs non nulle pour les animateurs non rencontrés —, et les valeurs
-// qu'il classe sous ces contraintes et ce mode.
-function etatDesCriteres(contraintes, mode, { possibles, borne, pairesEnConflit }) {
+// aucune ligne active pour les inclusions non satisfaites, aucun couple
+// possible pour les tours hors objectif, aucune borne des animateurs non
+// nulle pour les animateurs non rencontrés —, et les valeurs qu'il classe
+// sous ces contraintes et ce mode.
+function etatDesCriteres(contraintes, mode, { possibles, borne, pairesEnConflit, inclusionsActives }) {
   const sansObjet = {
     conflitsOrganisation: pairesEnConflit === 0,
+    inclusionsNonSatisfaites: inclusionsActives === 0,
     toursHorsObjectif: possibles.every((n) => n === 0),
     animateursNonRencontres: borne.every((b) => b === 0),
   };
@@ -1187,6 +1189,7 @@ function instanceDe(configuration) {
       possibles: objectifs.possibles,
       borne: borneAnimateurs,
       pairesEnConflit: conflits.pairesEnConflit,
+      inclusionsActives: inclusions.inclusionsActives,
     }),
     priorites,
   };

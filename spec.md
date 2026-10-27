@@ -265,9 +265,12 @@ ordonne tous. Les réservations des étapes 6 et 7 sont honorées, le moteur pla
 les autres autour (§ 5.2). Les critères que la recherche poursuit et que le
 classement applique sont ceux que l'opérateur coche (§ 5.3), dans l'**ordre des
 priorités** qu'il règle à côté (§ 5.7) ; pour les objectifs des tables, il y
-choisit aussi ce que le critère cherche d'abord, le **mode** (§ 5.3). Sans
-réglage, c'est l'ordre par défaut et le mode « le plus de places servies ». Le
-logiciel nomme automatiquement l'instant qui précède chaque génération (§ 8.3).
+choisit aussi ce que le critère cherche d'abord, le **mode** (§ 5.3). Les
+conflits d'organisation et les inclusions de l'étape 3 comptent sans case dès
+qu'ils ont un objet ; l'ordre par défaut les range en tête, les inclusions
+juste après les conflits (§ 5.3, § 5.7). Sans réglage, c'est l'ordre par défaut
+et le mode « le plus de places servies ». Le logiciel nomme automatiquement
+l'instant qui précède chaque génération (§ 8.3).
 Une génération peut aussi **repartir d'une proposition** choisie au tableau,
 son **départ**, et en figer des tours : ses propositions, dites
 **dérivées**, continuent le plan du départ sous de nouvelles graines, ne
@@ -569,12 +572,12 @@ et jamais la sienne ; une personne incluse est un participant de l'événement,
 exclu compris, et jamais elle-même. Un collègue de sa propre organisation se
 nomme comme un autre. Une inclusion que contredit un conflit de la personne
 s'admet. L'inclusion n'est ni une réservation ni une fixation : elle ne place
-personne et ne retire rien de ce que la génération peut faire ; la mesure d'un
-placement la lit (§ 5.4), la recherche et le classement ne la lisent pas.
-L'exclusion suspend une personne, pas ses listes : la liste d'une exclue se
-garde, et une inclusion qui vise une exclue aussi. Elle se saisit dans la fiche
-et dans la grille (§ 10.2), et s'importe en CSV, une personne par son nom
-affiché (§ 10.1).
+personne et ne retire rien de ce que la génération peut faire ; c'est un
+critère de la recherche et du classement (§ 5.3, § 5.7), que la mesure d'un
+placement compte (§ 5.4). L'exclusion suspend une personne, pas ses listes :
+la liste d'une exclue se garde, et une inclusion qui vise une exclue aussi.
+Elle se saisit dans la fiche et dans la grille (§ 10.2), et s'importe en CSV,
+une personne par son nom affiché (§ 10.1).
 
 Les listes d'inclusions d'organisation suivent les organisations comme celles
 des conflits : la référence suit le renommage de la dernière personne d'une
@@ -892,7 +895,9 @@ qu'il sonde (§ 5.6). Les tours figés d'une génération dérivée (§ 5.7) n'y
 entrent pas : ils ne réduisent aucune capacité, ne retirent personne et
 n'annotent aucune table. La recherche les reçoit à part, ne tire aucun
 mouvement dans ces tours, et compte leurs rencontres dans le score de la
-soirée.
+soirée. L'inclusion n'y ajoute ni prétraitement ni placement préalable : c'est
+un critère de la recherche (§ 5.3, § 5.7), qui ne choisit que les sièges à
+échanger.
 
 ### 5.3 Les contraintes, activables une à une
 
@@ -937,6 +942,7 @@ aucune case : il montre l'état que donnent les cases de ce tableau.
 | animateurs non rencontrés | « Rencontrer le plus d'animateurs différents » est cochée et a un objet |
 | redondance d'organisation | « Varier les organisations rencontrées » est cochée |
 | conflits d'organisation | toujours, sans case, quand il a un objet |
+| inclusions non satisfaites | toujours, sans case, quand il a un objet |
 
 **Le conflit d'organisation n'a pas de case.** Il compte dès qu'une paire de
 personnes présentes est en conflit (§ 4) : une liste, d'une personne
@@ -946,6 +952,14 @@ aucune liste ne relie ainsi deux présents, il est sans objet — il ne compte
 nulle part, et l'éditeur de l'ordre le marque « sans objet ». Un événement qui
 ne porte aucune liste se génère donc exactement comme avant que le critère
 existe : mêmes plans à graine égale, même classement, même phrase.
+
+**Les inclusions n'ont pas de case.** Elles comptent dès qu'une inclusion est
+active (§ 4). Sans liste, ou quand aucune inclusion n'est active, elles sont
+sans objet, et l'éditeur de l'ordre les marque ainsi. Un événement sans
+inclusion active se génère exactement comme avant que le critère existe :
+mêmes plans à graine égale, même classement, même phrase. Quand des
+inclusions sont actives mais que chaque liste dépasse ce que sa personne
+peut rencontrer (§ 5.4), le critère a un objet et vaut zéro partout.
 
 **« Attribuer les sièges » change les animateurs.** Sans sièges attribués, une
 réservation sans siège à une table titrée peut pourvoir un titre de cette
@@ -2030,13 +2044,18 @@ entier ≥ 0, et la plus faible est la meilleure.
 | animateurs non rencontrés | Σ (B(p) − m(p)) (§ 5.4) | la même | raffinement |
 | redondance d'organisation | Σ r(p) | la même | raffinement |
 | conflits d'organisation | les conflits d'organisation (§ 5.4) | la même | contrainte |
+| inclusions non satisfaites | les inclusions non satisfaites (§ 5.4) | la même | contrainte |
 
-**La liste est complète** : chaque critère y figure une fois, coché ou non.
-Trois critères y sont **seuls à leur palier** : ils se déplacent, ils ne
-partagent pas leur palier. Le conflit d'organisation, parce qu'il dit ce que
+**La liste est complète** : chaque critère y figure une fois, coché ou non ;
+seule une liste lue d'un fichier écrit avant les inclusions peut les taire
+(§ 8.9). Quatre critères y sont **seuls à leur palier** : ils se déplacent, ils
+ne partagent pas leur palier. Le conflit d'organisation, parce qu'il dit ce que
 la soirée promet de ne jamais faire : une somme pondérée l'échangerait contre
-quelques collisions ou quelques retours. L'écart au plafond a priori, parce que sa valeur nulle est le
-certificat du § 5.5 et qu'une somme pondérée le noierait dans d'autres unités.
+quelques collisions ou quelques retours. Les inclusions non satisfaites, pour
+la même raison : une somme pondérée échangerait une rencontre promise contre
+quelques collisions. L'écart au plafond a priori, parce que sa valeur nulle est
+le certificat du § 5.5 et qu'une somme pondérée le noierait dans d'autres
+unités.
 Les rencontres répétées et les retours, parce que leurs deux valeurs ne
 s'échangent pas au même taux contre un autre critère : une paire réunie trois
 fois coûte deux à la recherche et un au classement, un retour coûte un à la
@@ -2061,17 +2080,19 @@ de même effet que l'ordre par défaut s'y lit, et se réécrit présente (§ 8.
 Un critère qui rejoint un palier y entre au poids 1. Changer de mode réécrit la
 liste ainsi rangée, sans qu'aucun critère change de palier.
 
-**Ordre par défaut** : conflits d'organisation, puis excédent de collisions,
-puis rencontres répétées et retours, puis collisions cumulées, puis écart au
-plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis
-redondance d'organisation, chacun seul à son palier, sous le mode « le plus de
-places servies ». Il n'est pas l'ordre du tableau ci-dessus, qui reste celui des
-critères dans un palier. L'**ordre fixe de référence** est la liste excédent,
-rencontres répétées, cumulées, écart, redondance, chacun seul à son palier :
-l'ordre par défaut sans les trois critères des conflits, des objectifs et des
+**Ordre par défaut** : conflits d'organisation, puis inclusions non
+satisfaites, puis excédent de collisions, puis rencontres répétées et retours,
+puis collisions cumulées, puis écart au plafond a priori, puis tours hors
+objectif, puis animateurs non rencontrés, puis redondance d'organisation, chacun
+seul à son palier, sous le mode « le plus de places servies ». Il n'est pas
+l'ordre du tableau ci-dessus, qui reste celui des critères dans un palier.
+L'**ordre fixe de référence** est la liste excédent, rencontres répétées,
+cumulées, écart, redondance, chacun seul à son palier : l'ordre par défaut sans
+les quatre critères des conflits, des inclusions, des objectifs et des
 animateurs. Une liste écrite garde son ordre : seul l'événement qui ne règle
 rien suit l'ordre par défaut. Sous l'ordre par défaut, sans liste de conflits,
-sans objectif de table et sans la case des animateurs, quel que soit le mode :
+sans inclusion active, sans objectif de table et sans la case des animateurs,
+quel que soit le mode :
 sous toute combinaison des cases du § 5.3, les plans à graine égale sont ceux
 de l'ordre fixe de référence ; sous les quatre cases cochées, le classement et
 sa phrase le sont aussi. Une case décochée retire son critère du
@@ -2083,11 +2104,15 @@ focus au clavier, ouvre une infobulle qui dit ce qu'il compte et nomme la
 colonne des propositions qui le montre (§ 14.5).
 
 **L'ordre par défaut met d'abord ce que la soirée promet à chacun.** Ne jamais
-asseoir ensemble deux organisations en conflit vient avant tout : c'est le
-seul critère que l'opérateur nomme personne par personne, et il le fait pour
-qu'il tienne. Le conflit d'organisation ouvre donc l'ordre par défaut ; il se
-déplace comme les autres, et l'opérateur qui le range plus bas l'accepte
-moins tenu. Ne pas passer la soirée avec ses collègues, ne pas revoir à une table une personne déjà
+asseoir ensemble deux organisations en conflit vient avant tout ; les inclusions
+suivent. Ce sont les deux critères que l'opérateur nomme personne par personne,
+et il les nomme pour qu'ils tiennent : un conflit dit ce que la soirée ne fera
+jamais, une inclusion ce qu'elle fera au moins une fois, et le « jamais » passe
+devant. Une inclusion qu'un conflit contredit est hors d'atteinte, quel que soit
+l'ordre (§ 4). Le conflit d'organisation ouvre l'ordre par défaut, les
+inclusions non satisfaites viennent ensuite ; chacun se déplace comme les
+autres, et l'opérateur qui le range plus bas l'accepte moins tenu. Ne pas passer
+la soirée avec ses collègues, ne pas revoir à une table une personne déjà
 rencontrée, ne pas revenir à une table déjà visitée : ce sont les promesses que
 l'opérateur fait à la salle, et un plan qui en manque une se voit. L'excédent de
 collisions vient en tête, puis les rencontres répétées et retours, puis les
@@ -2112,10 +2137,10 @@ contraintes de la recherche : une fois l'écart annulé, la bascule compare les
 paliers dans le même ordre que sous l'ordre par défaut, les rencontres répétées
 devant les collisions cumulées. L'ordre du tableau ci-dessus — écart, excédent,
 cumulées, tours hors objectif, rencontres répétées et retours, animateurs,
-redondance — range les collisions devant les rencontres répétées, et c'est sous
-lui que chaque proposition de la petite démonstration et de sa variante atteint
-son optimum (§ 15.3) ; l'opérateur qui préfère les rencontres le règle, et
-l'éditeur le permet.
+redondance, conflits, inclusions — range les collisions devant les rencontres
+répétées, et c'est sous lui que chaque proposition de la petite démonstration
+et de sa variante atteint son optimum (§ 15.3) ; l'opérateur qui préfère les
+rencontres le règle, et l'éditeur le permet.
 
 **L'excédent de collisions précède les rencontres répétées et les collisions
 cumulées.** Le § 5.4 le démontre en trois plans. Classer d'abord sur les
@@ -2156,11 +2181,11 @@ gardant leur ordre : elle peut perdre une rencontre le temps de défaire une
 collision, puis la reprendre. L'écart en tête, une meilleure affectation garde
 un écart nul, et la bascule est acquise ; rangé après d'autres paliers, il peut
 redevenir non nul sur une meilleure affectation, et la recherche revient alors
-à l'ordre du score. Sous l'ordre par défaut, cela compare conflits,
+à l'ordre du score. Sous l'ordre par défaut, cela compare conflits, inclusions,
 excédent, rencontres répétées et retours, cumulées, tours hors objectif,
 l'écart, animateurs, redondance : sans objectif, l'ordre des paliers ne change
-pas. Le classement,
-lui, suit toujours l'ordre réglé.
+pas, et les inclusions restent devant l'écart dans les deux ordres. Le
+classement, lui, suit toujours l'ordre réglé.
 
 **Tant que l'écart n'est pas annulé, la somme des carrés précède tous les
 paliers qui suivent l'écart.** Là où le plus grand écart ne peut pas descendre à
@@ -2170,8 +2195,8 @@ somme des carrés, et pèse dans la recherche à peine plus qu'un départage. Un
 critère rangé après l'écart ne coûte donc aucune rencontre à personne ; pour
 qu'il pèse sur une soirée tendue, l'opérateur le range devant l'écart, et
 accepte de perdre des rencontres pour lui. L'ordre par défaut le fait pour les
-conflits d'organisation, l'excédent, les rencontres répétées et retours et les
-collisions cumulées.
+conflits d'organisation, les inclusions non satisfaites, l'excédent, les
+rencontres répétées et retours et les collisions cumulées.
 
 **Un critère décoché ou sans objet** (§ 5.3) sort de la recherche comme du
 classement ; un palier dont aucun critère ne compte disparaît, et les autres
@@ -2197,9 +2222,9 @@ le palier applique : « rencontres répétées », ou « retours » sous « nouv
 table » seule ; un critère qui en classe deux les nomme l'une après l'autre,
 séparées par « puis » comme deux paliers — « personnes jamais servies, puis
 tours hors objectif ». L'éditeur, lui, écrit le nom complet du critère. Sous
-l'ordre par défaut, sans liste de conflits, sans objectif et sans la case des
-animateurs, les quatre cases cochées, elle est mot pour mot celle de l'ordre
-fixe de référence.
+l'ordre par défaut, sans liste de conflits, sans inclusion active, sans
+objectif et sans la case des animateurs, les quatre cases cochées, elle est mot
+pour mot celle de l'ordre fixe de référence.
 
 **Les paires distinctes ne sont pas une clé de tri** ; elles restent une colonne
 affichée, et se retrouvent de toute façon par soustraction. Trois clés pour deux
@@ -2228,7 +2253,9 @@ d'abord » ; pour le second, le minimum des animateurs rencontrés et les
 animateurs non rencontrés ; chacune présente quand son critère compte (§ 5.3).
 Le groupe des collisions d'organisation s'ouvre, quand le conflit d'organisation
 a un objet, sur la colonne des conflits d'organisation, en occurrences (paire,
-tour) ; sans paire de présents en conflit, elle n'y est pas. Une ligne qui en
+tour) ; sans paire de présents en conflit, elle n'y est pas. Quand une inclusion
+est active (§ 4), la colonne des inclusions non satisfaites la suit, en
+rencontres demandées (§ 5.4) ; sans objet, elle n'y est pas. Une ligne qui en
 laisse — la recherche les vise à zéro sans les interdire — le dit aussi sous son
 numéro, après ses violations : « 2 conflits restants », « 1 conflit restant » ;
 à zéro, la phrase manque. Chacun de ces deux minimums porte sur tous les
@@ -2497,13 +2524,22 @@ d'arrivée ; un compteur par couple (personne, animateur), N × A octets pour A
 animateurs tant que R ne dépasse pas 255, dit quand une rencontre apparaît ou
 disparaît. La recherche ne tient ces compteurs que quand le critère des
 animateurs compte, coché et avec un objet : sinon aucune composante ne les lit,
-et elle ne paie rien pour eux, même quand des personnes animent. Le coût d'un
-mouvement reste de l'ordre des sièges des deux tables, et un n-uplet de dix
+et elle ne paie rien pour eux, même quand des personnes animent. Les inclusions
+non satisfaites se lisent sur deux compteurs que la recherche tient déjà : une
+inclusion de personne est satisfaite quand la paire est réunie, une inclusion
+d'organisation quand la personne compte un membre de cette organisation parmi
+ses rencontres, comme la mesure les juge (§ 13.2). Après un échange, seules se
+relisent les rencontres demandées des deux personnes déplacées — celles dont
+elles sont une extrémité, celles qu'elles portent, et celles qui incluent leur
+organisation —, chacune en temps constant ; la boucle des paires n'en lit rien
+de plus, et sans inclusion active la recherche ne relit rien. Le coût d'un
+mouvement reste de l'ordre des sièges des deux tables, et un n-uplet de douze
 composantes au plus se compose et se compare dans le même ordre de grandeur que
 celui de six : mesuré sur la grande démonstration, un mouvement coûte quelques
 pour cent de plus que sous l'ordre fixe de référence sans objectif, et moins
 d'un dixième de plus avec des étiquettes, des objectifs, la case des animateurs
-et un ordre réglé.
+et un ordre réglé ; deux cent dix inclusions actives n'en changent pas l'ordre
+de grandeur.
 
 **La présence ne coûte rien à la recherche.** Une personne absente à un tour
 n'occupe aucun siège de ce tour, aucun mouvement ne la touche, et les grandeurs
@@ -4484,14 +4520,21 @@ lisent, et s'écrivent rangés.
 | `respecterObjectifs` | réglages | coché | booléen ; présent seulement à faux |
 | `modeObjectifs` | réglages | le plus de places servies | `chacun` (chacun au moins une fois) ou `minimum` (l'équité d'abord) ; présent seulement hors du défaut |
 | `rencontrerAnimateurs` | réglages | décoché | booléen ; présent seulement à vrai |
-| `priorites` | réglages | l'ordre par défaut (§ 5.7) | liste de paliers, chacun une liste non vide de `{critere, poids}` ; chaque critère du § 5.7 une fois ; l'écart au plafond a priori, les rencontres répétées et retours et les conflits d'organisation seuls à leur palier, au poids 1 ; sous `modeObjectifs` présent, les tours hors objectif aussi ; poids entiers de 1 à 100, un critère seul à son palier hors de ceux-là gardant le poids écrit (§ 5.7) ; chaque palier écrit dans l'ordre du tableau du § 5.7 ; absent quand il égale le défaut, chaque critère seul à son palier au poids 1 |
+| `priorites` | réglages | l'ordre par défaut (§ 5.7) | liste de paliers, chacun une liste non vide de `{critere, poids}` ; chaque critère du § 5.7 une fois, les inclusions non satisfaites pouvant manquer (plus bas) ; l'écart au plafond a priori, les rencontres répétées et retours, les conflits d'organisation et les inclusions non satisfaites seuls à leur palier, au poids 1 ; sous `modeObjectifs` présent, les tours hors objectif aussi ; poids entiers de 1 à 100, un critère seul à son palier hors de ceux-là gardant le poids écrit (§ 5.7) ; chaque palier écrit dans l'ordre du tableau du § 5.7 ; absent quand il égale le défaut, chaque critère seul à son palier au poids 1 |
 
-La liste `priorites` est complète : une liste qui ne nomme pas un critère est
-une faute de forme. Le lecteur de l'ordre sait compléter une liste qui ne
-nommerait pas un critère — chaque critère manquant à sa place de l'ordre par
-défaut, seul à son palier, au poids 1 — ; au format courant l'analyse la refuse
-avant, et ce complément sert la liste d'un format qui ne connaissait pas un
-critère.
+La liste `priorites` est complète, à une exception : un critère ajouté au
+format courant après que des listes ont pu s'écrire — les inclusions non
+satisfaites — peut y manquer. Le lecteur de l'ordre le place juste après le
+palier de son prédécesseur dans l'ordre par défaut, celui des conflits
+d'organisation, seul, au poids 1 ; la liste se juge ainsi complétée, et une
+liste qui, complétée, égalerait l'ordre par défaut reste une faute, comme
+l'ordre par défaut écrit. Le fichier garde la liste telle qu'il l'écrit : la
+relire et la réécrire ne la complète pas, et seule une commande de l'ordre en
+écrit une complète. Tout autre critère absent reste une faute de forme. Le
+lecteur sait compléter une liste à qui manqueraient d'autres critères —
+chacun à sa place de l'ordre par défaut, seul à son palier, au poids 1 — ; au
+format courant l'analyse la refuse avant, et ce complément sert la liste d'un
+format qui ne connaissait pas un critère.
 
 Un objectif appartient à sa table : supprimer la table l'emporte, et la fenêtre
 qui annonce la suppression le compte (§ 2.1). Retirer un tour détruit les
@@ -4614,8 +4657,10 @@ quand aucune liste ne change de valeurs. Modifier, supprimer ou importer des
 participants fait suivre les listes dans la même entrée (§ 4). Un correctif du
 journal les pose et les retire comme tout champ. La configuration du moteur en
 porte une copie : sans liste, elle est celle d'avant les champs, et les
-empreintes avec elle. Les raisons de dérive ne les lisent pas. Les deux champs
-font partie du format 3.
+empreintes avec elle. Les raisons de dérive ne les lisent pas : **changer une
+inclusion reclasse sans faire dériver**, comme un conflit, et une proposition
+calculée avant se mesure et se classe sous les listes d'aujourd'hui (§ 5.7).
+Les deux champs font partie du format 3.
 
 #### Deux champs facultatifs : la présence
 
@@ -6937,15 +6982,16 @@ l'ordre des colonnes, chacune avec sa population. Le minimum brut porte le
 (§ 12.3), qu'elle nomme ; ses deux lignes secondaires, les mobiles et les ancrés
 (§ 5.4), le suivent, chacune sa tuile. Le minimum se lit sur la population
 entière : la personne qui en a le moins est souvent une présence partielle, et
-l'infobulle de la tuile le dit alors — « Prénom Nom, au rang 1, est présente
-aux tours 1 et 2. ». Puis, quand le conflit d'organisation a un objet, les
-conflits d'organisation ; puis les collisions cumulées, les paires distinctes
-et l'excédent ; les rencontres répétées choisies, les imposées
-énoncées à part ; le plus grand nombre de rencontres d'une paire ; les retours
-choisis, les imposés à part ; le minimum de A(p), avec la borne de diversité de
-la personne au rang 1 du même tri sur A(p) (§ 5.5) — une phrase dit à sa place
-qu'aucune personne présente ne porte d'organisation — ; la somme de redondance ;
-le minimum du taux de diversité d(p), au centième, comme au tableau des
+l'infobulle de la tuile le dit alors — « Prénom Nom, au rang 1, est présente aux
+tours 1 et 2. ». Puis, quand le conflit d'organisation a un objet, les conflits
+d'organisation ; puis, quand une inclusion est active, les inclusions non
+satisfaites, sans plancher ; puis les collisions cumulées, les paires distinctes
+et l'excédent ; les rencontres répétées choisies, les imposées énoncées à part ;
+le plus grand nombre de rencontres d'une paire ; les retours choisis, les
+imposés à part ; le minimum de A(p), avec la borne de diversité de la personne
+au rang 1 du même tri sur A(p) (§ 5.5) — une phrase dit à sa place qu'aucune
+personne présente ne porte d'organisation — ; la somme de redondance ; le
+minimum du taux de diversité d(p), au centième, comme au tableau des
 propositions. Puis le manque maximal, avec l'effectif au manque maximal — les
 personnes dont le manque l'égale, que la tuile tait quand il vaut 0, personne
 n'y manquant de rien — et le **plafond réalisé de la personne au rang 1 du
@@ -8757,6 +8803,23 @@ I = 2. Chaque raison d'une inclusion hors d'atteinte a son cas ; deux personnes
 qui s'incluent l'une l'autre ne font qu'une unité, comme une personne et
 l'organisation dont elle est le seul membre rencontrable, et une organisation
 que deux membres satisfont en fait une à elle seule.
+
+**Sans inclusion active, le critère ne change aucun plan ; avec elles, la
+recherche tient les mêmes avis que la mesure.** Les empreintes de référence se
+relèvent identiques, seul le nom du critère s'ajoutant à la liste de l'ordre
+du registre ; une salle dont les seules inclusions sont hors d'atteinte rend
+les plans de la même salle sans liste, et l'état n'en tient rien. Avec des
+inclusions — paires demandées des deux côtés, organisations incluses,
+inclusions contredites —, sous objectifs, animateurs, chaque mode et un ordre
+déplacé, l'état tenu à jour égale, après chaque mouvement et chaque mouvement
+défait, les avis que la mesure recompte, et le n-uplet celui de l'oracle ;
+sous un départ à tour figé et réserves imposées aussi, où une personne
+rencontre au siège d'une réserve un membre qu'aucun plan honorant les
+réservations ne lui fait rencontrer. Une génération répartie sur plusieurs
+fils égale celle d'un seul, et une dérivée n'en laisse jamais plus que son
+départ. La grande démonstration portant les listes d'une fixture de graine
+fixe (`test/fixtures/moteur/inclusions_grande.json`) a sa section des
+empreintes de référence, ses inclusions non satisfaites comprises.
 
 **L'ordre par défaut rend les plans de l'ordre fixe de référence.** Des
 **empreintes de référence**, fichier d'épreuve versionné

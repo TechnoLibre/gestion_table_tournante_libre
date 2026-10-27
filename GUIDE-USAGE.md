@@ -362,8 +362,13 @@ la cellule suivante. Une saisie qui change les deux listes ne fait qu’un geste
 que « Défaire » reprend d’un coup ; une saisie refusée, restée ouverte,
 s’abandonne quand vous masquez la colonne. Montrée, la colonne peut faire
 défiler la grille en largeur dans une fenêtre étroite. Les inclusions
-s’importent et s’exportent aussi en CSV (étape 2). La génération ne lit pas
-les inclusions : elles se gardent dans le fichier de l’événement.
+s’importent et s’exportent aussi en CSV (étape 2). Ce n’est pas une
+réservation : la recherche cherche à faire chaque rencontre demandée (étape 9),
+juste après éviter les conflits d’organisation, et une rencontre demandée des
+deux côtés ne compte qu’une fois. Une liste qui demande plus de personnes que
+la soirée n’en fait rencontrer à la personne ne compte pas, ni une inclusion
+qu’un conflit d’organisation contredit ou que les réservations rendent
+impossible.
 
 Une fois des propositions générées (étape 9), la colonne « Conflits du
 placement », juste après celle des conflits d’organisation, dit pour chaque
@@ -779,7 +784,7 @@ referme.
 ![L’ordre des priorités : un palier de deux critères et leurs poids, les animateurs décochés](doc/captures/10a-ordre-priorites.png)
 
 *Ici, l’excédent de collisions et les tours hors objectif partagent le
-palier 2, aux poids 1 et 3 : le classement y compare l’excédent plus trois
+palier 3, aux poids 1 et 3 : le classement y compare l’excédent plus trois
 fois les tours hors objectif. « Animateurs non rencontrés » est marqué
 « décoché » : la case « Rencontrer le plus d’animateurs différents » ne l’est
 pas. Au-dessus de la liste, hors de l’image, le choix « Objectifs des
@@ -896,7 +901,10 @@ cherche », plus bas). « Imposé par les réservations » sépare ce que vos
 réservations imposent de ce que la recherche a choisi. Quand des personnes
 nomment des organisations en conflit, une colonne compte les conflits
 d’organisation de chaque proposition, et une ligne qui en garde le dit sous son
-numéro : « 2 conflits restants ». Pour deux placements précis, la vue
+numéro : « 2 conflits restants ». Quand des personnes portent des inclusions
+qui comptent, la colonne « Inclusions non satisfaites », juste après, compte
+les rencontres demandées que la proposition ne fait pas, une rencontre
+demandée des deux côtés comptant une fois. Pour deux placements précis, la vue
 « Comparaison » de la page « Qualité », plus bas, les met côte à côte.
 
 Les commandes d’une ligne sont dans son menu : cliquez « Actions », au bout de
@@ -1619,7 +1627,7 @@ réglage du poste, pour la séance, automatique par défaut (étape 9).
 | Rencontrer le plus d'animateurs différents | Génération | décochée |
 | Attribuer les sièges | Génération | décochée |
 | Objectifs des tables : chercher d'abord | Génération | le plus de places servies |
-| Ordre des priorités | Génération | conflits d'organisation, puis excédent de collisions, puis rencontres répétées et retours, puis collisions cumulées, puis écart au plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis redondance d'organisation |
+| Ordre des priorités | Génération | conflits d'organisation, puis inclusions non satisfaites, puis excédent de collisions, puis rencontres répétées et retours, puis collisions cumulées, puis écart au plafond a priori, puis tours hors objectif, puis animateurs non rencontrés, puis redondance d'organisation |
 
 <!-- engendre:fin reglages -->
 

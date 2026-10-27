@@ -2096,6 +2096,7 @@ describe('configurationDepuisCharge : étiquettes, objectifs, mode et cases (con
 const prioritesParDefaut = () =>
   [
     'conflitsOrganisation',
+    'inclusionsNonSatisfaites',
     'excedentCollisions',
     'rencontresRepetees',
     'collisionsCumulees',
@@ -2119,8 +2120,8 @@ function avecPalierPartage(premier, second, [poidsPremier, poidsSecond] = [1, 3]
 
 // L'ordre réglé des épreuves : l'écart au premier palier, l'excédent de
 // collisions × 1 et les tours hors objectif × 3 au deuxième, les collisions
-// cumulées, les rencontres répétées, les animateurs et la redondance seuls
-// à leur palier, dans cet ordre.
+// cumulées, les rencontres répétées, les animateurs, la redondance, les
+// conflits et les inclusions seuls à leur palier, dans cet ordre.
 const prioritesReglees = () => avecPalierPartage('excedentCollisions', 'toursHorsObjectif');
 
 describe('l’ordre des priorités : un réglage facultatif, absent à son défaut (§ 8.9, A16)', () => {
@@ -2136,6 +2137,28 @@ describe('l’ordre des priorités : un réglage facultatif, absent à son défa
     assert.ok(ecrit.includes(attendu), ecrit);
     assert.ok(attendu.includes('[{"critere":"excedentCollisions","poids":1},{"critere":"toursHorsObjectif","poids":3}]'), attendu);
     assert.equal(serialiser(analyser(ecrit).charge, lu.entete), ecrit);
+  });
+
+  test('une liste écrite avant les inclusions se lit et se récrit telle quelle ; ses lecteurs les placent après le palier des conflits (§ 8.9)', () => {
+    const sansInclusions = () => prioritesReglees().filter(([{ critere }]) => critere !== 'inclusionsNonSatisfaites');
+    const lu = analyser(abime((d) => { d.charge.reglages.priorites = sansInclusions(); }));
+    assert.deepEqual(lu.charge.reglages.priorites, sansInclusions());
+    assert.deepEqual(priorites(lu.charge), prioritesReglees());
+    assert.deepEqual(configurationDepuisCharge(lu.charge).priorites, prioritesReglees());
+    const ecrit = serialiser(lu.charge, lu.entete);
+    assert.ok(ecrit.includes(`"priorites":${JSON.stringify(sansInclusions())}}`), ecrit);
+    assert.equal(serialiser(analyser(ecrit).charge, lu.entete), ecrit);
+    // Complétée, l'ancienne liste par défaut serait l'ordre par défaut :
+    // elle reste une faute, comme lui. Un autre critère absent avec les
+    // inclusions en est une aussi.
+    const P = 'charge.reglages.priorites';
+    const ancienDefaut = () => prioritesParDefaut().filter(([{ critere }]) => critere !== 'inclusionsNonSatisfaites');
+    assert.deepEqual(ecartsDeRefus([
+      ['l’ordre par défaut d’avant les inclusions', abime((d) => { d.charge.reglages.priorites = ancienDefaut(); }), 'FORME', P],
+      ['la redondance absente avec les inclusions', abime((d) => {
+        d.charge.reglages.priorites = sansInclusions().filter(([{ critere }]) => critere !== 'redondance');
+      }), 'FORME', P],
+    ]), []);
   });
 
   test('un palier hors de l’ordre du registre se lit ; il s’écrit rangé, et ses lecteurs le rendent rangé', () => {
@@ -2154,7 +2177,7 @@ describe('l’ordre des priorités : un réglage facultatif, absent à son défa
     trois.splice(trois.findIndex(([{ critere }]) => critere === 'collisionsCumulees'), 1);
     trois[1].splice(1, 0, { critere: 'collisionsCumulees', poids: 2 });
     const animateursDAbord = prioritesParDefaut();
-    animateursDAbord.splice(1, 0, ...animateursDAbord.splice(6, 1));
+    animateursDAbord.splice(1, 0, ...animateursDAbord.splice(7, 1));
     const seuls = prioritesParDefaut().reverse();
     seuls.push(...seuls.splice(seuls.findIndex(([{ critere }]) => critere === 'ecartAuPlafondAPrioriMax'), 1));
     const variantes = [
@@ -2274,12 +2297,15 @@ describe('priorites : le lecteur de l’ordre des priorités (§ 5.7, § 8.9)', 
     // l'excédent, et non après les rencontres répétées qui les précèdent
     // dans l'ordre du registre.
     charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'animateursNonRencontres');
-    const [ecart, partage, cumulees, repetees, animateurs, redondance, conflits] = prioritesReglees();
-    assert.deepEqual(priorites(charge), [ecart, partage, animateurs, cumulees, repetees, redondance, conflits]);
+    const [ecart, partage, cumulees, repetees, animateurs, redondance, conflits, inclusions] = prioritesReglees();
+    assert.deepEqual(priorites(charge), [ecart, partage, animateurs, cumulees, repetees, redondance, conflits, inclusions]);
     // Le conflit d'organisation, premier de l'ordre par défaut, se place en
     // tête.
     charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'conflitsOrganisation');
-    assert.deepEqual(priorites(charge), [conflits, ecart, partage, cumulees, repetees, animateurs, redondance]);
+    assert.deepEqual(priorites(charge), [conflits, ecart, partage, cumulees, repetees, animateurs, redondance, inclusions]);
+    // Les inclusions suivent le palier des conflits, où qu'il soit.
+    charge.reglages.priorites = [conflits, ecart, partage, cumulees, repetees, animateurs, redondance];
+    assert.deepEqual(priorites(charge), [conflits, inclusions, ecart, partage, cumulees, repetees, animateurs, redondance]);
   });
 });
 

@@ -354,6 +354,7 @@ describe('le dernier point égale la ligne du tableau, sous les réglages couran
       [{ critere: 'rencontresRepetees', poids: 1 }],
       [{ critere: 'animateursNonRencontres', poids: 1 }],
       [{ critere: 'conflitsOrganisation', poids: 1 }],
+      [{ critere: 'inclusionsNonSatisfaites', poids: 1 }],
     ];
     await m.seance.executer('changerPriorites', { paliers });
     const reglee = await dernierPointEgaleLaLigne(m, 1, 'priorités');

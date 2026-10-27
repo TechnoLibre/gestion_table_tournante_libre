@@ -224,6 +224,15 @@ export const TABLE = new Map([
       "palier avant de regarder les paliers suivants. Colonne « Conflits d'organisation (paire et tour) » des " +
       'propositions.',
   ],
+  [
+    'generation.priorites.explication.inclusionsNonSatisfaites',
+    'Les rencontres que les inclusions demandent et que le placement ne fait pas : une inclusion est satisfaite dès ' +
+      "que la personne partage une table, à un tour, avec la personne incluse ou avec un membre de l'organisation " +
+      'incluse. Une rencontre demandée des deux côtés compte une fois ; une liste qui demande plus de personnes que ' +
+      "la personne n'en peut rencontrer ne compte pas, et une inclusion qu'un conflit d'organisation contredit non " +
+      'plus. La recherche et le classement le veulent aussi bas que possible à son palier avant de regarder les ' +
+      'paliers suivants. Colonne « Inclusions non satisfaites » des propositions.',
+  ],
 
   // --- Les cœurs de calcul, un réglage du poste pour la séance (§ 5.10) --------
   // disponibles : les processeurs logiques du poste, hyperthreads compris.

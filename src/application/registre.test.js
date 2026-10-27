@@ -165,13 +165,13 @@ const IMPORTER_FINANCE_A_LA_TABLE_2 = (charge) => ({
 });
 
 // L'ordre des priorités par défaut, chaque critère seul à son palier ; un
-// ordre réglé, où l'excédent et les collisions cumulées partagent le
-// deuxième palier ; et le geste qui joint les tours hors objectif à
-// l'excédent.
+// ordre réglé, où l'excédent et les collisions cumulées partagent un
+// palier ; et le geste qui joint les tours hors objectif à l'excédent.
 const PRIORITES_DEFAUT = PRIORITES_PAR_DEFAUT.map((palier) => palier.map((entree) => ({ ...entree })));
 const seul = (critere) => [{ critere, poids: 1 }];
 const COLLISIONS_JOINTES = [
   seul('conflitsOrganisation'),
+  seul('inclusionsNonSatisfaites'),
   seul('rencontresRepetees'),
   [{ critere: 'excedentCollisions', poids: 2 }, { critere: 'collisionsCumulees', poids: 3 }],
   seul('ecartAuPlafondAPrioriMax'),
@@ -184,6 +184,7 @@ const JOINDRE_LES_TOURS_HORS_OBJECTIF = [
   {
     paliers: [
       seul('conflitsOrganisation'),
+      seul('inclusionsNonSatisfaites'),
       seul('rencontresRepetees'),
       [{ critere: 'excedentCollisions', poids: 1 }, { critere: 'toursHorsObjectif', poids: 3 }],
       seul('collisionsCumulees'),

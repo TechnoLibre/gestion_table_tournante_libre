@@ -58,7 +58,14 @@
 // Les autres fonctions créent une charge ou dérivent d'elle la configuration
 // du moteur, l'état qu'impose son contenu, la capacité d'une table et la
 // valeur d'un réglage facultatif. Aucune ne modifie ce qu'elle reçoit.
-import { CRITERES, POIDS_MAX, PRIORITES_PAR_DEFAUT, completerPriorites, verifierPriorites } from '../moteur/criteres.js';
+import {
+  CRITERES,
+  CRITERES_POSTERIEURS,
+  POIDS_MAX,
+  PRIORITES_PAR_DEFAUT,
+  completerPriorites,
+  verifierPriorites,
+} from '../moteur/criteres.js';
 import { ETIQUETTES_MAX, estEtiquetteBienFormee } from './etiquettes.js';
 import { ErreurStockage } from './erreurs.js';
 import { estCheminLogo } from './logos.js';
@@ -954,16 +961,24 @@ function examinerNomsNumerotes({ participants }, faute) {
 // L'ordre des priorités, quand les réglages le portent, chaque palier rangé
 // dans l'ordre du registre : la liste se juge par verifierPriorites sous le
 // mode des objectifs de la charge, et l'ordre par défaut écrit est une faute
-// (§ 8.9, A16). Une faute d'un palier désigne ce palier ; une autre, la
-// liste. faute(chemin) lève l'écart.
+// (§ 8.9, A16). Une liste à qui ne manque qu'un critère de
+// CRITERES_POSTERIEURS — le premier absent dans l'ordre du registre, qui les
+// range en dernier — se juge complétée (completerPriorites) : elle s'est
+// écrite avant que ce critère existe ; complétée, elle ne doit pas égaler
+// l'ordre par défaut, qu'aucun fichier n'écrit. Une faute d'un palier
+// désigne ce palier ; une autre, la liste. faute(chemin) lève l'écart.
 function examinerPriorites(charge, faute) {
   const { priorites: portee } = charge.reglages;
   if (portee === undefined) return;
   const chemin = 'charge.reglages.priorites';
   const rangee = rangerPriorites(portee);
-  const ecart = verifierPriorites(rangee, modeObjectifs(charge));
+  const mode = modeObjectifs(charge);
+  let ecart = verifierPriorites(rangee, mode);
+  if (ecart?.faute === 'critereAbsent' && CRITERES_POSTERIEURS.includes(ecart.critere)) {
+    ecart = verifierPriorites(completerPriorites(rangee), mode);
+  }
   if (ecart !== null) faute(ecart.palier === undefined ? chemin : `${chemin}[${ecart.palier}]`);
-  if (egaleAuDefaut(rangee)) faute(chemin);
+  if (egaleAuDefaut(completerPriorites(rangee))) faute(chemin);
 }
 
 // Copie d'une liste de priorités, chaque palier rangé dans l'ordre du
