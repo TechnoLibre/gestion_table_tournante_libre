@@ -668,6 +668,25 @@ describe('la présence par tour : une absence ne retire que le plancher de l’�
     expect(collisions(m).querySelector('[data-segment="prouve"]')).not.toBeNull();
   });
 
+  test('une réservée pour la soirée : les tuiles des agrégats écrivent « mobiles X · ancrés Y » sous leur borne, celle du minimum brut non', async () => {
+    const lue = generee(chargeSept());
+    const id = lue.propositions[0].id;
+    const ligne = evaluer(lue).propositions.find((candidate) => candidate.id === id);
+    const m = await qualiteDe(lue, id);
+    const bornesDe = (nom) => [...page(m).querySelectorAll(`[data-tuile="${nom}"] .borne`)].map(texteDe);
+    const { manqueMax, effectifManque } = ligne.troisChiffres;
+    for (const [nom, valeurs] of [['manqueMax', manqueMax], ['effectifManque', effectifManque]]) {
+      const attendue = t('propositions.secondaires', { mobiles: String(valeurs.mobiles), ancres: String(valeurs.ancres) });
+      expect(bornesDe(nom), nom).toContain(attendue);
+    }
+    for (const nom of ['organisationsVues', 'diversite', 'ecartItineraireMax']) {
+      expect(bornesDe(nom).filter((borne) => borne.startsWith('mobiles ')), nom).toHaveLength(1);
+    }
+    for (const nom of ['rencontresTous', 'rencontresMobiles', 'rencontresAncres', 'collisionsCumulees']) {
+      expect(bornesDe(nom).filter((borne) => borne.startsWith('mobiles ')), nom).toEqual([]);
+    }
+  });
+
   test('une dérivée où l’arrivante d’un tour figé reste en réserve : la phrase de la réserve, comme aujourd’hui, et un seul segment', async () => {
     const lue = generee(chargeSept(), { graine: 3, nombre: 1, arret: 40 });
     // Ondine Ressac part au tour 1 et libère une chaise à sa table ; Iris

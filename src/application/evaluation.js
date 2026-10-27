@@ -332,6 +332,25 @@ export function premiereDuClassement(table) {
 }
 
 /**
+ * Le plafond réalisé de la personne au rang 1 du profil de manque d'une
+ * ligne comparable (§ 12.10.3), celui que la colonne du plus grand manque
+ * écrit sous son chiffre : profilManque range le plus grand manque en
+ * tête, à manque égal le plafond le plus bas d'abord, et teteDuManque en
+ * lit le rang 1, comme le détail et la comparaison. Le départage par
+ * identifiant ne change pas ce plafond : le profil se range ici sur les
+ * index de la ligne. null pour une population vide.
+ *
+ * @param {LigneEvaluation} ligne  comparable
+ * @returns {number|null}
+ */
+export function plafondEnTeteDuManque({ mesures, plafondsRealises: realises }) {
+  const N = realises.length;
+  const index = Array.from({ length: N }, (_, p) => p);
+  const tete = teteDuManque(profilManque({ N, ids: index }, manques(realises, mesures.rencontres), realises));
+  return tete === null ? null : tete.plafondRealise;
+}
+
+/**
  * La meilleure proposition du classement que montre la liste des
  * événements (§ 5.4, § 5.7, § 8.1) : id, l'identifiant de la proposition au
  * rang 1 (premiereDuClassement). null sans proposition, quand aucune ne se

@@ -16,13 +16,14 @@
 // Chaque cellule de mesure s'écrit par celluleDeTuile, la fonction de la
 // tuile, sur la ligne d'évaluation de son placement (lue dans la table) et
 // sur les bornes de son côté de la comparaison : la même valeur, les mêmes
-// bornes, le même plancher, le même pourcentage suivi du même compte du
-// pire que la tuile de ce placement. Rien ne se compte ni ne se divise ici
-// (contrainte 41) : un pourcentage est l'entier que comparerPlacements
-// porte, celui du pire cas de son placement, jamais une moyenne, et trois
-// cellules seulement en portent un (TUILES_A_POURCENTAGE). L'ordre des
-// lignes est fixe : aucune ne dépend des valeurs, aucun écart n'est écrit,
-// aucune cellule n'est mise en avant (§ 12.8).
+// bornes, les mêmes lignes secondaires, le même plancher, le même
+// pourcentage suivi du même compte du pire que la tuile de ce placement.
+// Rien ne se compte ni ne se divise ici (contrainte 41) : un pourcentage est
+// l'entier que comparerPlacements porte, celui du pire cas de son placement,
+// jamais une moyenne, et trois cellules seulement en portent un
+// (TUILES_A_POURCENTAGE). L'ordre des lignes est fixe : aucune ne dépend des
+// valeurs, aucun écart n'est écrit, aucune cellule n'est mise en avant
+// (§ 12.8).
 //
 // Une comparaison ne porte ni la borne de diversité ni celle des
 // animateurs : leurs cellules écrivent la valeur et le plancher, sans
@@ -41,7 +42,8 @@ export const TETE_DES_COLONNES = Object.freeze(['rang', 'rencontresTous', 'manqu
 /**
  * @typedef {Object} Cellule
  * @property {string} texte     la valeur, écrite comme au tableau
- * @property {string[]} bornes  les lignes de la borne, le plancher en dernier
+ * @property {string[]} bornes  les lignes de la borne, puis celle des lignes
+ *           secondaires d'un agrégat, le plancher en dernier
  * @property {{texte: string|null, compte: string}|null} pourcentage
  *           comme sur la tuile : null hors des trois tuiles qui en portent
  *

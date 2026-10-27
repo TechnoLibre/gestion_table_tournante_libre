@@ -876,9 +876,11 @@ son départ, n° 4, sur la grande démonstration sans exception. Le minimum brut
 s’écrit 88 % et 85 %, chacun avec le compte du pire dessous, « minimum 24 sur
 27 » et « minimum 23 sur 27 » ; suivent le plus grand manque, 3 et 4, les
 personnes à qui il en manque, 143 et 141, et l’écart d’itinéraire, 3 des deux
-côtés. Aucun écart n’est calculé entre les deux colonnes, et aucune n’est mise
-en évidence. « Tous les indicateurs », replié dessous, garde les autres
-chiffres. La question de la vue, juste au-dessus, est hors de l’image.*
+côtés, chacun avec, dessous, la même mesure sur les mobiles et sur les ancrés.
+Aucun écart n’est calculé entre les deux colonnes, et aucune n’est mise en
+évidence. « Tous les indicateurs », replié dessous, garde les autres
+chiffres. La ligne qui nomme les deux placements et la question de la vue,
+juste au-dessus, sont hors de l’image.*
 
 ![Le manque de deux propositions superposé sur un même axe : les courbes se croisent](doc/captures/17-comparaison-manque.png)
 
@@ -1417,6 +1419,15 @@ C’est la troisième colonne qui évite le contresens : une personne laissée e
 réserve pendant presque toute la soirée a un manque nul, puisqu’elle n’avait
 presque personne à rencontrer. Un manque nul sur un itinéraire bas n’est pas
 une bonne nouvelle.
+
+Sous le plus grand manque, en petit, le tableau écrit le plafond réalisé de la
+personne la plus privée : manquer une rencontre sur trois possibles n’est pas
+en manquer une sur vingt-huit. Quand des réservations ancrent des personnes à
+leur table, une autre ligne donne la même mesure sur les mobiles et sur les
+ancrés, sous le plus grand manque, les personnes à qui il en manque, l’écart
+d’itinéraire, les organisations rencontrées et le taux de diversité : elle dit
+si le chiffre vient du placement, qu’une relance peut améliorer, ou de vos
+réservations. Les tuiles de la page « Qualité » portent les mêmes lignes.
 
 La page « Qualité » pose la même question pour deux placements à la fois :
 le manque de chacun, rang par rang, sur un même axe

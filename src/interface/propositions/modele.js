@@ -11,8 +11,16 @@
 // ne s'y recompose. Des rencontres, il ne porte que le minimum, sur les trois
 // populations du § 5.4 — tous, mobiles, ancrés —, en tête des colonnes de
 // mesure ; la moyenne n'y entre pas. Le plafond réalisé, individuel, se lit
-// par le manque, dont les cellules sont celles de troisChiffres. Les imposés
-// se disent à part, sur chaque ligne, jamais ajoutés aux choisis.
+// par le manque, dont les cellules sont celles de troisChiffres : la
+// cellule du plus grand manque écrit sous son chiffre le plafond réalisé de
+// la personne au rang 1 du profil de manque (plafondEnTeteDuManque). Les
+// imposés se disent à part, sur chaque ligne, jamais ajoutés aux choisis.
+//
+// Les autres agrégats du § 5.4 portent leurs deux lignes secondaires, la
+// même mesure sur les mobiles et sur les ancrés, sous leur chiffre et non
+// en colonnes (lireSecondaires) : le minimum de A(p), celui du taux de
+// diversité et les trois chiffres du manque. Les minimums de s(p) et de
+// m(p) ne les portent que sur la page de qualité (§ 5.7).
 //
 // Chaque minimum affiché désigne la personne la plus mal servie (§ 12.1) :
 // le moins de rencontres, d'organisations vues, de diversité. La redondance
@@ -34,7 +42,7 @@
 // « inconnu » pour une grandeur que l'a priori inconnu ne permet pas, le
 // certificat en mots.
 import { lireEntier } from '../../application/capacite.js';
-import { evaluer, nettoyage, retenuAjuste, retenuRetouche } from '../../application/evaluation.js';
+import { evaluer, nettoyage, plafondEnTeteDuManque, retenuAjuste, retenuRetouche } from '../../application/evaluation.js';
 import { nomAffiche } from '../../application/personnes.js';
 import { presencesPartielles } from '../../application/places.js';
 
@@ -87,6 +95,26 @@ const SOUS_CONDITION = new Map([
   ['animateursRencontres', ['animateursNonRencontres', null]],
   ['animateursNonRencontres', ['animateursNonRencontres', 'animateursNonRencontres']],
 ]);
+
+// Les lignes secondaires (§ 5.4, § 12.10.4) : la lecture, dans une ligne
+// comparable, de la mesure d'une colonne restreinte à une population,
+// 'mobiles' ou 'ancres'. Le minimum des rencontres a les siennes en
+// colonnes, rencontresMobiles et rencontresAncres. La Map ne sert qu'à
+// retrouver la lecture d'une colonne.
+const SECONDAIRES = new Map([
+  ['organisationsVues', (l, population) => l.mesures.aggOrganisationsVues[population].min],
+  ['diversite', (l, population) => l.mesures.aggDiversite[population].min],
+  ['manqueMax', (l, population) => l.troisChiffres.manqueMax[population]],
+  ['effectifManque', (l, population) => l.troisChiffres.effectifManque[population]],
+  ['ecartItineraireMax', (l, population) => l.troisChiffres.ecartItineraireMax[population]],
+  ['toursSelonObjectif', (l, population) => l.mesures.objectifs.agregat[population].min],
+  ['animateursRencontres', (l, population) => l.mesures.animateurs.agregat[population].min],
+]);
+
+// Les colonnes dont le tableau tait les lignes secondaires : chacun de ces
+// deux minimums y porte sur tous les concernés (§ 5.7), et sa tuile les
+// écrit.
+const SECONDAIRES_HORS_TABLEAU = new Set(['toursSelonObjectif', 'animateursRencontres']);
 
 // Les colonnes dont la valeur n'existe pas quand le plafond a priori est
 // inconnu : elles s'écrivent « inconnu », jamais « — » (§ 12.6).
@@ -239,10 +267,62 @@ export function lireColonne(ligne, nom) {
   return nombre(nom, lire(ligne));
 }
 
+/**
+ * Les deux lignes secondaires d'une colonne de mesure pour une ligne
+ * comparable (§ 5.4, § 12.10.4) : la même mesure sur les mobiles et sur
+ * les ancrés, chacune une cellule de nombre comme celle de lireColonne.
+ * null pour une colonne qui n'en porte pas, quand la colonne n'a pas de
+ * valeur — population vide, « inconnu », critère sans objet —, quand la
+ * population de l'agrégat — les présents, ou ses seuls concernés — n'a pas
+ * à la fois des mobiles et des ancrés — l'une des deux lignes écrirait
+ * alors « — », et l'autre le chiffre de tête —, et pour le minimum de A(p)
+ * quand personne ne rencontre une personne qui porte une organisation :
+ * A(p) y vaut 0 pour tous, et le taux de diversité « — ».
+ *
+ * @param {import('../../application/evaluation.js').LigneEvaluation} ligne  comparable
+ * @param {string} nom  le nom d'une colonne de mesure de COLONNES
+ * @returns {null|{mobiles: {colonne: string, valeur: number|null, cle: string|null, decimales: number},
+ *   ancres: {colonne: string, valeur: number|null, cle: string|null, decimales: number}}}
+ */
+export function lireSecondaires(ligne, nom) {
+  const lire = SECONDAIRES.get(nom);
+  if (lire === undefined || lireColonne(ligne, nom).valeur === null) return null;
+  if (nom === 'organisationsVues' && ligne.mesures.aggDiversite.tous.min === null) return null;
+  const mobiles = lire(ligne, 'mobiles');
+  const ancres = lire(ligne, 'ancres');
+  if (mobiles === null || ancres === null) return null;
+  return { mobiles: nombre(nom, mobiles), ancres: nombre(nom, ancres) };
+}
+
+/**
+ * Le texte des deux lignes secondaires (lireSecondaires), sur une ligne :
+ * « mobiles 24 · ancrés 21 », chaque chiffre écrit comme sa cellule.
+ *
+ * @param {{mobiles: Object, ancres: Object}} secondaires
+ * @param {{t: Function, format: {nombre: Function}}} outils
+ * @returns {string}
+ */
+export function texteSecondaires({ mobiles, ancres }, outils) {
+  return outils.t('propositions.secondaires', { mobiles: texteCellule(mobiles, outils), ancres: texteCellule(ancres, outils) });
+}
+
+// La cellule de la colonne nom d'une ligne comparable au tableau : celle de
+// lireColonne, plus plafondRealise, le plafond réalisé au rang 1 du profil
+// de manque pour la colonne du plus grand manque, null pour une autre ; et
+// secondaires, ses lignes secondaires, null hors de celles que le tableau
+// écrit.
+function celluleDuTableau(ligne, nom) {
+  return {
+    ...lireColonne(ligne, nom),
+    plafondRealise: nom === 'manqueMax' ? plafondEnTeteDuManque(ligne) : null,
+    secondaires: SECONDAIRES_HORS_TABLEAU.has(nom) ? null : lireSecondaires(ligne, nom),
+  };
+}
+
 // Les cellules de mesure d'une ligne comparable, une par colonne de mesure
 // portée, dans l'ordre de LECTURES.
 function cellules(ligne, portees) {
-  return [...LECTURES.keys()].filter((colonne) => portees.has(colonne)).map((colonne) => lireColonne(ligne, colonne));
+  return [...LECTURES.keys()].filter((colonne) => portees.has(colonne)).map((colonne) => celluleDuTableau(ligne, colonne));
 }
 
 // Ce que les réservations imposent, énoncé à part (§ 5.4) : les retours et
@@ -524,6 +604,22 @@ export function surlignee(survolee, focalisee) {
  */
 export function texteCellule({ valeur, cle, decimales }, { t, format }) {
   return cle === null ? format.nombre(valeur, { decimales }) : t(cle);
+}
+
+/**
+ * Les lignes qu'une cellule du tableau écrit sous son chiffre, dans
+ * l'ordre : le plafond réalisé au rang 1 du profil de manque, puis les
+ * lignes secondaires ; [] pour une cellule qui n'en porte aucune.
+ *
+ * @param {{plafondRealise?: number|null, secondaires?: Object|null}} cellule
+ * @param {{t: Function, format: {nombre: Function}}} outils
+ * @returns {string[]}
+ */
+export function lignesSousCellule({ plafondRealise = null, secondaires = null }, outils) {
+  const lignes = [];
+  if (plafondRealise !== null) lignes.push(outils.t('propositions.plafondRealise', { plafond: outils.format.nombre(plafondRealise) }));
+  if (secondaires !== null) lignes.push(texteSecondaires(secondaires, outils));
+  return lignes;
 }
 
 // Le retenu ajusté se définit une fois, dans l'évaluation, que la page de

@@ -3403,11 +3403,16 @@ function minimumDe(id) {
 }
 
 // La ligne de la proposition id au tableau des propositions : une Map
-// colonne → texte de sa cellule.
+// colonne → chiffre de sa cellule, sans les lignes écrites dessous.
 async function ligneAuTableau(id) {
   await ouvrirSection('propositions');
   const ligne = await attendre('la ligne de la proposition', () => dans(`[data-section="propositions"] tr[data-proposition="${id}"]`));
-  return new Map([...ligne.querySelectorAll('td[data-colonne]')].map((cellule) => [cellule.dataset.colonne, texteDe(cellule)]));
+  const chiffreDe = (cellule) => {
+    const copie = cellule.cloneNode(true);
+    for (const sous of copie.querySelectorAll('[data-sous]')) sous.remove();
+    return texteDe(copie);
+  };
+  return new Map([...ligne.querySelectorAll('td[data-colonne]')].map((cellule) => [cellule.dataset.colonne, chiffreDe(cellule)]));
 }
 
 // La page de qualité d'une proposition déjà au plan, rouverte par la
@@ -4413,20 +4418,33 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
       const cellule = tete.querySelector(`tr[data-colonne="manqueMax"] td[data-colonne-comparaison="${cote}"]`);
       expect([...cellule.querySelectorAll('.secondaire')].map(texteDe), `n° ${id}`).toContain(plat(t('qualite.tuile.effectifAuManqueMax', { effectif: auMaximum })));
     }
+    // Les animateurs, réservés à leur table, sont des ancrés : chacun des
+    // trois chiffres du manque porte, dans chaque colonne, ses deux lignes
+    // secondaires sur une ligne (§ 5.4, § 12.10.4).
+    for (const nom of ['manqueMax', 'effectifManque', 'ecartItineraireMax']) {
+      for (const cote of ['a', 'b']) {
+        const cellule = tete.querySelector(`tr[data-colonne="${nom}"] td[data-colonne-comparaison="${cote}"]`);
+        const secondaires = [...cellule.querySelectorAll('.secondaire')].map(texteDe).filter((ligne) => ligne.startsWith('mobiles '));
+        expect(secondaires, `${nom} ${cote}`).toHaveLength(1);
+      }
+    }
     await rienEcrit(avant, 'relire les colonnes');
 
-    // L'image : de la ligne des placements jusqu'à « Tous les indicateurs »
-    // replié, les deux colonnes entre eux, l'infobulle fermée, sans focus.
-    // L'intitulé de la vue et sa question, juste au-dessus, ne tiennent pas
-    // avec eux dans la surface : 17 les affirme sans l'image.
+    // L'image : des en-têtes des deux colonnes, qui nomment les placements,
+    // jusqu'à « Tous les indicateurs » replié, l'infobulle fermée, sans
+    // focus. La ligne des placements, l'intitulé de la vue et sa question,
+    // juste au-dessus, ne tiennent pas avec eux dans la surface, les lignes
+    // secondaires des trois chiffres du manque comprises : aucune image ne
+    // les montre, et 17 les affirme par l'épreuve.
     await ecarterLePointeur();
     document.activeElement?.blur();
     await images(2);
     expect(tous('[data-section="qualite"] [role="tooltip"]').every((bulle) => bulle.hidden)).toBe(true);
-    await cadrerDansLaSurface([vue.querySelector('[data-placements-compares]'), repli]);
+    await cadrerDansLaSurface([tete.querySelector('thead'), repli]);
     await photographier(m, '17a-comparaison-colonnes', {
       condition: [
-        '[data-vue-qualite="comparaison"] [data-placements-compares]',
+        '[data-vue-qualite="comparaison"] thead th[data-colonne-comparaison="a"]',
+        '[data-vue-qualite="comparaison"] thead th[data-colonne-comparaison="b"]',
         '[data-vue-qualite="comparaison"] tr[data-colonne="rencontresTous"] td[data-colonne-comparaison="a"] [data-compte-pire]',
         '[data-vue-qualite="comparaison"] tr[data-colonne="rencontresTous"] td[data-colonne-comparaison="b"] [data-compte-pire]',
         '[data-vue-qualite="comparaison"] [data-tous-les-indicateurs]',

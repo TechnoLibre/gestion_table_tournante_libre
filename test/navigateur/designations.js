@@ -262,6 +262,7 @@ const ENTREES = [
   ['data-solveur', 'diagnostic : la ligne du calcul exact du plancher, par son état', null],
   ['data-source', 'plan : le placement montré, dans la barre de vue', ['']],
   ['data-source-qualite', 'qualité : la ligne de source, le placement que la page mesure', ['']],
+  ['data-sous', 'propositions : une ligne sous le chiffre d’une cellule — le plafond réalisé, les lignes secondaires', ['']],
   ['data-support-rompu', 'événement : le message du support rompu', ['']],
   ['data-surface', 'plan : la surface du plan', ['']],
   ['data-table', 'une table, par son identifiant', null],

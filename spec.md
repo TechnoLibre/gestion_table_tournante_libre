@@ -952,6 +952,17 @@ partiellement fixé compte parmi les mobiles.
 > global désigne un défaut qu'une relance corrige, ou la conséquence de son
 > propre plan de réservation.
 
+Le minimum des rencontres porte les siennes en colonnes au tableau des
+propositions (§ 5.7), et en tuiles sur la page de qualité (§ 12.2). Les autres
+agrégats — le minimum de A(p), celui de d(p), les trois chiffres du manque
+(§ 12.10.4), les minimums de s(p) et de m(p) — les écrivent **sous leur
+chiffre**, sur une ligne en encre secondaire : « mobiles 26 · ancrés 24 ». Elles
+ne s'y écrivent que quand la population que l'agrégat mesure compte des mobiles
+et des ancrés — celle de s(p) et de m(p) n'est que leurs concernés : sans ancré,
+l'une écrirait « — » et l'autre répéterait le chiffre de tête. Le minimum de
+A(p) les tait aussi quand le taux de diversité écrit « — » : personne n'y
+rencontre d'organisation, et A(p) vaut 0 pour tous.
+
 **Des rencontres, le minimum s'affiche, jamais la moyenne.** Le minimum décrit
 le sort de la personne la plus mal servie, qui est celle qui se plaindra. La
 moyenne ne sépare rien : quand les tables sont pleines à chaque tour, le nombre
@@ -2056,46 +2067,49 @@ l'objectif, précédés des personnes jamais servies sous « chacun au moins une
 fois » et du plus de tours hors objectif d'une personne sous « l'équité
 d'abord » ; pour le second, le minimum des animateurs rencontrés et les
 animateurs non rencontrés ; chacune présente quand son critère compte (§ 5.3).
-Le groupe des collisions d'organisation s'ouvre, quand le conflit
-d'organisation a un objet, sur la colonne des conflits d'organisation, en
-occurrences (paire, tour) ; sans paire de présents en conflit, elle n'y est
-pas. Une ligne qui en laisse — la recherche les vise à zéro sans les
-interdire — le dit aussi sous son numéro, après ses violations : « 2 conflits
-restants », « 1 conflit restant » ; à zéro, la phrase manque.
-Chacun de ces deux minimums porte sur tous les concernés, sans ses lignes
-secondaires (§ 5.4). Le regroupement ne change l'en-tête ni l'explication
-d'aucune colonne ; ses nombres s'alignent à droite en chiffres tabulaires. La
-ligne du placement retenu porte la teinte de l'état Retenu, et la proposition
-retenue, la pastille « retenue ». Une proposition dérivée porte, sous son
-numéro, la phrase qui la rattache à son départ — « Dérivée de n° 4. », ou
-« Dérivée de n° 4, tours 1 et 2 figés. » —, sans colonne de plus, comme la
-ligne du retenu porte « Tel que la proposition n° X. », « Tel que la
-proposition n° X, ajusté aux participants. » quand il ne diffère de sa
-proposition que par l'ajustement aux participants (§ 5.8), et « Ajusté à la
-main depuis la proposition n° X. » quand il porte une retouche que retenir de
-nouveau cette proposition détruirait. Seul le départ immédiat
-est nommé : la ligne du départ dit le sien. Quand le départ n'est plus dans la
+Le groupe des collisions d'organisation s'ouvre, quand le conflit d'organisation
+a un objet, sur la colonne des conflits d'organisation, en occurrences (paire,
+tour) ; sans paire de présents en conflit, elle n'y est pas. Une ligne qui en
+laisse — la recherche les vise à zéro sans les interdire — le dit aussi sous son
+numéro, après ses violations : « 2 conflits restants », « 1 conflit restant » ;
+à zéro, la phrase manque. Chacun de ces deux minimums porte sur tous les
+concernés, sans ses lignes secondaires (§ 5.4), que sa tuile écrit (§ 12.2).
+Sous le chiffre de la colonne du plus grand manque, une ligne en encre
+secondaire écrit le plafond réalisé de la personne au rang 1 du profil de manque
+(§ 12.10.3) ; sous ceux du minimum de A(p), du taux de diversité et des trois
+chiffres du manque, une autre écrit leurs deux lignes secondaires (§ 5.4). Le
+regroupement ne change l'en-tête ni l'explication d'aucune colonne ; ses nombres
+s'alignent à droite en chiffres tabulaires. La ligne du placement retenu porte
+la teinte de l'état Retenu, et la proposition retenue, la pastille « retenue ».
+Une proposition dérivée porte, sous son numéro, la phrase qui la rattache à son
+départ — « Dérivée de n° 4. », ou « Dérivée de n° 4, tours 1 et 2 figés. » —,
+sans colonne de plus, comme la ligne du retenu porte « Tel que la proposition
+n° X. », « Tel que la proposition n° X, ajusté aux participants. » quand il ne
+diffère de sa proposition que par l'ajustement aux participants (§ 5.8), et
+« Ajusté à la main depuis la proposition n° X. » quand il porte une retouche que
+retenir de nouveau cette proposition détruirait. Seul le départ immédiat est
+nommé : la ligne du départ dit le sien. Quand le départ n'est plus dans la
 liste, la phrase le dit — « Dérivée de n° 4, qui n'est plus dans la liste. » —
 et ne désigne aucune autre proposition. Les commandes d'une ligne vivent dans
-son **menu « Actions »**, un seul bouton dans la dernière cellule : fermé, il
-ne montre que ce bouton. Chaque phrase de la colonne « Imposé par les
+son **menu « Actions »**, un seul bouton dans la dernière cellule : fermé, il ne
+montre que ce bouton. Chaque phrase de la colonne « Imposé par les
 réservations » tient sur une ligne, et chaque ligne a la hauteur de ses
-chiffres, phrase de filiation comprise. Le menu d'une proposition porte « Voir
-sur le plan », « Qualité » et « Retenir » ; celui d'une proposition comparable
-porte aussi « Repartir d'elle » et « Comparer » (§ 12) ; celui d'une
-proposition qu'un changement de participants a seul mise en dérive porte
-« Repartir d'elle », sans « Comparer » ; celui d'une autre ligne en dérive, ou
-fautive, ni l'une ni l'autre ; le menu du placement retenu porte
+chiffres, phrase de filiation et lignes sous un chiffre comprises. Le menu d'une
+proposition porte « Voir sur le plan », « Qualité » et « Retenir » ; celui d'une
+proposition comparable porte aussi « Repartir d'elle » et « Comparer » (§ 12) ;
+celui d'une proposition qu'un changement de participants a seul mise en dérive
+porte « Repartir d'elle », sans « Comparer » ; celui d'une autre ligne en
+dérive, ou fautive, ni l'une ni l'autre ; le menu du placement retenu porte
 « Voir sur le plan », « Qualité » et « Comparer ». Le bouton suit le motif du
 bouton de menu de WAI-ARIA : il annonce son menu, s'ouvre au clic, par Entrée,
 l'espace et les flèches, et le menu se parcourt aux flèches, à Début et à Fin,
 se ferme par Échap, par Tab ou par un clic au dehors. Une commande exécutée
-ferme le menu ; le refus d'une commande — « Retenir » en lecture — reste
-affiché à côté du bouton, que le bouton désigne. Le bouton a un nom accessible
-qui porte le numéro de la ligne, « Actions de la proposition n° 4 », « Actions
-du placement retenu », comme « Repartir d'elle » et « Comparer » : « Comparer
-la proposition n° 4 », « Repartir de la proposition n° 4 », « Comparer le
-placement retenu ».
+ferme le menu ; le refus d'une commande — « Retenir » en lecture — reste affiché
+à côté du bouton, que le bouton désigne. Le bouton a un nom accessible qui porte
+le numéro de la ligne, « Actions de la proposition n° 4 », « Actions du
+placement retenu », comme « Repartir d'elle » et « Comparer » : « Comparer la
+proposition n° 4 », « Repartir de la proposition n° 4 », « Comparer le placement
+retenu ».
 
 ### 5.8 Le placement à la main
 
@@ -6341,6 +6355,15 @@ concernée par les animateurs, le minimum de m(p) avec la borne des animateurs d
 la personne à ce minimum, et les animateurs non rencontrés. La mention « minimum
 atteint », ou « atteignabilité inconnue », suit les tuiles (§ 5.5).
 
+**Les lignes secondaires des autres agrégats ne font pas de tuile.** Le minimum
+brut a les siennes en tuiles parce que le tableau des propositions les porte en
+colonnes ; la tuile du minimum de A(p), celle du minimum de d(p), celles des
+trois chiffres du manque (§ 12.10.4) et celles des minimums de s(p) et de m(p)
+écrivent les leurs dans la tuile, sous les lignes de sa borne et avant son
+plancher, sur une ligne : « mobiles 3 · ancrés 2 » (§ 5.4). La règle d'une tuile
+par colonne tient donc partout. Le minimum de s(p) et celui de m(p) les écrivent
+ici bien que le tableau les taise (§ 5.7).
+
 **Une tuile écrit le plancher que le diagnostic écrit pour sa mesure** (§ 5.6),
 et là seulement, en dernière ligne, sous son chiffre : « plancher 4 », ou
 « plancher 4, le meilleur atteint » quand la mesure que la tuile écrit l'égale.
@@ -6931,20 +6954,23 @@ sur le manque.
 | le manque absolu seul | une personne sur un itinéraire bas paraît bien servie alors qu'elle est proportionnellement la plus privée |
 
 Le second défaut se corrige sans inventer de grandeur : **le plafond réalisé
-accompagne le manque partout** — tuile, infobulle, tableau — comme le § 12.2
-l'exige déjà du chiffre de tête, et **à manque égal, le tri place d'abord le
-plafond le plus bas**. Entre deux manques égaux, la personne proportionnellement
-la plus privée est donc la première ; **entre deux manques différents, le tri ne
-prétend rien sur la proportion**, et c'est le choix assumé ci-dessus.
-L'infobulle d'un point porte la ligne entière, qui enseigne le vocabulaire :
+accompagne le manque partout** — tuile, colonne de la comparaison, infobulle,
+tableau des propositions, sous le chiffre du plus grand manque (§ 5.7) — comme
+le § 12.2 l'exige déjà du chiffre de tête, et **à manque égal, le tri place
+d'abord le plafond le plus bas**. Entre deux manques égaux, la personne
+proportionnellement la plus privée est donc la première ; **entre deux manques
+différents, le tri ne prétend rien sur la proportion**, et c'est le choix assumé
+ci-dessus. L'infobulle d'un point porte la ligne entière, qui enseigne le
+vocabulaire :
 
 > manque 3 · rencontres 24 · plafond réalisé 27 · plafond a priori 28 · 259 au total
 
 #### 12.10.4 Les trois chiffres, et aucun quatrième
 
 Chacun porte sa population mesurée et ses deux lignes secondaires — mobiles,
-ancrés — comme tout agrégat du § 5.4. Quand la population mesurée est vide, les
-trois s'écrivent « — ».
+ancrés — comme tout agrégat du § 5.4, sous son chiffre, au tableau des
+propositions (§ 5.7) comme sur sa tuile (§ 12.2). Quand la population mesurée
+est vide, les trois s'écrivent « — ».
 
 **1. Le manque maximal.** *De combien la personne la plus privée est-elle privée,
 compte tenu de là où ce placement l'a assise ?* Le plus grand manque sur la
@@ -7057,23 +7083,22 @@ placement, portent les mêmes chiffres dans le même ordre. En tête, ceux de la
 question de la vue : la place au classement — celle de sa proposition pour un
 retenu non ajusté, « — » pour un retenu ajusté, aux participants ou à la main,
 qui ne se classe pas, avec la mention « ajusté depuis sa proposition : ne se
-classe pas » —, le
-minimum brut, le plus grand manque avec le plafond réalisé de la personne au
-rang 1, l'effectif du manque et l'écart d'itinéraire maximal. Dessous, repliés
-sous « Tous les indicateurs », un repli que le clavier ouvre et ferme, les
-indicateurs des tuiles de l'en-tête chiffré (§ 12.2), par les groupes des
-colonnes du tableau des propositions (§ 5.7) — personnes rencontrées, collisions
-d'organisation, rencontres répétées et retours, diversité, objectifs des tables
-et animateurs ; une colonne que le tableau ne porte pas sous un critère décoché
-y reste, comme sa tuile, avec « ne classe pas » —, lus dans les deux lignes de
-la table d'évaluation, sans le détail de B. Chaque chiffre porte son plancher
-quand il est prouvé, comme sur les tuiles (§ 12.2) ; les planchers sont ceux du
-diagnostic, communs aux deux placements. Une colonne nomme la personne que la
-tuile nomme, sauf au minimum de A(p) et au minimum de m(p), dont la borne ne se
-lit que dans le détail : ces deux chiffres s'y écrivent sans personne ni borne ;
-quand aucune personne présente ne porte d'organisation, la cellule de la
-diversité écrit, comme sa tuile, la phrase qui le dit (§ 12.2). Une dérivée y
-porte « dérivée de n° X ».
+classe pas » —, le minimum brut, le plus grand manque avec le plafond réalisé de
+la personne au rang 1, l'effectif du manque et l'écart d'itinéraire maximal.
+Dessous, repliés sous « Tous les indicateurs », un repli que le clavier ouvre et
+ferme, les indicateurs des tuiles de l'en-tête chiffré (§ 12.2), par les groupes
+des colonnes du tableau des propositions (§ 5.7) — personnes rencontrées,
+collisions d'organisation, rencontres répétées et retours, diversité, objectifs
+des tables et animateurs ; une colonne que le tableau ne porte pas sous un
+critère décoché y reste, comme sa tuile, avec « ne classe pas » —, lus dans les
+deux lignes de la table d'évaluation, sans le détail de B. Chaque chiffre porte
+ses lignes secondaires, et son plancher quand il est prouvé, comme sur les
+tuiles (§ 12.2) ; les planchers sont ceux du diagnostic, communs aux deux
+placements. Une colonne nomme la personne que la tuile nomme, sauf au minimum de
+A(p) et au minimum de m(p), dont la borne ne se lit que dans le détail : ces
+deux chiffres s'y écrivent sans personne ni borne ; quand aucune personne
+présente ne porte d'organisation, la cellule de la diversité écrit, comme sa
+tuile, la phrase qui le dit (§ 12.2). Une dérivée y porte « dérivée de n° X ».
 
 **Les colonnes portent les pourcentages des tuiles**, et eux seuls
 (§ 12.2) : un chiffre dont la tuile porte un pourcentage le porte aussi dans
@@ -9845,8 +9870,8 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `15b-qualite-animateurs.png` | **grande démonstration** | le profil des animateurs rencontrés avec la borne des animateurs en repère pointillé, puis le début de la diversité par animateur sur la soirée, le moins varié en tête ; ses colonnes et leurs trois nombres, plus bas, sont affirmés sans l'image (§ 12.13) | le mot « plafond » n'est pas écrit dans la vue ; la première barre porte le minimum annoncé |
 | `15c-qualite-performance.png` | **grande démonstration**, une proposition montrée, dans la séance qui l'a engendrée | la ligne de tête — mouvements évalués, durée et cadence de la génération — et les deux premiers rangs des petits multiples sur l'abscisse logarithmique ; les autres multiples et la phrase du dernier changement, plus bas, sont affirmés sans l'image (§ 12.14) | le dernier point de relevé est le plan de la proposition ; ses valeurs égalent la ligne du tableau des propositions ; la durée écrite est celle dont le parcours a avancé l'horloge |
 | `16-minimum-atteint.png` | **petite démonstration** | le bas de l'en-tête chiffré : la diversité d'organisation, le manque à zéro et **« minimum atteint »** ; les compteurs de collision et de répétition **mesurés** à zéro et la ligne secondaire « ancrés » à **« — »**, plus haut, sont affirmés sans l'image (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
-| `17-comparaison-manque.png` | **variante sans exception** (§ 15.1), une paire de placements écrite dans le scénario | la vue de comparaison : « Tous les indicateurs » replié, les deux profils de manque superposés qui se croisent, l'axe commun, le zéro libellé, la synthèse du tracé, les trois effectifs de rangs (§ 12.10.6) ; la question, la ligne qui nomme les deux placements et leurs colonnes, plus haut, sont affirmées sans l'image, et `17a` les montre | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe ; chaque pourcentage d'une colonne est suivi de son compte du pire ; aucun pourcentage hors des colonnes — ni au tracé, ni à sa synthèse, ni dans les phrases ; le signe change au moins une fois |
-| `17a-comparaison-colonnes.png` | idem, la même paire | la même vue, cadrée sur ses colonnes : la ligne qui nomme les deux placements, leurs chiffres en deux colonnes côte à côte — le minimum brut de chacune en pourcentage, le compte du pire dessous —, « Tous les indicateurs » replié | chaque colonne porte un pourcentage par indicateur visible qui en a un, le pire cas de son placement, chacun suivi de son compte du pire |
+| `17-comparaison-manque.png` | **variante sans exception** (§ 15.1), une paire de placements écrite dans le scénario | la vue de comparaison : « Tous les indicateurs » replié, les deux profils de manque superposés qui se croisent, l'axe commun, le zéro libellé, la synthèse du tracé, les trois effectifs de rangs (§ 12.10.6) ; les colonnes, plus haut, sont affirmées sans l'image, et `17a` les montre, leurs en-têtes nommant les deux placements ; la question et la ligne qui nomme les deux placements, au-dessus d'elles, ne sont dans aucune des deux images et s'affirment par l'épreuve | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe ; chaque pourcentage d'une colonne est suivi de son compte du pire ; aucun pourcentage hors des colonnes — ni au tracé, ni à sa synthèse, ni dans les phrases ; le signe change au moins une fois |
+| `17a-comparaison-colonnes.png` | idem, la même paire | la même vue, cadrée sur ses colonnes : leurs en-têtes, qui nomment les deux placements, leurs chiffres en deux colonnes côte à côte — le minimum brut de chacune en pourcentage, le compte du pire dessous, les lignes secondaires des trois chiffres du manque —, « Tous les indicateurs » replié | chaque colonne porte un pourcentage par indicateur visible qui en a un, le pire cas de son placement, chacun suivi de son compte du pire |
 | `18-comparaison-escalier.png` | idem | l'escalier du manque ouvert, jumeau tabulaire de la vue précédente, une colonne d'effectif et une d'effectif cumulé par placement | les effectifs cumulés du tableau reproduisent la courbe ; l'escalier n'écrit aucun pourcentage |
 | `19-ajustement.png` | l'événement retenu | le déplacement d'une personne après la retenue, l'interface disant **lequel des deux gestes** est en cours (§ 5.8) | le libellé de l'état des données est visible |
 | `19a-presence-plan.png` | idem que `02c` | le retenu au tour 3 : la chaise libre de la partante, l'arrivée dans la réserve, la carte « Absentes » qui nomme la partante, et la liste « En réserve dans le placement retenu » (§ 5.8, § 7.1) | une entrée par geste depuis l'ajout, trois en tout ; le retenu ne dérive pas ; la réserve, les absentes et la liste nomment chacune la seule personne attendue |

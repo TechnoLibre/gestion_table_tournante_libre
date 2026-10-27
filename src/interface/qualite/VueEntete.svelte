@@ -14,14 +14,15 @@
   // Une tuile porte son libellé, sa valeur écrite comme au tableau, « ne
   // classe pas » quand le tableau ne porte pas sa colonne, son pourcentage
   // et le compte du pire (Pourcentage) sur trois tuiles seulement, puis les
-  // lignes de sa borne, celles d'une personne qu'elle nomme, et en dernier,
-  // quand le détail en porte un, son plancher, qui ne nomme personne : il
-  // borne la mesure de la tuile. Un plancher que la présence par tour
-  // retire laisse à sa place la phrase qui le dit non prouvé. Le libellé
-  // est un terme : le survol et le focus du clavier ouvrent l'infobulle de
-  // son explication, celle de la colonne au tableau (Infobulle, primitive),
-  // à laquelle la tuile du minimum brut ajoute la présence de la personne
-  // au rang 1 quand elle manque un tour, lue sur la charge de la séance.
+  // lignes de sa borne, celles d'une personne qu'elle nomme, celle des
+  // lignes secondaires d'un agrégat, mobiles et ancrés, et en dernier, quand
+  // le détail en porte un, son plancher, qui ne nomme personne : il borne la
+  // mesure de la tuile. Un plancher que la présence par tour retire laisse à
+  // sa place la phrase qui le dit non prouvé. Le libellé est un terme : le
+  // survol et le focus du clavier ouvrent l'infobulle de son explication,
+  // celle de la colonne au tableau (Infobulle, primitive), à laquelle la
+  // tuile du minimum brut ajoute la présence de la personne au rang 1 quand
+  // elle manque un tour, lue sur la charge de la séance.
   //
   // Désignations : data-vue-qualite sur le <div> qui enveloppe la carte,
   // que la carte ne transmet pas ; data-tuile sur chaque tuile, par le nom

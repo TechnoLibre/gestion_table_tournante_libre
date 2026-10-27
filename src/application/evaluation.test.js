@@ -58,6 +58,7 @@ import {
   detaillerQualite,
   evaluer,
   nettoyage,
+  plafondEnTeteDuManque,
   premiereDuClassement,
   rencontresDePersonne,
   resumeDuMeilleur,
@@ -2457,5 +2458,29 @@ describe('évaluation : la présence par tour et le départ en dérive par ses p
       assert.equal(candidats.some(({ cle }) => cle === 1), false);
       assert.equal(defaut, a === 4 ? 5 : 4);
     }
+  });
+});
+
+describe('plafondEnTeteDuManque : le plafond réalisé sous le plus grand manque du tableau (§ 12.10.3)', () => {
+  test('il égale celui que le détail et la comparaison nomment au rang 1 du profil de manque', () => {
+    const charge = figer(generee(chargeDemo('grande'), { graine: 2, nombre: 2, arret: 300 }));
+    const table = evaluer(charge);
+    const [a, b] = table.classement.ordre;
+    const comparaison = comparerPlacements(charge, table, a, b);
+    for (const [cote, cle] of [['a', a], ['b', b]]) {
+      const ligne = table.propositions.find(({ id }) => id === cle);
+      const plafond = plafondEnTeteDuManque(ligne);
+      assert.equal(typeof plafond, 'number', String(cle));
+      assert.equal(plafond, comparaison[cote].bornes.manque.plafondRealise, String(cle));
+      assert.equal(plafond, detaillerQualite(charge, cle).bornes.manque.plafondRealise, String(cle));
+    }
+  });
+
+  test('à manque égal, le plafond le plus bas d’abord ; null sur une population vide', () => {
+    // Manques 3, 3 et 2 : deux personnes au plus grand, aux plafonds 27 et
+    // 23 ; la seconde, proportionnellement plus privée, ouvre le profil.
+    const ligne = { mesures: { rencontres: [24, 20, 22] }, plafondsRealises: [27, 23, 24] };
+    assert.equal(plafondEnTeteDuManque(ligne), 23);
+    assert.equal(plafondEnTeteDuManque({ mesures: { rencontres: [] }, plafondsRealises: [] }), null);
   });
 });

@@ -773,6 +773,14 @@
 - Quand toutes les tables sont en conflit, le bandeau du plan nomme les deux
   unités de chaque organisation : « au moins 8 collisions cumulées sur la
   soirée, portées par au moins 2 paires distinctes ».
+- Au tableau des propositions, le plus grand manque porte dessous, en petit, le
+  plafond réalisé de la personne la plus privée. Quand des réservations ancrent
+  des personnes à leur table, le minimum des organisations rencontrées, le taux
+  de diversité et les trois chiffres du manque portent aussi la même mesure sur
+  les mobiles et sur les ancrés : « mobiles 26 · ancrés 24 ». Dans la page de
+  qualité, les tuiles de ces chiffres écrivent la même ligne, comme les
+  colonnes de la comparaison ; celles des tours selon l'objectif et des
+  animateurs rencontrés l'écrivent quand des ancrés sont concernés.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

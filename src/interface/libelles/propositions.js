@@ -332,6 +332,14 @@ export const TABLE = new Map([
   ['propositions.certificat.atteint', 'minimum atteint'],
   ['propositions.certificat.inconnue', 'atteignabilité inconnue'],
 
+  // --- Sous le chiffre d'une cellule (§ 5.4, § 12.10.3, § 12.10.4) ---------------
+  // Le plafond réalisé qui accompagne le plus grand manque, et les deux
+  // lignes secondaires d'un agrégat, chaque chiffre déjà mis en forme. La
+  // tuile et la colonne de la comparaison écrivent les mêmes lignes
+  // secondaires.
+  ['propositions.plafondRealise', ({ plafond }) => `plafond réalisé ${plafond}`],
+  ['propositions.secondaires', ({ mobiles, ancres }) => `mobiles ${mobiles} \u{00B7} ancrés ${ancres}`],
+
   // --- Ce que les réservations imposent, à part (§ 5.4) --------------------------
   [
     'propositions.imposes.retours',

@@ -16,6 +16,7 @@ import {
   detaillerQualite,
   evaluer,
   nettoyage,
+  plafondEnTeteDuManque,
   retenuAjuste as retenuAjusteDeLEvaluation,
   retenuRetouche as retenuRetoucheDeLEvaluation,
 } from '../../application/evaluation.js';
@@ -49,7 +50,9 @@ import {
   demandeNettoyage,
   evaluation,
   explicationDeColonne,
+  lignesSousCellule,
   lireColonne,
+  lireSecondaires,
   nomDe,
   nombreDePages,
   lireGardees,
@@ -834,7 +837,7 @@ describe('tableau : le sixième groupe, les objectifs des tables et les animateu
       const cellule = ligne.cellules.find(({ colonne }) => colonne === 'conflitsOrganisation');
       const mesure = table.propositions.find(({ id }) => id === ligne.id).mesures.conflitsOrganisation;
       assert.equal(typeof mesure, 'number');
-      assert.deepEqual(cellule, { colonne: 'conflitsOrganisation', valeur: mesure, cle: null, decimales: 0 });
+      assert.deepEqual(cellule, { colonne: 'conflitsOrganisation', valeur: mesure, cle: null, decimales: 0, plafondRealise: null, secondaires: null });
     }
     const [premierDesignant] = vue.ordre.flat().filter(({ colonne }) => colonne !== null);
     assert.equal(premierDesignant.valeur, 'conflitsOrganisation');
@@ -1825,8 +1828,9 @@ describe('lireColonne : la mesure d’une ligne par le nom de sa colonne (§ 12.
     const lignes = [...vue.lignes.map((ligne, rang) => [ligne, table.propositions[rang]]), [vue.retenu, table.retenu]];
     let lues = 0;
     for (const [ligne, source] of lignes) {
-      for (const attendue of ligne.cellules) {
+      for (const { plafondRealise, secondaires, ...attendue } of ligne.cellules) {
         assert.deepEqual(lireColonne(source, attendue.colonne), attendue, attendue.colonne);
+        assert.equal(plafondRealise === null, attendue.colonne !== 'manqueMax', attendue.colonne);
         lues += 1;
       }
     }
@@ -1852,7 +1856,9 @@ describe('lireColonne : la mesure d’une ligne par le nom de sa colonne (§ 12.
     const [ligne] = tableau(table).lignes;
     const [source] = table.propositions;
     for (const nom of ['ecartItineraireMax', 'ecartAuPlafondAPriori']) {
-      assert.deepEqual(lireColonne(source, nom), cellule(ligne, nom), nom);
+      const { plafondRealise, secondaires, ...lue } = cellule(ligne, nom);
+      assert.deepEqual(lireColonne(source, nom), lue, nom);
+      assert.equal(secondaires, null, nom);
       assert.equal(lireColonne(source, nom).cle, 'propositions.valeur.inconnu', nom);
     }
     assert.equal(lireColonne(source, 'diversite').decimales, 2);
@@ -1866,6 +1872,91 @@ describe('lireColonne : la mesure d’une ligne par le nom de sa colonne (§ 12.
       assert.throws(() => lireColonne(source, nom), TypeError, nom);
     }
     assert.equal(Object.hasOwn(MODELE, 'LECTURES'), false);
+  });
+});
+
+describe('tableau : sous le chiffre, le plafond réalisé du plus grand manque et les lignes secondaires (§ 5.4, § 5.7, § 12.10.3)', () => {
+  // Les colonnes dont le tableau écrit les lignes secondaires ; le minimum
+  // des rencontres a les siennes en colonnes, ceux de s(p) et de m(p) les
+  // taisent au tableau.
+  const AU_TABLEAU = ['organisationsVues', 'diversite', 'manqueMax', 'effectifManque', 'ecartItineraireMax'];
+  const nombreDe = (colonne, valeur) => ({ colonne, valeur, cle: valeur === null ? 'format.vide' : null, decimales: colonne === 'diversite' ? 2 : 0 });
+
+  test('avec des mobiles et des ancrés : les lignes secondaires sous les cinq colonnes, jamais sous m(p)', () => {
+    const charge = structuredClone(chargeDemo('grande'));
+    charge.reglages.rencontrerAnimateurs = true;
+    const table = evaluer(generee(charge, { graine: 1, nombre: 2, arret: 300 }));
+    const vue = tableau(table);
+    assert.ok(vue.colonnes.some(({ nom }) => nom === 'animateursRencontres'));
+    assert.equal(vue.lignes.length, 2);
+    for (const ligne of vue.lignes) {
+      const source = table.propositions.find(({ id }) => id === ligne.id);
+      for (const c of ligne.cellules) {
+        if (!AU_TABLEAU.includes(c.colonne)) {
+          assert.equal(c.secondaires, null, c.colonne);
+          continue;
+        }
+        assert.notEqual(c.secondaires, null, c.colonne);
+        assert.deepEqual(c.secondaires, lireSecondaires(source, c.colonne), c.colonne);
+      }
+      const { manqueMax } = source.troisChiffres;
+      assert.deepEqual(cellule(ligne, 'manqueMax').secondaires, {
+        mobiles: nombreDe('manqueMax', manqueMax.mobiles),
+        ancres: nombreDe('manqueMax', manqueMax.ancres),
+      });
+      const { aggDiversite } = source.mesures;
+      assert.deepEqual(cellule(ligne, 'diversite').secondaires, {
+        mobiles: nombreDe('diversite', aggDiversite.mobiles.min),
+        ancres: nombreDe('diversite', aggDiversite.ancres.min),
+      });
+      // La population de m(p) est celle des concernés : les ancrés, les
+      // animateurs, n'en sont pas, et m(p) n'a pas de ligne secondaire.
+      assert.equal(source.mesures.animateurs.agregat.ancres.min, null);
+      assert.equal(lireSecondaires(source, 'animateursRencontres'), null);
+      // Sous le plus grand manque, le plafond réalisé, puis les lignes
+      // secondaires.
+      const manque = cellule(ligne, 'manqueMax');
+      assert.equal(typeof manque.plafondRealise, 'number');
+      assert.equal(manque.plafondRealise, plafondEnTeteDuManque(source));
+      assert.deepEqual(lignesSousCellule(manque, { t, format }), [
+        `plafond réalisé ${format.nombre(manque.plafondRealise)}`,
+        `mobiles ${format.nombre(manqueMax.mobiles)} \u{00B7} ancrés ${format.nombre(manqueMax.ancres)}`,
+      ]);
+      assert.deepEqual(lignesSousCellule(cellule(ligne, 'rencontresTous'), { t, format }), []);
+    }
+  });
+
+  test('sans ancré : aucune ligne secondaire, et le plafond réalisé reste sous le plus grand manque', () => {
+    const table = evaluer(generee(chargeDemo('petite'), { graine: 2, nombre: 2, arret: 300 }));
+    for (const ligne of tableau(table).lignes) {
+      const source = table.propositions.find(({ id }) => id === ligne.id);
+      assert.equal(source.mesures.aggRencontres.ancres.min, null);
+      for (const c of ligne.cellules) {
+        assert.equal(c.secondaires, null, c.colonne);
+        assert.equal(c.plafondRealise === null, c.colonne !== 'manqueMax', c.colonne);
+      }
+      const manque = cellule(ligne, 'manqueMax');
+      assert.deepEqual(lignesSousCellule(manque, { t, format }), [`plafond réalisé ${format.nombre(plafondEnTeteDuManque(source))}`]);
+    }
+  });
+
+  test('a priori inconnu : l’écart d’itinéraire maximal, « inconnu », ne porte pas de ligne secondaire', () => {
+    const charge = structuredClone(chargeDemo('grande'));
+    const table = evaluer(generee(charge, { graine: 1, nombre: 1, arret: 300 }), { plafondsAPriori: null });
+    const [ligne] = tableau(table).lignes;
+    assert.equal(cellule(ligne, 'ecartItineraireMax').cle, 'propositions.valeur.inconnu');
+    assert.equal(cellule(ligne, 'ecartItineraireMax').secondaires, null);
+    assert.notEqual(cellule(ligne, 'manqueMax').secondaires, null);
+  });
+
+  test('le texte : « plafond réalisé 27 », « mobiles 24 · ancrés — », les chiffres tels que la cellule les écrit', () => {
+    assert.equal(t('propositions.plafondRealise', { plafond: '27' }), 'plafond réalisé 27');
+    assert.equal(t('propositions.secondaires', { mobiles: '24', ancres: '\u{2014}' }), 'mobiles 24 \u{00B7} ancrés \u{2014}');
+    const secondaires = { mobiles: nombreDe('diversite', 0.5), ancres: nombreDe('diversite', null) };
+    assert.deepEqual(lignesSousCellule({ plafondRealise: 1500, secondaires }, { t, format }), [
+      `plafond réalisé ${format.nombre(1500)}`,
+      `mobiles ${format.nombre(0.5, { decimales: 2 })} \u{00B7} ancrés ${t('format.vide')}`,
+    ]);
   });
 });
 
