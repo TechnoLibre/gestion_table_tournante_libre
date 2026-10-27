@@ -3,12 +3,13 @@
 
 // Épreuves des conflits d'organisation et des inclusions côté application
 // (§ 4, § 5.9, § 8.2, § 8.9) : ajouter et retirer un conflit, poser une
-// liste de conflits ou d'inclusions, une entrée d'historique chacun, et les
-// listes qui suivent un renommage ou la disparition d'une organisation, ou
-// la suppression d'une personne incluse, dans l'entrée du geste qui la
-// provoque. Chaque charge rendue se relit par l'analyse du fichier : une
-// liste qui nommerait une organisation disparue, la sienne, une personne
-// retirée ou soi-même y serait refusée. Les noms sont inventés.
+// liste de conflits ou d'inclusions, ou les deux listes d'inclusions, une
+// entrée d'historique chacun, et les listes qui suivent un renommage ou la
+// disparition d'une organisation, ou la suppression d'une personne incluse,
+// dans l'entrée du geste qui la provoque. Chaque charge rendue se relit par
+// l'analyse du fichier : une liste qui nommerait une organisation disparue,
+// la sienne, une personne retirée ou soi-même y serait refusée. Les noms
+// sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
@@ -491,6 +492,67 @@ describe('changerInclusionsParticipant : la liste entière, par identifiant, en 
   });
 });
 
+describe('changerInclusions : les deux listes, en un geste et une entrée (§ 4, § 5.9, § 8.2)', () => {
+  test('les deux listes changent en une entrée, dont le libellé nomme chacune ; la charge se relit', () => {
+    const { charge, libelle, avertissements } = executer('changerInclusions', chargeInclusions(), {
+      id: 1,
+      organisations: [TILLEUL],
+      participants: [4, 3],
+    });
+    assert.deepEqual(organisationsIncluses(charge, 1), [TILLEUL]);
+    assert.deepEqual(personnesIncluses(charge, 1), [3, 4]);
+    assert.equal(
+      libelle,
+      `Inclusions d'organisation de Fougère : ajouté « ${TILLEUL} » ; retiré « ${SAULE} » ; ` +
+        'inclusions de participant : ajouté Ronce ; retiré Bruyère',
+    );
+    assert.deepEqual(avertissements, []);
+    const lue = relue(charge);
+    assert.deepEqual(organisationsIncluses(lue, 1), [TILLEUL]);
+    assert.deepEqual(personnesIncluses(lue, 1), [3, 4]);
+  });
+
+  test("une liste absente des arguments ne change pas ; une liste nommée qui ne change pas ne s'écrit pas au libellé", () => {
+    const seule = executer('changerInclusions', chargeInclusions(), { id: 6, participants: [] });
+    assert.ok(!Object.hasOwn(seule.charge.participants[5], 'inclusionsParticipant'));
+    assert.deepEqual(organisationsIncluses(seule.charge, 6), [TILLEUL]);
+    assert.equal(seule.libelle, 'Inclusions de participant de Chèvrefeuille : retiré Bruyère');
+    const inchangee = executer('changerInclusions', chargeInclusions(), { id: 6, organisations: [TILLEUL, RAMEAU], participants: [5] });
+    assert.deepEqual(organisationsIncluses(inchangee.charge, 6), [RAMEAU, TILLEUL]);
+    assert.deepEqual(personnesIncluses(inchangee.charge, 6), [5]);
+    assert.equal(inchangee.libelle, `Inclusions d'organisation de Chèvrefeuille : ajouté « ${RAMEAU} »`);
+  });
+
+  test('aucune liste nommée qui change est SANS_EFFET ; aucune liste nommée est une faute du code', () => {
+    refuse(() => executer('changerInclusions', chargeInclusions(), { id: 1, organisations: [SAULE], participants: [5, 3] }), 'SANS_EFFET', {
+      commande: 'changerInclusions',
+      remede: null,
+    });
+    refuse(() => executer('changerInclusions', chargeInclusions(), { id: 2, organisations: [] }), 'SANS_EFFET');
+    assert.throws(() => executer('changerInclusions', chargeInclusions(), { id: 2 }), TypeError);
+  });
+
+  test("le premier fautif refuse le geste entier, les organisations d'abord : aucune liste ne s'écrit, la charge reste", () => {
+    const charge = chargeInclusions();
+    const avant = structuredClone(charge);
+    refuse(() => executer('changerInclusions', charge, { id: 2, organisations: [RAMEAU], participants: [2] }), 'INCLUSION_PROPRE_ORGANISATION', {
+      personne: 'Lierre',
+      organisation: RAMEAU,
+      remede: null,
+    });
+    refuse(() => executer('changerInclusions', charge, { id: 2, organisations: [SAULE], participants: [3, 2] }), 'INCLUSION_DE_SOI', {
+      personne: 'Lierre',
+      remede: null,
+    });
+    refuse(() => executer('changerInclusions', charge, { id: 2, organisations: [SAULE], participants: [99] }), 'PARTICIPANT_INCONNU');
+    refuse(() => executer('changerInclusions', charge, { id: 99, participants: [] }), 'PARTICIPANT_INCONNU');
+    charge.evenement.etat = 'bloque';
+    refuse(() => executer('changerInclusions', charge, { id: 3, organisations: [SAULE] }), 'PLAN_BLOQUE');
+    charge.evenement.etat = avant.evenement.etat;
+    assert.deepEqual(charge, avant);
+  });
+});
+
 describe('les inclusions suivent les organisations et les personnes (§ 4, § 8.2, § 8.9)', () => {
   test("la dernière personne d'une organisation qui en change : la référence suit dans les inclusions comme dans les conflits", () => {
     const { charge, libelle } = appliquerCommande('modifierParticipant', chargeInclusions(), {
@@ -580,6 +642,7 @@ describe('les inclusions : la charge reçue ne change jamais (§ 13.2)', () => {
     for (const [nom, args] of [
       ['changerInclusionsOrganisation', { id: 1, organisations: [TILLEUL] }],
       ['changerInclusionsParticipant', { id: 1, participants: [2] }],
+      ['changerInclusions', { id: 1, organisations: [TILLEUL], participants: [2] }],
       ['modifierParticipant', { id: 5, champs: { organisation: 'Ferme des Saules' } }],
       ['modifierParticipant', { id: 6, champs: { organisation: TILLEUL } }],
       ['supprimerParticipant', { id: 5 }],

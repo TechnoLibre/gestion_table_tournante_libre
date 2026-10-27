@@ -533,6 +533,21 @@ const EXEMPLES = new Map([
     },
   ],
   [
+    'changerInclusions',
+    {
+      accepte: {
+        args: (charge) => ({ id: 2, organisations: [autreOrganisation(charge, 2)], participants: [autrePersonne(charge, 2)] }),
+      },
+      personne: () => 2,
+      refuse: {
+        args: (charge) => ({ id: 2, organisations: [], participants: [participantDe(charge, 2).id] }),
+        code: 'INCLUSION_DE_SOI',
+        remede: null,
+      },
+      sansEffet: { args: { id: 2, organisations: [], participants: [] } },
+    },
+  ],
+  [
     'changerLogo',
     {
       accepte: { args: { id: 2, chemin: LOGO } },

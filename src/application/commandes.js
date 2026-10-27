@@ -451,22 +451,17 @@ function changerInclusionsOrganisation(charge, args = {}) {
   };
 }
 
-/**
- * changerInclusionsParticipant {id, participants} (§ 4, § 5.9, § 8.2) : les
- * inclusions de participant de la personne — les personnes qu'elle doit
- * rencontrer au moins une fois, par identifiant — deviennent participants,
- * en un geste et une entrée d'historique. Chaque identifiant est celui d'un
- * participant de la charge, exclus compris, sinon PARTICIPANT_INCONNU {id},
- * et jamais celui de la personne, INCLUSION_DE_SOI {personne}, remède
- * null ; le premier fautif, dans l'ordre reçu, refuse le geste entier. Deux
- * identifiants égaux n'en font qu'un. Une liste qui garde les mêmes
- * identifiants, dans n'importe quel ordre, est SANS_EFFET. La liste s'écrit
- * croissante, et le champ se retire quand elle se vide. Le libellé nomme la
- * personne, puis les personnes ajoutées et les retirées par leur nom
- * affiché, chacune dans l'ordre des identifiants. participants qui n'est
- * pas une liste d'entiers est une faute du code.
- */
-function changerInclusionsParticipant(charge, { id, participants } = {}) {
+// La liste d'inclusions de participant de la personne id, telle que la pose
+// participants : la règle commune à changerInclusionsParticipant et à
+// changerInclusions. Chaque identifiant est celui d'un participant de la
+// charge, exclus compris, sinon PARTICIPANT_INCONNU {id}, et jamais celui de
+// la personne, INCLUSION_DE_SOI {personne}, remède null ; le premier fautif,
+// dans l'ordre reçu, refuse le geste entier. Deux identifiants égaux n'en
+// font qu'un. Rend la personne, la liste croissante, les identifiants
+// ajoutés et les retirés, croissants : deux listes vides disent un geste
+// sans effet. participants qui n'est pas une liste d'entiers est une faute
+// du code.
+function participantsPoses(charge, { id, participants }) {
   exigerModifiable(charge);
   if (!Array.isArray(participants)) {
     throw new TypeError(`participants : liste attendue, reçu ${JSON.stringify(participants)}`);
@@ -483,16 +478,84 @@ function changerInclusionsParticipant(charge, { id, participants } = {}) {
   const liste = [...cibles].sort((a, b) => a - b);
   const ajoutees = liste.filter((cible) => !avant.includes(cible));
   const retirees = avant.filter((cible) => !cibles.has(cible));
+  return { participant, liste, ajoutees, retirees };
+}
+
+// Les noms affichés des personnes ids, dans leur ordre.
+const nomsAffiches = (charge, ids) => ids.map((cible) => nomAffiche(participantDe(charge, cible)));
+
+/**
+ * changerInclusionsParticipant {id, participants} (§ 4, § 5.9, § 8.2) : les
+ * inclusions de participant de la personne — les personnes qu'elle doit
+ * rencontrer au moins une fois, par identifiant — deviennent participants,
+ * en un geste et une entrée d'historique. Chaque identifiant est celui d'un
+ * participant de la charge, exclus compris, sinon PARTICIPANT_INCONNU {id},
+ * et jamais celui de la personne, INCLUSION_DE_SOI {personne}, remède
+ * null ; le premier fautif, dans l'ordre reçu, refuse le geste entier
+ * (participantsPoses). Une liste qui garde les mêmes identifiants, dans
+ * n'importe quel ordre, est SANS_EFFET. La liste s'écrit croissante, et le
+ * champ se retire quand elle se vide. Le libellé nomme la personne, puis
+ * les personnes ajoutées et les retirées par leur nom affiché, chacune dans
+ * l'ordre des identifiants. participants qui n'est pas une liste d'entiers
+ * est une faute du code.
+ */
+function changerInclusionsParticipant(charge, args = {}) {
+  const { participant, liste, ajoutees, retirees } = participantsPoses(charge, args);
   if (ajoutees.length === 0 && retirees.length === 0) {
     throw refus('SANS_EFFET', { commande: 'changerInclusionsParticipant' });
   }
-  const noms = (ids) => ids.map((cible) => nomAffiche(participantDe(charge, cible)));
   return {
-    charge: avecParticipant(charge, id, (copie) => avecListe(copie, 'inclusionsParticipant', liste)),
+    charge: avecParticipant(charge, participant.id, (copie) => avecListe(copie, 'inclusionsParticipant', liste)),
     libelle: libelle('ENTREE_CHANGER_INCLUSIONS_PARTICIPANT', {
       personne: nomAffiche(participant),
-      ajoutees: noms(ajoutees),
-      retirees: noms(retirees),
+      ajoutees: nomsAffiches(charge, ajoutees),
+      retirees: nomsAffiches(charge, retirees),
+    }),
+    avertissements: [],
+  };
+}
+
+/**
+ * changerInclusions {id, organisations?, participants?} (§ 4, § 5.9,
+ * § 8.2) : les deux listes d'inclusions de la personne, ou celle des deux
+ * que les arguments nomment, deviennent organisations et participants, en
+ * un geste et une seule entrée d'historique, que « Défaire » reprend d'un
+ * coup. Chaque liste se juge comme dans sa commande propre,
+ * changerInclusionsOrganisation et changerInclusionsParticipant
+ * (organisationsPosees, participantsPoses), les organisations d'abord : le
+ * premier fautif refuse le geste entier, et aucune liste ne s'écrit. Une
+ * liste absente des arguments ne change pas. Le geste est SANS_EFFET quand
+ * aucune liste nommée ne change. Le libellé nomme la personne et, pour
+ * chaque liste qui change, ses ajouts et ses retraits ; une liste nommée qui
+ * ne change pas ne s'y lit pas. Aucune des deux listes nommée est une faute
+ * du code.
+ */
+function changerInclusions(charge, { id, organisations, participants } = {}) {
+  if (organisations === undefined && participants === undefined) {
+    throw new TypeError('changerInclusions : organisations ou participants attendu');
+  }
+  exigerModifiable(charge);
+  const parOrganisation =
+    organisations === undefined
+      ? null
+      : organisationsPosees(charge, { id, organisations }, 'inclusionsOrganisation', (details) =>
+          refus('INCLUSION_PROPRE_ORGANISATION', details),
+        );
+  const parParticipant = participants === undefined ? null : participantsPoses(charge, { id, participants });
+  const change = (posees) => posees !== null && (posees.ajoutees.length > 0 || posees.retirees.length > 0);
+  if (!change(parOrganisation) && !change(parParticipant)) throw refus('SANS_EFFET', { commande: 'changerInclusions' });
+  const participant = participantDe(charge, id);
+  return {
+    charge: avecParticipant(charge, id, (copie) => {
+      const avecOrganisations = change(parOrganisation) ? avecListe(copie, 'inclusionsOrganisation', parOrganisation.liste) : copie;
+      return change(parParticipant) ? avecListe(avecOrganisations, 'inclusionsParticipant', parParticipant.liste) : avecOrganisations;
+    }),
+    libelle: libelle('ENTREE_CHANGER_INCLUSIONS', {
+      personne: nomAffiche(participant),
+      organisations: change(parOrganisation) ? { ajoutees: parOrganisation.ajoutees, retirees: parOrganisation.retirees } : null,
+      participants: change(parParticipant)
+        ? { ajoutees: nomsAffiches(charge, parParticipant.ajoutees), retirees: nomsAffiches(charge, parParticipant.retirees) }
+        : null,
     }),
     avertissements: [],
   };
@@ -1204,6 +1267,7 @@ export const COMMANDES = reunirCommandes(
     ['changerConflits', changerConflits],
     ['changerInclusionsOrganisation', changerInclusionsOrganisation],
     ['changerInclusionsParticipant', changerInclusionsParticipant],
+    ['changerInclusions', changerInclusions],
     ['changerLogo', changerLogo],
     ['exclureParticipant', exclureParticipant],
     ['reintegrerParticipant', reintegrerParticipant],

@@ -319,6 +319,28 @@ d’organisation », avec « Appliquer ». Ce n’est pas une interdiction : la
 recherche les évite autant qu’elle peut (étape 9), et un placement qui en garde
 le dit.
 
+Une personne peut aussi nommer des **inclusions** : les organisations et les
+personnes qu’elle doit rencontrer au moins une fois dans la soirée, à n’importe
+quel tour. Sa fiche porte deux rubriques, sous ses conflits : « Inclusions
+d’organisation », une case par organisation de l’événement, la sienne exceptée,
+et « Inclusions de participant », une case par personne, elle-même exceptée, une
+personne exclue marquée « (exclue) », un homonyme suivi de son numéro. Au-dessus
+des personnes, « Chercher une personne » ne montre que celles dont le nom
+contient ce que vous tapez, sans égard à la casse ni aux accents ; une case
+cochée que la recherche cache reste cochée, et Échap vide la recherche. Chaque
+rubrique a son « Appliquer », qui enregistre sa liste en un seul geste, que
+« Défaire » reprend. Dans la grille, la colonne « Inclusions », juste après les
+conflits du placement, est masquée tant que vous ne cochez pas « Montrer les
+inclusions », dans la barre au-dessus de la grille : elle écrit les
+organisations incluses, puis les personnes incluses, et Entrée ou F2 l’ouvre
+avec les mêmes cases et la même recherche. Tab passe des organisations à la
+recherche, puis aux personnes ; depuis les personnes, il enregistre et passe à
+la cellule suivante. Une saisie qui change les deux listes ne fait qu’un geste,
+que « Défaire » reprend d’un coup ; une saisie refusée, restée ouverte,
+s’abandonne quand vous masquez la colonne. Montrée, la colonne peut faire
+défiler la grille en largeur dans une fenêtre étroite. La génération ne lit pas
+les inclusions : elles se gardent dans le fichier de l’événement.
+
 Une fois des propositions générées (étape 9), la colonne « Conflits du
 placement », juste après celle des conflits d’organisation, dit pour chaque
 personne ce qui cloche dans le placement que le plan montre — la proposition que
@@ -1633,6 +1655,7 @@ l’historique ; les noms des exemples sont inventés.
 | `changerConflits` | Conflits de Iris Ombrelle : ajouté « Atelier Ressac » et « Club des Merles » |
 | `changerInclusionsOrganisation` | Inclusions d'organisation de Iris Ombrelle : ajouté « Atelier Ressac » |
 | `changerInclusionsParticipant` | Inclusions de participant de Iris Ombrelle : ajouté Théo Pervenche et Ondine Lacasse |
+| `changerInclusions` | Inclusions d'organisation de Iris Ombrelle : ajouté « Atelier Ressac » ; inclusions de participant : ajouté Théo Pervenche |
 | `changerLogo` | Logo de Iris Ombrelle : posé |
 | `exclureParticipant` | Exclu Théo Pervenche |
 | `reintegrerParticipant` | Réintégré Théo Pervenche |

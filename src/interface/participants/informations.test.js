@@ -22,7 +22,7 @@ import {
   informationsModifiees,
   saisieDesInformations,
   suggestionsOrganisation,
-  suiviDesConflits,
+  suiviDesListes,
 } from './informations.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -226,16 +226,44 @@ describe('suggestionsOrganisation : les organisations proposées au champ', () =
   });
 });
 
-describe('suiviDesConflits : ce que les listes ont suivi, lu entre deux charges', () => {
+describe('suiviDesListes : ce que les listes ont suivi, lu entre deux charges', () => {
   // La charge d'après modifierParticipant de la personne id, et ce que la
-  // fiche en lit.
+  // fiche en lit : celui des conflits, et celui des deux sortes de listes.
   function suivre(avant, id, champs) {
     const apres = appliquerCommande('modifierParticipant', avant, { id, champs }).charge;
-    return { apres, suivi: suiviDesConflits(avant, apres, id) };
+    const listes = suiviDesListes(avant, apres, id);
+    return { apres, suivi: listes.conflits, listes };
   }
 
-  test('aucune liste changée : null', () => {
-    assert.equal(suivre(chargeEssai(), 1, { notes: 'à l’accueil' }).suivi, null);
+  test('aucune liste changée : null pour les conflits comme pour les inclusions', () => {
+    assert.deepEqual(suivre(chargeEssai(), 1, { notes: 'à l’accueil' }).listes, { conflits: null, inclusions: null });
+  });
+
+  test('les inclusions d’organisation suivent comme les conflits : renommage, propre organisation retirée ; chaque sorte a son avis', () => {
+    const incluse = appliquerCommande('changerInclusionsOrganisation', chargeEssai(), { id: 3, organisations: ['Atelier Ressac'] }).charge;
+    const avant = appliquerCommande('modifierParticipant', incluse, { id: 2, champs: { organisation: 'Finance' } }).charge;
+    const { apres, listes } = suivre(avant, 1, { organisation: 'Atelier Embrun' });
+    assert.deepEqual(apres.participants[2].inclusionsOrganisation, ['Atelier Embrun']);
+    const renommee = { renommee: { de: 'Atelier Ressac', vers: 'Atelier Embrun' }, retirees: [], propres: 0 };
+    assert.deepEqual(listes, { conflits: renommee, inclusions: renommee });
+    assert.equal(
+      t('participants.informations.inclusionsSuivies', listes.inclusions),
+      "Les inclusions d'organisation suivent ce changement : « Atelier Ressac » devient « Atelier Embrun ».",
+    );
+    // Seules les inclusions nomment l'organisation que la personne prend.
+    const seule = appliquerCommande('changerInclusionsOrganisation', chargeEssai(), { id: 1, organisations: ['Club des Merles'] }).charge;
+    const rejointe = suivre(seule, 1, { organisation: 'Club des Merles' }).listes;
+    assert.deepEqual(rejointe, { conflits: null, inclusions: { renommee: null, retirees: [], propres: 1 } });
+    assert.equal(
+      t('participants.informations.inclusionsSuivies', rejointe.inclusions),
+      "Les inclusions d'organisation suivent ce changement : 1 inclusion de sa propre organisation retirée.",
+    );
+    const retirees = { renommee: null, retirees: ['Alpha', 'Bêta'], propres: 2 };
+    assert.equal(
+      t('participants.informations.inclusionsSuivies', retirees),
+      "Les inclusions d'organisation suivent ce changement : « Alpha » et « Bêta » les quittent ; " +
+        '2 inclusions de leur propre organisation retirées.',
+    );
   });
 
   test('la dernière personne d’une organisation en change : la référence suit le renommage', () => {
@@ -298,7 +326,7 @@ describe('suiviDesConflits : ce que les listes ont suivi, lu entre deux charges'
     };
     const apres = { participants: [{ id: 1, organisation: 'Zénith' }, { id: 2, organisation: null }, { id: 3, organisation: null }] };
     const copie = structuredClone(apres);
-    const suivi = suiviDesConflits(avant, apres, 2);
+    const suivi = suiviDesListes(avant, apres, 2).conflits;
     assert.deepEqual(suivi, { renommee: null, retirees: ['Alpha', 'Bêta'], propres: 0 });
     assert.deepEqual(apres, copie);
     assert.equal(

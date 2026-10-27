@@ -200,6 +200,10 @@ export const TABLE = new Map([
   ['coquille.apropos.fonctionnalite.pre12', 'Télécharger les modèles CSV et les fichiers d\u{2019}exemple'],
   ['coquille.apropos.fonctionnalite.pre13', 'Donner un libellé aux tables'],
   ['coquille.apropos.fonctionnalite.pre14', 'Donner un logo aux personnes'],
+  [
+    'coquille.apropos.fonctionnalite.pre15',
+    "Nommer les inclusions d'une personne : organisations et participants à rencontrer au moins une fois",
+  ],
   ['coquille.apropos.fonctionnalite.pla01', 'Disposer les tables sur un plan de salle à l\u{2019}échelle'],
   ['coquille.apropos.fonctionnalite.pla02', 'Déplacer et échanger les personnes sur le plan, au pointeur, au doigt ou par menu'],
   ['coquille.apropos.fonctionnalite.pla03', 'Désigner les animateurs, table par table'],

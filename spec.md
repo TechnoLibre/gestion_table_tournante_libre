@@ -113,6 +113,11 @@ là, avant comme pendant la soirée ; une colonne du CSV les importe (§ 10.1).
 Valider une présence est une entrée d'historique, qui ajuste le placement
 retenu (§ 5.8).
 
+La fiche porte enfin ses **inclusions** (§ 4) : les organisations et les
+personnes qu'elle doit rencontrer au moins une fois, une case par organisation
+ou par personne, sous deux rubriques ; la grille les montre dans une colonne
+qu'elle masque par défaut (§ 10.2). Elles ne sont exigées nulle part.
+
 **4. Préparer les tables.** *Obligatoire.* L'opérateur fixe le nombre de sièges
 par défaut, crée les tables — une à une, ou d'un geste celles qui manquent pour
 asseoir chacun, à la taille qu'il donne, et qui reçoivent les animateurs à
@@ -350,6 +355,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PRE-12` | Télécharger les modèles CSV et les fichiers d'exemple | § 10.1, § 10.3 |
 | `PRE-13` | Donner un libellé aux tables | § 4, § 7.7 |
 | `PRE-14` | Donner un logo aux personnes | § 8.9, § 10.2 |
+| `PRE-15` | Nommer les inclusions d'une personne : organisations et participants à rencontrer au moins une fois | § 4, § 10.2 |
 
 **Placer** — `PLA`
 
@@ -564,7 +570,8 @@ nomme comme un autre. Une inclusion que contredit un conflit de la personne
 s'admet. L'inclusion n'est ni une réservation ni une fixation : elle ne place
 personne et ne retire rien de ce que la génération peut faire ; le moteur ne la
 lit pas (§ 8.9). L'exclusion suspend une personne, pas ses listes : la liste
-d'une exclue se garde, et une inclusion qui vise une exclue aussi.
+d'une exclue se garde, et une inclusion qui vise une exclue aussi. Elle se
+saisit dans la fiche et dans la grille (§ 10.2).
 
 Les listes d'inclusions d'organisation suivent les organisations comme celles
 des conflits : la référence suit le renommage de la dernière personne d'une
@@ -4516,19 +4523,22 @@ homonymes restent distincts. Un collègue de la même organisation se nomme comm
 un autre. Une inclusion que contredit un conflit de la personne n'est pas une
 faute du fichier. La liste d'une exclue se garde, et une inclusion qui vise une
 exclue aussi. Une personne sans inclusion s'écrit octet pour octet comme sans
-ces champs, démonstrations comprises. Les champs se posent par deux commandes,
-`changerInclusionsOrganisation` et `changerInclusionsParticipant` — une entrée
-d'historique chacune, refusées en lecture et sur un plan bloqué — : chacune pose
-la liste entière d'un geste, ajouts et retraits ensemble ; la première juge
-chaque organisation nouvelle comme `changerConflits`, sous
-`INCLUSION_PROPRE_ORGANISATION` pour la sienne ; la seconde refuse l'identifiant
-de la personne et un identifiant inconnu (§ 5.9). Chacune rend la liste rangée,
-retire le champ quand elle se vide, et est sans effet quand la liste garde les
-mêmes valeurs. Modifier, supprimer ou importer des participants fait suivre les
-listes dans la même entrée (§ 4). Un correctif du journal les pose et les retire
-comme tout champ. Le moteur ne les lit pas : la configuration qu'il reçoit, les
-empreintes et les raisons de dérive restent les mêmes. Les deux champs font
-partie du format 3.
+ces champs, démonstrations comprises. Les champs se posent par trois commandes,
+`changerInclusionsOrganisation`, `changerInclusionsParticipant` et
+`changerInclusions` — une entrée d'historique chacune, refusées en lecture et
+sur un plan bloqué — : chacune pose une liste entière d'un geste, ajouts et
+retraits ensemble ; la première juge chaque organisation nouvelle comme
+`changerConflits`, sous `INCLUSION_PROPRE_ORGANISATION` pour la sienne ; la
+seconde refuse l'identifiant de la personne et un identifiant inconnu (§ 5.9) ;
+la troisième pose l'une des deux listes ou les deux en une seule entrée, chacune
+jugée comme par sa commande, les organisations d'abord, le premier fautif
+refusant le geste entier, et laisse la liste qu'elle ne nomme pas. Chacune rend
+les listes rangées, retire un champ quand sa liste se vide, et est sans effet
+quand aucune liste ne change de valeurs. Modifier, supprimer ou importer des
+participants fait suivre les listes dans la même entrée (§ 4). Un correctif du
+journal les pose et les retire comme tout champ. Le moteur ne les lit pas : la
+configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
+mêmes. Les deux champs font partie du format 3.
 
 #### Deux champs facultatifs : la présence
 
@@ -5300,14 +5310,16 @@ la saisie ne touche pas reste la sienne, même voisine d'une autre ; la seule
 personne à porter une organisation en change la casse ; une saisie dont
 l'orthographe retenue est déjà celle de la personne ne change rien et ne se
 signale pas. Quand les listes de conflits suivent le changement d'organisation
-(§ 4), un avis le dit sous le bloc ; signal et avis tombent avec la révision qui
-les a produits. Un refus garde le formulaire ouvert et la saisie : un nom vide
-se refuse contre le nom (`NOM_REQUIS`), tout autre refus sous « Enregistrer »,
-avec son remède. En lecture et sur un plan bloqué, « Modifier » refuse à côté du
+(§ 4), un avis le dit sous le bloc, et un second quand les listes d'inclusions
+d'organisation le suivent ; signal et avis tombent avec la révision qui les a
+produits. Un refus garde le formulaire ouvert et la saisie : un nom vide se
+refuse contre le nom (`NOM_REQUIS`), tout autre refus sous « Enregistrer », avec
+son remède. En lecture et sur un plan bloqué, « Modifier » refuse à côté du
 bouton, avec son remède, avant d'ouvrir le formulaire. Ouvrir la fiche d'une
 autre personne referme le formulaire sans rien écrire. Les conflits
-d'organisation, la présence et l'exclusion gardent leurs commandes, hors du
-formulaire, et leurs rubriques restent actives pendant la saisie.
+d'organisation, les inclusions, la présence et l'exclusion gardent leurs
+commandes, hors du formulaire, et leurs rubriques restent actives pendant la
+saisie.
 
 **Renommer une personne retire la marque du nom numéroté** (§ 8.9) : un
 `modifierParticipant` qui change le nom, par la fiche ou par la cellule de la
@@ -5387,7 +5399,7 @@ geste entier en une commande** — `changerConflits` de la liste saisie, ajouts
 et retraits ensemble, une seule entrée d'historique (§ 8.2), que « Défaire »
 reprend d'un coup —, et rien quand la saisie revient à la liste enregistrée. La
 fiche porte une rubrique « Conflits d'organisation », entre les étiquettes et
-la présence : un résumé — les organisations en pastilles, ou « Aucun conflit
+les inclusions : un résumé — les organisations en pastilles, ou « Aucun conflit
 d'organisation. » —, le même choix multiple sous la légende « Organisations à
 éviter », et « Appliquer », qui écrit de même ; Entrée dans les cases applique,
 Échap rend la liste enregistrée. Un refus — séance en lecture, plan bloqué — se
@@ -5395,6 +5407,58 @@ pose dans la cellule ou sous les cases, avec son remède, la saisie gardée. La
 grille trie la colonne sur la liste rangée de ses clés normalisées, une
 personne sans conflit après toutes les autres ; elle ne se groupe ni ne se
 filtre par elle : une personne y porte plusieurs noms.
+
+**Les inclusions se saisissent dans la fiche et dans la grille** (§ 4). La
+fiche porte deux rubriques, l'une sous l'autre entre les conflits
+d'organisation et la présence : « Inclusions d'organisation » et « Inclusions
+de participant ». Chacune a son résumé — les organisations incluses en
+pastilles neutres à l'icône « ajouter », les personnes incluses par leur nom,
+ou « Aucune inclusion d'organisation. », « Aucune inclusion de
+participant. » —, son choix multiple et son « Appliquer », qui écrit la liste
+entière en une commande, `changerInclusionsOrganisation` ou
+`changerInclusionsParticipant`, une seule entrée d'historique, et rien quand la
+saisie revient à la liste enregistrée. Le choix des organisations offre une
+case par organisation de l'événement, exclus compris, hors la sienne, rangées
+par clé normalisée, sous la légende « Organisations à rencontrer », dans un
+groupe nommé « Inclusions d'organisation de Prénom Nom, une case par
+organisation ». Celui des personnes offre une case par personne de
+l'événement hors elle-même, exclues comprises, rangées par la clé normalisée
+de leur nom puis par identifiant, jamais par une comparaison de langue, sous
+la légende « Personnes à rencontrer », dans un groupe nommé « Inclusions de
+participant de Prénom Nom, une case par personne » : un homonyme y porte son
+identifiant, « Iris Ombrelle (n° 4) », une exclue « (exclue) ». Un nom que la
+liste porte et que l'événement n'a plus y reste, coché, pour qu'il se décoche.
+Une zone de recherche, en tête des personnes, « Chercher une personne », ne
+montre que les cases dont le nom contient le texte tapé, sans égard à la casse
+ni aux accents, et dit quand aucune ne le contient ; elle ne change pas la
+saisie — une case cochée qu'elle cache reste cochée —, et Échap la vide. Les
+touches des cases sont celles des conflits ; Entrée, dans les cases comme dans
+la recherche, applique, et Échap dans les cases, ou dans la recherche vide,
+rend la liste enregistrée. Un refus — séance en lecture, plan bloqué — se pose
+sous les cases de sa rubrique, avec son remède, la saisie gardée. Ouvrir la
+fiche d'une autre personne repart de ses listes, sans brouillon ni refus.
+
+La colonne « Inclusions » de la grille, juste après celle des conflits du
+placement, est **masquée par défaut** : la case « Montrer les inclusions », dans
+la barre de la liste, la montre et la masque, sans rien écrire, le temps que la
+section est ouverte, et la masquer retire le tri qu'elle portait. Montrée, elle
+écrit chaque organisation incluse en pastille neutre à l'icône « ajouter », puis
+chaque personne incluse, et rien sans inclusion. Entrée ou F2 l'ouvre en deux
+choix multiples, ceux de la fiche, sans légende, la recherche comprise. Tab et
+Maj+Tab passent d'abord d'un contrôle à l'autre — les cases des organisations,
+la recherche, les cases des personnes — ; Tab depuis le dernier, Maj+Tab depuis
+le premier, valident et mènent à la cellule voisine, comme Entrée et la sortie
+de l'éditeur valident ; Échap rend la saisie. **Valider écrit une seule
+commande, `changerInclusions` des listes que la saisie change**, une seule
+entrée d'historique, que « Défaire » reprend d'un coup, et rien quand la saisie
+ne change plus rien ; une liste que la saisie ne touche pas ne part jamais, même
+changée ailleurs pendant la saisie, et un refus n'écrit aucune des deux. Quitter
+l'éditeur pour la case « Montrer les inclusions » valide la saisie comme toute
+sortie ; une saisie refusée, restée ouverte, s'abandonne quand la colonne se
+masque, sans rien écrire, son refus et son geste avec elle. La grille trie la
+colonne par le nombre d'inclusions de chaque personne, une personne sans
+inclusion après toutes les autres ; elle ne se groupe ni ne se filtre par elle,
+et l'export ne l'écrit pas.
 
 **Les conflits du placement de chaque personne se lisent dans la grille et
 dans la fiche** (§ 7.5). La colonne « Conflits du placement », juste après celle
@@ -5436,16 +5500,18 @@ seulement — sa cellule prend le focus, Entrée et F2 n'y ouvrent rien —, son
 en-tête ne trie pas, la liste ne se groupe ni ne se filtre par elle, et
 l'export ne l'écrit pas ; la marque, elle, s'exporte dans sa propre colonne.
 
-La tenue de la grille suit la place que la carte lui laisse, non la largeur
-de la fenêtre ; ses en-têtes sont en petit corps. Sous 86 rem de place, les
-cellules et les actions se serrent, et les onze colonnes tiennent dans la carte
-pleine largeur d'une fenêtre de 1024 px. À partir de 80 rem — la carte d'une
-fenêtre de 1 366 px —, chaque en-tête tient sur une ligne, hors de celui des
-conflits du placement, qui se replie toujours entre ses mots, les quatre
-actions d'une ligne vont en deux rangées de deux, en colonnes alignées d'une
-ligne à l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés
-de la présence ne se coupent pas ; en deçà, un en-tête se replie entre ses
-mots et les actions passent à la ligne.
+La tenue de la grille suit la place que la carte lui laisse, non la largeur de
+la fenêtre ; ses en-têtes sont en petit corps. Sous 86 rem de place, les
+cellules et les actions se serrent, et les onze colonnes que la grille montre
+par défaut tiennent dans la carte pleine largeur d'une fenêtre de 1024 px ; la
+colonne des inclusions montrée, la grille défile au besoin dans son conteneur,
+sans sortir de la carte. À partir de 80 rem — la carte d'une fenêtre de
+1 366 px —, chaque en-tête tient sur une ligne, hors de celui des conflits du
+placement, qui se replie toujours entre ses mots, les quatre actions d'une ligne
+vont en deux rangées de deux, en colonnes alignées d'une ligne à l'autre, un
+prénom ne se coupe qu'entre ses mots, et les tours nommés de la présence ne se
+coupent pas ; en deçà, un en-tête se replie entre ses mots et les actions
+passent à la ligne.
 
 **La liste s'exporte en CSV dans la forme exacte qu'il importe.** L'aller-retour
 est éprouvé par un test qui importe, exporte et compare champ par champ : il

@@ -5,8 +5,9 @@
 // § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'organisation
 // collante, la grille au clavier, le tri, le filtre et le compte,
 // l'exclusion, la présence par tour saisie en cases dans la grille, les
-// conflits d'organisation saisis par un choix multiple, le
-// manque de places à l'ajout et à la réintégration, la fiche
+// conflits d'organisation saisis par un choix multiple, la colonne des
+// inclusions, masquée par défaut, et ses deux choix multiples sous une
+// recherche, le manque de places à l'ajout et à la réintégration, la fiche
 // et l'itinéraire, les étiquettes de la fiche et leur légende, l'export, le
 // collage, et la liste groupée par une colonne ou plusieurs, ses groupes
 // imbriqués, repliés et dépliés, et les conflits du placement montré sous
@@ -48,7 +49,17 @@ import { RANGS_ORGANISATION, teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { cadreDepuisRect, englobantDuTour } from '../plan/vue_plan.js';
 import { comptesEntete } from './entete.js';
-import { COLONNES, GROUPEMENTS, cheminDe, cleDeGroupement, cleDeStatut, groupesGrille, lignesGrille, lignesVisibles } from './grille.js';
+import {
+  COLONNES,
+  GROUPEMENTS,
+  cheminDe,
+  cleDeGroupement,
+  cleDeStatut,
+  colonnesMontrees,
+  groupesGrille,
+  lignesGrille,
+  lignesVisibles,
+} from './grille.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 // Le t de l'écran, celui qu'App pose au contexte (§ 14.6) : l'attendu d'un
@@ -414,7 +425,7 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     const m = await evenementOuvert({ personnes: TROIS });
     const ondine = idDe(m, 'Lacasse');
     const rang = idsAffiches(m).indexOf(ondine);
-    const colonne = COLONNES.indexOf('courriel');
+    const colonne = colonnesMontrees([]).indexOf('courriel');
     expect(rang).toBeGreaterThan(0);
     expect(colonne).toBeGreaterThan(0);
 
@@ -1192,6 +1203,275 @@ describe("les conflits d'organisation dans la grille (§ 4, § 10.2)", () => {
   });
 });
 
+describe('les inclusions dans la grille (§ 4, § 10.2)', () => {
+  // Quatre personnes, trois organisations ; Grisaille n'en porte aucune,
+  // Lacasse est exclue.
+  const QUATRE = [
+    { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB },
+    { nom: 'Pervenche', prenom: 'Théo', organisation: 'Atelier Ressac' },
+    { nom: 'Lacasse', prenom: 'Ondine', organisation: 'cercle des Hérons', exclu: true },
+    { nom: 'Grisaille' },
+  ];
+
+  const editeurDe = (m, id) => cellule(m, id, 'inclusions').querySelector('[data-editeur-inclusions]');
+  const groupes = (m, id) => [...cellule(m, id, 'inclusions').querySelectorAll('[data-editeur-choix]')];
+  const casesDe = (groupe) => [...groupe.querySelectorAll('[data-choix]')];
+  const nomsDe = (groupe) => casesDe(groupe).map((c) => c.closest('label').textContent.trim());
+  const coches = (groupe) => casesDe(groupe).map((c) => c.checked);
+  const recherche = (m, id) => cellule(m, id, 'inclusions').querySelector('[data-recherche-choix]');
+  const personneDe = (m, id) => participants(m).find((p) => p.id === id);
+  const affichees = (m, id) => [...cellule(m, id, 'inclusions').querySelectorAll('[data-inclusions-personne] li')].map((li) => li.textContent.trim());
+
+  const bascule = (m) => section(m).querySelector('[data-champ="montrerInclusions"]');
+
+  // Un événement des quatre personnes, la colonne des inclusions montrée.
+  async function ouvert() {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    await cliquer(bascule(m));
+    return m;
+  }
+
+  async function ouvrir(m, id) {
+    cellule(m, id, 'inclusions').focus();
+    await touche('Enter');
+    await rendu();
+  }
+
+  test('masquée par défaut ; la case « Montrer les inclusions » la montre et la masque sans rien écrire, et masquée, son tri tombe ; la cellule active garde sa colonne', async () => {
+    const m = await evenementOuvert({ personnes: QUATRE });
+    const trace = m.trace.length;
+    const active = () => grille(m).querySelector('td[tabindex="0"]');
+    expect(bascule(m).checked).toBe(false);
+    expect(bascule(m).closest('label').textContent.trim()).toBe(t('participants.grille.montrerInclusions'));
+    expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
+    expect(grille(m).tHead.rows[0].cells).toHaveLength(COLONNES.length);
+    const id = idDe(m, 'Pervenche');
+    cellule(m, id, 'courriel').focus();
+    await rendu();
+    await cliquer(bascule(m));
+    expect(grille(m).tHead.rows[0].cells).toHaveLength(COLONNES.length + 1);
+    expect(lignes(m).every((rangee) => rangee.querySelector('[data-champ="inclusions"]') !== null)).toBe(true);
+    // Montrer une colonne devant la cellule active ne la déplace pas ; masquer
+    // la colonne active la cède à sa voisine, et la remontrer la rend.
+    expect(active()).toBe(cellule(m, id, 'courriel'));
+    cellule(m, id, 'inclusions').focus();
+    await rendu();
+    await cliquer(bascule(m));
+    expect(active()).toBe(cellule(m, id, 'courriel'));
+    await cliquer(bascule(m));
+    expect(active()).toBe(cellule(m, id, 'inclusions'));
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="inclusions"]'));
+    expect(section(m).querySelector('[data-cible="inclusions"]').closest('th').getAttribute('aria-sort')).toBe('ascending');
+    await cliquer(bascule(m));
+    expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
+    expect([...grille(m).tHead.rows[0].cells].some((th) => th.getAttribute('aria-sort') !== 'none' && th.hasAttribute('aria-sort'))).toBe(false);
+    expect(m.trace.length).toBe(trace);
+  });
+
+  test('la colonne « Inclusions » suit les conflits du placement ; au repos, une pastille par organisation incluse, puis chaque personne incluse, « (exclue) » comprise ; vide sans inclusion', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Grisaille');
+    await m.seance.executer('changerInclusionsOrganisation', { id, organisations: ['Atelier Ressac', CLUB] });
+    await m.seance.executer('changerInclusionsParticipant', { id, participants: [idDe(m, 'Lacasse'), idDe(m, 'Ombrelle')] });
+    await attendreSeance(m);
+    expect(COLONNES.indexOf('inclusions')).toBe(COLONNES.indexOf('conflitsPlacement') + 1);
+    const entete = section(m).querySelector('[data-commande="trier"][data-cible="inclusions"]');
+    expect(entete.textContent).toContain(t('participants.colonne.inclusions'));
+    expect(affichees(m, id)).toEqual(['Atelier Ressac', CLUB, 'Iris Ombrelle', 'Ondine Lacasse (exclue)']);
+    expect(cellule(m, id, 'inclusions').querySelectorAll('[data-inclusion-organisation] svg')).toHaveLength(2);
+    expect(cellule(m, id, 'inclusions').querySelectorAll('[data-inclusion-participant]')).toHaveLength(2);
+    expect(cellule(m, idDe(m, 'Ombrelle'), 'inclusions').textContent.trim()).toBe('');
+    // Le tri par le nombre de lignes : Grisaille, la seule à en porter, en
+    // tête dans les deux sens.
+    await cliquer(entete);
+    expect(idsAffiches(m)[0]).toBe(id);
+    await cliquer(entete);
+    expect(idsAffiches(m)[0]).toBe(id);
+  });
+
+  test('Entrée ouvre deux groupes : les organisations hors la sienne, puis les personnes hors elle-même sous une recherche ; Tab passe d’un contrôle à l’autre ; Entrée écrit les deux listes en une entrée, que Défaire reprend d’un coup', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Ombrelle');
+    const avant = entrees(m).length;
+    const trace = m.trace.length;
+    await ouvrir(m, id);
+    expect(editeurDe(m, id)).not.toBeNull();
+    const [organisations, personnes] = groupes(m, id);
+    expect(organisations.getAttribute('aria-label')).toBe("Inclusions d'organisation de Iris Ombrelle, une case par organisation");
+    expect(personnes.getAttribute('aria-label')).toBe('Inclusions de participant de Iris Ombrelle, une case par personne');
+    expect(nomsDe(organisations)).toEqual(['Atelier Ressac', 'cercle des Hérons']);
+    expect(nomsDe(personnes)).toEqual(['Grisaille', 'Ondine Lacasse (exclue)', 'Théo Pervenche']);
+    expect(document.activeElement).toBe(casesDe(organisations)[0]);
+
+    // Tab : de la case active des organisations à la recherche, puis à la
+    // case active des personnes ; Maj+Tab revient.
+    await touche('Tab');
+    await rendu();
+    expect(document.activeElement).toBe(recherche(m, id));
+    await touche('Tab');
+    await rendu();
+    expect(document.activeElement).toBe(casesDe(personnes)[0]);
+    await majTab();
+    await rendu();
+    expect(document.activeElement).toBe(recherche(m, id));
+    expect(m.trace.length).toBe(trace);
+
+    // La recherche ne garde que les cases qui la contiennent ; Échap la vide
+    // sans refermer l'éditeur.
+    await saisir(recherche(m, id), 'theo');
+    expect(nomsDe(groupes(m, id)[1])).toEqual(['Théo Pervenche']);
+    await saisir(recherche(m, id), 'zéphyr');
+    expect(nomsDe(groupes(m, id)[1])).toEqual([]);
+    expect(groupes(m, id)[1].querySelector('[data-aucun-choix]').textContent.trim()).toBe(tEcran('participants.inclusions.aucunResultat', { texte: 'zéphyr' }));
+    recherche(m, id).focus();
+    await touche('Escape');
+    await rendu();
+    expect(editeurDe(m, id)).not.toBeNull();
+    expect(recherche(m, id).value).toBe('');
+    expect(nomsDe(groupes(m, id)[1])).toHaveLength(3);
+
+    // L'espace coche sans rien écrire ; Entrée valide.
+    await touche('Tab');
+    await touche('End');
+    await touche(' ');
+    await majTab();
+    await majTab();
+    await touche(' ');
+    await rendu();
+    expect(coches(groupes(m, id)[0])).toEqual([true, false]);
+    expect(coches(groupes(m, id)[1])).toEqual([false, false, true]);
+    expect(m.seance.gesteEnCours).toBe(true);
+    await attendreSeance(m);
+    expect(m.trace.length).toBe(trace);
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(entrees(m).at(-1).libelle).toBe(
+      "Inclusions d'organisation de Iris Ombrelle : ajouté « Atelier Ressac » ; inclusions de participant : ajouté Théo Pervenche",
+    );
+    expect(personneDe(m, id).inclusionsOrganisation).toEqual(['Atelier Ressac']);
+    expect(personneDe(m, id).inclusionsParticipant).toEqual([idDe(m, 'Pervenche')]);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(affichees(m, id)).toEqual(['Atelier Ressac', 'Théo Pervenche']);
+    expect(document.activeElement).toBe(cellule(m, id, 'inclusions'));
+    expect(m.seance.gesteEnCours).toBe(false);
+    await m.seance.defaire();
+    await attendreSeance(m);
+    expect(personneDe(m, id).inclusionsParticipant).toBeUndefined();
+    expect(personneDe(m, id).inclusionsOrganisation).toBeUndefined();
+    expect(affichees(m, id)).toEqual([]);
+  });
+
+  test('une seule liste changée : la commande ne porte qu’elle ; Échap rend la saisie sans rien écrire ; Tab depuis le dernier contrôle valide une fois et mène à la cellule voisine', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Pervenche');
+    await m.seance.executer('changerInclusionsOrganisation', { id, organisations: [CLUB] });
+    await attendreSeance(m);
+    const avant = entrees(m).length;
+    const executer = vi.spyOn(m.seance, 'executer');
+
+    await ouvrir(m, id);
+    expect(nomsDe(groupes(m, id)[0])).toEqual(['cercle des Hérons', CLUB]);
+    expect(coches(groupes(m, id)[0])).toEqual([false, true]);
+    await touche(' ');
+    await touche('Escape');
+    await attendreSeance(m);
+    expect(editeurDe(m, id)).toBeNull();
+    expect(document.activeElement).toBe(cellule(m, id, 'inclusions'));
+    expect(personneDe(m, id).inclusionsOrganisation).toEqual([CLUB]);
+    expect(executer).not.toHaveBeenCalled();
+
+    await ouvrir(m, id);
+    await touche('Tab');
+    await touche('Tab');
+    await touche(' ');
+    await rendu();
+    expect(coches(groupes(m, id)[1])).toEqual([true, false, false]);
+    await touche('Tab');
+    await attendreSeance(m);
+    await attendreSeance(m);
+    expect(executer).toHaveBeenCalledTimes(1);
+    expect(executer).toHaveBeenCalledWith('changerInclusions', { id, participants: [idDe(m, 'Grisaille')] });
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(document.activeElement).toBe(cellule(m, id, 'courriel'));
+  });
+
+  test('montrée à 1366 et 1024 de large : la page ne défile pas, la grille défile au besoin dans son conteneur, sans quitter la carte, et chaque inclusion tient dans sa cellule', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    try {
+      for (const largeur of [1366, 1024]) {
+        await fixerCadre(largeur, 700);
+        const m = await ouvert();
+        const id = idDe(m, 'Grisaille');
+        await m.seance.executer('changerInclusionsOrganisation', { id, organisations: ['Atelier Ressac', 'cercle des Hérons', CLUB] });
+        await m.seance.executer('changerInclusionsParticipant', { id, participants: [idDe(m, 'Lacasse'), idDe(m, 'Ombrelle'), idDe(m, 'Pervenche')] });
+        await attendreSeance(m);
+        expect(document.documentElement.scrollWidth, `${largeur}`).toBeLessThanOrEqual(innerWidth);
+        const defilement = grille(m).parentElement;
+        const carteDe = section(m).querySelector('section[aria-labelledby]');
+        expect(defilement.getBoundingClientRect().right, `${largeur}`).toBeLessThanOrEqual(carteDe.getBoundingClientRect().right);
+        const inclus = cellule(m, id, 'inclusions');
+        expect(inclus.querySelectorAll('[data-inclusions-personne] li')).toHaveLength(6);
+        for (const li of inclus.querySelectorAll('li')) {
+          expect(li.getBoundingClientRect().right, `${largeur} ${li.textContent}`).toBeLessThanOrEqual(inclus.getBoundingClientRect().right + 0.5);
+        }
+        m.demonter();
+        montes.splice(montes.indexOf(m), 1);
+      }
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('un refus dans la cellule, la saisie gardée, les deux groupes marqués ; masquer la colonne l’abandonne, geste libéré ; en lecture, Entrée pose le refus de la séance', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Grisaille');
+    const trace = m.trace.length;
+    vi.spyOn(m.seance, 'executer').mockImplementation(() =>
+      Promise.reject(Object.assign(new Error('PLAN_BLOQUE'), { code: 'PLAN_BLOQUE', details: { remede: { geste: 'debloquer' } } })),
+    );
+    await ouvrir(m, id);
+    await touche(' ');
+    await touche('Enter');
+    await attendreSeance(m);
+    const refus = cellule(m, id, 'inclusions').querySelector('[data-refus="PLAN_BLOQUE"]');
+    expect(refus).not.toBeNull();
+    expect(editeurDe(m, id)).not.toBeNull();
+    expect(coches(groupes(m, id)[0])).toEqual([true, false, false]);
+    for (const groupe of groupes(m, id)) {
+      expect(document.getElementById(groupe.getAttribute('aria-describedby'))).toBe(refus);
+      for (const c of casesDe(groupe)) expect(c.getAttribute('aria-invalid')).toBe('true');
+    }
+    expect(m.trace.length).toBe(trace);
+    // La colonne masquée pendant le refus emporte l'éditeur : la saisie
+    // s'abandonne, le geste se libère, rien ne s'écrit ; remontrée, la
+    // cellule est au repos. Le clic passe par click(), sans pointeur : le
+    // focus reste dans l'éditeur, que la case masque alors qu'il est ouvert.
+    expect(m.seance.gesteEnCours).toBe(true);
+    bascule(m).click();
+    await rendu();
+    await attendreSeance(m);
+    expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(m.trace.length).toBe(trace);
+    await cliquer(bascule(m));
+    expect(editeurDe(m, id)).toBeNull();
+    expect(cellule(m, id, 'inclusions').querySelector('[data-refus]')).toBeNull();
+    expect(personneDe(m, id).inclusionsOrganisation).toBeUndefined();
+    vi.restoreAllMocks();
+
+    await m.seance.passerEnLecture();
+    await rendu();
+    const autre = idDe(m, 'Ombrelle');
+    cellule(m, autre, 'inclusions').focus();
+    await touche('Enter');
+    await rendu();
+    expect(editeurDe(m, autre)).toBeNull();
+    const refusSeance = cellule(m, autre, 'inclusions').querySelector('[data-refus]');
+    expect(refusSeance.dataset.refus).toBe(m.seance.etat().refus.code);
+  });
+});
+
 describe('le manque de places (§ 5.9, § 4.4)', () => {
   test('deux tables de 8 et seize personnes : la dix-septième est acceptée, une entrée, et avertit PLACES_MANQUANTES de 1', async () => {
     const m = await evenementOuvert({ tables: 2, personnes: NOMS.slice(0, 16).map((nom) => ({ nom })) });
@@ -1275,10 +1555,17 @@ describe('la fiche (§ 4.2, § 7.4)', () => {
       expect(fiche(m).dataset.fiche).toBe(String(id));
       expect(valeurDeFiche(m, 'participants.fiche.statut').textContent).toBe(t(cleDeStatut(statut)));
       // Les seuls contrôles de saisie de la fiche sont le champ des
-      // étiquettes et les cases de la présence, une par tour.
+      // étiquettes, la recherche et les cases des inclusions de participant
+      // — sans organisation, aucune case d'organisation —, et les cases de
+      // la présence, une par tour.
       const tours = m.seance.etat().charge.evenement.tours;
-      expect([...fiche(m).querySelectorAll('input, select, textarea')].map((champ) => champ.dataset.champ ?? `tour ${champ.dataset.presenceTour}`)).toEqual([
+      const nature = (champ) => {
+        if (champ.closest('[data-inclusions-fiche]') !== null) return 'inclusions';
+        return champ.dataset.champ ?? `tour ${champ.dataset.presenceTour}`;
+      };
+      expect([...fiche(m).querySelectorAll('input, select, textarea')].map(nature)).toEqual([
         'etiquettes',
+        ...Array.from({ length: participants(m).length }, () => 'inclusions'),
         ...Array.from({ length: tours }, (_, rang) => `tour ${rang + 1}`),
       ]);
     }
@@ -2854,6 +3141,8 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
         expect(pastille.left).toBeGreaterThanOrEqual(presence.getBoundingClientRect().left);
         const conflit = cellule(m, idDe(m, 'Quenouillet'), 'conflits');
         expect(conflit.querySelectorAll('[data-conflits-personne] li')).toHaveLength(conflits.length);
+        // La colonne des inclusions est masquée par défaut.
+        expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
         expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
         const region = carte(m).getBoundingClientRect();
         expect(region.right).toBeLessThanOrEqual(innerWidth);
@@ -3330,7 +3619,7 @@ describe('la colonne « Animation » : les tables animées, ou « à désigner �
   test('juste après le titre pressenti : les numéros des tables animées, « à désigner » sous la marque, rien pour une exclue ni sans marque ; l’en-tête ne trie pas', async () => {
     const m = await ouvrirAnimees();
     expect(COLONNES.indexOf('animation')).toBe(COLONNES.indexOf('titrePressenti') + 1);
-    const entete = [...grille(m).tHead.rows[0].cells][COLONNES.indexOf('animation')];
+    const entete = [...grille(m).tHead.rows[0].cells][colonnesMontrees([]).indexOf('animation')];
     expect(texteDe(entete)).toBe(t('participants.colonne.animation'));
     expect(entete.querySelector('button')).toBeNull();
     expect(texteDe(cellule(m, idDe(m, 'Ombrelle'), 'animation'))).toBe('2');

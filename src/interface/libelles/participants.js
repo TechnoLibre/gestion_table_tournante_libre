@@ -37,6 +37,12 @@
 // d'organisation (participants/liste_conflits.js) : le groupe de ses cases,
 // sa légende, le groupe sans choix et sa commande ;
 // participants.fiche.conflits* la rubrique de la fiche.
+// participants.inclusions.* porte la saisie des inclusions
+// (participants/liste_inclusions.js) : le groupe et la légende de chacun de
+// ses deux choix multiples, le groupe sans choix, la recherche des
+// personnes et la phrase quand rien n'y répond, la commande, et le libellé
+// d'une personne incluse ; participants.fiche.inclusions* et
+// participants.fiche.aucuneInclusion* les deux rubriques de la fiche.
 // participants.fiche.logo et participants.fiche.aucunLogo portent la rubrique
 // « Logo » de la fiche ; participants.logo.* ses commandes — « Logo », nommée
 // par la personne, « Retirer le logo » —, sa vignette, qui agrandit, l'image
@@ -46,8 +52,9 @@
 // (InformationsFiche.svelte) : « Modifier », nommée par la personne, le
 // formulaire, nommé de même, « Enregistrer », « Annuler », la case et la
 // valeur de l'animation réservée, et l'avis de ce que les listes de
-// conflits ont suivi (suiviDesConflits, informations.js), ses parties
-// séparées d'un point-virgule. participants.animation.* porte la cellule
+// conflits, puis celles d'inclusions d'organisation, ont suivi
+// (suiviDesListes, informations.js), ses parties séparées d'un
+// point-virgule. participants.animation.* porte la cellule
 // de la colonne « Animation » (celluleAnimation, grille.js) : les numéros
 // des tables animées, ou « à désigner ».
 
@@ -89,6 +96,7 @@ export const TABLE = new Map([
   ['participants.colonne.organisation', 'Organisation'],
   ['participants.colonne.conflits', "Conflit d'organisation"],
   ['participants.colonne.conflitsPlacement', 'Conflits du placement'],
+  ['participants.colonne.inclusions', 'Inclusions'],
   ['participants.colonne.courriel', 'Courriel'],
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
   ['participants.colonne.animation', 'Animation'],
@@ -133,6 +141,7 @@ export const TABLE = new Map([
   ['participants.grille.presente', 'présente'],
   ['participants.grille.vide', 'Aucun participant. Ajoutez une personne, ou collez une liste dans la grille.'],
   ['participants.grille.aucunResultat', 'Aucune personne ne correspond au filtre.'],
+  ['participants.grille.montrerInclusions', 'Montrer les inclusions'],
 
   // --- La colonne « Animation » et la marque de l'animation réservée -------
   ['participants.animation.tables', ({ numeros }) => numeros.join(', ')],
@@ -155,6 +164,27 @@ export const TABLE = new Map([
   ['participants.conflits.legende', 'Organisations à éviter'],
   ['participants.conflits.aucuneAutre', "Aucune autre organisation dans l'événement."],
   ['participants.conflits.appliquer', 'Appliquer'],
+
+  // --- Les inclusions : les deux choix multiples d'une saisie --------------
+  [
+    'participants.inclusions.editeurOrganisations',
+    ({ nom }) => `Inclusions d'organisation de ${nom}, une case par organisation`,
+  ],
+  ['participants.inclusions.editeurParticipants', ({ nom }) => `Inclusions de participant de ${nom}, une case par personne`],
+  ['participants.inclusions.legendeOrganisations', 'Organisations à rencontrer'],
+  ['participants.inclusions.legendeParticipants', 'Personnes à rencontrer'],
+  ['participants.inclusions.aucuneOrganisation', "Aucune autre organisation dans l'événement."],
+  ['participants.inclusions.aucunParticipant', "Aucune autre personne dans l'événement."],
+  ['participants.inclusions.recherche', 'Chercher une personne'],
+  ['participants.inclusions.aucunResultat', ({ texte }) => `Aucune personne ne correspond à « ${texte.trim()} ».`],
+  ['participants.inclusions.appliquer', 'Appliquer'],
+  // Une personne incluse : son nom, l'identifiant d'un homonyme, la marque
+  // d'une exclue ; un identifiant que l'événement n'a plus, seul.
+  [
+    'participants.inclusions.cible',
+    ({ nom, id, homonyme, exclue }) => `${nom}${homonyme ? ` (n° ${id})` : ''}${exclue ? ' (exclue)' : ''}`,
+  ],
+  ['participants.inclusions.inconnue', ({ id }) => `n° ${id}`],
 
   // --- La liste groupée par une colonne ou plusieurs ------------------------
   ['participants.groupe.grouperPar', 'Grouper par'],
@@ -251,6 +281,10 @@ export const TABLE = new Map([
   ['participants.fiche.presenceLegende', 'Présente aux tours'],
   ['participants.fiche.conflits', "Conflits d'organisation"],
   ['participants.fiche.aucunConflit', "Aucun conflit d'organisation."],
+  ['participants.fiche.inclusionsOrganisation', "Inclusions d'organisation"],
+  ['participants.fiche.aucuneInclusionOrganisation', "Aucune inclusion d'organisation."],
+  ['participants.fiche.inclusionsParticipant', 'Inclusions de participant'],
+  ['participants.fiche.aucuneInclusionParticipant', 'Aucune inclusion de participant.'],
   ['participants.fiche.absente', 'absente'],
   ['participants.fiche.logo', 'Logo'],
   ['participants.fiche.aucunLogo', 'Aucun logo.'],
@@ -271,6 +305,18 @@ export const TABLE = new Map([
         parties.push(compte(propres, 'conflit avec sa propre organisation retiré', 'conflits avec leur propre organisation retirés'));
       }
       return `Les conflits d'organisation suivent ce changement : ${parties.join(' ; ')}.`;
+    },
+  ],
+  [
+    'participants.informations.inclusionsSuivies',
+    ({ renommee, retirees, propres }) => {
+      const parties = [];
+      if (renommee !== null) parties.push(`${cite(renommee.de)} devient ${cite(renommee.vers)}`);
+      if (retirees.length > 0) parties.push(`${enumeration(retirees.map(cite))} ${retirees.length === 1 ? 'les quitte' : 'les quittent'}`);
+      if (propres > 0) {
+        parties.push(compte(propres, 'inclusion de sa propre organisation retirée', 'inclusions de leur propre organisation retirées'));
+      }
+      return `Les inclusions d'organisation suivent ce changement : ${parties.join(' ; ')}.`;
     },
   ],
 

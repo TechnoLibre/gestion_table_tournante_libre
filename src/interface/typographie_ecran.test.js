@@ -188,6 +188,11 @@ const EXEMPLES_ECRAN = [
     { renommee: { de: 'Atelier Ressac', vers: 'Atelier Embrun' }, retirees: ['Club des Merles', 'Fonds Grisaille'], propres: 2 },
   ],
   [
+    'participants.informations.inclusionsSuivies',
+    { renommee: { de: 'Atelier Ressac', vers: 'Atelier Embrun' }, retirees: ['Club des Merles', 'Fonds Grisaille'], propres: 2 },
+  ],
+  ['participants.inclusions.cible', { nom: 'Iris Ombrelle', id: 4, homonyme: true, exclue: true }],
+  [
     'participants.fiche.rencontres.toursListe',
     {
       tours: [

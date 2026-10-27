@@ -18,9 +18,9 @@
 // compte pas, si bien que la seule à porter une organisation en change la
 // casse. Les refus restent ceux de la commande et de la séance : NOM_REQUIS
 // se pose contre le nom, tout autre contre « Enregistrer ». Ce que les listes
-// de conflits ont suivi (§ 4) se lit entre la charge d'avant et celle
-// d'après, par la règle même de la commande (suivreOrganisations). Aucune
-// fonction ne modifie ce qu'elle reçoit.
+// de conflits et d'inclusions d'organisation ont suivi (§ 4) se lit entre la
+// charge d'avant et celle d'après, par la règle même de la commande
+// (suivreOrganisations). Aucune fonction ne modifie ce qu'elle reçoit.
 
 import { rienASuivre, suivreOrganisations } from '../../application/conflits_organisation.js';
 import { orthographeExistante } from './grille.js';
@@ -141,32 +141,42 @@ export function suggestionsOrganisation(organisations, cleNormalisee) {
   return [...organisations].sort((a, b) => comparerTextes(cles.get(a), cles.get(b)) || comparerTextes(a, b));
 }
 
+// Les listes d'organisations d'un participant que suivreOrganisations fait
+// suivre.
+const LISTES_SUIVIES = ['conflits', 'inclusionsOrganisation'];
+
 /**
- * Ce que les listes de conflits ont suivi quand modifierParticipant a changé
- * la personne id, lu entre la charge d'avant et celle d'après : null quand
- * rien n'a suivi, sinon ce que suivreOrganisations rend pour les conflits —
- * renommee, {de, vers} ; retirees, rangées ; propres, un compte. La règle
- * reste celle de suivreOrganisations, rejouée sur les participants d'après,
- * chacun avec la liste de conflits qu'il portait avant, sous le renommage
- * que la commande en déduit : l'organisation de la personne changée d'une
- * valeur en une autre. Aucune des deux charges reçues ne change.
+ * Ce que les listes de conflits et d'inclusions d'organisation ont suivi
+ * quand modifierParticipant a changé la personne id, lu entre la charge
+ * d'avant et celle d'après : pour chaque sorte de listes, conflits et
+ * inclusions, null quand rien n'a suivi, sinon ce que suivreOrganisations
+ * rend pour elle — renommee, {de, vers} ; retirees, rangées ; propres, un
+ * compte. La règle reste celle de suivreOrganisations, rejouée sur les
+ * participants d'après, chacun avec les listes qu'il portait avant, sous le
+ * renommage que la commande en déduit : l'organisation de la personne
+ * changée d'une valeur en une autre. Aucune des deux charges reçues ne
+ * change.
  *
  * @param {{participants: Array<Object>}} avant
  * @param {{participants: Array<Object>}} apres
  * @param {number} id
- * @returns {{renommee: {de: string, vers: string}|null, retirees: string[], propres: number}|null}
+ * @returns {{conflits: import('../../application/conflits_organisation.js').Suivi|null,
+ *            inclusions: import('../../application/conflits_organisation.js').Suivi|null}}
  */
-export function suiviDesConflits(avant, apres, id) {
+export function suiviDesListes(avant, apres, id) {
   const anciens = new Map(avant.participants.map((participant) => [participant.id, participant]));
   const participants = apres.participants.map((participant) => {
     const copie = { ...participant };
-    delete copie.conflits;
-    const listeAvant = anciens.get(participant.id)?.conflits;
-    return listeAvant === undefined ? copie : { ...copie, conflits: listeAvant };
+    for (const champ of LISTES_SUIVIES) {
+      delete copie[champ];
+      const listeAvant = anciens.get(participant.id)?.[champ];
+      if (listeAvant !== undefined) copie[champ] = listeAvant;
+    }
+    return copie;
   });
   const de = anciens.get(id)?.organisation ?? null;
   const vers = apres.participants.find((participant) => participant.id === id)?.organisation ?? null;
   const renommage = de !== null && vers !== null && de !== vers ? { de, vers } : null;
-  const { conflits } = suivreOrganisations(avant, { participants }, renommage);
-  return rienASuivre(conflits) ? null : conflits;
+  const { conflits, inclusions } = suivreOrganisations(avant, { participants }, renommage);
+  return { conflits: rienASuivre(conflits) ? null : conflits, inclusions: rienASuivre(inclusions) ? null : inclusions };
 }

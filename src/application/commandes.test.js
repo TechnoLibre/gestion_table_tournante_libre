@@ -138,7 +138,7 @@ const AUTRE_LOGO = `logo/${'fedcba9876543210'.repeat(4)}.png`;
 const CSV_DEUX = 'nom;prenom;organisation\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, les deux des inclusions, changerLogo, garderMeilleures, changerPresence, les douze des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, les trois des inclusions, changerLogo, garderMeilleures, changerPresence, les douze des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
       'ajouterConflit',
       'ajouterParticipant',
@@ -146,6 +146,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'changerEtat',
       'changerPresence',
       'changerEtiquettes',
+      'changerInclusions',
       'changerInclusionsOrganisation',
       'changerInclusionsParticipant',
       'changerLogo',
@@ -174,7 +175,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 33);
+    assert.equal(attendues.length, 34);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     assert.deepEqual([...COMMANDES_PRESENCE.keys()], ['changerPresence']);
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
@@ -1805,6 +1806,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['changerConflits', { id: 4, organisations: ['Club des Merles'] }],
       ['changerInclusionsOrganisation', { id: 4, organisations: ['Club des Merles'] }],
       ['changerInclusionsParticipant', { id: 4, participants: [1, 3] }],
+      ['changerInclusions', { id: 4, organisations: ['Club des Merles'], participants: [1, 3] }],
       ['changerLogo', { id: 4, chemin: LOGO }],
       ['changerPresence', { id: 3, tours: [2] }],
       ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
@@ -2088,8 +2090,8 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les trois des conflits, les deux des inclusions, changerLogo, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
-    assert.equal(COMMANDES.size, 20 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les trois des conflits, les trois des inclusions, changerLogo, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
+    assert.equal(COMMANDES.size, 21 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
     assert.ok(COMMANDES_PRESENCE instanceof Map);

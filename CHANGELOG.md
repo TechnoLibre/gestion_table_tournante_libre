@@ -509,6 +509,18 @@
   dit sous son numéro, « 2 conflits restants », et une réservation ou un
   placement à la main qui en crée un est accepté, la table signalée et son
   panneau nommant la paire.
+- Une personne peut nommer des **inclusions** : les organisations et les
+  personnes qu'elle doit rencontrer au moins une fois. Sa fiche porte deux
+  rubriques, « Inclusions d'organisation » et « Inclusions de participant », une
+  case par organisation de l'événement hors la sienne, une case par personne
+  hors elle-même, avec une recherche par nom ; chaque « Appliquer » enregistre
+  sa liste en une entrée d'historique que « Défaire » reprend. La grille des
+  participants gagne la colonne « Inclusions », masquée tant que « Montrer les
+  inclusions » n'est pas cochée, qui se saisit au clavier avec les mêmes cases,
+  les deux listes en une seule entrée, et se trie par le nombre d'inclusions.
+  Supprimer une personne la retire des listes qui la nomment, et les inclusions
+  d'organisation suivent le renommage ou la disparition d'une organisation comme
+  les conflits. La génération ne les lit pas.
 - **L'animation réservée.** Une personne peut être marquée à désigner animatrice
   d'une table : la case « Animation réservée » de sa fiche la pose ou la retire,
   en une entrée d'historique que « Défaire » reprend, et la colonne

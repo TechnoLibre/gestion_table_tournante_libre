@@ -272,6 +272,20 @@ export const TABLE = new Map([
     ({ personne, ajoutees, retirees }) =>
       `Inclusions de participant de ${personne} : ${ajoutsEtRetraits(ajoutees, retirees, enumeration)}`,
   ],
+  // organisations et participants : les ajouts et les retraits de chaque
+  // liste qui change, null pour une liste qui ne change pas. Une seule liste
+  // qui change s'écrit comme dans le libellé de sa commande propre ; les
+  // deux, la seconde suit la première sous « inclusions de participant ».
+  [
+    'ENTREE_CHANGER_INCLUSIONS',
+    ({ personne, organisations, participants }) => {
+      const parOrganisation = organisations === null ? null : ajoutsEtRetraits(organisations.ajoutees, organisations.retirees, etiquettesCitees);
+      const parParticipant = participants === null ? null : ajoutsEtRetraits(participants.ajoutees, participants.retirees, enumeration);
+      if (parOrganisation === null) return `Inclusions de participant de ${personne} : ${parParticipant}`;
+      const suite = parParticipant === null ? '' : ` ; inclusions de participant : ${parParticipant}`;
+      return `Inclusions d'organisation de ${personne} : ${parOrganisation}${suite}`;
+    },
+  ],
   [
     'ENTREE_CHANGER_LOGO',
     ({ personne, effet }) => `Logo de ${personne} : ${nomDans(EFFETS_DU_LOGO, effet, 'effet du logo')}`,

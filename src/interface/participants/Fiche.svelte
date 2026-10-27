@@ -4,12 +4,12 @@
 <script>
   // La fiche d'une personne à l'écran (§ 4, § 4.2, § 4.5, § 7.4, § 10.2) :
   // nom, prénom, organisation, courriel, titre pressenti, notes, statut
-  // calculé, son logo, ses étiquettes, ses conflits d'organisation, sa
-  // présence par tour, ses réservations, et sa table et son siège à chaque
-  // tour du retenu, ou son absence à ce tour ; un tour que le retenu ne
-  // porte pas se dit hors du retenu. La fiche replie, ne tronque jamais :
-  // un nom de deux cents caractères s'y lit entier, sur autant de lignes
-  // qu'il en faut.
+  // calculé, son logo, ses étiquettes, ses conflits d'organisation, ses
+  // inclusions, sa présence par tour, ses réservations, et sa table et son
+  // siège à chaque tour du retenu, ou son absence à ce tour ; un tour que
+  // le retenu ne porte pas se dit hors du retenu. La fiche replie, ne
+  // tronque jamais : un nom de deux cents caractères s'y lit entier, sur
+  // autant de lignes qu'il en faut.
   // Chaque donnée occupe son propre nœud de texte, et rien n'y est
   // interprété comme du balisage.
   //
@@ -17,8 +17,8 @@
   // l'instance du moteur ; l'itinéraire, celui d'itineraire (grille.js), lu
   // tour par tour dans etatPlaces : la fiche ne recalcule ni l'un ni
   // l'autre. Ses contrôles de saisie sont le formulaire des informations,
-  // le champ des étiquettes, les cases des conflits et celles de la
-  // présence.
+  // le champ des étiquettes, les cases des conflits, celles des inclusions
+  // et celles de la présence.
   //
   // Le bloc des informations (InformationsFiche.svelte,
   // data-informations-fiche), en tête : les six valeurs de texte et le
@@ -73,7 +73,12 @@
   // remède, le brouillon gardé ; une écriture venue d'ailleurs arrive par
   // recevoir, et une autre personne repart de sa liste.
   //
-  // La rubrique « Présence » (data-presence-fiche), entre les conflits et
+  // Les rubriques « Inclusions d'organisation » et « Inclusions de
+  // participant » (RubriqueInclusions.svelte, data-inclusions-fiche), l'une
+  // sous l'autre entre les conflits et la présence, se saisissent de même,
+  // chacune sous sa commande ; elles se recréent à chaque personne ({#key}).
+  //
+  // La rubrique « Présence » (data-presence-fiche), entre les inclusions et
   // les réservations : la présence enregistrée, « tous » ou ses tours
   // nommés (affichagePresence, presence.js), puis une case par tour
   // (CasesPresence), « Tous les tours » et « Appliquer ». Cocher, décocher et
@@ -145,6 +150,7 @@
   import { cleDeRaison, lignesDePersonne } from './conflits.js';
   import InformationsFiche from './InformationsFiche.svelte';
   import LogoFiche from './LogoFiche.svelte';
+  import RubriqueInclusions from './RubriqueInclusions.svelte';
   import { ajoutEtiquettes, etiquettesDeLaFiche, retraitEtiquette, saisieApresAjout, signauxOrthographe } from './etiquettes.js';
   import { cleDeStatut, commandeDeCellule, itineraire, ligneVoisine, reservationsDe } from './grille.js';
   import { choixDeConflits, commandeDeConflits, lectureConflits, saisieApresBasculeConflit, saisieConflitsEnregistree } from './liste_conflits.js';
@@ -546,6 +552,11 @@
       {/if}
     </form>
   </section>
+
+  {#key participant.id}
+    <RubriqueInclusions {participant} {charge} sorte="organisation" />
+    <RubriqueInclusions {participant} {charge} sorte="participant" />
+  {/key}
 
   <section class="presence" data-presence-fiche aria-labelledby={`${uid}-titre-presence`}>
     <h4 id={`${uid}-titre-presence`}>{t('participants.fiche.presence')}</h4>

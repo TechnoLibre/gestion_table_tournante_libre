@@ -31,6 +31,13 @@
   // dans la section, le temps qu'elle est ouverte : changer de groupement
   // déplie tout, et rien ne s'écrit.
   //
+  // La case « Montrer les inclusions » (data-champ="montrerInclusions"),
+  // après le groupement, montre la colonne des inclusions, masquée par
+  // défaut (MASQUABLES, colonnesMontrees) ; la grille reçoit les colonnes
+  // montrées. Le choix vit dans la section, le temps qu'elle est ouverte, et
+  // n'écrit rien. Masquer la colonne retire le tri qu'elle portait, et la
+  // grille abandonne une édition ouverte sur elle.
+  //
   // Groupée, la liste lit les conflits du placement que le plan montre —
   // la proposition demandée, ui.proposition, sinon le retenu — par
   // conflitsDuPlacement (src/application/conflits_placement.js), recalculés
@@ -73,6 +80,7 @@
     choisirGroupement,
     cleDeGroupement,
     clesPremierNiveau,
+    colonnesMontrees,
     colonnesOffertes,
     groupesGrille,
     lignesGrille,
@@ -93,6 +101,9 @@
   // groupement, et les clés des groupes repliés.
   let groupement = $state.raw([]);
   let replies = $state.raw(new Set());
+  // La colonne des inclusions montrée, et les colonnes que la grille reçoit.
+  let inclusionsMontrees = $state(false);
+  const colonnes = $derived(colonnesMontrees(inclusionsMontrees ? ['inclusions'] : []));
   // La suppression qui attend sa confirmation : {participant, reservations}.
   let aSupprimer = $state.raw(null);
 
@@ -119,6 +130,12 @@
   const conflitsParGroupe = $derived(groupes === null ? new Map() : conflitsDesGroupes(groupes, conflits));
   const enConflit = $derived(reglesParPersonne(conflits));
   const personneFiche = $derived($ui.fiche === null ? null : (participants.find(({ id }) => id === $ui.fiche) ?? null));
+
+  // Montre ou masque la colonne des inclusions ; masquée, son tri tombe.
+  function montrerInclusions(montrer) {
+    inclusionsMontrees = montrer;
+    if (!montrer && tri?.colonne === 'inclusions') tri = null;
+  }
 
   function choisirNiveau(rang, colonne) {
     groupement = choisirGroupement(groupement, rang, colonne);
@@ -179,6 +196,15 @@
               </select>
             </div>
           {/each}
+          <label class="bascule">
+            <input
+              type="checkbox"
+              data-champ="montrerInclusions"
+              checked={inclusionsMontrees}
+              onchange={(evenement) => montrerInclusions(evenement.currentTarget.checked)}
+            />
+            <span>{t('participants.grille.montrerInclusions')}</span>
+          </label>
           {#if groupes !== null}
             <button type="button" data-commande="toutReplier" onclick={() => (replies = new Set(clesPremierNiveau(groupesEntiers)))}>
               {t('participants.groupe.toutReplier')}
@@ -210,7 +236,18 @@
           {/if}
         </div>
 
-        <Grille {lignes} {groupes} {teintes} bind:replies bind:tri {supprimer} conflits={conflitsParGroupe} {enConflit} tours={charge?.evenement.tours ?? 1} />
+        <Grille
+          {lignes}
+          {groupes}
+          {teintes}
+          {colonnes}
+          bind:replies
+          bind:tri
+          {supprimer}
+          conflits={conflitsParGroupe}
+          {enConflit}
+          tours={charge?.evenement.tours ?? 1}
+        />
         {#if participants.length === 0}
           <p class="vide">{t('participants.grille.vide')}</p>
         {:else if lignes.length === 0}
@@ -271,6 +308,23 @@
     font: inherit;
     font-size: var(--taille-texte);
     font-weight: normal;
+  }
+
+  /* La case de la colonne des inclusions, à la hauteur des champs, son
+     libellé à droite. */
+  .bascule {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espace-1);
+    min-height: 2.5rem;
+    font-size: var(--taille-texte-petit);
+    font-weight: bold;
+  }
+
+  .bascule input {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
   }
 
   .outils > button {

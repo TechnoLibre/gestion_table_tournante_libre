@@ -35,6 +35,14 @@ export const EXEMPLES = [
   ['ENTREE_CHANGER_CONFLITS', { personne: 'Iris Ombrelle', ajoutees: ['Société Alpha', 'Société Beta'], retirees: ['Club des Merles'] }],
   ['ENTREE_CHANGER_INCLUSIONS_ORGANISATION', { personne: 'Iris Ombrelle', ajoutees: ['Société Alpha'], retirees: ['Club des Merles'] }],
   ['ENTREE_CHANGER_INCLUSIONS_PARTICIPANT', { personne: 'Iris Ombrelle', ajoutees: ['Théo Pervenche'], retirees: ['Basile Mélèze'] }],
+  [
+    'ENTREE_CHANGER_INCLUSIONS',
+    {
+      personne: 'Iris Ombrelle',
+      organisations: { ajoutees: ['Société Alpha'], retirees: [] },
+      participants: { ajoutees: ['Théo Pervenche'], retirees: ['Basile Mélèze'] },
+    },
+  ],
   ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
   // Le logo d'une personne
   ['ENTREE_CHANGER_LOGO', { personne: 'Iris Ombrelle', effet: 'pose' }],
@@ -166,6 +174,26 @@ export const TEXTES = [
   [
     'ENTREE_CHANGER_INCLUSIONS_PARTICIPANT',
     { personne: 'Iris Ombrelle', ajoutees: ['Théo Pervenche'], retirees: [] },
+    'Inclusions de participant de Iris Ombrelle : ajouté Théo Pervenche',
+  ],
+  [
+    'ENTREE_CHANGER_INCLUSIONS',
+    {
+      personne: 'Iris Ombrelle',
+      organisations: { ajoutees: ['Société Alpha'], retirees: ['Club des Merles'] },
+      participants: { ajoutees: ['Théo Pervenche'], retirees: ['Basile Mélèze'] },
+    },
+    "Inclusions d'organisation de Iris Ombrelle : ajouté « Société Alpha » ; retiré « Club des Merles » ; " +
+      'inclusions de participant : ajouté Théo Pervenche ; retiré Basile Mélèze',
+  ],
+  [
+    'ENTREE_CHANGER_INCLUSIONS',
+    { personne: 'Iris Ombrelle', organisations: { ajoutees: [], retirees: ['Club des Merles'] }, participants: null },
+    "Inclusions d'organisation de Iris Ombrelle : retiré « Club des Merles »",
+  ],
+  [
+    'ENTREE_CHANGER_INCLUSIONS',
+    { personne: 'Iris Ombrelle', organisations: null, participants: { ajoutees: ['Théo Pervenche'], retirees: [] } },
     'Inclusions de participant de Iris Ombrelle : ajouté Théo Pervenche',
   ],
   [

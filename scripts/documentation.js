@@ -381,6 +381,11 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   changerConflits: { personne: 'Iris Ombrelle', ajoutees: ['Atelier Ressac', 'Club des Merles'], retirees: [] },
   changerInclusionsOrganisation: { personne: 'Iris Ombrelle', ajoutees: ['Atelier Ressac'], retirees: [] },
   changerInclusionsParticipant: { personne: 'Iris Ombrelle', ajoutees: ['Théo Pervenche', 'Ondine Lacasse'], retirees: [] },
+  changerInclusions: {
+    personne: 'Iris Ombrelle',
+    organisations: { ajoutees: ['Atelier Ressac'], retirees: [] },
+    participants: { ajoutees: ['Théo Pervenche'], retirees: [] },
+  },
   changerLogo: { personne: 'Iris Ombrelle', effet: 'pose' },
   poserObjectif: { numero: 3, tour: null, regle: null, etiquettes: ['finance'] },
   retirerObjectif: { numero: 3, tour: 2 },

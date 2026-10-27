@@ -38,13 +38,14 @@
   //
   // Une écriture aboutie laisse sous le bloc, tant que sa révision est la
   // courante, le signal de l'orthographe d'organisation retenue
-  // (ORTHOGRAPHE_RETENUE) et l'avis de ce que les listes de conflits ont
-  // suivi (suiviDesConflits) : Défaire, ou toute autre écriture, les
-  // retire.
+  // (ORTHOGRAPHE_RETENUE), puis l'avis de ce que les listes de conflits ont
+  // suivi et celui de ce que les listes d'inclusions d'organisation ont
+  // suivi (suiviDesListes) : Défaire, ou toute autre écriture, les retire.
   //
-  // Les conflits d'organisation de la personne restent dans leur rubrique,
-  // hors du formulaire, actifs pendant la saisie : leur commande écrit sa
-  // propre entrée, et le formulaire garde la sienne.
+  // Les conflits d'organisation et les inclusions de la personne restent
+  // dans leurs rubriques, hors du formulaire, actives pendant la saisie :
+  // chacune de leurs commandes écrit sa propre entrée, et le formulaire
+  // garde la sienne.
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { cleNormalisee } from '../../application/csv.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
@@ -64,7 +65,7 @@
     informationsModifiees,
     saisieDesInformations,
     suggestionsOrganisation,
-    suiviDesConflits,
+    suiviDesListes,
   } from './informations.js';
 
   let { participant, charge, statut } = $props();
@@ -82,7 +83,7 @@
   // Le formulaire ouvert, la saisie de son ouverture et la courante, ses
   // refus — celui du nom, celui d'« Enregistrer » —, l'envoi en cours, et
   // le rendu de la dernière écriture aboutie : sa révision, l'orthographe
-  // retenue et le suivi des conflits.
+  // retenue et le suivi des conflits et des inclusions.
   let ouvert = $state(false);
   let initiale = $state.raw(untrack(() => saisieDesInformations(participant)));
   let saisie = $state(untrack(() => saisieDesInformations(participant)));
@@ -153,7 +154,7 @@
     dernier = {
       revision: apres.evenement.revision,
       orthographe: rendu.orthographe,
-      conflits: suiviDesConflits(avant, apres.charge, rendu.args.id),
+      ...suiviDesListes(avant, apres.charge, rendu.args.id),
     };
     await fermer();
   }
@@ -274,6 +275,12 @@
     <div class="signal" role="status" data-avertissement="conflitsSuivis" {@attach montrer}>
       <span class="signe"><Icone nom="triangle" /></span>
       <p>{t('participants.informations.conflitsSuivis', signaux.conflits)}</p>
+    </div>
+  {/if}
+  {#if signaux !== null && signaux.inclusions !== null}
+    <div class="signal" role="status" data-avertissement="inclusionsSuivies" {@attach montrer}>
+      <span class="signe"><Icone nom="triangle" /></span>
+      <p>{t('participants.informations.inclusionsSuivies', signaux.inclusions)}</p>
     </div>
   {/if}
 </div>
