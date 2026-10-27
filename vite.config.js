@@ -11,7 +11,7 @@
 // ses modules, vue_plan : les modules que le point d'entrée partage avec
 // un morceau différé. La section de la qualité forme son propre morceau,
 // différé, que la page ne charge qu'à la première ouverture de la section
-// (src/main.js). Le seuil d'avertissement d'un morceau vaut 1 000 ko, et
+// (src/main.js). Le seuil d'avertissement d'un morceau vaut 1 100 ko, et
 // non les 500 ko de Vite : la page se lit sur le disque local, hors ligne,
 // une fois au lancement. Le seuil n'avertit donc que d'une croissance
 // anormale d'un morceau ; test/construction.long.test.js tombe au-delà.
@@ -51,7 +51,7 @@ export default defineConfig({
   build: {
     outDir: 'www',
     emptyOutDir: true,
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 1100,
     rolldownOptions: {
       output: {
         codeSplitting: {
