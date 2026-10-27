@@ -589,9 +589,13 @@ describe("les colonnes de la grille s'associent à l'export par leur champ (§ 1
     const avec = decoder(exporterParticipants([{ ...p, conflits: ['Atelier Ressac'] }])).texte.split('\r\n');
     assert.deepEqual(avec[0].split(';').slice(-3), ['etiquettes', 'presence', 'conflit_organisation']);
     assert.equal(avec[1].split(';').length, CHAMP_DE_COLONNE.size + 1);
-    // Les inclusions ne s'exportent pas.
-    const incluse = decoder(exporterParticipants([{ ...p, inclusionsOrganisation: ['Atelier Ressac'], inclusionsParticipant: [2] }])).texte;
-    assert.equal(incluse.split('\r\n')[0], entete);
+    // La colonne des inclusions s'exporte en deux colonnes, qu'aucune
+    // colonne de la grille ne porte seule.
+    const autre = { ...p, id: 2, nom: 'Pervenche', prenom: null, organisation: 'Atelier Ressac', etiquettes: [] };
+    const incluse = decoder(exporterParticipants([{ ...p, inclusionsOrganisation: ['Atelier Ressac'], inclusionsParticipant: [2] }, autre])).texte;
+    assert.deepEqual(incluse.split('\r\n')[0].split(';').slice(-2), ['inclusion_organisation', 'inclusion_participant']);
+    assert.deepEqual(incluse.split('\r\n')[1].split(';').slice(-2), ['Atelier Ressac', 'Pervenche']);
+    assert.ok(!CHAMP_DE_COLONNE.has('inclusions'));
     // Les conflits du placement, une mesure, ne s'exportent pas.
     assert.ok(!avec[0].split(';').some((champ) => champ.includes('placement')));
   });

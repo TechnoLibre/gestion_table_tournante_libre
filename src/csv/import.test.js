@@ -12,7 +12,10 @@
 // sous un aperçu calculé pour un autre nombre de tours ; les titres que
 // pourvoient les seules personnes présentes ; la marque du nom numéroté, que
 // porte la seule personne créée d'une ligne renommée par « Rendre les noms
-// uniques ». Les marques combinantes s'écrivent par leur point de code.
+// uniques » ; les colonnes des inclusions, dont chaque personne nommée
+// devient un identifiant, celui d'une ligne du fichier compris, et ce que
+// remplacer en retire. Les marques combinantes s'écrivent par leur point de
+// code.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { serialiser } from '../stockage/canonique.js';
@@ -648,7 +651,7 @@ describe('appliquerImport : remplacer, et ce que remplacer annonce (§ 10.1)', (
       propositions: [proposition(1, [1, 2, 3])],
       attribuerSieges: true,
     });
-    assert.deepEqual(bilanRemplacement(charge), { participants: 3, reservations: 2, titresPourvus: 1, propositions: 1 });
+    assert.deepEqual(bilanRemplacement(charge), { participants: 3, reservations: 2, titresPourvus: 1, propositions: 1, inclusions: 0 });
   });
 
   test("le bilan annonce ce que remplacer retire : participants et réservations du résumé, titres et propositions gardés", () => {
@@ -671,7 +674,7 @@ describe('appliquerImport : remplacer, et ce que remplacer annonce (§ 10.1)', (
     // personne exclue. Titre (2, 1) : réservé au tour 2 seulement. Titre
     // (2, 2) : la réservation de la table 2 ne désigne aucun siège.
     assert.deepEqual(bilanRemplacement(chargeGarnie({ attribuerSieges: true })), {
-      participants: 4, reservations: 4, titresPourvus: 2, propositions: 2,
+      participants: 4, reservations: 4, titresPourvus: 2, propositions: 2, inclusions: 0,
     });
   });
 
@@ -692,7 +695,7 @@ describe('appliquerImport : remplacer, et ce que remplacer annonce (§ 10.1)', (
       ],
       titres: [titre(1, 1), titre(1, 2), titre(1, 3), titre(2, 1), titre(3, 1), titre(3, 2), titre(4, 1)],
     });
-    assert.deepEqual(bilanRemplacement(charge), { participants: 8, reservations: 8, titresPourvus: 5, propositions: 0 });
+    assert.deepEqual(bilanRemplacement(charge), { participants: 8, reservations: 8, titresPourvus: 5, propositions: 0, inclusions: 0 });
     assert.equal(bilanRemplacement(chargeGarnie()).titresPourvus, 3);
   });
 
@@ -909,6 +912,107 @@ describe("appliquerImport : la colonne des conflits d'organisation (§ 10.1)", (
       );
       assert.deepEqual(charge, avant, mode);
     }
+  });
+});
+
+describe('appliquerImport : les colonnes des inclusions (§ 10.1)', () => {
+  test('une personne créée porte ses inclusions rangées après ses conflits, les personnes en identifiants croissants, celles du fichier comprises, même plus bas', () => {
+    const charge = chargeDe({
+      participants: [personne(1, 'Houle', 'Basile', 'Club des Merles'), personne(4, 'Ombrelle', 'Iris')],
+      prochain: 9,
+    });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv(
+        'nom;prenom;organisation;conflits;inclusion_organisation;inclusion_participant',
+        'Pervenche;Théo;;Société Alpha;Société Alpha | club des merles;Ondine Lacasse | Iris Ombrelle | basile houle',
+        'Lacasse;Ondine;Société Alpha;;;',
+        'Sarcelle;;;;;Théo Pervenche',
+      ),
+      'ajouter',
+    );
+    assert.deepEqual(apres.participants.slice(2), [
+      personne(9, 'Pervenche', 'Théo', null, {
+        conflits: ['Société Alpha'], inclusionsOrganisation: ['Club des Merles', 'Société Alpha'], inclusionsParticipant: [1, 4, 10],
+      }),
+      personne(10, 'Lacasse', 'Ondine', 'Société Alpha'),
+      personne(11, 'Sarcelle', null, null, { inclusionsParticipant: [9] }),
+    ]);
+    assert.deepEqual(Object.keys(apres.participants[2]).slice(-3), ['conflits', 'inclusionsOrganisation', 'inclusionsParticipant']);
+    assert.equal(resume.ajoutes, 3);
+    assert.deepEqual(analyser(serialiser(apres, { revision: 1, produitVersion: VERSION.affichee })).charge, apres);
+  });
+
+  test('remplacer : les personnes du fichier seules, numérotées à la suite du compteur', () => {
+    const charge = chargeGarnie();
+    const { charge: apres } = importer(charge, csv('nom;prenom;inclusion_participant', 'Bruyère;Anouk;Ondine Sarcelle', 'Sarcelle;Ondine;'), 'remplacer');
+    assert.deepEqual(apres.participants, [personne(9, 'Bruyère', 'Anouk', null, { inclusionsParticipant: [10] }), personne(10, 'Sarcelle', 'Ondine')]);
+  });
+
+  test('en mise à jour, une cellule non vide remplace sa liste, une cellule vide la garde ; une personne mise à jour ou ajoutée se vise par son identifiant ; la même liste ne compte pas la personne modifiée', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', 'Club des Merles', { inclusionsParticipant: [2] }),
+        personne(2, 'Pervenche', 'Théo', null, { inclusionsOrganisation: ['Club des Merles'] }),
+        personne(3, 'Lacasse', 'Ondine', 'Société Alpha', { inclusionsParticipant: [1, 2] }),
+      ],
+      prochain: 7,
+    });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv(
+        'nom;prenom;inclusion_organisation;inclusion_participant',
+        'Ombrelle;Iris;société alpha;Théo Pervenche | Basile Houle',
+        'Pervenche;Théo;;',
+        'Lacasse;Ondine;;"Théo Pervenche; Iris Ombrelle"',
+        'Houle;Basile;;Iris Ombrelle',
+      ),
+      'mettreAJour',
+    );
+    assert.deepEqual(
+      apres.participants.map(({ id, inclusionsOrganisation, inclusionsParticipant }) => [id, inclusionsOrganisation, inclusionsParticipant]),
+      [
+        [1, ['Société Alpha'], [2, 7]],
+        [2, ['Club des Merles'], undefined],
+        [3, undefined, [1, 2]],
+        [7, undefined, [1]],
+      ],
+    );
+    assert.deepEqual([resume.ajoutes, resume.misAJour, resume.inchanges], [1, 1, 2]);
+  });
+
+  test("un aperçu refusé pour une inclusion refuse l'import : son code, son rang et l'organisation ou le nom dans les détails ; la charge reste", () => {
+    for (const mode of MODES) {
+      const charge = chargeDe({ participants: [personne(1, 'Houle', 'Basile', 'Club des Merles')] });
+      const avant = structuredClone(charge);
+      assert.throws(
+        () => importer(charge, csv('nom;inclusion_organisation', 'Ombrelle;Société Gamma'), mode),
+        refus('INCLUSION_ORGANISATION_INCONNUE', { ligne: 2, organisation: 'Société Gamma' }),
+        mode,
+      );
+      assert.throws(
+        () => importer(charge, csv('nom;prenom;inclusion_participant', 'Ombrelle;Iris;Basile Houl'), mode),
+        refus('INCLUSION_PARTICIPANT_INCONNU', { ligne: 2, nom: 'Basile Houl' }),
+        mode,
+      );
+      assert.throws(
+        () => importer(charge, csv('nom;prenom;inclusion_participant', 'Ombrelle;Iris;Iris Ombrelle'), mode),
+        refus('INCLUSION_PARTICIPANT_SOI', { ligne: 2, nom: 'Iris Ombrelle' }),
+        mode,
+      );
+      assert.deepEqual(charge, avant, mode);
+    }
+  });
+
+  test('bilanRemplacement compte les inclusions des personnes retirées, d’organisation et de participant', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', 'Club des Merles', { inclusionsParticipant: [2, 3] }),
+        personne(2, 'Pervenche', 'Théo', null, { inclusionsOrganisation: ['Club des Merles'], inclusionsParticipant: [1] }),
+        personne(3, 'Lacasse'),
+      ],
+    });
+    assert.equal(bilanRemplacement(charge).inclusions, 4);
   });
 });
 

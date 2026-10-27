@@ -4602,10 +4602,13 @@ describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
     // Le modèle, plus une ligne qui désigne une personne inscrite par son nom
     // et son prénom seuls, sa présence vide : l'import la met à jour, quand
     // il crée les quatre personnes inventées du modèle. La présence est la
-    // neuvième colonne, que suivent les conflits d'organisation.
+    // neuvième colonne, que suivent les conflits d'organisation, l'animation
+    // réservée et les deux colonnes des inclusions.
     const [entete, ...lignes] = decouper(decoder(octets).texte, ';').enregistrements;
     const colonne = entete.indexOf('presence');
-    expect(entete.slice(colonne)).toEqual(['presence', 'conflit_organisation']);
+    expect(entete.slice(colonne)).toEqual([
+      'presence', 'conflit_organisation', 'animation_reservee', 'inclusion_organisation', 'inclusion_participant',
+    ]);
     const inscrite = personneDe(PRESENCE.groupe);
     expect(inscrite.organisation, 'une organisation : la ligne qui la désigne n’est pas un doublon').not.toBeNull();
     const designe = entete.map((champ) => ({ nom: inscrite.nom, prenom: inscrite.prenom ?? '' })[champ] ?? '');

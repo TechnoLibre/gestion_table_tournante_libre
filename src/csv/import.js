@@ -13,7 +13,11 @@
 // (§ 8.2). Les personnes ajoutées prennent leurs identifiants à partir de
 // prochainsIds.participant, dans l'ordre du fichier, et le compteur ne
 // recule jamais : un identifiant retiré ne revient pas (§ 4). Un compteur
-// qui ne suffit pas à toutes refuse l'import entier (§ 8.9).
+// qui ne suffit pas à toutes refuse l'import entier (§ 8.9). Les
+// identifiants s'attribuent avant qu'aucune personne ne s'écrive : une
+// inclusion de participant, que l'aperçu résout en une personne existante
+// ou en la ligne qui la crée, se traduit alors en identifiant, quel que soit
+// le rang de cette ligne dans le fichier.
 //
 // Le CSV des refus reprend chaque ligne refusée telle que découpée, sous
 // l'en-tête d'origine, et ajoute deux colonnes, ligne et motif, qu'aucun
@@ -33,8 +37,8 @@ import { enregistrementVide } from './lecture.js';
 
 // Champs d'une ligne de l'aperçu, dans l'ordre du participant : ceux que
 // porte une personne créée, et que pose une mise à jour quand la cellule
-// n'est pas vide. Les étiquettes, la présence et les conflits, des listes,
-// se posent à part (poser).
+// n'est pas vide. Les étiquettes, la présence, les conflits et les
+// inclusions, des listes, se posent à part (poser).
 const CHAMPS_LUS = Object.freeze(['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu']);
 
 // Le plus grand identifiant de participant qu'admet la règle du schéma : le
@@ -240,11 +244,16 @@ const titresPourvus = (charge) =>
  *   pourvoyeursDesTitres ;
  * - propositions : les propositions qui placent au moins une personne
  *   retirée. Le retenu n'y entre pas : l'import en état retenu porte
- *   l'avertissement de dérive.
+ *   l'avertissement de dérive ;
+ * - inclusions : les inclusions que portent les participants retirés,
+ *   d'organisation et de participant, une par organisation ou personne
+ *   nommée. Elles partent avec eux, et une inclusion de participant vise
+ *   toujours une personne retirée.
  * La charge n'est pas modifiée.
  *
  * @param {import('../stockage/types.js').Charge} charge
- * @returns {{participants: number, reservations: number, titresPourvus: number, propositions: number}}
+ * @returns {{participants: number, reservations: number, titresPourvus: number, propositions: number,
+ *   inclusions: number}}
  */
 export function bilanRemplacement(charge) {
   const retires = new Set(charge.participants.map(({ id }) => id));
@@ -253,16 +262,27 @@ export function bilanRemplacement(charge) {
     reservations: charge.reservations.length,
     titresPourvus: titresPourvus(charge),
     propositions: charge.propositions.filter(({ participants }) => participants.some((id) => retires.has(id))).length,
+    inclusions: charge.participants.reduce(
+      (total, { inclusionsOrganisation = [], inclusionsParticipant = [] }) =>
+        total + inclusionsOrganisation.length + inclusionsParticipant.length,
+      0,
+    ),
   };
 }
 
-// Les étiquettes ou les conflits d'une ligne tels que le fichier d'état les
-// range : une copie, triée par unités de code (§ 8.9), qui ne partage rien
-// avec l'aperçu.
+// Les étiquettes, les conflits ou les inclusions d'organisation d'une ligne
+// tels que le fichier d'état les range : une copie, triée par unités de code
+// (§ 8.9), qui ne partage rien avec l'aperçu.
 const rangees = (textes) => [...textes].sort(comparerTextes);
 
-// Vrai quand deux listes rangées portent les mêmes chaînes, rang à rang :
-// deux listes distinctes de même contenu sont égales.
+// Les identifiants des personnes qu'une ligne inclut, croissants comme le
+// fichier d'état les range (§ 8.9) ; idDe traduit chaque personne de
+// l'aperçu, existante ou créée, en son identifiant.
+const identifiantsInclus = (personnes, idDe) => personnes.map(idDe).sort((a, b) => a - b);
+
+// Vrai quand deux listes rangées portent les mêmes valeurs, chaînes ou
+// identifiants, rang à rang : deux listes distinctes de même contenu sont
+// égales.
 const memesListes = (a, b) => a.length === b.length && a.every((texte, rang) => texte === b[rang]);
 
 // Vrai quand deux présences canoniques sont la même : undefined (tous les
@@ -272,18 +292,21 @@ const memePresence = (a, b) =>
 
 // Participant créé d'une ligne de l'aperçu, sous tours tours, ses clés dans
 // l'ordre du fichier d'état : un exclu vide vaut non ; les étiquettes,
-// rangées, la présence canonique, les conflits, rangés, la marque du nom
-// numéroté, puis celle de l'animation réservée, posée par « oui » seul,
-// chaque clé absente quand la ligne n'en porte pas (§ 8.9). Une présence
-// vide ou qui nomme chaque tour laisse le champ absent : la personne vient
-// à tous les tours.
-function creer(id, champs, tours) {
+// rangées, la présence canonique, les conflits, rangés, les inclusions
+// d'organisation, rangées, puis de participant, croissantes, traduites par
+// idDe, la marque du nom numéroté, puis celle de l'animation réservée, posée
+// par « oui » seul, chaque clé absente quand la ligne n'en porte pas
+// (§ 8.9). Une présence vide ou qui nomme chaque tour laisse le champ
+// absent : la personne vient à tous les tours.
+function creer(id, champs, tours, idDe) {
   const { nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits } = champs;
   const participant = { id, nom, prenom, organisation, courriel, titrePressenti, notes, exclu: exclu ?? false };
   if (etiquettes !== null) participant.etiquettes = rangees(etiquettes);
   const canonique = presence === null ? undefined : presenceCanonique(presence, tours);
   if (canonique !== undefined) participant.presence = canonique;
   if (conflits !== null) participant.conflits = rangees(conflits);
+  if (champs.inclusionsOrganisation !== null) participant.inclusionsOrganisation = rangees(champs.inclusionsOrganisation);
+  if (champs.inclusionsParticipant !== null) participant.inclusionsParticipant = identifiantsInclus(champs.inclusionsParticipant, idDe);
   if (champs.nomNumerote === true) participant.nomNumerote = true;
   if (champs.animationReservee === true) participant.animationReservee = true;
   return participant;
@@ -294,18 +317,18 @@ function creer(id, champs, tours) {
 // non vide remplace la liste entière, une cellule vide la garde : un CSV
 // n'efface pas les étiquettes. De même, une cellule de présence non vide
 // remplace la présence, une cellule vide la garde, et « tous » retire le
-// champ ; une cellule de conflits non vide remplace la liste, une cellule
-// vide la garde. Les listes se comparent élément par élément, les
-// étiquettes et les conflits une fois rangés, la présence sous sa forme
-// canonique : un fichier réimporté ne compte aucun modifié. La marque du
-// nom numéroté n'est pas un champ lu : la personne garde la sienne, la
-// ligne qui la désigne portant le même nom à la casse, aux accents et aux
-// blancs près. Elle ne tombe que si le nom posé ne finit plus par un numéro
-// (SUFFIXE_NUMERO) — un autre blanc devant lui, une marque combinante entre
-// ses chiffres —, faute de quoi le fichier écrit se refuserait. Une cellule
-// d'animation réservée non vide pose la marque ou la retire, une cellule
-// vide la garde. Rend vrai quand une valeur a changé.
-function poser(participant, champs, tours) {
+// champ ; une cellule de conflits ou d'inclusions non vide remplace sa liste,
+// une cellule vide la garde, les personnes incluses traduites en identifiants
+// par idDe. Les listes se comparent élément par élément, une fois rangées, la
+// présence sous sa forme canonique : un fichier réimporté ne compte aucun
+// modifié. La marque du nom numéroté n'est pas un champ lu : la personne
+// garde la sienne, la ligne qui la désigne portant le même nom à la casse,
+// aux accents et aux blancs près. Elle ne tombe que si le nom posé ne finit
+// plus par un numéro (SUFFIXE_NUMERO) — un autre blanc devant lui, une marque
+// combinante entre ses chiffres —, faute de quoi le fichier écrit se
+// refuserait. Une cellule d'animation réservée non vide pose la marque ou la
+// retire, une cellule vide la garde. Rend vrai quand une valeur a changé.
+function poser(participant, champs, tours, idDe) {
   let change = false;
   for (const champ of CHAMPS_LUS) {
     if (champs[champ] !== null && champs[champ] !== participant[champ]) {
@@ -329,10 +352,14 @@ function poser(participant, champs, tours) {
       change = true;
     }
   }
-  if (champs.conflits !== null) {
-    const conflits = rangees(champs.conflits);
-    if (!memesListes(conflits, participant.conflits ?? [])) {
-      participant.conflits = conflits;
+  const listes = [
+    ['conflits', champs.conflits === null ? null : rangees(champs.conflits)],
+    ['inclusionsOrganisation', champs.inclusionsOrganisation === null ? null : rangees(champs.inclusionsOrganisation)],
+    ['inclusionsParticipant', champs.inclusionsParticipant === null ? null : identifiantsInclus(champs.inclusionsParticipant, idDe)],
+  ];
+  for (const [champ, liste] of listes) {
+    if (liste !== null && !memesListes(liste, participant[champ] ?? [])) {
+      participant[champ] = liste;
       change = true;
     }
   }
@@ -346,19 +373,18 @@ function poser(participant, champs, tours) {
 }
 
 // Met à jour, en place, les participants que désignent les lignes, et rend
-// les lignes à ajouter, les refus et les comptes, selon ce que
-// issuesDeMiseAJour fait de chaque ligne, contre les participants d'avant
-// l'import : un participant ajouté par une ligne n'est désigné par aucune
-// autre, et le prénom ou l'organisation qu'une ligne pose n'écarte pas ce
-// participant des candidats d'une suivante. Une ligne qui ne désigne
-// personne est à ajouter ; une ligne refusée, PLUSIEURS_CORRESPONDENT ou
-// DEJA_DESIGNE, n'est jamais ajoutée : deux lignes ne se fondent pas en
-// silence dans une même personne. tours est celui de l'événement, sous
-// lequel la présence d'une ligne se met en forme.
-function mettreAJour(participants, lignes, tours) {
-  const issues = issuesDeMiseAJour(participants, lignes);
+// les refus et les comptes, selon issues, ce que issuesDeMiseAJour fait de
+// chaque ligne contre les participants d'avant l'import : un participant
+// ajouté par une ligne n'est désigné par aucune autre, et le prénom ou
+// l'organisation qu'une ligne pose n'écarte pas ce participant des
+// candidats d'une suivante. Une ligne qui ne désigne personne est à
+// ajouter, et appliquerImport la crée ; une ligne refusée,
+// PLUSIEURS_CORRESPONDENT ou DEJA_DESIGNE, n'est jamais ajoutée : deux
+// lignes ne se fondent pas en silence dans une même personne. tours est
+// celui de l'événement, sous lequel la présence d'une ligne se met en
+// forme ; idDe traduit une personne incluse en son identifiant.
+function mettreAJour(participants, lignes, issues, tours, idDe) {
   const parId = new Map(participants.map((participant) => [participant.id, participant]));
-  const nouvelles = [];
   const refusees = [];
   let misAJour = 0;
   let inchanges = 0;
@@ -367,11 +393,12 @@ function mettreAJour(participants, lignes, tours) {
     if (refus !== undefined) {
       const { code, ...details } = refus;
       refusees.push({ ligne, code, valeur: null, ...details, brut: [...brut] });
-    } else if (id === null) nouvelles.push({ champs });
-    else if (poser(parId.get(id), champs, tours)) misAJour += 1;
-    else inchanges += 1;
+    } else if (id !== null) {
+      if (poser(parId.get(id), champs, tours, idDe)) misAJour += 1;
+      else inchanges += 1;
+    }
   });
-  return { nouvelles, refusees, misAJour, inchanges };
+  return { refusees, misAJour, inchanges };
 }
 
 /**
@@ -388,11 +415,11 @@ function mettreAJour(participants, lignes, tours) {
  *   champ vide ; exclu vide le garde ; une cellule d'étiquettes non vide
  *   remplace la liste, vide la garde ; une cellule de présence non vide
  *   remplace la présence, vide la garde, et « tous » la retire ; une cellule
- *   de conflits non vide remplace la liste, vide la garde ; une cellule
- *   d'animation réservée non vide pose ou retire la marque, vide la garde. Une
- *   ligne qui ne désigne personne est ajoutée ; qui en désigne plusieurs,
- *   refusée PLUSIEURS_CORRESPONDENT ; qui désigne un participant qu'une ligne
- *   précédente désigne déjà, refusée DEJA_DESIGNE ;
+ *   de conflits ou d'inclusions non vide remplace sa liste, vide la garde ;
+ *   une cellule d'animation réservée non vide pose ou retire la marque, vide
+ *   la garde. Une ligne qui ne désigne personne est ajoutée ; qui en
+ *   désigne plusieurs, refusée PLUSIEURS_CORRESPONDENT ; qui désigne un
+ *   participant qu'une ligne précédente désigne déjà, refusée DEJA_DESIGNE ;
  * - 'remplacer' : les participants et leurs réservations sont retirés,
  *   leurs logos avec eux, puis chaque ligne valide ajoutée. Tables, titres,
  *   propositions et retenu restent (bilanRemplacement). Le CSV ne porte
@@ -401,14 +428,18 @@ function mettreAJour(participants, lignes, tours) {
  * Une personne créée prend les champs de sa ligne, exclu vide valant non, ses
  * étiquettes rangées par unités de code, absentes quand la ligne n'en porte
  * pas, sa présence canonique, absente quand la cellule est vide ou nomme
- * chaque tour, la marque de l'animation réservée quand sa cellule se lit oui,
- * et la marque du nom numéroté quand l'aperçu a renommé sa ligne (option
- * noms) ; une personne mise à jour garde la sienne tant que son nom finit par
- * un numéro (SUFFIXE_NUMERO) ; les identifiants partent de
+ * chaque tour, ses conflits et ses inclusions rangés, absents de même, la
+ * marque de l'animation réservée quand sa cellule se lit oui, et la marque
+ * du nom numéroté quand l'aperçu a renommé sa ligne (option noms) ; une
+ * personne mise à jour garde la sienne tant que son nom finit par un numéro
+ * (SUFFIXE_NUMERO) ; les identifiants partent de
  * prochainsIds.participant, dans l'ordre du fichier, et le compteur avance
  * d'autant, sans passer IDENTIFIANT_MAX : un compteur qui ne suffit pas à
  * chaque personne créée refuse l'import entier avant d'en numéroter aucune
- * (§ 8.9). La charge et l'aperçu reçus ne sont pas modifiés ; la charge rendue
+ * (§ 8.9). Une personne incluse se traduit en son identifiant : celui de
+ * l'existant que l'aperçu nomme, ou celui que reçoit la personne créée de la
+ * ligne qu'il nomme, attribué avant toute écriture, la mise à jour comprise.
+ * La charge et l'aperçu reçus ne sont pas modifiés ; la charge rendue
  * n'en partage aucun objet, les propositions figées (gel.js) exceptées,
  * qu'elle reprend telles quelles.
  *
@@ -435,7 +466,9 @@ function mettreAJour(participants, lignes, tours) {
  *   l'aperçu, par un Défaire par exemple : c'est un état de la séance, et
  *   relire le fichier refait l'aperçu ; le refus global de l'aperçu, son
  *   code, détails { ligne }, le rang que nomme l'aperçu ou null, plus
- *   { organisation } quand l'aperçu en nomme une — un conflit fautif ;
+ *   { organisation } quand l'aperçu en nomme une — un conflit ou une
+ *   inclusion d'organisation fautifs —, { nom } quand il nomme une personne
+ *   — une inclusion de participant fautive ;
  *   AMBIGUITE, détails { champs }, les champs que l'en-tête laisse ambigus,
  *   tant que le choix ne les tranche pas ; COMPTEUR_SATURE, détails
  *   { compteur: 'participant' }, quand une personne créée demanderait un
@@ -455,7 +488,12 @@ export function appliquerImport(charge, apercu, mode) {
   }
   if (apercu.refusGlobal !== null) {
     const organisation = apercu.refusGlobalOrganisation ?? null;
-    const details = { ligne: apercu.refusGlobalLigne, ...(organisation === null ? {} : { organisation }) };
+    const nom = apercu.refusGlobalNom ?? null;
+    const details = {
+      ligne: apercu.refusGlobalLigne,
+      ...(organisation === null ? {} : { organisation }),
+      ...(nom === null ? {} : { nom }),
+    };
     throw new ErreurCsv(apercu.refusGlobal, details);
   }
   const { ambigus } = apercu.association;
@@ -466,7 +504,7 @@ export function appliquerImport(charge, apercu, mode) {
   let reservationsRetirees = 0;
   let logosRetires = 0;
   let aAjouter = apercu.lignes;
-  let suite = { refusees: [], misAJour: 0, inchanges: 0 };
+  let issues = null;
   if (mode === 'remplacer') {
     retires = resultat.participants.length;
     reservationsRetirees = resultat.reservations.length;
@@ -474,14 +512,26 @@ export function appliquerImport(charge, apercu, mode) {
     resultat.participants = [];
     resultat.reservations = [];
   } else if (mode === 'mettreAJour') {
-    suite = mettreAJour(resultat.participants, apercu.lignes, tours);
-    aAjouter = suite.nouvelles;
+    issues = issuesDeMiseAJour(resultat.participants, apercu.lignes);
+    aAjouter = apercu.lignes.filter((_, rang) => issues[rang].id === null);
   }
-  if (resultat.prochainsIds.participant + aAjouter.length - 1 >= IDENTIFIANT_MAX) {
+  const premier = resultat.prochainsIds.participant;
+  if (premier + aAjouter.length - 1 >= IDENTIFIANT_MAX) {
     throw new ErreurCsv('COMPTEUR_SATURE', { compteur: 'participant' });
   }
+  // L'identifiant de chaque ligne à créer, attribué avant toute écriture.
+  const idsDesLignes = new Map(aAjouter.map(({ ligne }, rang) => [ligne, premier + rang]));
+  const idDe = ({ id, ligne }) => {
+    const traduit = id ?? idsDesLignes.get(ligne);
+    if (traduit === undefined) throw new Error(`inclusion : la ligne ${ligne} ne crée personne`);
+    return traduit;
+  };
+  const suite =
+    issues === null
+      ? { refusees: [], misAJour: 0, inchanges: 0 }
+      : mettreAJour(resultat.participants, apercu.lignes, issues, tours, idDe);
   for (const { champs } of aAjouter) {
-    resultat.participants.push(creer(resultat.prochainsIds.participant, champs, tours));
+    resultat.participants.push(creer(resultat.prochainsIds.participant, champs, tours, idDe));
     resultat.prochainsIds.participant += 1;
   }
   return {

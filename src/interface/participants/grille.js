@@ -97,7 +97,9 @@ const CHAMPS_RENOMMES = new Map([
   ['conflits', 'conflit_organisation'],
 ]);
 
-// Les colonnes de propriétés que l'export n'écrit pas : les inclusions.
+// Les colonnes de propriétés qu'aucune colonne de l'export n'écrit seule :
+// les inclusions, que l'export écrit en deux colonnes, l'une pour les
+// organisations, l'autre pour les personnes.
 const SANS_EXPORT = ['inclusions'];
 
 /** Le champ de l'export CSV (CHAMPS, src/application/csv.js) de chaque

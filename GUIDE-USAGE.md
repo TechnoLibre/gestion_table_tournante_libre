@@ -117,7 +117,8 @@ Vérifiez ces trois lignes avant d’importer.*
 Le mode de l’import se choisit au même endroit : « Ajouter » ajoute des
 personnes, « Mettre à jour » met à jour celles que le fichier reconnaît sans
 effacer les champs qu’il ne porte pas, « Remplacer » remplace la liste et
-annonce d’abord ce qu’il détruit.
+annonce d’abord ce qu’il détruit, les inclusions des personnes retirées
+comprises.
 
 Deux lignes au même nom, prénom et organisation — ou une ligne qui reprend une
 personne déjà dans la liste — se signalent en doublons : chacun nomme la
@@ -193,6 +194,24 @@ organisation que seule apporterait une ligne refusée — elle désigne plusieur
 personnes, ou une personne qu’une ligne plus haut désigne déjà — n’existe
 pas pour les conflits.
 
+Deux colonnes portent les inclusions (étape 3). « Inclusion organisation » nomme
+les organisations que la personne doit rencontrer au moins une fois, écrites et
+séparées comme les conflits. « Inclusion participant » nomme les personnes à
+rencontrer, chacune par son prénom puis son nom — « Iris Ombrelle », ou le nom
+seul pour une personne sans prénom —, séparées de même. Une personne se cherche
+parmi celles de la liste et celles du fichier, même plus bas, sous le nom
+qu’elle aura après l’import ; casse, accents et blancs ne comptent pas. Une
+ligne refusée ne crée personne : une inclusion qui nomme sa personne ne la
+trouve pas tant que la ligne n’est pas corrigée. Un nom que personne ne porte,
+un nom que portent deux personnes, ou le nom de la personne elle-même **refusent
+le fichier entier**, comme une organisation inconnue ou la sienne : l’aperçu
+nomme la ligne et le nom, et dit quoi corriger. Deux homonymes ne se départagent
+jamais au hasard : distinguez-les d’abord par leur nom, dans le fichier ou dans
+leur fiche — un nom numéroté par « Rendre les noms uniques »,
+« Roger Galet 01 », en est un autre. Ces colonnes ne paraissent dans l’aperçu
+que lorsque le fichier les porte ; le tableau peut alors défiler en largeur dans
+son cadre.
+
 Une colonne « Animation réservée » dit qui doit animer une table : « oui »,
 « o », « vrai », « 1 » ou « x » marque la personne à désigner ; « non » ou une
 cellule vide ne la marque pas, et toute autre valeur refuse la ligne, avec son
@@ -227,7 +246,11 @@ pour trier, tapez dans « Filtrer » pour réduire la liste.*
 chaque valeur telle qu’elle a été saisie, sans rien y ajouter : un tableur qui
 l’ouvre peut prendre pour une formule une cellule qui commence par « = »,
 « + », « - » ou « @ ». Si une valeur commence ainsi, ouvrez le fichier par la
-commande d’import de texte du tableur, colonnes en texte.
+commande d’import de texte du tableur, colonnes en texte. Les inclusions
+s’écrivent dans leurs deux colonnes, chaque personne par son nom ; quand une
+inclusion vise une personne dont une autre porte le même nom, un avis le dit
+sous l’en-tête de la liste : distinguez ces personnes par leur nom, dans leur
+fiche, avant de réimporter le fichier, sinon l’import le refusera.
 
 La fiche d’une personne, ouverte par « Fiche » dans la grille, montre en tête
 son nom, son prénom, son organisation, son courriel, son titre pressenti et ses
@@ -338,7 +361,8 @@ recherche, puis aux personnes ; depuis les personnes, il enregistre et passe à
 la cellule suivante. Une saisie qui change les deux listes ne fait qu’un geste,
 que « Défaire » reprend d’un coup ; une saisie refusée, restée ouverte,
 s’abandonne quand vous masquez la colonne. Montrée, la colonne peut faire
-défiler la grille en largeur dans une fenêtre étroite. La génération ne lit pas
+défiler la grille en largeur dans une fenêtre étroite. Les inclusions
+s’importent et s’exportent aussi en CSV (étape 2). La génération ne lit pas
 les inclusions : elles se gardent dans le fichier de l’événement.
 
 Une fois des propositions générées (étape 9), la colonne « Conflits du
@@ -1620,6 +1644,8 @@ majuscules ni aux accents.
 | `presence` | `présence`, `tours de présence` |
 | `conflit_organisation` | `conflits`, `conflit d'organisation`, `conflit d’organisation` |
 | `animation_reservee` | `animation réservée`, `animation réservé` |
+| `inclusion_organisation` | `inclusions d'organisation`, `inclusions d’organisation` |
+| `inclusion_participant` | `inclusions de participant` |
 
 <!-- engendre:fin colonnes-csv -->
 

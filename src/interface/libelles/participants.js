@@ -56,7 +56,9 @@
 // (suiviDesListes, informations.js), ses parties séparées d'un
 // point-virgule. participants.animation.* porte la cellule
 // de la colonne « Animation » (celluleAnimation, grille.js) : les numéros
-// des tables animées, ou « à désigner ».
+// des tables animées, ou « à désigner ». participants.export.homonymes est
+// l'avis d'un export dont des inclusions visent une personne de même nom
+// qu'une autre (inclusionsVersHomonymes), leur nombre en tête.
 
 import { cite, enumeration, toursNommes } from '../../application/libelles/aides.js';
 
@@ -245,6 +247,19 @@ export const TABLE = new Map([
   ['participants.commande.supprimer', 'Supprimer'],
   ['participants.commande.exporter', 'Exporter la liste'],
   ['participants.commande.fermerFiche', 'Fermer la fiche'],
+
+  // --- L'avis de l'export : les inclusions qui visent un homonyme (§ 10.2) ---
+  [
+    'participants.export.homonymes',
+    ({ n }) => {
+      const pronom = n <= 1 ? 'la' : 'les';
+      return (
+        `${compte(n, 'inclusion vise', 'inclusions visent')} une personne dont une autre porte le même nom : le ` +
+        `fichier ${pronom} nomme ainsi, et l'import ${pronom} refuserait. Distinguez ces personnes par leur nom, ` +
+        'dans leur fiche, avant de réimporter le fichier.'
+      );
+    },
+  ],
 
   // --- La suppression d'une personne qui porte des réservations (§ 2.1) -----
   ['participants.suppression.titre', ({ personne }) => `Supprimer ${personne} et ses réservations ?`],

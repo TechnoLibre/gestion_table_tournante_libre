@@ -2024,6 +2024,39 @@ describe('export et collage (§ 10.2)', () => {
     expect(sansId(participants(m))).toEqual(sansId(avant));
   });
 
+  test('un export dont des inclusions visent un homonyme le dit en avis, tant que la liste reste celle qu’il a écrite ; annulé, il ne dit rien', async () => {
+    const m = await evenementOuvert({
+      personnes: [
+        { nom: 'Galet', prenom: 'Roger', organisation: 'Club des Merles' },
+        { nom: 'Galet', prenom: 'Roger', organisation: 'Atelier Ressac' },
+        { nom: 'Ombrelle', prenom: 'Iris' },
+      ],
+    });
+    const [premier, second] = participants(m).filter(({ nom }) => nom === 'Galet').map(({ id }) => id);
+    await m.seance.executer('changerInclusionsParticipant', { id: idDe(m, 'Ombrelle'), participants: [premier, second] });
+    await rendu();
+    const avis = () => section(m).querySelector('[data-avertissement="inclusionsVersHomonymes"]');
+    expect(avis()).toBeNull();
+    m.fs.enregistrerSous = async () => null;
+    await cliquer(section(m).querySelector('[data-commande="exporter"]'));
+    await attendreSeance(m);
+    expect(avis(), 'export annulé').toBeNull();
+    m.fs.enregistrerSous = async (nomPropose) => nomPropose;
+    const trace = m.trace.length;
+    await cliquer(section(m).querySelector('[data-commande="exporter"]'));
+    await attendreSeance(m);
+    await rendu();
+    expect(avis()).not.toBeNull();
+    expect(avis().getAttribute('role')).toBe('status');
+    expect(avis().textContent.trim()).toBe(tEcran('participants.export.homonymes', { n: 2 }));
+    expect(t('participants.export.homonymes', { n: 2 })).toMatch(/^2 inclusions visent une personne/);
+    expect(m.trace.length).toBe(trace);
+    // La liste change : l'avis tombe avec elle.
+    await m.seance.executer('ajouterParticipant', { champs: { nom: 'Pervenche', prenom: 'Théo' } });
+    await rendu();
+    expect(avis()).toBeNull();
+  });
+
   test('un collage sur la grille ouvre l’aperçu d’import : importEnAttente porte le texte intact, origine collage, et la section import ; zéro écriture', async () => {
     const m = await evenementOuvert({ personnes: [{ nom: 'Ombrelle' }] });
     const etats = [];

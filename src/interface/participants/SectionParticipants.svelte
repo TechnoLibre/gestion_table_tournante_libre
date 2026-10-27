@@ -60,15 +60,20 @@
   // confirmer, qui les nomme ; sans réservation, ou quand la séance refuse
   // déjà tout geste modifiant, la commande part et la séance répond. L'export
   // remet les octets d'exporterParticipants à facade.enregistrerSous, sous le
-  // nom ‹base›-participants.csv (nomExport).
+  // nom ‹base›-participants.csv (nomExport). Un export enregistré dont des
+  // inclusions visent une personne de même nom qu'une autre
+  // (inclusionsVersHomonymes) le dit en avis sous l'en-tête
+  // (data-avertissement="inclusionsVersHomonymes"), tant que la liste reste
+  // celle qu'il a écrite.
   import { getContext } from 'svelte';
-  import { cleNormalisee, exporterParticipants } from '../../application/csv.js';
+  import { cleNormalisee, exporterParticipants, inclusionsVersHomonymes } from '../../application/csv.js';
   import { nomAffiche } from '../../application/personnes.js';
   import { teintesOrganisations } from '../organisations.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
+  import Icone from '../primitives/Icone.svelte';
   import Fiche from './Fiche.svelte';
   import Formulaire from './Formulaire.svelte';
   import Grille from './Grille.svelte';
@@ -106,6 +111,9 @@
   const colonnes = $derived(colonnesMontrees(inclusionsMontrees ? ['inclusions'] : []));
   // La suppression qui attend sa confirmation : {participant, reservations}.
   let aSupprimer = $state.raw(null);
+  // Le dernier export enregistré qui nomme des homonymes : la liste qu'il a
+  // écrite et le nombre d'inclusions en cause ; null sinon.
+  let exportAHomonymes = $state.raw(null);
 
   const charge = $derived($seance.charge);
   const participants = $derived(charge?.participants ?? []);
@@ -130,6 +138,7 @@
   const conflitsParGroupe = $derived(groupes === null ? new Map() : conflitsDesGroupes(groupes, conflits));
   const enConflit = $derived(reglesParPersonne(conflits));
   const personneFiche = $derived($ui.fiche === null ? null : (participants.find(({ id }) => id === $ui.fiche) ?? null));
+  const homonymesExportes = $derived(exportAHomonymes?.participants === participants ? exportAHomonymes.n : 0);
 
   // Montre ou masque la colonne des inclusions ; masquée, son tri tombe.
   function montrerInclusions(montrer) {
@@ -144,7 +153,9 @@
 
   async function exporter() {
     const { evenement, charge: courante } = seance.etat();
-    await facade.enregistrerSous(nomExport(evenement.base), exporterParticipants(courante.participants));
+    const chemin = await facade.enregistrerSous(nomExport(evenement.base), exporterParticipants(courante.participants));
+    const n = chemin === null ? 0 : inclusionsVersHomonymes(courante.participants);
+    exportAHomonymes = n === 0 ? null : { participants: courante.participants, n };
   }
 
   function supprimer(participant) {
@@ -169,6 +180,13 @@
         {#snippet actions()}
           <Commande cle="participants.commande.exporter" nom="exporter" executer={exporter} />
         {/snippet}
+
+        {#if homonymesExportes > 0}
+          <div class="signal" role="status" data-avertissement="inclusionsVersHomonymes">
+            <span class="signe"><Icone nom="triangle" /></span>
+            <p>{t('participants.export.homonymes', { n: homonymesExportes })}</p>
+          </div>
+        {/if}
 
         <Formulaire {participants} />
 
@@ -276,6 +294,32 @@
     display: flex;
     flex-direction: column;
     gap: var(--espace-4);
+  }
+
+  /* L'avis d'un export qui nomme des homonymes, en tête de la carte : le
+     filet et la marque de l'avis, comme les signaux de la fiche. */
+  .signal {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--espace-2);
+    margin: var(--espace-3) var(--espace-5) 0;
+    padding: var(--espace-2);
+    border: 1px solid var(--couleur-avis-filet);
+    border-left: 3px solid var(--couleur-avis-marque);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-avis-fond);
+    color: var(--couleur-page-texte);
+    font-size: var(--taille-texte-petit);
+  }
+
+  .signal .signe {
+    display: inline-flex;
+    color: var(--couleur-avis-marque);
+  }
+
+  .signal p {
+    margin: 0;
   }
 
   /* La barre sous le formulaire : filtre, groupement, compte, puis la

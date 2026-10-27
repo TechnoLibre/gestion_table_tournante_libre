@@ -520,7 +520,16 @@
   les deux listes en une seule entrée, et se trie par le nombre d'inclusions.
   Supprimer une personne la retire des listes qui la nomment, et les inclusions
   d'organisation suivent le renommage ou la disparition d'une organisation comme
-  les conflits. La génération ne les lit pas.
+  les conflits. Elles s'importent et s'exportent par deux colonnes du CSV,
+  `inclusion_organisation` et `inclusion_participant`, après l'animation
+  réservée, séparées comme les conflits, chaque personne par son prénom puis
+  son nom, cherchée parmi la liste et le fichier sous le nom qu'elle aura
+  après l'import. Une organisation inconnue ou la sienne, un nom que personne
+  ne porte, que deux personnes portent, ou la personne elle-même refusent
+  l'import entier, la ligne et le nom nommés. L'export avertit quand une
+  inclusion vise un homonyme, qu'il ne saurait relire, et « Remplacer »
+  compte les inclusions qu'il retire. Le modèle à télécharger et le guide de
+  l'import portent les deux colonnes. La génération ne les lit pas.
 - **L'animation réservée.** Une personne peut être marquée à désigner animatrice
   d'une table : la case « Animation réservée » de sa fiche la pose ou la retire,
   en une entrée d'historique que « Défaire » reprend, et la colonne

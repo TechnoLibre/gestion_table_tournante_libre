@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes des codes de src/csv (§ 10.1, § 10.4, § 14.6) : encodage,
-// séparateur, en-tête, refus d'une ligne, présence comprise, refus de la
-// mise à jour, aperçu calculé pour un autre nombre de tours, conflits
-// d'organisation fautifs, les logos qu'un import « remplacer » retire, et
-// ceux du CSV des objectifs de table, son import et son libellé
+// séparateur, en-tête, refus d'une ligne, présence comprise, refus de la mise
+// à jour, aperçu calculé pour un autre nombre de tours, conflits
+// d'organisation et inclusions fautifs, les logos qu'un import « remplacer »
+// retire, et ceux du CSV des objectifs de table, son import et son libellé
 // d'historique.
 import { ETIQUETTE_LONGUEUR_MAX, ETIQUETTES_MAX } from '../../stockage/etiquettes.js';
 import { cite, compte, enumeration, nomDans } from './aides.js';
@@ -131,6 +131,39 @@ export const TABLE = new Map([
     ({ ligne, organisation }) =>
       `L'organisation ${cite(organisation)} est celle de la personne (ligne ${ligne}, colonne des conflits) : ` +
       "une personne ne nomme pas la sienne en conflit. Rien n'est importé.",
+  ],
+  // Une inclusion fautive refuse le fichier entier, comme un conflit
+  // (§ 10.1) : la cause nomme l'organisation, ou la personne, telle que la
+  // cellule l'écrit, et la ligne qui la porte.
+  [
+    'INCLUSION_ORGANISATION_INCONNUE',
+    ({ ligne, organisation }) =>
+      `L'organisation ${cite(organisation)} n'existe pas (ligne ${ligne}, colonne des inclusions d'organisation). ` +
+      "Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_ORGANISATION_PROPRE',
+    ({ ligne, organisation }) =>
+      `L'organisation ${cite(organisation)} est celle de la personne (ligne ${ligne}, colonne des inclusions ` +
+      "d'organisation) : une inclusion nomme une autre organisation que la sienne. Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_PARTICIPANT_INCONNU',
+    ({ ligne, nom }) =>
+      `Aucune personne ne s'appelle ${cite(nom)} (ligne ${ligne}, colonne des inclusions de participant) : ` +
+      "une inclusion nomme une personne par son prénom et son nom. Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_PARTICIPANT_AMBIGU',
+    ({ ligne, nom }) =>
+      `Plusieurs personnes s'appellent ${cite(nom)} (ligne ${ligne}, colonne des inclusions de participant) : ` +
+      "le nom ne dit pas laquelle rencontrer. Rien n'est importé.",
+  ],
+  [
+    'INCLUSION_PARTICIPANT_SOI',
+    ({ ligne, nom }) =>
+      `${cite(nom)} est la personne de la ligne ${ligne} elle-même (colonne des inclusions de participant) : ` +
+      "une inclusion nomme une autre personne. Rien n'est importé.",
   ],
   // --- Le CSV des objectifs de table (§ 10.4) -------------------------------
   ['TABLE_NON_ASSOCIEE', () => "Aucune colonne ne porte le numéro de table : l'en-tête doit compter une colonne « table »."],

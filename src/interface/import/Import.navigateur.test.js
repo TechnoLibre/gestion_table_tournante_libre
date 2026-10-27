@@ -503,6 +503,65 @@ describe("un conflit d'organisation fautif refuse le fichier entier (§ 10.1)", 
   });
 });
 
+describe('une inclusion fautive refuse le fichier entier (§ 10.1, § 10.3)', () => {
+  test("une personne inconnue : cause, ligne et remède, rien d'écrit ; corrigé, le fichier s'importe, chaque personne incluse en pastille à « ajouter »", async () => {
+    // Le refus vide l'aperçu : il se montre sur un texte à part, jamais sur
+    // un fichier d'exemple.
+    const e = await ouvrir({ participants: [personne(1, 'Houle', 'Basile', { organisation: 'Club des Merles' })] });
+    const avant = ecritures(e);
+    const entete = 'nom;prenom;organisation;inclusion_organisation;inclusion_participant';
+    await choisir(e, 'inclusions.csv', enUtf8(`${entete}\r\nOmbrelle;Iris;Atelier Ressac;club des merles;Basile Houle\r\nPervenche;Théo;;;Ondine Lacase\r\n`));
+    const pose = dans(e, '[data-apercu] [data-refus="INCLUSION_PARTICIPANT_INCONNU"]');
+    expect(pose).not.toBeNull();
+    expect(vu(pose)).toBe(true);
+    const textes = [...pose.querySelectorAll('p')].map(texteDe);
+    expect(textes).toContain(
+      "Aucune personne ne s'appelle « Ondine Lacase » (ligne 3, colonne des inclusions de participant) : " +
+        "une inclusion nomme une personne par son prénom et son nom. Rien n'est importé.",
+    );
+    expect(textes).toContain(t('import.remede.inclusionInconnue', { ligne: 3 }));
+    expect(dans(e, '[data-apercu] [data-lignes]')).toBeNull();
+    expect(commande(e, 'importer')).toBeNull();
+    expect(ecritures(e)).toBe(avant);
+
+    await choisir(
+      e,
+      'inclusions-corrige.csv',
+      enUtf8(`${entete}\r\nOmbrelle;Iris;Atelier Ressac;club des merles;Basile Houle | ondine lacasse\r\nPervenche;Théo;;;\r\nLacasse;Ondine;;;Iris Ombrelle\r\n`),
+    );
+    expect(dans(e, '[data-apercu] [data-refus]')).toBeNull();
+    const pastilles = tous(e, '[data-lignes] [data-ligne="2"] [data-cellule="inclusion_participant"] li');
+    expect(pastilles.map(texteDe)).toEqual(['Basile Houle', 'Ondine Lacasse']);
+    expect(tous(e, '[data-lignes] [data-ligne="2"] [data-cellule="inclusion_organisation"] li').map(texteDe)).toEqual(['Club des Merles']);
+    const { refus } = await importer(e);
+    expect(refus).toBeNull();
+    const ids = new Map(participantsDe(e).map(({ nom, id }) => [nom, id]));
+    expect(participantsDe(e).map(({ inclusionsOrganisation, inclusionsParticipant }) => [inclusionsOrganisation, inclusionsParticipant])).toEqual([
+      [undefined, undefined],
+      [['Club des Merles'], [ids.get('Houle'), ids.get('Lacasse')].sort((a, b) => a - b)],
+      [undefined, undefined],
+      [undefined, [ids.get('Ombrelle')]],
+    ]);
+  });
+
+  test('un nom que portent deux personnes : la cause, et le remède qui dit de les distinguer, rien d’écrit', async () => {
+    const e = await ouvrir({
+      participants: [
+        personne(1, 'Galet', 'Roger', { organisation: 'Club des Merles' }),
+        personne(2, 'Galet', 'Roger', { organisation: 'Atelier Ressac' }),
+      ],
+    });
+    const avant = ecritures(e);
+    await choisir(e, 'ambigu.csv', enUtf8('nom;inclusion_participant\r\nOmbrelle;Roger Galet\r\n'));
+    const pose = dans(e, '[data-apercu] [data-refus="INCLUSION_PARTICIPANT_AMBIGU"]');
+    expect(pose).not.toBeNull();
+    expect(texteDe(pose)).toContain(t('INCLUSION_PARTICIPANT_AMBIGU', { ligne: 2, nom: 'Roger Galet' }));
+    expect(texteDe(pose)).toContain(t('import.remede.inclusionAmbigue', { ligne: 2 }));
+    expect(commande(e, 'importer')).toBeNull();
+    expect(ecritures(e)).toBe(avant);
+  });
+});
+
 describe('une ligne fausse n’arrête pas le reste (§ 10.1, § 2.1)', () => {
   test('la grande démonstration, « peut-être » à l’enregistrement 213 : 259 lignes valides, la ligne 213 et sa valeur ; l’import en ajoute 259', async () => {
     const e = await ouvrir();
@@ -1864,17 +1923,18 @@ describe("le guide de l'import, replié sous le modèle (§ 10.1, § 10.4)", () 
 });
 
 describe('la colonne de la présence (§ 10.1)', () => {
-  test('le modèle téléchargé porte la neuvième colonne, « presence », puis les conflits et l’animation réservée ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
+  test('le modèle téléchargé porte la neuvième colonne, « presence », puis les conflits, l’animation réservée et les inclusions ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
     const e = await ouvrir({ tours: 4 });
     commande(e, 'telechargerModele').click();
     await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
     const octets = e.enregistres[0].octets;
     expect([...octets]).toEqual([...modeleParticipants({ tours: 4 })]);
     const [entete] = decouper(decoder(octets).texte, ';').enregistrements;
-    expect(entete.length).toBe(11);
+    expect(entete.length).toBe(13);
     expect(entete[8]).toBe('presence');
     expect(entete[9]).toBe('conflit_organisation');
     expect(entete[10]).toBe('animation_reservee');
+    expect(entete.slice(11)).toEqual(['inclusion_organisation', 'inclusion_participant']);
     await choisir(e, 'modele-participants.csv', octets);
     const apercu = dans(e, '[data-apercu]');
     expect(new Map(association(apercu)).get('presence')).toBe(t('import.champ.presence'));
@@ -1884,6 +1944,9 @@ describe('la colonne de la présence (§ 10.1)', () => {
     expect(participantsDe(e).map(({ presence }) => presence)).toEqual([undefined, [2, 3], undefined, [1, 2, 3]]);
     expect(participantsDe(e).map(({ conflits }) => conflits)).toEqual([undefined, undefined, undefined, ['Atelier Ressac']]);
     expect(participantsDe(e).map(({ animationReservee }) => animationReservee)).toEqual([true, undefined, undefined, undefined]);
+    expect(participantsDe(e).map(({ inclusionsOrganisation }) => inclusionsOrganisation)).toEqual([undefined, ['Atelier Ressac'], undefined, undefined]);
+    const basile = participantsDe(e).find(({ nom }) => nom === 'Tourteau').id;
+    expect(participantsDe(e).map(({ inclusionsParticipant }) => inclusionsParticipant)).toEqual([[basile], undefined, undefined, undefined]);
   });
 
   test('l’aperçu montre « tours 2 à 4 » et « tous les tours » ; une ligne refusée porte son motif, à son rang', async () => {
@@ -1914,12 +1977,18 @@ describe('la colonne de la présence (§ 10.1)', () => {
 });
 
 describe('l’aperçu dans une fenêtre de 1 366 × 700 (§ 10.1)', () => {
-  test('le modèle de quatre tours : le tableau tient dans sa carte, les tours nommés d’un tenant', async () => {
+  test('le modèle de quatre tours, sans ses deux colonnes d’inclusions : le tableau tient dans sa carte, les tours nommés d’un tenant', async () => {
     const avant = { largeur: innerWidth, hauteur: innerHeight };
     await fixerCadre(1366, 700);
     try {
       const e = await ouvrir({ tours: 4, participants: [personne(1, 'Houle', 'Agathe', { organisation: 'Atelier Ressac' })] });
-      const modele = new TextDecoder().decode(modeleParticipants({ tours: 4 }));
+      // Les onze premières colonnes du modèle : aucune de ses cellules ne
+      // porte « ; ».
+      const modele = new TextDecoder()
+        .decode(modeleParticipants({ tours: 4 }))
+        .split('\r\n')
+        .map((ligne) => (ligne === '' ? ligne : ligne.split(';').slice(0, 11).join(';')))
+        .join('\r\n');
       await choisir(e, 'modele.csv', new TextEncoder().encode(`${modele}Houle;Agathe;;;;;;;;;\r\n`));
       const tableau = dans(e, '[data-apercu] [data-lignes]');
       const entetes = [...tableau.tHead.rows[0].cells];
@@ -1935,6 +2004,25 @@ describe('l’aperçu dans une fenêtre de 1 366 × 700 (§ 10.1)', () => {
       const lues = [...tableau.querySelectorAll('[data-cellule="presence"]')].filter((c) => /^tours /.test(texteDe(c)));
       expect(lues.map(texteDe).sort()).toEqual(['tours 1 à 3', 'tours 2 et 3']);
       for (const presence of lues) expect(rangeesDeTexte(presence), texteDe(presence)).toBe(1);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('le modèle entier, ses deux colonnes d’inclusions comprises : le tableau défile au besoin dans son conteneur, jamais la page', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+    try {
+      const e = await ouvrir({ tours: 4 });
+      await choisir(e, 'modele.csv', modeleParticipants({ tours: 4 }));
+      const tableau = dans(e, '[data-apercu] [data-lignes]');
+      const entetes = [...tableau.tHead.rows[0].cells];
+      expect(entetes.at(-2).textContent).toBe(t('import.champ.inclusionsOrganisation'));
+      expect(entetes.at(-1).textContent).toBe(t('import.champ.inclusionsParticipant'));
+      const defile = tableau.parentElement;
+      expect(defile.getBoundingClientRect().right).toBeLessThanOrEqual(section(e).getBoundingClientRect().right);
+      expect(document.documentElement.scrollWidth, 'la page défile en largeur').toBeLessThanOrEqual(innerWidth);
+      for (const entete of entetes) expect(entete.scrollWidth, entete.textContent).toBeLessThanOrEqual(entete.clientWidth);
     } finally {
       await fixerCadre(avant.largeur, avant.hauteur);
     }

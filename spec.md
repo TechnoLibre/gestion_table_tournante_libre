@@ -116,7 +116,8 @@ retenu (§ 5.8).
 La fiche porte enfin ses **inclusions** (§ 4) : les organisations et les
 personnes qu'elle doit rencontrer au moins une fois, une case par organisation
 ou par personne, sous deux rubriques ; la grille les montre dans une colonne
-qu'elle masque par défaut (§ 10.2). Elles ne sont exigées nulle part.
+qu'elle masque par défaut (§ 10.2), et deux colonnes du CSV les importent
+(§ 10.1). Elles ne sont exigées nulle part.
 
 **4. Préparer les tables.** *Obligatoire.* L'opérateur fixe le nombre de sièges
 par défaut, crée les tables — une à une, ou d'un geste celles qui manquent pour
@@ -355,7 +356,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PRE-12` | Télécharger les modèles CSV et les fichiers d'exemple | § 10.1, § 10.3 |
 | `PRE-13` | Donner un libellé aux tables | § 4, § 7.7 |
 | `PRE-14` | Donner un logo aux personnes | § 8.9, § 10.2 |
-| `PRE-15` | Nommer les inclusions d'une personne : organisations et participants à rencontrer au moins une fois | § 4, § 10.2 |
+| `PRE-15` | Nommer les inclusions d'une personne : organisations et participants à rencontrer au moins une fois | § 4, § 10.1, § 10.2 |
 
 **Placer** — `PLA`
 
@@ -571,7 +572,8 @@ s'admet. L'inclusion n'est ni une réservation ni une fixation : elle ne place
 personne et ne retire rien de ce que la génération peut faire ; le moteur ne la
 lit pas (§ 8.9). L'exclusion suspend une personne, pas ses listes : la liste
 d'une exclue se garde, et une inclusion qui vise une exclue aussi. Elle se
-saisit dans la fiche et dans la grille (§ 10.2).
+saisit dans la fiche et dans la grille (§ 10.2), et s'importe en CSV, une
+personne par son nom affiché (§ 10.1).
 
 Les listes d'inclusions d'organisation suivent les organisations comme celles
 des conflits : la référence suit le renommage de la dernière personne d'une
@@ -4987,6 +4989,8 @@ organisations sans rien signaler.
 | `presence` | non | les tours de présence : des tours et des plages — « 1-3 », « 2, 3 », « tours 1 et 2 » ; `tous` ou `tous les tours` valent tous les tours ; vide, voir plus bas ; synonymes : `présence`, `tours de présence` |
 | `conflit_organisation` | non | les organisations que la personne nomme en conflit (§ 4), plusieurs par cellule, séparées par `;`, `\|` ou une fin de ligne — une virgule reste dans le nom ; voir plus bas ; synonymes : `conflits`, `conflit d'organisation` sous ses deux apostrophes |
 | `animation_reservee` | non | la marque de l'animation réservée (§ 4), par la liste fermée d'`exclu` ; voir plus bas ; synonymes : `animation réservée`, `animation réservé` — **l'import ne désigne personne** |
+| `inclusion_organisation` | non | les organisations que la personne doit rencontrer au moins une fois (§ 4), séparées comme les conflits ; voir plus bas ; synonymes : `inclusions d'organisation` sous ses deux apostrophes |
+| `inclusion_participant` | non | les personnes qu'elle doit rencontrer au moins une fois (§ 4), chacune par son prénom puis son nom, séparées comme les conflits ; voir plus bas ; synonyme : `inclusions de participant` |
 
 Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents,
 des blancs, des traits de soulignement ni des traits d'union** :
@@ -5077,6 +5081,45 @@ ne le dise. À la création, une cellule vide ne nomme aucun conflit ; en mise �
 jour, elle garde la liste de la personne, et une cellule non vide la remplace,
 la comparaison se faisant sur la liste rangée.
 
+**Les valeurs des colonnes `inclusion_organisation` et `inclusion_participant`
+se lisent elles aussi avant de valider quoi que ce soit**, après celles des
+conflits, ligne à ligne dans l'ordre du fichier, la cellule des organisations
+avant celle des personnes. Les deux cellules se découpent comme celle des
+conflits, par le plus long assemblage de morceaux, et aucun synonyme ne dit
+« inclusion » seul, qui ne dirait pas laquelle. **Une organisation incluse** se
+lit contre les mêmes organisations que les conflits, par la même clé, sous la
+même orthographe : celle qu'aucune ne porte refuse le fichier entier
+(`INCLUSION_ORGANISATION_INCONNUE`), comme la propre organisation de la personne
+(`INCLUSION_ORGANISATION_PROPRE`). **Une personne incluse** se nomme par son nom
+affiché — le prénom, une espace, puis le nom, le nom seul sans prénom (§ 8.2) —
+et se lit contre les personnes que l'import laisse dans la liste, sous le nom
+qu'il leur laisse : les participants existants, hors du mode « remplacer », et
+les lignes valides que l'import crée, même plus bas que la ligne qui les nomme ;
+en mise à jour, une personne que le fichier met à jour ne compte qu'une fois,
+sous le nom et le prénom que sa ligne lui pose ; une ligne que l'import refuse,
+dans tout mode, ne crée personne, si bien que son nom ne s'y trouve pas. Le nom
+s'apparie par la clé normalisée. Un nom qu'aucune personne ne porte refuse le
+fichier entier (`INCLUSION_PARTICIPANT_INCONNU`), comme un nom que plusieurs
+portent (`INCLUSION_PARTICIPANT_AMBIGU`) — deux homonymes ne se départagent
+jamais au hasard ; un nom que « Rendre les noms uniques » a numéroté,
+« Roger Galet 01 », n'en est pas un — et le nom de la personne de la ligne
+elle-même (`INCLUSION_PARTICIPANT_SOI`). La première faute est nommée, avec
+l'organisation ou le nom tels que la cellule les écrit et le rang de sa ligne ;
+l'aperçu ne montre alors aucune ligne, et son remède dit la correction :
+corriger la cellule ou ajouter au fichier la personne ou l'organisation — ou
+corriger la ligne refusée qui porte la personne —, distinguer par leur nom, dans
+le fichier ou dans leur fiche, les personnes qui portent un nom ambigu, retirer
+la sienne ou soi-même ; puis importer le fichier de nouveau, ou, sous un texte
+collé, le coller de nouveau. Un collègue de sa propre organisation se nomme
+comme un autre, et une inclusion que contredit un conflit de la personne s'admet
+(§ 4). L'import écrit chaque personne incluse sous son identifiant, celui
+qu'elle a ou celui que sa ligne reçoit, la liste rangée ; à la création, une
+cellule vide n'inclut rien ; en mise à jour, elle garde la liste de la personne,
+et une cellule non vide la remplace, la comparaison se faisant sur la liste
+rangée. Les colonnes des inclusions ne se montrent dans le tableau des lignes de
+l'aperçu que lorsque le fichier les porte, chaque nom en pastille à l'icône
+« ajouter » ; montrées, le tableau peut défiler dans son cadre, jamais la page.
+
 **L'encodage se tranche en quatre temps, dans cet ordre :** marque d'ordre
 d'octets UTF-8 ; marque UTF-16 ; **un octet nul dans les quatre premiers
 kibioctets sans marque** → refus global avec le remède nommé
@@ -5160,12 +5203,13 @@ numéro de l'enregistrement, en-tête compris : celui qu'un tableur affiche, un
 champ cité sur plusieurs lignes du texte n'y comptant qu'une fois. Sur 260
 lignes, un refus global coûterait l'import entier pour une faute en ligne 213.
 
-Hors de l'encodage et du séparateur, cinq cas restent des refus **globaux** :
+Hors de l'encodage et du séparateur, six cas restent des refus **globaux** :
 aucun en-tête reconnaissable, aucune colonne associée à `nom`, zéro ligne
 valide, **un guillemet resté ouvert** jusqu'à la fin du texte
 (`GUILLEMET_OUVERT`, avec l'enregistrement où il s'ouvre) — tout ce qui le suit
-tiendrait dans un seul champ, et deux personnes se fondraient en une —, et
-**un conflit d'organisation fautif**, vu plus haut.
+tiendrait dans un seul champ, et deux personnes se fondraient en une —,
+**un conflit d'organisation fautif** et **une inclusion fautive**, vus plus
+haut.
 
 **L'import entier est une seule entrée d'historique.** Les personnes qu'il crée
 prennent leurs identifiants à la suite du compteur, dans l'ordre du fichier ;
@@ -5212,30 +5256,36 @@ courriels, d'un geste qui s'annonce comme une mise à jour.
 « 260 personnes seront supprimées » laisse croire qu'on ne perd que des noms.
 La fenêtre à confirmer compte les personnes, les réservations, les titres qui
 perdront leur réservation et les propositions qui deviendront périmées, puis
-les logos que le remplacement retire, seulement quand il en retire.
+les inclusions que portent les personnes retirées — chacune vise une personne
+retirée ou part avec elle —, seulement quand elles en portent, puis les logos
+que le remplacement retire, seulement quand il en retire.
 
 **Importer selon l'état** : sans avertissement en brouillon et proposé ; en
 retenu, avec l'avertissement que le placement retenu suit la présence de chacun,
 les arrivées en réserve et les départs laissant leur chaise vide (§ 5.8) ;
 **refusé** en bloqué, le message nommant la commande qui déverrouille.
 
-**Le modèle à télécharger.** La section d'import offre « Télécharger un
-modèle » pour la nature cochée (§ 10.4) ; la commande passe par « Enregistrer
-sous… » et n'écrit rien dans l'événement : elle est permise en lecture et sur
-un plan bloqué. Son nom accessible nomme la nature, et le chemin enregistré
-s'annonce sous elle. Le modèle a la forme de l'export — UTF-8 avec marque, `;`,
-CRLF, les en-têtes de l'import — et **s'importe tel quel sans refuser aucune
-ligne**. Celui des participants, `modele-participants.csv`, est réglé par le
-nombre de tours de l'événement pour sa seule colonne `presence` : quatre
-personnes inventées, dont les cellules remplissent chaque colonne du tableau
-ci-dessus, `exclu` sous ses deux valeurs, `animation_reservee` aussi — `oui`
-pour la personne au titre pressenti —, une cellule à deux étiquettes, un
-conflit, que la personne sans organisation nomme envers l'organisation de
-l'exclue — une organisation existe aussi par ses exclus —, et deux présences,
-l'une de 1 à l'avant-dernier tour, l'autre aux tours 2 et 3 : « 1-3 » et
-« 2, 3 » à quatre tours, « 1, 2 » et « 2, 3 » à trois, « 1 » et « 2 » à deux ;
-à un tour, la colonne reste vide. Il s'importe tel quel sous tout nombre de
-tours.
+**Le modèle à télécharger.** La section d'import offre « Télécharger un modèle »
+pour la nature cochée (§ 10.4) ; la commande passe par « Enregistrer sous… » et
+n'écrit rien dans l'événement : elle est permise en lecture et sur un plan
+bloqué. Son nom accessible nomme la nature, et le chemin enregistré s'annonce
+sous elle. Le modèle a la forme de l'export — UTF-8 avec marque, `;`, CRLF, les
+en-têtes de l'import — et **s'importe tel quel sans refuser aucune ligne**.
+Celui des participants, `modele-participants.csv`, est réglé par le nombre de
+tours de l'événement pour sa seule colonne `presence` : quatre personnes
+inventées, dont les cellules remplissent chaque colonne du tableau ci-dessus,
+`exclu` sous ses deux valeurs, `animation_reservee` aussi — `oui` pour la
+personne au titre pressenti —, une cellule à deux étiquettes, un conflit, que la
+personne sans organisation nomme envers l'organisation de l'exclue — une
+organisation existe aussi par ses exclus —, une inclusion de cette même
+organisation, celle de l'exclue, que nomme une autre personne, une inclusion de
+participant, la personne sans organisation, et deux présences, l'une de 1 à
+l'avant-dernier tour, l'autre aux tours 2 et 3 : « 1-3 » et « 2, 3 » à quatre
+tours, « 1, 2 » et « 2, 3 » à trois, « 1 » et « 2 » à deux ; à un tour, la
+colonne reste vide. Il s'importe tel quel sous tout nombre de tours, dans une
+liste vide, en mise à jour ou en remplacement ; ajouté à une liste qui porte
+déjà la personne sans organisation, son inclusion de participant nomme deux
+personnes et refuse le fichier entier (`INCLUSION_PARTICIPANT_AMBIGU`).
 Celui des objectifs suit l'événement (§ 10.4).
 
 **Le guide de l'import.** Sous « Télécharger un modèle », dernier de la carte
@@ -5260,8 +5310,10 @@ sans texte de guide fait échouer une épreuve.
 Le texte d'une colonne suit ce paragraphe et le § 10.4 : une liste fermée —
 `exclu`, `animation_reservee`, `regle` — s'y donne en entier, la ligne
 `animation_reservee` dit que l'import ne désigne personne et que « Créer les
-tables… » désigne les personnes marquées, et la ligne `conflit_organisation` dit
-qu'une virgule ne sépare pas deux organisations, qu'elle reste dans le nom.
+tables… » désigne les personnes marquées, la ligne `conflit_organisation` et
+celle d'`inclusion_organisation` disent qu'une virgule ne sépare pas deux
+organisations, qu'elle reste dans le nom, et la ligne `inclusion_participant`
+qu'une personne s'y écrit par son prénom puis son nom.
 Changer de nature change le tableau, le bloc restant ouvert.
 
 ### 10.2 La saisie
@@ -5458,7 +5510,7 @@ sortie ; une saisie refusée, restée ouverte, s'abandonne quand la colonne se
 masque, sans rien écrire, son refus et son geste avec elle. La grille trie la
 colonne par le nombre d'inclusions de chaque personne, une personne sans
 inclusion après toutes les autres ; elle ne se groupe ni ne se filtre par elle,
-et l'export ne l'écrit pas.
+et l'export écrit ses deux listes dans deux colonnes à lui (plus bas).
 
 **Les conflits du placement de chaque personne se lisent dans la grille et
 dans la fiche** (§ 7.5). La colonne « Conflits du placement », juste après celle
@@ -5516,7 +5568,8 @@ passent à la ligne.
 **La liste s'exporte en CSV dans la forme exacte qu'il importe.** L'aller-retour
 est éprouvé par un test qui importe, exporte et compare champ par champ : il
 fait du fichier une sauvegarde, et de l'export le gabarit que personne n'a
-besoin de documenter.
+besoin de documenter. Seule une inclusion qui vise un homonyme non numéroté
+n'y entre pas (plus bas).
 
 L'export écrit toujours la colonne `etiquettes`, puis la colonne `presence`,
 les étiquettes jointes par une virgule suivie d'une espace (`, `) ; la
@@ -5532,12 +5585,24 @@ puis par une fin de ligne : la première jointure que la lecture de l'import
 rend en la même liste. Sans conflit dans la liste, la colonne manque, et son
 réimport en mise à jour ne touche aucune liste. Dès qu'une personne de la liste
 porte la marque de l'animation réservée, la colonne `animation_reservee` suit,
-en dernière position, `oui` pour la marque, `non` sans elle ; sans marque dans
-la liste, elle manque de même. Comme le logo, la marque du nom numéroté (§ 8.9)
-n'a pas de colonne : le nom s'écrit entier, numéro compris, et se réimporte
-sans elle. Le collage en bloc suit le même ordre de colonnes, la huitième étant
-celle des étiquettes, la neuvième celle de la présence, la dixième celle des
-conflits, la onzième celle de l'animation réservée. Les objectifs des tables
+`oui` pour la marque, `non` sans elle ; sans marque dans la liste, elle manque
+de même. Puis viennent les deux colonnes des inclusions, chacune dès qu'une
+personne de la liste porte une telle liste, et absente sinon :
+`inclusion_organisation`, ses organisations jointes comme les conflits, puis
+`inclusion_participant`, chaque personne incluse par son nom affiché, numéro
+compris, dans l'ordre de ses identifiants, jointes de même — un nom qui porte
+« ; » se joint par ` | `, puis par une fin de ligne. L'identifiant ne s'écrit
+pas : le réimport relit chaque personne incluse par son nom, si bien que
+l'aller-retour vaut **hors des inclusions qui visent un homonyme non
+numéroté**, que l'import refuse (`INCLUSION_PARTICIPANT_AMBIGU`). Un export
+qui en porte le dit, en avis sous l'en-tête de la liste, leur nombre en tête :
+« 2 inclusions visent une personne dont une autre porte le même nom… » ;
+l'avis tombe dès que la liste change. Comme le logo, la marque du nom
+numéroté (§ 8.9) n'a pas de colonne : le nom s'écrit entier, numéro compris,
+et se réimporte sans elle. Le collage en bloc suit le même ordre de colonnes,
+la huitième étant celle des étiquettes, la neuvième celle de la présence, la
+dixième celle des conflits, la onzième celle de l'animation réservée, la
+douzième et la treizième celles des inclusions. Les objectifs des tables
 s'exportent par leur propre CSV, dans la forme exacte qu'il importe (§ 10.4).
 
 ### 10.3 Les fichiers d'exemple livrés
@@ -5570,17 +5635,18 @@ d'orthographes d'une même étiquette à fondre, et une cellule vide. Sa colonne
 non reconnue reste la dernière. Il porte aussi une colonne `Présence`, avant la
 colonne non reconnue : des cellules vides, un « Tous », et une plage qui
 commence avant la soirée, « 0-2 », qui refuse sa ligne sous tout nombre de
-tours. Il ne porte aucune présence partielle admise : ses lignes valides
-passent par le moteur dans les épreuves d'intégration, et y gardent leurs
-personnes. Les deux fichiers `participants_demo_*.csv`, exports des
-démonstrations, portent la colonne `etiquettes`, vide, et la colonne
-`presence`, vide ; les
-démonstrations elles-mêmes ne changent pas. Le fichier des objectifs exerce un
-numéro de table inconnu, un tour hors de la soirée, une règle inconnue, deux
-lignes pour une même table et un même tour, une orthographe qui se fond avec une
-étiquette des participants, et une table qui porte un objectif de soirée et un
-objectif de tour ; il alimente la capture d'écran de l'aperçu des objectifs
-(§ 19.3).
+tours. Il ne porte aucune présence partielle admise : ses lignes valides passent
+par le moteur dans les épreuves d'intégration, et y gardent leurs personnes. Les
+deux fichiers `participants_demo_*.csv`, exports des démonstrations, portent la
+colonne `etiquettes`, vide, et la colonne `presence`, vide ; les démonstrations
+elles-mêmes ne changent pas. Aucun fichier livré ne porte de colonne
+d'inclusion : une inclusion fautive refuse le fichier entier et vide l'aperçu,
+si bien que son refus s'éprouve, et se montre, sur un texte à part. Le fichier
+des objectifs exerce un numéro de table inconnu, un tour hors de la soirée, une
+règle inconnue, deux lignes pour une même table et un même tour, une orthographe
+qui se fond avec une étiquette des participants, et une table qui porte un
+objectif de soirée et un objectif de tour ; il alimente la capture d'écran de
+l'aperçu des objectifs (§ 19.3).
 
 Tous sont en **UTF-8 avec marque d'ordre d'octets, séparés par `;`** — la forme
 qu'un tableur francophone sous Windows rouvre sans manipulation — sauf
@@ -8984,6 +9050,14 @@ partie non vide des tours de 1 à 6, et un réimport compte zéro personne
 modifiée. **Le modèle s'importe sans refus sous tout nombre de tours.** En mise
 à jour, une cellule vide garde la présence et une cellule « tous » la retire ;
 un aperçu calculé sous un autre nombre de tours ne s'applique pas.
+
+**Une inclusion fautive refuse le fichier entier, et la cause nomme sa ligne,
+sa cellule et le nom tel qu'écrit.** Une personne se lit sous le nom que
+l'import lui laisse, une personne mise à jour comptée une fois ; un nom que
+deux personnes portent ne se départage jamais. **Les inclusions font
+l'aller-retour** sous chaque mode, hors d'une inclusion vers un homonyme non
+numéroté, que l'export compte, et un réimport en mise à jour compte zéro
+personne modifiée.
 
 **Un objectif sur un numéro de table inconnu refuse la ligne, jamais le
 fichier.**

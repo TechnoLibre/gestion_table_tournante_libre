@@ -12,14 +12,14 @@
   // puis, dans un bloc à part, celles d'étiquettes, les noms rendus uniques,
   // les doublons, les homonymes d'une mise à jour, les cellules sur
   // plusieurs lignes. Le rapport le reprend pour l'aperçu appliqué, ses
-  // refus remplacés par ceux du résumé. Une cellule d'étiquettes, celles d'une personne ou l'objectif
-  // d'une table, montre chacune en pastille, à l'icône des étiquettes ;
-  // seule une cellule de conflits, chaque organisation nommée en pastille,
-  // prend l'icône « interdit » ; une cellule à clé se traduit avec ses
-  // détails, les tours de la présence. Un conflit fautif refuse le fichier
-  // entier : l'aperçu ne montre alors aucune ligne, et le refus global
-  // nomme l'organisation, la ligne, et la correction à faire avant de
-  // réimporter.
+  // refus remplacés par ceux du résumé. Une cellule en liste montre chaque
+  // nom en pastille, à l'icône de iconeDeListe : celle des étiquettes, d'une
+  // personne ou de l'objectif d'une table, « interdit » pour les conflits,
+  // « ajouter » pour les organisations et les personnes incluses ; une
+  // cellule à clé se traduit avec ses détails, les tours de la présence. Un
+  // conflit ou une inclusion fautifs refusent le fichier entier : l'aperçu
+  // ne montre alors aucune ligne, et le refus global nomme l'organisation ou
+  // la personne, la ligne, et la correction à faire avant de réimporter.
   //
   // modele : le modèle ; source : { origine: 'fichier'|'collage', nom } ;
   // participants : ceux de la charge, qui nomment les personnes désignées ;
@@ -45,7 +45,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Message from './Message.svelte';
-  import { messageDuBloc, motifLigne, nommer } from './modele.js';
+  import { iconeDeListe, messageDuBloc, motifLigne, nommer } from './modele.js';
 
   let { modele, source, participants = [], refusees = null, choisir = null, rendreUniques = null } = $props();
 
@@ -165,7 +165,7 @@
                       <ul class="etiquettes">
                         {#each etiquettes as motCle (motCle)}
                           <li>
-                            <Pastille sorte="statut" valeur="neutre" icone={champ === 'conflit_organisation' ? 'interdit' : 'etiquettes'} libelle={motCle} />
+                            <Pastille sorte="statut" valeur="neutre" icone={iconeDeListe(champ)} libelle={motCle} />
                           </li>
                         {/each}
                       </ul>
@@ -414,8 +414,9 @@
   }
 
   /* Un courriel, d'un seul tenant, passe à la ligne n'importe où quand la
-     place manque : les onze colonnes d'un fichier de participants tiennent
-     dans la carte à 1 366 px. */
+     place manque : les onze colonnes d'un fichier de participants sans
+     inclusions tiennent dans la carte à 1 366 px ; les deux colonnes des
+     inclusions, montrées, font défiler le tableau dans son cadre (.defile). */
   .lignes td[data-cellule='courriel'] {
     overflow-wrap: anywhere;
   }

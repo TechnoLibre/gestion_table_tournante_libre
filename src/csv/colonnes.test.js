@@ -13,10 +13,10 @@ import { CHAMPS, ENTETES_DES_CHAMPS, associer, associerSelon, reconnaitre, recon
 import { cleEntete } from './normalisation.js';
 
 describe('CHAMPS', () => {
-  test('les onze champs du § 10.1, dans leur ordre, etiquettes, presence, conflit_organisation puis animation_reservee en dernier, figés', () => {
+  test('les treize champs du § 10.1, dans leur ordre, etiquettes, presence, conflit_organisation, animation_reservee, puis les deux inclusions en dernier, figés', () => {
     assert.deepEqual(CHAMPS, [
       'nom', 'prenom', 'organisation', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes', 'presence',
-      'conflit_organisation', 'animation_reservee',
+      'conflit_organisation', 'animation_reservee', 'inclusion_organisation', 'inclusion_participant',
     ]);
     assert.ok(Object.isFrozen(CHAMPS));
   });
@@ -38,6 +38,8 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
         ['presence', ['presence', 'présence', 'tours de présence']],
         ['conflit_organisation', ['conflit_organisation', 'conflits', "conflit d'organisation", 'conflit d\u{2019}organisation']],
         ['animation_reservee', ['animation_reservee', 'animation réservée', 'animation réservé']],
+        ['inclusion_organisation', ['inclusion_organisation', "inclusions d'organisation", 'inclusions d\u{2019}organisation']],
+        ['inclusion_participant', ['inclusion_participant', 'inclusions de participant']],
       ],
     );
     assert.deepEqual(ENTETES_DES_CHAMPS.map(([champ]) => champ), [...CHAMPS]);
@@ -57,7 +59,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
 
   test('chaque en-tête de la table est reconnu sous son champ : la reconnaissance la lit', () => {
     const paires = ENTETES_DES_CHAMPS.flatMap(([champ, entetes]) => entetes.map((entete) => [entete, champ]));
-    assert.equal(paires.length, 25);
+    assert.equal(paires.length, 30);
     for (const [entete, champ] of paires) assert.equal(reconnaitre(entete), champ, entete);
   });
 
@@ -72,7 +74,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
     }
     // « presence » et « présence » partagent leur clé, sous le même champ ;
     // « animation_reservee » et « animation réservée » aussi.
-    assert.equal(champDeCle.size, 23);
+    assert.equal(champDeCle.size, 28);
   });
 });
 
@@ -133,6 +135,20 @@ describe('reconnaitre (§ 10.1)', () => {
       Array.from({ length: 5 }, () => 'animation_reservee'),
     );
     assert.deepEqual(['animation', 'réservée', 'animateur', 'animation réservées'].map((entete) => reconnaitre(entete)), [null, null, null, null]);
+  });
+
+  test('les inclusions, d’organisation et de participant, sous leur nom et au pluriel des rubriques de la fiche ; « inclusion » et « inclusions » seuls restent inconnus', () => {
+    assert.deepEqual(
+      ['Inclusion organisation', 'INCLUSION_ORGANISATION', "Inclusions d'organisation", 'inclusions d\u{2019}Organisation'].map((entete) =>
+        reconnaitre(entete),
+      ),
+      Array.from({ length: 4 }, () => 'inclusion_organisation'),
+    );
+    assert.deepEqual(
+      ['Inclusion participant', 'inclusion-participant', 'Inclusions de participant'].map((entete) => reconnaitre(entete)),
+      Array.from({ length: 3 }, () => 'inclusion_participant'),
+    );
+    assert.deepEqual(['inclusion', 'inclusions', 'inclusions participant'].map((entete) => reconnaitre(entete)), [null, null, null]);
   });
 
   test('sans égard à la casse, aux accents ni aux espaces', () => {

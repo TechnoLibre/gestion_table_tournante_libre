@@ -105,6 +105,20 @@ export const TABLE = new Map([
       "« non » la retire. L'import ne désigne personne : « Créer les tables\u{2026} » désigne les personnes marquées " +
       "sur les tables qu'il crée. La casse et les accents ne comptent pas ; toute autre valeur refuse la ligne.",
   ],
+  [
+    'import.guide.colonne.inclusionsOrganisation',
+    'Les organisations que la personne doit rencontrer au moins une fois à table, séparées par « ; », « | » ou un ' +
+      'retour à la ligne dans la cellule — pas par une virgule, qui reste dans le nom. Chacune doit être portée par ' +
+      "une personne que l'import laisse dans la liste, et différer de celle de la personne : sinon le fichier entier " +
+      'est refusé.',
+  ],
+  [
+    'import.guide.colonne.inclusionsParticipant',
+    'Les personnes que la personne doit rencontrer au moins une fois à table, chacune par son prénom puis son nom, ' +
+      'séparées par « ; », « | » ou un retour à la ligne dans la cellule. Chacune doit être une seule personne que ' +
+      "l'import laisse dans la liste, sous le nom qu'il lui laisse, et une autre que la personne elle-même : sinon " +
+      'le fichier entier est refusé.',
+  ],
   ['import.guide.colonne.table', "Le numéro de la table, tel que le plan l'affiche."],
   ['import.guide.colonne.tour', 'Le tour, de 1 au nombre de tours ; vide pour toute la soirée.'],
   [
@@ -165,6 +179,8 @@ export const TABLE = new Map([
   ['import.champ.presence', 'présence'],
   ['import.champ.conflits', "conflits d'organisation"],
   ['import.champ.animationReservee', 'animation réservée'],
+  ['import.champ.inclusionsOrganisation', "inclusions d'organisation"],
+  ['import.champ.inclusionsParticipant', 'inclusions de participant'],
   ['import.champ.table', 'table'],
   ['import.champ.tour', 'tour'],
   ['import.champ.objectif', 'objectif'],
@@ -258,6 +274,71 @@ export const TABLE = new Map([
       `Retirez de la colonne des conflits, à la ligne ${ligne}, l'organisation de la personne, ` +
       'puis collez le texte de nouveau.',
   ],
+  // Une inclusion fautive se corrige comme un conflit : dans le fichier, ou
+  // dans le texte collé. Un nom que plusieurs personnes portent ne désigne
+  // aucune d'elles : ces personnes se distinguent d'abord par leur nom.
+  [
+    'import.remede.inclusionOrganisation',
+    ({ ligne }) =>
+      `Corrigez la colonne des inclusions d'organisation à la ligne ${ligne} \u{2014} ou ajoutez au fichier une ` +
+      'personne de cette organisation \u{2014}, puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.inclusionPropre',
+    ({ ligne }) =>
+      `Retirez de la colonne des inclusions d'organisation, à la ligne ${ligne}, l'organisation de la personne, ` +
+      'puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.inclusionInconnue',
+    ({ ligne }) =>
+      `Écrivez à la ligne ${ligne}, dans la colonne des inclusions de participant, le prénom puis le nom d'une ` +
+      "personne de la liste ou du fichier \u{2014} ajoutez-la au fichier, ou corrigez sa ligne si l'import la refuse " +
+      '\u{2014}, puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.inclusionAmbigue',
+    ({ ligne }) =>
+      'Distinguez par leur nom les personnes qui le portent, dans le fichier ou dans leur fiche, écrivez à la ' +
+      `ligne ${ligne} celui de la personne à rencontrer, puis importez le fichier de nouveau.`,
+  ],
+  [
+    'import.remede.inclusionSoi',
+    ({ ligne }) =>
+      `Retirez de la colonne des inclusions de participant, à la ligne ${ligne}, le nom de la personne elle-même, ` +
+      'puis importez le fichier de nouveau.',
+  ],
+  [
+    'import.remede.inclusionOrganisationCollage',
+    ({ ligne }) =>
+      `Corrigez la colonne des inclusions d'organisation à la ligne ${ligne} \u{2014} ou ajoutez au texte une ` +
+      'personne de cette organisation \u{2014}, puis collez-le de nouveau.',
+  ],
+  [
+    'import.remede.inclusionPropreCollage',
+    ({ ligne }) =>
+      `Retirez de la colonne des inclusions d'organisation, à la ligne ${ligne}, l'organisation de la personne, ` +
+      'puis collez le texte de nouveau.',
+  ],
+  [
+    'import.remede.inclusionInconnueCollage',
+    ({ ligne }) =>
+      `Écrivez à la ligne ${ligne}, dans la colonne des inclusions de participant, le prénom puis le nom d'une ` +
+      "personne de la liste ou du texte \u{2014} ajoutez-la au texte, ou corrigez sa ligne si l'import la refuse " +
+      '\u{2014}, puis collez-le de nouveau.',
+  ],
+  [
+    'import.remede.inclusionAmbigueCollage',
+    ({ ligne }) =>
+      'Distinguez par leur nom les personnes qui le portent, dans le texte ou dans leur fiche, écrivez à la ' +
+      `ligne ${ligne} celui de la personne à rencontrer, puis collez le texte de nouveau.`,
+  ],
+  [
+    'import.remede.inclusionSoiCollage',
+    ({ ligne }) =>
+      `Retirez de la colonne des inclusions de participant, à la ligne ${ligne}, le nom de la personne elle-même, ` +
+      'puis collez le texte de nouveau.',
+  ],
   [
     'import.remede.separateurIntrouvableCollage',
     "Séparez les colonnes par « ; », « , » ou une tabulation, ou lisez la colonne dans l'ordre de la grille : " +
@@ -283,6 +364,12 @@ export const TABLE = new Map([
   [
     'import.remplacer.propositions',
     ({ n }) => `${n} ${accorde(n, 'proposition deviendra périmée', 'propositions deviendront périmées')}`,
+  ],
+  // Les inclusions des personnes retirées, d'organisation et de
+  // participant : l'élément ne s'affiche qu'à partir de 1.
+  [
+    'import.remplacer.inclusions',
+    ({ n }) => `${n} ${accorde(n, 'inclusion sera supprimée', 'inclusions seront supprimées')}`,
   ],
   // Les logos des personnes retirées, que le CSV ne porte pas : l'élément
   // ne s'affiche qu'à partir de 1.

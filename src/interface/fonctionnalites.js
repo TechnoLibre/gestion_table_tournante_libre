@@ -37,7 +37,7 @@ export const CATEGORIES = Object.freeze([
     f('PRE-12', '10.1', '10.3'),
     f('PRE-13', '4', '7.7'),
     f('PRE-14', '8.9', '10.2'),
-    f('PRE-15', '4', '10.2'),
+    f('PRE-15', '4', '10.1', '10.2'),
   ),
   categorie(
     'PLA',

@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Épreuves du nom affiché (§ 8.2) : la seule composition du nom d'une
-// personne, celle des libellés figés et du plan. Les noms sont inventés.
+// personne, celle des libellés figés et du plan, que l'application
+// réexporte de src/stockage/personnes.js. Les noms sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
+import { nomAffiche as nomDuStockage } from '../stockage/personnes.js';
 import { nomAffiche as nomDesCommandes } from './commandes.js';
 import { libelle } from './libelles.js';
 import { nomAffiche } from './personnes.js';
@@ -20,6 +22,10 @@ describe('personnes : le nom affiché (§ 8.2)', () => {
       nomAffiche({ id: 4, nom: 'Lacasse', prenom: 'Ondine', organisation: 'Club des Merles', exclu: true }),
       'Ondine Lacasse',
     );
+  });
+
+  test('nomAffiche de personnes.js est celui de src/stockage/personnes.js', () => {
+    assert.equal(nomAffiche, nomDuStockage);
   });
 
   test('nomAffiche importé de commandes.js est celui de personnes.js', () => {

@@ -33,19 +33,24 @@
 //      laisse à un participant : celles des existants, et celles que le
 //      fichier crée, hors des lignes que la mise à jour refuse. Un nom
 //      inconnu, ou la propre organisation de la personne, refuse le texte
-//      entier, au rang de sa ligne ;
+//      entier, au rang de sa ligne. Les inclusions se lisent ensuite, ligne
+//      à ligne, les organisations contre les mêmes noms et par la même
+//      règle, puis les personnes contre les noms que l'import laisse
+//      (personnesDeLImport) : une personne inconnue, ambiguë ou la personne
+//      même de la ligne refusent aussi le texte entier ;
 //   8. en mode mettreAJour, les lignes ajoutées à côté d'un existant de même
 //      nom se nomment ; dans chaque mode, les cellules qui s'étendent sur
 //      plusieurs lignes du texte et portent le séparateur.
 // Une ligne valide dont l'option noms donne le nom le prend dès le point 6,
 // avec la marque du nom numéroté : tout ce qui suit se lit sur ce nom.
 // Une ligne refusée ne refuse pas le texte : le reste s'importe, et la ligne
-// revient dans le CSV des refus (§ 10.1). Un conflit fautif, lui, refuse le
-// texte entier : importer le reste ferait d'un conflit mal écrit un conflit
-// perdu, sans que rien ne le dise.
+// revient dans le CSV des refus (§ 10.1). Un conflit ou une inclusion
+// fautifs, eux, refusent le texte entier : importer le reste ferait d'une
+// liste mal écrite une liste perdue, sans que rien ne le dise.
 
 import { SUFFIXE_NUMERO, TOURS_MAX } from '../stockage/document.js';
 import { ETIQUETTES_MAX, lireEtiquettes } from '../stockage/etiquettes.js';
+import { nomAffiche } from '../stockage/personnes.js';
 import { associer, reconnaitre } from './colonnes.js';
 import { contientNul } from './encodage.js';
 import { ErreurCsv } from './erreurs.js';
@@ -118,6 +123,18 @@ export const VALEURS_EXCLU = new Map([
  *           —, une seule par clé normalisée ; null pour une colonne absente
  *           ou une cellule qui n'en nomme aucune, qui laisse la liste d'une
  *           personne mise à jour
+ * @property {string[]|null} inclusionsOrganisation   les organisations que
+ *           la cellule des inclusions d'organisation nomme, lues comme les
+ *           conflits, sous la même orthographe ; null de même
+ * @property {Array<{id: number|null, ligne: number|null, nom: string}>|null} inclusionsParticipant
+ *           les personnes que la cellule des inclusions de participant
+ *           nomme, dans l'ordre de la cellule, chacune une fois : id, celui
+ *           d'un participant existant que l'import garde, mis à jour
+ *           compris, null sinon ; ligne, le rang de la ligne valide qui crée
+ *           la personne, null pour un existant ; nom, son nom affiché tel
+ *           que l'import le laisse (personnesDeLImport). null pour une
+ *           colonne absente ou une cellule qui n'en nomme aucune, qui laisse
+ *           la liste d'une personne mise à jour
  * @property {true} [nomNumerote]          présent sur la seule ligne dont le
  *           nom vient de l'option noms, celui que « Rendre les noms
  *           uniques » numérote : une personne créée de cette ligne porte la
@@ -205,7 +222,9 @@ export const VALEURS_EXCLU = new Map([
  *           lignes a la même forme, et l'export l'écrit ainsi (§ 10.2) :
  *           l'aperçu la nomme sans refuser la ligne
  * @property {null|'CARACTERE_NUL'|'AUCUN_ENTETE'|'SEPARATEUR_INTROUVABLE'|'GUILLEMET_OUVERT'|'NOM_NON_ASSOCIE'|'AUCUNE_LIGNE_VALIDE'
- *             |'CONFLIT_ORGANISATION_INCONNUE'|'CONFLIT_ORGANISATION_PROPRE'} refusGlobal
+ *             |'CONFLIT_ORGANISATION_INCONNUE'|'CONFLIT_ORGANISATION_PROPRE'|'INCLUSION_ORGANISATION_INCONNUE'
+ *             |'INCLUSION_ORGANISATION_PROPRE'|'INCLUSION_PARTICIPANT_INCONNU'|'INCLUSION_PARTICIPANT_AMBIGU'
+ *             |'INCLUSION_PARTICIPANT_SOI'} refusGlobal
  *           sous un refus global, lignes, fusions, fusionsEtiquettes,
  *           doublons, homonymes, designees, renommes et multilignes sont
  *           vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les
@@ -214,24 +233,29 @@ export const VALEURS_EXCLU = new Map([
  *           l'enregistrement où le guillemet s'ouvre ; sous
  *           SEPARATEUR_INTROUVABLE, celui de l'enregistrement dont le nombre
  *           de champs écarte le séparateur, quand choisirSeparateur le nomme ;
- *           sous CONFLIT_ORGANISATION_INCONNUE et CONFLIT_ORGANISATION_PROPRE,
- *           celui de la ligne qui nomme l'organisation ; null sinon
+ *           sous un conflit ou une inclusion fautifs, celui de la ligne qui
+ *           porte la cellule ; null sinon
  * @property {string|null} refusGlobalOrganisation   sous
- *           CONFLIT_ORGANISATION_INCONNUE, l'organisation qu'aucun participant
- *           ne porterait, telle que la cellule l'écrit, en NFC sans ses blancs
- *           de bord ; sous CONFLIT_ORGANISATION_PROPRE, la propre organisation
- *           de la personne, telle que la cellule l'écrit ; null sinon
+ *           CONFLIT_ORGANISATION_INCONNUE et INCLUSION_ORGANISATION_INCONNUE,
+ *           l'organisation qu'aucun participant ne porterait, telle que la
+ *           cellule l'écrit, en NFC sans ses blancs de bord ; sous
+ *           CONFLIT_ORGANISATION_PROPRE et INCLUSION_ORGANISATION_PROPRE, la
+ *           propre organisation de la personne, telle que la cellule l'écrit ;
+ *           null sinon
+ * @property {string|null} refusGlobalNom   sous INCLUSION_PARTICIPANT_INCONNU,
+ *           INCLUSION_PARTICIPANT_AMBIGU et INCLUSION_PARTICIPANT_SOI, le nom
+ *           que la cellule écrit, en NFC sans ses blancs de bord ; null sinon
  */
 
 // Aperçu d'un texte refusé en entier : son mode et son nombre de tours, ce
-// que la lecture a établi avant le refus, aucune ligne ; le rang et
-// l'organisation que le refus nomme, null quand il n'en nomme pas.
+// que la lecture a établi avant le refus, aucune ligne ; le rang,
+// l'organisation et le nom de personne que le refus nomme, null quand il
+// n'en nomme pas.
 function refuserEn(
   { mode, tours },
   code,
   { separateur = null, entetes = [], association = { colonnes: {}, ambigus: [], nonReconnues: [] } } = {},
-  ligne = null,
-  organisation = null,
+  { ligne = null, organisation = null, nom = null } = {},
 ) {
   return {
     mode,
@@ -251,6 +275,7 @@ function refuserEn(
     refusGlobal: code,
     refusGlobalLigne: ligne,
     refusGlobalOrganisation: organisation,
+    refusGlobalNom: nom,
   };
 }
 
@@ -314,16 +339,18 @@ function presenceDe(cellule, tours) {
 // Ce qui sépare les organisations d'une cellule de conflits (§ 10.1) : le
 // point-virgule, la barre verticale et la fin de ligne, sous ses trois
 // formes. La virgule n'en est pas : un nom d'organisation peut en porter une.
+// Les cellules d'inclusions se découpent de même, celle des personnes
+// comprise.
 const SEPARATEURS_CONFLITS = /\r\n|\r|\n|;|\|/;
 
 // Le nombre de séparateurs de conflits qu'un texte porte.
 const separateursDe = (texte) => texte.split(SEPARATEURS_CONFLITS).length - 1;
 
 /**
- * Les organisations contre lesquelles une cellule de conflits se lit
- * (lireConflits) : porte(texte), vrai quand un nom donné a la clé
- * normalisée du texte, et le plus grand nombre de séparateurs de conflits
- * qu'un nom donné porte.
+ * Les noms contre lesquels une cellule de conflits ou d'inclusions se lit
+ * (lireConflits) — des organisations, ou les noms affichés des personnes :
+ * porte(texte), vrai quand un nom donné a la clé normalisée du texte, et le
+ * plus grand nombre de séparateurs de conflits qu'un nom donné porte.
  *
  * @typedef {{porte: (texte: string) => boolean, separateursMax: number}} OrganisationsConnues
  *
@@ -351,7 +378,8 @@ export function organisationsConnues(noms) {
  * connues.separateursMax. Chaque nom en NFC, sans ses blancs de bord ; ceux
  * dont la clé normalisée est vide écartés, un seul par clé, le premier, dans
  * l'ordre de la cellule ; null quand il n'en reste aucun. Rien ne se refuse
- * ici : un nom inconnu se rend tel quel.
+ * ici : un nom inconnu se rend tel quel. Les cellules d'inclusions se lisent
+ * par la même règle, celle des personnes contre leurs noms affichés.
  *
  * @param {string|undefined} cellule  undefined quand le champ n'a pas de
  *   colonne ou que l'enregistrement s'arrête avant elle
@@ -387,15 +415,15 @@ export function lireConflits(cellule, { porte, separateursMax }) {
 // Lit un enregistrement de données selon les colonnes associées, largeur
 // étant le nombre d'en-têtes et tours celui de l'aperçu. Rend { champs },
 // l'organisation telle qu'écrite ou null quand elle n'en nomme aucune, les
-// étiquettes telles que découpées, la cellule des conflits telle quelle,
-// undefined sans elle — lireConflits la lit contre les organisations de
-// tout le texte —, ou le motif du refus { code, valeur }, avec raison,
-// nombre, tour ou tours selon le code, un seul, dans cet ordre : un champ
-// non vide au-delà de l'en-tête, qui dit une ligne décalée dont aucune
-// valeur n'est sûre ; un nom vide ; une valeur d'« exclu » hors de la liste
-// fermée ; une valeur de l'animation réservée hors de la même liste ; une
-// étiquette mal formée ; trop d'étiquettes ; une présence illisible ou hors
-// de la soirée.
+// étiquettes telles que découpées, les cellules des conflits et des
+// inclusions telles quelles, undefined sans elles — lireConflits les lit
+// contre les noms de tout le texte —, ou le motif du refus { code, valeur },
+// avec raison, nombre, tour ou tours selon le code, un seul, dans cet
+// ordre : un champ non vide au-delà de l'en-tête, qui dit une ligne décalée
+// dont aucune valeur n'est sûre ; un nom vide ; une valeur d'« exclu » hors
+// de la liste fermée ; une valeur de l'animation réservée hors de la même
+// liste ; une étiquette mal formée ; trop d'étiquettes ; une présence
+// illisible ou hors de la soirée.
 function lireLigne(brut, largeur, colonnes, tours) {
   if (!enregistrementVide(brut.slice(largeur))) return { code: 'CHAMPS_EN_TROP', valeur: null };
   const lire = (champ) => valeurDe(brut, colonnes[champ]);
@@ -412,6 +440,7 @@ function lireLigne(brut, largeur, colonnes, tours) {
   const lue = presenceDe(colonnes.presence === undefined ? undefined : brut[colonnes.presence], tours);
   if (lue.refus !== undefined) return lue.refus;
   const organisation = lire('organisation');
+  const cellule = (champ) => (colonnes[champ] === undefined ? undefined : brut[colonnes[champ]]);
   return {
     champs: {
       nom,
@@ -423,8 +452,10 @@ function lireLigne(brut, largeur, colonnes, tours) {
       exclu,
       etiquettes,
       presence: lue.presence,
-      conflits: colonnes.conflit_organisation === undefined ? undefined : brut[colonnes.conflit_organisation],
+      conflits: cellule('conflit_organisation'),
       animationReservee,
+      inclusionsOrganisation: cellule('inclusion_organisation'),
+      inclusionsParticipant: cellule('inclusion_participant'),
     },
   };
 }
@@ -483,27 +514,129 @@ function reconcilier(existants, valides) {
   };
 }
 
+// Les codes d'une organisation fautive, par cellule : la propre organisation
+// de la personne, puis une organisation que nul ne porte.
+const CONFLIT_PROPRE = 'CONFLIT_ORGANISATION_PROPRE';
+const CONFLIT_INCONNU = 'CONFLIT_ORGANISATION_INCONNUE';
+const INCLUSION_PROPRE = 'INCLUSION_ORGANISATION_PROPRE';
+const INCLUSION_INCONNUE = 'INCLUSION_ORGANISATION_INCONNUE';
+const FAUTES_DE_CONFLIT = [CONFLIT_PROPRE, CONFLIT_INCONNU];
+const FAUTES_D_INCLUSION = [INCLUSION_PROPRE, INCLUSION_INCONNUE];
+
+// La première organisation fautive d'une cellule, dans son ordre, ou null :
+// { code, ligne, organisation }, le nom tel que la cellule l'écrit. noms :
+// ceux de la cellule (lireConflits), null pour aucun ; propre : la propre
+// organisation de la personne (organisationsPropres), null sans elle. Un nom
+// de même clé normalisée qu'elle prend le premier code de codes ; un nom
+// que porte n'admet pas, le second.
+function organisationFautive(ligne, noms, propre, porte, [codePropre, codeInconnue]) {
+  for (const organisation of noms ?? []) {
+    if (propre !== null && cleNormalisee(propre) === cleNormalisee(organisation)) {
+      return { code: codePropre, ligne, organisation };
+    }
+    if (!porte(organisation)) return { code: codeInconnue, ligne, organisation };
+  }
+  return null;
+}
+
 // La première faute de conflit des lignes valides (§ 10.1), dans l'ordre du
-// texte puis de la cellule, ou null : { code, ligne, organisation }, le nom
-// tel que la cellule l'écrit. conflits : les noms de chaque ligne
-// (lireConflits), rang à rang de valides. Un nom de même clé normalisée que
-// la propre organisation de la personne — celle de la ligne ; en mise à
-// jour, sous une cellule vide, celle du seul participant que la ligne
-// désigne (organisationPropre) — est CONFLIT_ORGANISATION_PROPRE ; un nom
-// que porte n'admet pas, CONFLIT_ORGANISATION_INCONNUE.
+// texte puis de la cellule, ou null (organisationFautive). conflits : les
+// noms de chaque ligne (lireConflits), rang à rang de valides ; la propre
+// organisation est celle de la ligne, ou, en mise à jour sous une cellule
+// vide, celle du seul participant que la ligne désigne (organisationPropre).
 function fauteDeConflit(valides, conflits, porte, organisationPropre) {
   for (const [rang, { ligne, champs }] of valides.entries()) {
-    if (conflits[rang] === null) continue;
-    const propre = organisationPropre(champs);
-    for (const organisation of conflits[rang]) {
-      if (propre !== null && cleNormalisee(propre) === cleNormalisee(organisation)) {
-        return { code: 'CONFLIT_ORGANISATION_PROPRE', ligne, organisation };
-      }
-      if (!porte(organisation)) return { code: 'CONFLIT_ORGANISATION_INCONNUE', ligne, organisation };
+    const faute = organisationFautive(ligne, conflits[rang], organisationPropre(champs), porte, FAUTES_DE_CONFLIT);
+    if (faute !== null) return faute;
+  }
+  return null;
+}
+
+// Vrai quand deux personnes que rend personnesDeLImport sont la même : le
+// même existant, ou la même ligne créée.
+const memePersonne = (a, b) => a.id === b.id && a.ligne === b.ligne;
+
+/**
+ * Les personnes que l'import laisse dans la liste (§ 10.1), chacune une
+ * fois, sous le nom affiché qu'il leur laisse, contre lesquelles se lit la
+ * cellule des inclusions de participant. Les existants comptent hors du mode
+ * remplacer, qui les retire : chacun sous son nom, ou, quand une ligne le
+ * met à jour (issues), sous le nom et le prénom qu'elle lui pose, un prénom
+ * vide gardant le sien. Chaque ligne que l'import crée compte sous son nom :
+ * toute ligne valide sous ajouter et remplacer, celle qui ne désigne
+ * personne en mise à jour. Une ligne que la mise à jour refuse ne crée
+ * personne et ne compte pas.
+ *
+ * @param {Array<{id: number, nom: string, prenom: string|null}>} existants
+ *   ceux que le mode garde, rangés par identifiant
+ * @param {Array<{ligne: number, champs: ChampsLus}>} valides
+ * @param {Array<{id: number|null}|{refus: Object}>|null} issues  celles de
+ *   issuesDeMiseAJour en mise à jour, rang à rang de valides ; null sinon
+ * @returns {{parCle: Map<string, Array<{id: number|null, ligne: number|null, nom: string}>>,
+ *   soi: Array<{id: number|null, ligne: number|null}|null>}}
+ *   parCle : par clé normalisée du nom affiché, les personnes qui la
+ *   portent, existants d'abord ; soi : la personne de chaque ligne valide,
+ *   rang à rang, null pour une ligne que la mise à jour refuse
+ */
+function personnesDeLImport(existants, valides, issues) {
+  const parCle = new Map();
+  const noter = (id, ligne, nom) => {
+    const cle = cleNormalisee(nom);
+    if (!parCle.has(cle)) parCle.set(cle, []);
+    parCle.get(cle).push({ id, ligne, nom });
+  };
+  const soi = valides.map(({ ligne }, rang) => {
+    const issue = issues === null ? { id: null } : issues[rang];
+    if (issue.refus !== undefined) return null;
+    return issue.id === null ? { id: null, ligne } : { id: issue.id, ligne: null };
+  });
+  // Les champs de la ligne qui met à jour chaque existant, par identifiant.
+  const misesAJour = new Map(
+    soi.flatMap((personne, rang) => (personne === null || personne.id === null ? [] : [[personne.id, valides[rang].champs]])),
+  );
+  for (const existant of existants) {
+    const champs = misesAJour.get(existant.id);
+    const nom = champs === undefined ? existant : { nom: champs.nom, prenom: champs.prenom ?? existant.prenom };
+    noter(existant.id, null, nomAffiche(nom));
+  }
+  soi.forEach((personne, rang) => {
+    if (personne !== null && personne.id === null) noter(null, personne.ligne, nomAffiche(valides[rang].champs));
+  });
+  return { parCle, soi };
+}
+
+// La première faute d'inclusion des lignes valides (§ 10.1), ou null :
+// ligne à ligne dans l'ordre du texte, la cellule des organisations, puis
+// celle des personnes, chacune dans son ordre. Les organisations se jugent
+// comme les conflits (organisationFautive), sous les codes des inclusions.
+// Un nom de personne dont aucune personne que rend personnesDeLImport ne
+// porte la clé normalisée est INCLUSION_PARTICIPANT_INCONNU ; que
+// plusieurs portent, INCLUSION_PARTICIPANT_AMBIGU ; que porte la seule
+// personne de la ligne elle-même, INCLUSION_PARTICIPANT_SOI. Rend { code,
+// ligne, organisation } ou { code, ligne, nom }, le nom tel que la cellule
+// l'écrit. organisations et noms : ceux de chaque ligne (lireConflits),
+// rang à rang de valides.
+function fauteDInclusion(valides, { organisations, noms }, porte, organisationPropre, { parCle, soi }) {
+  for (const [rang, { ligne, champs }] of valides.entries()) {
+    const faute = organisationFautive(ligne, organisations[rang], organisationPropre(champs), porte, FAUTES_D_INCLUSION);
+    if (faute !== null) return faute;
+    for (const nom of noms[rang] ?? []) {
+      const candidats = parCle.get(cleNormalisee(nom)) ?? [];
+      if (candidats.length === 0) return { code: 'INCLUSION_PARTICIPANT_INCONNU', ligne, nom };
+      if (candidats.length > 1) return { code: 'INCLUSION_PARTICIPANT_AMBIGU', ligne, nom };
+      if (soi[rang] !== null && memePersonne(candidats[0], soi[rang])) return { code: 'INCLUSION_PARTICIPANT_SOI', ligne, nom };
     }
   }
   return null;
 }
+
+// Les personnes qu'une cellule d'inclusions nomme, dans l'ordre de la
+// cellule, sous le nom affiché que l'import leur laisse ; null pour une
+// cellule qui n'en nomme aucune. Chaque nom désigne une seule personne
+// (fauteDInclusion l'a établi), et une personne ne porte qu'une clé de nom :
+// les noms, distincts par leur clé (lireConflits), nomment des personnes
+// distinctes.
+const personnesIncluses = (noms, parCle) => (noms === null ? null : noms.map((nom) => ({ ...parCle.get(cleNormalisee(nom))[0] })));
 
 // La propre organisation d'une ligne : celle qu'elle porte ; en mode
 // mettreAJour, sans organisation sur la ligne, celle du seul participant
@@ -700,10 +833,10 @@ function multilignesDe(lignes, separateur) {
  *   rendreNomsUniques (noms_uniques.js), chacun fini par une espace et un
  *   numéro de deux chiffres ou plus (SUFFIXE_NUMERO) : la ligne valide de ce
  *   rang prend ce nom à la place de celui de sa cellule, dès sa lecture, si
- *   bien que réconciliation, doublons, conflits et mise à jour se calculent
- *   sur lui, et porte la marque nomNumerote. Le texte n'est pas réécrit :
- *   brut garde la cellule. Un rang qui n'est pas celui d'une ligne valide
- *   est ignoré
+ *   bien que réconciliation, doublons, conflits, inclusions et mise à jour
+ *   se calculent sur lui, et porte la marque nomNumerote. Le texte n'est pas
+ *   réécrit : brut garde la cellule. Un rang qui n'est pas celui d'une ligne
+ *   valide est ignoré
  * @returns {Apercu}
  * @throws {TypeError} quand texte n'est pas une chaîne : des octets passent
  *   d'abord par decoder ; pour un mode inconnu ; pour un nombre de tours qui
@@ -734,7 +867,7 @@ export function apercevoir(
     if (!(erreur instanceof ErreurCsv) || erreur.code !== 'SEPARATEUR_INTROUVABLE') throw erreur;
     if (texte.trim() === '') return refuser('AUCUN_ENTETE');
     const { cause = null, ligne = null } = erreur.details;
-    if (cause !== 'GUILLEMET_OUVERT') return refuser('SEPARATEUR_INTROUVABLE', {}, ligne);
+    if (cause !== 'GUILLEMET_OUVERT') return refuser('SEPARATEUR_INTROUVABLE', {}, { ligne });
     // Seul le guillemet resté ouvert écarte ce candidat : le texte se lit
     // sous lui, et le refus GUILLEMET_OUVERT porte le séparateur, l'en-tête,
     // l'association et le rang, comme au-delà de la fenêtre.
@@ -748,7 +881,7 @@ export function apercevoir(
   const entetes = enregistrements[indiceEntete];
   const association = associer(entetes, choix);
   const lu = { separateur, entetes, association };
-  if (guillemetOuvert) return refuser('GUILLEMET_OUVERT', lu, enregistrements.length);
+  if (guillemetOuvert) return refuser('GUILLEMET_OUVERT', lu, { ligne: enregistrements.length });
   if (association.nonReconnues.length === entetes.length) return refuser('AUCUN_ENTETE', lu);
   if (association.colonnes.nom === undefined) return refuser('NOM_NON_ASSOCIE', lu);
 
@@ -787,9 +920,20 @@ export function apercevoir(
       organisationNommee(organisation) ? [organisation] : [],
     ),
   );
+  const organisationPropre = organisationsPropres(participants, mode);
   const conflits = valides.map(({ champs }) => lireConflits(champs.conflits, connues));
-  const faute = fauteDeConflit(valides, conflits, connues.porte, organisationsPropres(participants, mode));
-  if (faute !== null) return refuser(faute.code, lu, faute.ligne, faute.organisation);
+  const fauteConflit = fauteDeConflit(valides, conflits, connues.porte, organisationPropre);
+  if (fauteConflit !== null) return refuser(fauteConflit.code, lu, fauteConflit);
+  // Les inclusions se lisent après les conflits : les organisations contre
+  // les mêmes noms, les personnes contre celles que l'import laisse.
+  const personnes = personnesDeLImport(existants, valides, issues);
+  const nomsConnus = organisationsConnues([...personnes.parCle.values()].flatMap((porteurs) => porteurs.map(({ nom }) => nom)));
+  const inclusions = {
+    organisations: valides.map(({ champs }) => lireConflits(champs.inclusionsOrganisation, connues)),
+    noms: valides.map(({ champs }) => lireConflits(champs.inclusionsParticipant, nomsConnus)),
+  };
+  const fauteInclusion = fauteDInclusion(valides, inclusions, connues.porte, organisationPropre, personnes);
+  if (fauteInclusion !== null) return refuser(fauteInclusion.code, lu, fauteInclusion);
   const { listes, fusions: fusionsEtiquettes } = reconcilierEtiquettes(
     etiquettesExistantes(existants, tables),
     valides.map(({ champs }) => champs.etiquettes),
@@ -801,6 +945,8 @@ export function apercevoir(
       organisation: champs.organisation === null ? null : afficheeDe(champs.organisation),
       etiquettes: listes[rang],
       conflits: conflits[rang] === null ? null : conflits[rang].map(afficheeDe),
+      inclusionsOrganisation: inclusions.organisations[rang] === null ? null : inclusions.organisations[rang].map(afficheeDe),
+      inclusionsParticipant: personnesIncluses(inclusions.noms[rang], personnes.parCle),
     },
     brut,
   }));
@@ -820,5 +966,6 @@ export function apercevoir(
     refusGlobal: null,
     refusGlobalLigne: null,
     refusGlobalOrganisation: null,
+    refusGlobalNom: null,
   };
 }
