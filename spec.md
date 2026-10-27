@@ -3244,7 +3244,7 @@ jamais nécessaire pour ouvrir.
 
 | | |
 |---|---|
-| participants | avec identifiant entier, nom, prénom, organisation, courriel, titre pressenti, notes, **exclusion**, **étiquettes**, **présence**, **conflits d'organisation**, chemin du **logo**, marque du **nom numéroté**, marque de l'**animation réservée** |
+| participants | avec identifiant entier, nom, prénom, organisation, courriel, titre pressenti, notes, **exclusion**, **étiquettes**, **présence**, **conflits d'organisation**, **inclusions** d'organisation et de participant, chemin du **logo**, marque du **nom numéroté**, marque de l'**animation réservée** |
 | tables | numéro, capacité **et son état** : `sieges: null` (suit le défaut) ou un entier (surcharge) ; **forme**, **libellé** |
 | le **nombre de sièges par défaut** de l'événement | |
 | tours, réglages, réservations avec leur portée, **titres de place** | |
@@ -4438,7 +4438,7 @@ facultatif, absent quand elle n'en nomme aucun :
 
 | champ | où | absent, il vaut | forme |
 |---|---|---|---|
-| `conflits` | chaque participant, après `presence`, avant `logo` | aucun conflit | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
+| `conflits` | chaque participant, après `presence`, avant `inclusionsOrganisation` | aucun conflit | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
 
 Une liste vide, un doublon, une valeur qui n'est pas un texte non vide sont des
 fautes de forme ; la propre organisation de la personne aussi, nommée par le
@@ -4455,6 +4455,34 @@ liste garde les mêmes noms. Modifier, supprimer ou importer des participants
 fait suivre les listes dans la même entrée (§ 4). La configuration du moteur en
 porte une copie : sans liste, elle est celle d'avant le champ, et les
 empreintes avec elle. Le champ fait partie du format 3.
+
+#### Deux champs facultatifs : les inclusions
+
+Les inclusions d'une personne — les organisations et les participants qu'elle
+doit rencontrer au moins une fois à une table — s'écrivent dans deux champs
+facultatifs, absents quand elle n'en nomme aucun :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `inclusionsOrganisation` | chaque participant, après `conflits`, avant `inclusionsParticipant` | aucune organisation à rencontrer | liste non vide de noms d'organisation, textes non vides, sans doublon exact, écrite triée par unités de code ; chacun est l'organisation d'un participant de la charge, exclus compris, comparée chaîne à chaîne, et jamais celle de la personne |
+| `inclusionsParticipant` | chaque participant, après `inclusionsOrganisation`, avant `logo` | aucun participant à rencontrer | liste non vide d'identifiants entiers distincts, écrite croissante ; chacun est celui d'un participant de la charge, exclus compris, et jamais celui de la personne |
+
+Une liste vide, un doublon, une valeur d'une autre sorte sont des fautes de
+forme ; la propre organisation de la personne et son propre identifiant aussi,
+nommés par le rang qui les porte, pour chaque personne l'organisation d'abord,
+et contrôlés après les conflits ; une organisation que nul participant ne porte
+et un identifiant que nul participant n'a sont des fautes de référence, nommées
+après celles des conflits (§ 8.8), pour chaque personne l'organisation avant
+l'identifiant. **Une inclusion de participant désigne la personne
+par son identifiant, jamais par son nom** : la renommer ne la change pas, et
+deux homonymes restent distincts. Un collègue de la même organisation se nomme
+comme un autre. Une inclusion que contredit un conflit de la personne n'est pas
+une faute du fichier. La liste d'une exclue se garde, et une inclusion qui vise
+une exclue aussi. Une personne sans inclusion s'écrit octet pour octet comme
+sans ces champs, démonstrations comprises. Un correctif du journal les pose et
+les retire comme tout champ. Le moteur ne les lit pas : la configuration qu'il
+reçoit, les empreintes et les raisons de dérive restent les mêmes. Les deux
+champs font partie du format 3.
 
 #### Deux champs facultatifs : la présence
 
@@ -4492,7 +4520,7 @@ porte pas :
 
 | champ | où | absent, il vaut | forme |
 |---|---|---|---|
-| `logo` | chaque participant, après `conflits`, avant `nomNumerote` | aucun logo | `logo/`, puis les 64 chiffres hexadécimaux minuscules du SHA-256 des octets de l'image, puis `.png` : un chemin relatif au dossier de l'événement |
+| `logo` | chaque participant, après `inclusionsParticipant`, avant `nomNumerote` | aucun logo | `logo/`, puis les 64 chiffres hexadécimaux minuscules du SHA-256 des octets de l'image, puis `.png` : un chemin relatif au dossier de l'événement |
 
 Une autre forme — des capitales, une autre longueur, un autre dossier ou une
 autre extension, une remontée `..`, un chemin absolu, un blanc, `null` — est une
@@ -4537,10 +4565,10 @@ facultatif, absent quand son nom est celui qu'elle a reçu :
 `false`, `null` ou toute autre valeur que `true` est une faute de forme ; une
 marque posée sur un nom qui ne finit pas ainsi — un seul chiffre, un autre
 blanc, des chiffres d'une autre écriture, un mot après — aussi, nommée par le
-chemin de la marque et contrôlée après les conflits (§ 8.8). Une personne sans
-marque s'écrit octet pour octet comme sans ce champ, démonstrations comprises.
-**La marque ne se déduit jamais du nom** : « Galet 01 » écrit tel quel dans un
-CSV ne la porte pas.
+chemin de la marque et contrôlée après les conflits et les inclusions (§ 8.8).
+Une personne sans marque s'écrit octet pour octet comme sans ce champ,
+démonstrations comprises. **La marque ne se déduit jamais du nom** :
+« Galet 01 » écrit tel quel dans un CSV ne la porte pas.
 
 Aucune commande de saisie ne la pose ni ne la montre. L'import la pose sur
 chaque personne qu'il crée d'une ligne que « Rendre les noms uniques » a

@@ -1454,12 +1454,14 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
       ],
     );
     assert.deepEqual(
-      PARTICIPANT.champs.slice(-7).map(([cle, regle]) => [cle, regle.optionnel]),
+      PARTICIPANT.champs.slice(-9).map(([cle, regle]) => [cle, regle.optionnel]),
       [
         ['exclu', false],
         ['etiquettes', true],
         ['presence', true],
         ['conflits', true],
+        ['inclusionsOrganisation', true],
+        ['inclusionsParticipant', true],
         ['logo', true],
         ['nomNumerote', true],
         ['animationReservee', true],
@@ -2836,5 +2838,159 @@ describe('les conflits d’organisation : participant.conflits, facultatif (§ 4
     assert.deepEqual(charge.participants[3].conflits, [VALLON]);
     // Le moteur relie les deux organisations.
     assert.equal(normaliser(configuration).pairesEnConflit > 0, true);
+  });
+});
+
+describe('les inclusions : participant.inclusionsOrganisation et inclusionsParticipant, facultatifs (§ 8.9)', () => {
+  const VALLON = 'Chorale du Vallon';
+  const GAMMA = 'Cercle Gamma';
+  // Le document valide, où le participant de rang rang inclut organisations,
+  // puis participants ; undefined laisse le champ absent.
+  const avecInclusions = (rang, organisations, participants) =>
+    abime((d) => {
+      if (organisations !== undefined) d.charge.participants[rang].inclusionsOrganisation = organisations;
+      if (participants !== undefined) d.charge.participants[rang].inclusionsParticipant = participants;
+    });
+  const ENTETE = { revision: 12, produitVersion: VERSION.affichee };
+
+  test('absentes, rien ne s’écrit : une personne sans inclusion se clôt sur ses champs d’avant, et aucune démonstration n’en porte', () => {
+    const sans = analyser(abime(() => {}));
+    const texte = serialiser(sans.charge, ENTETE);
+    assert.ok(!texte.includes('"inclusions'), texte);
+    assert.ok(texte.includes('"notes":"part à 21 h","exclu":false}'), texte);
+    for (const cle of ['grande', 'grande-sans-exception', 'petite', 'petite-conflit']) {
+      assert.equal(texteLivre(cle).includes('"inclusions'), false, cle);
+    }
+  });
+
+  test('présentes, elles se lisent telles qu’écrites, s’écrivent rangées après les conflits et avant le logo, et se relisent à l’octet', () => {
+    const LOGO = `logo/${'0123456789abcdef'.repeat(4)}.png`;
+    // La personne de rang 0 inclut deux participants hors de l'ordre
+    // croissant, et l'organisation que nomme son conflit : la contradiction
+    // se lit sans faute. Son conflit et son logo encadrent les deux champs.
+    // L'exclue de rang 2, sans organisation, en inclut deux hors de l'ordre
+    // des unités de code, où « e » (0x65) précède « h » (0x68).
+    const lu = analyser(abime((d) => {
+      Object.assign(d.charge.participants[0], {
+        conflits: [GAMMA],
+        inclusionsOrganisation: [GAMMA],
+        inclusionsParticipant: [5, 3],
+        logo: LOGO,
+      });
+      d.charge.participants[2].inclusionsOrganisation = [VALLON, GAMMA];
+    }));
+    assert.deepEqual(lu.charge.participants[0].inclusionsParticipant, [5, 3]);
+    assert.deepEqual(lu.charge.participants[2].inclusionsOrganisation, [VALLON, GAMMA]);
+    const texte = serialiser(lu.charge, ENTETE);
+    assert.ok(
+      texte.includes(`"conflits":["${GAMMA}"],"inclusionsOrganisation":["${GAMMA}"],"inclusionsParticipant":[3,5],"logo":"${LOGO}"}`),
+      texte,
+    );
+    assert.ok(texte.includes(`"exclu":true,"inclusionsOrganisation":["${GAMMA}","${VALLON}"]}`), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge.participants[0].inclusionsParticipant, [3, 5]);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+  });
+
+  test('une liste vide, répétée, d’une autre sorte d’élément : FORME, nommée par son chemin', () => {
+    const organisation = 'charge.participants[3].inclusionsOrganisation';
+    const participant = 'charge.participants[3].inclusionsParticipant';
+    assert.deepEqual(ecartsDeRefus([
+      ['organisations : une liste vide', avecInclusions(3, []), 'FORME', organisation],
+      ['organisations : un doublon', avecInclusions(3, [VALLON, VALLON]), 'FORME', organisation],
+      ['organisations : un texte vide', avecInclusions(3, [VALLON, '']), 'FORME', `${organisation}[1]`],
+      ['organisations : un nombre', avecInclusions(3, [7]), 'FORME', `${organisation}[0]`],
+      ['organisations : null', avecInclusions(3, null), 'FORME', organisation],
+      ['organisations : un texte seul', avecInclusions(3, VALLON), 'FORME', organisation],
+      ['participants : une liste vide', avecInclusions(3, undefined, []), 'FORME', participant],
+      ['participants : un doublon', avecInclusions(3, undefined, [1, 1]), 'FORME', participant],
+      ['participants : zéro', avecInclusions(3, undefined, [1, 0]), 'FORME', `${participant}[1]`],
+      ['participants : négatif', avecInclusions(3, undefined, [-2]), 'FORME', `${participant}[0]`],
+      ['participants : non entier', avecInclusions(3, undefined, [1.5]), 'FORME', `${participant}[0]`],
+      ['participants : au-delà de 2^31 − 1', avecInclusions(3, undefined, [2 ** 31]), 'FORME', `${participant}[0]`],
+      ['participants : un nom', avecInclusions(3, undefined, ['Brindille']), 'FORME', `${participant}[0]`],
+      ['participants : null', avecInclusions(3, undefined, null), 'FORME', participant],
+      ['participants : un entier seul', avecInclusions(3, undefined, 1), 'FORME', participant],
+    ]), []);
+  });
+
+  test('sa propre organisation et soi-même : FORME au rang qui les nomme, l’organisation d’abord', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['la sienne', avecInclusions(1, [GAMMA, VALLON]), 'FORME', 'charge.participants[1].inclusionsOrganisation[1]'],
+      ['soi-même', avecInclusions(3, undefined, [1, 5]), 'FORME', 'charge.participants[3].inclusionsParticipant[1]'],
+      ['les deux', avecInclusions(0, [VALLON], [1]), 'FORME', 'charge.participants[0].inclusionsOrganisation[0]'],
+    ]), []);
+  });
+
+  test('une organisation que nul ne porte, un identifiant que nul n’a : REFERENCE, nommée par son rang', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['organisation inconnue', avecInclusions(0, [GAMMA, 'Cercle Gama']), 'REFERENCE', 'charge.participants[0].inclusionsOrganisation[1]'],
+      // L'égalité de chaînes décide : une autre casse n'est pas la même
+      // organisation.
+      ['une autre casse', avecInclusions(3, ['chorale du vallon']), 'REFERENCE', 'charge.participants[3].inclusionsOrganisation[0]'],
+      // L'identifiant 4, retiré, n'est plus celui de personne.
+      ['identifiant retiré', avecInclusions(0, undefined, [2, 4]), 'REFERENCE', 'charge.participants[0].inclusionsParticipant[1]'],
+      ['identifiant jamais attribué', avecInclusions(0, undefined, [6]), 'REFERENCE', 'charge.participants[0].inclusionsParticipant[0]'],
+      // Les organisations d'une personne se contrôlent avant ses participants.
+      ['les deux', avecInclusions(0, ['Cercle Gama'], [4]), 'REFERENCE', 'charge.participants[0].inclusionsOrganisation[0]'],
+    ]), []);
+  });
+
+  test('un collègue nommé, une exclue, une réciproque : admis', () => {
+    const lu = analyser(abime((d) => {
+      // Un collègue de la même organisation, et l'exclue de rang 2.
+      d.charge.participants[0].inclusionsParticipant = [2, 3];
+      // L'exclue, sans organisation, garde sa liste et inclut en retour.
+      d.charge.participants[2].inclusionsOrganisation = [GAMMA];
+      d.charge.participants[2].inclusionsParticipant = [1];
+      // L'organisation d'une exclue existe.
+      d.charge.participants[2].organisation = 'Atelier Pivoine';
+      d.charge.participants[3].inclusionsOrganisation = ['Atelier Pivoine'];
+    }));
+    assert.deepEqual(lu.charge.participants[0].inclusionsParticipant, [2, 3]);
+    assert.deepEqual(lu.charge.participants[2].inclusionsParticipant, [1]);
+    assert.deepEqual(lu.charge.participants[3].inclusionsOrganisation, ['Atelier Pivoine']);
+  });
+
+  test('le contrôle suit celui des conflits et précède celui du nom numéroté ; les références suivent celles des conflits', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['conflit et inclusion fautifs', abime((d) => {
+        d.charge.participants[1].conflits = [VALLON];
+        d.charge.participants[1].inclusionsOrganisation = [VALLON];
+      }), 'FORME', 'charge.participants[1].conflits[0]'],
+      ['inclusion et marque fautives', abime((d) => {
+        d.charge.participants[1].inclusionsParticipant = [2];
+        d.charge.participants[1].nomNumerote = true;
+      }), 'FORME', 'charge.participants[1].inclusionsParticipant[0]'],
+      ['références d’une personne plus loin', abime((d) => {
+        d.charge.participants[0].inclusionsOrganisation = ['Cercle Gama'];
+        d.charge.participants[3].conflits = ['Cercle Gama'];
+      }), 'REFERENCE', 'charge.participants[3].conflits[0]'],
+    ]), []);
+  });
+
+  test('un fichier d’un format plus récent les garde, et lève FORMAT_PLUS_RECENT sur ce que le format courant refuse', () => {
+    const lu = analyser(abime((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.participants[0].inclusionsParticipant = [5];
+    }));
+    assert.equal(lu.formatPlusRecent, true);
+    assert.deepEqual(lu.charge.participants[0].inclusionsParticipant, [5]);
+    assert.deepEqual(ecartsDeRefus([
+      ['soi-même', abime((d) => {
+        d.entete.format = FORMAT + 1;
+        d.charge.participants[0].inclusionsParticipant = [1];
+      }), 'FORMAT_PLUS_RECENT', 'charge.participants[0].inclusionsParticipant[0]', { format: FORMAT + 1 }],
+      ['identifiant inconnu', abime((d) => {
+        d.entete.format = FORMAT + 1;
+        d.charge.participants[0].inclusionsParticipant = [4];
+      }), 'REFERENCE', 'charge.participants[0].inclusionsParticipant[0]', { format: FORMAT + 1 }],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne les lit pas : une personne qui en porte donne la même configuration', () => {
+    const sans = analyser(abime(() => {})).charge;
+    const avec = analyser(avecInclusions(0, [GAMMA], [3, 5])).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
   });
 });

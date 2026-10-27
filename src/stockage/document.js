@@ -21,26 +21,28 @@
 // puis des rangs (FORME) ; les identifiants des participants et des tables,
 // le tour des réservations, la portée et le tour des objectifs de table, la
 // présence de chaque personne, sa propre organisation nommée dans ses
-// conflits, le numéro final de son nom quand elle porte la marque du nom
+// conflits, sa propre organisation puis elle-même nommées dans ses
+// inclusions, le numéro final de son nom quand elle porte la marque du nom
 // numéroté, l'ordre des priorités sous le mode des objectifs et les titres
 // répétés à l'identique (FORME) ; les comptes de la saisie dans l'en-tête —
 // participants, tables, réservations, titres — (COMPTES) ; les références,
-// dont chaque organisation que nomment les conflits d'une personne
-// (REFERENCE). Les comptes des
-// propositions et du retenu ne refusent jamais le fichier (§ 8.9, point 3) :
-// ce que l'en-tête annonce sans que la charge le porte se rend à côté d'elle,
-// et le dépôt l'annonce. Un fichier d'un format plus récent que FORMAT se lit
-// réduit aux clés que le schéma connaît, et ce qui serait FORME au format
-// courant y porte la raison FORMAT_PLUS_RECENT : la lecture ne le distingue
-// pas d'une évolution du format. Ses comptes et ses références gardent leur
-// raison, une corruption quel que soit le format ; tout refus d'un tel
-// fichier porte le format lu dans ses détails, qui disent au dépôt d'où il
-// vient. Le dépôt complète les détails — base, secours — et pose lui-même la
-// raison ABSENT, quand le journal existe sans l'état. Des propositions et du
-// retenu, l'analyse ne lit que le conteneur : leur forme, leur cohérence et
-// leurs identifiants, comparés entre eux et à prochainsIds.proposition, sont
-// l'affaire du contrôle des placements, qui écarte une proposition fautive et
-// signale un retenu fautif sans refuser le fichier (§ 8.9, point 3).
+// dont chaque organisation que nomment les conflits d'une personne, puis
+// chaque organisation et chaque participant que nomment ses inclusions
+// (REFERENCE). Les comptes des propositions et du retenu ne refusent jamais
+// le fichier (§ 8.9, point 3) : ce que l'en-tête annonce sans que la charge
+// le porte se rend à côté d'elle, et le dépôt l'annonce. Un fichier d'un
+// format plus récent que FORMAT se lit réduit aux clés que le schéma connaît,
+// et ce qui serait FORME au format courant y porte la raison
+// FORMAT_PLUS_RECENT : la lecture ne le distingue pas d'une évolution du
+// format. Ses comptes et ses références gardent leur raison, une corruption
+// quel que soit le format ; tout refus d'un tel fichier porte le format lu
+// dans ses détails, qui disent au dépôt d'où il vient. Le dépôt complète les
+// détails — base, secours — et pose lui-même la raison ABSENT, quand le
+// journal existe sans l'état. Des propositions et du retenu, l'analyse ne lit
+// que le conteneur : leur forme, leur cohérence et leurs identifiants,
+// comparés entre eux et à prochainsIds.proposition, sont l'affaire du
+// contrôle des placements, qui écarte une proposition fautive et signale un
+// retenu fautif sans refuser le fichier (§ 8.9, point 3).
 //
 // Un fichier d'un format plus ancien que FORMAT ne se lit pas : son refus,
 // FORMAT_TROP_ANCIEN au chemin entete.format, porte le format lu dans ses
@@ -365,23 +367,32 @@ const PARTICIPANT = objet([
   // (src/moteur/presence.js) ; présent, les tours où elle l'est, une liste
   // non vide d'entiers distincts de 1 à TOURS_MAX, rangée croissante à
   // l'écriture ; examinerPresences la compare au nombre de tours. conflits
-  // absent : la personne n'est en conflit avec aucune organisation ;
-  // présent, une liste non vide d'organisations distinctes, rangée par
-  // unités de code à l'écriture ; examinerConflits refuse la sienne, et
-  // examinerReferences une organisation que nul participant ne porte. logo
-  // absent : la personne ne porte aucun logo ; présent, le chemin de son
-  // image dans le dossier de l'événement, logo/<empreinte>.png
-  // (estCheminLogo), que le moteur ne lit pas. nomNumerote absent : le nom
-  // est celui que la personne a reçu ; présent, toujours vrai, le numéro
-  // final de son nom est celui qu'y a ajouté « Rendre les noms uniques » à
-  // l'import ; examinerNomsNumerotes exige ce numéro, et le moteur ne lit
-  // pas la marque. animationReservee absent : la personne n'a pas à animer
-  // une table ; présent, toujours vrai, elle est à désigner animatrice
-  // (§ 4) — la marque dit une intention, jamais qu'elle anime, et le moteur
-  // ne la lit pas.
+  // absent : la personne n'est en conflit avec aucune organisation ; présent,
+  // une liste non vide d'organisations distinctes, rangée par unités de code
+  // à l'écriture ; examinerConflits refuse la sienne, et examinerReferences
+  // une organisation que nul participant ne porte. inclusionsOrganisation et
+  // inclusionsParticipant absents : la personne n'a aucune organisation, ou
+  // aucun participant, à rencontrer ; présents, ceux qu'elle doit rencontrer
+  // au moins une fois, une liste non vide d'éléments distincts, les
+  // organisations rangées par unités de code et les identifiants croissants à
+  // l'écriture ; examinerInclusions refuse sa propre organisation et son
+  // propre identifiant, examinerReferences une organisation que nul
+  // participant ne porte et un identifiant que nul participant n'a, et le
+  // moteur ne les lit pas. logo absent : la personne ne porte aucun logo ;
+  // présent, le chemin de son image dans le dossier de l'événement,
+  // logo/<empreinte>.png (estCheminLogo), que le moteur ne lit pas.
+  // nomNumerote absent : le nom est celui que la personne a reçu ; présent,
+  // toujours vrai, le numéro final de son nom est celui qu'y a ajouté
+  // « Rendre les noms uniques » à l'import ; examinerNomsNumerotes exige ce
+  // numéro, et le moteur ne lit pas la marque. animationReservee absent : la
+  // personne n'a pas à animer une table ; présent, toujours vrai, elle est à
+  // désigner animatrice (§ 4) — la marque dit une intention, jamais qu'elle
+  // anime, et le moteur ne la lit pas.
   ['etiquettes', regle('liste', { ...ETIQUETTES, optionnel: true })],
   ['presence', liste(entier(1, TOURS_MAX), { min: 1, distincts: true, tri: croissant, optionnel: true })],
   ['conflits', liste(CHAINE, { min: 1, distincts: true, tri: comparerTextes, optionnel: true })],
+  ['inclusionsOrganisation', liste(CHAINE, { min: 1, distincts: true, tri: comparerTextes, optionnel: true })],
+  ['inclusionsParticipant', liste(IDENTIFIANT, { min: 1, distincts: true, tri: croissant, optionnel: true })],
   ['logo', regle('logo', { optionnel: true })],
   ['nomNumerote', horsDuDefaut(true)],
   ['animationReservee', horsDuDefaut(true)],
@@ -916,6 +927,20 @@ function examinerConflits({ participants }, faute) {
   });
 }
 
+// Les inclusions de chaque personne qui en porte, exclues comprises, dans
+// l'ordre des personnes : sa propre organisation est fautive, au rang qui la
+// nomme, puis son propre identifiant, au rang qui le porte. Une personne sans
+// organisation n'en a aucune à refuser. faute(chemin) lève l'écart.
+function examinerInclusions({ participants }, faute) {
+  participants.forEach(({ id, organisation, inclusionsOrganisation = [], inclusionsParticipant = [] }, rang) => {
+    const chemin = `charge.participants[${rang}]`;
+    const sienne = inclusionsOrganisation.indexOf(organisation);
+    if (sienne >= 0) faute(`${chemin}.inclusionsOrganisation[${sienne}]`);
+    const soi = inclusionsParticipant.indexOf(id);
+    if (soi >= 0) faute(`${chemin}.inclusionsParticipant[${soi}]`);
+  });
+}
+
 // La marque du nom numéroté de chaque personne qui la porte, exclues
 // comprises, dans l'ordre des personnes : un nom qui ne finit pas par un
 // numéro (SUFFIXE_NUMERO) la rend fautive, nommée par la marque. La forme
@@ -979,13 +1004,16 @@ function examinerComptes(comptes, charge, plus) {
   };
 }
 
-// Références des réservations, puis des titres, puis des conflits : la
-// personne et la table désignées existent, et le siège, quand il est donné,
-// tient dans la capacité courante de la table (§ 6.2) ; chaque organisation
-// que nomment les conflits d'une personne est celle d'un participant,
-// exclus compris, comparée chaîne à chaîne. La réservation d'une personne
-// exclue reste admise : elle est suspendue, non fautive (§ 4.4). plus
-// s'ajoute aux détails du refus.
+// Références des réservations, puis des titres, puis des conflits, puis des
+// inclusions : la personne et la table désignées existent, et le siège, quand
+// il est donné, tient dans la capacité courante de la table (§ 6.2) ; chaque
+// organisation que nomment les conflits d'une personne est celle d'un
+// participant, exclus compris, comparée chaîne à chaîne ; chaque organisation
+// qu'elle inclut l'est de même, puis chaque identifiant qu'elle inclut est
+// celui d'un participant, exclus compris, personne par personne. La
+// réservation d'une personne exclue reste admise : elle est suspendue, non
+// fautive (§ 4.4) ; une inclusion qui vise une exclue aussi. plus s'ajoute
+// aux détails du refus.
 function examinerReferences(charge, plus) {
   const personnes = new Set(charge.participants.map(({ id }) => id));
   const tables = new Map(charge.tables.map((table) => [table.id, table]));
@@ -1004,6 +1032,13 @@ function examinerReferences(charge, plus) {
   charge.participants.forEach(({ conflits = [] }, rang) => {
     const inconnue = conflits.findIndex((nom) => !organisations.has(nom));
     if (inconnue >= 0) illisible('REFERENCE', `charge.participants[${rang}].conflits[${inconnue}]`, plus);
+  });
+  charge.participants.forEach(({ inclusionsOrganisation = [], inclusionsParticipant = [] }, rang) => {
+    const chemin = `charge.participants[${rang}]`;
+    const organisation = inclusionsOrganisation.findIndex((nom) => !organisations.has(nom));
+    if (organisation >= 0) illisible('REFERENCE', `${chemin}.inclusionsOrganisation[${organisation}]`, plus);
+    const participant = inclusionsParticipant.findIndex((id) => !personnes.has(id));
+    if (participant >= 0) illisible('REFERENCE', `${chemin}.inclusionsParticipant[${participant}]`, plus);
   });
 }
 
@@ -1066,6 +1101,7 @@ export function analyser(texte) {
   examinerObjectifs(charge, faute);
   examinerPresences(charge, faute);
   examinerConflits(charge, faute);
+  examinerInclusions(charge, faute);
   examinerNomsNumerotes(charge, faute);
   examinerPriorites(charge, faute);
   examinerTitres(charge, faute);

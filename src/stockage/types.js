@@ -23,14 +23,14 @@
  * Le fichier d'état, au format courant, FORMAT (§ 8.8, § 8.9). Deux régions :
  * l'en-tête et la charge. Des champs facultatifs, chacun absent à son défaut
  * et écrit après les clés toujours présentes de son objet : les
- * étiquettes, la présence par tour, les conflits, le logo et la marque du
- * nom numéroté d'un participant, le libellé et les objectifs d'une table,
- * des réglages, la dérivation d'une proposition et les absents d'un tour
- * de placement. Aucun format plus ancien que FORMAT ne se lit : un tel
- * fichier se refuse, raison FORMAT_TROP_ANCIEN. Les comparaisons qui
- * traversent les constructions — empreinte des démonstrations, aller-retour
- * des fichiers livrés — portent sur la charge seule. Toute clé hors de ces
- * formes est une faute de forme.
+ * étiquettes, la présence par tour, les conflits, les inclusions, le logo
+ * et la marque du nom numéroté d'un participant, le libellé et les
+ * objectifs d'une table, des réglages, la dérivation d'une proposition et
+ * les absents d'un tour de placement. Aucun format plus ancien que FORMAT
+ * ne se lit : un tel fichier se refuse, raison FORMAT_TROP_ANCIEN. Les
+ * comparaisons qui traversent les constructions — empreinte des
+ * démonstrations, aller-retour des fichiers livrés — portent sur la charge
+ * seule. Toute clé hors de ces formes est une faute de forme.
  * Le texte est en UTF-8 sans marque d'ordre d'octets, fin de ligne LF, une
  * seule fin de ligne finale, dans la forme canonique qu'écrit canonique.js.
  *
@@ -183,6 +183,26 @@
  *                                          jamais la sienne, sans doublon,
  *                                          rangées par unités UTF-16 ;
  *                                          absent, aucune
+ * @property {string[]} [inclusionsOrganisation] facultatif : les
+ *                                          organisations dont la personne
+ *                                          doit rencontrer au moins un
+ *                                          membre à une table, au moins
+ *                                          une, chacune l'organisation
+ *                                          d'un participant de
+ *                                          l'événement, jamais la sienne,
+ *                                          sans doublon, rangées par
+ *                                          unités UTF-16 ; absent, aucune.
+ *                                          Le moteur ne les lit pas (§ 8.9)
+ * @property {number[]} [inclusionsParticipant] facultatif : les
+ *                                          identifiants des participants
+ *                                          que la personne doit rencontrer
+ *                                          au moins une fois à une table,
+ *                                          au moins un, chacun celui d'un
+ *                                          participant de l'événement,
+ *                                          exclus compris, jamais le sien,
+ *                                          sans doublon, rangés
+ *                                          croissants ; absent, aucun. Le
+ *                                          moteur ne les lit pas (§ 8.9)
  * @property {string} [logo]               facultatif : le chemin de son
  *                                          logo, relatif au dossier de
  *                                          l'événement, logo/ puis le

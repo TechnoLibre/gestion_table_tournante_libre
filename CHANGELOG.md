@@ -870,15 +870,18 @@ proposition dérivée y porte aussi son départ et ses tours figés, `depart` et
 `presence`, est absente quand elle vaut tous les tours, et chaque tour d'un
 placement nomme ses absents, `absents`, seulement quand il en a. Le libellé
 d'une table, `libelle`, est absent quand elle n'en porte pas ; les conflits
-d'organisation d'une personne, `conflits`, quand elle n'en nomme aucun ; son
-logo, `logo`, le chemin de son image dans le dossier de l'événement, quand
-elle n'en a pas ; la marque de son nom numéroté, `nomNumerote`, quand
-« Rendre les noms uniques » ne l'a pas renommée ; celle de son animation
-réservée, `animationReservee`, quand rien ne l'appelle à animer. Un fichier de
-format 1 ou 2, écrit par une version de développement, est refusé :
-il ne s'ouvre pas, ne s'importe pas, et l'application dit que son format, trop
-ancien, n'est plus pris en charge, sans rien écrire par-dessus. La course de
-la recherche ne va ni dans le fichier de l'événement ni dans son historique :
-elle a son propre fichier, `<nom>.gtt-courses.json`.
+d'organisation d'une personne, `conflits`, quand elle n'en nomme aucun ; ses
+inclusions, `inclusionsOrganisation` et `inclusionsParticipant` — les
+organisations, puis les participants désignés par leur identifiant, qu'elle
+doit rencontrer au moins une fois —, quand elle n'en nomme aucune ; son logo,
+`logo`, le chemin de son image dans le dossier de l'événement, quand elle n'en
+a pas ; la marque de son nom numéroté, `nomNumerote`, quand « Rendre les noms
+uniques » ne l'a pas renommée ; celle de son animation réservée,
+`animationReservee`, quand rien ne l'appelle à animer. Un fichier de format 1
+ou 2, écrit par une version de développement, est refusé : il ne s'ouvre pas,
+ne s'importe pas, et l'application dit que son format, trop ancien, n'est plus
+pris en charge, sans rien écrire par-dessus. La course de la recherche ne va ni
+dans le fichier de l'événement ni dans son historique : elle a son propre
+fichier, `<nom>.gtt-courses.json`.
 
 **En remplaçant** : rien à faire, c'est la première version.
