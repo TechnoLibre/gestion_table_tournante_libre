@@ -8,13 +8,14 @@
 // plateforme web, sur l'OPFS, le presse-papiers et la boîte d'impression
 // du navigateur. L'imprimante (src/impression), frontière de plateforme
 // comme le système de fichiers, ne s'importe que d'ici. Il construit les
-// dépendances d'App — l'horloge du système, l'exécuteur de la génération sur
-// le travailleur, l'exécuteur de la vue d'ensemble de la liste sur le sien,
-// les identifiants tirés par crypto.randomUUID, les démonstrations livrées
-// nommées par le catalogue, le chargement de la police embarquée,
-// l'imprimante, le chargement de la section de la qualité, celui du solveur
-// du plancher exact — et monte App dans le corps du document. Le thème de
-// départ est laissé à App, qui lit la préférence du système.
+// dépendances d'App — l'horloge du système, que le système de fichiers web
+// reçoit aussi, l'exécuteur de la génération sur le travailleur, l'exécuteur
+// de la vue d'ensemble de la liste sur le sien, les identifiants tirés par
+// crypto.randomUUID, les démonstrations livrées nommées par le catalogue, le
+// chargement de la police embarquée, l'imprimante, le chargement de la
+// section de la qualité, celui du solveur du plancher exact — et monte App
+// dans le corps du document. Le thème de départ est laissé à App, qui lit la
+// préférence du système.
 //
 // Il est le seul module qui importe le travailleur de génération, par
 // « ?worker&inline » : Vite l'inclut dans la page, que la coquille charge
@@ -78,7 +79,8 @@ import { VERSION } from './version.genere.js';
 const pont = window.gtt;
 const sousElectron = pont !== undefined;
 
-const fs = sousElectron ? creerFichiersElectron(pont.fichiers) : creerFichiersWeb();
+const horloge = creerHorlogeSysteme();
+const fs = sousElectron ? creerFichiersElectron(pont.fichiers) : creerFichiersWeb(horloge);
 const pressePapiers = sousElectron
   ? { copier: async (texte) => void (await pont.copier(texte)) }
   : { copier: (texte) => navigator.clipboard.writeText(texte) };
@@ -99,7 +101,7 @@ mount(App, {
   target: document.body,
   props: {
     fs,
-    horloge: creerHorlogeSysteme(),
+    horloge,
     executeur: creerExecuteurTravailleur(() => new Travailleur(), {
       coeursDisponibles: navigator.hardwareConcurrency,
     }),

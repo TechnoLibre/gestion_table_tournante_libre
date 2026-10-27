@@ -10,6 +10,9 @@
 // qui n'en est pas un, les primitives qui n'existent pas sous web, le choix
 // d'un fichier à importer et l'enregistrement par téléchargement.
 //
+// Le système reçoit l'horloge de l'application, pilotée ici : l'adresse
+// d'un téléchargement ne se libère qu'à la minuterie que l'horloge arme.
+//
 // Une panne de l'OPFS se provoque en remplaçant, le temps d'une épreuve, une
 // méthode de ses prototypes (vi.spyOn), que afterEach rétablit ; un dialogue,
 // en remplaçant le clic du champ de fichier ou du lien. Les mains de
@@ -19,6 +22,7 @@
 // d'épreuve sont inventés.
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { eprouverContrat } from '../../test/contrat_fichiers.js';
+import { creerHorlogePilotee } from '../application/horloge.js';
 import { ErreurStockage } from './erreurs.js';
 import { TEMOIN, creerFichiersWeb } from './fichiers_web.js';
 import { LOGO_SOURCE_MAX_OCTETS } from './logos.js';
@@ -34,6 +38,9 @@ const DOCUMENTS = { id: 'documents', chemin: CHEMIN_DOCUMENTS };
 const BRUTS = new Uint8Array([0xef, 0xbb, 0xbf, 0x6e, 0x6f, 0x6d, 0x3b, 0x0d, 0x0a, 0xff]);
 
 const opfs = () => navigator.storage.getDirectory();
+
+// Un système neuf, sous une horloge pilotée neuve ou celle donnée.
+const fichiersWeb = (horloge = creerHorlogePilotee()) => creerFichiersWeb(horloge);
 
 // Retire toute entrée de la racine de l'OPFS.
 async function viderOpfs() {
@@ -71,7 +78,7 @@ async function poserOpfs(nom, octets) {
 // Un système neuf sur un dossier du produit qui existe et ne porte rien.
 async function preparer() {
   await (await opfs()).getDirectoryHandle(DOSSIER, { create: true });
-  return creerFichiersWeb();
+  return fichiersWeb();
 }
 
 // Rend la raison du rejet de la promesse ; échoue quand elle se résout.
@@ -116,7 +123,7 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
   });
 
   test("nature web, ni renommage atomique ni verrou ; ni exécutable ni données applicatives ; noms comparés à la lettre sous « / » ; support inconnu", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     expect(fs.nature).toBe('web');
     expect(fs.renommageAtomique).toBe(false);
     expect(fs.verrouDisponible).toBe(false);
@@ -181,7 +188,7 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
   });
 
   test("sonder crée le dossier du produit dans un OPFS vide, et n'y laisse aucun témoin", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     expect(await nomsOpfs()).toStrictEqual([]);
     expect(await fs.sonder(DOCUMENTS)).toStrictEqual({ inscriptible: true, cause: null });
     expect(await nomsOpfs()).toStrictEqual([DOSSIER]);
@@ -189,7 +196,7 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
   });
 
   test("sans le dossier du produit : une écriture lève ECRITURE sans le recréer, une lecture ABSENT, supprimer et supprimerDossier ne font rien, creerDossier d'un chemin sous lui aussi ; creerDossier de '' le crée", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     const refus = (chemin, dossier = CHEMIN_DOCUMENTS) => ({ chemin, dossier, cause: 'NotFoundError' });
     await echoue(fs.ecrireAtomique(DOCUMENTS, 'etat.json', 'x'), 'ECRITURE', refus('etat.json'));
     await echoue(fs.ajouterLigne(DOCUMENTS, 'journal.jsonl', 'x'), 'ECRITURE', refus('journal.jsonl'));
@@ -542,7 +549,7 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
   });
 
   test("sonder rend la cause que lève l'OPFS, ou RELECTURE_DIFFERENTE, sans lever, et ne laisse aucun témoin", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     vi.spyOn(StorageManager.prototype, 'getDirectory').mockRejectedValueOnce(new DOMException('refus', 'SecurityError'));
     expect(await fs.sonder(DOCUMENTS)).toStrictEqual({ inscriptible: false, cause: 'SecurityError' });
     expect(await nomsOpfs()).toStrictEqual([]);
@@ -620,7 +627,7 @@ describe('fichiers web : ni verrou, ni explorateur, ni dossier choisi (§ 8.8)',
 
 describe('fichiers web : importer et enregistrer', () => {
   test('choisirFichierAImporter ouvre un champ de fichier unique, hors du document, et rend le nom et les octets choisis tels quels', async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     const champs = [];
     vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function cliquer() {
       champs.push({ type: this.type, multiple: this.multiple, dansLeDocument: this.isConnected });
@@ -635,7 +642,7 @@ describe('fichiers web : importer et enregistrer', () => {
   });
 
   test("choisirFichierAImporter rend null quand l'opérateur annule, ou que le champ revient sans fichier", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     const clic = vi.spyOn(HTMLInputElement.prototype, 'click');
     clic.mockImplementationOnce(function annuler() {
       this.dispatchEvent(new Event('cancel'));
@@ -648,7 +655,7 @@ describe('fichiers web : importer et enregistrer', () => {
   });
 
   test("sans genre, le champ n'accepte rien de particulier ; le genre image le restreint aux images par accept", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     const accepts = [];
     vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function annuler() {
       accepts.push(this.accept);
@@ -660,7 +667,7 @@ describe('fichiers web : importer et enregistrer', () => {
   });
 
   test("le genre image lit la taille du fichier avant ses octets : au plafond, il le lit ; au-delà, TROP_VOLUMINEUX {chemin, dossier: null, taille, max} sans rien lire ; sans genre, aucun plafond", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     const lectures = vi.spyOn(Blob.prototype, 'arrayBuffer');
     const aServir = [
       new File([new Uint8Array(LOGO_SOURCE_MAX_OCTETS + 1)], 'trop-lourde.jpg'),
@@ -688,7 +695,7 @@ describe('fichiers web : importer et enregistrer', () => {
   });
 
   test("un genre inconnu ou une option de forme fausse lève TypeError avant d'ouvrir le champ", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     const clic = vi.spyOn(HTMLInputElement.prototype, 'click');
     for (const options of [null, 'image', {}, { genre: 'csv' }, { genre: 'toString' }]) {
       await expect(fs.choisirFichierAImporter(options), JSON.stringify(options)).rejects.toThrow(TypeError);
@@ -697,7 +704,7 @@ describe('fichiers web : importer et enregistrer', () => {
   });
 
   test("un fichier choisi qui ne se lit pas lève LECTURE, ou ABSENT quand il a disparu, et se nomme par son seul nom : le navigateur tait son dossier", async () => {
-    const fs = creerFichiersWeb();
+    const fs = fichiersWeb();
     vi.spyOn(Blob.prototype, 'arrayBuffer')
       .mockRejectedValueOnce(new DOMException('change', 'NotReadableError'))
       .mockRejectedValueOnce(new DOMException('disparu', 'NotFoundError'));
@@ -715,8 +722,9 @@ describe('fichiers web : importer et enregistrer', () => {
     await echoue(fs.choisirFichierAImporter(), 'ABSENT', { chemin: 'invit\u{E9}s.csv' });
   });
 
-  test("enregistrerSous remet au navigateur un lien de téléchargement des octets sous le nom proposé, rend ce nom, puis libère l'adresse", async () => {
-    const fs = creerFichiersWeb();
+  test("enregistrerSous remet au navigateur un lien de téléchargement des octets sous le nom proposé, rend ce nom, puis libère l'adresse à la minuterie de l'horloge", async () => {
+    const horloge = creerHorlogePilotee();
+    const fs = fichiersWeb(horloge);
     const creer = vi.spyOn(URL, 'createObjectURL');
     const liberer = vi.spyOn(URL, 'revokeObjectURL');
     const liens = [];
@@ -738,12 +746,20 @@ describe('fichiers web : importer et enregistrer', () => {
     expect(liens).toStrictEqual([
       { href: adresse, download: 'invit\u{E9}s.csv', dansLeDocument: false, liberee: false },
     ]);
-    await vi.waitFor(() => expect(liberer).toHaveBeenCalledWith(adresse));
+    expect(liberer).not.toHaveBeenCalled();
+    horloge.avancer(0);
     expect(liberer).toHaveBeenCalledTimes(1);
+    expect(liberer).toHaveBeenCalledWith(adresse);
   });
 });
 
 describe('fichiers web : fautes de programmation', () => {
+  test("sans horloge qui arme une minuterie, la création lève TypeError", () => {
+    for (const horloge of [undefined, null, {}, { planifier: 1 }]) {
+      expect(() => creerFichiersWeb(horloge), String(JSON.stringify(horloge))).toThrow(TypeError);
+    }
+  });
+
   test('un texte, une ligne, une séance, un nom ou des octets mal formés lèvent TypeError, sans rien écrire ni rien proposer', async () => {
     const fs = await preparer();
     const creer = vi.spyOn(URL, 'createObjectURL');

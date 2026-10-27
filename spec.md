@@ -781,14 +781,16 @@ aperçoive**.
 
 Moyennant cet ajout, le moteur n'a **qu'un seul chemin de code** : la
 réservation est un prétraitement qui réduit les capacités, retire des
-participants et annote les tables — jamais un second algorithme. Une garde de
-l'arborescence le tient : dans le moteur, seuls la normalisation de la
-configuration et le diagnostic lisent les réservations, et la normalisation
-seule lit la présence. Les tours figés d'une
-génération dérivée (§ 5.7) n'y entrent pas : ils ne réduisent aucune capacité,
-ne retirent personne et n'annotent aucune table. La recherche les reçoit à
-part, ne tire aucun mouvement dans ces tours, et compte leurs rencontres dans
-le score de la soirée.
+participants et annote les tables — jamais un second algorithme. Deux gardes
+de l'arborescence le tiennent : dans le moteur, seuls la normalisation de la
+configuration et le diagnostic lisent les réservations ; seuls la fonction
+qui dit qu'une personne est présente, la normalisation et le diagnostic lisent
+la présence, le diagnostic pour la ramener aux tours d'une soirée plus courte
+qu'il sonde (§ 5.6). Les tours figés d'une génération dérivée (§ 5.7) n'y
+entrent pas : ils ne réduisent aucune capacité, ne retirent personne et
+n'annotent aucune table. La recherche les reçoit à part, ne tire aucun
+mouvement dans ces tours, et compte leurs rencontres dans le score de la
+soirée.
 
 ### 5.3 Les contraintes, activables une à une
 
@@ -7490,13 +7492,16 @@ complet au disque.
 Le code que Vite compile vit sous **`src/`**, en modules nommés d'après les
 couches du § 13.4 : `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`,
 `src/pdf`, `src/impression`, `src/polices`, `src/demo`, `src/application`,
-`src/interface`. À la racine du
-projet, **`version.json`** est l'unique source de la version (§ 18.3) et
-**`src/version.genere.js`** le module qu'elle engendre — **versionné dans le
-dépôt**, parce qu'une séance de développement lancée sans l'étape de construction
-doit afficher une version et non une importation manquante, et **contrôlé par
-rejeu du script**, parce qu'un fichier engendré et oublié affiche une version
-périmée avec l'assurance d'une constante.
+`src/interface`, et `src/actifs`, qui porte le logo de l'éditeur tel qu'il le
+fournit, que le panneau « À propos » montre et que la séance passe à la planche
+de badges (§ 11.4), et les modules qui chargent à la demande ce logo, les textes
+des licences de `public/licences` et les avis des tiers, que ce panneau donne à
+lire. À la racine du projet, **`version.json`** est l'unique source de la
+version (§ 18.3) et **`src/version.genere.js`** le module qu'elle engendre —
+**versionné dans le dépôt**, parce qu'une séance de développement lancée sans
+l'étape de construction doit afficher une version et non une importation
+manquante, et **contrôlé par rejeu du script**, parce qu'un fichier engendré et
+oublié affiche une version périmée avec l'assurance d'une constante.
 
 **Ce qui n'est pas un composant s'éprouve sous `node`** : `src/application` et
 les modules purs de `src/interface` — tri, filtre, mise en forme, modèle de
@@ -7512,10 +7517,15 @@ Aucune partie du calcul n'est dupliquée dans un second langage.
 Cette propriété doit être **préservée délibérément**, et une garde de
 l'arborescence la tient : sous `src/`, `electron/` et `scripts/`, rien d'autre
 que du JavaScript, des composants Svelte, des feuilles de style, des données
-JSON et les scripts d'installation nommés. Dès que la même arithmétique existe
-en deux endroits, une suite de tests peut prouver qu'ils s'accordent **sans
-jamais prouver qu'ils ont raison** : les deux dérivent ensemble et les tests
-restent verts. Une seule implémentation rend ce mode de défaillance impossible.
+JSON, les scripts nommés — d'installation, d'environnement et de lancement sous
+Linux et sous Windows, de construction de l'exécutable Windows, d'épreuve de
+l'installation sur chaque système, et de l'oracle du générateur pseudo-aléatoire
+(§ 14.11) — et les données nommées, qui ne calculent rien : les deux fichiers de
+la police embarquée et leur provenance, les deux fichiers du logo de l'éditeur.
+Dès que la même arithmétique existe en deux endroits, une suite de tests peut
+prouver qu'ils s'accordent **sans jamais prouver qu'ils ont raison** : les deux
+dérivent ensemble et les tests restent verts. Une seule implémentation rend ce
+mode de défaillance impossible.
 
 **Deux exceptions, nommées, et elles seules.** La première est le calcul
 incrémental des indicateurs du § 5.10. Elle tient à une condition écrite — **le
@@ -7597,9 +7607,13 @@ message d'erreur**.
 ```
 
 Une couche n'importe que des couches placées plus bas, hors du générateur
-pseudo-aléatoire `src/demo/prng.js`, que le moteur partage avec le générateur
-de démonstrations ; l'interface n'atteint le CSV, le stockage et le moteur que
-par l'application.
+pseudo-aléatoire `src/demo/prng.js`, que le moteur partage avec le générateur de
+démonstrations ; l'interface n'atteint le CSV, le stockage et le moteur que par
+l'application. Deux modules hors des couches lui sont admis : `src/actifs`,
+qu'aucune autre couche n'importe, et qui n'importe que ses propres fichiers et
+les textes des licences de `public/`, sans toucher le navigateur ; et
+`src/version.genere.js`, que ni le moteur, ni la géométrie, ni le générateur de
+démonstrations ne lisent (§ 14.7).
 
 **Le moteur ne connaît ni le DOM, ni Capacitor, ni Electron.** Il reçoit des
 nombres et des listes, il rend des placements. C'est ce qui le rend testable sous
@@ -7704,16 +7718,17 @@ que `src/stockage` importe de `src/csv`, de `src/application`, de
 `src/interface` ou d'une plateforme, ou touche le navigateur hors de ses deux
 implémentations du système de fichiers, qu'aucun autre de ses modules
 n'importe ; que `src/csv`, qui lit le modèle du stockage, importe de
-`src/application`, de `src/interface` ou d'une plateforme ; que
-`src/geometrie` importe en outre du moteur ou de `src/demo` ; que
-`src/application` importe de `src/interface` ou de Svelte ; et que
-`src/interface` importe autre chose que Svelte, ses propres modules,
-`src/application` et `src/geometrie` — elle atteint le CSV et le moteur par
-l'application, jamais en direct. Un type que la documentation d'un module
-importe compte comme un import. Le projet `node` ne chargeant pas le greffon
-Svelte (§ 14.8), un test de moteur qui importerait un composant échoue au
-chargement — mais cette garde-là ne couvre que les composants, et un module qui
-touche `document` ne tomberait qu'à l'exécution de la branche fautive.
+`src/application`, de `src/interface` ou d'une plateforme ; que `src/geometrie`
+importe en outre du moteur ou de `src/demo` ; que `src/application` importe de
+`src/interface` ou de Svelte ; que `src/interface` importe autre chose que
+Svelte, ses propres modules, `src/application`, `src/geometrie`, `src/actifs` et
+`src/version.genere.js` — une liste fermée : elle atteint le CSV et le moteur
+par l'application, jamais en direct, et tout autre fichier du projet se refuse ;
+et qu'une autre couche importe `src/actifs`. Un type que la documentation d'un
+module importe compte comme un import. Le projet `node` ne chargeant pas le
+greffon Svelte (§ 14.8), un test de moteur qui importerait un composant échoue
+au chargement — mais cette garde-là ne couvre que les composants, et un module
+qui touche `document` ne tomberait qu'à l'exécution de la branche fautive.
 
 ### 13.5 Ce que le SVG donne et que le canvas ferait payer
 
@@ -8351,12 +8366,15 @@ la fluidité » : le plan répondrait faux partout, et la cause serait cherchée
 dans le module de géométrie.
 
 **Le module des graphiques est frère de celui du plan, et n'en importe rien.**
-Ses échelles rendent un pixel d'écran depuis un rang ou un nombre ; ses
-graduations sont des entiers ronds pour des comptes ; son escalier ne trace que
-des segments horizontaux et verticaux, un pas par rang ; le rang au plus proche
-d'une abscisse est borné aux rangs existants, y compris hors du tracé. L'épreuve
-refuse une graduation non entière sur un axe de comptes, et un escalier qui
-relierait deux rangs en diagonale.
+Les deux ne partagent que le seuil des cibles d'écran de 24 px (§ 7.3), dans un
+module à part qui n'importe rien ; une garde de l'arborescence refuse tout autre
+import entre eux, dans un sens comme dans l'autre. Ses échelles rendent un pixel
+d'écran depuis un rang ou un nombre ; ses graduations sont des entiers ronds
+pour des comptes ; son escalier ne trace que des segments horizontaux et
+verticaux, un pas par rang ; le rang au plus proche d'une abscisse est borné aux
+rangs existants, y compris hors du tracé. L'épreuve refuse une graduation non
+entière sur un axe de comptes, et un escalier qui relierait deux rangs en
+diagonale.
 
 #### Le stockage
 
@@ -10019,7 +10037,7 @@ neutralise chaque source de variation nommément.
 | **le mode d'affichage du navigateur** | un seul mode, nommé, inscrit au manifeste : les métriques de texte en diffèrent |
 | **le cadrage mémorisé** | le § 8.5 range le cadrage dans un fichier de réglages locaux : le scénario démarre sur un **profil neuf**, ce qui lui donne du même geste un dossier de travail neuf |
 | **le numéro d'ordre du nom de démonstration** | charger une démonstration crée « ‹nom› 2 » à la deuxième exécution (§ 15) ; le répertoire neuf ramène chaque exécution au premier ordinal |
-| **l'horloge** — horodatage d'historique, pied de page, « dernière modification », retour automatique en lecture | **une seule source d'horloge dans toute l'application hors moteur**, et **elle possède aussi les minuteries**. Un instant figé ne suffit pas : un compte à rebours bâti sur une minuterie du moteur d'exécution continue d'avancer sous une horloge gelée, et **le retour automatique en lecture tombe au milieu d'une étape**. Le scénario installe une horloge dont il contrôle l'avance, ce qui lui permet aussi d'éprouver les durées |
+| **l'horloge** — horodatage d'historique, pied de page, « dernière modification », retour automatique en lecture | **une seule source d'horloge dans toute l'application hors moteur**, et **elle possède aussi les minuteries** : le stockage reçoit d'elle ses horodatages en paramètre, le système de fichiers web l'horloge elle-même pour ses minuteries, et une garde de l'arborescence refuse toute minuterie armée hors d'elle dans l'interface, l'application, le stockage et le point d'entrée de la page. Un instant figé ne suffit pas : un compte à rebours bâti sur une minuterie du moteur d'exécution continue d'avancer sous une horloge gelée, et **le retour automatique en lecture tombe au milieu d'une étape**. Le scénario installe une horloge dont il contrôle l'avance, ce qui lui permet aussi d'éprouver les durées |
 | **le numéro de version affiché** | une construction de documentation pose une **marque de provenance à la place du numéro** (§ 18.6), dans le bandeau, sur le premier écran, au pied des pages imprimées et sur la feuille de contrôle des badges. Sans elle, le texte relevé de chaque capture change à chaque livraison, l'empreinte d'étape change avec lui, et **toutes les images se réécrivent à chaque incrément** — précisément le bruit que la réécriture conditionnelle du § 19.5 existe pour supprimer |
 | **le chemin affiché** dans la liste des événements (§ 8.1) | racine de travail neutre, et le contrôle **refuse une capture dont le texte relevé — celui de tous les nœuds de texte de la région photographiée, pas des seuls éléments que l'étape nomme — porte un chemin hors de cette racine**. Un chemin réel porte un nom de compte, qu'une documentation publie |
 | **la police réellement rendue** | la police embarquée (§ 11.1) est celle du pilotage. Le scénario **mesure une chaîne témoin** par `getComputedTextLength()` et la compare à la valeur enregistrée **avec une tolérance relative, constante mesurée** (§ 14.1) — exiger l'égalité exacte reproduirait, sur une mesure de texte, l'erreur que cette section refuse sur les pixels. La tolérance se fixe au-dessous de l'écart qu'introduit un repli de police, qui est d'un tout autre ordre |

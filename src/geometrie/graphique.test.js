@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { constante } from './constantes.js';
-import { CIBLE_MIN_PX } from './designation.js';
+import { CIBLE_MIN_PX } from './cible.js';
 import {
   NIVEAUX,
   barres,

@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { LIVREES } from '../demo/livrees.js';
 import { analyser, capacite } from '../stockage/document.js';
-import { CIBLE_MIN_PX, designer, regimeCibles, surLeSol } from './designation.js';
+import { CIBLE_MIN_PX } from './cible.js';
+import { designer, regimeCibles, surLeSol } from './designation.js';
 import { englobant, geometrieTable } from './tables.js';
 
 const table = (id, forme, x, y) => ({ id, numero: id, sieges: null, forme, position: { x, y } });

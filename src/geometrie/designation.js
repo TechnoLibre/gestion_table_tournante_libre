@@ -4,10 +4,10 @@
 // La désignation d'un siège (§ 7.3, § 14.10) : ce que contient un point de
 // dessin, lu sur les géométries de tables.js, celles mêmes que le dessin pose.
 // Le dépôt d'un glissement ne cherche pas sa cible dans le DOM : il convertit
-// le point en coordonnées de dessin et le passe à designer.
+// le point en coordonnées de dessin et le passe à designer. Le seuil des
+// cibles, CIBLE_MIN_PX, vient de cible.js, que les graphiques lisent aussi.
 
-/** Taille d'écran minimale d'une cible de siège, en px (§ 7.3). */
-export const CIBLE_MIN_PX = 24;
+import { CIBLE_MIN_PX } from './cible.js';
 
 // Vrai quand le point est dans le disque (ronde) ou le carré aux côtés
 // parallèles aux axes (carrée) de demi-taille donnée, centré sur la table,
