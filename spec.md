@@ -1490,10 +1490,11 @@ formule ne s'écrit que lorsque le chiffre de l'énoncé l'égale. Sur 4 tours
   exception : « 4 places restent vides à chaque tour, 260 personnes pour 264
   places : une personne assise à une table incomplète y rencontre une
   personne de moins par place vide, et ce plafond, compté sur des tables
-  pleines, peut alors lui échapper » — sous présence partielle, « Jusqu'à 4
-  places restent vides selon le tour ». C'est la source de l'écart
-  d'itinéraire que le diagnostic ne chiffre pas d'avance quand des places
-  restent vides ;
+  pleines, peut alors lui échapper » — quand le nombre de places vides varie
+  d'un tour à l'autre, « Jusqu'à 4 places restent vides selon le tour ». Une
+  présence partielle qui laisse le même nombre de places vides à chaque tour
+  garde la première forme. C'est la source de l'écart d'itinéraire que le
+  diagnostic ne chiffre pas d'avance quand des places restent vides ;
 - les **retours imposés**, quand chaque personne qui en porte revient R − 1
   fois : « chacune des 33 personnes réservées à une table y reste aux 4
   tours, et y revient donc 3 fois ; ces retours sont voulus par les
@@ -2030,8 +2031,8 @@ borne N bien en deçà. Deux propositions égales sur tous les paliers se
 départagent par l'identifiant croissant. L'ordre des paliers est celui de la
 liste écrite. L'ordre des critères dans un palier ne change aucune clé ; il est
 pourtant fixé, celui du tableau ci-dessus, pour que deux listes de même effet
-s'écrivent pareil : les commandes et le moteur refusent un palier rangé
-autrement, et la lecture d'un fichier le range (§ 8.9).
+s'écrivent pareil : le moteur refuse un palier rangé autrement ; les commandes
+le rangent avant de l'écrire, et la lecture d'un fichier le range (§ 8.9).
 
 **La phrase de l'ordre dit les paliers.** Elle nomme les paliers appliqués, dans
 l'ordre, séparés par « puis » ; un palier de plusieurs critères se lit
@@ -2143,7 +2144,11 @@ participants** : seul le mobilier, les tours ou un fichier écrit ailleurs l'y
 mettent (§ 9). « Défaire » reprend le geste et l'ajustement ensemble. Le
 libellé de l'entrée le dit — « ; placement retenu ajusté » —, et les
 propositions, elles, gardent leur plan : elles entrent en dérive (§ 9), sans
-cesser de servir de départ (§ 5.7).
+cesser de servir de départ (§ 5.7). Le changement de présence nomme les tours
+touchés au lieu de cette mention : « Présence de Prénom Nom : tours 2 et 3, au
+lieu des tours 1 et 2 ; retirée du placement retenu au tour 1, mise en réserve
+au tour 3 » — chaque partie seulement quand elle a des tours, et rien après la
+présence quand le retenu ne bouge pas.
 
 Une personne ajoutée en état retenu entre en réserve du retenu à ses tours de
 présence, et le logiciel le dit (`A_PLACER_DANS_LE_RETENU`) : quand sa présence
@@ -4432,12 +4437,20 @@ suite de graines dérivées (§ 5.7), et ne dérive ni de l'horloge ni d'un tira
 Il se compte à partir d'un compteur du fichier, `prochainsIds.proposition`, qui
 dépasse tout identifiant de proposition jamais attribué, celui d'où vient le
 placement retenu compris : une génération numérote ses propositions dans
-l'ordre de ses graines à partir de lui, puis le porte au-delà de la dernière. Le
+l'ordre de ses graines à partir de lui, puis le porte au-delà de la dernière.
+L'identifiant d'une proposition reste sous le compteur que le fichier porte,
+sous peine de la faute `IDENTIFIANT_HORS_COMPTEUR` : à l'ouverture, une
+proposition qui l'atteint est fautive, et l'événement s'ouvre sans elle ; un
+retenu dont la proposition d'origine l'atteint porte la même faute, qui le
+rend fautif (point 3). Ces fautes se jugent contre le compteur reçu. Le
 compteur ne recule jamais — ni quand une commande efface les propositions
-(§ 5.7), ni quand une main l'abaisse dans le fichier, l'ouverture le relevant
-au-delà de chaque identifiant qu'elle lit. Les générations s'accumulent ainsi
-sans qu'un identifiant se répète ni revienne, et le retenu désigne toujours la
-même proposition d'origine.
+(§ 5.7), ni quand une main l'abaisse dans le fichier : l'ouverture le relève
+ensuite au-delà de chaque identifiant qu'elle lit, propositions écartées et
+origine du retenu comprises. Un compteur abaissé à la main écarte donc les
+propositions qu'il ne couvre plus, sans faire réattribuer aucun de leurs
+identifiants. Les générations s'accumulent ainsi sans qu'un identifiant se
+répète ni revienne, et le retenu ne désigne jamais une autre proposition que
+la sienne.
 
 **Un identifiant entier tient de 1 à 2³¹ − 1** — celui d'un participant, d'une
 table, d'une proposition, ou de ce qu'une réservation, un titre ou un placement
@@ -4605,11 +4618,15 @@ Quatre exigences rendent ce coût acceptable, et aucune n'est facultative.
    même capacité, conservent le multiensemble et les longueurs. Rien dans le
    fichier ne les distingue d'un placement légitime ; ils se voient sur le plan.
 3. **Fautif et périmé sont deux choses, et le logiciel ne les confond pas.**
-   Fautif = le fichier se contredit lui-même : une longueur fausse, un identifiant
-   dupliqué, un identifiant absent de l'ensemble déclaré. Périmé = la proposition
-   est cohérente mais ne décrit plus la configuration courante : une table
-   supprimée, une capacité changée, une personne exclue depuis (§ 4.4), une
-   présence changée depuis, un tour retiré.
+   Fautif = le fichier se contredit lui-même : une longueur fausse, un
+   identifiant dupliqué, un identifiant absent de l'ensemble déclaré, une
+   proposition qui porte l'identifiant d'une proposition gardée avant elle
+   (`IDENTIFIANT_REPETE`), un identifiant de proposition qui atteint le
+   compteur reçu (`IDENTIFIANT_HORS_COMPTEUR`). Une proposition écartée n'en
+   écarte aucune autre : celle qui porte l'identifiant d'une fautive n'est pas
+   une répétition. Périmé = la proposition est cohérente mais ne décrit plus la
+   configuration courante : une table supprimée, une capacité changée, une
+   personne exclue depuis (§ 4.4), une présence changée depuis, un tour retiré.
    Une proposition **fautive** est nommée, comptée, et l'événement s'ouvre sans
    elle. Une proposition **périmée** n'est pas écartée : c'est la **dérive** du
    § 9, qui avertit et ne bloque pas, et le logiciel dit laquelle et pourquoi.
@@ -6254,9 +6271,9 @@ mène à chacune.
 | profil trié (§ 12.3) | qui est le plus mal servi, de combien, et combien sont-ils ? | deux graphiques au même ordre de rangs : l'escalier en comptes, deux séries, le plafond réalisé et la borne de diversité en repères ; dessous, les rencontres en pourcentage du plafond réalisé | une ligne par personne dans l'ordre du profil, comptes et pourcentage, et la répartition des rencontres |
 | comparaison (§ 12.10.6) | laquelle des deux sert mieux, et qui y perd ? | un tracé, le manque des deux placements en escaliers superposés sur un axe commun, en comptes ; au-dessus, leurs chiffres en deux colonnes côte à côte, chacun en compte, ou en pourcentage suivi du compte du pire là où sa tuile en porte un | l'escalier du manque : une ligne par valeur de manque, et par placement l'effectif et l'effectif cumulé, en comptes |
 | collisions d'organisation (§ 12.4) | d'où vient le problème, et relancer peut-il y changer quelque chose ? | barres horizontales à deux segments | une ligne par organisation |
-| organisations à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table, et par tour les trois comptes et leurs pourcentages |
+| organisations à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table et par tour, les trois comptes et leurs pourcentages |
 | paires répétées (§ 12.5) | qui revoit trop souvent la même personne ? | tableau paginé ; matrice sous le seuil | le tableau est la vue ; la matrice a le sien |
-| objectifs des tables (§ 12.12) | qui n'est jamais assis à une table qui lui correspond, et à quel tour l'objectif perd-il ? | la soirée en texte, puis des barres horizontales par tour, à deux segments, chacune avec son pourcentage et ses assis sans table possible | une ligne par tour, et la liste des personnes jamais servies |
+| objectifs des tables (§ 12.12) | qui n'est jamais assis à une table qui lui correspond, et à quel tour l'objectif perd-il ? | la soirée en texte, puis des barres horizontales par tour, à deux segments, chacune avec ses assis sans table possible ; dessous, chaque tour avec son pourcentage et ses deux comptes | une ligne par tour, et la liste des personnes jamais servies |
 | animateurs rencontrés (§ 12.13) | qui a rencontré le moins d'animateurs ? | escalier, une série, la borne des animateurs en repère | une ligne par personne concernée, et la répartition |
 | diversité par animateur (§ 12.13) | quel animateur voit le moins de diversité à sa table ? | deux colonnes de barres horizontales juxtaposées, organisations et étiquettes, chacune son axe, sur la soirée | une ligne par animateur sur la soirée, puis une par animateur et tour animé |
 | performance du calcul (§ 12.14) | relancer plus longtemps aurait-il donné mieux ? | petits multiples, un indicateur par graphique, points aux seuls points de relevé, abscisse logarithmique | une ligne par point de relevé, une colonne par indicateur |
@@ -6464,11 +6481,13 @@ faux : la page **refuse de dessiner** et le dit, plutôt que d'afficher un
 graphique impossible que personne ne regardera d'assez près.
 
 La page lui passe en complément les planchers des collisions cumulées par
-organisation, les planchers des objectifs par tour (§ 12.12), la validité de ces
-planchers pour le plan (§ 12.4) et les bornes de diversité : la garde éprouve
-alors aussi que le segment « reste » n'est jamais négatif, ni pour une
-organisation ni pour un tour, et que A(p) ne dépasse ni les rencontres de p,
-ni |F(p)|, ni sa borne de diversité, |F(p)| ne dépassant pas Φ_aff(p) (§ 5.5).
+organisation, les planchers des objectifs par tour (§ 12.12), les conflits
+imposés par les réservations (§ 5.6), la validité de ces planchers pour le plan
+(§ 12.4) et les bornes de diversité : la garde éprouve alors aussi que le
+segment « reste » n'est jamais négatif, ni pour une organisation ni pour un
+tour, que les conflits d'organisation du plan ne tombent pas sous les conflits
+imposés, et que A(p) ne dépasse ni les rencontres de p, ni |F(p)|, ni sa borne
+de diversité, |F(p)| ne dépassant pas Φ_aff(p) (§ 5.5).
 La propriété A(p) ≤ rencontres(p) fonde l'axe unique de cette vue ; elle n'est
 vraie que par construction tant qu'aucune garde ne l'éprouve. Le refus vaut pour
 la page entière, et nomme la mesure et les personnes en cause.
@@ -6696,7 +6715,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | une grille tables × tours trop large pour ses cases | le jumeau seul, et la phrase qui le dit |
 | la matrice sous le seuil, mais trop étroite pour la largeur de la carte | la phrase de la matrice non dessinée, qui renvoie à la fiche |
 | le placement retenu | la performance dit qu'elle mesure une proposition ; un retenu non ajusté nomme la proposition d'où il vient et en montre la course tant qu'elle est dans la liste ; un retenu ajusté, aux participants ou à la main, ou dont la proposition a été effacée, n'en a aucune |
-| une proposition rouverte, dont le compagnon des courses garde la course | la performance la montre, ses valeurs mesurées sous les réglages courants ; la durée et la cadence s'écrivent « inconnues » (§ 5.10) |
+| une proposition rouverte, dont le compagnon des courses garde la course | la performance la montre, ses valeurs mesurées sous les réglages courants ; « durée inconnue », sans cadence (§ 5.10) |
 | une proposition dont la course n'est pas gardée — écrite avant le compagnon ou par une version antérieure, compagnon absent, illisible ou contradictoire, proposition effacée puis rendue après une réouverture (§ 8.6) | la performance cède la place à sa phrase : sa course n'est pas gardée |
 | une proposition dont la recherche a atteint un n-uplet nul | la performance l'écrit : « rien à reprendre après 3 412 mouvements sur 20 000 » ; à zéro mouvement, « le plan initial n'avait rien à reprendre » |
 | une génération de durée nulle ou inconnue | « durée inconnue », sans cadence |
@@ -6758,13 +6777,16 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 - **Chaque graphique a son jumeau tabulaire** : un survol n'est jamais le seul
   chemin vers une valeur, et un tableau se parcourt au clavier et au lecteur
   d'écran. Il s'ouvre à la demande, par une commande sous le graphique. Chaque
-  graphique est une image nommée par la question de sa vue et décrite par une
-  phrase de synthèse — le pire cas et son effectif. **Un jumeau porte au moins
-  les valeurs de son graphique, et peut détailler au-delà** — les trois comptes
-  du mélange d'une table, quand la grille n'en dessine qu'un ; la diversité de
-  chaque animateur tour par tour, quand le graphique dessine la soirée —, jamais
-  en deçà. Celui de la vue de comparaison est **l'escalier du manque**
-  (§ 12.10.6), une colonne par placement comparé.
+  graphique est une image nommée par un titre qui dit ce qu'elle dessine et
+  décrite par une phrase de synthèse — le pire cas et son effectif. La
+  question de la vue est le sous-titre de sa carte : les graphiques d'une même
+  vue la partagent, comme les deux du profil, en comptes et en pourcentages.
+  **Un jumeau porte au moins les valeurs de son graphique, et peut détailler
+  au-delà** — les trois comptes du mélange d'une table, quand la grille n'en
+  dessine qu'un ; la diversité de chaque animateur tour par tour, quand le
+  graphique dessine la soirée —, jamais en deçà. Celui de la vue de
+  comparaison est **l'escalier du manque** (§ 12.10.6), une colonne par
+  placement comparé.
 - **Le pointage se fait au plus proche** : à 260 points, le pas est de quelques
   pixels, et sans cette couche la vue est inutilisable au pavé tactile.
 - **Les jetons de graphique forment une famille** (§ 13.3) : deux séries, le
@@ -7090,17 +7112,19 @@ la personne au rang 1, l'effectif du manque et l'écart d'itinéraire maximal.
 Dessous, repliés sous « Tous les indicateurs », un repli que le clavier ouvre et
 ferme, les indicateurs des tuiles de l'en-tête chiffré (§ 12.2), par les groupes
 des colonnes du tableau des propositions (§ 5.7) — personnes rencontrées,
-collisions d'organisation, rencontres répétées et retours, diversité, objectifs
-des tables et animateurs ; une colonne que le tableau ne porte pas sous un
-critère décoché y reste, comme sa tuile, avec « ne classe pas » —, lus dans les
-deux lignes de la table d'évaluation, sans le détail de B. Chaque chiffre porte
-ses lignes secondaires, et son plancher quand il est prouvé, comme sur les
-tuiles (§ 12.2) ; les planchers sont ceux du diagnostic, communs aux deux
-placements. Une colonne nomme la personne que la tuile nomme, sauf au minimum de
-A(p) et au minimum de m(p), dont la borne ne se lit que dans le détail : ces
-deux chiffres s'y écrivent sans personne ni borne ; quand aucune personne
-présente ne porte d'organisation, la cellule de la diversité écrit, comme sa
-tuile, la phrase qui le dit (§ 12.2). Une dérivée y porte « dérivée de n° X ».
+collisions d'organisation, rencontres répétées et retours, diversité, manque et
+plafond a priori, objectifs des tables et animateurs ; les chiffres de la tête
+n'y reparaissent pas, si bien que le groupe du manque n'y garde que l'écart au
+plafond a priori ; une colonne que le tableau ne porte pas sous un critère
+décoché y reste, comme sa tuile, avec « ne classe pas » —, lus dans les deux
+lignes de la table d'évaluation, sans le détail de B. Chaque chiffre porte ses
+lignes secondaires, et son plancher quand il est prouvé, comme sur les tuiles
+(§ 12.2) ; les planchers sont ceux du diagnostic, communs aux deux placements.
+Une colonne nomme la personne que la tuile nomme, sauf au minimum de A(p) et au
+minimum de m(p), dont la borne ne se lit que dans le détail : ces deux chiffres
+s'y écrivent sans personne ni borne ; quand aucune personne présente ne porte
+d'organisation, la cellule de la diversité écrit, comme sa tuile, la phrase qui
+le dit (§ 12.2). Une dérivée y porte « dérivée de n° X ».
 
 **Les colonnes portent les pourcentages des tuiles**, et eux seuls
 (§ 12.2) : un chiffre dont la tuile porte un pourcentage le porte aussi dans
@@ -7300,17 +7324,18 @@ collisions (§ 12.4) : celle-ci dit quelle organisation se retrouve, la grille o
 et quand ; un doublon d'organisation non nul est exactement une table où la vue
 des collisions compte au moins une collision ce tour-là.
 
-**Le jumeau** porte une ligne par table dans l'ordre de la position, et par tour
-**les trois comptes et leurs trois pourcentages**, chaque pourcentage suivi du
-compte de sa ligne (§ 12), les occupants, les affiliés et la capacité : il
-détaille au-delà de la grille (§ 12.7). Une case tient son chiffre et 24 px de
-côté ; une grille dont les cases ne tiennent pas dans la largeur de la carte
-cède la place à son jumeau, avec la phrase qui le dit, et le sélecteur reste.
-Une case n'est pas une cible : le pointage au plus proche désigne la case sous
-le pointeur (§ 12.7), et le jumeau porte les mêmes valeurs. Sans collision, la
-grille cède la place à la phrase de la vue des collisions sous la position
-« doublons » seulement ; sans organisation, à celle du § 12.6 sous les trois ;
-avec une seule organisation, elle reste.
+**Le jumeau** porte une ligne par table et par tour, les tables dans l'ordre de
+la position et, sous chacune, ses tours dans l'ordre ; chaque ligne écrit **les
+trois comptes et leurs trois pourcentages**, chaque pourcentage suivi du compte
+de sa ligne (§ 12), les occupants, les affiliés et la capacité : il détaille
+au-delà de la grille (§ 12.7). Une case tient son chiffre et 24 px de côté ; une
+grille dont les cases ne tiennent pas dans la largeur de la carte cède la place
+à son jumeau, avec la phrase qui le dit, et le sélecteur reste. Une case n'est
+pas une cible : le pointage au plus proche désigne la case sous le pointeur
+(§ 12.7), et le jumeau porte les mêmes valeurs. Sans collision, la grille cède
+la place à la phrase de la vue des collisions sous la position « doublons »
+seulement ; sans organisation, à celle du § 12.6 sous les trois ; avec une seule
+organisation, elle reste.
 
 ### 12.12 Les objectifs des tables
 
@@ -7333,15 +7358,18 @@ du § 5.6, et **reste**. Un couple fixé possible étant servi, Π_r − S_r = P
 − S^nf_r, et une personne servie non fixée occupe un siège libre : S^nf_r ≤ L_r,
 donc le plancher du tour borne la barre. **La première barre est celle du tour
 au plus grand reste**, à place fixe ; les autres tours suivent dans leur ordre ;
-aucune couleur ne désigne un tour. En encre secondaire, chaque ligne porte le
-pourcentage des tours possibles servis à ce tour, ses deux comptes dessous —
-« 80 % », « 24 servis sur 30 possibles » —, puis **ses assis sans table
-possible** σ_r (§ 5.4) : « 10 assis sans table possible ». Ce compte lit tous
-les assis du tour, concernés ou non : il dit combien de personnes aucune table
-ne pouvait servir, sans entrer dans le dénominateur, que le plancher borne. Un
-tour sans couple possible écrit « — », sans barre ni pourcentage, et garde ses
-assis sans table possible. Les mots, la forme des segments et le domaine des
-planchers sont ceux du § 12.4.
+aucune couleur ne désigne un tour. En encre secondaire, chaque ligne porte
+**ses assis sans table possible** σ_r (§ 5.4) : « 10 assis sans table
+possible ». Ce compte lit tous les assis du tour, concernés ou non : il dit
+combien de personnes aucune table ne pouvait servir, sans entrer dans le
+dénominateur, que le plancher borne. Un tour sans couple possible n'a pas de
+barre : sa ligne écrit « — » et garde ses assis sans table possible — « —, 10
+assis sans table possible ». Sous le graphique, une liste reprend les tours dans
+l'ordre des barres, chacun avec le pourcentage des tours possibles servis à ce
+tour et ses deux comptes dessous — « 80 % », « 24 servis sur 30 possibles » ; un
+tour sans couple possible y écrit « aucun couple possible à ce tour », sans
+pourcentage. Les mots, la forme des segments et le domaine des planchers sont
+ceux du § 12.4.
 
 **Le diagnostic calcule le plancher de chaque tour**, que le critère classe ou
 non, et en rend les termes et la somme ; le détail les lit et ne les recompte
@@ -8677,19 +8705,20 @@ d'être appelé** ; appelé par les commandes, il refuse au moment du geste, là
 `verifier_indicateurs(mesures, plafonds_a_priori, plafonds_realises,
 complements)` éprouve les **trois** inégalités de la ligne de décomposition du
 § 12.10.5. Avec ses compléments, que seule la page de qualité lui passe, elle
-éprouve aussi le segment « reste » de chaque organisation et de chaque tour sur
-le domaine des planchers (§ 12.4, § 12.12) et la diversité de chacun contre ses
-rencontres et sa borne (§ 5.5) ; la table d'évaluation l'appelle sans eux. Quand
-les mesures portent les objectifs des tables ou les animateurs (§ 5.4), elle
-éprouve aussi, pour chacun, s(p) ≤ P(p), s(p) ≤ ses tours assis et m(p) ≤ B(p),
-puis, sur les totaux, les personnes jamais servies contre les concernées et le
-plus de tours hors objectif d'une personne contre le plus de tours possibles.
-P(p) ne se compare pas aux tours assis : un plan qui laisse une personne en
-réserve à un tour possible le tient au-delà. Elle ne prend pas un plan mais des
-mesures, et ce qu'elle refuse n'est pas un geste mais un **dessin**. Les deux
-fonctions vivent dans le moteur, sous la même discipline ; les confondre
-obligerait le vérificateur de plan à recevoir des indicateurs qu'il n'a aucune
-raison de connaître.
+éprouve aussi, sur le domaine des planchers (§ 12.4, § 12.12), le segment
+« reste » de chaque organisation et de chaque tour et les conflits
+d'organisation du plan contre les conflits imposés (§ 5.6), puis la diversité de
+chacun contre ses rencontres et sa borne (§ 5.5) ; la table d'évaluation
+l'appelle sans eux. Quand les mesures portent les objectifs des tables ou les
+animateurs (§ 5.4), elle éprouve aussi, pour chacun, s(p) ≤ P(p), s(p) ≤ ses
+tours assis et m(p) ≤ B(p), puis, sur les totaux, les personnes jamais servies
+contre les concernées et le plus de tours hors objectif d'une personne contre le
+plus de tours possibles. P(p) ne se compare pas aux tours assis : un plan qui
+laisse une personne en réserve à un tour possible le tient au-delà. Elle ne
+prend pas un plan mais des mesures, et ce qu'elle refuse n'est pas un geste mais
+un **dessin**. Les deux fonctions vivent dans le moteur, sous la même
+discipline ; les confondre obligerait le vérificateur de plan à recevoir des
+indicateurs qu'il n'a aucune raison de connaître.
 
 **Le vérificateur est lui-même éprouvé par mutation.** Le test prend un plan
 valide, déplace une personne pour qu'elle occupe deux tables au tour 2, et affirme
@@ -9896,7 +9925,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et la première commande de chaque ligne mène au premier tour où la paire se revoit |
 | `14a-fiche-rencontres.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | la rubrique « Rencontres » de la fiche d'une personne, ses premières lignes, les plus revues d'abord ; le haut de la fiche, son nom et sa rubrique « Logo » compris, hors de l'image (§ 12.5, § 10.2) | la ligne de la fiche égale la ligne de la personne dans le tableau des paires |
 | `15-pas-de-matrice.png` | **grande démonstration** | à 260 participants, le tableau et non la matrice, avec la phrase qui le dit | aucune matrice n'est dessinée |
-| `15a-qualite-objectifs.png` | l'événement en construction, la première proposition du classement montrée | les personnes jamais servies en tête, la soirée en texte, son pourcentage et le compte des jamais servies dessous, puis les barres des tours hors objectif, « prouvé inévitable » et « reste », chacune avec son pourcentage, ses deux comptes et ses assis sans table possible (§ 12.12) | la somme des planchers des tours égale le plancher du diagnostic ; possibles − servis de la soirée égale la colonne des tours hors objectif du tableau des propositions ; chaque ligne de tour écrit ses assis sans table possible |
+| `15a-qualite-objectifs.png` | l'événement en construction, la première proposition du classement montrée | les personnes jamais servies en tête, la soirée en texte, son pourcentage et le compte des jamais servies dessous, puis les barres des tours hors objectif, « prouvé inévitable » et « reste », chacune avec ses assis sans table possible, puis chaque tour avec son pourcentage et ses deux comptes (§ 12.12) | la somme des planchers des tours égale le plancher du diagnostic ; possibles − servis de la soirée égale la colonne des tours hors objectif du tableau des propositions ; chaque ligne de tour écrit ses assis sans table possible |
 | `15b-qualite-animateurs.png` | **grande démonstration** | le profil des animateurs rencontrés avec la borne des animateurs en repère pointillé, puis le début de la diversité par animateur sur la soirée, le moins varié en tête ; ses colonnes et leurs trois nombres, plus bas, sont affirmés sans l'image (§ 12.13) | le mot « plafond » n'est pas écrit dans la vue ; la première barre porte le minimum annoncé |
 | `15c-qualite-performance.png` | **grande démonstration**, une proposition montrée, dans la séance qui l'a engendrée | la ligne de tête — mouvements évalués, durée et cadence de la génération — et les deux premiers rangs des petits multiples sur l'abscisse logarithmique ; les autres multiples et la phrase du dernier changement, plus bas, sont affirmés sans l'image (§ 12.14) | le dernier point de relevé est le plan de la proposition ; ses valeurs égalent la ligne du tableau des propositions ; la durée écrite est celle dont le parcours a avancé l'horloge |
 | `16-minimum-atteint.png` | **petite démonstration** | le bas de l'en-tête chiffré : la diversité d'organisation, le manque à zéro et **« minimum atteint »** ; les compteurs de collision et de répétition **mesurés** à zéro et la ligne secondaire « ancrés » à **« — »**, plus haut, sont affirmés sans l'image (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
@@ -10254,16 +10283,18 @@ questions et s'arrête.
    les combinaisons, et la petite démonstration est le plus petit cas du catalogue.
    Ce compte est vérifiable et remplace avantageusement toute affirmation sur la
    difficulté du problème.
-3. **Comment le logiciel cherche** : il part d'un placement complet dont le point
-   de départ dépend de la **graine**, **échange** des personnes entre tables, garde
-   ce qui améliore, et s'arrête sur un **compte** de mouvements sans amélioration
-   (§ 5.10). D'où **la réponse à la première question** : deux recherches parties
-   de deux points différents s'arrêtent sur deux placements différents, et aucun
-   des deux n'est « le bon ». Cette phrase est **vérifiable, et elle est
-   vérifiée** : un test sous `node` affirme que deux graines donnent deux résultats
-   et qu'une même graine donne deux fois le même. Un énoncé vérifiable vieillit
-   mieux qu'un énoncé vague : si le moteur est réécrit et que la phrase cesse
-   d'être vraie, le test le dit.
+3. **Comment le logiciel cherche** : il part d'un placement complet dont le
+   point de départ dépend de la **graine**, **échange** des personnes entre
+   tables, garde ce qui ne dégrade pas le placement, à score égal compris, et
+   s'arrête après un **compte** de mouvements essayés, le compte d'arrêt
+   (§ 5.10), ou plus tôt s'il ne reste rien à améliorer. D'où **la réponse à
+   la première question** : deux recherches parties de deux points différents
+   s'arrêtent sur deux placements différents, et aucun des deux n'est « le
+   bon ». Cette phrase est **vérifiable, et elle est vérifiée** : un test sous
+   `node` affirme que deux graines donnent deux résultats et qu'une même graine
+   donne deux fois le même. Un énoncé vérifiable vieillit mieux qu'un énoncé
+   vague : si le moteur est réécrit et que la phrase cesse d'être vraie, le
+   test le dit.
 4. **Ce que les contraintes font** : chacune est un **objectif**, pas un interdit
    (§ 5.3). Quand elles ne tiennent pas ensemble, le logiciel produit le meilleur
    compromis et dit lequel, au lieu de refuser et de ne rien montrer.

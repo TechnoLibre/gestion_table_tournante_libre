@@ -4,10 +4,11 @@
 <script>
   // Le cadre d'un graphique de la page de qualité (§ 12.7, § 14.5, D44) :
   // un <svg role="img"> sans viewBox — le pixel du dessin est celui de
-  // l'écran —, nommé par la question de sa vue (aria-labelledby) et décrit
-  // par sa phrase de synthèse, visible dessous (aria-describedby) ; la
-  // légende ; la surface de pointage ; l'infobulle. Escalier, Barres et
-  // Grille le remplissent : il ne dessine aucune marque et ne calcule rien.
+  // l'écran —, nommé par le titre de ce qu'il dessine (nom, aria-labelledby)
+  // et décrit par sa phrase de synthèse, visible dessous (aria-describedby) ;
+  // la légende ; la surface de pointage ; l'infobulle. La question de la vue
+  // est le sous-titre de la carte, hors du cadre. Escalier, Barres et Grille
+  // le remplissent : il ne dessine aucune marque et ne calcule rien.
   //
   // La largeur se mesure sur une règle de hauteur nulle en tête du
   // conteneur (largeur, liable) : sa hauteur ne suit pas le dessin, si bien
