@@ -70,14 +70,11 @@ import { versionVisible } from './version.js';
  * @property {string|null} logo           le chemin du logo de la personne,
  *                                        relatif au dossier de l'événement ;
  *                                        null sans logo
- * @property {{nom: string, nomEnBlanc?: true, lignes: string[], abregeables: Array<Array<{debut: number, fin: number}>>,
+ * @property {{nom: string, nomEnBlanc?: true, lignes: string[],
  *             organisation: string|null, pied: string[], piedReduit: string[]}} textes
  *           nom : le nom affiché, en NFC, que la mise en page mesure ;
  *           nomEnBlanc : présent sur le seul badge dont le nom se laisse en
- *           blanc (cacherNumero), la place gardée vide ; abregeables : pour
- *           chaque ligne de tour, les textes libres que la mise en page abrège
- *           au plancher — le libellé de la table, puis le titre —, par leurs
- *           positions en unités UTF-16, dans cet ordre
+ *           blanc (cacherNumero), la place gardée vide
  * @typedef {Object} ModelePlanche
  * @property {Badge[]} badges             dans l'ordre de la pile
  * @property {'retenu'|'proposition'} source   le placement imprimé
@@ -234,22 +231,38 @@ export function refusPlanche(charge, { source = 'retenu', proposition = null } =
 
 /**
  * Un refus de la mise en page (§ 11.5), que la production relaie avec le
- * remède du contrat : PLANCHE_TROP_DE_TOURS {tours}, sans remède ;
- * PLANCHE_NOM_TROP_LONG {participant}, vers la liste des participants, où
- * le nom se corrige. Les détails reçus restent, personne comprise quand
- * l'appelant la nomme.
+ * remède du contrat et, quand le remède porte sur elle, la personne du
+ * badge refusé, que src/pdf ne connaît pas, par son nom entier :
+ *
+ * - PLANCHE_NOM_TROP_LONG {participant, personne}, vers la liste des
+ *   participants, où le nom se corrige ;
+ * - PLANCHE_TROP_DE_TOURS {tours, lignesLongues} : lignesLongues est vrai
+ *   quand les lignes de tour débordent parce qu'elles se replient (repliees
+ *   de la mise en page) et que l'une porte un libellé de table ou un
+ *   titre, qui l'allonge. Le refus nomme alors la personne
+ *   {participant, personne}, vers la section des tables, où libellé et
+ *   titre se raccourcissent ; sinon, il ne dit que le nombre de tours,
+ *   sans remède.
+ *
+ * Les autres détails reçus restent ; repliees ne passe pas.
  *
  * @param {string} code
- * @param {Object} details
+ * @param {Object} details   ceux du refus de la mise en page
+ * @param {Badge} badge   le badge refusé
  * @returns {{code: string, details: Object}}
  * @throws {TypeError} un autre code
  */
-export function refusProduction(code, details) {
-  if (code === TROP_DE_TOURS) return { code, details: { ...details, remede: null } };
-  if (code === NOM_TROP_LONG) {
-    return { code, details: { ...details, remede: { geste: 'ouvrirSection', section: 'participants' } } };
+export function refusProduction(code, { repliees = false, ...details }, badge) {
+  if (code !== TROP_DE_TOURS && code !== NOM_TROP_LONG) {
+    throw new TypeError(`refusProduction : ${TROP_DE_TOURS} ou ${NOM_TROP_LONG} attendu, reçu ${JSON.stringify(code)}`);
   }
-  throw new TypeError(`refusProduction : ${TROP_DE_TOURS} ou ${NOM_TROP_LONG} attendu, reçu ${JSON.stringify(code)}`);
+  const personne = { participant: badge.participant, personne: badge.nom };
+  if (code === NOM_TROP_LONG) {
+    return { code, details: { ...details, ...personne, remede: { geste: 'ouvrirSection', section: 'participants' } } };
+  }
+  const allongee = ({ libelleTable, titre }) => libelleTable !== undefined || titre !== null;
+  if (!(repliees && badge.lignes.some(allongee))) return { code, details: { ...details, lignesLongues: false, remede: null } };
+  return { code, details: { ...details, lignesLongues: true, ...personne, remede: { geste: 'ouvrirSection', section: 'tables' } } };
 }
 
 // Un libellé de table imprimé tient sur la ligne de son tour : ses sauts de
@@ -348,9 +361,8 @@ function lignesDe(id, places, titres) {
 const TENANT_LIBELLE = '\u{E000}';
 const TENANT_TITRE = '\u{E001}';
 
-// Une ligne de tour composée par libelle, et ses morceaux abrégeables : les
-// positions du libellé de la table puis du titre dans le texte, dans l'ordre
-// où la ligne les porte, celui où la mise en page les abrège (§ 11.5).
+// Le texte d'une ligne de tour composé par libelle, le libellé de la table
+// et le titre insérés tels quels à la place de leurs tenants (§ 11.4).
 function ligneComposee(ligne) {
   const tenue = { ...ligne, titre: ligne.titre === null ? null : TENANT_TITRE };
   if (ligne.libelleTable !== undefined) tenue.libelleTable = TENANT_LIBELLE;
@@ -360,17 +372,11 @@ function ligneComposee(ligne) {
     [TENANT_TITRE, ligne.titre],
   ]);
   let texte = '';
-  const morceaux = [];
   for (const caractere of gabarit) {
     const libre = libres.get(caractere);
-    if (typeof libre !== 'string') {
-      texte += caractere;
-      continue;
-    }
-    morceaux.push({ debut: texte.length, fin: texte.length + libre.length });
-    texte += libre;
+    texte += typeof libre === 'string' ? libre : caractere;
   }
-  return { texte, morceaux };
+  return texte;
 }
 
 // Les textes d'un badge (§ 11.4, décision 8), composés par libelle : le pied
@@ -383,12 +389,10 @@ function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodat
     horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
   const ligneIdentifiant = identifiant === null ? [] : [libelle('planche.pied.identifiant', { identifiant })];
   const ligneDate = evenement.date === null ? [] : [libelle('planche.pied.date', { date: evenement.date })];
-  const composees = lignes.map(ligneComposee);
   return {
     nom,
     ...(nomEnBlanc ? { nomEnBlanc: true } : {}),
-    lignes: composees.map(({ texte }) => texte),
-    abregeables: composees.map(({ morceaux }) => morceaux),
+    lignes: lignes.map(ligneComposee),
     organisation,
     pied: [libelle('planche.pied.evenement', evenement), ligneHorodatage, ...ligneIdentifiant],
     piedReduit: [...ligneDate, ligneHorodatage, ...ligneIdentifiant],

@@ -90,11 +90,18 @@ export const TABLE = new Map([
       'Le placement ne décrit plus la soirée, la planche ne se produit pas : ' +
       raisons.map((raison) => phraseDeRaison(raison.code, raison, texte)).join(' '),
   ],
+  // lignesLongues : des lignes de tour repliées sous un libellé de table ou
+  // un titre débordent ; le texte nomme alors la personne et ce qui se
+  // raccourcit, et non le nombre de tours.
   [
     'PLANCHE_TROP_DE_TOURS',
-    ({ tours }) =>
-      `Les ${tours} tours ne tiennent pas sur un badge, même sur deux colonnes au plus petit corps : ` +
-      "la planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
+    (details) =>
+      details.lignesLongues
+        ? `Les lignes de tour de ${laPersonne(details)}, repliées par un libellé de table ou un titre long, ` +
+          'ne tiennent pas sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce libellé ' +
+          "ou ce titre. La planche n'est pas produite, plutôt qu'une liste de tours tronquée."
+        : `Les ${details.tours} tours ne tiennent pas sur un badge, même sur deux colonnes au plus petit corps : ` +
+          "la planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
   ],
   [
     'PLANCHE_NOM_TROP_LONG',

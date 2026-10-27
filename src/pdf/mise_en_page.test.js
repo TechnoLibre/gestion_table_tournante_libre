@@ -6,8 +6,8 @@
 // métriques factices à chasse fixe dont chaque cote se calcule de tête.
 // Chaque épreuve affirme ce que voit le porteur du carton : le nom jamais
 // abrégé et toujours dans le cadre utile, l'ordre de sacrifice, une
-// organisation sur une ligne, des tours jamais tronqués, aucun texte qui en
-// chevauche un autre.
+// organisation et des lignes de tour repliées en paragraphe, jamais
+// abrégées ni tronquées, aucun texte qui en chevauche un autre.
 import assert from 'node:assert/strict';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
@@ -90,33 +90,12 @@ const NOMS_COMPOSES = [
   'Iris Lacasse-Pervenche-Grisaille de Théo',
 ];
 
-// Une ligne de tour faite de morceaux : des textes fixes, et des textes
-// libres, { libre }, que la ligne abrège au plancher. Rend la ligne et les
-// positions de ses textes libres, comme le modèle de la planche les donne.
-function composee(...parts) {
-  let ligne = '';
-  const morceaux = [];
-  for (const part of parts) {
-    if (typeof part === 'string') {
-      ligne += part;
-      continue;
-    }
-    morceaux.push({ debut: ligne.length, fin: ligne.length + part.libre.length });
-    ligne += part.libre;
-  }
-  return { ligne, morceaux };
-}
-// Une ligne sans texte libre.
-const simple = (ligne) => ({ ligne, morceaux: [] });
-// Une ligne titrée : la place, le séparateur, puis le titre, libre.
-const titree = (place, titre) => composee(`${place} ${TIRET} `, { libre: titre });
+// Une ligne titrée : la place, le séparateur, puis le titre.
+const titree = (place, titre) => `${place} ${TIRET} ${titre}`;
 // Une ligne au libellé de table : « Tour r — table t (libellé), siège s »,
 // suivie du titre quand il est donné.
 const auLibelle = (r, t, libelle, s, titre = null) =>
-  composee(`Tour ${r} ${TIRET} table ${t} (`, { libre: libelle }, `), siège ${s}`, ...(titre === null ? [] : [` ${TIRET} `, { libre: titre }]));
-// Les textes d'un badge aux lignes composées.
-const textesComposes = (lignes, champs = {}) =>
-  textes({ lignes: lignes.map(({ ligne }) => ligne), abregeables: lignes.map(({ morceaux }) => morceaux), ...champs });
+  `Tour ${r} ${TIRET} table ${t} (${libelle}), siège ${s}${titre === null ? '' : ` ${TIRET} ${titre}`}`;
 // Un libellé de table au plus long que la saisie admet.
 const LIBELLE_LONG = 'Verrière du jardin d’hiver, près des grandes baies, côté sud';
 
@@ -181,6 +160,41 @@ function rejoint(lignes, texte) {
   }
   return reste === '';
 }
+
+// Les blocs qui portent une ligne de tour : celui qui l'ouvre, puis ses
+// suites, les blocs qui le suivent au même corps, décalés à sa droite,
+// jusqu'à ce que leurs textes rejoints redonnent la ligne ; null quand la
+// page ne la porte pas entière.
+function blocsDeLigne(page, ligne) {
+  for (const [rang, premier] of page.blocs.entries()) {
+    if (premier.gras || !ligne.startsWith(premier.texte)) continue;
+    const blocs = [premier];
+    for (const suite of page.blocs.slice(rang + 1)) {
+      if (rejoint(blocs.map((b) => b.texte), ligne)) break;
+      if (suite.corps !== premier.corps || suite.x <= premier.x + TOLERANCE) break;
+      blocs.push(suite);
+    }
+    if (rejoint(blocs.map((b) => b.texte), ligne)) return blocs;
+  }
+  return null;
+}
+
+// Vrai quand chaque coupe des lignes tombe au dernier espace qui tient : le
+// premier mot de la ligne suivante, ajouté à la ligne, la ferait déborder de
+// la largeur donnée pour son rang. Sous `lier`, le premier mot emmène les
+// mots qui le suivent et commencent par un chiffre, comme le repli d'une
+// ligne de tour.
+function coupesAuDernierEspace(lignes, metriques, corps, largeurDe, { lier = false } = {}) {
+  return lignes.slice(0, -1).every((ligne, rang) => {
+    const mots = lignes[rang + 1].split(' ');
+    let fin = 1;
+    while (lier && fin < mots.length && /^\p{Nd}/u.test(mots[fin])) fin += 1;
+    return metriques.largeur(`${ligne} ${mots.slice(0, fin).join(' ')}`, corps, false) > largeurDe(rang) + TOLERANCE;
+  });
+}
+
+// Le mot qui ouvre une place, sur une ligne de tour : un nombre le suit.
+const MOT_DE_NOMBRE = /(?:^|\s)(?:Tour|table|siège)$/u;
 
 const repete = (motif, longueur) => motif.repeat(Math.ceil(longueur / motif.length)).slice(0, longueur).trim();
 
@@ -366,46 +380,52 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
 
     test(`${jeu} : sous un nom de trois lignes au plus, le nom descend jusqu’au plancher avant que rien ne parte`, () => {
       // Un nom d'événement long occupe plusieurs lignes du pied : son départ
-      // libère de quoi poser une ligne de tour de plus.
+      // libère de quoi poser une ligne de tour de plus. Une organisation
+      // courte, puis une qui se replie : leur départ libère une ligne, ou
+      // plusieurs.
       const pied = [`${repete('Grand souper annuel du Club des Merles et de la Grisaille ', 160)} ${TIRET} ${DATE}`, HORODATAGE];
+      const organisations = ['Club des Merles', 'Association des amis de la Pervenche et des Ondines, section du Grand Nord, chapitre de la vallée'];
       const vus = { descendu: 0, sansEvenement: 0, sansOrganisation: 0, refus: 0 };
       for (const nom of NOMS_COMPOSES) {
-        const depart = blocsNom(mettreEnPage(textes({ nom }), metriques))[0].corps;
-        let precedent = { corps: depart, refus: false };
-        for (let n = 12; n <= 30; n += 1) {
-          const lignes = toursAuxSieges(n);
-          const cas = `${nom}, ${n} tours`;
-          const page = mettreEnPage(textes({ nom, lignes, pied }), metriques);
-          if ('refus' in page) {
-            assert.deepEqual(page.refus, { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: n } }, cas);
-            vus.refus += 1;
-            precedent = { corps: precedent.corps, refus: true };
-            continue;
+        for (const nomOrganisation of organisations) {
+          const depart = blocsNom(mettreEnPage(textes({ nom, organisation: nomOrganisation }), metriques))[0].corps;
+          let precedent = { corps: depart, refus: false };
+          for (let n = 12; n <= 30; n += 1) {
+            const lignes = toursAuxSieges(n);
+            const cas = `${nom}, ${nomOrganisation}, ${n} tours`;
+            const page = mettreEnPage(textes({ nom, organisation: nomOrganisation, lignes, pied }), metriques);
+            if ('refus' in page) {
+              assert.deepEqual([page.refus.code, page.refus.details.tours], ['PLANCHE_TROP_DE_TOURS', n], cas);
+              vus.refus += 1;
+              precedent = { corps: precedent.corps, refus: true };
+              continue;
+            }
+            assert.ok(!precedent.refus, `${cas} : accepté après un refus`);
+            const tout = textesDe(page);
+            const evenement = tout.some((t) => t.startsWith('Grand souper'));
+            const organisation = page.blocs.some((b) => !b.gras && nomOrganisation.includes(b.texte));
+            const nomBlocs = blocsNom(page);
+            const corps = nomBlocs[0].corps;
+            const auPlancher = Math.abs(corps - corpsNomPlancher(metriques)) < 1e-9;
+            assert.ok(nomBlocs.length <= 3, `${cas} : ${nomBlocs.length} lignes de nom`);
+            assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), [], `${cas} : tours`);
+            assert.ok(tout.join(' ').includes(DATE) && tout.includes(HORODATAGE), `${cas} : date, horodatage`);
+            // Plus de tours, jamais un nom plus grand.
+            assert.ok(corps <= precedent.corps + 1e-9, `${cas} : ${corps} après ${precedent.corps}`);
+            // Un texte ne part que sous le nom au plancher, l'événement
+            // d'abord.
+            assert.ok(evenement || auPlancher, `${cas} : l’événement part sous un nom de ${corps} pt`);
+            assert.ok(organisation || !evenement, `${cas} : l’organisation part avant l’événement`);
+            if (evenement && corps < depart - 1e-9 && !auPlancher) vus.descendu += 1;
+            // Un nom qui partait au-dessus du plancher y est descendu avant que
+            // l'événement ne parte.
+            if (!evenement && depart > corpsNomPlancher(metriques) + 1e-9) {
+              vus[organisation ? 'sansEvenement' : 'sansOrganisation'] += 1;
+            }
+            assert.deepEqual(horsDuCadre(page, metriques), [], cas);
+            assert.deepEqual(chevauchements(page, metriques), [], cas);
+            precedent = { corps, refus: false };
           }
-          assert.ok(!precedent.refus, `${cas} : accepté après un refus`);
-          const tout = textesDe(page);
-          const evenement = tout.some((t) => t.startsWith('Grand souper'));
-          const organisation = tout.includes('Club des Merles');
-          const nomBlocs = blocsNom(page);
-          const corps = nomBlocs[0].corps;
-          const auPlancher = Math.abs(corps - corpsNomPlancher(metriques)) < 1e-9;
-          assert.ok(nomBlocs.length <= 3, `${cas} : ${nomBlocs.length} lignes de nom`);
-          assert.ok(lignes.every((l) => tout.includes(l)), `${cas} : tours`);
-          assert.ok(tout.join(' ').includes(DATE) && tout.includes(HORODATAGE), `${cas} : date, horodatage`);
-          // Plus de tours, jamais un nom plus grand.
-          assert.ok(corps <= precedent.corps + 1e-9, `${cas} : ${corps} après ${precedent.corps}`);
-          // Un texte ne part que sous le nom au plancher, l'événement d'abord.
-          assert.ok(evenement || auPlancher, `${cas} : l’événement part sous un nom de ${corps} pt`);
-          assert.ok(organisation || !evenement, `${cas} : l’organisation part avant l’événement`);
-          if (evenement && corps < depart - 1e-9 && !auPlancher) vus.descendu += 1;
-          // Un nom qui partait au-dessus du plancher y est descendu avant que
-          // l'événement ne parte.
-          if (!evenement && depart > corpsNomPlancher(metriques) + 1e-9) {
-            vus[organisation ? 'sansEvenement' : 'sansOrganisation'] += 1;
-          }
-          assert.deepEqual(horsDuCadre(page, metriques), [], cas);
-          assert.deepEqual(chevauchements(page, metriques), [], cas);
-          precedent = { corps, refus: false };
         }
       }
       for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
@@ -415,23 +435,60 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
 
 describe('mise en page : l’organisation (§ 11.5)', () => {
   for (const [jeu, metriques] of JEUX) {
-    test(`${jeu} : 200 caractères tiennent sur une ligne finie par « … », au plus long préfixe qui tient`, () => {
+    test(`${jeu} : 200 caractères se replient en paragraphe, chaque ligne centrée, coupée au dernier espace qui tient, rien d’abrégé`, () => {
       const organisation = repete('Club des Merles et de la Grisaille ', 200);
       const page = mettreEnPage(textes({ organisation }), metriques);
-      const blocs = page.blocs.filter((b) => b.texte.endsWith(MARQUE));
-      assert.equal(blocs.length, 1);
-      const [bloc] = blocs;
-      assert.equal(bloc.corps, constante('CORPS_ORGANISATION_PT'));
-      assert.equal(bloc.gras, false);
-      const prefixe = bloc.texte.slice(0, -MARQUE.length);
-      assert.ok(prefixe.length > 0 && organisation.startsWith(prefixe) && prefixe === prefixe.trimEnd());
-      assert.ok(metriques.largeur(bloc.texte, bloc.corps, false) <= CADRE.largeur);
-      // Le préfixe suivant, espaces finales retirées, déborderait.
-      let fin = prefixe.length + 1;
-      while (organisation.slice(0, fin).trimEnd() === prefixe) fin += 1;
-      const suivant = organisation.slice(0, fin).trimEnd();
-      assert.ok(metriques.largeur(`${suivant}${MARQUE}`, bloc.corps, false) > CADRE.largeur, suivant);
+      const blocs = page.blocs.filter((b) => !b.gras && !b.texte.startsWith('Tour ') && !PIED.includes(b.texte));
+      assert.ok(blocs.length >= 2, JSON.stringify(textesDe(page)));
+      assert.ok(rejoint(blocs.map((b) => b.texte), organisation), JSON.stringify(blocs.map((b) => b.texte)));
+      assert.ok(textesDe(page).every((t) => !t.includes(MARQUE)));
+      const corps = blocs[0].corps;
+      assert.ok(blocs.every((b) => b.corps === corps && !b.gras));
+      assert.ok(corps <= constante('CORPS_ORGANISATION_PT') && corps >= constante('CORPS_ORGANISATION_PLANCHER_PT'), `${corps}`);
+      for (const b of blocs) assert.ok(Math.abs(b.x - (CADRE.largeur - metriques.largeur(b.texte, corps, false)) / 2) < TOLERANCE, b.texte);
+      assert.ok(coupesAuDernierEspace(blocs.map((b) => b.texte), metriques, corps, () => CADRE.largeur));
+      assert.deepEqual(tours(4).filter((t) => !textesDe(page).includes(t)), []);
       assert.deepEqual(horsDuCadre(page, metriques), []);
+      assert.deepEqual(chevauchements(page, metriques), []);
+    });
+
+    test(`${jeu} : une organisation qui tient sur une ligne reste telle quelle, à son corps de départ`, () => {
+      const organisation = 'Club  des Merles';
+      const page = mettreEnPage(textes({ organisation }), metriques);
+      const bloc = page.blocs.find((b) => b.texte === organisation);
+      assert.ok(bloc !== undefined, JSON.stringify(textesDe(page)));
+      assert.equal(bloc.corps, constante('CORPS_ORGANISATION_PT'));
+    });
+
+    test(`${jeu} : à mesure que les tours s’ajoutent, une organisation longue descend par paliers jusqu’à son plancher, puis part, après le nom de l’événement`, () => {
+      const organisation = repete('Club des Merles et de la Grisaille ', 160);
+      const depart = constante('CORPS_ORGANISATION_PT');
+      const plancher = constante('CORPS_ORGANISATION_PLANCHER_PT');
+      const vus = { depart: 0, reduit: 0, plancher: 0, partie: 0 };
+      let partie = false;
+      for (let n = 1; n <= 80; n += 1) {
+        const page = mettreEnPage(textes({ organisation, lignes: tours(n) }), metriques);
+        if ('refus' in page) break;
+        const tout = textesDe(page);
+        const blocs = page.blocs.filter((b) => !b.gras && organisation.includes(b.texte));
+        assert.ok(tours(n).every((t) => tout.includes(t)), `${n} tours`);
+        if (blocs.length === 0) {
+          // Elle ne part qu'après le nom de l'événement.
+          assert.ok(!tout.some((t) => t.includes(EVENEMENT)), `${n} tours`);
+          vus.partie += 1;
+          partie = true;
+          continue;
+        }
+        assert.ok(rejoint(blocs.map((b) => b.texte), organisation), `${n} tours`);
+        // Partie, elle ne revient pas sous plus de tours.
+        assert.ok(!partie, `${n} tours : revenue`);
+        const corps = blocs[0].corps;
+        assert.ok(Number.isInteger(depart - corps) && corps >= plancher, `${n} tours : ${corps}`);
+        vus[corps === depart ? 'depart' : corps === plancher ? 'plancher' : 'reduit'] += 1;
+        assert.deepEqual(horsDuCadre(page, metriques), [], `${n} tours`);
+        assert.deepEqual(chevauchements(page, metriques), [], `${n} tours`);
+      }
+      for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
     });
 
     test(`${jeu} : sans organisation, aucun bloc, et les tours remontent de la hauteur de sa ligne`, () => {
@@ -445,16 +502,28 @@ describe('mise en page : l’organisation (§ 11.5)', () => {
       assert.ok(textesDe(sans).every((t) => t !== TIRET && t.trim() !== ''));
     });
   }
-  test('le plus long préfixe qui tient avec la marque est gardé, même quand le caractère suivant, large, déborde', () => {
-    // Sous la chasse fixe, le préfixe tient avec la marque, et la capitale
-    // large qui le suit fait déborder le préfixe seul : la recherche du plus
-    // long préfixe ne s'arrête pas un caractère trop tôt.
-    const corps = constante('CORPS_ORGANISATION_PT');
-    const prefixe = 'Grisaille Grisaille Grisaille Grisaille Ondin';
-    assert.ok(FACTICES.largeur(`${prefixe}${MARQUE}`, corps, false) <= CADRE.largeur);
-    assert.ok(FACTICES.largeur(`${prefixe}W`, corps, false) > CADRE.largeur);
-    const page = mettreEnPage(textes({ organisation: `${prefixe}WWW du Club` }), FACTICES);
-    assert.ok(textesDe(page).includes(`${prefixe}${MARQUE}`), JSON.stringify(textesDe(page)));
+  test('Noto Sans : sur une carte serrée, une organisation qui tient sur une ligne garde son corps de départ, et ne rapetisse pas pour grandir le nom', () => {
+    // Sous ce nom et ces sept tours, réduire l'organisation laisserait au nom
+    // un corps plus grand ; elle reste à son corps de départ, qu'elle tient
+    // entière sur une ligne, et c'est le nom qui descend.
+    const nom = 'Iris Lacasse-Pervenche de la Grisaille';
+    const page = mettreEnPage(textes({ nom, lignes: toursAuxSieges(7) }), NOTO, 'avery5392');
+    const nomBlocs = blocsNom(page);
+    const depart = Math.min(constante('CORPS_ORGANISATION_CARTE_PT'), nomBlocs[0].corps);
+    assert.deepEqual(page.blocs.filter((b) => b.texte === 'Club des Merles').map((b) => b.corps), [depart]);
+    assert.ok(toursAuxSieges(7).every((t) => textesDe(page).includes(t)));
+  });
+
+  test('un mot plus large que la ligne se coupe entre deux grappes, jamais devant une marque combinante, et le reste de l’organisation suit', () => {
+    const metriques = metriquesFactices({ marque: 1 });
+    const organisation = `Club ${'Pe\u{301}'.repeat(60)} des Merles`;
+    const page = mettreEnPage(textes({ organisation }), metriques);
+    const blocs = page.blocs.filter((b) => !b.gras && !b.texte.startsWith('Tour ') && !PIED.includes(b.texte));
+    assert.ok(blocs.length >= 3, JSON.stringify(blocs.map((b) => b.texte)));
+    assert.ok(rejoint(blocs.map((b) => b.texte), organisation));
+    assert.ok(blocs.every((b) => !/^\p{M}/u.test(b.texte)), JSON.stringify(blocs.map((b) => b.texte.slice(0, 3))));
+    assert.equal(blocs[0].texte, 'Club');
+    assert.deepEqual(horsDuCadre(page, metriques), []);
   });
 });
 
@@ -526,162 +595,193 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
 
     test(`${jeu} : cent tours sont refusés, PLANCHE_TROP_DE_TOURS nomme cent`, () => {
       assert.deepEqual(mettreEnPage(textes({ lignes: tours(100) }), metriques), {
-        refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100 } },
+        refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100, repliees: false } },
       });
     });
 
-    test(`${jeu} : une ligne trop large pour la colonne s’abrège à la fin, au corps plancher ; les autres restent entières`, () => {
+    test(`${jeu} : une ligne trop large pour la colonne se replie au corps plancher, sa suite en retrait d’un cadratin ; les autres restent entières`, () => {
       const titre = titree(tour(2, 5), repete('Animatrice de la table d’honneur ', 120));
-      const page = mettreEnPage(textesComposes([simple(tour(1, 3)), titre, simple(tour(3, 7))]), metriques);
+      const page = mettreEnPage(textes({ lignes: [tour(1, 3), titre, tour(3, 7)] }), metriques);
       assert.equal(page.colonnesTours, 1);
-      const blocs = page.blocs.filter((b) => b.texte.startsWith('Tour '));
-      assert.equal(blocs.length, 3);
-      assert.equal(blocs[0].texte, tour(1, 3));
-      assert.equal(blocs[2].texte, tour(3, 7));
-      assert.ok(blocs[1].texte.endsWith(MARQUE) && blocs[1].texte.startsWith(tour(2, 5)));
-      assert.ok(blocs.every((b) => b.corps === constante('CORPS_TOURS_PLANCHER_PT')));
+      const plancher = constante('CORPS_TOURS_PLANCHER_PT');
+      const retrait = plancher * MM_PAR_PT;
+      const [premiere, ...suites] = blocsDeLigne(page, titre);
+      assert.ok(suites.length >= 1, JSON.stringify(textesDe(page)));
+      assert.ok(premiere.texte.startsWith(tour(2, 5)));
+      assert.ok(suites.every((b) => Math.abs(b.x - premiere.x - retrait) < TOLERANCE));
+      const largeurDe = (rang) => CADRE.largeur - (rang === 0 ? 0 : retrait);
+      assert.ok(coupesAuDernierEspace([premiere, ...suites].map((b) => b.texte), metriques, plancher, largeurDe, { lier: true }));
+      // Les lignes de tour se suivent, rangée après rangée.
+      const blocs = page.blocs.filter((b) => b.corps === plancher);
+      assert.ok(blocs.every((b, i) => i === 0 || Math.abs(b.y - blocs[i - 1].y - (metriques.hauteurs(plancher).ascendante + metriques.hauteurs(plancher).descendante)) < 1e-9));
+      assert.deepEqual([blocs[0].texte, blocs.at(-1).texte], [tour(1, 3), tour(3, 7)]);
+      assert.ok(textesDe(page).every((t) => !t.includes(MARQUE)));
       assert.deepEqual(horsDuCadre(page, metriques), []);
+      assert.deepEqual(chevauchements(page, metriques), []);
     });
 
-    test(`${jeu} : à deux colonnes, au corps plancher, un titre trop large pour sa colonne s’abrège ; table et siège restent`, () => {
+    test(`${jeu} : à deux colonnes, au corps plancher, un titre trop large pour sa colonne s’y replie ; ses suites restent dans sa colonne, les autres lignes entières`, () => {
       // Le premier nombre de tours que ce nom renvoie sur deux colonnes ; la
       // première ligne y reçoit un titre plus large qu'une demi-colonne.
       const nom = 'Ondine Lacasse Théo Pervenche Iris Ombrelle Grisaille Merles';
       let n = 1;
       while (n < 60 && mettreEnPage(textes({ nom, lignes: tours(n) }), metriques).colonnesTours !== 2) n += 1;
       assert.ok(n < 60);
-      const composees = tours(n).map(simple);
-      composees[0] = titree(tour(1, 3), repete('Animatrice de la table d’honneur ', 60));
-      const lignes = composees.map(({ ligne }) => ligne);
-      const page = mettreEnPage(textesComposes(composees, { nom }), metriques);
-      assert.equal(page.colonnesTours, 2, `${n} : ${JSON.stringify(page.refus)}`);
-      const blocs = page.blocs.filter((b) => b.texte.startsWith('Tour '));
-      assert.equal(blocs.length, n);
-      const [titre, ...autres] = blocs;
-      assert.ok(titre.texte.endsWith(MARQUE) && titre.texte.startsWith(tour(1, 3)), titre.texte);
-      assert.ok(lignes[0].startsWith(titre.texte.slice(0, -MARQUE.length)), titre.texte);
-      // La colonne de droite, étroite, laisse au titre plus d'une demi-colonne.
+      const lignes = tours(n);
+      lignes[0] = titree(tour(1, 3), repete('Animatrice de la table d’honneur ', 60));
+      const page = mettreEnPage(textes({ nom, lignes }), metriques);
+      if ('refus' in page) {
+        // Ses suites prennent des rangées : la liste peut ne plus tenir.
+        assert.deepEqual(page.refus, { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: n, repliees: true } });
+        return;
+      }
+      assert.equal(page.colonnesTours, 2);
+      const [premiere, ...suites] = blocsDeLigne(page, lignes[0]);
+      assert.ok(suites.length >= 1, JSON.stringify(textesDe(page)));
       const plancher = constante('CORPS_TOURS_PLANCHER_PT');
-      const demi = (CADRE.largeur - plancher * MM_PAR_PT) / 2;
-      assert.ok(metriques.largeur(titre.texte, plancher, false) > demi, titre.texte);
-      assert.deepEqual(autres.map((b) => b.texte), lignes.slice(1));
-      assert.ok(blocs.every((b) => b.corps === constante('CORPS_TOURS_PLANCHER_PT')));
+      const retrait = plancher * MM_PAR_PT;
+      assert.ok(suites.every((b) => Math.abs(b.x - premiere.x - retrait) < TOLERANCE));
+      // La colonne de droite commence à droite de la plus large ligne de la
+      // gauche, suites comprises.
+      const blocsTours = page.blocs.filter((b) => b.corps === plancher && b.texte !== 'Club des Merles');
+      const gauche = blocsTours.filter((b) => b.x <= premiere.x + retrait + TOLERANCE);
+      const droite = blocsTours.filter((b) => b.x > premiere.x + retrait + TOLERANCE);
+      const finGauche = Math.max(...gauche.map((b) => b.x + metriques.largeur(b.texte, plancher, false)));
+      assert.ok(droite.length > 0 && droite.every((b) => b.x >= finGauche + retrait - TOLERANCE));
+      assert.ok(lignes.slice(1).every((l) => textesDe(page).includes(l)), JSON.stringify(textesDe(page)));
       assert.deepEqual(horsDuCadre(page, metriques), []);
       assert.deepEqual(chevauchements(page, metriques), []);
     });
 
-    test(`${jeu} : une ligne sans titre ne s’abrège jamais, à une colonne comme à deux ; le badge est refusé plutôt`, () => {
-      // Une colonne : une table dont le numéro déborde le cadre au plancher,
-      // sans titre, puis suivie d'un titre.
+    test(`${jeu} : une ligne sans titre plus large que le cadre se replie aussi ; un numéro plus large que la ligne se coupe entre deux chiffres`, () => {
       const large = tour(1, '9'.repeat(80));
-      assert.ok(metriques.largeur(large, constante('CORPS_TOURS_PLANCHER_PT'), false) > CADRE.largeur);
-      for (const ligne of [simple(large), titree(large, 'Animatrice')]) {
-        assert.deepEqual(mettreEnPage(textesComposes([ligne]), metriques), {
-          refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 1 } },
-        });
+      const plancher = constante('CORPS_TOURS_PLANCHER_PT');
+      assert.ok(metriques.largeur(large, plancher, false) > CADRE.largeur);
+      for (const ligne of [large, titree(large, 'Animatrice')]) {
+        const page = mettreEnPage(textes({ lignes: [ligne] }), metriques);
+        assert.ok(!('refus' in page), JSON.stringify(page));
+        const blocs = blocsDeLigne(page, ligne);
+        assert.ok(blocs !== null && blocs.length >= 2, JSON.stringify(textesDe(page)));
+        assert.deepEqual(horsDuCadre(page, metriques), []);
+        assert.deepEqual(chevauchements(page, metriques), []);
       }
       // Deux colonnes : des lignes aux sièges plus larges qu'une demi-colonne,
       // la première titrée. Quelle que soit la disposition retenue, chaque
-      // ligne sans titre paraît entière, et la titrée garde sa place.
+      // ligne paraît entière, repliée ou non.
       const nom = 'Ondine Lacasse Théo Pervenche Iris Ombrelle Grisaille Merles';
       const lignes = Array.from({ length: 20 }, (_, i) => `${tour(i + 1, i + 30)}, siège ${i + 10}`);
-      const demi = (CADRE.largeur - constante('CORPS_TOURS_PLANCHER_PT') * MM_PAR_PT) / 2;
-      assert.ok(lignes.slice(-10).every((l) => metriques.largeur(l, constante('CORPS_TOURS_PLANCHER_PT'), false) > demi));
-      const place = lignes[0];
-      const composees = lignes.map(simple);
-      composees[0] = titree(place, 'Animatrice de la table d’honneur');
-      const page = mettreEnPage(textesComposes(composees, { nom }), metriques);
+      const demi = (CADRE.largeur - plancher * MM_PAR_PT) / 2;
+      assert.ok(lignes.slice(-10).every((l) => metriques.largeur(l, plancher, false) > demi));
+      lignes[0] = titree(lignes[0], 'Animatrice de la table d’honneur');
+      const page = mettreEnPage(textes({ nom, lignes }), metriques);
       if ('refus' in page) {
-        assert.equal(page.refus.code, 'PLANCHE_TROP_DE_TOURS');
+        assert.deepEqual([page.refus.code, page.refus.details.tours], ['PLANCHE_TROP_DE_TOURS', 20]);
         return;
       }
-      const tout = textesDe(page);
-      assert.ok(lignes.slice(1).every((l) => tout.includes(l)), JSON.stringify(tout.filter((t) => t.endsWith(MARQUE))));
-      assert.ok(tout.some((t) => t.startsWith(place)));
+      assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), []);
+      assert.deepEqual(horsDuCadre(page, metriques), []);
     });
   }
 
   for (const [jeu, metriques] of JEUX) {
     for (const modele of ['a6', 'avery5392']) {
       const plancher = constante('CORPS_TOURS_PLANCHER_PT');
-      const { largeur: L } = cadreUtile({ x: 0, y: 0, ...(modele === 'a6' ? BADGE : MODELES_BADGE.avery5392) }, modele);
-      const blocTour = (page, debut) => page.blocs.find((b) => b.texte.startsWith(debut));
+      const retrait = plancher * MM_PAR_PT;
+      const { largeur: L, hauteur: H } = cadreUtile({ x: 0, y: 0, ...(modele === 'a6' ? BADGE : MODELES_BADGE.avery5392) }, modele);
+      const dansLeCadre = (page) =>
+        page.blocs.every((b) => {
+          const { haut, bas, gauche, droite } = boite(b, metriques);
+          return gauche >= -TOLERANCE && droite <= L + TOLERANCE && haut >= -TOLERANCE && bas <= H + TOLERANCE;
+        });
 
-      test(`${jeu}, ${modele} : un libellé de ${LIBELLE_TABLE_MAX} caractères s’abrège au plancher, entre ses parenthèses ; numéro, siège et titre restent entiers`, () => {
+      test(`${jeu}, ${modele} : un libellé de ${LIBELLE_TABLE_MAX} caractères se replie au plancher, entier, rien d’abrégé ; « table 13 » et « siège 8 » ne se séparent pas`, () => {
         assert.equal([...LIBELLE_LONG].length, LIBELLE_TABLE_MAX);
         const longue = auLibelle(1, 13, LIBELLE_LONG, 8, 'animation');
-        assert.ok(metriques.largeur(longue.ligne, plancher, false) > L, 'la ligne entière déborde au plancher');
-        const page = mettreEnPage(textesComposes([longue, simple(tour(2, 5)), simple(tour(3, 7))]), metriques, modele);
+        assert.ok(metriques.largeur(longue, plancher, false) > L, 'la ligne entière déborde au plancher');
+        const page = mettreEnPage(textes({ lignes: [longue, tour(2, 5), tour(3, 7)] }), metriques, modele);
         assert.ok(!('refus' in page), JSON.stringify(page));
-        const bloc = blocTour(page, `Tour 1 ${TIRET} table 13 (`);
-        assert.equal(bloc.corps, plancher);
-        const [, libelle] = /^Tour 1 — table 13 \((.*)\), siège 8 — animation$/u.exec(bloc.texte) ?? [];
-        assert.ok(libelle !== undefined && libelle.endsWith(MARQUE), bloc.texte);
-        assert.ok(LIBELLE_LONG.startsWith(libelle.slice(0, -MARQUE.length)) && libelle.length > MARQUE.length, bloc.texte);
-        // Le plus long préfixe qui tient : une grappe de plus déborde.
-        const garde = libelle.slice(0, -MARQUE.length);
-        const plus = LIBELLE_LONG.slice(0, garde.length + 1).trimEnd();
-        if (plus.length > garde.length) {
-          assert.ok(metriques.largeur(`Tour 1 ${TIRET} table 13 (${plus}${MARQUE}), siège 8 ${TIRET} animation`, plancher, false) > L);
-        }
+        const [premiere, ...suites] = blocsDeLigne(page, longue) ?? [];
+        assert.ok(premiere !== undefined && suites.length >= 1, JSON.stringify(textesDe(page)));
+        assert.equal(premiere.corps, plancher);
+        assert.ok(premiere.texte.startsWith(`Tour 1 ${TIRET} table 13 (`), premiere.texte);
+        assert.ok(suites.every((b) => Math.abs(b.x - premiere.x - retrait) < TOLERANCE));
+        assert.ok(coupesAuDernierEspace([premiere, ...suites].map((b) => b.texte), metriques, plancher, (rang) => L - (rang === 0 ? 0 : retrait), { lier: true }));
+        assert.ok([premiere, ...suites].every((b) => !MOT_DE_NOMBRE.test(b.texte)), JSON.stringify(textesDe(page)));
         assert.ok([tour(2, 5), tour(3, 7)].every((t) => textesDe(page).includes(t)));
+        assert.ok(textesDe(page).every((t) => !t.includes(MARQUE)));
         assert.deepEqual(chevauchements(page, metriques), []);
-        assert.ok(page.blocs.every((b) => b.x >= -TOLERANCE && b.x + metriques.largeur(b.texte, b.corps, b.gras) <= L + TOLERANCE));
+        assert.ok(dansLeCadre(page));
       });
 
-      test(`${jeu}, ${modele} : le libellé s’abrège avant le titre ; le titre ne s’abrège que le libellé réduit à sa première grappe`, () => {
+      test(`${jeu}, ${modele} : un libellé long et un titre long se replient tous deux ; la ligne paraît entière, rien d’abrégé`, () => {
         const titre = repete('Animatrice de la table d’honneur ', 80);
-        const page = mettreEnPage(textesComposes([auLibelle(1, 13, LIBELLE_LONG, 8, titre)]), metriques, modele);
+        const ligne = auLibelle(1, 13, LIBELLE_LONG, 8, titre);
+        const page = mettreEnPage(textes({ lignes: [ligne] }), metriques, modele);
         assert.ok(!('refus' in page), JSON.stringify(page));
-        const bloc = blocTour(page, 'Tour 1');
-        assert.ok(bloc.texte.startsWith(`Tour 1 ${TIRET} table 13 (V${MARQUE}), siège 8 ${TIRET} A`), bloc.texte);
-        assert.ok(bloc.texte.endsWith(MARQUE), bloc.texte);
-        // Un titre court reste entier, le libellé seul abrégé.
-        const court = mettreEnPage(textesComposes([auLibelle(1, 13, LIBELLE_LONG, 8, 'animation')]), metriques, modele);
-        assert.match(blocTour(court, 'Tour 1').texte, /…\), siège 8 — animation$/u);
+        const blocs = blocsDeLigne(page, ligne);
+        assert.ok(blocs !== null && blocs.length >= 3, JSON.stringify(textesDe(page)));
+        assert.ok(textesDe(page).every((t) => !t.includes(MARQUE)));
+        assert.ok(dansLeCadre(page));
       });
 
-      test(`${jeu}, ${modele} : au-dessus du plancher, un libellé ne s’abrège pas ; une ligne qui tient entière n’est pas touchée`, () => {
+      test(`${jeu}, ${modele} : au-dessus du plancher, un libellé ne se replie pas ; une ligne qui tient entière n’est pas touchée`, () => {
         const court = auLibelle(1, 13, 'Terrasse', 8, 'animation');
-        const page = mettreEnPage(textesComposes([court]), metriques, modele);
-        const bloc = blocTour(page, 'Tour 1');
-        assert.equal(bloc.texte, court.ligne);
-        assert.ok(metriques.largeur(court.ligne, bloc.corps, false) <= L + TOLERANCE);
+        const page = mettreEnPage(textes({ lignes: [court] }), metriques, modele);
+        const bloc = page.blocs.find((b) => b.texte.startsWith('Tour 1'));
+        assert.equal(bloc.texte, court);
+        assert.ok(metriques.largeur(court, bloc.corps, false) <= L + TOLERANCE);
+      });
+
+      test(`${jeu}, ${modele} : une ligne repliée ne se coupe jamais entre « Tour », « table » ou « siège » et leur numéro ; la coupe tombe devant le mot`, () => {
+        // Des libellés de toutes longueurs déplacent la coupe le long de la
+        // ligne : elle tombe tôt ou tard juste devant un numéro.
+        const vus = { pages: 0, devantLeMot: 0 };
+        for (let longueur = 1; longueur <= LIBELLE_TABLE_MAX; longueur += 2) {
+          const libelle = [...LIBELLE_LONG].slice(0, longueur).join('').trim();
+          for (const titre of [null, 'animateur VIP']) {
+            const lignes = [1, 2, 3].map((r) => auLibelle(r, 10 + r, libelle, r, titre));
+            const page = mettreEnPage(textes({ lignes }), metriques, modele);
+            if ('refus' in page) continue;
+            vus.pages += 1;
+            const cas = `${libelle} | ${titre}`;
+            assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), [], cas);
+            assert.ok(textesDe(page).every((t) => !MOT_DE_NOMBRE.test(t)), `${cas} : ${JSON.stringify(textesDe(page))}`);
+            vus.devantLeMot += textesDe(page).filter((t) => /^(?:table|siège) \d/u.test(t)).length;
+          }
+        }
+        assert.ok(vus.pages >= 40 && vus.devantLeMot > 0, JSON.stringify(vus));
       });
     }
-
-    test(`${jeu} : des morceaux mal formés lèvent TypeError`, () => {
-      const ligne = tour(1, 3);
-      for (const abregeables of [[], [[{ debut: 0, fin: 99 }]], [[{ debut: 2, fin: 2 }]], [[{ debut: 0, fin: 3 }, { debut: 2, fin: 5 }]], [null], [[{ debut: -1, fin: 2 }]]]) {
-        assert.throws(() => mettreEnPage(textes({ lignes: [ligne], abregeables }), metriques), TypeError, JSON.stringify(abregeables));
-      }
-    });
   }
 
-  test('un titre abrégé garde au moins une grappe : sa place suivie du séparateur et de la marque seuls ne passent pas pour un titre', () => {
-    // Sous la chasse fixe, la place, le séparateur et la marque tiennent au
-    // corps plancher, mais pas une grappe de titre de plus : le titre ne
-    // peut pas s'abréger, et la ligne ne se rend pas réduite à sa place.
-    const plancher = constante('CORPS_TOURS_PLANCHER_PT');
-    let chiffres = 1;
-    const place = () => tour(1, '9'.repeat(chiffres));
-    while (
-      chiffres < 400 &&
-      !(FACTICES.largeur(`${place()} ${TIRET}${MARQUE}`, plancher, false) <= CADRE.largeur &&
-        FACTICES.largeur(`${place()} ${TIRET} A${MARQUE}`, plancher, false) > CADRE.largeur)
-    ) chiffres += 1;
-    assert.ok(chiffres < 400);
-    const page = mettreEnPage(textesComposes([titree(place(), 'Animatrice')]), FACTICES);
-    if ('refus' in page) return;
-    const abregees = textesDe(page).filter((t) => t.startsWith('Tour ') && t.endsWith(MARQUE));
-    assert.ok(
-      abregees.every((t) => t.slice(0, -MARQUE.length).trimEnd().length > `${place()} ${TIRET}`.length),
-      JSON.stringify(abregees),
-    );
+  test('Noto Sans : le prix du repli, aux seuils que le spec donne — des lignes repliées se refusent, repliees, là où les mêmes tours sans libellé tiennent', () => {
+    // [modèle, libellé, titre, le plus grand nombre de tours qui tient].
+    const seuils = [
+      ['avery5392', LIBELLE_LONG, null, 5],
+      ['avery5392', LIBELLE_LONG, 'animation', 5],
+      ['avery5392', [...LIBELLE_LONG].slice(0, 40).join(''), null, 6],
+      ['avery5392', 'Terrasse', 'animateur VIP', 9],
+      ['a6', LIBELLE_LONG, null, 12],
+      ['a6', LIBELLE_LONG, 'animateur VIP', 11],
+    ];
+    for (const [modele, libelle, titre, seuil] of seuils) {
+      const cas = `${modele}, ${libelle}, ${titre}`;
+      const lignes = (n) => Array.from({ length: n }, (_, i) => auLibelle(i + 1, i + 3, libelle, i + 1, titre));
+      const page = mettreEnPage(textes({ lignes: lignes(seuil) }), NOTO, modele);
+      assert.ok(!('refus' in page), cas);
+      assert.deepEqual(lignes(seuil).filter((l) => blocsDeLigne(page, l) === null), [], cas);
+      assert.deepEqual(
+        mettreEnPage(textes({ lignes: lignes(seuil + 1) }), NOTO, modele),
+        { refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: seuil + 1, repliees: true } } },
+        cas,
+      );
+      assert.ok(!('refus' in mettreEnPage(textes({ lignes: toursAuxSieges(seuil + 1) }), NOTO, modele)), cas);
+    }
   });
 
   test('Noto Sans : la plus large ligne sans titre tient entière sur une colonne au corps plancher', () => {
-    // L'abrègement d'une ligne en colonne unique ne mange alors que le titre.
+    // Une telle ligne ne se replie donc jamais en colonne unique : seule une
+    // ligne titrée, ou portant un libellé, s'y replie.
     const ligne = `Toute la soirée ${TIRET} table 9999, siège 9999`;
     assert.ok(NOTO.largeur(ligne, constante('CORPS_TOURS_PLANCHER_PT'), false) <= CADRE.largeur);
   });
@@ -784,7 +884,7 @@ describe('mise en page : propriétés sur des noms engendrés', () => {
 
   for (const [jeu, metriques] of JEUX) {
     test(`${jeu} : tout bloc dans le cadre, aucun chevauchement, le nom au plus grand corps, rien de perdu`, () => {
-      const bilan = { acceptes: 0, auDela: 0, deuxColonnes: 0, abregees: 0, refus: 0 };
+      const bilan = { acceptes: 0, auDela: 0, deuxColonnes: 0, organisationsRepliees: 0, refus: 0 };
       const tirer = tirage(GRAINE);
       for (let rang = 0; rang < TIRAGES.get(metriques); rang += 1) {
         const { nom, organisation, tours: n, sieges } = tirer();
@@ -795,7 +895,7 @@ describe('mise en page : propriétés sur des noms engendrés', () => {
         if ('refus' in page) {
           bilan.refus += 1;
           assert.ok(['PLANCHE_TROP_DE_TOURS', 'PLANCHE_NOM_TROP_LONG'].includes(page.refus.code), cas);
-          if (page.refus.code === 'PLANCHE_TROP_DE_TOURS') assert.deepEqual(page.refus.details, { tours: n }, cas);
+          if (page.refus.code === 'PLANCHE_TROP_DE_TOURS') assert.equal(page.refus.details.tours, n, cas);
           continue;
         }
         bilan.acceptes += 1;
@@ -806,20 +906,31 @@ describe('mise en page : propriétés sur des noms engendrés', () => {
         const corpsNom = nomBlocs[0].corps;
         assert.ok(page.blocs.every((b) => b.corps <= corpsNom), cas);
         assert.ok(nomBlocs.every((b) => b.corps === corpsNom), cas);
-        // Aucune ligne de tour ne manque ni ne s'abrège.
+        // Aucune ligne de tour ne manque ni ne s'abrège, aucun texte ne porte
+        // la marque.
         const tout = textesDe(page);
-        assert.ok(lignes.every((l) => tout.includes(l)), cas);
+        assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), [], cas);
+        assert.ok(tout.every((t) => !t.includes(MARQUE)), cas);
+        // L'organisation : absente, telle quelle sur une ligne, ou repliée
+        // sans rien perdre. Ses blocs suivent le nom, avant le premier tour.
+        const apresNom = page.blocs.slice(nomBlocs.length);
+        const blocsOrganisation = apresNom.slice(0, apresNom.findIndex((b) => b.texte.startsWith('Tour ')));
+        const organisationPropre = organisation?.trim().replace(/ +/g, ' ');
+        if (blocsOrganisation.length === 1) assert.ok([organisation, organisationPropre].includes(blocsOrganisation[0].texte), cas);
+        if (blocsOrganisation.length > 1) {
+          assert.ok(rejoint(blocsOrganisation.map((b) => b.texte), organisationPropre), cas);
+          bilan.organisationsRepliees += 1;
+        }
         assert.ok(tout.includes(HORODATAGE), cas);
         if (nomBlocs.length > 3) bilan.auDela += 1;
         if (page.colonnesTours === 2) bilan.deuxColonnes += 1;
-        if (tout.some((t) => t.endsWith(MARQUE))) bilan.abregees += 1;
       }
       // Un tirage qui n'atteint pas les cas difficiles rend la propriété
       // vraie sans rien éprouver : chaque famille a son plancher.
       assert.ok(bilan.acceptes >= (TIRAGES.get(metriques) * 2) / 3, JSON.stringify(bilan));
       assert.ok(bilan.auDela >= 10, JSON.stringify(bilan));
       assert.ok(bilan.deuxColonnes >= 10, JSON.stringify(bilan));
-      assert.ok(bilan.abregees >= 10, JSON.stringify(bilan));
+      assert.ok(bilan.organisationsRepliees >= 10, JSON.stringify(bilan));
     });
   }
 });
@@ -919,8 +1030,27 @@ describe('mise en page : la carte Avery 5392', () => {
     assert.deepEqual(sortDeLaCarte(page, NOTO), []);
     assert.deepEqual(chevauchements(page, NOTO), []);
     assert.deepEqual(mettreEnPage(textes({ lignes: tours(21) }), NOTO, AVERY), {
-      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 21 } },
+      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 21, repliees: false } },
     });
+  });
+
+  test('Noto Sans : le refus des tours compte les lignes repliées — des tours au titre long se refusent à un nombre où les mêmes tours sans titre tiennent', () => {
+    const titre = 'Animatrice de la grande table d’honneur du Club des Merles';
+    const titrees = (n) => tours(n).map((ligne) => `${ligne} ${TIRET} ${titre}`);
+    let n = 1;
+    while (n <= 20 && !('refus' in mettreEnPage(textes({ lignes: titrees(n) }), NOTO, AVERY))) n += 1;
+    assert.ok(n > 1 && n < 20, `${n}`);
+    // Les mêmes tours, une ligne chacun, tiendraient : repliees le dit.
+    assert.deepEqual(mettreEnPage(textes({ lignes: titrees(n) }), NOTO, AVERY), {
+      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: n, repliees: true } },
+    });
+    assert.ok(!('refus' in mettreEnPage(textes({ lignes: tours(n) }), NOTO, AVERY)));
+    // Un tour de moins tient : chaque ligne entière, repliée, dans la carte.
+    const page = mettreEnPage(textes({ lignes: titrees(n - 1) }), NOTO, AVERY);
+    assert.deepEqual(titrees(n - 1).filter((l) => blocsDeLigne(page, l) === null), []);
+    assert.ok(titrees(n - 1).some((l) => blocsDeLigne(page, l).length > 1));
+    assert.deepEqual(sortDeLaCarte(page, NOTO), []);
+    assert.deepEqual(chevauchements(page, NOTO), []);
   });
 
   test('l’A6 reste le modèle quand aucun n’est donné, et un modèle inconnu lève TypeError', () => {
@@ -1135,7 +1265,7 @@ describe('mise en page : le pied TechnoLibre', () => {
     for (const [, modele] of MODELES) {
       assert.deepEqual(mettreEnPage(textes(), NOTO, modele, null), mettreEnPage(textes(), NOTO, modele));
       assert.deepEqual(mettreEnPage(textes({ lignes: tours(100) }), NOTO, modele, TECHNOLIBRE), {
-        refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100 } },
+        refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100, repliees: false } },
       });
     }
   });

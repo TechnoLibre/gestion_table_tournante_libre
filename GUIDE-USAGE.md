@@ -1258,6 +1258,17 @@ l’instant du placement, puis le pied TechnoLibre et son logo en couleurs, que 
 case de la section retire. Les cartes étant prédécoupées, la feuille ne porte
 aucun trait de coupe ; avec l’A6, des traits fins marquent la coupe.*
 
+Rien ne s’abrège sur un badge : une organisation, un titre ou un libellé de
+table trop long pour sa ligne se replie sur la suivante, coupé au dernier
+espace, et la suite d’une ligne de tour descend en retrait sous son début,
+pour qu’on retrouve chaque tour d’un coup d’œil ; un numéro de table ou de
+siège reste sur la ligne de son mot. Sur un badge chargé, une organisation
+repliée rapetisse d’abord, pour laisser au nom et aux tours leur taille.
+Les lignes repliées prennent de la place : sur une carte Avery 5392, un
+libellé de soixante caractères tient jusqu’à cinq tours. Au-delà, la section
+refuse de produire la planche, nomme la personne dont les tours débordent et
+offre « Ouvrir les tables », où raccourcir le libellé ou le titre.
+
 Une personne absente à un tour garde la ligne de ce tour sur son badge, qui
 dit « absente » au lieu d’une table :
 

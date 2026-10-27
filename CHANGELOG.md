@@ -40,7 +40,7 @@
   planche.
 - La ligne de tour d'un badge porte le libellé de la table entre parenthèses
   après son numéro : « Tour 1 — table 5 (Terrasse), siège 3 — animation ». Un
-  libellé trop long pour la carte s'abrège ; le numéro et le siège, jamais.
+  libellé trop long pour la carte se replie sur la ligne suivante, entier.
 - « Enregistrer sous… » des cartes Avery 5392 affiche les deux chemins
   choisis, et une feuille de contrôle qui ne s'écrit pas le dit en nommant le
   fichier, les cartes déjà déposées. Un modèle de badge que le poste ne peut
@@ -568,6 +568,17 @@
   CSV et la feuille de contrôle gardent le nom entier, et l'ordre de la pile
   ne change pas ; aucune ligne « Identifiant » ne s'ajoute. Sans personne
   numérotée, la planche ne change pas.
+- Plus rien ne s'abrège d'un « … » sur les badges : une organisation, un titre
+  ou un libellé de table trop long pour sa ligne se replie sur la suivante,
+  coupé au dernier espace, comme un paragraphe, et la suite d'une ligne de
+  tour descend en retrait sous son début ; « table 5 » ou « siège 3 » ne se
+  séparent jamais de leur numéro. Sur un badge chargé, une organisation
+  repliée rapetisse d'abord, pour laisser au nom et aux tours leur taille,
+  puis part quand même sa plus petite taille ne tient pas. Les lignes
+  repliées prennent de la place : sur une carte Avery 5392, un libellé de
+  soixante caractères tient jusqu'à cinq tours. Au-delà, la planche se
+  refuse en nommant la personne et le libellé ou le titre à raccourcir, avec
+  « Ouvrir les tables ».
 - Quand les places manquent, l'avis qui offre « Ouvrir les tables » offre aussi
   « Créer les tables… », et la section « Tables et tours » offre la même
   commande tant qu'il en manque. Elle déplie un petit formulaire : le nombre de

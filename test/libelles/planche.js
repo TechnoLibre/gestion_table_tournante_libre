@@ -19,7 +19,7 @@ export const EXEMPLES = [
       remede: { geste: 'ouvrirSection', section: 'propositions' },
     },
   ],
-  ['PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }],
+  ['PLANCHE_TROP_DE_TOURS', { tours: 40, lignesLongues: false, remede: null }],
   ['PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } }],
   [
     'PLANCHE_NON_ECRITE',
@@ -54,6 +54,21 @@ export const TEXTES = [
     'Tour 1 \u{2014} table 5 (Terrasse), siège 3 \u{2014} animation',
   ],
   ['planche.touteLaSoiree', { table: 13, libelleTable: 'Verrière', siege: null, titre: null }, 'Toute la soirée \u{2014} table 13 (Verrière)'],
+  // Des lignes de tour repliées qui débordent : le refus nomme la personne
+  // et ce qui se raccourcit, plutôt que le nombre de tours.
+  [
+    'PLANCHE_TROP_DE_TOURS',
+    {
+      tours: 8,
+      lignesLongues: true,
+      participant: 4,
+      personne: 'Iris Ombrelle',
+      remede: { geste: 'ouvrirSection', section: 'tables' },
+    },
+    'Les lignes de tour de Iris Ombrelle, repliées par un libellé de table ou un titre long, ne tiennent pas ' +
+      'sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce libellé ou ce titre. ' +
+      "La planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
+  ],
   // L'écriture refusée nomme le fichier qui manque ; la feuille de contrôle,
   // aussi les cartes déjà déposées.
   [

@@ -583,7 +583,7 @@ describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
   test('un badge à 100 tours : refus PLANCHE_TROP_DE_TOURS, et son rang dans le modèle', async () => {
     const m = modele([badge(1, 'Iris Ombrelle'), badge(2, 'Théo Pervenche', { tours: 100 }), badge(3, 'Ondine Lacasse', { tours: 100 })]);
     assert.deepEqual(await analyserPlanche({ modele: m, polices }), {
-      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100 }, rang: 1 },
+      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100, repliees: false }, rang: 1 },
       absents: [],
       sansTechnolibre: 0,
       logosParticipants: { poses: 0, sansPlace: 0 },
@@ -711,7 +711,7 @@ describe('produirePlanche et produireControle : le modèle Avery 5392', () => {
     const m = modele([badge(1, 'Iris Ombrelle', { tours: 21 })]);
     assert.deepEqual((await analyserPlanche({ modele: m, polices, modeleBadge: AVERY })).refus, {
       code: 'PLANCHE_TROP_DE_TOURS',
-      details: { tours: 21 },
+      details: { tours: 21, repliees: false },
       rang: 0,
     });
     assert.equal((await analyserPlanche({ modele: m, polices })).refus, null);

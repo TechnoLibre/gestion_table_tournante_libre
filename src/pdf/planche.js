@@ -90,13 +90,10 @@ import { ErreurPng, lirePng } from './png.js';
  *
  * @typedef {Object} ModelePlanche
  * @property {Array<{textes: {nom: string, nomEnBlanc?: boolean, lignes: string[],
- *            abregeables?: Array<Array<{debut: number, fin: number}>>,
  *            organisation: string|null, pied: string[], piedReduit: string[]}, logo?: string|null}>} badges
  *           dans l'ordre de la pile ; nomEnBlanc, vrai pour un nom que la
- *           mise en page mesure sans le poser ; abregeables, les textes
- *           libres de chaque ligne de tour, que la mise en page abrège au
- *           plancher ; logo, le chemin du logo de la personne, absent ou
- *           null sans logo
+ *           mise en page mesure sans le poser ; logo, le chemin du logo de
+ *           la personne, absent ou null sans logo
  * @property {string|null} horodatage   l'horodatage du placement ; null : inconnu
  * @property {boolean} brouillon
  */

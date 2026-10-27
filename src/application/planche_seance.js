@@ -386,10 +386,10 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
 
   // L'étude d'une demande : le refus du placement, ou le modèle, ses logos
   // lus, son analyse par la mise en page et le refus qu'elle porte. Un refus
-  // de mise en page reçoit la personne du badge refusé, que src/pdf ne
-  // connaît pas, par son nom entier (Badge.nom). logos : null quand aucun
-  // badge ne désigne de logo, sinon les comptes de l'annonce. Rien ne
-  // s'écrit.
+  // de mise en page se relaie avec le badge refusé, où refusProduction lit
+  // la personne, que src/pdf ne connaît pas, par son nom entier
+  // (Badge.nom). logos : null quand aucun badge ne désigne de logo, sinon
+  // les comptes de l'annonce. Rien ne s'écrit.
   async function etudier(lecture, demande) {
     const { charge } = lecture;
     const lue = demandeLue(demande);
@@ -418,9 +418,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     let leRefus = null;
     if (analyse.refus !== null) {
       const { code, details, rang } = analyse.refus;
-      const badge = modele.badges[rang];
-      const personne = code === 'PLANCHE_NOM_TROP_LONG' ? { participant: badge.participant, personne: badge.nom } : {};
-      leRefus = refusProduction(code, { ...details, ...personne });
+      leRefus = refusProduction(code, details, modele.badges[rang]);
     }
     const introuvables = modele.badges
       .filter(({ logo }) => echecs.has(logo))

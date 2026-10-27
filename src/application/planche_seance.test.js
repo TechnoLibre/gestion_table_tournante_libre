@@ -862,7 +862,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     assert.deepEqual(recus, [nomCartes]);
   });
 
-  test('un libellé de table au plus long que la saisie admet s’abrège sur la carte, entre ses parenthèses ; la liste en CSV le garde entier', async () => {
+  test('un libellé de table au plus long que la saisie admet se replie sur la carte, entier, sans marque ; la liste en CSV le garde entier', async () => {
     const libelle = 'Verrière du jardin d’hiver, près des grandes baies, côté sud';
     assert.equal([...libelle].length, LIBELLE_TABLE_MAX);
     const charge = chargeLucioles();
@@ -870,10 +870,13 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     const { fs, seance } = await monter(charge, { modeleBadge: null });
     const { nom } = await seance.produirePlanche();
     const textes = textesDe((await lirePdf(fs.octets('documents', ICI + nom))).pages[0]);
-    // Iris Ombrelle, à la table 1 aux deux tours : sa ligne unique.
-    const ligne = textes.find((texte) => texte.startsWith('Toute la soirée — table 1 ('));
-    assert.ok(ligne !== undefined, textes.join(' | '));
-    assert.match(ligne, /^Toute la soirée — table 1 \(Verri[^)]*…\)$/u);
+    // Iris Ombrelle, à la table 1 aux deux tours : sa ligne unique, que sa
+    // suite complète sur la ligne d'après.
+    const rang = textes.findIndex((texte) => texte.startsWith('Toute la soirée — table 1 ('));
+    assert.ok(rang >= 0, textes.join(' | '));
+    assert.notEqual(textes[rang], `Toute la soirée — table 1 (${libelle})`);
+    assert.equal(`${textes[rang]} ${textes[rang + 1]}`, `Toute la soirée — table 1 (${libelle})`);
+    assert.ok(textes.every((texte) => !texte.includes('\u{2026}')), textes.join(' | '));
     const liste = await seance.produireListeBadges();
     const texte = new TextDecoder().decode(fs.octets('documents', ICI + liste.nom));
     assert.ok(texte.includes(`Toute la soirée — table 1 (${libelle})`), texte);

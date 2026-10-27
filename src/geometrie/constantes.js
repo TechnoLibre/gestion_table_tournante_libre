@@ -207,6 +207,21 @@ export const CONSTANTES = Object.freeze(
         'le corps retenu, écrit dans ce registre',
     },
     {
+      nom: 'CORPS_ORGANISATION_PLANCHER_PT',
+      valeur: 8,
+      unite: 'pt',
+      mesure: "corps sous lequel l'organisation d'un badge, A6 ou carte Avery 5392, ne descend pas",
+      raison:
+        "une organisation longue se replie sans s'abréger, puis rapetisse pour laisser la place aux tours ; " +
+        "en deçà, elle se retire du badge dans l'ordre de sacrifice plutôt que de devenir illisible (§ 11.5)",
+      configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle à corps décroissants ; lecture en main par une " +
+        "personne qui n'a pas écrit le logiciel ; le plus petit corps lu sans erreur, écrit dans ce registre",
+    },
+    {
       nom: 'CORPS_PIED_PT',
       valeur: 8,
       unite: 'pt',

@@ -849,21 +849,49 @@ describe('planche : la feuille de contrôle (§ 11.3, § 11.5, § 11.8)', () => 
 
 describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8)', () => {
   test('refusProduction relaie un refus de la mise en page avec le remède du contrat ; un autre code lève TypeError', () => {
-    assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 40 }), {
+    const ligne = (champs = {}) => ({ tour: 1, table: 5, siege: null, titre: null, absente: false, ...champs });
+    const badge = (lignes) => ({ participant: 3, nom: 'Ondine Lacasse', lignes });
+    const nue = badge([ligne(), ligne({ tour: 2 })]);
+    assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 40, repliees: false }, nue), {
       code: 'PLANCHE_TROP_DE_TOURS',
-      details: { tours: 40, remede: null },
+      details: { tours: 40, lignesLongues: false, remede: null },
     });
-    assert.deepEqual(refusProduction('PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse' }), {
+    // Des lignes repliées sans libellé ni titre : rien à raccourcir, le
+    // refus ne dit que le nombre de tours.
+    assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 15, repliees: true }, nue), {
+      code: 'PLANCHE_TROP_DE_TOURS',
+      details: { tours: 15, lignesLongues: false, remede: null },
+    });
+    // Un libellé ou un titre sur une ligne : la personne, vers les tables.
+    for (const longue of [ligne({ libelleTable: 'Terrasse côté jardin nord' }), ligne({ titre: 'animateur VIP' })]) {
+      assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 8, repliees: true }, badge([ligne({ tour: 2 }), longue])), {
+        code: 'PLANCHE_TROP_DE_TOURS',
+        details: {
+          tours: 8,
+          lignesLongues: true,
+          participant: 3,
+          personne: 'Ondine Lacasse',
+          remede: { geste: 'ouvrirSection', section: 'tables' },
+        },
+      });
+      // Non repliées, les mêmes lignes ne sont pas en cause.
+      assert.equal(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 8, repliees: false }, badge([longue])).details.lignesLongues, false);
+    }
+    assert.deepEqual(refusProduction('PLANCHE_NOM_TROP_LONG', {}, nue), {
       code: 'PLANCHE_NOM_TROP_LONG',
       details: { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } },
     });
     for (const code of ['PLANCHE_DERIVE', 'RETENU_FAUTIF', 'toString', null]) {
-      assert.throws(() => refusProduction(code, {}), TypeError, String(code));
+      assert.throws(() => refusProduction(code, {}, nue), TypeError, String(code));
     }
   });
 
-  test('chaque refus de la planche se dit : le nombre de tours, la personne au nom trop long, chaque raison de la dérive', () => {
-    assert.match(libelle('PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }), /\b40 tours\b/);
+  test('chaque refus de la planche se dit : le nombre de tours, ou la personne aux lignes de tour trop longues, la personne au nom trop long, chaque raison de la dérive', () => {
+    assert.match(libelle('PLANCHE_TROP_DE_TOURS', { tours: 40, lignesLongues: false, remede: null }), /\b40 tours\b/);
+    const longues = libelle('PLANCHE_TROP_DE_TOURS', { tours: 8, lignesLongues: true, participant: 3, personne: 'Ondine Lacasse' });
+    assert.match(longues, /Ondine Lacasse/);
+    assert.match(longues, /libellé de table ou un titre/);
+    assert.doesNotMatch(longues, /\b8 tours\b/);
     assert.match(libelle('PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse' }), /Ondine Lacasse/);
     assert.match(libelle('PLANCHE_NOM_TROP_LONG', { participant: 3 }), /n° 3\b/);
     const derive = libelle('PLANCHE_DERIVE', {
@@ -889,11 +917,6 @@ describe('planche : le papier des badges (§ 11.2)', () => {
 
 // Une table et son libellé.
 const libellee = (id, numero, sieges, libelle) => ({ ...table(id, numero, sieges), libelle });
-
-// Le texte de chaque morceau abrégeable des lignes d'un badge, ligne par
-// ligne : ce que ses positions découpent dans le texte de la ligne.
-const morceauxDe = ({ textes }) =>
-  textes.lignes.map((ligne, rang) => textes.abregeables[rang].map(({ debut, fin }) => ligne.slice(debut, fin)));
 
 describe('planche : le libellé de la table sur les lignes de tour (§ 11.4, § 11.5)', () => {
   test('entre parenthèses après le numéro, dans « Tour » comme dans « Toute la soirée » ; une table sans libellé laisse la ligne telle quelle', () => {
@@ -939,19 +962,16 @@ describe('planche : le libellé de la table sur les lignes de tour (§ 11.4, § 
     assert.deepEqual(badgeDe(modele(charge), 1).textes.lignes, ['Tour 1 — table 7 (Terrasse)', 'Tour 2 — table 7 (Verrière)']);
   });
 
-  test('les morceaux abrégeables : le libellé, puis le titre, par leur position dans la ligne ; aucun sans eux', () => {
+  test('le libellé et le titre s’insèrent tels quels, parenthèses et tirets compris ; les textes du badge ne désignent rien à abréger', () => {
     const charge = titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }] });
     charge.tables = [libellee(1, 7, 3, 'Coin (nord) — fenêtre')];
-    const m = modele(charge);
-    const badge = badgeDe(m, 1);
-    assert.deepEqual(morceauxDe(badge), [['Coin (nord) — fenêtre', 'animateur'], ['Coin (nord) — fenêtre']]);
-    assert.deepEqual(badge.textes.abregeables[0], [
-      { debut: 'Tour 1 — table 7 ('.length, fin: 'Tour 1 — table 7 (Coin (nord) — fenêtre'.length },
-      { debut: 'Tour 1 — table 7 (Coin (nord) — fenêtre), siège 1 — '.length, fin: badge.textes.lignes[0].length },
+    const badge = badgeDe(modele(charge), 1);
+    assert.deepEqual(badge.textes.lignes, [
+      'Tour 1 — table 7 (Coin (nord) — fenêtre), siège 1 — animateur',
+      'Tour 2 — table 7 (Coin (nord) — fenêtre), siège 2',
     ]);
-    const sans = modele(aReserve());
-    for (const b of sans.badges) assert.deepEqual(b.textes.abregeables, b.textes.lignes.map(() => []));
-    assert.deepEqual(morceauxDe(badgeDe(modele(titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tous', tour: null }], tour2: [1, 2, 3] })), 1)), [['animateur']]);
+    assert.ok(!('abregeables' in badge.textes), JSON.stringify(Object.keys(badge.textes)));
+    for (const b of modele(aReserve()).badges) assert.ok(!('abregeables' in b.textes));
   });
 });
 

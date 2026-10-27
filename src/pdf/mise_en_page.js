@@ -16,17 +16,25 @@
 // jamais, et une ligne absente laisse sa place à la suivante. Un nom laissé
 // en blanc n'est pas absent : ses lignes gardent leur place, vide.
 //
+// Aucun texte du badge ne s'abrège : un texte trop large pour sa ligne se
+// replie comme un paragraphe, au dernier espace qui tient, et un mot plus
+// large que la ligne se coupe entre deux grappes (replier). Le texte entier
+// reste donc sur la page, ou le badge se refuse.
+//
 // Le nom se choisit d'abord, sur la seule largeur : il passe avant tout le
 // reste (§ 11.4, rang 1). Pour chaque forme du nom, de la plus grande au
 // plancher, les tours essaient leurs dispositions, une colonne du corps des
-// tours au plancher, puis deux colonnes ; la première qui tient l'emporte.
-// Le nom au plancher, le badge se dépouille dans l'ordre de sacrifice
-// (décision 8). Retirer un texte ne vient qu'après avoir réduit tout ce qui
-// se réduit.
+// tours au plancher, puis deux colonnes ; sous chacune, une organisation
+// qui se replie essaie ses corps, du départ à son plancher ; la première
+// qui tient l'emporte. Une organisation qui tient sur une ligne garde son
+// corps de départ. Le nom au plancher, le badge se dépouille dans l'ordre
+// de sacrifice (décision 8). Retirer un texte ne vient qu'après avoir
+// réduit tout ce qui se réduit.
 //
 // Chaque modèle de badge a son cadre utile (cadreUtile) et ses corps de
 // départ, lus au registre des constantes (TYPOGRAPHIES) ; les planchers du
-// nom et des tours sont ceux de la lisibilité, communs aux modèles.
+// nom, des tours et de l'organisation sont ceux de la lisibilité, communs
+// aux modèles.
 //
 // Le pied TechnoLibre, quand il est demandé, vient en dernier : un texte,
 // puis le logo, sous le pied, le logo posé sur le bord du cadre ; un texte
@@ -76,10 +84,6 @@ const TYPOGRAPHIES = Object.freeze({
 
 /** Le point typographique en millimètres. */
 const MM_PAR_PT = 25.4 / 72;
-
-/** La marque d'abrègement d'une organisation ou d'un texte libre d'une
- *  ligne de tour. */
-const MARQUE = '\u{2026}';
 
 // La hauteur du logo du pied TechnoLibre, en cadratins du corps de son
 // texte, commune aux modèles : une proportion du bloc, non un seuil de
@@ -182,34 +186,6 @@ function paliers(depart, plancher) {
   return corps;
 }
 
-// Les textes libres de chaque ligne de tour, contrôlés : textes.abregeables,
-// ou aucun pour chaque ligne quand il manque. Chaque ligne en a une liste de
-// { debut, fin }, entiers, 0 ≤ debut < fin ≤ sa longueur, croissants et
-// disjoints, un caractère au moins chacun ; TypeError sinon.
-function morceauxLus({ lignes, abregeables }) {
-  if (abregeables === undefined) return lignes.map(() => []);
-  if (!Array.isArray(abregeables) || abregeables.length !== lignes.length) {
-    throw new TypeError('mettreEnPage : abregeables, une liste par ligne de tour, attendus');
-  }
-  abregeables.forEach((morceaux, rang) => {
-    let fin = 0;
-    const bien =
-      Array.isArray(morceaux) &&
-      morceaux.every((morceau) => {
-        const forme =
-          Number.isSafeInteger(morceau?.debut) &&
-          Number.isSafeInteger(morceau?.fin) &&
-          morceau.debut >= fin &&
-          morceau.debut < morceau.fin &&
-          morceau.fin <= lignes[rang].length;
-        fin = forme ? morceau.fin : fin;
-        return forme;
-      });
-    if (!bien) throw new TypeError(`mettreEnPage : textes libres de la ligne ${rang + 1} mal désignés, reçu ${JSON.stringify(morceaux)}`);
-  });
-  return abregeables;
-}
-
 // Le pied TechnoLibre demandé, contrôlé : null, ou {texte, rapport}, un
 // texte, vide admis, et le rapport largeur sur hauteur du logo, un nombre
 // fini positif ; TypeError sinon.
@@ -262,23 +238,27 @@ function nomEnBlancLu({ nomEnBlanc = false }) {
  * dépouillement, pied TechnoLibre, logo du participant, refus — est celui du
  * nom imprimé.
  *
- * Organisation : une ligne, abrégée par « … » au plus long préfixe qui
- * tient. Pied : chaque ligne se replie comme le nom, rien ne s'y abrège.
+ * Organisation : entière sur une ligne, à son corps de départ, quand elle
+ * y tient ; sinon repliée en paragraphe sur autant de lignes qu'il lui
+ * faut, chacune centrée, et, quand le badge ne tient pas, descendue d'un
+ * point par palier jusqu'à son plancher (CORPS_ORGANISATION_PLANCHER_PT).
+ * Quand le badge ne tient pas même ainsi, elle se retire dans l'ordre de
+ * sacrifice. Pied : chaque ligne se replie comme le nom.
  *
  * Tours : une colonne, du corps des tours à leur plancher, puis deux
  * colonnes, la première rangée de haut en bas d'abord, séparées d'un
  * cadratin. Chaque ligne est entière, sauf au plancher : une ligne trop
- * large pour sa colonne y abrège ses textes libres — le libellé de la
- * table, puis le titre, ceux que textes.abregeables désigne —, chacun à son
- * plus long préfixe suivi de « … », une grappe au moins, le suivant ne
- * s'abrégeant que le précédent réduit à sa première grappe ; jamais le
- * reste de la ligne, tour, table et siège. Une ligne sans texte libre, ou
- * que même ses textes libres réduits ne font pas tenir, ne se pose pas.
- * Aucun corps ne dépasse celui du nom.
+ * large pour sa colonne s'y replie en paragraphe, un nombre gardé sur la
+ * ligne du mot qui le précède, et sa suite descend sous elle en retrait
+ * d'un cadratin, dans la même colonne. La hauteur des tours compte ces
+ * lignes repliées. Rien ne s'y abrège, ni le libellé de la table, ni le
+ * titre, ni le numéro. Aucun corps ne dépasse celui du nom.
  *
  * Refus : PLANCHE_NOM_TROP_LONG quand le nom dépasse trois lignes et que
- * rien ne tient, PLANCHE_TROP_DE_TOURS {tours} sinon, tours étant le nombre
- * de lignes de tour. src/pdf ne connaît pas la personne : l'appelant
+ * rien ne tient, PLANCHE_TROP_DE_TOURS {tours, repliees} sinon, tours étant
+ * le nombre de lignes de tour reçues ; repliees, vrai quand ces lignes,
+ * une rangée chacune, tiendraient : ce sont alors des lignes trop larges,
+ * repliées, qui débordent. src/pdf ne connaît pas la personne : l'appelant
  * complète les détails.
  *
  * Le modèle de badge donne le cadre utile et les corps de départ : l'A6,
@@ -306,12 +286,9 @@ function nomEnBlancLu({ nomEnBlanc = false }) {
  * page est alors celle du badge sans logo. Non demandé, logoParticipant rend
  * null, et la page est celle d'avant le logo.
  *
- * @param {{nom: string, nomEnBlanc?: boolean, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
+ * @param {{nom: string, nomEnBlanc?: boolean, lignes: string[],
  *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
- *        nomEnBlanc : vrai, le nom se mesure sans se poser ; absent, faux.
- *        abregeables : pour chaque ligne de tour, ses textes libres, par
- *        leurs positions en unités UTF-16, croissants et disjoints ; absent,
- *        aucune ligne n'en porte
+ *        nomEnBlanc : vrai, le nom se mesure sans se poser ; absent, faux
  * @param {Metriques} metriques
  * @param {import('../geometrie/papiers.js').ModeleBadge} [modeleBadge]   'a6' par défaut
  * @param {{texte: string, rapport: number}|null} [technolibre]   le pied
@@ -327,13 +304,12 @@ function nomEnBlancLu({ nomEnBlanc = false }) {
  *            logoParticipant: null | {boite: null|{x: number, y: number, largeur: number, hauteur: number}}}
  *          | {refus: {code: string, details: object}}}
  *          les boîtes des logos en millimètres du cadre utile, y à leur haut
- * @throws {TypeError} un modèle de badge inconnu, des textes libres mal
- *         désignés, un nomEnBlanc qui n'est pas un booléen, un pied
- *         TechnoLibre ou un logo du participant mal formés
+ * @throws {TypeError} un modèle de badge inconnu, un nomEnBlanc qui n'est
+ *         pas un booléen, un pied TechnoLibre ou un logo du participant mal
+ *         formés
  */
 export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre = null, logoParticipant = null) {
   if (!estModeleBadge(modeleBadge)) throw new TypeError(`mettreEnPage : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
-  const morceauxDesLignes = morceauxLus(textes);
   const nomEnBlanc = nomEnBlancLu(textes);
   const promotion = technolibreLu(technolibre);
   const logoDemande = logoParticipantLu(logoParticipant);
@@ -352,107 +328,78 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     return { ascendante, descendante, hauteur: ascendante + descendante };
   };
 
-  // Les lignes du texte repliées dans la largeur, au plus `limite` ; null
-  // quand il en faut davantage, ou qu'une grappe seule déborde. Un mot qui
-  // ne tient pas seul sur une ligne se coupe entre deux grappes, sauf sous
-  // `motsEntiers`, où le repli échoue.
-  function replier(texte, corps, gras, limite, motsEntiers = false) {
+  // Les lignes du texte repliées, au plus `limite` ; null quand il en faut
+  // davantage, ou qu'une grappe seule déborde. Chaque ligne prend les mots
+  // qui tiennent, et la coupe tombe au dernier espace qui tient. Un mot qui
+  // ne tient pas seul sur une ligne ouvre la suivante et se coupe entre deux
+  // grappes, sauf sous `motsEntiers`, où le repli échoue. La première ligne
+  // tient dans la largeur `premiere`, les suivantes dans `suite` ; toutes
+  // dans la largeur du cadre par défaut. Sous `lier`, un mot qui commence
+  // par un chiffre reste sur la ligne du mot qui le précède — « Tour 2 »,
+  // « table 5 », « siège 3 » ne se séparent pas —, tant que les deux tiennent
+  // ensemble sur une ligne nouvelle ; sinon, ils se replient chacun.
+  function replier(texte, corps, gras, limite, motsEntiers = false, { premiere = L, suite = premiere, lier = false } = {}) {
     const lignes = [];
     let courante = '';
+    const tientIci = (morceau) => tient(morceau, corps, gras, lignes.length === 0 ? premiere : suite);
     const clore = () => {
       lignes.push(courante);
       courante = '';
       return lignes.length <= limite;
     };
+    // Les unités du repli, chacune ses mots : un mot seul, ou, sous `lier`,
+    // un mot suivi des mots qui commencent par un chiffre.
+    const unites = [];
     for (const mot of texte.split(' ')) {
       if (mot === '') continue;
+      if (lier && unites.length > 0 && /^\p{Nd}/u.test(mot)) unites.at(-1).push(mot);
+      else unites.push([mot]);
+    }
+    for (let rang = 0; rang < unites.length; rang += 1) {
+      const unite = unites[rang];
+      const mot = unite.join(' ');
       const avecMot = courante === '' ? mot : `${courante} ${mot}`;
-      if (tient(avecMot, corps, gras)) {
+      if (tientIci(avecMot)) {
         courante = avecMot;
         continue;
       }
+      // Une unité de plusieurs mots qui ne tient pas sur la ligne qu'elle
+      // ouvrirait se défait en ses mots, qui se replient chacun.
+      const ouverte = courante === '' && lignes.length === 0 ? premiere : suite;
+      if (unite.length > 1 && !tient(mot, corps, gras, ouverte)) {
+        unites.splice(rang + 1, 0, ...unite.map((seul) => [seul]));
+        continue;
+      }
       if (courante !== '' && !clore()) return null;
-      if (tient(mot, corps, gras)) {
+      if (tientIci(mot)) {
         courante = mot;
         continue;
       }
       if (motsEntiers) return null;
       for (const grappe of mot.match(GRAPPE)) {
         const avecGrappe = courante + grappe;
-        if (courante === '' || tient(avecGrappe, corps, gras)) {
+        if (courante === '' || tientIci(avecGrappe)) {
           courante = avecGrappe;
         } else if (!clore()) {
           return null;
         } else {
           courante = grappe;
         }
-        if (!tient(courante, corps, gras)) return null;
+        if (!tientIci(courante)) return null;
       }
     }
     if (courante !== '' && !clore()) return null;
     return lignes;
   }
 
-  // Le texte, entre avant et apres, entier si l'ensemble tient ; sinon son
-  // plus long préfixe d'au moins `minimum` grappes, espaces finales
-  // retirées, suivi de la marque — la marque seule pour un minimum nul ;
-  // null quand aucun ne tient. Les avances sont positives ou nulles : la
-  // largeur croît avec le nombre de grappes du préfixe, une dichotomie
-  // trouve le plus long qui tient sans la marque, et aucun plus long ne
-  // tient avec elle. De là, le premier qui tient avec elle, en descendant.
-  function abregerEntre(avant, texte, apres, corps, gras, largeurMax, minimum) {
-    const tientAvec = (milieu) => tient(`${avant}${milieu}${apres}`, corps, gras, largeurMax);
-    if (tientAvec(texte)) return `${avant}${texte}${apres}`;
-    if (!tientAvec('')) return null;
-    const grappes = texte.match(GRAPPE) ?? [];
-    const prefixe = (nombre) => grappes.slice(0, nombre).join('');
-    // Le préfixe vide tient, le texte entier non.
-    let bas = 0;
-    let haut = grappes.length - 1;
-    while (bas < haut) {
-      const milieu = Math.ceil((bas + haut) / 2);
-      if (tientAvec(prefixe(milieu))) bas = milieu;
-      else haut = milieu - 1;
-    }
-    for (let nombre = bas; nombre >= minimum; nombre -= 1) {
-      const garde = prefixe(nombre).replace(/ +$/u, '');
-      if (garde === '' && minimum > 0) continue;
-      if (tientAvec(`${garde}${MARQUE}`)) return `${avant}${garde}${MARQUE}${apres}`;
-    }
-    return null;
-  }
-
-  // Une organisation dans la largeur : entière, ou abrégée, la marque seule
-  // au pis ; null si la marque seule déborde.
-  const abreger = (texte, corps, gras, largeurMax) => abregerEntre('', texte, '', corps, gras, largeurMax, 0);
-
-  // Une ligne de tour dans la largeur : entière si elle tient ; sinon ses
-  // textes libres s'abrègent l'un après l'autre, dans l'ordre de la ligne,
-  // une grappe au moins chacun : le premier à son plus long préfixe qui fait
-  // tenir la ligne, les suivants entiers ; à défaut, réduit à sa première
-  // grappe, et le suivant s'abrège. null quand la ligne n'en a pas, ou que
-  // tous réduits ne la font pas tenir. Le reste de la ligne ne s'abrège
-  // jamais.
-  function abregerLigne(ligne, morceaux, corps, largeurMax) {
-    if (tient(ligne, corps, false, largeurMax)) return ligne;
-    // Les morceaux de la ligne : textes fixes et textes libres alternés,
-    // chaque libre ensuite remplacé par sa forme réduite.
-    const parts = [];
-    let curseur = 0;
-    for (const { debut, fin } of morceaux) {
-      parts.push(ligne.slice(curseur, debut), ligne.slice(debut, fin));
-      curseur = fin;
-    }
-    parts.push(ligne.slice(curseur));
-    for (let rang = 1; rang < parts.length; rang += 2) {
-      const avant = parts.slice(0, rang).join('');
-      const apres = parts.slice(rang + 1).join('');
-      const abregee = abregerEntre(avant, parts[rang], apres, corps, false, largeurMax, 1);
-      if (abregee !== null) return abregee;
-      parts[rang] = `${parts[rang].match(GRAPPE)[0]}${MARQUE}`;
-    }
-    return null;
-  }
+  // Un paragraphe dans la largeur donnée : le texte tel quel quand il tient
+  // sur une ligne, sinon replié, ses lignes après la première en retrait,
+  // un nombre lié au mot qui le précède sous `lier` ; null quand une grappe
+  // seule déborde.
+  const paragraphe = (texte, corps, largeurMax, { retrait = 0, lier = false } = {}) =>
+    tient(texte, corps, false, largeurMax)
+      ? [texte]
+      : replier(texte, corps, false, Infinity, false, { premiere: largeurMax, suite: largeurMax - retrait, lier });
 
   // Les formes du nom, dans l'ordre où le badge les essaie, chacune
   // {corps, lignes}. La première est la plus grande qui tient en largeur :
@@ -489,6 +436,11 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   const nom = choisirNom();
   if (nom === null) return refusNom;
 
+  // Vrai dès qu'une disposition tient les tours, une ligne chacun, sous une
+  // forme du badge : quand le badge se refuse ensuite, ce sont des lignes
+  // trop larges, repliées, qui débordent, et non le nombre des tours.
+  let toursEnLignesTiennent = false;
+
   const piedReplie = (lignes, corps) => {
     const resultat = [];
     for (const ligne of lignes) {
@@ -506,92 +458,125 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   // de ses tours, et le nombre de ses blocs de pied, les derniers.
   function composer(forme, { evenement, avecOrganisation }) {
     const auPlusNom = (corps) => Math.min(corps, forme.corps);
-    const corpsOrganisation = auPlusNom(constante(typographie.organisation));
     const corpsPied = auPlusNom(constante(typographie.pied));
     const corpsTours = paliers(auPlusNom(constante(typographie.tours)), auPlusNom(constante('CORPS_TOURS_PLANCHER_PT')));
     const plancherTours = corpsTours.at(-1);
 
-    const organisation =
-      !avecOrganisation || textes.organisation === null || textes.organisation.trim() === ''
-        ? null
-        : abreger(textes.organisation, corpsOrganisation, false, L);
     const pied = piedReplie(evenement ? textes.pied : textes.piedReduit, corpsPied);
     if (pied === null) return null;
 
-    // Les lignes de tour d'une disposition, avec leur abscisse et leur rang ;
-    // null quand l'une ne tient pas dans sa colonne. Une colonne reçoit les
-    // lignes et leurs textes libres, { ligne, morceaux }.
+    // Les lignes de tour d'une disposition, avec leur abscisse et leur rang
+    // dans leur colonne, et le nombre de rangées de la plus haute colonne ;
+    // null quand l'une ne tient pas dans sa colonne. Au plancher, une ligne
+    // trop large se replie, sa suite en retrait d'un cadratin.
     function disposerTours({ colonnes, corps }) {
-      const poser = ({ ligne, morceaux }, largeurMax) => {
-        if (corps === plancherTours) return abregerLigne(ligne, morceaux, corps, largeurMax);
-        return tient(ligne, corps, false, largeurMax) ? ligne : null;
+      const retrait = corps * MM_PAR_PT;
+      const poser = (ligne, largeurMax) => {
+        if (corps === plancherTours) return paragraphe(ligne, corps, largeurMax, { retrait, lier: true });
+        return tient(ligne, corps, false, largeurMax) ? [ligne] : null;
       };
       const poserColonne = (colonne, largeurMax) => {
         const posees = colonne.map((ligne) => poser(ligne, largeurMax));
         return posees.includes(null) ? null : posees;
       };
-      const largeurColonne = (colonne) => Math.max(0, ...colonne.map((t) => largeur(t, corps, false)));
-      const lignes = textes.lignes.map((ligne, rang) => ({ ligne, morceaux: morceauxDesLignes[rang] }));
+      // La largeur d'une colonne posée : sa plus large ligne, une suite
+      // comptée avec son retrait.
+      const largeurColonne = (posees) =>
+        Math.max(0, ...posees.flatMap((morceaux) => morceaux.map((t, rang) => (rang === 0 ? 0 : retrait) + largeur(t, corps, false))));
+      // Les lignes d'une colonne posée à l'abscisse x, de haut en bas, chaque
+      // suite décalée de son retrait.
+      const ranger = (posees, x) =>
+        posees
+          .flatMap((morceaux) => morceaux.map((texte, rang) => ({ texte, x: rang === 0 ? x : x + retrait })))
+          .map((ligne, rang) => ({ ...ligne, rang }));
       if (colonnes === 1) {
-        const posees = poserColonne(lignes, L);
+        const posees = poserColonne(textes.lignes, L);
         if (posees === null) return null;
-        const x = (L - largeurColonne(posees)) / 2;
-        return { lignes: posees.map((texte, rang) => ({ texte, x, rang })) };
+        const lignes = ranger(posees, (L - largeurColonne(posees)) / 2);
+        return { lignes, rangees: lignes.length };
       }
       // La colonne de gauche reçoit ce que la droite, entière, lui laisse, et
       // jamais moins d'une demi-colonne ; la droite, ce que la gauche posée
       // lui laisse. Les deux tiennent ensemble par construction, et des
-      // lignes entières qui tiennent ensemble passent telles quelles.
-      const rangees = Math.ceil(lignes.length / 2);
+      // lignes entières qui tiennent ensemble passent telles quelles. Une
+      // ligne et ses suites restent dans leur colonne.
+      const rangees = Math.ceil(textes.lignes.length / 2);
       const gouttiere = corps * MM_PAR_PT;
       const demi = (L - gouttiere) / 2;
-      const droiteEntiere = lignes.slice(rangees);
-      const largeurDroite = largeurColonne(droiteEntiere.map(({ ligne }) => ligne));
-      const gauche = poserColonne(lignes.slice(0, rangees), L - gouttiere - Math.min(largeurDroite, demi));
+      const droiteEntiere = textes.lignes.slice(rangees);
+      const largeurDroite = largeurColonne(droiteEntiere.map((ligne) => [ligne]));
+      const gauche = poserColonne(textes.lignes.slice(0, rangees), L - gouttiere - Math.min(largeurDroite, demi));
       if (gauche === null) return null;
       const droite = poserColonne(droiteEntiere, L - gouttiere - largeurColonne(gauche));
       if (droite === null) return null;
       const x = (L - (largeurColonne(gauche) + gouttiere + largeurColonne(droite))) / 2;
-      const xDroite = x + largeurColonne(gauche) + gouttiere;
-      return {
-        lignes: [
-          ...gauche.map((texte, rang) => ({ texte, x, rang })),
-          ...droite.map((texte, rang) => ({ texte, x: xDroite, rang })),
-        ],
-      };
+      const lignesGauche = ranger(gauche, x);
+      const lignesDroite = ranger(droite, x + largeurColonne(gauche) + gouttiere);
+      return { lignes: [...lignesGauche, ...lignesDroite], rangees: Math.max(lignesGauche.length, lignesDroite.length) };
     }
 
     const pasPied = pas(corpsPied);
     const hautDuPied = H - pied.length * pasPied.hauteur;
-    // Le flux du haut, jusqu'aux tours. Un nom laissé en blanc avance le
-    // curseur de ses lignes sans en poser aucune.
+    // Le flux du haut, jusqu'à l'organisation. Un nom laissé en blanc avance
+    // le curseur de ses lignes sans en poser aucune.
     const blocs = [];
-    let curseur = 0;
+    let curseurNom = 0;
     const pasNom = pas(forme.corps);
     for (const texte of forme.lignes) {
-      const y = curseur + pasNom.ascendante;
+      const y = curseurNom + pasNom.ascendante;
       if (!nomEnBlanc) blocs.push({ texte, corps: forme.corps, gras: true, x: centre(texte, forme.corps, true), y });
-      curseur = y + pasNom.descendante;
+      curseurNom = y + pasNom.descendante;
     }
-    if (organisation !== null) {
-      const pasOrganisation = pas(corpsOrganisation);
-      const y = curseur + pasOrganisation.ascendante;
-      blocs.push({ texte: organisation, corps: corpsOrganisation, gras: false, x: centre(organisation, corpsOrganisation, false), y });
-      curseur = y + pasOrganisation.descendante;
+    // Les formes de l'organisation, chacune ses blocs et le curseur sous
+    // elle : son corps de départ seul quand elle y tient sur une ligne,
+    // sinon de son corps de départ à son plancher ; une forme seule, vide,
+    // sans organisation. Aucune quand même son plancher ne se replie pas :
+    // une grappe seule déborde.
+    const sansOrganisation = !avecOrganisation || textes.organisation === null || textes.organisation.trim() === '';
+    const departOrganisation = auPlusNom(constante(typographie.organisation));
+    const corpsOrganisation = sansOrganisation
+      ? []
+      : tient(textes.organisation, departOrganisation, false)
+        ? [departOrganisation]
+        : paliers(departOrganisation, auPlusNom(constante('CORPS_ORGANISATION_PLANCHER_PT')));
+    const formesOrganisation = sansOrganisation ? [{ blocs: [], curseur: curseurNom }] : [];
+    for (const corps of corpsOrganisation) {
+      const lignes = paragraphe(textes.organisation, corps, L);
+      if (lignes === null) continue;
+      const pasOrganisation = pas(corps);
+      const blocsOrganisation = [];
+      let curseur = curseurNom;
+      for (const texte of lignes) {
+        const y = curseur + pasOrganisation.ascendante;
+        blocsOrganisation.push({ texte, corps, gras: false, x: centre(texte, corps, false), y });
+        curseur = y + pasOrganisation.descendante;
+      }
+      formesOrganisation.push({ blocs: blocsOrganisation, curseur });
     }
+    if (formesOrganisation.length === 0) return null;
+    const curseurLePlusHaut = Math.min(...formesOrganisation.map(({ curseur }) => curseur));
     // Les dispositions des tours, dans l'ordre de préférence : une colonne
-    // du corps des tours au plancher, puis deux.
+    // du corps des tours au plancher, puis deux. Sous chacune, la première
+    // forme de l'organisation qui laisse la place aux tours.
     const dispositions = [
       ...corpsTours.map((corps) => ({ colonnes: 1, corps })),
       ...corpsTours.map((corps) => ({ colonnes: 2, corps })),
     ];
     for (const disposition of dispositions) {
       const pasTours = pas(disposition.corps);
-      if (curseur + Math.ceil(textes.lignes.length / disposition.colonnes) * pasTours.hauteur > hautDuPied + TOLERANCE_MM) {
+      // Une ligne par tour au moins : une disposition qui ne les tient pas
+      // sous l'organisation la plus basse ne se compose pas. Une qui les
+      // tient, une ligne chacun, dit que leur nombre n'est pas en cause.
+      if (curseurLePlusHaut + Math.ceil(textes.lignes.length / disposition.colonnes) * pasTours.hauteur > hautDuPied + TOLERANCE_MM) {
         continue;
       }
+      toursEnLignesTiennent = true;
       const tours = disposerTours(disposition);
       if (tours === null) continue;
+      const hauteurTours = tours.rangees * pasTours.hauteur;
+      const organisation = formesOrganisation.find(({ curseur }) => curseur + hauteurTours <= hautDuPied + TOLERANCE_MM);
+      if (organisation === undefined) continue;
+      const { curseur } = organisation;
       const blocsTours = tours.lignes.map(({ texte, x, rang }) => ({
         texte,
         corps: disposition.corps,
@@ -606,9 +591,9 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
         x: centre(texte, corpsPied, false),
         y: hautDuPied + rang * pasPied.hauteur + pasPied.ascendante,
       }));
-      const finDesTours = curseur + Math.ceil(textes.lignes.length / disposition.colonnes) * pasTours.hauteur;
+      const finDesTours = curseur + hauteurTours;
       return {
-        blocs: [...blocs, ...blocsTours, ...blocsPied],
+        blocs: [...blocs, ...organisation.blocs, ...blocsTours, ...blocsPied],
         colonnesTours: disposition.colonnes,
         libre: hautDuPied - finDesTours,
         finDesTours,
@@ -818,5 +803,5 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     if (page !== null) return finir(page, { depouillee: !niveau.avecOrganisation || (!niveau.evenement && !sansNomEvenement) });
   }
   if (nom.auDela) return refusNom;
-  return { refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: textes.lignes.length } } };
+  return { refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: textes.lignes.length, repliees: toursEnLignesTiennent } } };
 }
