@@ -25,10 +25,15 @@ export const TABLE = new Map([
   ['impression.tour.titre', 'Tour imprimé'],
   ['impression.tour.option', ({ tour }) => `Tour ${tour}`],
   ['impression.listes', 'Listes de noms'],
+  // L'organisation à droite de chaque nom des listes ; listes masquées, la
+  // bascule reste offerte, inactive, et dit pourquoi.
+  ['impression.organisations', 'Organisation'],
+  ['impression.organisationsSansListes', 'Imprimez les listes de noms pour y voir les organisations'],
   ['impression.decoupe.titre', 'Pages du plan'],
   ['impression.decoupe.auto', 'Découpage proposé'],
   ['impression.decoupe.unePage', 'Tout sur une page'],
   ['impression.decoupe.decoupe', 'Découper en pages'],
+  ['impression.parColonne', 'Une colonne par page'],
   ['impression.parTour', 'Une feuille par tour'],
 
   // --- La question du papier (§ 8.5, § 11.2) -----------------------------------

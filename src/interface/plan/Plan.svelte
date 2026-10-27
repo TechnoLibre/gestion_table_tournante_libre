@@ -193,6 +193,8 @@
           listes: $ui.listes,
           miseEnEvidence: $ui.miseEnEvidence,
           nomDe,
+          organisations: $ui.organisations,
+          organisationDe,
           diagnostic,
           poignee,
           selection,

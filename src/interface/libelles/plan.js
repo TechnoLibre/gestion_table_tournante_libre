@@ -50,6 +50,9 @@ export const TABLE = new Map([
   // entre teteReserveeA et reserveeA.
   ['plan.ligne.teteReserveeA', ({ numero }) => `${numero}. (réservée à `],
   ['plan.ligne.reserveeA', ({ portee, tour }) => (portee === 'tous' ? ', tous les tours)' : `, tour ${tour})`)],
+  // L'organisation de l'occupant, quand la barre de vue la montre, suit son
+  // nom après ce séparateur fin.
+  ['plan.ligne.avantOrganisation', ' \u{00B7} '],
   ['plan.ligne.avantTitrePourvu', ' \u{2014} '],
   ['plan.ligne.avantTitreNonPourvu', ' \u{2014} titre '],
   ['plan.ligne.apresTitreNonPourvu', ' non pourvu'],
@@ -92,6 +95,10 @@ export const TABLE = new Map([
   ['plan.vue.dezoomer', 'Zoom \u{2212}'],
   ['plan.vue.ajuster', 'Ajuster'],
   ['plan.vue.listes', 'Listes de noms'],
+  // L'organisation à droite de chaque nom des listes ; listes masquées, la
+  // bascule reste offerte, inactive, et dit pourquoi.
+  ['plan.vue.organisations', 'Organisation'],
+  ['plan.vue.organisationsSansListes', 'Montrez les listes de noms pour y voir les organisations'],
   ['plan.vue.pleinEcran', 'Plein écran'],
   // Les noms des groupes de la barre de vue (role="group").
   ['plan.vue.groupeZoom', 'Zoom'],

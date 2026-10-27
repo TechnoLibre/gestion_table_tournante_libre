@@ -37,6 +37,10 @@
   // s'écrit : l'aperçu ne reçoit de la séance que son état, et le papier
   // passe par choisirPapier.
   //
+  // Les réglages du plan : le tour, les listes de noms, l'organisation de
+  // chaque nom — offerte inactive, listes masquées, avec la raison en
+  // titre —, les pages du plan et une colonne de tables par page.
+  //
   // Habillage de l'écran : la barre est une carte, ses commandes en groupes
   // nommés, côte à côte — la vue imprimée, en commandes enfoncées ; les
   // réglages de la vue, quand elle en a ; le papier et « Imprimer », l'action
@@ -147,6 +151,16 @@
           <button type="button" data-commande="listes" aria-pressed={options.listes} onclick={() => ui.reglerApercu({ listes: !options.listes })}
             >{t('impression.listes')}</button
           >
+          <button
+            type="button"
+            data-commande="organisations"
+            aria-pressed={options.organisations}
+            aria-disabled={options.listes ? undefined : 'true'}
+            title={options.listes ? undefined : t('impression.organisationsSansListes')}
+            onclick={() => {
+              if (options.listes) ui.reglerApercu({ organisations: !options.organisations });
+            }}>{t('impression.organisations')}</button
+          >
           <label class="reglage">
             <span>{t('impression.decoupe.titre')}</span>
             <select data-champ="decoupe" value={options.decoupe} onchange={(evenement) => ui.reglerApercu({ decoupe: evenement.currentTarget.value })}>
@@ -155,6 +169,12 @@
               {/each}
             </select>
           </label>
+          <button
+            type="button"
+            data-commande="parColonne"
+            aria-pressed={options.parColonne}
+            onclick={() => ui.reglerApercu({ parColonne: !options.parColonne })}>{t('impression.parColonne')}</button
+          >
         {:else}
           <button type="button" data-commande="parTour" aria-pressed={options.parTour} onclick={() => ui.reglerApercu({ parTour: !options.parTour })}
             >{t('impression.parTour')}</button
@@ -285,7 +305,9 @@
     cursor: pointer;
   }
 
-  button:hover {
+  /* Le survol ne teinte qu'une commande active ; :where garde la
+     spécificité de button:hover, qu'un bouton enfoncé recouvre. */
+  button:hover:where(:not([aria-disabled='true'])) {
     background-color: var(--couleur-carte-fond-sourd);
   }
 
@@ -295,6 +317,14 @@
     position: relative;
     background-color: var(--couleur-action-teinte);
     font-weight: bold;
+  }
+
+  /* Un réglage inactif : son filet tireté, l'encre secondaire ; il garde la
+     marque de son état. */
+  button[aria-disabled='true'] {
+    border-style: dashed;
+    color: var(--couleur-page-texte-secondaire);
+    cursor: default;
   }
 
   button:focus-visible,

@@ -7,12 +7,13 @@
   // La liste de noms d'une table (§ 7.4, § 7.6) : un <text data-liste>, une
   // ligne par siège, chacune un <tspan> à x et y explicites, précédée de
   // l'en-tête d'une table gelée. Chaque partie d'une ligne — tête, nom,
-  // titre et ce qui l'entoure — est son propre tspan, nommé par
-  // data-partie ; le titre est en italique. La ligne entière tient dans
-  // largeur (ajusterLigne), mesurée par les mesureurs que PlanDessin crée
-  // sur la police rendue ; les lignes s'espacent de la hauteur d'encre du
-  // gabarit. La liste ne reçoit pas le pointeur : elle ne masque aucune
-  // chaise.
+  // organisation, titre et ce qui les entoure — est son propre tspan, nommé
+  // par data-partie ; le titre est en italique, l'organisation et son
+  // séparateur dans l'encre secondaire, à la même police. La ligne entière
+  // tient dans largeur (ajusterLigne), mesurée par les mesureurs que
+  // PlanDessin crée sur la police rendue ; les lignes s'espacent de la
+  // hauteur d'encre du gabarit. La liste ne reçoit pas le pointeur : elle ne
+  // masque aucune chaise.
   //
   // Le texte est en white-space: pre, pour que les espaces des parties
   // comptent comme elles ont été mesurées : le gabarit n'a aucun blanc entre
@@ -49,8 +50,10 @@
 
 <text class="liste" data-liste={table.id} font-size={TAILLE_TEXTE_LISTE_CM}
   >{#each rangees as rangee (rangee.rang)}<tspan x={origine.x} y={rangee.y}
-      >{#each rangee.parties as partie (partie.partie)}<tspan class:titre={partie.partie === 'titre'} data-partie={partie.partie}
-          >{partie.texte}</tspan
+      >{#each rangee.parties as partie (partie.partie)}<tspan
+          class:titre={partie.partie === 'titre'}
+          class:organisation={partie.partie === 'organisation' || partie.partie === 'avantOrganisation'}
+          data-partie={partie.partie}>{partie.texte}</tspan
         >{/each}</tspan
     >{/each}</text
 >
@@ -66,5 +69,9 @@
 
   .titre {
     font-style: italic;
+  }
+
+  .organisation {
+    fill: var(--couleur-page-texte-secondaire);
   }
 </style>

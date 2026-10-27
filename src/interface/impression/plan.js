@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le plan imprimé (§ 7.7, § 11.7), sans DOM : les pages du plan d'un tour,
-// chacune la tuile que la découpe (decouperPlan) lui donne, sous le pied
+// chacune la tuile que la découpe (decouperPlan, ou decouperParColonnes pour
+// une colonne de tables par page) lui donne, sous le pied
 // d'un seul tour, avec son cartouche de repérage, la mention « disposition
 // relative », l'échelle graphique de son échelle et, quand les listes sont
 // montrées et que la page porte une table, la mention qui dit les listes
@@ -14,7 +15,7 @@
 // découpe.
 import { constante } from '../../geometrie/constantes.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
-import { decouperPlan } from '../../geometrie/pages.js';
+import { decouperParColonnes, decouperPlan } from '../../geometrie/pages.js';
 import { englobantImpression } from '../../geometrie/tables.js';
 import { refusApercu } from './modele.js';
 
@@ -92,8 +93,10 @@ function exigerNomImprimable(pied) {
  *
  * La découpe est celle de decouperPlan, sur l'englobant d'impression des
  * géométries (englobantImpression) ; les listes montrées l'étendent de
- * leurs blocs, larges de LARGEUR_BLOC_NOMS_CM, hauts de hauteursListes. Une
- * page par tuile, dans l'ordre de la découpe :
+ * leurs blocs, larges de LARGEUR_BLOC_NOMS_CM, hauts de hauteursListes.
+ * Avec parColonne, celle de decouperParColonnes : chaque colonne de tables
+ * sur ses propres pages, que les blocs montrés relient. Une page par tuile,
+ * dans l'ordre de la découpe :
  *  - rang, cartouche, tables : ceux de la tuile ;
  *  - orientation : celle de la découpe ;
  *  - viewBox : le cadrage de la tuile, en cm de dessin ;
@@ -108,7 +111,8 @@ function exigerNomImprimable(pied) {
  * @param {import('../../geometrie/tables.js').GeometrieTable[]} geometries   celles des tables de etat
  * @param {'auto'|'unePage'|'decoupe'} decoupe
  * @param {{papier: string, bandeMm: number, listes?: boolean, hauteurLigne?: number|null,
- *          pied: {elements: Object[], filigrane: boolean}, largeurEchelleMm?: number}} options
+ *          parColonne?: boolean, pied: {elements: Object[], filigrane: boolean},
+ *          largeurEchelleMm?: number}} options
  *        pied : la feuille de feuilleDe (modele.js), d'un seul tour
  * @returns {Array<{rang: number, orientation: 'portrait'|'paysage',
  *            viewBox: {x: number, y: number, largeur: number, hauteur: number},
@@ -124,18 +128,15 @@ export function pagesDuPlan(
   etat,
   geometries,
   decoupe,
-  { papier, bandeMm, listes = false, hauteurLigne = null, pied, largeurEchelleMm = LARGEUR_ECHELLE_MM },
+  { papier, bandeMm, listes = false, hauteurLigne = null, parColonne = false, pied, largeurEchelleMm = LARGEUR_ECHELLE_MM },
 ) {
   exigerPiedDUnTour(pied);
   exigerNomImprimable(pied);
   const blocs = listes ? { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, hauteurLigne) } : null;
-  const resultat = decouperPlan(englobantImpression(geometries, { listes: blocs }), {
-    papier,
-    bandeMm,
-    mode: decoupe,
-    geometries,
-    listes: blocs,
-  });
+  const reglages = { papier, bandeMm, mode: decoupe, geometries, listes: blocs };
+  const resultat = parColonne
+    ? decouperParColonnes(geometries, reglages)
+    : decouperPlan(englobantImpression(geometries, { listes: blocs }), reglages);
   const { longueurCm, largeurPx } = echelleGraphique(resultat.echelle, largeurEchelleMm);
   return resultat.pages.map(({ rang, cadrage, cartouche, tables }) => ({
     rang,

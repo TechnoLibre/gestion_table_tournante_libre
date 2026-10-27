@@ -10,7 +10,9 @@
   // d'assistance ; il dessine les tables de la page par PlanDessin, sur le
   // modèle du plan imprimé (modeleDessin, option impression) : régime des
   // sièges, ni poignée, ni cible, ni identifiant, ni sélection. Les listes
-  // ont la largeur et la troncature de l'écran (§ 7.4).
+  // ont la largeur et la troncature de l'écran (§ 7.4), et portent
+  // l'organisation de chaque occupant quand l'aperçu la demande. Une colonne
+  // de tables par page, demandée, passe à la découpe (pagesDuPlan).
   //
   // Hors de la zone de contenu, dans la bande de la feuille : le cartouche
   // de repérage — page, colonne, rangée, renvois vers les pages voisines —,
@@ -33,7 +35,7 @@
   import { hauteurLigne, mesurable } from '../plan/mesure_texte.js';
   import { libelleLongueur, modeleDessin } from '../plan/modele.js';
   import PlanDessin from '../plan/PlanDessin.svelte';
-  import { nomDeCharge } from '../plan/vue_plan.js';
+  import { nomDeCharge, organisationDeCharge } from '../plan/vue_plan.js';
   import Feuille from './Feuille.svelte';
   import { CARTOUCHE_GABARIT, ECHELLE_GABARIT, MENTIONS_GABARIT, modeleDeLaPage, pagesDuPlan, renvois } from './plan.js';
 
@@ -47,7 +49,15 @@
   // la mesure.
   let hauteur = $state(null);
 
-  const modele = $derived(modeleDessin(etat, { listes: options.listes, nomDe: nomDeCharge($seance.charge), impression: true }));
+  const modele = $derived(
+    modeleDessin(etat, {
+      listes: options.listes,
+      nomDe: nomDeCharge($seance.charge),
+      organisations: options.organisations,
+      organisationDe: organisationDeCharge($seance.charge),
+      impression: true,
+    }),
+  );
   const pages = $derived(
     bandeMm === null || hauteur === null
       ? null
@@ -55,7 +65,7 @@
           etat,
           modele.tables.map((table) => table.geometrie),
           options.decoupe,
-          { papier: options.papier, bandeMm, listes: options.listes, hauteurLigne: hauteur, pied: feuille },
+          { papier: options.papier, bandeMm, listes: options.listes, hauteurLigne: hauteur, parColonne: options.parColonne, pied: feuille },
         ),
   );
 

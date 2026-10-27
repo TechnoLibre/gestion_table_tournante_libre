@@ -167,6 +167,9 @@ export function libelleDessin(geometrie, texte, { mesurer, marque }) {
   return { corps, lignes };
 }
 
+// L'ordre des parties d'une ligne, celui de la lecture.
+const PARTIES = ['tete', 'titulaire', 'suite', 'nom', 'avantOrganisation', 'organisation', 'avantTitre', 'titre', 'apresTitre'];
+
 /**
  * La ligne d'une chaise (§ 7.6) : son numéro, l'état de la place — réservée
  * pour tous les tours, réservée au tour désigné, libre, ou rien pour un
@@ -180,12 +183,20 @@ export function libelleDessin(geometrie, texte, { mesurer, marque }) {
  * mêmes portée et tour, et titulaire porte le nom de la personne réservée,
  * que la ligne énonce dans sa propre partie.
  *
+ * Avec organisationDe, la ligne porte aussi l'organisation de l'occupant,
+ * que la liste écrit à droite de son nom ; null sans occupant, sans
+ * organisationDe, et pour une organisation absente ou vide. La titulaire
+ * d'une réservation n'en porte pas : la ligne ne la qualifie que par son
+ * nom.
+ *
  * @param {Object} chaise   EtatChaise
  * @param {(id: number) => string} nomDe   le nom affiché d'un participant
+ * @param {null|((id: number) => string|null)} [organisationDe]   l'organisation d'un participant
  * @returns {{numero: number, etat: {cle: string, details: Object}|null, titulaire: string|null,
- *            nom: string|null, titre: {libelle: string, pourvu: boolean}|null}}
+ *            nom: string|null, organisation: string|null,
+ *            titre: {libelle: string, pourvu: boolean}|null}}
  */
-export function ligneListe(chaise, nomDe) {
+export function ligneListe(chaise, nomDe, organisationDe = null) {
   const { siege, occupant, reservation, titre } = chaise;
   let etat = null;
   let titulaire = null;
@@ -200,11 +211,13 @@ export function ligneListe(chaise, nomDe) {
   } else if (occupant === null) {
     etat = { cle: 'plan.ligne.libre', details: {} };
   }
+  const organisation = occupant === null || organisationDe === null ? null : (organisationDe(occupant) ?? null);
   return {
     numero: siege,
     etat,
     titulaire,
     nom: occupant === null ? null : nomDe(occupant),
+    organisation: organisation === '' ? null : organisation,
     titre: titre === null ? null : { libelle: titre.libelle, pourvu: titre.pourvu },
   };
 }
@@ -212,10 +225,11 @@ export function ligneListe(chaise, nomDe) {
 /**
  * Les textes d'une ligne, partie par partie : tete — numéro et état, suivis
  * d'une espace quand un nom suit —, teteSansNom — la même sans l'espace,
- * quand le nom tombe —, titulaire et suite, nom, avantTitre, titre — le
- * libellé seul —, apresTitre ; null pour une partie absente. Leur
- * concaténation, dans cet ordre et sans les formes « SansNom », est la
- * ligne entière.
+ * quand le nom tombe —, titulaire et suite, nom, avantOrganisation — le
+ * séparateur fin —, organisation, avantTitre, titre — le libellé seul —,
+ * apresTitre ; null pour une partie absente. Leur concaténation, dans cet
+ * ordre et sans les formes « SansNom », est la ligne entière. L'organisation
+ * et son séparateur ne paraissent qu'avec un nom.
  *
  * Quand la ligne a une titulaire, l'état s'écrit autour de son nom : tete
  * porte le numéro et le début de l'état, titulaire le nom de la personne
@@ -226,10 +240,11 @@ export function ligneListe(chaise, nomDe) {
  * @param {ReturnType<typeof ligneListe>} ligne
  * @param {(cle: string, details?: Object) => string} t
  */
-export function textesLigne({ numero, etat, titulaire = null, nom, titre }, t) {
+export function textesLigne({ numero, etat, titulaire = null, nom, organisation = null, titre }, t) {
   const tete = (avecNom) => t('plan.ligne.tete', { numero, etat, avecNom });
   const espace = nom === null ? '' : ' ';
   const reservee = titulaire === null ? null : t(etat.cle, etat.details);
+  const avecOrganisation = nom !== null && organisation !== null;
   return {
     tete: titulaire === null ? tete(nom !== null) : t('plan.ligne.teteReserveeA', { numero }),
     teteSansNom: titulaire === null ? tete(false) : t('plan.ligne.teteReserveeA', { numero }),
@@ -237,6 +252,8 @@ export function textesLigne({ numero, etat, titulaire = null, nom, titre }, t) {
     suite: reservee === null ? null : `${reservee}${espace}`,
     suiteSansNom: reservee,
     nom,
+    avantOrganisation: avecOrganisation ? t('plan.ligne.avantOrganisation') : null,
+    organisation: avecOrganisation ? organisation : null,
     avantTitre: titre === null ? null : t(titre.pourvu ? 'plan.ligne.avantTitrePourvu' : 'plan.ligne.avantTitreNonPourvu'),
     titre: titre === null ? null : titre.libelle,
     apresTitre: titre === null || titre.pourvu ? null : t('plan.ligne.apresTitreNonPourvu'),
@@ -254,29 +271,34 @@ export function textesLigne({ numero, etat, titulaire = null, nom, titre }, t) {
  */
 export function texteLigne(ligne, t) {
   const textes = textesLigne(ligne, t);
-  return ['tete', 'titulaire', 'suite', 'nom', 'avantTitre', 'titre', 'apresTitre']
-    .map((partie) => textes[partie] ?? '')
-    .join('');
+  return PARTIES.map((partie) => textes[partie] ?? '').join('');
 }
 
 /**
- * La ligne qui tient dans largeur (§ 7.4) : le nom s'abrège, suivi de la
- * marque, à la largeur que lui laissent les autres parties ; quand la
- * marque n'y tient plus, le nom tombe — la tête, ou la suite, perd son
- * espace — et le titre s'abrège à son tour ; quand il ne tient plus, il
- * tombe avec ce qui l'entoure, puis le nom de la titulaire s'abrège dans sa
- * partie ; enfin une tête encore trop large s'abrège seule. Le numéro, en
- * tête, part le dernier.
+ * La ligne qui tient dans largeur (§ 7.4) : l'organisation s'abrège la
+ * première, suivie de la marque, à la largeur que lui laissent les autres
+ * parties entières ; quand il n'en reste que la marque, elle tombe avec son
+ * séparateur. Puis le nom s'abrège, suivi de la marque ; quand la marque
+ * n'y tient plus, le nom tombe — la tête, ou la suite, perd son espace — et
+ * le titre s'abrège à son tour ; quand il ne tient plus, il tombe avec ce
+ * qui l'entoure, puis le nom de la titulaire s'abrège dans sa partie ;
+ * enfin une tête encore trop large s'abrège seule. Le numéro, en tête, part
+ * le dernier.
  *
- * Les parties de même style se mesurent ensemble, comme le moteur de rendu
- * les compose : tête, titulaire, suite, nom et avantTitre droits d'un
- * tenant, le titre en italique, apresTitre droit ; un changement de style
- * coupe la composition.
+ * Les parties droites qui se suivent — tête, titulaire, suite, nom,
+ * avantOrganisation, organisation et avantTitre ; l'organisation change
+ * d'encre, non de police — se mesurent d'un tenant, comme le moteur de rendu
+ * les compose, et une à une, comme il pose chacune dans son tspan, dont il
+ * arrondit la chasse à son unité de mise en page : la plus grande des deux
+ * largeurs compte, et la ligne rendue tient dans largeur. Le titre se
+ * mesure en italique, apresTitre droit, chacun seul ; un changement de
+ * style coupe la composition.
  *
  * @param {ReturnType<typeof textesLigne>} textes
  * @param {{mesurer: (s: string) => number, mesurerItalique: (s: string) => number,
  *          largeur: number, marque: string}} mesures
  * @returns {{tete: string, titulaire: string|null, suite: string|null, nom: string|null,
+ *            avantOrganisation: string|null, organisation: string|null,
  *            avantTitre: string|null, titre: string|null, apresTitre: string|null}}
  */
 export function ajusterLigne(textes, { mesurer, mesurerItalique, largeur, marque }) {
@@ -284,40 +306,60 @@ export function ajusterLigne(textes, { mesurer, mesurerItalique, largeur, marque
   const titulaire = textes.titulaire ?? null;
   const suite = textes.suite ?? null;
   const suiteSansNom = textes.suiteSansNom ?? null;
-  // Le début droit de la ligne, jusqu'au nom : tête, titulaire et suite.
-  const debutAvecNom = `${tete}${titulaire ?? ''}${suite ?? ''}`;
-  const debutSansNom = `${teteSansNom}${titulaire ?? ''}${suiteSansNom ?? ''}`;
+  const avantOrganisation = textes.avantOrganisation ?? null;
+  const organisation = textes.organisation ?? null;
+  // La largeur d'une suite de parties droites, les absentes omises : celle
+  // de la suite d'un tenant, ou la somme des parties mesurées une à une
+  // quand elle la dépasse.
+  const droites = (...parties) => {
+    const presentes = parties.filter((partie) => partie !== null && partie !== '');
+    const tenant = mesurer(presentes.join(''));
+    if (presentes.length < 2) return tenant;
+    return Math.max(tenant, presentes.reduce((somme, partie) => somme + mesurer(partie), 0));
+  };
   // Largeur de ce qui suit le titre, puis du titre en italique.
   const apres = apresTitre === null ? 0 : mesurer(apresTitre);
   const italique = (texte) => (texte === null ? 0 : mesurerItalique(texte));
-  const vide = { nom: null, avantTitre: null, titre: null, apresTitre: null };
+  const sansOrganisation = { avantOrganisation: null, organisation: null };
+  const vide = { nom: null, ...sansOrganisation, avantTitre: null, titre: null, apresTitre: null };
+
+  if (nom !== null && organisation !== null) {
+    const reste = italique(titre) + apres;
+    const ajustee = tronquer(
+      organisation,
+      largeur,
+      (candidat) => droites(tete, titulaire, suite, nom, avantOrganisation, candidat, avantTitre) + reste,
+      marque,
+    );
+    if (ajustee !== '' && ajustee !== marque) {
+      return { tete, titulaire, suite, nom, avantOrganisation, organisation: ajustee, avantTitre, titre, apresTitre };
+    }
+  }
 
   if (nom !== null) {
     const reste = italique(titre) + apres;
-    const nomAjuste = tronquer(nom, largeur, (candidat) => mesurer(`${debutAvecNom}${candidat}${avantTitre ?? ''}`) + reste, marque);
-    if (nomAjuste !== '') return { tete, titulaire, suite, nom: nomAjuste, avantTitre, titre, apresTitre };
+    const nomAjuste = tronquer(nom, largeur, (candidat) => droites(tete, titulaire, suite, candidat, avantTitre) + reste, marque);
+    if (nomAjuste !== '') return { tete, titulaire, suite, nom: nomAjuste, ...sansOrganisation, avantTitre, titre, apresTitre };
   }
 
   if (titre !== null) {
-    const debut = mesurer(`${debutSansNom}${avantTitre}`);
+    const debut = droites(teteSansNom, titulaire, suiteSansNom, avantTitre);
     const titreAjuste = tronquer(titre, largeur, (candidat) => debut + italique(candidat) + apres, marque);
     if (titreAjuste !== '') return { tete: teteSansNom, titulaire, suite: suiteSansNom, ...vide, avantTitre, titre: titreAjuste, apresTitre };
   }
 
   if (titulaire !== null) {
-    const titulaireAjuste = tronquer(titulaire, largeur, (candidat) => mesurer(`${teteSansNom}${candidat}${suiteSansNom}`), marque);
+    const titulaireAjuste = tronquer(titulaire, largeur, (candidat) => droites(teteSansNom, candidat, suiteSansNom), marque);
     if (titulaireAjuste !== '') return { tete: teteSansNom, titulaire: titulaireAjuste, suite: suiteSansNom, ...vide };
   }
 
   return { tete: tronquer(teteSansNom, largeur, mesurer, marque), titulaire: null, suite: null, ...vide };
 }
 
-// L'ordre des parties d'une ligne, celui de la lecture.
-const PARTIES = ['tete', 'titulaire', 'suite', 'nom', 'avantTitre', 'titre', 'apresTitre'];
-
 /**
  * Les parties présentes d'une ligne ajustée, dans l'ordre de la lecture :
- * chacune son tspan, nommé par data-partie ; le titre seul en italique.
+ * chacune son tspan, nommé par data-partie ; le titre seul en italique,
+ * l'organisation et son séparateur dans l'encre secondaire.
  * @param {ReturnType<typeof ajusterLigne>} ligne
  * @returns {Array<{partie: string, texte: string}>}
  */
@@ -410,8 +452,13 @@ function porteurDe(place, id, regime) {
 // de sièges que la poignée montre, sinon sa capacité. Imprimée, la table
 // est en régime sièges, quel que soit k. Son libellé se dessine à
 // l'impression et dès K_LISTES, comme les listes de noms, sans égard à leur
-// affichage ; le nom accessible le porte à tout zoom.
-function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, actif = null, impression = false }, places = etatTable.capacite) {
+// affichage ; le nom accessible le porte à tout zoom. organisationDe, null
+// ou une fonction, est celle que reçoit ligneListe.
+function tableDessin(
+  etatTable,
+  { k, miseEnEvidence, nomDe, organisationDe = null, selection = null, actif = null, impression = false },
+  places = etatTable.capacite,
+) {
   const { id, numero, gelee, surchargee, conflits } = etatTable;
   const libelle = etatTable.libelle ?? null;
   const geometrie = geometrieTable(etatTable, places);
@@ -457,7 +504,7 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
     },
     chaises,
     enTete: gelee ? { cle: 'plan.liste.gelee', details: {} } : null,
-    lignes: etatChaises.map((chaise) => ligneListe(chaise, nomDe)),
+    lignes: etatChaises.map((chaise) => ligneListe(chaise, nomDe, organisationDe)),
   };
 }
 
@@ -479,7 +526,9 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
  * les pastilles gardent leur nombre. Les listes se rendent quand elles
  * sont demandées et que k atteint K_LISTES (§ 17, point 6). La largeur du
  * bloc de noms n'est pas dans le modèle : c'est LARGEUR_BLOC_NOMS_CM du
- * registre, que le dessin lit.
+ * registre, que le dessin lit. Avec l'option organisations, chaque ligne
+ * porte l'organisation de son occupant, que lit organisationDe ; sans elle,
+ * aucune.
  *
  * La place sélectionnée (option selection) et l'élément actif du clavier
  * (option actif), {table, siege|null} ou null, marquent leur chaise —
@@ -501,24 +550,42 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
  *
  * @param {Object} etatPlaces   EtatPlaces (A5)
  * @param {{k?: number, listes: boolean, miseEnEvidence?: number|null,
- *          nomDe: (id: number) => string, diagnostic?: Object|null,
+ *          nomDe: (id: number) => string, organisations?: boolean,
+ *          organisationDe?: null|((id: number) => string|null), diagnostic?: Object|null,
  *          poignee?: {table: number, places: number}|null,
  *          selection?: {table: number, siege?: number|null}|null,
  *          actif?: {table: number, siege: number|null}|null,
  *          impression?: boolean}} options
  *        diagnostic : celui que rend diagnostiquer, compléments de M1 compris ;
- *        k : exigé hors de l'impression ; miseEnEvidence : null par défaut
+ *        k : exigé hors de l'impression ; miseEnEvidence : null par défaut ;
+ *        organisations : faux par défaut ; organisationDe : exigée avec elles
  * @returns {Object}   ModeleDessin
+ * @throws {TypeError} organisations demandées sans fonction organisationDe
  */
 export function modeleDessin(
   etatPlaces,
-  { k, listes, miseEnEvidence = null, nomDe, diagnostic = null, poignee = null, selection = null, actif = null, impression = false },
+  {
+    k,
+    listes,
+    miseEnEvidence = null,
+    nomDe,
+    organisations = false,
+    organisationDe = null,
+    diagnostic = null,
+    poignee = null,
+    selection = null,
+    actif = null,
+    impression = false,
+  },
 ) {
+  if (organisations && typeof organisationDe !== 'function') {
+    throw new TypeError('modeleDessin : organisations demandées sans fonction organisationDe');
+  }
   const gestes = impression ? { miseEnEvidence: null, selection: null, actif: null } : { miseEnEvidence, selection, actif };
   const tables = etatPlaces.tables.map((etatTable) =>
     tableDessin(
       etatTable,
-      { k, nomDe, impression, ...gestes },
+      { k, nomDe, organisationDe: organisations ? organisationDe : null, impression, ...gestes },
       !impression && poignee !== null && poignee.table === etatTable.id ? poignee.places : etatTable.capacite,
     ),
   );

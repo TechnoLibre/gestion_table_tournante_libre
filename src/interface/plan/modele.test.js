@@ -368,31 +368,31 @@ const animateur = (pourvu) => ({ libelle: 'animateur', pourvu });
 const SIX_FORMES = [
   [
     chaise(1, { occupant: 1, reservation: { participant: 1, portee: 'tous', tour: null }, titre: animateur(true) }),
-    { numero: 1, etat: { cle: 'plan.ligne.reserveeTous', details: {} }, titulaire: null, nom: 'Iris Ombrelle', titre: animateur(true) },
+    { numero: 1, etat: { cle: 'plan.ligne.reserveeTous', details: {} }, titulaire: null, nom: 'Iris Ombrelle', organisation: null, titre: animateur(true) },
     '1. (réservée, tous les tours) Iris Ombrelle \u{2014} animateur',
   ],
   [
     chaise(2, { occupant: 2, reservation: { participant: 2, portee: 'tour', tour: 2 } }),
-    { numero: 2, etat: { cle: 'plan.ligne.reserveeTour', details: { tour: 2 } }, titulaire: null, nom: 'Théo Pervenche', titre: null },
+    { numero: 2, etat: { cle: 'plan.ligne.reserveeTour', details: { tour: 2 } }, titulaire: null, nom: 'Théo Pervenche', organisation: null, titre: null },
     '2. (réservée, tour 2) Théo Pervenche',
   ],
-  [chaise(3, { occupant: 3 }), { numero: 3, etat: null, titulaire: null, nom: 'Ondine Lacasse', titre: null }, '3. Ondine Lacasse'],
+  [chaise(3, { occupant: 3 }), { numero: 3, etat: null, titulaire: null, nom: 'Ondine Lacasse', organisation: null, titre: null }, '3. Ondine Lacasse'],
   [
     chaise(4, { occupant: 4, titre: animateur(false) }),
-    { numero: 4, etat: null, titulaire: null, nom: 'Grisaille', titre: animateur(false) },
+    { numero: 4, etat: null, titulaire: null, nom: 'Grisaille', organisation: null, titre: animateur(false) },
     '4. Grisaille \u{2014} titre animateur non pourvu',
   ],
-  [chaise(5), { numero: 5, etat: { cle: 'plan.ligne.libre', details: {} }, titulaire: null, nom: null, titre: null }, '5. (libre)'],
+  [chaise(5), { numero: 5, etat: { cle: 'plan.ligne.libre', details: {} }, titulaire: null, nom: null, organisation: null, titre: null }, '5. (libre)'],
   [
     chaise(6, { titre: animateur(false) }),
-    { numero: 6, etat: { cle: 'plan.ligne.libre', details: {} }, titulaire: null, nom: null, titre: animateur(false) },
+    { numero: 6, etat: { cle: 'plan.ligne.libre', details: {} }, titulaire: null, nom: null, organisation: null, titre: animateur(false) },
     '6. (libre) \u{2014} titre animateur non pourvu',
   ],
 ];
 
 // Le texte entier d'une ligne : ses parties dans l'ordre, les absentes omises.
-const joindre = ({ tete, titulaire, suite, nom, avantTitre, titre, apresTitre }) =>
-  [tete, titulaire, suite, nom, avantTitre, titre, apresTitre].filter((partie) => partie !== null).join('');
+const joindre = ({ tete, titulaire, suite, nom, avantOrganisation = null, organisation = null, avantTitre, titre, apresTitre }) =>
+  [tete, titulaire, suite, nom, avantOrganisation, organisation, avantTitre, titre, apresTitre].filter((partie) => partie !== null).join('');
 
 describe('ligneListe et textesLigne : les six formes (§ 7.6)', () => {
   test('chaque forme, exactement, titre valant {libelle, pourvu}', () => {
@@ -418,7 +418,10 @@ const droit = (chaine) => chaine.length;
 const italique = (chaine) => 1.5 * chaine.length;
 const MARQUE = '\u{2026}';
 const largeurDe = (ligne) =>
-  droit(`${ligne.tete}${ligne.titulaire ?? ''}${ligne.suite ?? ''}${ligne.nom ?? ''}${ligne.avantTitre ?? ''}`) +
+  droit(
+    `${ligne.tete}${ligne.titulaire ?? ''}${ligne.suite ?? ''}${ligne.nom ?? ''}${ligne.avantOrganisation ?? ''}` +
+      `${ligne.organisation ?? ''}${ligne.avantTitre ?? ''}`,
+  ) +
   italique(ligne.titre ?? '') +
   droit(ligne.apresTitre ?? '');
 
@@ -447,6 +450,7 @@ describe('ligneListe : la réservation d\u{2019}une autre personne que l\u{2019}
       etat: { cle: 'plan.ligne.reserveeA', details: { portee: 'tous', tour: null } },
       titulaire,
       nom: occupant,
+      organisation: null,
       titre: null,
     });
     assert.deepEqual(modeleDessin(etat, options(charge)).tables[0].lignes[1], ligne);
@@ -470,6 +474,7 @@ describe('ligneListe : la réservation d\u{2019}une autre personne que l\u{2019}
       etat: { cle: 'plan.ligne.reserveeA', details: { portee: 'tour', tour: 3 } },
       titulaire: 'Iris Ombrelle',
       nom: null,
+      organisation: null,
       titre: null,
     });
     assert.equal(joindre(textesLigne(ligne, t)), '2. (réservée à Iris Ombrelle, tour 3)');
@@ -507,6 +512,8 @@ describe('ajusterLigne : la ligne entière tient (§ 7.4)', () => {
       titulaire: null,
       suite: null,
       nom: entree.nom,
+      avantOrganisation: null,
+      organisation: null,
       avantTitre: entree.avantTitre,
       titre: entree.titre,
       apresTitre: null,
@@ -554,6 +561,119 @@ describe('ajusterLigne : la ligne entière tient (§ 7.4)', () => {
         assert.ok(largeurDe(ligne) <= largeur, `${joindre(entree)} à ${largeur} : ${largeurDe(ligne)}`);
       }
     }
+  });
+});
+
+// --- L'organisation à droite du nom ----------------------------------------------------
+
+const ORGANISATIONS_LIGNES = new Map([
+  [1, 'Club des Merles'],
+  [2, ''],
+  [3, 'Cercle des Hérons'],
+]);
+const organisationDeLigne = (id) => ORGANISATIONS_LIGNES.get(id) ?? null;
+
+describe('l\u{2019}organisation de l\u{2019}occupant, à droite de son nom (§ 7.4, § 7.6)', () => {
+  test('ligneListe la lit pour l\u{2019}occupant seul ; null sans organisationDe, sans occupant, ou vide', () => {
+    const assise = chaise(1, { occupant: 1, titre: animateur(true) });
+    assert.equal(ligneListe(assise, nomDeLigne, organisationDeLigne).organisation, 'Club des Merles');
+    assert.equal(ligneListe(assise, nomDeLigne).organisation, null);
+    assert.equal(ligneListe(chaise(2, { occupant: 2 }), nomDeLigne, organisationDeLigne).organisation, null);
+    assert.equal(ligneListe(chaise(4, { occupant: 4 }), nomDeLigne, organisationDeLigne).organisation, null);
+    assert.equal(ligneListe(chaise(5), nomDeLigne, organisationDeLigne).organisation, null);
+    // Une titulaire que la chaise n'assied pas n'est nommée que par son nom.
+    const tenue = ligneListe(chaise(6, { reservation: { participant: 1, portee: 'tous', tour: null } }), nomDeLigne, organisationDeLigne);
+    assert.equal(tenue.titulaire, 'Iris Ombrelle');
+    assert.equal(tenue.organisation, null);
+    const autre = ligneListe(chaise(7, { occupant: 3, reservation: { participant: 1, portee: 'tous', tour: null } }), nomDeLigne, organisationDeLigne);
+    assert.equal(autre.organisation, 'Cercle des Hérons');
+  });
+
+  test('textesLigne la pose après le nom, derrière un séparateur fin, avant le titre ; texteLigne et partiesLigne suivent cet ordre', () => {
+    const ligne = ligneListe(chaise(3, { occupant: 3, titre: animateur(true) }), nomDeLigne, organisationDeLigne);
+    const textes = textesLigne(ligne, t);
+    assert.equal(textes.avantOrganisation, ' \u{00B7} ');
+    assert.equal(textes.organisation, 'Cercle des Hérons');
+    assert.equal(joindre(textes), '3. Ondine Lacasse \u{00B7} Cercle des Hérons \u{2014} animateur');
+    assert.equal(texteLigne(ligne, t), joindre(textes));
+    const reglage = { mesurer: droit, mesurerItalique: italique, largeur: 1000, marque: MARQUE };
+    assert.deepEqual(
+      partiesLigne(ajusterLigne(textes, reglage)).map(({ partie }) => partie),
+      ['tete', 'nom', 'avantOrganisation', 'organisation', 'avantTitre', 'titre'],
+    );
+    // Sans nom, ni séparateur ni organisation, même reçue.
+    const libre = textesLigne({ numero: 5, etat: { cle: 'plan.ligne.libre', details: {} }, nom: null, organisation: 'Club des Merles', titre: null }, t);
+    assert.deepEqual([libre.avantOrganisation, libre.organisation], [null, null]);
+  });
+
+  test('ajusterLigne abrège l\u{2019}organisation la première, le nom et le titre entiers ; réduite à la marque, elle tombe et le nom s\u{2019}abrège comme sans elle', () => {
+    const avec = textesLigne({ numero: 3, etat: null, nom: 'Ondine Lacasse', organisation: 'O'.repeat(60), titre: animateur(true) }, t);
+    const sans = textesLigne({ numero: 3, etat: null, nom: 'Ondine Lacasse', organisation: null, titre: animateur(true) }, t);
+    const reglage = (largeur) => ({ mesurer: droit, mesurerItalique: italique, largeur, marque: MARQUE });
+    const entiere = largeurDe(sans);
+    const abregee = ajusterLigne(avec, reglage(entiere + 10));
+    assert.equal(abregee.nom, 'Ondine Lacasse');
+    assert.equal(abregee.titre, 'animateur');
+    assert.ok(abregee.organisation.endsWith(MARQUE), abregee.organisation);
+    assert.ok(abregee.organisation.length > MARQUE.length);
+    assert.ok(largeurDe(abregee) <= entiere + 10);
+    assert.ok(largeurDe(abregee) > entiere + 9, `l\u{2019}organisation prend toute la place restante : ${largeurDe(abregee)}`);
+    // Au plus la marque et un caractère de moins : l'organisation tombe.
+    for (const largeur of [entiere + 4, entiere, entiere - 5, 12]) {
+      assert.deepEqual(ajusterLigne(avec, reglage(largeur)), ajusterLigne(sans, reglage(largeur)), `à ${largeur}`);
+    }
+  });
+
+  test('chaque ligne, organisation comprise, tient dans sa largeur, quelle qu\u{2019}elle soit', () => {
+    const lignes = SIX_FORMES.map(([entree]) => textesLigne(ligneListe(entree, nomDeLigne, () => 'Fédération des jardins partagés'), t));
+    assert.ok(lignes.some(({ organisation }) => organisation !== null));
+    for (const largeur of [5, 12, 20, 40, 60, 80, 200]) {
+      for (const entree of lignes) {
+        const ligne = ajusterLigne(entree, { mesurer: droit, mesurerItalique: italique, largeur, marque: MARQUE });
+        assert.ok(largeurDe(ligne) <= largeur, `${joindre(entree)} à ${largeur} : ${largeurDe(ligne)}`);
+        assert.equal(ligne.organisation === null, ligne.avantOrganisation === null);
+      }
+    }
+  });
+
+  test('chaque partie posée dans son tspan, sa chasse arrondie : la somme des parties rendues tient dans la largeur, quand la suite d\u{2019}un tenant y tenait déjà', () => {
+    // Une chasse de 1,1 par unité de code, que chaque mesure arrondit par
+    // excès au quart : « 3. » et « Ondine Lacasse » posés à part rendent
+    // plus large que leur suite d'un tenant.
+    const arrondi = (chaine) => Math.ceil(chaine.length * 1.1 * 4) / 4;
+    const rendue = (ligne) =>
+      partiesLigne(ligne).reduce((somme, { partie, texte }) => somme + (partie === 'titre' ? italique(texte) : arrondi(texte)), 0);
+    const lignes = [
+      textesLigne(ligneListe(chaise(3, { occupant: 3, titre: animateur(true) }), nomDeLigne, organisationDeLigne), t),
+      textesLigne(ligneListe(chaise(1, { occupant: 1, reservation: { participant: 1, portee: 'tous', tour: null } }), nomDeLigne, organisationDeLigne), t),
+      textesLigne(ligneListe(chaise(2, { occupant: 2, reservation: { participant: 1, portee: 'tous', tour: null } }), nomDeLigne), t),
+    ];
+    let serrees = 0;
+    for (const entree of lignes) {
+      for (let largeur = 4; largeur <= 90; largeur += 0.125) {
+        const ligne = ajusterLigne(entree, { mesurer: arrondi, mesurerItalique: italique, largeur, marque: MARQUE });
+        assert.ok(rendue(ligne) <= largeur, `${joindre(ligne)} à ${largeur} : ${rendue(ligne)}`);
+        if (rendue(ligne) > largeur - 0.25) serrees += 1;
+      }
+    }
+    assert.ok(serrees > 0, 'des lignes au plus près de leur largeur');
+  });
+
+  test('modeleDessin : l\u{2019}organisation de chaque occupant avec l\u{2019}option, aucune sans elle ; TypeError sans organisationDe', () => {
+    const charge = avecPropositions(petite());
+    const etat = etatPlaces(charge, { tour: 1, proposition: 1 });
+    const organisationDe = organisationDeCharge(charge);
+    const occupants = etat.tables.flatMap(({ chaises }) => chaises.map(({ occupant }) => occupant));
+    assert.ok(occupants.some((id) => id !== null && organisationDe(id) !== null));
+    const organisationsDes = (modele) => modele.tables.flatMap(({ lignes }) => lignes.map(({ organisation }) => organisation));
+    const attendues = occupants.map((id) => (id === null ? null : organisationDe(id)));
+    for (const impression of [false, true]) {
+      const base = options(charge, { impression });
+      assert.ok(organisationsDes(modeleDessin(etat, base)).every((organisation) => organisation === null));
+      assert.deepEqual(organisationsDes(modeleDessin(etat, { ...base, organisations: false, organisationDe })), occupants.map(() => null));
+      assert.deepEqual(organisationsDes(modeleDessin(etat, { ...base, organisations: true, organisationDe })), attendues);
+    }
+    assert.throws(() => modeleDessin(etat, options(charge, { organisations: true })), TypeError);
   });
 });
 

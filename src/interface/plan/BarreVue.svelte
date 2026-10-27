@@ -2,15 +2,20 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // La barre de vue du plan (§ 7.2, § 7.5, § 7.7, § 8.4) : le sélecteur de
-  // tour, « Zoom + », « Zoom − », « Ajuster », l'affichage des listes, la
-  // légende des conflits et le plein écran. Des contrôles HTML, hors du
-  // <svg data-plan>, tous vivants en lecture comme sur un plan bloqué : aucun
-  // n'écrit l'événement. Le tour, les listes et le plein écran passent par
+  // La barre de vue du plan (§ 7.2, § 7.4, § 7.5, § 7.7, § 8.4) : le
+  // sélecteur de tour, « Zoom + », « Zoom − », « Ajuster », l'affichage des
+  // listes et des organisations qu'elles portent, la légende des conflits et
+  // le plein écran. Des contrôles HTML, hors du <svg data-plan>, tous vivants
+  // en lecture comme sur un plan bloqué : aucun n'écrit l'événement. Le
+  // tour, les listes, les organisations et le plein écran passent par
   // l'état de navigation ('ui') ; les zooms et l'ajustement par Plan.svelte,
   // qui tient la vue : zoomer(sens), sens valant 1 ou -1, et ajuster(). Un
   // bouton à bascule dit son état par aria-pressed, le bouton de la légende,
   // qui dévoile, par aria-expanded ; la forme du bouton redit l'un et l'autre.
+  // Listes masquées, « Organisation » n'a rien à montrer : la bascule reste
+  // à sa place et garde son état, inactive — aria-disabled, un filet tireté,
+  // l'encre secondaire —, et son titre, que les technologies d'assistance
+  // lisent comme sa description, dit de montrer les listes.
   //
   // evidence : la personne mise en évidence, {id, nom, absente, reserve} —
   // nom null pour une personne que la charge n'a plus, absente vrai quand
@@ -32,11 +37,11 @@
   //
   // La barre se lit en groupes, de gauche à droite : le placement montré, le
   // tour affiché, le zoom — ses deux boutons et « Ajuster » —, puis
-  // l'affichage — listes, légende, plein écran —, chacun un role="group"
-  // nommé, aux boutons accolés dans un même filet ; la mise en évidence
-  // ferme la barre. Une bascule active, ou la légende dévoilée, se peint de
-  // la teinte de l'action et garde sa forme distincte : trait intérieur
-  // épais, texte souligné.
+  // l'affichage — listes, organisations, légende, plein écran —, chacun un
+  // role="group" nommé, aux boutons accolés dans un même filet ; la mise en
+  // évidence ferme la barre. Une bascule active, ou la légende dévoilée, se
+  // peint de la teinte de l'action et garde sa forme distincte : trait
+  // intérieur épais, texte souligné.
   //
   // source : ce que la barre dit du placement montré, que rend sourceMontree
   // (vue_plan.js) — {libelle, revenir} — : la barre le nomme, [data-source],
@@ -79,6 +84,16 @@
   <div class="groupe" role="group" aria-label={t('plan.vue.groupeAffichage')}>
     <button type="button" data-commande="listes" aria-pressed={$ui.listes} onclick={() => ui.basculerListes()}
       >{t('plan.vue.listes')}</button
+    >
+    <button
+      type="button"
+      data-commande="organisations"
+      aria-pressed={$ui.organisations}
+      aria-disabled={$ui.listes ? undefined : 'true'}
+      title={$ui.listes ? undefined : t('plan.vue.organisationsSansListes')}
+      onclick={() => {
+        if ($ui.listes) ui.basculerOrganisations();
+      }}>{t('plan.vue.organisations')}</button
     >
     <button
       type="button"
@@ -192,7 +207,9 @@
     border-radius: 0 calc(var(--rayon-2) - 1px) calc(var(--rayon-2) - 1px) 0;
   }
 
-  button:hover {
+  /* Le survol ne teinte qu'une commande active ; :where garde la
+     spécificité de button:hover, qu'une bascule enfoncée recouvre. */
+  button:hover:where(:not([aria-disabled='true'])) {
     background-color: var(--couleur-carte-fond-sourd);
   }
 
@@ -204,6 +221,15 @@
     background-color: var(--couleur-action-teinte);
     box-shadow: inset 0 0 0 2px var(--couleur-page-texte);
     text-decoration: underline;
+  }
+
+  /* Une bascule inactive : l'encre secondaire, un filet tireté à
+     l'intérieur ; elle garde la marque de son état. */
+  button[aria-disabled='true'] {
+    color: var(--couleur-page-texte-secondaire);
+    cursor: default;
+    outline: 1px dashed currentColor;
+    outline-offset: -4px;
   }
 
   button:focus-visible,

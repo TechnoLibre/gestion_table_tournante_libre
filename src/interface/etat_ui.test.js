@@ -21,6 +21,7 @@ const DEPART = {
   proposition: null,
   importEnAttente: null,
   listes: true,
+  organisations: false,
   pleinEcran: false,
   selection: null,
   fiche: null,
@@ -45,7 +46,7 @@ function suivi() {
 }
 
 describe('état de navigation : départ et magasin', () => {
-  test('le départ : la section d’ouverture, le tour 1, rien de choisi, les listes montrées', () => {
+  test('le départ : la section d’ouverture, le tour 1, rien de choisi, les listes montrées, sans organisations', () => {
     assert.deepEqual(creerEtatUi().etat(), DEPART);
   });
 
@@ -273,6 +274,20 @@ describe('état de navigation : chaque transition', () => {
     assert.deepEqual(ui.etat(), DEPART);
   });
 
+  test('basculerOrganisations alterne, listes montrées ou masquées, sans toucher aux listes ; un événement qui s’ouvre en repart sans organisations', () => {
+    const ui = creerEtatUi();
+    ui.basculerOrganisations();
+    assert.deepEqual(ui.etat(), { ...DEPART, organisations: true });
+    ui.basculerListes();
+    assert.deepEqual(ui.etat(), { ...DEPART, listes: false, organisations: true });
+    ui.basculerListes();
+    ui.reinitialiser();
+    assert.deepEqual(ui.etat(), DEPART);
+    ui.basculerOrganisations();
+    ui.basculerOrganisations();
+    assert.deepEqual(ui.etat(), DEPART);
+  });
+
   test('le plein écran ne vaut que pour le plan : quitter le plan le retire, par allerA, ouvrirFiche ou ouvrirImport ; hors du plan, il ne se pose pas', () => {
     const quitters = [
       ...SECTIONS.filter((section) => section !== 'plan').map((section) => [`allerA ${section}`, (ui) => ui.allerA(section)]),
@@ -472,20 +487,25 @@ describe('état de navigation : le choix en attente (§ 5.8, § 7.1)', () => {
 });
 
 describe('état de navigation : l’aperçu avant impression (§ 11.7)', () => {
-  test('ouvrirApercu ouvre la vue demandée au tour demandé, les listes du plan, la découpe proposée, la soirée en colonnes, et retient la section d’origine ; l’état est figé', () => {
+  test('ouvrirApercu ouvre la vue demandée au tour demandé, les listes du plan et leurs organisations, la découpe proposée sans une colonne par page, la soirée en colonnes, et retient la section d’origine ; l’état est figé', () => {
     const ui = creerEtatUi();
     ui.allerA('propositions');
     ui.basculerListes();
     ui.ouvrirApercu({ vue: 'plan', tour: 2 });
+    const reglages = { listes: false, organisations: false, decoupe: 'auto', parColonne: false, parTour: false, retour: 'propositions' };
     assert.deepEqual(ui.etat(), {
       ...DEPART,
       section: 'propositions',
       listes: false,
-      apercu: { vue: 'plan', tour: 2, listes: false, decoupe: 'auto', parTour: false, retour: 'propositions' },
+      apercu: { vue: 'plan', tour: 2, ...reglages },
     });
     assert.ok(Object.isFrozen(ui.etat().apercu));
     ui.ouvrirApercu({ vue: 'accueil', tour: 'tous' });
-    assert.deepEqual(ui.etat().apercu, { vue: 'accueil', tour: 'tous', listes: false, decoupe: 'auto', parTour: false, retour: 'propositions' });
+    assert.deepEqual(ui.etat().apercu, { vue: 'accueil', tour: 'tous', ...reglages });
+    ui.basculerListes();
+    ui.basculerOrganisations();
+    ui.ouvrirApercu({ vue: 'plan', tour: 1 });
+    assert.deepEqual(ui.etat().apercu, { vue: 'plan', tour: 1, ...reglages, listes: true, organisations: true });
   });
 
   test('ouvrirApercu refuse une vue inconnue, un tour qui n’est ni un entier positif ni « tous », et « tous » pour le plan, sans rien changer', () => {
@@ -507,21 +527,34 @@ describe('état de navigation : l’aperçu avant impression (§ 11.7)', () => {
     assert.equal(ui.etat(), avant);
   });
 
-  test('reglerApercu change la vue, le tour, les listes, la découpe et la feuille par tour, chacun dans son domaine ; hors de lui, ou sans aperçu ouvert, RangeError sans rien changer', () => {
+  test('reglerApercu change la vue, le tour, les listes, les organisations, la découpe, une colonne par page et la feuille par tour, chacun dans son domaine ; hors de lui, ou sans aperçu ouvert, RangeError sans rien changer', () => {
     const ui = creerEtatUi();
     assert.throws(() => ui.reglerApercu({ vue: 'accueil' }), RangeError);
     ui.ouvrirApercu({ vue: 'plan', tour: 1 });
     ui.reglerApercu({ tour: 3 });
     ui.reglerApercu({ listes: false, decoupe: 'unePage' });
+    ui.reglerApercu({ organisations: true, parColonne: true });
     ui.reglerApercu({ vue: 'tables', parTour: true });
-    assert.deepEqual(ui.etat().apercu, { vue: 'tables', tour: 3, listes: false, decoupe: 'unePage', parTour: true, retour: DEPART.section });
+    assert.deepEqual(ui.etat().apercu, {
+      vue: 'tables',
+      tour: 3,
+      listes: false,
+      organisations: true,
+      decoupe: 'unePage',
+      parColonne: true,
+      parTour: true,
+      retour: DEPART.section,
+    });
+    assert.equal(ui.etat().organisations, false, 'l’aperçu ne touche pas à l’écran');
     assert.ok(Object.isFrozen(ui.etat().apercu));
     const avant = ui.etat();
     for (const faute of [
       { vue: 'badges' },
       { tour: 0 },
       { listes: 'oui' },
+      { organisations: 1 },
       { decoupe: 'deux' },
+      { parColonne: 'oui' },
       { parTour: 1 },
       { retour: 'plan' },
       { inconnu: true },

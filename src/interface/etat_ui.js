@@ -5,15 +5,15 @@
 // propos » et le panneau « Paramètres », le thème de la séance, le tour
 // montré, la personne mise en évidence, la proposition demandée au plan et
 // le numéro de sa demande, le texte d'un import en attente, les listes de
-// noms, le plein écran, la place sélectionnée, la fiche ouverte, le choix
-// en attente du plan, le refus posé sur une place,
-// l'organisation collante du formulaire d'ajout, l'aperçu avant impression,
-// la page du tableau des propositions, la position du sélecteur du
-// mélange des tables de la page de qualité (§ 12.11, D54) — ce que la
-// grille compte : sièges, assis ou doublons —, le départ d'une génération
-// dérivée et ses tours figés (§ 5.7), le second placement de la vue de
-// comparaison (§ 12.10.6) et la vue de la qualité demandée. Ce qu'il tient
-// survit au démontage des sections.
+// noms et les organisations qu'elles portent, le plein écran, la place
+// sélectionnée, la fiche ouverte, le choix en attente du plan, le refus posé
+// sur une place, l'organisation collante du formulaire d'ajout, l'aperçu
+// avant impression, la page du tableau des propositions, la position du
+// sélecteur du mélange des tables de la page de qualité (§ 12.11, D54) — ce
+// que la grille compte : sièges, assis ou doublons —, le départ d'une
+// génération dérivée et ses tours figés (§ 5.7), le second placement de la
+// vue de comparaison (§ 12.10.6) et la vue de la qualité demandée. Ce qu'il
+// tient survit au démontage des sections.
 // Le départ et le second placement sont des états de navigation (§ 8.4) :
 // les choisir n'écrit rien, en lecture comme sur un plan bloqué ;
 // oublierAbsents les retire quand ils quittent la liste, et un événement
@@ -46,6 +46,8 @@ import { THEMES } from './theme.js';
  * @property {number|null} proposition    la proposition demandée au plan
  * @property {null|{texte: string, origine: string}} importEnAttente
  * @property {boolean} listes             les listes de noms sont montrées
+ * @property {boolean} organisations      les listes portent l'organisation de chaque
+ *           occupant, à droite de son nom ; faux au départ
  * @property {boolean} pleinEcran       vrai seulement sur la section du plan
  * @property {Object|null} selection      la place sélectionnée
  * @property {number|null} fiche          l'identifiant de la personne dont la fiche est ouverte
@@ -63,10 +65,12 @@ import { THEMES } from './theme.js';
  * @property {string} organisation        l'organisation collante du formulaire d'ajout
  *           des participants : celle du dernier ajout (§ 10.2), '' au départ
  * @property {null|{vue: 'plan'|'accueil'|'tables', tour: number|'tous', listes: boolean,
- *            decoupe: 'auto'|'unePage'|'decoupe', parTour: boolean, retour: string}} apercu
+ *            organisations: boolean, decoupe: 'auto'|'unePage'|'decoupe', parColonne: boolean,
+ *            parTour: boolean, retour: string}} apercu
  *           l'aperçu avant impression ouvert (§ 11.7), null fermé : la vue imprimée ; le
  *           tour du plan, 'tous' pour une vue de la soirée, jamais pour le plan ; les
- *           listes de noms du plan ; sa découpe en pages ; la feuille par table, une
+ *           listes de noms du plan, et les organisations qu'elles portent ; sa découpe
+ *           en pages, et une colonne de tables par page ; la feuille par table, une
  *           par tour ou la soirée en colonnes ; la section où l'aperçu se referme
  * @property {number} visee               le numéro de la dernière demande d'une proposition
  *           au plan : chaque montrerProposition d'une proposition l'augmente de 1, même
@@ -98,6 +102,7 @@ const DEPART = Object.freeze({
   proposition: null,
   importEnAttente: null,
   listes: true,
+  organisations: false,
   pleinEcran: false,
   selection: null,
   fiche: null,
@@ -133,7 +138,9 @@ const REGLAGES_APERCU = Object.freeze({
   vue: (v) => VUES_IMPRESSION.includes(v),
   tour: (v) => v === 'tous' || entierPositif(v),
   listes: (v) => typeof v === 'boolean',
+  organisations: (v) => typeof v === 'boolean',
   decoupe: (v) => DECOUPES.includes(v),
+  parColonne: (v) => typeof v === 'boolean',
   parTour: (v) => typeof v === 'boolean',
 });
 
@@ -203,7 +210,7 @@ function choixValide(choix) {
  *   montrerTour: Function, mettreEnEvidence: Function,
  *   montrerProposition: Function, ouvrirImport: Function,
  *   prendreImport: () => null|{texte: string, origine: string},
- *   basculerListes: Function, basculerPleinEcran: Function,
+ *   basculerListes: Function, basculerOrganisations: Function, basculerPleinEcran: Function,
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
  *   poserSurPlace: Function, garderOrganisation: Function,
  *   ouvrirApercu: Function, reglerApercu: Function, fermerApercu: Function,
@@ -392,6 +399,11 @@ export function creerEtatUi() {
     basculerListes() {
       changer({ listes: !etat.listes });
     },
+    /** Montre, ou retire, l'organisation de chaque occupant dans les
+     *  listes ; listes masquées, le réglage se garde pour leur retour. */
+    basculerOrganisations() {
+      changer({ organisations: !etat.organisations });
+    },
     basculerPleinEcran() {
       changer({ pleinEcran: !etat.pleinEcran });
     },
@@ -423,20 +435,31 @@ export function creerEtatUi() {
       changer({ organisation: texte });
     },
     /** Ouvre l'aperçu avant impression sur la vue et le tour reçus : les
-     *  listes du plan telles que l'écran les montre, la découpe proposée par
-     *  défaut, la feuille par table couvrant la soirée ; la section courante
-     *  est celle où il se refermera. RangeError hors du domaine
-     *  (reglerApercu), sans rien changer. */
+     *  listes du plan et leurs organisations telles que l'écran les montre,
+     *  la découpe proposée par défaut, sans une colonne par page, la feuille
+     *  par table couvrant la soirée ; la section courante est celle où il se
+     *  refermera. RangeError hors du domaine (reglerApercu), sans rien
+     *  changer. */
     ouvrirApercu(demande) {
       if (demande === null || typeof demande !== 'object' || !Object.hasOwn(demande, 'vue') || !Object.hasOwn(demande, 'tour')) {
         throw new RangeError(`aperçu : { vue, tour } attendu, reçu ${JSON.stringify(demande)}`);
       }
-      const depart = { vue: 'plan', tour: 1, listes: etat.listes, decoupe: 'auto', parTour: false, retour: etat.section };
+      const depart = {
+        vue: 'plan',
+        tour: 1,
+        listes: etat.listes,
+        organisations: etat.organisations,
+        decoupe: 'auto',
+        parColonne: false,
+        parTour: false,
+        retour: etat.section,
+      };
       changer({ apercu: apercuValide(depart, { vue: demande.vue, tour: demande.tour }) });
     },
-    /** Change les réglages de l'aperçu ouvert — vue, tour, listes, decoupe,
-     *  parTour — chacun dans son domaine ; RangeError hors de lui, pour un
-     *  autre nom, ou sans aperçu ouvert, sans rien changer. */
+    /** Change les réglages de l'aperçu ouvert — vue, tour, listes,
+     *  organisations, decoupe, parColonne, parTour — chacun dans son
+     *  domaine ; RangeError hors de lui, pour un autre nom, ou sans aperçu
+     *  ouvert, sans rien changer. */
     reglerApercu(changements) {
       if (etat.apercu === null) throw new RangeError('aperçu : aucun aperçu ouvert');
       changer({ apercu: apercuValide(etat.apercu, changements) });

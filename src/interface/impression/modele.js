@@ -50,12 +50,16 @@ const nombreFini = (valeur) => typeof valeur === 'number' && Number.isFinite(val
  * par table — s'impriment en portrait et couvrent la soirée ; le plan
  * s'imprime à son tour, dans l'orientation que choisit sa découpe (null
  * ici). Sans papier choisi, question est vrai : l'aperçu pose la question
- * du papier avant de rien mettre en page (§ 8.5, § 11.2).
+ * du papier avant de rien mettre en page (§ 8.5, § 11.2). Les organisations
+ * des listes et une colonne de tables par page sont des réglages du plan,
+ * rendus tels quels.
  *
- * @param {{vue: string, tour: number|'tous', listes: boolean, decoupe: string, parTour: boolean}} apercu
+ * @param {{vue: string, tour: number|'tous', listes: boolean, organisations: boolean, decoupe: string,
+ *          parColonne: boolean, parTour: boolean}} apercu
  * @param {'A4'|'Lettre'|null} papier
  * @returns {{vue: string, papier: string|null, orientation: 'portrait'|null, tour: number|'tous',
- *            listes: boolean, decoupe: string, parTour: boolean, question: boolean}}
+ *            listes: boolean, organisations: boolean, decoupe: string, parColonne: boolean,
+ *            parTour: boolean, question: boolean}}
  * @throws {TypeError} sans aperçu ouvert
  * @throws {RangeError} une vue ou un papier hors de leur domaine
  */
@@ -70,7 +74,9 @@ export function optionsApercu(apercu, papier) {
     orientation: plan ? null : 'portrait',
     tour: plan ? apercu.tour : 'tous',
     listes: apercu.listes,
+    organisations: apercu.organisations,
     decoupe: apercu.decoupe,
+    parColonne: apercu.parColonne,
     parTour: apercu.parTour,
     question: papier === null,
   };

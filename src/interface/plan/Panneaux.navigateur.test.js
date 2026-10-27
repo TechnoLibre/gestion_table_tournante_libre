@@ -669,7 +669,7 @@ describe('l’infobulle nomme l’organisation d’une paire réunie ; la légen
     expect(groupes.map((g) => g.getAttribute('aria-label'))).toEqual([t('plan.vue.groupeZoom'), t('plan.vue.groupeAffichage')]);
     expect(groupes.map((g) => [...g.querySelectorAll('[data-commande]')].map((b) => b.dataset.commande))).toEqual([
       ['zoomer', 'dezoomer', 'ajuster'],
-      ['listes', 'legende', 'pleinEcran'],
+      ['listes', 'organisations', 'legende', 'pleinEcran'],
     ]);
   });
 

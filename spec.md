@@ -2950,6 +2950,29 @@ Un nom coupé sur la feuille que tient le personnel de salle ne sert à personne
 un nom de deux cents caractères déployé sur un plan de 33 tables détruit la
 page.
 
+**L'organisation se lit à côté du nom, sur demande.** La barre de vue du plan
+offre, à droite de « Listes de noms », la bascule « Organisation », éteinte à
+l'ouverture de chaque événement. Allumée, la ligne d'une personne assise porte,
+après son nom et un point médian, son organisation, à l'encre secondaire : « 3.
+Iris Ombrelle · Club des Merles — *animateur* ». Une personne sans organisation
+garde son nom seul ; la titulaire d'une réservation que la chaise n'assied pas
+n'est nommée que par son nom. Regarder n'écrit rien (§ 8.4) : la bascule ne
+touche ni l'événement ni les réglages du poste. Listes masquées, elle n'a rien à
+montrer : elle reste à sa place et garde son état, inactive, et dit qu'il faut
+montrer les listes. Le bloc de noms garde sa largeur, et l'organisation cède la
+première : elle s'abrège, suivie de la marque, et tombe avec son point quand il
+n'en resterait que la marque ; le nom, le titre et la tête s'abrègent ensuite
+comme sans elle. Aucune ligne ne sort de son bloc, et la grille des tables,
+l'emprise du plan et l'ajustement ne changent pas.
+
+**La largeur d'une ligne est celle que le moteur de rendu pose.** Chaque partie
+d'une ligne — numéro et état, nom, organisation, titre — est son propre
+`<tspan>`, dont le moteur de rendu arrondit la chasse à son unité de mise en
+page : une ligne de quatre parties peut rendre plus large que la même ligne
+mesurée d'un tenant. La ligne s'ajuste sur la plus grande des deux largeurs, et
+une épreuve du navigateur vérifie, sur le plan imprimé, que la chasse rendue de
+chaque ligne tient dans le bloc.
+
 **Sur une feuille imprimée, replier s'étend à la page.** La feuille par table
 garde à chaque colonne de tour au moins la largeur de son plus long mot ; des
 tours qui n'y tiennent pas côte à côte se scindent en **groupes de tours
@@ -3371,7 +3394,8 @@ seuil, et l'épreuve vérifie à part que le geste écrit sa ligne de journal, l
 `.precedent` et l'état, une fois chacun, et rien d'autre.
 
 **Est une entrée exactement ce qui change le contenu du fichier.** Changer de
-tour affiché, zoomer, mettre en évidence, masquer les listes **n'en sont pas**.
+tour affiché, zoomer, mettre en évidence, masquer les listes ou y montrer les
+organisations **n'en sont pas**.
 Déplacer une table **en est une** : sa position est une donnée du plan.
 
 **Chaque entrée porte un libellé en français, figé à l'écriture** — « Déplacé
@@ -3478,13 +3502,14 @@ fichier : c'est une posture de la séance, pas une propriété du plan.
 écrit. **Ouvrir un événement ne réécrit jamais son fichier d'état.**
 
 **Ce qui reste vivant en lecture** : le sélecteur de tour, le zoom, le cadrage,
-l'ajustement, le plein écran, la mise en évidence, l'affichage des listes, la
-**page de qualité** (§ 12), la comparaison de deux placements et le choix
-du second, le choix d'un départ et des tours à figer (§ 5.7), la lecture de
-l'historique, l'impression, et la **production de la planche de badges**, qui
-n'écrit aucun fichier d'événement (§ 11.6). C'est la condition pour que la
-protection tienne : si naviguer exigeait de passer en écriture, l'opérateur y
-resterait en permanence et le mode lecture ne protégerait plus rien.
+l'ajustement, le plein écran, la mise en évidence, l'affichage des listes et
+des organisations qu'elles portent, la **page de qualité** (§ 12), la
+comparaison de deux placements et le choix du second, le choix d'un départ et
+des tours à figer (§ 5.7), la lecture de l'historique, l'impression, et la
+**production de la planche de badges**, qui n'écrit aucun fichier d'événement
+(§ 11.6). C'est la condition pour que la protection tienne : si naviguer
+exigeait de passer en écriture, l'opérateur y resterait en permanence et le
+mode lecture ne protégerait plus rien.
 
 **On en sort par un seul geste délibéré** — une commande « Modifier » à place
 fixe — et le logiciel y retourne **seul après dix minutes d'inactivité**. Ce
@@ -6377,6 +6402,27 @@ sa rangée, ses voisines. Le choix reste offert — tenir sur une page, ou déco
 — et le découpage selon le seuil est proposé par défaut. Le plan s'imprime dans
 l'orientation qui donne le moins de pages ; à pages égales, à la plus grande
 échelle ; à échelle égale aussi, en paysage.
+
+**Le plan s'imprime aussi une colonne de tables par page.** L'aperçu du plan
+offre « Une colonne par page », éteinte par défaut. Une colonne de tables réunit
+les tables que relie leur étendue horizontale, celle de l'emprise et, listes
+imprimées, du bloc de noms : deux tables dont les étendues se recouvrent sont de
+la même colonne, de proche en proche, et une colonne ne se coupe jamais entre
+deux tables qu'un bloc de noms relie. Chaque colonne se découpe seule, selon le
+choix du découpage, et ses pages ne dessinent que ses tables. Toutes les pages
+partagent une orientation, celle que l'imprimante reçoit, et une échelle, la
+plus petite de celles des colonnes prises seules : une table a la même taille
+sur chaque page, et chaque colonne tient dans ses pages. Les pages se suivent
+colonne par colonne, de gauche à droite ; le cartouche compte les colonnes de
+pages sur tout le plan, et une page voisine à gauche ou à droite, au bord d'une
+colonne, est la page de la même rangée dans la colonne voisine. L'orientation
+est celle qui donne le moins de pages en tout ; à pages égales, la plus grande
+échelle ; à échelle égale aussi, le paysage.
+
+**Les listes imprimées portent l'organisation comme l'écran** (§ 7.4) : à
+l'ouverture, l'aperçu reprend la bascule de l'écran, puis la sienne,
+« Organisation », la change pour le papier seul ; listes masquées, elle reste
+offerte, inactive.
 
 **Le plan imprimé est le dessin de l'écran** : chaque table y porte son numéro au
 centre du plateau et sa pastille sur son bord, aux mêmes places et aux mêmes

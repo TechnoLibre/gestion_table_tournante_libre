@@ -57,6 +57,16 @@
   repérées quand il ne se lit plus sur une seule ; la liste d'accueil ; la
   feuille par table, une pour la soirée ou une par tour. Les listes imprimées
   replient les noms longs au lieu de les couper.
+- « Organisation », à droite de « Listes de noms » dans la barre du plan, ajoute
+  après chaque nom l'organisation de la personne, en gris : « 3. Iris Ombrelle ·
+  Club des Merles ». Éteinte à l'ouverture de l'événement, elle n'écrit rien.
+  Une liste garde sa largeur : une organisation trop longue s'abrège la
+  première, puis disparaît, avant le nom. L'aperçu du plan reprend le choix de
+  l'écran et le règle pour le papier seul.
+- L'aperçu du plan offre « Une colonne par page » : chaque colonne de tables
+  s'imprime sur ses propres pages, toutes à la même échelle, sans jamais mêler
+  deux colonnes sur une page. Une ligne d'une liste de noms ne déborde plus de
+  son bloc, l'arrondi du rendu compris, à l'écran comme sur le papier.
 - L'aperçu et la planche restent disponibles en lecture et sur un plan bloqué,
   et n'écrivent rien dans l'événement.
 - Ce qui n'est pas le placement retenu s'imprime avec le filigrane BROUILLON,

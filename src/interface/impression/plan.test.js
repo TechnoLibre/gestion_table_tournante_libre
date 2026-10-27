@@ -16,7 +16,7 @@ import { etatPlaces } from '../../application/places.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
-import { decouperPlan } from '../../geometrie/pages.js';
+import { colonnesDeTables, decouperParColonnes, decouperPlan } from '../../geometrie/pages.js';
 import { HAUTEUR_LIGNE_SUPPOSEE, englobantImpression, geometrieTable } from '../../geometrie/tables.js';
 import { analyser, creerCharge } from '../../stockage/document.js';
 import { constante } from '../../geometrie/constantes.js';
@@ -102,6 +102,28 @@ describe('pagesDuPlan : une page par feuille, chacune la tuile de la découpe (�
       }
     });
   }
+
+  test('une colonne par page : les pages de decouperParColonnes, chacune ne portant que les tables d’une colonne ; sans elle, celles de decouperPlan', () => {
+    const { etat, geometries } = plan(demonstration('grande'));
+    const blocs = { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, H) };
+    const colonnes = colonnesDeTables(geometries, blocs);
+    assert.ok(colonnes.length > 1, `${colonnes.length} colonne(s)`);
+    for (const mode of ['auto', 'decoupe', 'unePage']) {
+      const attendue = decouperParColonnes(geometries, { papier: 'A4', bandeMm: 12, mode, geometries, listes: blocs });
+      const options = { papier: 'A4', bandeMm: 12, listes: true, hauteurLigne: H, pied: piedAu(1) };
+      const pages = pagesDuPlan(etat, geometries, mode, { ...options, parColonne: true });
+      assert.equal(pages.length, attendue.pages.length, mode);
+      assert.ok(pages.length >= colonnes.length, mode);
+      for (const [rang, page] of pages.entries()) {
+        assert.equal(page.orientation, attendue.orientation);
+        assert.deepEqual(page.viewBox, attendue.pages[rang].cadrage);
+        assert.deepEqual(page.cartouche, attendue.pages[rang].cartouche);
+        assert.deepEqual(page.tables, attendue.pages[rang].tables);
+        assert.ok(colonnes.some((colonne) => page.tables.every((id) => colonne.includes(id))), `${mode}, page ${rang}`);
+      }
+      assert.deepEqual(pagesDuPlan(etat, geometries, mode, { ...options, parColonne: false }), pagesDuPlan(etat, geometries, mode, options));
+    }
+  });
 
   test('le pied de chaque page est celui d’un seul tour, le tour imprimé', () => {
     const { etat, geometries } = plan(demonstration('grande'));

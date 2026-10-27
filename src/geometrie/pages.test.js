@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { describe, test } from '../../test/lanceur.js';
 import { constante } from './constantes.js';
-import { decouperPlan } from './pages.js';
+import { colonnesDeTables, decouperParColonnes, decouperPlan } from './pages.js';
 import { PAPIERS } from './papiers.js';
 import { englobant, englobantImpression, geometrieTable } from './tables.js';
 import { TAILLE_TEXTE_LISTE_CM } from './texte.js';
@@ -401,6 +401,135 @@ describe('decouperPlan : les refus', () => {
     const geometries = [geometrieTable(table(1, 0, 0), 8), geometrieTable(table(2, 900, 0), 8)];
     const listes = { largeur: 500, hauteurs: new Map([[1, 100]]) };
     assert.throws(() => decouperPlan(englobant(geometries), { ...OPTIONS, geometries, listes }), RangeError);
+  });
+});
+
+// --- Une colonne de tables par page --------------------------------------------
+
+// Huit rondes de 8 sur la grille des démonstrations, deux colonnes de quatre
+// (pas de 813 cm entre colonnes, de 300 entre rangées), et leurs blocs de
+// noms de 500 × 200 cm.
+const HUIT = Array.from({ length: 8 }, (_, i) => geometrieTable(table(i + 1, (i % 2) * 813, Math.floor(i / 2) * 300), 8));
+const blocsDe = (geometries, largeur = 500) => ({ largeur, hauteurs: new Map(geometries.map((g) => [g.id, 200])) });
+
+describe('colonnesDeTables : les tables que relie leur étendue horizontale', () => {
+  test('deux colonnes de la grille, listes comprises ou non, de gauche à droite, chacune dans l’ordre des géométries', () => {
+    assert.deepEqual(colonnesDeTables(HUIT, blocsDe(HUIT)), [
+      [1, 3, 5, 7],
+      [2, 4, 6, 8],
+    ]);
+    assert.deepEqual(colonnesDeTables(HUIT), [
+      [1, 3, 5, 7],
+      [2, 4, 6, 8],
+    ]);
+    assert.deepEqual(colonnesDeTables([...HUIT].reverse(), blocsDe(HUIT)), [
+      [7, 5, 3, 1],
+      [8, 6, 4, 2],
+    ]);
+    assert.deepEqual(colonnesDeTables([]), []);
+  });
+
+  test('un bloc de noms qui atteint l’emprise de la colonne voisine les réunit ; un bord commun ne réunit pas', () => {
+    // Le bloc part de 156,4 cm ; l'emprise voisine commence à 813 − 120,4
+    // = 692,6 cm : un bloc de 600 cm l'atteint.
+    assert.deepEqual(colonnesDeTables(HUIT, blocsDe(HUIT, 600)), [[1, 2, 3, 4, 5, 6, 7, 8]]);
+    // Deux emprises de demi-côté 50, en x = 0 et 250, le bloc de la première
+    // parti de x = 80 : large de 120, il finit au bord de la seconde.
+    const deux = [
+      { id: 1, centre: { x: 0, y: 0 }, rayonEmprise: 50, origineListe: { x: 80, y: -50 } },
+      { id: 2, centre: { x: 250, y: 0 }, rayonEmprise: 50, origineListe: { x: 330, y: -50 } },
+    ];
+    assert.deepEqual(colonnesDeTables(deux, blocsDe(deux, 120)), [[1], [2]]);
+    assert.deepEqual(colonnesDeTables(deux, blocsDe(deux, 121)), [[1, 2]]);
+  });
+
+  test('une table à cheval sur deux colonnes les réunit, de proche en proche', () => {
+    // Emprises de demi-côté 120,4 : la deuxième recouvre la première et la
+    // troisième, qui ne se touchent pas.
+    const trois = [table(1, 0, 0), table(2, 200, 300), table(3, 400, 0)].map((t) => geometrieTable(t, 8));
+    assert.deepEqual(colonnesDeTables(trois), [[1, 2, 3]]);
+    assert.deepEqual(colonnesDeTables([trois[0], trois[2]]), [[1], [3]]);
+  });
+});
+
+describe('decouperParColonnes : une colonne de tables par page au moins (§ 11.7)', () => {
+  // Les options de la découpe des huit rondes, à un seuil e* donné.
+  const options = (corpsMinMm, mode = 'auto') => ({ ...OPTIONS, corpsMinMm, mode, geometries: HUIT, listes: blocsDe(HUIT) });
+
+  test('chaque page ne porte que les tables d’une colonne ; les colonnes se suivent, chaque table paraît', () => {
+    // Seuil 0,1 : le plan entier tient sur une page de paysage, les deux
+    // colonnes de tables sur cette même page.
+    const entier = decouperPlan(englobantImpression(HUIT, { listes: blocsDe(HUIT) }), options(0.1));
+    assert.deepEqual(entier.pages.map(({ tables }) => tables), [[1, 2, 3, 4, 5, 6, 7, 8]]);
+    for (const mode of ['auto', 'unePage', 'decoupe']) {
+      const plan = decouperParColonnes(HUIT, options(0.1, mode));
+      assert.deepEqual(plan.pages.map(({ tables }) => tables), [
+        [1, 3, 5, 7],
+        [2, 4, 6, 8],
+      ], mode);
+      assert.deepEqual(plan.pages.map(({ rang }) => rang), [0, 1], mode);
+    }
+  });
+
+  test('une orientation et une échelle pour toutes les pages : celles de chaque colonne découpée seule, quand les colonnes se valent', () => {
+    for (const [corpsMinMm, mode] of [[0.1, 'auto'], [0.3, 'decoupe'], [0.3, 'unePage']]) {
+      const plan = decouperParColonnes(HUIT, options(corpsMinMm, mode));
+      const gauche = HUIT.filter(({ id }) => id % 2 === 1);
+      const seule = decouperPlan(englobantImpression(gauche, { listes: blocsDe(gauche) }), { ...options(corpsMinMm, mode), geometries: gauche });
+      assert.equal(plan.orientation, seule.orientation, `${corpsMinMm} ${mode}`);
+      proche(plan.echelle, seule.echelle, `${corpsMinMm} ${mode}`);
+      assert.equal(plan.pages.length, 2 * seule.pages.length);
+      assert.equal(plan.lisibleSurUnePage, seule.lisibleSurUnePage);
+    }
+  });
+
+  test('chaque colonne découpée en rangées : le cartouche compte les colonnes de pages sur tout le plan, les voisines passent d’une colonne de tables à l’autre', () => {
+    // Seuil 0,3 : chaque colonne demande deux rangées de pages.
+    const plan = decouperParColonnes(HUIT, options(0.3));
+    assert.deepEqual([plan.colonnes, plan.rangees], [2, 2]);
+    const v = (haut, droite, bas, gauche) => ({ haut, droite, bas, gauche });
+    assert.deepEqual(
+      plan.pages.map(({ rang, cartouche, tables }) => ({ rang, ...cartouche, tables })),
+      [
+        { rang: 0, page: 1, total: 4, colonne: 'A', rangee: 1, voisins: v(null, 2, 1, null), tables: [1, 3] },
+        { rang: 1, page: 2, total: 4, colonne: 'A', rangee: 2, voisins: v(0, 3, null, null), tables: [5, 7] },
+        { rang: 2, page: 3, total: 4, colonne: 'B', rangee: 1, voisins: v(null, null, 3, 0), tables: [2, 4] },
+        { rang: 3, page: 4, total: 4, colonne: 'B', rangee: 2, voisins: v(2, null, null, 1), tables: [6, 8] },
+      ],
+    );
+  });
+
+  test('des colonnes inégales : l’échelle de la plus exigeante pour toutes ; une tuile qui déborde sur l’autre colonne n’en dessine aucune table ; une voisine sans la rangée est nulle', () => {
+    // Six rondes à gauche, une à droite, « unePage » : la colonne de gauche,
+    // haute de 1 756,8 cm, fixe l'échelle ; la tuile de droite, de même
+    // taille, s'étend jusque sur les blocs de gauche.
+    const geometries = [
+      ...Array.from({ length: 6 }, (_, i) => geometrieTable(table(i + 1, 0, i * 300), 8)),
+      geometrieTable(table(7, 813, 0), 8),
+    ];
+    const listes = blocsDe(geometries);
+    const plan = decouperParColonnes(geometries, { ...OPTIONS, corpsMinMm: 0.1, mode: 'unePage', geometries, listes });
+    const gauche = geometries.slice(0, 6);
+    const seule = decouperPlan(englobantImpression(gauche, { listes }), { ...OPTIONS, corpsMinMm: 0.1, mode: 'unePage', geometries: gauche, listes });
+    proche(plan.echelle, seule.echelle, 'échelle de la colonne de gauche');
+    assert.deepEqual(plan.pages.map(({ tables }) => tables), [[1, 2, 3, 4, 5, 6], [7]]);
+    const tuile = plan.pages[1].cadrage;
+    assert.ok(tuile.x < gauche[0].origineListe.x + listes.largeur, `la tuile de droite commence à ${tuile.x}`);
+    // Découpée au seuil 0,3 : trois rangées à gauche, une seule à droite.
+    const decoupe = decouperParColonnes(geometries, { ...OPTIONS, corpsMinMm: 0.3, mode: 'decoupe', geometries, listes });
+    const droite = decoupe.pages.at(-1);
+    assert.deepEqual(droite.tables, [7]);
+    assert.equal(droite.cartouche.colonne, 'B');
+    const deuxieme = decoupe.pages.find(({ cartouche }) => cartouche.colonne === 'A' && cartouche.rangee === 2);
+    assert.equal(deuxieme.cartouche.voisins.droite, null);
+    assert.equal(droite.cartouche.voisins.gauche, 0);
+  });
+
+  test('le plan vide rend la page de decouperPlan ; les refus sont les siens', () => {
+    assert.deepEqual(decouperParColonnes([], OPTIONS), decouperPlan(null, OPTIONS));
+    assert.throws(() => decouperParColonnes(HUIT, { ...OPTIONS, papier: 'A3' }), RangeError);
+    assert.throws(() => decouperParColonnes(HUIT, { ...OPTIONS, mode: 'deux' }), RangeError);
+    assert.throws(() => decouperParColonnes(HUIT, { ...OPTIONS, listes: { largeur: 500, hauteurs: new Map([[1, 100]]) } }), RangeError);
   });
 });
 

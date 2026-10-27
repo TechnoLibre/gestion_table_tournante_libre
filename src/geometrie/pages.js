@@ -4,13 +4,14 @@
 // La découpe du plan en pages (§ 11.7) : un navigateur ne fragmente pas un
 // SVG, le plan imprimé pose donc un dessin par page, chacun sur sa tuile.
 // decouperPlan rend l'échelle, l'orientation et les tuiles contiguës du plan
-// entier, avec le cartouche de chacune et les tables qu'elle dessine.
-// Fonction pure : ni DOM, ni mesure ; la hauteur de la bande (pied,
-// mentions, barre, cartouche), mesurée au rendu de l'aperçu, entre en
-// paramètre.
+// entier, avec le cartouche de chacune et les tables qu'elle dessine ;
+// decouperParColonnes, les mêmes pour chaque colonne de tables
+// (colonnesDeTables), chacune sur ses propres pages. Fonctions pures : ni
+// DOM, ni mesure ; la hauteur de la bande (pied, mentions, barre,
+// cartouche), mesurée au rendu de l'aperçu, entre en paramètre.
 import { constante } from './constantes.js';
 import { PAPIERS } from './papiers.js';
-import { blocNoms } from './tables.js';
+import { blocNoms, englobantImpression } from './tables.js';
 import { TAILLE_TEXTE_LISTE_CM } from './texte.js';
 
 /** @typedef {'auto'|'unePage'|'decoupe'} ModeDecoupe */
@@ -136,40 +137,159 @@ function bords(n, utileMm, echelle, centre, etendue) {
  *         orientation avec une surface utile ; englobant plat, inversé ou non fini ; table sans
  *         hauteur de liste
  */
-export function decouperPlan(
-  englobant,
-  {
-    papier,
-    margeMm = constante('MARGE_PAGE_MM'),
-    bandeMm,
-    corpsDessinCm = TAILLE_TEXTE_LISTE_CM,
-    corpsMinMm = constante('CORPS_MIN_IMPRESSION_MM'),
-    mode = 'auto',
-    geometries = [],
-    listes = null,
-  } = {},
-) {
+export function decouperPlan(englobant, options = {}) {
+  const { papier, margeMm, bandeMm, seuil, mode, geometries, listes } = reglages(options);
+  const plan = planDe(englobant);
+  const retenu = meilleure(orientationsUtiles(papier, margeMm, bandeMm), (utile) => {
+    const disposition = disposer(utile, plan, seuil, mode);
+    return { dispositions: [disposition], echelle: disposition.echelle, lisible: disposition.lisible };
+  });
+  const [{ colonnes, rangees }] = retenu.dispositions;
+  const pages = tuiles(
+    [{ plan, colonnes, rangees, emprises: emprisesDe(geometries, listes) }],
+    retenu.utile,
+    retenu.echelle,
+  );
+  return { orientation: retenu.orientation, echelle: retenu.echelle, lisibleSurUnePage: retenu.lisible, colonnes, rangees, pages };
+}
+
+/**
+ * Les colonnes de tables du plan (§ 11.7), de gauche à droite : chaque
+ * table couvre, sur l'axe horizontal, l'étendue de son emprise — le carré
+ * de demi-côté rayonEmprise — et, quand listes est donné, de son bloc de
+ * noms (blocNoms). Deux tables dont les étendues se recouvrent, bords
+ * exclus, sont de la même colonne, et la relation se ferme : une table à
+ * cheval sur deux colonnes les réunit. Une colonne ne se coupe donc jamais
+ * entre deux tables qu'un bloc de noms ou une emprise relie. Chaque colonne
+ * rend les identifiants de ses tables dans l'ordre de geometries.
+ *
+ * @param {import('./tables.js').GeometrieTable[]} geometries
+ * @param {null|{largeur: number, hauteurs: Map<number, number>}} [listes]
+ * @returns {number[][]}   aucune colonne sans table
+ */
+export function colonnesDeTables(geometries, listes = null) {
+  const etendues = geometries
+    .map((geometrie, rang) => {
+      const rectangles = rectanglesDe(geometrie, listes);
+      return { rang, minX: Math.min(...rectangles.map(({ minX }) => minX)), maxX: Math.max(...rectangles.map(({ maxX }) => maxX)) };
+    })
+    .sort((a, b) => a.minX - b.minX || a.rang - b.rang);
+  const colonnes = [];
+  for (const { rang, minX, maxX } of etendues) {
+    const courante = colonnes.at(-1);
+    if (courante !== undefined && minX < courante.maxX) {
+      courante.rangs.push(rang);
+      courante.maxX = Math.max(courante.maxX, maxX);
+    } else {
+      colonnes.push({ rangs: [rang], maxX });
+    }
+  }
+  return colonnes.map(({ rangs }) => rangs.sort((a, b) => a - b).map((rang) => geometries[rang].id));
+}
+
+/**
+ * La découpe du plan en pages, une colonne de tables par page au moins
+ * (§ 11.7) : chaque colonne de colonnesDeTables se découpe seule, sur
+ * l'englobant d'impression de ses tables (englobantImpression), selon le
+ * mode, comme decouperPlan découpe le plan entier — une page à son échelle,
+ * ou la grille minimale au seuil de lisibilité. Ses pages ne dessinent que
+ * ses tables : une table d'une autre colonne ne paraît sur aucune d'elles,
+ * même quand la tuile s'étend jusqu'à elle.
+ *
+ * Toutes les pages partagent l'orientation et l'échelle : l'imprimante
+ * reçoit une seule orientation, et une même échelle garde aux tables leur
+ * taille d'une page à l'autre. L'échelle est la plus petite de celles des
+ * colonnes, chacune prise seule : chaque colonne tient dans ses pages, et
+ * l'échelle reste au seuil au moins, sauf en mode 'unePage'.
+ * L'orientation est celle qui donne le moins de pages en tout ; à pages
+ * égales, la plus grande échelle ; à échelle égale aussi, le paysage.
+ *
+ * Les pages se rangent colonne par colonne, de gauche à droite, et dans
+ * chacune comme decouperPlan les range ; la grille de chaque colonne est
+ * centrée sur ses tables. Le cartouche compte les colonnes de pages de
+ * gauche à droite sur tout le plan, et les rangées dans chaque colonne de
+ * tables ; une page voisine à gauche ou à droite, au bord d'une colonne de
+ * tables, est la page de la même rangée dans la colonne voisine, null
+ * quand celle-ci n'a pas cette rangée. lisibleSurUnePage dit que chaque
+ * colonne se lit sur une page ; colonnes compte les colonnes de pages, et
+ * rangees, le plus de rangées d'une colonne. Le plan vide rend la page de
+ * decouperPlan.
+ *
+ * @param {import('./tables.js').GeometrieTable[]} geometries
+ * @param {Object} options   celles de decouperPlan, geometries exceptées
+ * @returns {ReturnType<typeof decouperPlan>}
+ * @throws {RangeError} ce que decouperPlan refuse
+ */
+export function decouperParColonnes(geometries, options = {}) {
+  const { papier, margeMm, bandeMm, seuil, mode, listes } = reglages({ ...options, geometries });
+  const colonnesTables = colonnesDeTables(geometries, listes);
+  if (colonnesTables.length === 0) return decouperPlan(null, { ...options, geometries });
+  const groupes = colonnesTables.map((ids) => {
+    const membres = geometries.filter(({ id }) => ids.includes(id));
+    return { plan: planDe(englobantImpression(membres, { listes })), emprises: emprisesDe(membres, listes) };
+  });
+  const retenu = meilleure(orientationsUtiles(papier, margeMm, bandeMm), (utile) => {
+    const dispositions = groupes.map(({ plan }) => disposer(utile, plan, seuil, mode));
+    return {
+      dispositions,
+      echelle: Math.min(...dispositions.map(({ echelle }) => echelle)),
+      lisible: dispositions.every(({ lisible }) => lisible),
+    };
+  });
+  const pages = tuiles(
+    groupes.map((groupe, rang) => ({ ...groupe, ...retenu.dispositions[rang] })),
+    retenu.utile,
+    retenu.echelle,
+  );
+  return {
+    orientation: retenu.orientation,
+    echelle: retenu.echelle,
+    lisibleSurUnePage: retenu.lisible,
+    colonnes: retenu.dispositions.reduce((somme, { colonnes }) => somme + colonnes, 0),
+    rangees: Math.max(...retenu.dispositions.map(({ rangees }) => rangees)),
+    pages,
+  };
+}
+
+// Les options de decouperPlan, validées, aux défauts posés ; le seuil de
+// lisibilité e* en mm de papier par cm de dessin.
+function reglages({
+  papier,
+  margeMm = constante('MARGE_PAGE_MM'),
+  bandeMm,
+  corpsDessinCm = TAILLE_TEXTE_LISTE_CM,
+  corpsMinMm = constante('CORPS_MIN_IMPRESSION_MM'),
+  mode = 'auto',
+  geometries = [],
+  listes = null,
+} = {}) {
   if (!Object.hasOwn(PAPIERS, papier)) throw new RangeError(`papier inconnu : ${String(papier)}`);
   if (!MODES.has(mode)) throw new RangeError(`mode de découpe inconnu : ${String(mode)}`);
   exigerNombre('marge', margeMm, 0, false);
   exigerNombre('bande', bandeMm, 0, false);
   exigerNombre('corps du dessin', corpsDessinCm, 0, true);
   exigerNombre('corps minimal', corpsMinMm, 0, true);
-  let plan = { largeur: 0, hauteur: 0, centreX: 0, centreY: 0 };
-  if (englobant !== null) {
-    const { minX, minY, maxX, maxY } = englobant;
-    for (const [nom, valeur] of [['minX', minX], ['minY', minY], ['maxX', maxX], ['maxY', maxY]]) {
-      exigerNombre(`englobant, ${nom}`, valeur, -Infinity, true);
-    }
-    if (!(maxX > minX && maxY > minY)) throw new RangeError('englobant plat ou inversé');
-    plan = { largeur: maxX - minX, hauteur: maxY - minY, centreX: (minX + maxX) / 2, centreY: (minY + maxY) / 2 };
-  }
-  const seuil = corpsMinMm / corpsDessinCm;
-  const { largeur: petit, hauteur: grand } = PAPIERS[papier];
+  return { papier, margeMm, bandeMm, seuil: corpsMinMm / corpsDessinCm, mode, geometries, listes };
+}
 
-  // Paysage d'abord : il garde la place à toute égalité. Une orientation
-  // sans surface utile — une bande plus haute que la page couchée — n'est
-  // pas candidate ; le portrait, plus haut, garde alors la sienne.
+// Les dimensions et le centre d'un englobant, en cm, nuls pour le plan vide
+// (null) ; RangeError pour un englobant plat, inversé ou non fini.
+function planDe(englobant) {
+  if (englobant === null) return { largeur: 0, hauteur: 0, centreX: 0, centreY: 0 };
+  const { minX, minY, maxX, maxY } = englobant;
+  for (const [nom, valeur] of [['minX', minX], ['minY', minY], ['maxX', maxX], ['maxY', maxY]]) {
+    exigerNombre(`englobant, ${nom}`, valeur, -Infinity, true);
+  }
+  if (!(maxX > minX && maxY > minY)) throw new RangeError('englobant plat ou inversé');
+  return { largeur: maxX - minX, hauteur: maxY - minY, centreX: (minX + maxX) / 2, centreY: (minY + maxY) / 2 };
+}
+
+// Les orientations qui ont une surface utile, paysage d'abord : il garde la
+// place à toute égalité. Une orientation sans surface utile — une bande plus
+// haute que la page couchée — n'est pas candidate ; le portrait, plus haut,
+// garde alors la sienne. RangeError quand aucune n'en a.
+function orientationsUtiles(papier, margeMm, bandeMm) {
+  const { largeur: petit, hauteur: grand } = PAPIERS[papier];
   const orientations = [
     { orientation: 'paysage', feuille: { largeur: grand, hauteur: petit } },
     { orientation: 'portrait', feuille: { largeur: petit, hauteur: grand } },
@@ -177,56 +297,91 @@ export function decouperPlan(
     orientation,
     utile: { largeur: feuille.largeur - 2 * margeMm, hauteur: feuille.hauteur - 2 * margeMm - bandeMm },
   }));
-  const candidats = orientations
-    .filter(({ utile }) => utile.largeur > 0 && utile.hauteur > 0)
-    .map(({ orientation, utile }) => ({ orientation, utile, ...disposer(utile, plan, seuil, mode) }));
-  if (candidats.length === 0) {
+  const utiles = orientations.filter(({ utile }) => utile.largeur > 0 && utile.hauteur > 0);
+  if (utiles.length === 0) {
     const surfaces = orientations.map(({ orientation, utile }) => `${orientation} ${utile.largeur} × ${utile.hauteur} mm`);
     throw new RangeError(`aucune orientation n'a de surface utile : ${surfaces.join(', ')}`);
   }
-  const retenu = candidats.reduce((meilleur, c) => {
-    const pages = c.colonnes * c.rangees;
-    const pagesMeilleur = meilleur.colonnes * meilleur.rangees;
-    return pages < pagesMeilleur || (pages === pagesMeilleur && c.echelle > meilleur.echelle) ? c : meilleur;
-  });
+  return utiles;
+}
 
-  const { orientation, utile, colonnes, rangees, echelle, lisible } = retenu;
-  const enX = bords(colonnes, utile.largeur, echelle, plan.centreX, plan.largeur);
-  const enY = bords(rangees, utile.hauteur, echelle, plan.centreY, plan.hauteur);
-  const emprises = geometries.map((g) => ({
-    id: g.id,
-    rectangles: [
-      {
-        minX: g.centre.x - g.rayonEmprise,
-        minY: g.centre.y - g.rayonEmprise,
-        maxX: g.centre.x + g.rayonEmprise,
-        maxY: g.centre.y + g.rayonEmprise,
-      },
-      ...(listes === null ? [] : [blocNoms(g, listes)]),
-    ],
-  }));
-  const total = colonnes * rangees;
-  const pages = Array.from({ length: total }, (_, rang) => {
-    const c = rang % colonnes;
-    const r = Math.floor(rang / colonnes);
-    const tuile = { minX: enX.cotes[c], minY: enY.cotes[r], maxX: enX.cotes[c + 1], maxY: enY.cotes[r + 1] };
-    return {
-      rang,
-      cadrage: { x: tuile.minX, y: tuile.minY, largeur: enX.tuile, hauteur: enY.tuile },
-      cartouche: {
-        page: rang + 1,
-        total,
-        colonne: lettreColonne(c + 1),
-        rangee: r + 1,
-        voisins: {
-          haut: r > 0 ? rang - colonnes : null,
-          droite: c + 1 < colonnes ? rang + 1 : null,
-          bas: r + 1 < rangees ? rang + colonnes : null,
-          gauche: c > 0 ? rang - 1 : null,
+// L'orientation retenue parmi les candidates : disposer(utile) rend ses
+// dispositions — une par plan découpé —, leur échelle commune et leur
+// lisibilité ; le moins de pages en tout, puis la plus grande échelle,
+// puis la première candidate.
+function meilleure(candidates, disposer) {
+  const pagesDe = ({ dispositions }) => dispositions.reduce((somme, { colonnes, rangees }) => somme + colonnes * rangees, 0);
+  return candidates
+    .map(({ orientation, utile }) => ({ orientation, utile, ...disposer(utile) }))
+    .reduce((meilleur, c) => {
+      const pages = pagesDe(c);
+      const pagesMeilleur = pagesDe(meilleur);
+      return pages < pagesMeilleur || (pages === pagesMeilleur && c.echelle > meilleur.echelle) ? c : meilleur;
+    });
+}
+
+// Les rectangles qu'une table dessine sur le papier : son emprise, puis,
+// quand listes est donné, son bloc de noms.
+function rectanglesDe(g, listes) {
+  return [
+    { minX: g.centre.x - g.rayonEmprise, minY: g.centre.y - g.rayonEmprise, maxX: g.centre.x + g.rayonEmprise, maxY: g.centre.y + g.rayonEmprise },
+    ...(listes === null ? [] : [blocNoms(g, listes)]),
+  ];
+}
+
+const emprisesDe = (geometries, listes) => geometries.map((g) => ({ id: g.id, rectangles: rectanglesDe(g, listes) }));
+
+// Les pages des plans reçus, l'un après l'autre, à l'échelle commune :
+// chaque plan, {plan, colonnes, rangees, emprises}, sur sa grille de
+// colonnes × rangees tuiles centrée sur lui, ses pages par rangées de haut
+// en bas, de gauche à droite dans chacune, et chaque page portant les
+// tables de emprises qui coupent sa tuile. Les colonnes de pages se
+// comptent sur tous les plans ; au bord d'un plan, la voisine à gauche ou
+// à droite est la page de même rangée du plan voisin, quand il l'a.
+function tuiles(plans, utile, echelle) {
+  const total = plans.reduce((somme, { colonnes, rangees }) => somme + colonnes * rangees, 0);
+  const premiers = [];
+  const colonnesAvant = [];
+  plans.reduce(
+    (cumul, { colonnes, rangees }) => {
+      premiers.push(cumul.rang);
+      colonnesAvant.push(cumul.colonnes);
+      return { rang: cumul.rang + colonnes * rangees, colonnes: cumul.colonnes + colonnes };
+    },
+    { rang: 0, colonnes: 0 },
+  );
+  // Le rang de la page de la colonne c et de la rangée r du plan p ; null
+  // hors de sa grille ou hors des plans.
+  const rangDe = (p, c, r) => {
+    const voisin = plans[p];
+    if (voisin === undefined || r >= voisin.rangees) return null;
+    return premiers[p] + r * voisin.colonnes + c;
+  };
+  return plans.flatMap(({ plan, colonnes, rangees, emprises }, p) => {
+    const enX = bords(colonnes, utile.largeur, echelle, plan.centreX, plan.largeur);
+    const enY = bords(rangees, utile.hauteur, echelle, plan.centreY, plan.hauteur);
+    return Array.from({ length: colonnes * rangees }, (_, indice) => {
+      const c = indice % colonnes;
+      const r = Math.floor(indice / colonnes);
+      const rang = premiers[p] + indice;
+      const tuile = { minX: enX.cotes[c], minY: enY.cotes[r], maxX: enX.cotes[c + 1], maxY: enY.cotes[r + 1] };
+      return {
+        rang,
+        cadrage: { x: tuile.minX, y: tuile.minY, largeur: enX.tuile, hauteur: enY.tuile },
+        cartouche: {
+          page: rang + 1,
+          total,
+          colonne: lettreColonne(colonnesAvant[p] + c + 1),
+          rangee: r + 1,
+          voisins: {
+            haut: r > 0 ? rang - colonnes : null,
+            droite: c + 1 < colonnes ? rang + 1 : rangDe(p + 1, 0, r),
+            bas: r + 1 < rangees ? rang + colonnes : null,
+            gauche: c > 0 ? rang - 1 : p > 0 ? rangDe(p - 1, plans[p - 1].colonnes - 1, r) : null,
+          },
         },
-      },
-      tables: emprises.filter(({ rectangles }) => rectangles.some((rect) => coupe(rect, tuile))).map(({ id }) => id),
-    };
+        tables: emprises.filter(({ rectangles }) => rectangles.some((rect) => coupe(rect, tuile))).map(({ id }) => id),
+      };
+    });
   });
-  return { orientation, echelle, lisibleSurUnePage: lisible, colonnes, rangees, pages };
 }

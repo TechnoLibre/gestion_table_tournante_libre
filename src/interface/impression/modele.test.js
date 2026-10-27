@@ -36,7 +36,16 @@ import {
   toursOfferts,
 } from './modele.js';
 
-const APERCU = Object.freeze({ vue: 'plan', tour: 2, listes: true, decoupe: 'auto', parTour: false, retour: 'plan' });
+const APERCU = Object.freeze({
+  vue: 'plan',
+  tour: 2,
+  listes: true,
+  organisations: true,
+  decoupe: 'auto',
+  parColonne: true,
+  parTour: false,
+  retour: 'plan',
+});
 const PIED = Object.freeze({ nom: 'Soirée des Merles', date: '2026-10-09', tour: 2, horodatage: '2026-10-09T19:00:00-04:00', version: 'v' });
 
 const petite = () => analyser(texteLivre('petite')).charge;
@@ -67,10 +76,13 @@ function avecProposition() {
 }
 
 describe('optionsApercu : ce que l’aperçu imprime', () => {
-  test('le plan : son tour, ses listes, sa découpe ; l’orientation, celle que la découpe choisira (null)', () => {
+  test('le plan : son tour, ses listes et leurs organisations, sa découpe et une colonne par page ; l’orientation, celle que la découpe choisira (null)', () => {
     assert.deepEqual(optionsApercu(APERCU, 'A4'), {
-      vue: 'plan', papier: 'A4', orientation: null, tour: 2, listes: true, decoupe: 'auto', parTour: false, question: false,
+      vue: 'plan', papier: 'A4', orientation: null, tour: 2, listes: true, organisations: true,
+      decoupe: 'auto', parColonne: true, parTour: false, question: false,
     });
+    const sans = optionsApercu({ ...APERCU, organisations: false, parColonne: false }, 'A4');
+    assert.deepEqual([sans.organisations, sans.parColonne], [false, false]);
   });
 
   test('les listes s’impriment en portrait et couvrent la soirée, quel que soit le tour du plan', () => {

@@ -488,6 +488,14 @@ visés un par un, et c’est la table entière qui reçoit le geste :
 
 *Ici, un dépôt vise la table ; zoomez pour choisir un siège précis.*
 
+La barre au-dessus du plan règle ce qu’il montre, sans rien modifier : « Listes
+de noms » montre ou masque la liste de chaque table, et « Organisation », juste
+à sa droite, ajoute après chaque nom l’organisation de la personne, en gris :
+« 3. Iris Ombrelle · Club des Merles ». « Organisation » est éteinte à chaque
+ouverture de l’événement. Une liste garde sa largeur : une organisation trop
+longue s’abrège d’abord, puis disparaît, avant que le nom ne s’abrège. Listes
+masquées, le bouton « Organisation » reste à sa place, inactif.
+
 ## Étape 5 — Fixer le nombre de tours
 
 Le nombre de tours se règle dans la même section. Retirer un tour puis le
@@ -1172,6 +1180,12 @@ découpe en pages quand il ne tient pas lisiblement sur une seule ; chaque page
 porte son repère et ses voisines. Au premier aperçu, le logiciel demande le
 format du papier, A4 ou Lettre, puis le garde pour ce poste ; il se change
 ensuite à tout moment.
+
+Les réglages du plan, dans la barre de l’aperçu, ne changent que le papier.
+« Organisation » reprend à l’ouverture le choix de l’écran. « Une colonne par
+page », éteinte par défaut, imprime chaque colonne de tables sur ses propres
+pages : aucune page ne mêle deux colonnes. Toutes les pages gardent la même
+échelle, et chacune son repère.
 
 La **planche de badges** est le seul document produit en PDF. Par défaut, elle
 s’imprime sur des **cartes Avery 5392** prédécoupées, six par feuille Lettre,

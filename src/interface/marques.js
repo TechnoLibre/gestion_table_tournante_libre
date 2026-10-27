@@ -268,11 +268,12 @@ const FONDS_ETIQUETTE = [
 ];
 
 /** Les textes et leurs fonds, même forme, seuil 4,5 : page, secondaire,
- *  bandeau, refus, avis, listes du plan sur le sol, pastille du plan, numéro
+ *  bandeau, refus, avis, listes du plan sur le sol, l'organisation qu'elles
+ *  portent, de l'encre secondaire, sur le sol, pastille du plan, numéro
  *  d'une table sur son plateau, que son halo prolonge sous les trames, et
- *  son libellé, de même ; puis
- *  l'encre de la page sur la carte, l'encre secondaire sur la carte, le
- *  texte d'une étiquette — l'encre de la page sur chaque fond teinté de
+ *  son libellé, de même ; puis l'encre de la page sur la carte, l'encre
+ *  secondaire sur la carte et sur la teinte de l'action — celle d'une
+ *  bascule enfoncée mais inactive —, le texte d'une étiquette — l'encre de la page sur chaque fond teinté de
  *  pastille (§ 12.7) —, celui de la bande de mode, la version et la
  *  provenance du bandeau, le thème retenu du bandeau, aux couleurs du
  *  bandeau inversées, le texte de l'action principale, un lien ou un texte
@@ -287,11 +288,12 @@ export const TEXTES = Object.freeze([
   texte('refus', 'refus', ['page-fond', 'refus-fond', 'carte-fond']),
   texte('avis', 'avis', ['page-fond', 'avis-fond', 'carte-fond']),
   texte('listes', 'liste-texte', ['sol']),
+  texte('listesOrganisation', 'page-texte-secondaire', ['sol']),
   texte('pastille', 'pastille-texte', ['pastille-fond']),
   texte('numeroTable', 'liste-texte', ['table-fond']),
   texte('libelleTable', 'liste-texte', ['table-fond']),
   texte('carte', 'page-texte', ['carte-fond', 'carte-fond-sourd']),
-  texte('secondaireCarte', 'page-texte-secondaire', ['carte-fond', 'carte-fond-sourd']),
+  texte('secondaireCarte', 'page-texte-secondaire', ['carte-fond', 'carte-fond-sourd', 'action-teinte']),
   texte('etiquette', 'page-texte', FONDS_ETIQUETTE),
   texte('bandeMode', 'page-texte', ['mode-ecriture-fond', 'mode-lecture-fond', 'mode-bloque-fond']),
   texte('bandeauSecondaire', 'bandeau-texte-secondaire', ['bandeau-fond']),
