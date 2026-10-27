@@ -144,12 +144,12 @@ export function suggestionsOrganisation(organisations, cleNormalisee) {
 /**
  * Ce que les listes de conflits ont suivi quand modifierParticipant a changé
  * la personne id, lu entre la charge d'avant et celle d'après : null quand
- * rien n'a suivi, sinon ce que suivreOrganisations rend — renommee, {de,
- * vers} ; retirees, rangées ; propres, un compte. La règle reste celle de
- * suivreOrganisations, rejouée sur les participants d'après, chacun avec la
- * liste qu'il portait avant, sous le renommage que la commande en déduit :
- * l'organisation de la personne changée d'une valeur en une autre. Aucune
- * des deux charges reçues ne change.
+ * rien n'a suivi, sinon ce que suivreOrganisations rend pour les conflits —
+ * renommee, {de, vers} ; retirees, rangées ; propres, un compte. La règle
+ * reste celle de suivreOrganisations, rejouée sur les participants d'après,
+ * chacun avec la liste de conflits qu'il portait avant, sous le renommage
+ * que la commande en déduit : l'organisation de la personne changée d'une
+ * valeur en une autre. Aucune des deux charges reçues ne change.
  *
  * @param {{participants: Array<Object>}} avant
  * @param {{participants: Array<Object>}} apres
@@ -167,6 +167,6 @@ export function suiviDesConflits(avant, apres, id) {
   const de = anciens.get(id)?.organisation ?? null;
   const vers = apres.participants.find((participant) => participant.id === id)?.organisation ?? null;
   const renommage = de !== null && vers !== null && de !== vers ? { de, vers } : null;
-  const suivi = suivreOrganisations(avant, { participants }, renommage);
-  return rienASuivre(suivi) ? null : suivi;
+  const { conflits } = suivreOrganisations(avant, { participants }, renommage);
+  return rienASuivre(conflits) ? null : conflits;
 }

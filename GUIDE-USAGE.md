@@ -1631,6 +1631,8 @@ l’historique ; les noms des exemples sont inventés.
 | `ajouterConflit` | Conflits de Iris Ombrelle : ajouté « Atelier Ressac » |
 | `retirerConflit` | Conflits de Iris Ombrelle : retiré « Atelier Ressac » |
 | `changerConflits` | Conflits de Iris Ombrelle : ajouté « Atelier Ressac » et « Club des Merles » |
+| `changerInclusionsOrganisation` | Inclusions d'organisation de Iris Ombrelle : ajouté « Atelier Ressac » |
+| `changerInclusionsParticipant` | Inclusions de participant de Iris Ombrelle : ajouté Théo Pervenche et Ondine Lacasse |
 | `changerLogo` | Logo de Iris Ombrelle : posé |
 | `exclureParticipant` | Exclu Théo Pervenche |
 | `reintegrerParticipant` | Réintégré Théo Pervenche |

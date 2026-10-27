@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes des commandes de la liste des participants, de leurs
-// étiquettes, de leurs conflits d'organisation, de leur logo, de leur
-// présence par tour et de l'import des participants (§ 4, § 4.4, § 4.5,
-// § 5.8, § 8.9, § 10.2, § 14.6) : leurs refus, leurs avertissements
-// et leurs libellés figés. Une personne s'y dit au féminin ; les tours se
-// nomment par toursNommes et auxToursNommes (aides.js). Cette
+// étiquettes, de leurs conflits d'organisation, de leurs inclusions, de leur
+// logo, de leur présence par tour et de l'import des participants (§ 4,
+// § 4.4, § 4.5, § 5.8, § 8.9, § 10.2, § 14.6) : leurs refus, leurs
+// avertissements et leurs libellés figés. Une personne s'y dit au féminin ;
+// les tours se nomment par toursNommes et auxToursNommes (aides.js). Cette
 // table ne porte que des codes. Un champ ou une raison inconnus lèvent
 // RangeError, au lieu de se taire. Les bornes d'une étiquette viennent de la
 // règle qui les pose.
@@ -39,21 +39,48 @@ const etiquettesCitees = (etiquettes) => enumeration(etiquettes.map(cite));
 // Ce qu'un libellé du journal ajoute quand le geste a ajusté le retenu.
 const ajusteTexte = (ajuste) => (ajuste === true ? ' ; placement retenu ajusté' : '');
 
-// Ce qu'un libellé du journal ajoute quand les listes de conflits ont suivi
-// le geste (suivreOrganisations) : l'organisation renommée, celles qui ont
-// disparu, les propres organisations ôtées ; rien sans suivi.
-function conflitsTexte(conflits) {
-  if (conflits === null || conflits === undefined) return '';
-  const { renommee, retirees, propres } = conflits;
+// Ce qu'un libellé du journal ajoute quand des listes ont suivi le geste
+// (suivreOrganisations) : l'organisation renommée, celles qui ont disparu,
+// toutes deux rapportées aux listes que nomme listes (« les conflits »),
+// puis le compte des propres organisations ôtées, sous ses mots au singulier
+// et au pluriel ; rien sans suivi.
+function suiviTexte(suivi, listes, propresSingulier, propresPluriel) {
+  if (suivi === null || suivi === undefined) return '';
+  const { renommee, retirees, propres } = suivi;
   const parties = [];
-  if (renommee !== null) parties.push(`${cite(renommee.de)} devient ${cite(renommee.vers)} dans les conflits`);
+  if (renommee !== null) parties.push(`${cite(renommee.de)} devient ${cite(renommee.vers)} dans ${listes}`);
   if (retirees.length > 0) {
-    parties.push(`${enumeration(retirees.map(cite))} ${retirees.length === 1 ? 'quitte' : 'quittent'} les conflits`);
+    parties.push(`${enumeration(retirees.map(cite))} ${retirees.length === 1 ? 'quitte' : 'quittent'} ${listes}`);
   }
-  if (propres > 0) {
-    parties.push(`${compte(propres, 'conflit avec sa propre organisation retiré', 'conflits avec leur propre organisation retirés')}`);
-  }
+  if (propres > 0) parties.push(compte(propres, propresSingulier, propresPluriel));
   return parties.map((partie) => ` ; ${partie}`).join('');
+}
+
+// Ce que les listes de conflits ont suivi.
+const conflitsTexte = (conflits) =>
+  suiviTexte(conflits, 'les conflits', 'conflit avec sa propre organisation retiré', 'conflits avec leur propre organisation retirés');
+
+// Ce que les listes d'inclusions d'organisation ont suivi.
+const inclusionsTexte = (inclusions) =>
+  suiviTexte(
+    inclusions,
+    'les inclusions',
+    'inclusion de sa propre organisation retirée',
+    'inclusions de leur propre organisation retirées',
+  );
+
+// Ce qu'un libellé du journal ajoute quand la personne supprimée quitte des
+// listes d'inclusions de participant ; rien quand aucune ne la nommait.
+const listesDInclusionsTexte = (n) =>
+  Number.isInteger(n) && n > 0 ? ` ; retirée de ${compte(n, "liste d'inclusions", "listes d'inclusions")}` : '';
+
+// Les ajouts et les retraits d'une liste, nommés par nommer : « ajouté … ;
+// retiré … », chaque partie présente quand sa liste n'est pas vide.
+function ajoutsEtRetraits(ajoutees, retirees, nommer) {
+  const parties = [];
+  if (ajoutees.length > 0) parties.push(`ajouté ${nommer(ajoutees)}`);
+  if (retirees.length > 0) parties.push(`retiré ${nommer(retirees)}`);
+  return parties.join(' ; ');
 }
 
 // Des tours nommés après « au lieu » : « de tous les tours », « du tour 2 »,
@@ -138,6 +165,12 @@ export const TABLE = new Map([
       `${personne} appartient à ${cite(organisation)} : une organisation n'est pas en conflit avec elle-même.`,
   ],
   [
+    'INCLUSION_PROPRE_ORGANISATION',
+    ({ personne, organisation }) =>
+      `${personne} appartient à ${cite(organisation)} : une inclusion nomme une autre organisation que la sienne.`,
+  ],
+  ['INCLUSION_DE_SOI', ({ personne }) => `${personne} ne se rencontre pas elle-même : une inclusion nomme une autre personne.`],
+  [
     'IMPORT_EN_RETENU',
     () =>
       "L'import change la liste après le choix d'un placement : le placement retenu suit la présence de chacun, " +
@@ -205,36 +238,39 @@ export const TABLE = new Map([
   ['ENTREE_AJOUTER_PARTICIPANT', ({ personne, ajuste }) => `Ajouté ${personne}${ajusteTexte(ajuste)}`],
   [
     'ENTREE_MODIFIER_PARTICIPANT',
-    ({ personne, champs, devenu, conflits }) => {
+    ({ personne, champs, devenu, conflits, inclusions }) => {
       const nouveau = devenu === null || devenu === undefined ? '' : ` (désormais ${devenu})`;
-      return `Modifié ${personne} : ${champs.map(nomChamp).join(', ')}${nouveau}${conflitsTexte(conflits)}`;
+      const suivis = `${conflitsTexte(conflits)}${inclusionsTexte(inclusions)}`;
+      return `Modifié ${personne} : ${champs.map(nomChamp).join(', ')}${nouveau}${suivis}`;
     },
   ],
   ['ENTREE_EXCLURE_PARTICIPANT', ({ personne, ajuste }) => `Exclu ${personne}${ajusteTexte(ajuste)}`],
   ['ENTREE_REINTEGRER_PARTICIPANT', ({ personne, ajuste }) => `Réintégré ${personne}${ajusteTexte(ajuste)}`],
   [
     'ENTREE_SUPPRIMER_PARTICIPANT',
-    ({ personne, ajuste, conflits }) => `Supprimé ${personne}${ajusteTexte(ajuste)}${conflitsTexte(conflits)}`,
+    ({ personne, ajuste, conflits, inclusions, listesDInclusions }) =>
+      `Supprimé ${personne}${ajusteTexte(ajuste)}${conflitsTexte(conflits)}${inclusionsTexte(inclusions)}` +
+      listesDInclusionsTexte(listesDInclusions),
   ],
   [
     'ENTREE_CHANGER_ETIQUETTES',
-    ({ personne, ajoutees, retirees }) => {
-      const parties = [];
-      if (ajoutees.length > 0) parties.push(`ajouté ${etiquettesCitees(ajoutees)}`);
-      if (retirees.length > 0) parties.push(`retiré ${etiquettesCitees(retirees)}`);
-      return `Étiquettes de ${personne} : ${parties.join(' ; ')}`;
-    },
+    ({ personne, ajoutees, retirees }) => `Étiquettes de ${personne} : ${ajoutsEtRetraits(ajoutees, retirees, etiquettesCitees)}`,
   ],
   ['ENTREE_AJOUTER_CONFLIT', ({ personne, organisation }) => `Conflits de ${personne} : ajouté ${cite(organisation)}`],
   ['ENTREE_RETIRER_CONFLIT', ({ personne, organisation }) => `Conflits de ${personne} : retiré ${cite(organisation)}`],
   [
     'ENTREE_CHANGER_CONFLITS',
-    ({ personne, ajoutees, retirees }) => {
-      const parties = [];
-      if (ajoutees.length > 0) parties.push(`ajouté ${etiquettesCitees(ajoutees)}`);
-      if (retirees.length > 0) parties.push(`retiré ${etiquettesCitees(retirees)}`);
-      return `Conflits de ${personne} : ${parties.join(' ; ')}`;
-    },
+    ({ personne, ajoutees, retirees }) => `Conflits de ${personne} : ${ajoutsEtRetraits(ajoutees, retirees, etiquettesCitees)}`,
+  ],
+  [
+    'ENTREE_CHANGER_INCLUSIONS_ORGANISATION',
+    ({ personne, ajoutees, retirees }) =>
+      `Inclusions d'organisation de ${personne} : ${ajoutsEtRetraits(ajoutees, retirees, etiquettesCitees)}`,
+  ],
+  [
+    'ENTREE_CHANGER_INCLUSIONS_PARTICIPANT',
+    ({ personne, ajoutees, retirees }) =>
+      `Inclusions de participant de ${personne} : ${ajoutsEtRetraits(ajoutees, retirees, enumeration)}`,
   ],
   [
     'ENTREE_CHANGER_LOGO',
@@ -242,9 +278,9 @@ export const TABLE = new Map([
   ],
   [
     'ENTREE_IMPORTER_PARTICIPANTS',
-    ({ mode, ajoutes, misAJour, retires, ajuste, conflits }) => {
+    ({ mode, ajoutes, misAJour, retires, ajuste, conflits, inclusions }) => {
       const ajoutesTexte = compte(ajoutes, 'ajouté', 'ajoutés');
-      const suite = `${ajusteTexte(ajuste)}${conflitsTexte(conflits)}`;
+      const suite = `${ajusteTexte(ajuste)}${conflitsTexte(conflits)}${inclusionsTexte(inclusions)}`;
       if (mode === 'ajouter') return `Importé ${compte(ajoutes, 'participant', 'participants')}${suite}`;
       if (mode === 'mettreAJour') {
         return `Mis à jour la liste par import : ${ajoutesTexte}, ${compte(misAJour, 'modifié', 'modifiés')}${suite}`;

@@ -21,6 +21,8 @@ export const EXEMPLES = [
   ['ORTHOGRAPHE_RETENUE', { saisie: 'Finance', retenue: 'finance' }],
   ['ORGANISATION_INCONNUE', { organisation: 'Atelier Pivoine', remede: null }],
   ['CONFLIT_PROPRE_ORGANISATION', { personne: 'Iris Ombrelle', organisation: 'Club des Merles', remede: null }],
+  ['INCLUSION_PROPRE_ORGANISATION', { personne: 'Iris Ombrelle', organisation: 'Club des Merles', remede: null }],
+  ['INCLUSION_DE_SOI', { personne: 'Iris Ombrelle', remede: null }],
   // Libellés figés du journal
   ['ENTREE_AJOUTER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
   ['ENTREE_MODIFIER_PARTICIPANT', { personne: 'Iris Ombrelle', champs: ['courriel'], devenu: null }],
@@ -31,6 +33,8 @@ export const EXEMPLES = [
   ['ENTREE_AJOUTER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }],
   ['ENTREE_RETIRER_CONFLIT', { personne: 'Iris Ombrelle', organisation: 'Société Alpha' }],
   ['ENTREE_CHANGER_CONFLITS', { personne: 'Iris Ombrelle', ajoutees: ['Société Alpha', 'Société Beta'], retirees: ['Club des Merles'] }],
+  ['ENTREE_CHANGER_INCLUSIONS_ORGANISATION', { personne: 'Iris Ombrelle', ajoutees: ['Société Alpha'], retirees: ['Club des Merles'] }],
+  ['ENTREE_CHANGER_INCLUSIONS_PARTICIPANT', { personne: 'Iris Ombrelle', ajoutees: ['Théo Pervenche'], retirees: ['Basile Mélèze'] }],
   ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
   // Le logo d'une personne
   ['ENTREE_CHANGER_LOGO', { personne: 'Iris Ombrelle', effet: 'pose' }],
@@ -145,6 +149,73 @@ export const TEXTES = [
   ],
   ['ENTREE_CHANGER_CONFLITS', { personne: 'Iris Ombrelle', ajoutees: [], retirees: ['Club des Merles'] }, 'Conflits de Iris Ombrelle : retiré « Club des Merles »'],
   [
+    'ENTREE_CHANGER_INCLUSIONS_ORGANISATION',
+    { personne: 'Iris Ombrelle', ajoutees: ['Société Alpha', 'Société Beta'], retirees: ['Club des Merles'] },
+    "Inclusions d'organisation de Iris Ombrelle : ajouté « Société Alpha » et « Société Beta » ; retiré « Club des Merles »",
+  ],
+  [
+    'ENTREE_CHANGER_INCLUSIONS_ORGANISATION',
+    { personne: 'Iris Ombrelle', ajoutees: [], retirees: ['Club des Merles'] },
+    "Inclusions d'organisation de Iris Ombrelle : retiré « Club des Merles »",
+  ],
+  [
+    'ENTREE_CHANGER_INCLUSIONS_PARTICIPANT',
+    { personne: 'Iris Ombrelle', ajoutees: ['Théo Pervenche', 'Ondine Lacasse', 'Basile Mélèze'], retirees: ['Hortense Quenouille'] },
+    'Inclusions de participant de Iris Ombrelle : ajouté Théo Pervenche, Ondine Lacasse et Basile Mélèze ; retiré Hortense Quenouille',
+  ],
+  [
+    'ENTREE_CHANGER_INCLUSIONS_PARTICIPANT',
+    { personne: 'Iris Ombrelle', ajoutees: ['Théo Pervenche'], retirees: [] },
+    'Inclusions de participant de Iris Ombrelle : ajouté Théo Pervenche',
+  ],
+  [
+    'ENTREE_SUPPRIMER_PARTICIPANT',
+    {
+      personne: 'Théo Pervenche',
+      ajuste: true,
+      conflits: { renommee: null, retirees: ['Club des Merles'], propres: 0 },
+      inclusions: { renommee: null, retirees: ['Club des Merles'], propres: 0 },
+      listesDInclusions: 2,
+    },
+    "Supprimé Théo Pervenche ; placement retenu ajusté ; « Club des Merles » quitte les conflits ; « Club des Merles » quitte les " +
+      "inclusions ; retirée de 2 listes d'inclusions",
+  ],
+  [
+    'ENTREE_SUPPRIMER_PARTICIPANT',
+    { personne: 'Théo Pervenche', ajuste: false, conflits: null, inclusions: null, listesDInclusions: 1 },
+    "Supprimé Théo Pervenche ; retirée de 1 liste d'inclusions",
+  ],
+  [
+    'ENTREE_SUPPRIMER_PARTICIPANT',
+    { personne: 'Théo Pervenche', ajuste: false, conflits: null, inclusions: null, listesDInclusions: 0 },
+    'Supprimé Théo Pervenche',
+  ],
+  [
+    'ENTREE_MODIFIER_PARTICIPANT',
+    {
+      personne: 'Iris Ombrelle',
+      champs: ['organisation'],
+      devenu: null,
+      conflits: null,
+      inclusions: { renommee: { de: 'Club des Merles', vers: 'Club des Mésanges' }, retirees: [], propres: 2 },
+    },
+    'Modifié Iris Ombrelle : organisation ; « Club des Merles » devient « Club des Mésanges » dans les inclusions ; ' +
+      '2 inclusions de leur propre organisation retirées',
+  ],
+  [
+    'ENTREE_IMPORTER_PARTICIPANTS',
+    {
+      mode: 'mettreAJour',
+      ajoutes: 0,
+      misAJour: 1,
+      retires: 0,
+      conflits: { renommee: null, retirees: [], propres: 1 },
+      inclusions: { renommee: null, retirees: ['Société Alpha', 'Société Beta'], propres: 1 },
+    },
+    'Mis à jour la liste par import : 0 ajouté, 1 modifié ; 1 conflit avec sa propre organisation retiré ; ' +
+      '« Société Alpha » et « Société Beta » quittent les inclusions ; 1 inclusion de sa propre organisation retirée',
+  ],
+  [
     'ORGANISATION_INCONNUE',
     { organisation: 'Atelier Pivoine', remede: null },
     "L'organisation « Atelier Pivoine » n'existe pas : aucune personne de l'événement ne la porte.",
@@ -153,6 +224,16 @@ export const TEXTES = [
     'CONFLIT_PROPRE_ORGANISATION',
     { personne: 'Iris Ombrelle', organisation: 'Club des Merles', remede: null },
     "Iris Ombrelle appartient à « Club des Merles » : une organisation n'est pas en conflit avec elle-même.",
+  ],
+  [
+    'INCLUSION_PROPRE_ORGANISATION',
+    { personne: 'Iris Ombrelle', organisation: 'Club des Merles', remede: null },
+    'Iris Ombrelle appartient à « Club des Merles » : une inclusion nomme une autre organisation que la sienne.',
+  ],
+  [
+    'INCLUSION_DE_SOI',
+    { personne: 'Iris Ombrelle', remede: null },
+    'Iris Ombrelle ne se rencontre pas elle-même : une inclusion nomme une autre personne.',
   ],
   [
     'ENTREE_IMPORTER_PARTICIPANTS',

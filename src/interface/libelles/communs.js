@@ -114,6 +114,8 @@ export const TABLE = new Map([
   ['communs.remede.ajouterConflit', 'Ajouter le conflit'],
   ['communs.remede.retirerConflit', 'Retirer le conflit'],
   ['communs.remede.changerConflits', 'Changer les conflits'],
+  ['communs.remede.changerInclusionsOrganisation', "Changer les inclusions d'organisation"],
+  ['communs.remede.changerInclusionsParticipant', 'Changer les inclusions de participant'],
   ['communs.remede.changerLogo', 'Changer le logo'],
   ['communs.remede.poserObjectif', "Poser l'objectif"],
   ['communs.remede.retirerObjectif', "Retirer l'objectif"],

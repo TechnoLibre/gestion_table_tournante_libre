@@ -550,6 +550,30 @@ elle quitte chaque liste dans la même entrée ; et une personne qui prend
 l'organisation qu'elle nommait la retire de sa liste. Le libellé de l'entrée
 le dit (§ 8.2).
 
+**Inclusion** — une organisation ou une personne qu'une personne nomme pour la
+**rencontrer au moins une fois** : partager une table avec elle à un tour au
+moins, n'importe lequel. Une personne porte deux listes, vides par défaut : ses
+**inclusions d'organisation**, chacune satisfaite quand la personne partage une
+table avec au moins un membre de cette organisation, et ses **inclusions de
+participant**, qui désignent chaque personne par son identifiant, jamais par
+son nom : la renommer ne change rien, et deux homonymes restent distincts. Une
+organisation incluse est celle d'un participant de l'événement, exclus compris,
+et jamais la sienne ; une personne incluse est un participant de l'événement,
+exclu compris, et jamais elle-même. Un collègue de sa propre organisation se
+nomme comme un autre. Une inclusion que contredit un conflit de la personne
+s'admet. L'inclusion n'est ni une réservation ni une fixation : elle ne place
+personne et ne retire rien de ce que la génération peut faire ; le moteur ne la
+lit pas (§ 8.9). L'exclusion suspend une personne, pas ses listes : la liste
+d'une exclue se garde, et une inclusion qui vise une exclue aussi.
+
+Les listes d'inclusions d'organisation suivent les organisations comme celles
+des conflits : la référence suit le renommage de la dernière personne d'une
+organisation, une organisation qui disparaît quitte chaque liste, et une
+personne qui prend l'organisation qu'elle incluait la retire de sa liste. Une
+personne supprimée quitte chaque liste d'inclusions de participant qui la
+nomme. Tout cela se fait dans l'entrée du geste qui le provoque : son libellé
+le dit (§ 8.2), et un retour arrière rend les listes d'avant (§ 8.3).
+
 **Objectif de table** — une liste d'étiquettes attachée à une table, sous une
 règle : *au moins une* de ces étiquettes, ou *toutes*. Il vaut pour la soirée,
 ou pour un tour désigné. Il ne fixe personne : c'est un critère de la recherche
@@ -2300,6 +2324,14 @@ dans l'outil.
   participant ne porterait, ou la propre organisation de la personne : refusé
   entier, la cause nommant l'organisation et sa ligne, le remède invitant à
   corriger le fichier puis à l'importer de nouveau (§ 10.1).
+- Une liste d'inclusions qui nomme la propre organisation de la personne
+  (`INCLUSION_PROPRE_ORGANISATION`) ou la personne elle-même
+  (`INCLUSION_DE_SOI`), une organisation qu'aucun participant ne porte
+  (`ORGANISATION_INCONNUE`) ou un identifiant qu'aucun participant n'a
+  (`PARTICIPANT_INCONNU`) : refusée entière à la première valeur fautive,
+  dans l'ordre reçu, sans remède, l'organisation ou la personne se
+  choisissant dans le champ même, parmi les autres. Une inclusion que
+  contredit un conflit de la personne n'est pas refusée (§ 4).
 - Déposer quelqu'un sur une place réservée à un autre, ou l'échanger avec elle.
   **Déplacer la réservation** est une commande séparée et explicite.
 - Une saisie d'étiquettes vide — des blancs ou des séparateurs seuls —, une
@@ -3417,7 +3449,12 @@ Déplacer une table **en est une** : sa position est une donnée du plan.
 **Chaque entrée porte un libellé en français, figé à l'écriture** — « Déplacé
 Camille Roy de la table 4 à la table 7, tour 2 ». Jamais reconstruit ensuite :
 les objets nommés peuvent avoir disparu, et un historique qui affiche « déplacé
-‹participant supprimé› » ne sert plus à rien.
+‹participant supprimé› » ne sert plus à rien. Une inclusion de participant, que
+le fichier ne désigne que par son identifiant, se nomme donc dans le libellé par
+le nom de la personne visée : « Inclusions de participant de Iris Ombrelle :
+ajouté Théo Pervenche » se lit encore après que Théo Pervenche a été renommée ou
+supprimée. La suppression d'une personne incluse compte les listes qu'elle
+quitte : « Supprimé Théo Pervenche ; retirée de 2 listes d'inclusions ».
 
 **Un retour fait au clavier nomme sa touche dans son libellé** : « Défait
 (Ctrl+Z) : », « Refait (Ctrl+Maj+Z) : » ou « Refait (Ctrl+Y) : », suivi du
@@ -4473,16 +4510,25 @@ nommés par le rang qui les porte, pour chaque personne l'organisation d'abord,
 et contrôlés après les conflits ; une organisation que nul participant ne porte
 et un identifiant que nul participant n'a sont des fautes de référence, nommées
 après celles des conflits (§ 8.8), pour chaque personne l'organisation avant
-l'identifiant. **Une inclusion de participant désigne la personne
-par son identifiant, jamais par son nom** : la renommer ne la change pas, et
-deux homonymes restent distincts. Un collègue de la même organisation se nomme
-comme un autre. Une inclusion que contredit un conflit de la personne n'est pas
-une faute du fichier. La liste d'une exclue se garde, et une inclusion qui vise
-une exclue aussi. Une personne sans inclusion s'écrit octet pour octet comme
-sans ces champs, démonstrations comprises. Un correctif du journal les pose et
-les retire comme tout champ. Le moteur ne les lit pas : la configuration qu'il
-reçoit, les empreintes et les raisons de dérive restent les mêmes. Les deux
-champs font partie du format 3.
+l'identifiant. **Une inclusion de participant désigne la personne par son
+identifiant, jamais par son nom** : la renommer ne la change pas, et deux
+homonymes restent distincts. Un collègue de la même organisation se nomme comme
+un autre. Une inclusion que contredit un conflit de la personne n'est pas une
+faute du fichier. La liste d'une exclue se garde, et une inclusion qui vise une
+exclue aussi. Une personne sans inclusion s'écrit octet pour octet comme sans
+ces champs, démonstrations comprises. Les champs se posent par deux commandes,
+`changerInclusionsOrganisation` et `changerInclusionsParticipant` — une entrée
+d'historique chacune, refusées en lecture et sur un plan bloqué — : chacune pose
+la liste entière d'un geste, ajouts et retraits ensemble ; la première juge
+chaque organisation nouvelle comme `changerConflits`, sous
+`INCLUSION_PROPRE_ORGANISATION` pour la sienne ; la seconde refuse l'identifiant
+de la personne et un identifiant inconnu (§ 5.9). Chacune rend la liste rangée,
+retire le champ quand elle se vide, et est sans effet quand la liste garde les
+mêmes valeurs. Modifier, supprimer ou importer des participants fait suivre les
+listes dans la même entrée (§ 4). Un correctif du journal les pose et les retire
+comme tout champ. Le moteur ne les lit pas : la configuration qu'il reçoit, les
+empreintes et les raisons de dérive restent les mêmes. Les deux champs font
+partie du format 3.
 
 #### Deux champs facultatifs : la présence
 

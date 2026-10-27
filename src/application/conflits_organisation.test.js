@@ -1,12 +1,14 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// Épreuves des conflits d'organisation côté application (§ 4, § 8.2,
-// § 8.9) : ajouter et retirer un conflit, une entrée d'historique chacun, et
-// les listes qui suivent un renommage ou la disparition d'une organisation
-// dans l'entrée du geste qui la provoque. Chaque charge rendue se relit par
-// l'analyse du fichier : une liste qui nommerait une organisation disparue,
-// ou la sienne, y serait refusée. Les noms sont inventés.
+// Épreuves des conflits d'organisation et des inclusions côté application
+// (§ 4, § 5.9, § 8.2, § 8.9) : ajouter et retirer un conflit, poser une
+// liste de conflits ou d'inclusions, une entrée d'historique chacun, et les
+// listes qui suivent un renommage ou la disparition d'une organisation, ou
+// la suppression d'une personne incluse, dans l'entrée du geste qui la
+// provoque. Chaque charge rendue se relit par l'analyse du fichier : une
+// liste qui nommerait une organisation disparue, la sienne, une personne
+// retirée ou soi-même y serait refusée. Les noms sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
@@ -274,10 +276,15 @@ describe('les listes suivent les organisations (§ 4, § 8.9)', () => {
     suivante.participants = suivante.participants.filter(({ id }) => id !== 5);
     const intacte = suivante.participants[1];
     const suivi = suivreOrganisations(avant, suivante);
-    assert.deepEqual(suivi, { renommee: null, retirees: [SAULE], propres: 0 });
-    assert.equal(rienASuivre(suivi), false);
+    assert.deepEqual(suivi, {
+      conflits: { renommee: null, retirees: [SAULE], propres: 0 },
+      inclusions: { renommee: null, retirees: [], propres: 0 },
+    });
+    assert.equal(rienASuivre(suivi.conflits), false);
+    assert.equal(rienASuivre(suivi.inclusions), true);
     assert.equal(suivante.participants[1], intacte);
-    assert.equal(rienASuivre(suivreOrganisations(avant, structuredClone(avant))), true);
+    const rien = suivreOrganisations(avant, structuredClone(avant));
+    assert.equal(rienASuivre(rien.conflits) && rienASuivre(rien.inclusions), true);
   });
 });
 
@@ -327,5 +334,261 @@ describe("l'import pose les conflits de la colonne conflit_organisation (§ 10.1
     assert.deepEqual(resume.refusees.map(({ ligne, code }) => [ligne, code]), [[3, 'DEJA_DESIGNE']]);
     assert.deepEqual(conflitsDe(suivante, 9), ['Clos Neuf']);
     assert.deepEqual(relue(suivante).participants, suivante.participants);
+  });
+});
+
+// --- Les inclusions ------------------------------------------------------------
+
+// La charge des conflits, ses inclusions posées : 1 (Rameau) inclut le Saule,
+// Mousse (3) et Bruyère (5) ; 3 inclut 1 en retour ; 6, sans organisation,
+// inclut le Tilleul et Bruyère. Bruyère est la seule du Saule.
+function chargeInclusions() {
+  const charge = chargeConflits();
+  const poser = (id, champs) => Object.assign(charge.participants.find((p) => p.id === id), champs);
+  poser(1, { inclusionsOrganisation: [SAULE], inclusionsParticipant: [3, 5] });
+  poser(3, { inclusionsParticipant: [1] });
+  poser(6, { inclusionsOrganisation: [TILLEUL], inclusionsParticipant: [5] });
+  return charge;
+}
+
+const champDe = (charge, id, champ) => charge.participants.find((p) => p.id === id)[champ];
+const organisationsIncluses = (charge, id) => champDe(charge, id, 'inclusionsOrganisation');
+const personnesIncluses = (charge, id) => champDe(charge, id, 'inclusionsParticipant');
+
+describe('changerInclusionsOrganisation : la liste entière, en un geste (§ 4, § 5.9, § 8.2)', () => {
+  test("ajouts et retraits en une entrée, qui les nomme ; la liste se range, sans doublon, et la charge se relit", () => {
+    const { charge, libelle, avertissements } = executer('changerInclusionsOrganisation', chargeInclusions(), {
+      id: 6,
+      organisations: [` ${SAULE} `, RAMEAU, SAULE],
+    });
+    assert.deepEqual(organisationsIncluses(charge, 6), [RAMEAU, SAULE]);
+    assert.equal(libelle, `Inclusions d'organisation de Chèvrefeuille : ajouté « ${RAMEAU} » et « ${SAULE} » ; retiré « ${TILLEUL} »`);
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual(organisationsIncluses(relue(charge), 6), [RAMEAU, SAULE]);
+    // Une personne sans liste en reçoit une ; les autres listes ne bougent pas.
+    const premier = executer('changerInclusionsOrganisation', chargeInclusions(), { id: 4, organisations: [SAULE] });
+    assert.deepEqual(organisationsIncluses(premier.charge, 4), [SAULE]);
+    assert.equal(premier.libelle, `Inclusions d'organisation de Ronce : ajouté « ${SAULE} »`);
+    assert.deepEqual(conflitsDe(premier.charge, 4), undefined);
+    assert.deepEqual(personnesIncluses(premier.charge, 4), undefined);
+  });
+
+  test('la liste vide retire le champ ; la même liste, dans un autre ordre, est SANS_EFFET', () => {
+    const { charge, libelle } = executer('changerInclusionsOrganisation', chargeInclusions(), { id: 1, organisations: [] });
+    assert.ok(!Object.hasOwn(charge.participants[0], 'inclusionsOrganisation'));
+    assert.deepEqual(personnesIncluses(charge, 1), [3, 5]);
+    assert.equal(libelle, `Inclusions d'organisation de Fougère : retiré « ${SAULE} »`);
+    refuse(() => executer('changerInclusionsOrganisation', chargeInclusions(), { id: 1, organisations: [SAULE, SAULE] }), 'SANS_EFFET', {
+      commande: 'changerInclusionsOrganisation',
+      remede: null,
+    });
+    refuse(() => executer('changerInclusionsOrganisation', chargeInclusions(), { id: 2, organisations: [] }), 'SANS_EFFET');
+  });
+
+  test("une organisation que nomme un conflit de la personne s'admet ; celle des seuls exclus aussi", () => {
+    // 1 est en conflit avec le Tilleul, et l'inclut : la contradiction ne se
+    // refuse pas (§ 4).
+    const contredite = executer('changerInclusionsOrganisation', chargeInclusions(), { id: 1, organisations: [SAULE, TILLEUL] });
+    assert.deepEqual(organisationsIncluses(contredite.charge, 1), [TILLEUL, SAULE].sort());
+    assert.deepEqual(contredite.avertissements, []);
+    assert.doesNotThrow(() => relue(contredite.charge));
+    const exclus = chargeInclusions();
+    exclus.participants[4].exclu = true;
+    const suivante = executer('changerInclusionsOrganisation', exclus, { id: 3, organisations: [SAULE] }).charge;
+    assert.deepEqual(organisationsIncluses(relue(suivante), 3), [SAULE]);
+  });
+
+  test("sa propre organisation, ou une organisation que nul ne porte, refuse le geste entier, le premier fautif d'abord ; la charge reste", () => {
+    const charge = chargeInclusions();
+    const avant = structuredClone(charge);
+    refuse(() => executer('changerInclusionsOrganisation', charge, { id: 2, organisations: [SAULE, RAMEAU] }), 'INCLUSION_PROPRE_ORGANISATION', {
+      personne: 'Lierre',
+      organisation: RAMEAU,
+      remede: null,
+    });
+    refuse(() => executer('changerInclusionsOrganisation', charge, { id: 2, organisations: ['atelier pivoine', RAMEAU] }), 'ORGANISATION_INCONNUE', {
+      organisation: 'atelier pivoine',
+      remede: null,
+    });
+    refuse(() => executer('changerInclusionsOrganisation', charge, { id: 2, organisations: [RAMEAU, 'atelier pivoine'] }), 'INCLUSION_PROPRE_ORGANISATION');
+    refuse(() => executer('changerInclusionsOrganisation', charge, { id: 99, organisations: [] }), 'PARTICIPANT_INCONNU');
+    assert.throws(() => executer('changerInclusionsOrganisation', charge, { id: 2, organisations: SAULE }), TypeError);
+    assert.throws(() => executer('changerInclusionsOrganisation', charge, { id: 2, organisations: [SAULE, 7] }), TypeError);
+    charge.evenement.etat = 'bloque';
+    refuse(() => executer('changerInclusionsOrganisation', charge, { id: 3, organisations: [SAULE] }), 'PLAN_BLOQUE');
+    charge.evenement.etat = avant.evenement.etat;
+    assert.deepEqual(charge, avant);
+  });
+});
+
+describe('changerInclusionsParticipant : la liste entière, par identifiant, en un geste (§ 4, § 5.9, § 8.2)', () => {
+  test("ajouts et retraits en une entrée, qui les nomme par leur nom affiché, dans l'ordre des identifiants ; la liste est croissante", () => {
+    const { charge, libelle, avertissements } = executer('changerInclusionsParticipant', chargeInclusions(), {
+      id: 1,
+      participants: [6, 4, 3, 6],
+    });
+    assert.deepEqual(personnesIncluses(charge, 1), [3, 4, 6]);
+    assert.equal(libelle, "Inclusions de participant de Fougère : ajouté Ronce et Chèvrefeuille ; retiré Bruyère");
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual(personnesIncluses(relue(charge), 1), [3, 4, 6]);
+    assert.deepEqual(organisationsIncluses(charge, 1), [SAULE]);
+  });
+
+  test('un collègue, une personne exclue, une réciproque et une source exclue s’admettent', () => {
+    const charge = chargeInclusions();
+    charge.participants[3].exclu = true;
+    charge.participants[4].exclu = true;
+    // 1 inclut Lierre, sa collègue du Rameau, et Ronce, exclue ; 5, exclue,
+    // inclut 6 ; 1 inclut 3, qui l'inclut déjà.
+    let suivante = executer('changerInclusionsParticipant', charge, { id: 1, participants: [2, 3, 4, 5] }).charge;
+    suivante = executer('changerInclusionsParticipant', suivante, { id: 5, participants: [6] }).charge;
+    const lue = relue(suivante);
+    assert.deepEqual(personnesIncluses(lue, 1), [2, 3, 4, 5]);
+    assert.deepEqual(personnesIncluses(lue, 3), [1]);
+    assert.deepEqual(personnesIncluses(lue, 5), [6]);
+  });
+
+  test('la liste vide retire le champ ; la même liste, dans un autre ordre, est SANS_EFFET', () => {
+    const { charge, libelle } = executer('changerInclusionsParticipant', chargeInclusions(), { id: 6, participants: [] });
+    assert.ok(!Object.hasOwn(charge.participants[5], 'inclusionsParticipant'));
+    assert.deepEqual(organisationsIncluses(charge, 6), [TILLEUL]);
+    assert.equal(libelle, 'Inclusions de participant de Chèvrefeuille : retiré Bruyère');
+    refuse(() => executer('changerInclusionsParticipant', chargeInclusions(), { id: 1, participants: [5, 3, 5] }), 'SANS_EFFET', {
+      commande: 'changerInclusionsParticipant',
+      remede: null,
+    });
+    refuse(() => executer('changerInclusionsParticipant', chargeInclusions(), { id: 2, participants: [] }), 'SANS_EFFET');
+  });
+
+  test("soi-même, ou un identifiant que nul n'a, refuse le geste entier, le premier fautif d'abord ; la charge reste", () => {
+    const charge = chargeInclusions();
+    const avant = structuredClone(charge);
+    refuse(() => executer('changerInclusionsParticipant', charge, { id: 2, participants: [3, 2, 99] }), 'INCLUSION_DE_SOI', {
+      personne: 'Lierre',
+      remede: null,
+    });
+    refuse(() => executer('changerInclusionsParticipant', charge, { id: 2, participants: [3, 99, 2] }), 'PARTICIPANT_INCONNU', {
+      id: 99,
+      remede: null,
+    });
+    refuse(() => executer('changerInclusionsParticipant', charge, { id: 99, participants: [] }), 'PARTICIPANT_INCONNU', { id: 99, remede: null });
+    for (const participants of [3, [3, '4'], [3, 4.5], [null]]) {
+      assert.throws(() => executer('changerInclusionsParticipant', charge, { id: 2, participants }), TypeError);
+    }
+    charge.evenement.etat = 'bloque';
+    refuse(() => executer('changerInclusionsParticipant', charge, { id: 2, participants: [3] }), 'PLAN_BLOQUE');
+    charge.evenement.etat = avant.evenement.etat;
+    assert.deepEqual(charge, avant);
+  });
+
+  test("un homonyme se désigne par son identifiant : le libellé nomme les deux sous le même nom, la liste les distingue", () => {
+    const charge = chargeInclusions();
+    charge.participants.push(personne(7, 'Ortie'), personne(8, 'Ortie'));
+    charge.prochainsIds.participant = 9;
+    const { charge: suivante, libelle } = executer('changerInclusionsParticipant', charge, { id: 2, participants: [8] });
+    assert.deepEqual(personnesIncluses(suivante, 2), [8]);
+    assert.equal(libelle, 'Inclusions de participant de Lierre : ajouté Ortie');
+  });
+});
+
+describe('les inclusions suivent les organisations et les personnes (§ 4, § 8.2, § 8.9)', () => {
+  test("la dernière personne d'une organisation qui en change : la référence suit dans les inclusions comme dans les conflits", () => {
+    const { charge, libelle } = appliquerCommande('modifierParticipant', chargeInclusions(), {
+      id: 5,
+      champs: { organisation: 'Ferme des Saules' },
+    });
+    assert.deepEqual(organisationsIncluses(charge, 1), ['Ferme des Saules']);
+    assert.deepEqual(conflitsDe(charge, 6), ['Ferme des Saules', RAMEAU].sort());
+    assert.equal(
+      libelle,
+      `Modifié Bruyère : organisation ; « ${SAULE} » devient « Ferme des Saules » dans les conflits ; ` +
+        `« ${SAULE} » devient « Ferme des Saules » dans les inclusions`,
+    );
+    assert.deepEqual(organisationsIncluses(relue(charge), 1), ['Ferme des Saules']);
+  });
+
+  test("sans organisation, la dernière quitte les inclusions ; le champ vidé se retire", () => {
+    const { charge, libelle } = appliquerCommande('modifierParticipant', chargeInclusions(), { id: 5, champs: { organisation: '' } });
+    assert.ok(!Object.hasOwn(charge.participants[0], 'inclusionsOrganisation'));
+    assert.deepEqual(personnesIncluses(charge, 1), [3, 5]);
+    assert.equal(libelle, `Modifié Bruyère : organisation ; « ${SAULE} » quitte les conflits ; « ${SAULE} » quitte les inclusions`);
+    assert.doesNotThrow(() => relue(charge));
+  });
+
+  test("prendre l'organisation qu'on incluait l'ôte de sa liste ; une organisation qui garde des personnes ne change rien", () => {
+    const propre = appliquerCommande('modifierParticipant', chargeInclusions(), { id: 6, champs: { organisation: TILLEUL } });
+    assert.ok(!Object.hasOwn(propre.charge.participants[5], 'inclusionsOrganisation'));
+    assert.equal(propre.libelle, 'Modifié Chèvrefeuille : organisation ; 1 inclusion de sa propre organisation retirée');
+    assert.doesNotThrow(() => relue(propre.charge));
+    const garde = appliquerCommande('modifierParticipant', chargeInclusions(), { id: 3, champs: { organisation: SAULE } });
+    assert.deepEqual(organisationsIncluses(garde.charge, 6), [TILLEUL]);
+    assert.equal(garde.libelle, 'Modifié Mousse : organisation');
+  });
+
+  test("supprimer une personne incluse la retire de chaque liste qui la nomme, dans la même entrée, et le libellé compte les listes", () => {
+    // Bruyère, seule du Saule, est incluse par 1 et par 6.
+    const { charge, libelle } = appliquerCommande('supprimerParticipant', chargeInclusions(), { id: 5 });
+    assert.deepEqual(personnesIncluses(charge, 1), [3]);
+    assert.ok(!Object.hasOwn(charge.participants.find(({ id }) => id === 6), 'inclusionsParticipant'));
+    assert.deepEqual(personnesIncluses(charge, 3), [1]);
+    assert.equal(
+      libelle,
+      `Supprimé Bruyère ; « ${SAULE} » quitte les conflits ; « ${SAULE} » quitte les inclusions ; retirée de 2 listes d'inclusions`,
+    );
+    assert.doesNotThrow(() => relue(charge));
+    // Une personne qu'une seule liste nomme, dont l'organisation reste.
+    const seule = appliquerCommande('supprimerParticipant', chargeInclusions(), { id: 3 });
+    assert.deepEqual(personnesIncluses(seule.charge, 1), [5]);
+    assert.equal(seule.libelle, "Supprimé Mousse ; retirée de 1 liste d'inclusions");
+    // Ni incluse ni dernière de son organisation : le libellé n'ajoute rien.
+    assert.equal(appliquerCommande('supprimerParticipant', chargeInclusions(), { id: 2 }).libelle, 'Supprimé Lierre');
+    // La personne supprimée emporte ses propres listes.
+    const source = appliquerCommande('supprimerParticipant', chargeInclusions(), { id: 1 });
+    assert.deepEqual(personnesIncluses(source.charge, 3), undefined);
+    assert.doesNotThrow(() => relue(source.charge));
+  });
+
+  test("un import qui met à jour donne à une personne l'organisation qu'elle incluait : elle quitte sa liste, dans l'entrée de l'import", () => {
+    const charge = chargeInclusions();
+    const apercu = apercevoir(`nom;organisation\nChèvrefeuille;${TILLEUL}\n`, { participants: charge.participants, mode: 'mettreAJour' });
+    const { charge: suivante, libelle } = appliquerCommande('importerParticipants', charge, { apercu, mode: 'mettreAJour' });
+    assert.ok(!Object.hasOwn(suivante.participants.find(({ id }) => id === 6), 'inclusionsOrganisation'));
+    assert.equal(libelle, 'Mis à jour la liste par import : 0 ajouté, 1 modifié ; 1 inclusion de sa propre organisation retirée');
+    assert.doesNotThrow(() => relue(suivante));
+  });
+
+  test("un import qui remplace la liste ne laisse aucune inclusion vers une personne retirée", () => {
+    const charge = chargeInclusions();
+    const apercu = apercevoir(`nom;organisation\nGenêt;${RAMEAU}\n`, { participants: charge.participants, mode: 'remplacer' });
+    const { charge: suivante } = appliquerCommande('importerParticipants', charge, { apercu, mode: 'remplacer' });
+    assert.ok(suivante.participants.every((p) => p.inclusionsOrganisation === undefined && p.inclusionsParticipant === undefined));
+    assert.doesNotThrow(() => relue(suivante));
+  });
+});
+
+describe('les inclusions : la charge reçue ne change jamais (§ 13.2)', () => {
+  // Gèle une valeur en profondeur : un geste qui la modifierait lèverait.
+  function figer(valeur) {
+    if (valeur !== null && typeof valeur === 'object' && !Object.isFrozen(valeur)) {
+      Object.freeze(valeur);
+      for (const element of Object.values(valeur)) figer(element);
+    }
+    return valeur;
+  }
+
+  test('chaque geste qui touche une liste d’inclusions rend une charge neuve et laisse la reçue intacte', () => {
+    for (const [nom, args] of [
+      ['changerInclusionsOrganisation', { id: 1, organisations: [TILLEUL] }],
+      ['changerInclusionsParticipant', { id: 1, participants: [2] }],
+      ['modifierParticipant', { id: 5, champs: { organisation: 'Ferme des Saules' } }],
+      ['modifierParticipant', { id: 6, champs: { organisation: TILLEUL } }],
+      ['supprimerParticipant', { id: 5 }],
+    ]) {
+      const recue = chargeInclusions();
+      const copie = structuredClone(recue);
+      const rendu = appliquerCommande(nom, figer(recue), args);
+      assert.deepEqual(recue, copie, nom);
+      assert.notEqual(rendu.charge, recue, nom);
+    }
   });
 });
