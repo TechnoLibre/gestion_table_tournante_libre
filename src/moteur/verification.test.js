@@ -1320,3 +1320,88 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
     );
   });
 });
+
+describe('verifierIndicateurs : les inclusions (§ 5.4, § 12.3)', () => {
+  // Quatre personnes qui rencontrent chacune une personne sous des plafonds
+  // de 3 : la ligne de décomposition tient. 1 et 3 portent des lignes.
+  const plafonds = () => [3, 3, 3, 3];
+  const inclusions = () => ({
+    cible: 3,
+    satisfaites: 2,
+    avis: 1,
+    nonSatisfaites: [{ p: 0, cible: 1, reciproque: false }],
+    parPersonne: [
+      { p: 0, actives: 2, besoin: 2, plafond: 3, atteignables: 2, satisfaites: 1, auDelaDuPlafond: false },
+      { p: 2, actives: 1, besoin: 1, plafond: 3, atteignables: 1, satisfaites: 1, auDelaDuPlafond: false },
+    ],
+  });
+  const avec = (modifier) => {
+    const mesures = { rencontres: [1, 1, 1, 1], inclusions: inclusions() };
+    modifier(mesures.inclusions);
+    return mesures;
+  };
+
+  test('des inclusions qui tiennent, null ou absentes : aucune violation', () => {
+    assert.deepEqual(verifierIndicateurs(avec(() => {}), plafonds(), plafonds()), []);
+    assert.deepEqual(verifierIndicateurs({ rencontres: [1, 1, 1, 1], inclusions: null }, plafonds(), plafonds()), []);
+    assert.deepEqual(verifierIndicateurs({ rencontres: [1, 1, 1, 1] }, plafonds(), plafonds()), []);
+  });
+
+  test('chaque écart a son code ; la borne de chacun ne se lit pas quand le plafond a priori est inconnu', () => {
+    const cas = [
+      ['satisfaites 2 > atteignables 1', (i) => { i.parPersonne[1].satisfaites = 2; }, [{ code: 'INCLUSIONS_SATISFAITES', index: 2 }]],
+      ['satisfaites négatives', (i) => { i.parPersonne[0].satisfaites = -1; }, [{ code: 'INCLUSIONS_SATISFAITES', index: 0 }]],
+      ['avis ≠ cible − satisfaites', (i) => { i.avis = 2; }, [{ code: 'INCLUSIONS_AVIS' }]],
+      ['un avis sans unité nommée', (i) => { i.nonSatisfaites = []; }, [{ code: 'INCLUSIONS_AVIS' }]],
+      ['satisfaites > cible', (i) => { i.satisfaites = 4; i.avis = -1; }, [{ code: 'INCLUSIONS_AVIS' }]],
+      ['satisfaites négatives au total', (i) => { i.satisfaites = -1; i.avis = 4; }, [{ code: 'INCLUSIONS_AVIS' }]],
+      ['les deux, la personne d’abord', (i) => { i.parPersonne[0].satisfaites = 3; i.avis = 0; },
+        [{ code: 'INCLUSIONS_SATISFAITES', index: 0 }, { code: 'INCLUSIONS_AVIS' }]],
+    ];
+    const ecarts = cas
+      .map(([libelle, modifier, attendu]) => [libelle, verifierIndicateurs(avec(modifier), plafonds(), plafonds()), attendu])
+      .filter(([, recu, attendu]) => JSON.stringify(recu) !== JSON.stringify(attendu))
+      .map(([libelle, recu]) => `${libelle} : ${JSON.stringify(recu)}`);
+    assert.deepEqual(ecarts, []);
+    const inconnu = verifierIndicateurs(avec((i) => { i.parPersonne[1].satisfaites = 2; }), null, plafonds());
+    assert.deepEqual(inconnu, []);
+  });
+
+  test('les violations des inclusions suivent celles des totaux et précèdent les restes', () => {
+    const mesures = {
+      ...avec((i) => { i.avis = 0; }),
+      toursAssis: [1, 1, 1, 1],
+      objectifs: { tours: [0, 0, 0, 0], possibles: [0, 0, 0, 0], jamaisServies: 5, concernes: 0, horsObjectifMax: 0 },
+      organisationsVues: [0, 0, 0, 0],
+      affilies: [0, 0, 0, 0],
+      parGroupe: [],
+      conflitsOrganisation: 0,
+    };
+    const complements = { planchersValides: true, plancherConflits: 1 };
+    assert.deepEqual(verifierIndicateurs(mesures, plafonds(), plafonds(), complements), [
+      { code: 'JAMAIS_SERVIES' },
+      { code: 'INCLUSIONS_AVIS' },
+      { code: 'RESTE_CONFLITS_NEGATIF' },
+    ]);
+  });
+
+  test('sur un plan mesuré, les inclusions tiennent', () => {
+    // 1 inclut 2, qu'il rencontre, et 3, qu'il ne rencontre pas.
+    const instance = normaliser({
+      participants: [
+        { id: 1, nom: 'P1', organisation: null, inclusionsParticipant: [2, 3] },
+        { id: 2, nom: 'P2', organisation: null },
+        { id: 3, nom: 'P3', organisation: null },
+        { id: 4, nom: 'P4', organisation: null },
+      ],
+      tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 2 }],
+      tours: 2,
+      reservations: [],
+      contraintes: { separerOrganisations: false, nouveauxVoisins: false, nouvelleTable: false, varierOrganisations: false },
+    });
+    const tableDe = indexerPlan(instance, { tables: [1, 2], tours: [[[1, 2], [3, 4]], [[1, 2], [3, 4]]], reserves: [[], []] });
+    const mesures = mesurer(instance, tableDe);
+    assert.equal(mesures.inclusions.avis, 1);
+    assert.deepEqual(verifierIndicateurs(mesures, plafondsAPriori(instance), plafondsRealises(instance, tableDe)), []);
+  });
+});

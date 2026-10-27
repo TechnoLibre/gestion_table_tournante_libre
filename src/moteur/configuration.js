@@ -6,16 +6,16 @@
 // ses deux formes (§ 8.9). Les formes sont décrites dans types.js.
 //
 // L'instance porte aussi la présence de chacun à chaque tour, en masque, avec
-// ses comptes et la co-présence que lit le plafond ; les étiquettes de
-// chacun, en index, que lit la diversité par animateur ; la relation des
-// conflits d'organisation, par unités, que lit le critère des conflits ; et
-// ce que les
-// critères des objectifs et des animateurs lisent, calculé une fois par
-// configuration : l'objectif en vigueur à chaque table et chaque tour, la
-// correspondance de chaque personne à chaque objectif distinct, ses couples
-// (personne, tour) possibles, les animateurs de chaque table à chaque tour et
-// la borne des animateurs de chacun ; puis l'état de chaque critère et la
-// liste des priorités complète.
+// ses comptes et la co-présence que lit le plafond ; les étiquettes de chacun,
+// en index, que lit la diversité par animateur ; la relation des conflits
+// d'organisation, par unités, que lit le critère des conflits ; les lignes
+// actives des inclusions et celles qui sont hors d'atteinte, que lisent leur
+// mesure et le diagnostic ; et ce que les critères des objectifs et des
+// animateurs lisent, calculé une fois par configuration : l'objectif en
+// vigueur à chaque table et chaque tour, la correspondance de chaque personne
+// à chaque objectif distinct, ses couples (personne, tour) possibles, les
+// animateurs de chaque table à chaque tour et la borne des animateurs de
+// chacun ; puis l'état de chaque critère et la liste des priorités complète.
 //
 // Ce module définit aussi, une seule fois pour tout le moteur (§ 13.2), ce
 // que les autres modules lisent de ces formes : les valeurs du contrat —
@@ -43,14 +43,15 @@
 //   entier ≥ 1, une organisation ni chaîne ni null, un exclu présent et non
 //   booléen, une portée ni « tous » ni « tour », des contraintes qui ne sont
 //   pas un objet de quatre booléens, ou dont une case facultative présente
-//   n'est pas booléenne, une liste qui n'est pas un tableau, des étiquettes
-//   ou des conflits qui ne sont pas une liste de chaînes, une règle
-//   d'objectif ni « ou » ni
-//   « et », un mode des objectifs inconnu, des tours animés qui ne croissent
-//   pas strictement, une présence qui n'est pas une liste strictement
-//   croissante. Ces formes sont les seules que normaliser contrôle par
-//   TypeError ; une valeur qui en sort est une faute de l'appelant, qu'aucune
-//   valeur par défaut ne masque ;
+//   n'est pas booléenne, une liste qui n'est pas un tableau, des étiquettes,
+//   des conflits ou des inclusions d'organisation qui ne sont pas une liste
+//   de chaînes, des inclusions de participant qui ne sont pas une liste
+//   d'identifiants d'autres participants de la configuration, une règle
+//   d'objectif ni « ou » ni « et », un mode des objectifs inconnu, des tours
+//   animés qui ne croissent pas strictement, une présence qui n'est pas une
+//   liste strictement croissante. Ces formes sont les seules que normaliser
+//   contrôle par TypeError ; une valeur qui en sort est une faute de
+//   l'appelant, qu'aucune valeur par défaut ne masque ;
 // - RangeError, pour un plan indexé qui n'a pas la forme de l'instance : seul
 //   le moteur produit cette forme, et l'écart y est une faute de code.
 //
@@ -279,6 +280,160 @@ function relierConflits(presents, exclus, groupe, groupes) {
     pairesEnConflit += effectif[u] * effectif[v];
   }
   return { uniteConflit, unitesConflit: K, conflitEntre, pairesEnConflit };
+}
+
+// Lève TypeError quand les inclusions d'un participant, exclus compris,
+// sortent de leur forme : inclusionsOrganisation, une liste de chaînes ;
+// inclusionsParticipant, une liste d'identifiants entiers ≥ 1, chacun celui
+// d'un autre participant de la configuration (connus). Le stockage garantit
+// les deux références, qu'aucune saisie ne produit ; les noms
+// d'organisation, eux, se rapportent aux présents comme ceux des conflits.
+function exigerInclusions(participants, connus) {
+  for (const { id, inclusionsOrganisation, inclusionsParticipant } of participants) {
+    if (inclusionsOrganisation !== undefined) {
+      exigerEtiquettes(inclusionsOrganisation, `participant ${id}, inclusions d'organisation`);
+    }
+    if (inclusionsParticipant === undefined) continue;
+    if (!Array.isArray(inclusionsParticipant)) {
+      throw new TypeError(`participant ${id} : inclusions de participant en liste attendues`);
+    }
+    for (const cible of inclusionsParticipant) {
+      exigerIdentifiant(cible, `participant ${id}, inclusion du participant`);
+      if (cible === id) throw new TypeError(`participant ${id} : inclusion de lui-même`);
+      if (!connus.has(cible)) throw new TypeError(`participant ${id} : inclusion du participant ${cible}, inconnu`);
+    }
+  }
+}
+
+// Ce qui empêche p et q, deux présents, de partager une table à un tour au
+// moins (§ 4) : null quand un tour r où les deux sont présents offre une
+// table qui les accueille tous deux — leur table fixée commune, la table
+// fixée de l'un quand l'autre est libre et qu'elle garde un siège libre, ou,
+// les deux libres, une table qui en garde deux. Sinon la raison :
+// 'sansTourCommun' quand aucun tour ne les voit présents ensemble,
+// 'tablesImposees' quand chaque tour commun les fixe à deux tables
+// différentes, 'pleine' quand un tour commun laisse l'un d'eux libre sans
+// table qui ait la place. O(R · T).
+function empechement({ T, R, present, fixe, siegesLibres }, p, q) {
+  let commun = false;
+  let libre = false;
+  for (let r = 0; r < R; r += 1) {
+    if (present[p * R + r] === 0 || present[q * R + r] === 0) continue;
+    commun = true;
+    const tp = fixe[p * R + r];
+    const tq = fixe[q * R + r];
+    if (tp !== LIBRE && tq !== LIBRE) {
+      if (tp === tq) return null;
+      continue;
+    }
+    libre = true;
+    const t = tp !== LIBRE ? tp : tq;
+    if (t !== LIBRE) {
+      if (siegesLibres[t * R + r] >= 1) return null;
+      continue;
+    }
+    for (let u = 0; u < T; u += 1) if (siegesLibres[u * R + r] >= 2) return null;
+  }
+  if (!commun) return 'sansTourCommun';
+  return libre ? 'pleine' : 'tablesImposees';
+}
+
+/**
+ * Vrai quand les présents d'index p et q peuvent partager une table à un
+ * tour au moins d'un plan qui honore les réservations (§ 4) : un tour où les
+ * deux sont présents offre une table qui les accueille tous deux, sans que
+ * les autres occupants soient regardés. C'est une relaxation : un plan qui
+ * les réunit la rend vraie, l'inverse n'est pas promis. O(R · T).
+ *
+ * @param {import('./types.js').Instance} instance  T, R, present, fixe et
+ *        siegesLibres sont lus
+ * @param {number} p
+ * @param {number} q
+ * @returns {boolean}
+ */
+export function inclusionPossible(instance, p, q) {
+  return empechement(instance, p, q) === null;
+}
+
+// Rang d'une raison d'organisation hors d'atteinte : celle de l'organisation
+// est la plus avancée de celles de ses membres, une table pleine passant
+// devant des tables imposées, qui passent devant l'absence de tour commun.
+const AVANCEE = { sansTourCommun: 0, tablesImposees: 1, pleine: 2 };
+
+// Les inclusions des présents (§ 4), normalisées. Une ligne est une
+// inclusion d'une personne, d'organisation ou de participant ; elle est
+// active quand la cible est présente — une personne non exclue, une
+// organisation qu'un présent porte —, qu'aucun conflit ne la contredit — les
+// unités de conflit de p et de la cible, ou d'un membre de l'organisation,
+// ne sont pas reliées — et que p peut partager une table avec la personne,
+// ou avec un membre au moins de l'organisation (empechement). Une ligne non
+// active est hors d'atteinte, sous la première raison qui la retient, dans
+// cet ordre : 'exclue' (une personne exclue), 'sansPresent' (aucun présent
+// ne porte l'organisation), 'conflit', puis la raison d'empechement, celle
+// d'une organisation étant la plus avancée de ses membres. Sa propre
+// organisation, et un nom répété, ne font aucune ligne ; la liste d'un exclu
+// est ignorée. Les lignes actives de p vont, dans inclusionCible, de
+// inclusionDebut[p] à inclusionDebut[p + 1] : ses organisations, codées
+// −1 − g, par groupe croissant, puis ses personnes, par index croissant ;
+// l'ordre des listes reçues n'y change rien. horsAtteinte porte, par index
+// de source croissant, puis organisations par nom et personnes par
+// identifiant, {p, cible, raison}, cible valant {organisation} ou
+// {participant}, l'identifiant d'une personne exclue n'ayant pas d'index.
+// La Map ne sert qu'à retrouver un groupe par son libellé.
+function relierInclusions(presents, instance) {
+  const { N, groupe, groupes, indexDe, uniteConflit, unitesConflit: K, conflitEntre } = instance;
+  const numeroDe = new Map(groupes.map((libelle, g) => [libelle, g]));
+  // Les membres de chaque groupe, par index croissant.
+  const membres = groupes.map(() => []);
+  for (let p = 0; p < N; p += 1) if (groupe[p] !== SANS_GROUPE) membres[groupe[p]].push(p);
+  const enConflit = (p, q) =>
+    uniteConflit[p] >= 0 && uniteConflit[q] >= 0 && conflitEntre[uniteConflit[p] * K + uniteConflit[q]] === 1;
+  const inclusionDebut = new Int32Array(N + 1);
+  const cibles = [];
+  const horsAtteinte = [];
+  const ecarter = (p, cible, raison) => horsAtteinte.push({ p, cible, raison });
+  for (let p = 0; p < N; p += 1) {
+    const { inclusionsOrganisation = [], inclusionsParticipant = [] } = presents[p];
+    const organisations = [];
+    for (const nom of [...new Set(inclusionsOrganisation)].sort()) {
+      const g = numeroDe.get(nom);
+      if (g === groupe[p]) continue;
+      if (g === undefined) {
+        ecarter(p, { organisation: nom }, 'sansPresent');
+        continue;
+      }
+      if (enConflit(p, membres[g][0])) {
+        ecarter(p, { organisation: nom }, 'conflit');
+        continue;
+      }
+      let raison = 'sansTourCommun';
+      for (const q of membres[g]) {
+        const sienne = empechement(instance, p, q);
+        if (sienne === null) {
+          raison = null;
+          break;
+        }
+        if (AVANCEE[sienne] > AVANCEE[raison]) raison = sienne;
+      }
+      if (raison === null) organisations.push(g);
+      else ecarter(p, { organisation: nom }, raison);
+    }
+    organisations.sort((a, b) => a - b);
+    for (const g of organisations) cibles.push(-1 - g);
+    for (const id of [...new Set(inclusionsParticipant)].sort((a, b) => a - b)) {
+      const q = indexDe.get(id);
+      const raison = q === undefined ? 'exclue' : enConflit(p, q) ? 'conflit' : empechement(instance, p, q);
+      if (raison === null) cibles.push(q);
+      else ecarter(p, { participant: id }, raison);
+    }
+    inclusionDebut[p + 1] = cibles.length;
+  }
+  return {
+    inclusionDebut,
+    inclusionCible: Int32Array.from(cibles),
+    inclusionsActives: cibles.length,
+    inclusionsHorsAtteinte: horsAtteinte,
+  };
 }
 
 // Les étiquettes des présents en index (D39). libellesEtiquettes porte les
@@ -813,24 +968,26 @@ function etatDesCriteres(contraintes, mode, { possibles, borne, pairesEnConflit 
  *
  * Lève TypeError sur les seules formes qu'énumère l'en-tête du module :
  * identifiants de participant et de table, organisation, exclu, portée,
- * contraintes, listes, étiquettes, conflits, règle d'un objectif, mode,
- * ordre des tours animés, présence qui n'est pas une liste strictement
- * croissante. Une capacité, un nombre de tours, un tour désigné, le tour
- * d'un objectif, un tour animé ou un tour de présence hors de leur forme
- * lèvent CAPACITE, TOURS, RESERVATION_TOUR, OBJECTIF_TOUR,
- * ANIMATION_NON_FIXEE ou PRESENCE_TOUR ; une réservation ou un objectif qui
- * désignent un participant ou une table absents de la configuration lèvent
- * RESERVATION_INCONNUE ou OBJECTIF_INCONNU, quelle que soit la forme de la
- * valeur qui les désigne. Un conflit qui nomme une organisation qu'aucun
- * présent ne porte, ou celle de la personne, n'est pas refusé : il ne relie
- * rien (relierConflits). La liste d'un exclu relie son organisation, quand
- * des présents la portent.
+ * contraintes, listes, étiquettes, conflits, inclusions, règle d'un objectif,
+ * mode, ordre des tours animés, présence qui n'est pas une liste strictement
+ * croissante. Une capacité, un nombre de tours, un tour désigné, le tour d'un
+ * objectif, un tour animé ou un tour de présence hors de leur forme lèvent
+ * CAPACITE, TOURS, RESERVATION_TOUR, OBJECTIF_TOUR, ANIMATION_NON_FIXEE ou
+ * PRESENCE_TOUR ; une réservation ou un objectif qui désignent un participant
+ * ou une table absents de la configuration lèvent RESERVATION_INCONNUE ou
+ * OBJECTIF_INCONNU, quelle que soit la forme de la valeur qui les désigne. Un
+ * conflit qui nomme une organisation qu'aucun présent ne porte, ou celle de la
+ * personne, n'est pas refusé : il ne relie rien (relierConflits). La liste
+ * d'un exclu relie son organisation, quand des présents la portent. Une
+ * inclusion qui vise une exclue, une organisation qu'aucun présent ne porte,
+ * une cible que contredit un conflit ou que les tours et les tables tiennent à
+ * l'écart n'est pas refusée : elle est hors d'atteinte (relierInclusions).
  *
- * Les champs facultatifs absents prennent leur défaut : aucun objectif,
- * aucune étiquette, aucun conflit, personne n'anime, le mode « places »,
- * l'ordre par défaut ; les deux cases facultatives restent absentes de
- * instance.contraintes, où estCoche (criteres.js) leur donne leur valeur par
- * défaut.
+ * Les champs facultatifs absents prennent leur défaut : aucun objectif, aucune
+ * étiquette, aucun conflit, aucune inclusion, personne n'anime, le mode
+ * « places », l'ordre par défaut ; les deux cases facultatives restent
+ * absentes de instance.contraintes, où estCoche (criteres.js) leur donne leur
+ * valeur par défaut.
  *
  * Une configuration passée par figerConfiguration ne se normalise qu'une
  * fois : les appels suivants rendent la même instance, que l'appelant lit
@@ -870,13 +1027,13 @@ function figerObjet(valeur) {
 
 /**
  * Fige ce que normaliser lit de la configuration et la rend : l'objet, ses
- * participants avec leurs étiquettes, leurs conflits, leurs tours animés et
- * leur présence, ses tables, ses
- * réservations, ses contraintes, ses objectifs avec leurs étiquettes, ses
- * priorités, palier par palier. normaliser ne la calcule alors plus qu'une
- * fois, et chaque appel suivant rend la même instance : un appelant qui la
- * passe à plusieurs fonctions du moteur — diagnostiquer, puis normaliser
- * pour mesurer — ne paie qu'une normalisation. Ce qu'elle atteint devient
+ * participants avec leurs étiquettes, leurs conflits, leurs inclusions,
+ * leurs tours animés et leur présence, ses tables, ses réservations, ses
+ * contraintes, ses objectifs avec leurs étiquettes, ses priorités, palier
+ * par palier. normaliser ne la calcule alors plus qu'une fois, et chaque
+ * appel suivant rend la même instance : un appelant qui la passe à
+ * plusieurs fonctions du moteur — diagnostiquer, puis normaliser pour
+ * mesurer — ne paie qu'une normalisation. Ce qu'elle atteint devient
  * immuable : elle ne doit rien partager avec une valeur que son
  * propriétaire modifie encore. Les champs sont nommés, et non parcourus :
  * l'instance ne dépend que d'eux.
@@ -889,6 +1046,8 @@ export function figerConfiguration(configuration) {
     figerObjet(participant);
     figerListe(participant?.etiquettes, figerObjet);
     figerListe(participant?.conflits, figerObjet);
+    figerListe(participant?.inclusionsOrganisation, figerObjet);
+    figerListe(participant?.inclusionsParticipant, figerObjet);
     figerListe(participant?.anime, figerObjet);
     figerListe(participant?.presence, figerObjet);
   });
@@ -931,6 +1090,7 @@ function instanceDe(configuration) {
     if (estExclu(participant)) membresExclus.push(participant);
     else presents.push(participant);
   }
+  exigerInclusions(participants, connus);
   presents.sort((a, b) => a.id - b.id);
   membresExclus.sort((a, b) => a.id - b.id);
   const exclus = membresExclus.map(({ id }) => id);
@@ -964,6 +1124,9 @@ function instanceDe(configuration) {
   const { present } = presence;
   const fixe = fixerReservations(reservations, { connus, indexDe, indexTableDe, idsTables, N, R, present });
   const siegesLibres = siegesLibresApres(fixe, { N, T, R, capacite, idsTables });
+  const inclusions = relierInclusions(presents, {
+    N, T, R, groupe, groupes, indexDe, ...conflits, present, fixe, siegesLibres,
+  });
   const { statut, ancresParTable, k } = deriverStatuts(fixe, N, T, R);
   const { coPresents, mobilesCoPresents } = coPresences({ N, R, present, absences: presence.absences, statut, k });
   const { objectifDe, distincts } = numeroterObjectifs(configuration.objectifs ?? [], { T, R, idsTables, indexTableDe });
@@ -988,6 +1151,10 @@ function instanceDe(configuration) {
     unitesConflit: conflits.unitesConflit,
     conflitEntre: conflits.conflitEntre,
     pairesEnConflit: conflits.pairesEnConflit,
+    inclusionDebut: inclusions.inclusionDebut,
+    inclusionCible: inclusions.inclusionCible,
+    inclusionsActives: inclusions.inclusionsActives,
+    inclusionsHorsAtteinte: inclusions.inclusionsHorsAtteinte,
     debutEtiquettes,
     etiquettes,
     libellesEtiquettes,

@@ -569,11 +569,12 @@ et jamais la sienne ; une personne incluse est un participant de l'événement,
 exclu compris, et jamais elle-même. Un collègue de sa propre organisation se
 nomme comme un autre. Une inclusion que contredit un conflit de la personne
 s'admet. L'inclusion n'est ni une réservation ni une fixation : elle ne place
-personne et ne retire rien de ce que la génération peut faire ; le moteur ne la
-lit pas (§ 8.9). L'exclusion suspend une personne, pas ses listes : la liste
-d'une exclue se garde, et une inclusion qui vise une exclue aussi. Elle se
-saisit dans la fiche et dans la grille (§ 10.2), et s'importe en CSV, une
-personne par son nom affiché (§ 10.1).
+personne et ne retire rien de ce que la génération peut faire ; la mesure d'un
+placement la lit (§ 5.4), la recherche et le classement ne la lisent pas.
+L'exclusion suspend une personne, pas ses listes : la liste d'une exclue se
+garde, et une inclusion qui vise une exclue aussi. Elle se saisit dans la fiche
+et dans la grille (§ 10.2), et s'importe en CSV, une personne par son nom
+affiché (§ 10.1).
 
 Les listes d'inclusions d'organisation suivent les organisations comme celles
 des conflits : la référence suit le renommage de la dernière personne d'une
@@ -582,6 +583,25 @@ personne qui prend l'organisation qu'elle incluait la retire de sa liste. Une
 personne supprimée quitte chaque liste d'inclusions de participant qui la
 nomme. Tout cela se fait dans l'entrée du geste qui le provoque : son libellé
 le dit (§ 8.2), et un retour arrière rend les listes d'avant (§ 8.3).
+
+Une inclusion est **active** quand un plan qui honore les réservations peut la
+satisfaire, au jugé de la configuration seule : la personne qui la porte n'est
+pas exclue ; la personne incluse non plus, ou un présent porte
+l'organisation incluse ; aucun conflit d'organisation ne sépare la personne de
+la cible, ou des membres de l'organisation incluse ; et, à un tour au moins où
+les deux sont présentes, une table peut les accueillir ensemble — leur table
+réservée commune, la table réservée de l'une quand il y reste un siège, ou,
+toutes deux libres, une table qui garde deux sièges. Une organisation incluse
+l'est dès qu'un de ses membres l'est. Sinon l'inclusion est **hors
+d'atteinte**, sous la première raison qui la retient : la personne incluse est
+exclue, aucun présent ne porte l'organisation, un conflit la contredit, les
+deux ne sont jamais présentes au même tour, les réservations les assoient à
+deux tables différentes à chaque tour commun, aucune table n'a de place pour
+les deux ; pour une organisation, la raison la plus proche du possible parmi
+ses membres. Une inclusion hors d'atteinte ne compte nulle part, ni satisfaite
+ni manquée : le diagnostic la nomme (§ 5.6). Sa propre organisation et une
+cible nommée deux fois ne font pas d'inclusion de plus, et la liste d'une
+exclue attend qu'elle soit réintégrée.
 
 **Objectif de table** — une liste d'étiquettes attachée à une table, sous une
 règle : *au moins une* de ces étiquettes, ou *toutes*. Il vaut pour la soirée,
@@ -1022,6 +1042,8 @@ une lecture et non un jugement :
 | **le plus de tours hors objectif d'une personne** | max (P(p) − s(p)) sur les personnes concernées |
 | **animateurs rencontrés** — m(p) | animateurs distincts (§ 4.5) que p rencontre à un tour où ils animent, lui-même non compté ; un animateur rencontré à plusieurs tours compte une fois ; m(p) ne dépasse pas B(p), la borne des animateurs |
 | **animateurs non rencontrés** | Σ (B(p) − m(p)) sur les personnes présentes placées : ce qui leur reste à rencontrer de ce que la configuration leur permettait |
+| **inclusions satisfaites** — sat(p) | inclusions actives de p (§ 4) satisfaites : p partage une table, à un tour au moins, n'importe lequel, avec la personne incluse, ou avec un membre au moins de l'organisation incluse ; elles ne dépassent pas I(p), ses **inclusions atteignables** |
+| **inclusions non satisfaites** | rencontres demandées non satisfaites : chaque inclusion active non satisfaite d'une personne dont la liste ne dépasse pas son plafond, une même paire de personnes ne comptant qu'une fois, quel que soit le sens des demandes ; « — » sans inclusion active |
 
 **Les agrégats portent sur tous les participants placés.** Le minimum se calcule
 sur l'ensemble, ancrés compris, et **deux lignes secondaires** donnent la même
@@ -1119,6 +1141,46 @@ les animateurs non rencontrés. Un animateur y entre comme tout autre : aux tour
 où il n'anime pas, il rencontre ceux qui animent. Comme les personnes
 rencontrées, les animateurs rencontrés ne se séparent pas en imposé et choisi.
 Sans personne concernée, m(p) et les animateurs non rencontrés écrivent « — ».
+
+**Les inclusions se lisent sur les inclusions actives** (§ 4) ; une inclusion
+hors d'atteinte n'y entre pas. Pour une personne p, k°(p) compte ses
+inclusions actives ; Q(p) ses personnes incluses ; d(p) ses organisations
+incluses qui contiennent une personne de Q(p) ; b(p) = k°(p) − d(p) les
+personnes qu'il lui faut rencontrer pour toutes les satisfaire, une personne
+n'ayant qu'une organisation ; K(p) son plafond a priori (§ 5.5), le plus de
+personnes distinctes qu'un plan valide lui fait rencontrer. Ses inclusions
+atteignables valent
+
+```
+I(p) = min( k°(p) , K(p) + min( K(p) , d(p) ) )
+```
+
+et aucun plan valide n'en satisfait davantage : parmi les M personnes qu'elle
+rencontre, |M| ≤ K(p), chacune satisfait au plus sa propre inclusion et celle
+de son organisation, et une personne de Q(p) ne touche qu'une organisation
+qu'elle couvre, d'où sat(p) ≤ |M| + min(|M|, d(p)). Prendre d'abord une
+personne de Q(p) par organisation couverte, puis une personne par inclusion
+restante, atteint I(p) dès que K(p) personnes sont libres de la rencontrer.
+Deux régimes en sortent :
+
+- **b(p) ≤ K(p)** : toute la liste est atteignable, I(p) = k°(p), et chaque
+  inclusion active que le plan ne satisfait pas est une inclusion non
+  satisfaite, nommée ;
+- **b(p) > K(p)** : la liste demande plus de personnes que p n'en peut
+  rencontrer. Ne pas la satisfaire tout entière n'est pas une erreur : ses
+  inclusions ne comptent jamais parmi les inclusions non satisfaites, et le
+  nombre de celles qu'elle aurait pu atteindre, I(p) − sat(p), est une
+  information.
+
+Les inclusions non satisfaites comptent des **rencontres demandées**. Une
+inclusion de personne demande la rencontre de la paire ; une inclusion
+d'organisation dont un seul membre peut partager une table avec la personne
+(§ 4) demande la même, car dans un plan qui honore les réservations ce membre
+est le seul qui la satisfasse. Les inclusions qui demandent une même paire, dans
+un sens ou dans l'autre, ne comptent qu'une fois, dès que l'une des deux
+personnes reste dans son plafond. Une inclusion d'organisation que plusieurs
+membres peuvent satisfaire est une rencontre à elle seule. Sans inclusion
+active, les chiffres des inclusions écrivent « — ».
 
 **Aucun de ces chiffres ne s'additionne à un autre pour s'afficher.** Un palier
 pondéré du § 5.7 somme des paires, des couples (personne, tour) et des
@@ -1527,6 +1589,18 @@ inévitable, **combien**, et ce qui le rendrait évitable :
 
 L'objectif auquel aucune personne présente ne correspond est signalé à
 l'objectif même (§ 5.9).
+
+**Les inclusions qu'aucun plan ne satisfait.** Le diagnostic relève chaque
+inclusion hors d'atteinte (§ 4), avec sa raison et la personne qui la porte. Il
+relève aussi chaque personne **au-delà de son plafond**, dont la liste demande
+plus de personnes qu'elle n'en peut rencontrer, b(p) > K(p) (§ 5.4) : avec ses
+inclusions actives, les personnes qu'elles demandent, son plafond a priori et
+ses inclusions atteignables I(p), si bien que k°(p) − I(p) d'entre elles
+restent hors de portée quel que soit le plan. Ce sont des informations, jamais
+des avis : aucun plan ne lève une inclusion hors d'atteinte, et ne pas
+satisfaire toute une liste qui dépasse n'est pas une erreur. Elles ne touchent
+à aucun plancher : celui des collisions, pris sur tous les plans, reste
+valide.
 
 **Sous absence.** Dès qu'une personne non exclue est absente à un tour, le
 diagnostic le dit en tête de la carte de tout l'événement, après les
@@ -4538,9 +4612,10 @@ refusant le geste entier, et laisse la liste qu'elle ne nomme pas. Chacune rend
 les listes rangées, retire un champ quand sa liste se vide, et est sans effet
 quand aucune liste ne change de valeurs. Modifier, supprimer ou importer des
 participants fait suivre les listes dans la même entrée (§ 4). Un correctif du
-journal les pose et les retire comme tout champ. Le moteur ne les lit pas : la
-configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
-mêmes. Les deux champs font partie du format 3.
+journal les pose et les retire comme tout champ. La configuration du moteur en
+porte une copie : sans liste, elle est celle d'avant les champs, et les
+empreintes avec elle. Les raisons de dérive ne les lisent pas. Les deux champs
+font partie du format 3.
 
 #### Deux champs facultatifs : la présence
 
@@ -8083,6 +8158,11 @@ recoupe les deux bornes sur des charges tirées — le plancher des étoiles ne
 dépasse jamais la somme exacte — et confronte chaque minimum exact à une
 recherche exhaustive.
 
+**Une seule fonction décide qu'une inclusion est satisfaite**, dans la mesure
+du moteur : la personne et sa cible partagent une table à un tour au moins, ou
+la personne a rencontré un membre de l'organisation incluse. Le compte de
+chacun, les inclusions non satisfaites et leur garde (§ 12.3) la lisent toutes.
+
 **La présence a une règle de lecture et une grammaire, chacune en un seul
 lieu.** Une seule fonction décide qu'une personne est présente à un tour — une
 liste absente valant tous les tours —, dans le moteur, que la normalisation, les
@@ -8596,7 +8676,7 @@ n'égale, octet pour octet, un fichier livré.
 
 | module (§ 13.4) | niveau | ce qui s'y éprouve |
 |---|---|---|
-| moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut, détail d'un placement pour la page de qualité, borne de diversité, points de relevé de la recherche |
+| moteur | `node` | indicateurs, plafonds et borne, inclusions atteignables, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut, détail d'un placement pour la page de qualité, borne de diversité, points de relevé de la recherche |
 | géométrie | `node` + navigateur | conversions, ajustement, bornes de zoom, désignation d'un siège ; l'oracle du moteur de rendu au niveau 2 ; la découpe du plan en pages (§ 11.7) ; les échelles, tracés et pointage des graphiques (§ 12.9) |
 | stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), refus des formats plus anciens, état, journal et secours compris, compagnon des courses (§ 8.6), accord de la restitution incrémentale avec la chaîne des correctifs, de l'élagage en mémoire avec le texte relu, de SANS_EFFET par la différence avec le texte, des mémoires par identité avec le recalcul |
 | analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des organisations et des étiquettes, lignes refusées, aller-retour, CSV des objectifs de table |
@@ -8663,6 +8743,20 @@ d'organisation, en tête de l'ordre par défaut, est sans objet sans liste : les
 empreintes de référence se relèvent identiques, plans, combinaisons, bascule
 et classements, octet pour octet ; seul le nom du critère s'ajoute à la liste
 écrite de l'ordre du registre que la section de la bascule porte.
+
+**Les inclusions atteignables sont un maximum, et la mesure une lecture du
+plan.** Sur cent configurations tirées, I(p) égale le plus d'inclusions que
+satisfait un ensemble de K(p) personnes au plus, chaque ensemble énuméré, et
+vaut k°(p) exactement quand b(p) ≤ K(p) ; sur cent plans tirés, les inclusions
+satisfaites de chacun et les inclusions non satisfaites égalent celles d'une
+lecture naïve des tables de chaque tour. Deux cas écrits refusent les formules
+qui comptent d(p) sans le borner par K(p), ou qui ne lui accordent rien : trois
+personnes incluses de trois organisations, et les trois organisations, sous
+K = 2, donnent I = 4 ; une personne et son organisation sous K = 1 donnent
+I = 2. Chaque raison d'une inclusion hors d'atteinte a son cas ; deux personnes
+qui s'incluent l'une l'autre ne font qu'une unité, comme une personne et
+l'organisation dont elle est le seul membre rencontrable, et une organisation
+que deux membres satisfont en fait une à elle seule.
 
 **L'ordre par défaut rend les plans de l'ordre fixe de référence.** Des
 **empreintes de référence**, fichier d'épreuve versionné
@@ -9236,11 +9330,14 @@ animateurs (§ 5.4), elle éprouve aussi, pour chacun, s(p) ≤ P(p), s(p) ≤ s
 tours assis et m(p) ≤ B(p), puis, sur les totaux, les personnes jamais servies
 contre les concernées et le plus de tours hors objectif d'une personne contre le
 plus de tours possibles. P(p) ne se compare pas aux tours assis : un plan qui
-laisse une personne en réserve à un tour possible le tient au-delà. Elle ne
-prend pas un plan mais des mesures, et ce qu'elle refuse n'est pas un geste mais
-un **dessin**. Les deux fonctions vivent dans le moteur, sous la même
-discipline ; les confondre obligerait le vérificateur de plan à recevoir des
-indicateurs qu'il n'a aucune raison de connaître.
+laisse une personne en réserve à un tour possible le tient au-delà. Quand les
+mesures portent les inclusions, elle éprouve sat(p) ≤ I(p) pour chacun, plafond
+a priori connu, puis que les inclusions non satisfaites valent les unités
+demandées moins les satisfaites, une par unité nommée. Elle ne prend pas un plan
+mais des mesures, et ce qu'elle refuse n'est pas un geste mais un **dessin**.
+Les deux fonctions vivent dans le moteur, sous la même discipline ; les
+confondre obligerait le vérificateur de plan à recevoir des indicateurs qu'il
+n'a aucune raison de connaître.
 
 **Le vérificateur est lui-même éprouvé par mutation.** Le test prend un plan
 valide, déplace une personne pour qu'elle occupe deux tables au tour 2, et affirme

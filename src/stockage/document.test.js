@@ -2988,9 +2988,24 @@ describe('les inclusions : participant.inclusionsOrganisation et inclusionsParti
     ]), []);
   });
 
-  test('la configuration du moteur ne les lit pas : une personne qui en porte donne la même configuration', () => {
+  test('configurationDepuisCharge en porte une copie ; absentes, la configuration est celle d’avant les champs', () => {
     const sans = analyser(abime(() => {})).charge;
-    const avec = analyser(avecInclusions(0, [GAMMA], [3, 5])).charge;
-    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+    const { charge } = analyser(avecInclusions(0, [GAMMA], [3, 5]));
+    geler(charge);
+    const configuration = configurationDepuisCharge(charge);
+    assert.deepEqual(configuration.participants[0].inclusionsOrganisation, [GAMMA]);
+    assert.deepEqual(configuration.participants[0].inclusionsParticipant, [3, 5]);
+    configuration.participants[0].inclusionsOrganisation.push('Autre');
+    configuration.participants[0].inclusionsParticipant.push(9);
+    assert.deepEqual(charge.participants[0].inclusionsOrganisation, [GAMMA]);
+    assert.deepEqual(charge.participants[0].inclusionsParticipant, [3, 5]);
+    const { inclusionsOrganisation, inclusionsParticipant, ...reste } = configurationDepuisCharge(charge).participants[0];
+    assert.deepEqual(
+      { ...configurationDepuisCharge(charge), participants: [reste, ...configurationDepuisCharge(charge).participants.slice(1)] },
+      configurationDepuisCharge(sans),
+    );
+    // Le moteur en tire trois lignes, actives ou hors d'atteinte.
+    const instance = normaliser(configurationDepuisCharge(charge));
+    assert.equal(instance.inclusionsActives + instance.inclusionsHorsAtteinte.length, 3);
   });
 });

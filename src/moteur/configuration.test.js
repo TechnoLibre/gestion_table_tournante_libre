@@ -21,6 +21,7 @@ import {
   STATUT,
   exigerPlanIndexe,
   figerConfiguration,
+  inclusionPossible,
   indexerPlan,
   nombrePlaces,
   nombrePlacesManquantes,
@@ -2065,5 +2066,187 @@ describe('plans : la présence par tour (§ 8.9)', () => {
     });
     tableDe[3] = RESERVE;
     assert.equal(exigerPlanIndexe(instance, tableDe), undefined);
+  });
+});
+
+describe('normaliser : les inclusions, lignes actives et hors d’atteinte (§ 4)', () => {
+  // Une personne d'organisation donnée, avec ses champs facultatifs.
+  const membre = (id, organisation, champs = {}) => ({ id, nom: `P${id}`, organisation, ...champs });
+  // Les lignes actives de chacun, par index.
+  const lignes = ({ N, inclusionDebut, inclusionCible }) =>
+    Array.from({ length: N }, (_, p) => Array.from(inclusionCible.subarray(inclusionDebut[p], inclusionDebut[p + 1])));
+  const salle = (participants, { tables = tablesDe([11], 8), tours = 1, reservations = [] } = {}) =>
+    normaliser(configuration({ participants, tables, tours, reservations }));
+
+  test('les lignes actives : organisations par groupe, puis personnes par index, quel que soit l’ordre des listes ; sa propre organisation, un doublon et la liste d’un exclu ne font aucune ligne', () => {
+    // Présents par identifiant : 5 (index 0, Rameau, groupe 0), 7 (1,
+    // Tilleul, groupe 1), 8 (2, Saule, groupe 2), 9 (3, sans organisation) :
+    // l'ordre des groupes n'est pas celui des noms. 4, exclue, du Tilleul,
+    // inclut le Rameau et 5 : sa liste ne compte pas.
+    const participants = (ordre) => [
+      membre(9, null),
+      membre(5, 'Rameau', {
+        inclusionsOrganisation: ordre(['Tilleul', 'Saule', 'Rameau', 'Tilleul']),
+        inclusionsParticipant: ordre([9, 7, 9]),
+      }),
+      membre(8, 'Saule'),
+      membre(4, 'Tilleul', { exclu: true, inclusionsOrganisation: ['Rameau'], inclusionsParticipant: [5] }),
+      membre(7, 'Tilleul'),
+    ];
+    const instance = salle(participants((liste) => liste));
+    assert.deepEqual(lignes(instance), [[-2, -3, 1, 3], [], [], []]);
+    assert.deepEqual(Array.from(instance.inclusionDebut), [0, 4, 4, 4, 4]);
+    assert.equal(instance.inclusionsActives, 4);
+    assert.deepEqual(instance.inclusionsHorsAtteinte, []);
+    const renversee = salle(participants((liste) => [...liste].reverse()));
+    assert.deepEqual(lignes(renversee), lignes(instance));
+  });
+
+  test('sans inclusion, aucune ligne : debut à zéro, cible vide', () => {
+    const instance = salle([membre(1, 'Rameau'), membre(2, null)]);
+    assert.deepEqual(Array.from(instance.inclusionDebut), [0, 0, 0]);
+    assert.equal(instance.inclusionCible.length, 0);
+    assert.equal(instance.inclusionsActives, 0);
+    assert.deepEqual(instance.inclusionsHorsAtteinte, []);
+  });
+
+  test('une personne exclue, une organisation qu’aucun présent ne porte : hors d’atteinte, organisations par nom, personnes par identifiant', () => {
+    // 3, exclue, porte seule le Fanal ; personne ne porte « Vigie ».
+    const instance = salle([
+      membre(1, null, { inclusionsOrganisation: ['Vigie', 'Fanal'], inclusionsParticipant: [3, 2] }),
+      membre(2, null),
+      membre(3, 'Fanal', { exclu: true }),
+    ]);
+    assert.deepEqual(lignes(instance), [[1], []]);
+    assert.deepEqual(instance.inclusionsHorsAtteinte, [
+      { p: 0, cible: { organisation: 'Fanal' }, raison: 'sansPresent' },
+      { p: 0, cible: { organisation: 'Vigie' }, raison: 'sansPresent' },
+      { p: 0, cible: { participant: 3 }, raison: 'exclue' },
+    ]);
+  });
+
+  test('contredite par un conflit, dans un sens ou dans l’autre, ou par l’organisation de la cible : hors d’atteinte', () => {
+    // 1, du Rameau, nomme le Tilleul en conflit et inclut 2, du Tilleul, et
+    // le Tilleul. 3, de la Saule, inclut 1 : le Rameau nomme la Saule par 5.
+    // 1 inclut aussi 4, de la Saule, contredite par l'organisation de 4.
+    const instance = salle([
+      membre(1, 'Rameau', { conflits: ['Tilleul'], inclusionsOrganisation: ['Tilleul'], inclusionsParticipant: [2, 4] }),
+      membre(2, 'Tilleul'),
+      membre(3, 'Saule', { inclusionsParticipant: [1] }),
+      membre(4, 'Saule'),
+      membre(5, 'Rameau', { conflits: ['Saule'] }),
+    ]);
+    assert.equal(instance.inclusionsActives, 0);
+    assert.deepEqual(instance.inclusionsHorsAtteinte, [
+      { p: 0, cible: { organisation: 'Tilleul' }, raison: 'conflit' },
+      { p: 0, cible: { participant: 2 }, raison: 'conflit' },
+      { p: 0, cible: { participant: 4 }, raison: 'conflit' },
+      { p: 2, cible: { participant: 1 }, raison: 'conflit' },
+    ]);
+  });
+
+  test('jamais présents au même tour, assis d’office à deux tables, aucune table qui ait la place : hors d’atteinte sous sa raison', () => {
+    // Deux tours, tables 11 et 12 de 2 places. 1 n'est là qu'au tour 1, 2
+    // qu'au tour 2. 3 et 4 sont ancrés, 3 à la 11, 4 à la 12. 5 est libre ;
+    // 6 et 7 remplissent la 11 aux deux tours, et 3 s'y ajoute : 5 ne peut
+    // rejoindre ni 3 à sa table pleine, ni 6. 8 et 9 sont libres, et chaque
+    // table ne garde qu'un siège : pas de place pour les deux.
+    const tables = tablesDe([11, 12], 2);
+    const sansTour = salle([
+      membre(1, null, { presence: [1], inclusionsParticipant: [2] }),
+      membre(2, null, { presence: [2] }),
+    ], { tables, tours: 2 });
+    assert.deepEqual(sansTour.inclusionsHorsAtteinte, [{ p: 0, cible: { participant: 2 }, raison: 'sansTourCommun' }]);
+    const imposees = salle([
+      membre(3, null, { inclusionsParticipant: [4] }),
+      membre(4, null),
+    ], { tables, tours: 2, reservations: [tous(3, 11), tous(4, 12)] });
+    assert.deepEqual(imposees.inclusionsHorsAtteinte, [{ p: 0, cible: { participant: 4 }, raison: 'tablesImposees' }]);
+    const pleine = salle([
+      membre(5, null, { inclusionsParticipant: [6] }),
+      membre(6, null),
+      membre(7, null),
+    ], { tables, tours: 1, reservations: [tous(6, 11), tous(7, 11)] });
+    assert.deepEqual(pleine.inclusionsHorsAtteinte, [{ p: 0, cible: { participant: 6 }, raison: 'pleine' }]);
+    const sansPlace = salle([
+      membre(8, null, { inclusionsParticipant: [9] }),
+      membre(9, null),
+      membre(10, null),
+      membre(13, null),
+    ], { tables, tours: 1, reservations: [tous(10, 11), tous(13, 12)] });
+    assert.deepEqual(sansPlace.inclusionsHorsAtteinte, [{ p: 0, cible: { participant: 9 }, raison: 'pleine' }]);
+  });
+
+  test('une organisation est hors d’atteinte sous la raison la plus avancée de ses membres, active dès qu’un membre est possible', () => {
+    // Deux tours, tables 11 et 12 de 2 places. 1, présent au tour 1 seul,
+    // y est réservé à la 11 avec 2, qui la remplissent. Du Fanal : 3, réservé
+    // à la 12, ne partage avec 1 que le tour 1, à une autre table ; 5,
+    // présent au tour 2 seul, n'a aucun tour commun avec 1.
+    const tables = tablesDe([11, 12], 2);
+    const reservations = [tous(1, 11), tous(2, 11), tous(3, 12)];
+    const base = [
+      membre(1, null, { presence: [1], inclusionsOrganisation: ['Fanal'] }),
+      membre(2, null),
+      membre(3, 'Fanal'),
+      membre(5, 'Fanal', { presence: [2] }),
+    ];
+    const imposees = salle(base, { tables, tours: 2, reservations });
+    assert.deepEqual(imposees.inclusionsHorsAtteinte, [{ p: 0, cible: { organisation: 'Fanal' }, raison: 'tablesImposees' }]);
+    // 6, du Fanal, libre au tour 1 : la table 11 de 1 est pleine.
+    const pleine = salle([...base, membre(6, 'Fanal')], { tables, tours: 2, reservations });
+    assert.deepEqual(pleine.inclusionsHorsAtteinte, [{ p: 0, cible: { organisation: 'Fanal' }, raison: 'pleine' }]);
+    // Seul 5, sans tour commun : la raison la moins avancée.
+    const seul = salle([base[0], base[1], base[3]], { tables, tours: 2, reservations: reservations.slice(0, 2) });
+    assert.deepEqual(seul.inclusionsHorsAtteinte, [{ p: 0, cible: { organisation: 'Fanal' }, raison: 'sansTourCommun' }]);
+    // Une table de trois places à 1 : 6 peut l'y rejoindre, la ligne est
+    // active.
+    const active = salle([...base, membre(6, 'Fanal')], { tables: tablesDe([11, 12], 3), tours: 2, reservations });
+    assert.deepEqual(active.inclusionsHorsAtteinte, []);
+    assert.deepEqual(lignes(active)[0], [-1]);
+  });
+
+  test('inclusionPossible : une table commune, la table fixée de l’un qui garde un siège, ou une table qui en garde deux', () => {
+    // Un tour, tables 11 et 12 de 3 places ; 1 et 2 ancrés à la 11, 3 à la
+    // 12, 4 et 5 libres ; 6 et 7 ancrés à la 12, qui n'a plus de siège.
+    const instance = salle(
+      [1, 2, 3, 4, 5, 6, 7].map((id) => membre(id, null)),
+      { tables: tablesDe([11, 12], 3), reservations: [tous(1, 11), tous(2, 11), tous(3, 12), tous(6, 12), tous(7, 12)] },
+    );
+    // Index = identifiant − 1. Sièges libres : 11 → 1, 12 → 0.
+    assert.equal(inclusionPossible(instance, 0, 1), true, 'même table fixée');
+    assert.equal(inclusionPossible(instance, 0, 2), false, 'deux tables fixées');
+    assert.equal(inclusionPossible(instance, 0, 3), true, 'la table de 1 garde un siège');
+    assert.equal(inclusionPossible(instance, 3, 0), true, 'dans l’autre sens');
+    assert.equal(inclusionPossible(instance, 2, 3), false, 'la table de 3 est pleine');
+    assert.equal(inclusionPossible(instance, 3, 2), false, 'dans l’autre sens');
+    assert.equal(inclusionPossible(instance, 3, 4), false, 'aucune table ne garde deux sièges');
+    const ample = salle([4, 5].map((id) => membre(id, null)), { tables: tablesDe([11], 2) });
+    assert.equal(inclusionPossible(ample, 0, 1), true, 'une table garde deux sièges');
+  });
+
+  test('des inclusions hors de leur forme lèvent TypeError', () => {
+    const avec = (champs) => () => salle([membre(1, null, champs), membre(2, null)]);
+    exigerTypeError(avec({ inclusionsOrganisation: 'Rameau' }), "participant 1, inclusions d'organisation : liste de chaînes attendue", 'organisations en texte');
+    exigerTypeError(avec({ inclusionsOrganisation: ['Rameau', 3] }), "participant 1, inclusions d'organisation : liste de chaînes attendue", 'une organisation numérique');
+    exigerTypeError(avec({ inclusionsParticipant: 2 }), 'participant 1 : inclusions de participant en liste attendues', 'un nombre');
+    exigerTypeError(avec({ inclusionsParticipant: ['2'] }), 'participant 1, inclusion du participant d\'identifiant "2" : entier ≥ 1 attendu', 'un identifiant en texte');
+    exigerTypeError(avec({ inclusionsParticipant: [1] }), 'participant 1 : inclusion de lui-même', 'elle-même');
+    exigerTypeError(avec({ inclusionsParticipant: [2, 9] }), 'participant 1 : inclusion du participant 9, inconnu', 'un inconnu');
+    // Une exclue est contrôlée comme une présente.
+    exigerTypeError(
+      () => salle([membre(1, null, { exclu: true, inclusionsParticipant: [9] }), membre(2, null)]),
+      'participant 1 : inclusion du participant 9, inconnu',
+      'la liste d’une exclue',
+    );
+  });
+
+  test('figerConfiguration fige les deux listes', () => {
+    const figee = figerConfiguration(configuration({
+      participants: [membre(1, null, { inclusionsOrganisation: ['Rameau'], inclusionsParticipant: [2] }), membre(2, 'Rameau')],
+      tables: tablesDe([11], 4),
+      tours: 1,
+    }));
+    assert.equal(Object.isFrozen(figee.participants[0].inclusionsOrganisation), true);
+    assert.equal(Object.isFrozen(figee.participants[0].inclusionsParticipant), true);
   });
 });

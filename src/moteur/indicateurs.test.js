@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { LIBRE, RESERVE, indexerPlan, normaliser } from './configuration.js';
 import { VALEURS_DES_MODES } from './criteres.js';
-import { assisAChaqueTourPresent, mesurer, parcourirTours } from './indicateurs.js';
+import { FLUX, creerPcg32 } from '../demo/prng.js';
+import { assisAChaqueTourPresent, inclusionSatisfaite, mesurer, parcourirTours } from './indicateurs.js';
 
 const SANS_CONTRAINTE = {
   separerOrganisations: false,
@@ -167,6 +168,7 @@ describe('mesurer', () => {
       ],
       objectifs: null,
       animateurs: null,
+      inclusions: null,
     });
   });
 
@@ -651,6 +653,7 @@ describe('mesurer', () => {
       parGroupe: [],
       objectifs: null,
       animateurs: null,
+      inclusions: null,
     });
   });
 
@@ -1525,5 +1528,176 @@ describe('mesurer et assisAChaqueTourPresent : les tours de présence (§ 5.4, �
     assert.equal(assisAChaqueTourPresent(instance, [1, 2, 1]), false);
     assert.equal(assisAChaqueTourPresent(instance, [2, 1, 1]), false);
     assert.equal(assisAChaqueTourPresent(instance, [2, 2, 0]), false);
+  });
+});
+
+describe('mesurer : les inclusions (§ 5.4, § 13.2)', () => {
+  // Participants 1..N : organisation[i] et, quand il est donné, champs[i],
+  // les listes d'inclusions du participant i + 1. Tables 1..T de la capacité
+  // donnée ; tours[r][t] liste les assis de la table t + 1 au tour r + 1.
+  function preparerInclusions({ organisation, champs = [], capacite, tours }) {
+    const instance = normaliser({
+      participants: organisation.map((libelle, i) => ({ id: i + 1, nom: `P${i + 1}`, organisation: libelle, ...champs[i] })),
+      tables: tours[0].map((_, t) => ({ id: t + 1, numero: t + 1, capacite })),
+      tours: tours.length,
+      reservations: [],
+      contraintes: SANS_CONTRAINTE,
+    });
+    const tableDe = indexerPlan(instance, {
+      tables: tours[0].map((_, t) => t + 1),
+      tours,
+      reserves: tours.map(() => []),
+    });
+    return { instance, tableDe };
+  }
+
+  test('lignes satisfaites à n’importe quel tour, une unité par paire réciproque, un avis par unité non satisfaite', () => {
+    // Rameau : 1, 2 ; Saule : 3, 5. 1 inclut la Saule, 3 et 6 ; 2 inclut 3 ;
+    // 3 inclut 2 ; 4 inclut le Rameau. Deux tours, deux tables de 3 : 1
+    // rencontre 3, de la Saule, au tour 2 seulement ; 2 et 3 ne se
+    // rencontrent jamais, ni 1 et 6 ; 4 rencontre 1 et 2.
+    const { instance, tableDe } = preparerInclusions({
+      organisation: ['Rameau', 'Rameau', 'Saule', null, 'Saule', null],
+      champs: [
+        { inclusionsOrganisation: ['Saule'], inclusionsParticipant: [3, 6] },
+        { inclusionsParticipant: [3] },
+        { inclusionsParticipant: [2] },
+        { inclusionsOrganisation: ['Rameau'] },
+      ],
+      capacite: 3,
+      tours: [[[1, 2, 4], [3, 5, 6]], [[2, 5, 6], [1, 3, 4]]],
+    });
+    // Groupes : Rameau 0, Saule 1. Cinq unités : 1 → Saule, 1 → 3,
+    // 1 → 6, 2 ↔ 3, 4 → Rameau.
+    assert.deepEqual(mesurer(instance, tableDe).inclusions, {
+      cible: 5,
+      satisfaites: 3,
+      avis: 2,
+      nonSatisfaites: [
+        { p: 0, cible: 5, reciproque: false },
+        { p: 1, cible: 2, reciproque: true },
+      ],
+      parPersonne: [
+        { p: 0, actives: 3, besoin: 2, plafond: 4, atteignables: 3, satisfaites: 2, auDelaDuPlafond: false },
+        { p: 1, actives: 1, besoin: 1, plafond: 4, atteignables: 1, satisfaites: 0, auDelaDuPlafond: false },
+        { p: 2, actives: 1, besoin: 1, plafond: 4, atteignables: 1, satisfaites: 0, auDelaDuPlafond: false },
+        { p: 3, actives: 1, besoin: 1, plafond: 4, atteignables: 1, satisfaites: 1, auDelaDuPlafond: false },
+      ],
+    });
+  });
+
+  test('une liste au-delà du plafond ne fait aucun avis : ses lignes non satisfaites ne sont que comptées', () => {
+    // Un tour, deux tables de 2 : 1 rencontre une personne au plus et en
+    // inclut trois.
+    const { instance, tableDe } = preparerInclusions({
+      organisation: [null, null, null, null],
+      champs: [{ inclusionsParticipant: [2, 3, 4] }],
+      capacite: 2,
+      tours: [[[1, 2], [3, 4]]],
+    });
+    assert.deepEqual(mesurer(instance, tableDe).inclusions, {
+      cible: 0,
+      satisfaites: 0,
+      avis: 0,
+      nonSatisfaites: [],
+      parPersonne: [{ p: 0, actives: 3, besoin: 3, plafond: 1, atteignables: 1, satisfaites: 1, auDelaDuPlafond: true }],
+    });
+  });
+
+  test('sans ligne active, les inclusions valent null, même quand des lignes sont hors d’atteinte', () => {
+    const { instance, tableDe } = preparerInclusions({
+      organisation: ['Rameau', null],
+      champs: [{ inclusionsOrganisation: ['Vigie'] }],
+      capacite: 2,
+      tours: [[[1, 2]]],
+    });
+    assert.equal(instance.inclusionsHorsAtteinte.length, 1);
+    assert.equal(mesurer(instance, tableDe).inclusions, null);
+  });
+
+  test('inclusionSatisfaite lit la paire dans les deux sens, et l’organisation dans vu', () => {
+    // 1 et 3 se rencontrent au tour 2 ; 2 ne rencontre personne.
+    const { instance, tableDe } = preparerInclusions({
+      organisation: ['Rameau', 'Saule', null],
+      capacite: 2,
+      tours: [[[1], [2], [3]], [[1, 3], [2], []]],
+    });
+    const { parPaire } = parcourirTours(instance, tableDe);
+    // vu[p × G + g] : 1 a vu le Rameau seulement, posé à la main.
+    const vu = Uint8Array.from([1, 0, 0, 0, 0, 0]);
+    assert.equal(inclusionSatisfaite(instance, { parPaire, vu }, 0, 2), true);
+    assert.equal(inclusionSatisfaite(instance, { parPaire, vu }, 2, 0), true);
+    assert.equal(inclusionSatisfaite(instance, { parPaire, vu }, 0, 1), false);
+    assert.equal(inclusionSatisfaite(instance, { parPaire, vu }, 1, 2), false);
+    assert.equal(inclusionSatisfaite(instance, { parPaire, vu }, 0, -1), true);
+    assert.equal(inclusionSatisfaite(instance, { parPaire, vu }, 0, -2), false);
+    assert.equal(inclusionSatisfaite(instance, { parPaire, vu }, 2, -1), false);
+  });
+
+  test('cent plans tirés : les lignes satisfaites et les avis de la mesure sont ceux d’une lecture naïve du plan', () => {
+    const ORGANISATIONS = ['Rameau', 'Saule', null];
+    let avisVus = 0;
+    let satisfaitesVues = 0;
+    for (let i = 0; i < 100; i += 1) {
+      const alea = creerPcg32(9_100 + i, FLUX.DEMO);
+      const N = 3 + alea.borne(6);
+      const T = 1 + alea.borne(3);
+      const R = 1 + alea.borne(3);
+      const organisation = Array.from({ length: N }, () => ORGANISATIONS[alea.borne(ORGANISATIONS.length)]);
+      const participants = organisation.map((libelle, p) => ({
+        id: p + 1,
+        nom: `P${p + 1}`,
+        organisation: libelle,
+        inclusionsOrganisation: ['Rameau', 'Saule'].filter((nom) => nom !== libelle && alea.borne(3) === 0),
+        inclusionsParticipant: Array.from({ length: N }, (_, q) => q + 1).filter((id) => id !== p + 1 && alea.borne(3) === 0),
+      }));
+      const instance = normaliser({
+        participants,
+        tables: Array.from({ length: T }, (_, t) => ({ id: t + 1, numero: t + 1, capacite: N })),
+        tours: R,
+        reservations: [],
+        contraintes: SANS_CONTRAINTE,
+      });
+      const tableDe = Int32Array.from({ length: N * R }, () => alea.borne(T + 1) - 1);
+      const { inclusions } = mesurer(instance, tableDe);
+      if (instance.inclusionsActives === 0) {
+        assert.equal(inclusions, null);
+        continue;
+      }
+      // La lecture naïve : p et q se rencontrent quand un tour les assied à
+      // la même table.
+      const rencontre = (p, q) => {
+        for (let r = 0; r < R; r += 1) {
+          if (tableDe[p * R + r] !== RESERVE && tableDe[p * R + r] === tableDe[q * R + r]) return true;
+        }
+        return false;
+      };
+      const { groupe, groupes, inclusionDebut, inclusionCible } = instance;
+      const satisfaite = (p, c) =>
+        c >= 0 ? rencontre(p, c) : Array.from({ length: N }, (_, q) => q).some((q) => q !== p && groupe[q] === -1 - c && rencontre(p, q));
+      // Les tables de N places et sans réservation laissent chacun
+      // rencontrer chacun : une organisation d'un seul membre demande la
+      // rencontre de ce membre, comme une ligne de personne.
+      const membres = (g) => Array.from({ length: N }, (_, q) => q).filter((q) => groupe[q] === g);
+      const unite = (p, c) => {
+        const q = c >= 0 ? c : membres(-1 - c).length === 1 ? membres(-1 - c)[0] : -1;
+        return q < 0 ? `${p} → ${groupes[-1 - c]}` : `${Math.min(p, q)} ↔ ${Math.max(p, q)}`;
+      };
+      const unites = new Set();
+      for (const { p, satisfaites, auDelaDuPlafond } of inclusions.parPersonne) {
+        const lignes = Array.from(inclusionCible.subarray(inclusionDebut[p], inclusionDebut[p + 1]));
+        assert.equal(satisfaites, lignes.filter((c) => satisfaite(p, c)).length, `plan ${i}, personne ${p}`);
+        satisfaitesVues += satisfaites;
+        if (auDelaDuPlafond) continue;
+        for (const c of lignes) {
+          if (satisfaite(p, c)) continue;
+          unites.add(unite(p, c));
+        }
+      }
+      assert.equal(inclusions.avis, unites.size, `plan ${i}`);
+      avisVus += inclusions.avis;
+    }
+    assert.ok(avisVus >= 50, `${avisVus} avis`);
+    assert.ok(satisfaitesVues >= 50, `${satisfaitesVues} lignes satisfaites`);
   });
 });

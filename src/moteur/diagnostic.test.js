@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { conflitsParTable } from './conflits.js';
-import { LIBRE, STATUT, indexerPlan, normaliser } from './configuration.js';
+import { LIBRE, STATUT, figerConfiguration, indexerPlan, normaliser } from './configuration.js';
 import { diagnostiquer, planchersCollisions } from './diagnostic.js';
 import { ErreurConfiguration } from './erreurs.js';
 import { mesurer } from './indicateurs.js';
@@ -1171,6 +1171,7 @@ describe('diagnostic : population vide, forme, refus', () => {
       placesManquantesParTour: [0, 0],
       presence: { absences: 0, presentsParTour: [0, 0] },
       planchersRetires: [],
+      inclusions: { horsDAtteinte: [], auDelaDuPlafond: [] },
     };
     // Les mêmes chiffres, séparation active ou non : sans présent, aucune
     // organisation n'est portée par chacun, et aucune table n'est forcée.
@@ -1956,5 +1957,41 @@ describe('diagnostic : la présence par tour (§ 5.6, § 12.6)', () => {
     assert.ok(Array.isArray(diagnostic.placesManquantesParTour));
     assert.ok(Array.isArray(diagnostic.presence.presentsParTour));
     assert.deepEqual(diagnostic.presence, { absences: 1, presentsParTour: [4, 3] });
+  });
+});
+
+describe('diagnostic : les inclusions (§ 5.6)', () => {
+  test('les inclusions hors d’atteinte et les personnes au-delà du plafond, désignées par identifiant', () => {
+    // Un tour, trois tables de 2 : chacun rencontre une personne au plus. 1
+    // est exclue : les index décalent les identifiants d'un. 2 inclut 3, 4
+    // et 5, trois personnes, au-delà du plafond ; 3 inclut 1, exclue, et la
+    // Vigie, que personne ne porte ; 5 inclut 2, dans le plafond.
+    const configuration = salle({
+      tables: [[10, 2], [20, 2], [30, 2]],
+      organisations: [null, null, null, null, null, null],
+      tours: 1,
+      exclus: [1],
+    });
+    configuration.participants[1].inclusionsParticipant = [3, 4, 5];
+    configuration.participants[2].inclusionsParticipant = [1];
+    configuration.participants[2].inclusionsOrganisation = ['Vigie'];
+    configuration.participants[4].inclusionsParticipant = [2];
+    assert.deepEqual(diagnostiquer(configuration).inclusions, {
+      horsDAtteinte: [
+        { participant: 3, cible: { organisation: 'Vigie' }, raison: 'sansPresent' },
+        { participant: 3, cible: { participant: 1 }, raison: 'exclue' },
+      ],
+      auDelaDuPlafond: [{ participant: 2, actives: 3, besoin: 3, plafond: 1, atteignables: 1 }],
+    });
+  });
+
+  test('la cible du diagnostic est une copie : la modifier ne touche pas l’instance', () => {
+    const configuration = salle({ tables: [[10, 2]], organisations: [null, null], tours: 1, exclus: [2] });
+    configuration.participants[0].inclusionsParticipant = [2];
+    figerConfiguration(configuration);
+    const instance = normaliser(configuration);
+    const { horsDAtteinte } = diagnostiquer(configuration).inclusions;
+    horsDAtteinte[0].cible.participant = 9;
+    assert.deepEqual(instance.inclusionsHorsAtteinte[0].cible, { participant: 2 });
   });
 });

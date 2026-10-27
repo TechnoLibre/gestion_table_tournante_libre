@@ -1112,31 +1112,32 @@ export function analyser(texte) {
 
 /**
  * Configuration du moteur tirée d'une charge : les participants avec leur
- * organisation, leur exclusion, leurs étiquettes, leur présence et leurs
- * conflits ; les tables avec leur capacité courante ; le nombre de tours ;
- * les réservations sans leur siège, que le moteur ne lit pas, et sans tour
- * pour la portée « tous » ; les quatre contraintes des réglages et les deux
- * cases facultatives ; les objectifs des tables, chacun { table, tour, regle,
- * etiquettes }, tour null pour la soirée, sa règle résolue : la sienne, sinon
- * la règle par défaut (regleObjectifs) ; le mode des objectifs ; l'ordre des
- * priorités, tel que le rend priorites. Chaque champ facultatif est absent à
- * son défaut — étiquettes d'une personne qui n'en porte pas, présence d'une
- * personne présente à tous les tours, conflits d'une personne qui n'en porte
- * pas, objectifs quand aucune table n'en a, modeObjectifs à « places »,
- * respecterObjectifs coché, rencontrerAnimateurs décoché, priorites quand les
- * réglages ne le portent pas — : la configuration d'une charge sans eux ne
- * porte que les clés toujours présentes. Qui anime à chaque tour ne se lit
- * pas ici : configurationDe (src/application/configuration.js) l'ajoute, sur
- * la règle des titres pourvus, que le stockage n'importe pas. Les tables vont
- * par identifiant croissant, l'ordre du texte canonique : le moteur assoit
- * table après table, et une charge aux tables dans un autre ordre, relue
- * après un enregistrement, ne régénérerait plus ses propositions (§ 8.9). Les
+ * organisation, leur exclusion, leurs étiquettes, leur présence, leurs
+ * conflits et leurs inclusions ; les tables avec leur capacité courante ; le
+ * nombre de tours ; les réservations sans leur siège, que le moteur ne lit
+ * pas, et sans tour pour la portée « tous » ; les quatre contraintes des
+ * réglages et les deux cases facultatives ; les objectifs des tables, chacun
+ * { table, tour, regle, etiquettes }, tour null pour la soirée, sa règle
+ * résolue : la sienne, sinon la règle par défaut (regleObjectifs) ; le mode
+ * des objectifs ; l'ordre des priorités, tel que le rend priorites. Chaque
+ * champ facultatif est absent à son défaut — étiquettes d'une personne qui
+ * n'en porte pas, présence d'une personne présente à tous les tours, conflits
+ * ou inclusions d'une personne qui n'en porte pas, objectifs quand aucune
+ * table n'en a, modeObjectifs à « places », respecterObjectifs coché,
+ * rencontrerAnimateurs décoché, priorites quand les réglages ne le portent
+ * pas — : la configuration d'une charge sans eux ne porte que les clés
+ * toujours présentes. Qui anime à chaque tour ne se lit pas ici :
+ * configurationDe (src/application/configuration.js) l'ajoute, sur la règle
+ * des titres pourvus, que le stockage n'importe pas. Les tables vont par
+ * identifiant croissant, l'ordre du texte canonique : le moteur assoit table
+ * après table, et une charge aux tables dans un autre ordre, relue après un
+ * enregistrement, ne régénérerait plus ses propositions (§ 8.9). Les
  * objectifs suivent l'ordre des tables, puis la soirée et les tours
  * croissants. Les participants et les réservations gardent l'ordre de la
  * charge : le rang d'une réservation que nomme une ErreurConfiguration est
- * son rang dans la charge. Les listes d'étiquettes, de présence, de conflits
- * et de priorités sont des copies ; la présence, que le fichier admet dans un
- * autre ordre, s'y range croissante, comme le moteur la lit.
+ * son rang dans la charge. Les listes d'étiquettes, de présence, de conflits,
+ * d'inclusions et de priorités sont des copies ; la présence, que le fichier
+ * admet dans un autre ordre, s'y range croissante, comme le moteur la lit.
  *
  * @param {import('./types.js').Charge} charge
  * @returns {import('../moteur/types.js').Configuration}
@@ -1160,13 +1161,17 @@ export function configurationDepuisCharge(charge) {
     if (critereCoche(charge, cle) !== defaut) contraintes[cle] = !defaut;
   }
   const configuration = {
-    participants: charge.participants.map(({ id, nom, organisation, exclu, etiquettes, presence, conflits }) => {
-      const participant = { id, nom, organisation, exclu };
-      if (etiquettes !== undefined) participant.etiquettes = [...etiquettes];
-      if (presence !== undefined) participant.presence = [...presence].sort(croissant);
-      if (conflits !== undefined) participant.conflits = [...conflits];
-      return participant;
-    }),
+    participants: charge.participants.map(
+      ({ id, nom, organisation, exclu, etiquettes, presence, conflits, inclusionsOrganisation, inclusionsParticipant }) => {
+        const participant = { id, nom, organisation, exclu };
+        if (etiquettes !== undefined) participant.etiquettes = [...etiquettes];
+        if (presence !== undefined) participant.presence = [...presence].sort(croissant);
+        if (conflits !== undefined) participant.conflits = [...conflits];
+        if (inclusionsOrganisation !== undefined) participant.inclusionsOrganisation = [...inclusionsOrganisation];
+        if (inclusionsParticipant !== undefined) participant.inclusionsParticipant = [...inclusionsParticipant];
+        return participant;
+      },
+    ),
     tables: tables.map((table) => ({ id: table.id, numero: table.numero, capacite: capacite(charge, table) })),
     tours: evenement.tours,
     reservations: charge.reservations.map(({ participant, table, portee, tour }) =>

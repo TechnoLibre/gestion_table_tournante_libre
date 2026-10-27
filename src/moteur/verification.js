@@ -358,6 +358,29 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
   }
 }
 
+// Les inclusions mesurées (§ 5.4), ajoutées à violations quand la mesure en
+// porte : pour chaque personne qui porte une ligne active, quand le plafond
+// a priori est connu, 0 ≤ satisfaites ≤ atteignables (INCLUSIONS_SATISFAITES,
+// index), puis, sur le total, 0 ≤ satisfaites ≤ cible, avis = cible −
+// satisfaites et un avis par unité non satisfaite nommée (INCLUSIONS_AVIS).
+// Un plan qui n'honore pas les réservations, a priori inconnu, peut faire
+// rencontrer plus que le plafond a priori : la borne de chacun ne s'y lit
+// pas.
+function verifierInclusions(inclusions, aPrioriConnu, violations) {
+  if (inclusions === null) return;
+  if (aPrioriConnu) {
+    for (const { p, satisfaites, atteignables } of inclusions.parPersonne) {
+      if (!tient(satisfaites, 0) || !tient(atteignables, satisfaites)) {
+        violations.push({ code: 'INCLUSIONS_SATISFAITES', index: p });
+      }
+    }
+  }
+  const { cible, satisfaites, avis, nonSatisfaites } = inclusions;
+  if (!tient(satisfaites, 0) || !tient(cible, satisfaites) || avis !== cible - satisfaites || avis !== nonSatisfaites.length) {
+    violations.push({ code: 'INCLUSIONS_AVIS' });
+  }
+}
+
 /**
  * Garde du § 12.3 : éprouve, pour chacun, la ligne de décomposition du
  * § 12.10.5, N − 1 ≥ plafond a priori ≥ plafond réalisé ≥ rencontres, une
@@ -371,8 +394,11 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * les animateurs rencontrés contre la borne (ANIMATEURS_RENCONTRES) ; puis,
  * sur les totaux, sans index, les personnes jamais servies contre les
  * concernées (JAMAIS_SERVIES) et le plus de tours hors objectif d'une
- * personne contre le plus de tours possibles (HORS_OBJECTIF_MAX). Une mesure
- * absente se lit comme null : seule la liste rencontres est exigée.
+ * personne contre le plus de tours possibles (HORS_OBJECTIF_MAX). Quand
+ * elles portent les inclusions, non null, elle éprouve les lignes
+ * satisfaites de chacun contre ses inclusions atteignables, a priori connu
+ * (INCLUSIONS_SATISFAITES), puis le compte des avis (INCLUSIONS_AVIS). Une
+ * mesure absente se lit comme null : seule la liste rencontres est exigée.
  *
  * Avec ses compléments, que seule la page de qualité lui passe (§ 12.3, D42),
  * elle éprouve en plus, pour chacun, A(p) ≤ rencontres(p)
@@ -404,8 +430,8 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * que instance.ids[index] traduit. Les violations se rangent par index
  * croissant, puis de gauche à droite sur la ligne, suivie des dépassements
  * de la personne, puis de sa diversité ; les deux violations des totaux
- * viennent ensuite, et les restes en dernier, organisations, tours, puis
- * conflits.
+ * viennent ensuite, puis celles des inclusions, par index puis le total, et
+ * les restes en dernier, organisations, tours, puis conflits.
  *
  * Lève RangeError quand une liste de plafonds, ou une liste par personne des
  * objectifs, des animateurs ou des tours assis, n'a pas N cases : elle décrit
@@ -416,7 +442,8 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * sans rien signaler.
  *
  * @param {{rencontres: ArrayLike<number>, toursAssis?: ArrayLike<number>,
- *          objectifs?: Object|null, animateurs?: Object|null}} mesures
+ *          objectifs?: Object|null, animateurs?: Object|null,
+ *          inclusions?: Object|null}} mesures
  *        les mesures d'un plan ; toursAssis n'est lu qu'avec les objectifs
  * @param {ArrayLike<number>|null} plafondsAPriori
  * @param {ArrayLike<number>} plafondsRealises
@@ -459,6 +486,7 @@ export function verifierIndicateurs(mesures, plafondsAPriori, plafondsRealises, 
     const plusDePossibles = Array.prototype.reduce.call(possibles, (plus, n) => Math.max(plus, n), 0);
     if (!tient(plusDePossibles, horsObjectifMax)) violations.push({ code: 'HORS_OBJECTIF_MAX' });
   }
+  verifierInclusions(mesures.inclusions ?? null, plafondsAPriori !== null, violations);
   verifierRestes(lus, mesures, violations);
   return violations;
 }

@@ -54,6 +54,8 @@ export const EXEMPLES = [
   ['ANIMATEURS_RENCONTRES', { index: 4, participant: 9 }],
   ['JAMAIS_SERVIES', {}],
   ['HORS_OBJECTIF_MAX', {}],
+  ['INCLUSIONS_SATISFAITES', { index: 4, participant: 9 }],
+  ['INCLUSIONS_AVIS', {}],
   ['RESTE_NEGATIF', { groupe: 1, organisation: 'Atelier Ressac' }],
   ['RESTE_OBJECTIFS_NEGATIF', { tour: 2 }],
   ['RESTE_CONFLITS_NEGATIF', {}],

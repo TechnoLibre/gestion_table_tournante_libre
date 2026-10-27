@@ -269,6 +269,16 @@ export const TABLE = new Map([
     () => "Le plus de tours hors objectif d'une personne dépasse le plus de tours possibles : le calcul est faux.",
   ],
   [
+    'INCLUSIONS_SATISFAITES',
+    (details) =>
+      `Les inclusions satisfaites de ${personneDe(details)} dépassent ses inclusions atteignables : le calcul est faux.`,
+  ],
+  [
+    'INCLUSIONS_AVIS',
+    () =>
+      'Les inclusions non satisfaites ne valent pas les inclusions demandées moins les satisfaites : le calcul est faux.',
+  ],
+  [
     'RESTE_NEGATIF',
     (details) =>
       `Les collisions cumulées de ${organisationDe(details)} passent sous la part prouvée inévitable : le reste est négatif, le calcul est faux.`,
