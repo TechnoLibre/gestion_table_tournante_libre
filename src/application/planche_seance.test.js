@@ -38,9 +38,9 @@
 // annonce. Les logos des participants ajoutent quatre productions de l'A6
 // — logos lus et posés, logo introuvable, une réédition sans logo sous des
 // voisins qui en portent et la même sans aucun logo —, sur des PNG composés
-// ici ; la case qui cache le numéro des doublons, trois — cochée, décochée,
-// une réédition. Les noms sont inventés ; la version vient du module
-// engendré.
+// ici ; la case qui laisse en blanc le nom des doublons, trois — cochée,
+// décochée, une réédition. Les noms sont inventés ; la version vient du
+// module engendré.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
@@ -1661,9 +1661,11 @@ describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.
   });
 });
 
-describe('planche dans la séance : le numéro des doublons caché (§ 8.5, § 11.4, § 11.6)', () => {
+describe('planche dans la séance : le nom des doublons laissé en blanc (§ 8.5, § 11.4, § 11.6)', () => {
   const lu = (pdf, depuis = 0) => pdf.pages.slice(depuis).flatMap((page) => textesDe(page));
-  const NUMEROTES = ['Louis Arc 14', 'Zoé Galet', 'Roger Galet', 'Roger Galet 01', 'Roger Galet 02'];
+  const NUMEROTES = ['Louis Arc 14', 'Zoé Galet', 'Roger Galet 01', 'Roger Galet 02'];
+  // Les textes posés d'une page, sans les noms donnés.
+  const horsNoms = (page, noms) => page.textes.filter(({ texte }) => !noms.includes(texte));
   // Deux « Roger Galet » numérotés par l'import, une « Zoé Galet » et un
   // « Louis Arc 14 » dont le numéro est saisi à la main, sans marque.
   const numerotes = () =>
@@ -1676,13 +1678,14 @@ describe('planche dans la séance : le numéro des doublons caché (§ 8.5, § 1
       ],
     });
 
-  test('cochée par défaut, chaque badge marqué imprime le nom sans son numéro, à la place que le nom entier lui donne dans la pile, sans ligne « Identifiant » ; décochée, le nom entier ; la liste en CSV garde ses octets', async () => {
+  test('cochée par défaut, chaque badge marqué ne porte aucun nom, prénom compris, dans la couche de texte, le reste de sa carte posé comme sous le nom entier, sans ligne « Identifiant » ; décochée, le nom entier ; la liste en CSV garde ses octets', async () => {
     const { fs, seance } = await monter(numerotes());
     const cochee = await seance.preparerPlanche();
     assert.deepEqual([cochee.refus, cochee.cacherNumero, cochee.homonymes], [null, true, []]);
     const liste = fs.octets('documents', ICI + (await seance.produireListeBadges()).nom);
     const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
-    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4', NUMEROTES), ['Louis Arc 14', 'Zoé Galet', 'Roger Galet', 'Roger Galet']);
+    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4', NUMEROTES), ['Louis Arc 14', 'Zoé Galet', null, null]);
+    assert.ok(!lu(pdf, 1).some((texte) => texte.includes('Roger') || texte.includes('Galet 0')), lu(pdf, 1).join(' | '));
     assert.ok(!lu(pdf, 1).some((texte) => texte.startsWith('Identifiant')), lu(pdf, 1).join(' | '));
 
     await seance.choisirCacherNumero(false);
@@ -1690,6 +1693,7 @@ describe('planche dans la séance : le numéro des doublons caché (§ 8.5, § 1
     assert.deepEqual([decochee.refus, decochee.cacherNumero, decochee.homonymes], [null, false, []]);
     const entier = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
     assert.deepEqual(nomsParCellule(entier.pages[1], 'A4', NUMEROTES), ['Louis Arc 14', 'Zoé Galet', 'Roger Galet 01', 'Roger Galet 02']);
+    assert.deepEqual(horsNoms(pdf.pages[1], NUMEROTES), horsNoms(entier.pages[1], NUMEROTES));
     assert.deepEqual(fs.octets('documents', ICI + (await seance.produireListeBadges()).nom), liste);
   });
 
@@ -1712,7 +1716,8 @@ describe('planche dans la séance : le numéro des doublons caché (§ 8.5, § 1
     const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche({ selection: [2, 1] })).nom));
     const controle = textesDe(pdf.pages[0]);
     assert.ok(controle.includes('Roger Galet 01') && controle.includes('Roger Galet 02'), controle.join(' | '));
-    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4', NUMEROTES), ['Roger Galet', 'Roger Galet', null, null]);
+    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4', NUMEROTES), [null, null, null, null]);
+    assert.ok(!lu(pdf, 1).some((texte) => texte.includes('Roger')), lu(pdf, 1).join(' | '));
   });
 
   test('la lecture porte la case : absente, décochée ; un booléen tel quel ; une valeur qui n’est pas un booléen est une faute du code, TypeError', async () => {

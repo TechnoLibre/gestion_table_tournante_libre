@@ -89,11 +89,14 @@ import { ErreurPng, lirePng } from './png.js';
  * src/application/planche.js, que src/pdf n'importe pas.
  *
  * @typedef {Object} ModelePlanche
- * @property {Array<{textes: {nom: string, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
+ * @property {Array<{textes: {nom: string, nomEnBlanc?: boolean, lignes: string[],
+ *            abregeables?: Array<Array<{debut: number, fin: number}>>,
  *            organisation: string|null, pied: string[], piedReduit: string[]}, logo?: string|null}>} badges
- *           dans l'ordre de la pile ; abregeables, les textes libres de chaque
- *           ligne de tour, que la mise en page abrège au plancher ; logo, le
- *           chemin du logo de la personne, absent ou null sans logo
+ *           dans l'ordre de la pile ; nomEnBlanc, vrai pour un nom que la
+ *           mise en page mesure sans le poser ; abregeables, les textes
+ *           libres de chaque ligne de tour, que la mise en page abrège au
+ *           plancher ; logo, le chemin du logo de la personne, absent ou
+ *           null sans logo
  * @property {string|null} horodatage   l'horodatage du placement ; null : inconnu
  * @property {boolean} brouillon
  */
@@ -245,7 +248,9 @@ async function documentAvecPolices(polices) {
 }
 
 // Les textes d'un badge, dans l'ordre où ses absents se nomment : les siens,
-// puis celui du pied TechnoLibre demandé, que chaque badge peut porter.
+// puis celui du pied TechnoLibre demandé, que chaque badge peut porter. Un
+// nom laissé en blanc en est : la feuille de contrôle l'écrit entier dans
+// la liste d'une réédition, ses absents par leur point de code.
 const textesDuBadge = ({ textes }, promotion) => [
   textes.nom,
   ...(textes.organisation === null ? [] : [textes.organisation]),

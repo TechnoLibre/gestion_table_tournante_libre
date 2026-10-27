@@ -70,15 +70,15 @@
 // regarder n'écrit jamais l'événement. Le papier des planches, de la machine et
 // non du plan, s'y range aussi, dans tout mode, avec ou sans événement (§ 8.5,
 // § 11.2), et de même le modèle des badges, ses cases — celle du pied
-// TechnoLibre, celle qui cache le numéro des doublons — et la taille du texte
-// de l'écran (§ 18.6) ; une seule file y écrit, que le cadrage, le papier, le
-// modèle, les cases et la taille partagent. Des réglages que la lecture ne
-// prend pas ne s'écrasent jamais : le cadrage attend, et le papier choisi vaut
-// pour la séance, en mémoire, sans être retenu sur la machine. Il en va de même
-// du papier d'une écriture que le dossier refuse : ni des réglages illisibles
-// ni un dossier en lecture seule ne bloquent le choix du papier, et les sorties
-// écrivent là où le dossier l'accepte — un dossier qui refuse l'écriture refuse
-// aussi le PDF des planches.
+// TechnoLibre, celle qui laisse en blanc le nom des doublons — et la taille du
+// texte de l'écran (§ 18.6) ; une seule file y écrit, que le cadrage, le
+// papier, le modèle, les cases et la taille partagent. Des réglages que la
+// lecture ne prend pas ne s'écrasent jamais : le cadrage attend, et le papier
+// choisi vaut pour la séance, en mémoire, sans être retenu sur la machine. Il
+// en va de même du papier d'une écriture que le dossier refuse : ni des
+// réglages illisibles ni un dossier en lecture seule ne bloquent le choix du
+// papier, et les sorties écrivent là où le dossier l'accepte — un dossier qui
+// refuse l'écriture refuse aussi le PDF des planches.
 //
 // Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
 // date aussi le placement qu'il change (§ 8.9, § 11.8).
@@ -394,8 +394,8 @@ export function creerSeance({
   // ni l'autre n'est venu et pour des réglages relus sans la clé ;
   // donneesBadge : les cases de ce que le badge imprime, une par donnée de
   // DONNEES_BADGE, de même, chacune lue ou choisie pour elle-même, cochées
-  // tant que rien n'est venu ; cacherNumero : la case qui cache le numéro
-  // des doublons sur les badges, comme celle du pied TechnoLibre.
+  // tant que rien n'est venu ; cacherNumero : la case qui laisse en blanc
+  // le nom des doublons sur les badges, comme celle du pied TechnoLibre.
   const etat = {
     racine,
     ouvert: null,
@@ -1688,7 +1688,7 @@ export function creerSeance({
   // Ce que la planche lit de l'événement ouvert, à son tour dans la file des
   // appels, une fois faites les écritures de réglages déjà demandées : le
   // papier, le modèle de badge, la case du pied TechnoLibre, son texte, les
-  // cases de ce que le badge imprime et celle du numéro des doublons qu'un
+  // cases de ce que le badge imprime et celle du nom des doublons qu'un
   // choix vient de poser comptent.
   // AUCUN_EVENEMENT sans événement. Le système de fichiers est la vue du
   // dossier de l'événement, sous la racine de l'Ouvert : la planche se pose
@@ -1964,11 +1964,11 @@ export function creerSeance({
       return { retenu: ecrit, avertissements };
     },
     /**
-     * Coche ou décoche la case qui cache le numéro des doublons sur les
-     * badges (§ 8.5, § 11.4) : EtatSeance.cacherNumero la porte aussitôt, et
-     * le choix s'écrit dans reglages_locaux.json de la racine sous
-     * cacher_numero_doublon, comme la case du pied TechnoLibre, dans tout
-     * mode, avec ou sans événement.
+     * Coche ou décoche la case qui laisse en blanc le nom des doublons sur
+     * les badges (§ 8.5, § 11.4) : EtatSeance.cacherNumero la porte
+     * aussitôt, et le choix s'écrit dans reglages_locaux.json de la racine
+     * sous cacher_numero_doublon, comme la case du pied TechnoLibre, dans
+     * tout mode, avec ou sans événement.
      *
      * Rend {retenu, avertissements}, aux règles de choisirPiedTechnolibre :
      * sans dossier, des réglages que la lecture ne prend pas, ou une

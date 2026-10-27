@@ -3517,7 +3517,7 @@ Ce fichier porte **huit choses, et huit seulement** :
 | la **case du pied TechnoLibre** des badges (§ 11.4), clé `pied_technolibre` | globale à la machine |
 | le **texte du pied TechnoLibre** (§ 11.4), clé `texte_pied_technolibre` | global à la machine |
 | les **cases de ce que le badge imprime** (§ 11.4), clé `donnees_badge` | globales à la machine |
-| la **case qui cache le numéro des doublons** (§ 11.4), clé `cacher_numero_doublon` | globale à la machine |
+| la **case qui laisse en blanc le nom des doublons** (§ 11.4), clé `cacher_numero_doublon` | globale à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
@@ -3535,7 +3535,7 @@ mode portable (§ 8.6), ce fichier suit la clé avec les événements.
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
 cadrage, le papier, le modèle de badge, la case du pied TechnoLibre et son
-texte, les cases de ce que le badge imprime, celle du numéro des doublons et
+texte, les cases de ce que le badge imprime, celle du nom des doublons et
 la taille du texte passent par une même file, qui relit le fichier avant
 chaque écriture : deux écrivains qui le liraient chacun avant que l'autre
 l'ait écrit perdraient le réglage de l'un.
@@ -3621,18 +3621,19 @@ porte que sa case : une écriture qui réussit pour une case n'en retient pas un
 autre, et l'avertissement reste tant qu'une case non retenue garde la valeur
 choisie, jusqu'à ce qu'un choix de cette case soit retenu.
 
-**La case qui cache le numéro des doublons** — « Cacher le numéro des
-doublons » (§ 11.4) — est, comme celle du pied TechnoLibre, un choix de la
-machine qui imprime, et non une sixième donnée de `donnees_badge` : cochée,
-elle retire un numéro du badge au lieu d'y garder une donnée. Le fichier ne
-la porte que touchée, un booléen sous `cacher_numero_doublon` ; sans elle,
-la case est cochée. Une valeur présente qui n'est pas un booléen rend le
-fichier illisible, comme un papier inconnu. Elle se coche et se décoche dans
-la section des badges, sous les deux modèles, s'écrit au geste, dans tout
-mode, par la même file, et se relit comme la case du pied TechnoLibre ; un
-fichier que la lecture ne prend pas, ou un dossier qui refuse de l'écrire, ne
-bloque pas le choix : la case vaut pour la séance, et la section dit, sous
-ses réglages, qu'elle n'est pas retenue sur ce poste.
+**La case qui laisse en blanc le nom des doublons** — « Laisser le nom des
+doublons en blanc » (§ 11.4) — est, comme celle du pied TechnoLibre, un
+choix de la machine qui imprime, et non une sixième donnée de
+`donnees_badge` : cochée, elle vide la place d'un nom au lieu d'y garder
+une donnée. Le fichier ne la porte que touchée, un booléen sous
+`cacher_numero_doublon` ; sans elle, la case est cochée. Une valeur présente
+qui n'est pas un booléen rend le fichier illisible, comme un papier inconnu.
+Elle se coche et se décoche dans la section des badges, sous les deux
+modèles, s'écrit au geste, dans tout mode, par la même file, et se relit
+comme la case du pied TechnoLibre ; un fichier que la lecture ne prend pas,
+ou un dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut
+pour la séance, et la section dit, sous ses réglages, qu'elle n'est pas
+retenue sur ce poste.
 
 **La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
 (§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
@@ -5622,9 +5623,9 @@ planche cesserait alors de pouvoir s'annoncer A6, et **une sortie qui ment sur s
 format est pire qu'une sortie qui coûte une coupe**.
 
 **La feuille de contrôle de l'A6 est la page 1 du document**, et les pages qui
-la suivent quand ses lignes — la liste des noms entiers d'une réédition, numéro
-des doublons compris (§ 11.4) — ne tiennent pas sur une page ; **elle ne se
-découpe pas**, ses pages de suite non plus.
+la suivent quand ses lignes — la liste des noms entiers d'une réédition, ceux
+que la case des doublons laisse en blanc compris (§ 11.4) — ne tiennent pas sur
+une page ; **elle ne se découpe pas**, ses pages de suite non plus.
 **Celle d'Avery 5392 est un second PDF**, écrit à côté du premier sous le même
 nom, `.controle` à la place de `.badges` (§ 11.6) : une feuille de cartes gâchée
 pour une règle coûterait six badges, et la feuille de contrôle s'imprime sur
@@ -5698,19 +5699,24 @@ permet. La feuille de contrôle nomme les données retirées, d'une ligne
 CSV (§ 11.6) ne lit aucune case : elle ne change pas. Toutes les cases
 cochées, la planche garde exactement ses octets.
 
-**Une case cache le numéro des doublons.** Juste avant celle du pied
-TechnoLibre, la case « Cacher le numéro des doublons », **cochée par défaut**
-et **gardée sur le poste** comme elle (§ 8.5), vise les personnes que
-« Rendre les noms uniques » a numérotées à l'import et dont la marque cachée
-tient encore (§ 8.9, § 10.1) : cochée, le badge d'une telle personne imprime
-son nom sans le numéro final — « Roger Galet 01 » devient « Roger Galet » —,
-un seul numéro, celui que la marque désigne ; un nom que ce retrait
-laisserait vide ou blanc s'imprime entier. Un nom sans marque garde ses
-chiffres, saisis à la main ou importés tels quels. Seul le nom du badge
-change : le plan, les listes, la liste des badges en CSV et la feuille de
-contrôle gardent le nom entier, comme l'ordre de la pile (§ 11.6) et le
-refus d'un nom trop long, qui nomme la personne (§ 11.5). Sans personne
-marquée, la planche garde exactement ses octets, la case cochée ou non.
+**Une case laisse en blanc le nom des doublons.** Juste avant celle du pied
+TechnoLibre, la case « Laisser le nom des doublons en blanc », **cochée par
+défaut** et **gardée sur le poste** comme elle (§ 8.5), vise les personnes
+que « Rendre les noms uniques » a numérotées à l'import et dont la marque
+cachée tient encore (§ 8.9, § 10.1). Une note sous la case dit pourquoi :
+la place du nom reste vide, pour l'écrire à la main. Cochée, le badge d'une
+telle personne n'imprime **aucun nom**, prénom compris : la place où
+« Roger Galet 01 » s'imprimerait reste blanche. La mise en page mesure le
+nom entier et lui réserve exactement sa place — même corps, mêmes lignes,
+même hauteur —, si bien que le reste de la carte est celui du badge au nom
+imprimé, ligne pour ligne ; la couche de texte du PDF ne porte pas le nom.
+Décochée, le badge imprime le nom entier, numéro compris. Un nom sans marque
+s'imprime toujours, chiffres compris, saisis à la main ou importés tels
+quels. Seul le nom du badge change : le plan, les listes, la liste des
+badges en CSV et la feuille de contrôle gardent le nom entier, comme l'ordre
+de la pile (§ 11.6) et le refus d'un nom trop long, qui nomme la personne
+(§ 11.5). Sans personne marquée, la planche garde exactement ses octets, la
+case cochée ou non.
 
 **Le logo du participant passe après tout le texte.** La place du badge se
 donne dans cet ordre : le nom et les tours toujours ; puis l'organisation et
@@ -5807,11 +5813,10 @@ deux personnes passent la soirée aux tables l'une de l'autre, sans que rien ne 
 signale. Le logiciel **compte ces collisions avant de produire, les nomme, et
 porte l'identifiant en pied des seuls badges concernés** — sauf quand la case
 « Identifiant » est décochée : l'annonce les nomme encore, et aucun badge ne le
-porte. Les homonymes se comptent sur le nom entier : le numéro que cache la
-case des doublons n'en fait pas, si bien que « Roger Galet 01 » et
-« Roger Galet 02 », sans organisation, sortent en deux badges au même nom,
-« Roger Galet », sans ligne « Identifiant n° … », et l'annonce ne les nomme
-pas.
+porte. Les homonymes se comptent sur le nom entier : la case des doublons n'en
+fait pas, si bien que « Roger Galet 01 » et « Roger Galet 02 », la case
+cochée, sortent en deux badges au nom laissé en blanc, sans ligne
+« Identifiant n° … », et l'annonce ne les nomme pas.
 
 ### 11.5 Les cas qui cassent la mise en page
 
@@ -5831,9 +5836,9 @@ un débordement.
 
 > nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre
 
-- **Un nom très long.** Le nom **ne s'abrège jamais**. Le numéro que la case des
-  doublons cache (§ 11.4) n'est pas une abréviation : la case choisit le nom que
-  le badge imprime, et c'est lui que la mise en page mesure. Le logiciel réduit
+- **Un nom très long.** Le nom **ne s'abrège jamais**. Un nom que la case des
+  doublons laisse en blanc (§ 11.4) se mesure entier, comme imprimé : sa place
+  vide est celle qu'il prendrait, et il se refuse comme lui. Le logiciel réduit
   le corps par paliers jusqu'à un plancher de lisibilité **mesuré sur les
   métriques de la police embarquée**, puis replie sur une seconde ligne, puis
   sur une troisième — aux espaces, et entre deux lettres seulement quand un mot
@@ -5878,8 +5883,10 @@ un débordement.
   **avant de produire** ; la feuille de contrôle les liste par leur point de code
   — « U+674E » — et n'en écrit jamais un tel quel. Ceux du nom de l'événement,
   que la feuille de contrôle écrit toujours, se nomment de même, même quand
-  sa case le retire des badges (§ 11.4). La planche se produit : le remède
-  est dans la liste des participants, et l'opérateur décide.
+  sa case le retire des badges (§ 11.4), comme ceux d'un nom que la case des
+  doublons laisse en blanc, que la liste d'une réédition écrit entier. La
+  planche se produit : le remède est dans la liste des participants, et
+  l'opérateur décide.
 - **Un participant sans organisation.** La ligne **n'existe pas**. Ni espace
   réservé, ni tiret : le « — » signale une mesure vide dans la page de qualité
   (§ 5.4), et sur un carton il se lit comme une donnée manquante dont la personne
@@ -5953,8 +5960,8 @@ un débordement.
 réduits, casse et accents ignorés — appliquée au couple (nom, prénom), et
 départagée par identifiant entier pour que deux productions de la même planche
 soient identiques. Le nom est le nom entier, numéro compris, même quand la case
-des doublons le cache sur le badge (§ 11.4) : « Roger Galet 01 » se range
-après « Zoé Galet », et non à côté de « Roger Galet ».
+des doublons le laisse en blanc sur le badge (§ 11.4) : « Roger Galet 01 » se
+range après « Zoé Galet », et non à côté de « Roger Galet ».
 
 **La comparaison n'emploie pas `localeCompare`** : le § 15.5 l'interdit pour la
 même raison qu'ici, l'ordre dépendrait de la langue du système et deux machines
@@ -6096,12 +6103,13 @@ planche, pour toute la soirée ; la réédition de la section ne produit que la
 planche. La séance accepte aussi une demande de liste qui porte une sélection :
 la liste n'a alors que les badges choisis, et son nom porte leur nombre k, comme
 la planche d'une réédition. Un enregistrement par badge, sous l'en-tête
-`Nom;Prénom;Organisation;Tours` : le nom entier et le prénom de la personne — le
-numéro que la case des doublons cache sur le badge compris (§ 11.4), le prénom
-vide quand elle n'en a pas —, l'organisation telle que le badge l'imprime, vide
-sans elle, et, dans une seule cellule, les lignes de tour du badge, **texte pour
-texte**, une par ligne — « Toute la soirée — table 13 — animation », « Tour 1 —
-table 5 (Terrasse) » —, jamais abrégées. Les personnes exclues n'y figurent pas.
+`Nom;Prénom;Organisation;Tours` : le nom entier et le prénom de la personne —
+même quand la case des doublons les laisse en blanc sur le badge (§ 11.4), le
+prénom vide quand elle n'en a pas —, l'organisation telle que le badge
+l'imprime, vide sans elle, et, dans une seule cellule, les lignes de tour du
+badge, **texte pour texte**, une par ligne — « Toute la soirée — table 13 —
+animation », « Tour 1 — table 5 (Terrasse) » —, jamais abrégées. Les personnes
+exclues n'y figurent pas.
 **Elle ne porte jamais le logo** : un logo ne se range pas dans une cellule, ses
 octets sont les mêmes avec et sans logos, et elle ne lit aucun fichier de logo.
 Le fichier est celui de l'export des participants (§ 10.3) : UTF-8 avec marque
@@ -6134,7 +6142,7 @@ l'impression restent ouvertes (§ 9). Ses seules écritures sont ses PDF, sa
 liste CSV et, dans les réglages locaux (§ 8.5), les choix de la section,
 chacun au geste qui le fait : le papier, le modèle de badge, la case du pied
 TechnoLibre et son texte, les cases de ce que le badge imprime et celle qui
-cache le numéro des doublons (§ 11.4).
+laisse en blanc le nom des doublons (§ 11.4).
 
 ### 11.7 Les autres sorties, et ce que porte toute page imprimée
 

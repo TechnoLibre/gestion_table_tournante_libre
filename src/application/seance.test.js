@@ -5168,7 +5168,7 @@ describe('séance : le pied TechnoLibre des badges (§ 8.5, § 11.4)', () => {
   });
 });
 
-describe('séance : la case qui cache le numéro des doublons (§ 8.5, § 11.4)', () => {
+describe('séance : la case qui laisse en blanc le nom des doublons (§ 8.5, § 11.4)', () => {
   const caseLue = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).cacher_numero_doublon;
   const PLAN_RETENU = [{ sieges: [[1, 2]] }];
   const chargeRetenue = () =>

@@ -58,12 +58,14 @@ export const TABLE = new Map([
     'badges.donnees.nonRetenues',
     'Les cases valent pour cette séance, sans être retenues sur ce poste : les réglages locaux ne se sont pas écrits.',
   ],
-  // La case qui cache le numéro des doublons (§ 8.5, § 11.4), dans le même
-  // groupe, et l'annonce d'une case que le poste ne retient pas.
-  ['badges.doublons.case', 'Cacher le numéro des doublons'],
+  // La case qui laisse en blanc le nom des doublons (§ 8.5, § 11.4), dans le
+  // même groupe, la note qui dit à quoi sert la place vide, et l'annonce
+  // d'une case que le poste ne retient pas.
+  ['badges.doublons.case', 'Laisser le nom des doublons en blanc'],
+  ['badges.doublons.note', 'La place du nom reste vide, pour l\u{2019}écrire à la main.'],
   [
     'badges.doublons.nonRetenu',
-    'La case « Cacher le numéro des doublons » vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
+    'La case « Laisser le nom des doublons en blanc » vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
   ],
   ['badges.source.titre', 'Placement imprimé'],
   ['badges.source.retenu', 'Le placement retenu'],

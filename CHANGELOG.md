@@ -559,13 +559,14 @@
   données retirées. La liste en CSV ne change pas, et toutes cochées, la
   planche porte les mêmes données qu'avant.
 - Dans la section « Badges », juste avant le pied TechnoLibre, la case
-  « Cacher le numéro des doublons », cochée par défaut et gardée sur le poste,
-  imprime sur le badge d'une personne que « Rendre les noms uniques » a
-  numérotée son nom sans le numéro : « Roger Galet 01 » devient
-  « Roger Galet ». Le plan, les listes, la liste des badges en CSV et la
-  feuille de contrôle gardent le nom entier, et l'ordre de la pile ne change
-  pas. Le numéro caché ne fait pas d'homonymes : deux badges « Roger Galet »
-  peuvent sortir identiques, sans ligne « Identifiant ». Sans personne
+  « Laisser le nom des doublons en blanc », cochée par défaut et gardée sur le
+  poste, laisse vide, prénom compris, la place du nom sur le badge d'une
+  personne que « Rendre les noms uniques » a numérotée, pour l'écrire à la
+  main ; une note sous la case le dit. La place garde la hauteur du nom
+  entier, et le reste de la carte ne bouge pas. Décochée, le badge imprime le
+  nom entier, « Roger Galet 01 ». Le plan, les listes, la liste des badges en
+  CSV et la feuille de contrôle gardent le nom entier, et l'ordre de la pile
+  ne change pas ; aucune ligne « Identifiant » ne s'ajoute. Sans personne
   numérotée, la planche ne change pas.
 - Quand les places manquent, l'avis qui offre « Ouvrir les tables » offre aussi
   « Créer les tables… », et la section « Tables et tours » offre la même

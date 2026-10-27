@@ -1738,3 +1738,55 @@ describe('mise en page : un badge dont les cases retirent des données (§ 11.4)
     }
   }
 });
+
+// Le nom laissé en blanc (§ 11.4) : la page se compose sur le nom entier,
+// puis n'en pose aucune ligne. Tout le reste — corps, positions, ordre de
+// sacrifice, pied TechnoLibre, logo, refus — est celui du nom imprimé.
+describe('mise en page : le nom laissé en blanc (§ 11.4)', () => {
+  const TECHNOLIBRE = Object.freeze({ texte: 'Développement logiciel libre sur mesure', rapport: 5 });
+  const CARRE = Object.freeze({ rapport: 1 });
+  const NOMS = [
+    'Iris Ombrelle 01',
+    'Ondelie-Mauve Lacasse-Pervenche de la Grisaille 02',
+    'WWWWWWWWWW MMMMMMMMMM WWWWWWWWWW MMMMMMMMM WWWWWWW 03',
+  ];
+  const sansNom = (page) => ({ ...page, blocs: page.blocs.filter((bloc) => !bloc.gras) });
+
+  for (const modele of Object.keys(MODELES_BADGE)) {
+    for (const [jeu, metriques] of JEUX) {
+      test(`${modele}, ${jeu} : la page est celle du nom entier, privée des seules lignes du nom, sous un nom d’une à plus de trois lignes, avec ou sans pied TechnoLibre et logo`, () => {
+        let vues = 0;
+        for (const nom of NOMS) {
+          for (const n of [1, 4, 9]) {
+            for (const [technolibre, logo] of [[null, null], [TECHNOLIBRE, null], [TECHNOLIBRE, CARRE]]) {
+              const champs = textes({ nom, lignes: tours(n) });
+              const imprime = mettreEnPage(champs, metriques, modele, technolibre, logo);
+              const blanc = mettreEnPage({ ...champs, nomEnBlanc: true }, metriques, modele, technolibre, logo);
+              const quoi = `${nom}, ${n} tours, ${technolibre === null ? 'sans' : 'avec'} pied TechnoLibre, ${logo === null ? 'sans' : 'avec'} logo`;
+              if ('refus' in imprime) {
+                assert.deepEqual(blanc, imprime, quoi);
+                continue;
+              }
+              vues += 1;
+              assert.ok(blocsNom(imprime).length > 0, quoi);
+              assert.deepEqual(blocsNom(blanc), [], quoi);
+              assert.deepEqual(blanc, sansNom(imprime), quoi);
+              assert.deepEqual(mettreEnPage({ ...champs, nomEnBlanc: false }, metriques, modele, technolibre, logo), imprime, quoi);
+            }
+          }
+        }
+        assert.ok(vues > 0);
+      });
+
+      test(`${modele}, ${jeu} : un nom trop long se refuse en blanc comme imprimé ; nomEnBlanc qui n’est pas un booléen lève TypeError`, () => {
+        const champs = textes({ nom: `Galet${'W'.repeat(400)} 01`, lignes: tours(6) });
+        const refus = mettreEnPage(champs, metriques, modele);
+        assert.equal(refus.refus.code, 'PLANCHE_NOM_TROP_LONG');
+        assert.deepEqual(mettreEnPage({ ...champs, nomEnBlanc: true }, metriques, modele), refus);
+        for (const faute of ['oui', 1, null]) {
+          assert.throws(() => mettreEnPage({ ...textes(), nomEnBlanc: faute }, metriques, modele), TypeError, String(faute));
+        }
+      });
+    }
+  }
+});

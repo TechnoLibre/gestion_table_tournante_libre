@@ -618,7 +618,7 @@ describe('réglages locaux : le pied TechnoLibre des badges (§ 8.5, § 11.4)', 
   });
 });
 
-describe('réglages locaux : la case qui cache le numéro des doublons (§ 8.5, § 11.4)', () => {
+describe('réglages locaux : la case qui laisse en blanc le nom des doublons (§ 8.5, § 11.4)', () => {
   test('cacher_numero_doublon se lit tel quel ; absent, il vaut vrai sans que la clé s’ajoute aux réglages lus', async () => {
     for (const valeur of [true, false]) {
       const texte = `{"cacher_numero_doublon":${valeur},"cadrages":[],"format":1,"papier":null}\n`;

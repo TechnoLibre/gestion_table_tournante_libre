@@ -15,7 +15,7 @@
 // la section l'offre, Avery 5392 d'abord. Un modèle qui impose son papier
 // n'offre ni imposition ni papier. La case du pied TechnoLibre en est un
 // autre (EtatSeance.piedTechnolibre), et l'annonce nomme les badges d'où il
-// se retire ; la case qui cache le numéro des doublons aussi
+// se retire ; la case qui laisse en blanc le nom des doublons aussi
 // (EtatSeance.cacherNumero).
 //
 // La liste des badges en CSV se tire du même placement que la planche : un
@@ -62,7 +62,7 @@ export function modeleImposeSonPapier(modele) {
 
 /**
  * Vrai quand l'annonce reçue est celle du modèle, du papier, de la case du
- * pied TechnoLibre et de celle du numéro des doublons de la machine : son
+ * pied TechnoLibre et de celle du nom des doublons de la machine : son
  * modèle est celui de la séance, son papier celui que ce modèle prend
  * (papierDesBadges), chaque case celle de la séance. Une annonce sans
  * modèle est celle de l'A6 ; une case que l'annonce ou la machine ne porte

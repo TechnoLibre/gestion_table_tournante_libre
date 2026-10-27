@@ -44,12 +44,13 @@
 // ligne ; l'annonce nomme toujours les homonymes, et la liste en CSV ne lit
 // aucune case.
 //
-// La case qui cache le numéro des doublons suit aussi la machine, que la
-// lecture porte : cochée, le badge d'une personne marquée nomNumerote
-// imprime son nom sans le numéro final (modelePlanche). Le nom entier reste
-// celui du refus PLANCHE_NOM_TROP_LONG, des logos introuvables, des
-// homonymes et de la liste de réédition ; la liste en CSV ne la lit pas.
-// Sans personne marquée, les octets ne changent pas.
+// La case qui laisse en blanc le nom des doublons suit aussi la machine,
+// que la lecture porte : cochée, le badge d'une personne marquée
+// nomNumerote garde la place de son nom sans le poser (modelePlanche). Le
+// nom entier reste celui que la mise en page mesure, celui du refus
+// PLANCHE_NOM_TROP_LONG, des logos introuvables, des homonymes et de la
+// liste de réédition ; la liste en CSV ne la lit pas. Sans personne
+// marquée, les octets ne changent pas.
 //
 // Le logo d'un participant arrive en octets, lus du dossier de l'événement
 // par lireOctets au chemin que porte son badge : chaque chemin distinct se
@@ -141,9 +142,9 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {Object<string, boolean>} [donneesBadge]   les cases de ce que le
  *           badge imprime, un booléen par donnée de DONNEES_BADGE ; toutes
  *           cochées quand la lecture ne les porte pas
- * @property {boolean} [cacherNumero]   la case qui cache le numéro des
- *           doublons des réglages locaux ; faux quand la lecture ne la porte
- *           pas
+ * @property {boolean} [cacherNumero]   la case qui laisse en blanc le nom
+ *           des doublons, des réglages locaux ; faux quand la lecture ne la
+ *           porte pas
  *
  * @typedef {Object} DemandePlanche
  * @property {'retenu'|'proposition'} [source]   'retenu' par défaut
@@ -172,7 +173,7 @@ const chargerProduction = () => import('../pdf/planche.js');
  *           la lecture, normalisé, vide pour le logo seul
  * @property {Object<string, boolean>} donneesBadge   les cases de la lecture,
  *           une par donnée de DONNEES_BADGE, dans leur ordre
- * @property {boolean} cacherNumero   la case du numéro des doublons de la
+ * @property {boolean} cacherNumero   la case du nom des doublons de la
  *           lecture
  * @property {number|null} sansTechnolibre   le nombre de badges d'où le pied
  *           TechnoLibre se retire, faute de place ; null sans la case, et
@@ -243,9 +244,9 @@ function donneesDe({ donneesBadge = null }) {
   return Object.fromEntries(DONNEES_BADGE.map((donnee) => [donnee, donneesBadge[donnee]]));
 }
 
-// La case qui cache le numéro des doublons d'une lecture, contrôlée, fausse
-// quand elle ne la porte pas ; une valeur qui n'est pas un booléen est une
-// faute du code.
+// La case qui laisse en blanc le nom des doublons d'une lecture, contrôlée,
+// fausse quand elle ne la porte pas ; une valeur qui n'est pas un booléen
+// est une faute du code.
 function cacherDe({ cacherNumero = false }) {
   if (typeof cacherNumero !== 'boolean') throw new TypeError(`cacherNumero : booléen attendu, reçu ${JSON.stringify(cacherNumero)}`);
   return cacherNumero;
@@ -624,7 +625,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * annonce ne demande le papier. La case du pied TechnoLibre de la lecture
      * s'y lit, avec son texte, et, quand elle est cochée et le modèle
      * présent, le nombre de badges d'où il se retire ; les cases de ce que
-     * le badge imprime et celle du numéro des doublons s'y lisent de même ;
+     * le badge imprime et celle du nom des doublons s'y lisent de même ;
      * les homonymes restent ceux du nom entier. Les logos des participants
      * s'y comptent quand un badge en désigne un, les introuvables nommés ;
      * aucun ne refuse la planche. Le nom est celui que la production

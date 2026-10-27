@@ -48,12 +48,13 @@
   // des autres, et l'annonce le dit tant qu'une case non retenue garde dans
   // la séance la valeur choisie.
   //
-  // Juste avant la case du pied TechnoLibre, la case « Cacher le numéro des
-  // doublons », autre réglage de la machine (EtatSeance.cacherNumero,
+  // Juste avant la case du pied TechnoLibre, la case « Laisser le nom des
+  // doublons en blanc », autre réglage de la machine (EtatSeance.cacherNumero,
   // seance.choisirCacherNumero), cochée tant que l'opérateur ne l'a pas
-  // décochée : le badge d'une personne que l'import a numérotée imprime son
-  // nom sans le numéro. Une case que la machine ne retient pas s'annonce
-  // tant qu'elle est celle de la séance, comme celle du pied.
+  // décochée : le badge d'une personne que l'import a numérotée garde la
+  // place de son nom, vide, pour l'écrire à la main, ce que dit la note
+  // sous la case. Une case que la machine ne retient pas s'annonce tant
+  // qu'elle est celle de la séance, comme celle du pied.
   //
   // Les réglages d'une demande : la source — le retenu s'il existe, sinon la
   // proposition demandée au plan depuis les propositions, choisie quand les
@@ -201,7 +202,7 @@
   let derniereListe = null;
   // Le dernier modèle choisi que la machine n'a pas retenu, ou null ; de
   // même, la dernière valeur de la case du pied TechnoLibre, et celle de la
-  // case du numéro des doublons.
+  // case du nom des doublons.
   let modeleNonRetenu = $state(null);
   let piedNonRetenu = $state(null);
   let cacherNonRetenu = $state(null);
@@ -324,7 +325,7 @@
     piedNonRetenu = retenu ? null : coche;
   }
 
-  // La case du numéro des doublons s'écrit sur la machine, comme celle du
+  // La case du nom des doublons s'écrit sur la machine, comme celle du
   // pied TechnoLibre.
   async function choisirCacher(coche) {
     const { retenu } = await seance.choisirCacherNumero(coche);
@@ -414,15 +415,19 @@
               </div>
             {/each}
           </div>
-          <div class="case">
-            <input
-              id={`${uid}-doublons`}
-              type="checkbox"
-              data-champ="cacherNumero"
-              checked={cacherNumero}
-              onchange={(evenement) => choisirCacher(evenement.currentTarget.checked)}
-            />
-            <label for={`${uid}-doublons`}>{t('badges.doublons.case')}</label>
+          <div class="case-notee">
+            <div class="case">
+              <input
+                id={`${uid}-doublons`}
+                type="checkbox"
+                data-champ="cacherNumero"
+                checked={cacherNumero}
+                aria-describedby={`${uid}-doublons-note`}
+                onchange={(evenement) => choisirCacher(evenement.currentTarget.checked)}
+              />
+              <label for={`${uid}-doublons`}>{t('badges.doublons.case')}</label>
+            </div>
+            <p class="aide note" id={`${uid}-doublons-note`}>{t('badges.doublons.note')}</p>
           </div>
           <div class="case">
             <input
@@ -619,8 +624,8 @@
   /* Les cases de ce que le badge imprime, sous les sélecteurs : leur
      intitulé, en petites capitales d'encre secondaire comme celui d'un
      sélecteur, puis les cinq cases en rangée qui se replie, puis celle du
-     pied TechnoLibre. Chaque case : la case, puis son libellé, en encre
-     courante. */
+     nom des doublons et sa note, puis celle du pied TechnoLibre. Chaque
+     case : la case, puis son libellé, en encre courante. */
   .cases {
     display: flex;
     flex-direction: column;
@@ -649,6 +654,18 @@
 
   .case input {
     margin: 0;
+  }
+
+  /* Une case suivie de sa note, en encre secondaire, serrée sous elle et
+     alignée sur le retrait du texte du pied TechnoLibre. */
+  .case-notee {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-1);
+  }
+
+  .note {
+    padding-left: var(--espace-5);
   }
 
   /* Le texte du pied TechnoLibre, sous sa case, en retrait : son libellé,

@@ -1080,12 +1080,12 @@ describe('les cases de ce que le badge imprime : gardées sur le poste (§ 8.5, 
   });
 });
 
-describe('le numéro des doublons caché : une case gardée sur le poste (§ 8.5, § 11.4)', () => {
+describe('le nom des doublons laissé en blanc : une case gardée sur le poste (§ 8.5, § 11.4)', () => {
   const caseCacher = (m) => dans(m, '[data-section="badges"] [data-champ="cacherNumero"]');
   const avisNonRetenu = (m) => dans(m, '[data-section="badges"] [data-avertissement="cacherNonRetenu"]');
   const caseEcrite = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).cacher_numero_doublon;
 
-  test('une machine neuve : la case cochée, dans le groupe des cases, juste avant celle du pied TechnoLibre, son libellé lié', async () => {
+  test('une machine neuve : la case cochée, dans le groupe des cases, juste avant celle du pied TechnoLibre, son libellé et sa note liés', async () => {
     const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
     const element = caseCacher(m);
     expect(element).not.toBeNull();
@@ -1093,9 +1093,12 @@ describe('le numéro des doublons caché : une case gardée sur le poste (§ 8.5
     expect(element.checked).toBe(true);
     expect(m.seance.etat().cacherNumero).toBe(true);
     expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran('badges.doublons.case')));
+    const note = dans(m, `[id="${element.getAttribute('aria-describedby')}"]`);
+    expect(texte(note)).toBe(plat(tEcran('badges.doublons.note')));
+    expect(element.closest('.case').nextElementSibling).toBe(note);
     const technolibre = dans(m, '[data-section="badges"] [data-champ="piedTechnolibre"]');
     expect(technolibre.closest('[role="group"]').contains(element)).toBe(true);
-    expect(element.closest('.case').nextElementSibling.contains(technolibre)).toBe(true);
+    expect(note.parentElement.nextElementSibling.contains(technolibre)).toBe(true);
     choisirReglage(m, 'modeleBadge', 'a6');
     await attendre('l’A6', () => dans(m, '[data-section="badges"] [data-champ="imposition"]'), IMAGES);
     expect(caseCacher(m).checked).toBe(true);

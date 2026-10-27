@@ -25,16 +25,16 @@
 // feuille de contrôle ne dit des logos que leurs comptes, quand la séance
 // les lui donne.
 //
-// Le nom que le badge imprime est le nom affiché de sa personne, ou, sous
-// l'option cacherNumero, celui d'une personne marquée nomNumerote privé de
-// son numéro final (§ 11.4). Tout le reste lit le nom entier : le badge
-// lui-même (Badge.nom), l'ordre de la pile, les homonymes, la liste de
+// Le nom que le badge imprime est le nom affiché de sa personne. Sous
+// l'option cacherNumero, le badge d'une personne marquée nomNumerote le
+// laisse en blanc (§ 11.4) : ses textes portent le nom entier et la marque
+// nomEnBlanc, et la mise en page lui garde sa place sans le poser. Tout le
+// reste lit le nom entier : l'ordre de la pile, les homonymes, la liste de
 // réédition de la feuille de contrôle et la liste en CSV.
 import { SEPARATEUR, ecrireCsv } from '../csv/export.js';
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { cleNormalisee } from '../csv/normalisation.js';
 import { MODELES_BADGE, PAPIERS, PAPIER_BADGES_DEFAUT, estModeleBadge } from '../geometrie/papiers.js';
-import { SUFFIXE_NUMERO } from '../stockage/document.js';
 import { derive, fautes } from '../stockage/placements.js';
 import { raisonsNommees } from './avertissements.js';
 import { formeNommeeDe } from './commandes.js';
@@ -70,9 +70,11 @@ import { versionVisible } from './version.js';
  * @property {string|null} logo           le chemin du logo de la personne,
  *                                        relatif au dossier de l'événement ;
  *                                        null sans logo
- * @property {{nom: string, lignes: string[], abregeables: Array<Array<{debut: number, fin: number}>>,
+ * @property {{nom: string, nomEnBlanc?: true, lignes: string[], abregeables: Array<Array<{debut: number, fin: number}>>,
  *             organisation: string|null, pied: string[], piedReduit: string[]}} textes
- *           nom : celui que le badge imprime (nomImprime) ; abregeables : pour
+ *           nom : le nom affiché, en NFC, que la mise en page mesure ;
+ *           nomEnBlanc : présent sur le seul badge dont le nom se laisse en
+ *           blanc (cacherNumero), la place gardée vide ; abregeables : pour
  *           chaque ligne de tour, les textes libres que la mise en page abrège
  *           au plancher — le libellé de la table, puis le titre —, par leurs
  *           positions en unités UTF-16, dans cet ordre
@@ -374,8 +376,9 @@ function ligneComposee(ligne) {
 // Les textes d'un badge (§ 11.4, décision 8), composés par libelle : le pied
 // porte l'événement et sa date, l'horodatage, puis l'identifiant d'un
 // homonyme ; piedReduit, le même sans le nom de l'événement, date gardée.
-// Aucun ne porte la version, ni le tour.
-function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodatage) {
+// Aucun ne porte la version, ni le tour. nomEnBlanc ajoute la marque du nom
+// laissé en blanc ; sans elle, les textes n'ont pas la clé.
+function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodatage, nomEnBlanc) {
   const ligneHorodatage =
     horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
   const ligneIdentifiant = identifiant === null ? [] : [libelle('planche.pied.identifiant', { identifiant })];
@@ -383,23 +386,13 @@ function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodat
   const composees = lignes.map(ligneComposee);
   return {
     nom,
+    ...(nomEnBlanc ? { nomEnBlanc: true } : {}),
     lignes: composees.map(({ texte }) => texte),
     abregeables: composees.map(({ morceaux }) => morceaux),
     organisation,
     pied: [libelle('planche.pied.evenement', evenement), ligneHorodatage, ...ligneIdentifiant],
     piedReduit: [...ligneDate, ligneHorodatage, ...ligneIdentifiant],
   };
-}
-
-// Le nom que le badge d'une personne imprime (§ 11.4), en NFC : son nom
-// affiché ; sous cacherNumero, celui d'une personne marquée nomNumerote
-// perd le numéro final de son nom (SUFFIXE_NUMERO), un seul :
-// « Galet 01 01 » imprime « Galet 01 ». Un nom que le retrait laisserait
-// vide ou blanc s'imprime entier.
-function nomImprime(personne, cacherNumero) {
-  if (!cacherNumero || personne.nomNumerote !== true) return nomAffiche(personne).normalize('NFC');
-  const nom = personne.nom.replace(SUFFIXE_NUMERO, '');
-  return nomAffiche({ ...personne, nom: nom.trim() === '' ? personne.nom : nom }).normalize('NFC');
 }
 
 // L'ordre alphabétique de la pile (§ 11.6, § 15.5) : la clé normalisée du
@@ -452,11 +445,12 @@ function selectionLue(charge, selection) {
  * feuille de contrôle nomme ; horodatage : horodatagePlacement de la source ;
  * brouillon : estBrouillon sur toute la soirée, toujours vrai pour une
  * proposition ; version : versionVisible, que la feuille de contrôle
- * imprime et le badge jamais. cacherNumero, faux par défaut, retire des
- * textes de chaque badge le numéro final d'un nom marqué nomNumerote
- * (nomImprime) ; le badge garde son nom entier, et l'ordre de la pile et les
- * homonymes se lisent sur lui. Les comptes sont ceux de la soirée, produits
- * celui des badges du modèle. La charge n'est pas modifiée.
+ * imprime et le badge jamais. cacherNumero, faux par défaut, laisse en
+ * blanc le nom de chaque badge d'une personne marquée nomNumerote, prénom
+ * compris : ses textes gardent le nom entier et portent nomEnBlanc. L'ordre
+ * de la pile et les homonymes se lisent sur le nom entier. Les comptes sont
+ * ceux de la soirée, produits celui des badges du modèle. La charge n'est
+ * pas modifiée.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {Object} options
@@ -464,7 +458,8 @@ function selectionLue(charge, selection) {
  * @param {number|null} [options.proposition]   la proposition imprimée
  * @param {Ordre} [options.ordre]
  * @param {number[]|null} [options.selection]   les personnes à rééditer
- * @param {boolean} [options.cacherNumero]      le numéro des doublons caché
+ * @param {boolean} [options.cacherNumero]      le nom des doublons laissé
+ *                                              en blanc
  * @param {string} options.provenance           le mode de construction
  * @param {string} options.version              la version affichée
  * @returns {ModelePlanche}
@@ -508,7 +503,7 @@ export function modelePlanche(
       lignes: lignesDe(personne.id, places, titres),
       identifiant: identifiants.has(personne.id) ? personne.id : null,
     };
-    const textes = textesDe({ ...badge, nom: nomImprime(personne, cacherNumero) }, evenement, horodatage);
+    const textes = textesDe(badge, evenement, horodatage, cacherNumero && personne.nomNumerote === true);
     return { ...badge, logo: personne.logo ?? null, textes };
   });
 

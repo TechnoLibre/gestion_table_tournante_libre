@@ -13,7 +13,8 @@
 // les lignes de tour ; en bas, le pied, sa dernière ligne posée sur le bord
 // du cadre. Chaque ligne occupe la hauteur que la police lui donne, de
 // l'ascendante à la descendante : deux lignes empilées ne se recouvrent
-// jamais, et une ligne absente laisse sa place à la suivante.
+// jamais, et une ligne absente laisse sa place à la suivante. Un nom laissé
+// en blanc n'est pas absent : ses lignes gardent leur place, vide.
 //
 // Le nom se choisit d'abord, sur la seule largeur : il passe avant tout le
 // reste (§ 11.4, rang 1). Pour chaque forme du nom, de la plus grande au
@@ -229,6 +230,13 @@ function logoParticipantLu(logoParticipant) {
   return logoParticipant;
 }
 
+// Le nom laissé en blanc, contrôlé : textes.nomEnBlanc, un booléen, faux
+// quand il manque ; TypeError sinon.
+function nomEnBlancLu({ nomEnBlanc = false }) {
+  if (typeof nomEnBlanc !== 'boolean') throw new TypeError(`mettreEnPage : nomEnBlanc, un booléen, attendu, reçu ${JSON.stringify(nomEnBlanc)}`);
+  return nomEnBlanc;
+}
+
 /**
  * La mise en page d'un badge, ou le refus qui dit pourquoi il ne tient pas.
  *
@@ -247,6 +255,12 @@ function logoParticipantLu(logoParticipant) {
  * perd l'un ou l'autre est dépouillé ; un pied égal au pied réduit, celui
  * dont une case retire déjà le nom de l'événement, ne dépouille pas le
  * badge en passant au pied réduit.
+ *
+ * Nom laissé en blanc : la page se compose sur le nom tel quel, puis n'en
+ * pose aucune ligne. Sa place reste vide, à la hauteur exacte des lignes
+ * qu'il aurait prises, et tout le reste de la page — corps, positions,
+ * dépouillement, pied TechnoLibre, logo du participant, refus — est celui du
+ * nom imprimé.
  *
  * Organisation : une ligne, abrégée par « … » au plus long préfixe qui
  * tient. Pied : chaque ligne se replie comme le nom, rien ne s'y abrège.
@@ -292,8 +306,9 @@ function logoParticipantLu(logoParticipant) {
  * page est alors celle du badge sans logo. Non demandé, logoParticipant rend
  * null, et la page est celle d'avant le logo.
  *
- * @param {{nom: string, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
+ * @param {{nom: string, nomEnBlanc?: boolean, lignes: string[], abregeables?: Array<Array<{debut: number, fin: number}>>,
  *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
+ *        nomEnBlanc : vrai, le nom se mesure sans se poser ; absent, faux.
  *        abregeables : pour chaque ligne de tour, ses textes libres, par
  *        leurs positions en unités UTF-16, croissants et disjoints ; absent,
  *        aucune ligne n'en porte
@@ -313,11 +328,13 @@ function logoParticipantLu(logoParticipant) {
  *          | {refus: {code: string, details: object}}}
  *          les boîtes des logos en millimètres du cadre utile, y à leur haut
  * @throws {TypeError} un modèle de badge inconnu, des textes libres mal
- *         désignés, un pied TechnoLibre ou un logo du participant mal formés
+ *         désignés, un nomEnBlanc qui n'est pas un booléen, un pied
+ *         TechnoLibre ou un logo du participant mal formés
  */
 export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre = null, logoParticipant = null) {
   if (!estModeleBadge(modeleBadge)) throw new TypeError(`mettreEnPage : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
   const morceauxDesLignes = morceauxLus(textes);
+  const nomEnBlanc = nomEnBlancLu(textes);
   const promotion = technolibreLu(technolibre);
   const logoDemande = logoParticipantLu(logoParticipant);
   const badge = MODELES_BADGE[modeleBadge];
@@ -546,13 +563,14 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
 
     const pasPied = pas(corpsPied);
     const hautDuPied = H - pied.length * pasPied.hauteur;
-    // Le flux du haut, jusqu'aux tours.
+    // Le flux du haut, jusqu'aux tours. Un nom laissé en blanc avance le
+    // curseur de ses lignes sans en poser aucune.
     const blocs = [];
     let curseur = 0;
     const pasNom = pas(forme.corps);
     for (const texte of forme.lignes) {
       const y = curseur + pasNom.ascendante;
-      blocs.push({ texte, corps: forme.corps, gras: true, x: centre(texte, forme.corps, true), y });
+      if (!nomEnBlanc) blocs.push({ texte, corps: forme.corps, gras: true, x: centre(texte, forme.corps, true), y });
       curseur = y + pasNom.descendante;
     }
     if (organisation !== null) {

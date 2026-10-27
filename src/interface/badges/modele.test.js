@@ -417,7 +417,7 @@ describe('le pied TechnoLibre (§ 8.5, § 11.4)', () => {
   });
 });
 
-describe('le numéro des doublons caché (§ 8.5, § 11.4)', () => {
+describe('le nom des doublons laissé en blanc (§ 8.5, § 11.4)', () => {
   // L'annonce de la séance sur la soirée retenue, la case donnée.
   const annoncerAvecCase = (charge, cacherNumero) =>
     planches.preparer({ charge, base: 'lucioles', fs: fsVide, racine: { id: 'documents', chemin: '/d' }, papier: 'A4', modeleBadge: 'a6', cacherNumero });
@@ -444,13 +444,15 @@ describe('le numéro des doublons caché (§ 8.5, § 11.4)', () => {
     assert.deepEqual(phrasesAnnonce(await annoncerAvecCase(retenue(), true)), phrasesAnnonce(await annoncerAvecCase(retenue(), false)));
   });
 
-  test('la case et son avertissement ont leur libellé', () => {
+  test('la case, sa note et son avertissement ont leur libellé', () => {
     const textes = composer([
       { cle: 'badges.doublons.case', details: {} },
       { cle: 'badges.doublons.nonRetenu', details: {} },
+      { cle: 'badges.doublons.note', details: {} },
     ]);
-    assert.equal(textes[0], 'Cacher le numéro des doublons');
+    assert.equal(textes[0], 'Laisser le nom des doublons en blanc');
     assert.match(textes[1], /retenue sur ce poste/);
+    assert.equal(textes[2], 'La place du nom reste vide, pour l\u{2019}écrire à la main.');
     // Les deux cases du groupe ont chacune leur avis : celui-ci nomme la
     // sienne, pour ne pas se confondre avec celui du pied TechnoLibre.
     assert.ok(textes[1].includes(textes[0]));

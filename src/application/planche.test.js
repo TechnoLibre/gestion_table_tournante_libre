@@ -1008,11 +1008,12 @@ describe('planche : la liste des badges en CSV (§ 11.6)', () => {
   });
 });
 
-// Le numéro des doublons caché (§ 11.4, § 11.6) : sous cacherNumero, le
-// badge d'une personne marquée nomNumerote imprime son nom sans le numéro
-// final ; le badge garde le nom entier, que lisent l'ordre de la pile, les
-// homonymes, la liste de réédition et la liste en CSV.
-describe('planche : le numéro des doublons caché (§ 11.4, § 11.6)', () => {
+// Le nom des doublons laissé en blanc (§ 11.4, § 11.6) : sous cacherNumero,
+// le badge d'une personne marquée nomNumerote porte son nom entier et la
+// marque nomEnBlanc, que la mise en page mesure sans le poser ; l'ordre de
+// la pile, les homonymes, la liste de réédition et la liste en CSV lisent le
+// nom entier.
+describe('planche : le nom des doublons laissé en blanc (§ 11.4, § 11.6)', () => {
   // Deux « Roger Galet » numérotés par l'import, une « Zoé Galet », un
   // « Louis Arc 14 » dont le numéro est saisi à la main, sans marque, et
   // une personne sans prénom numérotée deux fois, « Galet 01 01 ».
@@ -1029,29 +1030,36 @@ describe('planche : le numéro des doublons caché (§ 11.4, § 11.6)', () => {
       plan: [{ sieges: [[1, 2, 3], [4, 5]] }],
     });
   const cache = (charge, autres = {}) => modele(charge, { cacherNumero: true, ...autres });
+  const enBlanc = ({ textes }) => Object.hasOwn(textes, 'nomEnBlanc');
 
-  test('le badge d’une personne marquée imprime son nom sans le numéro final, un seul ; le badge garde le nom entier ; un numéro saisi sans marque reste', () => {
+  test('le badge d’une personne marquée porte son nom entier, prénom compris, et la marque nomEnBlanc ; un numéro saisi sans marque reste imprimé', () => {
     const m = cache(numerotes());
     assert.deepEqual(
-      m.badges.map(({ participant, nom, textes }) => [participant, nom, textes.nom]),
+      m.badges.map((badge) => [badge.participant, badge.nom, badge.textes.nom, badge.textes.nomEnBlanc]),
       [
-        [4, 'Louis Arc 14', 'Louis Arc 14'],
-        [3, 'Zoé Galet', 'Zoé Galet'],
-        [1, 'Roger Galet 01', 'Roger Galet'],
-        [5, 'Galet 01 01', 'Galet 01'],
-        [2, 'Roger Galet 02', 'Roger Galet'],
+        [4, 'Louis Arc 14', 'Louis Arc 14', undefined],
+        [3, 'Zoé Galet', 'Zoé Galet', undefined],
+        [1, 'Roger Galet 01', 'Roger Galet 01', true],
+        [5, 'Galet 01 01', 'Galet 01 01', true],
+        [2, 'Roger Galet 02', 'Roger Galet 02', true],
       ],
     );
+    // Hors de la marque, les textes sont ceux du nom imprimé.
+    const imprime = modele(numerotes());
+    m.badges.forEach(({ textes: { nomEnBlanc: _marque, ...reste } }, rang) => assert.deepEqual(reste, imprime.badges[rang].textes));
   });
 
-  test('par défaut, et sans personne marquée, le modèle est celui d’avant : le nom imprimé est le nom entier', () => {
+  test('par défaut, et sans personne marquée, le modèle est celui d’avant : aucun badge ne porte la marque', () => {
     const charge = numerotes();
     assert.deepEqual(modele(charge, { cacherNumero: false }), modele(charge));
-    for (const { nom, textes } of modele(charge).badges) assert.equal(textes.nom, nom);
+    for (const badge of modele(charge).badges) {
+      assert.equal(badge.textes.nom, badge.nom);
+      assert.ok(!enBlanc(badge), badge.nom);
+    }
     for (const sans of [aReserve(), homonymes()]) assert.deepEqual(cache(sans), modele(sans));
   });
 
-  test('l’ordre de la pile et les homonymes se lisent sur le nom entier : aucun identifiant au pied de deux badges « Roger Galet »', () => {
+  test('l’ordre de la pile et les homonymes se lisent sur le nom entier : aucun identifiant au pied des badges en blanc', () => {
     const charge = numerotes();
     const m = cache(charge);
     assert.deepEqual(
@@ -1073,21 +1081,18 @@ describe('planche : le numéro des doublons caché (§ 11.4, § 11.6)', () => {
   test('la liste de réédition de la feuille de contrôle et la liste en CSV gardent le nom entier', () => {
     const charge = numerotes();
     const reedite = cache(charge, { selection: [2, 1] });
-    assert.deepEqual(reedite.badges.map(({ textes }) => textes.nom), ['Roger Galet', 'Roger Galet']);
+    assert.ok(reedite.badges.every(enBlanc));
     const lignes = textesControle(reedite, { papier: 'A4', imposition: 'feuille', planches: 1 });
     assert.deepEqual(lignes.slice(-2), ['Roger Galet 01', 'Roger Galet 02']);
-    assert.ok(!lignes.includes('Roger Galet'));
     assert.deepEqual(listeBadges(cache(charge), charge), listeBadges(modele(charge), charge));
     assert.match(texteCsv(listeBadges(cache(charge), charge)), /\r\nGalet 01;Roger;/);
   });
 
-  test('un nom que le retrait laisserait vide ou blanc s’imprime entier ; une option qui n’est pas un booléen lève TypeError', () => {
+  test('un nom que le numéro seul compose est laissé en blanc lui aussi ; une option qui n’est pas un booléen lève TypeError', () => {
     const charge = numerotes();
     charge.participants[4].nom = ' 01';
-    charge.participants[0].nom = '  07';
     const m = cache(charge);
-    assert.equal(badgeDe(m, 5).textes.nom, ' 01');
-    assert.equal(badgeDe(m, 1).textes.nom, 'Roger   07');
+    assert.deepEqual([badgeDe(m, 5).textes.nom, badgeDe(m, 5).textes.nomEnBlanc], [' 01', true]);
     for (const mauvais of ['oui', 1, null]) assert.throws(() => cache(charge, { cacherNumero: mauvais }), TypeError, String(mauvais));
   });
 });
