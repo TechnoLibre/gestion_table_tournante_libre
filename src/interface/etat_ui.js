@@ -3,17 +3,17 @@
 
 // L'état de navigation de l'interface : la section ouverte, le panneau « À
 // propos » et le panneau « Paramètres », le thème de la séance, le tour
-// montré, la personne mise en évidence, la proposition demandée au plan et
-// le numéro de sa demande, le texte d'un import en attente, les listes de
-// noms et les organisations qu'elles portent, le plein écran, la place
-// sélectionnée, la fiche ouverte, le choix en attente du plan, le refus posé
-// sur une place, l'organisation collante du formulaire d'ajout, l'aperçu
-// de la section de l'impression, la page du tableau des propositions, la
-// position du sélecteur du mélange des tables de la page de qualité
-// (§ 12.11, D54) — ce que la grille compte : sièges, assis ou doublons —, le
-// départ d'une génération dérivée et ses tours figés (§ 5.7), le second
-// placement de la vue de comparaison (§ 12.10.6) et la vue de la qualité
-// demandée. Ce qu'il tient survit au démontage des sections.
+// montré, la personne mise en évidence et la demande de la centrer sur le
+// plan, la proposition demandée au plan et le numéro de sa demande, le texte
+// d'un import en attente, les listes de noms et les organisations qu'elles
+// portent, le plein écran, la place sélectionnée, la fiche ouverte, le choix
+// en attente du plan, le refus posé sur une place, l'organisation collante du
+// formulaire d'ajout, l'aperçu de la section de l'impression, la page du
+// tableau des propositions, la position du sélecteur du mélange des tables de
+// la page de qualité (§ 12.11, D54) — ce que la grille compte : sièges, assis
+// ou doublons —, le départ d'une génération dérivée et ses tours figés
+// (§ 5.7), le second placement de la vue de comparaison (§ 12.10.6) et la vue
+// de la qualité demandée. Ce qu'il tient survit au démontage des sections.
 // Le départ et le second placement sont des états de navigation (§ 8.4) :
 // les choisir n'écrit rien, en lecture comme sur un plan bloqué ;
 // oublierAbsents les retire quand ils quittent la liste, et un événement
@@ -43,6 +43,9 @@ import { THEMES } from './theme.js';
  * @property {'clair'|'sombre'} theme     le thème de la séance, l'un de THEMES
  * @property {number} tour                le tour montré, entier positif
  * @property {number|null} miseEnEvidence l'identifiant de la personne mise en évidence
+ * @property {boolean} centrerEvidence    le plan doit amener la chaise de la personne mise
+ *           en évidence au centre de sa vue (« Voir sur le plan », § 7.1) ; Plan.svelte
+ *           la consomme (evidenceCentree) ; faux au départ
  * @property {number|null} proposition    la proposition demandée au plan
  * @property {null|{texte: string, origine: string}} importEnAttente
  * @property {boolean} listes             les listes de noms sont montrées
@@ -101,6 +104,7 @@ const DEPART = Object.freeze({
   section: SECTION_OUVERTURE,
   tour: 1,
   miseEnEvidence: null,
+  centrerEvidence: false,
   proposition: null,
   importEnAttente: null,
   listes: true,
@@ -226,7 +230,7 @@ function choixValide(choix) {
  *   reinitialiser: Function, ouvrirApropos: Function, fermerApropos: Function,
  *   ouvrirParametres: Function, fermerParametres: Function,
  *   basculerApropos: Function, basculerParametres: Function, choisirTheme: Function,
- *   montrerTour: Function, mettreEnEvidence: Function,
+ *   montrerTour: Function, mettreEnEvidence: Function, evidenceCentree: Function,
  *   montrerProposition: Function, ouvrirImport: Function,
  *   prendreImport: () => null|{texte: string, origine: string},
  *   basculerListes: Function, basculerOrganisations: Function, basculerPleinEcran: Function,
@@ -316,8 +320,19 @@ export function creerEtatUi() {
       if (!Number.isInteger(r) || r < 1) throw new RangeError(`tour : entier positif attendu, reçu ${String(r)}`);
       changer({ tour: r, choix: null, pose: null });
     },
-    mettreEnEvidence(id) {
-      changer({ miseEnEvidence: id });
+    /** Met la personne id en évidence, ou personne (null). Avec centrer
+     *  vrai, demande au plan d'amener sa chaise au centre de sa vue ; une
+     *  mise en évidence sans centrer, et null, retirent la demande en
+     *  attente. RangeError pour un centrer qui n'est pas un booléen, sans
+     *  rien changer. */
+    mettreEnEvidence(id, { centrer = false } = {}) {
+      if (typeof centrer !== 'boolean') throw new RangeError(`centrer : booléen attendu, reçu ${JSON.stringify(centrer)}`);
+      changer({ miseEnEvidence: id, centrerEvidence: centrer && id !== null });
+    },
+    /** Retire la demande de centrer la personne mise en évidence, une fois
+     *  le plan à même d'y répondre. */
+    evidenceCentree() {
+      changer({ centrerEvidence: false });
     },
     /** Demande la proposition id au plan, ou aucune (null) ; la pose, lue
      *  sur l'état des places d'avant, se retire. Chaque demande d'une

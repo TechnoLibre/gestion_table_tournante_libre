@@ -22,12 +22,18 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cdp } from 'vitest/browser';
 import { flushSync, tick } from 'svelte';
 import { bilanChangementDefaut } from '../../application/bilans.js';
+import { appliquerCommande } from '../../application/commandes.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { apercevoir, cleNormalisee, decoder, exporterParticipants } from '../../application/csv.js';
 import { etatPlaces, statuts } from '../../application/places.js';
+import { texteLivre } from '../../demo/livrees.js';
+import { kSieges } from '../../geometrie/designation.js';
+import { geometrieTable } from '../../geometrie/tables.js';
+import { ajuster, vueDepuisTransform } from '../../geometrie/vue.js';
 import { STATUT, nombrePlacesManquantes, normaliser } from '../../moteur/configuration.js';
-import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
+import { rechercher } from '../../moteur/recherche.js';
+import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
@@ -40,6 +46,7 @@ import { composantes, rangeesDeTexte, sousTheme, traductionEcran, visible } from
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
 import { RANGS_ORGANISATION, teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { cadreDepuisRect, englobantDuTour } from '../plan/vue_plan.js';
 import { comptesEntete } from './entete.js';
 import { COLONNES, GROUPEMENTS, cheminDe, cleDeGroupement, cleDeStatut, groupesGrille, lignesGrille, lignesVisibles } from './grille.js';
 
@@ -154,6 +161,9 @@ const idsAffiches = (m) => lignes(m).map((ligne) => Number(ligne.dataset.partici
 const ligne = (m, id) => grille(m).querySelector(`[data-participant="${id}"]`);
 const cellule = (m, id, colonne) => ligne(m, id).querySelector(`[data-champ="${colonne}"]`);
 const commandeDeLigne = (m, id, nom) => ligne(m, id).querySelector(`[data-commande="${nom}"]`);
+// Le <svg> du plan, et la vue que porte son groupe [data-vue].
+const svgDe = (m) => m.racine.querySelector('svg[data-plan]');
+const vueDe = (m) => vueDepuisTransform(m.racine.querySelector('[data-vue]').getAttribute('transform'));
 const fiche = (m) => section(m).querySelector('[data-fiche]');
 
 const centre = (element) => {
@@ -3097,14 +3107,16 @@ describe('« Voir sur le plan » depuis sa ligne de la grille', () => {
     return { m, id: idDe(m, NOMS[2]) };
   }
 
-  // Clique « Voir sur le plan » sur la ligne de la personne, attend la vue
-  // et les deux tables ; rend la barre de la mise en évidence.
-  async function voir(m, id) {
+  // Clique « Voir sur le plan » sur la ligne de la personne, attend la vue,
+  // les tables du tour — deux par défaut — et le retrait de la demande de
+  // centrer ; rend la barre de la mise en évidence.
+  async function voir(m, id, { tables = 2 } = {}) {
     await cliquer(commandeDeLigne(m, id, 'voirSurLePlan'));
     expect(m.ui.etat().section).toBe('plan');
     expect(m.ui.etat().miseEnEvidence).toBe(id);
     await vi.waitFor(() => expect(m.racine.querySelector('[data-vue]')?.getAttribute('transform') ?? null).not.toBeNull());
-    await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-table]')).toHaveLength(2));
+    await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-table]')).toHaveLength(tables));
+    await vi.waitFor(() => expect(m.ui.etat().centrerEvidence).toBe(false));
     await rendu();
     const barre = m.racine.querySelector('[data-evidence]');
     expect(barre).not.toBeNull();
@@ -3170,7 +3182,7 @@ describe('« Voir sur le plan » depuis sa ligne de la grille', () => {
     expect(marquees(m)).toEqual([placeAuTour(m, id, 2)]);
   });
 
-  test('dans la réserve à chaque tour : le tour montré reste, rien n’est marqué, la barre dit la réserve', async () => {
+  test('dans la réserve à chaque tour : le tour montré reste, la vue ajustée aussi, rien n’est marqué, la barre dit la réserve', async () => {
     const { m, id } = await montage();
     for (const tour of [1, 2, 3]) await m.seance.executer('retirerDuTour', { tour, participant: id });
     await rendu();
@@ -3178,9 +3190,122 @@ describe('« Voir sur le plan » depuis sa ligne de la grille', () => {
 
     const barre = await voir(m, id);
     expect(m.ui.etat().tour).toBe(1);
+    const cadre = cadreDepuisRect(svgDe(m).getBoundingClientRect());
+    const ajustee = ajuster(englobantDuTour(etatPlaces(m.seance.etat().charge, { tour: 1, proposition: null })), cadre);
+    expect(vueDe(m), 'la vue ajustée, que rien ne déplace').toEqual(ajustee);
     expect(marquees(m)).toEqual([]);
     expect(barre.textContent).toContain(tEcran('plan.evidence.reserveAuTour', { tour: 1 }));
     expect(barre.textContent).not.toContain(tEcran('plan.evidence.absenteAuTour', { tour: 1 }));
+  });
+});
+
+describe('« Voir sur le plan » sur la grande démonstration : la chaise au centre du cadre (§ 7.1, § 7.3)', () => {
+  let avant = null;
+  beforeEach(async () => {
+    avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+  });
+  afterEach(async () => {
+    await fixerCadre(avant.largeur, avant.hauteur);
+  });
+
+  // La grande démonstration livrée, une proposition générée puis retenue,
+  // ouverte en lecture depuis le disque simulé ; cadrage, s'il est donné,
+  // mémorisé avant que le plan ne s'ouvre. La section des participants
+  // ouverte.
+  async function ouvrirGrande({ cadrage = null } = {}) {
+    const lue = analyser(texteLivre('grande')).charge;
+    const configuration = configurationDepuisCharge(lue);
+    const propositions = rechercher(configuration, { graine: 1, nombre: 1, arret: 50 });
+    const generee = appliquerCommande('enregistrerGeneration', lue, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+    const charge = appliquerCommande('retenirProposition', generee, { id: generee.propositions[0].id }).charge;
+    const texte = serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
+    const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree/soiree${SUFFIXES.etat}`, texte }] });
+    montes.push(m);
+    await m.seance.ouvrir('soiree/soiree');
+    if (cadrage !== null) m.seance.demanderCadrage(cadrage);
+    m.ui.allerA('participants');
+    await rendu();
+    return m;
+  }
+
+  // La personne assise au tour 1 la plus loin du centre du plan, sa table,
+  // son siège et la géométrie de sa table.
+  function laPlusLoin(m) {
+    const etat = etatPlaces(m.seance.etat().charge, { tour: 1, proposition: null });
+    const { minX, minY, maxX, maxY } = englobantDuTour(etat);
+    const milieu = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    let retenue = null;
+    for (const table of etat.tables) {
+      const geometrie = geometrieTable(table, table.capacite);
+      for (const [rang, { occupant, siege }] of table.chaises.entries()) {
+        if (occupant === null) continue;
+        const { x, y } = geometrie.chaises[rang];
+        const distance = Math.hypot(x - milieu.x, y - milieu.y);
+        if (retenue === null || distance > retenue.distance) retenue = { id: occupant, table: table.id, siege, geometrie, distance };
+      }
+    }
+    return { ...retenue, tables: etat.tables.length };
+  }
+
+  // Ouvre « Voir sur le plan » sur la ligne de la personne et attend la
+  // vue, les tables et le retrait de la demande de centrer.
+  async function voirGrande(m, id, tables) {
+    await cliquer(commandeDeLigne(m, id, 'voirSurLePlan'));
+    expect([m.ui.etat().section, m.ui.etat().miseEnEvidence]).toEqual(['plan', id]);
+    await vi.waitFor(() => expect(m.racine.querySelector('[data-vue]')?.getAttribute('transform') ?? null).not.toBeNull());
+    await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-table]')).toHaveLength(tables));
+    await vi.waitFor(() => expect(m.ui.etat().centrerEvidence).toBe(false));
+    await rendu();
+  }
+
+  // La chaise marquée, seule, visible, et son centre à l'écran.
+  function marqueSeule(m) {
+    const marques = [...m.racine.querySelectorAll('[data-marque="miseEnEvidence"]')];
+    expect(marques).toHaveLength(1);
+    expect(marques[0].checkVisibility({ opacityProperty: true, visibilityProperty: true })).toBe(true);
+    const rect = marques[0].getBoundingClientRect();
+    return { siege: marques[0].closest('[data-siege]').dataset.siege, rect, centre: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+  }
+
+  test('le plan ajusté ne dessine aucune chaise ; « Voir sur le plan » amène la sienne, marquée, au centre du cadre, au zoom où sa table dessine ses chaises', async () => {
+    const m = await ouvrirGrande();
+    const personne = laPlusLoin(m);
+    // Ouvert sans demande, le plan ajusté ne dessine aucune chaise.
+    m.ui.allerA('plan');
+    await vi.waitFor(() => expect(m.racine.querySelectorAll('[data-table]')).toHaveLength(personne.tables));
+    await rendu();
+    expect(m.racine.querySelectorAll('[data-siege]')).toHaveLength(0);
+    expect(vueDe(m).k).toBeLessThan(kSieges(personne.geometrie));
+    expect(m.seance.cadrage(), 'la vue ajustée ne s’écrit pas').toBeNull();
+    m.ui.allerA('participants');
+    await rendu();
+
+    await voirGrande(m, personne.id, personne.tables);
+    expect(m.ui.etat().tour).toBe(1);
+    const vue = vueDe(m);
+    expect(vue.k, 'le seuil de sa table, à l’arrondi de l’attribut près').toBeCloseTo(kSieges(personne.geometrie), 12);
+    expect(m.seance.cadrage(), 'mémorisée comme un zoom de l’opérateur (§ 8.5)').toEqual(vue);
+    const marque = marqueSeule(m);
+    expect(marque.siege).toBe(`${personne.table}:${personne.siege}`);
+    const cadre = svgDe(m).getBoundingClientRect();
+    expect(marque.rect.left >= cadre.left && marque.rect.right <= cadre.right, 'dans le cadre, en largeur').toBe(true);
+    expect(marque.rect.top >= cadre.top && marque.rect.bottom <= cadre.bottom, 'dans le cadre, en hauteur').toBe(true);
+    expect(Math.abs(marque.centre.x - (cadre.left + cadre.width / 2))).toBeLessThan(1);
+    expect(Math.abs(marque.centre.y - (cadre.top + cadre.height / 2))).toBeLessThan(1);
+  });
+
+  test('un cadrage déjà plus près que le seuil garde son zoom ; la chaise vient au centre du cadre', async () => {
+    const m = await ouvrirGrande({ cadrage: { k: 2, tx: 0, ty: 0 } });
+    const personne = laPlusLoin(m);
+    await voirGrande(m, personne.id, personne.tables);
+    expect(vueDe(m).k).toBe(2);
+    expect(m.seance.cadrage(), 'mémorisée comme un zoom de l’opérateur (§ 8.5)').toEqual(vueDe(m));
+    const marque = marqueSeule(m);
+    expect(marque.siege).toBe(`${personne.table}:${personne.siege}`);
+    const cadre = svgDe(m).getBoundingClientRect();
+    expect(Math.abs(marque.centre.x - (cadre.left + cadre.width / 2))).toBeLessThan(1);
+    expect(Math.abs(marque.centre.y - (cadre.top + cadre.height / 2))).toBeLessThan(1);
   });
 });
 

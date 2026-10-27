@@ -488,6 +488,12 @@ visés un par un, et c’est la table entière qui reçoit le geste :
 
 *Ici, un dépôt vise la table ; zoomez pour choisir un siège précis.*
 
+Pour trouver une personne sur un grand plan, cliquez « Voir sur le plan » sur
+sa ligne de la grille des participants : le plan s’ouvre au tour où elle est
+assise, sa chaise marquée au centre, au zoom où les sièges se dessinent. Si
+vous étiez déjà plus près, le zoom reste. Le tableau des paires répétées, à
+la page « Qualité », mène au plan de la même façon.
+
 La barre au-dessus du plan règle ce qu’il montre, sans rien modifier : « Listes
 de noms » montre ou masque la liste de chaque table, et « Organisation », juste
 à sa droite, ajoute après chaque nom l’organisation de la personne, en gris :

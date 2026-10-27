@@ -2784,6 +2784,17 @@ a une chaise, sinon au premier tour où elle en a une : le plan la montre
 assise, sans que l'opérateur cherche son tour. Sans chaise à aucun tour, le
 tour montré reste.
 
+**« Voir sur le plan » amène la chaise de la personne au centre du plan.** Le
+plan s'ouvre avec sa chaise au centre de son cadre, au plus petit zoom où sa
+table dessine ses chaises (§ 7.3), ou au zoom de la vue quand l'opérateur est
+déjà plus près : sur une grande salle ajustée à la fenêtre, aucune chaise
+n'est dessinée, et la marque n'aurait ni où se poser ni où se voir. Ce
+cadrage est celui d'un zoom de l'opérateur, mémorisé comme lui (§ 8.5). Sans
+chaise au tour montré, la vue ne bouge pas. Le tableau des paires répétées
+mène au plan de même (§ 12.5). « Mettre en évidence », depuis le menu d'une
+personne sur le plan, ne déplace pas la vue : la personne est déjà sous les
+yeux de l'opérateur.
+
 **La poignée pilote le nombre de places, jamais une taille libre.** Chaque table
 est dessinée à l'échelle de son nombre de sièges ; une taille libre permettrait
 un dessin qui ment sur la capacité, et ce mensonge n'apparaîtrait sur aucun
@@ -2897,7 +2908,9 @@ utile, un siège n'est pas pointable au doigt.** La règle est donc : sous le zo
 où la cible tomberait en deçà de 24 px, **les sièges cessent d'être des cibles
 et la table devient la cible**, le siège se choisissant dans son panneau. Le
 logiciel le montre en cessant de dessiner les chaises individuellement, plutôt
-qu'en laissant l'opérateur manquer sa cible sans comprendre.
+qu'en laissant l'opérateur manquer sa cible sans comprendre. Sous ce zoom, la
+chaise d'une personne mise en évidence n'est pas dessinée non plus : « Voir
+sur le plan » zoome jusqu'au seuil de sa table (§ 7.1).
 
 **Le seuil se décide table par table**, sur le pas de chacune — la distance
 entre deux sièges voisins au bord du plateau. Au même zoom, une petite table
@@ -6922,13 +6935,14 @@ ne montre qu'un grain aléatoire où l'opérateur croira voir un motif.
 décroissant — les deux noms, leurs organisations, le nombre de fois, les tours.
 Une ligne n'est pas cliquable : **sa première commande mène au plan au premier
 tour où la paire se revoit**, la première des deux personnes mise en évidence,
-et chacun de ses tours est une commande sœur vers le plan à ce tour. Les
+et chacun de ses tours est une commande sœur vers le plan à ce tour ; chacune
+amène la chaise de la première personne au centre du plan (§ 7.1). Les
 **paires choisies** viennent d'abord, triées par nombre de fois décroissant,
 puis par les identifiants ; les **paires que les réservations imposent** —
 chacune de leurs rencontres a lieu à une table où les deux sont réservées ce
 tour-là — suivent sous leur intitulé, triées de même : le § 5.4 les énonce à
-part. Le tableau **se pagine comme celui des propositions**, par pages de cent
-(§ 5.7), l'étendue et le total écrits.
+part. Le tableau **se pagine comme celui des propositions**, par pages de
+cent (§ 5.7), l'étendue et le total écrits.
 
 **Deux exceptions** : la matrice se dessine sous un seuil de participants
 **mesuré sur le rendu réel**, `SEUIL_MATRICE_PARTICIPANTS` (§ 19.10), et la

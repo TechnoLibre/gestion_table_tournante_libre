@@ -2073,9 +2073,13 @@ describe('la mise en évidence d’une personne : posée et ôtée par un geste,
     const personne = etatMontre(m).tables[1].chaises[0].occupant;
     expect(personne).not.toBeNull();
     expect(chaiseMarquee(m)).toBeNull();
+    const vueAvant = dans(m, '[data-vue]').getAttribute('transform');
     await cliquer(dans(m, `[data-menu="${personne}"] [data-commande="mettreEnEvidence"]`));
     await attendre(() => expect(chaiseMarquee(m)).toBe('2:1'));
     expect(dans(m, `[data-menu="${personne}"] [data-commande="mettreEnEvidence"]`)).toBeNull();
+    // Le menu d'une personne déjà sous les yeux ne déplace pas la vue.
+    expect(m.ui.etat().centrerEvidence).toBe(false);
+    expect(dans(m, '[data-vue]').getAttribute('transform')).toBe(vueAvant);
     // La barre de vue nomme la personne mise en évidence.
     const barre = dans(m, '[data-evidence]');
     expect(barre).not.toBeNull();

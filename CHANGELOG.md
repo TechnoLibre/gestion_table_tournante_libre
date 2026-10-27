@@ -855,6 +855,12 @@
   montré : sa chaise est mise en évidence tout de suite, sans changer de tour
   à la main. Une personne en réserve au tour montré se dit telle dans la barre
   de vue, « — dans la réserve au tour 1 », comme une absente.
+- « Voir sur le plan », depuis la grille des participants ou le tableau des
+  paires répétées, amène la chaise de la personne au centre du plan, au zoom
+  où sa table dessine ses chaises : sur un grand plan ajusté à la fenêtre, sa
+  chaise marquée paraît sans zoomer ni chercher. Un plan déjà plus zoomé garde
+  son zoom. « Mettre en évidence », depuis le menu d'une personne sur le plan,
+  ne déplace pas la vue.
 
 **Version de format des fichiers** : 3. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

@@ -1,10 +1,11 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
-// La vue du plan côté interface (§ 7.2, § 8.5, § 13.3), sans DOM : ce que
-// Plan.svelte décide de sa vue — à l'ouverture, après un changement de
-// cadre, à la molette et aux boutons de zoom —, composé des seules
-// fonctions de src/geometrie/vue.js. Le cadre est un paramètre, relu par
+// La vue du plan côté interface (§ 7.1, § 7.2, § 8.5, § 13.3), sans DOM :
+// ce que Plan.svelte décide de sa vue — à l'ouverture, après un changement
+// de cadre, à la molette, aux boutons de zoom et sur « Voir sur le plan » —,
+// composé des fonctions de src/geometrie/vue.js et du seuil des chaises de
+// src/geometrie/designation.js. Le cadre est un paramètre, relu par
 // l'appelant au moment du geste ; aucune fonction ne lit le DOM.
 //
 // Une vue ne se calcule que dans un cadre où kAjuste rend un nombre : un
@@ -12,6 +13,7 @@
 // nul compris — un plan monté caché —, ne fixe aucune borne, et bornesZoom
 // lèverait sur null. Chaque fonction fait ce contrôle avant de borner.
 import { nomAffiche } from '../../application/personnes.js';
+import { kSieges } from '../../geometrie/designation.js';
 import { englobant, geometrieTable } from '../../geometrie/tables.js';
 import { ajuster, borner, bornesZoom, facteurMolette, kAjuste, zoomerSous } from '../../geometrie/vue.js';
 
@@ -142,6 +144,39 @@ export function tourPourVoir(id, tours, montre, etatDuTour) {
     if (tour !== montre && assiseDans(etatDuTour(tour), id)) return tour;
   }
   return montre;
+}
+
+/**
+ * La vue où « Voir sur le plan » montre une personne (§ 7.1, § 7.3) : le
+ * centre de la chaise qu'elle occupe dans l'état des places du tour montré
+ * au centre du cadre, au plus petit zoom où sa table dessine ses chaises
+ * (kSieges), ou au k de la vue quand il est déjà plus grand ; k ramené
+ * dans les bornes du cadre. Null quand elle n'a pas de chaise à ce tour —
+ * réserve, absence, exclusion, personne que la charge n'a plus —, sans vue,
+ * ou dans un cadre où kAjuste vaut null : la vue reste. La chaise se lit
+ * sur la géométrie de sa table à sa capacité, celle que le modèle de
+ * dessin pose ; aucun argument n'est modifié.
+ *
+ * @param {{k: number, tx: number, ty: number}|null} vue
+ * @param {{tables: Object[]}} etat   EtatPlaces du tour montré
+ * @param {number} id
+ * @param {{minX: number, minY: number, maxX: number, maxY: number}|null} englobantPlan
+ * @param {{gauche: number, haut: number, largeur: number, hauteur: number}} cadre
+ * @returns {{k: number, tx: number, ty: number}|null}
+ */
+export function vuePourVoir(vue, etat, id, englobantPlan, cadre) {
+  const kCadre = vue === null ? null : kAjuste(englobantPlan, cadre);
+  if (kCadre === null) return null;
+  for (const table of etat.tables) {
+    const rang = table.chaises.findIndex(({ occupant }) => occupant === id);
+    if (rang === -1) continue;
+    const geometrie = geometrieTable(table, table.capacite);
+    const { x, y } = geometrie.chaises[rang];
+    const { kMin, kMax } = bornesZoom(kCadre);
+    const k = Math.min(kMax, Math.max(kMin, vue.k, kSieges(geometrie)));
+    return { k, tx: cadre.largeur / 2 - k * x, ty: cadre.hauteur / 2 - k * y };
+  }
+  return null;
 }
 
 /**

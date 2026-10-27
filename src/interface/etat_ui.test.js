@@ -18,6 +18,7 @@ const DEPART = {
   theme: 'clair',
   tour: 1,
   miseEnEvidence: null,
+  centrerEvidence: false,
   proposition: null,
   importEnAttente: null,
   listes: true,
@@ -107,7 +108,7 @@ describe('état de navigation : chaque transition', () => {
     const ui = creerEtatUi();
     ui.allerA('generation');
     ui.montrerTour(3);
-    ui.mettreEnEvidence(7);
+    ui.mettreEnEvidence(7, { centrer: true });
     ui.montrerProposition(2);
     ui.ouvrirImport({ texte: 'nom\nOmbrelle', origine: 'liste.csv' });
     ui.basculerListes();
@@ -229,6 +230,32 @@ describe('état de navigation : chaque transition', () => {
     ui.montrerProposition(null);
     ui.selectionner(null);
     assert.deepEqual(ui.etat(), { ...DEPART, visee: 1 });
+  });
+
+  test('mettreEnEvidence avec centrer demande au plan de centrer la personne, evidenceCentree retire la demande ; sans centrer, ou pour null, aucune demande ne reste', () => {
+    const { ui, recus } = suivi();
+    ui.mettreEnEvidence(12, { centrer: true });
+    assert.deepEqual(ui.etat(), { ...DEPART, miseEnEvidence: 12, centrerEvidence: true });
+    ui.evidenceCentree();
+    assert.deepEqual(ui.etat(), { ...DEPART, miseEnEvidence: 12 });
+    const publies = recus.length;
+    ui.evidenceCentree();
+    assert.equal(recus.length, publies);
+    // Le menu d'une personne la met en évidence sans centrer : la demande
+    // en attente tombe.
+    ui.mettreEnEvidence(12, { centrer: true });
+    ui.mettreEnEvidence(5);
+    assert.deepEqual(ui.etat(), { ...DEPART, miseEnEvidence: 5 });
+    ui.mettreEnEvidence(null, { centrer: true });
+    assert.deepEqual(ui.etat(), DEPART);
+    // La même personne de nouveau centrée publie une demande neuve.
+    ui.mettreEnEvidence(5, { centrer: true });
+    ui.evidenceCentree();
+    ui.mettreEnEvidence(5, { centrer: true });
+    assert.equal(ui.etat().centrerEvidence, true);
+    const avant = ui.etat();
+    for (const faute of [1, 'oui', null]) assert.throws(() => ui.mettreEnEvidence(3, { centrer: faute }), RangeError, String(faute));
+    assert.equal(ui.etat(), avant);
   });
 
   test('montrerProposition numérote chaque visée : la même proposition demandée de nouveau publie un état neuf ; null retire la visée sans la numéroter', () => {

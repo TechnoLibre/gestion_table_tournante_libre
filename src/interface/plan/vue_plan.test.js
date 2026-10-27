@@ -5,8 +5,9 @@
 // DOMRect, la vue d'ouverture — cadrage mémorisé borné au cadre, sinon
 // l'ajustement —, la vue d'après un changement de cadre, les zooms de la
 // molette et des boutons, l'englobant d'un tour, le tour montré, les noms,
-// le tour où « Voir sur le plan » montre une personne, et la personne mise
-// en évidence, dite absente ou dans la réserve au tour où elle l'est.
+// le tour où « Voir sur le plan » montre une personne et la vue qui la
+// centre, et la personne mise en évidence, dite absente ou dans la réserve
+// au tour où elle l'est.
 // Les valeurs attendues viennent de src/geometrie/vue.js, la seule
 // implémentation des conversions, sollicitée une seconde fois.
 import assert from 'node:assert/strict';
@@ -14,6 +15,7 @@ import { describe, test } from '../../../test/lanceur.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { etatPlaces } from '../../application/places.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { kSieges, regimeCibles } from '../../geometrie/designation.js';
 import { englobant, geometrieTable } from '../../geometrie/tables.js';
 import {
   FACTEUR_K_MIN,
@@ -21,6 +23,7 @@ import {
   MARGE_AJUSTEMENT_PX,
   ajuster,
   bornesZoom,
+  ecranDepuisDessin,
   facteurMolette,
   kAjuste,
   zoomerSous,
@@ -41,6 +44,7 @@ import {
   toursOfferts,
   vueApresCadre,
   vueInitiale,
+  vuePourVoir,
   zoomerBouton,
   zoomerMolette,
 } from './vue_plan.js';
@@ -310,6 +314,88 @@ describe('tourPourVoir : le tour où « Voir sur le plan » montre une personne 
     assert.equal(tourPourVoir(1, 3, 3, etatDuTour), 2);
     assert.equal(tourPourVoir(1, 3, 1, etatDuTour), 2);
     assert.equal(tourPourVoir(2, 3, 3, etatDuTour), 3);
+  });
+});
+
+describe('vuePourVoir : la vue où « Voir sur le plan » montre une personne (§ 7.1, § 7.3)', () => {
+  // La charge d'épreuve, la table 2, une carrée réduite à 3 places, portée
+  // à 60 m de la première : ajusté au cadre, le plan est sous le seuil des
+  // deux tables, et aucune chaise ne se dessine. Iris Ombrelle (1) est
+  // réservée au siège 3 de la table 2, au pas plus large que celui de la
+  // ronde de 6 ; Grisaille (2), sans réservation, attend dans la réserve.
+  function montage() {
+    const charge = chargeDEpreuve();
+    charge.tables[1].sieges = 3;
+    charge.tables[1].position = { x: 6000, y: 120 };
+    charge.reservations = [{ participant: 1, table: 2, siege: 3, portee: 'tous', tour: null }];
+    const etat = etatPlaces(charge, { tour: 1 });
+    const englobantPlan = englobantDuTour(etat);
+    const geometrie = geometrieTable(etat.tables[1], etat.tables[1].capacite);
+    return { charge, etat, englobantPlan, geometrie, chaise: geometrie.chaises[2] };
+  }
+  // Le point de dessin d'une vue au centre du cadre.
+  const centreDe = (vue, cadre) => ({ x: (cadre.largeur / 2 - vue.tx) / vue.k, y: (cadre.hauteur / 2 - vue.ty) / vue.k });
+  const proche = (a, b) => Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9;
+
+  test('sous le seuil de sa table : k monte au seuil, kSieges, et sa chaise vient au centre du cadre', () => {
+    const { etat, englobantPlan, geometrie, chaise } = montage();
+    const ajustee = ajuster(englobantPlan, CADRE);
+    assert.equal(regimeCibles(ajustee.k, geometrie), 'table');
+    const vue = vuePourVoir(ajustee, etat, 1, englobantPlan, CADRE);
+    assert.equal(vue.k, kSieges(geometrie));
+    assert.equal(regimeCibles(vue.k, geometrie), 'sieges');
+    assert.ok(proche(centreDe(vue, CADRE), chaise));
+    const ecran = ecranDepuisDessin(vue, CADRE, chaise.x, chaise.y);
+    assert.ok(Math.abs(ecran.x - (CADRE.gauche + CADRE.largeur / 2)) < 1e-6 && Math.abs(ecran.y - (CADRE.haut + CADRE.hauteur / 2)) < 1e-6);
+  });
+
+  test('le seuil est celui de sa table, non celui de la plus serrée', () => {
+    const { etat, englobantPlan, geometrie } = montage();
+    const autre = geometrieTable(etat.tables[0], etat.tables[0].capacite);
+    assert.ok(kSieges(geometrie) < kSieges(autre));
+    assert.equal(vuePourVoir(ajuster(englobantPlan, CADRE), etat, 1, englobantPlan, CADRE).k, kSieges(geometrie));
+  });
+
+  test('déjà plus près que le seuil : k gardé, sa chaise au centre', () => {
+    const { etat, englobantPlan, chaise } = montage();
+    const pres = { k: 2.5, tx: -40, ty: 25 };
+    const vue = vuePourVoir(pres, etat, 1, englobantPlan, CADRE);
+    assert.equal(vue.k, 2.5);
+    assert.ok(proche(centreDe(vue, CADRE), chaise));
+  });
+
+  test('un k au-delà de K_MAX revient à la borne, sa chaise au centre', () => {
+    const { etat, englobantPlan, chaise } = montage();
+    const vue = vuePourVoir({ k: 40, tx: 0, ty: 0 }, etat, 1, englobantPlan, CADRE);
+    assert.equal(vue.k, K_MAX);
+    assert.ok(proche(centreDe(vue, CADRE), chaise));
+  });
+
+  test('sans chaise au tour montré — dans la réserve, absente, exclue, hors de la charge — : null, la vue reste', () => {
+    const { charge, etat, englobantPlan } = montage();
+    const vue = ajuster(englobantPlan, CADRE);
+    assert.ok(etat.reserve.includes(2));
+    assert.equal(vuePourVoir(vue, etat, 2, englobantPlan, CADRE), null);
+    assert.equal(vuePourVoir(vue, etat, 99, englobantPlan, CADRE), null);
+    charge.participants[0].presence = [2, 3];
+    assert.equal(vuePourVoir(vue, etatPlaces(charge, { tour: 1 }), 1, englobantPlan, CADRE), null);
+    charge.participants[0].presence = undefined;
+    charge.participants[0].exclu = true;
+    assert.equal(vuePourVoir(vue, etatPlaces(charge, { tour: 1 }), 1, englobantPlan, CADRE), null);
+  });
+
+  test('sans vue, ou dans un cadre où kAjuste vaut null : null', () => {
+    const { etat, englobantPlan } = montage();
+    assert.equal(vuePourVoir(null, etat, 1, englobantPlan, CADRE), null);
+    const nul = { gauche: 0, haut: 0, largeur: 0, hauteur: 0 };
+    assert.equal(vuePourVoir({ k: 1, tx: 0, ty: 0 }, etat, 1, englobantPlan, nul), null);
+  });
+
+  test('la vue reçue n’est pas modifiée', () => {
+    const { etat, englobantPlan } = montage();
+    const vue = Object.freeze({ k: 0.05, tx: 3, ty: 4 });
+    vuePourVoir(vue, etat, 1, englobantPlan, CADRE);
+    assert.deepEqual(vue, { k: 0.05, tx: 3, ty: 4 });
   });
 });
 

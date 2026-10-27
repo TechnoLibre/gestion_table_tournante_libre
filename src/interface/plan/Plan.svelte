@@ -23,9 +23,16 @@
   // changement de taille : tant que la vue est null, il la calcule par
   // vueInitiale, du cadrage que la séance a mémorisé ; ensuite par
   // vueApresCadre. Ni l'une ni l'autre ne s'écrit : seul un geste de
-  // l'opérateur — molette, « Zoom + », « Zoom − », « Ajuster » — confie sa
-  // vue à seance.demanderCadrage, qui l'écrit, différée, dans
-  // reglages_locaux.json, jamais dans l'événement.
+  // l'opérateur — molette, « Zoom + », « Zoom − », « Ajuster », « Voir sur
+  // le plan » — confie sa vue à seance.demanderCadrage, qui l'écrit,
+  // différée, dans reglages_locaux.json, jamais dans l'événement.
+  //
+  // « Voir sur le plan » (§ 7.1) pose ui.centrerEvidence : dès que la vue
+  // existe, la chaise de la personne mise en évidence vient au centre du
+  // cadre, au zoom où sa table dessine ses chaises, sans dézoomer une vue
+  // plus proche (vuePourVoir), puis la demande se retire ; sans chaise au
+  // tour montré, la vue ne bouge pas. Le menu d'une personne la met en
+  // évidence sans demande : la vue reste où l'opérateur la regarde.
   //
   // Le cadre se relit au moment du geste, par getBoundingClientRect de la
   // racine : un défilement de la page le déplace sans changer sa taille.
@@ -118,6 +125,7 @@
     sourceMontree,
     vueApresCadre,
     vueInitiale,
+    vuePourVoir,
     zoomerBouton,
     zoomerMolette,
   } from './vue_plan.js';
@@ -730,6 +738,16 @@
     };
   });
 
+  // La demande de « Voir sur le plan », servie sur la première vue qui
+  // existe, puis retirée, que la vue bouge ou non.
+  $effect(() => {
+    if (!$ui.centrerEvidence || vue === null) return;
+    untrack(() => {
+      const id = ui.etat().miseEnEvidence;
+      if (id !== null) poserVue(vuePourVoir(vue, etat, id, englobantPlan, cadreCourant()));
+      ui.evidenceCentree();
+    });
+  });
   // La place qui porte la pose la désigne par aria-describedby ; l'effet
   // suit le modèle, qui peut redessiner la chaise.
   $effect(() => {

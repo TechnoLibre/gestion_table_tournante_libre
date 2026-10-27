@@ -32,6 +32,21 @@ export function regimeCibles(k, geometrie) {
 }
 
 /**
+ * Le plus petit zoom où regimeCibles rend 'sieges' pour une table :
+ * CIBLE_MIN_PX / pas, relevé d'un écart d'arrondi quand le produit k × pas
+ * retombe sous le seuil. Au-dessous, la table ne dessine aucune chaise, et
+ * aucune marque ne s'y pose (§ 7.3).
+ *
+ * @param {import('./tables.js').GeometrieTable} geometrie
+ * @returns {number}  px/cm
+ */
+export function kSieges(geometrie) {
+  let k = CIBLE_MIN_PX / geometrie.pas;
+  while (k * geometrie.pas < CIBLE_MIN_PX) k += k * Number.EPSILON;
+  return k;
+}
+
+/**
  * Ce que désigne un point de dessin au zoom k.
  *
  * Les tables s'examinent de la dernière reçue à la première, l'ordre inverse

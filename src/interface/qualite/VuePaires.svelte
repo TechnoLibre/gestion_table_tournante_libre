@@ -18,8 +18,8 @@
   // mène au plan au premier tour où la paire se revoit, la première
   // personne mise en évidence, et chaque tour de la paire, avec sa table,
   // est une commande sœur vers le plan à ce tour, la même personne mise en
-  // évidence. Chaque commande se nomme par son libellé suivi de la paire,
-  // l'identifiant d'un homonyme compris.
+  // évidence ; le plan centre sa chaise. Chaque commande se nomme par son
+  // libellé suivi de la paire, l'identifiant d'un homonyme compris.
   // Les commandes de ligne sont des boutons simples, sans refus possible :
   // une ligne coûte une quinzaine de nœuds, cent lignes par page.
   // Le tableau se pagine comme celui des propositions, par pages de cent,
@@ -74,10 +74,10 @@
   const nomAccessible = (p) => nomDistinct(p, t);
 
   // Montre la paire au plan au tour donné, à partir de 1, sa première
-  // personne mise en évidence.
+  // personne mise en évidence, sa chaise au centre de la vue (§ 7.1).
   function voir(paire, tour) {
     ui.montrerTour(tour);
-    ui.mettreEnEvidence(paire.a.id);
+    ui.mettreEnEvidence(paire.a.id, { centrer: true });
     ui.allerA('plan');
   }
 </script>

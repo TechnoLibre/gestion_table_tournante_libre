@@ -50,7 +50,8 @@
   //
   // « Voir sur le plan » met la personne en évidence et ouvre le plan
   // (§ 7.1, § 8.4) au tour montré quand elle y a une chaise, sinon au
-  // premier tour où elle en a une : un geste de regard, qui n'écrit rien.
+  // premier tour où elle en a une, sa chaise au centre de la vue : un geste
+  // de regard, qui n'écrit rien.
   //
   // L'en-tête trie : un clic sur une colonne la trie croissante, un second
   // décroissante ; le sens se lit en texte et dans aria-sort. Un collage sur
@@ -164,9 +165,9 @@
   const ui = getContext('ui');
 
   // Met la personne en évidence et ouvre le plan au tour où elle a une
-  // chaise (tourPourVoir), dans le placement que le plan montre ; le tour
-  // montré, et le choix en attente avec lui, ne change que si elle n'y en a
-  // pas.
+  // chaise (tourPourVoir), dans le placement que le plan montre, en
+  // demandant au plan de centrer sa chaise ; le tour montré, et le choix en
+  // attente avec lui, ne change que si elle n'y en a pas.
   function voirSurLePlan(id) {
     const { charge } = seance.etat();
     if (charge !== null) {
@@ -175,7 +176,7 @@
       const tour = tourPourVoir(id, charge.evenement.tours, montre, (r) => etatPlaces(charge, { tour: r, proposition }));
       if (tour !== montre) ui.montrerTour(tour);
     }
-    ui.mettreEnEvidence(id);
+    ui.mettreEnEvidence(id, { centrer: true });
     ui.allerA('plan');
   }
   const uid = $props.id();
