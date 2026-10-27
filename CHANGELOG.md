@@ -294,6 +294,12 @@
   refuse quand chaque numéro est ainsi partagé, en menant à la section des
   tables. Les deux s'importent tels quels sans aucun refus. Le modèle n'écrit
   rien dans l'événement et reste disponible en lecture.
+- Sous « Télécharger un modèle », « Guide import », replié par défaut, décrit
+  chaque colonne reconnue du contenu choisi : son en-tête, si elle est
+  obligatoire, ce qu'elle contient, comment séparer plusieurs valeurs et ses
+  synonymes. Les organisations en conflit se séparent par « ; », « | » ou un
+  retour à la ligne dans la cellule, jamais par une virgule, qui reste dans le
+  nom.
 - Dans un fichier d'objectifs, une ligne sans objectif ni règle est une ligne à
   remplir : l'import la passe sans la refuser, et l'objectif de sa table reste
   en mise à jour.

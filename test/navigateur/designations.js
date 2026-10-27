@@ -136,6 +136,8 @@ const ENTREES = [
   ['data-groupe-etat', 'participants : l’état replié ou déplié d’un groupe', ['']],
   ['data-groupe-libelle', 'participants : le libellé d’un groupe', ['']],
   ['data-groupe-ligne', 'participants : le groupe qui compte une ligne', null],
+  ['data-guide-colonne', 'import : la ligne d’une colonne reconnue dans le guide de l’import, par son champ', null],
+  ['data-guide-import', 'import : le contenu ouvert du guide de l’import', ['']],
   ['data-historique', 'événement : la commande de l’historique', ['']],
   ['data-homonyme', 'import : une ligne homonyme', null],
   ['data-hors-classement', 'propositions : les lignes hors classement', ['']],

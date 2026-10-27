@@ -4998,6 +4998,30 @@ l'une de 1 à l'avant-dernier tour, l'autre aux tours 2 et 3 : « 1-3 » et
 tours.
 Celui des objectifs suit l'événement (§ 10.4).
 
+**Le guide de l'import.** Sous « Télécharger un modèle », dernier de la carte
+de l'import, un bloc replié, « Guide import », décrit le fichier attendu pour
+la nature cochée. Il est **fermé à l'ouverture de la section** ; son bouton
+l'ouvre et le ferme, à la souris comme au clavier, dit son état par
+`aria-expanded` et désigne le contenu ouvert par `aria-controls`. Son état
+n'appartient qu'à l'écran : il ne s'écrit ni dans l'événement ni dans les
+réglages, et il n'écrit rien, en lecture comme sur un plan bloqué. Ouvert, il
+porte quelques consignes — les en-têtes reconnus sans égard à la casse, aux
+accents, aux blancs, à « _ » ni à « - », l'ordre des colonnes libre et une
+colonne inconnue ignorée ; le séparateur et l'encodage détectés, et nommés
+par l'aperçu ; le modèle aux bons en-têtes ; rien d'importé avant l'aperçu —,
+puis un tableau, **une ligne par colonne reconnue**, dans l'ordre de la table
+d'en-têtes de la nature : l'en-tête, s'il est obligatoire, ce que la colonne
+contient et comment une cellule sépare plusieurs valeurs, et les synonymes.
+**En-têtes et synonymes se lisent dans la table d'en-têtes**, celle de la
+reconnaissance (§ 19.8), jamais recopiés — deux écritures qui ne diffèrent
+que par l'apostrophe, droite ou typographique, s'y montrent une fois, la
+première : une colonne ajoutée à la table paraît au guide, et une colonne
+sans texte de guide fait échouer une épreuve.
+Le texte d'une colonne suit ce paragraphe et le § 10.4 : une liste fermée —
+`exclu`, `regle` — s'y donne en entier, et la ligne `conflit_organisation`
+dit qu'une virgule ne sépare pas deux organisations, qu'elle reste dans le
+nom. Changer de nature change le tableau, le bloc restant ouvert.
+
 ### 10.2 La saisie
 
 Seul `nom` est obligatoire : refuser une personne faute de courriel pousse
@@ -5264,6 +5288,9 @@ participants arrive sous « participants ».
 | `tour` | non | vide pour la soirée, sinon un tour de 1 à R |
 | `objectif` | **oui** | les étiquettes, découpées comme la colonne `etiquettes` (§ 10.1) ; synonyme : `objectifs` |
 | `regle` | non | liste fermée, sur la forme normalisée, comme `exclu` (§ 10.1) — casse et accents ignorés, blancs réduits, si bien que « Au moins une » se lit et « aumoinsune » non : `ou`, `une`, `au moins une` ; `et`, `toutes` ; vide pour suivre le défaut ; synonyme : `règle` |
+
+Sous la nature « Objectifs de table », le guide de l'import (§ 10.1) décrit
+ces colonnes.
 
 **Tout le § 10.1 vaut, sauf ce qui nomme les participants** : aperçu
 obligatoire, encodage en quatre temps, séparateur analysé, colonnes par en-tête,

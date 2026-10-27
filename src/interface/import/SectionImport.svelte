@@ -52,6 +52,9 @@
   // objectifs se refuse à côté d'elle sans table, ou quand chaque numéro de
   // table est partagé, avec le remède qui ouvre la section des tables ; la
   // commande se recrée à chaque nature, son refus avec elle.
+  //
+  // Le guide de l'import (GuideImport.svelte), replié sous elle et dernier de
+  // la carte, décrit les colonnes de la nature cochée.
   import { getContext, untrack } from 'svelte';
   import { appliquerCommande } from '../../application/commandes.js';
   import { bilanRemplacement, bilanRemplacementObjectifs, decoder, exporterRefus } from '../../application/csv.js';
@@ -60,6 +63,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
   import Apercu from './Apercu.svelte';
+  import GuideImport from './GuideImport.svelte';
   import Rapport from './Rapport.svelte';
   import {
     NATURES_D_IMPORT,
@@ -334,6 +338,7 @@
         </p>
       {/if}
     </div>
+    <GuideImport {nature} />
   </Carte>
 
   {#if source !== null}

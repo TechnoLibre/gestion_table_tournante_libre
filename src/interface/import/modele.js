@@ -16,10 +16,13 @@
 //
 // Le modèle à télécharger suit la nature cochée : celui des participants,
 // dont la présence suit le nombre de tours de l'événement ouvert, ou celui
-// des objectifs de l'événement ouvert.
+// des objectifs de l'événement ouvert. Le guide de l'import la suit aussi :
+// une ligne par colonne reconnue, lue dans la table d'en-têtes de la nature.
 import {
   CHAMPS,
   CHAMPS_OBJECTIFS,
+  ENTETES_DES_CHAMPS,
+  ENTETES_DES_OBJECTIFS,
   apercevoir,
   apercevoirObjectifs,
   modeleObjectifs,
@@ -265,6 +268,91 @@ export const COLONNES_DES_LIGNES = colonnes(CHAMPS);
 /** Les colonnes du tableau des lignes des objectifs : chaque champ, dans
  *  l'ordre de CHAMPS_OBJECTIFS, et la clé de son nom. */
 export const COLONNES_DES_OBJECTIFS = colonnes(CHAMPS_OBJECTIFS);
+
+// La clé du texte de guide de chaque champ, dans l'ordre de CHAMPS, puis de
+// CHAMPS_OBJECTIFS : ce que la colonne contient, et comment une cellule en
+// sépare plusieurs valeurs.
+const CLES_DU_GUIDE = new Map([
+  ['nom', 'import.guide.colonne.nom'],
+  ['prenom', 'import.guide.colonne.prenom'],
+  ['organisation', 'import.guide.colonne.organisation'],
+  ['courriel', 'import.guide.colonne.courriel'],
+  ['titre_pressenti', 'import.guide.colonne.titrePressenti'],
+  ['exclu', 'import.guide.colonne.exclu'],
+  ['notes', 'import.guide.colonne.notes'],
+  ['etiquettes', 'import.guide.colonne.etiquettes'],
+  ['presence', 'import.guide.colonne.presence'],
+  ['conflit_organisation', 'import.guide.colonne.conflits'],
+  ['table', 'import.guide.colonne.table'],
+  ['tour', 'import.guide.colonne.tour'],
+  ['objectif', 'import.guide.colonne.objectif'],
+  ['regle', 'import.guide.colonne.regle'],
+]);
+
+// La table d'en-têtes de chaque nature, la clé de la légende de son tableau
+// dans le guide, et ses champs obligatoires : ceux dont l'absence refuse le
+// fichier entier, NOM_NON_ASSOCIE pour des participants,
+// TABLE_NON_ASSOCIEE et OBJECTIF_NON_ASSOCIE pour des objectifs.
+const GUIDES_DES_NATURES = new Map([
+  ['participants', { entetes: ENTETES_DES_CHAMPS, legende: 'import.guide.legende.participants', obligatoires: ['nom'] }],
+  ['objectifs', { entetes: ENTETES_DES_OBJECTIFS, legende: 'import.guide.legende.objectifs', obligatoires: ['table', 'objectif'] }],
+]);
+
+/** Les clés des consignes générales du guide de l'import, dans l'ordre où
+ *  il les montre, sous l'une et l'autre nature. */
+export const CONSIGNES_DU_GUIDE = Object.freeze([
+  'import.guide.consigne.entetes',
+  'import.guide.consigne.fichier',
+  'import.guide.consigne.modele',
+  'import.guide.consigne.apercu',
+]);
+
+// Les en-têtes d'un champ, sans ceux qui ne diffèrent d'un précédent que
+// par l'apostrophe, droite ou typographique : la reconnaissance garde les
+// deux graphies, le guide n'écrit que la première, que l'œil distingue mal
+// de l'autre.
+function uneGraphieParApostrophe(ecritures) {
+  const vues = new Set();
+  return ecritures.filter((ecriture) => {
+    const graphie = ecriture.replaceAll('\u{2019}', "'");
+    if (vues.has(graphie)) return false;
+    vues.add(graphie);
+    return true;
+  });
+}
+
+/**
+ * Les lignes du guide d'une table d'en-têtes, de la forme
+ * d'ENTETES_DES_CHAMPS : une par champ, dans l'ordre de la table, son
+ * en-tête, ses synonymes tels que la table les écrit, une seule graphie par
+ * apostrophe, s'il est obligatoire, et la clé de son texte de guide. La
+ * table seule donne en-têtes et synonymes : le guide n'en recopie aucun.
+ *
+ * @param {ReadonlyArray<readonly [string, ReadonlyArray<string>]>} entetes
+ * @param {ReadonlyArray<string>} obligatoires  les champs obligatoires
+ * @returns {Array<{champ: string, entete: string, synonymes: string[], obligatoire: boolean, cle: string}>}
+ * @throws {RangeError} un champ sans texte de guide, qu'il nomme
+ */
+export function colonnesDuGuide(entetes, obligatoires) {
+  return entetes.map(([champ, ecritures]) => {
+    const [entete, ...synonymes] = uneGraphieParApostrophe(ecritures);
+    return { champ, entete, synonymes, obligatoire: obligatoires.includes(champ), cle: dans(CLES_DU_GUIDE, champ, 'texte de guide du champ') };
+  });
+}
+
+/**
+ * Le guide de l'import sous une nature (§ 10.1, § 10.4) : la clé de la
+ * légende de son tableau, et une ligne par colonne reconnue, dans l'ordre
+ * de la table d'en-têtes de la nature (colonnesDuGuide).
+ *
+ * @param {'participants'|'objectifs'} nature
+ * @returns {{legende: string, colonnes: ReturnType<typeof colonnesDuGuide>}}
+ * @throws {RangeError} une nature inconnue, ou un champ sans texte de guide
+ */
+export function guideDeLImport(nature) {
+  const { entetes, legende, obligatoires } = GUIDES_DES_NATURES.get(exigerNature(nature));
+  return { legende, colonnes: colonnesDuGuide(entetes, obligatoires) };
+}
 
 // Les comptes du rapport de chaque nature, dans l'ordre du résumé de son
 // import, et la clé de leur libellé, accordé au nombre.

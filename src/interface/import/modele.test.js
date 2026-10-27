@@ -12,7 +12,8 @@
 // fautif cause, avec l'organisation et la ligne, et son invitation à
 // réimporter ; le modèle à télécharger de chaque nature, son nom et son nom
 // accessible ; les doublons nommés, leurs lignes énumérées, et les noms que
-// « Rendre les noms uniques » leur donne.
+// « Rendre les noms uniques » leur donne ; le guide de l'import, dont
+// chaque colonne vient de la table d'en-têtes de sa nature et a son texte.
 // Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
@@ -29,11 +30,17 @@ import {
 } from '../../application/csv.js';
 import { comptesTitres, titresNonPourvus } from '../../application/listes_travail.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { VALEURS_EXCLU } from '../../csv/apercu.js';
+import { ENTETES_DES_CHAMPS } from '../../csv/colonnes.js';
+import { ENTETES_DES_OBJECTIFS, VALEURS_REGLE } from '../../csv/objectifs.js';
 import { creerCharge } from '../../stockage/document.js';
+import { SEPARATEURS_ETIQUETTES } from '../../stockage/etiquettes.js';
+import { TABLE as LIBELLES_IMPORT } from '../libelles/import.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
   COLONNES_DES_LIGNES,
   COLONNES_DES_OBJECTIFS,
+  CONSIGNES_DU_GUIDE,
   ENCODAGES,
   MODES_D_IMPORT,
   NATURES_D_IMPORT,
@@ -43,7 +50,9 @@ import {
   annonceRemplacementParticipants,
   apercevoirSelon,
   avecEntetesDeLaGrille,
+  colonnesDuGuide,
   comptesDuRapport,
+  guideDeLImport,
   messageDuBloc,
   modesDImport,
   modeleApercu,
@@ -1008,5 +1017,87 @@ describe('modèle : les doublons nommés et les noms rendus uniques (§ 10.1)', 
     assert.equal(t('import.apercu.nomsRendusUniques', { n: 1 }), 'nom rendu unique par un suffixe numéroté');
     assert.equal(t('import.apercu.nomsRendusUniques', { n: 2 }), 'noms rendus uniques par un suffixe numéroté');
     for (const cle of ['import.apercu.renommes', 'import.commande.rendreNomsUniques']) assert.ok(t(cle).length > 0, cle);
+  });
+});
+
+describe("modèle : le guide de l'import (§ 10.1, § 10.4)", () => {
+  // La table d'en-têtes de chaque nature, lue dans src/csv même : le guide
+  // ne recopie aucun en-tête.
+  const TABLES = [
+    ['participants', ENTETES_DES_CHAMPS, ['nom']],
+    ['objectifs', ENTETES_DES_OBJECTIFS, ['table', 'objectif']],
+  ];
+  // Une valeur citée telle que l'écrit le texte d'un guide.
+  const citee = (valeur) => `« ${valeur} »`;
+
+  test('une ligne par champ de la table, dans son ordre : son en-tête, ses synonymes tels que la table les écrit, une graphie par apostrophe, s’il est obligatoire', () => {
+    for (const [nature, table, obligatoires] of TABLES) {
+      const { colonnes } = guideDeLImport(nature);
+      assert.deepEqual(
+        colonnes.map(({ champ, entete, synonymes, obligatoire }) => ({ champ, entete, synonymes, obligatoire })),
+        table.map(([champ, ecritures]) => {
+          const [entete, ...synonymes] = ecritures.filter(
+            (ecriture, rang) => !ecritures.slice(0, rang).some((avant) => avant.replaceAll('\u{2019}', "'") === ecriture.replaceAll('\u{2019}', "'")),
+          );
+          return { champ, entete, synonymes, obligatoire: obligatoires.includes(champ) };
+        }),
+        nature,
+      );
+    }
+    // Les deux apostrophes de « conflit d'organisation » ne s'écrivent qu'une
+    // fois, la droite, la première de la table.
+    const conflits = guideDeLImport('participants').colonnes.find(({ champ }) => champ === 'conflit_organisation');
+    assert.deepEqual(conflits.synonymes, ['conflits', "conflit d'organisation"]);
+    assert.deepEqual(guideDeLImport('participants').colonnes.map(({ champ }) => champ), [...CHAMPS]);
+    assert.deepEqual(guideDeLImport('objectifs').colonnes.map(({ champ }) => champ), [...CHAMPS_OBJECTIFS]);
+    assert.throws(() => guideDeLImport('tables'), RangeError);
+  });
+
+  test('chaque champ des deux tables a son texte de guide, propre à lui, dans la table des libellés de l’import', () => {
+    const cles = TABLES.flatMap(([nature]) => guideDeLImport(nature).colonnes.map(({ cle }) => cle));
+    assert.equal(cles.length, ENTETES_DES_CHAMPS.length + ENTETES_DES_OBJECTIFS.length);
+    assert.equal(new Set(cles).size, cles.length);
+    for (const cle of cles) {
+      assert.ok(LIBELLES_IMPORT.has(cle), cle);
+      assert.ok(t(cle).length > 0, cle);
+    }
+    for (const [nature] of TABLES) assert.ok(t(guideDeLImport(nature).legende).length > 0, nature);
+    for (const cle of CONSIGNES_DU_GUIDE) assert.ok(LIBELLES_IMPORT.has(cle), cle);
+    assert.equal(t('import.guide.titre'), 'Guide import');
+  });
+
+  test('rouge : une colonne ajoutée à une table sans texte de guide fait échouer le guide, qui la nomme', () => {
+    const augmentee = [...ENTETES_DES_CHAMPS, ['inventee', ['inventee', 'synonyme inventé']]];
+    assert.throws(() => colonnesDuGuide(augmentee, ['nom']), /inventee/);
+  });
+
+  test('les listes fermées se donnent en entier : chaque valeur d’« exclu » et de la règle est citée dans son texte', () => {
+    const exclu = t('import.guide.colonne.exclu');
+    for (const valeur of VALEURS_EXCLU.keys()) if (valeur !== '') assert.ok(exclu.includes(citee(valeur)), valeur);
+    assert.match(exclu, /cellule vide/);
+    const regle = t('import.guide.colonne.regle');
+    for (const valeur of VALEURS_REGLE.keys()) if (valeur !== '') assert.ok(regle.includes(citee(valeur)), valeur);
+    assert.match(regle, /vide/);
+  });
+
+  test('les séparateurs : ceux des étiquettes et des objectifs nommés, et ceux des conflits sans la virgule, qui reste dans le nom', () => {
+    // Les séparateurs d'étiquettes imprimables ; la fin de ligne se dit en
+    // mots.
+    const imprimables = SEPARATEURS_ETIQUETTES.filter((separateur) => !/[\r\n]/.test(separateur));
+    assert.deepEqual(imprimables, [',', ';', '|']);
+    for (const cle of ['import.guide.colonne.etiquettes', 'import.guide.colonne.objectif']) {
+      for (const separateur of imprimables) assert.ok(t(cle).includes(citee(separateur)), `${cle} ${separateur}`);
+      assert.match(t(cle), /retour à la ligne/);
+    }
+    const conflits = t('import.guide.colonne.conflits');
+    for (const separateur of [';', '|']) assert.ok(conflits.includes(citee(separateur)), separateur);
+    assert.ok(!conflits.includes(citee(',')));
+    assert.match(conflits, /retour à la ligne/);
+    assert.match(conflits, /pas par une virgule, qui reste dans le nom/);
+  });
+
+  test('la présence se donne par l’exemple : une plage, une liste, « tous »', () => {
+    const presence = t('import.guide.colonne.presence');
+    for (const exemple of ['1-3', '2, 3', 'tous']) assert.ok(presence.includes(citee(exemple)), exemple);
   });
 });

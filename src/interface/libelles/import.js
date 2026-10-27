@@ -38,6 +38,79 @@ export const TABLE = new Map([
   ['import.modele.objectifs', "Télécharger un modèle d'objectifs de table"],
   ['import.modele.enregistre', 'Modèle enregistré :'],
 
+  // --- Le guide de l'import, replié sous le modèle (§ 10.1, § 10.4) ----------
+  // Une ligne par colonne reconnue de la nature cochée : son en-tête et ses
+  // synonymes viennent de la table d'en-têtes, son texte d'ici. Un texte dit
+  // ce que la colonne contient et comment une cellule sépare plusieurs
+  // valeurs ; une liste fermée s'y donne en entier.
+  ['import.guide.titre', 'Guide import'],
+  ['import.guide.legende.participants', "Colonnes d'un fichier de participants"],
+  ['import.guide.legende.objectifs', "Colonnes d'un fichier d'objectifs de table"],
+  ['import.guide.entete', 'En-tête'],
+  ['import.guide.obligatoire', 'Obligatoire'],
+  ['import.guide.contenu', 'Contenu'],
+  ['import.guide.synonymes', 'Synonymes'],
+  ['import.guide.oui', 'oui'],
+  ['import.guide.non', 'non'],
+  ['import.guide.aucunSynonyme', 'aucun'],
+  [
+    'import.guide.consigne.entetes',
+    "Chaque colonne se reconnaît à son en-tête, sans égard à la casse, aux accents, aux espaces, à « _ » ni à « - ». " +
+      "L'ordre des colonnes est libre ; une colonne inconnue est ignorée.",
+  ],
+  [
+    'import.guide.consigne.fichier',
+    "Le séparateur des colonnes — « ; », « , » ou une tabulation — et l'encodage — UTF-8, UTF-16 avec marque " +
+      "ou windows-1252 — se détectent seuls ; l'aperçu les nomme.",
+  ],
+  ['import.guide.consigne.modele', '« Télécharger un modèle » donne un fichier aux bons en-têtes, prêt à remplir.'],
+  [
+    'import.guide.consigne.apercu',
+    "Rien ne s'importe avant l'aperçu, qui montre chaque ligne lue et chaque ligne refusée avec son motif.",
+  ],
+  ['import.guide.colonne.nom', 'Le nom de la personne ; une ligne sans nom est refusée.'],
+  ['import.guide.colonne.prenom', 'Le prénom.'],
+  [
+    'import.guide.colonne.organisation',
+    "L'organisation de la personne. Deux orthographes qui ne diffèrent que par la casse, les accents ou les espaces " +
+      "n'en font qu'une.",
+  ],
+  ['import.guide.colonne.courriel', "L'adresse de courriel."],
+  ['import.guide.colonne.titrePressenti', 'Un titre ou un rôle, pour information : il ne pourvoit aucune place.'],
+  [
+    'import.guide.colonne.exclu',
+    "« oui », « o », « vrai », « 1 » ou « x » exclut la personne ; « non », « n », « faux », « 0 » ou une cellule vide " +
+      "ne l'exclut pas. La casse et les accents ne comptent pas ; toute autre valeur refuse la ligne.",
+  ],
+  ['import.guide.colonne.notes', 'Un texte libre, jamais interprété.'],
+  [
+    'import.guide.colonne.etiquettes',
+    'Les étiquettes de la personne, séparées par « , », « ; », « | » ou un retour à la ligne dans la cellule.',
+  ],
+  [
+    'import.guide.colonne.presence',
+    'Les tours où la personne vient, en tours et en plages : « 1-3 », « 2, 3 », « tours 1 et 2 » ; « tous » vaut ' +
+      'tous les tours. Vide : tous les tours pour une personne créée, sa présence gardée en mise à jour.',
+  ],
+  [
+    'import.guide.colonne.conflits',
+    'Les organisations que celle de la personne évite à table, séparées par « ; », « | » ou un retour à la ligne ' +
+      'dans la cellule — pas par une virgule, qui reste dans le nom. Chacune doit être portée par une personne que ' +
+      "l'import laisse dans la liste, et différer de celle de la personne : sinon le fichier entier est refusé.",
+  ],
+  ['import.guide.colonne.table', "Le numéro de la table, tel que le plan l'affiche."],
+  ['import.guide.colonne.tour', 'Le tour, de 1 au nombre de tours ; vide pour toute la soirée.'],
+  [
+    'import.guide.colonne.objectif',
+    'Les étiquettes visées, séparées par « , », « ; », « | » ou un retour à la ligne dans la cellule. ' +
+      'Une ligne sans objectif ni règle est passée, sans refus.',
+  ],
+  [
+    'import.guide.colonne.regle',
+    "« ou », « une » ou « au moins une » : au moins une des étiquettes ; « et » ou « toutes » : toutes ; vide : " +
+      "la règle par défaut de l'événement. Toute autre valeur refuse la ligne.",
+  ],
+
   // --- La sorte d'un message de l'aperçu et du rapport (messageDuBloc) ------
   ['import.sorte.refus', 'Refus'],
   ['import.sorte.avis', 'Avis'],

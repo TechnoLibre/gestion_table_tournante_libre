@@ -7,8 +7,9 @@
 // séparateur nommés, l'association par en-tête, l'ambiguïté, les refus
 // d'une ligne et les refus globaux, les étiquettes en pastilles et leurs
 // fusions à part, le rapport, le CSV des refus, les modes, l'import selon
-// l'état, le collage, le modèle à télécharger, la colonne de la présence,
-// les doublons nommés et « Rendre les noms uniques ».
+// l'état, le collage, le modèle à télécharger et le guide de l'import, la
+// colonne de la présence, les doublons nommés et « Rendre les noms
+// uniques ».
 // Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé, ouvre un événement et sa
 // section d'import ; le dialogue de choix sert, dans l'ordre, les fichiers
@@ -30,11 +31,12 @@ import { TABLES_APPLICATION, libelle } from '../../application/libelles.js';
 import { creerFormat } from '../../application/format.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { apercevoir } from '../../csv/apercu.js';
+import { ENTETES_DES_CHAMPS } from '../../csv/colonnes.js';
 import { decoder } from '../../csv/encodage.js';
 import { bilanRemplacement, exporterRefus as exporterRefusCsv } from '../../csv/import.js';
 import { decouper } from '../../csv/lecture.js';
 import { modeleParticipants } from '../../csv/export.js';
-import { apercevoirObjectifs, bilanRemplacementObjectifs, modeleObjectifs } from '../../csv/objectifs.js';
+import { ENTETES_DES_OBJECTIFS, apercevoirObjectifs, bilanRemplacementObjectifs, modeleObjectifs } from '../../csv/objectifs.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { creerCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
@@ -1688,6 +1690,150 @@ describe('le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4)',
     expect(e.enregistres).toEqual([]);
     const remede = dans(e, '[data-refus="OBJECTIFS_NUMEROS_PARTAGES"] [data-commande="ouvrirSection"]');
     expect(remede.textContent.trim()).toBe(t('communs.remede.ouvrirSection.tables'));
+  });
+});
+
+describe("le guide de l'import, replié sous le modèle (§ 10.1, § 10.4)", () => {
+  // Le bouton du guide, son contenu ouvert, et la ligne d'un champ.
+  const bouton = (e) => commande(e, 'guideImport');
+  const contenu = (e) => dans(e, '[data-guide-import]');
+  const ligneDuGuide = (e, champ) => dans(e, `[data-guide-import] [data-guide-colonne="${champ}"]`);
+  // Les cellules d'une ligne, après son en-tête : obligatoire, texte,
+  // synonymes.
+  const celluleDuGuide = (e, champ, rang) => ligneDuGuide(e, champ).querySelectorAll('td')[rang];
+  const texteDuGuide = (e, champ) => celluleDuGuide(e, champ, 1);
+  // Chaque ligne du tableau : son en-tête, puis ses synonymes, tels que
+  // l'écran les écrit en code.
+  const lignesDuGuide = (e) =>
+    tous(e, '[data-guide-import] [data-guide-colonne]').map((ligne) => [
+      ligne.dataset.guideColonne,
+      [...ligne.querySelectorAll('code')].map((code) => code.textContent),
+    ]);
+  // Celles qu'attend une table d'en-têtes de src/csv : une graphie par
+  // apostrophe, la première.
+  const droite = (texte) => texte.replaceAll('\u{2019}', "'");
+  const attendues = (table) =>
+    table.map(([champ, entetes]) => [
+      champ,
+      entetes.filter((entete, rang) => !entetes.slice(0, rang).some((avant) => droite(avant) === droite(entete))),
+    ]);
+
+  test('fermé à l’ouverture de la section, dernier de la carte de l’import : « Guide import », aria-expanded faux, aucun contenu', async () => {
+    const e = await ouvrir();
+    const guide = bouton(e);
+    expect(guide.localName).toBe('button');
+    expect(guide.getAttribute('type')).toBe('button');
+    expect(guide).toHaveAccessibleName(tEcran('import.guide.titre'));
+    expect(texteDe(guide)).toBe(tEcran('import.guide.titre'));
+    expect(guide.getAttribute('aria-expanded')).toBe('false');
+    expect(guide.hasAttribute('aria-controls')).toBe(false);
+    expect(contenu(e)).toBeNull();
+    expect(vu(guide)).toBe(true);
+    const modele = commande(e, 'telechargerModele');
+    expect(modele.compareDocumentPosition(guide) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(dans(e, '[data-apercu]')).toBeNull();
+  });
+
+  test('au clavier : Entrée l’ouvre, aria-controls désigne le contenu, Espace le ferme ; le bouton qui a le focus porte l’anneau de l’application', async () => {
+    const e = await ouvrir();
+    const guide = bouton(e);
+    guide.focus();
+    await touche('Enter');
+    await vi.waitFor(() => expect(guide.getAttribute('aria-expanded')).toBe('true'));
+    expect(contenu(e)).not.toBeNull();
+    expect(guide.getAttribute('aria-controls')).toBe(contenu(e).id);
+    expect(document.getElementById(guide.getAttribute('aria-controls'))).toBe(contenu(e));
+    expect(vu(contenu(e).querySelector('li'))).toBe(true);
+    expect(document.activeElement).toBe(guide);
+    expect(guide.matches(':focus-visible')).toBe(true);
+    const style = getComputedStyle(guide);
+    expect(style.outlineStyle).toBe('solid');
+    const sonde = document.createElement('span');
+    sonde.style.color = 'var(--couleur-focus)';
+    document.body.append(sonde);
+    expect(style.outlineColor).toBe(getComputedStyle(sonde).color);
+    sonde.remove();
+
+    await touche(' ');
+    await vi.waitFor(() => expect(guide.getAttribute('aria-expanded')).toBe('false'));
+    expect(guide.hasAttribute('aria-controls')).toBe(false);
+    expect(contenu(e)).toBeNull();
+    expect(document.activeElement).toBe(guide);
+    expect(e.espion).not.toHaveBeenCalled();
+  });
+
+  test('ouvert sous Participants : les consignes, puis une ligne par colonne reconnue, dans l’ordre de la table, ses synonymes ceux de la table, « nom » seul obligatoire', async () => {
+    const e = await ouvrir();
+    bouton(e).click();
+    flushSync();
+    expect(texteDe(contenu(e).querySelector('caption'))).toBe(tEcran('import.guide.legende.participants'));
+    expect([...contenu(e).querySelectorAll('thead th')].map(texteDe)).toEqual(
+      ['import.guide.entete', 'import.guide.obligatoire', 'import.guide.contenu', 'import.guide.synonymes'].map((cle) => tEcran(cle)),
+    );
+    expect([...contenu(e).firstElementChild.children].map(texteDe)).toEqual(
+      ['entetes', 'fichier', 'modele', 'apercu'].map((nom) => enLigne(tEcran(`import.guide.consigne.${nom}`))),
+    );
+    expect(lignesDuGuide(e)).toEqual(attendues(ENTETES_DES_CHAMPS));
+    for (const [champ] of ENTETES_DES_CHAMPS) {
+      const obligatoire = celluleDuGuide(e, champ, 0);
+      expect(texteDe(obligatoire), champ).toBe(tEcran(champ === 'nom' ? 'import.guide.oui' : 'import.guide.non'));
+    }
+    expect(texteDe(celluleDuGuide(e, 'nom', 2))).toBe(tEcran('import.guide.aucunSynonyme'));
+    expect(ligneDuGuide(e, 'exclu').querySelector('th').getAttribute('scope')).toBe('row');
+  });
+
+  test('la ligne « conflit_organisation » dit que « ; », « | » ou un retour à la ligne séparent, et qu’une virgule reste dans le nom', async () => {
+    const e = await ouvrir();
+    bouton(e).click();
+    flushSync();
+    const ligne = ligneDuGuide(e, 'conflit_organisation');
+    expect(texteDe(ligne.querySelector('th'))).toBe('conflit_organisation');
+    const texte = texteDe(texteDuGuide(e, 'conflit_organisation'));
+    expect(texte).toBe(enLigne(tEcran('import.guide.colonne.conflits')));
+    expect(texte).toContain('pas par une virgule, qui reste dans le nom');
+    // texteDe ramène les insécables de l'écran à des espaces.
+    for (const separateur of [';', '|']) expect(texte).toContain(`« ${separateur} »`);
+    expect(texte).not.toContain('« , »');
+    expect(texteDe(texteDuGuide(e, 'etiquettes'))).toContain('« , »');
+  });
+
+  test('le contenu suit la nature cochée, le guide restant ouvert : les colonnes des objectifs, « table » et « objectif » obligatoires, puis celles des participants', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    bouton(e).click();
+    flushSync();
+    choisirNature(e, 'objectifs');
+    expect(bouton(e).getAttribute('aria-expanded')).toBe('true');
+    expect(texteDe(contenu(e).querySelector('caption'))).toBe(tEcran('import.guide.legende.objectifs'));
+    expect(lignesDuGuide(e)).toEqual(attendues(ENTETES_DES_OBJECTIFS));
+    expect(
+      ENTETES_DES_OBJECTIFS.map(([champ]) => texteDe(celluleDuGuide(e, champ, 0))),
+    ).toEqual(['import.guide.oui', 'import.guide.non', 'import.guide.oui', 'import.guide.non'].map((cle) => tEcran(cle)));
+    expect(texteDe(texteDuGuide(e, 'regle'))).toBe(enLigne(tEcran('import.guide.colonne.regle')));
+    expect(ligneDuGuide(e, 'conflit_organisation')).toBeNull();
+
+    choisirNature(e, 'participants');
+    expect(texteDe(contenu(e).querySelector('caption'))).toBe(tEcran('import.guide.legende.participants'));
+    expect(lignesDuGuide(e)).toEqual(attendues(ENTETES_DES_CHAMPS));
+    expect(ligneDuGuide(e, 'regle')).toBeNull();
+  });
+
+  test('ouvert, le tableau tient dans sa carte à 1 366 × 700 ; dans la fenêtre d’un téléphone, il défile dans la carte, jamais la page', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    const page = document.documentElement;
+    try {
+      await fixerCadre(1366, 700);
+      const e = await ouvrir();
+      bouton(e).click();
+      flushSync();
+      const defile = contenu(e).querySelector('table').parentElement;
+      expect(defile.scrollWidth, 'le tableau défile en largeur').toBeLessThanOrEqual(defile.clientWidth);
+      expect(defile.getBoundingClientRect().right).toBeLessThanOrEqual(section(e).getBoundingClientRect().right);
+      await fixerCadre(414, 896);
+      expect(page.scrollWidth, 'la page défile en largeur').toBeLessThanOrEqual(page.clientWidth);
+      expect(defile.getBoundingClientRect().right).toBeLessThanOrEqual(section(e).getBoundingClientRect().right);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
   });
 });
 

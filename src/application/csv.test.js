@@ -27,7 +27,7 @@ import * as relais from './csv.js';
 import { libelle } from './libelles.js';
 
 describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
-  test('decoder, apercevoir, rendreNomsUniques, exporterParticipants, bilanRemplacement, cleNormalisee, CHAMPS, JOINTURE_ETIQUETTES et ceux des objectifs sont ceux de src/csv', () => {
+  test('decoder, apercevoir, rendreNomsUniques, exporterParticipants, bilanRemplacement, cleNormalisee, CHAMPS, JOINTURE_ETIQUETTES, les deux tables d’en-têtes et ceux des objectifs sont ceux de src/csv', () => {
     const attendus = [
       ['decoder', encodage.decoder],
       ['apercevoir', apercu.apercevoir],
@@ -48,8 +48,11 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
     assert.equal(relais.JOINTURE_ETIQUETTES, exportCsv.JOINTURE_ETIQUETTES);
     assert.equal(relais.JOINTURE_ETIQUETTES, ', ');
     assert.equal(relais.CHAMPS_OBJECTIFS, objectifs.CHAMPS_OBJECTIFS);
+    assert.equal(relais.ENTETES_DES_CHAMPS, colonnes.ENTETES_DES_CHAMPS);
+    assert.equal(relais.ENTETES_DES_OBJECTIFS, objectifs.ENTETES_DES_OBJECTIFS);
     assert.deepEqual(Object.keys(relais).sort(), [
-      'CHAMPS', 'CHAMPS_OBJECTIFS', 'JOINTURE_ETIQUETTES', 'apercevoir', 'apercevoirObjectifs', 'bilanRemplacement',
+      'CHAMPS', 'CHAMPS_OBJECTIFS', 'ENTETES_DES_CHAMPS', 'ENTETES_DES_OBJECTIFS', 'JOINTURE_ETIQUETTES', 'apercevoir',
+      'apercevoirObjectifs', 'bilanRemplacement',
       'bilanRemplacementObjectifs', 'cleNormalisee', 'decoder', 'exporterObjectifs', 'exporterParticipants', 'exporterRefus',
       'modeleObjectifs', 'modeleParticipants', 'rendreNomsUniques',
     ]);

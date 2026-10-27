@@ -159,7 +159,10 @@ reconnue (annexe B). Sa colonne « présence » suit le nombre de tours de
 l’événement. Une présence s’écrit en tours et en plages — « 1-3 », « 2, 3 »,
 « tours 1 et 2 » — ; « tous » vaut tous les tours, et une cellule vide aussi,
 pour une personne que l’import crée. Le modèle s’importe tel quel, sans
-qu’aucune ligne soit refusée.
+qu’aucune ligne soit refusée. Juste dessous, « Guide import » déplie, pour le
+contenu coché, chaque colonne reconnue : son en-tête, si elle est
+obligatoire, ce qu’elle contient, comment séparer plusieurs valeurs dans une
+cellule, et ses synonymes.
 
 ![L’aperçu du modèle de participants d’un événement de quatre tours, plus la ligne d’une personne déjà inscrite : la colonne « présence » lue en tours](doc/captures/02c-import-presence.png)
 
