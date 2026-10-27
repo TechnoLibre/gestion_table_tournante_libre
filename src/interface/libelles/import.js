@@ -98,6 +98,13 @@ export const TABLE = new Map([
       'dans la cellule — pas par une virgule, qui reste dans le nom. Chacune doit être portée par une personne que ' +
       "l'import laisse dans la liste, et différer de celle de la personne : sinon le fichier entier est refusé.",
   ],
+  [
+    'import.guide.colonne.animationReservee',
+    "« oui », « o », « vrai », « 1 » ou « x » : la personne est à désigner animatrice d'une table ; « non », « n », " +
+      "« faux », « 0 » ou une cellule vide : elle ne l'est pas. En mise à jour, une cellule vide garde sa marque, " +
+      "« non » la retire. L'import ne désigne personne. La casse et les accents ne comptent pas ; toute autre " +
+      'valeur refuse la ligne.',
+  ],
   ['import.guide.colonne.table', "Le numéro de la table, tel que le plan l'affiche."],
   ['import.guide.colonne.tour', 'Le tour, de 1 au nombre de tours ; vide pour toute la soirée.'],
   [
@@ -157,6 +164,7 @@ export const TABLE = new Map([
   ['import.champ.etiquettes', 'étiquettes'],
   ['import.champ.presence', 'présence'],
   ['import.champ.conflits', "conflits d'organisation"],
+  ['import.champ.animationReservee', 'animation réservée'],
   ['import.champ.table', 'table'],
   ['import.champ.tour', 'tour'],
   ['import.champ.objectif', 'objectif'],
@@ -296,6 +304,20 @@ export const TABLE = new Map([
   ['import.rapport.retires', ({ n }) => accorde(n, 'personne retirée', 'personnes retirées')],
   ['import.rapport.reservationsRetirees', ({ n }) => accorde(n, 'réservation retirée', 'réservations retirées')],
   ['import.rapport.rienEcrit', "Rien n'a changé dans la liste : seules des lignes refusées restent à lire."],
+  // Les personnes marquées « animation réservée » qui n'animent aucune table
+  // après l'import (aDesigner) : leur nombre précède le texte.
+  ['import.rapport.animations', 'Animation réservée'],
+  [
+    'import.rapport.aDesigner',
+    ({ n }) =>
+      accorde(
+        n,
+        "personne porte une animation réservée sans animer de table : désignez-la dans « Tables et tours », à la " +
+          "rangée « Animateurs » d'une table.",
+        "personnes portent une animation réservée sans animer de table : désignez-les dans « Tables et tours », à " +
+          "la rangée « Animateurs » d'une table.",
+      ),
+  ],
   ['import.rapport.objectifsAjoutes', ({ n }) => accorde(n, 'objectif ajouté', 'objectifs ajoutés')],
   ['import.rapport.objectifsRemplaces', ({ n }) => accorde(n, 'objectif remplacé', 'objectifs remplacés')],
   ['import.rapport.objectifsInchanges', ({ n }) => accorde(n, 'objectif inchangé', 'objectifs inchangés')],

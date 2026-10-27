@@ -375,12 +375,16 @@ const PARTICIPANT = objet([
   // est celui que la personne a reçu ; présent, toujours vrai, le numéro
   // final de son nom est celui qu'y a ajouté « Rendre les noms uniques » à
   // l'import ; examinerNomsNumerotes exige ce numéro, et le moteur ne lit
-  // pas la marque.
+  // pas la marque. animationReservee absent : la personne n'a pas à animer
+  // une table ; présent, toujours vrai, elle est à désigner animatrice
+  // (§ 4) — la marque dit une intention, jamais qu'elle anime, et le moteur
+  // ne la lit pas.
   ['etiquettes', regle('liste', { ...ETIQUETTES, optionnel: true })],
   ['presence', liste(entier(1, TOURS_MAX), { min: 1, distincts: true, tri: croissant, optionnel: true })],
   ['conflits', liste(CHAINE, { min: 1, distincts: true, tri: comparerTextes, optionnel: true })],
   ['logo', regle('logo', { optionnel: true })],
   ['nomNumerote', horsDuDefaut(true)],
+  ['animationReservee', horsDuDefaut(true)],
 ]);
 
 const TABLE = objet([

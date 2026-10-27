@@ -13,10 +13,10 @@ import { CHAMPS, ENTETES_DES_CHAMPS, associer, associerSelon, reconnaitre, recon
 import { cleEntete } from './normalisation.js';
 
 describe('CHAMPS', () => {
-  test('les dix champs du § 10.1, dans leur ordre, etiquettes, presence puis conflit_organisation en dernier, figés', () => {
+  test('les onze champs du § 10.1, dans leur ordre, etiquettes, presence, conflit_organisation puis animation_reservee en dernier, figés', () => {
     assert.deepEqual(CHAMPS, [
       'nom', 'prenom', 'organisation', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes', 'presence',
-      'conflit_organisation',
+      'conflit_organisation', 'animation_reservee',
     ]);
     assert.ok(Object.isFrozen(CHAMPS));
   });
@@ -37,6 +37,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
         ['etiquettes', ['etiquettes', 'étiquette', 'mots-clés']],
         ['presence', ['presence', 'présence', 'tours de présence']],
         ['conflit_organisation', ['conflit_organisation', 'conflits', "conflit d'organisation", 'conflit d\u{2019}organisation']],
+        ['animation_reservee', ['animation_reservee', 'animation réservée', 'animation réservé']],
       ],
     );
     assert.deepEqual(ENTETES_DES_CHAMPS.map(([champ]) => champ), [...CHAMPS]);
@@ -56,7 +57,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
 
   test('chaque en-tête de la table est reconnu sous son champ : la reconnaissance la lit', () => {
     const paires = ENTETES_DES_CHAMPS.flatMap(([champ, entetes]) => entetes.map((entete) => [entete, champ]));
-    assert.equal(paires.length, 22);
+    assert.equal(paires.length, 25);
     for (const [entete, champ] of paires) assert.equal(reconnaitre(entete), champ, entete);
   });
 
@@ -69,8 +70,9 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
         champDeCle.set(cle, champ);
       }
     }
-    // « presence » et « présence » partagent leur clé, sous le même champ.
-    assert.equal(champDeCle.size, 21);
+    // « presence » et « présence » partagent leur clé, sous le même champ ;
+    // « animation_reservee » et « animation réservée » aussi.
+    assert.equal(champDeCle.size, 23);
   });
 });
 
@@ -121,6 +123,16 @@ describe('reconnaitre (§ 10.1)', () => {
       Array.from({ length: 6 }, () => 'conflit_organisation'),
     );
     assert.deepEqual(['conflit', 'organisations', 'conflits 2'].map((entete) => reconnaitre(entete)), [null, null, null]);
+  });
+
+  test('Animation réservée, sous ses deux accords, désigne l’animation réservée ; « animation » et « réservée » restent inconnus', () => {
+    assert.deepEqual(
+      ['animation_reservee', 'Animation réservée', 'ANIMATION RÉSERVÉ', 'animation-reservee', 'Animation Réservé'].map((entete) =>
+        reconnaitre(entete),
+      ),
+      Array.from({ length: 5 }, () => 'animation_reservee'),
+    );
+    assert.deepEqual(['animation', 'réservée', 'animateur', 'animation réservées'].map((entete) => reconnaitre(entete)), [null, null, null, null]);
   });
 
   test('sans égard à la casse, aux accents ni aux espaces', () => {

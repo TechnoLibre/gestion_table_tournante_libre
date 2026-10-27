@@ -23,8 +23,9 @@ import { affichagePresence, clePresence } from './presence.js';
  *  mesures de MESURES. Les propriétés s'associent à l'export par leur champ
  *  (CHAMP_DE_COLONNE), non par leur rang : la grille ne montre pas les
  *  étiquettes, les conflits d'organisation y suivent l'organisation, ceux
- *  du placement les suivent, et la présence suit l'exclusion. Le collage en
- *  bloc suit l'ordre des champs de l'export, non celui-ci. */
+ *  du placement les suivent, l'animation suit le titre pressenti, et la
+ *  présence suit l'exclusion. Le collage en bloc suit l'ordre des champs de
+ *  l'export, non celui-ci. */
 export const COLONNES = Object.freeze([
   'nom',
   'prenom',
@@ -33,6 +34,7 @@ export const COLONNES = Object.freeze([
   'conflitsPlacement',
   'courriel',
   'titrePressenti',
+  'animation',
   'exclu',
   'presence',
   'notes',
@@ -40,9 +42,11 @@ export const COLONNES = Object.freeze([
 
 /** Les colonnes qui écrivent une mesure, non une propriété : les conflits du
  *  placement montré (conflitsParTour, conflits.js), que la grille lit dans
- *  conflitsDuPlacement. Elles se lisent seulement : ni saisie, ni tri, ni
+ *  conflitsDuPlacement, et l'animation — les tables que la personne anime,
+ *  ou « à désigner » sous la marque de l'animation réservée
+ *  (celluleAnimation). Elles se lisent seulement : ni saisie, ni tri, ni
  *  filtre, ni groupement, ni export. */
-export const MESURES = Object.freeze(['conflitsPlacement']);
+export const MESURES = Object.freeze(['conflitsPlacement', 'animation']);
 
 /** Les colonnes dont l'en-tête trie : COLONNES hors des mesures, que
  *  lignesGrille ne reçoit pas. */
@@ -77,6 +81,7 @@ const CLES_COLONNES = new Map([
   ['conflitsPlacement', 'participants.colonne.conflitsPlacement'],
   ['courriel', 'participants.colonne.courriel'],
   ['titrePressenti', 'participants.colonne.titrePressenti'],
+  ['animation', 'participants.colonne.animation'],
   ['exclu', 'participants.colonne.exclu'],
   ['presence', 'participants.colonne.presence'],
   ['notes', 'participants.colonne.notes'],
@@ -86,6 +91,26 @@ const CLES_STATUTS = new Map([
   ['partiel', 'participants.statut.partiel'],
   ['mobile', 'participants.statut.mobile'],
 ]);
+
+/**
+ * Ce que la cellule « Animation » écrit pour une personne (§ 10.2) : les
+ * numéros affichés des tables qu'elle anime, {sorte: 'tables', numeros},
+ * croissants, lus dans animees (tablesAnimees,
+ * src/application/animateurs.js) ; « à désigner », {sorte: 'aDesigner'},
+ * pour une personne non exclue qui porte la marque de l'animation réservée
+ * et n'anime aucune table ; sinon {sorte: 'vide'}. Une exclue n'anime rien
+ * et n'est pas à désigner.
+ *
+ * @param {{id: number, exclu: boolean, animationReservee?: true}} personne
+ * @param {Map<number, number[]>} animees
+ * @returns {{sorte: 'tables', numeros: number[]}|{sorte: 'aDesigner'}|{sorte: 'vide'}}
+ */
+export function celluleAnimation(personne, animees) {
+  const numeros = animees.get(personne.id);
+  if (numeros !== undefined && numeros.length > 0) return { sorte: 'tables', numeros };
+  if (personne.animationReservee === true && !personne.exclu) return { sorte: 'aDesigner' };
+  return { sorte: 'vide' };
+}
 
 /**
  * La clé du libellé d'une colonne de COLONNES.

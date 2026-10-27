@@ -63,10 +63,10 @@ export const MODES = Object.freeze(['ajouter', 'mettreAJour', 'remplacer']);
 
 /**
  * Valeurs admises d'« exclu », par clé normalisée (cleNormalisee) : une liste
- * fermée. Une valeur absente de la liste refuse la ligne. La clé vide dit ce
- * que vaut une cellule vide pour une personne créée, non ; l'aperçu rend
- * pourtant null pour une cellule vide, qu'une mise à jour lit comme « garder
- * la valeur » (voir ChampsLus).
+ * fermée, que l'animation réservée lit aussi. Une valeur absente de la liste
+ * refuse la ligne. La clé vide dit ce que vaut une cellule vide pour une
+ * personne créée, non ; l'aperçu rend pourtant null pour une cellule vide,
+ * qu'une mise à jour lit comme « garder la valeur » (voir ChampsLus).
  *
  * @type {Map<string, boolean>}
  */
@@ -96,6 +96,10 @@ export const VALEURS_EXCLU = new Map([
  * @property {boolean|null} exclu          null pour une cellule vide ou une
  *           colonne absente : vide vaut non pour une personne créée, et laisse
  *           la valeur d'une personne existante qu'un import met à jour
+ * @property {boolean|null} animationReservee   lue par la liste fermée
+ *           d'« exclu » ; null pour une cellule vide ou une colonne absente,
+ *           comme exclu : vide vaut non pour une personne créée, et laisse la
+ *           marque d'une personne mise à jour
  * @property {string[]|null} etiquettes    les étiquettes de la cellule,
  *           découpées par lireEtiquettes, dans l'ordre de la cellule, chacune
  *           sous l'orthographe que la réconciliation lui donne, sans deux de
@@ -141,11 +145,12 @@ export const VALEURS_EXCLU = new Map([
  * @property {Array<{ligne: number, code: string, valeur: string|null, raison?: string, nombre?: number,
  *             tour?: number, tours?: number, brut: string[]}>} refusees
  *           code : CHAMPS_EN_TROP, NOM_ABSENT, EXCLU_INCONNU,
- *           ETIQUETTE_MAL_FORMEE, ETIQUETTES_TROP_NOMBREUSES,
- *           PRESENCE_ILLISIBLE, PRESENCE_HORS_TOURS ; valeur : la valeur
- *           d'« exclu » ou de la présence refusée, en NFC sans ses blancs de
- *           bord, ou la première étiquette fautive de la cellule, mise en
- *           forme ; null pour les autres codes ; raison, sous
+ *           ANIMATION_INCONNUE, ETIQUETTE_MAL_FORMEE,
+ *           ETIQUETTES_TROP_NOMBREUSES, PRESENCE_ILLISIBLE,
+ *           PRESENCE_HORS_TOURS ; valeur : la valeur d'« exclu », de
+ *           l'animation réservée ou de la présence refusée, en NFC sans ses
+ *           blancs de bord, ou la première étiquette fautive de la cellule,
+ *           mise en forme ; null pour les autres codes ; raison, sous
  *           ETIQUETTE_MAL_FORMEE : 'controle' ou 'longueur', celle de
  *           lireEtiquettes ; sous PRESENCE_ILLISIBLE : 'syntaxe',
  *           'intervalle' ou 'date', celle de lirePresence ; nombre, sous
@@ -388,8 +393,9 @@ export function lireConflits(cellule, { porte, separateursMax }) {
 // nombre, tour ou tours selon le code, un seul, dans cet ordre : un champ
 // non vide au-delà de l'en-tête, qui dit une ligne décalée dont aucune
 // valeur n'est sûre ; un nom vide ; une valeur d'« exclu » hors de la liste
-// fermée ; une étiquette mal formée ; trop d'étiquettes ; une présence
-// illisible ou hors de la soirée.
+// fermée ; une valeur de l'animation réservée hors de la même liste ; une
+// étiquette mal formée ; trop d'étiquettes ; une présence illisible ou hors
+// de la soirée.
 function lireLigne(brut, largeur, colonnes, tours) {
   if (!enregistrementVide(brut.slice(largeur))) return { code: 'CHAMPS_EN_TROP', valeur: null };
   const lire = (champ) => valeurDe(brut, colonnes[champ]);
@@ -398,6 +404,9 @@ function lireLigne(brut, largeur, colonnes, tours) {
   const valeurExclu = lire('exclu');
   const exclu = valeurExclu === null ? null : VALEURS_EXCLU.get(cleNormalisee(valeurExclu));
   if (exclu === undefined) return { code: 'EXCLU_INCONNU', valeur: valeurExclu };
+  const valeurAnimation = lire('animation_reservee');
+  const animationReservee = valeurAnimation === null ? null : VALEURS_EXCLU.get(cleNormalisee(valeurAnimation));
+  if (animationReservee === undefined) return { code: 'ANIMATION_INCONNUE', valeur: valeurAnimation };
   const { etiquettes, refus } = etiquettesDe(colonnes.etiquettes === undefined ? undefined : brut[colonnes.etiquettes]);
   if (refus !== undefined) return refus;
   const lue = presenceDe(colonnes.presence === undefined ? undefined : brut[colonnes.presence], tours);
@@ -415,6 +424,7 @@ function lireLigne(brut, largeur, colonnes, tours) {
       etiquettes,
       presence: lue.presence,
       conflits: colonnes.conflit_organisation === undefined ? undefined : brut[colonnes.conflit_organisation],
+      animationReservee,
     },
   };
 }

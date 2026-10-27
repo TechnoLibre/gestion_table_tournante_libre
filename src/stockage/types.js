@@ -202,6 +202,16 @@
  *                                          écrit dans une colonne CSV ;
  *                                          renommer la personne le
  *                                          retire (§ 8.9)
+ * @property {true} [animationReservee]    facultatif : la personne est à
+ *                                          désigner animatrice d'une
+ *                                          table (§ 4) ; absent, rien ne
+ *                                          l'y appelle. Jamais faux ; une
+ *                                          intention, non le fait
+ *                                          d'animer, que les titres
+ *                                          pourvus disent seuls ; la
+ *                                          fiche la saisit, la colonne
+ *                                          CSV animation_reservee la
+ *                                          porte (§ 8.9, § 10.1)
  *
  * @typedef {Object} Table
  * @property {number} id            identifiant, unique

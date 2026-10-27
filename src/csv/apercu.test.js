@@ -50,8 +50,8 @@ const existant = (id, nom, prenom, organisation) => ({
 // Champs d'une ligne valide, dans l'ordre de l'aperçu ; un champ omis vaut null.
 const champs = ({
   nom, prenom = null, organisation = null, courriel = null, titrePressenti = null, notes = null, exclu = null,
-  etiquettes = null, presence = null, conflits = null,
-}) => ({ nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits });
+  etiquettes = null, presence = null, conflits = null, animationReservee = null,
+}) => ({ nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits, animationReservee });
 
 // Aperçu d'un texte refusé en entier : ce que la lecture a établi avant le
 // refus, aucune ligne.
@@ -149,12 +149,12 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
 
   test("les champs d'une ligne, dans l'ordre du participant, quel que soit celui des colonnes", () => {
     const [ligne] = apercevoir(
-      csv('mots-clés;notes;exclu;titre;courriel;équipe;prénom;nom', 'e;n;oui;t;c@exemple.test;a;p;Ombrelle'),
+      csv('animation réservée;mots-clés;notes;exclu;titre;courriel;équipe;prénom;nom', 'x;e;n;oui;t;c@exemple.test;a;p;Ombrelle'),
     ).lignes;
     assert.equal(
       JSON.stringify(ligne.champs),
       '{"nom":"Ombrelle","prenom":"p","organisation":"a","courriel":"c@exemple.test","titrePressenti":"t","notes":"n",' +
-        '"exclu":true,"etiquettes":["e"],"presence":null,"conflits":null}',
+        '"exclu":true,"etiquettes":["e"],"presence":null,"conflits":null,"animationReservee":true}',
     );
   });
 
@@ -344,6 +344,33 @@ describe('apercevoir : « exclu », une liste fermée (§ 10.1)', () => {
       valeurs.map((valeur, rang) => [rang + 2, 'EXCLU_INCONNU', valeur.trim()]),
     );
     assert.equal(apercu.refusGlobal, 'AUCUNE_LIGNE_VALIDE');
+  });
+});
+
+describe('apercevoir : l’animation réservée, la liste fermée d’« exclu » (§ 10.1)', () => {
+  test('oui, o, vrai, 1 et x la posent ; non, n, faux et 0 l’écartent ; vide et colonne absente valent null', () => {
+    const cas = [['OUI', true], [' o ', true], ['Vrai', true], ['1', true], ['x', true], ['NON', false], ['n', false], ['faux', false], ['0', false], ['', null]];
+    const apercu = apercevoir(csv('nom;animation_reservee', ...cas.map(([valeur], rang) => `${PATRONYMES[rang]};${valeur}`)));
+    assert.deepEqual(apercu.refusees, []);
+    assert.deepEqual(apercu.lignes.map(({ champs: lus }) => lus.animationReservee), cas.map(([, lue]) => lue));
+    assert.equal(apercevoir(csv('nom', 'Ombrelle')).lignes[0].champs.animationReservee, null);
+  });
+
+  test('toute autre valeur refuse la ligne, ANIMATION_INCONNUE, la valeur nommée ; le reste s’importe', () => {
+    const apercu = apercevoir(csv('nom;animation réservée', 'Ombrelle;oui', 'Pervenche; table d’honneur ', 'Lacasse;'));
+    assert.deepEqual(apercu.lignes.map(({ ligne }) => ligne), [2, 4]);
+    assert.deepEqual(apercu.refusees, [
+      { ligne: 3, code: 'ANIMATION_INCONNUE', valeur: 'table d’honneur', brut: ['Pervenche', ' table d’honneur '] },
+    ]);
+  });
+
+  test('le refus suit celui d’« exclu » et précède celui des étiquettes', () => {
+    const apercu = apercevoir(csv(
+      'nom;exclu;animation_reservee;etiquettes',
+      'Ombrelle;peut-être;peut-être;finance',
+      `Pervenche;;peut-être;${'x'.repeat(41)}`,
+    ));
+    assert.deepEqual(apercu.refusees.map(({ ligne, code }) => [ligne, code]), [[2, 'EXCLU_INCONNU'], [3, 'ANIMATION_INCONNUE']]);
   });
 });
 

@@ -241,8 +241,8 @@ describe('csv : le modèle des participants, sur l’événement (§ 10.1)', () 
       assert.deepEqual([lu.refusGlobal, lu.refusees], [null, []], `${tours} tours`);
     }
     const quatre = creerCharge({ id: 'evt-modele', nom: 'Soirée des Hérons', siegesParDefaut: 4, tours: 4 });
-    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /^Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac\r$/m);
-    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /;2, 3;\r$/m);
+    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /^Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac;non\r$/m);
+    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /;2, 3;;non\r$/m);
   });
 });
 

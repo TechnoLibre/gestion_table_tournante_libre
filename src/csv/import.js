@@ -55,11 +55,13 @@ const ENTETE_MOTIF = 'motif';
  * @typedef {Object} LigneRefusee
  * @property {number} ligne          rang de l'enregistrement, en-tête compris
  * @property {string} code           CHAMPS_EN_TROP, NOM_ABSENT,
- *           EXCLU_INCONNU, ETIQUETTE_MAL_FORMEE, ETIQUETTES_TROP_NOMBREUSES,
- *           PRESENCE_ILLISIBLE ou PRESENCE_HORS_TOURS, de l'aperçu ;
- *           PLUSIEURS_CORRESPONDENT ou DEJA_DESIGNE, de la mise à jour
+ *           EXCLU_INCONNU, ANIMATION_INCONNUE, ETIQUETTE_MAL_FORMEE,
+ *           ETIQUETTES_TROP_NOMBREUSES, PRESENCE_ILLISIBLE ou
+ *           PRESENCE_HORS_TOURS, de l'aperçu ; PLUSIEURS_CORRESPONDENT ou
+ *           DEJA_DESIGNE, de la mise à jour
  * @property {string|null} valeur    la valeur d'« exclu » refusée sous
- *           EXCLU_INCONNU, l'étiquette fautive sous ETIQUETTE_MAL_FORMEE,
+ *           EXCLU_INCONNU, celle de l'animation réservée sous
+ *           ANIMATION_INCONNUE, l'étiquette fautive sous ETIQUETTE_MAL_FORMEE,
  *           la cellule de présence sous PRESENCE_ILLISIBLE et
  *           PRESENCE_HORS_TOURS, null sous tout autre code
  * @property {string} [raison]       ETIQUETTE_MAL_FORMEE : 'controle' ou
@@ -270,10 +272,11 @@ const memePresence = (a, b) =>
 
 // Participant créé d'une ligne de l'aperçu, sous tours tours, ses clés dans
 // l'ordre du fichier d'état : un exclu vide vaut non ; les étiquettes,
-// rangées, la présence canonique, les conflits, rangés, puis la marque du
-// nom numéroté, en dernier, chaque clé absente quand la ligne n'en porte
-// pas (§ 8.9). Une présence vide ou qui nomme chaque tour laisse le champ
-// absent : la personne vient à tous les tours.
+// rangées, la présence canonique, les conflits, rangés, la marque du nom
+// numéroté, puis celle de l'animation réservée, posée par « oui » seul,
+// chaque clé absente quand la ligne n'en porte pas (§ 8.9). Une présence
+// vide ou qui nomme chaque tour laisse le champ absent : la personne vient
+// à tous les tours.
 function creer(id, champs, tours) {
   const { nom, prenom, organisation, courriel, titrePressenti, notes, exclu, etiquettes, presence, conflits } = champs;
   const participant = { id, nom, prenom, organisation, courriel, titrePressenti, notes, exclu: exclu ?? false };
@@ -282,6 +285,7 @@ function creer(id, champs, tours) {
   if (canonique !== undefined) participant.presence = canonique;
   if (conflits !== null) participant.conflits = rangees(conflits);
   if (champs.nomNumerote === true) participant.nomNumerote = true;
+  if (champs.animationReservee === true) participant.animationReservee = true;
   return participant;
 }
 
@@ -298,8 +302,9 @@ function creer(id, champs, tours) {
 // ligne qui la désigne portant le même nom à la casse, aux accents et aux
 // blancs près. Elle ne tombe que si le nom posé ne finit plus par un numéro
 // (SUFFIXE_NUMERO) — un autre blanc devant lui, une marque combinante entre
-// ses chiffres —, faute de quoi le fichier écrit se refuserait. Rend vrai
-// quand une valeur a changé.
+// ses chiffres —, faute de quoi le fichier écrit se refuserait. Une cellule
+// d'animation réservée non vide pose la marque ou la retire, une cellule
+// vide la garde. Rend vrai quand une valeur a changé.
 function poser(participant, champs, tours) {
   let change = false;
   for (const champ of CHAMPS_LUS) {
@@ -330,6 +335,12 @@ function poser(participant, champs, tours) {
       participant.conflits = conflits;
       change = true;
     }
+  }
+  const marque = champs.animationReservee ?? null;
+  if (marque !== null && marque !== (participant.animationReservee === true)) {
+    if (marque) participant.animationReservee = true;
+    else delete participant.animationReservee;
+    change = true;
   }
   return change;
 }
@@ -368,8 +379,8 @@ function mettreAJour(participants, lignes, tours) {
  * - 'ajouter' : chaque ligne valide devient un participant ; un doublon ne se
  *   fusionne jamais ;
  * - 'mettreAJour' : une ligne désigne, par designer, les participants d'avant
- *   l'import de même nom normalisé ; le prénom et l'organisation n'en
- *   écartent un que lorsque la ligne et lui en portent tous deux un, de clés
+ *   l'import de même nom normalisé ; le prénom et l'organisation n'en écartent
+ *   un que lorsque la ligne et lui en portent tous deux un, de clés
  *   normalisées différentes, selon leurs valeurs d'avant l'import. Une ligne
  *   ajoutée à côté d'un participant de même nom est celle que l'aperçu nomme
  *   dans homonymes. Désigné seul, le participant prend chaque champ non vide
@@ -377,27 +388,29 @@ function mettreAJour(participants, lignes, tours) {
  *   champ vide ; exclu vide le garde ; une cellule d'étiquettes non vide
  *   remplace la liste, vide la garde ; une cellule de présence non vide
  *   remplace la présence, vide la garde, et « tous » la retire ; une cellule
- *   de conflits non vide remplace la liste, vide la garde. Une ligne qui ne
- *   désigne personne est ajoutée ; qui en désigne plusieurs, refusée
- *   PLUSIEURS_CORRESPONDENT ; qui désigne un participant qu'une ligne
+ *   de conflits non vide remplace la liste, vide la garde ; une cellule
+ *   d'animation réservée non vide pose ou retire la marque, vide la garde. Une
+ *   ligne qui ne désigne personne est ajoutée ; qui en désigne plusieurs,
+ *   refusée PLUSIEURS_CORRESPONDENT ; qui désigne un participant qu'une ligne
  *   précédente désigne déjà, refusée DEJA_DESIGNE ;
  * - 'remplacer' : les participants et leurs réservations sont retirés,
  *   leurs logos avec eux, puis chaque ligne valide ajoutée. Tables, titres,
  *   propositions et retenu restent (bilanRemplacement). Le CSV ne porte
  *   aucun logo : une personne ajoutée n'en a pas, et une personne mise à
  *   jour garde le sien.
- * Une personne créée prend les champs de sa ligne, exclu vide valant non,
- * ses étiquettes rangées par unités de code, absentes quand la ligne n'en
- * porte pas, sa présence canonique, absente quand la cellule est vide ou
- * nomme chaque tour, et la marque du nom numéroté quand l'aperçu a renommé
- * sa ligne (option noms) ; une personne mise à jour garde la sienne tant que
- * son nom finit par un numéro (SUFFIXE_NUMERO) ; les identifiants partent de
+ * Une personne créée prend les champs de sa ligne, exclu vide valant non, ses
+ * étiquettes rangées par unités de code, absentes quand la ligne n'en porte
+ * pas, sa présence canonique, absente quand la cellule est vide ou nomme
+ * chaque tour, la marque de l'animation réservée quand sa cellule se lit oui,
+ * et la marque du nom numéroté quand l'aperçu a renommé sa ligne (option
+ * noms) ; une personne mise à jour garde la sienne tant que son nom finit par
+ * un numéro (SUFFIXE_NUMERO) ; les identifiants partent de
  * prochainsIds.participant, dans l'ordre du fichier, et le compteur avance
  * d'autant, sans passer IDENTIFIANT_MAX : un compteur qui ne suffit pas à
  * chaque personne créée refuse l'import entier avant d'en numéroter aucune
- * (§ 8.9). La charge et l'aperçu reçus ne sont pas modifiés ; la charge
- * rendue n'en partage aucun objet, les propositions figées (gel.js)
- * exceptées, qu'elle reprend telles quelles.
+ * (§ 8.9). La charge et l'aperçu reçus ne sont pas modifiés ; la charge rendue
+ * n'en partage aucun objet, les propositions figées (gel.js) exceptées,
+ * qu'elle reprend telles quelles.
  *
  * Le résumé (ResumeImport) compte les participants ajoutés, mis à jour,
  * inchangés et retirés, les réservations retirées et les liens de logo

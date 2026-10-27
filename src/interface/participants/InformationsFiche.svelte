@@ -5,8 +5,9 @@
   // Le bloc des informations de la fiche d'une personne (§ 4, § 10.2,
   // data-informations-fiche) : en lecture, les six valeurs de texte — nom,
   // prénom, organisation, courriel, titre pressenti, notes —, chacune sous
-  // l'intitulé de sa colonne, « — » quand elle manque, puis le statut que
-  // la fiche lui passe ; puis « Modifier », nommée par la personne.
+  // l'intitulé de sa colonne, « — » quand elle manque, puis l'animation
+  // réservée, « oui » ou « non », puis le statut que la fiche lui passe ;
+  // puis « Modifier », nommée par la personne.
   // Fiche.svelte le recrée pour chaque personne ({#key}) : un formulaire,
   // un refus ou un signal ne survivent pas au passage à une autre, et rien
   // ne s'écrit.
@@ -16,7 +17,8 @@
   // « Logo ». Sinon le formulaire prend la place du bloc : un champ par
   // valeur, prérempli (saisieDesInformations, informations.js), les notes en
   // zone de texte, l'organisation proposant celles de l'événement (datalist,
-  // suggestionsOrganisation) ; le focus va au nom. « Enregistrer », ou
+  // suggestionsOrganisation), puis la case « Animation réservée », cochée
+  // sous la marque ; le focus va au nom. « Enregistrer », ou
   // Entrée, pose une seule commande, modifierParticipant des seuls champs que
   // la saisie change depuis l'ouverture et qui diffèrent de la personne
   // courante (commandeDesInformations) : une écriture venue d'ailleurs
@@ -55,6 +57,7 @@
   import { effetDe } from '../raccourcis.js';
   import { cleDeColonne, entreeValide } from './grille.js';
   import {
+    CASE_ANIMATION,
     CHAMPS_INFORMATIONS,
     champDuRefus,
     commandeDesInformations,
@@ -223,6 +226,10 @@
           {/if}
         </div>
       {/each}
+      <div class="case">
+        <input id={`${uid}-${CASE_ANIMATION}`} type="checkbox" data-champ={CASE_ANIMATION} bind:checked={saisie[CASE_ANIMATION]} />
+        <label for={`${uid}-${CASE_ANIMATION}`}>{t('participants.informations.animationReservee')}</label>
+      </div>
       <div class="boutons">
         <button
           type="submit"
@@ -245,6 +252,8 @@
         <dt>{t(cleDeColonne(cle))}</dt>
         <dd>{participant[cle] ?? t('participants.fiche.vide')}</dd>
       {/each}
+      <dt>{t('participants.informations.animationReservee')}</dt>
+      <dd>{t(participant[CASE_ANIMATION] === true ? 'participants.informations.animationOui' : 'participants.informations.animationNon')}</dd>
       <dt>{t('participants.fiche.statut')}</dt>
       <dd>{statut}</dd>
     </dl>
@@ -335,6 +344,30 @@
 
   textarea {
     resize: vertical;
+  }
+
+  /* La case de l'animation réservée : la case à la taille du texte, son
+     intitulé à côté, dans l'encre et le corps du texte, la rangée haute d'une
+     cible de pointage au moins, comme les cases de l'historique. */
+  .case {
+    display: flex;
+    align-items: center;
+    gap: var(--espace-1);
+    min-height: var(--cible-minimale);
+  }
+
+  .case input {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .case label {
+    color: var(--couleur-page-texte);
+    font-size: inherit;
+    font-weight: normal;
+    letter-spacing: normal;
+    text-transform: none;
   }
 
   input[aria-invalid='true'] {

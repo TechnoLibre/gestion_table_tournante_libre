@@ -1305,7 +1305,7 @@ describe('les informations de la fiche et « Modifier » (§ 4, § 10.2)', () =>
     return charge;
   }
 
-  test('en lecture, les six valeurs sous leur intitulé, « — » quand vide, puis le statut ; « Modifier », nommée par la personne, avant le logo', async () => {
+  test('en lecture, les six valeurs sous leur intitulé, « — » quand vide, puis l’animation réservée et le statut ; « Modifier », nommée par la personne, avant le logo', async () => {
     const charge = chargeDouze();
     Object.assign(charge.participants[2], { courriel: 'ondine@exemple.invalid', notes: 'Arrive tard\nAllergie aux noix' });
     const { fiche } = await ouvrirFiche(charge, 3);
@@ -1317,6 +1317,7 @@ describe('les informations de la fiche et « Modifier » (§ 4, § 10.2)', () =>
       [t('participants.colonne.courriel'), 'ondine@exemple.invalid'],
       [t('participants.colonne.titrePressenti'), '\u{2014}'],
       [t('participants.colonne.notes'), 'Arrive tard Allergie aux noix'],
+      [t('participants.informations.animationReservee'), t('participants.informations.animationNon')],
       [t('participants.fiche.statut'), expect.any(String)],
     ]);
     expect([...bloc(fiche).querySelectorAll('dd')][5].textContent).toBe('Arrive tard\nAllergie aux noix');
@@ -1379,6 +1380,34 @@ describe('les informations de la fiche et « Modifier » (§ 4, § 10.2)', () =>
     expect(personneDe(m, 3).organisation).toBe('Coopérative Aubier');
     await attendre(() => expect(valeurs(ficheDe(m, 3)).slice(0, 3).map(([, valeur]) => valeur)).toEqual(['Lacasse', 'Ondine', 'Coopérative Aubier']));
     expect(executer).toHaveBeenCalledTimes(1);
+  });
+
+  test('la case « Animation réservée », cochée puis enregistrée : une entrée qui la nomme, la fiche dit « oui » ; Ctrl+Z la retire', async () => {
+    const { m } = await ouvrirFiche(chargeDouze(), 3);
+    const executer = vi.spyOn(m.seance, 'executer');
+    const fiche = await ouvrirFormulaire(m, 3);
+    const caseAnimation = champ(fiche, 'animationReservee');
+    expect(caseAnimation.type).toBe('checkbox');
+    expect(caseAnimation.checked).toBe(false);
+    expect(texteDe(formulaire(fiche).querySelector(`label[for="${caseAnimation.id}"]`))).toBe(t('participants.informations.animationReservee'));
+    caseAnimation.click();
+    flushSync();
+    expect(m.seance.gesteEnCours).toBe(true);
+    enregistrer(fiche).click();
+    await attendre(() => expect(personneDe(m, 3).animationReservee).toBe(true));
+    expect(executer).toHaveBeenCalledWith('modifierParticipant', { id: 3, champs: { animationReservee: true } });
+    await attendre(() => expect(libelles(m)).toEqual(['Modifié Ondine Lacasse : animation réservée']));
+    await attendre(() =>
+      expect(valeurs(ficheDe(m, 3)).at(-2)).toEqual([t('participants.informations.animationReservee'), t('participants.informations.animationOui')]),
+    );
+    const rouverte = await ouvrirFormulaire(m, 3);
+    expect(champ(rouverte, 'animationReservee').checked).toBe(true);
+    annuler(rouverte).click();
+    await attendre(() => expect(formulaire(ficheDe(m, 3))).toBeNull());
+
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(Object.hasOwn(personneDe(m, 3), 'animationReservee')).toBe(false));
+    await attendre(() => expect(valeurs(ficheDe(m, 3)).at(-2)[1]).toBe(t('participants.informations.animationNon')));
   });
 
   test('rien de changé, ou des blancs de bord seulement : « Enregistrer » referme sans écrire ni refuser, le focus à « Modifier »', async () => {

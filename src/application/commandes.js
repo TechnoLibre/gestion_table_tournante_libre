@@ -115,25 +115,39 @@ function saisie(valeur, champ) {
   return texte === '' ? null : texte;
 }
 
+// La marque de l'animation réservée (§ 4) : une case de la saisie, que le
+// fichier d'état n'écrit que vraie (horsDuDefaut).
+const ANIMATION_RESERVEE = 'animationReservee';
+
+// Un champ booléen d'une saisie, ou TypeError qui le nomme.
+function booleen(valeur, champ) {
+  if (typeof valeur !== 'boolean') throw new TypeError(`${champ} : booléen attendu, reçu ${JSON.stringify(valeur)}`);
+  return valeur;
+}
+
 // Les champs d'une saisie de participant : chaque champ de texte présent, lu
-// par saisie, et exclu quand admisExclu, un booléen. Un champ inconnu, ou
-// d'une autre sorte, est une faute du code.
+// par saisie, l'animation réservée, un booléen, et exclu quand admisExclu,
+// un booléen. Un champ inconnu, ou d'une autre sorte, est une faute du code.
 function lireChamps(champs, { admisExclu }) {
   if (champs === null || typeof champs !== 'object' || Array.isArray(champs)) {
     throw new TypeError(`champs : objet attendu, reçu ${JSON.stringify(champs)}`);
   }
-  const permis = admisExclu ? [...CHAMPS_DE_SAISIE, 'exclu'] : CHAMPS_DE_SAISIE;
+  const permis = [...CHAMPS_DE_SAISIE, ANIMATION_RESERVEE, ...(admisExclu ? ['exclu'] : [])];
   const inconnu = clesRangees(champs).find((cle) => !permis.includes(cle));
   if (inconnu !== undefined) throw new TypeError(`champs : ${inconnu} n'est pas un champ de cette saisie`);
   const lus = {};
   for (const champ of CHAMPS_DE_SAISIE) if (Object.hasOwn(champs, champ)) lus[champ] = saisie(champs[champ], champ);
-  if (Object.hasOwn(champs, 'exclu')) {
-    if (typeof champs.exclu !== 'boolean') {
-      throw new TypeError(`exclu : booléen attendu, reçu ${JSON.stringify(champs.exclu)}`);
-    }
-    lus.exclu = champs.exclu;
-  }
+  if (Object.hasOwn(champs, ANIMATION_RESERVEE)) lus[ANIMATION_RESERVEE] = booleen(champs[ANIMATION_RESERVEE], ANIMATION_RESERVEE);
+  if (Object.hasOwn(champs, 'exclu')) lus.exclu = booleen(champs.exclu, 'exclu');
   return lus;
+}
+
+// Le participant reçu, l'animation réservée lue posée : vraie, la marque ;
+// fausse, son absence ; non lue, celle de la personne. Rend une copie.
+function avecAnimationReservee(participant, lus) {
+  const { [ANIMATION_RESERVEE]: _marque, ...sans } = participant;
+  const marquee = lus[ANIMATION_RESERVEE] ?? participant[ANIMATION_RESERVEE] === true;
+  return marquee ? { ...sans, [ANIMATION_RESERVEE]: true } : sans;
 }
 
 // Un participant tel que la saisie le pose : nom requis (NOM_REQUIS) ; toute
@@ -188,13 +202,14 @@ function ajusterLeRetenu(avant, suivante) {
 }
 
 /**
- * ajouterParticipant {champs, presence?} : seul le nom est requis ; exclu
- * vaut faux par défaut. presence, absente ou null pour tous les tours,
- * suit la règle de changerPresence : une liste strictement croissante de
- * tours de 1 à R, sinon TypeError ; aucun tour, PRESENCE_VIDE {participant,
- * personne}, remède null ; écrite canonique. Une personne neuve n'a pas de
- * réservation : rien à contrôler. Sous un retenu, elle y attend en réserve à
- * ses tours de présence, A_PLACER_DANS_LE_RETENU.
+ * ajouterParticipant {champs, presence?} : seul le nom est requis ; exclu vaut
+ * faux par défaut, l'animation réservée aussi, qui ne s'écrit que vraie.
+ * presence, absente ou null pour tous les tours, suit la règle de
+ * changerPresence : une liste strictement croissante de tours de 1 à R, sinon
+ * TypeError ; aucun tour, PRESENCE_VIDE {participant, personne}, remède null ;
+ * écrite canonique. Une personne neuve n'a pas de réservation : rien à
+ * contrôler. Sous un retenu, elle y attend en réserve à ses tours de présence,
+ * A_PLACER_DANS_LE_RETENU.
  */
 function ajouterParticipant(charge, { champs, presence = null }) {
   exigerModifiable(charge);
@@ -216,6 +231,7 @@ function ajouterParticipant(charge, { champs, presence = null }) {
   if (tours !== null && tours.length === 0) throw refus('PRESENCE_VIDE', { participant: id, personne: nomAffiche(participant) });
   const canonique = tours === null ? undefined : presenceCanonique(tours, R);
   if (canonique !== undefined) participant.presence = canonique;
+  if (lus[ANIMATION_RESERVEE] === true) participant[ANIMATION_RESERVEE] = true;
   if (id >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'participant' });
   const suivante = copieDeTravail(charge);
   suivante.participants.push(participant);
@@ -233,12 +249,13 @@ function ajouterParticipant(charge, { champs, presence = null }) {
 const conflitsSuivis = (suivi) => (rienASuivre(suivi) ? null : suivi);
 
 /**
- * modifierParticipant {id, champs} : les champs de texte donnés ; l'exclusion
- * a ses deux commandes. Le libellé nomme la personne d'avant et chaque champ
- * changé, puis le nouveau nom quand il change. Un nom changé retire la
- * marque du nom numéroté (§ 8.9) : le nom saisi est voulu tel quel, numéro
- * compris, et Défaire, qui rend la charge d'avant, rend la marque. Une
- * organisation changée fait suivre les listes de conflits
+ * modifierParticipant {id, champs} : les champs de texte donnés, et la
+ * marque de l'animation réservée, posée à vrai, retirée à faux ;
+ * l'exclusion a ses deux commandes. Le libellé nomme la personne d'avant et
+ * chaque champ changé, puis le nouveau nom quand il change. Un nom changé
+ * retire la marque du nom numéroté (§ 8.9) : le nom saisi est voulu tel
+ * quel, numéro compris, et Défaire, qui rend la charge d'avant, rend la
+ * marque. Une organisation changée fait suivre les listes de conflits
  * (suivreOrganisations) : quand la personne était la dernière de son
  * organisation et en prend une autre, la référence suit ce renommage ; sans
  * organisation, l'ancienne quitte les listes. Le libellé le dit.
@@ -246,10 +263,11 @@ const conflitsSuivis = (suivi) => (rienASuivre(suivi) ? null : suivi);
 function modifierParticipant(charge, { id, champs }) {
   exigerModifiable(charge);
   const avant = participantDe(charge, id);
-  const apres = { ...avant, ...lireChamps(champs, { admisExclu: false }) };
+  const lus = lireChamps(champs, { admisExclu: false });
+  const apres = avecAnimationReservee({ ...avant, ...lus }, lus);
   if (apres.nom !== avant.nom) delete apres.nomNumerote;
   exigerParticipant(apres);
-  const changes = CHAMPS_DE_SAISIE.filter((champ) => apres[champ] !== avant[champ]);
+  const changes = [...CHAMPS_DE_SAISIE, ANIMATION_RESERVEE].filter((champ) => apres[champ] !== avant[champ]);
   if (changes.length === 0) throw refus('SANS_EFFET', { commande: 'modifierParticipant' });
   const renomme = apres.nom !== avant.nom || apres.prenom !== avant.prenom;
   const suivante = avecParticipant(charge, id, () => apres);

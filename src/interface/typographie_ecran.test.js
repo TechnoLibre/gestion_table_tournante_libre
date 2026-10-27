@@ -181,6 +181,8 @@ const EXEMPLES_ECRAN = [
   ['participants.conflit.regle.nouvelleTableNumero', { tables: [2, 5] }],
   ['participants.conflit.reglesDuTour', { textes: ['même organisation', 'revient à la table 5'] }],
   ['participants.presence.tours', { tours: [2, 3, 4] }],
+  ['participants.animation.tables', { numeros: [3] }],
+  ['participants.animation.tables', { numeros: [3, 5] }],
   [
     'participants.informations.conflitsSuivis',
     { renommee: { de: 'Atelier Ressac', vers: 'Atelier Embrun' }, retirees: ['Club des Merles', 'Fonds Grisaille'], propres: 2 },

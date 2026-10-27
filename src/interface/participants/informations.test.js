@@ -63,7 +63,17 @@ describe('saisieDesInformations, informationsModifiees : la saisie préremplie e
       courriel: 'iris@exemple.invalid',
       titrePressenti: '',
       notes: '',
+      animationReservee: false,
     });
+    assert.equal(saisieDesInformations({ ...IRIS, animationReservee: true }).animationReservee, true);
+  });
+
+  test('la case de l’animation réservée, cochée ou décochée, rend le brouillon modifié', () => {
+    const saisie = saisieDesInformations(IRIS);
+    assert.equal(informationsModifiees(IRIS, { ...saisie, animationReservee: true }), true);
+    const marquee = { ...IRIS, animationReservee: true };
+    assert.equal(informationsModifiees(marquee, saisieDesInformations(marquee)), false);
+    assert.equal(informationsModifiees(marquee, { ...saisieDesInformations(marquee), animationReservee: false }), true);
   });
 
   test('un brouillon se lit comme la commande l’enregistre : blancs de bord et chaîne vide ne le rendent pas modifié', () => {
@@ -102,6 +112,30 @@ describe('commandeDesInformations : une seule commande, les seuls champs changé
       args: { id: 4, champs: { nom: 'Ombrelle-Varech', organisation: 'Club des Merles' } },
       orthographe: null,
     });
+  });
+
+  test('la case cochée part en vrai, décochée en faux, après les champs de texte ; la commande l’écrit et Défaire la rend', () => {
+    const saisie = { ...saisieDesInformations(IRIS), titrePressenti: 'Animation table d’honneur', animationReservee: true };
+    const rendu = commandeDesInformations(IRIS, saisie, autres, cleNormalisee);
+    assert.deepEqual(rendu.args, { id: 4, champs: { titrePressenti: 'Animation table d’honneur', animationReservee: true } });
+    assert.deepEqual(Object.keys(rendu.args.champs), ['titrePressenti', 'animationReservee']);
+    const marquee = { ...IRIS, animationReservee: true };
+    assert.deepEqual(commandeDesInformations(marquee, { ...saisieDesInformations(marquee), animationReservee: false }, autres, cleNormalisee).args, {
+      id: 4,
+      champs: { animationReservee: false },
+    });
+    const charge = appliquerCommande('modifierParticipant', chargeEssai(), { id: 1, champs: { animationReservee: true } }).charge;
+    assert.equal(charge.participants[0].animationReservee, true);
+  });
+
+  test('une case que la saisie ne touche pas ne part pas, même quand une écriture venue d’ailleurs l’a changée', () => {
+    const initiale = saisieDesInformations(IRIS);
+    const marquee = { ...IRIS, animationReservee: true };
+    assert.deepEqual(commandeDesInformations(marquee, { ...initiale, notes: 'arrive tard' }, autres, cleNormalisee, initiale).args, {
+      id: 4,
+      champs: { notes: 'arrive tard' },
+    });
+    assert.deepEqual(commandeDesInformations(marquee, { ...initiale, animationReservee: true }, autres, cleNormalisee, initiale), { action: 'aucune' });
   });
 
   test('un champ vidé part à null ; le nom vidé part aussi, et la commande le refuse', () => {

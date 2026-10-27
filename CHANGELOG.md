@@ -490,6 +490,20 @@
   dit sous son numéro, « 2 conflits restants », et une réservation ou un
   placement à la main qui en crée un est accepté, la table signalée et son
   panneau nommant la paire.
+- **L'animation réservée.** Une personne peut être marquée à désigner
+  animatrice d'une table : la case « Animation réservée » de sa fiche la pose
+  ou la retire, en une entrée d'historique que « Défaire » reprend, et la
+  colonne `animation_reservee` du CSV l'importe et l'exporte, après les
+  conflits, par la même liste fermée qu'« exclu » — « oui », « o », « vrai »,
+  « 1 » ou « x » ; « non », « n », « faux », « 0 » ou vide —, toute autre
+  valeur refusant la ligne avec son motif. Le modèle à télécharger et le guide
+  de l'import la portent. La marque ne fait animer personne : l'import ne
+  désigne aucune table, et son rapport compte les personnes marquées qui
+  n'animent encore aucune table, avec le geste qui les désigne, la rangée
+  « Animateurs » de « Tables et tours ». La grille des participants gagne la
+  colonne « Animation », juste après le titre pressenti : les numéros des
+  tables que la personne anime, « 3 » ou « 3, 5 », ou « à désigner » sous la
+  marque ; elle se lit seulement, et l'export ne l'écrit pas.
 - **Le logo d'une personne.** Il se pose dans sa fiche, sous la rubrique
   « Logo » : le bouton « Logo » choisit une image PNG, JPEG, GIF, WebP, AVIF,
   BMP, ICO ou SVG, que le logiciel range en PNG dans le sous-dossier `logo` du
@@ -824,8 +838,9 @@ d'une table, `libelle`, est absent quand elle n'en porte pas ; les conflits
 d'organisation d'une personne, `conflits`, quand elle n'en nomme aucun ; son
 logo, `logo`, le chemin de son image dans le dossier de l'événement, quand
 elle n'en a pas ; la marque de son nom numéroté, `nomNumerote`, quand
-« Rendre les noms uniques » ne l'a pas renommée. Un fichier de format 1 ou 2,
-écrit par une version de développement, est refusé :
+« Rendre les noms uniques » ne l'a pas renommée ; celle de son animation
+réservée, `animationReservee`, quand rien ne l'appelle à animer. Un fichier de
+format 1 ou 2, écrit par une version de développement, est refusé :
 il ne s'ouvre pas, ne s'importe pas, et l'application dit que son format, trop
 ancien, n'est plus pris en charge, sans rien écrire par-dessus. La course de
 la recherche ne va ni dans le fichier de l'événement ni dans son historique :

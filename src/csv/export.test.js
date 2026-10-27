@@ -29,9 +29,10 @@ import { JOINTURE_PRESENCE } from './presence.js';
 
 const FIXTURES = new URL('../../test/fixtures/csv/', import.meta.url);
 
-// L'en-tête d'une liste où personne ne nomme de conflit : CHAMPS sans la
-// colonne des conflits d'organisation, que l'export n'écrit alors pas.
-const ENTETE = CHAMPS.filter((champ) => champ !== 'conflit_organisation').join(';');
+// L'en-tête d'une liste où personne ne nomme de conflit ni ne porte
+// l'animation réservée : CHAMPS sans ces deux colonnes, que l'export n'écrit
+// alors pas.
+const ENTETE = CHAMPS.filter((champ) => champ !== 'conflit_organisation' && champ !== 'animation_reservee').join(';');
 const EXEMPLES = new URL('../../exemples/', import.meta.url);
 
 const MARQUE = '\u{FEFF}';
@@ -50,6 +51,7 @@ const personne = (id, nom, autres = {}) => ({
 // Champs d'un participant, dans l'ordre du fichier d'état.
 const CHAMPS_DU_PARTICIPANT = [
   'id', 'nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes', 'exclu', 'etiquettes', 'presence', 'conflits',
+  'animationReservee',
 ];
 
 // Participants qu'un import crée, en ajoutant, sur une charge neuve de tours
@@ -96,9 +98,12 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
     );
   });
 
-  test("les en-têtes sont les champs de l'import, CHAMPS, sans les conflits quand personne n'en nomme, et le séparateur « ; »", () => {
+  test("les en-têtes sont les champs de l'import, CHAMPS, sans les conflits ni l'animation réservée quand personne n'en porte, et le séparateur « ; »", () => {
     assert.equal(SEPARATEUR, ';');
-    assert.equal(CHAMPS.join(';'), 'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation');
+    assert.equal(
+      CHAMPS.join(';'),
+      'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation;animation_reservee',
+    );
     assert.equal(ENTETE, 'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence');
     assert.equal(texteDe(exporterParticipants([])), `${MARQUE}${ENTETE}\r\n`);
   });
@@ -246,7 +251,7 @@ describe("exporterParticipants : l'aller-retour, champ par champ (§ 10.2)", () 
 describe('exporterParticipants : la colonne de la présence (§ 10.2)', () => {
   test('la neuvième, toujours écrite : vide sans champ, chaque suite d’au moins trois tours en « a-b », les autres tours joints par « , »', () => {
     assert.equal(JOINTURE_PRESENCE, ', ');
-    assert.equal(CHAMPS.at(-2), 'presence');
+    assert.equal(CHAMPS[8], 'presence');
     const texte = texteDe(exporterParticipants([
       personne(1, 'Ombrelle', { presence: [1, 2, 3, 5] }),
       personne(2, 'Pervenche'),
@@ -341,13 +346,13 @@ describe("exporterParticipants : la colonne des conflits d'organisation (§ 10.2
     return { entete, cellules: lignes.map((ligne) => ligne[entete.indexOf('conflit_organisation')]) };
   };
 
-  test('écrite en dernier, après la présence, dès qu\u{2019}une personne nomme un conflit ; absente sinon', () => {
+  test('écrite après la présence, en dernier sans animation réservée, dès qu\u{2019}une personne nomme un conflit ; absente sinon', () => {
     const avec = conflitsEcrits(exporterParticipants([
       personne(1, 'Ombrelle', { organisation: 'Club des Merles' }),
       personne(2, 'Pervenche', { conflits: ['Atelier Ressac', 'Club des Merles'] }),
       personne(3, 'Lacasse', { organisation: 'Atelier Ressac', presence: [2] }),
     ]));
-    assert.deepEqual(avec.entete, [...CHAMPS]);
+    assert.deepEqual(avec.entete, [...CHAMPS.slice(0, -1)]);
     assert.equal(avec.entete.at(-1), 'conflit_organisation');
     assert.deepEqual(avec.cellules, ['', 'Atelier Ressac; Club des Merles', '']);
     assert.equal(decoder(exporterParticipants([personne(2, 'Pervenche', { conflits: ['A', 'B'] })])).texte.split('\r\n')[1], 'Pervenche;;;;;non;;;;"A; B"');
@@ -427,14 +432,53 @@ describe("exporterParticipants : la colonne des conflits d'organisation (§ 10.2
   });
 });
 
+describe('exporterParticipants : la colonne de l’animation réservée (§ 10.2)', () => {
+  // L'en-tête et les cellules de la colonne de l'animation réservée, null
+  // quand l'export ne l'écrit pas.
+  function animationsEcrites(octets) {
+    const [entete, ...lignes] = decouper(decoder(octets).texte, SEPARATEUR).enregistrements;
+    const rang = entete.indexOf('animation_reservee');
+    return { entete, cellules: rang < 0 ? null : lignes.map((ligne) => ligne[rang]) };
+  }
+
+  test('écrite en dernier, oui ou non, dès qu’une personne porte la marque ; absente sinon', () => {
+    const avec = animationsEcrites(exporterParticipants([
+      personne(1, 'Ombrelle', { titrePressenti: 'Animation table d’honneur', animationReservee: true }),
+      personne(2, 'Pervenche'),
+    ]));
+    assert.deepEqual(avec.entete, [...ENTETE.split(';'), 'animation_reservee']);
+    assert.deepEqual(avec.cellules, ['oui', 'non']);
+    const lesDeux = animationsEcrites(exporterParticipants([personne(1, 'Ombrelle', { animationReservee: true, conflits: ['A'] })]));
+    assert.deepEqual(lesDeux.entete, [...CHAMPS]);
+    assert.deepEqual(animationsEcrites(exporterParticipants([personne(1, 'Ombrelle')])).cellules, null);
+  });
+
+  test('l’aller-retour export → import rend les mêmes marques, et un réimport en mise à jour ne modifie personne', () => {
+    const participants = [personne(1, 'Ombrelle', { animationReservee: true }), personne(2, 'Pervenche')];
+    const octets = exporterParticipants(participants);
+    memesParticipants(importer(octets, 'animation'), participants, 'animation');
+    const charge = { ...creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours: 4 }), participants };
+    const apercu = apercevoir(decoder(octets).texte, { participants, tours: 4, mode: 'mettreAJour' });
+    const { resume } = appliquerImport(charge, apercu, 'mettreAJour');
+    assert.deepEqual([resume.misAJour, resume.inchanges], [0, 2]);
+  });
+
+  test('une marque présente qui n’est pas vraie : TypeError qui nomme la personne et le champ', () => {
+    assert.throws(
+      () => exporterParticipants([personne(1, 'Ombrelle', { animationReservee: false })]),
+      { name: 'TypeError', message: 'participant 1 de la liste, animation_reservee : vrai ou absent attendu, reçu false' },
+    );
+  });
+});
+
 describe("modeleParticipants : le modèle à télécharger, dans la forme de l'export (§ 10.1)", () => {
   // Le modèle sous quatre tours : la plage « 1-3 », la liste « 2, 3 ».
   const ATTENDU = csv(
-    'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation',
-    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal;;',
-    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines;2, 3;',
-    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;;;',
-    'Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac',
+    'nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence;conflit_organisation;animation_reservee',
+    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal;;;oui',
+    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines;2, 3;;non',
+    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;;;;non',
+    'Tourteau;Basile;;;;non;;bénévole;1-3;Atelier Ressac;non',
   );
 
   // Les cellules de présence du modèle, rang à rang, sous tours tours.
@@ -472,13 +516,15 @@ describe("modeleParticipants : le modèle à télécharger, dans la forme de l'e
     assert.throws(() => modeleParticipants(), TypeError);
   });
 
-  test("chaque colonne que l'import lit porte au moins une valeur ; exclu ses deux valeurs, une cellule plusieurs étiquettes", () => {
+  test("chaque colonne que l'import lit porte au moins une valeur ; exclu et l'animation réservée leurs deux valeurs, une cellule plusieurs étiquettes", () => {
     const { enregistrements } = decouper(decoder(modeleParticipants({ tours: 4 })).texte, SEPARATEUR);
     const [entete, ...lignes] = enregistrements;
     assert.deepEqual(entete, [...CHAMPS]);
     CHAMPS.forEach((champ, rang) => assert.ok(lignes.some((ligne) => ligne[rang] !== ''), champ));
     const exclus = new Set(lignes.map((ligne) => ligne[CHAMPS.indexOf('exclu')]));
     assert.deepEqual([...exclus].sort(), ['non', 'oui']);
+    const animations = new Set(lignes.map((ligne) => ligne[CHAMPS.indexOf('animation_reservee')]));
+    assert.deepEqual([...animations].sort(), ['non', 'oui']);
     assert.ok(lignes.some((ligne) => ligne[CHAMPS.indexOf('etiquettes')].includes(JOINTURE_ETIQUETTES)));
   });
 
@@ -486,7 +532,7 @@ describe("modeleParticipants : le modèle à télécharger, dans la forme de l'e
     memesParticipants(importer(modeleParticipants({ tours: 4 }), 'modèle'), [
       personne(1, 'Ombrelle', {
         prenom: 'Iris', organisation: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
-        etiquettes: ['Montréal', 'finance'],
+        etiquettes: ['Montréal', 'finance'], animationReservee: true,
       }),
       personne(2, 'Pervenche', {
         prenom: 'Théo', organisation: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],

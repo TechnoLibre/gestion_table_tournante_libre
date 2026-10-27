@@ -74,6 +74,12 @@ export const TABLE = new Map([
       'oui, o, vrai, 1 ou x pour exclure ; non, n, faux, 0 ou vide sinon.',
   ],
   [
+    'ANIMATION_INCONNUE',
+    ({ valeur }) =>
+      `La valeur d'« animation réservée » ${cite(valeur)} n'est pas reconnue : ` +
+      'oui, o, vrai, 1 ou x pour une personne à désigner animatrice ; non, n, faux, 0 ou vide sinon.',
+  ],
+  [
     'ETIQUETTE_MAL_FORMEE',
     ({ valeur, raison }) =>
       `L'étiquette ${cite(valeur)} ${nomDans(FAUTES_D_ETIQUETTE, raison, 'raison')} : ` +

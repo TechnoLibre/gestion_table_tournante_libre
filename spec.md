@@ -154,7 +154,9 @@ la personne, et un **titre de place** (§ 4). Les deux ensemble font l'animateur
 ni l'un ni l'autre seul. Le titre reste quand son titulaire part, et la table
 affiche « titre *animateur* non pourvu » (§ 4.1). Le statut d'« ancré » du § 4.2
 en découle comme un fait calculé : le logiciel ne porte aucune case « est
-animateur ».
+animateur ». La marque de l'animation réservée (§ 4) n'en est pas une : elle
+dit qu'une personne est **à désigner**, jamais qu'elle anime, et l'import qui
+la pose ne désigne personne.
 
 La désignation se fait aussi **en lot**, depuis la rangée « Animateurs » de
 chaque table dans « Tables et tours » (§ 6.1) : les personnes choisies sont
@@ -208,7 +210,10 @@ autre.
 Le logiciel n'assigne pas, il **montre le travail qui reste**, par deux listes
 cliquables qui mènent à la place ou à la personne : la liste des **titres de
 place non pourvus** (§ 4.1), et la liste des participants portant un **titre
-pressenti** (§ 4) qui ne sont encore réservés nulle part.
+pressenti** (§ 4) qui ne sont encore réservés nulle part. La colonne
+« Animation » de la liste des participants (§ 10.2) dit, pour chaque
+personne, les tables qu'elle anime, ou « à désigner » sous la marque de
+l'animation réservée.
 
 **7. Placer des participants à la main.** *Facultative, reprenable.* Ce sont des
 réservations ordinaires (§ 5.8). Le logiciel refuse de déposer quelqu'un sur une
@@ -422,6 +427,18 @@ qu'une liste reçue où les animateurs sont signalés ne perde pas cette
 information à l'import. La désignation en lot lui emprunte le libellé du
 titre qu'elle pose (§ 2.1 étape 6), la désignation une à une le propose
 d'abord ; il ne pourvoit rien par lui-même.
+
+Un participant peut porter la **marque de l'animation réservée** : elle dit
+qu'il est **à désigner** animateur d'une table — une liste reçue où « animation
+de la table d'honneur » est un titre pressenti ne dit pas, sinon, que la
+personne doit animer. La marque est une **intention**, jamais le fait : elle ne
+fait animer personne, ne pourvoit aucune place et ne contraint pas la
+génération ; l'animateur reste celui que les titres pourvus désignent (§ 2.1
+étape 6). Absente, elle vaut « non ». La fiche la saisit par une case, la
+colonne CSV `animation_reservee` la porte à l'import comme à l'export (§ 10.1,
+§ 10.2), et la colonne « Animation » de la grille dit « à désigner » pour une
+personne marquée, non exclue, qui n'anime encore aucune table. Une personne
+exclue la garde, suspendue comme le reste.
 
 Un participant peut être **exclu** sans être supprimé : il reste dans la liste,
 il n'est plus placé, et il sort de toutes les statistiques.
@@ -3147,7 +3164,7 @@ jamais nécessaire pour ouvrir.
 
 | | |
 |---|---|
-| participants | avec identifiant entier, nom, prénom, organisation, courriel, titre pressenti, notes, **exclusion**, **étiquettes**, **présence**, **conflits d'organisation**, chemin du **logo**, marque du **nom numéroté** |
+| participants | avec identifiant entier, nom, prénom, organisation, courriel, titre pressenti, notes, **exclusion**, **étiquettes**, **présence**, **conflits d'organisation**, chemin du **logo**, marque du **nom numéroté**, marque de l'**animation réservée** |
 | tables | numéro, capacité **et son état** : `sieges: null` (suit le défaut) ou un entier (surcharge) ; **forme**, **libellé** |
 | le **nombre de sièges par défaut** de l'événement | |
 | tours, réglages, réservations avec leur portée, **titres de place** | |
@@ -4431,7 +4448,7 @@ facultatif, absent quand son nom est celui qu'elle a reçu :
 
 | champ | où | absent, il vaut | forme |
 |---|---|---|---|
-| `nomNumerote` | chaque participant, en dernier, après `logo` | aucun numéro ajouté au nom | `true` ; le nom finit alors par une espace (U+0020) et deux chiffres ASCII ou plus |
+| `nomNumerote` | chaque participant, après `logo`, avant `animationReservee` | aucun numéro ajouté au nom | `true` ; le nom finit alors par une espace (U+0020) et deux chiffres ASCII ou plus |
 
 `false`, `null` ou toute autre valeur que `true` est une faute de forme ; une
 marque posée sur un nom qui ne finit pas ainsi — un seul chiffre, un autre
@@ -4450,6 +4467,25 @@ marque quand il change un autre champ. Un correctif du journal la pose et la
 retire comme tout champ : « Défaire » la rend avec l'ancien nom. Le CSV des
 participants ne la porte pas : un export puis un réimport rendent le nom entier,
 numéro compris, sans la marque (§ 10.2). Le moteur ne lit pas le champ : la
+configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
+mêmes. Le champ fait partie du format 3.
+
+#### Un champ facultatif : l'animation réservée
+
+La marque de l'animation réservée d'une personne (§ 4) s'écrit dans un champ
+facultatif, absent quand rien ne l'appelle à animer :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `animationReservee` | chaque participant, en dernier, après `nomNumerote` | la personne n'est pas à désigner | `true` |
+
+`false`, `null` ou toute autre valeur que `true` est une faute de forme, nommée
+par le chemin de la marque (§ 8.8). Une personne sans marque s'écrit octet pour
+octet comme sans ce champ, démonstrations comprises. `modifierParticipant` la
+pose à vrai et la retire à faux, par la case de la fiche (§ 10.2), et
+`ajouterParticipant` la reçoit de même ; l'import la pose ou la retire par la
+colonne `animation_reservee` (§ 10.1), et l'export l'écrit. Elle ne dépend ni
+de l'exclusion ni de la présence. Le moteur ne lit pas le champ : la
 configuration qu'il reçoit, les empreintes et les raisons de dérive restent les
 mêmes. Le champ fait partie du format 3.
 
@@ -4782,6 +4818,7 @@ organisations sans rien signaler.
 | `etiquettes` | non | plusieurs par cellule, séparées par `,`, `;`, `\|` ou une fin de ligne (§ 4.5) ; synonymes : `étiquette`, `mots-clés` |
 | `presence` | non | les tours de présence : des tours et des plages — « 1-3 », « 2, 3 », « tours 1 et 2 » ; `tous` ou `tous les tours` valent tous les tours ; vide, voir plus bas ; synonymes : `présence`, `tours de présence` |
 | `conflit_organisation` | non | les organisations que la personne nomme en conflit (§ 4), plusieurs par cellule, séparées par `;`, `\|` ou une fin de ligne — une virgule reste dans le nom ; voir plus bas ; synonymes : `conflits`, `conflit d'organisation` sous ses deux apostrophes |
+| `animation_reservee` | non | la marque de l'animation réservée (§ 4), par la liste fermée d'`exclu` ; voir plus bas ; synonymes : `animation réservée`, `animation réservé` — **l'import ne désigne personne** |
 
 Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents,
 des blancs, des traits de soulignement ni des traits d'union** :
@@ -4797,6 +4834,22 @@ blanc à l'intérieur d'une valeur compte, et « o u i » n'est pas « oui ». T
 autre valeur **refuse la ligne**. Traiter l'inconnu comme `non` placerait dans
 la salle une personne qui s'est désistée, et la chaise vide ne se verrait que le
 soir même.
+
+**La valeur de `animation_reservee`** se lit par la même liste fermée, sur la
+même forme normalisée : `oui`, `o`, `vrai`, `1` ou `x` posent la marque de
+l'animation réservée ; `non`, `n`, `faux` ou `0` l'écartent. Toute autre valeur
+**refuse la ligne** (`ANIMATION_INCONNUE`, qui cite la valeur), après le refus
+d'`exclu` et avant ceux des étiquettes : une cellule « Table d'honneur »
+écrite là où l'on attend oui ou non ne dit pas si la personne est à désigner.
+À la création, une cellule vide vaut `non` ; en mise à jour, elle garde la
+marque de la personne, et une cellule non vide la pose ou la retire. **L'import
+ne désigne personne** : il ne crée ni réservation ni titre, puisque les tables
+qui recevront les animateurs ne sont pas encore connues. Quand la liste des
+participants, après l'import, compte des personnes marquées, non exclues, qui
+n'animent aucune table, le rapport d'import les compte, en information, et nomme
+le geste qui les désigne : la rangée « Animateurs » d'une table, dans « Tables
+et tours » (§ 2.1 étape 6, § 6.1). Une personne absente à un tour en est, et se
+désigne une fois sa présence rendue (§ 5.9).
 
 **La valeur de `presence`** se lit par une seule grammaire, celle que l'aperçu,
 l'export et le modèle emploient (§ 13.2) : sans égard à la casse, chaque morceau
@@ -4927,7 +4980,7 @@ L'aperçu et le rapport classent chacun de leurs messages en **refus** — le re
 global, les lignes refusées —, **avis** — les doublons, les homonymes d'une mise
 à jour, les cellules sur plusieurs lignes qui portent le séparateur — ou
 **information** — les orthographes fondues, les noms rendus uniques, un import
-qui n'a rien écrit. Une
+qui n'a rien écrit, les personnes à désigner animatrices qu'il laisse. Une
 pastille nomme la classe en texte, avec son icône ; la couleur la redit.
 
 **La ligne invalide : importer le reste.** Le logiciel importe les lignes
@@ -5006,7 +5059,8 @@ CRLF, les en-têtes de l'import — et **s'importe tel quel sans refuser aucune
 ligne**. Celui des participants, `modele-participants.csv`, est réglé par le
 nombre de tours de l'événement pour sa seule colonne `presence` : quatre
 personnes inventées, dont les cellules remplissent chaque colonne du tableau
-ci-dessus, `exclu` sous ses deux valeurs, une cellule à deux étiquettes, un
+ci-dessus, `exclu` sous ses deux valeurs, `animation_reservee` aussi — `oui`
+pour la personne au titre pressenti —, une cellule à deux étiquettes, un
 conflit, que la personne sans organisation nomme envers l'organisation de
 l'exclue — une organisation existe aussi par ses exclus —, et deux présences,
 l'une de 1 à l'avant-dernier tour, l'autre aux tours 2 et 3 : « 1-3 » et
@@ -5035,9 +5089,11 @@ que par l'apostrophe, droite ou typographique, s'y montrent une fois, la
 première : une colonne ajoutée à la table paraît au guide, et une colonne
 sans texte de guide fait échouer une épreuve.
 Le texte d'une colonne suit ce paragraphe et le § 10.4 : une liste fermée —
-`exclu`, `regle` — s'y donne en entier, et la ligne `conflit_organisation`
-dit qu'une virgule ne sépare pas deux organisations, qu'elle reste dans le
-nom. Changer de nature change le tableau, le bloc restant ouvert.
+`exclu`, `animation_reservee`, `regle` — s'y donne en entier, la ligne
+`animation_reservee` dit que l'import ne désigne personne, et la ligne
+`conflit_organisation` dit qu'une virgule ne sépare pas deux organisations,
+qu'elle reste dans le nom. Changer de nature change le tableau, le bloc
+restant ouvert.
 
 ### 10.2 La saisie
 
@@ -5064,32 +5120,35 @@ et l'exclusion en pastilles à icône.
 **Les informations d'une personne se modifient dans sa fiche.** En tête de la
 fiche, ses six valeurs de texte — nom, prénom, organisation, courriel, titre
 pressenti, notes — se lisent chacune sous l'intitulé de sa colonne, « — » quand
-elle manque, puis son statut calculé et la commande « Modifier ». « Modifier »
-ouvre à leur place un formulaire prérempli, un champ par valeur, les notes en
-zone de texte, l'organisation proposant celles de l'événement ; le focus va au
-nom. « Enregistrer », ou Entrée — Maj+Entrée garde un saut de ligne dans les
-notes —, écrit **une** entrée d'historique, `modifierParticipant` des seuls
-champs que la saisie change depuis l'ouverture et qui diffèrent encore de la
-personne, lus comme la saisie les enregistre, que son libellé nomme ; sans champ
-changé, le formulaire se referme sans rien écrire. Une écriture venue d'ailleurs
-pendant la saisie — une autre fenêtre, Défaire — garde les champs que la saisie
-ne touche pas, et ne tient pas le geste. « Annuler », ou Échap, le referme sans
-rien écrire ; refermé, il rend le focus à « Modifier ». Une organisation saisie
-qui ne diffère de celle d'une autre personne que par la casse, les accents ou
-les blancs s'enregistre sous l'orthographe existante, et un signal le dit sous
-le bloc ; une organisation que la saisie ne touche pas reste la sienne, même
-voisine d'une autre ; la seule personne à porter une organisation en change la
-casse ; une saisie dont l'orthographe retenue est déjà celle de la personne ne
-change rien et ne se signale pas. Quand les listes de conflits suivent le
-changement d'organisation (§ 4), un avis le dit sous le bloc ; signal et avis
-tombent avec la révision qui les a produits. Un refus garde le formulaire ouvert
-et la saisie : un nom vide se refuse contre le nom (`NOM_REQUIS`), tout autre
-refus sous « Enregistrer », avec son remède. En lecture et sur un plan bloqué,
-« Modifier » refuse à côté du bouton, avec son remède, avant d'ouvrir le
-formulaire. Ouvrir la fiche d'une autre personne referme le formulaire sans rien
-écrire. Les conflits d'organisation, la présence et l'exclusion gardent leurs
-commandes, hors du formulaire, et leurs rubriques restent actives pendant la
-saisie.
+elle manque, puis son animation réservée (§ 4), « oui » ou « non », son statut
+calculé et la commande « Modifier ». « Modifier » ouvre à leur place un
+formulaire prérempli, un champ par valeur, les notes en zone de texte,
+l'organisation proposant celles de l'événement, puis la case « Animation
+réservée », cochée sous la marque ; le focus va au nom. Cocher ou décocher la
+case est un changement comme un autre : il part dans la même entrée, la marque
+posée ou retirée, et « Défaire » la rend. « Enregistrer », ou Entrée —
+Maj+Entrée garde un saut de ligne dans les notes —, écrit **une** entrée
+d'historique, `modifierParticipant` des seuls champs que la saisie change depuis
+l'ouverture et qui diffèrent encore de la personne, lus comme la saisie les
+enregistre, que son libellé nomme ; sans champ changé, le formulaire se referme
+sans rien écrire. Une écriture venue d'ailleurs pendant la saisie — une autre
+fenêtre, Défaire — garde les champs que la saisie ne touche pas, et ne tient pas
+le geste. « Annuler », ou Échap, le referme sans rien écrire ; refermé, il rend
+le focus à « Modifier ». Une organisation saisie qui ne diffère de celle d'une
+autre personne que par la casse, les accents ou les blancs s'enregistre sous
+l'orthographe existante, et un signal le dit sous le bloc ; une organisation que
+la saisie ne touche pas reste la sienne, même voisine d'une autre ; la seule
+personne à porter une organisation en change la casse ; une saisie dont
+l'orthographe retenue est déjà celle de la personne ne change rien et ne se
+signale pas. Quand les listes de conflits suivent le changement d'organisation
+(§ 4), un avis le dit sous le bloc ; signal et avis tombent avec la révision qui
+les a produits. Un refus garde le formulaire ouvert et la saisie : un nom vide
+se refuse contre le nom (`NOM_REQUIS`), tout autre refus sous « Enregistrer »,
+avec son remède. En lecture et sur un plan bloqué, « Modifier » refuse à côté du
+bouton, avec son remède, avant d'ouvrir le formulaire. Ouvrir la fiche d'une
+autre personne referme le formulaire sans rien écrire. Les conflits
+d'organisation, la présence et l'exclusion gardent leurs commandes, hors du
+formulaire, et leurs rubriques restent actives pendant la saisie.
 
 **Renommer une personne retire la marque du nom numéroté** (§ 8.9) : un
 `modifierParticipant` qui change le nom, par la fiche ou par la cellule de la
@@ -5206,9 +5265,21 @@ commande, et se lit en lecture et sur un plan bloqué comme en écriture. La
 marque d'un groupe en conflit et celle d'une personne, dans la liste groupée,
 restent les leurs.
 
+**La colonne « Animation » dit qui anime quelle table**, juste après celle du
+titre pressenti : les numéros affichés des tables que la personne anime —
+« 3 », « 3, 5 » —, lus dans les titres que ses réservations « tous les tours »
+pourvoient, désignation suspendue par une absence comprise (§ 2.1 étape 6) ;
+« à désigner », en pastille d'avis à triangle, pour une personne non exclue qui
+porte la marque de l'animation réservée (§ 4) et n'anime encore aucune table ;
+rien sinon. Une personne exclue n'anime rien et n'est pas à désigner. C'est une
+mesure, non une donnée, comme les conflits du placement : elle se lit
+seulement — sa cellule prend le focus, Entrée et F2 n'y ouvrent rien —, son
+en-tête ne trie pas, la liste ne se groupe ni ne se filtre par elle, et
+l'export ne l'écrit pas ; la marque, elle, s'exporte dans sa propre colonne.
+
 La tenue de la grille suit la place que la carte lui laisse, non la largeur
 de la fenêtre ; ses en-têtes sont en petit corps. Sous 86 rem de place, les
-cellules et les actions se serrent, et les dix colonnes tiennent dans la carte
+cellules et les actions se serrent, et les onze colonnes tiennent dans la carte
 pleine largeur d'une fenêtre de 1024 px. À partir de 80 rem — la carte d'une
 fenêtre de 1 366 px —, chaque en-tête tient sur une ligne, hors de celui des
 conflits du placement, qui se replie toujours entre ses mots, les quatre
@@ -5227,19 +5298,22 @@ les étiquettes jointes par une virgule suivie d'une espace (`, `) ; la
 présence s'écrit vide pour tous les tours, sinon chaque suite d'au moins trois
 tours consécutifs en plage `a-b`, les autres tours un à un, joints par `, ` —
 « 1-3 », « 2, 3 », « 1-3, 5 ». Dès qu'une personne de la liste nomme un
-conflit, la colonne `conflit_organisation` suit, en dernière position, ses
+conflit, la colonne `conflit_organisation` suit, après la présence, ses
 noms joints par un point-virgule suivi d'une espace (`; `), vide pour une
 personne sans conflit. Quand une organisation de la liste porte elle-même
 « ; » et que la cellule se relirait ainsi en d'autres noms — « Alpha; Beta »
 lu comme une seule organisation de ce nom —, les noms se joignent par ` | `,
 puis par une fin de ligne : la première jointure que la lecture de l'import
 rend en la même liste. Sans conflit dans la liste, la colonne manque, et son
-réimport en mise à jour ne touche aucune liste. Comme le logo, la marque du nom
-numéroté (§ 8.9) n'a pas de colonne : le nom s'écrit entier, numéro compris, et
-se réimporte sans elle. Le collage en bloc suit le même ordre de colonnes, la
-huitième étant celle des étiquettes, la neuvième celle de la présence, la
-dixième celle des conflits. Les objectifs des tables s'exportent par leur propre
-CSV, dans la forme exacte qu'il importe (§ 10.4).
+réimport en mise à jour ne touche aucune liste. Dès qu'une personne de la liste
+porte la marque de l'animation réservée, la colonne `animation_reservee` suit,
+en dernière position, `oui` pour la marque, `non` sans elle ; sans marque dans
+la liste, elle manque de même. Comme le logo, la marque du nom numéroté (§ 8.9)
+n'a pas de colonne : le nom s'écrit entier, numéro compris, et se réimporte
+sans elle. Le collage en bloc suit le même ordre de colonnes, la huitième étant
+celle des étiquettes, la neuvième celle de la présence, la dixième celle des
+conflits, la onzième celle de l'animation réservée. Les objectifs des tables
+s'exportent par leur propre CSV, dans la forme exacte qu'il importe (§ 10.4).
 
 ### 10.3 Les fichiers d'exemple livrés
 

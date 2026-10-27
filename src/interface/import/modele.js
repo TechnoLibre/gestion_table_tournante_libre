@@ -83,6 +83,7 @@ const CLES_DES_CHAMPS = new Map([
   ['etiquettes', 'import.champ.etiquettes'],
   ['presence', 'import.champ.presence'],
   ['conflit_organisation', 'import.champ.conflits'],
+  ['animation_reservee', 'import.champ.animationReservee'],
   ['table', 'import.champ.table'],
   ['tour', 'import.champ.tour'],
   ['objectif', 'import.champ.objectif'],
@@ -97,8 +98,9 @@ const CLES_DE_REGLE = new Map([
   [null, 'import.regle.defaut'],
 ]);
 
-// La clé de la valeur lue d'« exclu » ; une cellule vide n'en a pas.
-const CLES_D_EXCLU = new Map([
+// La clé de la valeur lue d'« exclu » ou de l'animation réservée, la même
+// liste fermée ; une cellule vide n'en a pas.
+const CLES_OUI_NON = new Map([
   [true, 'import.exclu.oui'],
   [false, 'import.exclu.non'],
 ]);
@@ -107,7 +109,12 @@ const CLES_D_EXCLU = new Map([
 const CHAMPS_LUS = new Map([
   ['titre_pressenti', 'titrePressenti'],
   ['conflit_organisation', 'conflits'],
+  ['animation_reservee', 'animationReservee'],
 ]);
+
+// Les champs dont la valeur lue est oui ou non : chacun se montre par la
+// clé de sa valeur (CLES_OUI_NON).
+const CHAMPS_OUI_NON = new Set(['exclu', 'animation_reservee']);
 
 // Les champs dont la cellule est une liste de noms, chacun sa pastille : les
 // étiquettes, et les organisations en conflit.
@@ -229,7 +236,8 @@ const ICONES_DE_SORTE = new Map([
 // à jour —, ou une cellule sur plusieurs lignes qui porte le séparateur,
 // peut-être un guillemet mal fermé ; une information dit ce qui a été fait
 // ou lu sans rien écarter — les orthographes fondues d'organisations et
-// celles d'étiquettes, deux blocs distincts, et les noms rendus uniques.
+// celles d'étiquettes, deux blocs distincts, les noms rendus uniques, et
+// les personnes à désigner animatrices qu'un import laisse.
 const SORTES_DES_BLOCS = new Map([
   ['global', 'refus'],
   ['refusees', 'refus'],
@@ -240,14 +248,15 @@ const SORTES_DES_BLOCS = new Map([
   ['fusionsEtiquettes', 'information'],
   ['renommes', 'information'],
   ['rienEcrit', 'information'],
+  ['animations', 'information'],
 ]);
 
 /**
  * La classe d'un bloc de messages de l'aperçu ou du rapport.
  *
  * @param {string} bloc  'global', 'refusees', 'doublons', 'homonymes',
- *        'fusions', 'fusionsEtiquettes', 'renommes', 'multilignes' ou
- *        'rienEcrit'
+ *        'fusions', 'fusionsEtiquettes', 'renommes', 'multilignes',
+ *        'rienEcrit' ou 'animations'
  * @returns {{sorte: string, cle: string, icone: string}}  la sorte, la clé
  *   de son libellé et l'icône de sa pastille
  * @throws {RangeError} un bloc inconnu
@@ -283,6 +292,7 @@ const CLES_DU_GUIDE = new Map([
   ['etiquettes', 'import.guide.colonne.etiquettes'],
   ['presence', 'import.guide.colonne.presence'],
   ['conflit_organisation', 'import.guide.colonne.conflits'],
+  ['animation_reservee', 'import.guide.colonne.animationReservee'],
   ['table', 'import.guide.colonne.table'],
   ['tour', 'import.guide.colonne.tour'],
   ['objectif', 'import.guide.colonne.objectif'],
@@ -555,13 +565,13 @@ function celluleDePresence(presence, { tours, inchangee }) {
   return cellule('presence', { cle: 'import.presence.tours', details: { tours: [...presence] } });
 }
 
-// Chaque ligne valide des participants : son rang, puis une cellule par
-// champ, dans l'ordre de CHAMPS : le texte lu, ou la clé de la valeur
-// d'« exclu » ; les étiquettes une à une, et de même les organisations en
-// conflit, aucune pour une cellule vide ; la présence par celluleDePresence,
-// sous le nombre de tours : « inchangée » seulement quand la colonne existe
-// et que la ligne désigne une personne existante (designees, que l'aperçu ne
-// remplit qu'en mise à jour).
+// Chaque ligne valide des participants : son rang, puis une cellule par champ,
+// dans l'ordre de CHAMPS : le texte lu, ou la clé de la valeur d'« exclu » ou
+// de l'animation réservée ; les étiquettes une à une, et de même les
+// organisations en conflit, aucune pour une cellule vide ; la présence par
+// celluleDePresence, sous le nombre de tours : « inchangée » seulement quand
+// la colonne existe et que la ligne désigne une personne existante (designees,
+// que l'aperçu ne remplit qu'en mise à jour).
 function lignesDesParticipants({ lignes, tours, association, designees }) {
   const colonne = association.colonnes.presence !== undefined;
   const designee = new Set(designees);
@@ -569,7 +579,7 @@ function lignesDesParticipants({ lignes, tours, association, designees }) {
     ligne,
     cellules: CHAMPS.map((champ) => {
       const valeur = champs[CHAMPS_LUS.get(champ) ?? champ];
-      if (champ === 'exclu') return cellule(champ, { cle: valeur === null ? null : CLES_D_EXCLU.get(valeur) });
+      if (CHAMPS_OUI_NON.has(champ)) return cellule(champ, { cle: valeur === null ? null : CLES_OUI_NON.get(valeur) });
       if (CHAMPS_EN_LISTE.has(champ)) return cellule(champ, { etiquettes: valeur ?? [] });
       if (champ === 'presence') return celluleDePresence(valeur, { tours, inchangee: colonne && designee.has(ligne) });
       return cellule(champ, { texte: valeur });
@@ -759,7 +769,7 @@ export function modeleApercu({ nature = 'participants', encodage = null, apercu 
 /**
  * Le texte relu dans l'ordre de la grille, sous la nature des participants
  * seule : précédé d'une ligne d'en-têtes —
- * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de dix —,
+ * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de onze —,
  * joints par le séparateur de l'aperçu. Sous AUCUN_ENTETE d'un texte non
  * blanc, largeur vaut apercu.entetes.length ; sous SEPARATEUR_INTROUVABLE
  * sans candidat (refusGlobalLigne null : une seule colonne), largeur vaut 1

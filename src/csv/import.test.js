@@ -985,6 +985,55 @@ describe('appliquerImport : la marque du nom numéroté (§ 8.9, § 10.1)', () =
   });
 });
 
+describe('appliquerImport : l’animation réservée (§ 4, § 10.1)', () => {
+  const relue = (charge) => analyser(serialiser(charge, { revision: 1, produitVersion: VERSION.affichee })).charge;
+
+  test('ajouter : « oui » pose la marque, « non » et vide la laissent absente ; la charge se relit', () => {
+    const texte = csv('nom;prenom;titre_pressenti;animation_reservee', 'Galet;Roger;Animation table d’honneur;oui', 'Houle;Iris;;non', 'Ombrelle;;;');
+    const { charge: apres, resume } = importer(chargeDe(), texte, 'ajouter');
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Galet', 'Roger', null, { titrePressenti: 'Animation table d’honneur', animationReservee: true }),
+      personne(2, 'Houle', 'Iris'),
+      personne(3, 'Ombrelle', null),
+    ]);
+    assert.deepEqual(resume, resumeDe({ ajoutes: 3 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('l’import ne désigne personne : ni réservation ni titre ne s’ajoutent', () => {
+    const { charge: apres } = importer(chargeDe(), csv('nom;animation réservée', 'Galet;x'), 'ajouter');
+    assert.deepEqual([apres.reservations, apres.titres], [[], []]);
+  });
+
+  test('mettre à jour : une cellule non vide pose ou retire la marque, une cellule vide la garde ; la même valeur ne modifie personne', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Galet', 'Roger', null, { animationReservee: true }),
+        personne(2, 'Houle', 'Iris', null, { animationReservee: true }),
+        personne(3, 'Ombrelle', 'Iris'),
+        personne(4, 'Pervenche', 'Théo'),
+      ],
+    });
+    const texte = csv('nom;prenom;animation_reservee', 'Galet;Roger;non', 'Houle;Iris;', 'Ombrelle;Iris;oui', 'Pervenche;Théo;non');
+    const { charge: apres, resume } = importer(charge, texte, 'mettreAJour');
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Galet', 'Roger'),
+      personne(2, 'Houle', 'Iris', null, { animationReservee: true }),
+      personne(3, 'Ombrelle', 'Iris', null, { animationReservee: true }),
+      personne(4, 'Pervenche', 'Théo'),
+    ]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 2, inchanges: 2 }));
+    assert.deepEqual(relue(apres), apres);
+  });
+
+  test('une valeur inconnue refuse la ligne, ANIMATION_INCONNUE, et le CSV des refus la reprend avec son motif', () => {
+    const texte = csv('nom;animation_reservee', 'Galet;oui', 'Houle;Table d’honneur');
+    const { charge: apres, resume } = importer(chargeDe(), texte, 'ajouter');
+    assert.deepEqual(apres.participants, [personne(1, 'Galet', null, null, { animationReservee: true })]);
+    assert.deepEqual(resume.refusees.map(({ ligne, code, valeur }) => [ligne, code, valeur]), [[3, 'ANIMATION_INCONNUE', 'Table d’honneur']]);
+  });
+});
+
 describe('appliquerImport : les refus globaux (§ 10.1)', () => {
   test("le refus global de l'aperçu, son rang dans les détails", () => {
     const charge = chargeDe();

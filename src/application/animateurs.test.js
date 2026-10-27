@@ -11,7 +11,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { creerCharge } from '../stockage/document.js';
 import { fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
-import { animateursDeLaTable, avertissementsDuLot, designations, statutsPourAnimation } from './animateurs.js';
+import { aDesigner, animateursDeLaTable, avertissementsDuLot, designations, statutsPourAnimation, tablesAnimees } from './animateurs.js';
 import { appliquerCommande } from './commandes.js';
 
 const NOMS = [
@@ -202,6 +202,33 @@ describe('animateurs : qui anime une table se calcule (§ 2.1 étape 6, § 4.1)'
     statutsPourAnimation(charge, 2);
     designations(charge);
     assert.equal(JSON.stringify(charge), texte);
+  });
+});
+
+describe('animateurs : les tables de chaque personne et l’animation réservée (§ 4, § 10.2)', () => {
+  test('tablesAnimees : chaque animatrice et les numéros affichés de ses tables, croissants ; une désignation suspendue compte', () => {
+    assert.deepEqual([...tablesAnimees(chargeAnimee())], [[1, [5]], [2, [3]], [6, [5]]]);
+  });
+
+  test('tablesAnimees : deux tables animées s’écrivent croissantes, chacune une fois', () => {
+    const charge = chargeAnimee();
+    charge.reservations.push(resa(1, 4, 2));
+    charge.titres.push({ table: 4, siege: 2, libelle: 'animatrice' }, { table: 4, siege: 2, libelle: 'veille' });
+    assert.deepEqual(tablesAnimees(charge).get(1), [3, 5]);
+  });
+
+  test('tablesAnimees : une réservation sans titre, ou de tour désigné, ne fait animer aucune table', () => {
+    const animees = tablesAnimees(chargeAnimee());
+    assert.equal(animees.has(3), false);
+    assert.equal(animees.has(4), false);
+  });
+
+  test('aDesigner : les marquées non exclues qui n’animent aucune table, dans l’ordre des participants', () => {
+    const charge = chargeAnimee();
+    for (const id of [1, 3, 5, 6, 8]) charge.participants[id - 1].animationReservee = true;
+    charge.participants[2].presence = [1, 2];
+    assert.deepEqual(aDesigner(charge), [3, 8]);
+    assert.deepEqual(aDesigner(chargeAnimee()), []);
   });
 });
 

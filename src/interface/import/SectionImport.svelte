@@ -28,7 +28,8 @@
   // participants, et les logos retirés quand il y en a, les deux de
   // bilanRemplacementObjectifs — objectifs et tables — pour des objectifs,
   // et ne l'ouvre que sur un import que la commande accepterait. Le rapport
-  // lit le résumé que la séance rend.
+  // lit le résumé que la séance rend, et, pour des participants, le nombre
+  // de personnes à désigner animatrices dans la charge écrite (aDesigner).
   // L'import appliqué, et l'essai de « Remplacer » avant sa fenêtre, passent
   // par l'indicateur d'activité (activite.js).
   //
@@ -56,6 +57,7 @@
   // Le guide de l'import (GuideImport.svelte), replié sous elle et dernier de
   // la carte, décrit les colonnes de la nature cochée.
   import { getContext, untrack } from 'svelte';
+  import { aDesigner } from '../../application/animateurs.js';
   import { appliquerCommande } from '../../application/commandes.js';
   import { bilanRemplacement, bilanRemplacementObjectifs, decoder, exporterRefus } from '../../application/csv.js';
   import { suivre } from '../activite.js';
@@ -227,8 +229,9 @@
   }
 
   // L'aperçu appliqué par la séance, par la commande de sa nature, dans son
-  // mode, sous l'indicateur d'activité ; le rapport lit le résumé rendu, et
-  // l'aperçu se ferme.
+  // mode, sous l'indicateur d'activité ; le rapport lit le résumé rendu et
+  // compte les personnes à désigner de la charge écrite, et l'aperçu se
+  // ferme.
   async function appliquer(applique, sonMode, depuis, saNature) {
     const { libelle, resume } = await suivre(() =>
       seance.executer(COMMANDES_DES_NATURES.get(saNature), { apercu: applique, mode: sonMode }),
@@ -240,6 +243,7 @@
       apercu: applique,
       resume,
       libelle,
+      aDesigner: saNature === 'participants' ? aDesigner(seance.etat().charge).length : 0,
     };
     source = null;
     enregistre = null;

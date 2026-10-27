@@ -20,6 +20,7 @@ import {
   MESURES,
   TRIABLES,
   basculerGroupe,
+  celluleAnimation,
   celluleSuivante,
   cheminDe,
   choisirGroupement,
@@ -171,18 +172,31 @@ describe('lignesGrille : tri et filtre (§ 10.2)', () => {
     assert.throws(() => lignesGrille(participants, { tri: { colonne: 'nom', sens: 'haut' }, filtre: '' }, cleNormalisee), RangeError);
   });
 
-  test('les conflits du placement, une mesure, ne se trient ni ne se filtrent : TRIABLES les écarte, et leur tri lève', () => {
-    assert.deepEqual(MESURES, ['conflitsPlacement']);
+  test('les conflits du placement et l’animation, deux mesures, ne se trient ni ne se filtrent : TRIABLES les écarte, et leur tri lève', () => {
+    assert.deepEqual(MESURES, ['conflitsPlacement', 'animation']);
     assert.ok(Object.isFrozen(MESURES));
-    assert.deepEqual(TRIABLES, COLONNES.filter((colonne) => colonne !== 'conflitsPlacement'));
+    assert.deepEqual(TRIABLES, COLONNES.filter((colonne) => colonne !== 'conflitsPlacement' && colonne !== 'animation'));
     assert.ok(Object.isFrozen(TRIABLES));
-    for (const sens of ['croissant', 'decroissant']) {
-      assert.throws(() => lignesGrille(participants, { tri: { colonne: 'conflitsPlacement', sens }, filtre: '' }, cleNormalisee), RangeError);
+    for (const colonne of MESURES) {
+      for (const sens of ['croissant', 'decroissant']) {
+        assert.throws(() => lignesGrille(participants, { tri: { colonne, sens }, filtre: '' }, cleNormalisee), RangeError);
+      }
     }
     // Une propriété de ce nom, que la grille n'écrit jamais, n'est pas lue
     // par le filtre.
-    const porteuse = [personne(1, 'Ombrelle', { conflitsPlacement: 'tour 2' })];
+    const porteuse = [personne(1, 'Ombrelle', { conflitsPlacement: 'tour 2', animation: 'table 3' })];
     assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'tour' }, cleNormalisee), []);
+    assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'table' }, cleNormalisee), []);
+  });
+
+  test('celluleAnimation : les tables animées, sinon « à désigner » sous la marque, sinon rien ; une exclue n’est pas à désigner', () => {
+    const animees = new Map([[1, [3, 5]], [2, [4]]]);
+    assert.deepEqual(celluleAnimation(personne(1, 'Ombrelle', { animationReservee: true }), animees), { sorte: 'tables', numeros: [3, 5] });
+    assert.deepEqual(celluleAnimation(personne(2, 'Pervenche'), animees), { sorte: 'tables', numeros: [4] });
+    assert.deepEqual(celluleAnimation(personne(3, 'Lacasse', { animationReservee: true }), animees), { sorte: 'aDesigner' });
+    assert.deepEqual(celluleAnimation(personne(4, 'Grisaille', { animationReservee: true, exclu: true }), animees), { sorte: 'vide' });
+    assert.deepEqual(celluleAnimation(personne(5, 'Lisonnet'), animees), { sorte: 'vide' });
+    assert.throws(() => commandeDeCellule('animation', 1, 'oui'), RangeError);
   });
 });
 
@@ -443,11 +457,14 @@ describe('reservationsDe : les réservations d’une personne, pour la fiche (§
 });
 
 describe("les colonnes de la grille s'associent à l'export par leur champ (§ 10.2)", () => {
-  test('dix colonnes, les conflits juste après l’organisation, ceux du placement juste après, la présence juste après l’exclusion ; chacune, hors des mesures, a son champ d’export, sous son en-tête', () => {
-    assert.deepEqual(COLONNES, ['nom', 'prenom', 'organisation', 'conflits', 'conflitsPlacement', 'courriel', 'titrePressenti', 'exclu', 'presence', 'notes']);
+  test('onze colonnes, les conflits juste après l’organisation, ceux du placement juste après, l’animation juste après le titre pressenti, la présence juste après l’exclusion ; chacune, hors des mesures, a son champ d’export, sous son en-tête', () => {
+    assert.deepEqual(COLONNES, [
+      'nom', 'prenom', 'organisation', 'conflits', 'conflitsPlacement', 'courriel', 'titrePressenti', 'animation', 'exclu', 'presence', 'notes',
+    ]);
     assert.ok(Object.isFrozen(COLONNES));
     assert.deepEqual([...CHAMP_DE_COLONNE.keys()], COLONNES.filter((colonne) => !MESURES.includes(colonne)));
     assert.equal(CHAMP_DE_COLONNE.has('conflitsPlacement'), false);
+    assert.equal(CHAMP_DE_COLONNE.has('animation'), false);
     assert.equal(CHAMP_DE_COLONNE.get('titrePressenti'), 'titre_pressenti');
     assert.equal(CHAMP_DE_COLONNE.get('conflits'), 'conflit_organisation');
     for (const colonne of [...CHAMP_DE_COLONNE.keys()].filter((c) => c !== 'titrePressenti' && c !== 'conflits')) assert.equal(CHAMP_DE_COLONNE.get(colonne), colonne);
@@ -560,9 +577,9 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
   ];
 
   test('les colonnes groupables : celles de la grille hors des conflits, une liste, puis le statut calculé, chacune avec sa clé de libellé', () => {
-    assert.deepEqual(GROUPEMENTS, [...COLONNES.filter((colonne) => colonne !== 'conflits' && colonne !== 'conflitsPlacement'), 'statut']);
+    assert.deepEqual(GROUPEMENTS, [...COLONNES.filter((colonne) => colonne !== 'conflits' && !MESURES.includes(colonne)), 'statut']);
     assert.throws(() => groupesGrille([], ['conflits'], { tri: null, cleNormalisee, statuts: null }), RangeError);
-    assert.throws(() => groupesGrille([], ['conflitsPlacement'], { tri: null, cleNormalisee, statuts: null }), RangeError);
+    for (const mesure of MESURES) assert.throws(() => groupesGrille([], [mesure], { tri: null, cleNormalisee, statuts: null }), RangeError);
     assert.ok(GROUPEMENTS.length > 0);
     for (const colonne of COLONNES) assert.equal(cleDeGroupement(colonne), cleDeColonne(colonne), colonne);
     assert.equal(cleDeGroupement('statut'), 'participants.groupe.statut');
@@ -634,7 +651,7 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
   });
 
   test('chaque colonne de texte groupe par sa clé normalisée, le vide après toute valeur, dans les deux sens', () => {
-    const textes = COLONNES.filter((colonne) => !['conflits', 'conflitsPlacement', 'exclu', 'presence', 'nom'].includes(colonne));
+    const textes = COLONNES.filter((colonne) => !MESURES.includes(colonne) && !['conflits', 'exclu', 'presence', 'nom'].includes(colonne));
     assert.ok(textes.length > 0);
     for (const colonne of textes) {
       const liste = [

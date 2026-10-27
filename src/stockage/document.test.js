@@ -1454,8 +1454,16 @@ describe('les champs facultatifs : forme et place (§ 8.9, A16)', () => {
       ],
     );
     assert.deepEqual(
-      PARTICIPANT.champs.slice(-6).map(([cle, regle]) => [cle, regle.optionnel]),
-      [['exclu', false], ['etiquettes', true], ['presence', true], ['conflits', true], ['logo', true], ['nomNumerote', true]],
+      PARTICIPANT.champs.slice(-7).map(([cle, regle]) => [cle, regle.optionnel]),
+      [
+        ['exclu', false],
+        ['etiquettes', true],
+        ['presence', true],
+        ['conflits', true],
+        ['logo', true],
+        ['nomNumerote', true],
+        ['animationReservee', true],
+      ],
     );
     assert.deepEqual(
       TABLE.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
@@ -1853,6 +1861,59 @@ describe('le nom numéroté : une marque facultative, absente quand le nom n’a
   test('la configuration du moteur ne lit pas la marque : une personne marquée donne la même configuration', () => {
     const sans = analyser(abime((d) => { d.charge.participants[1].nom = 'Sarrasin 01'; })).charge;
     const avec = analyser(abime(marque('Sarrasin 01'))).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
+// --- L'animation réservée d'une personne (§ 4, § 8.9) ------------------------
+
+describe('l’animation réservée : une marque facultative, absente quand la personne n’est pas à désigner (§ 8.9)', () => {
+  // Le document valide, la personne de rang 1 marquée de valeur.
+  const reservee = (valeur = true) => (d) => {
+    d.charge.participants[1].animationReservee = valeur;
+  };
+
+  test('elle s’écrit en dernier, après le nom numéroté, et se relit à l’identique ; absente, elle ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.participants[0].nom = 'Brindille 01';
+    d.charge.participants[0].nomNumerote = true;
+    d.charge.participants[0].animationReservee = true;
+    reservee()(d);
+    const lu = analyser(JSON.stringify(d));
+    assert.equal(lu.charge.participants[0].animationReservee, true);
+    assert.equal(lu.charge.participants[1].animationReservee, true);
+    assert.equal(Object.hasOwn(lu.charge.participants[2], 'animationReservee'), false);
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(texte.includes('"nomNumerote":true,"animationReservee":true}'), texte);
+    assert.ok(texte.includes('"exclu":false,"animationReservee":true}'), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    const sans = serialiser(analyser(JSON.stringify(documentValide())).charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(!sans.includes('"animationReservee"'), sans);
+  });
+
+  test('une autre valeur que vrai est une faute de forme, nommée par la marque', () => {
+    const chemin = 'charge.participants[1].animationReservee';
+    assert.deepEqual(ecartsDeRefus([
+      ['faux', abime(reservee(false)), 'FORME', chemin],
+      ['nul', abime(reservee(null)), 'FORME', chemin],
+      ['une chaîne', abime(reservee('oui')), 'FORME', chemin],
+      ['un nombre', abime(reservee(1)), 'FORME', chemin],
+    ]), []);
+  });
+
+  test('une personne exclue la garde : la marque ne dépend ni de l’exclusion ni de la présence', () => {
+    const lu = analyser(abime((d) => {
+      reservee()(d);
+      d.charge.participants[1].exclu = true;
+    }));
+    assert.equal(lu.charge.participants[1].animationReservee, true);
+  });
+
+  test('la configuration du moteur ne lit pas la marque : une personne marquée donne la même configuration', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    const avec = analyser(abime(reservee())).charge;
     assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
   });
 });

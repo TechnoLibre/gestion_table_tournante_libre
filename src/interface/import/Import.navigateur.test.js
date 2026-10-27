@@ -1174,6 +1174,32 @@ describe('l’habillage : cartes et messages classés en refus, avis ou informat
     exigerSorte(rien, 'information', 'rapport, rien d’écrit');
   });
 
+  // L'import ne désigne personne : les personnes marquées qui n'animent
+  // aucune table se comptent en information, non exclues seulement.
+  test('un import qui laisse des personnes à désigner animatrices les compte en information, avec le geste qui les désigne', async () => {
+    const e = await ouvrir();
+    await choisir(
+      e,
+      'animation.csv',
+      enUtf8('nom;exclu;animation_reservee\r\nOmbrelle;;oui\r\nPervenche;;x\r\nLacasse;oui;oui\r\nGrisaille;;non\r\n'),
+    );
+    expect(cellule(dans(e, '[data-apercu]'), 2, 'animation_reservee')).toBe(t('import.exclu.oui'));
+    await importer(e);
+    const rapport = dans(e, '[data-rapport]');
+    const phrase = rapport.querySelector('[data-a-designer]');
+    expect(phrase.querySelector('[data-nombre]').textContent).toBe(format.nombre(2));
+    expect(texteDe(phrase)).toContain(t('import.rapport.aDesigner', { n: 2 }));
+    exigerSorte(phrase.closest('section'), 'information', 'rapport, personnes à désigner');
+    expect(e.m.seance.etat().charge.reservations).toEqual([]);
+  });
+
+  test('sans personne à désigner, le rapport n’en dit rien', async () => {
+    const e = await ouvrir();
+    await choisir(e, 'sans.csv', enUtf8('nom;animation_reservee\r\nOmbrelle;non\r\n'));
+    await importer(e);
+    expect(dans(e, '[data-rapport] [data-a-designer]')).toBeNull();
+  });
+
   // Un import d'objectifs n'écrit rien quand chaque couple du fichier porte
   // déjà son objectif et qu'il refuse des lignes : ici, la table 1 porte
   // déjà « finance », et aucune table n'affiche le numéro 9.
@@ -1838,16 +1864,17 @@ describe("le guide de l'import, replié sous le modèle (§ 10.1, § 10.4)", () 
 });
 
 describe('la colonne de la présence (§ 10.1)', () => {
-  test('le modèle téléchargé porte la neuvième colonne, « presence », puis les conflits ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
+  test('le modèle téléchargé porte la neuvième colonne, « presence », puis les conflits et l’animation réservée ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
     const e = await ouvrir({ tours: 4 });
     commande(e, 'telechargerModele').click();
     await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
     const octets = e.enregistres[0].octets;
     expect([...octets]).toEqual([...modeleParticipants({ tours: 4 })]);
     const [entete] = decouper(decoder(octets).texte, ';').enregistrements;
-    expect(entete.length).toBe(10);
+    expect(entete.length).toBe(11);
     expect(entete[8]).toBe('presence');
     expect(entete[9]).toBe('conflit_organisation');
+    expect(entete[10]).toBe('animation_reservee');
     await choisir(e, 'modele-participants.csv', octets);
     const apercu = dans(e, '[data-apercu]');
     expect(new Map(association(apercu)).get('presence')).toBe(t('import.champ.presence'));
@@ -1856,6 +1883,7 @@ describe('la colonne de la présence (§ 10.1)', () => {
     await importer(e);
     expect(participantsDe(e).map(({ presence }) => presence)).toEqual([undefined, [2, 3], undefined, [1, 2, 3]]);
     expect(participantsDe(e).map(({ conflits }) => conflits)).toEqual([undefined, undefined, undefined, ['Atelier Ressac']]);
+    expect(participantsDe(e).map(({ animationReservee }) => animationReservee)).toEqual([true, undefined, undefined, undefined]);
   });
 
   test('l’aperçu montre « tours 2 à 4 » et « tous les tours » ; une ligne refusée porte son motif, à son rang', async () => {
@@ -1892,10 +1920,11 @@ describe('l’aperçu dans une fenêtre de 1 366 × 700 (§ 10.1)', () => {
     try {
       const e = await ouvrir({ tours: 4, participants: [personne(1, 'Houle', 'Agathe', { organisation: 'Atelier Ressac' })] });
       const modele = new TextDecoder().decode(modeleParticipants({ tours: 4 }));
-      await choisir(e, 'modele.csv', new TextEncoder().encode(`${modele}Houle;Agathe;;;;;;;;\r\n`));
+      await choisir(e, 'modele.csv', new TextEncoder().encode(`${modele}Houle;Agathe;;;;;;;;;\r\n`));
       const tableau = dans(e, '[data-apercu] [data-lignes]');
       const entetes = [...tableau.tHead.rows[0].cells];
-      expect(entetes.at(-1).textContent).toBe(t('import.champ.conflits'));
+      expect(entetes.at(-2).textContent).toBe(t('import.champ.conflits'));
+      expect(entetes.at(-1).textContent).toBe(t('import.champ.animationReservee'));
       // Aucune colonne ne se cache au-delà du bord du conteneur qui défile :
       // il ne défile pas en largeur, et chaque en-tête tient dans sa cellule.
       const defile = tableau.parentElement;

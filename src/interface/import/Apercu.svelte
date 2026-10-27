@@ -413,6 +413,13 @@
     text-align: right;
   }
 
+  /* Un courriel, d'un seul tenant, passe à la ligne n'importe où quand la
+     place manque : les onze colonnes d'un fichier de participants tiennent
+     dans la carte à 1 366 px. */
+  .lignes td[data-cellule='courriel'] {
+    overflow-wrap: anywhere;
+  }
+
   /* Un motif cite la valeur fautive, qu'aucun blanc ne coupe parfois — une
      étiquette trop longue — : il passe à la ligne n'importe où plutôt que
      d'élargir la page. */

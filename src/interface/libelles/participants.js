@@ -44,9 +44,12 @@
 // dont l'image manque au dossier de l'événement ou ne se lit pas.
 // participants.informations.* porte le bloc des informations de la fiche
 // (InformationsFiche.svelte) : « Modifier », nommée par la personne, le
-// formulaire, nommé de même, « Enregistrer », « Annuler », et l'avis de ce
-// que les listes de conflits ont suivi (suiviDesConflits, informations.js),
-// ses parties séparées d'un point-virgule.
+// formulaire, nommé de même, « Enregistrer », « Annuler », la case et la
+// valeur de l'animation réservée, et l'avis de ce que les listes de
+// conflits ont suivi (suiviDesConflits, informations.js), ses parties
+// séparées d'un point-virgule. participants.animation.* porte la cellule
+// de la colonne « Animation » (celluleAnimation, grille.js) : les numéros
+// des tables animées, ou « à désigner ».
 
 import { cite, enumeration, toursNommes } from '../../application/libelles/aides.js';
 
@@ -88,6 +91,7 @@ export const TABLE = new Map([
   ['participants.colonne.conflitsPlacement', 'Conflits du placement'],
   ['participants.colonne.courriel', 'Courriel'],
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
+  ['participants.colonne.animation', 'Animation'],
   ['participants.colonne.exclu', 'Exclusion'],
   ['participants.colonne.presence', 'Présence'],
   ['participants.colonne.notes', 'Notes'],
@@ -129,6 +133,13 @@ export const TABLE = new Map([
   ['participants.grille.presente', 'présente'],
   ['participants.grille.vide', 'Aucun participant. Ajoutez une personne, ou collez une liste dans la grille.'],
   ['participants.grille.aucunResultat', 'Aucune personne ne correspond au filtre.'],
+
+  // --- La colonne « Animation » et la marque de l'animation réservée -------
+  ['participants.animation.tables', ({ numeros }) => numeros.join(', ')],
+  ['participants.animation.aDesigner', 'à désigner'],
+  ['participants.informations.animationReservee', 'Animation réservée'],
+  ['participants.informations.animationOui', 'oui'],
+  ['participants.informations.animationNon', 'non'],
 
   // --- La présence par tour : cellule, groupe, cases d'une saisie ----------
   ['participants.presence.tous', 'tous'],

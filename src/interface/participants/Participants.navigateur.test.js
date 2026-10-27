@@ -2974,8 +2974,9 @@ describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous 
       expect(innerWidth).toBeGreaterThan(86 * rem);
       expect(defilement.clientWidth).toBeLessThan(86 * rem);
       const id = idDe(m, 'Calvaille');
-      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingRight)).toBe(espace(m, '--espace-2'));
-      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingLeft)).toBe(espace(m, '--espace-2'));
+      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingRight)).toBe(espace(m, '--espace-1'));
+      expect(parseFloat(getComputedStyle(cellule(m, id, 'prenom')).paddingLeft)).toBe(espace(m, '--espace-1'));
+      expect(parseFloat(getComputedStyle(cellule(m, id, 'exclu')).paddingLeft)).toBe(espace(m, '--espace-1'));
       expect(parseFloat(getComputedStyle(ligne(m, id).firstElementChild).paddingLeft)).toBe(espace(m, '--espace-3'));
       // Chaque en-tête sur une ligne, hors de celui des conflits du
       // placement, qui se replie toujours entre ses mots.
@@ -3180,5 +3181,57 @@ describe('« Voir sur le plan » depuis sa ligne de la grille', () => {
     expect(marquees(m)).toEqual([]);
     expect(barre.textContent).toContain(tEcran('plan.evidence.reserveAuTour', { tour: 1 }));
     expect(barre.textContent).not.toContain(tEcran('plan.evidence.absenteAuTour', { tour: 1 }));
+  });
+});
+
+describe('la colonne « Animation » : les tables animées, ou « à désigner » (§ 10.2)', () => {
+  // Quatre personnes et deux tables, numérotées 1 et 2 : Ombrelle anime la
+  // table 2, Pervenche et Lacasse portent la marque, Lacasse exclue,
+  // Grisaille ne porte rien.
+  async function ouvrirAnimees() {
+    const m = await evenementOuvert({
+      tables: 2,
+      personnes: [{ nom: 'Ombrelle' }, { nom: 'Pervenche' }, { nom: 'Lacasse', exclu: true }, { nom: 'Grisaille' }],
+    });
+    for (const nom of ['Ombrelle', 'Pervenche', 'Lacasse']) {
+      await m.seance.executer('modifierParticipant', { id: idDe(m, nom), champs: { animationReservee: true } });
+    }
+    const table = m.seance.etat().charge.tables.find(({ numero }) => numero === 2);
+    await m.seance.executer('designerAnimateurs', { table: table.id, participants: [idDe(m, 'Ombrelle')], libelle: 'animation' });
+    await attendreSeance(m);
+    return m;
+  }
+
+  test('juste après le titre pressenti : les numéros des tables animées, « à désigner » sous la marque, rien pour une exclue ni sans marque ; l’en-tête ne trie pas', async () => {
+    const m = await ouvrirAnimees();
+    expect(COLONNES.indexOf('animation')).toBe(COLONNES.indexOf('titrePressenti') + 1);
+    const entete = [...grille(m).tHead.rows[0].cells][COLONNES.indexOf('animation')];
+    expect(texteDe(entete)).toBe(t('participants.colonne.animation'));
+    expect(entete.querySelector('button')).toBeNull();
+    expect(texteDe(cellule(m, idDe(m, 'Ombrelle'), 'animation'))).toBe('2');
+    expect(cellule(m, idDe(m, 'Ombrelle'), 'animation').querySelector('[data-animation="tables"]')).not.toBeNull();
+    expect(texteDe(cellule(m, idDe(m, 'Pervenche'), 'animation'))).toBe(t('participants.animation.aDesigner'));
+    expect(cellule(m, idDe(m, 'Pervenche'), 'animation').querySelector('[data-animation="aDesigner"]')).not.toBeNull();
+    expect(texteDe(cellule(m, idDe(m, 'Lacasse'), 'animation'))).toBe('');
+    expect(texteDe(cellule(m, idDe(m, 'Grisaille'), 'animation'))).toBe('');
+  });
+
+  test('la cellule se lit au clavier et ne s’édite pas ; une désignation la met à jour', async () => {
+    const m = await ouvrirAnimees();
+    const id = idDe(m, 'Pervenche');
+    const trace = m.trace.length;
+    cellule(m, id, 'titrePressenti').focus();
+    await touche('ArrowRight');
+    await rendu();
+    const mesure = cellule(m, id, 'animation');
+    expect(document.activeElement).toBe(mesure);
+    await touche('Enter');
+    await rendu();
+    expect(mesure.querySelector('input, textarea, [role="group"]')).toBeNull();
+    expect(m.trace.length).toBe(trace);
+    const table = m.seance.etat().charge.tables.find(({ numero }) => numero === 1);
+    await m.seance.executer('designerAnimateurs', { table: table.id, participants: [id], libelle: 'animation' });
+    await attendreSeance(m);
+    expect(texteDe(cellule(m, id, 'animation'))).toBe('1');
   });
 });

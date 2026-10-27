@@ -104,7 +104,16 @@
   // comme sans placement montré. Elle se lit seulement : sa cellule prend
   // le focus, Entrée et F2 n'y ouvrent rien, son en-tête ne trie pas, elle
   // ne se groupe ni ne se filtre, et l'export ne l'écrit pas.
+  //
+  // La colonne « Animation » (MESURES), juste après le titre pressenti, se
+  // lit de même : les numéros affichés des tables que la personne anime,
+  // « 3 » ou « 3, 5 », lus dans tablesAnimees
+  // (src/application/animateurs.js) sur la charge entière, ou « à
+  // désigner » en pastille d'avis à triangle pour une personne non exclue
+  // qui porte la marque de l'animation réservée sans animer de table
+  // (celluleAnimation, grille.js), vide sinon.
   import { getContext, onDestroy, tick } from 'svelte';
+  import { tablesAnimees } from '../../application/animateurs.js';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
   import { cleNormalisee } from '../../application/csv.js';
@@ -125,6 +134,7 @@
     MESURES,
     TRIABLES,
     basculerGroupe,
+    celluleAnimation,
     celluleSuivante,
     cheminDe,
     cleDeColonne,
@@ -200,6 +210,10 @@
   const nonCompte = $derived(
     $seance.charge !== null && conflitsBruts === null && ($ui.proposition !== null || $seance.charge.retenu !== null),
   );
+
+  // Les tables que chaque personne anime, lues sur la charge entière : la
+  // grille ne reçoit que ses lignes.
+  const animees = $derived($seance.charge === null ? new Map() : tablesAnimees($seance.charge));
 
   // Les lignes que la grille montre, dans leur ordre, et le rang de chacune
   // parmi elles, par identifiant.
@@ -611,6 +625,15 @@
           {:else}
             <span class="sans-conflit">{t('participants.conflit.aucun')}</span>
           {/if}
+        {:else if colonne === 'animation'}
+          {@const animation = celluleAnimation(personne, animees)}
+          {#if animation.sorte === 'tables'}
+            <span class="valeur" data-animation="tables">{t('participants.animation.tables', { numeros: animation.numeros })}</span>
+          {:else if animation.sorte === 'aDesigner'}
+            <span class="donnee-pastille" data-animation="aDesigner">
+              <Pastille sorte="statut" valeur="avis" icone="triangle" libelle={t('participants.animation.aDesigner')} />
+            </span>
+          {/if}
         {:else if colonne === 'organisation' && personne.organisation !== null}
           <span class="donnee-pastille">
             <Pastille sorte="organisation" valeur={teintes.get(personne.organisation) ?? null} libelle={personne.organisation} />
@@ -731,7 +754,9 @@
               </button>
             </th>
           {:else}
-            <th scope="col" class="mesure">{t(cleDeColonne(colonne))}</th>
+            <th scope="col" class="mesure" class:replie={colonne === 'conflitsPlacement'} class:etroite={colonne === 'animation'}
+              >{t(cleDeColonne(colonne))}</th
+            >
           {/if}
         {/each}
         <th scope="col">{t('participants.grille.actions')}</th>
@@ -795,7 +820,7 @@
     padding-right: var(--espace-5);
   }
 
-  /* Les en-têtes en petit corps : les dix colonnes, dont chacune prend au
+  /* Les en-têtes en petit corps : les onze colonnes, dont chacune prend au
      moins la largeur de son plus long mot d'en-tête, tiennent dans les
      cartes décrites plus bas. Sous 80rem de place, un en-tête se replie
      entre ses mots : celui des conflits d'organisation sur deux lignes. */
@@ -806,15 +831,28 @@
     background-color: var(--couleur-carte-fond-sourd);
   }
 
-  /* Sous 86rem de place, les cellules se serrent, les bords de la ligne
-     aussi : les dix colonnes et les actions tiennent dans la carte pleine
-     largeur d'une fenêtre de 1024 px, sans défiler, et dans celle d'une
-     fenêtre de 1 366 px avec leurs en-têtes sur une ligne. */
+  /* L'animation, l'exclusion et la présence, en mots courts ou en
+     pastille : un retrait plus étroit leur suffit. */
+  th.etroite,
+  td[data-champ='animation'],
+  td[data-champ='exclu'],
+  td[data-champ='presence'] {
+    padding-right: var(--espace-2);
+    padding-left: var(--espace-2);
+  }
+
+  /* Sous 86rem de place, les cellules se serrent à un quart de rem de
+     chaque côté, étroites comprises, les bords de la ligne à trois quarts :
+     les onze colonnes et les actions tiennent dans la carte pleine largeur
+     d'une fenêtre de 1024 px, sans défiler, et dans celle d'une fenêtre de
+     1 366 px avec leurs en-têtes sur une ligne, un tri compris. */
   @container (max-width: 86rem) {
     th,
-    td {
-      padding-right: var(--espace-2);
-      padding-left: var(--espace-2);
+    td,
+    th.etroite,
+    td[data-champ] {
+      padding-right: var(--espace-1);
+      padding-left: var(--espace-1);
     }
 
     th:first-child,
@@ -835,16 +873,6 @@
 
   td[data-champ='nom'] {
     font-weight: bold;
-  }
-
-  /* L'exclusion et la présence, qui disent qui vient, en mots courts ou en
-     pastille : un retrait plus étroit leur suffit, et les dix colonnes
-     tiennent dans la carte pleine largeur d'une fenêtre de 1024 px. */
-  th.etroite,
-  td[data-champ='exclu'],
-  td[data-champ='presence'] {
-    padding-right: var(--espace-2);
-    padding-left: var(--espace-2);
   }
 
   td[data-champ='notes'] {
@@ -1059,7 +1087,7 @@
 
   /* À partir de 80rem de place, celle de la carte d'une fenêtre de
      1 366 px, chaque en-tête tient sur une ligne — hors de celui des
-     conflits du placement, une mesure, qui se replie toujours entre ses
+     conflits du placement (replie), qui se replie toujours entre ses
      mots : sur une ligne, il ferait déborder la grille —, les quatre actions d'une
      ligne vont sur deux rangées de deux, en colonnes alignées d'une ligne à
      l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés
@@ -1067,7 +1095,7 @@
      entre leurs mots, et les actions passent à la ligne quand leur colonne
      est étroite. */
   @container (min-width: 80rem) {
-    thead th:not(.mesure) {
+    thead th:not(.replie) {
       white-space: nowrap;
     }
 

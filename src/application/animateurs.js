@@ -12,8 +12,14 @@
 // « tous les tours » est suspendue à ses tours d'absence (§ 4.4), et elle
 // reste animatrice de la table, que son retrait libère.
 //
-// Les commandes des places (designerAnimateurs, retirerAnimateur) et la
-// fenêtre d'ajout des animateurs lisent ces fonctions. Elles ne modifient
+// La marque de l'animation réservée (§ 4) dit qui est à désigner, jamais
+// qui anime : une personne marquée qui n'anime aucune table reste à
+// désigner (aDesigner), et une personne qui anime une table l'anime, marquée
+// ou non (tablesAnimees).
+//
+// Les commandes des places (designerAnimateurs, retirerAnimateur), la
+// fenêtre d'ajout des animateurs, la colonne « Animation » de la grille des
+// participants et le rapport d'import lisent ces fonctions. Elles ne modifient
 // rien de ce qu'elles reçoivent, et rendent leurs listes dans un ordre que
 // fixent la charge et des comparaisons numériques, jamais l'ordre des clés
 // d'un objet.
@@ -123,6 +129,46 @@ function placementsAuRetenu(charge, id) {
     parTable.get(idTable).tours.push(tour);
   }
   return [...parTable.values()];
+}
+
+/**
+ * Les tables que chaque personne anime (§ 4, § 10.2) : identifiant de la
+ * personne → numéros affichés des tables où une de ses désignations
+ * (designations) la fait animer, chaque table une fois, croissants. Une
+ * désignation suspendue par une absence compte : la personne reste
+ * animatrice de sa table. Une personne qui n'anime aucune table n'y figure
+ * pas.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {Map<number, number[]>}
+ */
+export function tablesAnimees(charge) {
+  const numeroDe = new Map(charge.tables.map((table) => [table.id, table.numero]));
+  const tablesDe = new Map();
+  for (const { titre, reservation } of designations(charge)) {
+    if (!tablesDe.has(reservation.participant)) tablesDe.set(reservation.participant, new Set());
+    tablesDe.get(reservation.participant).add(titre.table);
+  }
+  return new Map(
+    [...tablesDe].map(([participant, tables]) => [participant, [...tables].map((id) => numeroDe.get(id)).sort((a, b) => a - b)]),
+  );
+}
+
+/**
+ * Les personnes à désigner animatrices (§ 4) : celles qui portent la marque
+ * de l'animation réservée, ne sont pas exclues et n'animent aucune table
+ * (tablesAnimees), dans l'ordre de charge.participants, par identifiant.
+ * Une personne absente à un tour en est : la marque attend sa désignation,
+ * que l'absence refuse tant qu'elle dure (§ 5.9).
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {number[]}
+ */
+export function aDesigner(charge) {
+  const animent = tablesAnimees(charge);
+  return charge.participants
+    .filter((personne) => personne.animationReservee === true && !personne.exclu && !animent.has(personne.id))
+    .map(({ id }) => id);
 }
 
 /**

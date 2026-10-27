@@ -53,8 +53,8 @@ const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
 const FIN_DE_LIGNE = '\r\n';
 const GUILLEMET = '"';
 
-// Les deux valeurs écrites d'« exclu », que la liste fermée de l'aperçu
-// relit : oui pour vrai, non pour faux.
+// Les deux valeurs écrites d'« exclu » et de l'animation réservée, que la
+// liste fermée de l'aperçu relit : oui pour vrai, non pour faux.
 const OUI = 'oui';
 const NON = 'non';
 
@@ -70,6 +70,7 @@ const PROPRIETE_DU_CHAMP = new Map([
   ['etiquettes', 'etiquettes'],
   ['presence', 'presence'],
   ['conflit_organisation', 'conflits'],
+  ['animation_reservee', 'animationReservee'],
 ]);
 
 // Un champ s'écrit cité (RFC 4180) quand il porte le séparateur, un retour
@@ -109,20 +110,21 @@ const presenceEcrite = (valeur) =>
   valeur.every((tour, rang) => Number.isInteger(tour) && tour >= 1 && (rang === 0 || tour > valeur[rang - 1]));
 
 // Cellule d'un champ de CHAMPS pour le participant de rang donné, à partir de
-// 0 : exclu en oui ou non, les étiquettes jointes par JOINTURE_ETIQUETTES
-// dans l'ordre de leur liste, vide quand la clé manque, la présence par
-// ecrirePresence, vide quand elle manque, les conflits dans l'ordre de leur
-// liste, joints par la première jointure de JOINTURES_CONFLITS dont la
-// cellule se relit en la même liste contre connues, les organisations de la
-// liste exportée, par JOINTURE_CONFLITS quand aucune ne le fait, vide quand
-// la clé manque, un texte tel quel, null vide. Lèvent TypeError un exclu qui
-// n'est pas un booléen, des étiquettes ou des conflits présents qui ne sont
-// pas une liste de textes, une présence présente qui n'est pas une liste
-// croissante de tours, un nom qui n'est pas une chaîne, un autre texte ni
-// chaîne ni null. Écrit sans bruit « non » ou vide, un exclu de travers
-// réinviterait au réimport une personne qui s'est désistée ; un texte d'un
-// autre genre lèverait plus loin, dans l'écriture, sans nommer ni la personne
-// ni le champ.
+// 0 : exclu en oui ou non, l'animation réservée en oui pour la marque, non
+// sans elle, les étiquettes jointes par JOINTURE_ETIQUETTES dans l'ordre de
+// leur liste, vide quand la clé manque, la présence par ecrirePresence, vide
+// quand elle manque, les conflits dans l'ordre de leur liste, joints par la
+// première jointure de JOINTURES_CONFLITS dont la cellule se relit en la même
+// liste contre connues, les organisations de la liste exportée, par
+// JOINTURE_CONFLITS quand aucune ne le fait, vide quand la clé manque, un
+// texte tel quel, null vide. Lèvent TypeError un exclu qui n'est pas un
+// booléen, une marque présente qui n'est pas vraie, des étiquettes ou des
+// conflits présents qui ne sont pas une liste de textes, une présence présente
+// qui n'est pas une liste croissante de tours, un nom qui n'est pas une
+// chaîne, un autre texte ni chaîne ni null. Écrit sans bruit « non » ou vide,
+// un exclu de travers réinviterait au réimport une personne qui s'est
+// désistée ; un texte d'un autre genre lèverait plus loin, dans l'écriture,
+// sans nommer ni la personne ni le champ.
 function cellule(participant, champ, rang, connues) {
   const valeur = participant[PROPRIETE_DU_CHAMP.get(champ)];
   const refuser = (attendu) => {
@@ -132,6 +134,10 @@ function cellule(participant, champ, rang, connues) {
   if (champ === 'exclu') {
     if (typeof valeur !== 'boolean') refuser('booléen');
     return valeur ? OUI : NON;
+  }
+  if (champ === 'animation_reservee') {
+    if (valeur !== undefined && valeur !== true) refuser('vrai ou absent');
+    return valeur === true ? OUI : NON;
   }
   if (champ === 'etiquettes') {
     if (!Object.hasOwn(participant, 'etiquettes')) return '';
@@ -160,30 +166,37 @@ function cellule(participant, champ, rang, connues) {
  * (§ 10.2) : UTF-8 avec marque, « ; », CRLF ; l'en-tête
  * nom;prenom;organisation;courriel;titre_pressenti;exclu;notes;etiquettes;presence,
  * les champs de CHAMPS dans leur ordre, suivis de conflit_organisation dès
- * qu'un participant de la liste porte des conflits ; puis un participant par
- * ligne, dans l'ordre de la liste reçue, que la charge range par identifiant.
- * exclu s'écrit oui ou non, un champ null vide, la colonne etiquettes
- * toujours, ses étiquettes jointes par « , », vide sans étiquette, puis la
- * colonne presence toujours, vide pour tous les tours, sinon en plages et en
- * listes (ecrirePresence), puis, quand elle s'écrit, la colonne des conflits,
- * vide sans conflit, ses noms joints par « ; », sauf quand la cellule se
- * relirait autrement (JOINTURES_CONFLITS) ; un champ qui porte « ; », un
- * guillemet ou une fin de ligne entre guillemets. Sans conflit, la colonne
- * manque : le fichier d'une liste qui n'en porte pas reste celui d'avant le
- * champ, et son réimport en mise à jour ne touche aucune liste. L'identifiant
- * ne s'écrit pas : le réimport en attribue de neufs. La liste reçue n'est pas
- * modifiée.
+ * qu'un participant de la liste porte des conflits, puis de animation_reservee
+ * dès qu'un participant porte la marque ; puis un participant par ligne, dans
+ * l'ordre de la liste reçue, que la charge range par identifiant. exclu
+ * s'écrit oui ou non, un champ null vide, la colonne etiquettes toujours, ses
+ * étiquettes jointes par « , », vide sans étiquette, puis la colonne presence
+ * toujours, vide pour tous les tours, sinon en plages et en listes
+ * (ecrirePresence), puis, quand elle s'écrit, la colonne des conflits, vide
+ * sans conflit, ses noms joints par « ; », sauf quand la cellule se relirait
+ * autrement (JOINTURES_CONFLITS) ; un champ qui porte « ; », un guillemet ou
+ * une fin de ligne entre guillemets. Sans conflit, la colonne manque : le
+ * fichier d'une liste qui n'en porte pas reste celui d'avant le champ, et son
+ * réimport en mise à jour ne touche aucune liste. La colonne de l'animation
+ * réservée, quand elle s'écrit, porte oui ou non ; sans marque dans la liste,
+ * elle manque de même. L'identifiant ne s'écrit pas : le réimport en attribue
+ * de neufs. La liste reçue n'est pas modifiée.
  *
  * @param {import('../stockage/types.js').Participant[]} participants
  * @returns {Uint8Array}
- * @throws {TypeError} pour un exclu qui n'est pas un booléen, des étiquettes
- *   ou des conflits présents qui ne sont pas une liste de textes, une
- *   présence présente qui n'est pas une liste croissante de tours, un nom
- *   qui n'est pas une chaîne, un autre texte ni chaîne ni null
+ * @throws {TypeError} pour un exclu qui n'est pas un booléen, une marque
+ *   d'animation réservée présente qui n'est pas vraie, des étiquettes ou des
+ *   conflits présents qui ne sont pas une liste de textes, une présence
+ *   présente qui n'est pas une liste croissante de tours, un nom qui n'est pas
+ *   une chaîne, un autre texte ni chaîne ni null
  */
 export function exporterParticipants(participants) {
-  const avecConflits = participants.some((participant) => Object.hasOwn(participant, 'conflits'));
-  const champs = avecConflits ? CHAMPS : CHAMPS.filter((champ) => champ !== 'conflit_organisation');
+  const porte = (cle) => participants.some((participant) => Object.hasOwn(participant, cle));
+  const omis = new Set([
+    ...(porte('conflits') ? [] : ['conflit_organisation']),
+    ...(porte('animationReservee') ? [] : ['animation_reservee']),
+  ]);
+  const champs = CHAMPS.filter((champ) => !omis.has(champ));
   const connues = organisationsConnues(
     participants.flatMap(({ organisation }) => (typeof organisation === 'string' ? [organisation] : [])),
   );
@@ -199,7 +212,8 @@ const exemple = (nom, prenom, autres) => ({
 });
 
 // Les personnes du modèle : à elles quatre, elles remplissent chaque colonne
-// de CHAMPS, exclu sous ses deux valeurs, une organisation partagée, une
+// de CHAMPS, exclu et l'animation réservée sous leurs deux valeurs — la
+// personne au titre pressenti à désigner —, une organisation partagée, une
 // absente, une cellule à deux étiquettes, et un conflit, que nomme la
 // personne sans organisation, envers celle de l'exclue : une organisation
 // existe par ses exclus aussi. Leur présence s'ajoute selon le nombre de
@@ -207,7 +221,7 @@ const exemple = (nom, prenom, autres) => ({
 const EXEMPLES_DU_MODELE = [
   exemple('Ombrelle', 'Iris', {
     organisation: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
-    etiquettes: ['finance', 'Montréal'],
+    etiquettes: ['finance', 'Montréal'], animationReservee: true,
   }),
   exemple('Pervenche', 'Théo', {
     organisation: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],

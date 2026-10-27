@@ -24,6 +24,7 @@ export const EXEMPLES = [
   ['CHAMPS_EN_TROP', { ligne: 4, valeur: null }],
   ['NOM_ABSENT', { ligne: 5, valeur: null }],
   ['EXCLU_INCONNU', { ligne: 6, valeur: 'peut-être' }],
+  ['ANIMATION_INCONNUE', { ligne: 7, valeur: 'Table d’honneur' }],
   ['ETIQUETTE_MAL_FORMEE', { ligne: 6, valeur: 'ressources\thumaines', raison: 'controle' }],
   ['ETIQUETTES_TROP_NOMBREUSES', { ligne: 6, valeur: null, nombre: 21 }],
   ['PRESENCE_ILLISIBLE', { ligne: 6, valeur: '01-mars', raison: 'date' }],

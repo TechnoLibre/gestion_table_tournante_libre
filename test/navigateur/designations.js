@@ -18,11 +18,13 @@
 
 // [attribut, porteur, valeurs], dans l'ordre des attributs.
 const ENTREES = [
+  ['data-a-designer', 'import : le compte des personnes à désigner animatrices, dans le rapport', ['']],
   ['data-a-verifier', 'accueil : une valeur de la liste tirée d’un aperçu périmé, en cours de vérification', ['']],
   ['data-absence', 'tables : les tours d’absence d’une animatrice, après sa pastille de la rangée « Animateurs »', ['']],
   ['data-absentes', 'plan : les absentes d’un tour sur la fiche d’une place ou d’une table, par tour', null],
   ['data-activite', 'la pastille de l’indicateur d’activité, pendant une opération longue', ['']],
   ['data-affichee', 'import : la valeur affichée d’une cellule de l’aperçu', ['']],
+  ['data-animation', 'participants : la cellule « Animation » d’une personne, ses tables animées ou « à désigner »', ['aDesigner', 'tables']],
   ['data-annonce-nettoyage', 'propositions : l’annonce des propositions effacées par « Garder les N meilleures »', ['']],
   ['data-annonce-planche', 'badges : l’annonce de la planche, avant de produire', ['']],
   ['data-annonces', 'événement : la zone des annonces à côté de la tête', ['']],

@@ -21,6 +21,7 @@ const NOMS_DES_CHAMPS = new Map([
   ['courriel', 'courriel'],
   ['titrePressenti', 'titre pressenti'],
   ['notes', 'notes'],
+  ['animationReservee', 'animation réservée'],
 ]);
 const nomChamp = (champ) => nomDans(NOMS_DES_CHAMPS, champ, 'champ');
 

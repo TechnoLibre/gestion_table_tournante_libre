@@ -417,6 +417,61 @@ describe('commandes : la marque du nom numéroté (§ 8.9, § 10.1, § 10.2)', (
   });
 });
 
+describe('commandes : la marque de l’animation réservée (§ 4, § 8.9, § 10.2)', () => {
+  const relue = (charge) => analyser(serialiser(charge, { revision: 2, produitVersion: V1 })).charge;
+
+  test('modifierParticipant la pose à vrai, la retire à faux ; le libellé nomme le champ, et la charge se relit', () => {
+    const { charge: posee, libelle } = executer('modifierParticipant', figer(chargeEssai()), { id: 3, champs: { animationReservee: true } });
+    assert.deepEqual(posee.participants[2], { ...personne(3, 'Pervenche', 'Théo'), animationReservee: true });
+    assert.equal(libelle, 'Modifié Théo Pervenche : animation réservée');
+    assert.deepEqual(relue(posee), posee);
+    const { charge: retiree } = executer('modifierParticipant', figer(posee), { id: 3, champs: { animationReservee: false } });
+    assert.deepEqual(retiree.participants[2], personne(3, 'Pervenche', 'Théo'));
+    assert.equal(serialiserCharge(retiree), serialiserCharge(chargeEssai()));
+  });
+
+  test('avec un champ de texte, une seule entrée qui nomme les deux ; la même valeur seule est SANS_EFFET', () => {
+    const { charge, libelle } = executer('modifierParticipant', chargeEssai(), {
+      id: 1,
+      champs: { titrePressenti: 'animation de la terrasse', animationReservee: true },
+    });
+    assert.equal(charge.participants[0].animationReservee, true);
+    assert.equal(libelle, 'Modifié Iris Ombrelle : titre pressenti, animation réservée');
+    refuse(() => executer('modifierParticipant', chargeEssai(), { id: 1, champs: { animationReservee: false } }), 'SANS_EFFET');
+    refuse(() => executer('modifierParticipant', charge, { id: 1, champs: { animationReservee: true } }), 'SANS_EFFET');
+  });
+
+  test('modifier un autre champ garde la marque ; Défaire, qui rend la charge d’avant, la rend', () => {
+    const marquee = executer('modifierParticipant', chargeEssai(), { id: 4, champs: { animationReservee: true } }).charge;
+    const { charge } = executer('modifierParticipant', marquee, { id: 4, champs: { nom: 'Lacasse 01', notes: 'arrive tard' } });
+    assert.equal(charge.participants[3].animationReservee, true);
+    const avant = figer(marquee);
+    const { charge: apres } = executer('modifierParticipant', avant, { id: 4, champs: { animationReservee: false } });
+    assert.deepEqual(appliquer(apres, difference(apres, avant)), avant);
+  });
+
+  test('ajouterParticipant la pose à vrai, et faux la laisse absente', () => {
+    const { charge } = executer('ajouterParticipant', chargeEssai(), { champs: { nom: 'Bruyère', animationReservee: true } });
+    assert.equal(charge.participants.at(-1).animationReservee, true);
+    const { charge: sans } = executer('ajouterParticipant', chargeEssai(), { champs: { nom: 'Bruyère', animationReservee: false } });
+    assert.equal(Object.hasOwn(sans.participants.at(-1), 'animationReservee'), false);
+  });
+
+  test('une autre valeur qu’un booléen est une faute du code', () => {
+    for (const valeur of ['oui', 1, null]) {
+      assert.throws(() => executer('modifierParticipant', chargeEssai(), { id: 4, champs: { animationReservee: valeur } }), TypeError);
+      assert.throws(() => executer('ajouterParticipant', chargeEssai(), { champs: { nom: 'Bruyère', animationReservee: valeur } }), TypeError);
+    }
+  });
+
+  test('le moteur ne lit pas la marque : la configuration reste la même', () => {
+    const charge = chargeRiche();
+    const posee = executer('modifierParticipant', charge, { id: 1, champs: { animationReservee: true } }).charge;
+    assert.deepEqual(configurationDepuisCharge(posee), configurationDepuisCharge(charge));
+    assert.deepEqual(posee.retenu, charge.retenu);
+  });
+});
+
 describe('commandes : les étiquettes d’une personne (§ 4.5, § 5.9, A12)', () => {
   // La charge d'essai, Iris Ombrelle « finance », la table 2 d'objectif de
   // soirée « ressources humaines » sous sa règle propre.

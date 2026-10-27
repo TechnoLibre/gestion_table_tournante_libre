@@ -193,6 +193,17 @@ organisation que seule apporterait une ligne refusée — elle désigne plusieur
 personnes, ou une personne qu’une ligne plus haut désigne déjà — n’existe
 pas pour les conflits.
 
+Une colonne « Animation réservée » dit qui doit animer une table : « oui »,
+« o », « vrai », « 1 » ou « x » marque la personne à désigner ; « non » ou une
+cellule vide ne la marque pas, et toute autre valeur refuse la ligne, avec son
+motif. Un titre pressenti comme « animation de la table d’honneur » reste
+informatif : c’est cette colonne qui dit que la personne doit animer. L’import
+ne désigne personne, les tables n’étant pas encore connues ; le rapport compte
+les personnes marquées qui n’animent encore aucune table, et vous les désignez
+ensuite dans « Tables et tours », à la rangée « Animateurs » d’une table
+(étape 6) ; une personne absente à un tour s’y désigne une fois sa présence
+rendue. En mise à jour, une cellule vide garde la marque de la personne.
+
 Un import est refusé sur un plan bloqué ; le message nomme la commande qui
 débloque. Un aperçu ouvert avant un changement du nombre de tours ne
 s’importe pas : rechoisissez le fichier pour refaire l’aperçu.
@@ -228,6 +239,16 @@ referme sans rien écrire. Tapée « FINANCE » quand une autre personne porte
 Un nom vidé est refusé sous le champ, le formulaire gardé. En lecture et sur
 un plan bloqué, « Modifier » refuse à côté du bouton, en nommant le geste qui
 lève le refus.
+
+La fiche dit aussi si la personne porte une **animation réservée** : « oui »
+quand elle est à désigner animatrice d’une table. Dans le formulaire de
+« Modifier », la case « Animation réservée » la pose ou la retire, et
+« Enregistrer » l’écrit avec les autres champs changés, en un seul geste. Dans
+la grille, la colonne « Animation », juste après le titre pressenti, écrit les
+numéros des tables que la personne anime — « 3 », « 3, 5 » —, ou « à
+désigner » quand elle porte la marque sans animer encore aucune table. Cette
+colonne se lit seulement, ne se trie pas, et l’export n’en écrit rien : la
+marque s’exporte dans sa propre colonne, « animation_reservee ».
 
 Chaque personne peut porter des **étiquettes** — « finance », « bénévole »,
 « Montréal » —, que les objectifs des tables attendent (étape 4). Une colonne
@@ -1527,6 +1548,7 @@ majuscules ni aux accents.
 | `etiquettes` | `étiquette`, `mots-clés` |
 | `presence` | `présence`, `tours de présence` |
 | `conflit_organisation` | `conflits`, `conflit d'organisation`, `conflit d’organisation` |
+| `animation_reservee` | `animation réservée`, `animation réservé` |
 
 <!-- engendre:fin colonnes-csv -->
 
