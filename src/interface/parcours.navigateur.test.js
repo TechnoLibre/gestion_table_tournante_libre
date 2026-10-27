@@ -1188,6 +1188,9 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(apercu.querySelectorAll('[data-refusees] [data-ligne]').length).toBeGreaterThanOrEqual(1);
     expect(apercu.querySelector('[data-commande="importer"]')).not.toBeNull();
     await rienEcrit(avant, 'l’aperçu');
+    // L'image montre l'aperçu depuis son haut : la carte de l'import, que le
+    // guide replié allonge, ne le pousse pas sous la fenêtre.
+    await cadrerAuBord(apercu, 'haut');
     await photographier(m, '02-import-apercu', { condition: ['[data-apercu] [data-encodage]', '[data-apercu] [data-separateur]'] });
   });
 
@@ -1209,6 +1212,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(montrees.length, accentuees.join(' | ')).toBeGreaterThan(0);
     expect(apercu.textContent).not.toMatch(/\u{FFFD}|\u{C3}[\u{80}-\u{BF}]/u);
     await rienEcrit(avant, 'l’aperçu en windows-1252');
+    await cadrerAuBord(apercu, 'haut');
     await photographier(m, '02b-import-cp1252', { condition: ['[data-apercu] [data-encodage]', '[data-apercu] [data-fichier]'] });
   });
 
