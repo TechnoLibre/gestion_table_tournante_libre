@@ -903,8 +903,8 @@ entrent pas : ils ne réduisent aucune capacité, ne retirent personne et
 n'annotent aucune table. La recherche les reçoit à part, ne tire aucun
 mouvement dans ces tours, et compte leurs rencontres dans le score de la
 soirée. L'inclusion n'y ajoute ni prétraitement ni placement préalable : c'est
-un critère de la recherche (§ 5.3, § 5.7), qui ne choisit que les sièges à
-échanger.
+un critère de la recherche (§ 5.3, § 5.7), et son mouvement dirigé (§ 5.10) ne
+choisit que les sièges à échanger.
 
 ### 5.3 Les contraintes, activables une à une
 
@@ -2582,6 +2582,32 @@ d'un dixième de plus avec des étiquettes, des objectifs, la case des animateur
 et un ordre réglé ; deux cent dix inclusions actives n'en changent pas l'ordre
 de grandeur.
 
+**Tant qu'une rencontre demandée manque, un mouvement sur deux la rapproche.**
+Quand le critère des inclusions compte et qu'une rencontre demandée (§ 5.4)
+n'est pas faite, chaque mouvement tire d'abord entre deux genres, à parts
+égales. Le mouvement ordinaire tire comme sans inclusion. Le mouvement dirigé
+tire une rencontre demandée qui manque, puis, pour une organisation que
+plusieurs membres satisfont, l'un d'eux ; puis un tour où les deux sont présents
+et celle des deux qui y est libre, qui rejoint la table de l'autre à l'un de ses
+sièges mobiles, par l'échange ordinaire avec son occupant, personne ou place
+vide. Sans tour qui le permette, il est évalué et rejeté. Il ne touche ni un
+siège fixé ni un tour figé, et s'accepte, se refuse et se défait comme un
+autre : il ne choisit que les sièges à échanger, et la comparaison des scores
+reste seule juge. Les rencontres qui manquent forment un ensemble que chaque
+relecture tient en temps constant. Sans lui, la recherche ordinaire ne trouve
+une rencontre demandée qu'au hasard d'un échange qui assied les deux personnes
+ensemble, et en laisse, sur une soirée dense en listes, au compte par défaut.
+Avec lui, la fixture de mesure du § 14.10 les fait toutes en quelques dizaines
+de milliers de mouvements, une soirée dense en laisse près de dix fois moins au
+compte par défaut, et sur une soirée moins dense les paliers qui suivent ne s'en
+écartent pas au-delà du bruit des graines. La part d'un sur deux est une
+constante du moteur, qu'aucun réglage n'expose. Un mouvement dirigé coûte de
+l'ordre d'un dixième de plus qu'un mouvement ordinaire et ne se tire plus dès
+que toutes les rencontres demandées sont faites ; le prix en temps se paie
+pourtant surtout après ce point : à compte égal, une génération qui porte des
+inclusions dure de l'ordre d'un dixième de plus, car une recherche plus avancée
+rejette davantage de mouvements, et un mouvement rejeté se défait.
+
 **La présence ne coûte rien à la recherche.** Une personne absente à un tour
 n'occupe aucun siège de ce tour, aucun mouvement ne la touche, et les grandeurs
 incrémentales ne la lisent qu'aux tours où elle est assise : la boucle des
@@ -2598,7 +2624,9 @@ chacune le lit avec son |C(p)| et son n_p^C (§ 5.5).
 façon dont deux scores se comparent, jamais les tirages : aucun ne s'ajoute ni
 ne se déplace (§ 15.5, point 3). La liste se lit dans l'ordre où le fichier
 l'écrit, jamais par le parcours des clés d'un objet, et les sommes d'un palier
-sont des entiers exacts.
+sont des entiers exacts. Le mouvement dirigé des inclusions ne tire rien tant
+qu'aucune rencontre demandée ne manque ; sans inclusion active, la suite des
+tirages est celle d'avant.
 
 **Une génération dérivée ne touche pas au hasard d'une génération
 ordinaire.** Son départ remplace chaque tirage d'un placement, au début de la
@@ -8946,6 +8974,20 @@ fils égale celle d'un seul, et une dérivée n'en laisse jamais plus que son
 départ. La grande démonstration portant les listes d'une fixture de graine
 fixe (`test/fixtures/moteur/inclusions_grande.json`) a sa section des
 empreintes de référence, ses inclusions non satisfaites comprises.
+
+**Le mouvement dirigé se lit tirage par tirage.** Sous des tirages imposés,
+il rend l'échange que décrit le § 5.10, chaque borne demandée dans l'ordre :
+la rencontre, le partenaire, l'option, puis le siège, celui de la personne qui
+reste sauté. Une personne fixée ne se déplace pas, un tour où l'une manque
+n'offre rien, une table sans siège mobile ne reçoit personne, et sans option
+rien ne change. Coup par coup, sous un départ à tour figé et réserves
+imposées, aucun tour figé ni siège fixé ne bouge ; sur la fixture, l'ensemble
+des rencontres qui manquent égale le recompte après chaque mouvement et chaque
+retour, et l'état défait revient à ses compteurs. La recherche et la dérivée
+rendent les plans de leur réplique, qui dirige un mouvement sur deux ; quand
+un tour figé fait toutes les rencontres demandées, la dérivée tire comme sans
+mouvement dirigé. Cinq propositions de 50 000 mouvements font toutes les
+rencontres demandées de la fixture.
 
 **Ce que l'écran dit des inclusions se lit dans la ligne d'évaluation.** Une
 rencontre demandée des deux côtés fait une phrase et un avis, au tableau des

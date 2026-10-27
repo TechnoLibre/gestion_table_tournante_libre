@@ -533,20 +533,24 @@
   les conflits d'organisation dans l'ordre des priorités par défaut, seules à
   leur palier, et s'y déplacent comme les autres critères, si bien qu'un plan
   qui fait une rencontre demandée de plus passe devant un plan qui évite
-  quelques collisions. Une inclusion est satisfaite dès que les deux personnes,
-  ou la personne et un membre de l'organisation incluse, partagent une table à
-  un tour ; une rencontre demandée des deux côtés compte une fois. Ne comptent
-  pas une liste qui demande plus de personnes que la soirée n'en fait rencontrer
-  à la personne, une inclusion qu'un conflit d'organisation contredit, ni une
-  que les réservations ou la présence rendent impossible. Le tableau des
-  propositions compte les inclusions non satisfaites dans sa colonne
-  « Inclusions non satisfaites », et l'éditeur de l'ordre dit le critère « sans
-  objet » tant qu'aucune inclusion n'est active ; une liste qui dépasse ce que
-  sa personne peut rencontrer lui laisse un objet, à zéro. Une proposition qui
-  laisse des inclusions non satisfaites le dit sous son numéro, « 2 inclusions
-  non satisfaites », et chacune se nomme — « Iris Ombrelle n'a pas rencontré
-  Théo Pervenche », une rencontre demandée des deux côtés une seule fois — dans
-  la nouvelle vue « Inclusions » de la page de qualité, dans la liste de travail
+  quelques collisions. Tant qu'une rencontre demandée manque, la recherche
+  consacre un mouvement sur deux à asseoir l'une des deux personnes à la table
+  de l'autre, et les fait ainsi bien plus tôt dans sa course : sur une soirée
+  dense en listes, elle en laisse près de dix fois moins au compte par défaut.
+  Une inclusion est satisfaite dès que les deux personnes, ou la personne et un
+  membre de l'organisation incluse, partagent une table à un tour ; une
+  rencontre demandée des deux côtés compte une fois. Ne comptent pas une liste
+  qui demande plus de personnes que la soirée n'en fait rencontrer à la
+  personne, une inclusion qu'un conflit d'organisation contredit, ni une que les
+  réservations ou la présence rendent impossible. Le tableau des propositions
+  compte les inclusions non satisfaites dans sa colonne « Inclusions non
+  satisfaites », et l'éditeur de l'ordre dit le critère « sans objet » tant
+  qu'aucune inclusion n'est active ; une liste qui dépasse ce que sa personne
+  peut rencontrer lui laisse un objet, à zéro. Une proposition qui laisse des
+  inclusions non satisfaites le dit sous son numéro, « 2 inclusions non
+  satisfaites », et chacune se nomme — « Iris Ombrelle n'a pas rencontré Théo
+  Pervenche », une rencontre demandée des deux côtés une seule fois — dans la
+  nouvelle vue « Inclusions » de la page de qualité, dans la liste de travail
   « Inclusions non satisfaites » du plan, où un clic choisit la personne, dans
   la rubrique « Inclusions du placement » de la fiche et dans la colonne du même
   nom de la grille, montrée avec celle des inclusions. Une liste qui dépasse ce

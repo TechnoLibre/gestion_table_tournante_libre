@@ -42,7 +42,11 @@
 // chaque table, remplissage canonique, retours et animateurs sous réserve
 // imposée. Un plan rendu se juge par verifierInvariants, ou, sous absence,
 // par ses listes lues sur la configuration, et se mesure par mesurer, deux
-// modules distincts du module éprouvé.
+// modules distincts du module éprouvé. Le mouvement dirigé des inclusions se
+// lit tirage par tirage sous des tirages imposés, ne touche ni tour figé ni
+// siège fixé, tient l'ensemble des rencontres qui manquent égal au recompte,
+// et la réplique, qui le récrit, rend les plans de la recherche ; il ne tire
+// rien quand aucune rencontre demandée ne manque.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
@@ -67,6 +71,7 @@ import {
   proposerEtAppliquer,
   proposerParmi,
   proposerUne,
+  rapprocher,
   rechercher,
   regenerer,
   repartir,
@@ -85,6 +90,7 @@ import {
   exigerVerification,
   lireEmpreintes,
 } from '../../test/empreintes_moteur.js';
+import { grandeAvecInclusions } from '../../test/inclusions_grande.js';
 import {
   animateursRencontres,
   conflitsDirects,
@@ -253,6 +259,18 @@ function ordresDe(instance) {
 // Longueurs d'historique sans changement du score courant au-delà desquelles
 // une descente se relance (en-tête de recherche.js).
 const PATIENCE = 10;
+// Sur combien de mouvements tirés, tant qu'une unité d'inclusion manque, un
+// est dirigé (en-tête de recherche.js, « Le mouvement dirigé »).
+const PART_RAPPROCHER = 2;
+
+// La fonction de mouvement d'une descente, selon le paragraphe « Le mouvement
+// dirigé » de recherche.js : quand l'état tient les inclusions et qu'une
+// unité manque, borne(PART_RAPPROCHER) tire d'abord, et 0 fait rapprocher
+// dans tirables ; sinon le mouvement ordinaire seul, mouvoir.
+const dirige = (mouvoir, tirables) => (etat, rng) =>
+  etat.suitInclusions && etat.inclusionsNonSatisfaites > 0 && rng.borne(PART_RAPPROCHER) === 0
+    ? rapprocher(etat, rng, tirables)
+    : mouvoir(etat, rng);
 
 // Signe de la comparaison lexicographique de deux n-uplets, composantes
 // prises dans l'ordre donné.
@@ -285,14 +303,18 @@ function comparerDans(ordre, a, b) {
 // rng, le générateur des mouvements, est par défaut celui de la graine
 // dérivée ; partir() construit l'état du début et de chaque relance,
 // creerEtat sur rng par défaut ; mouvoir(etat, rng) tire et applique un
-// mouvement, proposerEtAppliquer par défaut. Une dérivée (paragraphe
-// « Départ ») se récrit en passant l'état de son départ et proposerParmi.
+// mouvement ordinaire, proposerEtAppliquer par défaut, que le mouvement
+// dirigé précède sous les inclusions (dirige), dans les tours de tirables,
+// tous par défaut. Une dérivée (paragraphe « Départ ») se récrit en passant
+// l'état de son départ, proposerParmi et ses tours non figés.
 function descendreALaLettre(instance, graineDerivee, arret, L, {
   bascule,
   rng = creerPcg32(graineDerivee, FLUX.RECHERCHE),
   partir = () => creerEtat(instance, rng),
-  mouvoir = proposerEtAppliquer,
+  mouvoir: ordinaire = proposerEtAppliquer,
+  tirables = null,
 }) {
+  const mouvoir = dirige(ordinaire, tirables);
   const { ORDRE_DU_SCORE, ORDRE_DES_CONTRAINTES, rangEcart } = ordresDe(instance);
   let etat = partir();
   let courant = scoreIncremental(etat);
@@ -1594,6 +1616,248 @@ describe('score : les inclusions, tenues coup par coup (en-tête de recherche.js
   });
 });
 
+// La salle à inclusions où personne ne rencontre qui il inclut, aux deux
+// tours : la table 10 assied 1, 4 et 5 aux sièges 0 à 2, la table 20 assied
+// 2, 3 et 6 aux sièges 3 à 5. Ses trois unités manquent, dans cet ordre :
+// la paire (1, 2), le couple (5, B), la paire (6, 4).
+function etatSansRencontre(configuration = salleAInclusions()) {
+  const instance = normaliser(configuration);
+  const plan = planDeLaSalle([[1, 4, 5], [2, 3, 6]], [[1, 4, 5], [2, 3, 6]]);
+  return { instance, etat: creerEtatDuDepart(instance, { plan, toursFiges: [] }) };
+}
+
+// Les unités qui manquent, lues de deux façons : le contenu de l'ensemble
+// enManque, trié, et les unités que l'état juge non satisfaites.
+function manquesDe(etat) {
+  const n = etat.inclusionsNonSatisfaites;
+  const ensemble = Array.from(etat.enManque.subarray(0, n)).sort((u, v) => u - v);
+  const recompte = [];
+  etat.inclusionSatisfaite.forEach((satisfaite, u) => {
+    if (satisfaite === 0) recompte.push(u);
+  });
+  return { ensemble, recompte };
+}
+
+// Les compteurs de l'état, tableaux copiés, hors de l'ordre interne de
+// l'ensemble enManque et des options du mouvement dirigé, qui ne sont pas
+// des grandeurs.
+function compteursDe(etat) {
+  const copie = {};
+  for (const [cle, valeur] of Object.entries(etat)) {
+    if (cle === 'enManque' || cle === 'placeEnManque' || cle === 'options') continue;
+    if (ArrayBuffer.isView(valeur)) copie[cle] = Array.from(valeur);
+    else if (typeof valeur === 'number') copie[cle] = valeur;
+  }
+  return copie;
+}
+
+describe('recherche : le mouvement dirigé des inclusions (en-tête de recherche.js, « Le mouvement dirigé », § 5.10)', () => {
+  test("à la lettre : une unité qui manque, un partenaire, une option, puis un siège de la table d'arrivée, celui qui y reste sauté", () => {
+    const { etat } = etatSansRencontre();
+    assert.deepEqual(Array.from(etat.enManque), [0, 1, 2]);
+    // (5, B) ; son second membre, 3 ; la quatrième option, 3 au tour 2 ; le
+    // second siège mobile de la table 10 hors de celui de 5, le siège 1, où
+    // est 4. 3, au siège 4, et 4 s'échangent : 5 rencontre 3, et 4, passé à
+    // la table 20, y rencontre 6.
+    let rng = tiragesImposes([1, 1, 3, 1]);
+    const mouvement = rapprocher(etat, rng);
+    assert.deepEqual(rng.bornes, [3, 2, 4, 2]);
+    assert.deepEqual(mouvement, { tour: 1, a: 4, b: 1 });
+    assert.deepEqual(manquesDe(etat), { ensemble: [0], recompte: [0] });
+    defaire(etat, mouvement);
+    assert.deepEqual(manquesDe(etat), { ensemble: [0, 1, 2], recompte: [0, 1, 2] });
+    assert.equal(etat.enManque[0], 0);
+    // (1, 2), là où l'ensemble la range ; son seul partenaire ; la deuxième
+    // option, 2 au tour 1, qui rejoint 1 au siège 0 : le rang 0 tiré saute
+    // le siège de 1 et désigne le siège 1 ; le rang 1, le siège 2.
+    for (const [rang, b] of [[0, 1], [1, 2]]) {
+      rng = tiragesImposes([etat.enManque.indexOf(0), 0, 1, rang]);
+      const vers = rapprocher(etat, rng);
+      assert.deepEqual(rng.bornes, [3, 1, 4, 2], `rang ${rang}`);
+      assert.deepEqual(vers, { tour: 0, a: 3, b }, `rang ${rang}`);
+      assert.equal(etat.inclusionSatisfaite[0], 1, `rang ${rang}`);
+      defaire(etat, vers);
+    }
+  });
+
+  test("une option exige les deux assis au tour, le déplacé libre et un siège mobile d'arrivée ; sans option, null, et rien ne change", () => {
+    // 1 est réservé à la table 10 au tour 1, et 2 n'est présent qu'au tour 1 :
+    // seul 2 au tour 1 réunit la paire (1, 2).
+    const reserve = salleAInclusions();
+    reserve.reservations = [auTour(1, 10, 1)];
+    reserve.participants[1] = { ...reserve.participants[1], presence: [1] };
+    let { etat } = etatSansRencontre(reserve);
+    let rng = tiragesImposes([0, 0, 0, 0]);
+    assert.deepEqual(rapprocher(etat, rng), { tour: 0, a: 3, b: 1 });
+    assert.deepEqual(rng.bornes, [3, 1, 1, 2]);
+    // 1, 4 et 5 réservés à la table 10 au tour 1, 2 présent aux deux tours :
+    // au tour 1, 1 ne bouge pas, et sa table n'a aucun siège mobile où 2
+    // le rejoindrait. Parmi ce seul tour, la paire n'a aucune option.
+    const pleine = salleAInclusions();
+    pleine.reservations = [auTour(1, 10, 1), auTour(4, 10, 1), auTour(5, 10, 1)];
+    ({ etat } = etatSansRencontre(pleine));
+    assert.equal(etat.inclusionsNonSatisfaites, 3);
+    const avant = compteursDe(etat);
+    rng = tiragesImposes([0, 0]);
+    assert.equal(rapprocher(etat, rng, [0]), null);
+    assert.deepEqual(rng.bornes, [3, 1]);
+    assert.deepStrictEqual(compteursDe(etat), avant);
+    // Parmi les seuls tours de tirables : le tour 2, où 2 est absent, n'en
+    // offre aucune, même sans la table pleine.
+    ({ etat } = etatSansRencontre(reserve));
+    rng = tiragesImposes([0, 0]);
+    assert.equal(rapprocher(etat, rng, [1]), null);
+    assert.deepEqual(rng.bornes, [3, 1]);
+  });
+
+  test("le partenaire d'une organisation qu'un seul membre peut satisfaire est ce membre, sans tirage parmi les autres", () => {
+    // 1 et 2 de B, 3 et 4 sans organisation, deux tables de 2, deux tours ;
+    // 2 est ancré à la table 10, 3 à la table 20 : seul 1, d'index 0, peut
+    // rencontrer 3, qui inclut B.
+    const configuration = configurationDe({
+      organisations: ['B', 'B', null, null],
+      tables: [{ id: 10, capacite: 2 }, { id: 20, capacite: 2 }],
+      tours: 2,
+      reservations: [tous(2, 10), tous(3, 20)],
+    });
+    configuration.participants[2].inclusionsOrganisation = ['B'];
+    const instance = normaliser(configuration);
+    const plan = { tables: [10, 20], tours: [[[1, 2], [3, 4]], [[1, 2], [3, 4]]], reserves: [[], []] };
+    const etat = creerEtatDuDepart(instance, { plan, toursFiges: [] });
+    assert.equal(etat.inclusionsNonSatisfaites, 1);
+    // 1 quitte le siège 1, derrière 2 fixé, et rejoint 3 au tour 2, au seul
+    // siège mobile de la table 20, celui de 4.
+    const rng = tiragesImposes([0, 0, 1, 0]);
+    assert.deepEqual(rapprocher(etat, rng), { tour: 1, a: 1, b: 3 });
+    assert.deepEqual(rng.bornes, [1, 1, 2, 1]);
+    assert.equal(etat.inclusionsNonSatisfaites, 0);
+  });
+
+  test("sous un départ à tours figés et réserves imposées, coup par coup : aucun tour figé ni siège fixé touché, l'ensemble des manques égal au recompte, puis tout défait", () => {
+    const configuration = soireeAReservesImposees();
+    const instance = normaliser(configuration);
+    const { R, fixe } = instance;
+    const reservesImposees = [{ participant: 3, tour: 2 }, { participant: 4, tour: 2 }];
+    const etat = creerEtatDuDepart(instance, { plan: departAReservesImposees(), toursFiges: [2], reservesImposees });
+    const depart = compteursDe(etat);
+    const fige = (tableDe) => Array.from({ length: instance.N }, (_, p) => tableDe[p * R + 1]);
+    const tourFige = fige(etat.tableDe);
+    const tirables = [0, 2];
+    const rng = creerPcg32(43, FLUX.RECHERCHE);
+    const appliques = [];
+    let diriges = 0;
+    const ecarts = [];
+    for (let essai = 0; essai < 400; essai += 1) {
+      const dirige = etat.inclusionsNonSatisfaites > 0;
+      const mouvement = dirige ? rapprocher(etat, rng, tirables) : proposerParmi(etat, rng, tirables);
+      if (mouvement === null) continue;
+      appliques.push(mouvement);
+      if (dirige) diriges += 1;
+      const { ensemble, recompte } = manquesDe(etat);
+      if (!tirables.includes(mouvement.tour)) ecarts.push(`tour ${mouvement.tour}`);
+      if (ensemble.join() !== recompte.join()) ecarts.push(`ensemble ${ensemble} contre ${recompte}`);
+      if (etat.inclusionsNonSatisfaites !== mesurer(instance, etat.tableDe).inclusions.avis) ecarts.push('avis');
+      for (const r of tirables) {
+        for (let p = 0; p < instance.N; p += 1) {
+          if (fixe[p * R + r] !== LIBRE && etat.tableDe[p * R + r] !== fixe[p * R + r]) ecarts.push(`fixé ${p} au tour ${r}`);
+        }
+      }
+      if (fige(etat.tableDe).join() !== tourFige.join()) ecarts.push('tour figé');
+    }
+    assert.deepEqual(ecarts.slice(0, 3), []);
+    assert.ok(diriges >= 50, `mouvements dirigés : ${diriges}`);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
+    for (const mouvement of appliques.reverse()) defaire(etat, mouvement);
+    assert.deepStrictEqual(compteursDe(etat), depart);
+    const { ensemble, recompte } = manquesDe(etat);
+    assert.deepEqual(ensemble, recompte);
+  });
+
+  test("sur la fixture des inclusions, deux cent six unités, un mouvement dirigé sur deux : l'ensemble des manques égal au recompte au placement, après chaque coup et chaque retour", () => {
+    const instance = normaliser(grandeAvecInclusions());
+    const rng = creerPcg32(47, FLUX.RECHERCHE);
+    const etat = creerEtat(instance, rng);
+    assert.equal(etat.inclusions.U, 206);
+    const appliques = [];
+    const ecarts = [];
+    const vus = new Set();
+    const confronter = (etiquette) => {
+      const { ensemble, recompte } = manquesDe(etat);
+      vus.add(ensemble.length);
+      if (ensemble.join() !== recompte.join()) ecarts.push(`${etiquette} : ${ensemble.length} contre ${recompte.length}`);
+    };
+    confronter('placement');
+    for (let essai = 0; essai < 600; essai += 1) {
+      const dirige = etat.inclusionsNonSatisfaites > 0 && essai % 2 === 0;
+      const mouvement = dirige ? rapprocher(etat, rng) : proposerEtAppliquer(etat, rng);
+      if (mouvement === null) continue;
+      appliques.push(mouvement);
+      confronter(`coup ${appliques.length}`);
+    }
+    for (const mouvement of appliques.reverse()) {
+      defaire(etat, mouvement);
+      confronter('retour');
+    }
+    assert.deepEqual(ecarts.slice(0, 3), []);
+    assert.ok(vus.size >= 10, `nombres de manques vus : ${vus.size}`);
+  });
+
+  test('rechercher et repartir sous inclusions : les plans de la réplique, qui dirige un mouvement sur PART_RAPPROCHER tant qu’une unité manque', () => {
+    const configuration = salleAInclusions();
+    const instance = normaliser(configuration);
+    const reglages = { graine: 17, arret: 2_000, nombre: 3, historique: 20 };
+    assert.deepStrictEqual(
+      rechercher(configuration, reglages).map(({ plan }) => plan),
+      descentesALaLettre(configuration, reglages, { bascule: true }).map(({ plan }) => plan),
+    );
+    // Au tour 1, figé, la paire (1, 2) et le couple (5, B) sont satisfaits ;
+    // (6, 4) manque, et le tour 2 seul peut la satisfaire.
+    const plan = planDeLaSalle([[1, 2, 6], [3, 4, 5]], [[1, 2, 6], [3, 4, 5]]);
+    assert.equal(mesurer(instance, indexerPlan(instance, plan)).inclusions.avis, 1);
+    const graines = creerPcg32(reglages.graine, FLUX.GRAINES);
+    for (const proposition of repartir(configuration, reglages, { plan, toursFiges: [1] })) {
+      const replique = repartirALaLettre(instance, graines.suivant(), reglages.arret, reglages.historique, { plan, toursFiges: [1] });
+      assert.deepStrictEqual(proposition.plan, replique.plan, `proposition ${proposition.id}`);
+    }
+  });
+
+  test('sur la fixture des inclusions, cinq propositions de 50 000 mouvements satisfont chacune les deux cent six rencontres demandées', () => {
+    // Sans le mouvement dirigé, la même génération en laisse encore une
+    // centaine par proposition à 100 000 mouvements : il fait l'atteinte.
+    const configuration = grandeAvecInclusions();
+    const instance = normaliser(configuration);
+    const propositions = rechercher(configuration, { graine: 1, arret: 50_000, nombre: 5 });
+    assert.deepEqual(propositions.map(({ plan }) => mesurer(instance, indexerPlan(instance, plan)).inclusions.avis), [0, 0, 0, 0, 0]);
+  });
+
+  test("toutes les unités satisfaites à un tour figé : aucun tirage de plus, la dérivée tire comme une descente sans mouvement dirigé", () => {
+    // Au tour 1, figé, les trois unités sont satisfaites ; le tour 2 répète
+    // les tables du tour 1, et l'écart reste à réduire jusqu'au compte.
+    const configuration = salleAInclusions();
+    const instance = normaliser(configuration);
+    const plan = planDeLaSalle([[1, 2, 5], [3, 4, 6]], [[1, 2, 5], [3, 4, 6]]);
+    assert.equal(mesurer(instance, indexerPlan(instance, plan)).inclusions.avis, 0);
+    const reglages = { graine: 23, arret: 3_000, nombre: 4, historique: 10 };
+    const graines = creerPcg32(reglages.graine, FLUX.GRAINES);
+    for (const proposition of repartir(configuration, reglages, { plan, toursFiges: [1] })) {
+      const graineDerivee = graines.suivant();
+      const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
+      const replique = descendreALaLettre(instance, graineDerivee, reglages.arret, reglages.historique, {
+        bascule: true,
+        rng,
+        partir: () => creerEtat(instance, rangeurDe(instance, plan)),
+        mouvoir: (etat, g) => {
+          assert.equal(etat.inclusionsNonSatisfaites, 0);
+          return proposerParmi(etat, g, [1]);
+        },
+        tirables: [1],
+      });
+      assert.equal(proposition.evalues, reglages.arret);
+      assert.deepStrictEqual(proposition.plan, replique.plan, `proposition ${proposition.id}`);
+    }
+  });
+});
+
 describe("score : les conflits d'organisation, tenus coup par coup (en-tête de recherche.js)", () => {
   test("après chaque mouvement appliqué puis chaque mouvement défait, l'état tient les conflits que mesurer recompte et que l'énumération directe compte", () => {
     const configuration = soireeAObjectifs();
@@ -2290,6 +2554,7 @@ function repartirALaLettre(instance, graineDerivee, arret, L, { plan, toursFiges
     bascule: true,
     partir: () => creerEtat(instance, rangeurDe(instance, plan)),
     mouvoir: (etat, rng) => proposerParmi(etat, rng, tirables),
+    tirables,
   });
 }
 

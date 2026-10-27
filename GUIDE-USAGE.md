@@ -1526,6 +1526,13 @@ n’est « le bon ». La même graine, sur la même configuration et les mêmes
 réglages, redonne exactement les mêmes propositions ; une autre graine en donne
 d’autres. Cette phrase est vérifiée par une épreuve du logiciel.
 
+Quand des personnes portent des inclusions, une partie des échanges est
+dirigée : tant qu’une rencontre demandée n’est pas faite, un mouvement sur deux
+assied l’une des deux personnes à la table de l’autre, à un tour où elle n’est
+ni réservée ni figée. Il est gardé ou défait comme tout autre échange ; une
+fois toutes les rencontres demandées faites, les échanges sont de nouveau tous
+tirés au hasard.
+
 La page « Qualité » montre la course d’une recherche
 ([la performance du calcul](doc/captures/15c-qualite-performance.png)) :
 chaque valeur de la proposition, mesurée sur le meilleur placement trouvé
