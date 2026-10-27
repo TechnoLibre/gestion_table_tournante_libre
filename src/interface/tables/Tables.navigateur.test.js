@@ -1435,6 +1435,35 @@ describe('créer les tables qui manquent (§ 6.1)', () => {
     expect(section(m).querySelector('[data-enonce="tablesCreees"]')).toBeNull();
   });
 
+  test('des personnes à l’animation réservée : l’aperçu dit combien la création en désignera et combien resteront ; « Créer » les désigne, l’annonce les compte, l’avertissement nomme la restante', async () => {
+    // Une table de 8 pour 20 personnes, 3 tables de 4 à créer : Iris et
+    // Théo sont marquées, Ondine aussi, mais absente au tour 2.
+    const donnees = chargeDe({ tables: [{ id: 1 }], n: 20 });
+    for (const id of [1, 2, 3]) donnees.participants[id - 1].animationReservee = true;
+    donnees.participants[2].presence = [1];
+    const m = await preparer(donnees);
+    await cliquer(m, ouvrir(m));
+    await saisir(m, champ(m, 'siegesParTable'), '4');
+    const phrase = () => formulaire(m).querySelector('[data-phrase="animateurs"]');
+    expect(apercu(m)).toBe(t('tables.manque.apercu', { tables: 3, sieges: 4, placesApres: 20, presentes: 20, partielle: true }));
+    expect(phrase().textContent).toBe(t('tables.manque.animateurs', { designees: 2, restantes: 1 }));
+    // La phrase passe sous celle des places.
+    const places = formulaire(m).querySelector('[data-phrase]').getBoundingClientRect();
+    expect(phrase().getBoundingClientRect().top).toBeGreaterThanOrEqual(places.bottom);
+    await cliquer(m, commande(formulaire(m), 'creerTables'));
+    expect(charge(m).reservations).toEqual([resa(1, 2, 1), resa(2, 3, 1)]);
+    const annonce = section(m).querySelector('[data-enonce="tablesCreees"]');
+    expect(annonce.textContent).toBe(t('tables.manque.fait', { premier: 2, dernier: 4, animateurs: 2 }));
+    const avis = m.seance.etat().avertissements.find(({ code }) => code === 'ANIMATEURS_A_DESIGNER');
+    expect(avis.details.personnes).toEqual([{ participant: 3, personne: 'Ondine Lacasse', cause: 'absente', tours: [2] }]);
+  });
+
+  test('sans personne à désigner, l’aperçu n’a pas de phrase des animateurs', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 12 }));
+    await cliquer(m, ouvrir(m));
+    expect(formulaire(m).querySelector('[data-phrase="animateurs"]')).toBeNull();
+  });
+
   test('la forme : « Rondes » et « Carrées » sous leur légende, rondes sans table ; « Carrées » choisie, chaque table créée est carrée', async () => {
     const m = await preparer(chargeDe({ n: 12 }));
     await cliquer(m, ouvrir(m));

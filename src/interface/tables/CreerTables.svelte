@@ -45,18 +45,27 @@
   // tables, « Rondes » ou « Carrées », un bouton radio chacune, cochée
   // d'abord à celle de la table la plus récemment créée (formeParDefaut), puis
   // l'aperçu chiffré de ce que la création fera, puis « Créer » et
-  // « Annuler ». Une taille validée ne s'applique pas : elle change l'aperçu,
+  // « Annuler ». Quand des personnes portent la marque de l'animation
+  // réservée sans animer de table (aDesigner), l'aperçu dit, d'une seconde
+  // phrase, combien la création désignera sur les tables créées et combien
+  // resteront à désigner (repartitionALaCreation, la répartition même de la
+  // commande). Une taille validée ne s'applique pas : elle change l'aperçu,
   // et une taille que la commande refuserait reçoit son refus sur le champ
-  // (refusDeCommande), l'aperçu gardant la taille précédente. Une forme choisie n'écrit rien non plus. « Créer » exécute
-  // creerTable {forme, combler}, une seule entrée ; le formulaire se replie,
-  // et l'annonce des tables créées reçoit le focus tant que la révision qui
-  // les a créées est la courante : hors de tout champ, Ctrl+Z y défait le
-  // geste. « Annuler » replie le formulaire et rend le focus à la commande.
-  // Le formulaire se replie aussi quand plus aucune place ne manque.
+  // (refusDeCommande), l'aperçu gardant la taille précédente. Une forme
+  // choisie n'écrit rien non plus. « Créer » exécute creerTable {forme,
+  // combler}, une seule entrée, tables et désignations comprises ; le
+  // formulaire se replie, et l'annonce des tables créées, qui compte les
+  // animateurs désignés, reçoit le focus tant que la révision qui les a
+  // créées est la courante : hors de tout champ, Ctrl+Z y défait le geste.
+  // Les personnes laissées à désigner, la commande les nomme dans son
+  // avertissement, ANIMATEURS_A_DESIGNER. « Annuler » replie le formulaire et
+  // rend le focus à la commande. Le formulaire se replie aussi quand plus
+  // aucune place ne manque.
   //
   // Le formulaire s'ouvre aussi par demanderCreationTables, ci-dessus : son
   // champ reçoit alors le focus, comme à l'ouverture par la commande.
   import { getContext, tick } from 'svelte';
+  import { aDesigner, repartitionALaCreation } from '../../application/animateurs.js';
   import { lireEntier } from '../../application/capacite.js';
   import { PLACES_TABLE, bilanTablesManquantes, formeParDefaut } from '../../application/commandes_mobilier.js';
   import { ErreurCommande } from '../../application/erreurs.js';
@@ -76,7 +85,8 @@
 
   // Le formulaire déplié ; la taille validée et la forme choisie, null pour
   // le défaut ; les tables créées par le dernier geste, {revision, premier,
-  // dernier}.
+  // dernier, animateurs}, animateurs le nombre de personnes qu'il a
+  // désignées.
   let ouvert = $state(false);
   let taille = $state(null);
   let choix = $state(null);
@@ -87,6 +97,11 @@
   const forme = $derived(choix ?? formeParDefaut(charge));
   const bilan = $derived(bilanTablesManquantes(charge, sieges));
   const montre = $derived(ouvert && bilan.manque > 0);
+  // La répartition des personnes à désigner sur les tables que l'aperçu
+  // annonce, null quand personne n'est à désigner.
+  const repartition = $derived(
+    montre && aDesigner(charge).length > 0 ? repartitionALaCreation(charge, bilan.tables, bilan.sieges) : null,
+  );
   // Plus aucune place ne manque : le formulaire se replie, et un manque
   // revenu ensuite ne montre que la commande.
   $effect(() => {
@@ -115,10 +130,12 @@
 
   async function creer() {
     const avant = charge.prochainsIds.table;
+    const restaient = aDesigner(charge).length;
     await seance.executer('creerTable', { forme, combler: sieges });
     const etat = seance.etat();
     const numeros = etat.charge.tables.filter(({ id }) => id >= avant).map(({ numero }) => numero);
-    creees = { revision: etat.evenement.revision, premier: numeros[0], dernier: numeros.at(-1) };
+    const animateurs = restaient - aDesigner(etat.charge).length;
+    creees = { revision: etat.evenement.revision, premier: numeros[0], dernier: numeros.at(-1), animateurs };
     ouvert = false;
     await tick();
     racine?.querySelector('[data-enonce="tablesCreees"]')?.focus();
@@ -135,7 +152,7 @@
   <div class="creer" bind:this={racine}>
     {#if annonce !== null && !montre}
       <p class="annonce" data-enonce="tablesCreees" role="status" tabindex="-1">
-        {t('tables.manque.fait', { premier: annonce.premier, dernier: annonce.dernier })}
+        {t('tables.manque.fait', { premier: annonce.premier, dernier: annonce.dernier, animateurs: annonce.animateurs })}
       </p>
     {/if}
     {#if montre}
@@ -179,6 +196,14 @@
               partielle: aDesAbsences(charge),
             })}</span
           >
+          {#if repartition !== null}
+            <span class="suite" data-phrase="animateurs"
+              >{t('tables.manque.animateurs', {
+                designees: repartition.affectations.length,
+                restantes: repartition.restantes.length,
+              })}</span
+            >
+          {/if}
         </p>
         <div class="issues">
           <Commande
@@ -220,6 +245,13 @@
   .formulaire p,
   .annonce {
     margin: 0;
+  }
+
+  /* La phrase des animateurs, sous celle des places, dans le même état
+     annoncé. */
+  .suite {
+    display: block;
+    margin-top: var(--espace-1);
   }
 
   .formes {

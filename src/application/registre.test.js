@@ -1043,8 +1043,10 @@ describe('registre : en écriture, un exemple accepté écrit une entrée, et d�
       assert.equal(serialiserCharge(reconstruire(journal, derniere.revision)), serialiserCharge(ecrite));
       assert.equal(seance.mode, 'ecriture');
 
-      // Aucune commande ne répartit : les réservations ajoutées tiennent à
-      // une seule place (§ 5.8, § 17 point 3).
+      // Les exemples du registre ne répartissent pas : les réservations
+      // ajoutées tiennent à une seule place (§ 5.8, § 17 point 3). La
+      // répartition à la création des tables s'éprouve dans
+      // commandes_mobilier.test.js.
       const connues = new Set(avant.reservations.map((r) => JSON.stringify(r)));
       const ajoutees = ecrite.reservations.filter((r) => !connues.has(JSON.stringify(r)));
       assert.ok(new Set(ajoutees.map(({ table, siege }) => `${table}:${siege}`)).size <= 1, JSON.stringify(ajoutees));

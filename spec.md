@@ -113,11 +113,12 @@ Valider une présence est une entrée d'historique, qui ajuste le placement
 retenu (§ 5.8).
 
 **4. Préparer les tables.** *Obligatoire.* L'opérateur fixe le nombre de sièges
-par défaut, crée les tables — une à une, ou d'un geste celles qui manquent
-pour asseoir chacun, à la taille qu'il donne —, surcharge celles qui diffèrent
-(§ 6.1) et les dispose sur le plan (§ 7.1). Le logiciel énonce la conséquence
-chiffrée d'un changement de défaut avant de l'appliquer, n'écrase aucune
-surcharge, et refuse en bloc une baisse qu'une seule table refuse (§ 6.1).
+par défaut, crée les tables — une à une, ou d'un geste celles qui manquent pour
+asseoir chacun, à la taille qu'il donne, et qui reçoivent les animateurs à
+désigner (étape 6) —, surcharge celles qui diffèrent (§ 6.1) et les dispose sur
+le plan (§ 7.1). Le logiciel énonce la conséquence chiffrée d'un changement de
+défaut avant de l'appliquer, n'écrase aucune surcharge, et refuse en bloc une
+baisse qu'une seule table refuse (§ 6.1).
 
 Il donne au besoin à une table un **objectif** (§ 4.5) — les étiquettes des
 personnes qu'elle attend, sous la règle « au moins une » ou « toutes » —, pour
@@ -145,8 +146,10 @@ aucun animateur est une configuration valide, et la petite démonstration en est
 une (§ 15.3). Reprenable : une désignation se retire, se déplace, s'ajoute après
 la génération.*
 
-L'opérateur désigne **lui-même quelle personne anime quelle table**. Il n'existe
-aucune commande qui répartit les animateurs sur les tables (§ 5.8).
+L'opérateur désigne **lui-même quelle personne anime quelle table**. Une seule
+commande répartit des animateurs, et seulement sur les tables qu'elle crée :
+« Créer les tables… » (§ 6.1), pour les personnes que la marque de l'animation
+réservée dit à désigner (§ 4, § 5.8).
 
 Un geste de désignation produit **deux faits sur la même place**, sous une seule
 entrée d'historique : une **réservation** de portée « tous les tours » au nom de
@@ -178,6 +181,25 @@ titre saisi, « animateur » par défaut. Quand aucun siège n'est à la fois sa
 titre et libre, le lot suit la règle de la désignation au plan et pourvoit le
 premier titre non pourvu de la table, dont le libellé ne change pas.
 
+La désignation se fait enfin **à la création des tables** qui manquent (§ 6.1),
+dans l'entrée d'historique qui les crée : chaque personne à désigner — marquée,
+non exclue, qui n'anime encore aucune table — l'est sur l'une des tables
+créées. Les personnes passent par identifiant croissant ; chacune va à la table
+créée qui a le moins d'animateurs, puis à celle dont aucun animateur ne porte
+son organisation, puis à celle de plus petit numéro. Elle y reçoit, comme au
+lot, une réservation « tous les tours » et son propre titre au plus petit siège
+libre : son titre pressenti, s'il ne se réduit pas à des espaces, sinon
+« animateur ». Une table créée garde au moins un siège qui tourne : elle reçoit
+au plus un animateur de moins que ses places. Ne sont pas désignées une
+personne absente à un tour, une personne à qui une place est déjà réservée, et
+celle qui ne trouve plus de place d'animateur aux tables créées : la création
+réussit quand même, et son avertissement (`ANIMATEURS_A_DESIGNER`) nomme
+chacune avec sa cause et renvoie à la rangée « Animateurs », en disant, pour
+chaque cause présente, ce qui y précède la désignation : l'absente s'y désigne
+une fois sa présence rendue à tous les tours, la personne réservée à la table
+de sa réservation ou une fois celle-ci retirée. Une personne exclue est passée
+sans mot. Créer une seule table ne désigne personne.
+
 Le retrait d'un animateur depuis cette rangée retire **ensemble** sa
 réservation « tous les tours » et **un seul** titre, celui qu'elle pourvoit, en
 une entrée ; les autres réservations et titres de la table restent. Le fichier
@@ -207,13 +229,13 @@ du § 5.9 gardent cette étape comme n'importe quelle autre pose : personne
 exclue, deux places sur un même tour, dépôt sur une place déjà réservée à un
 autre.
 
-Le logiciel n'assigne pas, il **montre le travail qui reste**, par deux listes
-cliquables qui mènent à la place ou à la personne : la liste des **titres de
-place non pourvus** (§ 4.1), et la liste des participants portant un **titre
-pressenti** (§ 4) qui ne sont encore réservés nulle part. La colonne
-« Animation » de la liste des participants (§ 10.2) dit, pour chaque
-personne, les tables qu'elle anime, ou « à désigner » sous la marque de
-l'animation réservée.
+Hors de la création des tables, le logiciel n'assigne pas, il **montre le
+travail qui reste**, par deux listes cliquables qui mènent à la place ou à la
+personne : la liste des **titres de place non pourvus** (§ 4.1), et la liste des
+participants portant un **titre pressenti** (§ 4) qui ne sont encore réservés
+nulle part. La colonne « Animation » de la liste des participants (§ 10.2) dit,
+pour chaque personne, les tables qu'elle anime, ou « à désigner » sous la marque
+de l'animation réservée.
 
 **7. Placer des participants à la main.** *Facultative, reprenable.* Ce sont des
 réservations ordinaires (§ 5.8). Le logiciel refuse de déposer quelqu'un sur une
@@ -434,11 +456,12 @@ de la table d'honneur » est un titre pressenti ne dit pas, sinon, que la
 personne doit animer. La marque est une **intention**, jamais le fait : elle ne
 fait animer personne, ne pourvoit aucune place et ne contraint pas la
 génération ; l'animateur reste celui que les titres pourvus désignent (§ 2.1
-étape 6). Absente, elle vaut « non ». La fiche la saisit par une case, la
-colonne CSV `animation_reservee` la porte à l'import comme à l'export (§ 10.1,
-§ 10.2), et la colonne « Animation » de la grille dit « à désigner » pour une
-personne marquée, non exclue, qui n'anime encore aucune table. Une personne
-exclue la garde, suspendue comme le reste.
+étape 6). « Créer les tables… » la lit, et désigne les personnes marquées sur
+les tables qu'il crée (§ 6.1). Absente, elle vaut « non ». La fiche la saisit
+par une case, la colonne CSV `animation_reservee` la porte à l'import comme à
+l'export (§ 10.1, § 10.2), et la colonne « Animation » de la grille dit « à
+désigner » pour une personne marquée, non exclue, qui n'anime encore aucune
+table. Une personne exclue la garde, suspendue comme le reste.
 
 Un participant peut être **exclu** sans être supprimé : il reste dans la liste,
 il n'est plus placé, et il sort de toutes les statistiques.
@@ -2191,21 +2214,28 @@ demande confirmation que si le retenu porte une retouche à la main que ce geste
 détruirait (§ 9) : un retenu seulement ajusté aux participants se remplace sans
 fenêtre, sa proposition retenue de nouveau donnant le même ajustement.
 
-**Il n'existe aucune commande qui répartit les animateurs sur les tables.**
-L'opérateur désigne lui-même quelle personne anime quelle table (§ 2.1,
-étape 6). Une commande qui attribuerait un animateur par numéro de table le
-ferait sous une **seule** entrée d'historique : revenir sur elle, parce que douze
-attributions sur trente-trois sont fausses, emporterait aussi les vingt-et-une
-qui étaient bonnes — le § 8.3 restitue un état, il ne défait pas un geste.
+**Une seule commande répartit des animateurs sur les tables**, et seulement sur
+celles qu'elle crée : « Créer les tables… », pour les personnes que la marque de
+l'animation réservée dit à désigner (§ 2.1 étape 6, § 6.1). Une table existante,
+l'opérateur désigne lui-même qui l'anime (§ 2.1, étape 6). Une commande qui
+attribuerait un animateur par numéro de table le ferait sous une **seule**
+entrée d'historique : revenir sur elle, parce que douze attributions sur
+trente-trois sont fausses, emporterait aussi les vingt-et-une qui étaient bonnes
+— le § 8.3 restitue un état, il ne défait pas un geste. La création des tables
+n'y tombe pas : elle suit l'intention que l'opérateur a écrite, personne par
+personne, dans la marque, et ne touche que des tables qui n'existaient pas.
+« Défaire » la reprend entière, tables et animateurs ensemble, et rien
+d'autre ; une attribution à corriger se retire à la rangée « Animateurs » de
+sa table, sans toucher aux autres.
 
-Ce qui la remplace : le logiciel **montre le travail qui reste**, par des listes
-cliquables qui mènent à la place ou à la personne — la liste des **titres de
-place non pourvus** (§ 4.1), la liste des participants portant un **titre
-pressenti** (§ 4) qui ne sont encore réservés nulle part, et, sous un retenu, la
-liste **« En réserve dans le placement retenu »** : chaque personne que le
-retenu laisse en réserve, avec ses tours, une exclue, une supprimée ou une
-absente au tour n'y figurant pas ; un clic montre le premier de ces tours et la
-choisit. Elle n'existe pas sans retenu, et dit « Aucun. » sous un retenu qui
+Ce qui remplace la répartition : le logiciel **montre le travail qui reste**,
+par des listes cliquables qui mènent à la place ou à la personne — la liste des
+**titres de place non pourvus** (§ 4.1), la liste des participants portant un
+**titre pressenti** (§ 4) qui ne sont encore réservés nulle part, et, sous un
+retenu, la liste **« En réserve dans le placement retenu »** : chaque personne
+que le retenu laisse en réserve, avec ses tours, une exclue, une supprimée ou
+une absente au tour n'y figurant pas ; un clic montre le premier de ces tours et
+la choisit. Elle n'existe pas sans retenu, et dit « Aucun. » sous un retenu qui
 n'en laisse pas, ou qui se contredit.
 
 ### 5.9 Ce que le logiciel refuse, au moment du geste
@@ -2623,10 +2653,21 @@ elle —, puis la conséquence chiffrée avant d'appliquer :
 même tour ». Elle ajoute aux tables existantes ⌈manque / taille⌉ tables
 de cette taille et de la forme cochée, numérotées à la suite, posées sur des
 cases libres, en **une seule entrée d'historique** ; une table à la taille
-du défaut le suit, une autre est surchargée. Elle se refuse en lecture et
-sur un plan bloqué comme tout geste sur les tables, et quand plus rien ne
-manque. Après, l'avertissement tombe, et le focus passe à l'annonce des
-tables créées.
+du défaut le suit, une autre est surchargée. Dans la même entrée, elle
+désigne sur ces tables les personnes à désigner animatrices (§ 2.1 étape 6),
+et le libellé de l'entrée les compte. Tant qu'une personne est à désigner,
+l'aperçu le dit d'une seconde phrase, sous la première :
+
+> « 2 personnes à l'animation réservée y seront désignées animatrices ;
+> 1 restera à désigner. »
+
+La phrase ne dit pas le geste qui désigne les restantes : il dépend de la
+cause de chacune. La création se refuse en lecture et sur un plan bloqué comme
+tout geste sur les tables, et quand plus rien ne manque. Après, l'avertissement
+tombe, et le focus passe à l'annonce des tables créées, qui compte les
+animateurs désignés ; l'avertissement `ANIMATEURS_A_DESIGNER` nomme chaque
+personne laissée à désigner, avec sa cause, et le geste qui la désigne (§ 2.1
+étape 6). Créer une seule table ne désigne personne.
 
 **Les animateurs d'une table.** Chaque table de la liste porte une rangée
 « Animateurs » : ses animateurs (§ 2.1 étape 6) en pastilles, chacun suivi d'un
@@ -4847,9 +4888,10 @@ ne désigne personne** : il ne crée ni réservation ni titre, puisque les table
 qui recevront les animateurs ne sont pas encore connues. Quand la liste des
 participants, après l'import, compte des personnes marquées, non exclues, qui
 n'animent aucune table, le rapport d'import les compte, en information, et nomme
-le geste qui les désigne : la rangée « Animateurs » d'une table, dans « Tables
-et tours » (§ 2.1 étape 6, § 6.1). Une personne absente à un tour en est, et se
-désigne une fois sa présence rendue (§ 5.9).
+les gestes qui les désignent : « Créer les tables… », s'il manque des places,
+puis la rangée « Animateurs » d'une table, dans « Tables et tours » (§ 2.1
+étape 6, § 6.1). Une personne absente à un tour en est, et se désigne une fois
+sa présence rendue (§ 5.9).
 
 **La valeur de `presence`** se lit par une seule grammaire, celle que l'aperçu,
 l'export et le modèle emploient (§ 13.2) : sans égard à la casse, chaque morceau
@@ -5090,10 +5132,10 @@ première : une colonne ajoutée à la table paraît au guide, et une colonne
 sans texte de guide fait échouer une épreuve.
 Le texte d'une colonne suit ce paragraphe et le § 10.4 : une liste fermée —
 `exclu`, `animation_reservee`, `regle` — s'y donne en entier, la ligne
-`animation_reservee` dit que l'import ne désigne personne, et la ligne
-`conflit_organisation` dit qu'une virgule ne sépare pas deux organisations,
-qu'elle reste dans le nom. Changer de nature change le tableau, le bloc
-restant ouvert.
+`animation_reservee` dit que l'import ne désigne personne et que « Créer les
+tables… » désigne les personnes marquées, et la ligne `conflit_organisation` dit
+qu'une virgule ne sépare pas deux organisations, qu'elle reste dans le nom.
+Changer de nature change le tableau, le bloc restant ouvert.
 
 ### 10.2 La saisie
 
@@ -9510,8 +9552,11 @@ sa valeur soit encore relevée ; un seul reste entièrement ouvert.
    version exacte : Vite incorpore au paquet ce que la page importe, et rien
    d'autre. Leurs avis, et ceux des œuvres que leur construction publiée
    incorpore, vont dans `public/licences/TIERS.txt`, qui voyage avec la page.
-3. **TRANCHÉ — la désignation des animateurs est manuelle.** Il n'existe aucune
-   commande qui les répartit : § 5.8 et § 2.1, étape 6.
+3. **TRANCHÉ — la désignation des animateurs est manuelle, hors de la création
+   des tables.** Seule « Créer les tables… » répartit des animateurs, sur les
+   tables qu'elle crée, pour les personnes que la marque de l'animation
+   réservée dit à désigner. Une table existante, l'opérateur la pourvoit
+   lui-même : § 5.8 et § 2.1, étape 6.
 4. **TRANCHÉ — mesuré : le coût de la maximisation du plafond a priori** sur
    les itinéraires admissibles. Sous `node`, sur la grande démonstration et sa
    variante, le plafond a priori coûte de l'ordre d'un dixième de milliseconde,

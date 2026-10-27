@@ -199,10 +199,11 @@ cellule vide ne la marque pas, et toute autre valeur refuse la ligne, avec son
 motif. Un titre pressenti comme « animation de la table d’honneur » reste
 informatif : c’est cette colonne qui dit que la personne doit animer. L’import
 ne désigne personne, les tables n’étant pas encore connues ; le rapport compte
-les personnes marquées qui n’animent encore aucune table, et vous les désignez
-ensuite dans « Tables et tours », à la rangée « Animateurs » d’une table
-(étape 6) ; une personne absente à un tour s’y désigne une fois sa présence
-rendue. En mise à jour, une cellule vide garde la marque de la personne.
+les personnes marquées qui n’animent encore aucune table. « Créer les tables… »
+les désigne sur les tables qu’il crée (étape 4) ; sinon, vous les désignez dans
+« Tables et tours », à la rangée « Animateurs » d’une table (étape 6) ; une
+personne absente à un tour s’y désigne une fois sa présence rendue. En mise à
+jour, une cellule vide garde la marque de la personne.
 
 Un import est refusé sur un plan bloqué ; le message nomme la commande qui
 débloque. Un aperçu ouvert avant un changement du nombre de tours ne
@@ -449,6 +450,22 @@ taille du défaut le suivent ; d’une autre taille, elles sont surchargées.
 Sous une présence partielle, le compte est celui des personnes présentes au
 plus à un même tour. « Annuler » replie le formulaire sans rien créer.
 
+Les personnes marquées « Animation réservée » qui n’animent encore aucune
+table sont désignées sur les tables créées, dans la même entrée : une seconde
+phrase du formulaire le dit avant, par exemple « 2 personnes à l’animation
+réservée y seront désignées animatrices », et l’annonce des tables créées
+compte les animateurs désignés. Chacune reçoit son titre pressenti, ou
+« animateur » si elle n’en a pas, sur la table qui a le moins d’animateurs,
+en évitant d’y réunir deux animateurs d’une même organisation quand c’est
+possible ; chaque table garde au moins une chaise qui tourne. Une personne
+absente à un tour, une personne à qui une place est déjà réservée, ou celle
+qui ne trouve plus de place d’animateur n’est pas désignée : un avertissement
+la nomme, avec sa raison, et vous la désignez à la rangée « Animateurs » d’une
+table (étape 6) — une personne absente, une fois sa présence rendue à tous les
+tours ; une personne déjà réservée, à la table de sa réservation ou une fois
+celle-ci retirée. « Ajouter une table ronde » ou « carrée » ne désigne
+personne.
+
 La section « Plan » montre les tables à l’échelle :
 
 ![Le plan des tables, leur échelle graphique et la mention « disposition relative »](doc/captures/07-plan-tables.png)
@@ -488,9 +505,10 @@ décrivent plus la soirée, et le logiciel nomme ceux que le changement touche.
 
 ## Étape 6 — Désigner les animateurs, table par table
 
-Cette étape est facultative : une soirée sans animateur est valide. Le
-logiciel ne répartit pas les animateurs : vous désignez vous-même **quelle
-personne anime quelle table**.
+Cette étape est facultative : une soirée sans animateur est valide. Hors de
+« Créer les tables… », qui désigne les personnes marquées « Animation réservée »
+sur les tables qu’il crée (étape 4), le logiciel ne répartit pas les
+animateurs : vous désignez vous-même **quelle personne anime quelle table**.
 
 Choisissez la personne — dans la « Réserve » du plan, ou par « Voir sur le
 plan » depuis la grille —, puis la place : « Désigner » pose d’un seul geste une

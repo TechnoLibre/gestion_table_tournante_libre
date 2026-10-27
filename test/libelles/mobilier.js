@@ -36,6 +36,7 @@ export const EXEMPLES = [
   ['LISTE_SUR_VOISINE', { table: 4, voisine: 7, numero: 3, numeroVoisine: 5, remede: { commande: 'deplacerTable', arguments: { id: 7, position: { x: 1626, y: 0 } } } }],
   ['ENTREE_CREER_TABLE', { numero: 3 }],
   ['ENTREE_CREER_TABLES', { premier: 3, dernier: 24, sieges: 8 }],
+  ['ANIMATEURS_A_DESIGNER', { personnes: [{ participant: 4, personne: 'Anouk Bruyère', cause: 'tablesPleines' }] }],
   ['PLACES_SUFFISANTES', { places: 176, presentes: 171, remede: null }],
   ['ENTREE_SUPPRIMER_TABLE', { numero: 2, reservations: 2, titres: 1 }],
   ['ENTREE_DEPLACER_TABLE', { numero: 3 }],
@@ -108,6 +109,41 @@ export const TEXTES = [
   ['ENTREE_CREER_TABLES', { premier: 3, dernier: 24, sieges: 8 }, 'Ajouté les tables 3 à 24, de 8 places'],
   ['ENTREE_CREER_TABLES', { premier: 7, dernier: 7, sieges: 10 }, 'Ajouté la table 7, de 10 places'],
   ['ENTREE_CREER_TABLES', { premier: 2, dernier: 3, sieges: 8 }, 'Ajouté les tables 2 et 3, de 8 places'],
+  ['ENTREE_CREER_TABLES', { premier: 2, dernier: 3, sieges: 8, animateurs: 0 }, 'Ajouté les tables 2 et 3, de 8 places'],
+  [
+    'ENTREE_CREER_TABLES',
+    { premier: 3, dernier: 5, sieges: 6, animateurs: 2 },
+    'Ajouté les tables 3 à 5, de 6 places ; 2 animateurs désignés',
+  ],
+  ['ENTREE_CREER_TABLES', { premier: 7, dernier: 7, sieges: 4, animateurs: 1 }, 'Ajouté la table 7, de 4 places ; 1 animateur désigné'],
+  [
+    'ANIMATEURS_A_DESIGNER',
+    { personnes: [{ participant: 4, personne: 'Anouk Bruyère', cause: 'tablesPleines' }] },
+    "Une personne à l'animation réservée n'est pas désignée sur les tables créées : Anouk Bruyère (plus de place " +
+      "d'animateur aux tables créées). Désignez-la dans « Tables et tours », à la rangée « Animateurs » d'une table.",
+  ],
+  [
+    'ANIMATEURS_A_DESIGNER',
+    {
+      personnes: [
+        { participant: 2, personne: 'Théo Pervenche', cause: 'reservee' },
+        { participant: 3, personne: 'Ondine Lacasse', cause: 'absente', tours: [2, 3] },
+        { participant: 8, personne: 'Basile Mélèze', cause: 'tablesPleines' },
+      ],
+    },
+    "3 personnes à l'animation réservée ne sont pas désignées sur les tables créées : Théo Pervenche (une place lui " +
+      "est déjà réservée), Ondine Lacasse (absente aux tours 2 et 3) et Basile Mélèze (plus de place d'animateur aux " +
+      "tables créées). Désignez-les dans « Tables et tours », à la rangée « Animateurs » d'une table. Une personne " +
+      "absente à un tour s'y désigne une fois sa présence rendue à tous les tours. Une personne déjà réservée s'y " +
+      'désigne à la table de sa réservation, ou une fois celle-ci retirée.',
+  ],
+  [
+    'ANIMATEURS_A_DESIGNER',
+    { personnes: [{ participant: 3, personne: 'Ondine Lacasse', cause: 'absente', tours: [2] }] },
+    "Une personne à l'animation réservée n'est pas désignée sur les tables créées : Ondine Lacasse " +
+      "(absente au tour 2). Désignez-la dans « Tables et tours », à la rangée « Animateurs » d'une table. " +
+      "Une personne absente à un tour s'y désigne une fois sa présence rendue à tous les tours.",
+  ],
   [
     'PLACES_SUFFISANTES',
     { places: 176, presentes: 171, remede: null },

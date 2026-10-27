@@ -15,14 +15,15 @@
 // La marque de l'animation réservée (§ 4) dit qui est à désigner, jamais
 // qui anime : une personne marquée qui n'anime aucune table reste à
 // désigner (aDesigner), et une personne qui anime une table l'anime, marquée
-// ou non (tablesAnimees).
+// ou non (tablesAnimees). La création des tables qui manquent répartit les
+// personnes à désigner sur les tables qu'elle crée (repartitionALaCreation).
 //
 // Les commandes des places (designerAnimateurs, retirerAnimateur), la
-// fenêtre d'ajout des animateurs, la colonne « Animation » de la grille des
-// participants et le rapport d'import lisent ces fonctions. Elles ne modifient
-// rien de ce qu'elles reçoivent, et rendent leurs listes dans un ordre que
-// fixent la charge et des comparaisons numériques, jamais l'ordre des clés
-// d'un objet.
+// création des tables qui manquent et son aperçu, la fenêtre d'ajout des
+// animateurs, la colonne « Animation » de la grille des participants et le
+// rapport d'import lisent ces fonctions. Elles ne modifient rien de ce
+// qu'elles reçoivent, et rendent leurs listes dans un ordre que fixent la
+// charge et des comparaisons numériques, jamais l'ordre des clés d'un objet.
 import { ordreDesReservations, pourvoyeursDesTitres } from '../csv/import.js';
 import { estPresentAuTour } from '../moteur/presence.js';
 import { fautes } from '../stockage/placements.js';
@@ -169,6 +170,70 @@ export function aDesigner(charge) {
   return charge.participants
     .filter((personne) => personne.animationReservee === true && !personne.exclu && !animent.has(personne.id))
     .map(({ id }) => id);
+}
+
+/**
+ * La répartition des personnes à désigner (aDesigner) sur nombre tables
+ * neuves, sans titre ni réservation, de places sièges chacune : celles que
+ * « Créer les tables… » crée (§ 6.1). Les personnes passent par identifiant
+ * croissant. Chacune va à la table qui a le moins d'animateurs, puis à celle
+ * dont aucun animateur ne porte son organisation, puis à celle de plus petit
+ * rang ; une table reçoit au plus places − 1 animateurs, pour garder une
+ * chaise qui tourne (k_t < c_t, § 5.9). Restent à désigner, dans le même
+ * ordre, chacune avec sa cause : 'absente' {tours}, absente à un tour, ses
+ * tours d'absence croissants — sa réservation « tous les tours » ne
+ * pourvoirait aucun titre pour la soirée ; 'reservee', qui tient déjà une
+ * réservation, qu'une désignation mettrait à deux places d'un même tour ;
+ * 'tablesPleines', quand chaque table a déjà places − 1 animateurs. Une
+ * personne exclue n'est pas à désigner et n'y figure pas. rang est celui de
+ * la table parmi les tables neuves, de 0 à nombre − 1.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {number} nombre   le nombre de tables neuves
+ * @param {number} places   les sièges de chacune
+ * @returns {{affectations: Array<{participant: number, rang: number}>,
+ *   restantes: Array<{participant: number, cause: 'absente'|'reservee'|'tablesPleines', tours?: number[]}>}}
+ */
+export function repartitionALaCreation(charge, nombre, places) {
+  const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
+  const reservees = new Set(charge.reservations.map(({ participant }) => participant));
+  const tables = Array.from({ length: nombre }, () => ({ animateurs: 0, organisations: new Set() }));
+  const affectations = [];
+  const restantes = [];
+  for (const id of [...aDesigner(charge)].sort((a, b) => a - b)) {
+    const personne = personneDe.get(id);
+    const tours = toursDAbsence(personne, charge.evenement.tours);
+    if (tours.length > 0) {
+      restantes.push({ participant: id, cause: 'absente', tours });
+      continue;
+    }
+    if (reservees.has(id)) {
+      restantes.push({ participant: id, cause: 'reservee' });
+      continue;
+    }
+    const { organisation } = personne;
+    const partage = (table) => organisation !== null && table.organisations.has(organisation);
+    let choisi = -1;
+    tables.forEach((table, rang) => {
+      if (table.animateurs >= places - 1) return;
+      const meilleure = tables[choisi];
+      if (
+        choisi === -1 ||
+        table.animateurs < meilleure.animateurs ||
+        (table.animateurs === meilleure.animateurs && partage(meilleure) && !partage(table))
+      ) {
+        choisi = rang;
+      }
+    });
+    if (choisi === -1) {
+      restantes.push({ participant: id, cause: 'tablesPleines' });
+      continue;
+    }
+    tables[choisi].animateurs += 1;
+    if (organisation !== null) tables[choisi].organisations.add(organisation);
+    affectations.push({ participant: id, rang: choisi });
+  }
+  return { affectations, restantes };
 }
 
 /**

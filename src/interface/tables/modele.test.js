@@ -680,4 +680,23 @@ describe('les animateurs d’une table et la fenêtre d’ajout (§ 2.1 étape 6
     assert.equal(t('tables.animateurs.compte', { choisies: 1, libres: 1 }), '1 choisie \u{00B7} 1 place libre à cette table');
     assert.equal(t('tables.animateurs.compte', { choisies: 0, libres: 0 }), '0 choisie \u{00B7} 0 place libre à cette table');
   });
+
+  test('les phrases des animateurs à la création des tables, mot pour mot', () => {
+    assert.equal(
+      t('tables.manque.animateurs', { designees: 2, restantes: 0 }),
+      "2 personnes à l'animation réservée y seront désignées animatrices.",
+    );
+    assert.equal(
+      t('tables.manque.animateurs', { designees: 1, restantes: 3 }),
+      "1 personne à l'animation réservée y sera désignée animatrice ; 3 resteront à désigner.",
+    );
+    assert.equal(
+      t('tables.manque.animateurs', { designees: 0, restantes: 1 }),
+      "Aucune personne à l'animation réservée n'y sera désignée ; 1 restera à désigner.",
+    );
+    assert.equal(t('tables.manque.fait', { premier: 3, dernier: 5 }), 'Tables 3 à 5 ajoutées.');
+    assert.equal(t('tables.manque.fait', { premier: 3, dernier: 5, animateurs: 0 }), 'Tables 3 à 5 ajoutées.');
+    assert.equal(t('tables.manque.fait', { premier: 3, dernier: 4, animateurs: 2 }), 'Tables 3 et 4 ajoutées, 2 animateurs désignés.');
+    assert.equal(t('tables.manque.fait', { premier: 7, dernier: 7, animateurs: 1 }), 'Table 7 ajoutée, 1 animateur désigné.');
+  });
 });

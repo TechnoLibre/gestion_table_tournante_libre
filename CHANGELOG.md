@@ -490,20 +490,20 @@
   dit sous son numéro, « 2 conflits restants », et une réservation ou un
   placement à la main qui en crée un est accepté, la table signalée et son
   panneau nommant la paire.
-- **L'animation réservée.** Une personne peut être marquée à désigner
-  animatrice d'une table : la case « Animation réservée » de sa fiche la pose
-  ou la retire, en une entrée d'historique que « Défaire » reprend, et la
-  colonne `animation_reservee` du CSV l'importe et l'exporte, après les
-  conflits, par la même liste fermée qu'« exclu » — « oui », « o », « vrai »,
-  « 1 » ou « x » ; « non », « n », « faux », « 0 » ou vide —, toute autre
-  valeur refusant la ligne avec son motif. Le modèle à télécharger et le guide
-  de l'import la portent. La marque ne fait animer personne : l'import ne
-  désigne aucune table, et son rapport compte les personnes marquées qui
-  n'animent encore aucune table, avec le geste qui les désigne, la rangée
+- **L'animation réservée.** Une personne peut être marquée à désigner animatrice
+  d'une table : la case « Animation réservée » de sa fiche la pose ou la retire,
+  en une entrée d'historique que « Défaire » reprend, et la colonne
+  `animation_reservee` du CSV l'importe et l'exporte, après les conflits, par la
+  même liste fermée qu'« exclu » — « oui », « o », « vrai », « 1 » ou « x » ;
+  « non », « n », « faux », « 0 » ou vide —, toute autre valeur refusant la
+  ligne avec son motif. Le modèle à télécharger et le guide de l'import la
+  portent. La marque ne fait animer personne : l'import ne désigne aucune table,
+  et son rapport compte les personnes marquées qui n'animent encore aucune
+  table, avec les gestes qui les désignent, « Créer les tables… » et la rangée
   « Animateurs » de « Tables et tours ». La grille des participants gagne la
-  colonne « Animation », juste après le titre pressenti : les numéros des
-  tables que la personne anime, « 3 » ou « 3, 5 », ou « à désigner » sous la
-  marque ; elle se lit seulement, et l'export ne l'écrit pas.
+  colonne « Animation », juste après le titre pressenti : les numéros des tables
+  que la personne anime, « 3 » ou « 3, 5 », ou « à désigner » sous la marque ;
+  elle se lit seulement, et l'export ne l'écrit pas.
 - **Le logo d'une personne.** Il se pose dans sa fiche, sous la rubrique
   « Logo » : le bouton « Logo » choisit une image PNG, JPEG, GIF, WebP, AVIF,
   BMP, ICO ou SVG, que le logiciel range en PNG dans le sous-dossier `logo` du
@@ -596,13 +596,23 @@
 - Quand les places manquent, l'avis qui offre « Ouvrir les tables » offre aussi
   « Créer les tables… », et la section « Tables et tours » offre la même
   commande tant qu'il en manque. Elle déplie un petit formulaire : le nombre de
-  places par table, pré-rempli du défaut de l'événement, puis ce que la
-  création fera, « 22 tables de 8 places : 176 places pour 171 participants ».
-  « Créer » ajoute aux tables existantes juste assez de tables de cette taille
-  pour asseoir chacun, numérotées à la suite, en une seule entrée de
-  l'historique que « Défaire » ou Ctrl+Z retire ; l'avis tombe, et une annonce
-  nomme les tables créées. Sous une présence partielle, le compte est celui des
-  personnes présentes au plus à un même tour.
+  places par table, pré-rempli du défaut de l'événement, puis ce que la création
+  fera, « 22 tables de 8 places : 176 places pour 171 participants ». « Créer »
+  ajoute aux tables existantes juste assez de tables de cette taille pour
+  asseoir chacun, numérotées à la suite, en une seule entrée de l'historique que
+  « Défaire » ou Ctrl+Z retire ; l'avis tombe, et une annonce nomme les tables
+  créées. Sous une présence partielle, le compte est celui des personnes
+  présentes au plus à un même tour. Dans la même entrée, les personnes marquées
+  « animation réservée » qui n'animent aucune table sont désignées animatrices
+  des tables créées, chacune sous son titre pressenti ou « animateur », à la
+  table qui en a le moins d'abord, puis à celle sans animateur de son
+  organisation, et chaque table garde au moins une chaise qui tourne. Le
+  formulaire dit combien en seront désignées, l'annonce compte les animateurs
+  désignés, et un avertissement nomme chaque personne qui reste à désigner —
+  absente à un tour, déjà réservée, ou faute de place d'animateur — avec la
+  rangée « Animateurs » où la désigner et, selon sa raison, ce qui doit
+  précéder : sa présence rendue à tous les tours, ou la table de sa
+  réservation. « Ajouter une table ronde » ou « carrée » ne désigne personne.
 - Le formulaire « Créer les tables… » offre le choix de la forme, « Rondes » ou
   « Carrées » : celle de la table la plus récemment créée est cochée d'abord,
   « Rondes » quand l'événement n'a aucune table. Le fichier de l'événement ne

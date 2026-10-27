@@ -139,14 +139,35 @@ export const TABLE = new Map([
         ? `${compte(presentes, 'personne présente', 'personnes présentes')} au plus à un même tour`
         : compte(presentes, 'participant', 'participants')),
   ],
+  // La seconde phrase de l'aperçu, quand des personnes sont à désigner :
+  // combien la création désignera sur les tables créées (designees), et
+  // combien resteront à désigner (restantes), sans le geste qui les
+  // désigne : il dépend de la cause de chacune, que l'avertissement de la
+  // création donne (ANIMATEURS_A_DESIGNER).
+  [
+    'tables.manque.animateurs',
+    ({ designees, restantes }) =>
+      (designees === 0
+        ? "Aucune personne à l'animation réservée n'y sera désignée"
+        : compte(
+            designees,
+            "personne à l'animation réservée y sera désignée animatrice",
+            "personnes à l'animation réservée y seront désignées animatrices",
+          )) +
+      (restantes === 0
+        ? '.'
+        : ` ; ${compte(restantes, 'restera', 'resteront')} à désigner.`),
+  ],
   ['tables.manque.creer', ({ tables }) => (tables <= 1 ? 'Créer la table' : `Créer les ${tables} tables`)],
   ['tables.manque.annuler', 'Annuler'],
-  // L'annonce du geste accepté : les tables créées, de premier à dernier.
+  // L'annonce du geste accepté : les tables créées, de premier à dernier,
+  // puis les animateurs qu'il y a désignés, rien dit sans eux.
   [
     'tables.manque.fait',
-    ({ premier, dernier }) => {
-      if (premier === dernier) return `Table ${premier} ajoutée.`;
-      return `Tables ${premier} ${dernier === premier + 1 ? 'et' : 'à'} ${dernier} ajoutées.`;
+    ({ premier, dernier, animateurs = 0 }) => {
+      const designes = animateurs > 0 ? `, ${compte(animateurs, 'animateur désigné', 'animateurs désignés')}` : '';
+      if (premier === dernier) return `Table ${premier} ajoutée${designes}.`;
+      return `Tables ${premier} ${dernier === premier + 1 ? 'et' : 'à'} ${dernier} ajoutées${designes}.`;
     },
   ],
 

@@ -10,11 +10,12 @@
 // libellés figés du journal. Les détails désignent tables et personnes par
 // identifiant : le refus se pose sur la table qu'il concerne, et son texte ne
 // les nomme pas ; seuls les textes de la présence que le nombre de tours
-// rogne ou n'étend pas nomment les personnes, que la commande lit dans la
+// rogne ou n'étend pas, et celui des animateurs que la création des tables
+// laisse à désigner, nomment les personnes, que la commande lit dans la
 // charge. Un libellé figé reçoit le numéro de table que la commande lit dans
 // la charge.
 import { POIDS_MAX } from '../../moteur/criteres.js';
-import { cite, compte, enumeration, nomDans } from './aides.js';
+import { auxToursNommes, cite, compte, enumeration, nomDans } from './aides.js';
 
 // Le nom de chaque réglage que modifierReglage change, tel que le journal le
 // fige (§ 5.3, § 5.10).
@@ -90,6 +91,27 @@ const lieuObjectif = (numero, tour) => (tour === null ? `Table ${numero}` : `Tab
 
 // Ce qu'un avis ou un refus dit du tour de l'objectif qu'il désigne.
 const aCeTour = (tour) => (tour === null ? 'pour la soirée' : `au tour ${tour}`);
+
+// La cause qui laisse une personne à désigner à la création des tables
+// (repartitionALaCreation) : son absence et ses tours, une réservation
+// qu'elle tient déjà, ou des tables créées qui ont toutes leur compte
+// d'animateurs. Une cause inconnue lève.
+const CAUSES_NON_DESIGNEE = new Map([
+  ['absente', (tours) => `absente ${auxToursNommes(tours)}`],
+  ['reservee', () => 'une place lui est déjà réservée'],
+  ['tablesPleines', () => "plus de place d'animateur aux tables créées"],
+]);
+const causeNonDesignee = (cause, tours) => nomDans(CAUSES_NON_DESIGNEE, cause, 'cause')(tours);
+
+// Ce qui précède la désignation à la rangée « Animateurs », par cause : une
+// absente à un tour y est refusée tant que sa présence ne couvre pas tous
+// les tours, une personne réservée l'est à toute autre table que celle de sa
+// réservation. Faute de place (tablesPleines), qui n'y figure pas, la
+// personne se désigne sans préalable.
+const PREALABLES_NON_DESIGNEE = new Map([
+  ['absente', "Une personne absente à un tour s'y désigne une fois sa présence rendue à tous les tours."],
+  ['reservee', "Une personne déjà réservée s'y désigne à la table de sa réservation, ou une fois celle-ci retirée."],
+]);
 
 // La valeur d'un réglage dans un libellé : activé ou désactivé pour un
 // interrupteur, le nombre sinon.
@@ -197,6 +219,28 @@ export const TABLE = new Map([
       `une liste de noms passe sur l'autre table. Déplacer la table ${numeroVoisine} la pose sur une case libre.`,
   ],
 
+  // --- Les animateurs à désigner à la création des tables (§ 6.1) -----------
+  // ANIMATEURS_A_DESIGNER {personnes: [{participant, personne, cause,
+  // tours?}]} : les personnes marquées que la création des tables laisse à
+  // désigner, chacune nommée, suivie de sa cause, puis le geste qui les
+  // désigne et, une fois par cause présente, ce qui doit le précéder
+  // (PREALABLES_NON_DESIGNEE), dans l'ordre de cette table.
+  [
+    'ANIMATEURS_A_DESIGNER',
+    ({ personnes }) => {
+      const une = personnes.length === 1;
+      const termes = personnes.map(({ personne, cause, tours }) => `${personne} (${causeNonDesignee(cause, tours)})`);
+      const causes = new Set(personnes.map(({ cause }) => cause));
+      const prealables = [...PREALABLES_NON_DESIGNEE].filter(([cause]) => causes.has(cause)).map(([, texte]) => ` ${texte}`);
+      return (
+        `${une ? 'Une personne' : `${personnes.length} personnes`} à l'animation réservée ` +
+        `${une ? "n'est pas désignée" : 'ne sont pas désignées'} sur les tables créées : ${enumeration(termes)}. ` +
+        `Désignez-${une ? 'la' : 'les'} dans « Tables et tours », à la rangée « Animateurs » d'une table.` +
+        prealables.join('')
+      );
+    },
+  ],
+
   // --- Les objectifs des tables (§ 4.5, § 5.9) -------------------------------
   ['OBJECTIF_HORS_SOIREE', ({ tour }) => `La soirée n'a pas de tour ${tour} : un objectif vise la soirée ou l'un de ses tours.`],
   // Le geste « Retirer l'objectif » ne se dit qu'avec son remède : un couple
@@ -258,13 +302,15 @@ export const TABLE = new Map([
   // --- Les libellés figés du journal (§ 8.2) ---------------------------------
   ['ENTREE_CREER_TABLE', ({ numero }) => `Ajouté la table ${numero}`],
   // Les tables qui comblent le manque, numérotées de premier à dernier.
+  // animateurs : ceux que la création y désigne, rien dit sans eux.
   [
     'ENTREE_CREER_TABLES',
-    ({ premier, dernier, sieges }) => {
+    ({ premier, dernier, sieges, animateurs = 0 }) => {
       const places = compte(sieges, 'place', 'places');
-      if (premier === dernier) return `Ajouté la table ${premier}, de ${places}`;
+      const designes = animateurs > 0 ? ` ; ${compte(animateurs, 'animateur désigné', 'animateurs désignés')}` : '';
+      if (premier === dernier) return `Ajouté la table ${premier}, de ${places}${designes}`;
       const lien = dernier === premier + 1 ? 'et' : 'à';
-      return `Ajouté les tables ${premier} ${lien} ${dernier}, de ${places}`;
+      return `Ajouté les tables ${premier} ${lien} ${dernier}, de ${places}${designes}`;
     },
   ],
   [

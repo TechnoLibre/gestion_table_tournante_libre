@@ -21,13 +21,16 @@
 // Une table a un identifiant, tiré de prochainsIds.table, qui ne revient
 // jamais, et un numéro affiché, le plus grand plus un, qui ne se renumérote
 // pas (§ 4). creerTable crée une table, ou, avec combler, en une seule
-// entrée, les tables d'une taille donnée qui assoient chacun : le manque est
-// celui de l'avis PLACES_MANQUANTES, lu dans capaciteParTour. Les capacités
-// passent par controlerCapacite (capacite.js) ; le retenu les suit, ses
-// surnuméraires versés en réserve, et une table créée y entre, vide à chaque
-// tour : il ne gagne aucune raison de dérive. Une proposition ne se réécrit
-// jamais : elle dérive (§ 8.9, § 9). Supprimer une table et changer les tours
-// laissent propositions et retenu en dérive.
+// entrée, les tables d'une taille donnée qui assoient chacun, et les
+// animateurs à désigner qu'elles reçoivent (designerALaCreation,
+// commandes_places.js) : le manque est celui de l'avis PLACES_MANQUANTES, lu
+// dans capaciteParTour. Les capacités passent par controlerCapacite
+// (capacite.js) ; le retenu les suit, ses surnuméraires versés en réserve,
+// et une table créée y entre, vide à chaque tour : elle ne lui donne aucune
+// raison de dérive, et une désignation qui la suit pèse sur lui comme toute
+// réservation (§ 9). Une proposition ne se réécrit jamais : elle dérive
+// (§ 8.9, § 9). Supprimer une table et changer les tours laissent
+// propositions et retenu en dérive.
 import { constante } from '../geometrie/constantes.js';
 import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js';
 import { CRITERES, MODES_OBJECTIFS, POIDS_MAX, seulsASonPalier, verifierPriorites } from '../moteur/criteres.js';
@@ -46,8 +49,10 @@ import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { fautes } from '../stockage/placements.js';
 import { presencesSousTours } from '../stockage/presence.js';
+import { repartitionALaCreation } from './animateurs.js';
 import { bilanChangementDefaut, capaciteParTour } from './bilans.js';
 import { controlerCapacite, lireEntier, retenuAuxCapacites } from './capacite.js';
+import { designerALaCreation } from './commandes_places.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { avisDeLObjectif, avisObjectifs, etiquettesDeLEvenement, ordreDesObjectifs, recevoirEtiquettes } from './objectifs.js';
@@ -259,8 +264,21 @@ export function formeParDefaut(charge) {
 // MOINS_DE_DEUX, TROP_DE_PLACES {max}, remède null. Sans manque :
 // PLACES_SUFFISANTES {places, presentes}, remède null. Un compteur qui ne
 // suffit pas à toutes refuse COMPTEUR_SATURE, et rien ne se crée. Une
-// table à la taille du défaut le suit ; une autre est surchargée. Au-delà
-// du seuil lisible, AU_DELA_LISIBLE {seuil}, comme une saisie de places.
+// table à la taille du défaut le suit ; une autre est surchargée.
+//
+// Dans la même entrée, les personnes à désigner animatrices (aDesigner)
+// sont désignées sur les tables créées, selon repartitionALaCreation, par
+// designerALaCreation : chacune reçoit une réservation « tous les tours »
+// et son titre pressenti, ou le titre par défaut, au plus petit siège libre
+// de sa table. Le libellé compte les animateurs désignés. Une désignation
+// suit la règle du § 5.9 : l'écart des places manquantes ne bouge sous
+// aucune réservation, et le bilan reste juste. Avertissements, dans cet
+// ordre : AU_DELA_LISIBLE {seuil} au-delà du seuil lisible, comme une
+// saisie de places ; ceux des désignations ; puis ANIMATEURS_A_DESIGNER
+// {personnes: [{participant, personne, cause, tours?}]}, chaque personne
+// que la répartition laisse à désigner, nommée par son nom affiché, avec sa
+// cause et, absente, ses tours d'absence. Elles n'arrêtent pas la
+// création : la rangée « Animateurs » d'une table les désigne ensuite.
 function creerTablesManquantes(charge, forme, saisie) {
   const sieges = entierSaisi(saisie);
   if (sieges < PLACES_TABLE.min) throw refus('MOINS_DE_DEUX');
@@ -271,12 +289,25 @@ function creerTablesManquantes(charge, forme, saisie) {
   const suivante = copieDeTravail(charge);
   const dansLeRetenu = retenuLisible(suivante);
   const surcharge = sieges === charge.evenement.siegesParDefaut ? null : sieges;
+  const premierId = suivante.prochainsIds.table;
   const numeros = Array.from({ length: bilan.tables }, () => poserTable(suivante, forme, surcharge, dansLeRetenu));
+  const { affectations, restantes } = repartitionALaCreation(charge, bilan.tables, sieges);
+  const designees = designerALaCreation(
+    suivante,
+    affectations.map(({ participant, rang }) => ({ participant, table: premierId + rang })),
+  );
   const seuil = constante(SEUIL_LISIBLE.nom);
+  const avertissements = sieges > seuil ? [{ code: 'AU_DELA_LISIBLE', details: { seuil } }] : [];
+  avertissements.push(...designees.avertissements);
+  if (restantes.length > 0) {
+    const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
+    const personnes = restantes.map(({ participant, ...cause }) => ({ participant, personne: nomAffiche(personneDe.get(participant)), ...cause }));
+    avertissements.push({ code: 'ANIMATEURS_A_DESIGNER', details: { personnes } });
+  }
   return {
-    charge: suivante,
-    libelle: libelle('ENTREE_CREER_TABLES', { premier: numeros[0], dernier: numeros.at(-1), sieges }),
-    avertissements: sieges > seuil ? [{ code: 'AU_DELA_LISIBLE', details: { seuil } }] : [],
+    charge: designees.charge,
+    libelle: libelle('ENTREE_CREER_TABLES', { premier: numeros[0], dernier: numeros.at(-1), sieges, animateurs: affectations.length }),
+    avertissements,
   };
 }
 
@@ -286,8 +317,10 @@ function creerTablesManquantes(charge, forme, saisie) {
  * grande, posée sur la première case libre (caseLibre) de la grille des
  * démonstrations, au pas que donnent les tables posées, chacune à sa
  * capacité, et la nouvelle. Sous un retenu lisible, elle y entre avec sa
- * capacité et une liste vide à chaque tour. Avec combler, les places par
- * table saisies, les tables qui comblent le manque (creerTablesManquantes).
+ * capacité et une liste vide à chaque tour ; elle ne reçoit aucun animateur.
+ * Avec combler, les places par table saisies, les tables qui comblent le
+ * manque et les animateurs à désigner qu'elles reçoivent
+ * (creerTablesManquantes).
  */
 function creerTable(charge, { forme, combler } = {}) {
   exigerModifiable(charge);

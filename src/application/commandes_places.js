@@ -493,6 +493,36 @@ function designerAnimateurs(charge, { table: idTable, participants, libelle: sai
   };
 }
 
+/**
+ * Les désignations que « Créer les tables… » fait sur les tables qu'il vient
+ * de poser (§ 2.1 étape 6, § 6.1) : designer pour chaque {participant,
+ * table} reçu, dans l'ordre reçu, chacune sur la charge que la précédente
+ * laisse, sans siège — le plus petit siège sans titre de la table neuve. Le
+ * titre est le titre pressenti de la personne quand il ne se réduit pas à
+ * des blancs, sinon le titre par défaut (places.titreParDefaut), comme pour
+ * un lot (titreDuLot). La création, qui répartit (repartitionALaCreation,
+ * animateurs.js), n'envoie que des personnes présentes à chaque tour, sans
+ * réservation, sous la garde k_t < c_t : designer ne les refuse pas, et un
+ * refus remonterait tel quel. Rend la charge et les avertissements cumulés
+ * (avertissementsDuLot) ; la charge reçue reste intacte.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {Array<{participant: number, table: number}>} affectations
+ * @returns {{charge: import('../stockage/types.js').Charge, avertissements: Array<{code: string, details: Object}>}}
+ */
+export function designerALaCreation(charge, affectations) {
+  const defaut = libelle('places.titreParDefaut');
+  let courante = charge;
+  const listes = [];
+  for (const { participant, table } of affectations) {
+    const personne = personneDe(courante, participant);
+    const rendu = designer(courante, { participant, table, siege: null, libelle: titreDuLot(personne, defaut) });
+    courante = rendu.charge;
+    listes.push(rendu.avertissements);
+  }
+  return { charge: courante, avertissements: avertissementsDuLot(listes) };
+}
+
 // Le premier de titres dans l'ordre canonique : le plus petit siège, puis
 // le libellé, comparé unité UTF-16 par unité, puis le rang dans
 // charge.titres.

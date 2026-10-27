@@ -11,8 +11,9 @@
   // de la mise à jour, chacune à son rang, avec les personnes qu'elle
   // désigne. Un import qui n'a rien écrit le dit. Un import de participants
   // qui laisse des personnes marquées « animation réservée » sans table à
-  // animer les compte, en information, avec le geste qui les désigne :
-  // l'import ne désigne personne (§ 10.1).
+  // animer les compte, en information, avec les gestes qui les désignent,
+  // « Créer les tables… » et la rangée « Animateurs » : l'import ne désigne
+  // personne (§ 10.1).
   //
   // Le rapport est une carte titrée ; ses comptes, des chiffres tabulaires
   // en tête de chaque libellé ; un import qui n'a rien écrit le dit en

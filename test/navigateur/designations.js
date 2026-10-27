@@ -205,7 +205,7 @@ const ENTREES = [
   ['data-partie', 'plan : une partie d’une ligne de liste ou du fantôme', null],
   ['data-pastille', 'plan : la pastille d’une table', null],
   ['data-pastille-instant', 'événement : une pastille d’une ligne du panneau d’historique', ['courant', 'abandonne', 'jalon']],
-  ['data-phrase', 'une phrase : diagnostic ou défaut des tables', ['']],
+  ['data-phrase', 'une phrase : diagnostic ou défaut des tables ; création des tables, celle des animateurs par son nom', ['', 'animateurs']],
   [
     'data-phrase-comparaison',
     'qualité : une phrase de la vue de comparaison, par son code — effectifs, bascule, domine, indiscernables, peuDeValeurs, refus, populations, seul, rang1',

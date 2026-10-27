@@ -37,6 +37,7 @@ import { SUFFIXES, cleEvenement } from '../stockage/noms.js';
 import { gelerPropositions } from '../stockage/gel.js';
 import { derive, examiner, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
+import { aDesigner, tablesAnimees } from './animateurs.js';
 import { invariantViole } from './avertissements.js';
 import { COMMANDES, appliquerCommande } from './commandes.js';
 import { COMMANDES_MOBILIER, PLACES_TABLE, bilanTablesManquantes, formeParDefaut } from './commandes_mobilier.js';
@@ -720,7 +721,7 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     for (const autre of autres) assert.equal(bilanTablesManquantes(autre, 2).manque, manqueDuMoteur(autre));
   });
 
-  test('sous un retenu lisible, chaque table créée y entre, à sa capacité, vide à chaque tour', () => {
+  test('sous un retenu lisible, chaque table créée y entre, à sa capacité, vide à chaque tour ; une désignation y reste non honorée', () => {
     const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 20 });
     const listes = [[suite(1, 8), suite(9, 16)], [suite(9, 16), suite(1, 8)]];
     placer(charge, listes, { id: 1, retenu: true });
@@ -730,6 +731,21 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     for (const { sieges } of apres.retenu.placement) assert.deepEqual(sieges.slice(2), [[], []]);
     assert.deepEqual(fautes(apres.retenu), []);
     assert.deepEqual(derive(apres.retenu, apres), []);
+    // Une personne assise au retenu et marquée est désignée à une table
+    // créée : le retenu ne bouge pas, sans dérive, et sa réservation n'y est
+    // pas honorée, comme toute réservation posée sous un retenu.
+    charge.participants[0].animationReservee = true;
+    const { charge: designee } = accepter('creerTable', charge, { forme: 'ronde', combler: 3 });
+    assert.deepEqual(designee.reservations, [resa(1, 3, 1)]);
+    assert.deepEqual(designee.retenu, apres.retenu);
+    assert.deepEqual(derive(designee.retenu, designee), []);
+    assert.deepEqual(
+      invariantViole(designee).details.violations.map(({ code, participant, table, tour }) => [code, participant, table, tour]),
+      [
+        ['RESERVATION', 1, 3, 1],
+        ['RESERVATION', 1, 3, 2],
+      ],
+    );
   });
 
   test('au-delà du seuil lisible, la création avertit AU_DELA_LISIBLE, comme une saisie de places', () => {
@@ -737,6 +753,59 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     const { avertissements } = accepter('creerTable', chargeDe({ n: 40 }), { forme: 'ronde', combler: seuil + 1 });
     assert.deepEqual(avertissements, [{ code: 'AU_DELA_LISIBLE', details: { seuil } }]);
     assert.deepEqual(accepter('creerTable', chargeDe({ n: 40 }), { forme: 'ronde', combler: seuil }).avertissements, []);
+  });
+
+  test('les personnes à désigner sont désignées sur les tables créées, en la même entrée : titre pressenti sans ses blancs, sinon le titre par défaut, au siège 1', () => {
+    // Une table de 8 pour 20 personnes : 3 tables de 4. Iris porte un titre
+    // pressenti, Théo aucun ; Ondine, non marquée, n'est pas désignée.
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 20 });
+    charge.participants[0] = { ...charge.participants[0], titrePressenti: '  animation du coin lecture ', animationReservee: true };
+    charge.participants[1].animationReservee = true;
+    const { charge: apres, libelle: texte, avertissements } = accepter('creerTable', charge, { forme: 'ronde', combler: 4 });
+    assert.equal(texte, 'Ajouté les tables 2 à 4, de 4 places ; 2 animateurs désignés');
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual(apres.reservations, [resa(1, 2, 1), resa(2, 3, 1)]);
+    assert.deepEqual(apres.titres, [
+      { table: 2, siege: 1, libelle: 'animation du coin lecture' },
+      { table: 3, siege: 1, libelle: libelle('places.titreParDefaut') },
+    ]);
+    assert.deepEqual([...tablesAnimees(apres)], [[1, [2]], [2, [3]]]);
+    assert.deepEqual(aDesigner(apres), []);
+    assert.equal(manqueDuMoteur(apres), 0);
+    // Sans personne à désigner, le libellé ne parle pas d'animateur.
+    assert.equal(accepter('creerTable', chargeDe({ tables: [{ id: 1 }], n: 20 }), { forme: 'ronde', combler: 4 }).libelle, 'Ajouté les tables 2 à 4, de 4 places');
+  });
+
+  test('une table créée garde une chaise qui tourne ; ANIMATEURS_A_DESIGNER nomme chaque personne laissée, avec sa cause ; une exclue est passée sans mot', () => {
+    // Une table de 2 réservée par Théo, 12 personnes dont Pivoine exclue :
+    // 9 places manquent, 5 tables de 2, un animateur chacune.
+    const charge = chargeDe({ tables: [{ id: 1, sieges: 2 }], n: 12, exclus: [10], reservations: [resa(2, 1, null)] });
+    for (const id of [1, 2, 3, 4, 5, 6, 7, 8, 10]) charge.participants[id - 1].animationReservee = true;
+    charge.participants[2].presence = [1];
+    const { charge: apres, libelle: texte, avertissements } = accepter('creerTable', charge, { forme: 'ronde', combler: 2 });
+    assert.equal(texte, 'Ajouté les tables 2 à 6, de 2 places ; 5 animateurs désignés');
+    assert.deepEqual([...tablesAnimees(apres)], [[1, [2]], [4, [3]], [5, [4]], [6, [5]], [7, [6]]]);
+    assert.deepEqual(avertissements, [
+      {
+        code: 'ANIMATEURS_A_DESIGNER',
+        details: {
+          personnes: [
+            { participant: 2, personne: 'Théo Pervenche', cause: 'reservee' },
+            { participant: 3, personne: 'Ondine Lacasse', cause: 'absente', tours: [2] },
+            { participant: 8, personne: 'Basile Mélèze', cause: 'tablesPleines' },
+          ],
+        },
+      },
+    ]);
+    assert.deepEqual(aDesigner(apres), [2, 3, 8]);
+  });
+
+  test('« Ajouter une table », sans combler, ne désigne personne', () => {
+    const charge = chargeDe({ n: 4 });
+    charge.participants[0].animationReservee = true;
+    const { charge: apres, libelle: texte, avertissements } = accepter('creerTable', charge, { forme: 'ronde' });
+    assert.equal(texte, 'Ajouté la table 1');
+    assert.deepEqual([apres.reservations, apres.titres, avertissements], [[], [], []]);
   });
 
   test('refus : aucune place ne manque, PLACES_SUFFISANTES ; une taille hors des bornes ou non entière ; un plan bloqué ; un compteur saturé', () => {
@@ -763,6 +832,19 @@ describe('mobilier : créer les tables qui manquent (§ 6.1)', () => {
     refuse(() => COMMANDES.get('creerTable')(saturee, { forme: 'ronde', combler: 5 }), 'COMPTEUR_SATURE', { compteur: 'table', remede: null });
     assert.equal(accepter('creerTable', saturee, { forme: 'ronde', combler: 9 }).charge.tables.length, 1);
     assert.throws(() => bilanTablesManquantes(manque, '8'), TypeError);
+  });
+
+  test('par la séance : tables et désignations en une entrée, que défaire reprend ensemble', async () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 12 });
+    charge.participants[3].animationReservee = true;
+    const { seance, entrees } = await seanceSur(charge);
+    const avant = entrees();
+    const rendu = await seance.executer('creerTable', { forme: 'ronde', combler: 4 });
+    assert.equal(rendu.libelle, 'Ajouté la table 2, de 4 places ; 1 animateur désigné');
+    assert.equal(entrees() - avant, 1);
+    assert.deepEqual(seance.charge.reservations, [resa(4, 2, 1)]);
+    await seance.defaire();
+    assert.deepEqual([seance.charge.tables.length, seance.charge.reservations, seance.charge.titres], [1, [], []]);
   });
 
   test('par la séance : une entrée du journal, l’avis tombe, défaire rend les tables d’avant ; en lecture, MODE_LECTURE sans écriture', async () => {

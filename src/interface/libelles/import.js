@@ -102,8 +102,8 @@ export const TABLE = new Map([
     'import.guide.colonne.animationReservee',
     "« oui », « o », « vrai », « 1 » ou « x » : la personne est à désigner animatrice d'une table ; « non », « n », " +
       "« faux », « 0 » ou une cellule vide : elle ne l'est pas. En mise à jour, une cellule vide garde sa marque, " +
-      "« non » la retire. L'import ne désigne personne. La casse et les accents ne comptent pas ; toute autre " +
-      'valeur refuse la ligne.',
+      "« non » la retire. L'import ne désigne personne : « Créer les tables\u{2026} » désigne les personnes marquées " +
+      "sur les tables qu'il crée. La casse et les accents ne comptent pas ; toute autre valeur refuse la ligne.",
   ],
   ['import.guide.colonne.table', "Le numéro de la table, tel que le plan l'affiche."],
   ['import.guide.colonne.tour', 'Le tour, de 1 au nombre de tours ; vide pour toute la soirée.'],
@@ -305,17 +305,21 @@ export const TABLE = new Map([
   ['import.rapport.reservationsRetirees', ({ n }) => accorde(n, 'réservation retirée', 'réservations retirées')],
   ['import.rapport.rienEcrit', "Rien n'a changé dans la liste : seules des lignes refusées restent à lire."],
   // Les personnes marquées « animation réservée » qui n'animent aucune table
-  // après l'import (aDesigner) : leur nombre précède le texte.
+  // après l'import (aDesigner) : leur nombre précède le texte, puis les deux
+  // gestes qui les désignent.
   ['import.rapport.animations', 'Animation réservée'],
   [
     'import.rapport.aDesigner',
     ({ n }) =>
       accorde(
         n,
-        "personne porte une animation réservée sans animer de table : désignez-la dans « Tables et tours », à la " +
-          "rangée « Animateurs » d'une table.",
-        "personnes portent une animation réservée sans animer de table : désignez-les dans « Tables et tours », à " +
-          "la rangée « Animateurs » d'une table.",
+        "personne porte une animation réservée sans animer de table : s'il manque des places, « Créer les " +
+          "tables\u{2026} » la désigne sur une table qu'il crée ; sinon, désignez-la dans « Tables et tours », à la " +
+          "rangée « Animateurs » d'une table. Une personne absente à un tour se désigne une fois sa présence rendue.",
+        "personnes portent une animation réservée sans animer de table : s'il manque des places, « Créer les " +
+          "tables\u{2026} » les désigne sur les tables qu'il crée ; sinon, désignez-les dans « Tables et tours », à " +
+          "la rangée « Animateurs » d'une table. Une personne absente à un tour se désigne une fois sa présence " +
+          'rendue.',
       ),
   ],
   ['import.rapport.objectifsAjoutes', ({ n }) => accorde(n, 'objectif ajouté', 'objectifs ajoutés')],

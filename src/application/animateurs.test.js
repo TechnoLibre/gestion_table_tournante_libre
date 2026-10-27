@@ -11,7 +11,15 @@ import { describe, test } from '../../test/lanceur.js';
 import { creerCharge } from '../stockage/document.js';
 import { fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
-import { aDesigner, animateursDeLaTable, avertissementsDuLot, designations, statutsPourAnimation, tablesAnimees } from './animateurs.js';
+import {
+  aDesigner,
+  animateursDeLaTable,
+  avertissementsDuLot,
+  designations,
+  repartitionALaCreation,
+  statutsPourAnimation,
+  tablesAnimees,
+} from './animateurs.js';
 import { appliquerCommande } from './commandes.js';
 
 const NOMS = [
@@ -229,6 +237,75 @@ describe('animateurs : les tables de chaque personne et l’animation réservée
     charge.participants[2].presence = [1, 2];
     assert.deepEqual(aDesigner(charge), [3, 8]);
     assert.deepEqual(aDesigner(chargeAnimee()), []);
+  });
+});
+
+describe('animateurs : la répartition des personnes à désigner sur les tables créées (§ 6.1)', () => {
+  // Huit personnes marquées, deux tours, aucune table : l'organisation de
+  // chacune, null sans organisation.
+  function chargeMarquee(organisations) {
+    const charge = creerCharge({ id: 'evt-repartition', nom: 'Soirée des Grèbes', siegesParDefaut: 3, tours: 2 });
+    charge.participants = organisations.map((organisation, rang) => personne(rang + 1, { organisation, animationReservee: true }));
+    charge.prochainsIds = { participant: organisations.length + 1, table: 1, proposition: 1 };
+    return charge;
+  }
+
+  test('le moins d’animateurs d’abord, puis une table sans animateur de son organisation, puis le plus petit rang ; au plus places − 1 par table', () => {
+    const charge = chargeMarquee(['Héron', 'Héron', 'Grèbe', null, 'Héron', 'Héron', null, 'Grèbe']);
+    // Trois tables de trois places, deux animateurs chacune au plus. La 5e
+    // évite la table 1, où anime déjà une personne de son organisation ; la
+    // 6e y va quand même : le moins d'animateurs passe avant l'organisation.
+    assert.deepEqual(repartitionALaCreation(charge, 3, 3), {
+      affectations: [
+        { participant: 1, rang: 0 },
+        { participant: 2, rang: 1 },
+        { participant: 3, rang: 2 },
+        { participant: 4, rang: 0 },
+        { participant: 5, rang: 2 },
+        { participant: 6, rang: 1 },
+      ],
+      restantes: [
+        { participant: 7, cause: 'tablesPleines' },
+        { participant: 8, cause: 'tablesPleines' },
+      ],
+    });
+    // Deux places par table : un animateur chacune.
+    assert.deepEqual(repartitionALaCreation(charge, 2, 2).affectations, [
+      { participant: 1, rang: 0 },
+      { participant: 2, rang: 1 },
+    ]);
+  });
+
+  test('par identifiant croissant, quel que soit l’ordre de la liste ; seules les personnes à désigner entrent', () => {
+    const charge = chargeMarquee([null, null, null, null]);
+    charge.participants.reverse();
+    delete charge.participants[0].animationReservee;
+    assert.deepEqual(repartitionALaCreation(charge, 2, 8), {
+      affectations: [
+        { participant: 1, rang: 0 },
+        { participant: 2, rang: 1 },
+        { participant: 3, rang: 0 },
+      ],
+      restantes: [],
+    });
+  });
+
+  test('restent à désigner, dans l’ordre des identifiants : une absente, ses tours ; une personne déjà réservée ; une exclue ou une animatrice n’y figurent pas', () => {
+    const charge = chargeAnimee();
+    for (const personneMarquee of charge.participants) personneMarquee.animationReservee = true;
+    charge.participants[6].presence = [1, 3];
+    // Iris, Théo et Capucine animent ; Anouk est exclue. Ondine et Grisaille
+    // tiennent une réservation, Amandine manque le tour 2, Basile va à la
+    // première table.
+    assert.deepEqual(repartitionALaCreation(charge, 2, 4), {
+      affectations: [{ participant: 8, rang: 0 }],
+      restantes: [
+        { participant: 3, cause: 'reservee' },
+        { participant: 4, cause: 'reservee' },
+        { participant: 7, cause: 'absente', tours: [2] },
+      ],
+    });
+    assert.deepEqual(repartitionALaCreation(chargeAnimee(), 2, 4), { affectations: [], restantes: [] });
   });
 });
 
