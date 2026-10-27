@@ -7,6 +7,9 @@
 // exhaustive qui l'arbitre (§ 14.11, § 14.12). Les valeurs attendues des
 // formes nommées sont celles du § 5.5, du § 14.10 et du § 15 ; les autres se
 // calculent à la main, table par table, dans le commentaire qui les précède.
+// Un réduit parfait ne prouve pas le plafond complet : l'énumération de
+// toutes les affectations du plan affine d'ordre 4 aux tables borne le
+// mobile le plus mal servi à 17 sur 19 (§ 5.5).
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { describe, test } from '../../test/lanceur.js';
@@ -119,6 +122,74 @@ const grandeForme = (partiels = []) =>
 // tour r en réserve.
 const planIndexe = (instance, listes, reserves = listes.map(() => [])) =>
   indexerPlan(instance, { tables: [...instance.idsTables], tours: listes, reserves });
+
+// Produit dans GF(4), ses éléments écrits 0 à 3, 2 la racine a de
+// x² + x + 1 et 3 son carré a² = a + 1 : FOIS_GF4[x][y]. La somme est le ou
+// exclusif.
+const FOIS_GF4 = [
+  [0, 0, 0, 0],
+  [0, 1, 2, 3],
+  [0, 2, 3, 1],
+  [0, 3, 1, 2],
+];
+
+// Le plan affine d'ordre 4 : les 16 points de GF(4)², le point (x, y) au
+// rang 4x + y, en 5 classes parallèles de 4 blocs de 4 — les droites
+// x = c, puis y = mx + c pour chaque pente m. Rend classes[r][b], la liste
+// des points du bloc b de la classe r.
+function planAffineOrdre4() {
+  const quatre = suite(0, 3);
+  return [
+    quatre.map((c) => quatre.map((y) => 4 * c + y)),
+    ...quatre.map((m) => quatre.map((c) => quatre.map((x) => 4 * x + (FOIS_GF4[m][x] ^ c)))),
+  ];
+}
+
+// Les 24 ordres de 0, 1, 2, 3.
+const PERMUTATIONS_4 = (function permuter(reste) {
+  if (reste.length === 0) return [[]];
+  return reste.flatMap((t) => permuter(reste.filter((u) => u !== t)).map((fin) => [t, ...fin]));
+})(suite(0, 3));
+
+/**
+ * Énumère les affectations des blocs d'un plan résoluble à 4 tables, une
+ * classe par tour : affectation[r][b] est la table du bloc b au tour r. Le
+ * premier tour est fixé, bloc b à la table b, puisque renuméroter les tables
+ * ne change aucun compte : il reste 24 ordres pour chacun des autres tours.
+ * Le compte d'un point est le nombre de tables distinctes qu'il visite.
+ * Rend le plus grand minimum de ce compte sur les points, le nombre
+ * d'affectations parcourues, et la première affectation qui l'atteint.
+ * @param {number[][][]} classes  classes[r][b], les points du bloc b
+ * @returns {{meilleur: number, affectations: number, temoin: number[][]}}
+ */
+function meilleureAffectation(classes) {
+  const premier = suite(0, 3);
+  const masques = new Array(16).fill(0);
+  classes[0].forEach((bloc, t) => {
+    for (const p of bloc) masques[p] = 1 << t;
+  });
+  const bilan = { meilleur: 0, affectations: 0, temoin: null };
+  const choix = [premier];
+  const descendre = (r, courants) => {
+    if (r === classes.length) {
+      bilan.affectations += 1;
+      const minimum = Math.min(...courants.map((m) => (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1)));
+      if (minimum > bilan.meilleur) Object.assign(bilan, { meilleur: minimum, temoin: [...choix] });
+      return;
+    }
+    for (const ordre of PERMUTATIONS_4) {
+      const suivants = courants.slice();
+      classes[r].forEach((bloc, b) => {
+        for (const p of bloc) suivants[p] |= 1 << ordre[b];
+      });
+      choix.push(ordre);
+      descendre(r + 1, suivants);
+      choix.pop();
+    }
+  };
+  descendre(1, masques);
+  return bilan;
+}
 
 // Plan valide quelconque, que la graine brasse : à chaque tour, chaque
 // personne fixée s'assied à sa table ; les autres, dans un ordre brassé,
@@ -253,6 +324,52 @@ describe('plafonds : valeurs exactes (§ 5.5, § 15)', () => {
     assert.deepEqual(plafondsAPrioriParEnumeration(instance), attendu);
     assert.equal(plafondItineraire(instance, ancres[0][0], [0, 0, 0, 0, 0]), 16);
     assert.equal(plafondItineraire(instance, mobiles[0], [0, 1, 2, 3, 0]), 19);
+  });
+
+  test('la même instance, réduite au plan affine d’ordre 4 : aucune affectation des blocs aux tables ne sert le pire mobile au-delà de 17 sur 19', () => {
+    const { instance, ancres, mobiles } = forme({
+      capacites: [5, 5, 5, 5],
+      ancres: [1, 1, 1, 1],
+      autres: 16,
+      tours: 5,
+    });
+    const classes = planAffineOrdre4();
+    // Le réduit est parfait : chacune des 120 paires de points partage un
+    // bloc et un seul, et chaque mobile rencontre les 15 autres.
+    const paires = new Map();
+    for (const bloc of classes.flat()) {
+      for (const a of bloc) {
+        for (const b of bloc) if (a < b) paires.set(`${a},${b}`, (paires.get(`${a},${b}`) ?? 0) + 1);
+      }
+    }
+    assert.equal(paires.size, 120);
+    assert.ok([...paires.values()].every((fois) => fois === 1));
+    const { meilleur, affectations, temoin } = meilleureAffectation(classes);
+    assert.equal(affectations, 24 ** 4);
+    assert.equal(meilleur, 2);
+    // Le témoin, assis : l'ancré de la table t à chaque tour, et le point i
+    // du plan au rang i des mobiles. Chaque mobile atteint son plafond
+    // réalisé, les 15 autres et les ancrés des tables qu'il visite : le pire
+    // en visite 2, et reste à 2 de son plafond a priori.
+    const idDuPoint = (i) => instance.ids[mobiles[i]];
+    const tableDe = planIndexe(
+      instance,
+      classes.map((classe, r) => {
+        const tables = [[], [], [], []];
+        classe.forEach((bloc, b) => tables[temoin[r][b]].push(...bloc.map(idDuPoint)));
+        return tables.map((ids, t) => [instance.ids[ancres[t][0]], ...ids]);
+      }),
+    );
+    const { rencontres } = mesurer(instance, tableDe);
+    const pire = Math.min(...mobiles.map((p) => rencontres[p]));
+    assert.equal(pire, 15 + meilleur);
+    assert.equal(pire, 17);
+    const aPriori = plafondsAPriori(instance);
+    const realises = plafondsRealises(instance, tableDe);
+    for (const p of mobiles) {
+      assert.equal(realises[p], rencontres[p]);
+      assert.equal(aPriori[p], 19);
+    }
   });
 
   test('forme de la grande démonstration : mobile 28, animateur 28 à une table de 8, 24 à une table de 7', () => {

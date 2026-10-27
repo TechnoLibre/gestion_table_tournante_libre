@@ -7,12 +7,13 @@
 // la découpe de la saisie, la présence en plages et en listes, relue par la
 // grammaire de l'import, et l'aller-retour qui importe, exporte, réimporte
 // et compare champ par champ, sur chaque donnée d'épreuve de
-// test/fixtures/csv/, sur les fichiers d'exemple et sur une liste aux valeurs
-// difficiles. L'écriture d'un
-// CSV, que l'export partage avec le CSV des refus, s'éprouve contre la
-// découpe qui la relit. Le modèle à télécharger (§ 10.1) s'éprouve par son
-// texte exact, par chaque colonne qu'il remplit et par son import tel quel,
-// sous chaque nombre de tours de 1 à 6, puisque sa présence le suit.
+// test/fixtures/csv/, sur les fichiers d'exemple, sur une liste aux valeurs
+// difficiles et sur chaque partie non vide des tours de 1 à 6, dont l'export
+// réimporté en mise à jour ne modifie personne. L'écriture d'un CSV, que
+// l'export partage avec le CSV des refus, s'éprouve contre la découpe qui la
+// relit. Le modèle à télécharger (§ 10.1) s'éprouve par son texte exact, par
+// chaque colonne qu'il remplit et par son import tel quel, sous chaque nombre
+// de tours de 1 à 6, puisque sa présence le suit.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
@@ -266,6 +267,42 @@ describe('exporterParticipants : la colonne de la présence (§ 10.2)', () => {
       personne(4, 'Sarcelle', { presence: [1, 3, 4, 5] }),
     ];
     memesParticipants(importer(exporterParticipants(participants), 'présences', [], 5), participants, 'présences');
+  });
+
+  test('pour R de 1 à 6, chaque partie non vide des tours : importée, exportée, réimportée, les mêmes ensembles, et une mise à jour par l’export ne modifie personne', () => {
+    for (let R = 1; R <= 6; R += 1) {
+      // Une personne par partie, sa présence écrite comme un opérateur la
+      // tape : « tour 2 », « tours 1 et 3 et 4 », ou « tous » pour la partie
+      // pleine, qui n'en porte aucune.
+      const parties = [];
+      const lignes = ['nom;prenom;presence'];
+      for (let masque = 1; masque < 2 ** R; masque += 1) {
+        const partie = Array.from({ length: R }, (_, rang) => rang + 1).filter((tour) => masque & (2 ** (tour - 1)));
+        parties.push(partie);
+        const cellule = partie.length === R ? 'tous' : `${partie.length === 1 ? 'tour' : 'tours'} ${partie.join(' et ')}`;
+        lignes.push(`Brumeval;Partie ${masque};${cellule}`);
+      }
+      const nom = `R = ${R}`;
+      const apercu = apercevoir(csv(...lignes), { tours: R });
+      assert.deepEqual(apercu.refusees, [], nom);
+      const neuve = creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours: R });
+      const { charge } = appliquerImport(neuve, apercu, 'ajouter');
+      assert.deepEqual(
+        charge.participants.map(({ presence }) => presence),
+        parties.map((partie) => (partie.length === R ? undefined : partie)),
+        nom,
+      );
+      const octets = exporterParticipants(charge.participants);
+      memesParticipants(importer(octets, nom, [], R), charge.participants, nom);
+      const options = { participants: charge.participants, mode: 'mettreAJour', tours: R };
+      const { charge: apres, resume } = appliquerImport(charge, apercevoir(decoder(octets).texte, options), 'mettreAJour');
+      assert.deepEqual(
+        [resume.ajoutes, resume.misAJour, resume.inchanges, resume.refusees],
+        [0, 0, parties.length, []],
+        nom,
+      );
+      assert.deepEqual(apres.participants, charge.participants, nom);
+    }
   });
 });
 

@@ -8,18 +8,18 @@
 // partir desquels regenerer le rend ; chaque plan rendu tient les invariants
 // et les réservations, et l'organisation d'un ancré y pèse comme une autre ;
 // une salle trop petite est refusée avec le nombre de places manquantes ;
-// l'avancement se rapporte toutes les 1 000 itérations, une descente
-// s'arrête sur un score nul, une annulation ne rend rien ; le placement
-// initial égale celui que décrit le paragraphe « Sièges » de l'en-tête de
-// recherche.js, récrit ici à la lettre ; un échange avec une place fantôme
-// fait passer une personne à une autre table, comme le dit son paragraphe
-// « Mouvement » ; la descente égale l'acceptation tardive de son paragraphe
-// « Acceptation tardive », récrite de même, là où ni bascule ni relance ne
-// jouent, et sinon augmentée de la bascule et de la relance de son
-// paragraphe « Deux ordres d'acceptation » ; le score tenu à jour et le score
-// recalculé égalent un n-uplet recalculé ici par énumération des paires, des
-// tours servis et des animateurs rencontrés, composé palier par palier sur
-// la compilation de l'instance ; la petite démonstration atteint son plan
+// l'avancement se rapporte toutes les 1 000 itérations, une descente s'arrête
+// sur un score nul, une annulation ne rend rien ; le placement initial égale
+// celui que décrit le paragraphe « Sièges » de l'en-tête de recherche.js,
+// récrit ici à la lettre ; un échange avec une place fantôme fait passer une
+// personne à une autre table, comme le dit son paragraphe « Mouvement » ; la
+// descente égale l'acceptation tardive de son paragraphe « Acceptation
+// tardive », récrite de même, là où ni bascule ni relance ne jouent, et sinon
+// augmentée de la bascule et de la relance de son paragraphe « Deux ordres
+// d'acceptation » ; le score tenu à jour et le score recalculé égalent le
+// n-uplet de l'oracle de test/oracle_score.js, qui énumère les paires, les
+// tours servis et les animateurs rencontrés et le compose palier par palier
+// sur la compilation de l'instance ; la petite démonstration atteint son plan
 // parfait sans cas particulier. Sur une configuration inventée à objectifs et
 // animateurs, sous chacun des trois modes et sous un ordre réglé, l'état tenu
 // à jour s'accorde au recalcul ; la bascule suit l'ordre réglé ; chaque mode
@@ -37,13 +37,12 @@
 // imposée, sans que personne d'autre ne bouge ; le départ brut et le départ
 // ajusté par le stockage rendent les mêmes propositions, et une réserve
 // imposée se mesure comme indicateurs.js la lit. Sur de petites salles
-// écrites à la main, le départ ajusté se lit aussi case par case et siège
-// par siège : libres en trop par index décroissants, débordements refusés à
+// écrites à la main, le départ ajusté se lit aussi case par case et siège par
+// siège : libres en trop par index décroissants, débordements refusés à
 // chaque table, remplissage canonique, retours et animateurs sous réserve
-// imposée. Un plan rendu se juge par
-// verifierInvariants, ou, sous absence, par ses listes lues sur la
-// configuration, et se mesure par mesurer, deux modules distincts du module
-// éprouvé.
+// imposée. Un plan rendu se juge par verifierInvariants, ou, sous absence,
+// par ses listes lues sur la configuration, et se mesure par mesurer, deux
+// modules distincts du module éprouvé.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
@@ -51,7 +50,6 @@ import { FLUX, creerPcg32 } from '../demo/prng.js';
 import {
   LIBRE,
   RESERVE,
-  SANS_GROUPE,
   indexerPlan,
   normaliser,
   planDepuisIndex,
@@ -86,6 +84,12 @@ import {
   exigerVerification,
   lireEmpreintes,
 } from '../../test/empreintes_moteur.js';
+import {
+  animateursRencontres,
+  conflitsDirects,
+  scoreOracle,
+  valeurDescendue,
+} from '../../test/oracle_score.js';
 
 const SANS_CONTRAINTE = {
   separerOrganisations: false,
@@ -235,191 +239,6 @@ function placementLitteral(instance, rng) {
     }
   }
   return tableDe;
-}
-
-// Les tours servis et les tours possibles de chaque personne présente, lus
-// directement sur la configuration (§ 4.5) : à la table t au tour r,
-// l'objectif du tour remplace celui de la soirée ; une personne y correspond
-// sous « ou » quand elle porte l'une de ses étiquettes, sous « et » quand
-// elle les porte toutes. (p, r) est possible quand sa table fixée lui
-// correspond, ou, p libre, quand une table qui garde un siège libre lui
-// correspond ; servi quand p est assis à une table qui lui correspond.
-function objectifsDirects(configuration, instance, tableDe) {
-  const { N, T, R, idsTables, ids, capacite, fixe } = instance;
-  const objectifs = configuration.objectifs ?? [];
-  const etiquettesDe = new Map(configuration.participants.map(({ id, etiquettes = [] }) => [id, etiquettes]));
-  const objectifA = (t, r) =>
-    objectifs.find(({ table, tour }) => table === idsTables[t] && tour === r + 1)
-    ?? objectifs.find(({ table, tour }) => table === idsTables[t] && (tour === null || tour === undefined))
-    ?? null;
-  const correspond = (p, t, r) => {
-    const objectif = objectifA(t, r);
-    if (objectif === null) return false;
-    const siennes = etiquettesDe.get(ids[p]);
-    return objectif.regle === 'ou'
-      ? objectif.etiquettes.some((motCle) => siennes.includes(motCle))
-      : objectif.etiquettes.length > 0 && objectif.etiquettes.every((motCle) => siennes.includes(motCle));
-  };
-  const possibles = Array(N).fill(0);
-  const servis = Array(N).fill(0);
-  for (let r = 0; r < R; r += 1) {
-    const libres = Array.from(capacite);
-    for (let p = 0; p < N; p += 1) if (fixe[p * R + r] !== LIBRE) libres[fixe[p * R + r]] -= 1;
-    for (let p = 0; p < N; p += 1) {
-      const t = fixe[p * R + r];
-      const tables = t === LIBRE ? [...Array(T).keys()].filter((u) => libres[u] > 0) : [t];
-      if (tables.some((u) => correspond(p, u, r))) possibles[p] += 1;
-      if (correspond(p, tableDe[p * R + r], r)) servis[p] += 1;
-    }
-  }
-  return { possibles, servis };
-}
-
-// Les animateurs distincts que chaque personne présente rencontre, lus
-// directement : f, autre que p, est rencontré quand p partage sa table à un
-// tour où f anime — participants[].anime de la configuration.
-function animateursRencontres(configuration, instance, tableDe) {
-  const { N, R, indexDe } = instance;
-  const animes = configuration.participants
-    .filter(({ anime, exclu }) => anime !== undefined && exclu !== true)
-    .map(({ id, anime }) => ({ f: indexDe.get(id), tours: anime }));
-  return Array.from({ length: N }, (_, p) =>
-    animes.filter(({ f, tours }) => f !== p && tours.some((tour) => tableDe[f * R + tour - 1] === tableDe[p * R + tour - 1])).length);
-}
-
-// La relation des conflits d'organisation, lue directement sur la
-// configuration : enConflit(a, b) est vrai quand une personne de l'unité de
-// l'un — son organisation, tous ses membres, exclus compris, ou elle seule
-// sans organisation — nomme l'organisation de l'autre, autre que la sienne
-// (§ 4).
-// Une personne que la configuration ne porte pas n'est en conflit avec
-// personne.
-function conflitsDirects(configuration, { ids }) {
-  const personneDe = new Map(configuration.participants.map((personne) => [personne.id, personne]));
-  const nomme = (x, y) => {
-    const px = personneDe.get(ids[x]);
-    const py = personneDe.get(ids[y]);
-    if (px === undefined || py === undefined) return false;
-    const ox = px.organisation;
-    const oy = py.organisation;
-    if (oy === null || oy === ox) return false;
-    const unite = ox === null ? [px] : configuration.participants.filter((q) => q.organisation === ox);
-    return unite.some(({ conflits = [] }) => conflits.includes(oy));
-  };
-  return (a, b) => nomme(a, b) || nomme(b, a);
-}
-
-// Les grandeurs brutes d'un plan indexé, chacune sous son nom, recalculées
-// par énumération directe des paires, des tours servis et des animateurs
-// rencontrés, sans mesurer ni le module éprouvé ; les plafonds a priori et
-// les bornes des animateurs de l'instance sont les seules grandeurs reçues.
-// Les contraintes n'y entrent pas.
-function grandeursBrutes(configuration, instance, tableDe, aPriori) {
-  const { N, T, R, groupe, fixe, borneAnimateurs } = instance;
-  // M[a × N + b], a < b : le nombre de tours où a et b partagent une table.
-  const M = new Int32Array(N * N);
-  for (let r = 0; r < R; r += 1) {
-    for (let a = 0; a < N; a += 1) {
-      for (let b = a + 1; b < N; b += 1) {
-        const t = tableDe[a * R + r];
-        if (t !== RESERVE && t === tableDe[b * R + r]) M[a * N + b] += 1;
-      }
-    }
-  }
-  const rencontres = Array(N).fill(0);
-  const affilies = Array(N).fill(0);
-  const organisations = Array.from({ length: N }, () => new Set());
-  let cumulees = 0;
-  let distinctes = 0;
-  let excedentPaires = 0;
-  let conflits = 0;
-  const enConflit = conflitsDirects(configuration, instance);
-  for (let a = 0; a < N; a += 1) {
-    for (let b = a + 1; b < N; b += 1) {
-      const m = M[a * N + b];
-      if (m === 0) continue;
-      excedentPaires += m - 1;
-      if (enConflit(a, b)) conflits += m;
-      for (const [p, q] of [[a, b], [b, a]]) {
-        rencontres[p] += 1;
-        if (groupe[q] !== SANS_GROUPE) {
-          affilies[p] += 1;
-          organisations[p].add(groupe[q]);
-        }
-      }
-      if (groupe[a] !== SANS_GROUPE && groupe[a] === groupe[b]) {
-        cumulees += m;
-        distinctes += 1;
-      }
-    }
-  }
-  // Une table visitée m fois, dont f à un tour où la personne y est
-  // réservée, compte m − 1 − max(0, f − 1) retours choisis (§ 5.4).
-  let retours = 0;
-  for (let p = 0; p < N; p += 1) {
-    for (let t = 0; t < T; t += 1) {
-      let visites = 0;
-      let reservees = 0;
-      for (let r = 0; r < R; r += 1) {
-        if (tableDe[p * R + r] !== t) continue;
-        visites += 1;
-        if (fixe[p * R + r] === t) reservees += 1;
-      }
-      if (visites > 0) retours += visites - 1 - Math.max(0, reservees - 1);
-    }
-  }
-  const ecarts = aPriori.map((plafond, p) => plafond - rencontres[p]);
-  // Les objectifs, sur les personnes concernées, P(p) > 0.
-  const { possibles, servis } = objectifsDirects(configuration, instance, tableDe);
-  const hors = possibles.flatMap((P, p) => (P > 0 ? [P - servis[p]] : []));
-  const horsObjectifMax = Math.max(0, ...hors);
-  const m = animateursRencontres(configuration, instance, tableDe);
-  return {
-    conflitsOrganisation: conflits,
-    ecartAuPlafondAPrioriMax: Math.max(...ecarts),
-    carresEcartsAuPlafondAPriori: ecarts.reduce((somme, ecart) => somme + ecart * ecart, 0),
-    excedentCollisions: cumulees - distinctes,
-    collisionsCumulees: cumulees,
-    excedentPaires,
-    retoursChoisis: retours,
-    redondance: affilies.reduce((somme, f, p) => somme + f - organisations[p].size, 0),
-    toursHorsObjectif: hors.reduce((somme, h) => somme + h, 0),
-    jamaisServies: possibles.filter((P, p) => P > 0 && servis[p] === 0).length,
-    horsObjectifMax,
-    personnesAuMax: horsObjectifMax === 0 ? 0 : hors.filter((h) => h === horsObjectifMax).length,
-    animateursNonRencontres: Array.from(borneAnimateurs).reduce((somme, B, p) => somme + B - m[p], 0),
-  };
-}
-
-// La valeur que la recherche descend pour une grandeur de composantesDe :
-// pour les rencontres répétées, Σ max(0, M − 1) sous « nouveaux voisins »,
-// plus les retours choisis sous « nouvelle table » (§ 5.7) ; sinon la
-// grandeur brute de ce nom.
-const valeurDescendue = (brutes, nom, contraintes) => (nom === 'rencontresRepetees'
-  ? (contraintes.nouveauxVoisins ? brutes.excedentPaires : 0) + (contraintes.nouvelleTable ? brutes.retoursChoisis : 0)
-  : brutes[nom]);
-
-// Le n-uplet du paragraphe « Score » de recherche.js, composé palier par
-// palier sur la compilation de l'instance, à partir des grandeurs brutes :
-// un critère seul à son palier pose une composante par grandeur qu'il
-// descend, son poids multiplié par la grandeur ; un palier partagé, une
-// seule, la somme sur ses critères du poids multiplié par la grandeur.
-// Rend aussi les grandeurs brutes.
-function scoreOracle(instance, tableDe, aPriori, configuration = { participants: [] }) {
-  const brutes = grandeursBrutes(configuration, instance, tableDe, aPriori);
-  const { paliers, taille } = compilationDe(instance);
-  const nUplet = Array(taille).fill(0);
-  for (const { criteres, composantes } of paliers) {
-    if (criteres.length === 1) {
-      const [{ nom, poids }] = criteres;
-      composantesDe(nom, instance.modeObjectifs).forEach((grandeur, k) => {
-        nUplet[composantes[k]] = poids * valeurDescendue(brutes, grandeur, instance.contraintes);
-      });
-    } else {
-      for (const { nom, poids } of criteres) nUplet[composantes[0]] += poids * valeurDescendue(brutes, nom, instance.contraintes);
-    }
-  }
-  return { nUplet, brutes };
 }
 
 // Les deux ordres de comparaison du n-uplet et le rang de la composante du
@@ -1271,10 +1090,11 @@ const GRANDEURS_DE_REFERENCE = [
 describe('score : composition du n-uplet (en-tête de recherche.js)', () => {
   test('scoreIncremental et scoreComplet égalent le n-uplet énuméré, pour aucune contrainte, chacune seule et toutes', () => {
     // Score tenu à jour et score recalculé passent par la même composition :
-    // les comparer entre eux ne dit rien d'elle. L'oracle de ce fichier la
-    // refait par un autre chemin. Chaque grandeur brute est non nulle dans au
-    // moins un état de chaque jeu : une composante comptée sous une
-    // contrainte désactivée, ou omise sous une contrainte active, se voit.
+    // les comparer entre eux ne dit rien d'elle. L'oracle de
+    // test/oracle_score.js la refait par un autre chemin. Chaque grandeur
+    // brute est non nulle dans au moins un état de chaque jeu : une
+    // composante comptée sous une contrainte désactivée, ou omise sous une
+    // contrainte active, se voit.
     const jeux = [
       ['aucune', SANS_CONTRAINTE],
       ...NOMS_CONTRAINTES.map((nom) => [nom, { ...SANS_CONTRAINTE, [nom]: true }]),

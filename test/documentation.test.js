@@ -800,13 +800,24 @@ const VOCABULAIRE_SAVANT = [
   /complexité/i, /NP-/,
 ];
 
+// Les captures sur lesquelles la section s'appuie (§ 19.9) : le diagnostic,
+// les propositions classées, les dérivées, le profil trié, la course d'une
+// recherche, « minimum atteint » sur la petite démonstration, la vue de
+// comparaison et son escalier. La course, 15c, appartient au point 3.
+const IMAGES_ALGORITHME = Object.freeze([
+  '10-diagnostic', '11-propositions', '11b-propositions-derivees', '12-qualite-profil',
+  '15c-qualite-performance', '16-minimum-atteint', '17-comparaison-manque', '18-comparaison-escalier',
+]);
+const IMAGE_DU_POINT_3 = '15c-qualite-performance';
+
 /**
  * Les fautes de la section sur l'algorithme : absente ; pas neuf points ;
  * un nombre écrit en chiffres que l'arithmétique ne recalcule pas, ou un
  * nombre recalculé qu'elle ne cite pas ; une phrase qui affirme un nombre
  * absente ; un bloc de code, un passage en code, un nom de fichier .js ou
- * un chemin de src/ ; un identifiant exporté de src/ ; un mot savant ; ni
- * le diagnostic ni les propositions en image.
+ * un chemin de src/ ; un identifiant exporté de src/ ; un mot savant ; une
+ * capture de IMAGES_ALGORITHME qu'elle ne cite pas, ou la course d'une
+ * recherche citée hors du point 3.
  */
 function fautesAlgorithme(texteGuide, { attendus, exportes }) {
   const section = sectionNommee(texteGuide, TITRE_ALGORITHME);
@@ -832,8 +843,12 @@ function fautesAlgorithme(texteGuide, { attendus, exportes }) {
   for (const mot of [...releves].sort()) fautes.push(`identifiant exporté de src/ : ${mot}`);
   for (const motif of VOCABULAIRE_SAVANT) if (motif.test(lisible)) fautes.push(`vocabulaire savant : ${motif}`);
   const images = imagesReferencees(texte);
-  for (const fichier of ['10-diagnostic', '11-propositions']) {
+  for (const fichier of IMAGES_ALGORITHME) {
     if (!images.includes(cheminImage(fichier))) fautes.push(`la section ne s'appuie pas sur ${fichier}`);
+  }
+  const point3 = texte.split(/^### /m)[3] ?? '';
+  if (images.includes(cheminImage(IMAGE_DU_POINT_3)) && !imagesReferencees(point3).includes(cheminImage(IMAGE_DU_POINT_3))) {
+    fautes.push(`le point 3 ne s'appuie pas sur ${IMAGE_DU_POINT_3}`);
   }
   return fautes;
 }
@@ -855,6 +870,31 @@ describe('documentation : la section sur l’algorithme (§ 19.9)', () => {
 
   test('la section du guide : neuf points, les nombres recalculés, ni code, ni identifiant, ni module, ni mot savant', () => {
     assert.deepEqual(fautesAlgorithme(lire(GUIDE_USAGE), { attendus, exportes }), []);
+  });
+
+  test('les captures exigées sont publiées, et la section les cite toutes', () => {
+    const publiees = new Set(CAPTURES.map(({ fichier }) => fichier));
+    for (const fichier of IMAGES_ALGORITHME) assert.ok(publiees.has(fichier), fichier);
+    assert.ok(IMAGES_ALGORITHME.includes(IMAGE_DU_POINT_3));
+  });
+
+  test('rouge : une capture exigée retirée de la section, ou la course citée hors du point 3', () => {
+    const texte = lire(GUIDE_USAGE);
+    const section = sectionNommee(texte, TITRE_ALGORITHME);
+    const debut = section.debut;
+    const fin = debut + section.texte.length;
+    for (const fichier of IMAGES_ALGORITHME) {
+      const sans = texte.slice(0, debut) + section.texte.replaceAll(cheminImage(fichier), 'doc/captures/autre.png') + texte.slice(fin);
+      const attendues = [`la section ne s'appuie pas sur ${fichier}`];
+      assert.deepEqual(fautesAlgorithme(sans, { attendus, exportes }), attendues, fichier);
+    }
+    // La course déplacée du point 3 au point 4 : citée, mais hors de sa place.
+    const points = section.texte.split(/^### /m);
+    const lien = points[3].match(/\(\[[^\]]*\]\(doc\/captures\/15c-qualite-performance\.png\)\)/)[0];
+    points[4] = points[4].replace(/\n\n/, ` ${lien}\n\n`);
+    points[3] = points[3].replace(lien, '');
+    const deplacee = texte.slice(0, debut) + points.join('### ') + texte.slice(fin);
+    assert.deepEqual(fautesAlgorithme(deplacee, { attendus, exportes }), [`le point 3 ne s'appuie pas sur ${IMAGE_DU_POINT_3}`]);
   });
 
   test('rouge : un nombre changé, un nombre de plus en chiffres, une phrase en lettres changée', () => {
