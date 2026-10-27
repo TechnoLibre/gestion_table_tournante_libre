@@ -216,7 +216,7 @@ export const TABLE = new Map([
   ['tables.animateurs.recherche', 'Rechercher (nom, prénom, organisation)'],
   ['tables.animateurs.grouper', 'Grouper par organisation'],
   ['tables.animateurs.sansOrganisation', 'Sans organisation'],
-  ['tables.animateurs.libelle', 'Titre'],
+  ['tables.animateurs.libelle', 'Titre pour les personnes sans titre pressenti'],
   ['tables.animateurs.aucunePersonne', 'Aucune personne ne correspond à la recherche.'],
   [
     'tables.animateurs.compte',

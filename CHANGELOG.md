@@ -600,16 +600,19 @@
   par organisation, et dit pour chacune si elle anime déjà une table, si elle
   est absente à un tour, si une place lui est réservée, si elle est exclue ou
   placée au plan retenu ; celles qu'on ne peut pas choisir ont leur case
-  désactivée, avec la raison. Les personnes cochées sont désignées ensemble
-  sous le titre saisi, « animateur » par défaut, en une seule entrée de
-  l'historique, chacune avec son propre titre, à une place qu'aucune autre
-  personne ne tient (la sienne d'abord, si elle en tient une) : un titre posé
-  avant reste tel quel, et une place réservée à la main est passée. Si une
-  seule est refusée, aucune n'est désignée, et le refus la nomme dans la
-  fenêtre, qui reste ouverte ; son remède abouti, le refus part et le focus
-  revient à « Ajouter ». Retirer un animateur de sa rangée retire sa
-  réservation et son titre ensemble, un seul titre, le reste de la table
-  intact. En lecture, les pastilles restent, sans ces boutons.
+  désactivée, avec la raison. Les personnes cochées sont désignées ensemble,
+  en une seule entrée de l'historique, chacune avec son propre titre, à une
+  place qu'aucune autre personne ne tient (la sienne d'abord, si elle en
+  tient une) : un titre posé avant reste tel quel, et une place réservée à la
+  main est passée. Ce titre est le titre pressenti de la personne quand elle
+  en a un — une personne pressentie « animateur VIP » le porte sur sa place
+  et sur son badge — et sinon le titre saisi, « animateur » par défaut, que
+  la fenêtre dit réservé aux personnes sans titre pressenti. Si une seule est
+  refusée, aucune n'est désignée, et le refus la nomme dans la fenêtre, qui
+  reste ouverte ; son remède abouti, le refus part et le focus revient à
+  « Ajouter ». Retirer un animateur de sa rangée retire sa réservation et son
+  titre ensemble, un seul titre, le reste de la table intact. En lecture, les
+  pastilles restent, sans ces boutons.
 - Dans la section « Badges », sous la case du pied TechnoLibre, un champ porte
   le texte de ce pied, prérempli de l'invitation d'origine : on le remplace par
   le sien, et le poste le garde, comme la case ; « Texte par défaut » remet

@@ -672,7 +672,7 @@ describe('les animateurs d’une table et la fenêtre d’ajout (§ 2.1 étape 6
     assert.equal(t('tables.animateurs.fenetre', { numero: 5 }), 'Ajouter des animateurs à la table 5');
     assert.equal(t('tables.animateurs.recherche'), 'Rechercher (nom, prénom, organisation)');
     assert.equal(t('tables.animateurs.grouper'), 'Grouper par organisation');
-    assert.equal(t('tables.animateurs.libelle'), 'Titre');
+    assert.equal(t('tables.animateurs.libelle'), 'Titre pour les personnes sans titre pressenti');
     assert.equal(t('tables.animateurs.confirmer'), 'Ajouter');
     assert.equal(t('tables.animateurs.annuler'), 'Annuler');
     assert.equal(t('tables.animateurs.aucunePersonne'), 'Aucune personne ne correspond à la recherche.');

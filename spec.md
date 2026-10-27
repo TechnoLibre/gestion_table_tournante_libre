@@ -158,19 +158,23 @@ animateur ».
 
 La désignation se fait aussi **en lot**, depuis la rangée « Animateurs » de
 chaque table dans « Tables et tours » (§ 6.1) : les personnes choisies sont
-désignées ensemble sous un même titre, en une seule entrée d'historique, et si
-une seule est refusée, aucune n'est désignée. Une personne absente à un tour est
-refusée avant toute désignation (§ 5.9) : sa réservation « tous les tours » ne
+désignées ensemble, en une seule entrée d'historique, et si une seule est
+refusée, aucune n'est désignée. Une personne absente à un tour est refusée
+avant toute désignation (§ 5.9) : sa réservation « tous les tours » ne
 pourvoirait aucun titre pour la soirée. Chaque personne du lot reçoit **son
 propre titre** : au siège sans titre qu'elle tient déjà à cette table, s'il en
 est un, sinon au plus petit siège de la table qui n'en porte aucun et que ne
 tient, à aucun tour, la réservation active d'une autre personne — une
 réservation suspendue par une exclusion ou une absence ne tient rien (§ 4.4) :
-un titre non pourvu posé avant le lot reste tel quel, à sa place, et
-une place réservée à la main n'arrête pas le lot tant qu'il reste une place
-libre. Quand aucun siège n'est à la fois sans titre et libre, le lot suit la
-règle de la désignation au plan et pourvoit le premier titre non pourvu de la
-table.
+un titre non pourvu posé avant le lot reste tel quel, à sa place, et une place
+réservée à la main n'arrête pas le lot tant qu'il reste une place libre. Ce
+titre porte le **titre pressenti** de la personne (§ 4), quand elle en a un
+qui ne se réduit pas à des espaces ; le titre saisi dans la fenêtre vaut pour
+les autres : une personne pressentie « animatrice VIP » porte ce titre sur sa
+place et sur son badge, et sa voisine de lot sans titre pressenti reçoit le
+titre saisi, « animateur » par défaut. Quand aucun siège n'est à la fois sans
+titre et libre, le lot suit la règle de la désignation au plan et pourvoit le
+premier titre non pourvu de la table, dont le libellé ne change pas.
 
 Le retrait d'un animateur depuis cette rangée retire **ensemble** sa
 réservation « tous les tours » et **un seul** titre, celui qu'elle pourvoit, en
@@ -415,7 +419,9 @@ Un participant porte aussi un **titre pressenti** — « animatrice », « hôte
 qui est **purement informatif** : il s'imprime sur sa fiche, il n'attribue
 aucun rôle, il ne pourvoit aucune place et il ne contraint rien. Il existe pour
 qu'une liste reçue où les animateurs sont signalés ne perde pas cette
-information à l'import.
+information à l'import. La désignation en lot lui emprunte le libellé du
+titre qu'elle pose (§ 2.1 étape 6), la désignation une à une le propose
+d'abord ; il ne pourvoit rien par lui-même.
 
 Un participant peut être **exclu** sans être supprimé : il reste dans la liste,
 il n'est plus placé, et il sort de toutes les statistiques.
@@ -2619,16 +2625,18 @@ tour 3 ». « Ajouter… » ouvre une fenêtre modale, « Ajouter des animateurs
 le prénom et l'organisation, sans égard à la casse ni aux accents ; la case
 « Grouper par organisation », cochée à l'ouverture, range les personnes par
 organisation, « Sans organisation » en dernier, chaque groupe dans l'ordre de
-la grille des participants ; le champ « Titre », prérempli d'« animateur »,
-vaut pour toutes les personnes choisies. Chaque personne a sa case et son
-statut **en texte** : elle anime cette table (case cochée et désactivée), elle
-anime une autre table, elle est absente à un tour — ses tours d'absence,
-« Absence au tour 3 » —, une place lui est réservée à la main — sa table, puis
-son tour ou la soirée —, elle est exclue — case désactivée dans ces quatre cas
-—, elle est placée au plan retenu sans réservation — ses tables et leurs
-tours, et elle se choisit : le retenu passera en dérive comme sous toute
-réservation (§ 9) —, ou elle est disponible ; son titre pressenti s'y lit en
-information. Un compte dit « 2 choisies · 3 places libres à cette table ».
+la grille des participants ; le champ « Titre pour les personnes sans titre
+pressenti », prérempli d'« animateur », vaut pour les personnes choisies qui
+n'en ont pas, chacune des autres recevant son titre pressenti (§ 2.1 étape 6).
+Chaque personne a sa case et son statut **en texte** : elle anime cette table
+(case cochée et désactivée), elle anime une autre table, elle est absente à un
+tour — ses tours d'absence, « Absence au tour 3 » —, une place lui est
+réservée à la main — sa table, puis son tour ou la soirée —, elle est exclue —
+case désactivée dans ces quatre cas —, elle est placée au plan retenu sans
+réservation — ses tables et leurs tours, et elle se choisit : le retenu passera
+en dérive comme sous toute réservation (§ 9) —, ou elle est disponible ; son
+titre pressenti s'y lit en information. Un compte dit « 2 choisies · 3 places
+libres à cette table ».
 « Ajouter », désactivé sans choix, désigne les personnes choisies, dans
 l'ordre de la liste, en une entrée ; un refus se pose dans la fenêtre, qui
 reste ouverte, et « Ajouter » le nomme dans sa description : son remède abouti,

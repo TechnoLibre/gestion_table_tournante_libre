@@ -1674,6 +1674,7 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     expect(fenetre()).toHaveAccessibleName('Ajouter des animateurs à la table 1');
     await vi.waitFor(() => expect(document.activeElement).toBe(recherche()));
     expect(titre().value).toBe('animateur');
+    expect(titre()).toHaveAccessibleName('Titre pour les personnes sans titre pressenti');
     expect(grouper().checked).toBe(true);
 
     expect(statutDe(1)).toBe('Anime cette table (« animateur »)');
@@ -1812,7 +1813,7 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     expect(charge(m).reservations).toEqual(expect.arrayContaining([resa(6, 1, 2), resa(7, 1, 3)]));
     expect(charge(m).titres).toEqual(
       expect.arrayContaining([
-        { table: 1, siege: 2, libelle: 'animateur' },
+        { table: 1, siege: 2, libelle: 'animatrice' },
         { table: 1, siege: 3, libelle: 'animateur' },
       ]),
     );
@@ -1829,7 +1830,7 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(ajouter(m, 1)));
   });
 
-  test('un titre saisi vaut pour toutes les personnes choisies ; la table pleine est signalée contre sa ligne', async () => {
+  test('un titre saisi vaut pour les personnes choisies sans titre pressenti, les autres reçoivent le leur ; la table pleine est signalée contre sa ligne', async () => {
     const m = await preparer(chargeAnimateurs());
     await cliquer(m, ajouter(m, 2));
     await cliquer(m, caseDe(6));
@@ -1840,7 +1841,7 @@ describe('les animateurs d’une table (§ 2.1 étape 6, § 6.1)', () => {
     await cliquer(m, commande(fenetre(), 'confirmerAnimateurs'));
     await attendre(m);
     expect(fenetre()).toBeNull();
-    expect(charge(m).titres.filter(({ table }) => table === 2).map(({ libelle }) => libelle)).toEqual(['hôte', 'accueil', 'accueil']);
+    expect(charge(m).titres.filter(({ table }) => table === 2).map(({ libelle }) => libelle)).toEqual(['hôte', 'animatrice', 'accueil']);
     expect(ligne(m, 2).querySelector('[data-avertissement="TABLE_GELEE"]')).not.toBeNull();
   });
 

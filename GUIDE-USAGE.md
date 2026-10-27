@@ -498,10 +498,12 @@ organisation, sans égard aux majuscules ni aux accents, et les groupe par
 organisation tant que « Grouper par organisation » est cochée. Chaque personne
 porte son statut en toutes lettres — elle anime déjà une table, elle est
 absente à un tour, une place lui est réservée, elle est exclue, ou elle est
-placée au plan retenu — et la case
-de celles qu’on ne peut pas choisir est désactivée. Cochez les personnes,
-gardez ou changez le titre, « animateur » par défaut, puis « Ajouter » : elles
-sont désignées ensemble, en une seule entrée de l’historique. Si une seule est
+placée au plan retenu — et la case de celles qu’on ne peut pas choisir est
+désactivée. Cochez les personnes, gardez ou changez le titre, « animateur »
+par défaut, puis « Ajouter » : elles sont désignées ensemble, en une seule
+entrée de l’historique. Ce titre ne vaut que pour les personnes sans titre
+pressenti, comme le dit son champ : une personne pressentie « animateur VIP »
+reçoit ce titre-là, sur sa place comme sur son badge. Si une seule est
 refusée, aucune ne l’est, et le refus la nomme dans la fenêtre. Le bouton de
 retrait d’une pastille retire à la fois la réservation et le titre de cet
 animateur. Ce retrait emporte aussi la réservation « tous les tours » que vous

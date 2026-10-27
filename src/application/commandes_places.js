@@ -86,11 +86,14 @@ function exigerPortee(charge, portee, tour) {
   throw new TypeError(`portée ${JSON.stringify(portee)}, tour ${JSON.stringify(tour)} : « tous » sans tour ou « tour » de 1 à R attendus`);
 }
 
-// Le libellé d'un titre saisi : en NFC, ses blancs de bord retirés ;
-// LIBELLE_VIDE quand il ne reste rien.
+// Un texte de libellé normalisé : en NFC, ses blancs de bord retirés.
+const normaliser = (valeur) => valeur.normalize('NFC').trim();
+
+// Le libellé d'un titre saisi, normalisé ; LIBELLE_VIDE quand il ne reste
+// rien.
 function libelleSaisi(valeur) {
   if (typeof valeur !== 'string') throw new TypeError(`libelle : chaîne attendue, reçu ${JSON.stringify(valeur)}`);
-  const texte = valeur.normalize('NFC').trim();
+  const texte = normaliser(valeur);
   if (texte === '') throw refus('LIBELLE_VIDE');
   return texte;
 }
@@ -395,6 +398,14 @@ function siegeDuLot(charge, idTable, places, participant) {
   return null;
 }
 
+// Le libellé que designerAnimateurs donne au titre de la personne : son
+// titre pressenti, normalisé comme un libellé saisi, quand il ne se réduit
+// pas à des blancs ; sinon texte, le libellé reçu du lot.
+function titreDuLot(personne, texte) {
+  const pressenti = normaliser(personne.titrePressenti ?? '');
+  return pressenti === '' ? texte : pressenti;
+}
+
 // ANIMATEUR_REFUSE pour la personne, sa cause {code, details} et le remède
 // de la cause, qui devient celui du lot.
 const animateurRefuse = (personne, cause, remede) =>
@@ -402,11 +413,13 @@ const animateurRefuse = (personne, cause, remede) =>
 
 /**
  * designerAnimateurs {table, participants: [id…], libelle} (§ 2.1 étape 6,
- * § 5.8) : designer, sous le même libellé, pour chaque personne dans l'ordre
- * reçu, chacune sur la charge que la précédente laisse, en une entrée qui
- * les nomme. Une personne qui anime déjà cette table (animateursDeLaTable)
- * est passée, absente à un tour comprise quand sa désignation suspendue l'y
- * garde ; quand toutes l'animent déjà, SANS_EFFET.
+ * § 5.8) : designer pour chaque personne dans l'ordre reçu, chacune sur la
+ * charge que la précédente laisse, en une entrée qui les nomme. Chaque
+ * personne dont le titre pressenti ne se réduit pas à des blancs reçoit le
+ * sien ; le libellé reçu sert aux autres (titreDuLot). Une personne qui
+ * anime déjà cette table (animateursDeLaTable) est passée, absente à un tour
+ * comprise quand sa désignation suspendue l'y garde ; quand toutes l'animent
+ * déjà, SANS_EFFET.
  *
  * Le siège de chaque personne est celui que rend siegeDuLot — un siège sans
  * titre qu'elle tient déjà à la table, sinon le plus petit siège sans titre
@@ -464,7 +477,7 @@ function designerAnimateurs(charge, { table: idTable, participants, libelle: sai
     let rendu;
     try {
       const siege = siegeDuLot(courante, idTable, places, personne.id);
-      rendu = designer(courante, { participant: personne.id, table: idTable, siege, libelle: texte });
+      rendu = designer(courante, { participant: personne.id, table: idTable, siege, libelle: titreDuLot(personne, texte) });
     } catch (erreur) {
       if (!(erreur instanceof ErreurCommande)) throw erreur;
       const { remede = null, ...details } = erreur.details;
