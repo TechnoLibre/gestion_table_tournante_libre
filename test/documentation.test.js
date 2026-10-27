@@ -50,12 +50,10 @@ import {
   verifierArbre,
 } from '../scripts/documentation.js';
 import {
-  A_VENIR,
   CAPTURES,
   CHEMIN_MANIFESTE,
   DOSSIER_CAPTURES,
   ETAPES,
-  REPORTEES,
   cheminImage,
   cheminsHorsRacine,
   fautesDImage,
@@ -181,7 +179,7 @@ describe('documentation : le guide d’usage suit les étapes et apparie ses ima
     assert.deepEqual(fautes, []);
   });
 
-  test('ordre : le manifeste range ses captures et ses reportées selon les étapes, chaque étape couverte', () => {
+  test('ordre : le manifeste range ses captures selon les étapes, chaque étape couverte d’une capture', () => {
     assert.deepEqual(verifierOrdre(lireManifeste()), []);
   });
 
@@ -203,14 +201,9 @@ describe('documentation : le guide d’usage suit les étapes et apparie ses ima
     }
   });
 
-  test('chaque capture publiée est citée ; une reportée ou à venir ne l’est pas : sans image, elle serait orpheline', () => {
+  test('chaque capture déclarée est publiée, donc citée par le guide', () => {
     const citees = new Set(imagesReferencees(lire(GUIDE_USAGE)));
-    // Sans reportée ni capture à venir, la première comparaison ne juge
-    // rien ; la seconde, sur toutes les captures publiées, juge le guide.
-    const absentes = [...REPORTEES.map((r) => r.fichier), ...A_VENIR].map(cheminImage);
-    assert.deepEqual(absentes.filter((chemin) => citees.has(chemin)), []);
-    // Chaque capture déclarée qui n'est pas à venir est publiée, donc citée.
-    const publiees = CAPTURES.filter((c) => !A_VENIR.includes(c.fichier)).map((c) => cheminImage(c.fichier));
+    const publiees = CAPTURES.map((c) => cheminImage(c.fichier));
     assert.ok(publiees.length > 0);
     assert.deepEqual(publiees.filter((chemin) => !citees.has(chemin)), []);
   });
@@ -257,10 +250,10 @@ describe('documentation : les documents n’affichent que les captures, telles q
   test('le guide d’usage et README.md ne citent aucune image hors de doc/captures', () => {
     for (const document of [GUIDE_USAGE, README]) assert.deepEqual(fautesImagesCitees(document, lire(document)), [], document);
     // Le relevé n'est pas vide : il voit chaque image que l'appariement voit,
-    // une par capture publiée ; une capture à venir n'a pas d'image à citer.
+    // une par capture déclarée, chacune publiée.
     const cibles = imagesCitees(lire(GUIDE_USAGE)).map((citee) => citee.cible);
     assert.deepEqual([...new Set(cibles)].sort(), [...imagesReferencees(lire(GUIDE_USAGE))].sort());
-    assert.equal(new Set(cibles).size, CAPTURES.length - A_VENIR.length);
+    assert.equal(new Set(cibles).size, CAPTURES.length);
   });
 
   test('rouge : une image hors de doc/captures, ou qui n’y est pas un PNG, se relève en mémoire, chacune nommée', () => {
@@ -319,7 +312,7 @@ describe('documentation : les documents n’affichent que les captures, telles q
 
   test('chaque image du manifeste a sur le disque l’empreinte et les dimensions qu’il inscrit', () => {
     const { captures } = lireManifeste();
-    assert.equal(captures.length, CAPTURES.length - A_VENIR.length);
+    assert.equal(captures.length, CAPTURES.length);
     for (const capture of captures) assert.deepEqual(fautesDImage(capture, lireOctets(cheminImage(capture.fichier))), [], capture.fichier);
   });
 
@@ -332,7 +325,7 @@ describe('documentation : les documents n’affichent que les captures, telles q
 
   test('verifier, sur l’arbre réel : chaque image citée par un porteur est contrôlée, aucune faute', () => {
     const bilan = verifierArbre();
-    assert.equal(bilan.images, CAPTURES.length - A_VENIR.length);
+    assert.equal(bilan.images, CAPTURES.length);
     assert.deepEqual(bilan.fautes, []);
     const lignes = [];
     assert.equal(executer(['verifier'], { sortie: (ligne) => lignes.push(ligne) }), 0);
@@ -400,7 +393,7 @@ describe('documentation : les documents n’affichent que les captures, telles q
     assert.deepEqual(horsManifeste.fautes, [{ chemin: inventee, faute: `citée par ${GUIDE_USAGE}, absente du manifeste` }]);
     assert.equal(horsManifeste.code, 1);
     assert.ok(!lus.includes(inventee));
-    assert.equal(lus.length, CAPTURES.length - A_VENIR.length);
+    assert.equal(lus.length, CAPTURES.length);
   });
 });
 

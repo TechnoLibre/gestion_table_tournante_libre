@@ -8,9 +8,9 @@
 // tient, et refuse de passer sur un balayage vide.
 //
 // Un nom de capture (« fichier ») n'a pas d'extension : l'image est
-// doc/captures/<fichier>.png. L'ordre déclaré des captures et des reportées
-// est celui de leurs noms, comparés unité de code par unité de code : le
-// préfixe NN, puis « a », « b », range chaque entrée à sa place dans le guide.
+// doc/captures/<fichier>.png. L'ordre déclaré des captures est celui de
+// leurs noms, comparés unité de code par unité de code : le préfixe NN, puis
+// « a », « b », range chaque capture à sa place dans le guide.
 //
 // Une faute est { chemin, faute } : le chemin du fichier en cause, relatif à
 // la racine du projet (l'image d'une capture, le manifeste, un document), et
@@ -132,17 +132,6 @@ export const CAPTURES = Object.freeze([
   capture('25a-badge-absente', '12', 'construite-presence', 'pdf'),
 ]);
 
-// Les captures des écrans que le logiciel n'offre pas encore, chacune
-// { fichier, etape, raison } : déclarées à leur étape, sans image ; le
-// contrôle d'ordre les compte comme présentes. Vide : chaque écran déclaré
-// existe et se photographie.
-export const REPORTEES = Object.freeze([]);
-
-// Captures déclarées dans CAPTURES et pas encore photographiées : la
-// publication et le contrôle d'ordre les admettent absentes du manifeste.
-// Vide : le parcours photographie chaque capture déclarée.
-export const A_VENIR = Object.freeze([]);
-
 // --- Forme canonique et empreintes ---------------------------------------------
 
 const comparer = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -172,10 +161,10 @@ const sha256 = (donnees) => createHash('sha256').update(donnees).digest('hex');
 
 /**
  * Le manifeste en JSON canonique : clés triées à toute profondeur, chaque
- * élément d'un tableau de premier niveau sur sa ligne (une capture, une
- * reportée), le reste sur la ligne de sa clé, une fin de ligne finale. Deux
- * manifestes égaux rendent les mêmes octets, quel que soit l'ordre de leurs
- * clés ; l'ordre des tableaux est conservé.
+ * élément d'un tableau de premier niveau sur sa ligne (une capture), le
+ * reste sur la ligne de sa clé, une fin de ligne finale. Deux manifestes
+ * égaux rendent les mêmes octets, quel que soit l'ordre de leurs clés ;
+ * l'ordre des tableaux est conservé.
  * @param {object} manifeste
  * @returns {string}
  */
@@ -297,28 +286,35 @@ export function verifierAppariement({ manifeste, references, images }) {
 // --- Ordre contre les étapes ------------------------------------------------------
 
 /**
- * Le contrôle d'ordre du § 19.3 : les captures et les reportées du
- * manifeste, plus chaque capture d'aVenir absente du manifeste à son étape
- * déclarée dans CAPTURES, rangées par nom. Faute : une étape hors d'ETAPES ;
- * un nom déclaré deux fois ; une entrée dont l'étape précède celle de
- * l'entrée connue qui la devance ; une étape d'ETAPES sans aucune entrée ; un
- * manifeste sans aucune entrée.
+ * Le contrôle d'ordre du § 19.3, sur les seules captures du manifeste,
+ * rangées par nom : une étape ne se couvre que d'une capture photographiée.
+ * La clé reportees du format vaut toujours la liste vide, et chacune de ses
+ * entrées est une faute. Faute aussi : une étape hors d'ETAPES ; un nom
+ * déclaré deux fois ; une capture dont l'étape précède celle de la capture
+ * connue qui la devance ; une étape exigée sans aucune capture ; un manifeste
+ * sans aucune capture.
  * @param {object} manifeste
- * @param {{aVenir?: readonly string[]}} [options]  A_VENIR par défaut
- * @returns {Faute[]}  les fautes d'entrée dans l'ordre des noms, puis les étapes manquantes
+ * @param {{etapes?: readonly string[]}} [options]  les étapes exigées, ETAPES
+ *        par défaut ; une publication partielle n'exige que celles de ses
+ *        captures. Une étape hors d'ETAPES lève.
+ * @returns {Faute[]}  les reportées, puis les fautes de capture dans l'ordre des noms, puis les étapes manquantes
  */
-export function verifierOrdre(manifeste, { aVenir = A_VENIR } = {}) {
+export function verifierOrdre(manifeste, { etapes = ETAPES } = {}) {
   const captures = capturesDe(manifeste);
   const reportees = manifeste.reportees ?? [];
   exigerTableau(reportees, 'manifeste.reportees');
-  const presentes = new Set(captures.map((c) => c.fichier));
-  const admises = CAPTURES.filter((c) => aVenir.includes(c.fichier) && !presentes.has(c.fichier));
-  const entrees = [...captures, ...reportees, ...admises]
+  exigerTableau(etapes, 'etapes');
+  const inconnue = etapes.find((etape) => !ETAPES.includes(etape));
+  if (inconnue !== undefined) throw new TypeError(`étape inconnue « ${inconnue} » parmi les étapes exigées`);
+  const entrees = captures
     .map(({ fichier, etape }) => ({ fichier, etape }))
     .sort((a, b) => comparer(a.fichier, b.fichier));
 
-  const fautes = [];
-  if (entrees.length === 0) fautes.push({ chemin: CHEMIN_MANIFESTE, faute: 'aucune capture ni reportée' });
+  const fautes = reportees.map((entree) => ({
+    chemin: cheminImage(entree?.fichier),
+    faute: 'reportée : une étape ne se couvre que d’une capture photographiée',
+  }));
+  if (entrees.length === 0) fautes.push({ chemin: CHEMIN_MANIFESTE, faute: 'aucune capture' });
   const vues = new Set();
   const couvertes = new Set();
   let precedente = null;
@@ -341,7 +337,7 @@ export function verifierOrdre(manifeste, { aVenir = A_VENIR } = {}) {
     precedente = { ...entree, rang };
   }
   for (const etape of ETAPES) {
-    if (!couvertes.has(etape)) fautes.push({ chemin: CHEMIN_MANIFESTE, faute: `étape ${etape} : aucune capture ni reportée` });
+    if (etapes.includes(etape) && !couvertes.has(etape)) fautes.push({ chemin: CHEMIN_MANIFESTE, faute: `étape ${etape} : aucune capture` });
   }
   return fautes;
 }

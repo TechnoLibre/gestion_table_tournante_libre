@@ -234,11 +234,10 @@ gtt_dependances_a_jour() {
 }
 
 # Vrai sur une réponse affirmative au terminal — o, oui, y, yes, sans égard à
-# la casse. Le défaut est non, et sans terminal rien ne consent. GTT_OUI=1
-# répond oui d'avance, pour une installation sans opérateur.
-gtt_confirmer() {
+# la casse. Le défaut est non, et sans terminal rien ne consent. Seul le
+# terminal répond : GTT_OUI n'est pas lu.
+gtt_demander() {
   local reponse
-  [ "${GTT_OUI:-}" = 1 ] && return 0
   [ -t 0 ] || return 1
   printf '%s [o/N] ' "$1" >&2
   read -r reponse || return 1
@@ -246,6 +245,13 @@ gtt_confirmer() {
     o | oui | y | yes) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# Comme gtt_demander, sauf que GTT_OUI=1 répond oui d'avance, pour une
+# installation sans opérateur.
+gtt_confirmer() {
+  [ "${GTT_OUI:-}" = 1 ] && return 0
+  gtt_demander "$1"
 }
 
 # Exécute une commande d'administration : telle quelle sous root, par sudo

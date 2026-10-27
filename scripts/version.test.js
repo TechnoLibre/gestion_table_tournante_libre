@@ -614,6 +614,12 @@ describe('version : contrôle du § 18.5, un défaut à la fois', () => {
       exigerEchecs(racine, [6], [/^6\. electron\/main\.js, ligne 1 : « 2026\.10\.05\.01 », forme affichée/]);
     }));
 
+  test('point 6 : les fichiers que la page sert tels quels, sous public/, sont dans le périmètre', () =>
+    surArbre((racine) => {
+      ecrire(racine, 'public/collecteur.js', "const version = '2026.10.05.01';\n");
+      exigerEchecs(racine, [6], [/^6\. public\/collecteur\.js, ligne 1 : « 2026\.10\.05\.01 », forme affichée/]);
+    }));
+
   test('point 6 : une version ne se lit pas dans un nombre plus long qui la contient', () =>
     surArbre((racine) => {
       // Un chiffre ou un point devant, un chiffre derrière : chaque ligne

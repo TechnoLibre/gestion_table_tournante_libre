@@ -9428,7 +9428,11 @@ cette copie-là.
 La construction **refuse d'écraser un exécutable portant le même nom** dans le
 dossier de sortie. Ce refus est un garde-fou local — le § 18.5 énonce ce qu'il ne
 couvre pas — et une option explicite le lève pour reconstruire un numéro qui n'a
-pas été livré.
+pas été livré. `./create_exe.sh` remplace ce refus par une **question posée au
+terminal** : « oui » passe l'option, toute autre réponse laisse l'exécutable en
+place. Sans terminal, la réponse est non, et `GTT_OUI=1`, qui répond oui d'avance
+aux questions de l'installation, **ne répond pas à celle-ci** : écraser un numéro
+qui a peut-être quitté la machine se décide à la main, ou par l'option.
 
 **Le guide ne cite jamais un nom complet, il cite le gabarit** (§ 16.1).
 
@@ -9827,6 +9831,14 @@ d'écran déclare l'étape à laquelle elle appartient, et un contrôle du nivea
 échoue si une étape n'a **aucune** capture, ou si l'ordre des captures contredit
 l'ordre des étapes.
 
+**Seule une capture photographiée, présente au manifeste, couvre une étape** :
+aucune liste ne déclare un écran sans image qui en tiendrait lieu, et la liste
+`reportees` du format du manifeste est toujours vide — chacune de ses entrées est
+une faute. La publication du § 19.5 passe le même contrôle ; celle d'une
+sélection de captures, que font les épreuves de la publication, n'exige que les
+étapes de sa sélection, et le contrôle du niveau `node` refuse le manifeste
+qu'elle laisserait.
+
 Chaque étape **affirme une condition visible avant de prendre sa capture
 d'écran** — l'élément nommé est présent et porte le libellé attendu — et
 l'exécution s'arrête sur la première condition fausse et sur la première entrée du
@@ -10034,7 +10046,7 @@ neutralise chaque source de variation nommément.
 | **la taille du cadre d'affichage** | **une taille demandée n'est pas une taille obtenue** : ce que l'interface du navigateur prend autour du cadre diffère d'une version à l'autre, et un cadre laissé libre gouverne `k_ajusté` (§ 7.2) et donc le seuil de 24 px au-delà duquel les sièges cessent d'être des cibles (§ 7.3). Le scénario pose le cadre, **relit `innerWidth` et `innerHeight`, corrige de l'écart relevé, et échoue** s'il n'obtient pas les valeurs visées |
 | **un écran plus haut que la fenêtre** | il se photographie à la taille de la fenêtre, à une position défilée que le scénario pose et relit : l'image ne dépend pas de la hauteur de l'écran entier |
 | **le facteur d'échelle de l'affichage** | fixé **au lancement du navigateur**, par son argument de lancement, la page ouverte au même facteur 1 : aucune commande du pilote ne le fixe pour la fenêtre |
-| **le mode d'affichage du navigateur** | un seul mode, nommé, inscrit au manifeste : les métriques de texte en diffèrent |
+| **le mode d'affichage du navigateur** | un seul mode, sans tête, et **le mode réel est nommé et inscrit au manifeste** : celui du Chromium de Playwright, `chromium-headless-shell`, ou, sous `GTT_CHROMIUM`, celui que le nom de l'exécutable désigné annonce — `chromium-headless` pour un navigateur complet. Les métriques de texte en diffèrent : une capture prise dans un autre mode s'écarte du manifeste au lieu de passer pour la même |
 | **le cadrage mémorisé** | le § 8.5 range le cadrage dans un fichier de réglages locaux : le scénario démarre sur un **profil neuf**, ce qui lui donne du même geste un dossier de travail neuf |
 | **le numéro d'ordre du nom de démonstration** | charger une démonstration crée « ‹nom› 2 » à la deuxième exécution (§ 15) ; le répertoire neuf ramène chaque exécution au premier ordinal |
 | **l'horloge** — horodatage d'historique, pied de page, « dernière modification », retour automatique en lecture | **une seule source d'horloge dans toute l'application hors moteur**, et **elle possède aussi les minuteries** : le stockage reçoit d'elle ses horodatages en paramètre, le système de fichiers web l'horloge elle-même pour ses minuteries, et une garde de l'arborescence refuse toute minuterie armée hors d'elle dans l'interface, l'application, le stockage et le point d'entrée de la page. Un instant figé ne suffit pas : un compte à rebours bâti sur une minuterie du moteur d'exécution continue d'avancer sous une horloge gelée, et **le retour automatique en lecture tombe au milieu d'une étape**. Le scénario installe une horloge dont il contrôle l'avance, ce qui lui permet aussi d'éprouver les durées |

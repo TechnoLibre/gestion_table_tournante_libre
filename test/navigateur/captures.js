@@ -31,7 +31,6 @@ import { serialiserCharge } from '../../src/stockage/canonique.js';
 import { analyser } from '../../src/stockage/document.js';
 import { SUFFIXES } from '../../src/stockage/noms.js';
 import { VERSION } from '../../src/version.genere.js';
-import { MODE_AFFICHAGE } from '../chromium.js';
 import { CHAINE_TEMOIN, longueurTemoin } from '../temoin.js';
 import { feuillePosee } from './feuilles.js';
 import {
@@ -539,6 +538,17 @@ export function modeFourni() {
   return inject('captures')?.mode ?? 'verifier';
 }
 
+/** Le mode d'affichage du Chromium lancé, que fournit la configuration
+ *  (modeAffichage de test/chromium.js) et que chaque capture inscrit au
+ *  manifeste (§ 19.4). Lève quand la configuration ne le fournit pas. */
+function affichageFourni() {
+  const affichage = inject('captures')?.affichage;
+  if (typeof affichage !== 'string' || affichage === '') {
+    throw new Error('captures : la configuration ne fournit pas le mode d’affichage du navigateur');
+  }
+  return affichage;
+}
+
 /**
  * Les textes du conteneur, en ordre de document : chaque nœud de texte hors
  * des éléments qui ne se peignent jamais, ses blancs réduits à une espace,
@@ -721,9 +731,10 @@ export async function requeteHorsBoucle() {
   return cause === null ? adresse : `${adresse} (${cause})`;
 }
 
-// Ce que porte le userAgent de Chromium sans tête, le seul mode d'affichage
-// des captures, MODE_AFFICHAGE au manifeste (§ 19.4) : les métriques de
-// texte diffèrent d'un mode à l'autre.
+// Ce que porte le userAgent de Chromium sans tête, shell ou navigateur
+// complet : les captures ne se prennent que sans tête, et le mode que la
+// configuration fournit (affichageFourni) les distingue au manifeste
+// (§ 19.4), car les métriques de texte diffèrent d'un mode à l'autre.
 const SANS_TETE = 'HeadlessChrome';
 
 // L'identifiant du cadre que pose cliche.
@@ -761,12 +772,12 @@ async function cliche(m, fichier, racine) {
  * CAPTURES. Dans l'ordre, chaque contrôle échoue en nommant la capture et
  * la nature de la faute : capture déclarée ; feuille sans mouvement posée ;
  * conditions visibles ; collecteur vide ; aucune requête hors de la boucle
- * locale ; cadre relu au CADRE, facteur d'échelle 1 ; navigateur sans
- * tête, que nomme MODE_AFFICHAGE ; thème clair ; chaîne témoin dans sa
+ * locale ; cadre relu au CADRE, facteur d'échelle 1 ; navigateur sans tête,
+ * dont le mode fourni est inscrit ; thème clair ; chaîne témoin dans sa
  * tolérance ; aucun chemin hors de la racine de travail dans le texte
  * relevé ; aucune faute de libellé ; styles relevés dans les deux thèmes,
- * sous leurs seuils ; empreinte d'état. L'entrée se compose,
- * puis 'verifier' la compare au manifeste — un écart nomme l'étape et sa
+ * sous leurs seuils ; empreinte d'état. L'entrée se compose, puis
+ * 'verifier' la compare au manifeste — un écart nomme l'étape et sa
  * nature —, et 'ecrire' dépose l'image de la fenêtre, prise avant les
  * relevés, et l'entrée.
  *
@@ -800,7 +811,7 @@ export async function photographier(m, fichier, { condition = [], graine = null,
   }
   if (devicePixelRatio !== 1) throw echec(`facteur d’échelle ${devicePixelRatio}, attendu 1`);
   if (!navigator.userAgent.includes(SANS_TETE)) {
-    throw echec(`navigateur avec tête, navigator.userAgent sans ${SANS_TETE} : le mode d’affichage nommé au manifeste est ${MODE_AFFICHAGE}`);
+    throw echec(`navigateur avec tête, navigator.userAgent sans ${SANS_TETE} : le mode d’affichage nommé au manifeste est ${affichageFourni()}`);
   }
   const theme = document.documentElement.getAttribute('data-theme');
   if (theme !== 'clair') throw echec(`thème « ${theme} », l’image se prend en thème clair`);
@@ -846,7 +857,7 @@ export async function photographier(m, fichier, { condition = [], graine = null,
     graine,
     cadre: { largeur: innerWidth, hauteur: innerHeight },
     facteurEchelle: devicePixelRatio,
-    mode: MODE_AFFICHAGE,
+    mode: affichageFourni(),
     theme,
     instant: m.horloge.horodatage(),
     texte,
@@ -869,13 +880,13 @@ export async function photographier(m, fichier, { condition = [], graine = null,
 
 /**
  * Clôt un parcours photographié (§ 19.1, § 19.5, § 19.7, § 19.11).
- * declarees : les captures que le parcours porte, CAPTURES hors A_VENIR par
- * défaut. Une épreuve du fichier en échec, qu'elle ait photographié ou non,
- * refuse la clôture en se nommant ; une requête hors de la boucle locale
- * émise depuis le dernier relevé la refuse en se nommant aussi : en
- * écriture, le dossier d'attente est jeté et rien n'est publié. Sans
- * échec, l'écriture publie d'un bloc et rend le bilan de publierCaptures ;
- * la vérification affirme que le manifeste porte exactement les déclarées.
+ * declarees : les captures que le parcours porte, toutes celles de CAPTURES
+ * par défaut. Une épreuve du fichier en échec, qu'elle ait photographié ou
+ * non, refuse la clôture en se nommant ; une requête hors de la boucle
+ * locale émise depuis le dernier relevé la refuse en se nommant aussi : en
+ * écriture, le dossier d'attente est jeté et rien n'est publié. Sans échec,
+ * l'écriture publie d'un bloc et rend le bilan de publierCaptures ; la
+ * vérification affirme que le manifeste porte exactement les déclarées.
  *
  * @param {Object} options
  * @param {string[]} options.echecs  les épreuves du fichier qui ont échoué
@@ -888,8 +899,8 @@ export async function photographier(m, fichier, { condition = [], graine = null,
 export async function cloreCaptures({ echecs, declarees = null, mode = modeFourni(), racine = null, racineNeutre }) {
   let liste = declarees;
   if (liste === null) {
-    const { captures, aVenir } = await commands.declarationsCaptures();
-    liste = captures.map(({ fichier }) => fichier).filter((fichier) => !aVenir.includes(fichier));
+    const { captures } = await commands.declarationsCaptures();
+    liste = captures.map(({ fichier }) => fichier);
   }
   if (liste.length === 0) throw new Error('captures : aucune capture déclarée — zéro capture n’est jamais un succès');
   const requete = await requeteHorsBoucle();

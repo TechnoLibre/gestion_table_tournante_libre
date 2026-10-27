@@ -30,7 +30,7 @@ import { dater } from '../../src/application/libelles/aides.js';
 import { PRENOMS } from '../../src/demo/noms.js';
 import { nomPlanche } from '../../src/stockage/noms.js';
 import { VERSION } from '../../src/version.genere.js';
-import { CHEMIN_MANIFESTE, DOSSIER_CAPTURES, lireEntetePng } from '../../scripts/documentation/manifeste.js';
+import { CAPTURES, CHEMIN_MANIFESTE, DOSSIER_CAPTURES, ETAPES, lireEntetePng } from '../../scripts/documentation/manifeste.js';
 import {
   COMMANDES,
   MODE_TRAMAGE,
@@ -41,6 +41,7 @@ import {
   dossierEpreuve,
   effacerDossierEpreuve,
   empreintesDossier,
+  etapesExigees,
   fautesDIdentite,
   lireManifeste,
   machineCourante,
@@ -292,6 +293,18 @@ async function deposer(racine, { fichier, etape, source, page }, remplacer = {})
   return deposerCapture(null, { fichier, entree, chemin, racine });
 }
 
+describe('etapesExigees : les étapes que le contrôle d’ordre exige d’une publication (§ 19.3)', () => {
+  test('la publication de toutes les CAPTURES exige toutes les étapes ; une sélection, ses seules étapes, dans l’ordre des étapes', () => {
+    const toutes = CAPTURES.map(({ fichier }) => fichier);
+    assert.equal(etapesExigees(toutes), ETAPES);
+    assert.equal(etapesExigees([...toutes].reverse()), ETAPES);
+    assert.deepEqual(etapesExigees(['24-badges-controle', '01-premier-ecran']), ['1', '12']);
+    const sansUne = toutes.slice(1);
+    const attendues = ETAPES.filter((etape) => sansUne.some((fichier) => CAPTURES.find((c) => c.fichier === fichier).etape === etape));
+    assert.deepEqual(etapesExigees(sansUne), attendues);
+  });
+});
+
 // Les images s'y écrivent par tramerPdf : sans canevas, ces épreuves ne
 // s'y jouent pas.
 describe('publierCaptures : une page de PDF à côté des captures du navigateur (§ 19.5, § 19.6)', () => {
@@ -328,6 +341,24 @@ describe('publierCaptures : une page de PDF à côté des captures du navigateur
       await assert.rejects(
         publierCaptures(CONTEXTE, { declarees: ['01-premier-ecran', '02-import-apercu'], racine, racineNeutre: RACINE_NEUTRE }),
         /publication : 02-import-apercu n’a pas le cadre ni le facteur d’échelle de 01-premier-ecran/,
+      );
+      assert.deepEqual(await empreintesDossier(null, { racine }), []);
+    });
+  });
+
+  test('le pilote porte le mode d’affichage inscrit par les captures du navigateur ; deux modes refusent la publication, rien de publié', async (contexte) => {
+    if (!canevasDisponible()) contexte.skip(SANS_CANEVAS);
+    await dansUnDossier(async (racine) => {
+      await deposer(racine, { fichier: '01-premier-ecran', etape: '1', source: 'navigateur', page: 1 }, { mode: 'chromium-headless' });
+      await publierCaptures(CONTEXTE, { declarees: ['01-premier-ecran'], racine, racineNeutre: RACINE_NEUTRE });
+      assert.equal((await lireManifeste(null, { racine })).pilote.mode, 'chromium-headless');
+    });
+    await dansUnDossier(async (racine) => {
+      await deposer(racine, { fichier: '01-premier-ecran', etape: '1', source: 'navigateur', page: 1 });
+      await deposer(racine, { fichier: '02-import-apercu', etape: '2', source: 'navigateur', page: 1 }, { mode: 'chromium-headless' });
+      await assert.rejects(
+        publierCaptures(CONTEXTE, { declarees: ['01-premier-ecran', '02-import-apercu'], racine, racineNeutre: RACINE_NEUTRE }),
+        /publication : 02-import-apercu n’a pas le mode d’affichage de 01-premier-ecran, « chromium-headless » contre « chromium-headless-shell »/,
       );
       assert.deepEqual(await empreintesDossier(null, { racine }), []);
     });
