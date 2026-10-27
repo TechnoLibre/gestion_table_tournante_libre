@@ -77,6 +77,10 @@
   // participant » (RubriqueInclusions.svelte, data-inclusions-fiche), l'une
   // sous l'autre entre les conflits et la présence, se saisissent de même,
   // chacune sous sa commande ; elles se recréent à chaque personne ({#key}).
+  // Sous chaque liste, les inclusions de cette sorte que le diagnostic de la
+  // configuration (diagnostiquerCharge) dit hors d'atteinte, chacune avec
+  // sa raison (horsDAtteinteDePersonne, qualite/inclusions.js) : une
+  // information, que la saisie ne refuse pas.
   //
   // La rubrique « Présence » (data-presence-fiche), entre les inclusions et
   // les réservations : la présence enregistrée, « tous » ou ses tours
@@ -130,8 +134,23 @@
   // source, et dit qu'aucun placement ne se mesure. Du texte seul : aucune
   // couleur, aucune commande, en lecture et sur un plan bloqué comme en
   // écriture.
+  //
+  // La rubrique « Inclusions du placement » (§ 7.5,
+  // data-rubrique-inclusions-placement), juste après celle des conflits,
+  // porte les inclusions de la personne dans le même placement, lues par
+  // inclusionsDuPlacement et inclusionsDePersonne (qualite/inclusions.js) —
+  // celles du tableau des propositions et de la liste de travail du plan :
+  // la ligne de source des rencontres, ses inclusions satisfaites sur ses
+  // inclusions actives, la phrase d'une liste au-delà du plafond, puis la
+  // phrase de chaque avis qui la concerne (PhraseInclusion), qu'elle le
+  // porte, qu'elle soit la personne incluse ou qu'elle demande aussi la
+  // rencontre que l'autre porte par son organisation ; sans rien de cela,
+  // une phrase le dit. Une personne exclue, un placement qui ne se mesure
+  // pas : une phrase aussi. Sans placement, ou quand aucune inclusion n'est
+  // active, la rubrique est absente. Du texte seul, aucune commande.
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
+  import { diagnostiquerCharge } from '../../application/diagnostic.js';
   import { nomAffiche } from '../../application/personnes.js';
   import { etatPlaces, presenceSaisie, statuts } from '../../application/places.js';
   import { cleDeMode } from '../mode.js';
@@ -141,7 +160,10 @@
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { creerGeste } from '../primitives/geste.js';
+  import { nomDe } from '../propositions/modele.js';
+  import { horsDAtteinteDePersonne, inclusionsDePersonne, inclusionsDuPlacement } from '../qualite/inclusions.js';
   import { rubriqueRencontres } from '../qualite/paires.js';
+  import PhraseInclusion from '../qualite/PhraseInclusion.svelte';
   import { effetDe } from '../raccourcis.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
   import { cleNormalisee } from '../../application/csv.js';
@@ -178,6 +200,16 @@
   const conflitsPlacement = $derived(
     lignesDePersonne(conflitsDuPlacement(charge, { proposition: $ui.proposition }), charge.participants, participant.id),
   );
+  // Le nom affiché d'une personne de la charge, exclue comprise.
+  const nommer = (id) => nomDe(charge, id);
+  // Les inclusions du même placement, et ce qu'elles disent de la personne
+  // quand il se mesure ; les inclusions hors d'atteinte du diagnostic, une
+  // liste vide quand la configuration ne se normalise pas.
+  const inclusionsPlacement = $derived(inclusionsDuPlacement(charge, $ui.proposition));
+  const siennes = $derived(
+    inclusionsPlacement.statut === 'mesuree' ? inclusionsDePersonne(inclusionsPlacement.inclusions, participant.id, nommer) : null,
+  );
+  const horsDAtteinte = $derived(diagnostiquerCharge(charge).diagnostic?.inclusions.horsDAtteinte ?? []);
 
   // La fiche et son champ d'ajout, montés : le défilement vise la fiche,
   // le focus d'après un retrait ses commandes de retrait ou le champ.
@@ -554,8 +586,18 @@
   </section>
 
   {#key participant.id}
-    <RubriqueInclusions {participant} {charge} sorte="organisation" />
-    <RubriqueInclusions {participant} {charge} sorte="participant" />
+    <RubriqueInclusions
+      {participant}
+      {charge}
+      sorte="organisation"
+      horsDAtteinte={horsDAtteinteDePersonne(horsDAtteinte, participant.id, 'organisation', nommer)}
+    />
+    <RubriqueInclusions
+      {participant}
+      {charge}
+      sorte="participant"
+      horsDAtteinte={horsDAtteinteDePersonne(horsDAtteinte, participant.id, 'participant', nommer)}
+    />
   {/key}
 
   <section class="presence" data-presence-fiche aria-labelledby={`${uid}-titre-presence`}>
@@ -693,6 +735,37 @@
       {/if}
     {/if}
   </section>
+
+  {#if inclusionsPlacement.statut !== 'sansPlacement' && inclusionsPlacement.statut !== 'sansObjet'}
+    <section class="rencontres" data-rubrique-inclusions-placement aria-labelledby={`${uid}-titre-inclusions-placement`}>
+      <h4 id={`${uid}-titre-inclusions-placement`}>{t('participants.fiche.inclusionsPlacement.titre')}</h4>
+      <p class="source">
+        <span>{t('participants.fiche.rencontres.intitule')}</span>
+        <span class="placement">{t(rencontres.source.cle, rencontres.source.details)}</span>
+      </p>
+      {#if participant.exclu}
+        <p>{t('participants.fiche.inclusionsPlacement.exclue')}</p>
+      {:else if siennes === null}
+        <p>{t('participants.fiche.inclusionsPlacement.nonMesurable')}</p>
+      {:else}
+        {#if siennes.compte !== null}
+          <p data-inclusions-compte>{t('participants.fiche.inclusionsPlacement.compte', siennes.compte)}</p>
+        {/if}
+        {#if siennes.auDela !== null}
+          <p data-inclusions-au-dela>{t('participants.fiche.inclusionsPlacement.auDela', siennes.auDela)}</p>
+        {/if}
+        {#if siennes.avis.length > 0}
+          <ul class="inclusions-placement">
+            {#each siennes.avis as avis, rang (rang)}
+              <li><PhraseInclusion {avis} /></li>
+            {/each}
+          </ul>
+        {:else if siennes.compte === null}
+          <p>{t('participants.fiche.inclusionsPlacement.aucune')}</p>
+        {/if}
+      {/if}
+    </section>
+  {/if}
 
   {#if rencontres.statut !== 'sansPlacement'}
     <section class="rencontres" data-rubrique-rencontres aria-labelledby={`${uid}-titre-rencontres`}>
@@ -933,7 +1006,8 @@
     font-weight: bold;
   }
 
-  .conflits-placement {
+  .conflits-placement,
+  .inclusions-placement {
     margin: 0;
     padding-left: var(--espace-5);
   }

@@ -52,6 +52,7 @@ import { comptesEntete } from './entete.js';
 import {
   COLONNES,
   GROUPEMENTS,
+  MASQUABLES,
   cheminDe,
   cleDeGroupement,
   cleDeStatut,
@@ -1244,13 +1245,16 @@ describe('les inclusions dans la grille (§ 4, § 10.2)', () => {
     expect(bascule(m).checked).toBe(false);
     expect(bascule(m).closest('label').textContent.trim()).toBe(t('participants.grille.montrerInclusions'));
     expect(grille(m).querySelector('[data-champ="inclusions"]')).toBeNull();
-    expect(grille(m).tHead.rows[0].cells).toHaveLength(COLONNES.length);
+    expect(grille(m).querySelector('[data-champ="inclusionsPlacement"]')).toBeNull();
+    expect(grille(m).tHead.rows[0].cells).toHaveLength(COLONNES.length - MASQUABLES.length + 1);
     const id = idDe(m, 'Pervenche');
     cellule(m, id, 'courriel').focus();
     await rendu();
     await cliquer(bascule(m));
     expect(grille(m).tHead.rows[0].cells).toHaveLength(COLONNES.length + 1);
-    expect(lignes(m).every((rangee) => rangee.querySelector('[data-champ="inclusions"]') !== null)).toBe(true);
+    for (const colonne of MASQUABLES) {
+      expect(lignes(m).every((rangee) => rangee.querySelector(`[data-champ="${colonne}"]`) !== null)).toBe(true);
+    }
     // Montrer une colonne devant la cellule active ne la déplace pas ; masquer
     // la colonne active la cède à sa voisine, et la remontrer la rend.
     expect(active()).toBe(cellule(m, id, 'courriel'));
@@ -1393,7 +1397,7 @@ describe('les inclusions dans la grille (§ 4, § 10.2)', () => {
     expect(executer).toHaveBeenCalledTimes(1);
     expect(executer).toHaveBeenCalledWith('changerInclusions', { id, participants: [idDe(m, 'Grisaille')] });
     expect(entrees(m)).toHaveLength(avant + 1);
-    expect(document.activeElement).toBe(cellule(m, id, 'courriel'));
+    expect(document.activeElement).toBe(cellule(m, id, 'inclusionsPlacement'));
   });
 
   test('montrée à 1366 et 1024 de large : la page ne défile pas, la grille défile au besoin dans son conteneur, sans quitter la carte, et chaque inclusion tient dans sa cellule', async () => {

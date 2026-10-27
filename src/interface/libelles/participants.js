@@ -42,7 +42,11 @@
 // ses deux choix multiples, le groupe sans choix, la recherche des
 // personnes et la phrase quand rien n'y répond, la commande, et le libellé
 // d'une personne incluse ; participants.fiche.inclusions* et
-// participants.fiche.aucuneInclusion* les deux rubriques de la fiche.
+// participants.fiche.aucuneInclusion* les deux rubriques de la fiche, et
+// participants.fiche.inclusionsHorsAtteinte l'information qu'elles posent
+// sous chaque liste ; participants.fiche.inclusionsPlacement.* la rubrique
+// « Inclusions du placement », et participants.inclusionsPlacement.* la
+// colonne du même nom de la grille.
 // participants.fiche.logo et participants.fiche.aucunLogo portent la rubrique
 // « Logo » de la fiche ; participants.logo.* ses commandes — « Logo », nommée
 // par la personne, « Retirer le logo » —, sa vignette, qui agrandit, l'image
@@ -99,6 +103,7 @@ export const TABLE = new Map([
   ['participants.colonne.conflits', "Conflit d'organisation"],
   ['participants.colonne.conflitsPlacement', 'Conflits du placement'],
   ['participants.colonne.inclusions', 'Inclusions'],
+  ['participants.colonne.inclusionsPlacement', 'Inclusions du placement'],
   ['participants.colonne.courriel', 'Courriel'],
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
   ['participants.colonne.animation', 'Animation'],
@@ -300,6 +305,9 @@ export const TABLE = new Map([
   ['participants.fiche.aucuneInclusionOrganisation', "Aucune inclusion d'organisation."],
   ['participants.fiche.inclusionsParticipant', 'Inclusions de participant'],
   ['participants.fiche.aucuneInclusionParticipant', 'Aucune inclusion de participant.'],
+  // Les inclusions de la liste que le diagnostic dit hors d'atteinte, chacune
+  // par sa cible et sa raison (qualite.inclusions.parce).
+  ['participants.fiche.inclusionsHorsAtteinte', "Hors d'atteinte, aucun placement ne peut les satisfaire :"],
   ['participants.fiche.absente', 'absente'],
   ['participants.fiche.logo', 'Logo'],
   ['participants.fiche.aucunLogo', 'Aucun logo.'],
@@ -378,6 +386,41 @@ export const TABLE = new Map([
     'participants.fiche.conflitsPlacement.nonEvalue',
     'Les conflits de ce placement ne se comptent pas : il ne décrit plus la soirée, ou la configuration est incohérente.',
   ],
+
+  // --- La rubrique « Inclusions du placement » de la fiche (§ 7.5, § 10.2) ---
+  // Les inclusions de la personne dans le placement que le plan montre, sous
+  // la ligne de source de la rubrique « Rencontres » : ses comptes, sa liste
+  // au-delà du plafond, puis la phrase de chaque avis qui la nomme
+  // (qualite.inclusions.*).
+  ['participants.fiche.inclusionsPlacement.titre', 'Inclusions du placement'],
+  [
+    'participants.fiche.inclusionsPlacement.compte',
+    ({ satisfaites, actives }) => `${compte(satisfaites, 'inclusion satisfaite', 'inclusions satisfaites')} sur ${actives}.`,
+  ],
+  [
+    'participants.fiche.inclusionsPlacement.auDela',
+    ({ atteignables, possibles }) =>
+      "Sa liste dépasse ce qu'elle peut rencontrer : " +
+      `${compte(atteignables, 'de ses inclusions au plus peut être satisfaite', 'de ses inclusions au plus peuvent être satisfaites')}, et ` +
+      (possibles === 0
+        ? 'toutes ses inclusions encore possibles sont atteintes'
+        : compte(possibles, "inclusion encore possible n'est pas atteinte", 'inclusions encore possibles ne sont pas atteintes')) +
+      ". Ce n'est pas un avis.",
+  ],
+  ['participants.fiche.inclusionsPlacement.aucune', 'Aucune inclusion active ne la nomme.'],
+  [
+    'participants.fiche.inclusionsPlacement.nonMesurable',
+    'Ce placement ne se mesure pas : ses inclusions ne se comptent pas. La page Qualité en donne les raisons.',
+  ],
+  ['participants.fiche.inclusionsPlacement.exclue', 'Exclue : ses inclusions attendent sa réintégration.'],
+
+  // --- La colonne « Inclusions du placement » de la grille (§ 10.2) ----------
+  // Ses inclusions satisfaites sur ses actives, sa liste au-delà du plafond,
+  // puis l'autre partie de chaque avis qui la nomme, après « sans ».
+  ['participants.inclusionsPlacement.compte', ({ satisfaites, actives }) => `${satisfaites} sur ${actives}`],
+  ['participants.inclusionsPlacement.auDela', 'liste au-delà du plafond'],
+  ['participants.inclusionsPlacement.sans', 'sans '],
+  ['participants.inclusionsPlacement.nonCompte', 'non comptées'],
 
   // --- Les étiquettes de la fiche (§ 4.5, § 10.2) ---------------------------
   ['participants.etiquettes.champ', 'Ajouter des étiquettes, séparées par une virgule'],

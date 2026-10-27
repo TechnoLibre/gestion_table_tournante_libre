@@ -26,9 +26,10 @@ import { affichagePresence, clePresence } from './presence.js';
  *  mesures de MESURES. Les propriétés s'associent à l'export par leur champ
  *  (CHAMP_DE_COLONNE), non par leur rang : la grille ne montre pas les
  *  étiquettes, les conflits d'organisation y suivent l'organisation, ceux
- *  du placement les suivent, les inclusions suivent ceux du placement,
- *  l'animation suit le titre pressenti, et la présence suit l'exclusion. Le
- *  collage en bloc suit l'ordre des champs de l'export, non celui-ci. */
+ *  du placement les suivent, les inclusions suivent ceux du placement, et
+ *  celles du placement les inclusions, l'animation suit le titre pressenti,
+ *  et la présence suit l'exclusion. Le collage en bloc suit l'ordre des
+ *  champs de l'export, non celui-ci. */
 export const COLONNES = Object.freeze([
   'nom',
   'prenom',
@@ -36,6 +37,7 @@ export const COLONNES = Object.freeze([
   'conflits',
   'conflitsPlacement',
   'inclusions',
+  'inclusionsPlacement',
   'courriel',
   'titrePressenti',
   'animation',
@@ -46,17 +48,18 @@ export const COLONNES = Object.freeze([
 
 /** Les colonnes qui écrivent une mesure, non une propriété : les conflits du
  *  placement montré (conflitsParTour, conflits.js), que la grille lit dans
- *  conflitsDuPlacement, et l'animation — les tables que la personne anime,
- *  ou « à désigner » sous la marque de l'animation réservée
- *  (celluleAnimation). Elles se lisent seulement : ni saisie, ni tri, ni
- *  filtre, ni groupement, ni export. */
-export const MESURES = Object.freeze(['conflitsPlacement', 'animation']);
+ *  conflitsDuPlacement, les inclusions du même placement
+ *  (inclusionsDePersonne, qualite/inclusions.js), et l'animation — les
+ *  tables que la personne anime, ou « à désigner » sous la marque de
+ *  l'animation réservée (celluleAnimation). Elles se lisent seulement : ni
+ *  saisie, ni tri, ni filtre, ni groupement, ni export. */
+export const MESURES = Object.freeze(['conflitsPlacement', 'inclusionsPlacement', 'animation']);
 
-/** Les colonnes que la grille ne montre qu'à la demande : les inclusions,
- *  masquées par défaut. Montrées, les douze colonnes ne tiennent plus
- *  toujours dans la carte d'une fenêtre de 1024 px, et la grille défile
- *  alors dans son conteneur. */
-export const MASQUABLES = Object.freeze(['inclusions']);
+/** Les colonnes que la grille ne montre qu'à la demande : les inclusions et
+ *  celles du placement, masquées par défaut, montrées ensemble. Montrées,
+ *  les treize colonnes ne tiennent plus toujours dans la carte d'une
+ *  fenêtre de 1024 px, et la grille défile alors dans son conteneur. */
+export const MASQUABLES = Object.freeze(['inclusions', 'inclusionsPlacement']);
 
 /**
  * Les colonnes que la grille montre, dans l'ordre de COLONNES : toutes,
@@ -131,6 +134,7 @@ const CLES_COLONNES = new Map([
   ['conflits', 'participants.colonne.conflits'],
   ['conflitsPlacement', 'participants.colonne.conflitsPlacement'],
   ['inclusions', 'participants.colonne.inclusions'],
+  ['inclusionsPlacement', 'participants.colonne.inclusionsPlacement'],
   ['courriel', 'participants.colonne.courriel'],
   ['titrePressenti', 'participants.colonne.titrePressenti'],
   ['animation', 'participants.colonne.animation'],

@@ -348,6 +348,15 @@ const codeDe = (raison) => ({ cle: raison.code, details: raison });
 const conflitsRestants = ({ mesures }) =>
   mesures.conflitsOrganisation > 0 ? { cle: 'propositions.conflitsRestants', details: { nombre: mesures.conflitsOrganisation } } : null;
 
+// La phrase des inclusions qu'une ligne laisse non satisfaites (§ 5.4,
+// § 5.7) : « N inclusions non satisfaites », quand sa mesure en compte ;
+// null à zéro, et quand le critère est sans objet — la mesure vaut alors
+// null.
+const inclusionsRestantes = ({ mesures }) =>
+  mesures.inclusions !== null && mesures.inclusions.avis > 0
+    ? { cle: 'propositions.inclusionsRestantes', details: { nombre: mesures.inclusions.avis } }
+    : null;
+
 // Une raison de dérive : son code, ses détails, et la personne qu'elle nomme,
 // null quand elle n'en nomme aucune.
 const raisonDe = (raison) => ({ ...codeDe(raison), participant: raison.participant ?? null });
@@ -380,6 +389,7 @@ function ligneDe(ligne, table, idRetenu, portees, rang = null) {
     imposes: imposes(ligne, table.imposes),
     violations: ligne.violations.map(codeDe),
     conflitsRestants: conflitsRestants(ligne),
+    inclusionsRestantes: inclusionsRestantes(ligne),
   };
 }
 
@@ -511,9 +521,11 @@ function ordre(classement) {
  *   animateurs selon l'état des critères de la table ; groupes : les
  *   segments de la rangée des groupes sur ces colonnes ; lignes : les
  *   comparables dans l'ordre du classement, chacune { id, rang, retenue, comparable: true,
- *   sertDeDepart, cellules, imposes, violations, conflitsRestants } —
- *   conflitsRestants, la phrase { cle, details } des conflits
- *   d'organisation que la ligne laisse, null quand elle n'en laisse aucun ;
+ *   sertDeDepart, cellules, imposes, violations, conflitsRestants,
+ *   inclusionsRestantes } — conflitsRestants, la phrase { cle, details }
+ *   des conflits d'organisation que la ligne laisse, null quand elle n'en
+ *   laisse aucun ; inclusionsRestantes, celle des inclusions qu'elle laisse
+ *   non satisfaites, null de même ;
  *   horsClassement : les autres par identifiant, { id, rang: null, retenue,
  *   comparable: false, sertDeDepart, statut, raisons } — sertDeDepart vrai
  *   pour une ligne en dérive par ses seuls participants, que « Repartir

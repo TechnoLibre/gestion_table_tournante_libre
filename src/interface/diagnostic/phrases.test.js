@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { diagnostiquerCharge } from '../../application/diagnostic.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
+import { nomAffiche } from '../../application/personnes.js';
 import { presencesPartielles } from '../../application/places.js';
 import { planchersConflits } from '../../application/planchers_conflits.js';
 import { creerTraduction } from '../../application/traduction.js';
@@ -65,6 +66,19 @@ function chargeDe({ organisations, capacites, tours = 4, ancres = [], separer = 
 
 const fois = (n, valeur) => Array(n).fill(valeur);
 
+// Six personnes inventées, deux tables de trois, un tour : chacune en
+// rencontre au plus deux. La première inclut les trois suivantes, plus
+// qu'elle n'en peut rencontrer ; la cinquième, seule aux Hérons, est exclue,
+// et la sixième l'inclut, ainsi que les Hérons.
+function chargeInclusions() {
+  const charge = chargeDe({ organisations: [null, null, null, null, 'Hérons', null], capacites: [3, 3], tours: 1 });
+  charge.participants[0].inclusionsParticipant = [2, 3, 4];
+  charge.participants[4].exclu = true;
+  charge.participants[5].inclusionsParticipant = [5];
+  charge.participants[5].inclusionsOrganisation = ['Hérons'];
+  return charge;
+}
+
 /**
  * Une charge d'objectifs (§ 4.5, A10) : n personnes qui portent
  * « finance », une table 1 de 8 places qui la vise pour la soirée, puis des
@@ -92,7 +106,14 @@ function lire(charge) {
   return {
     diagnostic,
     conflits,
-    liste: enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours, criteres, absentes, conflits }),
+    liste: enonces(diagnostic, {
+      numeroDe: numeroDeCharge(charge),
+      tours: charge.evenement.tours,
+      criteres,
+      absentes,
+      conflits,
+      nomDe: (id) => nomAffiche(charge.participants.find((personne) => personne.id === id)),
+    }),
   };
 }
 
@@ -1146,6 +1167,7 @@ describe('expliquer : « Concrètement » et « Pour changer cela » (§ 5.6)', 
       chargeDe({ organisations: [], capacites: [] }),
       chargeObjectifs(40, fois(4, 8), { mode: 'chacun' }),
       chargeObjectifs(40, fois(4, 8), { mode: 'minimum' }),
+      chargeInclusions(),
     ];
     // Les planchers exacts synthétiques de l'étoile : aucun plan sans
     // conflit, un plancher exact, un plancher sous limite.
@@ -1408,5 +1430,57 @@ describe('enonces : les planchers exacts du solveur (§ 5.6)', () => {
       const { liste } = lire(charge);
       assert.deepEqual(lireAvec(charge, null).liste, liste, nom);
     }
+  });
+});
+
+describe('enonces : les inclusions qu\u{2019}aucun plan ne satisfait (§ 5.6)', () => {
+  test('chaque inclusion hors d\u{2019}atteinte avec sa raison, puis chaque liste au-delà du plafond, en fin de liste, dans leur carte', () => {
+    const { diagnostic, liste } = lire(chargeInclusions());
+    const siennes = liste.filter(({ cle }) => cle.startsWith('diagnostic.inclusion'));
+    assert.deepEqual(liste.slice(-3), siennes);
+    assert.deepEqual(siennes, [
+      {
+        cle: 'diagnostic.inclusionHorsAtteinte',
+        details: { personne: 'Iris Ombrelle6', cible: 'Hérons', raison: 'sansPresent' },
+        remede: { cle: 'diagnostic.remede.inclusion.sansPresent', details: {} },
+      },
+      {
+        cle: 'diagnostic.inclusionHorsAtteinte',
+        details: { personne: 'Iris Ombrelle6', cible: 'Iris Ombrelle5', raison: 'exclue' },
+        remede: { cle: 'diagnostic.remede.inclusion.exclue', details: {} },
+      },
+      {
+        cle: 'diagnostic.inclusionsAuDela',
+        details: { personne: 'Iris Ombrelle1', actives: 3, besoin: 3, plafond: 2, atteignables: 2 },
+        remede: { cle: 'diagnostic.remede.inclusionsAuDela', details: {} },
+      },
+    ]);
+    assert.equal(diagnostic.inclusions.auDelaDuPlafond.length, 1);
+    assert.equal(texte(siennes[0]), "inclusion hors d'atteinte : Iris Ombrelle6 \u{2192} Hérons, aucun présent ne porte l'organisation");
+    assert.equal(
+      texte(siennes[2]),
+      'Iris Ombrelle1 : 3 inclusions demandent 3 personnes ; la soirée lui en fait rencontrer au plus 2, donc au plus 2 satisfaites, ' +
+        'et 1 reste hors de portée',
+    );
+    assert.deepEqual(cartesDiagnostic(liste).at(-1), { genre: 'inclusions', groupe: null, enonces: siennes });
+    assert.equal(remedeAgit(siennes[0].remede), false);
+    assert.equal(remedeAgit(siennes[1].remede), true);
+    const contexte = { diagnostic, tours: 1 };
+    for (const enonce of siennes) {
+      const { concretement, levier } = expliquer(enonce, contexte);
+      assert.equal(concretement.length, 1);
+      assert.equal(typeof texte(concretement[0]), 'string');
+      assert.equal(levier, null);
+      assert.equal(typeof texte(enonce.remede), 'string');
+    }
+  });
+
+  test('sans nomDe, des inclusions à nommer lèvent ; sans inclusion, nomDe n\u{2019}est pas lu', () => {
+    const charge = chargeInclusions();
+    const { diagnostic } = diagnostiquerCharge(charge);
+    assert.throws(() => enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: 1 }), TypeError);
+    const sans = chargeDe({ organisations: fois(6, null), capacites: [3, 3], tours: 1 });
+    const { diagnostic: sansInclusion } = diagnostiquerCharge(sans);
+    assert.ok(enonces(sansInclusion, { numeroDe: numeroDeCharge(sans), tours: 1 }).every(({ cle }) => !cle.startsWith('diagnostic.inclusion')));
   });
 });

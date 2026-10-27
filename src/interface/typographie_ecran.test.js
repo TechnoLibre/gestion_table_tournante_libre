@@ -137,6 +137,13 @@ const EXEMPLES_ECRAN = [
   ['diagnostic.concretement.collisionsAuMoins', { toursALimite: [3] }],
   ['diagnostic.concretement.collisionsAuMoins', { toursALimite: [] }],
   ['diagnostic.solveur.enCours', { tour: 2, tours: 4 }],
+  // Les inclusions : une raison se lit par sa clé
+  ['diagnostic.inclusionHorsAtteinte', { personne: 'Iris Ombrelle', cible: 'Théo Pervenche', raison: 'sansTourCommun' }],
+  ['qualite.inclusions.parce', { raison: 'qualite.inclusions.raison.conflit' }],
+  ['qualite.inclusions.synthese', { avis: 0, cible: 1 }],
+  ['qualite.inclusions.synthese', { avis: 0, cible: 0 }],
+  ['qualite.inclusions.auDela.ligne', { satisfaites: 1, actives: 3, atteignables: 1, possibles: 0 }],
+  ['participants.fiche.inclusionsPlacement.auDela', { atteignables: 1, possibles: 0 }],
   // La génération
   ['generation.avancement.texte', { fait: 1500, total: 20_000 }],
   ['generation.coeurs.disponibles', { disponibles: 8 }],

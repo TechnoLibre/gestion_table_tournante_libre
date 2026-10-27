@@ -32,11 +32,12 @@
   // déplie tout, et rien ne s'écrit.
   //
   // La case « Montrer les inclusions » (data-champ="montrerInclusions"),
-  // après le groupement, montre la colonne des inclusions, masquée par
-  // défaut (MASQUABLES, colonnesMontrees) ; la grille reçoit les colonnes
-  // montrées. Le choix vit dans la section, le temps qu'elle est ouverte, et
-  // n'écrit rien. Masquer la colonne retire le tri qu'elle portait, et la
-  // grille abandonne une édition ouverte sur elle.
+  // après le groupement, montre la colonne des inclusions et celle des
+  // inclusions du placement, masquées par défaut (MASQUABLES,
+  // colonnesMontrees) ; la grille reçoit les colonnes montrées. Le choix vit
+  // dans la section, le temps qu'elle est ouverte, et n'écrit rien. Masquer
+  // les colonnes retire le tri que portait celle des inclusions, et la grille
+  // abandonne une édition ouverte sur elle.
   //
   // Groupée, la liste lit les conflits du placement que le plan montre —
   // la proposition demandée, ui.proposition, sinon le retenu — par
@@ -82,6 +83,7 @@
   import { conflitsDesGroupes, lignesDeConflit, reglesParPersonne } from './conflits.js';
   import { comptesEntete, legendeOrganisations, legendeEtiquettes } from './entete.js';
   import {
+    MASQUABLES,
     choisirGroupement,
     cleDeGroupement,
     clesPremierNiveau,
@@ -106,9 +108,10 @@
   // groupement, et les clés des groupes repliés.
   let groupement = $state.raw([]);
   let replies = $state.raw(new Set());
-  // La colonne des inclusions montrée, et les colonnes que la grille reçoit.
+  // Les colonnes des inclusions montrées, et les colonnes que la grille
+  // reçoit.
   let inclusionsMontrees = $state(false);
-  const colonnes = $derived(colonnesMontrees(inclusionsMontrees ? ['inclusions'] : []));
+  const colonnes = $derived(colonnesMontrees(inclusionsMontrees ? MASQUABLES : []));
   // La suppression qui attend sa confirmation : {participant, reservations}.
   let aSupprimer = $state.raw(null);
   // Le dernier export enregistré qui nomme des homonymes : la liste qu'il a

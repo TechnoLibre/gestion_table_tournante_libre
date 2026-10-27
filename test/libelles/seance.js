@@ -40,6 +40,15 @@ export const EXEMPLES = [
   ],
   ['RESERVATION_NON_HONOREE', { participant: 4, table: 5, tour: 1 }],
   [
+    'INCLUSION_CONTREDITE',
+    {
+      contredites: [
+        { participant: 1, personne: 'Iris Ombrelle', cible: { organisation: 'Club des Merles' } },
+        { participant: 3, personne: 'Ondine Lacasse', cible: { participant: 2, personne: 'Théo Pervenche' } },
+      ],
+    },
+  ],
+  [
     'INVARIANT_VIOLE',
     {
       proposition: 1,
@@ -62,6 +71,13 @@ export const EXEMPLES = [
 ];
 
 export const TEXTES = [
+  // Une inclusion contredite, nommée par sa source et sa cible.
+  [
+    'INCLUSION_CONTREDITE',
+    { contredites: [{ participant: 1, personne: 'Iris Ombrelle', cible: { organisation: 'Club des Merles' } }] },
+    "Après ce geste, un conflit d'organisation contredit 1 inclusion : Iris Ombrelle \u{2192} Club des Merles. " +
+      "Elle reste dans sa liste, hors d'atteinte : aucun placement ne la satisfera tant que le conflit tient.",
+  ],
   // Le dossier de l'événement disparu pendant la séance.
   [
     'DOSSIER_EVENEMENT_ABSENT',

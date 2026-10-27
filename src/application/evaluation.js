@@ -75,6 +75,7 @@ import { classer, premierPalierQuiDepartage } from '../moteur/classement.js';
 import { SANS_GROUPE, STATUT, figerConfiguration, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
+import { ciblesDesInclusions } from '../moteur/inclusions.js';
 import { assisAChaqueTourPresent, mesurer } from '../moteur/indicateurs.js';
 import {
   borneHaute,
@@ -138,13 +139,32 @@ export { CASES, MODES_OBJECTIFS, PRIORITES_PAR_DEFAUT } from '../moteur/criteres
  * @property {boolean|null} minimumAtteint
  * @property {object[]} refusDessin   verifierIndicateurs, chaque violation
  *           complétée de participant, l'identifiant de son index ; []
- * @property {{avis: number, nonSatisfaites: Array<{participant: number,
+ * @property {InclusionsNommees|null} inclusions
+ *           comparable : les inclusions de la mesure (mesures.inclusions),
+ *           chaque personne par identifiant ; null sans ligne active, et
+ *           quand le statut n'est pas comparable
+ *
+ * @typedef {Object} InclusionsNommees   mesures.inclusions, nommées
+ * @property {number} cible        les rencontres demandées qui font les avis
+ * @property {number} satisfaites  celles que le plan fait
+ * @property {number} avis         cible − satisfaites
+ * @property {Array<{participant: number,
  *            cible: {participant: number}|{organisation: string},
- *            reciproque: boolean}>}|null} inclusions
- *           comparable : les inclusions non satisfaites de la mesure
- *           (mesures.inclusions), source et cible par identifiant et
- *           libellé ; null sans ligne active, et quand le statut n'est pas
- *           comparable
+ *            partenaire: number|null, reciproque: boolean}>} nonSatisfaites
+ *           une par rencontre demandée non satisfaite, dans l'ordre de la
+ *           mesure : la personne qui la porte, la personne incluse ou le
+ *           libellé de l'organisation incluse, partenaire, la personne dont
+ *           la rencontre la satisfait (null pour une organisation que
+ *           plusieurs membres satisfont), et reciproque quand les deux
+ *           personnes de la paire la demandent, l'une par son organisation
+ *           peut-être
+ * @property {Array<{participant: number, actives: number, besoin: number,
+ *            plafond: number, atteignables: number, satisfaites: number,
+ *            auDelaDuPlafond: boolean}>} parPersonne
+ *           chaque personne qui porte une inclusion active, par identifiant
+ *           croissant : k°(p), b(p), K(p), I(p), ses inclusions satisfaites,
+ *           et auDelaDuPlafond quand sa liste dépasse ce qu'elle peut
+ *           rencontrer (§ 5.4)
  *
  * @typedef {Object} TableEvaluation
  * @property {number[]} population    identifiants non exclus, croissants
@@ -217,19 +237,34 @@ const nonMesuree = (id, statut, raisons) => ({
   inclusions: null,
 });
 
-// Les inclusions non satisfaites d'une mesure, nommées par identifiants : la
-// source, et la cible codée −1 − g (instance.inclusionCible) par le libellé
-// de son organisation, sinon par l'identifiant de la personne, comme le
-// diagnostic les nomme. null quand la mesure n'en porte pas.
-function inclusionsNommees({ ids, groupes }, inclusions) {
+// Les inclusions d'une mesure, nommées par identifiants (InclusionsNommees) :
+// chaque personne par le sien, et la cible codée −1 − g
+// (instance.inclusionCible) par le libellé de son organisation, comme le
+// diagnostic les nomme. Le partenaire d'un avis se lit dans l'unité qui le
+// porte (ciblesDesInclusions, déjà calculée par la mesure) : les avis
+// suivent l'ordre des unités, et u avance jusqu'à celle de même source et
+// de même cible, unique pour une source. null quand la mesure n'en porte
+// pas.
+function inclusionsNommees(instance, inclusions) {
   if (inclusions === null) return null;
+  const { ids, groupes, inclusionCible } = instance;
+  const { uniteLigne, uniteSource, unitePartenaire } = ciblesDesInclusions(instance);
+  let u = 0;
+  const partenaireDe = (p, cible) => {
+    while (uniteSource[u] !== p || inclusionCible[uniteLigne[u]] !== cible) u += 1;
+    return unitePartenaire[u] < 0 ? null : ids[unitePartenaire[u]];
+  };
   return {
+    cible: inclusions.cible,
+    satisfaites: inclusions.satisfaites,
     avis: inclusions.avis,
     nonSatisfaites: inclusions.nonSatisfaites.map(({ p, cible, reciproque }) => ({
       participant: ids[p],
       cible: cible < 0 ? { organisation: groupes[-1 - cible] } : { participant: ids[cible] },
+      partenaire: partenaireDe(p, cible),
       reciproque,
     })),
+    parPersonne: inclusions.parPersonne.map(({ p, ...reste }) => ({ participant: ids[p], ...reste })),
   };
 }
 
@@ -477,6 +512,13 @@ export function nettoyage(table, n) {
  *           sansObjet} du critère des objectifs, et tables casesAuPire,
  *           {sieges, assis, doublons}, par position le nombre de cases au
  *           plus grand compte de la grille, null sans case
+ * @property {InclusionsNommees|null} inclusions   celles de la ligne
+ *           d'évaluation du placement ; null sans inclusion active
+ * @property {Array<{participant: number,
+ *            cible: {organisation: string}|{participant: number},
+ *            raison: string}>} inclusionsHorsDAtteinte
+ *           les inclusions hors d'atteinte du diagnostic, avec leur raison,
+ *           dans son ordre, qu'une inclusion soit active ou non
  * @property {string[]|null} planchersRetires   ceux du diagnostic : les
  *           planchers que la présence par tour retire, ['ecartItineraire']
  *           dès qu'une personne non exclue manque un tour, [] sinon
@@ -528,6 +570,8 @@ const CHAMPS_DE_MESURE = [
   'matrice',
   'objectifs',
   'animateurs',
+  'inclusions',
+  'inclusionsHorsDAtteinte',
   'planchersRetires',
   'course',
 ];
@@ -831,7 +875,9 @@ function placementDe(charge, id) {
  * de diversité ; detailler, en une
  * lecture du plan, la matrice seulement jusqu'à SEUIL_MATRICE_PARTICIPANTS
  * personnes, dans l'ordre du profil ; puis la garde à quatre paramètres,
- * planchers des collisions et des objectifs par tour compris (D42).
+ * planchers des collisions et des objectifs par tour compris (D42). Les
+ * inclusions sont celles de la ligne d'évaluation, nommées de même, et les
+ * inclusions hors d'atteinte du même diagnostic.
  *
  * La filiation (D76, C23) : derivation, celle de la proposition dont la
  * course est montrée ; un retenu non ajusté venu d'une dérivée porte donc
@@ -939,6 +985,12 @@ export function detaillerQualite(charge, id, options = {}) {
     })),
     propositionDuRetenu: id === 'retenu' && origine !== null ? origine.id : null,
     ...enIdentifiants(instance, brut, critere),
+    inclusions: inclusionsNommees(instance, mesures.inclusions),
+    inclusionsHorsDAtteinte: diagnostic.inclusions.horsDAtteinte.map(({ participant, cible, raison }) => ({
+      participant,
+      cible: { ...cible },
+      raison,
+    })),
     planchersRetires: [...diagnostic.planchersRetires],
     course:
       course === null

@@ -197,10 +197,10 @@ describe('lignesGrille : tri et filtre (§ 10.2)', () => {
     assert.throws(() => lignesGrille(participants, { tri: { colonne: 'nom', sens: 'haut' }, filtre: '' }, cleNormalisee), RangeError);
   });
 
-  test('les conflits du placement et l’animation, deux mesures, ne se trient ni ne se filtrent : TRIABLES les écarte, et leur tri lève', () => {
-    assert.deepEqual(MESURES, ['conflitsPlacement', 'animation']);
+  test('les conflits et les inclusions du placement et l’animation, trois mesures, ne se trient ni ne se filtrent : TRIABLES les écarte, et leur tri lève', () => {
+    assert.deepEqual(MESURES, ['conflitsPlacement', 'inclusionsPlacement', 'animation']);
     assert.ok(Object.isFrozen(MESURES));
-    assert.deepEqual(TRIABLES, COLONNES.filter((colonne) => colonne !== 'conflitsPlacement' && colonne !== 'animation'));
+    assert.deepEqual(TRIABLES, COLONNES.filter((colonne) => !['conflitsPlacement', 'inclusionsPlacement', 'animation'].includes(colonne)));
     assert.ok(Object.isFrozen(TRIABLES));
     for (const colonne of MESURES) {
       for (const sens of ['croissant', 'decroissant']) {
@@ -209,8 +209,9 @@ describe('lignesGrille : tri et filtre (§ 10.2)', () => {
     }
     // Une propriété de ce nom, que la grille n'écrit jamais, n'est pas lue
     // par le filtre.
-    const porteuse = [personne(1, 'Ombrelle', { conflitsPlacement: 'tour 2', animation: 'table 3' })];
+    const porteuse = [personne(1, 'Ombrelle', { conflitsPlacement: 'tour 2', inclusionsPlacement: 'sans Iris', animation: 'table 3' })];
     assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'tour' }, cleNormalisee), []);
+    assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'Iris' }, cleNormalisee), []);
     assert.deepEqual(lignesGrille(porteuse, { tri: null, filtre: 'table' }, cleNormalisee), []);
   });
 
@@ -500,26 +501,28 @@ describe('reservationsDe : les réservations d’une personne, pour la fiche (§
 });
 
 describe("les colonnes de la grille s'associent à l'export par leur champ (§ 10.2)", () => {
-  test('douze colonnes, les conflits juste après l’organisation, ceux du placement juste après, les inclusions juste après, l’animation juste après le titre pressenti, la présence juste après l’exclusion ; chacune, hors des mesures et des inclusions, a son champ d’export, sous son en-tête', () => {
+  test('treize colonnes, les conflits juste après l’organisation, ceux du placement juste après, les inclusions juste après, celles du placement juste après, l’animation juste après le titre pressenti, la présence juste après l’exclusion ; chacune, hors des mesures et des inclusions, a son champ d’export, sous son en-tête', () => {
     assert.deepEqual(COLONNES, [
-      'nom', 'prenom', 'organisation', 'conflits', 'conflitsPlacement', 'inclusions', 'courriel', 'titrePressenti', 'animation', 'exclu', 'presence', 'notes',
+      'nom', 'prenom', 'organisation', 'conflits', 'conflitsPlacement', 'inclusions', 'inclusionsPlacement', 'courriel', 'titrePressenti', 'animation', 'exclu', 'presence', 'notes',
     ]);
     assert.ok(Object.isFrozen(COLONNES));
     assert.deepEqual([...CHAMP_DE_COLONNE.keys()], COLONNES.filter((colonne) => !MESURES.includes(colonne) && colonne !== 'inclusions'));
     assert.equal(CHAMP_DE_COLONNE.has('conflitsPlacement'), false);
     assert.equal(CHAMP_DE_COLONNE.has('animation'), false);
     assert.equal(CHAMP_DE_COLONNE.has('inclusions'), false);
+    assert.equal(CHAMP_DE_COLONNE.has('inclusionsPlacement'), false);
     assert.equal(CHAMP_DE_COLONNE.get('titrePressenti'), 'titre_pressenti');
     assert.equal(CHAMP_DE_COLONNE.get('conflits'), 'conflit_organisation');
     for (const colonne of [...CHAMP_DE_COLONNE.keys()].filter((c) => c !== 'titrePressenti' && c !== 'conflits')) assert.equal(CHAMP_DE_COLONNE.get(colonne), colonne);
   });
 
-  test('les inclusions ne se montrent qu’à la demande : colonnesMontrees les écarte, sauf quand elles sont nommées, l’ordre de COLONNES gardé', () => {
-    assert.deepEqual(MASQUABLES, ['inclusions']);
+  test('les inclusions et celles du placement ne se montrent qu’à la demande : colonnesMontrees les écarte, sauf quand elles sont nommées, l’ordre de COLONNES gardé', () => {
+    assert.deepEqual(MASQUABLES, ['inclusions', 'inclusionsPlacement']);
     assert.ok(Object.isFrozen(MASQUABLES));
-    assert.deepEqual(colonnesMontrees([]), COLONNES.filter((colonne) => colonne !== 'inclusions'));
-    assert.deepEqual(colonnesMontrees(new Set(['inclusions'])), [...COLONNES]);
-    assert.notEqual(colonnesMontrees(['inclusions']), COLONNES);
+    assert.deepEqual(colonnesMontrees([]), COLONNES.filter((colonne) => !MASQUABLES.includes(colonne)));
+    assert.deepEqual(colonnesMontrees(new Set(MASQUABLES)), [...COLONNES]);
+    assert.deepEqual(colonnesMontrees(['inclusions']), COLONNES.filter((colonne) => colonne !== 'inclusionsPlacement'));
+    assert.notEqual(colonnesMontrees(MASQUABLES), COLONNES);
   });
 
   test('rangDeColonne : le rang d’une colonne montrée parmi celles de la grille ; une colonne masquée cède le sien à la première montrée qui la suit', () => {

@@ -14,6 +14,7 @@ import { creerCharge } from '../stockage/document.js';
 import { examiner } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { avertissementsApres, deriveNouvelle, examenNomme, invariantViole, raisonsNommees } from './avertissements.js';
+import { appliquerCommande } from './commandes.js';
 import { configurationDe } from './configuration.js';
 import { nomAffiche } from './personnes.js';
 
@@ -837,5 +838,97 @@ describe('avertissements : une liste de raisons partagée par les deux examens n
     assert.equal(deriveNouvelle(inchangee.examenAvant, inchangee.partage, avant, avant), null);
     assert.equal(inchangee.compte.cles, 0);
     assert.equal(deriveNouvelle(inchangee.examenAvant, inchangee.examenApres, avant, avant), null);
+  });
+});
+
+describe("avertissements : l'inclusion qu'un conflit contredit (§ 4, § 5.9)", () => {
+  // La petite soirée sans propositions, deux organisations inventées :
+  // Ombrelle et Grisaille aux Merles, Pervenche et Lacasse aux Hérons.
+  // Ombrelle inclut Pervenche, et les Hérons.
+  function soireeIncluse() {
+    return avec(petiteSoiree({ retenu: false }), (charge) => {
+      charge.propositions = [];
+      charge.evenement.etat = 'brouillon';
+      charge.participants.forEach((personneDe, rang) => {
+        personneDe.organisation = rang < 2 ? 'Merles' : 'Hérons';
+      });
+      charge.participants[0].inclusionsParticipant = [3];
+      charge.participants[0].inclusionsOrganisation = ['Hérons'];
+    });
+  }
+  const contredite = deCode('INCLUSION_CONTREDITE');
+
+  test('un conflit posé contredit les deux inclusions : un avertissement les nomme, source et cible', () => {
+    const avant = soireeIncluse();
+    const apres = avec(avant, (charge) => {
+      charge.participants[1].conflits = ['Hérons'];
+    });
+    assert.deepEqual(contredite(avertissementsApres(avant, apres)), [
+      {
+        code: 'INCLUSION_CONTREDITE',
+        details: {
+          contredites: [
+            { participant: 1, personne: 'Ombrelle', cible: { organisation: 'Hérons' } },
+            { participant: 1, personne: 'Ombrelle', cible: { participant: 3, personne: 'Pervenche' } },
+          ],
+        },
+      },
+    ]);
+  });
+
+  test("une inclusion posée contre un conflit déjà là l'est aussi ; une contradiction qui reste ne se redit pas", () => {
+    const avant = avec(soireeIncluse(), (charge) => {
+      charge.participants[1].conflits = ['Hérons'];
+      delete charge.participants[0].inclusionsOrganisation;
+    });
+    const apres = avec(avant, (charge) => {
+      charge.participants[0].inclusionsOrganisation = ['Hérons'];
+    });
+    assert.deepEqual(contredite(avertissementsApres(avant, apres)), [
+      {
+        code: 'INCLUSION_CONTREDITE',
+        details: { contredites: [{ participant: 1, personne: 'Ombrelle', cible: { organisation: 'Hérons' } }] },
+      },
+    ]);
+    assert.deepEqual(contredite(avertissementsApres(apres, avec(apres, (charge) => (charge.participants[3].notes = 'note')))), []);
+  });
+
+  test('une organisation contredite renommée, que les listes suivent, ne redit pas sa contradiction', () => {
+    // Pervenche seule aux Hérons, que Grisaille évite ; elle passe aux
+    // Hirondelles, et la liste d'Ombrelle comme le conflit de Grisaille
+    // suivent le renommage.
+    const avant = avec(soireeIncluse(), (charge) => {
+      charge.participants[1].conflits = ['Hérons'];
+      charge.participants[3].organisation = 'Pinsons';
+    });
+    const { charge: apres } = appliquerCommande('modifierParticipant', avant, { id: 3, champs: { organisation: 'Hirondelles' } });
+    assert.deepEqual(apres.participants[0].inclusionsOrganisation, ['Hirondelles']);
+    assert.deepEqual(contredite(avertissementsApres(avant, apres)), []);
+    // Le conflit levé sur le nouveau libellé, puis reposé : la contradiction
+    // revient, et se dit.
+    const sansConflit = avec(apres, (charge) => {
+      delete charge.participants[1].conflits;
+    });
+    assert.deepEqual(
+      contredite(avertissementsApres(sansConflit, apres)).map(({ details }) => details.contredites.map(({ cible }) => cible.organisation ?? cible.personne)),
+      [['Hirondelles', 'Pervenche']],
+    );
+  });
+
+  test('une inclusion hors d’atteinte pour une autre raison ne dit rien : la personne incluse exclue', () => {
+    const avant = soireeIncluse();
+    const apres = avec(avant, (charge) => {
+      charge.participants[2].exclu = true;
+    });
+    assert.deepEqual(contredite(avertissementsApres(avant, apres)), []);
+  });
+
+  test('sans contradiction, rien ; un conflit levé ne dit rien', () => {
+    const libre = soireeIncluse();
+    assert.deepEqual(contredite(avertissementsApres(libre, avec(libre, (charge) => (charge.participants[3].notes = 'note')))), []);
+    const enConflit = avec(libre, (charge) => {
+      charge.participants[1].conflits = ['Hérons'];
+    });
+    assert.deepEqual(contredite(avertissementsApres(enConflit, libre)), []);
   });
 });

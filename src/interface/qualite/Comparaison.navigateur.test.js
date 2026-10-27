@@ -54,7 +54,7 @@ const V1 = VERSION.affichee;
 const BASE = 'soiree';
 
 // Les vues de la page, dans leur ordre à l'écran (§ 12, B9, D55).
-const VUES = ['entete', 'profil', 'comparaison', 'collisions', 'tables', 'paires', 'objectifs', 'animateurs', 'diversite', 'performance'];
+const VUES = ['entete', 'profil', 'comparaison', 'collisions', 'tables', 'paires', 'inclusions', 'objectifs', 'animateurs', 'diversite', 'performance'];
 
 // --- Les charges d'épreuve -------------------------------------------------------
 

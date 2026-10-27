@@ -37,8 +37,12 @@
 // objectifs hors d'atteinte —, précédé de ce qui vide la séparation de son
 // sens (§ 15.4, § 7.5) et suivi du plafond a priori (§ 5.5), des retours
 // imposés (§ 5.4) et des conflits d'organisation que les réservations
-// imposent. Un plancher ne s'énonce que strictement positif : un plancher nul
-// laisserait croire qu'un plancher a été calculé là où il n'y en a pas.
+// imposent, puis des inclusions qu'aucun plan ne satisfait — chaque
+// inclusion hors d'atteinte avec sa raison, puis chaque personne dont la
+// liste dépasse ce qu'elle peut rencontrer —, qui nomment leurs personnes
+// par nomDe et ne sont jamais des avis. Un plancher ne s'énonce que
+// strictement positif : un plancher nul laisserait croire qu'un plancher a
+// été calculé là où il n'y en a pas.
 //
 // La présence par tour : quand une personne au moins manque un tour,
 // l'énoncé des planchers retirés, sans remède, suit les collisions et
@@ -301,6 +305,28 @@ function conflitsImposes({ conflitsImposes: conflits }) {
   return [{ cle: 'diagnostic.conflitsImposes', details: { conflits }, remede: remede('diagnostic.remede.conflitsImposes') }];
 }
 
+// Les inclusions qu'aucun plan ne satisfait (§ 5.6) : chaque inclusion hors
+// d'atteinte, dans l'ordre du diagnostic, sa personne et sa cible nommées,
+// puis chaque personne au-delà de son plafond, avec ses inclusions actives,
+// les personnes qu'elles demandent, son plafond a priori et ses inclusions
+// atteignables. nomDe nomme une personne par son identifiant ; il n'est lu
+// que quand le diagnostic en porte, et null lève alors une TypeError.
+function inclusions({ inclusions: { horsDAtteinte, auDelaDuPlafond } }, nomDe) {
+  const cibleDe = (cible) => (Object.hasOwn(cible, 'organisation') ? cible.organisation : nomDe(cible.participant));
+  return [
+    ...horsDAtteinte.map(({ participant, cible, raison }) => ({
+      cle: 'diagnostic.inclusionHorsAtteinte',
+      details: { personne: nomDe(participant), cible: cibleDe(cible), raison },
+      remede: remede(`diagnostic.remede.inclusion.${raison}`),
+    })),
+    ...auDelaDuPlafond.map(({ participant, actives, besoin, plafond, atteignables }) => ({
+      cle: 'diagnostic.inclusionsAuDela',
+      details: { personne: nomDe(participant), actives, besoin, plafond, atteignables },
+      remede: remede('diagnostic.remede.inclusionsAuDela'),
+    })),
+  ];
+}
+
 /**
  * Les énoncés d'un diagnostic, dans l'ordre décrit en tête. Ne modifie pas
  * le diagnostic.
@@ -310,7 +336,8 @@ function conflitsImposes({ conflitsImposes: conflits }) {
  *          criteres?: Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>,
  *          absentes?: number,
  *          conflits?: Array<{organisations: string[], plancherCumulees: number, parTour: number[], gain: number}>,
- *          exacts?: import('../../application/planchers_exacts.js').PlanchersExacts|null}} options
+ *          exacts?: import('../../application/planchers_exacts.js').PlanchersExacts|null,
+ *          nomDe?: ((id: number) => string|null)|null}} options
  *        numeroDe : le numéro affiché d'un identifiant de table ; tours : le
  *        nombre de tours de l'événement ; criteres : l'état des critères
  *        (criteresDuDiagnostic), vide par défaut, et aucun plancher des
@@ -318,11 +345,14 @@ function conflitsImposes({ conflitsImposes: conflits }) {
  *        exclues qui manquent un tour (presencesPartielles), 0 par défaut ;
  *        conflits : les planchers des conflits en étoile (planchersConflits),
  *        aucun par défaut ; exacts : les planchers exacts du solveur
- *        (assemblerPlanchers), null par défaut, tant qu'ils manquent
+ *        (assemblerPlanchers), null par défaut, tant qu'ils manquent ;
+ *        nomDe : le nom affiché d'une personne de la charge, exclue
+ *        comprise, qui nomme celles des inclusions ; null par défaut, et
+ *        une TypeError quand le diagnostic porte des inclusions à nommer
  * @returns {Array<{cle: string, details: Object, remede: null|{cle: string, details: Object,
  *           commande?: string, arguments?: Object}, grandeur?: string}>}
  */
-export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes = 0, conflits = [], exacts = null }) {
+export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes = 0, conflits = [], exacts = null, nomDe = null }) {
   return [
     ...separation(diagnostic),
     ...collisions(diagnostic, tours),
@@ -337,6 +367,7 @@ export function enonces(diagnostic, { numeroDe, tours, criteres = [], absentes =
     ...plafond(diagnostic),
     ...imposes(diagnostic),
     ...conflitsImposes(diagnostic),
+    ...inclusions(diagnostic, nomDe),
   ];
 }
 
@@ -363,10 +394,14 @@ const CLES_SEPARATION = new Set(['diagnostic.uneSeuleOrganisation', 'diagnostic.
 // Les énoncés que porte la carte des organisations en conflit.
 const CLES_CONFLITS = new Set(['diagnostic.conflitsEtoile', 'diagnostic.conflitsInevitables']);
 
+// Les énoncés que porte la carte des inclusions.
+const CLES_INCLUSIONS = new Set(['diagnostic.inclusionHorsAtteinte', 'diagnostic.inclusionsAuDela']);
+
 // Le genre et le groupe de la carte d'un énoncé.
 function carteDe({ cle, details }) {
   if (details.groupe !== undefined) return { genre: 'organisation', groupe: details.groupe };
   if (CLES_CONFLITS.has(cle)) return { genre: 'conflits', groupe: null };
+  if (CLES_INCLUSIONS.has(cle)) return { genre: 'inclusions', groupe: null };
   return { genre: CLES_SEPARATION.has(cle) ? 'separation' : 'ensemble', groupe: null };
 }
 
@@ -375,15 +410,16 @@ function carteDe({ cle, details }) {
  * l'ordre, par suites d'énoncés voisins de même carte — la séparation vidée
  * de son sens ('separation'), une organisation, celle de details.groupe
  * ('organisation'), les conflits en étoile ou leur impossibilité
- * ('conflits'), ou le reste de l'événement ('ensemble'), que le plancher
- * exact ouvre quand il s'énonce. Dans l'ordre d'enonces, la séparation vient
- * d'abord, puis une carte par organisation en collision — ses collisions et
- * son excédent —, puis une carte des conflits, puis l'événement : les
- * cartes mises bout à bout redonnent la liste reçue, énoncé pour énoncé, les
- * mêmes objets. Ne modifie pas la liste.
+ * ('conflits'), le reste de l'événement ('ensemble'), que le plancher exact
+ * ouvre quand il s'énonce, ou les inclusions qu'aucun plan ne satisfait
+ * ('inclusions'). Dans l'ordre d'enonces, la séparation vient d'abord, puis
+ * une carte par organisation en collision — ses collisions et son
+ * excédent —, puis une carte des conflits, puis l'événement, puis les
+ * inclusions : les cartes mises bout à bout redonnent la liste reçue,
+ * énoncé pour énoncé, les mêmes objets. Ne modifie pas la liste.
  *
  * @param {Array<{cle: string, details: Object}>} liste  celle que rend enonces
- * @returns {Array<{genre: 'separation'|'organisation'|'conflits'|'ensemble', groupe: string|null,
+ * @returns {Array<{genre: 'separation'|'organisation'|'conflits'|'ensemble'|'inclusions', groupe: string|null,
  *           enonces: Array<Object>}>}
  */
 export function cartesDiagnostic(liste) {
@@ -415,6 +451,7 @@ const REMEDES_CONSTATS = new Set([
   'diagnostic.remede.ecartItineraire',
   'diagnostic.remede.plafond',
   'diagnostic.remede.imposes',
+  'diagnostic.remede.inclusion.sansPresent',
 ]);
 
 /**
@@ -557,6 +594,11 @@ const CONCRETEMENT = new Map([
   ['diagnostic.plafondInconnu', () => phrase('diagnostic.concretement.plafondInconnu')],
   ['diagnostic.imposes', ({ details }, { tours }) => explicationImposes(details, tours)],
   ['diagnostic.conflitsImposes', ({ details }) => phrase('diagnostic.concretement.conflitsImposes', { ...details })],
+  ['diagnostic.inclusionHorsAtteinte', () => phrase('diagnostic.concretement.inclusionHorsAtteinte')],
+  [
+    'diagnostic.inclusionsAuDela',
+    ({ details: { actives, atteignables } }) => phrase('diagnostic.concretement.inclusionsAuDela', { actives, atteignables }),
+  ],
 ]);
 
 /**

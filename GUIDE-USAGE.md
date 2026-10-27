@@ -365,10 +365,14 @@ défiler la grille en largeur dans une fenêtre étroite. Les inclusions
 s’importent et s’exportent aussi en CSV (étape 2). Ce n’est pas une
 réservation : la recherche cherche à faire chaque rencontre demandée (étape 9),
 juste après éviter les conflits d’organisation, et une rencontre demandée des
-deux côtés ne compte qu’une fois. Une liste qui demande plus de personnes que
-la soirée n’en fait rencontrer à la personne ne compte pas, ni une inclusion
-qu’un conflit d’organisation contredit ou que les réservations rendent
-impossible.
+deux côtés ne compte qu’une fois. Une liste qui demande plus de personnes que la
+soirée n’en fait rencontrer à la personne ne compte pas, ni une inclusion qu’un
+conflit d’organisation contredit ou que les réservations rendent impossible. Une
+telle inclusion reste dans sa liste : sous elle, la fiche dit qu’elle est hors
+d’atteinte, et pourquoi — « Théo Pervenche : les deux ne sont jamais présentes
+au même tour ». Un geste qui fait contredire une inclusion par un conflit
+d’organisation — l’inclusion posée, le conflit posé — s’enregistre, et un
+avertissement la nomme.
 
 Une fois des propositions générées (étape 9), la colonne « Conflits du
 placement », juste après celle des conflits d’organisation, dit pour chaque
@@ -384,6 +388,17 @@ toutes les règles ; la colonne se lit seulement, ne se trie pas, et l’export
 n’en écrit rien. La fiche de la personne les détaille sous « Conflits du
 placement », juste avant « Rencontres » : une ligne par conflit, « Tour 2,
 table 5 : avec Iris Ombrelle — même organisation ».
+
+Ses inclusions se lisent de même sous « Inclusions du placement », juste après :
+combien de ses inclusions le placement montré satisfait — « 1 inclusion
+satisfaite sur 2. » —, puis chaque rencontre demandée qu’il ne fait pas et qui
+la nomme, qu’elle la demande ou qu’on la lui demande : « Iris Ombrelle n’a pas
+rencontré Théo Pervenche ». Une liste qui demande plus de personnes qu’elle
+n’en peut rencontrer le dit, avec le nombre d’inclusions encore possibles que
+le placement n’atteint pas : ce n’est pas une erreur. Dans la grille, la
+colonne « Inclusions du placement », montrée avec la colonne « Inclusions », en
+écrit le résumé : « 1 sur 2 », puis « sans » et la personne ou l’organisation
+qui manque.
 
 Une personne peut enfin porter un **logo** — celui de son organisation, par
 exemple —, que son badge imprime (étape 12). Il se pose dans sa fiche, sous la
@@ -708,31 +723,44 @@ plan ne peut éviter tout conflit d’organisation au tour 2 » —, avec ce qui
 le changerait : des tables de plus, lever un conflit ou retirer une
 réservation.
 
+Quand des personnes portent des inclusions, une carte « Inclusions » nomme
+celles qu’aucun placement ne peut satisfaire, et pourquoi : « inclusion hors
+d’atteinte : Iris Ombrelle → Théo Pervenche, les deux ne sont jamais présentes
+au même tour », avec ce qui la rendrait possible — les rendre présentes à un
+même tour, déplacer une réservation, lever le conflit qui la contredit. Elle
+nomme aussi chaque personne dont la liste demande plus de personnes que la
+soirée ne lui en fait rencontrer : « Ondine Lacasse : 9 inclusions demandent
+8 personnes ; la soirée lui en fait rencontrer au plus 6, donc au plus 7
+satisfaites, et 2 restent hors de portée ». Ce n’est pas une erreur : ces
+inclusions ne comptent jamais parmi les inclusions non satisfaites.
+
 Sous la carte « Tout l’événement », une dernière carte, **« La proposition
 choisie »**, explique un placement : la proposition que vous montrez au plan,
-sinon le placement retenu, sinon la meilleure du classement ; elle dit
-laquelle. Ses phrases reprennent les chiffres de sa ligne au tableau des
-propositions, en trois blocs. **Ce qui est atteint** : le moins bien servi et
-son plafond a priori — par exemple « Le moins bien servi rencontre 23
-personnes différentes, sur les 28 que son plafond a priori permet » —, puis,
-pour chaque règle cochée, les collisions, les retours choisis, la diversité,
-les objectifs et les animateurs ; une collision sans retrouvailles se dit
-« toujours des paires différentes », et des collisions au plancher des
-organisations en conflit ou au plancher exact, sans aucun conflit, se disent
-au minimum : aucune relance ne les fera baisser sans créer de conflit. Quand
-aucun plan ne peut éviter tout conflit, une proposition qui en compte le dit
-aussi : une relance ne les fera pas tomber à zéro. **Ce qui manque, et
-pourquoi** : ce qui sépare quelqu’un de son plafond a priori, partagé entre la
-place — une table incomplète, le nombre de places vides à chaque tour — et les
-revoirs — les personnes à qui il manque une rencontre, les paires qui se
-croisent deux fois. Quand le diagnostic prouve qu’aucun placement n’atteint le
-plafond a priori de tout le monde, la carte le dit « hors d’atteinte ».
-**Ce qu’on peut tenter** : « Repartir d’elle » avec un compte d’arrêt plus
-élevé que celui qui a produit la proposition quand des revoirs, la place ou
-une règle cochée coûtent plus que l’inévitable, les tables quand ce sont les
-places vides — des tables pleines les retirent, et si leurs capacités
-diffèrent alors, le diagnostic dit ce qui demeure —, et « Rien pour les
-rencontres » quand la proposition atteint le plafond de chacun. Sans
+sinon le placement retenu, sinon la meilleure du classement ; elle dit laquelle.
+Ses phrases reprennent les chiffres de sa ligne au tableau des propositions, en
+trois blocs. **Ce qui est atteint** : le moins bien servi et son plafond a
+priori — par exemple « Le moins bien servi rencontre 23 personnes différentes,
+sur les 28 que son plafond a priori permet » —, puis, pour chaque règle cochée,
+les conflits d’organisation, les inclusions — les rencontres demandées qui ne se
+font pas, puis, pour les listes qui dépassent ce que leur personne peut
+rencontrer, combien d’inclusions encore possibles le placement n’atteint pas —,
+les collisions, les retours choisis, la diversité, les objectifs et les
+animateurs ; une collision sans retrouvailles se dit « toujours des paires
+différentes », et des collisions au plancher des organisations en conflit ou au
+plancher exact, sans aucun conflit, se disent au minimum : aucune relance ne les
+fera baisser sans créer de conflit. Quand aucun plan ne peut éviter tout
+conflit, une proposition qui en compte le dit aussi : une relance ne les fera
+pas tomber à zéro. **Ce qui manque, et pourquoi** : ce qui sépare quelqu’un de
+son plafond a priori, partagé entre la place — une table incomplète, le nombre
+de places vides à chaque tour — et les revoirs — les personnes à qui il manque
+une rencontre, les paires qui se croisent deux fois. Quand le diagnostic prouve
+qu’aucun placement n’atteint le plafond a priori de tout le monde, la carte le
+dit « hors d’atteinte ». **Ce qu’on peut tenter** : « Repartir d’elle » avec un
+compte d’arrêt plus élevé que celui qui a produit la proposition quand des
+revoirs, la place ou une règle cochée coûtent plus que l’inévitable, les tables
+quand ce sont les places vides — des tables pleines les retirent, et si leurs
+capacités diffèrent alors, le diagnostic dit ce qui demeure —, et « Rien pour
+les rencontres » quand la proposition atteint le plafond de chacun. Sans
 proposition, comme sur la capture, la carte invite à en générer une ; une
 proposition en dérive le dit, sans chiffres.
 
@@ -901,11 +929,15 @@ cherche », plus bas). « Imposé par les réservations » sépare ce que vos
 réservations imposent de ce que la recherche a choisi. Quand des personnes
 nomment des organisations en conflit, une colonne compte les conflits
 d’organisation de chaque proposition, et une ligne qui en garde le dit sous son
-numéro : « 2 conflits restants ». Quand des personnes portent des inclusions
-qui comptent, la colonne « Inclusions non satisfaites », juste après, compte
-les rencontres demandées que la proposition ne fait pas, une rencontre
-demandée des deux côtés comptant une fois. Pour deux placements précis, la vue
-« Comparaison » de la page « Qualité », plus bas, les met côte à côte.
+numéro : « 2 conflits restants ». Quand des personnes portent des inclusions qui
+comptent, la colonne « Inclusions non satisfaites », juste après, compte les
+rencontres demandées que la proposition ne fait pas, une rencontre demandée des
+deux côtés comptant une fois, et la ligne le dit sous son numéro : « 2
+inclusions non satisfaites ». La vue « Inclusions » de la page « Qualité » les
+nomme une à une, et, sur le plan, la liste de travail « Inclusions non
+satisfaites » aussi : un clic y choisit la personne qui la demande, pour la
+déplacer. Pour deux placements précis, la vue « Comparaison » de la page
+« Qualité », plus bas, les met côte à côte.
 
 Les commandes d’une ligne sont dans son menu : cliquez « Actions », au bout de
 la ligne, puis la commande ; au clavier, Entrée ou les flèches ouvrent le menu.
@@ -1052,6 +1084,17 @@ tableau des paires.*
 dessinée : 260 personnes dépassent son seuil, et la phrase renvoie à la
 fiche de chaque personne. Au-dessus, la fin du tableau des paires
 répétées.*
+
+La vue « Inclusions » répond à « quelles rencontres demandées ce placement ne
+fait-il pas ? ». Une phrase les compte — « 2 inclusions non satisfaites sur
+5 rencontres demandées. » —, puis chacune se nomme, en tête : « Iris Ombrelle
+n’a pas rencontré Théo Pervenche », « …, une rencontre demandée des deux
+côtés » quand les deux se demandent. Viennent ensuite, quand il y en a, les
+listes qui dépassent ce que leur personne peut rencontrer, avec leurs
+inclusions satisfaites et celles encore possibles que le placement n’atteint
+pas, puis les inclusions hors d’atteinte et leur raison : ni les unes ni les
+autres ne sont des erreurs. Sans inclusion active, une phrase prend sa place,
+et les inclusions hors d’atteinte la suivent quand les listes en portent.
 
 ![Les objectifs des tables, tour par tour](doc/captures/15a-qualite-objectifs.png)
 

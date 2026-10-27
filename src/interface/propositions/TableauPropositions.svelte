@@ -14,7 +14,9 @@
   // Les violations d'une ligne comparable — retenu compris — se lisent sous
   // son identifiant, puis « N conflits restants » quand elle laisse des
   // conflits d'organisation (conflitsRestants, modele.js), dans un nœud
-  // data-conflits-restants : la recherche les vise à zéro sans les
+  // data-conflits-restants, puis « N inclusions non satisfaites » quand elle
+  // laisse des rencontres demandées (inclusionsRestantes), dans un nœud
+  // data-inclusions-non-satisfaites : la recherche les vise à zéro sans les
   // interdire, et la ligne le dit.
   //
   // vue : ce que rend tableau(), libellés et étendues compris — ses colonnes
@@ -215,6 +217,9 @@
     {/each}
     {#if ligne.conflitsRestants !== null}
       <p data-conflits-restants>{t(ligne.conflitsRestants.cle, ligne.conflitsRestants.details)}</p>
+    {/if}
+    {#if ligne.inclusionsRestantes !== null}
+      <p data-inclusions-non-satisfaites>{t(ligne.inclusionsRestantes.cle, ligne.inclusionsRestantes.details)}</p>
     {/if}
   {/if}
 {/snippet}

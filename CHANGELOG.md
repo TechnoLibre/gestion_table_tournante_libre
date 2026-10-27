@@ -522,32 +522,44 @@
   d'organisation suivent le renommage ou la disparition d'une organisation comme
   les conflits. Elles s'importent et s'exportent par deux colonnes du CSV,
   `inclusion_organisation` et `inclusion_participant`, après l'animation
-  réservée, séparées comme les conflits, chaque personne par son prénom puis
-  son nom, cherchée parmi la liste et le fichier sous le nom qu'elle aura
-  après l'import. Une organisation inconnue ou la sienne, un nom que personne
-  ne porte, que deux personnes portent, ou la personne elle-même refusent
-  l'import entier, la ligne et le nom nommés. L'export avertit quand une
-  inclusion vise un homonyme, qu'il ne saurait relire, et « Remplacer »
-  compte les inclusions qu'il retire. Le modèle à télécharger et le guide de
-  l'import portent les deux colonnes. La génération les poursuit : les
-  inclusions non satisfaites suivent les conflits d'organisation dans l'ordre
-  des priorités par défaut, seules à leur palier, et s'y déplacent comme les
-  autres critères, si bien qu'un plan qui fait une rencontre demandée de plus
-  passe devant un plan qui évite quelques collisions. Une inclusion est
-  satisfaite dès que les deux personnes, ou la personne et un membre de
-  l'organisation incluse, partagent une table à un tour ; une rencontre
-  demandée des deux côtés compte une fois. Ne comptent pas une liste qui
-  demande plus de personnes que la soirée n'en fait rencontrer à la personne,
-  une inclusion qu'un conflit d'organisation contredit, ni une que les
-  réservations ou la présence rendent impossible. Le tableau des propositions
-  compte les inclusions non satisfaites dans sa colonne « Inclusions non
-  satisfaites », et l'éditeur de l'ordre dit le critère « sans objet » tant
-  qu'aucune inclusion n'est active ; une liste qui dépasse ce que sa personne
-  peut rencontrer lui laisse un objet, à zéro. Sans inclusion active, une
-  graine donne les mêmes propositions qu'avant. Un ordre des priorités réglé
-  avant les inclusions se relit, les inclusions placées juste après les
-  conflits ; une version antérieure refuse un fichier qui porte des
-  inclusions, et aussi un fichier dont cette version a réglé ou réécrit
+  réservée, séparées comme les conflits, chaque personne par son prénom puis son
+  nom, cherchée parmi la liste et le fichier sous le nom qu'elle aura après
+  l'import. Une organisation inconnue ou la sienne, un nom que personne ne
+  porte, que deux personnes portent, ou la personne elle-même refusent l'import
+  entier, la ligne et le nom nommés. L'export avertit quand une inclusion vise
+  un homonyme, qu'il ne saurait relire, et « Remplacer » compte les inclusions
+  qu'il retire. Le modèle à télécharger et le guide de l'import portent les deux
+  colonnes. La génération les poursuit : les inclusions non satisfaites suivent
+  les conflits d'organisation dans l'ordre des priorités par défaut, seules à
+  leur palier, et s'y déplacent comme les autres critères, si bien qu'un plan
+  qui fait une rencontre demandée de plus passe devant un plan qui évite
+  quelques collisions. Une inclusion est satisfaite dès que les deux personnes,
+  ou la personne et un membre de l'organisation incluse, partagent une table à
+  un tour ; une rencontre demandée des deux côtés compte une fois. Ne comptent
+  pas une liste qui demande plus de personnes que la soirée n'en fait rencontrer
+  à la personne, une inclusion qu'un conflit d'organisation contredit, ni une
+  que les réservations ou la présence rendent impossible. Le tableau des
+  propositions compte les inclusions non satisfaites dans sa colonne
+  « Inclusions non satisfaites », et l'éditeur de l'ordre dit le critère « sans
+  objet » tant qu'aucune inclusion n'est active ; une liste qui dépasse ce que
+  sa personne peut rencontrer lui laisse un objet, à zéro. Une proposition qui
+  laisse des inclusions non satisfaites le dit sous son numéro, « 2 inclusions
+  non satisfaites », et chacune se nomme — « Iris Ombrelle n'a pas rencontré
+  Théo Pervenche », une rencontre demandée des deux côtés une seule fois — dans
+  la nouvelle vue « Inclusions » de la page de qualité, dans la liste de travail
+  « Inclusions non satisfaites » du plan, où un clic choisit la personne, dans
+  la rubrique « Inclusions du placement » de la fiche et dans la colonne du même
+  nom de la grille, montrée avec celle des inclusions. Une liste qui dépasse ce
+  que sa personne peut rencontrer n'y fait aucun avis : la page de qualité, la
+  fiche et le diagnostic disent combien de ses inclusions encore possibles le
+  placement n'atteint pas. Le diagnostic nomme chaque inclusion qu'aucun
+  placement ne peut satisfaire, avec sa raison et son remède, et la fiche la
+  redit sous sa liste ; un geste qui fait contredire une inclusion par un
+  conflit d'organisation est accepté, et un avertissement la nomme. Sans
+  inclusion active, une graine donne les mêmes propositions qu'avant. Un ordre
+  des priorités réglé avant les inclusions se relit, les inclusions placées
+  juste après les conflits ; une version antérieure refuse un fichier qui porte
+  des inclusions, et aussi un fichier dont cette version a réglé ou réécrit
   l'ordre des priorités, puisque la liste y nomme les inclusions.
 - **L'animation réservée.** Une personne peut être marquée à désigner animatrice
   d'une table : la case « Animation réservée » de sa fiche la pose ou la retire,

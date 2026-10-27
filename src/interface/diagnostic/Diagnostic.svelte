@@ -12,7 +12,9 @@
   //
   // Les énoncés se regroupent par cartesDiagnostic, sans changer d'ordre : la
   // séparation vidée de son sens, une carte par organisation en collision,
-  // celle des organisations en conflit, puis le reste de l'événement. Chaque
+  // celle des organisations en conflit, le reste de l'événement, puis les
+  // inclusions qu'aucun plan ne satisfait, chaque personne nommée par son
+  // nom affiché sur la charge (nomDe, propositions/modele.js). Chaque
   // groupe a son intitulé, qui nomme sa liste (aria-labelledby) : celui d'une
   // organisation est sa pastille, de la teinte que teintesOrganisations donne
   // à son rang sur toute la liste des participants, exclus compris, et porte
@@ -77,6 +79,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
+  import { nomDe } from '../propositions/modele.js';
   import { cartesDiagnostic, criteresDuDiagnostic, enonces, expliquer, numeroDeCharge, remedeAgit } from './phrases.js';
   import { propositionChoisie } from './proposition.js';
 
@@ -87,6 +90,7 @@
     ['separation', 'diagnostic.carte.separation'],
     ['conflits', 'diagnostic.carte.conflits'],
     ['ensemble', 'diagnostic.carte.ensemble'],
+    ['inclusions', 'diagnostic.carte.inclusions'],
   ]);
 
   const t = getContext('t');
@@ -118,6 +122,7 @@
           absentes: presencesPartielles(charge).length,
           conflits: planchersConflits(charge),
           exacts,
+          nomDe: (id) => nomDe(charge, id),
         }),
   );
   const cartes = $derived(cartesDiagnostic(liste));

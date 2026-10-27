@@ -254,7 +254,10 @@ demander.* Avant toute recherche, il énonce ce que la configuration rend
 inévitable, combien, et ce qui le rendrait évitable (§ 5.6), donne le **plafond
 a priori** (§ 5.5), et donne le **plancher de l'écart d'itinéraire maximal**
 quand la configuration en impose un. Sans ce dernier, le troisième chiffre de la
-page de qualité envoie relancer vers un zéro que la configuration interdit.
+page de qualité envoie relancer vers un zéro que la configuration interdit. Il
+nomme aussi les inclusions qu'aucun plan ne satisfait, et les listes
+d'inclusions qui demandent plus de personnes que leur personne n'en peut
+rencontrer (§ 5.6).
 
 **9. Générer.** *Nécessaire pour obtenir un placement, reprenable sans perte.*
 La commande prend une **graine** et un **compte d'arrêt** ; chaque proposition
@@ -287,17 +290,20 @@ placements sur le même axe — celui du **manque** (§ 12.10) — dans sa vue d
 comparaison, qui trace les deux courbes sur un même tracé et pose leurs chiffres
 côte à côte, puis retient celui qu'il préfère. « Comparer », dans le menu
 « Actions » de la ligne d'une proposition comparable du tableau des propositions
-et de celle du placement retenu, y mène. La page de qualité est la section « Qualité » de l'événement :
-elle mesure le placement que le plan montre, et chaque ligne du tableau des
-propositions y mène. Elle répond à deux questions — ce placement est-il bon, qui
-s'y trouve mal servi — par le profil des rencontres, les collisions
-d'organisation, les paires répétées, le mélange des organisations à chaque
-table, les objectifs des tables tour par tour, les animateurs, et la performance
-du calcul qui a produit la proposition. Le logiciel sépare ce que le moteur a
-décidé de ce que les réservations imposent (§ 5.4). Retenir fait passer le plan
-à l'état *Retenu* (§ 9) ; les propositions non retenues restent disponibles. Le
-retenu se résume ensuite dans la liste des événements, par ses collisions
-cumulées et ses rencontres répétées choisies (§ 5.4, § 8.1).
+et de celle du placement retenu, y mène. La page de qualité est la section
+« Qualité » de l'événement : elle mesure le placement que le plan montre, et
+chaque ligne du tableau des propositions y mène. Elle répond à deux questions —
+ce placement est-il bon, qui s'y trouve mal servi — par le profil des
+rencontres, les collisions d'organisation, les paires répétées, les inclusions
+non satisfaites, le mélange des organisations à chaque table, les objectifs des
+tables tour par tour, les animateurs, et la performance du calcul qui a produit
+la proposition. Le tableau des propositions, le plan, la fiche et la grille des
+participants nomment eux aussi chaque inclusion qu'un placement laisse non
+satisfaite (§ 12.15). Le logiciel sépare ce que le moteur a décidé de ce que les
+réservations imposent (§ 5.4). Retenir fait passer le plan à l'état *Retenu*
+(§ 9) ; les propositions non retenues restent disponibles. Le retenu se résume
+ensuite dans la liste des événements, par ses collisions cumulées et ses
+rencontres répétées choisies (§ 5.4, § 8.1).
 
 **11. Ajuster à la main.** *Facultative, reprenable.* Le même geste qu'à
 l'étape 7 déplace maintenant une personne réelle dans le placement retenu. **Le
@@ -382,6 +388,7 @@ une section de ce document. Les deux s'écrivent à la main (§ 19.8).
 | `PLA-15` | Ajuster le placement retenu, qui suit les présences | § 5.8 |
 | `PLA-16` | Signaler les tables en conflit sur le plan | § 7.5 |
 | `PLA-17` | Inscrire le numéro de chaque table sur son plateau | § 7.7 |
+| `PLA-18` | Voir chaque inclusion non satisfaite d'une proposition | § 5.7, § 7.5, § 12.15 |
 
 **Produire** — `PRO`
 
@@ -1057,7 +1064,7 @@ une lecture et non un jugement :
 | **animateurs rencontrés** — m(p) | animateurs distincts (§ 4.5) que p rencontre à un tour où ils animent, lui-même non compté ; un animateur rencontré à plusieurs tours compte une fois ; m(p) ne dépasse pas B(p), la borne des animateurs |
 | **animateurs non rencontrés** | Σ (B(p) − m(p)) sur les personnes présentes placées : ce qui leur reste à rencontrer de ce que la configuration leur permettait |
 | **inclusions satisfaites** — sat(p) | inclusions actives de p (§ 4) satisfaites : p partage une table, à un tour au moins, n'importe lequel, avec la personne incluse, ou avec un membre au moins de l'organisation incluse ; elles ne dépassent pas I(p), ses **inclusions atteignables** |
-| **inclusions non satisfaites** | rencontres demandées non satisfaites : chaque inclusion active non satisfaite d'une personne dont la liste ne dépasse pas son plafond, une même paire de personnes ne comptant qu'une fois, quel que soit le sens des demandes ; « — » sans inclusion active |
+| **inclusions non satisfaites** | rencontres demandées non satisfaites : chaque inclusion active non satisfaite d'une personne dont la liste ne dépasse pas son plafond, une même paire de personnes ne comptant qu'une fois, quel que soit le sens des demandes ; sans objet sans inclusion active |
 
 **Les agrégats portent sur tous les participants placés.** Le minimum se calcule
 sur l'ensemble, ancrés compris, et **deux lignes secondaires** donnent la même
@@ -1194,7 +1201,8 @@ est le seul qui la satisfasse. Les inclusions qui demandent une même paire, dan
 un sens ou dans l'autre, ne comptent qu'une fois, dès que l'une des deux
 personnes reste dans son plafond. Une inclusion d'organisation que plusieurs
 membres peuvent satisfaire est une rencontre à elle seule. Sans inclusion
-active, les chiffres des inclusions écrivent « — ».
+active, le critère est sans objet, et ni colonne ni tuile n'écrit ces chiffres
+(§ 5.7, § 12.2).
 
 **Aucun de ces chiffres ne s'additionne à un autre pour s'afficher.** Un palier
 pondéré du § 5.7 somme des paires, des couples (personne, tour) et des
@@ -1609,12 +1617,19 @@ inclusion hors d'atteinte (§ 4), avec sa raison et la personne qui la porte. Il
 relève aussi chaque personne **au-delà de son plafond**, dont la liste demande
 plus de personnes qu'elle n'en peut rencontrer, b(p) > K(p) (§ 5.4) : avec ses
 inclusions actives, les personnes qu'elles demandent, son plafond a priori et
-ses inclusions atteignables I(p), si bien que k°(p) − I(p) d'entre elles
-restent hors de portée quel que soit le plan. Ce sont des informations, jamais
-des avis : aucun plan ne lève une inclusion hors d'atteinte, et ne pas
-satisfaire toute une liste qui dépasse n'est pas une erreur. Elles ne touchent
-à aucun plancher : celui des collisions, pris sur tous les plans, reste
-valide.
+ses inclusions atteignables I(p), si bien que k°(p) − I(p) d'entre elles restent
+hors de portée quel que soit le plan. Ce sont des informations, jamais des
+avis : aucun plan ne lève une inclusion hors d'atteinte, et ne pas satisfaire
+toute une liste qui dépasse n'est pas une erreur. Elles ne touchent à aucun
+plancher : celui des collisions, pris sur tous les plans, reste valide. Les
+énoncés nomment les personnes : « inclusion hors d'atteinte : Iris Ombrelle →
+Théo Pervenche, les deux ne sont jamais présentes au même tour », avec le remède
+de sa raison — réintégrer la personne incluse, retirer le conflit ou
+l'inclusion, rendre les deux présentes à un même tour, déplacer une réservation,
+libérer un siège ; sans présent de l'organisation, un constat — ; « Ondine
+Lacasse : 9 inclusions demandent 8 personnes ; la soirée lui en fait rencontrer
+au plus 6, donc au plus 7 satisfaites, et 2 restent hors de portée », avec pour
+remède de raccourcir la liste ou de lui faire rencontrer plus de monde.
 
 **Sous absence.** Dès qu'une personne non exclue est absente à un tour, le
 diagnostic le dit en tête de la carte de tout l'événement, après les
@@ -1628,8 +1643,9 @@ d'itinéraire perd le sien.
 À l'écran, les énoncés se regroupent en cartes, sans changer d'ordre : la
 séparation des organisations vidée de son sens, une carte par organisation en
 collision, titrée de sa pastille d'organisation (§ 12.7), celle des
-organisations en conflit, une ligne par étoile, puis ce qui vaut pour tout
-l'événement.
+organisations en conflit, une ligne par étoile, ce qui vaut pour tout
+l'événement, puis la carte « Inclusions », les inclusions hors d'atteinte puis
+les listes au-delà de leur plafond.
 
 **Chaque énoncé s'explique, toujours visible.** Dans la section du
 diagnostic — le panneau compact à côté du plan garde les énoncés seuls —,
@@ -1670,18 +1686,23 @@ formule ne s'écrit que lorsque le chiffre de l'énoncé l'égale. Sur 4 tours
   tours, et y revient donc 3 fois ; ces retours sont voulus par les
   réservations et ne comptent pas contre les propositions » ; sinon leur
   compte et le nombre de personnes ;
-- les **collisions** d'une organisation disent si les tables manquent ou si
-  des réservations réunissent ses membres, et combien de fois deux d'entre eux
+- les **collisions** d'une organisation disent si les tables manquent ou si des
+  réservations réunissent ses membres, et combien de fois deux d'entre eux
   partagent une table ; l'**excédent**, que deux collègues déjà assis ensemble
-  se retrouvent ; l'**écart d'itinéraire**, que des tables plus petites ou
-  plus ancrées se remplissent quand même ; une table **gelée** ou **à moitié
+  se retrouvent ; l'**écart d'itinéraire**, que des tables plus petites ou plus
+  ancrées se remplissent quand même ; une table **gelée** ou **à moitié
   ancrée**, qui y reste et combien de places s'y renouvellent ; les
   **animateurs** d'une même organisation, combien de fois un mobile la
-  recroise ; la **redondance**, les **objectifs**, le **manque de places**,
-  les **conflits imposés** et la **présence par tour**, chacun de ses propres
+  recroise ; la **redondance**, les **objectifs**, le **manque de places**, les
+  **conflits imposés** et la **présence par tour**, chacun de ses propres
   chiffres ; une **étoile de conflits**, que chaque tour partage les tables
-  entre le centre et ses branches, le plancher de ses organisations une à
-  une, sans le conflit, et ce que le partage y ajoute.
+  entre le centre et ses branches, le plancher de ses organisations une à une,
+  sans le conflit, et ce que le partage y ajoute ; une **inclusion hors
+  d'atteinte**, qu'elle ne compte ni parmi les satisfaites ni parmi les non
+  satisfaites ; une **liste au-delà du plafond**, que ne pas la satisfaire tout
+  entière n'est pas une erreur, combien un placement lui en satisfait au plus,
+  et que la page de qualité dit combien il en laisse encore possibles sans les
+  atteindre.
 
 **La proposition choisie, expliquée.** Sous la carte de tout l'événement,
 la section — le panneau compact ne la porte pas — pose une carte « La
@@ -1701,22 +1722,26 @@ titrés :
 - **Ce qui est atteint** : le minimum des rencontres, rapporté au plafond a
   priori des personnes qui l'atteignent — « Le moins bien servi rencontre 23
   personnes différentes, sur les 28 que son plafond a priori permet », leur
-  étendue quand ces plafonds diffèrent —, les minimums des mobiles et des
-  ancrés quand les deux populations existent ; puis, chacun quand son
-  critère compte (§ 5.3) — coché, avec un objet —, les conflits
-  d'organisation, les collisions — « 9 fois, deux personnes d'une même
-  organisation partagent une table, toujours des paires différentes :
-  aucune paire de collègues ne se retrouve deux fois » à excédent nul —,
-  les retours choisis sous « nouvelle table », la diversité, les objectifs
-  et les animateurs. Un plancher du diagnostic ne se dit égalé que sur un
-  plan qui honore les réservations. Le plancher des collisions qui vaut pour
-  tout plan est la somme des planchers par groupe ; pour un plan sans
-  conflit, chaque étoile de conflits y remplace la somme de ses
-  organisations par son propre plancher. Des collisions qui égalent ce
-  plancher renforcé, sans aucun conflit, se disent au minimum : « Ses
-  collisions sont au minimum : aucune relance ne les fera baisser sans créer
-  de conflit d'organisation. » Le minimum atteint du § 5.5, qui se lit sur
-  les rencontres, n'en change pas ;
+  étendue quand ces plafonds diffèrent —, les minimums des mobiles et des ancrés
+  quand les deux populations existent ; puis, chacun quand son critère compte
+  (§ 5.3) — coché, avec un objet —, les conflits d'organisation, les inclusions
+  — « 2 rencontres demandées par les inclusions sur 5 ne se font pas : ce sont
+  les inclusions non satisfaites », ou que chacune se fait, rien quand chaque
+  liste active dépasse ce que sa personne peut rencontrer, puis, quand des
+  listes dépassent ce que leurs personnes peuvent rencontrer, combien de leurs
+  inclusions encore possibles le placement n'atteint pas, ou que toutes sont
+  atteintes, sans que ce soit un avis —, les collisions — « 9 fois, deux
+  personnes d'une même organisation partagent une table, toujours des paires
+  différentes : aucune paire de collègues ne se retrouve deux fois » à excédent
+  nul —, les retours choisis sous « nouvelle table », la diversité, les
+  objectifs et les animateurs. Un plancher du diagnostic ne se dit égalé que sur
+  un plan qui honore les réservations. Le plancher des collisions qui vaut pour
+  tout plan est la somme des planchers par groupe ; pour un plan sans conflit,
+  chaque étoile de conflits y remplace la somme de ses organisations par son
+  propre plancher. Des collisions qui égalent ce plancher renforcé, sans aucun
+  conflit, se disent au minimum : « Ses collisions sont au minimum : aucune
+  relance ne les fera baisser sans créer de conflit d'organisation. » Le minimum
+  atteint du § 5.5, qui se lit sur les rencontres, n'en change pas ;
 - **Ce qui manque, et pourquoi** : l'écart au plafond a priori maximal,
   décomposé en ses deux parts (§ 12.10.5) — la place, par l'écart
   d'itinéraire maximal, les places vides de chaque tour et le plancher que
@@ -2257,28 +2282,30 @@ tour) ; sans paire de présents en conflit, elle n'y est pas. Quand une inclusio
 est active (§ 4), la colonne des inclusions non satisfaites la suit, en
 rencontres demandées (§ 5.4) ; sans objet, elle n'y est pas. Une ligne qui en
 laisse — la recherche les vise à zéro sans les interdire — le dit aussi sous son
-numéro, après ses violations : « 2 conflits restants », « 1 conflit restant » ;
-à zéro, la phrase manque. Chacun de ces deux minimums porte sur tous les
-concernés, sans ses lignes secondaires (§ 5.4), que sa tuile écrit (§ 12.2).
-Sous le chiffre de la colonne du plus grand manque, une ligne en encre
-secondaire écrit le plafond réalisé de la personne au rang 1 du profil de manque
-(§ 12.10.3) ; sous ceux du minimum de A(p), du taux de diversité et des trois
-chiffres du manque, une autre écrit leurs deux lignes secondaires (§ 5.4). Le
-regroupement ne change l'en-tête ni l'explication d'aucune colonne ; ses nombres
-s'alignent à droite en chiffres tabulaires. La ligne du placement retenu porte
-la teinte de l'état Retenu, et la proposition retenue, la pastille « retenue ».
-Une proposition dérivée porte, sous son numéro, la phrase qui la rattache à son
-départ — « Dérivée de n° 4. », ou « Dérivée de n° 4, tours 1 et 2 figés. » —,
-sans colonne de plus, comme la ligne du retenu porte « Tel que la proposition
-n° X. », « Tel que la proposition n° X, ajusté aux participants. » quand il ne
-diffère de sa proposition que par l'ajustement aux participants (§ 5.8), et
-« Ajusté à la main depuis la proposition n° X. » quand il porte une retouche que
-retenir de nouveau cette proposition détruirait. Seul le départ immédiat est
-nommé : la ligne du départ dit le sien. Quand le départ n'est plus dans la
-liste, la phrase le dit — « Dérivée de n° 4, qui n'est plus dans la liste. » —
-et ne désigne aucune autre proposition. Les commandes d'une ligne vivent dans
-son **menu « Actions »**, un seul bouton dans la dernière cellule : fermé, il ne
-montre que ce bouton. Chaque phrase de la colonne « Imposé par les
+numéro, après ses violations : « 2 conflits restants », « 1 conflit restant »,
+puis « 2 inclusions non satisfaites », « 1 inclusion non satisfaite » ; à zéro,
+la phrase manque, et la ligne garde sa hauteur sans elle. Chaque inclusion non
+satisfaite se nomme à la page de qualité (§ 12.15). Chacun de ces deux minimums
+porte sur tous les concernés, sans ses lignes secondaires (§ 5.4), que sa tuile
+écrit (§ 12.2). Sous le chiffre de la colonne du plus grand manque, une ligne en
+encre secondaire écrit le plafond réalisé de la personne au rang 1 du profil de
+manque (§ 12.10.3) ; sous ceux du minimum de A(p), du taux de diversité et des
+trois chiffres du manque, une autre écrit leurs deux lignes secondaires (§ 5.4).
+Le regroupement ne change l'en-tête ni l'explication d'aucune colonne ; ses
+nombres s'alignent à droite en chiffres tabulaires. La ligne du placement retenu
+porte la teinte de l'état Retenu, et la proposition retenue, la pastille
+« retenue ». Une proposition dérivée porte, sous son numéro, la phrase qui la
+rattache à son départ — « Dérivée de n° 4. », ou « Dérivée de n° 4, tours 1 et 2
+figés. » —, sans colonne de plus, comme la ligne du retenu porte « Tel que la
+proposition n° X. », « Tel que la proposition n° X, ajusté aux participants. »
+quand il ne diffère de sa proposition que par l'ajustement aux participants
+(§ 5.8), et « Ajusté à la main depuis la proposition n° X. » quand il porte une
+retouche que retenir de nouveau cette proposition détruirait. Seul le départ
+immédiat est nommé : la ligne du départ dit le sien. Quand le départ n'est plus
+dans la liste, la phrase le dit — « Dérivée de n° 4, qui n'est plus dans la
+liste. » — et ne désigne aucune autre proposition. Les commandes d'une ligne
+vivent dans son **menu « Actions »**, un seul bouton dans la dernière cellule :
+fermé, il ne montre que ce bouton. Chaque phrase de la colonne « Imposé par les
 réservations » tient sur une ligne, et chaque ligne a la hauteur de ses
 chiffres, phrase de filiation et lignes sous un chiffre comprises. Le menu d'une
 proposition porte « Voir sur le plan », « Qualité » et « Retenir » ; celui d'une
@@ -2373,7 +2400,14 @@ retenu, la liste **« En réserve dans le placement retenu »** : chaque personn
 que le retenu laisse en réserve, avec ses tours, une exclue, une supprimée ou
 une absente au tour n'y figurant pas ; un clic montre le premier de ces tours et
 la choisit. Elle n'existe pas sans retenu, et dit « Aucun. » sous un retenu qui
-n'en laisse pas, ou qui se contredit.
+n'en laisse pas, ou qui se contredit. Puis la liste **« Inclusions non
+satisfaites »** du placement que le plan montre — la proposition demandée, sinon
+le retenu, comme la page de qualité le mesure (§ 12) — : chaque rencontre
+demandée qu'il ne fait pas, dans les phrases de la page de qualité (§ 12.15),
+« Iris Ombrelle n'a pas rencontré Théo Pervenche » ; un clic choisit la personne
+qui la porte, un second l'oublie. Aucune table ne la signale (§ 7.5). Elle
+n'existe que quand ce placement se mesure et qu'une inclusion est active, et dit
+« Aucune. » quand il les fait toutes.
 
 ### 5.9 Ce que le logiciel refuse, au moment du geste
 
@@ -2438,10 +2472,10 @@ dans l'outil.
   (`INCLUSION_PROPRE_ORGANISATION`) ou la personne elle-même
   (`INCLUSION_DE_SOI`), une organisation qu'aucun participant ne porte
   (`ORGANISATION_INCONNUE`) ou un identifiant qu'aucun participant n'a
-  (`PARTICIPANT_INCONNU`) : refusée entière à la première valeur fautive,
-  dans l'ordre reçu, sans remède, l'organisation ou la personne se
-  choisissant dans le champ même, parmi les autres. Une inclusion que
-  contredit un conflit de la personne n'est pas refusée (§ 4).
+  (`PARTICIPANT_INCONNU`) : refusée entière à la première valeur fautive, dans
+  l'ordre reçu, sans remède, l'organisation ou la personne se choisissant dans
+  le champ même, parmi les autres. Une inclusion que contredit un conflit de la
+  personne n'est pas refusée (§ 4) : elle est acceptée et signalée, plus bas.
 - Déposer quelqu'un sur une place réservée à un autre, ou l'échanger avec elle.
   **Déplacer la réservation** est une commande séparée et explicite.
 - Une saisie d'étiquettes vide — des blancs ou des séparateurs seuls —, une
@@ -2472,11 +2506,18 @@ dans l'outil.
   titre —, signalé contre l'objectif ; une étiquette d'objectif qu'aucune
   personne ne porte, exclues comprises, signalée avec l'orthographe voisine
   quand il en existe une ; un critère coché sans objet (§ 5.3), marqué « sans
-  objet » dans l'ordre des priorités ; une réservation, ou un placement
-  retouché à la main dans le retenu, qui réunit à une table deux personnes en
-  conflit d'organisation (§ 4) : la commande écrit, la table porte la trame
-  du conflit (§ 7.5), et son panneau nomme chaque paire sous « Conflits
-  d'organisation à ce tour ».
+  objet » dans l'ordre des priorités ; une réservation, ou un placement retouché
+  à la main dans le retenu, qui réunit à une table deux personnes en conflit
+  d'organisation (§ 4) : la commande écrit, la table porte la trame du conflit
+  (§ 7.5), et son panneau nomme chaque paire sous « Conflits d'organisation à ce
+  tour » ; une inclusion qu'un conflit d'organisation contredit (§ 4), quel que
+  soit le geste qui la fait naître — l'inclusion posée, le conflit posé, une
+  personne qui change d'organisation ou revient d'une exclusion — : la commande
+  écrit, et un avertissement (`INCLUSION_CONTREDITE`) nomme chaque inclusion
+  nouvellement contredite, sa personne et sa cible, et dit qu'elle reste dans sa
+  liste, hors d'atteinte, tant que le conflit tient ; une contradiction qui
+  était déjà là ne se redit pas, même quand l'organisation qu'elle vise est
+  renommée et que les listes suivent le renommage (§ 4).
 
 Un refus **nomme sa cause et propose le geste qui le lève**, et se manifeste
 **sur la place concernée**, pas dans une boîte de dialogue. Seul un geste qui
@@ -3228,6 +3269,13 @@ les lignes ; groupée ou non, la colonne « Conflits du placement » résume ceu
 chaque personne tour par tour, et sa fiche les détaille dans une rubrique du
 même nom (§ 10.2). Hors du plan, le texte seul les dit : aucune couleur ne les
 distingue, la teinte de conflit reste au plan.
+
+**Une inclusion non satisfaite ne se peint sur aucune table** : elle n'est la
+faute d'aucune, et la pastille ne compte que les violations de sa table. Elle se
+lit dans la liste de travail « Inclusions non satisfaites » du plan (§ 5.8), et,
+pour chaque personne, dans la rubrique « Inclusions du placement » de sa fiche
+et dans la colonne du même nom de la grille (§ 10.2), tirées de la même mesure
+que le tableau des propositions et la page de qualité (§ 12.15).
 
 **Quand toutes les tables sont en conflit, le plan cesse de signaler quoi que ce
 soit** — cas que le diagnostic sait prédire. La pastille chiffrée garde sa
@@ -5580,48 +5628,53 @@ grille trie la colonne sur la liste rangée de ses clés normalisées, une
 personne sans conflit après toutes les autres ; elle ne se groupe ni ne se
 filtre par elle : une personne y porte plusieurs noms.
 
-**Les inclusions se saisissent dans la fiche et dans la grille** (§ 4). La
-fiche porte deux rubriques, l'une sous l'autre entre les conflits
-d'organisation et la présence : « Inclusions d'organisation » et « Inclusions
-de participant ». Chacune a son résumé — les organisations incluses en
-pastilles neutres à l'icône « ajouter », les personnes incluses par leur nom,
-ou « Aucune inclusion d'organisation. », « Aucune inclusion de
-participant. » —, son choix multiple et son « Appliquer », qui écrit la liste
-entière en une commande, `changerInclusionsOrganisation` ou
-`changerInclusionsParticipant`, une seule entrée d'historique, et rien quand la
-saisie revient à la liste enregistrée. Le choix des organisations offre une
-case par organisation de l'événement, exclus compris, hors la sienne, rangées
-par clé normalisée, sous la légende « Organisations à rencontrer », dans un
-groupe nommé « Inclusions d'organisation de Prénom Nom, une case par
-organisation ». Celui des personnes offre une case par personne de
-l'événement hors elle-même, exclues comprises, rangées par la clé normalisée
-de leur nom puis par identifiant, jamais par une comparaison de langue, sous
-la légende « Personnes à rencontrer », dans un groupe nommé « Inclusions de
-participant de Prénom Nom, une case par personne » : un homonyme y porte son
-identifiant, « Iris Ombrelle (n° 4) », une exclue « (exclue) ». Un nom que la
-liste porte et que l'événement n'a plus y reste, coché, pour qu'il se décoche.
-Une zone de recherche, en tête des personnes, « Chercher une personne », ne
-montre que les cases dont le nom contient le texte tapé, sans égard à la casse
-ni aux accents, et dit quand aucune ne le contient ; elle ne change pas la
-saisie — une case cochée qu'elle cache reste cochée —, et Échap la vide. Les
-touches des cases sont celles des conflits ; Entrée, dans les cases comme dans
-la recherche, applique, et Échap dans les cases, ou dans la recherche vide,
-rend la liste enregistrée. Un refus — séance en lecture, plan bloqué — se pose
-sous les cases de sa rubrique, avec son remède, la saisie gardée. Ouvrir la
-fiche d'une autre personne repart de ses listes, sans brouillon ni refus.
+**Les inclusions se saisissent dans la fiche et dans la grille** (§ 4). La fiche
+porte deux rubriques, l'une sous l'autre entre les conflits d'organisation et la
+présence : « Inclusions d'organisation » et « Inclusions de participant ».
+Chacune a son résumé — les organisations incluses en pastilles neutres à l'icône
+« ajouter », les personnes incluses par leur nom, ou « Aucune inclusion
+d'organisation. », « Aucune inclusion de participant. » —, son choix multiple et
+son « Appliquer », qui écrit la liste entière en une commande,
+`changerInclusionsOrganisation` ou `changerInclusionsParticipant`, une seule
+entrée d'historique, et rien quand la saisie revient à la liste enregistrée. Le
+choix des organisations offre une case par organisation de l'événement, exclus
+compris, hors la sienne, rangées par clé normalisée, sous la légende
+« Organisations à rencontrer », dans un groupe nommé « Inclusions d'organisation
+de Prénom Nom, une case par organisation ». Celui des personnes offre une case
+par personne de l'événement hors elle-même, exclues comprises, rangées par la
+clé normalisée de leur nom puis par identifiant, jamais par une comparaison de
+langue, sous la légende « Personnes à rencontrer », dans un groupe nommé
+« Inclusions de participant de Prénom Nom, une case par personne » : un homonyme
+y porte son identifiant, « Iris Ombrelle (n° 4) », une exclue « (exclue) ». Un
+nom que la liste porte et que l'événement n'a plus y reste, coché, pour qu'il se
+décoche. Une zone de recherche, en tête des personnes, « Chercher une
+personne », ne montre que les cases dont le nom contient le texte tapé, sans
+égard à la casse ni aux accents, et dit quand aucune ne le contient ; elle ne
+change pas la saisie — une case cochée qu'elle cache reste cochée —, et Échap la
+vide. Les touches des cases sont celles des conflits ; Entrée, dans les cases
+comme dans la recherche, applique, et Échap dans les cases, ou dans la recherche
+vide, rend la liste enregistrée. Un refus — séance en lecture, plan bloqué — se
+pose sous les cases de sa rubrique, avec son remède, la saisie gardée. Ouvrir la
+fiche d'une autre personne repart de ses listes, sans brouillon ni refus. Sous
+le résumé de chaque rubrique, les inclusions de la liste que le diagnostic dit
+hors d'atteinte (§ 5.6), sous « Hors d'atteinte, aucun placement ne peut les
+satisfaire : », chacune par sa cible et sa raison — « Théo Pervenche : les deux
+ne sont jamais présentes au même tour » — : une information, que la saisie ne
+refuse pas, et qui suit la configuration, placement ou non.
 
 La colonne « Inclusions » de la grille, juste après celle des conflits du
-placement, est **masquée par défaut** : la case « Montrer les inclusions », dans
-la barre de la liste, la montre et la masque, sans rien écrire, le temps que la
-section est ouverte, et la masquer retire le tri qu'elle portait. Montrée, elle
-écrit chaque organisation incluse en pastille neutre à l'icône « ajouter », puis
-chaque personne incluse, et rien sans inclusion. Entrée ou F2 l'ouvre en deux
-choix multiples, ceux de la fiche, sans légende, la recherche comprise. Tab et
-Maj+Tab passent d'abord d'un contrôle à l'autre — les cases des organisations,
-la recherche, les cases des personnes — ; Tab depuis le dernier, Maj+Tab depuis
-le premier, valident et mènent à la cellule voisine, comme Entrée et la sortie
-de l'éditeur valident ; Échap rend la saisie. **Valider écrit une seule
-commande, `changerInclusions` des listes que la saisie change**, une seule
+placement, est **masquée par défaut**, avec celle des inclusions du placement
+qui la suit (plus bas) : la case « Montrer les inclusions », dans la barre de la
+liste, les montre et les masque ensemble, sans rien écrire, le temps que la
+section est ouverte, et les masquer retire le tri que la première portait.
+Montrée, elle écrit chaque organisation incluse en pastille neutre à l'icône
+« ajouter », puis chaque personne incluse, et rien sans inclusion. Entrée ou F2
+l'ouvre en deux choix multiples, ceux de la fiche, sans légende, la recherche
+comprise. Tab et Maj+Tab passent d'abord d'un contrôle à l'autre — les cases des
+organisations, la recherche, les cases des personnes — ; Tab depuis le dernier,
+Maj+Tab depuis le premier, valident et mènent à la cellule voisine, comme Entrée
+et la sortie de l'éditeur valident ; Échap rend la saisie. **Valider écrit une
+seule commande, `changerInclusions` des listes que la saisie change**, une seule
 entrée d'historique, que « Défaire » reprend d'un coup, et rien quand la saisie
 ne change plus rien ; une liste que la saisie ne touche pas ne part jamais, même
 changée ailleurs pendant la saisie, et un refus n'écrit aucune des deux. Quitter
@@ -5660,6 +5713,30 @@ commande, et se lit en lecture et sur un plan bloqué comme en écriture. La
 marque d'un groupe en conflit et celle d'une personne, dans la liste groupée,
 restent les leurs.
 
+**Les inclusions du placement de chaque personne se lisent de même** (§ 7.5,
+§ 12.15), dans le placement que la fiche mesure, sous les avis de sa ligne
+d'évaluation — ceux du tableau des propositions. La fiche porte une rubrique
+« Inclusions du placement », juste après celle des conflits, sous la même ligne
+de source : ses inclusions satisfaites sur ses inclusions actives, « 1 inclusion
+satisfaite sur 2. » ; quand sa liste dépasse ce qu'elle peut rencontrer, la
+phrase qui dit combien de ses inclusions au plus peuvent être satisfaites, et
+combien d'inclusions encore possibles le placement n'atteint pas, « Ce n'est pas
+un avis. » ; puis la phrase de chaque avis qui la concerne, celle de la page de
+qualité : qu'elle le porte, qu'elle soit la personne incluse, ou qu'elle demande
+aussi la rencontre que l'autre personne porte par une inclusion de son
+organisation, dont elle est le seul membre à sa portée. Sans rien de cela,
+« Aucune inclusion active ne la nomme. » ; une personne exclue, un
+placement qui ne se mesure pas, une phrase le dit ; sans placement, ou quand
+aucune inclusion n'est active, la rubrique est absente. Elle n'a aucune
+commande. La colonne « Inclusions du placement » de la grille, juste après celle
+des inclusions et masquée avec elle, en écrit le résumé : « 1 sur 2 », « liste
+au-delà du plafond », puis « sans » et l'autre partie de chaque avis qui la
+concerne — la personne ou l'organisation incluse, ou la personne qui l'inclut —,
+chaque nom dans son propre nœud ; un tiret sans rien de cela, et « non
+comptées » quand le placement montré ne se mesure pas. C'est une mesure, comme
+les conflits du placement : elle se lit seulement, son en-tête ne trie pas, la
+liste ne se groupe ni ne se filtre par elle, et l'export ne l'écrit pas.
+
 **La colonne « Animation » dit qui anime quelle table**, juste après celle du
 titre pressenti : les numéros affichés des tables que la personne anime —
 « 3 », « 3, 5 » —, lus dans les titres que ses réservations « tous les tours »
@@ -5675,15 +5752,15 @@ l'export ne l'écrit pas ; la marque, elle, s'exporte dans sa propre colonne.
 La tenue de la grille suit la place que la carte lui laisse, non la largeur de
 la fenêtre ; ses en-têtes sont en petit corps. Sous 86 rem de place, les
 cellules et les actions se serrent, et les onze colonnes que la grille montre
-par défaut tiennent dans la carte pleine largeur d'une fenêtre de 1024 px ; la
-colonne des inclusions montrée, la grille défile au besoin dans son conteneur,
-sans sortir de la carte. À partir de 80 rem — la carte d'une fenêtre de
-1 366 px —, chaque en-tête tient sur une ligne, hors de celui des conflits du
-placement, qui se replie toujours entre ses mots, les quatre actions d'une ligne
-vont en deux rangées de deux, en colonnes alignées d'une ligne à l'autre, un
-prénom ne se coupe qu'entre ses mots, et les tours nommés de la présence ne se
-coupent pas ; en deçà, un en-tête se replie entre ses mots et les actions
-passent à la ligne.
+par défaut tiennent dans la carte pleine largeur d'une fenêtre de 1024 px ; les
+colonnes des inclusions montrées, la grille défile au besoin dans son conteneur,
+sans sortir de la carte. À partir de 80 rem — la carte d'une fenêtre de 1 366 px
+—, chaque en-tête tient sur une ligne, hors de ceux des conflits et des
+inclusions du placement, qui se replient toujours entre leurs mots, les quatre
+actions d'une ligne vont en deux rangées de deux, en colonnes alignées d'une
+ligne à l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés de
+la présence ne se coupent pas ; en deçà, un en-tête se replie entre ses mots et
+les actions passent à la ligne.
 
 **La liste s'exporte en CSV dans la forme exacte qu'il importe.** L'aller-retour
 est éprouvé par un test qui importe, exporte et compare champ par champ : il
@@ -6903,17 +6980,18 @@ mène à chacune.
 | collisions d'organisation (§ 12.4) | d'où vient le problème, et relancer peut-il y changer quelque chose ? | barres horizontales à deux segments | une ligne par organisation |
 | organisations à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table et par tour, les trois comptes et leurs pourcentages |
 | paires répétées (§ 12.5) | qui revoit trop souvent la même personne ? | tableau paginé ; matrice sous le seuil | le tableau est la vue ; la matrice a le sien |
+| inclusions (§ 12.15) | quelles rencontres demandées par les inclusions ce placement ne fait-il pas ? | une phrase de synthèse, puis trois listes : les inclusions non satisfaites, les listes au-delà du plafond, les inclusions hors d'atteinte | les listes sont la vue |
 | objectifs des tables (§ 12.12) | qui n'est jamais assis à une table qui lui correspond, et à quel tour l'objectif perd-il ? | la soirée en texte, puis des barres horizontales par tour, à deux segments, chacune avec ses assis sans table possible ; dessous, chaque tour avec son pourcentage et ses deux comptes | une ligne par tour, et la liste des personnes jamais servies |
 | animateurs rencontrés (§ 12.13) | qui a rencontré le moins d'animateurs ? | escalier, une série, la borne des animateurs en repère | une ligne par personne concernée, et la répartition |
 | diversité par animateur (§ 12.13) | quel animateur voit le moins de diversité à sa table ? | deux colonnes de barres horizontales juxtaposées, organisations et étiquettes, chacune son axe, sur la soirée | une ligne par animateur sur la soirée, puis une par animateur et tour animé |
 | performance du calcul (§ 12.14) | relancer plus longtemps aurait-il donné mieux ? | petits multiples, un indicateur par graphique, points aux seuls points de relevé, abscisse logarithmique | une ligne par point de relevé, une colonne par indicateur |
 
-Une vue sans objet — aucune personne concernée par les objectifs, aucun
-animateur, aucune course connue — cède la place à sa phrase (§ 12.6), jamais à
-des axes vides. La vue de comparaison n'y fait pas exception : sans second
-placement — un seul placement mesurable —, elle garde son entrée dans la liste
-des vues et cède la place à sa phrase, « un seul placement mesurable : rien à
-comparer ».
+Une vue sans objet — aucune inclusion active, aucune personne concernée par les
+objectifs, aucun animateur, aucune course connue — cède la place à sa phrase
+(§ 12.6), jamais à des axes vides. La vue de comparaison n'y fait pas
+exception : sans second placement — un seul placement mesurable —, elle garde
+son entrée dans la liste des vues et cède la place à sa phrase, « un seul
+placement mesurable : rien à comparer ».
 
 **Un pourcentage de la page est toujours suivi, juste dessous, du pire cas en
 compte** : « 88 % », puis « minimum 24 sur 27 » ; « 77 % des tours possibles
@@ -7280,9 +7358,9 @@ plus revues d'abord, sous la ligne de source de la page de qualité ; quand la
 source ne se mesure pas ou que la personne est exclue, une phrase le dit ; sans
 placement, la rubrique est absente —, chemin garanti vers une personne quand la
 matrice n'est pas dessinée, et c'est pourquoi la fiche écran demeure alors que
-sa version imprimée est supprimée (§ 11.7). Juste avant elle, la rubrique
-« Conflits du placement » lit le même placement, sous la même ligne de source
-(§ 10.2).
+sa version imprimée est supprimée (§ 11.7). Juste avant elle, les rubriques
+« Conflits du placement » et « Inclusions du placement » lisent le même
+placement, sous la même ligne de source (§ 10.2).
 
 La matrice se dessine sous ce seuil **et** quand ses cases tiennent la cible de
 24 px dans la largeur réelle de la carte, que la géométrie éprouve ; sinon, la
@@ -7338,6 +7416,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | un plan qui laisse quelqu'un en réserve | collisions et objectifs sans segment « prouvé inévitable », et la phrase qui dit pourquoi (§ 12.4) ; aucune tuile n'écrit de plancher (§ 12.2) |
 | un pourcentage de dénominateur nul — plafond réalisé nul, tour sans couple possible, personne sans tour possible, table vide ou sans affilié | « — », jamais 0 % ni 100 % ; le compte reste écrit |
 | une table sans affilié à un tour | sa case écrit « — » sous les trois positions du sélecteur, sans couleur, et se range après les tables qui portent un compte |
+| aucune inclusion active | la vue des inclusions cède la place à sa phrase, suivie des inclusions hors d'atteinte quand les listes en portent, et le tableau des propositions n'a pas leur colonne |
 | aucune personne concernée par les objectifs | la vue des objectifs cède la place à sa phrase |
 | un tour sans couple possible | sa ligne écrit « — », sans barre ni pourcentage ; ses assis sans table possible restent écrits |
 | aucune personne concernée par les animateurs, ou aucun animateur | les deux vues des animateurs cèdent la place à leur phrase, la diversité par animateur même quand un animateur anime un tour où personne ne peut le rencontrer |
@@ -7525,24 +7604,24 @@ en deux endroits, le graphique et le tableau finissent par se contredire devant
 l'opérateur.
 
 **Le détail d'un placement** — son profil trié, ses collisions jointes aux
-planchers, ses paires, sa matrice, ses mélanges, ses bornes de diversité — se
-calcule pour lui seul, à l'ouverture de la page, par les fonctions du moteur, en
-une lecture du plan ; jamais pour toutes les propositions, dont la table
-d'évaluation se recalcule à chaque écriture. Les points de relevé de la
-performance s'y ajoutent, leurs plans lus dans la course que le compagnon des
-courses garde pour la proposition (§ 8.6), chacun mesuré sous les réglages
-courants par la mesure qui fait foi ; les pourcentages aussi, par la seule
-fonction du moteur qui les calcule (§ 5.4). Le détail d'une charge se garde tant
-qu'elle ne change pas, et se refait sur la suivante : aucune valeur ne survit à
-un changement de réglage. Les tuiles lisent les mesures de la ligne de cette
-table. Le détail ne reçoit pas cette ligne, que la table calcule pour chaque
-proposition : il mesure son placement par le même chemin qu'elle — la mesure,
-les plafonds réalisés et les trois chiffres du § 12.10.4, pris d'une seule
-fonction de l'application —, et ses fonctions du moteur n'en recomptent rien.
-Elles rendent une fois les bornes et les planchers qui accompagnent les tuiles,
-et jugent un plancher atteint sur la valeur même que la ligne porte. Les tris,
-les échelles, les chemins des tracés et le pointage au plus proche sont des
-fonctions pures : un composant n'en fait aucun.
+planchers, ses paires, sa matrice, ses mélanges, ses bornes de diversité, ses
+inclusions et celles hors d'atteinte du diagnostic — se calcule pour lui seul, à
+l'ouverture de la page, par les fonctions du moteur, en une lecture du plan ;
+jamais pour toutes les propositions, dont la table d'évaluation se recalcule à
+chaque écriture. Les points de relevé de la performance s'y ajoutent, leurs
+plans lus dans la course que le compagnon des courses garde pour la proposition
+(§ 8.6), chacun mesuré sous les réglages courants par la mesure qui fait foi ;
+les pourcentages aussi, par la seule fonction du moteur qui les calcule (§ 5.4).
+Le détail d'une charge se garde tant qu'elle ne change pas, et se refait sur la
+suivante : aucune valeur ne survit à un changement de réglage. Les tuiles lisent
+les mesures de la ligne de cette table. Le détail ne reçoit pas cette ligne, que
+la table calcule pour chaque proposition : il mesure son placement par le même
+chemin qu'elle — la mesure, les plafonds réalisés et les trois chiffres du
+§ 12.10.4, pris d'une seule fonction de l'application —, et ses fonctions du
+moteur n'en recomptent rien. Elles rendent une fois les bornes et les planchers
+qui accompagnent les tuiles, et jugent un plancher atteint sur la valeur même
+que la ligne porte. Les tris, les échelles, les chemins des tracés et le
+pointage au plus proche sont des fonctions pures : un composant n'en fait aucun.
 
 Les vues se dessinent en **SVG**, avec **un module de géométrie frère** de celui
 du plan, dans la même couche (§ 13.4) — même principe, même discipline
@@ -8110,6 +8189,53 @@ absent, illisible ou contradictoire, proposition effacée puis rendue après une
 réouverture — n'a pas ces données : la vue dit que sa course n'est pas gardée.
 La page ne lit l'horloge que par l'application ; le moteur ne la lit jamais
 (§ 14.7).
+
+### 12.15 Les inclusions
+
+**Question : quelles rencontres demandées par les inclusions ce placement ne
+fait-il pas ?**
+
+La vue lit les inclusions du détail du placement (§ 12.9) : celles de sa ligne
+d'évaluation, chaque personne par son identifiant, et les inclusions hors
+d'atteinte du diagnostic. Elle n'en mesure aucune : une seule fonction décide
+qu'une inclusion est satisfaite (§ 13.2).
+
+Une phrase de synthèse l'ouvre : « 2 inclusions non satisfaites sur 5 rencontres
+demandées. », ou « Chacune des 5 rencontres demandées se fait. », « La rencontre
+demandée se fait. » pour une seule ; quand chaque liste active dépasse ce que sa
+personne peut rencontrer, « Aucune rencontre demandée ne fait d'avis : chaque
+liste dépasse ce que sa personne peut rencontrer. ». Puis **les inclusions non
+satisfaites, à place fixe en tête** (§ 12.1) : une phrase par rencontre demandée
+que le placement ne fait pas, dans l'ordre de la mesure, par la personne qui la
+porte puis par sa liste — « Iris Ombrelle n'a pas rencontré Théo Pervenche »,
+« Iris Ombrelle n'a rencontré personne de Club des Merles ». Une rencontre que
+les deux personnes demandent ne compte qu'une fois (§ 5.4) : sa phrase la nomme
+une fois, chez la première des deux, et le dit, « …, une rencontre demandée des
+deux côtés ». Sans avis, « Aucune. ».
+
+Puis deux informations, jamais des avis, chacune sous la phrase qui le dit et
+seulement quand elle a des lignes :
+
+- **les listes au-delà du plafond** : chaque personne dont la liste demande
+  plus de personnes qu'elle n'en peut rencontrer (§ 5.4), par identifiant, ses
+  inclusions satisfaites sur ses inclusions actives, ses inclusions
+  atteignables et celles qui restent possibles sans que le placement les
+  atteigne — « Ondine Lacasse : 5 inclusions satisfaites sur 9, au plus 7
+  possibles ; 2 inclusions encore possibles non atteintes », ou « toutes ses
+  inclusions encore possibles sont atteintes » ;
+- **les inclusions hors d'atteinte** (§ 4, § 5.6), dans l'ordre du diagnostic,
+  chacune par sa personne, sa cible et sa raison — « Théo Pervenche → Capucine
+  Sarcelle : la personne incluse est exclue ».
+
+Chaque nom et chaque organisation est une donnée, dans son propre nœud. Les
+phrases des avis sont celles de la liste de travail du plan (§ 5.8) et de la
+rubrique « Inclusions du placement » de la fiche (§ 10.2) ; la colonne du
+tableau des propositions, sa phrase sous le numéro (§ 5.7) et la tuile de
+l'en-tête (§ 12.2) en écrivent le compte. Sans inclusion active, la vue cède la
+place à sa phrase (§ 12.6) ; quand les listes portent des inclusions toutes hors
+d'atteinte, la phrase le dit, « Aucune inclusion n'est active : celles que les
+listes portent sont toutes hors d'atteinte. », et la liste des inclusions hors
+d'atteinte la suit.
 
 ---
 
@@ -8820,6 +8946,20 @@ fils égale celle d'un seul, et une dérivée n'en laisse jamais plus que son
 départ. La grande démonstration portant les listes d'une fixture de graine
 fixe (`test/fixtures/moteur/inclusions_grande.json`) a sa section des
 empreintes de référence, ses inclusions non satisfaites comprises.
+
+**Ce que l'écran dit des inclusions se lit dans la ligne d'évaluation.** Une
+rencontre demandée des deux côtés fait une phrase et un avis, au tableau des
+propositions, à la liste de travail du plan, à la page de qualité, à la fiche et
+à la grille, qui la nomment chez les deux personnes ; une liste au-delà de son
+plafond n'y fait aucun avis, et ses inclusions encore possibles se comptent à la
+page de qualité, à la fiche et à la carte de la proposition choisie ; une
+inclusion hors d'atteinte se nomme avec sa raison au diagnostic, à la page de
+qualité et sous la liste de sa fiche. Un conflit posé, ou une inclusion posée
+contre un conflit, avertit une fois, et une contradiction qui reste ne se redit
+pas, même sous une organisation renommée. Sans inclusion active, ni phrase, ni
+liste, ni rubrique : la vue cède la place à sa phrase, et les inclusions hors
+d'atteinte se disent seules, au diagnostic, à la vue et sous les listes de la
+fiche.
 
 **L'ordre par défaut rend les plans de l'ordre fixe de référence.** Des
 **empreintes de référence**, fichier d'épreuve versionné

@@ -125,6 +125,18 @@
   // le focus, Entrée et F2 n'y ouvrent rien, son en-tête ne trie pas, elle
   // ne se groupe ni ne se filtre, et l'export ne l'écrit pas.
   //
+  // La colonne « Inclusions du placement » (MESURES), juste après celle des
+  // inclusions et masquée avec elle, se lit de même, dans le placement que
+  // la fiche lit (inclusionsDuPlacement, inclusionsDePersonne,
+  // qualite/inclusions.js), les mêmes avis que le tableau des propositions
+  // et la liste de travail du plan : ses inclusions satisfaites sur ses
+  // inclusions actives, « liste au-delà du plafond » quand la sienne
+  // dépasse ce qu'elle peut rencontrer, puis « sans » et l'autre partie de
+  // chaque avis qui la concerne — la personne ou l'organisation incluse, ou
+  // la personne qui l'inclut —, chaque nom dans son propre nœud ; un tiret
+  // sans rien de cela, ni placement mesuré ni inclusion active, et « non
+  // comptées » pour un placement montré qui ne se mesure pas.
+  //
   // La colonne « Animation » (MESURES), juste après le titre pressenti, se
   // lit de même : les numéros affichés des tables que la personne anime,
   // « 3 » ou « 3, 5 », lus dans tablesAnimees
@@ -145,6 +157,8 @@
   import Pastille from '../primitives/Pastille.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
+  import { nomDe } from '../propositions/modele.js';
+  import { inclusionsDePersonne, inclusionsDuPlacement } from '../qualite/inclusions.js';
   import { effetDe } from '../raccourcis.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
@@ -256,6 +270,15 @@
   const nonCompte = $derived(
     $seance.charge !== null && conflitsBruts === null && ($ui.proposition !== null || $seance.charge.retenu !== null),
   );
+
+  // Les inclusions du placement montré ; ce qu'elles disent d'une personne,
+  // null hors d'un placement mesuré.
+  const inclusionsBrutes = $derived($seance.charge === null ? null : inclusionsDuPlacement($seance.charge, $ui.proposition));
+  const inclusionsNonComptees = $derived(inclusionsBrutes?.statut === 'nonMesurable');
+  const inclusionsDe = (id) =>
+    inclusionsBrutes?.statut === 'mesuree'
+      ? inclusionsDePersonne(inclusionsBrutes.inclusions, id, (autre) => nomDe($seance.charge, autre))
+      : null;
 
   // Les tables que chaque personne anime, lues sur la charge entière : la
   // grille ne reçoit que ses lignes.
@@ -757,6 +780,25 @@
           {:else}
             <span class="sans-conflit">{t('participants.conflit.aucun')}</span>
           {/if}
+        {:else if colonne === 'inclusionsPlacement'}
+          {@const siennes = inclusionsDe(personne.id)}
+          {#if siennes !== null && (siennes.compte !== null || siennes.autres.length > 0)}
+            <ul class="conflits-placement" data-inclusions-placement>
+              {#if siennes.compte !== null}
+                <li>{t('participants.inclusionsPlacement.compte', siennes.compte)}</li>
+              {/if}
+              {#if siennes.auDela !== null}
+                <li>{t('participants.inclusionsPlacement.auDela')}</li>
+              {/if}
+              {#each siennes.autres as autre, rang (rang)}
+                <li><span>{t('participants.inclusionsPlacement.sans')}</span><span class="valeur">{autre.nom}</span></li>
+              {/each}
+            </ul>
+          {:else if inclusionsNonComptees}
+            <span class="sans-conflit">{t('participants.inclusionsPlacement.nonCompte')}</span>
+          {:else}
+            <span class="sans-conflit">{t('participants.conflit.aucun')}</span>
+          {/if}
         {:else if colonne === 'animation'}
           {@const animation = celluleAnimation(personne, animees)}
           {#if animation.sorte === 'tables'}
@@ -886,7 +928,7 @@
               </button>
             </th>
           {:else}
-            <th scope="col" class="mesure" class:replie={colonne === 'conflitsPlacement'} class:etroite={colonne === 'animation'}
+            <th scope="col" class="mesure" class:replie={colonne === 'conflitsPlacement' || colonne === 'inclusionsPlacement'} class:etroite={colonne === 'animation'}
               >{t(cleDeColonne(colonne))}</th
             >
           {/if}
@@ -1241,14 +1283,14 @@
   }
 
   /* À partir de 80rem de place, celle de la carte d'une fenêtre de
-     1 366 px, chaque en-tête tient sur une ligne — hors de celui des
-     conflits du placement (replie), qui se replie toujours entre ses
-     mots : sur une ligne, il ferait déborder la grille —, les quatre actions d'une
-     ligne vont sur deux rangées de deux, en colonnes alignées d'une ligne à
-     l'autre, un prénom ne se coupe qu'entre ses mots, et les tours nommés
-     de la présence ne se coupent pas. En deçà, les en-têtes se replient
-     entre leurs mots, et les actions passent à la ligne quand leur colonne
-     est étroite. */
+     1 366 px, chaque en-tête tient sur une ligne — hors de ceux des
+     conflits et des inclusions du placement (replie), qui se replient
+     toujours entre leurs mots : sur une ligne, ils feraient déborder la
+     grille —, les quatre actions d'une ligne vont sur deux rangées de deux,
+     en colonnes alignées d'une ligne à l'autre, un prénom ne se coupe
+     qu'entre ses mots, et les tours nommés de la présence ne se coupent
+     pas. En deçà, les en-têtes se replient entre leurs mots, et les actions
+     passent à la ligne quand leur colonne est étroite. */
   @container (min-width: 80rem) {
     thead th:not(.replie) {
       white-space: nowrap;

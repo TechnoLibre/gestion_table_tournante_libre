@@ -36,7 +36,7 @@
   // contradiction, son code traduit et la personne nommée.
   //
   // Sinon, la liste des vues, dans leur ordre à l'écran, mène à chacune :
-  // un lien porte le focus sur la vue, qui se fait voir. Puis les dix vues,
+  // un lien porte le focus sur la vue, qui se fait voir. Puis les onze vues,
   // chacune sous le contrat de propriétés {detail, ligne, table} — le
   // détail du placement (detailDe, modele.js), la ligne d'évaluation de la
   // source, la table d'évaluation de la charge. Le détail se mesure pour la
@@ -69,6 +69,7 @@
   import VueComparaison from './VueComparaison.svelte';
   import VueDiversite from './VueDiversite.svelte';
   import VueEntete from './VueEntete.svelte';
+  import VueInclusions from './VueInclusions.svelte';
   import VueObjectifs from './VueObjectifs.svelte';
   import VuePaires from './VuePaires.svelte';
   import VuePerformance from './VuePerformance.svelte';
@@ -93,6 +94,7 @@
     ['collisions', VueCollisions],
     ['tables', VueTables],
     ['paires', VuePaires],
+    ['inclusions', VueInclusions],
     ['objectifs', VueObjectifs],
     ['animateurs', VueAnimateurs],
     ['diversite', VueDiversite],

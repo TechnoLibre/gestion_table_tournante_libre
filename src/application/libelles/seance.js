@@ -150,6 +150,20 @@ export const TABLE = new Map([
       );
     },
   ],
+  // Les inclusions qu'un conflit d'organisation contredit après le geste,
+  // chacune par sa source et sa cible : elles restent dans leurs listes.
+  [
+    'INCLUSION_CONTREDITE',
+    ({ contredites }) => {
+      const une = contredites.length === 1;
+      const liste = contredites.map(({ personne, cible }) => `${personne} \u{2192} ${cible.organisation ?? cible.personne}`);
+      return (
+        `Après ce geste, un conflit d'organisation contredit ${compte(contredites.length, 'inclusion', 'inclusions')} : ` +
+        `${enumeration(liste)}. ${une ? 'Elle reste dans sa liste' : 'Elles restent dans leurs listes'}, hors d'atteinte : ` +
+        `aucun placement ne ${une ? 'la' : 'les'} satisfera tant que le conflit tient.`
+      );
+    },
+  ],
   [
     'INVARIANT_VIOLE',
     ({ proposition, violations }, texte) =>

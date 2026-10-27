@@ -13,11 +13,14 @@
   // incluse en pastille neutre à l'icône « ajouter », ou chaque personne
   // incluse par son libellé (libelleDeCible, liste_inclusions.js) — son nom,
   // l'identifiant d'un homonyme, « (exclue) » —, ou une phrase qui dit
-  // qu'elle n'en nomme aucune. Puis le choix multiple (ChoixMultiple) : une
-  // case par organisation de l'événement hors la sienne (choixDeConflits,
-  // liste_conflits.js), ou par personne de l'événement hors elle-même,
-  // exclues comprises (choixDeParticipants), avec une zone de recherche ;
-  // puis « Appliquer ».
+  // qu'elle n'en nomme aucune. Sous lui, quand il y en a, les inclusions de
+  // cette sorte qui sont hors d'atteinte (data-inclusions-hors-atteinte) :
+  // horsDAtteinte, que la fiche lit dans le diagnostic, chacune par sa
+  // cible et sa raison — une information, jamais un refus. Puis le choix
+  // multiple (ChoixMultiple) : une case par organisation de l'événement hors
+  // la sienne (choixDeConflits, liste_conflits.js), ou par personne de
+  // l'événement hors elle-même, exclues comprises (choixDeParticipants),
+  // avec une zone de recherche ; puis « Appliquer ».
   //
   // Cocher et décocher n'écrivent rien : le brouillon vit dans une machine
   // de champ.js, sur la saisie canonique de liste_inclusions.js, et tient le
@@ -37,6 +40,7 @@
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { creerGeste } from '../primitives/geste.js';
+  import { cleDeRaison } from '../qualite/inclusions.js';
   import { effetDe } from '../raccourcis.js';
   import ChoixMultiple from './ChoixMultiple.svelte';
   import { choixDeConflits, lectureConflits, saisieApresBasculeConflit } from './liste_conflits.js';
@@ -54,7 +58,7 @@
     saisieParticipantsEnregistree,
   } from './liste_inclusions.js';
 
-  let { participant, charge, sorte } = $props();
+  let { participant, charge, sorte, horsDAtteinte = [] } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -181,6 +185,18 @@
       {/each}
     </ul>
   {/if}
+  {#if horsDAtteinte.length > 0}
+    <div class="hors-atteinte" data-inclusions-hors-atteinte>
+      <p>{t('participants.fiche.inclusionsHorsAtteinte')}</p>
+      <ul>
+        {#each horsDAtteinte as inclusion, rang (rang)}
+          <li>
+            <span class="valeur">{inclusion.cible.nom}</span><span>{t('qualite.inclusions.parce', { raison: cleDeRaison(inclusion.raison) })}</span>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
   <form novalidate onsubmit={appliquer}>
     {#if organisation}
       <ChoixMultiple
@@ -270,6 +286,26 @@
 
   .valeur {
     white-space: pre-wrap;
+  }
+
+  /* Les inclusions hors d'atteinte, en encre secondaire : une ligne par
+     inclusion, la cible puis sa raison. */
+  .hors-atteinte {
+    color: var(--couleur-page-texte-secondaire);
+  }
+
+  .hors-atteinte p {
+    margin: 0;
+  }
+
+  .hors-atteinte ul {
+    flex-direction: column;
+    gap: 0;
+    margin: 0;
+  }
+
+  .hors-atteinte li {
+    display: block;
   }
 
   form {

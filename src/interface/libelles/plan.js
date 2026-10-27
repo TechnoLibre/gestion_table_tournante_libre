@@ -266,6 +266,10 @@ export const TABLE = new Map([
   // des tours où il la réserve.
   ['plan.listesTravail.reserves', 'En réserve dans le placement retenu'],
   ['plan.listesTravail.enReserve', ({ tours }) => ` \u{2014} en réserve ${auxToursNommes(tours)}`],
+  // Les inclusions que le placement montré laisse non satisfaites, chacune
+  // par sa phrase (qualite.inclusions.*).
+  ['plan.listesTravail.inclusions', 'Inclusions non satisfaites'],
+  ['plan.listesTravail.aucuneInclusion', 'Aucune.'],
   ['plan.listesTravail.ignorer', 'Ignorer'],
 
   // --- La réserve (§ 7.1, § 5.8) ---------------------------------------------

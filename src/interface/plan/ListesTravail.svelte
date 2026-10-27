@@ -20,6 +20,14 @@
   //    fait la personne choisie, dans cet ordre : montrer un tour oublie le
   //    choix (etat_ui.js). Un clic sur la personne déjà choisie l'oublie.
   //    La liste n'est pas dans le DOM sans retenu.
+  //  - Les inclusions non satisfaites du placement que le plan montre — la
+  //    proposition demandée, sinon le retenu — (inclusionsDuPlacement,
+  //    qualite/inclusions.js), [data-liste-travail=inclusions] : la phrase
+  //    de chaque avis (PhraseInclusion), dans l'ordre de la mesure. Un clic
+  //    fait de la personne qui le porte la personne choisie, un clic sur la
+  //    personne déjà choisie l'oublie. Aucune table ne la signale. La liste
+  //    n'est dans le DOM que quand ce placement se mesure et qu'une
+  //    inclusion est active.
   //  - Les conversions proposées (conversionsPossibles, § 4.2) : R
   //    réservations « tour » à une table qu'une seule « tous les tours »
   //    remplacerait. « Convertir » l'exécute ; « Ignorer » la retire de la
@@ -38,6 +46,8 @@
     titresNonPourvus,
   } from '../../application/listes_travail.js';
   import Commande from '../primitives/Commande.svelte';
+  import { avisNomme, inclusionsDuPlacement } from '../qualite/inclusions.js';
+  import PhraseInclusion from '../qualite/PhraseInclusion.svelte';
   import { effetDe } from '../raccourcis.js';
   import { nomDeCharge } from './vue_plan.js';
 
@@ -52,6 +62,12 @@
   const pressentis = $derived(charge === null ? [] : pressentisNonReserves(charge));
   const avecRetenu = $derived(charge !== null && charge.retenu !== null);
   const enReserve = $derived(avecRetenu ? enReserveDansLeRetenu(charge) : []);
+  // Les avis des inclusions du placement montré, nommés ; null quand ce
+  // placement ne se mesure pas ou qu'aucune inclusion n'est active.
+  const inclusions = $derived(charge === null ? null : inclusionsDuPlacement(charge, $ui.proposition));
+  const avisInclusions = $derived(
+    inclusions?.statut === 'mesuree' ? inclusions.inclusions.nonSatisfaites.map((avis) => avisNomme(avis, nomDe)) : null,
+  );
   // Les conversions que l'opérateur a ignorées, par clé « personne:table ».
   let ignorees = $state([]);
   const conversions = $derived(
@@ -152,6 +168,25 @@
         </ul>
         {#if enReserve.length === 0}
           <p>{t('plan.listesTravail.aucun')}</p>
+        {/if}
+      {/if}
+
+      {#if avisInclusions !== null}
+        <h4 id="{uid}-inclusions">{t('plan.listesTravail.inclusions')}</h4>
+        <ul data-liste-travail="inclusions" aria-labelledby="{uid}-inclusions">
+          {#each avisInclusions as avis, rang (rang)}
+            <li>
+              <button
+                type="button"
+                data-participant={avis.source.id}
+                aria-pressed={choisie(avis.source.id)}
+                onclick={() => basculer(avis.source.id)}><PhraseInclusion {avis} /></button
+              >
+            </li>
+          {/each}
+        </ul>
+        {#if avisInclusions.length === 0}
+          <p>{t('plan.listesTravail.aucuneInclusion')}</p>
         {/if}
       {/if}
 

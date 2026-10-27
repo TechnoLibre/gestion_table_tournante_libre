@@ -18,19 +18,24 @@
 // exacts du solveur que le Diagnostic reçoit (planchers_exacts.js) : aucune
 // mesure ne se refait ici. Les seules opérations sont des comparaisons de
 // ces chiffres entre eux, un minimum et un maximum sur les plafonds a priori
-// des personnes au minimum, la soustraction présents − places du diagnostic
-// et le plancher retenu des collisions (plancherRetenu) : pour un plan sans
-// conflit d'organisation, le plus fort de la somme par groupe renforcée par
-// les étoiles et du plancher exact ; pour un plan qui en a, la somme par
-// groupe seule, ces deux planchers ne valant que sans conflit. Aucune phrase
-// ne promet que le moteur atteindra le plancher exact. Trois blocs :
+// des personnes au minimum, la soustraction présents − places du diagnostic,
+// la somme des inclusions atteignables moins satisfaites des personnes
+// au-delà de leur plafond, et le plancher retenu des collisions
+// (plancherRetenu) : pour un plan sans conflit d'organisation, le plus fort
+// de la somme par groupe renforcée par les étoiles et du plancher exact ;
+// pour un plan qui en a, la somme par groupe seule, ces deux planchers ne
+// valant que sans conflit. Aucune phrase ne promet que le moteur atteindra
+// le plancher exact. Trois blocs :
 // - atteint : les rencontres minimales, puis, chacun quand sa règle compte
 //   — cochée et avec un objet, comme l'état des critères de la table le dit
-//   —, les conflits d'organisation, les collisions, les retours choisis, la
-//   diversité, les objectifs et les animateurs ; des collisions au minimum
-//   quand elles égalent le plancher retenu, au-dessus de la somme par
-//   groupe, sans aucun conflit — sous une limite de temps aussi : des
-//   collisions égales à une borne valide sont minimales ;
+//   —, les conflits d'organisation, les inclusions — les rencontres
+//   demandées qui ne se font pas, puis, quand des listes dépassent ce que
+//   leurs personnes peuvent rencontrer, les inclusions encore possibles
+//   qu'elles n'atteignent pas, qui ne sont pas des avis —, les collisions,
+//   les retours choisis, la diversité, les objectifs et les animateurs ; des
+//   collisions au minimum quand elles égalent le plancher retenu, au-dessus
+//   de la somme par groupe, sans aucun conflit — sous une limite de temps
+//   aussi : des collisions égales à une borne valide sont minimales ;
 // - manque : l'écart au plafond a priori décomposé en ses deux parts, la
 //   place — écart d'itinéraire, places vides, plancher prouvé — et les
 //   revoirs — plus grand manque, rencontres répétées —, puis ce qui se sait
@@ -138,6 +143,17 @@ function atteint(ligne, table, charge, comptent, etoiles, exacts) {
     const conflits = mesures.conflitsOrganisation;
     const imposes = honore && conflits > 0 && conflits === table.diagnostic.conflitsImposes;
     liste.push(conflits === 0 ? phrase('conflits.aucun') : phrase('conflits', { conflits, imposes }));
+  }
+  if (comptent.has('inclusionsNonSatisfaites') && mesures.inclusions !== null) {
+    // cible nulle, chaque liste active dépasse ce que sa personne peut
+    // rencontrer : seule la phrase des listes au-delà du plafond parle.
+    const { avis, cible, parPersonne } = mesures.inclusions;
+    if (cible > 0) liste.push(avis === 0 ? phrase('inclusions.aucune') : phrase('inclusions', { avis, cible }));
+    const auDela = parPersonne.filter(({ auDelaDuPlafond }) => auDelaDuPlafond);
+    if (auDela.length > 0) {
+      const possibles = auDela.reduce((somme, { atteignables, satisfaites }) => somme + atteignables - satisfaites, 0);
+      liste.push(phrase('inclusions.auDela', { personnes: auDela.length, possibles }));
+    }
   }
   if (comptent.has('collisionsCumulees') && mesures.parGroupe.some(({ effectif }) => effectif >= 2)) {
     const { collisionsCumulees: collisions, pairesDistinctes: paires, excedentCollisions: excedent } = mesures;

@@ -4,8 +4,8 @@
 // Les libellés de la page de qualité (§ 12 à § 12.14, § 14.6), une table.
 // Chaque clé commence par « qualite. » : la source et ses cas, la liste des
 // vues, le refus de dessiner, les pourcentages, puis un sous-préfixe par vue
-// — tuile, profil, comparaison, collisions, tables, paires, objectifs,
-// animateurs, diversite, performance.
+// — tuile, profil, comparaison, collisions, tables, paires, inclusions,
+// objectifs, animateurs, diversite, performance.
 //
 // Le signe « % » ne s'écrit que sous qualite.pourcentage.* : la valeur
 // « N % », les graduations d'un axe en pourcentages et le libellé de sa
@@ -66,6 +66,8 @@ export const TABLE = new Map([
   ['qualite.vue.tables.question', 'Où les mêmes cercles se retrouvent-ils à une même table ?'],
   ['qualite.vue.paires.titre', 'Paires répétées'],
   ['qualite.vue.paires.question', 'Qui revoit trop souvent la même personne ?'],
+  ['qualite.vue.inclusions.titre', 'Inclusions'],
+  ['qualite.vue.inclusions.question', 'Quelles rencontres demandées par les inclusions ce placement ne fait-il pas ?'],
   ['qualite.vue.objectifs.titre', 'Objectifs des tables'],
   [
     'qualite.vue.objectifs.question',
@@ -445,6 +447,59 @@ export const TABLE = new Map([
     'qualite.paires.matrice.etroite',
     "La matrice n'est pas dessinée : ses cases ne tiendraient pas dans la largeur de la carte. La fiche de chaque personne porte ses rencontres.",
   ],
+
+  // --- Les inclusions (§ 12.15) ----------------------------------------------
+  // Une phrase d'inclusion (PhraseInclusion.svelte) pose chaque nom et chaque
+  // organisation dans son propre nœud, entre ces textes, qui portent leurs
+  // blancs de bord : « Prénom Nom », avis.participant, « Prénom Nom ». Une
+  // raison se lit dans la phrase qui la cite, par parce, qui reçoit sa clé
+  // (cleDeRaison, inclusions.js).
+  ['qualite.inclusions.avis.participant', " n'a pas rencontré "],
+  ['qualite.inclusions.avis.organisation', " n'a rencontré personne de "],
+  ['qualite.inclusions.avis.reciproque', ', une rencontre demandée des deux côtés'],
+  ['qualite.inclusions.vers', ' \u{2192} '],
+  ['qualite.inclusions.parce', ({ raison }, texte) => ` : ${texte(raison)}`],
+  ['qualite.inclusions.raison.exclue', 'la personne incluse est exclue'],
+  ['qualite.inclusions.raison.sansPresent', "aucun présent ne porte l'organisation"],
+  ['qualite.inclusions.raison.conflit', "un conflit d'organisation la contredit"],
+  ['qualite.inclusions.raison.sansTourCommun', 'les deux ne sont jamais présentes au même tour'],
+  ['qualite.inclusions.raison.tablesImposees', 'les réservations les assoient à deux tables différentes à chaque tour commun'],
+  ['qualite.inclusions.raison.pleine', "aucune table n'a de place pour les deux"],
+  // cible vaut 0 quand chaque liste active dépasse ce que sa personne peut
+  // rencontrer : aucune ne fait d'avis.
+  [
+    'qualite.inclusions.synthese',
+    ({ avis, cible }) => {
+      if (cible === 0) return "Aucune rencontre demandée ne fait d'avis : chaque liste dépasse ce que sa personne peut rencontrer.";
+      if (avis > 0) {
+        return `${compte(avis, 'inclusion non satisfaite', 'inclusions non satisfaites')} sur ${compte(cible, 'rencontre demandée', 'rencontres demandées')}.`;
+      }
+      return cible === 1 ? 'La rencontre demandée se fait.' : `Chacune des ${cible} rencontres demandées se fait.`;
+    },
+  ],
+  ['qualite.inclusions.nonSatisfaites', 'Inclusions non satisfaites'],
+  ['qualite.inclusions.aucunAvis', 'Aucune.'],
+  ['qualite.inclusions.auDela', 'Listes au-delà du plafond'],
+  [
+    'qualite.inclusions.auDela.explication',
+    "Ces listes demandent plus de personnes que la soirée n'en fait rencontrer : ne pas les satisfaire tout entières n'est pas une erreur, et elles ne font aucun avis.",
+  ],
+  [
+    'qualite.inclusions.auDela.ligne',
+    ({ satisfaites, actives, atteignables, possibles }) =>
+      ` : ${compte(satisfaites, 'inclusion satisfaite', 'inclusions satisfaites')} sur ${actives}, au plus ` +
+      `${compte(atteignables, 'possible', 'possibles')} ; ` +
+      (possibles === 0
+        ? 'toutes ses inclusions encore possibles sont atteintes'
+        : compte(possibles, 'inclusion encore possible non atteinte', 'inclusions encore possibles non atteintes')),
+  ],
+  ['qualite.inclusions.horsDAtteinte', "Inclusions hors d'atteinte"],
+  [
+    'qualite.inclusions.horsDAtteinte.explication',
+    'Aucun placement ne peut les satisfaire : elles ne comptent ni parmi les satisfaites, ni parmi les non satisfaites.',
+  ],
+  ['qualite.inclusions.aucun', "Aucune inclusion n'est active : la vue n'a rien à montrer."],
+  ['qualite.inclusions.aucun.horsDAtteinte', "Aucune inclusion n'est active : celles que les listes portent sont toutes hors d'atteinte."],
 
   // --- Les objectifs des tables, tour par tour (§ 12.12, B21, D36) -----------
   ['qualite.objectifs.jamaisServies', 'Personnes jamais servies'],

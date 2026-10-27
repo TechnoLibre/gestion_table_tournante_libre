@@ -866,6 +866,26 @@ describe('tableau : le sixième groupe, les objectifs des tables et les animateu
     assert.deepEqual(sansListe.lignes.map(({ conflitsRestants }) => conflitsRestants), [null]);
   });
 
+  test("« N inclusions non satisfaites » sous l'identifiant d'une ligne qui laisse des rencontres demandées, le retenu compris ; une rencontre demandée des deux côtés compte une fois ; rien à zéro, ni sans inclusion", () => {
+    // Iris Ombrelle et Ondine Lacasse se demandent l'une l'autre : le
+    // premier plan ne les réunit jamais, le second au tour 1.
+    const charge = chargeSix();
+    charge.participants[0].inclusionsParticipant = [3];
+    charge.participants[2].inclusionsParticipant = [1];
+    const separees = [[[1, 2, 4], [3, 5, 6]], [[1, 2, 5], [3, 4, 6]], [[1, 2, 6], [3, 4, 5]], [[1, 2, 4], [3, 5, 6]]];
+    const avecRetenu = executer(avecPlans(charge, [{ tours: separees }, { tours: DEUX_COLLEGUES }]), 'retenirProposition', { id: 1 });
+    const vue = tableau(evaluer(avecRetenu));
+    const restantes = new Map(vue.lignes.map(({ id, inclusionsRestantes }) => [id, inclusionsRestantes]));
+    const une = { cle: 'propositions.inclusionsRestantes', details: { nombre: 1 } };
+    assert.deepEqual(restantes.get(1), une);
+    assert.equal(restantes.get(2), null);
+    assert.deepEqual(vue.retenu.inclusionsRestantes, une);
+    assert.equal(t('propositions.inclusionsRestantes', { nombre: 2 }), '2 inclusions non satisfaites');
+    assert.equal(t('propositions.inclusionsRestantes', { nombre: 1 }), '1 inclusion non satisfaite');
+    const sansListe = tableau(evaluer(avecPlans(chargeSix(), [{ tours: separees }])));
+    assert.deepEqual(sansListe.lignes.map(({ inclusionsRestantes }) => inclusionsRestantes), [null]);
+  });
+
   test('« le plus de places servies » : les tours hors objectif et le minimum des tours selon l’objectif, après le manque et avant le certificat ; ni les personnes jamais servies ni le plus de tours hors objectif d’une personne', () => {
     let charge = generee(petiteAObjectifs(), { graine: 3, nombre: 2, arret: 200 });
     charge = executer(charge, 'retenirProposition', { id: 2 });

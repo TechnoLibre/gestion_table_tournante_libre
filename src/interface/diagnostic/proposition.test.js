@@ -675,3 +675,54 @@ describe('propositionChoisie : les planchers exacts du solveur (§ 5.6)', () => 
     assert.ok(!cles(phrases(imposes, 'manque')).includes(`${P}.conflits.inevitables`));
   });
 });
+
+describe('propositionChoisie : les inclusions (§ 5.4, § 5.6)', () => {
+  // Six personnes sans organisation, deux tables de 3, un tour : chacune en
+  // rencontre au plus deux. La 1 inclut 2, 4 et 5, plus qu'elle n'en peut
+  // rencontrer ; la 4 inclut 1, que le plan assied à l'autre table.
+  function chargeInclusions() {
+    const charge = chargeDe({ organisations: sans(6), capacites: [3, 3], tours: 1 });
+    charge.participants[0].inclusionsParticipant = [2, 4, 5];
+    charge.participants[3].inclusionsParticipant = [1];
+    return avecPropositions(charge, [propositionDe(charge, 1, [[[1, 2, 3], [4, 5, 6]]])]);
+  }
+  const deInclusions = (choisie) => choisie.blocs[0].phrases.filter(({ cle }) => cle.startsWith(`${P}.inclusions`));
+
+  test('la rencontre demandée qui ne se fait pas, puis la liste au-delà du plafond et ses inclusions encore possibles', () => {
+    const choisie = propositionChoisie(chargeInclusions(), { demandee: 1 });
+    assert.deepEqual(deInclusions(choisie), [
+      phrase('inclusions', { avis: 1, cible: 1 }),
+      phrase('inclusions.auDela', { personnes: 1, possibles: 1 }),
+    ]);
+    assert.deepEqual(
+      deInclusions(choisie).map(({ cle, details }) => t(cle, details)),
+      [
+        '1 rencontre demandée par les inclusions sur 1 ne se fait pas : ce sont les inclusions non satisfaites.',
+        "Une personne a une liste d'inclusions qui dépasse ce qu'elle peut rencontrer : 1 inclusion encore possible n'est pas atteinte, " +
+          'sans que ce soit un avis.',
+      ],
+    );
+  });
+
+  test('chaque liste au-delà du plafond : aucune rencontre demandée ne fait d’avis, seule la phrase des listes au-delà parle', () => {
+    const seule = chargeInclusions();
+    delete seule.participants[3].inclusionsParticipant;
+    const choisie = propositionChoisie(seule, { demandee: 1 });
+    assert.deepEqual(deInclusions(choisie), [phrase('inclusions.auDela', { personnes: 1, possibles: 1 })]);
+    // Sans inclusion encore possible laissée, la phrase le dit aussi.
+    assert.equal(
+      t(`${P}.inclusions.auDela`, { personnes: 1, possibles: 0 }),
+      "Une personne a une liste d'inclusions qui dépasse ce qu'elle peut rencontrer : toutes les inclusions encore possibles sont atteintes.",
+    );
+  });
+
+  test('toutes faites : une phrase le dit ; sans inclusion active, rien', () => {
+    const faite = chargeInclusions();
+    delete faite.participants[3].inclusionsParticipant;
+    faite.participants[0].inclusionsParticipant = [2];
+    assert.deepEqual(deInclusions(propositionChoisie(faite, { demandee: 1 })), [phrase('inclusions.aucune')]);
+    const sansInclusion = chargeInclusions();
+    for (const personne of sansInclusion.participants) delete personne.inclusionsParticipant;
+    assert.deepEqual(deInclusions(propositionChoisie(sansInclusion, { demandee: 1 })), []);
+  });
+});

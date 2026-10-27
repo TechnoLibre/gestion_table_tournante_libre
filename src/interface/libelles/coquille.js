@@ -221,6 +221,7 @@ export const TABLE = new Map([
   ['coquille.apropos.fonctionnalite.pla15', 'Ajuster le placement retenu, qui suit les présences'],
   ['coquille.apropos.fonctionnalite.pla16', 'Signaler les tables en conflit sur le plan'],
   ['coquille.apropos.fonctionnalite.pla17', 'Inscrire le numéro de chaque table sur son plateau'],
+  ['coquille.apropos.fonctionnalite.pla18', "Voir chaque inclusion non satisfaite d'une proposition"],
   ['coquille.apropos.fonctionnalite.pro01', 'Produire la planche de badges en PDF, sur A4 ou Lettre'],
   ['coquille.apropos.fonctionnalite.pro02', 'Vérifier le découpage par la feuille de contrôle'],
   ['coquille.apropos.fonctionnalite.pro03', 'Ordonner les badges pour l\u{2019}accueil'],

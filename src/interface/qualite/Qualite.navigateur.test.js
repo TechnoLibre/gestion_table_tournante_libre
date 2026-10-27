@@ -7,7 +7,7 @@
 // nomme sur sa ligne de source ; la commande « Qualité » du tableau des
 // propositions l'ouvre sur sa proposition ; les quatre cas sans source
 // mesurable ne dessinent aucune vue ; une génération qui retire la
-// proposition montrée rend la page au plan ; les dix vues d'attente,
+// proposition montrée rend la page au plan ; les onze vues d'attente,
 // chacune sous son [data-vue-qualite], et la liste qui mène à chacune ;
 // aucune règle d'impression ne la vise. Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé où un fichier d'état
@@ -40,7 +40,7 @@ const V1 = VERSION.affichee;
 const BASE = 'soiree';
 
 // Les vues de la page, dans leur ordre à l'écran (§ 12, B9).
-const VUES = ['entete', 'profil', 'comparaison', 'collisions', 'tables', 'paires', 'objectifs', 'animateurs', 'diversite', 'performance'];
+const VUES = ['entete', 'profil', 'comparaison', 'collisions', 'tables', 'paires', 'inclusions', 'objectifs', 'animateurs', 'diversite', 'performance'];
 
 // --- Les charges d'épreuve -------------------------------------------------------
 
@@ -429,7 +429,7 @@ describe('une source qui disparaît sous la page ouverte (§ 12, B9)', () => {
 });
 
 describe('les vues d’attente et la liste qui y mène (§ 12, B9, B10)', () => {
-  test('les dix vues, dans leur ordre : chacune un <div> [data-vue-qualite] qui enveloppe la carte titrée de sa question', async () => {
+  test('les onze vues, dans leur ordre : chacune un <div> [data-vue-qualite] qui enveloppe la carte titrée de sa question', async () => {
     const generees = generee(chargeSix());
     const m = await ouvrir(executer(generees, 'retenirProposition', { id: generees.propositions[0].id }));
     expect(vuesRendues(m)).toEqual(VUES);
