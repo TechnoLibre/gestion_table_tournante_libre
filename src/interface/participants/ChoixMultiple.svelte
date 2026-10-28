@@ -220,7 +220,10 @@
   }
 
   /* La recherche : un champ de la largeur du groupe, qui reste en haut
-     d'un groupe compact quand ses cases défilent. */
+     d'un groupe compact quand ses cases défilent. Son texte indicatif prend
+     l'encre secondaire, à pleine opacité, que la palette mesure sur la carte
+     dans les deux thèmes : le gris par défaut du navigateur ne change pas
+     de thème. */
   .recherche {
     box-sizing: border-box;
     flex: 1 0 100%;
@@ -233,6 +236,11 @@
     background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
+  }
+
+  .recherche::placeholder {
+    color: var(--couleur-page-texte-secondaire);
+    opacity: 1;
   }
 
   .compact .recherche {

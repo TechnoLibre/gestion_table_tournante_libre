@@ -43,7 +43,7 @@ import { VERSION } from '../../version.genere.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { actionDe, boutonActions } from '../../../test/navigateur/menus.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
-import { composantes, rangeesDeTexte, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, rangeesDeTexte, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
 import { RANGS_ORGANISATION, teintesOrganisations } from '../organisations.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -1424,6 +1424,22 @@ describe('les inclusions dans la grille (§ 4, § 10.2)', () => {
       }
     } finally {
       await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('le texte indicatif de la recherche prend l’encre secondaire de la page et tient 4,5:1 sur le fond du champ, dans les deux thèmes', async () => {
+    const m = await ouvert();
+    const id = idDe(m, 'Ombrelle');
+    await ouvrir(m, id);
+    const champ = recherche(m, id);
+    expect(champ.getAttribute('placeholder')).toBe(tEcran('participants.inclusions.recherche'));
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        const indicatif = composantes(getComputedStyle(champ, '::placeholder').color);
+        expect(indicatif, theme).toEqual(jeton('--couleur-page-texte-secondaire'));
+        expect(fondDe(champ), theme).toEqual(jeton('--couleur-carte-fond'));
+        expect(contraste(indicatif, fondDe(champ)), theme).toBeGreaterThanOrEqual(4.5);
+      });
     }
   });
 
