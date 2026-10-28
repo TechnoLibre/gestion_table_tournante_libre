@@ -9,9 +9,10 @@
 // montrées et que la page porte une table, la mention qui dit les listes
 // hors d'échelle. Les blocs de noms entrent dans la découpe à la largeur du
 // registre, LARGEUR_BLOC_NOMS_CM, celle de l'écran, et à la hauteur que leur
-// donne la hauteur de ligne mesurée au rendu (HAUTEUR_LIGNE). Le module ne
-// rend que des nombres et des données ; PlanImprime les pose. Un pied dont
-// le nom d'événement ne s'imprime pas (refusApercu) se refuse avant toute
+// donnent la hauteur de ligne mesurée au rendu (HAUTEUR_LIGNE) et leurs
+// rangées, organisations repliées comprises. Le module ne rend que des
+// nombres et des données ; PlanImprime les pose. Un pied dont le nom
+// d'événement ne s'imprime pas (refusApercu) se refuse avant toute
 // découpe.
 import { constante } from '../../geometrie/constantes.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
@@ -52,22 +53,34 @@ const RENVOIS = Object.freeze([
 
 /**
  * La hauteur du bloc de noms de chaque table, en cm de dessin : une ligne
- * par siège, de 1 à la capacité, plus l'en-tête d'une table gelée, plus une
- * ligne. La ligne de base de la rangée i, comptée de 1, tombe i hauteurs de
- * ligne sous le haut du bloc (ordonneesLignes, plan/modele.js) ; la ligne
- * de plus majore le jambage de la dernière, plus court que la hauteur
- * d'encre du gabarit.
+ * par siège, de 1 à la capacité, plus l'en-tête d'une table gelée, plus les
+ * lignes que lignesAjoutees porte pour elle — les rangées en retrait d'une
+ * organisation repliée sous le nom (rangeesListe, plan/modele.js), aucune
+ * pour une table qu'elle ne nomme pas —, plus une ligne. La ligne de base
+ * de la rangée i, comptée de 1, tombe i hauteurs de ligne sous le haut du
+ * bloc (ordonneesLignes) ; la ligne de plus majore le jambage de la
+ * dernière, plus court que la hauteur d'encre du gabarit.
  *
  * @param {{tables: Array<{id: number, capacite: number, gelee: boolean}>}} etat   EtatPlaces
  * @param {number} hauteurLigne   cm, HAUTEUR_LIGNE mesurée au rendu
+ * @param {Map<number, number>} [lignesAjoutees]   par identifiant de table
  * @returns {Map<number, number>}
- * @throws {RangeError} une hauteur de ligne non finie ou ≤ 0
+ * @throws {RangeError} une hauteur de ligne non finie ou ≤ 0 ; un nombre de lignes ajoutées qui
+ *         n'est pas un entier ≥ 0
  */
-export function hauteursListes(etat, hauteurLigne) {
+export function hauteursListes(etat, hauteurLigne, lignesAjoutees = new Map()) {
   if (typeof hauteurLigne !== 'number' || !Number.isFinite(hauteurLigne) || hauteurLigne <= 0) {
     throw new RangeError(`hauteur de ligne : nombre fini > 0 attendu, reçu ${String(hauteurLigne)}`);
   }
-  return new Map(etat.tables.map(({ id, capacite, gelee }) => [id, (capacite + (gelee ? 1 : 0) + 1) * hauteurLigne]));
+  return new Map(
+    etat.tables.map(({ id, capacite, gelee }) => {
+      const ajoutees = lignesAjoutees.has(id) ? lignesAjoutees.get(id) : 0;
+      if (!Number.isInteger(ajoutees) || ajoutees < 0) {
+        throw new RangeError(`lignes ajoutées à la table ${id} : entier ≥ 0 attendu, reçu ${String(ajoutees)}`);
+      }
+      return [id, (capacite + (gelee ? 1 : 0) + ajoutees + 1) * hauteurLigne];
+    }),
+  );
 }
 
 // Lève RangeError quand le pied n'est pas celui d'un seul tour : le plan
@@ -93,7 +106,8 @@ function exigerNomImprimable(pied) {
  *
  * La découpe est celle de decouperPlan, sur l'englobant d'impression des
  * géométries (englobantImpression) ; les listes montrées l'étendent de
- * leurs blocs, larges de LARGEUR_BLOC_NOMS_CM, hauts de hauteursListes.
+ * leurs blocs, larges de LARGEUR_BLOC_NOMS_CM, hauts de hauteursListes,
+ * lignesAjoutees comprises.
  * Avec parColonne, celle de decouperParColonnes : chaque colonne de tables
  * sur ses propres pages, que les blocs montrés relient. Une page par tuile,
  * dans l'ordre de la découpe :
@@ -111,16 +125,17 @@ function exigerNomImprimable(pied) {
  * @param {import('../../geometrie/tables.js').GeometrieTable[]} geometries   celles des tables de etat
  * @param {'auto'|'unePage'|'decoupe'} decoupe
  * @param {{papier: string, bandeMm: number, listes?: boolean, hauteurLigne?: number|null,
- *          parColonne?: boolean, pied: {elements: Object[], filigrane: boolean},
- *          largeurEchelleMm?: number}} options
- *        pied : la feuille de feuilleDe (modele.js), d'un seul tour
+ *          lignesAjoutees?: Map<number, number>, parColonne?: boolean,
+ *          pied: {elements: Object[], filigrane: boolean}, largeurEchelleMm?: number}} options
+ *        pied : la feuille de feuilleDe (modele.js), d'un seul tour ; lignesAjoutees : celles
+ *        de hauteursListes, aucune par défaut
  * @returns {Array<{rang: number, orientation: 'portrait'|'paysage',
  *            viewBox: {x: number, y: number, largeur: number, hauteur: number},
  *            taille: {largeur: number, hauteur: number}, tables: number[],
  *            mentions: {relative: true, listes: boolean}, echelle: {longueurCm: number, largeurMm: number},
  *            cartouche: Object, pied: Object}>}
  * @throws {RangeError} un pied de la soirée ; des listes montrées sans hauteur de ligne ; ce que
- *         decouperPlan refuse
+ *         hauteursListes et decouperPlan refusent
  * @throws {import('../../application/erreurs.js').ErreurCommande} NOM_EVENEMENT_TROP_LONG
  *         {longueur, maximum}, remède « Renommer » (refusApercu), avant la découpe
  */
@@ -128,11 +143,22 @@ export function pagesDuPlan(
   etat,
   geometries,
   decoupe,
-  { papier, bandeMm, listes = false, hauteurLigne = null, parColonne = false, pied, largeurEchelleMm = LARGEUR_ECHELLE_MM },
+  {
+    papier,
+    bandeMm,
+    listes = false,
+    hauteurLigne = null,
+    lignesAjoutees = new Map(),
+    parColonne = false,
+    pied,
+    largeurEchelleMm = LARGEUR_ECHELLE_MM,
+  },
 ) {
   exigerPiedDUnTour(pied);
   exigerNomImprimable(pied);
-  const blocs = listes ? { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, hauteurLigne) } : null;
+  const blocs = listes
+    ? { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, hauteurLigne, lignesAjoutees) }
+    : null;
   const reglages = { papier, bandeMm, mode: decoupe, geometries, listes: blocs };
   const resultat = parColonne
     ? decouperParColonnes(geometries, reglages)

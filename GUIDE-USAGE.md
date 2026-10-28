@@ -565,8 +565,11 @@ de noms » montre ou masque la liste de chaque table, et « Organisation », jus
 à sa droite, ajoute après chaque nom l’organisation de la personne, en gris :
 « 3. Iris Ombrelle · Club des Merles ». « Organisation » est éteinte à chaque
 ouverture de l’événement. Une liste garde sa largeur : une organisation trop
-longue s’abrège d’abord, puis disparaît, avant que le nom ne s’abrège. Listes
-masquées, le bouton « Organisation » reste à sa place, inactif.
+longue pour la ligne passe dessous, en retrait, sur autant de lignes qu’il
+faut, sans jamais s’abréger, et la liste s’allonge d’autant, à l’écran comme
+sur le papier. Une liste ainsi allongée peut couvrir celle de la table posée
+dessous : écarter les deux tables, ou éteindre « Organisation », les sépare.
+Listes masquées, le bouton « Organisation » reste à sa place, inactif.
 
 ## Étape 5 — Fixer le nombre de tours
 

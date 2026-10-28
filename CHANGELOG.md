@@ -63,9 +63,12 @@
 - « Organisation », à droite de « Listes de noms » dans la barre du plan, ajoute
   après chaque nom l'organisation de la personne, en gris : « 3. Iris Ombrelle ·
   Club des Merles ». Éteinte à l'ouverture de l'événement, elle n'écrit rien.
-  Une liste garde sa largeur : une organisation trop longue s'abrège la
-  première, puis disparaît, avant le nom. L'aperçu du plan reprend le choix de
-  l'écran et le règle pour le papier seul.
+  Une liste garde sa largeur : une organisation trop longue pour la ligne
+  passe dessous, en retrait, sur autant de lignes qu'il faut, et ne s'abrège
+  jamais ; la liste s'allonge d'autant, et le plan imprimé en tient compte
+  dans ses pages. Allongée, une liste peut couvrir celle de la table posée
+  dessous ; écarter les deux tables les sépare. L'aperçu du plan reprend le
+  choix de l'écran et le règle pour le papier seul.
 - L'aperçu du plan offre « Une colonne par page » : chaque colonne de tables
   s'imprime sur ses propres pages, toutes à la même échelle, sans jamais mêler
   deux colonnes sur une page. Une ligne d'une liste de noms ne déborde plus de

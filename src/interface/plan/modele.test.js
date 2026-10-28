@@ -51,6 +51,7 @@ import {
   RAYON_PASTILLE,
   RAYON_SOCLE_PASTILLE,
   RETRAIT_GEL,
+  RETRAIT_ORGANISATION,
   TRACE_GEL,
   actionsPersonne,
   actionsPlace,
@@ -65,6 +66,8 @@ import {
   modeleDessin,
   ordonneesLignes,
   partiesLigne,
+  rangeesLigne,
+  rangeesListe,
   texteLigne,
   textesLigne,
 } from './modele.js';
@@ -606,22 +609,102 @@ describe('l\u{2019}organisation de l\u{2019}occupant, à droite de son nom (§ 7
     assert.deepEqual([libre.avantOrganisation, libre.organisation], [null, null]);
   });
 
-  test('ajusterLigne abrège l\u{2019}organisation la première, le nom et le titre entiers ; réduite à la marque, elle tombe et le nom s\u{2019}abrège comme sans elle', () => {
+  test('ajusterLigne garde l\u{2019}organisation entière quand la ligne entière tient ; sinon elle sort de la ligne, jamais abrégée, et la ligne s\u{2019}ajuste comme sans elle', () => {
     const avec = textesLigne({ numero: 3, etat: null, nom: 'Ondine Lacasse', organisation: 'O'.repeat(60), titre: animateur(true) }, t);
     const sans = textesLigne({ numero: 3, etat: null, nom: 'Ondine Lacasse', organisation: null, titre: animateur(true) }, t);
     const reglage = (largeur) => ({ mesurer: droit, mesurerItalique: italique, largeur, marque: MARQUE });
-    const entiere = largeurDe(sans);
-    const abregee = ajusterLigne(avec, reglage(entiere + 10));
-    assert.equal(abregee.nom, 'Ondine Lacasse');
-    assert.equal(abregee.titre, 'animateur');
-    assert.ok(abregee.organisation.endsWith(MARQUE), abregee.organisation);
-    assert.ok(abregee.organisation.length > MARQUE.length);
-    assert.ok(largeurDe(abregee) <= entiere + 10);
-    assert.ok(largeurDe(abregee) > entiere + 9, `l\u{2019}organisation prend toute la place restante : ${largeurDe(abregee)}`);
-    // Au plus la marque et un caractère de moins : l'organisation tombe.
-    for (const largeur of [entiere + 4, entiere, entiere - 5, 12]) {
+    const pleine = largeurDe(avec);
+    for (const largeur of [pleine, pleine + 10]) {
+      const entiere = ajusterLigne(avec, reglage(largeur));
+      assert.equal(entiere.organisation, avec.organisation, `à ${largeur}`);
+      assert.equal(entiere.avantOrganisation, avec.avantOrganisation);
+      assert.equal(entiere.nom, 'Ondine Lacasse');
+    }
+    for (const largeur of [pleine - 0.5, pleine - 30, largeurDe(sans) + 10, largeurDe(sans), largeurDe(sans) - 5, 12]) {
       assert.deepEqual(ajusterLigne(avec, reglage(largeur)), ajusterLigne(sans, reglage(largeur)), `à ${largeur}`);
     }
+  });
+
+  test('rangeesLigne : la ligne seule quand l\u{2019}organisation y tient ; sinon l\u{2019}organisation repliée sous le nom, en retrait, entre ses mots, sans séparateur ni marque', () => {
+    const organisation = 'Fédération des jardins partagés du quartier';
+    const avec = textesLigne({ numero: 3, etat: null, nom: 'Ondine Lacasse', organisation, titre: animateur(true) }, t);
+    const sans = textesLigne({ numero: 3, etat: null, nom: 'Ondine Lacasse', organisation: null, titre: animateur(true) }, t);
+    const reglage = (largeur) => ({ mesurer: droit, mesurerItalique: italique, largeur, marque: MARQUE });
+    assert.deepEqual(rangeesLigne(avec, reglage(largeurDe(avec))), [{ parties: partiesLigne(ajusterLigne(avec, reglage(largeurDe(avec)))), retrait: false }]);
+    assert.deepEqual(rangeesLigne(sans, reglage(40)), [{ parties: partiesLigne(ajusterLigne(sans, reglage(40))), retrait: false }]);
+
+    const largeur = RETRAIT_ORGANISATION + 22;
+    const rangees = rangeesLigne(avec, reglage(largeur));
+    assert.deepEqual(rangees[0], { parties: partiesLigne(ajusterLigne(sans, reglage(largeur))), retrait: false });
+    assert.equal(rangees[0].parties.find(({ partie }) => partie === 'nom').texte, 'Ondine Lacasse');
+    const suite = rangees.slice(1);
+    assert.deepEqual(
+      suite.map(({ parties }) => parties.map(({ texte }) => texte).join('')),
+      ['Fédération des jardins', 'partagés du quartier'],
+    );
+    for (const rangee of suite) {
+      assert.equal(rangee.retrait, true);
+      assert.deepEqual(rangee.parties.map(({ partie }) => partie), ['organisation']);
+      assert.ok(RETRAIT_ORGANISATION + droit(rangee.parties[0].texte) <= largeur);
+    }
+
+    // Un mot trop long se coupe entre deux caractères ; rien ne s'abrège.
+    const long = textesLigne({ numero: 3, etat: null, nom: 'Ondine Lacasse', organisation: 'O'.repeat(60), titre: null }, t);
+    const coupees = rangeesLigne(long, reglage(largeur)).slice(1).map(({ parties }) => parties[0].texte);
+    assert.deepEqual(coupees, ['O'.repeat(22), 'O'.repeat(22), 'O'.repeat(16)]);
+
+    // Sans nom sur la ligne, l'organisation ne paraît pas.
+    const etroite = rangeesLigne(avec, reglage(12));
+    assert.equal(ajusterLigne(avec, reglage(12)).nom, null);
+    assert.equal(etroite.length, 1);
+  });
+
+  test('chaque rangée tient dans sa largeur, retrait compris ; l\u{2019}organisation n\u{2019}est jamais abrégée, entière sur la ligne ou sous elle', () => {
+    const organisation = 'Fédération des jardins partagés';
+    const lignes = SIX_FORMES.map(([entree]) => textesLigne(ligneListe(entree, nomDeLigne, () => organisation), t));
+    assert.ok(lignes.some((textes) => textes.organisation !== null));
+    let repliees = 0;
+    for (const largeur of [RETRAIT_ORGANISATION + 6, 30, 40, 60, 80, 200]) {
+      for (const entree of lignes) {
+        const reglage = { mesurer: droit, mesurerItalique: italique, largeur, marque: MARQUE };
+        const rangees = rangeesLigne(entree, reglage);
+        const [premiere, ...suite] = rangees;
+        const ligne = ajusterLigne(entree, reglage);
+        assert.ok(largeurDe(ligne) <= largeur);
+        for (const { parties, retrait } of suite) {
+          assert.equal(retrait, true);
+          assert.ok(RETRAIT_ORGANISATION + droit(parties[0].texte) <= largeur, `${joindre(entree)} à ${largeur}`);
+        }
+        const sur = premiere.parties.find(({ partie }) => partie === 'organisation')?.texte ?? null;
+        // Les blancs omis : un mot trop long se coupe sans espace.
+        const sous = suite.map(({ parties }) => parties[0].texte).join('');
+        if (entree.organisation !== null && ligne.nom !== null) {
+          assert.equal((sur ?? sous).replaceAll(' ', ''), organisation.replaceAll(' ', ''), `${joindre(entree)} à ${largeur}`);
+          assert.ok(sur === null || suite.length === 0);
+        }
+        if (suite.length > 0) repliees += 1;
+        assert.ok(rangees.every(({ parties }) => parties.every(({ partie, texte }) => partie !== 'organisation' || !texte.includes(MARQUE))));
+      }
+    }
+    assert.ok(repliees > 0, 'des organisations repliées');
+  });
+
+  test('rangeesListe : l\u{2019}en-tête d\u{2019}une table gelée, puis les rangées de chaque ligne dans l\u{2019}ordre des sièges, abrégées de plan.liste.abreviation', () => {
+    const organisationDe = (id) => (id === 1 ? 'Fédération des jardins partagés du quartier' : 'Merles');
+    const table = {
+      enTete: { cle: 'plan.liste.gelee', details: {} },
+      lignes: [chaise(1, { occupant: 1 }), chaise(2, { occupant: 2 }), chaise(3)].map((c) => ligneListe(c, nomDeLigne, organisationDe)),
+    };
+    const mesures = { mesurer: droit, mesurerItalique: italique, largeur: RETRAIT_ORGANISATION + 22 };
+    const reglage = { ...mesures, marque: t('plan.liste.abreviation') };
+    const rangees = rangeesListe(table, t, mesures);
+    const attendues = [
+      ...rangeesLigne({ tete: t('plan.liste.gelee'), teteSansNom: t('plan.liste.gelee'), nom: null, avantTitre: null, titre: null, apresTitre: null }, reglage),
+      ...table.lignes.flatMap((ligne) => rangeesLigne(textesLigne(ligne, t), reglage)),
+    ];
+    assert.deepEqual(rangees, attendues);
+    assert.deepEqual(rangees.map(({ retrait }) => retrait), [false, false, true, true, false, false]);
+    assert.deepEqual(rangeesListe({ ...table, enTete: null }, t, mesures), attendues.slice(1));
   });
 
   test('chaque ligne, organisation comprise, tient dans sa largeur, quelle qu\u{2019}elle soit', () => {

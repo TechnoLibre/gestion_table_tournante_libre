@@ -37,6 +37,7 @@ import { fixerCadre, molette } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { sousTheme, visible } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { RETRAIT_ORGANISATION } from './modele.js';
 import { cadreDepuisRect, englobantDuTour, vueApresCadre, vueInitiale } from './vue_plan.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -873,7 +874,7 @@ describe('l’organisation dans les listes (§ 7.4, § 8.4)', () => {
     expect(fichiers(m)).toEqual(avant);
   });
 
-  test('une organisation trop longue s’abrège la première, suivie de la marque : le nom reste entier, la ligne tient dans son bloc', async () => {
+  test('une organisation trop longue passe sous le nom, en retrait, repliée entre ses mots, jamais abrégée : le nom reste entier, le bloc s’allonge d’autant de rangées, au même pas', async () => {
     const m = await petite();
     await m.seance.passerEnEcriture();
     const personne = m.seance.etat().charge.participants[0];
@@ -882,14 +883,42 @@ describe('l’organisation dans les listes (§ 7.4, § 8.4)', () => {
     await m.seance.executer('reserver', { participant: personne.id, table: 1, siege: 1, portee: 'tous', tour: null });
     flushSync();
     cliquer(m, 'ajuster');
+    await deuxImages();
+    const rangees = () => [...dans(m, '[data-liste="1"]').children];
+    const avant = rangees().map((rangee) => ({ texte: rangee.textContent, y: Number(rangee.getAttribute('y')) }));
     cliquer(m, 'organisations');
     await deuxImages();
-    const ligne = dans(m, '[data-liste="1"] > tspan');
-    const organisation = ligne.querySelector('[data-partie="organisation"]').textContent;
-    expect(organisation.endsWith(t('plan.liste.abreviation')), organisation).toBe(true);
-    expect(longue.startsWith(organisation.slice(0, -t('plan.liste.abreviation').length))).toBe(true);
+
+    const [ligne, ...suite] = rangees();
+    const x = Number(ligne.getAttribute('x'));
+    const repliees = suite.filter((rangee) => Number(rangee.getAttribute('x')) !== x);
+    expect(ligne.textContent).toBe(avant[0].texte);
+    expect(ligne.querySelector('[data-partie="organisation"]')).toBeNull();
     expect(ligne.querySelector('[data-partie="nom"]').textContent).toBe(`${personne.prenom} ${personne.nom}`);
-    expect(ligne.getComputedTextLength()).toBeLessThanOrEqual(constante('LARGEUR_BLOC_NOMS_CM') + 1e-6);
+    expect(dans(m, '[data-siege="1:1"]').getAttribute('aria-label')).toBe(`${avant[0].texte}${t('plan.ligne.avantOrganisation')}${longue}`);
+    // Les rangées repliées suivent la ligne, en retrait, chacune la seule
+    // partie organisation, à l'encre secondaire ; ensemble, l'organisation
+    // entière, sans marque.
+    expect(repliees.length).toBeGreaterThanOrEqual(2);
+    expect(suite.slice(0, repliees.length)).toEqual(repliees);
+    const marque = t('plan.liste.abreviation');
+    for (const rangee of repliees) {
+      expect(Number(rangee.getAttribute('x'))).toBeCloseTo(x + RETRAIT_ORGANISATION, 9);
+      expect([...rangee.children].map((partie) => partie.dataset.partie)).toEqual(['organisation']);
+      expect(rangee.textContent.includes(marque), rangee.textContent).toBe(false);
+      expect(getComputedStyle(rangee.firstElementChild).fill).not.toBe(getComputedStyle(ligne.querySelector('[data-partie="nom"]')).fill);
+      expect(RETRAIT_ORGANISATION + rangee.getComputedTextLength(), rangee.textContent).toBeLessThanOrEqual(constante('LARGEUR_BLOC_NOMS_CM') + 1e-6);
+    }
+    expect(repliees.map((rangee) => rangee.textContent).join(' ')).toBe(longue);
+    // Le bloc s'allonge des rangées repliées : les lignes suivantes, les
+    // mêmes, descendent d'autant, et toutes les rangées gardent le pas de la
+    // hauteur de ligne, sans se chevaucher.
+    const apres = rangees();
+    expect(apres).toHaveLength(avant.length + repliees.length);
+    expect(apres.filter((rangee) => !repliees.includes(rangee)).map((rangee) => rangee.textContent)).toEqual(avant.map(({ texte }) => texte));
+    const pas = avant[1].y - avant[0].y;
+    expect(pas).toBeGreaterThan(0);
+    apres.forEach((rangee, rang) => expect(Number(rangee.getAttribute('y')), rangee.textContent).toBeCloseTo(avant[0].y + rang * pas, 9));
   });
 });
 

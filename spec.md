@@ -3178,7 +3178,7 @@ champ :**
 
 | document | règle |
 |---|---|
-| le plan de salle, à l'écran comme à l'impression | **abrège** avec une marque, la largeur d'un bloc de noms étant la même contrainte des deux côtés ; le libellé d'une table s'y **replie** dans son plateau, **puis s'abrège** |
+| le plan de salle, à l'écran comme à l'impression | **abrège** avec une marque, la largeur d'un bloc de noms étant la même contrainte des deux côtés ; le libellé d'une table s'y **replie** dans son plateau, **puis s'abrège** ; l'organisation, demandée, s'y **replie** sous le nom et **ne s'abrège jamais** |
 | la fiche à l'écran, la feuille par table, la liste d'accueil | **ne tronquent jamais** : elles replient |
 | le **badge** (§ 11.5) | **ne tronque jamais** : chaque texte se replie en paragraphe, et l'ordre change **par champ** — le nom réduit de corps par paliers, puis se replie ; l'organisation se replie, puis réduit de corps ; une ligne de tour se replie au corps plancher, sa suite en retrait |
 
@@ -3195,11 +3195,25 @@ garde son nom seul ; la titulaire d'une réservation que la chaise n'assied pas
 n'est nommée que par son nom. Regarder n'écrit rien (§ 8.4) : la bascule ne
 touche ni l'événement ni les réglages du poste. Listes masquées, elle n'a rien à
 montrer : elle reste à sa place et garde son état, inactive, et dit qu'il faut
-montrer les listes. Le bloc de noms garde sa largeur, et l'organisation cède la
-première : elle s'abrège, suivie de la marque, et tombe avec son point quand il
-n'en resterait que la marque ; le nom, le titre et la tête s'abrègent ensuite
-comme sans elle. Aucune ligne ne sort de son bloc, et la grille des tables,
-l'emprise du plan et l'ajustement ne changent pas.
+montrer les listes. Le bloc de noms garde sa largeur, et **l'organisation ne
+s'abrège jamais** : quand la ligne entière ne tient pas, elle passe sous le nom,
+sans son point, en retrait d'un cadratin, et s'y replie sur autant de lignes
+qu'il faut, entre ses mots — entre deux caractères pour un mot plus large que la
+ligne, jamais entre une lettre et son accent. La ligne du nom s'ajuste alors
+comme sans elle : un nom trop long s'y abrège encore, et une organisation dont
+le nom tombe tombe avec lui. Le bloc s'allonge vers le bas de ces lignes, au
+pas des autres, et les sièges suivants descendent d'autant ; aucune ligne ne
+sort de la largeur du bloc. La grille des tables, dont le pas de rangée ne
+compte que les emprises, l'emprise du plan à l'écran et l'ajustement ne
+changent pas. **Un bloc ainsi allongé peut couvrir le bloc du dessous** : plus
+haut que le pas de rangée, ce qu'est déjà sur la grille par défaut une ronde de
+huit places dont chaque ligne se replie une fois, il descend sur la liste de la
+table posée une rangée plus bas dans la même colonne, et leurs lignes se
+superposent, à l'écran comme sur le papier. Rien ne le signale ; écarter les
+deux tables, ou éteindre la bascule, les sépare. Ces lignes s'ajoutent sans
+rien écrire, et l'avertissement d'une liste sur une voisine, qui juge
+l'événement, ne les compte pas. Sur le papier, la découpe en pages compte
+chacune (§ 11.7).
 
 **La largeur d'une ligne est celle que le moteur de rendu pose.** Chaque partie
 d'une ligne — numéro et état, nom, organisation, titre — est son propre
@@ -6924,7 +6938,13 @@ est celle qui donne le moins de pages en tout ; à pages égales, la plus grande
 **Les listes imprimées portent l'organisation comme l'écran** (§ 7.4) : à
 l'ouverture, l'aperçu reprend la bascule de l'écran, puis la sienne,
 « Organisation », la change pour le papier seul ; listes masquées, elle reste
-offerte, inactive.
+offerte, inactive. Une organisation repliée sous le nom allonge le bloc sur le
+papier comme à l'écran : la hauteur de chaque bloc, qui entre dans l'emprise du
+plan imprimé, dans ses colonnes de tables et dans sa découpe en pages, compte
+ces lignes, mesurées sur la police rendue comme celles de l'écran. Un bloc ne
+déborde ainsi d'aucune page ; découpé, il passe d'une page à sa voisine comme
+le reste du dessin. La découpe ne déplace aucune table : un bloc qui couvre à
+l'écran la liste du dessous la couvre aussi sur le papier (§ 7.4).
 
 **Le plan imprimé est le dessin de l'écran** : chaque table y porte son numéro au
 centre du plateau et sa pastille sur son bord, aux mêmes places et aux mêmes

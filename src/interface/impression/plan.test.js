@@ -59,8 +59,8 @@ function chargeDeTables(positions) {
 }
 
 // La découpe attendue, par decouperPlan appelée directement.
-function decoupeAttendue(etat, geometries, mode, { papier = 'A4', bandeMm = 12, listes = false, hauteurLigne = H } = {}) {
-  const blocs = listes ? { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, hauteurLigne) } : null;
+function decoupeAttendue(etat, geometries, mode, { papier = 'A4', bandeMm = 12, listes = false, hauteurLigne = H, lignesAjoutees } = {}) {
+  const blocs = listes ? { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, hauteurLigne, lignesAjoutees) } : null;
   return decouperPlan(englobantImpression(geometries, { listes: blocs }), { papier, bandeMm, mode, geometries, listes: blocs });
 }
 
@@ -75,6 +75,19 @@ describe('hauteursListes : la hauteur du bloc de noms de chaque table (§ 7.4, �
     const etat = { tables: [{ id: 1, capacite: 2, gelee: false }] };
     for (const h of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, null]) {
       assert.throws(() => hauteursListes(etat, h), RangeError, String(h));
+    }
+  });
+
+  test('les lignes qu’une organisation repliée ajoute à une table comptent chacune une ligne ; une table absente de la Map n’en ajoute aucune', () => {
+    const etat = { tables: [{ id: 4, capacite: 6, gelee: false }, { id: 9, capacite: 3, gelee: true }] };
+    assert.deepEqual([...hauteursListes(etat, 20, new Map([[4, 3]]))], [[4, 10 * 20], [9, 5 * 20]]);
+    assert.deepEqual([...hauteursListes(etat, 20, new Map([[4, 0], [9, 2]]))], [[4, 7 * 20], [9, 7 * 20]]);
+  });
+
+  test('un nombre de lignes ajoutées qui n’est pas un entier ≥ 0 se refuse', () => {
+    const etat = { tables: [{ id: 1, capacite: 2, gelee: false }] };
+    for (const n of [-1, 1.5, Number.NaN, null, '2']) {
+      assert.throws(() => hauteursListes(etat, 20, new Map([[1, n]])), RangeError, String(n));
     }
   });
 });
@@ -209,6 +222,31 @@ describe('pagesDuPlan : une page par feuille, chacune la tuile de la découpe (�
     // Sur une page, le plan avec ses listes couvre plus de dessin : son
     // échelle est plus petite.
     assert.ok(avec[0].taille.largeur / avec[0].viewBox.largeur < sans[0].taille.largeur / sans[0].viewBox.largeur);
+  });
+
+  test('les lignes ajoutées allongent les blocs que la découpe reçoit, au plan entier comme par colonne', () => {
+    const { etat, geometries } = plan(demonstration('petite'));
+    const lignesAjoutees = new Map(etat.tables.map(({ id }, rang) => [id, rang % 2 === 0 ? 12 : 0]));
+    const options = { papier: 'A4', bandeMm: 12, listes: true, hauteurLigne: H, pied: piedAu(1) };
+    for (const mode of ['auto', 'unePage', 'decoupe']) {
+      const attendue = decoupeAttendue(etat, geometries, mode, { listes: true, lignesAjoutees });
+      const pages = pagesDuPlan(etat, geometries, mode, { ...options, lignesAjoutees });
+      assert.deepEqual(pages.map(({ viewBox }) => viewBox), attendue.pages.map(({ cadrage }) => cadrage), mode);
+      const blocs = { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, H, lignesAjoutees) };
+      const parColonnes = decouperParColonnes(geometries, { papier: 'A4', bandeMm: 12, mode, geometries, listes: blocs });
+      const lues = pagesDuPlan(etat, geometries, mode, { ...options, lignesAjoutees, parColonne: true });
+      assert.deepEqual(lues.map(({ viewBox }) => viewBox), parColonnes.pages.map(({ cadrage }) => cadrage), `${mode}, par colonne`);
+    }
+    // Sur une page, une table seule dont le bloc s'allonge de quarante
+    // lignes couvre plus de dessin en hauteur qu'en largeur : l'échelle
+    // baisse.
+    const seule = plan(chargeDeTables([[0, 0]]));
+    const [sans] = pagesDuPlan(seule.etat, seule.geometries, 'unePage', options);
+    const [avec] = pagesDuPlan(seule.etat, seule.geometries, 'unePage', { ...options, lignesAjoutees: new Map([[1, 40]]) });
+    assert.ok(avec.taille.largeur / avec.viewBox.largeur < sans.taille.largeur / sans.viewBox.largeur);
+    // Listes masquées, les lignes ajoutées n'entrent pas.
+    const masquees = { ...options, listes: false };
+    assert.deepEqual(pagesDuPlan(etat, geometries, 'auto', { ...masquees, lignesAjoutees }), pagesDuPlan(etat, geometries, 'auto', masquees));
   });
 
   test('un plan vide : une page, aucune table, une échelle graphique finie', () => {

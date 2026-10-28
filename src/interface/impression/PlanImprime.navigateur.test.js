@@ -39,9 +39,9 @@ import {
 } from '../../../test/navigateur/ecrans.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { CONFLITS } from '../marques.js';
-import { hauteurLigne } from '../plan/mesure_texte.js';
-import { libelleLongueur, modeleDessin } from '../plan/modele.js';
-import { nomDeCharge } from '../plan/vue_plan.js';
+import { creerMesureur, hauteurLigne } from '../plan/mesure_texte.js';
+import { RETRAIT_ORGANISATION, libelleLongueur, modeleDessin, rangeesListe } from '../plan/modele.js';
+import { nomDeCharge, organisationDeCharge } from '../plan/vue_plan.js';
 import { MM_PAR_PX, bandeDeFeuille, feuilleDe, optionsApercu, sortieApercu } from './modele.js';
 import { LARGEUR_ECHELLE_MM, pagesDuPlan, renvois } from './plan.js';
 
@@ -102,30 +102,47 @@ function bandeDuGabarit(m) {
   });
 }
 
-// La hauteur de ligne des listes, mesurée comme la vue la mesure : une
-// sonde au style des listes, sous le document imprimé.
-function hauteurDesListes(m) {
+// La hauteur de ligne des listes, et les rangées en retrait de chaque table
+// du modèle, mesurées comme la vue les mesure : une sonde au style des
+// listes, composée en geometricPrecision, sous le document imprimé.
+function mesuresDesListes(m, modele) {
   const svg = document.createElementNS(SVG, 'svg');
   const texte = document.createElementNS(SVG, 'text');
+  const italique = document.createElementNS(SVG, 'tspan');
   texte.setAttribute('font-size', String(TAILLE_TEXTE_LISTE_CM));
-  texte.style.fontFamily = 'var(--police-interface)';
+  Object.assign(texte.style, { fontFamily: 'var(--police-interface)', textRendering: 'geometricPrecision', whiteSpace: 'pre' });
+  italique.style.fontStyle = 'italic';
+  texte.append(italique);
   svg.append(texte);
   dans(m, '[data-impression]').append(svg);
   try {
-    return hauteurLigne(texte);
+    const reglage = { mesurer: creerMesureur(texte), mesurerItalique: creerMesureur(italique), largeur: constante('LARGEUR_BLOC_NOMS_CM') };
+    const lignesAjoutees = new Map(
+      modele.tables.map((table) => [table.id, rangeesListe(table, t, reglage).filter(({ retrait }) => retrait).length]),
+    );
+    return { hauteur: hauteurLigne(texte), lignesAjoutees };
   } finally {
     svg.remove();
   }
 }
 
 // Les pages attendues du plan que l'aperçu montre, recalculées par
-// pagesDuPlan sur la même sortie, la même bande et la même hauteur de ligne.
-function pagesAttendues(m, charge) {
+// pagesDuPlan sur la même sortie, la même bande, la même hauteur de ligne
+// et les mêmes rangées, organisations comprises quand l'aperçu les montre ;
+// avec elles, les rangées en retrait de chaque table.
+function attendusDuPlan(m, charge) {
   const options = optionsApercu(m.ui.etat().apercu, 'A4');
   const { etat, tour } = sortieApercu(charge, options, m.ui.etat().proposition);
-  const modele = modeleDessin(etat, { listes: options.listes, nomDe: nomDeCharge(charge), impression: true });
+  const modele = modeleDessin(etat, {
+    listes: options.listes,
+    nomDe: nomDeCharge(charge),
+    organisations: options.organisations,
+    organisationDe: organisationDeCharge(charge),
+    impression: true,
+  });
   const pied = feuilleDe({ nom: charge.evenement.nom, date: null, tour, horodatage: null, version: 'epreuve' }, false);
-  return pagesDuPlan(
+  const { hauteur, lignesAjoutees } = mesuresDesListes(m, modele);
+  const pages = pagesDuPlan(
     etat,
     modele.tables.map((table) => table.geometrie),
     options.decoupe,
@@ -133,12 +150,16 @@ function pagesAttendues(m, charge) {
       papier: 'A4',
       bandeMm: bandeDuGabarit(m),
       listes: options.listes,
-      hauteurLigne: hauteurDesListes(m),
+      hauteurLigne: hauteur,
+      lignesAjoutees: options.listes ? lignesAjoutees : new Map(),
       parColonne: options.parColonne,
       pied,
     },
   );
+  return { pages, lignesAjoutees };
 }
+
+const pagesAttendues = (m, charge) => attendusDuPlan(m, charge).pages;
 
 // Bascule un réglage de l'aperçu par son bouton, et attend le document.
 async function basculer(m, nom) {
@@ -252,6 +273,11 @@ describe('l’organisation dans les listes imprimées (§ 7.4, § 11.7)', () => 
     const charge = chargeAuxNomsLongs();
     const m = await ouvrirEvenement(contexte, charge, { section: 'plan', options: { fichiers: [fichierReglages('A4')] } });
     m.ui.basculerOrganisations();
+    // Ajusté au cadre, ce plan est sous K_LISTES : un zoom à la fois
+    // jusqu'à ce que ses listes se dessinent.
+    for (let crans = 0; crans < 6 && tous(m, '[data-plan] [data-liste]').length === 0; crans += 1) {
+      await cliquer(m, '[data-commande="zoomer"]');
+    }
     await attendre('les organisations du plan', () => tous(m, '[data-plan] [data-liste] [data-partie="organisation"]').length > 0, IMAGES);
     const ecran = new Map(listesSous(dans(m, '[data-plan]')).map(({ table, lignes }) => [table, lignes]));
     await cliquer(m, '[data-commande="section"][data-cible="badges"]');
@@ -272,6 +298,99 @@ describe('l’organisation dans les listes imprimées (§ 7.4, § 11.7)', () => 
     expect(bouton().getAttribute('title')).toBe(t('impression.organisationsSansListes'));
     await cliquer(m, '[data-apercu-impression] [data-commande="organisations"]');
     expect(m.ui.etat().apercu.organisations, 'inactive, la bascule ne change rien').toBe(false);
+  });
+
+  // Les tables de la rangée du bas portent des organisations plus longues
+  // encore, repliées sur plusieurs rangées. Les listes repliées descendent sur
+  // celles de la rangée du dessous (§ 7.4) : l'épreuve ne juge ici que les
+  // tables qu'elles couvrent, les listes entre elles ont leur épreuve.
+  test('une organisation trop longue passe sous le nom, en retrait, jamais abrégée, sur le papier comme à l’écran ; la découpe compte ses rangées, et chaque liste reste dans sa page, sur aucune autre table', async () => {
+    let charge = chargeDeuxColonnes();
+    const longues = ['Fédération des jardins partagés du quartier des Merles', `Atelier ${'des sternes '.repeat(9)}`.trim()];
+    const bas = charge.tables.slice(-2).map(({ id }) => id);
+    const assis = charge.reservations.filter(({ table, siege }) => bas.includes(table) && siege <= 3).map(({ participant }) => participant);
+    for (const [rang, id] of assis.entries()) {
+      charge = appliquerCommande('modifierParticipant', charge, { id, champs: { organisation: longues[rang % 2] } }).charge;
+    }
+    const m = await ouvrirEvenement(contexte, charge, { section: 'plan', options: { fichiers: [fichierReglages('A4')] } });
+    m.ui.basculerOrganisations();
+    // Ajusté au cadre, ce plan est sous K_LISTES : un zoom à la fois
+    // jusqu'à ce que ses listes se dessinent.
+    for (let crans = 0; crans < 6 && tous(m, '[data-plan] [data-liste]').length === 0; crans += 1) {
+      await cliquer(m, '[data-commande="zoomer"]');
+    }
+    await attendre('les organisations du plan', () => tous(m, '[data-plan] [data-liste] [data-partie="organisation"]').length > 0, IMAGES);
+    const ecran = new Map(listesSous(dans(m, '[data-plan]')).map(({ table, lignes }) => [table, lignes]));
+    await cliquer(m, '[data-commande="section"][data-cible="badges"]');
+    await attendre('les listes imprimées', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
+    expect(m.ui.etat().apercu.organisations).toBe(true);
+    const marque = t('plan.liste.abreviation');
+    for (const parColonne of [false, true]) {
+      if (m.ui.etat().apercu.parColonne !== parColonne) await basculer(m, 'parColonne');
+      for (const decoupe of ['auto', 'unePage']) {
+        await decouper(m, decoupe);
+        const cas = `${decoupe}, ${parColonne ? 'une colonne par page' : 'plan entier'}`;
+        const { pages, lignesAjoutees } = attendusDuPlan(m, charge);
+        await attendre(`les pages, ${cas}`, () => feuilles(m).length === pages.length && tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
+        expect(bas.every((id) => lignesAjoutees.get(id) > 0), `${cas} : des rangées repliées aux tables du bas`).toBe(true);
+        // Par table, le bloc rendu et les tuiles des pages qui le portent,
+        // en cm de dessin.
+        const blocs = new Map();
+        for (const [rang, feuille] of feuilles(m).entries()) {
+          const lu = viewBoxDe(tuileDe(feuille));
+          for (const cote of ['x', 'y', 'largeur', 'hauteur']) {
+            expect(Math.abs(lu[cote] - pages[rang].viewBox[cote]), `${cas}, page ${rang}, ${cote}`).toBeLessThanOrEqual(1e-9);
+          }
+          for (const liste of feuille.querySelectorAll('[data-liste]')) {
+            const rangees = [...liste.children];
+            const ys = rangees.map((rangee) => Number(rangee.getAttribute('y')));
+            const pas = ys[1] - ys[0];
+            const bloc = blocs.get(liste.dataset.liste) ?? { tuiles: [] };
+            bloc.haut = ys[0] - pas;
+            bloc.bas = ys.at(-1) + pas;
+            bloc.gauche = Number(rangees[0].getAttribute('x'));
+            bloc.droite = Math.max(...rangees.map((rangee) => Number(rangee.getAttribute('x')) + rangee.getComputedTextLength()));
+            bloc.tuiles.push(lu);
+            blocs.set(liste.dataset.liste, bloc);
+          }
+          const cadre = tuileDe(feuille).getBoundingClientRect();
+          const tables = [...feuille.querySelectorAll('[data-table]')].map((table) => ({ id: table.dataset.table, boite: table.getBoundingClientRect() }));
+          for (const liste of feuille.querySelectorAll('[data-liste]')) {
+            const rangees = [...liste.children];
+            const bord = Number(rangees[0].getAttribute('x'));
+            const repliees = rangees.filter((rangee) => Number(rangee.getAttribute('x')) !== bord);
+            expect(repliees, `${cas} : table ${liste.dataset.liste}`).toHaveLength(lignesAjoutees.get(Number(liste.dataset.liste)));
+            expect(rangees.map((rangee) => rangee.textContent), `${cas} : table ${liste.dataset.liste}`).toEqual(ecran.get(liste.dataset.liste));
+            for (const rangee of repliees) {
+              expect(Number(rangee.getAttribute('x')) - bord).toBeCloseTo(RETRAIT_ORGANISATION, 9);
+              expect([...rangee.children].map((partie) => partie.dataset.partie)).toEqual(['organisation']);
+              expect(rangee.textContent.includes(marque), `${cas} : ${rangee.textContent}`).toBe(false);
+            }
+            const boite = liste.getBoundingClientRect();
+            if (decoupe === 'unePage') {
+              const dedans =
+                boite.left >= cadre.left - TOLERANCE_PX &&
+                boite.right <= cadre.right + TOLERANCE_PX &&
+                boite.top >= cadre.top - TOLERANCE_PX &&
+                boite.bottom <= cadre.bottom + TOLERANCE_PX;
+              expect(dedans, `${cas} : la liste de la table ${liste.dataset.liste} dans sa page`).toBe(true);
+            }
+            const couvertes = tables.filter(({ id, boite: table }) => id !== liste.dataset.liste && recoupe(boite, table)).map(({ id }) => id);
+            expect(couvertes, `${cas} : la liste de la table ${liste.dataset.liste}`).toEqual([]);
+          }
+        }
+        // Découpé, un bloc peut passer d'une page à la voisine : ses pages,
+        // ensemble, le couvrent entier, rangées repliées comprises.
+        for (const [table, { haut, bas: fond, gauche, droite, tuiles }] of blocs) {
+          const couvert =
+            Math.min(...tuiles.map(({ x }) => x)) <= gauche + 1e-9 &&
+            Math.max(...tuiles.map(({ x, largeur }) => x + largeur)) >= droite - 1e-9 &&
+            Math.min(...tuiles.map(({ y }) => y)) <= haut + 1e-9 &&
+            Math.max(...tuiles.map(({ y, hauteur }) => y + hauteur)) >= fond - 1e-9;
+          expect(couvert, `${cas} : le bloc de la table ${table} sur ses pages`).toBe(true);
+        }
+      }
+    }
   });
 });
 
@@ -347,8 +466,11 @@ describe('une colonne de tables par page, et aucun texte qui déborde (§ 7.4, �
               expect(cadre.right <= page.right && cadre.bottom <= page.bottom, `${cas} : la tuile dans la feuille`).toBe(true);
               const tables = [...feuille.querySelectorAll('[data-table]')].map((table) => ({ id: table.dataset.table, boite: table.getBoundingClientRect() }));
               for (const liste of feuille.querySelectorAll('[data-liste]')) {
+                // Une rangée en retrait compte son retrait.
+                const bord = Number(liste.firstElementChild.getAttribute('x'));
                 for (const ligne of liste.children) {
-                  expect(ligne.getComputedTextLength(), `${cas} : ${ligne.textContent}`).toBeLessThanOrEqual(largeurBloc + 1e-6);
+                  const largeur = Number(ligne.getAttribute('x')) - bord + ligne.getComputedTextLength();
+                  expect(largeur, `${cas} : ${ligne.textContent}`).toBeLessThanOrEqual(largeurBloc + 1e-6);
                 }
                 const boite = liste.getBoundingClientRect();
                 const dedans =
@@ -366,6 +488,61 @@ describe('une colonne de tables par page, et aucun texte qui déborde (§ 7.4, �
       }
       await contexte.defaire();
       contexte = creerContexte();
+    }
+  });
+
+  // La grille de la fixture a le pas de rangée par défaut, qui ne compte que
+  // les emprises (§ 7.4) : une liste de huit lignes y tient, non la même
+  // quand chaque ligne replie son organisation.
+  // Chaque paire est « a/b », a < b ; la boîte d'une liste est celle de son
+  // <text>, en cm de dessin.
+  test('organisations repliées : une liste couvre celle de la rangée du dessous, à l’écran et sur le papier ; sans elles, aucune', async () => {
+    const charge = chargeDeuxColonnes();
+    const chevauchees = (racine) => {
+      const boites = [...racine.querySelectorAll('text[data-liste]')].map((liste) => ({ id: Number(liste.dataset.liste), boite: liste.getBBox() }));
+      const paires = [];
+      for (const [rang, a] of boites.entries()) {
+        for (const b of boites.slice(rang + 1)) {
+          const recouvre =
+            a.boite.x < b.boite.x + b.boite.width &&
+            b.boite.x < a.boite.x + a.boite.width &&
+            a.boite.y < b.boite.y + b.boite.height &&
+            b.boite.y < a.boite.y + a.boite.height;
+          if (recouvre) paires.push(`${Math.min(a.id, b.id)}/${Math.max(a.id, b.id)}`);
+        }
+      }
+      return paires.sort();
+    };
+    const voisines = [];
+    for (const a of charge.tables) {
+      for (const b of charge.tables) {
+        if (a.id < b.id && a.position.x === b.position.x && Math.abs(a.position.y - b.position.y) === 300) voisines.push(`${a.id}/${b.id}`);
+      }
+    }
+    voisines.sort();
+    expect(voisines).toHaveLength(6);
+
+    const m = await ouvrirEvenement(contexte, charge, { section: 'plan', options: { fichiers: [fichierReglages('A4')] } });
+    // Ajusté au cadre, ce plan est sous K_LISTES : un zoom à la fois
+    // jusqu'à ce que ses listes se dessinent.
+    for (let crans = 0; crans < 6 && tous(m, '[data-plan] [data-liste]').length === 0; crans += 1) {
+      await cliquer(m, '[data-commande="zoomer"]');
+    }
+    await attendre('les listes du plan', () => tous(m, '[data-plan] [data-liste]').length === charge.tables.length, IMAGES);
+    expect(chevauchees(dans(m, '[data-plan]')), 'écran, noms seuls').toEqual([]);
+    m.ui.basculerOrganisations();
+    await attendre('les organisations du plan', () => tous(m, '[data-plan] [data-liste] [data-partie="organisation"]').length > 0, IMAGES);
+    expect(chevauchees(dans(m, '[data-plan]')), 'écran, organisations').toEqual(voisines);
+
+    await cliquer(m, '[data-commande="section"][data-cible="badges"]');
+    await attendre('les listes imprimées', () => tous(m, '[data-impression] [data-liste] tspan').length > 0, IMAGES);
+    await decouper(m, 'unePage');
+    expect(m.ui.etat().apercu.parColonne).toBe(false);
+    for (const organisations of [true, false]) {
+      if (m.ui.etat().apercu.organisations !== organisations) await basculer(m, 'organisations');
+      await attendre('la page du plan', () => feuilles(m).length === 1 && tous(m, '[data-impression] [data-liste]').length === charge.tables.length, IMAGES);
+      expect(tous(m, '[data-impression] [data-partie="organisation"]').length > 0).toBe(organisations);
+      expect(chevauchees(tuileDe(feuilles(m)[0])), `papier, ${organisations ? 'organisations' : 'noms seuls'}`).toEqual(organisations ? voisines : []);
     }
   });
 });

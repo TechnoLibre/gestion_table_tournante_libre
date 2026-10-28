@@ -21,11 +21,16 @@ import {
   placePastille,
 } from '../../geometrie/plateau.js';
 import { geometrieTable } from '../../geometrie/tables.js';
-import { decalagesLignes, replier, tronquer } from '../../geometrie/texte.js';
+import { TAILLE_TEXTE_LISTE_CM, decalagesLignes, replier, replierEntier, tronquer } from '../../geometrie/texte.js';
 import { CONFLITS } from '../marques.js';
 
 /** Largeur maximale de la barre de l'échelle graphique, en px d'écran. */
 export const LARGEUR_ECHELLE_PX = 120;
+
+/** Retrait des lignes d'une organisation repliée sous le nom, depuis le bord
+ *  gauche du bloc de noms, en cm de dessin : un cadratin du corps des
+ *  listes, qui détache la suite de la ligne qu'elle complète (§ 7.4). */
+export const RETRAIT_ORGANISATION = TAILLE_TEXTE_LISTE_CM;
 
 /** Rayon du disque de la pastille, en cm de dessin (plateau.js). */
 export { RAYON_PASTILLE };
@@ -275,15 +280,14 @@ export function texteLigne(ligne, t) {
 }
 
 /**
- * La ligne qui tient dans largeur (§ 7.4) : l'organisation s'abrège la
- * première, suivie de la marque, à la largeur que lui laissent les autres
- * parties entières ; quand il n'en reste que la marque, elle tombe avec son
- * séparateur. Puis le nom s'abrège, suivi de la marque ; quand la marque
- * n'y tient plus, le nom tombe — la tête, ou la suite, perd son espace — et
- * le titre s'abrège à son tour ; quand il ne tient plus, il tombe avec ce
- * qui l'entoure, puis le nom de la titulaire s'abrège dans sa partie ;
- * enfin une tête encore trop large s'abrège seule. Le numéro, en tête, part
- * le dernier.
+ * La ligne qui tient dans largeur (§ 7.4) : l'organisation y reste entière
+ * quand la ligne entière tient ; sinon elle en sort avec son séparateur,
+ * jamais abrégée — rangeesLigne la replie sous le nom. Puis le nom
+ * s'abrège, suivi de la marque ; quand la marque n'y tient plus, le nom
+ * tombe — la tête, ou la suite, perd son espace — et le titre s'abrège à son
+ * tour ; quand il ne tient plus, il tombe avec ce qui l'entoure, puis le nom
+ * de la titulaire s'abrège dans sa partie ; enfin une tête encore trop large
+ * s'abrège seule. Le numéro, en tête, part le dernier.
  *
  * Les parties droites qui se suivent — tête, titulaire, suite, nom,
  * avantOrganisation, organisation et avantTitre ; l'organisation change
@@ -324,16 +328,8 @@ export function ajusterLigne(textes, { mesurer, mesurerItalique, largeur, marque
   const vide = { nom: null, ...sansOrganisation, avantTitre: null, titre: null, apresTitre: null };
 
   if (nom !== null && organisation !== null) {
-    const reste = italique(titre) + apres;
-    const ajustee = tronquer(
-      organisation,
-      largeur,
-      (candidat) => droites(tete, titulaire, suite, nom, avantOrganisation, candidat, avantTitre) + reste,
-      marque,
-    );
-    if (ajustee !== '' && ajustee !== marque) {
-      return { tete, titulaire, suite, nom, avantOrganisation, organisation: ajustee, avantTitre, titre, apresTitre };
-    }
+    const entiere = droites(tete, titulaire, suite, nom, avantOrganisation, organisation, avantTitre) + italique(titre) + apres;
+    if (entiere <= largeur) return { tete, titulaire, suite, nom, avantOrganisation, organisation, avantTitre, titre, apresTitre };
   }
 
   if (nom !== null) {
@@ -354,6 +350,56 @@ export function ajusterLigne(textes, { mesurer, mesurerItalique, largeur, marque
   }
 
   return { tete: tronquer(teteSansNom, largeur, mesurer, marque), titulaire: null, suite: null, ...vide };
+}
+
+/**
+ * Les rangées qu'une ligne prend dans le bloc de noms (§ 7.4) : la ligne
+ * ajustée (ajusterLigne), puis, quand son organisation n'y tient pas et
+ * que son nom y reste, même abrégé, l'organisation repliée sous elle
+ * (replierEntier), entre ses mots, ou entre deux caractères pour un mot
+ * trop long, dans la largeur que laisse RETRAIT_ORGANISATION. Chaque rangée
+ * porte ses parties (partiesLigne) et son retrait : faux pour la ligne,
+ * vrai pour chaque rangée de l'organisation, faite de sa seule partie
+ * organisation, sans séparateur. L'organisation ne s'abrège jamais.
+ *
+ * @param {ReturnType<typeof textesLigne>} textes
+ * @param {Parameters<typeof ajusterLigne>[1]} mesures
+ * @returns {Array<{parties: Array<{partie: string, texte: string}>, retrait: boolean}>}
+ */
+export function rangeesLigne(textes, mesures) {
+  const ligne = ajusterLigne(textes, mesures);
+  const rangees = [{ parties: partiesLigne(ligne), retrait: false }];
+  const organisation = textes.organisation ?? null;
+  if (organisation === null || ligne.nom === null || ligne.organisation !== null) return rangees;
+  for (const texte of replierEntier(organisation, mesures.largeur - RETRAIT_ORGANISATION, mesures.mesurer)) {
+    rangees.push({ parties: [{ partie: 'organisation', texte }], retrait: true });
+  }
+  return rangees;
+}
+
+/**
+ * Les rangées du bloc de noms d'une table du modèle (§ 7.4, § 7.6) :
+ * l'en-tête d'une table gelée, s'il y en a un, abrégé à la largeur, puis
+ * les rangées de chaque ligne (rangeesLigne), dans l'ordre des sièges. La
+ * marque est le libellé plan.liste.abreviation. Le dessin de la liste et la
+ * découpe du plan imprimé, qui compte les rangées en retrait, lisent les
+ * mêmes.
+ *
+ * @param {{lignes: Array<ReturnType<typeof ligneListe>>, enTete: {cle: string, details: Object}|null}} table
+ *        une table de modeleDessin
+ * @param {(cle: string, details?: Object) => string} t
+ * @param {{mesurer: (s: string) => number, mesurerItalique: (s: string) => number, largeur: number}} mesures
+ * @returns {ReturnType<typeof rangeesLigne>}
+ */
+export function rangeesListe(table, t, mesures) {
+  const reglage = { ...mesures, marque: t('plan.liste.abreviation') };
+  const rangees = table.lignes.flatMap((ligne) => rangeesLigne(textesLigne(ligne, t), reglage));
+  if (table.enTete !== null) {
+    const enTete = t(table.enTete.cle, table.enTete.details);
+    const seule = { tete: enTete, teteSansNom: enTete, nom: null, avantTitre: null, titre: null, apresTitre: null };
+    rangees.unshift(...rangeesLigne(seule, reglage));
+  }
+  return rangees;
 }
 
 /**
