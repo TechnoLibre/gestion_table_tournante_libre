@@ -31,9 +31,26 @@ export const EXEMPLES = [
       remede: { geste: 'enregistrerSous' },
     },
   ],
+  // L'image des badges
+  ['ENTREE_CHANGER_IMAGE_BADGES', { active: true, effet: null, position: null }],
+  ['IMAGE_BADGES_NON_ECRITE', { chemin: `logo/${'ab'.repeat(32)}.png`, dossier: 'E:\\data\\Soirée des Lucioles', cause: 'EROFS', remede: null }],
 ];
 
 export const TEXTES = [
+  // L'entrée de l'image des badges : ce qui change, dans l'ordre du champ.
+  ['ENTREE_CHANGER_IMAGE_BADGES', { active: true, effet: null, position: null }, 'Image des badges : case cochée'],
+  ['ENTREE_CHANGER_IMAGE_BADGES', { active: null, effet: 'remplace', position: null }, 'Image des badges : image remplacée'],
+  [
+    'ENTREE_CHANGER_IMAGE_BADGES',
+    { active: false, effet: 'retire', position: 'centre' },
+    'Image des badges : case décochée, image retirée, au centre',
+  ],
+  [
+    'IMAGE_BADGES_NON_ECRITE',
+    { chemin: `logo/${'ab'.repeat(32)}.png`, dossier: 'E:\\data\\Soirée des Lucioles', cause: null },
+    `L'image des badges n'a pas pu s'écrire : « logo/${'ab'.repeat(32)}.png » dans le dossier « E:\\data\\Soirée des Lucioles ». ` +
+      "Rien n'est enregistré : les badges gardent leur image d'avant, ou aucune.",
+  ],
   // Une ligne de tour : la place, « pas de table » en réserve, « absente » à
   // un tour d'absence, où ni table, ni siège, ni titre ne s'écrivent.
   ['planche.absente', {}, 'absente'],

@@ -73,6 +73,15 @@
 // ligne de texte, les logos posés, sans place et introuvables, quand un
 // badge en désigne un. La liste en CSV ne lit aucun logo.
 //
+// L'image des badges vient de l'événement (imageBadgesDe) : sa case cochée
+// et une image choisie, ses octets se lisent comme ceux d'un logo, par la
+// même garde, et la mise en page la pose sur chaque badge où elle trouve sa
+// place, à la position choisie. Une image introuvable ou illisible ne
+// refuse rien : l'annonce le dit, et les badges s'impriment sans elle.
+// L'annonce compte les badges où elle se pose et ceux où elle manque de
+// place ; la feuille de contrôle et la liste en CSV ne la lisent pas. Sa
+// case décochée, les octets ne changent pas.
+//
 // Une demande désigne la source — le retenu, ou une proposition par son
 // identifiant, toujours BROUILLON (Q3) —, l'imposition, l'ordre de la pile
 // et, pour une réédition, la sélection. Les refus s'ordonnent : ceux du
@@ -107,6 +116,7 @@ import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js'
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurPng, lirePng } from '../pdf/png.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
+import { imageBadgesDe } from '../stockage/document.js';
 import { COLONNES_LISTE_BADGES, DONNEES_BADGE, normaliserTextePied } from '../stockage/reglages_locaux.js';
 import { nomControle, nomCsvBadges, nomCsvBadgesExigeListe, nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
 import { cheminAffiche } from '../stockage/systeme_fichiers.js';
@@ -204,6 +214,13 @@ const chargerProduction = () => import('../pdf/planche.js');
  *           fichier manque au dossier de l'événement (ABSENT) ou ne se lit pas
  *           comme un PNG (ILLISIBLE) ; null quand aucun badge ne désigne de
  *           logo, et sans modèle
+ * @property {null|{position: 'haut'|'centre'|'bas', chemin: string|null, posees: number, sansPlace: number,
+ *           introuvable: null|'ABSENT'|'ILLISIBLE'}} imageBadges
+ *           l'image des badges, quand sa case est cochée : sa position, son
+ *           chemin, null sans image choisie, les badges où elle se pose et
+ *           ceux où elle ne trouve pas de place, et la cause d'une image qui
+ *           manque au dossier de l'événement ou ne se lit pas, null sinon ;
+ *           null quand la case est décochée, et sans modèle
  */
 
 // La demande lue, ses défauts posés ; une imposition ou un ordre hors de sa
@@ -386,18 +403,19 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
   // événement repart d'une garde vide.
   let logosGardes = { cle: null, octets: new Map() };
 
-  // Les logos des badges d'un modèle : octets, par chemin, ceux qui se lisent
-  // et se contrôlent comme un PNG, dans l'ordre de la pile ; echecs, par
-  // chemin, la cause de ceux qui ne se lisent pas — ABSENT, le fichier
+  // Les images de chemins donnés — les logos des badges, dans l'ordre de la
+  // pile, puis l'image des badges ; null n'en désigne aucune : octets, par
+  // chemin, celles qui se lisent et se contrôlent comme un PNG ; echecs, par
+  // chemin, la cause de celles qui ne se lisent pas — ABSENT, le fichier
   // manque ; ILLISIBLE, il ne se lit pas, ou n'est pas un PNG. Un chemin
   // gardé ne se relit pas ; la garde ne retient ensuite que les chemins
-  // lus de ce modèle. Une erreur d'une autre nature remonte.
-  async function logosDe({ fs, racine, dossier }, modele) {
+  // lus de cette étude. Une erreur d'une autre nature remonte.
+  async function imagesDe({ fs, racine, dossier }, chemins) {
     const cle = JSON.stringify([racine?.id ?? null, racine?.chemin ?? null, dossier ?? null]);
     const gardes = logosGardes.cle === cle ? logosGardes.octets : new Map();
     const octets = new Map();
     const echecs = new Map();
-    for (const { logo } of modele.badges) {
+    for (const logo of chemins) {
       if (logo === null || octets.has(logo) || echecs.has(logo)) continue;
       if (gardes.has(logo)) {
         octets.set(logo, gardes.get(logo));
@@ -452,9 +470,14 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     const modele = modeleImprime(modelePlanche(charge, options), donnees);
     const octets = await lesPolices();
     const technolibre = await technolibreDe(pied, texte);
-    const { octets: logosParticipants, echecs } = await logosDe(lecture, modele);
+    const image = imageBadgesDe(charge);
+    const cheminImage = image.active ? image.chemin : null;
+    const cheminsLogos = modele.badges.map(({ logo }) => logo);
+    const { octets: lues, echecs } = await imagesDe(lecture, [...cheminsLogos, cheminImage]);
+    const logosParticipants = new Map([...lues].filter(([chemin]) => cheminsLogos.includes(chemin)));
+    const imageBadges = lues.has(cheminImage) ? { octets: lues.get(cheminImage), position: image.position } : null;
     const { analyserPlanche } = await chargerProduction();
-    const analyse = await analyserPlanche({ modele, polices: octets, modeleBadge, technolibre, logosParticipants });
+    const analyse = await analyserPlanche({ modele, polices: octets, modeleBadge, technolibre, logosParticipants, imageBadges });
     let leRefus = null;
     if (analyse.refus !== null) {
       const { code, details, rang } = analyse.refus;
@@ -464,6 +487,10 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       .filter(({ logo }) => echecs.has(logo))
       .map(({ participant, nom, logo }) => ({ participant, nom, cause: echecs.get(logo) }));
     const logos = modele.badges.some(({ logo }) => logo !== null) ? { ...analyse.logosParticipants, introuvables } : null;
+    const comptesImage = analyse.imageBadges ?? { posees: 0, sansPlace: 0 };
+    const annonceImage = image.active
+      ? { position: image.position, chemin: image.chemin, ...comptesImage, introuvable: echecs.get(cheminImage) ?? null }
+      : null;
     return {
       refus: leRefus,
       modele,
@@ -482,6 +509,8 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       sansTechnolibre: pied ? analyse.sansTechnolibre : null,
       logosParticipants,
       logos,
+      imageBadges,
+      annonceImage,
     };
   }
 
@@ -634,7 +663,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       }
     }
     const nom = nomDe(lecture.base, etude, dossier);
-    const { modele, papier, imposition, absents, modeleBadge, technolibre, logosParticipants } = etude;
+    const { modele, papier, imposition, absents, modeleBadge, technolibre, logosParticipants, imageBadges } = etude;
     const planches = nombrePlanches(modele.badges.length, papier, modeleBadge);
     const logos = etude.logos === null ? null : { ...etude.logos, introuvables: etude.logos.introuvables.length };
     const controle = controleAvecRetirees(
@@ -652,7 +681,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       filigrane: libelle('planche.brouillon'),
       modeleBadge,
     };
-    const octets = await produirePlanche({ ...entrees, technolibre, logosParticipants });
+    const octets = await produirePlanche({ ...entrees, technolibre, logosParticipants, imageBadges });
     if (!aCartes(modeleBadge)) return { octets, nom, controle: null };
     return { octets, nom, controle: { octets: await produireControle(entrees), nom: nomControleDe(lecture.base, etude, dossier) } };
   }
@@ -669,7 +698,8 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * le badge imprime, celle du nom des doublons et celle de l'organisation
      * en gros s'y lisent de même ; les homonymes restent ceux du nom entier.
      * Les logos des participants s'y comptent quand un badge en désigne un,
-     * les introuvables nommés ; aucun ne refuse la planche. Le nom est celui
+     * les introuvables nommés ; aucun ne refuse la planche. L'image des
+     * badges s'y compte de même quand sa case est cochée. Le nom est celui
      * que la production donnerait, rang compris ; sans dossier, donc sans
      * rang, quand le dossier ne se liste pas. Rien ne s'écrit.
      *
@@ -702,6 +732,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
           organisationEnGros: etude.enGros,
           sansTechnolibre: null,
           logos: null,
+          imageBadges: null,
         };
       }
       const { modele } = etude;
@@ -729,6 +760,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
         organisationEnGros: etude.enGros,
         sansTechnolibre: etude.sansTechnolibre,
         logos: etude.logos,
+        imageBadges: etude.annonceImage,
       };
     },
 

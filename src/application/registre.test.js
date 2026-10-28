@@ -567,6 +567,14 @@ const EXEMPLES = new Map([
     },
   ],
   [
+    'changerImageBadges',
+    {
+      accepte: { args: { active: true, chemin: LOGO, position: 'centre' } },
+      refuse: "l'image des badges ne refuse que la lecture et le plan bloqué, communs à toute écriture",
+      sansEffet: { avant: [['changerImageBadges', { active: true }]], args: { active: true, position: 'haut' } },
+    },
+  ],
+  [
     'changerEtiquettes',
     {
       accepte: { args: { id: 2, ajouter: 'finance, Montréal' } },

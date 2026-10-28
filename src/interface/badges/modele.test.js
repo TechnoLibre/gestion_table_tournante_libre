@@ -504,6 +504,41 @@ describe('l’organisation en gros (§ 8.5, § 11.4)', () => {
   });
 });
 
+describe('l’image des badges dans l’annonce (§ 11.4, § 11.5)', () => {
+  const avecImage = async (imageBadges, plus = {}) => ({ ...(await annoncer(retenue(), 'A4')), imageBadges, ...plus });
+  const POSEE = Object.freeze({ position: 'haut', chemin: `logo/${'9'.repeat(64)}.png`, posees: 4, sansPlace: 0, introuvable: null });
+  const dImage = (phrases) => cles(phrases).filter((cle) => cle.startsWith('badges.annonce.image'));
+
+  test('case décochée, ou image posée sur chaque badge : l’annonce n’en dit rien', async () => {
+    const annonce = await annoncer(retenue(), 'A4');
+    assert.equal(annonce.imageBadges, null);
+    assert.deepEqual(dImage(phrasesAnnonce(annonce)), []);
+    assert.deepEqual(dImage(phrasesAnnonce(await avecImage(POSEE))), []);
+  });
+
+  test('aucune image choisie, introuvable, illisible, ou sans place sur des badges : une phrase, avant celles des logos, et rien ne bloque', async () => {
+    for (const [image, cle, texte] of [
+      [{ ...POSEE, chemin: null, posees: 0 }, 'badges.annonce.imageAucune', 'Image des badges : aucune image choisie, les badges s’impriment sans image.'],
+      [
+        { ...POSEE, posees: 0, introuvable: 'ABSENT' },
+        'badges.annonce.imageIntrouvable',
+        'Image des badges introuvable dans le dossier de l’événement : les badges s’impriment sans image.',
+      ],
+      [{ ...POSEE, posees: 0, introuvable: 'ILLISIBLE' }, 'badges.annonce.imageIllisible', 'Image des badges illisible : les badges s’impriment sans image.'],
+      [{ ...POSEE, posees: 1, sansPlace: 3 }, 'badges.annonce.imageSansPlace', 'Image des badges : retirée de 3 badges, faute de place.'],
+      [{ ...POSEE, posees: 3, sansPlace: 1 }, 'badges.annonce.imageSansPlace', 'Image des badges : retirée d’un badge, faute de place.'],
+    ]) {
+      const annonce = await avecImage(image, { logos: { poses: 0, sansPlace: 1, introuvables: [] } });
+      const phrases = phrasesAnnonce(annonce);
+      assert.deepEqual(dImage(phrases), [cle]);
+      const rang = cles(phrases).indexOf(cle);
+      assert.equal(cles(phrases)[rang + 1], 'badges.annonce.logosSansPlace');
+      assert.equal(composer(phrases)[rang], texte);
+      assert.equal(produireBloque(annonce), false);
+    }
+  });
+});
+
 describe('les logos des participants (§ 11.4, § 11.5, § 5.9)', () => {
   const avecLogos = async (logos) => ({ ...(await annoncer(retenue(), 'A4')), logos });
 

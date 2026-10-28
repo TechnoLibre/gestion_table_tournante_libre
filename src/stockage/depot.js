@@ -130,7 +130,7 @@
 import { empreinteApercu } from './apercu.js';
 import { canoniser, canoniserPartagee, serialiser, serialiserCanonique } from './canonique.js';
 import { avecCourses, cleDeCourse, entreesPour, heriterEmpreintes, lireCourses, texteDesCourses } from './courses.js';
-import { FORMAT, analyser } from './document.js';
+import { FORMAT, analyser, imageBadgesDe } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { copieDeTravail, gelerPropositions } from './gel.js';
 import { DOSSIER_LOGO, estCheminLogo } from './logos.js';
@@ -241,9 +241,9 @@ import { cheminAffiche, vueDossier } from './systeme_fichiers.js';
  *           DERIVE {ids, retenu}, les
  *           propositions périmées par identifiant, et vrai quand le retenu
  *           l'est (§ 9) ; en dernier, LOGOS_NON_COPIES {evenement, logos,
- *           personnes}, que posent seulement la copie et l'écriture ailleurs
- *           quand un logo ne s'est pas recopié (copierLogos), et que
- *           l'écriture suivante ne recalcule pas
+ *           personnes, imageBadges}, que posent seulement la copie et
+ *           l'écriture ailleurs quand un logo ne s'est pas recopié
+ *           (copierLogos), et que l'écriture suivante ne recalcule pas
  */
 
 /**
@@ -1757,11 +1757,13 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
   return { journal, texteJournal: texte, charge: apres, chargeJournal: canonique, texteEtat, revision, produitVersion };
 }
 
-// Les chemins des logos que désignent les personnes de la charge, chacun
-// une fois, rangés par unités UTF-16.
+// Les chemins des logos que désignent les personnes de la charge, et celui
+// de l'image des badges de l'événement, chacun une fois, rangés par unités
+// UTF-16.
 function logosDesignes(charge) {
   const chemins = charge.participants.map(({ logo }) => logo).filter((logo) => logo !== undefined);
-  return [...new Set(chemins)].sort(comparerTextes);
+  const image = imageBadgesDe(charge).chemin;
+  return [...new Set(image === null ? chemins : [...chemins, image])].sort(comparerTextes);
 }
 
 /**
@@ -1778,12 +1780,13 @@ function logosDesignes(charge) {
  * qui ne se sont pas recopiés : un fichier dont la lecture ou l'écriture est
  * refusée, la suite continuant ; tous quand logo/ ne se crée pas là-bas ;
  * quand la liste de logo/ est refusée, chaque logo que désigne une personne
- * de charge, ce que porte logo/ étant inconnu, et rien ne s'écrit. logo/
- * absent, le dossier depuis se liste à son tour : présent, il n'a rien à
- * recopier ; absent ou refusé — un support retiré rend ABSENT sur tout
- * chemin —, c'est un refus de la liste, qui compte chaque logo désigné. Un
- * logo qu'une personne désigne sans que son fichier soit dans logo/ n'est
- * pas un refus : il manquait déjà.
+ * de charge, et l'image de ses badges, ce que porte logo/ étant inconnu, et
+ * rien ne s'écrit. logo/ absent, le dossier depuis se liste à son tour :
+ * présent, il n'a rien à recopier ; absent ou refusé — un support retiré
+ * rend ABSENT sur tout chemin —, c'est un refus de la liste, qui compte
+ * chaque logo désigné. Un logo qu'une personne ou l'image des badges
+ * désigne sans que son fichier soit dans logo/ n'est pas un refus : il
+ * manquait déjà.
  * Toute autre erreur remonte telle quelle.
  *
  * @param {{fs: import('./systeme_fichiers.js').SystemeFichiers, racine: import('./systeme_fichiers.js').Racine}} depuis
@@ -1791,10 +1794,11 @@ function logosDesignes(charge) {
  * @param {{fs: import('./systeme_fichiers.js').SystemeFichiers, racine: import('./systeme_fichiers.js').Racine}} vers
  *        la vue du dossier où ils vont, et sa racine
  * @param {import('./types.js').Charge} charge   celle de l'événement recopié
- * @returns {Promise<null|{code: 'LOGOS_NON_COPIES', details: {evenement: string, logos: number, personnes: number}}>}
+ * @returns {Promise<null|{code: 'LOGOS_NON_COPIES', details: {evenement: string, logos: number, personnes: number, imageBadges: boolean}}>}
  *          null quand chaque logo s'est recopié ; sinon l'avertissement : le
- *          nom de l'événement de charge, le nombre de fichiers non recopiés
- *          et celui des personnes dont le logo en est un
+ *          nom de l'événement de charge, le nombre de fichiers non recopiés,
+ *          celui des personnes dont le logo en est un, et vrai quand l'image
+ *          des badges en est un
  */
 export async function copierLogos(depuis, vers, charge) {
   let chemins;
@@ -1807,8 +1811,8 @@ export async function copierLogos(depuis, vers, charge) {
   } catch (erreur) {
     if (!(erreur instanceof ErreurStockage)) throw erreur;
     // Un logo/ absent d'un dossier présent n'a rien à recopier ; sans
-    // personne qui porte un logo, rien ne peut manquer, et le dossier ne se
-    // relit pas.
+    // logo désigné, ni d'une personne ni des badges, rien ne peut manquer,
+    // et le dossier ne se relit pas.
     const designes = logosDesignes(charge);
     if (erreur.code === 'ABSENT' && (designes.length === 0 || (await dossierPresent(depuis)))) return null;
     return avertissementLogos(designes, charge);
@@ -1852,12 +1856,15 @@ async function dossierPresent(depuis) {
 }
 
 // L'avertissement des chemins de logo refusés (refuses), ceux que
-// copierLogos n'a pas recopiés : null quand il n'y en a aucun.
+// copierLogos n'a pas recopiés : null quand il n'y en a aucun ; imageBadges
+// est vrai quand l'image des badges de l'événement est l'un d'eux.
 function avertissementLogos(refuses, charge) {
   if (refuses.length === 0) return null;
   const manquants = new Set(refuses);
   const personnes = charge.participants.filter(({ logo }) => manquants.has(logo)).length;
-  return { code: 'LOGOS_NON_COPIES', details: { evenement: charge.evenement.nom, logos: refuses.length, personnes } };
+  const imageBadges = manquants.has(imageBadgesDe(charge).chemin);
+  const { nom: evenement } = charge.evenement;
+  return { code: 'LOGOS_NON_COPIES', details: { evenement, logos: refuses.length, personnes, imageBadges } };
 }
 
 /**

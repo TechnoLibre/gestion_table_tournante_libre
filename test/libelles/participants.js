@@ -297,20 +297,20 @@ export const TEXTES = [
   [
     'LOGO_ILLISIBLE',
     { fichier: 'IMG_0042.HEIC', remede: null },
-    "Le fichier « IMG_0042.HEIC » ne s'ouvre pas comme une image : un logo se lit d'un fichier PNG, JPEG, GIF, WebP, " +
-      "AVIF, BMP, ICO ou SVG. Une photo HEIC ou une image TIFF s'exporte d'abord en JPEG ou en PNG.",
+    "Le fichier « IMG_0042.HEIC » ne s'ouvre pas comme une image : un logo ou l'image des badges se lit d'un fichier " +
+      "PNG, JPEG, GIF, WebP, AVIF, BMP, ICO ou SVG. Une photo HEIC ou une image TIFF s'exporte d'abord en JPEG ou en PNG.",
   ],
   [
     'LOGO_TROP_GRAND',
     { fichier: 'affiche-lucioles.png', largeur: 12_000, hauteur: 9000, max: 50_000_000, remede: null },
     "L'image « affiche-lucioles.png » compte 12000 × 9000 pixels, au-delà des 50 millions de pixels qu'accepte un " +
-      "logo : elle n'est pas ouverte. Une image réduite, exportée en JPEG ou en PNG, convient.",
+      "logo ou l'image des badges : elle n'est pas ouverte. Une image réduite, exportée en JPEG ou en PNG, convient.",
   ],
   [
     'LOGO_TROP_GRAND',
     { fichier: 'bannière.webp', largeur: 400, hauteur: 300, max: 100_000, remede: null },
     "L'image « bannière.webp » compte 400 × 300 pixels, au-delà des 100000 pixels qu'accepte un " +
-      "logo : elle n'est pas ouverte. Une image réduite, exportée en JPEG ou en PNG, convient.",
+      "logo ou l'image des badges : elle n'est pas ouverte. Une image réduite, exportée en JPEG ou en PNG, convient.",
   ],
   [
     'IMPORT_EN_RETENU',

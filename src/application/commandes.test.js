@@ -138,7 +138,7 @@ const AUTRE_LOGO = `logo/${'fedcba9876543210'.repeat(4)}.png`;
 const CSV_DEUX = 'nom;prenom;organisation\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, les trois des inclusions, changerLogo, garderMeilleures, changerPresence, les douze des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, les trois des conflits, les trois des inclusions, changerLogo, changerImageBadges, garderMeilleures, changerPresence, les douze des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
       'ajouterConflit',
       'ajouterParticipant',
@@ -149,6 +149,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'changerInclusions',
       'changerInclusionsOrganisation',
       'changerInclusionsParticipant',
+      'changerImageBadges',
       'changerLogo',
       'convertirEnTous',
       'debloquer',
@@ -175,7 +176,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 34);
+    assert.equal(attendues.length, 35);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     assert.deepEqual([...COMMANDES_PRESENCE.keys()], ['changerPresence']);
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
@@ -372,6 +373,82 @@ describe('commandes : le logo d’une personne (§ 8.9)', () => {
   test('le moteur ne lit pas le logo : la configuration et les raisons de dérive restent les mêmes', () => {
     const charge = chargeRiche();
     const posee = executer('changerLogo', charge, { id: 1, chemin: LOGO }).charge;
+    assert.deepEqual(configurationDepuisCharge(posee), configurationDepuisCharge(charge));
+    assert.deepEqual(derive(posee.propositions[0], posee), derive(charge.propositions[0], charge));
+    assert.deepEqual(posee.retenu, charge.retenu);
+  });
+});
+
+describe('commandes : l’image des badges (§ 8.9, § 11.4)', () => {
+  test('cocher la case pose le champ en dernière clé de l’événement, sans image, en haut ; le libellé dit « cochée »', () => {
+    const avant = chargeEssai();
+    const { charge, libelle, avertissements } = executer('changerImageBadges', figer(avant), { active: true });
+    assert.deepEqual(charge.evenement.imageBadges, { active: true, chemin: null, position: 'haut' });
+    assert.equal(Object.keys(charge.evenement).at(-1), 'imageBadges');
+    assert.deepEqual(charge.participants, avant.participants);
+    assert.equal(libelle, 'Image des badges : case cochée');
+    assert.deepEqual(avertissements, []);
+    assert.deepEqual(analyser(serialiser(charge, { revision: 2, produitVersion: V1 })).charge.evenement.imageBadges, charge.evenement.imageBadges);
+  });
+
+  test('l’image se pose, se remplace et se retire, la position change ; chaque libellé le dit', () => {
+    const cochee = executer('changerImageBadges', chargeEssai(), { active: true }).charge;
+    const posee = executer('changerImageBadges', cochee, { chemin: LOGO });
+    assert.deepEqual(posee.charge.evenement.imageBadges, { active: true, chemin: LOGO, position: 'haut' });
+    assert.equal(posee.libelle, 'Image des badges : image posée');
+    const remplacee = executer('changerImageBadges', posee.charge, { chemin: AUTRE_LOGO });
+    assert.equal(remplacee.charge.evenement.imageBadges.chemin, AUTRE_LOGO);
+    assert.equal(remplacee.libelle, 'Image des badges : image remplacée');
+    const centree = executer('changerImageBadges', remplacee.charge, { position: 'centre' });
+    assert.deepEqual(centree.charge.evenement.imageBadges, { active: true, chemin: AUTRE_LOGO, position: 'centre' });
+    assert.equal(centree.libelle, 'Image des badges : au centre');
+    const retiree = executer('changerImageBadges', centree.charge, { chemin: null });
+    assert.deepEqual(retiree.charge.evenement.imageBadges, { active: true, chemin: null, position: 'centre' });
+    assert.equal(retiree.libelle, 'Image des badges : image retirée');
+    const plusieurs = executer('changerImageBadges', retiree.charge, { active: false, chemin: LOGO, position: 'bas' });
+    assert.deepEqual(plusieurs.charge.evenement.imageBadges, { active: false, chemin: LOGO, position: 'bas' });
+    assert.equal(plusieurs.libelle, 'Image des badges : case décochée, image posée, en bas');
+  });
+
+  test('revenue à son défaut — décochée, sans image, en haut —, l’image retire le champ, et l’événement s’écrit comme sans elle', () => {
+    const cochee = executer('changerImageBadges', chargeEssai(), { active: true }).charge;
+    const { charge, libelle } = executer('changerImageBadges', cochee, { active: false });
+    assert.equal(Object.hasOwn(charge.evenement, 'imageBadges'), false);
+    assert.equal(serialiserCharge(charge), serialiserCharge(chargeEssai()));
+    assert.equal(libelle, 'Image des badges : case décochée');
+  });
+
+  test('rien qui change est SANS_EFFET ; un plan bloqué, PLAN_BLOQUE', () => {
+    const posee = executer('changerImageBadges', chargeEssai(), { active: true, chemin: LOGO, position: 'bas' }).charge;
+    const sansEffet = { commande: 'changerImageBadges', remede: null };
+    refuse(() => executer('changerImageBadges', posee, { active: true, chemin: LOGO, position: 'bas' }), 'SANS_EFFET', sansEffet);
+    refuse(() => executer('changerImageBadges', posee, { position: 'bas' }), 'SANS_EFFET', sansEffet);
+    refuse(() => executer('changerImageBadges', chargeEssai(), { active: false }), 'SANS_EFFET', sansEffet);
+    refuse(() => executer('changerImageBadges', chargeEssai(), { chemin: null, position: 'haut' }), 'SANS_EFFET', sansEffet);
+    const bloquee = { ...chargeEssai(), evenement: { ...chargeEssai().evenement, etat: 'bloque' } };
+    refuse(() => executer('changerImageBadges', bloquee, { active: true }), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+  });
+
+  test('une valeur d’une autre forme, ou aucune clé, est une faute du code : la séance et la section la composent', () => {
+    const fautifs = [
+      {},
+      { active: 'oui' },
+      { active: null },
+      { chemin: LOGO.toUpperCase() },
+      { chemin: '' },
+      { chemin: 'evenement.gtt.json' },
+      { position: 'gauche' },
+      { position: null },
+      { active: true, taille: 3 },
+    ];
+    for (const args of fautifs) {
+      assert.throws(() => executer('changerImageBadges', chargeEssai(), args), TypeError, JSON.stringify(args));
+    }
+  });
+
+  test('le moteur ne lit pas l’image des badges : la configuration et les raisons de dérive restent les mêmes', () => {
+    const charge = chargeRiche();
+    const posee = executer('changerImageBadges', charge, { active: true, chemin: LOGO, position: 'centre' }).charge;
     assert.deepEqual(configurationDepuisCharge(posee), configurationDepuisCharge(charge));
     assert.deepEqual(derive(posee.propositions[0], posee), derive(charge.propositions[0], charge));
     assert.deepEqual(posee.retenu, charge.retenu);
@@ -1810,6 +1887,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['changerInclusionsParticipant', { id: 4, participants: [1, 3] }],
       ['changerInclusions', { id: 4, organisations: ['Club des Merles'], participants: [1, 3] }],
       ['changerLogo', { id: 4, chemin: LOGO }],
+      ['changerImageBadges', { active: true, chemin: LOGO, position: 'bas' }],
       ['changerPresence', { id: 3, tours: [2] }],
       ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
       ['retirerObjectif', { table: 2, tour: null }],
@@ -2092,8 +2170,8 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les trois des conflits, les trois des inclusions, changerLogo, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
-    assert.equal(COMMANDES.size, 21 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, les trois des conflits, les trois des inclusions, changerLogo, changerImageBadges, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
+    assert.equal(COMMANDES.size, 22 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
     assert.ok(COMMANDES_PRESENCE instanceof Map);

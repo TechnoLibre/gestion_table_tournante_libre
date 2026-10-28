@@ -119,6 +119,7 @@ export const TABLE = new Map([
   ['communs.remede.changerInclusionsParticipant', 'Changer les inclusions de participant'],
   ['communs.remede.changerInclusions', 'Changer les inclusions'],
   ['communs.remede.changerLogo', 'Changer le logo'],
+  ['communs.remede.changerImageBadges', "Changer l'image des badges"],
   ['communs.remede.poserObjectif', "Poser l'objectif"],
   ['communs.remede.retirerObjectif', "Retirer l'objectif"],
   ['communs.remede.changerRegleObjectifs', 'Changer la règle par défaut des objectifs'],

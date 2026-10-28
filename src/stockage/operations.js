@@ -780,8 +780,8 @@ async function importerUn(fs, depuis, vers, cle) {
  *          avertissements: Array<{code: string, details: Object}>}>}
  *          importes : chaque clé importée et sa clé dans vers ; refuses :
  *          chaque clé refusée et le code de son refus ; avertissements :
- *          LOGOS_NON_COPIES {evenement, logos, personnes} de chaque
- *          événement importé dont un logo ne s'est pas recopié ; chacun
+ *          LOGOS_NON_COPIES {evenement, logos, personnes, imageBadges} de
+ *          chaque événement importé dont un logo ne s'est pas recopié ; chacun
  *          dans l'ordre des clés reçues. Une erreur qui n'est pas une
  *          ErreurStockage remonte telle quelle
  */

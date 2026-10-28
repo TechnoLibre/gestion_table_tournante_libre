@@ -49,7 +49,17 @@ import { presenceCanonique } from '../moteur/presence.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { difference } from '../stockage/correctifs.js';
 import { entreeDeCourse } from '../stockage/courses.js';
-import { SCHEMA, clesRangees, creerCharge, etatDeduit, nomsDesTours, premiereFaute } from '../stockage/document.js';
+import {
+  IMAGE_BADGES_DEFAUT,
+  POSITIONS_IMAGE_BADGES,
+  SCHEMA,
+  clesRangees,
+  creerCharge,
+  etatDeduit,
+  imageBadgesDe,
+  nomsDesTours,
+  premiereFaute,
+} from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { copieDeTravail } from '../stockage/gel.js';
@@ -590,6 +600,65 @@ function changerLogo(charge, { id, chemin } = {}) {
       return chemin === null ? reste : { ...reste, logo: chemin };
     }),
     libelle: libelle('ENTREE_CHANGER_LOGO', { personne: nomAffiche(participant), effet }),
+    avertissements: [],
+  };
+}
+
+// Les clés que changerImageBadges reçoit, dans l'ordre du champ.
+const CLES_IMAGE_BADGES = Object.freeze(['active', 'chemin', 'position']);
+
+// Les arguments de changerImageBadges, contrôlés : un objet qui porte au
+// moins une clé de CLES_IMAGE_BADGES, et aucune autre ; active, un booléen ;
+// chemin, celui d'un logo (estCheminLogo) ou null ; position, l'une de
+// POSITIONS_IMAGE_BADGES. Rend les clés reçues ; TypeError sinon.
+function argumentsImageBadges(args) {
+  const cles = Object.keys(args ?? {});
+  if (cles.length === 0 || cles.some((cle) => !CLES_IMAGE_BADGES.includes(cle))) {
+    throw new TypeError(`changerImageBadges : une ou plusieurs de ${CLES_IMAGE_BADGES.join(', ')} attendues, reçu ${JSON.stringify(args)}`);
+  }
+  const { active, chemin, position } = args;
+  if (cles.includes('active') && typeof active !== 'boolean') throw new TypeError(`active : booléen attendu, reçu ${JSON.stringify(active)}`);
+  if (cles.includes('chemin') && chemin !== null && !estCheminLogo(chemin)) {
+    throw new TypeError(`chemin : logo/<empreinte>.png ou null attendu, reçu ${JSON.stringify(chemin)}`);
+  }
+  if (cles.includes('position') && !POSITIONS_IMAGE_BADGES.includes(position)) {
+    throw new TypeError(`position : ${POSITIONS_IMAGE_BADGES.join(', ')} attendue, reçu ${JSON.stringify(position)}`);
+  }
+  return Object.fromEntries(cles.map((cle) => [cle, args[cle]]));
+}
+
+/**
+ * changerImageBadges {active?, chemin?, position?} (§ 8.9, § 11.4) : l'image
+ * des badges de l'événement prend les valeurs reçues — la case (active), le
+ * chemin d'un fichier logo/<empreinte>.png du dossier de l'événement
+ * (estCheminLogo), null pour aucune image, la position parmi
+ * POSITIONS_IMAGE_BADGES —, les autres restant celles de imageBadgesDe.
+ * Revenue à son défaut (IMAGE_BADGES_DEFAUT), elle retire le champ
+ * imageBadges ; sinon, il s'écrit en dernière clé de l'événement. Rien qui
+ * change : SANS_EFFET. Aucune clé, une clé inconnue ou une valeur d'une
+ * autre forme est une faute du code. La commande ne lit aucun fichier : la
+ * séance écrit l'image avant elle, et aucun geste n'en efface une. Le moteur
+ * ne lit pas le champ. Une entrée d'historique, dont le libellé dit ce qui
+ * change : la case, l'image posée, remplacée ou retirée, la position.
+ */
+function changerImageBadges(charge, args) {
+  exigerModifiable(charge);
+  const recues = argumentsImageBadges(args);
+  const avant = imageBadgesDe(charge);
+  const apres = { ...avant, ...recues };
+  if (CLES_IMAGE_BADGES.every((cle) => apres[cle] === avant[cle])) throw refus('SANS_EFFET', { commande: 'changerImageBadges' });
+  let effet = null;
+  if (apres.chemin !== avant.chemin) effet = apres.chemin === null ? 'retire' : avant.chemin === null ? 'pose' : 'remplace';
+  const suivante = copieDeTravail(charge);
+  if (CLES_IMAGE_BADGES.every((cle) => apres[cle] === IMAGE_BADGES_DEFAUT[cle])) delete suivante.evenement.imageBadges;
+  else suivante.evenement.imageBadges = apres;
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CHANGER_IMAGE_BADGES', {
+      active: apres.active === avant.active ? null : apres.active,
+      effet,
+      position: apres.position === avant.position ? null : apres.position,
+    }),
     avertissements: [],
   };
 }
@@ -1270,6 +1339,7 @@ export const COMMANDES = reunirCommandes(
     ['changerInclusionsParticipant', changerInclusionsParticipant],
     ['changerInclusions', changerInclusions],
     ['changerLogo', changerLogo],
+    ['changerImageBadges', changerImageBadges],
     ['exclureParticipant', exclureParticipant],
     ['reintegrerParticipant', reintegrerParticipant],
     ['supprimerParticipant', supprimerParticipant],

@@ -320,7 +320,7 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     const fs = creerFichiersSimules();
     await deposerEssai(fs);
     const { seance } = monter({ fs });
-    const annonce = { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 2, personnes: 3 } };
+    const annonce = { code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 2, personnes: 3, imageBadges: false } };
     const avant = fs.compteurs.ecritures;
     const rendu = await seance.ouvrir(EVT, undefined, { avertissements: [annonce] });
     assert.deepEqual(rendu.avertissements, [annonce]);
@@ -2139,7 +2139,7 @@ describe('séance : le logo d’une personne, écrit avant son entrée (§ 8.3, 
     assert.equal(fs.octets('documents', surLaRacine(cheminDuLogo(octets))), null);
     assert.deepEqual(
       seance.etat().avertissements.filter(({ code }) => code === 'LOGOS_NON_COPIES'),
-      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1 } }],
+      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1, imageBadges: false } }],
     );
   });
 
@@ -2156,8 +2156,75 @@ describe('séance : le logo d’une personne, écrit avant son entrée (§ 8.3, 
     assert.equal(etatDe(fs).charge.participants[0].logo, cheminDuLogo(octets));
     assert.deepEqual(
       seance.etat().avertissements.filter(({ code }) => code === 'LOGOS_NON_COPIES'),
-      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1 } }],
+      [{ code: 'LOGOS_NON_COPIES', details: { evenement: BASE, logos: 1, personnes: 1, imageBadges: false } }],
     );
+  });
+});
+
+describe('séance : l’image des badges, écrite avant son entrée (§ 8.9, § 11.4)', () => {
+  test('poser écrit l’image dans logo/ sous le SHA-256 de ses octets, puis une entrée ; la case et la position ne changent pas', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    const octets = pngEssai(3, 2, 4);
+    const chemin = cheminDuLogo(octets);
+    const journal = journalDe(fs).entrees.length;
+    const rendu = await seance.poserImageBadges({ octets });
+    assert.deepEqual(rendu, { libelle: 'Image des badges : image posée', chemin, avertissements: [] });
+    assert.deepEqual(fs.octets('documents', surLaRacine(chemin)), octets);
+    assert.deepEqual(seance.charge.evenement.imageBadges, { active: false, chemin, position: 'haut' });
+    assert.deepEqual(etatDe(fs).charge.evenement.imageBadges, { active: false, chemin, position: 'haut' });
+    assert.deepEqual(libellesDe(journalDe(fs)).slice(journal), ['Image des badges : image posée']);
+    assert.deepEqual(await seance.lireLogoParticipant(chemin), octets);
+    // La case, la position et le retrait passent par executer ; défaire rend
+    // l'image, dont le fichier reste.
+    await seance.executer('changerImageBadges', { active: true, position: 'bas' });
+    await seance.executer('changerImageBadges', { chemin: null });
+    assert.deepEqual(seance.charge.evenement.imageBadges, { active: true, chemin: null, position: 'bas' });
+    await seance.defaire();
+    assert.equal(seance.charge.evenement.imageBadges.chemin, chemin);
+    assert.deepEqual(fs.octets('documents', surLaRacine(chemin)), octets);
+  });
+
+  test('en lecture, ou sur un plan bloqué, rien ne s’écrit ; la même image se refuse SANS_EFFET, réécrite quand elle manque', async () => {
+    const montage = monter();
+    await deposerEssai(montage.fs);
+    await montage.seance.ouvrir(EVT);
+    const { fs, seance } = montage;
+    const octets = pngEssai();
+    const ecritures = fs.compteurs.ecritures;
+    await refus(seance.poserImageBadges({ octets }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    await refus(seance.executer('changerImageBadges', { active: true }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    assert.equal(fs.octets('documents', `${BASE}/logo`), null);
+    await seance.passerEnEcriture();
+    await seance.poserImageBadges({ octets });
+    const chemin = surLaRacine(cheminDuLogo(octets));
+    await fs.supprimer(DOC, chemin);
+    const journal = journalDe(fs).entrees.length;
+    await refus(seance.poserImageBadges({ octets }), 'SANS_EFFET', { commande: 'changerImageBadges', remede: null });
+    assert.deepEqual(fs.octets('documents', chemin), octets);
+    assert.equal(journalDe(fs).entrees.length, journal);
+    await seance.executer('changerEtat', { etat: 'bloque' });
+    const apres = fs.compteurs.ecritures;
+    await refus(seance.poserImageBadges({ octets: pngEssai(2, 2, 1) }), 'LECTURE_SEULE', BLOQUE_SEUL);
+    assert.equal(fs.compteurs.ecritures, apres);
+  });
+
+  test('une image que le disque refuse lève IMAGE_BADGES_NON_ECRITE, sans entrée ni rupture du support ; un PNG fautif est une faute du code', async () => {
+    const { fs, seance } = await essaiEnEcriture();
+    fs.deposer('documents', `${BASE}/logo`, 'pas un dossier');
+    const journal = journalDe(fs).entrees.length;
+    const erreur = await refus(seance.poserImageBadges({ octets: pngEssai() }), 'IMAGE_BADGES_NON_ECRITE');
+    assert.deepEqual(Object.keys(erreur.details), ['chemin', 'dossier', 'cause', 'remede']);
+    assert.equal(erreur.details.remede, null);
+    assert.equal(libelle('IMAGE_BADGES_NON_ECRITE', erreur.details).startsWith("L'image des badges n'a pas pu s'écrire : "), true);
+    assert.equal(journalDe(fs).entrees.length, journal);
+    assert.equal(Object.hasOwn(seance.charge.evenement, 'imageBadges'), false);
+    assert.equal(seance.etat().refus, null);
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
+    await assert.rejects(seance.poserImageBadges({ octets: jpeg }), TypeError);
+    await assert.rejects(seance.poserImageBadges({ octets: pngEssai(1201, 1) }), RangeError);
+    await assert.rejects(seance.poserImageBadges(), TypeError);
+    assert.equal(journalDe(fs).entrees.length, journal);
   });
 });
 

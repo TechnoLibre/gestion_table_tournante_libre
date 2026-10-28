@@ -1399,3 +1399,103 @@ describe('le texte du pied TechnoLibre : un champ gardé sur le poste (§ 8.5, �
     await attendre('l’annonce retirée', () => avisTexte(m) === null, IMAGES);
   });
 });
+
+describe('l’image sur tous les badges : un réglage de l’événement (§ 8.9, § 11.4)', () => {
+  const caseImage = (m) => dans(m, '[data-section="badges"] [data-champ="imageBadges"]');
+  const bloc = (m) => dans(m, '[data-section="badges"] [data-image-badges]');
+  const commandeImage = (m, nom) => dans(m, `[data-section="badges"] [data-image-badges] [data-commande="${nom}"]`);
+  const positions = (m) => [...m.racine.querySelectorAll('[data-section="badges"] [data-champ="positionImage"]')];
+  const reglage = (m) => m.seance.etat().charge.evenement.imageBadges ?? null;
+
+  // Les octets d'une image largeur × hauteur, d'une teinte unie, en PNG.
+  async function image(largeur, hauteur) {
+    const canevas = new OffscreenCanvas(largeur, hauteur);
+    const contexte2d = canevas.getContext('2d');
+    contexte2d.fillStyle = 'rgb(40, 110, 170)';
+    contexte2d.fillRect(0, 0, largeur, hauteur);
+    return new Uint8Array(await (await canevas.convertToBlob({ type: 'image/png' })).arrayBuffer());
+  }
+
+  test('décochée par défaut, sous le groupe des cases, son libellé lié ; ni image ni position tant qu’elle l’est', async () => {
+    const m = await ouvrirBadges(chargeRetenue());
+    const element = caseImage(m);
+    expect(element.type).toBe('checkbox');
+    expect(element.checked).toBe(false);
+    expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran('badges.image.case')));
+    expect(bloc(m).previousElementSibling.querySelector('[data-champ="piedTechnolibre"]')).not.toBeNull();
+    expect(positions(m)).toEqual([]);
+    expect(commandeImage(m, 'choisirImageBadges')).toBeNull();
+  });
+
+  test('en lecture, cocher se refuse à côté de la case, avec son remède ; la case reste décochée et rien ne s’écrit', async () => {
+    const m = await ouvrirBadges(chargeRetenue());
+    const depuis = m.trace.length;
+    caseImage(m).click();
+    const refus = await attendre('le refus de la case', () => bloc(m).querySelector('[role="status"]'), IMAGES);
+    expect(caseImage(m).getAttribute('aria-describedby')).toBe(refus.id);
+    expect(caseImage(m).checked).toBe(false);
+    expect(reglage(m)).toBeNull();
+    expect(ecrituresEvenement(m, depuis)).toEqual([]);
+  });
+
+  test('en écriture : cocher, choisir l’image, la placer au centre, produire ; chaque geste est une entrée, l’annonce montrée se retire, et la planche porte l’image sur chaque badge', async () => {
+    const source = await image(600, 200);
+    const m = await ouvrirBadges(chargeRetenue(), { ecriture: true, options: { aImporter: [{ nom: 'blason.png', octets: source }] } });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    caseImage(m).click();
+    await attendre('la case écrite', () => reglage(m)?.active === true, IMAGES);
+    expect(caseImage(m).checked).toBe(true);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    await attendre('les réglages de l’image', () => positions(m).length === 3, IMAGES);
+    expect(texte(bloc(m).querySelector('[data-image-absente]'))).toBe(plat(tEcran('badges.image.aucune')));
+    expect(positions(m).map((bouton) => [bouton.value, bouton.checked])).toEqual([
+      ['haut', true],
+      ['centre', false],
+      ['bas', false],
+    ]);
+    expect(commandeImage(m, 'retirerImageBadges')).toBeNull();
+
+    commandeImage(m, 'choisirImageBadges').click();
+    await attendre('l’image posée', () => reglage(m)?.chemin?.startsWith('logo/'), IMAGES);
+    const chemin = reglage(m).chemin;
+    expect(m.fs.octets('documents', `${BASE}/${chemin}`)).not.toBeNull();
+    await attendre('la vignette', () => bloc(m).querySelector('[data-image-vignette] img')?.naturalWidth > 0, IMAGES);
+    expect(bloc(m).querySelector('[data-image-vignette] img').getAttribute('alt')).toBe(plat(tEcran('badges.image.vignette')));
+
+    const centre = positions(m).find((bouton) => bouton.value === 'centre');
+    centre.click();
+    await attendre('la position écrite', () => reglage(m)?.position === 'centre', IMAGES);
+    expect(reglage(m)).toEqual({ active: true, chemin, position: 'centre' });
+    expect(m.seance.historique().lignes.slice(-3).map(({ libelle }) => libelle)).toEqual([
+      'Image des badges : case cochée',
+      'Image des badges : image posée',
+      'Image des badges : au centre',
+    ]);
+
+    const depuis = m.trace.length;
+    dans(m, '[data-section="badges"] [data-commande="produirePlanche"]').click();
+    await attendre('la planche', () => dans(m, '[data-chemin-planche]'), IMAGES);
+    expect(planchesEcrites(m, depuis).length).toBe(1);
+    const lue = await m.seance.preparerPlanche({ source: 'retenu' });
+    expect(lue.imageBadges).toEqual({ position: 'centre', chemin, posees: lue.comptes.produits, sansPlace: 0, introuvable: null });
+
+    commandeImage(m, 'retirerImageBadges').click();
+    await attendre('l’image retirée', () => reglage(m)?.chemin === null, IMAGES);
+    await attendre('« Aucune image choisie. »', () => bloc(m).querySelector('[data-image-absente]'), IMAGES);
+    expect(m.fs.octets('documents', `${BASE}/${chemin}`)).not.toBeNull();
+    await attendre('le focus à « Choisir l’image »', () => document.activeElement === commandeImage(m, 'choisirImageBadges'), IMAGES);
+  });
+
+  test('cochée sans image choisie, l’annonce le dit sans rien bloquer', async () => {
+    const charge = structuredClone(chargeRetenue());
+    charge.evenement.imageBadges = { active: true, chemin: null, position: 'bas' };
+    const m = await ouvrirBadges(charge);
+    expect(caseImage(m).checked).toBe(true);
+    expect(positions(m).find((bouton) => bouton.checked).value).toBe('bas');
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    const montree = await attendre('l’annonce', () => annonce(m), IMAGES);
+    expect(texte(montree)).toContain(plat(tEcran('badges.annonce.imageAucune')));
+    expect(produire(m).getAttribute('aria-disabled')).toBeNull();
+  });
+});

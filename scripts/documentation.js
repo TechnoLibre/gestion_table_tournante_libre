@@ -388,6 +388,7 @@ export const EXEMPLES_COMMANDES = Object.freeze({
     participants: { ajoutees: ['Théo Pervenche'], retirees: [] },
   },
   changerLogo: { personne: 'Iris Ombrelle', effet: 'pose' },
+  changerImageBadges: { active: true, effet: null, position: null },
   poserObjectif: { numero: 3, tour: null, regle: null, etiquettes: ['finance'] },
   retirerObjectif: { numero: 3, tour: 2 },
   changerRegleObjectifs: { regle: 'et' },

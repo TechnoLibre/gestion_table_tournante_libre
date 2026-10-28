@@ -1411,6 +1411,24 @@ feuille de contrôle gardent le nom entier, et les badges restent rangés sur
 lui, sans ligne « Identifiant n° … ». Un nom que vous avez renommé depuis
 l’import s’imprime toujours, chiffres compris.
 
+Sous ces cases, la case « Image sur tous les badges », décochée tant que vous
+ne la cochez pas, pose la même image sur chaque badge : l’emblème de la soirée,
+d’un congrès ou d’une association. Elle n’est pas gardée par le poste mais par
+l’événement, avec l’image et sa position : passez en écriture pour la changer,
+et « Défaire » reprend chaque changement. Cochée, elle montre l’image choisie,
+ou « Aucune image choisie. » ; « Choisir l’image » accepte les mêmes images que
+le logo d’une personne (étape 3), « Retirer l’image » l’enlève, et la position
+se choisit parmi « En haut », au-dessus du nom et de l’organisation, « Au
+centre », entre le nom et l’organisation d’une part et les tours de l’autre, et
+« En bas », au-dessus du pied. L’image ne prend que la place que le texte
+laisse, jusqu’à 30 mm de haut sur l’A6 et 15 mm sur une carte Avery 5392, et la
+prend avant le logo de la personne et le pied TechnoLibre : sur un badge
+chargé, elle rapetisse, puis s’en retire, sans jamais réduire un texte ni
+arrêter la planche. Une image très haute et étroite peut ainsi ne tenir sur
+aucune carte. Décochée, la case garde l’image et la position pour la prochaine
+fois. L’image suit l’événement copié ou importé, comme les logos des personnes,
+et l’avertissement d’un logo qui ne se recopie pas dit quand c’est elle.
+
 Le badge d’une personne qui porte un logo (étape 3) le pose entre ses tours et
 le pied, dans la place que le texte laisse : le logo ne rapetisse ni ne retire
 jamais un texte. Il s’y pose le plus grand possible, proportions gardées ; le
@@ -1423,9 +1441,11 @@ pas non plus, mais la case « Nom de l’événement » décochée ne l’en pri
 Une image introuvable ou illisible n’arrête rien : son badge s’imprime sans
 logo.
 « Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
-homonymes, les caractères que la police ne dessine pas, les personnes dont le
-logo est introuvable ou illisible, les badges sans place pour leur logo, les
-badges d’où le pied TechnoLibre se retire, le nom des fichiers.
+homonymes, les caractères que la police ne dessine pas, l’image des badges pas
+encore choisie, introuvable ou illisible, et les badges sans place pour elle,
+les personnes dont le logo est introuvable ou illisible, les badges sans place
+pour leur logo, les badges d’où le pied TechnoLibre se retire, le nom des
+fichiers.
 « Produire la planche (PDF) » écrit le PDF dans le dossier de l’événement et en
 affiche le chemin ; « Ouvrir le dossier » montre ce dossier dans l’explorateur ;
 dans un navigateur, le PDF se télécharge. « Produire la liste (CSV) » écrit au
@@ -1789,6 +1809,7 @@ l’historique ; les noms des exemples sont inventés.
 | `changerInclusionsParticipant` | Inclusions de participant de Iris Ombrelle : ajouté Théo Pervenche et Ondine Lacasse |
 | `changerInclusions` | Inclusions d'organisation de Iris Ombrelle : ajouté « Atelier Ressac » ; inclusions de participant : ajouté Théo Pervenche |
 | `changerLogo` | Logo de Iris Ombrelle : posé |
+| `changerImageBadges` | Image des badges : case cochée |
 | `exclureParticipant` | Exclu Théo Pervenche |
 | `reintegrerParticipant` | Réintégré Théo Pervenche |
 | `supprimerParticipant` | Supprimé Ondine Lacasse |

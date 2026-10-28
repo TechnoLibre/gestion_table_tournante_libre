@@ -2818,7 +2818,7 @@ describe('opérations : les logos suivent la copie et l’import (§ 8.7, § 8.8
     refuserOctets(fs, 'documents', `Variante/${logoDe(IMAGE_UN)}`);
     const copie = await copier(ouvert, optionsCopie('Variante'));
     assert.deepEqual(copie.avertissements, [
-      { code: 'LOGOS_NON_COPIES', details: { evenement: 'Variante', logos: 1, personnes: 2 } },
+      { code: 'LOGOS_NON_COPIES', details: { evenement: 'Variante', logos: 1, personnes: 2, imageBadges: false } },
     ]);
     assert.deepEqual(logosParmi(await octetsDe(disque, DOC, 'Variante')), [[logoDe(IMAGE_DEUX), IMAGE_DEUX]]);
     assert.deepEqual(
@@ -2854,7 +2854,7 @@ describe('opérations : les logos suivent la copie et l’import (§ 8.7, § 8.8
         { cle: roseraieCle, nouvelle: roseraieCle },
       ],
       refuses: [],
-      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: 'Roseraie', logos: 1, personnes: 1 } }],
+      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: 'Roseraie', logos: 1, personnes: 1, imageBadges: false } }],
     });
     assert.deepEqual(logosParmi(await octetsDe(disque, documents, BASE)), LOGOS);
     assert.deepEqual(logosParmi(await octetsDe(disque, documents, 'Roseraie')), [[logoDe(IMAGE_UN), IMAGE_UN]]);

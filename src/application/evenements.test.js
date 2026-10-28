@@ -2484,7 +2484,7 @@ describe('les logos suivent la copie et l’import (§ 8.7)', () => {
     assert.deepEqual(refusee, {
       cle: enDossier('Seconde variante'),
       base: 'Seconde variante',
-      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: 'Seconde variante', logos: 1, personnes: 1 } }],
+      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: 'Seconde variante', logos: 1, personnes: 1, imageBadges: false } }],
     });
     assert.equal(fs.octets('documents', `Seconde variante/${logoDe(IMAGE)}`), null);
     assert.equal(typeof libelle('LOGOS_NON_COPIES', refusee.avertissements[0].details), 'string');
@@ -2518,7 +2518,7 @@ describe('les logos suivent la copie et l’import (§ 8.7)', () => {
         { cle: enDossier(LUCIOLES), nouvelle: enDossier(LUCIOLES) },
       ],
       refuses: [],
-      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: CERFS, logos: 1, personnes: 1 } }],
+      avertissements: [{ code: 'LOGOS_NON_COPIES', details: { evenement: CERFS, logos: 1, personnes: 1, imageBadges: false } }],
     });
     assert.deepEqual(fs.octets('documents', `${LUCIOLES}/${logoDe(IMAGE)}`), IMAGE);
     assert.equal(fs.octets('documents', `${CERFS}/${logoDe(IMAGE)}`), null);

@@ -218,6 +218,7 @@ export const APPELS_EN_FILE = Object.freeze([
   'poserLogoParticipant',
   'retirerLogoParticipant',
   'lireLogoParticipant',
+  'poserImageBadges',
   'defaire',
   'refaire',
   'revenir',

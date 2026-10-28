@@ -567,6 +567,7 @@ describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
       absents: ['李'],
       sansTechnolibre: 0,
       logosParticipants: { poses: 0, sansPlace: 0 },
+      imageBadges: null,
     });
   });
 
@@ -587,6 +588,7 @@ describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
       absents: [],
       sansTechnolibre: 0,
       logosParticipants: { poses: 0, sansPlace: 0 },
+      imageBadges: null,
     });
   });
 
@@ -879,7 +881,13 @@ describe('produirePlanche : le pied TechnoLibre (§ 11.4)', () => {
     const retires = posees.filter((p) => !p).length;
     assert.ok(retires > 0 && retires < m.badges.length, String(retires));
     const analyse = await analyserPlanche({ modele: m, polices, modeleBadge: AVERY, technolibre: TECHNOLIBRE });
-    assert.deepEqual(analyse, { refus: null, absents: [], sansTechnolibre: retires, logosParticipants: { poses: 0, sansPlace: 0 } });
+    assert.deepEqual(analyse, {
+      refus: null,
+      absents: [],
+      sansTechnolibre: retires,
+      logosParticipants: { poses: 0, sansPlace: 0 },
+      imageBadges: null,
+    });
     assert.equal((await analyserPlanche({ modele: m, polices, modeleBadge: AVERY })).sansTechnolibre, 0);
     const document = await lirePdf(await produirePlanche(avecPromotion({ ...entreesAvery(m) })));
     assert.equal(document.pages.reduce((n, page) => n + page.zonesRemplies.length, 0), 3 * (m.badges.length - retires));
@@ -1129,6 +1137,92 @@ describe('produirePlanche : le logo du participant (§ 11.4, § 11.5)', () => {
     for (const logosParticipants of [{}, new Map([[1, LOGOS.get(LARGE)]]), new Map([[LARGE, 'png']]), new Map([[LARGE, Uint8Array.of(1, 2, 3)]])]) {
       await assert.rejects(produirePlanche({ ...base, logosParticipants }), TypeError);
       await assert.rejects(analyserPlanche({ modele: MODELE_A4_LOGOS, polices, logosParticipants }), TypeError);
+    }
+  });
+});
+
+describe('produirePlanche : l’image des badges (§ 11.4, § 11.5)', () => {
+  const IMAGE = pngUni(6, 2, [30, 160, 60]);
+  const avecImage = (position, octets = IMAGE) => ({ octets, position });
+
+  // La boîte attendue de l'image d'un badge A6 debout, en millimètres de sa
+  // page : celle que la mise en page donne, portée dans la cellule.
+  function imageAttendue(badgeDuModele, cellule, position, logo = null) {
+    const { boite } = mettreEnPage(badgeDuModele.textes, metriques, 'a6', null, logo, { rapport: 3, position }).imageBadges;
+    return { x: cellule.x + CADRE_A6.x + boite.x, y: cellule.y + CADRE_A6.y + boite.y, largeur: boite.largeur, hauteur: boite.hauteur };
+  }
+
+  test('une seule image pour toute la planche, peinte sur chaque badge, à la boîte que la mise en page donne, pour chaque position', async () => {
+    for (const position of ['haut', 'centre', 'bas']) {
+      const lu = await lirePdf(await produirePlanche({ ...entrees(MODELE_A4, 'A4', 'feuille'), imageBadges: avecImage(position) }));
+      assert.equal(lu.images, 1, position);
+      const lesPlaces = places(MODELE_A4.badges.length, 'A4', 'feuille');
+      const parPage = lu.pages.map(() => 0);
+      for (const { page } of lesPlaces) parPage[page] += 1;
+      assert.deepEqual(lu.pages.map((page) => page.images.length), parPage, position);
+      MODELE_A4.badges.forEach((b, indice) => {
+        const { page, cellule } = lesPlaces[indice];
+        const attendue = imageAttendue(b, cellule, position);
+        const image = lu.pages[page].images.find((im) => dans([im.x + im.largeur / 2, im.y + im.hauteur / 2], cellule));
+        assert.ok(image !== undefined, `${position} : aucune image dans la cellule ${indice}`);
+        for (const cle of ['x', 'y', 'largeur', 'hauteur']) {
+          assert.ok(Math.abs(image[cle] - attendue[cle]) < 0.01, `${position} ${cle} : ${JSON.stringify(image)} contre ${JSON.stringify(attendue)}`);
+        }
+        const recouvrants = lu.pages[page].textes.filter(
+          (t) =>
+            t.texte !== FILIGRANE &&
+            t.x < image.x + image.largeur - 0.01 &&
+            t.x + t.l > image.x + 0.01 &&
+            t.y < image.y + image.hauteur - 0.01 &&
+            t.y + t.h > image.y + 0.01,
+        );
+        assert.deepEqual(recouvrants.map(({ texte }) => texte), [], position);
+      });
+    }
+  });
+
+  test('avec les logos des participants, l’image se peint après le logo de son badge, avant le filigrane, sans le recouvrir', async () => {
+    const lu = await lirePdf(await produirePlanche({ ...entrees(MODELE_A4_LOGOS, 'A4', 'feuille'), logosParticipants: LOGOS, imageBadges: avecImage('haut') }));
+    assert.equal(lu.images, 3);
+    const lesPlaces = places(MODELE_A4_LOGOS.badges.length, 'A4', 'feuille');
+    MODELE_A4_LOGOS.badges.forEach((b, indice) => {
+      const { cellule } = lesPlaces[indice];
+      const page = lu.pages[lesPlaces[indice].page];
+      const logo = LOGOS.has(b.logo) ? { rapport: RAPPORTS.get(b.logo) } : null;
+      const attendue = imageAttendue(b, cellule, 'haut', logo);
+      const images = page.images.filter((im) => dans([im.x + im.largeur / 2, im.y + im.hauteur / 2], cellule));
+      assert.equal(images.length, logo === null ? 1 : 2, String(indice));
+      const image = images.at(-1);
+      for (const cle of ['x', 'y', 'largeur', 'hauteur']) assert.ok(Math.abs(image[cle] - attendue[cle]) < 0.01, `${indice} ${cle}`);
+      if (images.length === 2) {
+        const [autre] = images;
+        assert.ok(image.y + image.hauteur <= autre.y + 0.01, 'l’image en haut, au-dessus du logo');
+      }
+      assert.equal(page.modesTexte[image.textesAvant], 1, 'le filigrane, au trait, juste après');
+    });
+  });
+
+  test('sans image, ou une image sans place sur chaque badge, ou que zlib refuse : la planche d’avant, octet pour octet', async () => {
+    assert.deepEqual(await produirePlanche({ ...entrees(MODELE_A4, 'A4', 'feuille'), imageBadges: null }), octetsA4);
+    const etroite = pngUni(60, 2, [0, 0, 0]);
+    assert.deepEqual(await produirePlanche({ ...entreesAvery(MODELE_AVERY), imageBadges: avecImage('centre', etroite) }), octets);
+    const corrompue = pngUni(4, 2, [0, 0, 0], [0x78, 0x9c, 0xff, 0xff, 0xff, 0xff]);
+    assert.deepEqual(await produirePlanche({ ...entrees(MODELE_A4, 'A4', 'feuille'), imageBadges: avecImage('bas', corrompue) }), octetsA4);
+  });
+
+  test('analyserPlanche compte les badges où l’image se pose et ceux où elle ne trouve pas de place ; null sans image', async () => {
+    assert.equal((await analyserPlanche({ modele: MODELE_A4, polices })).imageBadges, null);
+    const a4 = await analyserPlanche({ modele: MODELE_A4, polices, imageBadges: avecImage('haut') });
+    assert.deepEqual(a4.imageBadges, { posees: MODELE_A4.badges.length, sansPlace: 0 });
+    const etroite = await analyserPlanche({ modele: MODELE_AVERY, polices, modeleBadge: AVERY, imageBadges: avecImage('bas', pngUni(60, 2, [0, 0, 0])) });
+    assert.deepEqual(etroite.imageBadges, { posees: 0, sansPlace: MODELE_AVERY.badges.length });
+  });
+
+  test('une image mal formée lève TypeError : sans octets, octets qui ne sont pas un PNG, position inconnue', async () => {
+    const base = entrees(MODELE_A4, 'A4', 'feuille');
+    for (const imageBadges of [{}, { octets: IMAGE }, { octets: IMAGE, position: 'gauche' }, { octets: Uint8Array.of(1, 2, 3), position: 'haut' }, { octets: 'png', position: 'bas' }]) {
+      await assert.rejects(produirePlanche({ ...base, imageBadges }), TypeError, JSON.stringify(imageBadges));
+      await assert.rejects(analyserPlanche({ modele: MODELE_A4, polices, imageBadges }), TypeError, JSON.stringify(imageBadges));
     }
   });
 });

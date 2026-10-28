@@ -188,15 +188,17 @@ const pointDeCode = (caractere) => `U+${caractere.codePointAt(0).toString(16).to
  * réédition ; le nombre de planches sur chaque papier de PAPIERS, le papier
  * utilisé marqué — pour Avery 5392, le nombre de feuilles de cartes ; chaque
  * groupe d'homonymes ; les caractères absents de la police avec leur point de
- * code ; les personnes dont le logo manque au dossier de l'événement, puis
- * celles dont il ne se lit pas, dans l'ordre de la pile, et le nombre de
- * badges où il ne trouve pas de place, quand il y en a — un avertissement,
- * jamais un refus ; le nombre de badges d'où le pied TechnoLibre se retire,
- * quand il y en a ; la mention BROUILLON, de la source ; le nom du fichier —
- * pour Avery 5392, ceux des cartes et de la feuille de contrôle à part. Une
- * annonce sans modèle est celle de l'A6. Sous un refus du placement, seule
- * la source se dit : comptes, planches et nom manquent à l'annonce.
- * L'annonce reçue n'est pas modifiée.
+ * code ; l'image des badges, sa case cochée, quand aucune n'est choisie,
+ * qu'elle manque au dossier de l'événement ou ne se lit pas, ou le nombre de
+ * badges où elle ne trouve pas de place ; les personnes dont le logo manque
+ * au dossier de l'événement, puis celles dont il ne se lit pas, dans l'ordre
+ * de la pile, et le nombre de badges où il ne trouve pas de place, quand il y
+ * en a — des avertissements, jamais un refus ; le nombre de badges d'où le
+ * pied TechnoLibre se retire, quand il y en a ; la mention BROUILLON, de la
+ * source ; le nom du fichier — pour Avery 5392, ceux des cartes et de la
+ * feuille de contrôle à part. Une annonce sans modèle est celle de l'A6. Sous
+ * un refus du placement, seule la source se dit : comptes, planches et nom
+ * manquent à l'annonce. L'annonce reçue n'est pas modifiée.
  *
  * @param {import('../../application/planche_seance.js').Annonce} annonce
  * @param {{source?: 'retenu'|'proposition', proposition?: number|null, selection?: number[]|null}} [demande]
@@ -228,6 +230,13 @@ export function phrasesAnnonce(annonce, { source = 'retenu', proposition = null,
   if (annonce.absents.length > 0) {
     const caracteres = annonce.absents.map((caractere) => ({ caractere, point: pointDeCode(caractere) }));
     phrases.push({ cle: 'badges.annonce.absents', details: { caracteres } });
+  }
+  const image = annonce.imageBadges ?? null;
+  if (image !== null) {
+    if (image.chemin === null) phrases.push({ cle: 'badges.annonce.imageAucune', details: {} });
+    else if (image.introuvable === 'ABSENT') phrases.push({ cle: 'badges.annonce.imageIntrouvable', details: {} });
+    else if (image.introuvable === 'ILLISIBLE') phrases.push({ cle: 'badges.annonce.imageIllisible', details: {} });
+    else if (image.sansPlace > 0) phrases.push({ cle: 'badges.annonce.imageSansPlace', details: { n: image.sansPlace } });
   }
   const logos = annonce.logos ?? null;
   if (logos !== null) {

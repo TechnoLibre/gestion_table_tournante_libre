@@ -1859,6 +1859,245 @@ describe('mise en page : le logo du participant', () => {
   });
 });
 
+describe('mise en page : l’image des badges (§ 11.4, § 11.5)', () => {
+  const TECHNOLIBRE = Object.freeze({
+    texte: 'Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise',
+    rapport: 5,
+  });
+  const PLANCHER = constante('LOGO_PARTICIPANT_PLANCHER_MM');
+  const ECART = constante('LOGO_PARTICIPANT_ECART_MM');
+  const AVERY = cadreUtile({ x: 0, y: 0, ...MODELES_BADGE.avery5392 }, 'avery5392');
+  const MODELES = [
+    ['A6', 'a6', CADRE, constante('IMAGE_BADGES_HAUTEUR_MAX_MM')],
+    ['Avery 5392', 'avery5392', AVERY, constante('IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM')],
+  ];
+  const POSITIONS = ['haut', 'centre', 'bas'];
+  const estPied = (bloc) => PIED.includes(bloc.texte) || PIED_REDUIT.includes(bloc.texte);
+  const image = (position, rapport = 1) => ({ rapport, position });
+  // La boîte d'un bloc, en coordonnées d'une boîte d'image.
+  const recouvre = (a, b) =>
+    !(a.x + a.largeur <= b.x + TOLERANCE || b.x + b.largeur <= a.x + TOLERANCE || a.y + a.hauteur <= b.y + TOLERANCE || b.y + b.hauteur <= a.y + TOLERANCE);
+  const commeBoite = (bloc, metriques) => {
+    const b = boite(bloc, metriques);
+    return { x: b.gauche, y: b.haut, largeur: b.droite - b.gauche, hauteur: b.bas - b.haut };
+  };
+  // Les blocs d'une page dont la boîte entre dans celle donnée.
+  const surLaBoite = (page, metriques, cible) => page.blocs.filter((bloc) => recouvre(commeBoite(bloc, metriques), cible));
+  const dansLeCadre = (cible, cadre) =>
+    cible.x >= -TOLERANCE && cible.y >= -TOLERANCE && cible.x + cible.largeur <= cadre.largeur + TOLERANCE && cible.y + cible.hauteur <= cadre.hauteur + TOLERANCE;
+
+  test('sans image demandée, imageBadges vaut null et la page est celle d’avant, logo et pied TechnoLibre ou non', () => {
+    for (const [, modele] of MODELES) {
+      for (const technolibre of [null, TECHNOLIBRE]) {
+        for (const logo of [null, { rapport: 1 }]) {
+          const avant = mettreEnPage(textes(), NOTO, modele, technolibre, logo);
+          assert.equal(avant.imageBadges, null);
+          assert.deepEqual(mettreEnPage(textes(), NOTO, modele, technolibre, logo, null), avant);
+          assert.deepEqual(Object.keys(avant), ['blocs', 'colonnesTours', 'technolibre', 'logoParticipant', 'imageBadges']);
+        }
+      }
+    }
+  });
+
+  for (const [nomModele, modele, cadre, maximum] of MODELES) {
+    for (const [jeu, metriques] of JEUX) {
+      test(`${nomModele}, ${jeu} : seule, l’image prend sa hauteur maximale, centrée ; en haut tout descend, au centre les tours seuls, en bas rien ne bouge`, () => {
+        const champs = textes({ lignes: tours(2) });
+        const sans = mettreEnPage(champs, metriques, modele);
+        const debutPied = sans.blocs.findIndex(estPied);
+        const debutTours = sans.blocs.findIndex((bloc) => bloc.texte === tour(1, 3));
+        const libre = Math.min(...sans.blocs.slice(debutPied).map((b) => boite(b, metriques).haut)) -
+          Math.max(...sans.blocs.slice(0, debutPied).map((b) => boite(b, metriques).bas));
+        for (const position of POSITIONS) {
+          const quoi = `${position}`;
+          const avec = mettreEnPage(champs, metriques, modele, null, null, image(position));
+          const posee = avec.imageBadges.boite;
+          assert.ok(libre > maximum + 2 * ECART, `${libre} mm d’écart`);
+          assert.ok(Math.abs(posee.hauteur - maximum) < 1e-9 && Math.abs(posee.largeur - maximum) < 1e-9, quoi);
+          assert.ok(Math.abs(posee.x - (cadre.largeur - posee.largeur) / 2) < 1e-9, quoi);
+          assert.equal(avec.colonnesTours, sans.colonnesTours);
+          const descente = position === 'haut' ? maximum + ECART : maximum + 2 * ECART;
+          const attendus = sans.blocs.map((bloc, rang) => {
+            const descend = rang < debutPied && (position === 'haut' || (position === 'centre' && rang >= debutTours));
+            return descend ? { ...bloc, y: bloc.y + descente } : bloc;
+          });
+          assert.equal(avec.blocs.length, attendus.length, quoi);
+          avec.blocs.forEach((bloc, rang) => {
+            assert.deepEqual({ ...bloc, y: 0 }, { ...attendus[rang], y: 0 }, quoi);
+            assert.ok(Math.abs(bloc.y - attendus[rang].y) < 1e-9, `${quoi} ${bloc.texte}`);
+          });
+          assert.deepEqual(surLaBoite(avec, metriques, posee), [], quoi);
+          assert.deepEqual(chevauchements(avec, metriques), [], quoi);
+          if (position === 'haut') assert.equal(posee.y, 0);
+          const hautDuPied = Math.min(...avec.blocs.filter(estPied).map((b) => boite(b, metriques).haut));
+          if (position === 'bas') assert.ok(Math.abs(posee.y + posee.hauteur + ECART - hautDuPied) < 1e-9, quoi);
+          if (position === 'centre') {
+            const premierTour = boite(avec.blocs[debutTours], metriques).haut;
+            const finDuHaut = boite(sans.blocs[debutTours], metriques).haut;
+            assert.ok(Math.abs(posee.y - finDuHaut - ECART) < 1e-9 && Math.abs(premierTour - (posee.y + posee.hauteur + ECART)) < 1e-9, quoi);
+          }
+        }
+      });
+    }
+  }
+
+  test('une image très haute bute sur sa hauteur maximale : sur la carte, sa largeur passe sous le plancher dès qu’elle est près de deux fois plus haute que large', () => {
+    const maximum = constante('IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM');
+    const champs = textes({ lignes: tours(1) });
+    const juste = mettreEnPage(champs, NOTO, 'avery5392', null, null, image('haut', PLANCHER / maximum)).imageBadges.boite;
+    assert.ok(Math.abs(juste.largeur - PLANCHER) < 1e-9 && Math.abs(juste.hauteur - maximum) < 1e-9, JSON.stringify(juste));
+    assert.equal(mettreEnPage(champs, NOTO, 'avery5392', null, null, image('haut', PLANCHER / maximum - 0.01)).imageBadges.boite, null);
+  });
+
+  test('l’image se borne à la largeur du cadre, puis, plus large encore, passe sous le plancher et ne se pose pas : la page est celle d’avant', () => {
+    for (const [, modele, cadre, maximum] of MODELES) {
+      for (const position of POSITIONS) {
+        const champs = textes({ lignes: tours(1) });
+        const large = mettreEnPage(champs, NOTO, modele, null, null, image(position, 8)).imageBadges.boite;
+        assert.ok(Math.abs(large.largeur - Math.min(cadre.largeur, maximum * 8)) < 1e-9, JSON.stringify(large));
+        const rapport = cadre.largeur / PLANCHER + 0.5;
+        const sans = mettreEnPage(champs, NOTO, modele);
+        assert.deepEqual(mettreEnPage(champs, NOTO, modele, null, null, image(position, rapport)), { ...sans, imageBadges: { boite: null } });
+        assert.equal(mettreEnPage(champs, NOTO, modele, null, null, image(position, 1 / 40)).imageBadges.boite, null);
+      }
+    }
+  });
+
+  test('à mesure que les tours s’ajoutent sur la carte, l’image prend l’écart que le texte laisse, rapetisse, puis se retire : jamais elle ne fait refuser un badge, ni ne change le choix du texte', () => {
+    const maximum = constante('IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM');
+    for (const position of POSITIONS) {
+      const vus = new Set();
+      for (let n = 1; n <= 30; n += 1) {
+        const champs = textes({ lignes: toursAuxSieges(n) });
+        const quoi = `${position}, ${n} tours`;
+        const sans = mettreEnPage(champs, NOTO, 'avery5392');
+        const avec = mettreEnPage(champs, NOTO, 'avery5392', null, null, image(position));
+        if ('refus' in sans) {
+          assert.deepEqual(avec, sans, quoi);
+          vus.add('refus');
+          continue;
+        }
+        // Le texte est celui du badge sans image : mêmes textes, mêmes corps,
+        // mêmes abscisses.
+        assert.deepEqual(avec.blocs.map(({ y: _y, ...reste }) => reste), sans.blocs.map(({ y: _y, ...reste }) => reste), quoi);
+        // L'écart entre les tours et le pied du badge sans image, moins les
+        // dégagements de l'image, borne sa hauteur ; deux colonnes de tours
+        // en libèrent, et l'image y regrandit.
+        const debutPied = sans.blocs.findIndex(estPied);
+        const libre =
+          Math.min(...sans.blocs.slice(debutPied).map((b) => boite(b, NOTO).haut)) -
+          Math.max(...sans.blocs.slice(0, debutPied).map((b) => boite(b, NOTO).bas));
+        const attendue = Math.min(maximum, libre - (position === 'haut' ? ECART : 2 * ECART));
+        const posee = avec.imageBadges.boite;
+        if (posee === null) {
+          vus.add('retiree');
+          assert.ok(attendue < PLANCHER, `${quoi} : ${attendue} mm`);
+          assert.deepEqual(avec, { ...sans, imageBadges: { boite: null } }, quoi);
+          continue;
+        }
+        assert.ok(Math.abs(posee.hauteur - attendue) < 1e-6, `${quoi} : ${posee.hauteur} contre ${attendue}`);
+        vus.add(posee.hauteur < maximum - 1e-9 ? 'reduite' : 'maximale');
+        assert.ok(posee.hauteur >= PLANCHER - 1e-9, quoi);
+        assert.ok(dansLeCadre(posee, AVERY), quoi);
+        assert.deepEqual(surLaBoite(avec, NOTO, posee), [], quoi);
+        assert.deepEqual(chevauchements(avec, NOTO), [], quoi);
+      }
+      assert.deepEqual([...vus].sort(), ['maximale', 'reduite', 'refus', 'retiree'], position);
+    }
+  });
+
+  test('l’image se taille avant le logo du participant et le pied TechnoLibre, qui prennent ce qu’elle laisse ; rien ne se recouvre, tout tient dans le cadre', () => {
+    for (const [, modele, cadre] of MODELES) {
+      for (const position of POSITIONS) {
+        for (let n = 1; n <= 6; n += 1) {
+          const champs = textes({ lignes: tours(n) });
+          const quoi = `${modele} ${position} ${n}`;
+          const seule = mettreEnPage(champs, NOTO, modele, null, null, image(position)).imageBadges.boite;
+          const avec = mettreEnPage(champs, NOTO, modele, TECHNOLIBRE, { rapport: 1 }, image(position));
+          const posee = avec.imageBadges.boite;
+          assert.deepEqual(posee === null ? null : { ...posee, y: 0 }, seule === null ? null : { ...seule, y: 0 }, quoi);
+          if (posee === null) continue;
+          assert.ok(dansLeCadre(posee, cadre), quoi);
+          assert.deepEqual(surLaBoite(avec, NOTO, posee), [], quoi);
+          for (const autre of [avec.logoParticipant.boite, avec.technolibre.logo]) {
+            if (autre === null) continue;
+            assert.ok(dansLeCadre(autre, cadre), quoi);
+            assert.equal(recouvre(posee, autre), false, `${quoi} ${JSON.stringify([posee, autre])}`);
+          }
+          const logo = avec.logoParticipant.boite;
+          if (logo !== null && position === 'bas') assert.ok(logo.y + logo.hauteur + ECART <= posee.y + 1e-9, quoi);
+          if (logo !== null && position !== 'bas') assert.ok(posee.y + posee.hauteur <= logo.y + 1e-9, quoi);
+          if (avec.technolibre.logo !== null) assert.ok(posee.y + posee.hauteur <= avec.technolibre.logo.y + 1e-9, quoi);
+          // En bas, l'image remonte avec le pied au-dessus du bloc TechnoLibre.
+          if (position === 'bas') {
+            const hautDuPied = Math.min(...avec.blocs.filter(estPied).map((b) => boite(b, NOTO).haut));
+            assert.ok(Math.abs(posee.y + posee.hauteur + ECART - hautDuPied) < 1e-9, quoi);
+          }
+        }
+      }
+    }
+  });
+
+  test('sur la carte, sous un nom d’une ligne, son organisation et trois tours, l’image à sa hauteur maximale laisse au pied TechnoLibre sa place', () => {
+    for (const position of POSITIONS) {
+      for (const rapport of [1, 2]) {
+        const page = mettreEnPage(textes({ lignes: tours(3) }), NOTO, 'avery5392', TECHNOLIBRE, null, image(position, rapport));
+        assert.equal(page.imageBadges.boite.hauteur, constante('IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM'), `${position} ${rapport}`);
+        assert.notEqual(page.technolibre.corps, null, `${position} ${rapport}`);
+      }
+    }
+  });
+
+  test('un badge qui a perdu le nom de l’événement ne porte pas l’image ; un refus reste le même ; une image mal formée lève TypeError', () => {
+    const MOTS_LARGES = 'WWWWWWWWWW MMMMMMMMMM WWWWWWWWWW MMMMMMMMM WWWWWWW';
+    for (const [, modele] of MODELES) {
+      const champs = textes({ nom: MOTS_LARGES, organisation: null, lignes: tours(1) });
+      const sans = mettreEnPage(champs, NOTO, modele, TECHNOLIBRE);
+      assert.ok(!sans.blocs.some((b) => b.texte.includes('Souper')), modele);
+      assert.deepEqual(mettreEnPage(champs, NOTO, modele, TECHNOLIBRE, null, image('haut')), { ...sans, imageBadges: { boite: null } });
+    }
+    const refus = mettreEnPage(textes({ lignes: tours(100) }), NOTO, 'a6');
+    assert.deepEqual(mettreEnPage(textes({ lignes: tours(100) }), NOTO, 'a6', TECHNOLIBRE, { rapport: 1 }, image('centre')), refus);
+    for (const faute of [{}, { rapport: 1 }, { position: 'haut' }, { rapport: 1, position: 'gauche' }, { rapport: 0, position: 'haut' }, { rapport: '1', position: 'bas' }, 1]) {
+      assert.throws(() => mettreEnPage(textes(), NOTO, 'a6', null, null, faute), TypeError, JSON.stringify(faute));
+    }
+  });
+
+  test('sur des noms, des tours et des positions variés, des deux modèles, avec logo et pied TechnoLibre : l’image posée tient dans le cadre, à son plancher au moins, sans toucher un texte', () => {
+    const noms = ['Iris Ombrelle', 'Ondine-Théa Lacasse-Pervenche de la Grisaille', NOMS_COMPOSES[0]];
+    const bilan = { posees: 0, sansPlace: 0 };
+    for (const [, modele, cadre] of MODELES) {
+      for (const [, metriques] of JEUX) {
+        for (const nom of noms) {
+          for (const position of POSITIONS) {
+            for (const rapport of [0.5, 1, 3]) {
+              for (let n = 1; n <= 12; n += 1) {
+                const champs = textes({ nom, lignes: toursAuxSieges(n) });
+                const avec = mettreEnPage(champs, metriques, modele, TECHNOLIBRE, { rapport: 1 }, image(position, rapport));
+                if ('refus' in avec) continue;
+                const quoi = `${modele} ${nom} ${position} ${rapport} ${n}`;
+                assert.deepEqual(chevauchements(avec, metriques), [], quoi);
+                const posee = avec.imageBadges.boite;
+                if (posee === null) {
+                  bilan.sansPlace += 1;
+                  continue;
+                }
+                bilan.posees += 1;
+                assert.ok(Math.abs(posee.largeur / posee.hauteur - rapport) < 1e-9, quoi);
+                assert.ok(Math.min(posee.largeur, posee.hauteur) >= PLANCHER - 1e-9, quoi);
+                assert.ok(dansLeCadre(posee, cadre), quoi);
+                assert.deepEqual(surLaBoite(avec, metriques, posee), [], quoi);
+                for (const bloc of avec.blocs) assert.ok(dansLeCadre(commeBoite(bloc, metriques), cadre), `${quoi} ${bloc.texte}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    assert.ok(bilan.posees > 50 && bilan.sansPlace > 10, JSON.stringify(bilan));
+  });
+});
+
 describe('mise en page : un badge dont les cases retirent des données (§ 11.4)', () => {
   const TECHNOLIBRE = Object.freeze({
     texte: 'Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise',

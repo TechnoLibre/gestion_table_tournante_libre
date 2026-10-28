@@ -301,6 +301,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           organisationEnGros: false,
           sansTechnolibre: null,
           logos: null,
+          imageBadges: null,
         },
         nom,
       );
@@ -425,6 +426,7 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       organisationEnGros: false,
       sansTechnolibre: null,
       logos: null,
+      imageBadges: null,
     });
     await refusee(sans.seance.produirePlanche(), 'PLANCHE_SANS_PLACEMENT');
     await assert.rejects(sans.seance.preparerPlanche({ ordre: 'hasard' }), TypeError);
@@ -741,6 +743,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
       organisationEnGros: false,
       sansTechnolibre: null,
       logos: null,
+      imageBadges: null,
     });
     assert.match(nomCartes, /\.badges_avery5392_/);
     assert.deepEqual(trace, []);
@@ -1540,6 +1543,118 @@ describe('planche dans la séance : les logos des participants (§ 11.4, § 11.5
     const lusRefus = lectures(refus.fs);
     const annonceRefus = await refus.seance.preparerPlanche();
     assert.deepEqual([annonceRefus.refus.code, annonceRefus.logos, lusRefus], ['PLANCHE_SANS_PLACEMENT', null, []]);
+  });
+});
+
+// L'image des badges (§ 8.9, § 11.4) : l'événement la porte, case,
+// chemin et position ; la séance lit son image comme un logo, par la même
+// garde, la planche la pose sur chaque badge qui a sa place, et l'annonce la
+// compte. Introuvable ou illisible, elle ne refuse rien ; décochée, rien ne
+// se lit et les octets ne changent pas.
+describe('planche dans la séance : l’image des badges (§ 8.9, § 11.4)', () => {
+  const mot = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+  const morceau = (type, donnees) => {
+    const corps = [...new TextEncoder().encode(type), ...donnees];
+    return [...mot(donnees.length), ...corps, ...mot(crc32(Uint8Array.from(corps)))];
+  };
+  const pngUni = (largeur, hauteur, couleur) => {
+    const ligne = [0, ...Array.from({ length: largeur }, () => couleur).flat()];
+    const idat = [...deflateSync(Uint8Array.from(Array.from({ length: hauteur }, () => ligne).flat()))];
+    const ihdr = [...mot(largeur), ...mot(hauteur), 8, 2, 0, 0, 0];
+    return Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...morceau('IHDR', ihdr), ...morceau('IDAT', idat), ...morceau('IEND', [])]);
+  };
+  const IMAGE = `logo/${'9'.repeat(64)}.png`;
+  const LOGO_COMMUN = `logo/${'5'.repeat(64)}.png`;
+  // La soirée d'essai, son image des badges donnée.
+  const chargeAvecImage = (imageBadges, logos = {}) => {
+    const charge = chargeLucioles();
+    charge.evenement.imageBadges = imageBadges;
+    for (const membre of charge.participants) if (logos[membre.id] !== undefined) membre.logo = logos[membre.id];
+    return charge;
+  };
+  const lectures = (fs) => {
+    const lus = [];
+    const lire = fs.lireOctets;
+    fs.lireOctets = (racine, chemin) => {
+      lus.push(chemin);
+      return lire(racine, chemin);
+    };
+    return lus;
+  };
+  // Les octets de la planche produite d'une séance, et ses images.
+  async function produite(montage) {
+    const { nom } = await montage.seance.produirePlanche();
+    const octets = montage.fs.octets('documents', ICI + nom);
+    return { octets, pdf: await lirePdf(octets) };
+  }
+
+  test('cochée, l’image se lit une fois, se pose sur chaque badge et s’annonce ; la feuille de contrôle ne change pas', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const montage = await monter(chargeAvecImage({ active: true, chemin: IMAGE, position: 'centre' }), { fs });
+    fs.deposerOctets('documents', ICI + IMAGE, pngUni(6, 3, [20, 120, 60]));
+    const lus = lectures(fs);
+    const annonce = await montage.seance.preparerPlanche();
+    assert.equal(annonce.refus, null);
+    assert.deepEqual(annonce.imageBadges, { position: 'centre', chemin: IMAGE, posees: 4, sansPlace: 0, introuvable: null });
+    assert.deepEqual(lus, [ICI + IMAGE]);
+    const { pdf } = await produite(montage);
+    assert.equal(lus.length, 1);
+    assert.equal(pdf.images, 1);
+    assert.equal(pdf.pages.reduce((n, page) => n + page.images.length, 0), 4);
+    assert.deepEqual(pdf.pages[0].images, []);
+    const sans = await produite(await monter(chargeLucioles()));
+    assert.deepEqual(textesDe(pdf.pages[0]), textesDe(sans.pdf.pages[0]));
+  });
+
+  test('décochée, ou cochée sans image : rien ne se lit, et la planche est celle de l’événement sans le champ, octet pour octet', async () => {
+    const sans = await produite(await monter(chargeLucioles()));
+    for (const [imageBadges, attendue] of [
+      [{ active: false, chemin: IMAGE, position: 'bas' }, null],
+      [{ active: true, chemin: null, position: 'bas' }, { position: 'bas', chemin: null, posees: 0, sansPlace: 0, introuvable: null }],
+    ]) {
+      const fs = creerFichiersSimules({ documents: DOCUMENTS });
+      const montage = await monter(chargeAvecImage(imageBadges), { fs });
+      fs.deposerOctets('documents', ICI + IMAGE, pngUni(6, 3, [20, 120, 60]));
+      const lus = lectures(fs);
+      assert.deepEqual((await montage.seance.preparerPlanche()).imageBadges, attendue);
+      const { octets } = await produite(montage);
+      assert.deepEqual(lus, []);
+      assert.deepEqual(octets, sans.octets);
+    }
+  });
+
+  test('introuvable ou illisible, l’image s’annonce sans refus, et les badges s’impriment sans elle ; remise, elle se lit à la préparation suivante', async () => {
+    const sans = await produite(await monter(chargeLucioles()));
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const montage = await monter(chargeAvecImage({ active: true, chemin: IMAGE, position: 'haut' }), { fs });
+    const absente = await montage.seance.preparerPlanche();
+    assert.equal(absente.refus, null);
+    assert.deepEqual(absente.imageBadges, { position: 'haut', chemin: IMAGE, posees: 0, sansPlace: 0, introuvable: 'ABSENT' });
+    assert.deepEqual((await produite(montage)).octets, sans.octets);
+    fs.deposerOctets('documents', ICI + IMAGE, new TextEncoder().encode('pas une image'));
+    assert.equal((await montage.seance.preparerPlanche()).imageBadges.introuvable, 'ILLISIBLE');
+    fs.deposerOctets('documents', ICI + IMAGE, pngUni(6, 3, [20, 120, 60]));
+    const remise = await montage.seance.preparerPlanche();
+    assert.deepEqual(remise.imageBadges, { position: 'haut', chemin: IMAGE, posees: 4, sansPlace: 0, introuvable: null });
+  });
+
+  test('l’image qui est aussi le logo d’une personne se lit une fois ; la liste en CSV ne la lit pas, et ses octets ne changent pas', async () => {
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const montage = await monter(chargeAvecImage({ active: true, chemin: LOGO_COMMUN, position: 'bas' }, { 1: LOGO_COMMUN }), { fs });
+    fs.deposerOctets('documents', ICI + LOGO_COMMUN, pngUni(3, 3, [180, 40, 40]));
+    const lus = lectures(fs);
+    const annonce = await montage.seance.preparerPlanche();
+    assert.deepEqual(lus, [ICI + LOGO_COMMUN]);
+    assert.equal(annonce.imageBadges.posees, 4);
+    assert.equal(annonce.logos.poses, 1);
+    const { pdf } = await produite(montage);
+    assert.equal(pdf.pages.reduce((n, page) => n + page.images.length, 0), 5);
+    lus.length = 0;
+    const { nom } = await montage.seance.produireListeBadges();
+    assert.deepEqual(lus, []);
+    const sans = await monter(chargeLucioles());
+    const second = await sans.seance.produireListeBadges();
+    assert.deepEqual(fs.octets('documents', ICI + nom), sans.fs.octets('documents', ICI + second.nom));
   });
 });
 

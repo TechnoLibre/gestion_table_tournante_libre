@@ -93,6 +93,13 @@
  *                                     libellé d'une table, ou null pour un
  *                                     tour sans nom ; au moins un nom ;
  *                                     absent, aucun tour n'a de nom (§ 8.9)
+ * @property {{active: boolean, chemin: string|null, position: 'haut'|'centre'|'bas'}} [imageBadges]
+ *                                     facultatif : l'image des badges, sa
+ *                                     case, le chemin de son image,
+ *                                     logo/<empreinte>.png, ou null, et sa
+ *                                     position ; jamais à son défaut, case
+ *                                     décochée, sans image, en haut ;
+ *                                     absent, ce défaut (§ 8.9, § 11.4)
  *
  * @typedef {Object} Filiation
  * @property {{id: string, nom: string}} source             chaînes non vides
@@ -504,13 +511,15 @@
  * dépôt) —, qui ne refuse jamais l'opération :
  *
  *   LOGOS_NON_COPIES     {evenement, logos,      des fichiers de logo/ ne se
- *                         personnes}             sont pas recopiés dans le
- *                                                dossier neuf : evenement, le
+ *                         personnes,             sont pas recopiés dans le
+ *                         imageBadges}           dossier neuf : evenement, le
  *                                                nom de l'événement écrit ;
  *                                                logos, le nombre de ces
  *                                                fichiers ; personnes, celui
  *                                                des personnes dont le logo
- *                                                en est un
+ *                                                en est un ; imageBadges,
+ *                                                vrai quand l'image des
+ *                                                badges en est un
  */
 
 /**

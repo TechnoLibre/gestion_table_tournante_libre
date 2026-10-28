@@ -19,30 +19,30 @@
 // FORMAT_INCONNU s'il n'est pas un entier ≥ 1, FORMAT_TROP_ANCIEN s'il est
 // plus petit que FORMAT) ; la forme de chaque champ, dans l'ordre du schéma
 // puis des rangs (FORME) ; les identifiants des participants et des tables,
-// les noms des tours, le tour des réservations, la portée et le tour des
-// objectifs de table, la présence de chaque personne, sa propre organisation
-// nommée dans ses conflits, sa propre organisation puis elle-même nommées
-// dans ses inclusions, le numéro final de son nom quand elle porte la marque
-// du nom numéroté, l'ordre des priorités sous le mode des objectifs et les
-// titres répétés à l'identique (FORME) ; les comptes de la saisie dans
-// l'en-tête — participants, tables, réservations, titres — (COMPTES) ; les
-// références, dont chaque organisation que nomment les conflits d'une
-// personne, puis chaque organisation et chaque participant que nomment ses
-// inclusions (REFERENCE). Les comptes des propositions et du retenu ne
-// refusent jamais le fichier (§ 8.9, point 3) : ce que l'en-tête annonce sans
-// que la charge le porte se rend à côté d'elle, et le dépôt l'annonce. Un
-// fichier d'un format plus récent que FORMAT se lit réduit aux clés que le
-// schéma connaît, et ce qui serait FORME au format courant y porte la raison
-// FORMAT_PLUS_RECENT : la lecture ne le distingue pas d'une évolution du
-// format. Ses comptes et ses références gardent leur raison, une corruption
-// quel que soit le format ; tout refus d'un tel fichier porte le format lu
-// dans ses détails, qui disent au dépôt d'où il vient. Le dépôt complète les
-// détails — base, secours — et pose lui-même la raison ABSENT, quand le
-// journal existe sans l'état. Des propositions et du retenu, l'analyse ne lit
-// que le conteneur : leur forme, leur cohérence et leurs identifiants,
-// comparés entre eux et à prochainsIds.proposition, sont l'affaire du
-// contrôle des placements, qui écarte une proposition fautive et signale un
-// retenu fautif sans refuser le fichier (§ 8.9, point 3).
+// les noms des tours, l'image des badges, le tour des réservations, la portée
+// et le tour des objectifs de table, la présence de chaque personne, sa
+// propre organisation nommée dans ses conflits, sa propre organisation puis
+// elle-même nommées dans ses inclusions, le numéro final de son nom quand
+// elle porte la marque du nom numéroté, l'ordre des priorités sous le mode
+// des objectifs et les titres répétés à l'identique (FORME) ; les comptes de
+// la saisie dans l'en-tête — participants, tables, réservations, titres —
+// (COMPTES) ; les références, dont chaque organisation que nomment les
+// conflits d'une personne, puis chaque organisation et chaque participant que
+// nomment ses inclusions (REFERENCE). Les comptes des propositions et du
+// retenu ne refusent jamais le fichier (§ 8.9, point 3) : ce que l'en-tête
+// annonce sans que la charge le porte se rend à côté d'elle, et le dépôt
+// l'annonce. Un fichier d'un format plus récent que FORMAT se lit réduit aux
+// clés que le schéma connaît, et ce qui serait FORME au format courant y
+// porte la raison FORMAT_PLUS_RECENT : la lecture ne le distingue pas d'une
+// évolution du format. Ses comptes et ses références gardent leur raison, une
+// corruption quel que soit le format ; tout refus d'un tel fichier porte le
+// format lu dans ses détails, qui disent au dépôt d'où il vient. Le dépôt
+// complète les détails — base, secours — et pose lui-même la raison ABSENT,
+// quand le journal existe sans l'état. Des propositions et du retenu,
+// l'analyse ne lit que le conteneur : leur forme, leur cohérence et leurs
+// identifiants, comparés entre eux et à prochainsIds.proposition, sont
+// l'affaire du contrôle des placements, qui écarte une proposition fautive et
+// signale un retenu fautif sans refuser le fichier (§ 8.9, point 3).
 //
 // Un fichier d'un format plus ancien que FORMAT ne se lit pas : son refus,
 // FORMAT_TROP_ANCIEN au chemin entete.format, porte le format lu dans ses
@@ -278,6 +278,19 @@ const FILIATION = objet(
   { nul: true },
 );
 
+/**
+ * Les positions de l'image des badges sur la carte (§ 11.4), dans l'ordre où
+ * la section les offre : en haut du badge, au centre — entre le nom et les
+ * lignes de tour —, en bas — au-dessus du pied.
+ */
+export const POSITIONS_IMAGE_BADGES = Object.freeze(['haut', 'centre', 'bas']);
+
+/**
+ * L'image des badges d'un événement qui ne porte pas le champ imageBadges :
+ * la case décochée, aucune image choisie, la position en haut.
+ */
+export const IMAGE_BADGES_DEFAUT = Object.freeze({ active: false, chemin: null, position: 'haut' });
+
 const EVENEMENT = objet([
   ['id', CHAINE],
   ['nom', CHAINE],
@@ -293,6 +306,23 @@ const EVENEMENT = objet([
   // sans nom ; examinerNomsTours la compare au nombre de tours et refuse une
   // liste sans aucun nom.
   ['nomsTours', liste(regle('libelleTable', { nul: true }), { min: 1, max: TOURS_MAX, optionnel: true })],
+  // Facultatif, après nomsTours. imageBadges absent : aucune image sur les
+  // badges, sa case décochée, sans image choisie, en haut
+  // (IMAGE_BADGES_DEFAUT) ; présent, la case (active), le chemin de l'image
+  // dans le dossier de l'événement, logo/<empreinte>.png (estCheminLogo), ou
+  // null sans image, et la position (POSITIONS_IMAGE_BADGES) ;
+  // examinerImageBadges refuse le défaut écrit. Le moteur ne le lit pas.
+  [
+    'imageBadges',
+    objet(
+      [
+        ['active', BOOLEEN],
+        ['chemin', regle('logo', { nul: true })],
+        ['position', parmi(...POSITIONS_IMAGE_BADGES)],
+      ],
+      { optionnel: true },
+    ),
+  ],
 ]);
 
 // Les étiquettes d'une personne ou d'un objectif (§ 4.5, § 8.9) : une liste
@@ -923,6 +953,18 @@ function examinerNomsTours({ evenement }, faute) {
   if (nomsTours.length !== tours || nomsTours.every((nom) => nom === null)) faute('charge.evenement.nomsTours');
 }
 
+// L'image des badges, quand l'événement la porte : écrite à son défaut
+// (IMAGE_BADGES_DEFAUT), elle est fautive, nommée par le champ. faute(chemin)
+// lève l'écart.
+function examinerImageBadges({ evenement }, faute) {
+  const { imageBadges } = evenement;
+  if (imageBadges === undefined) return;
+  const { active, chemin, position } = IMAGE_BADGES_DEFAUT;
+  if (imageBadges.active === active && imageBadges.chemin === chemin && imageBadges.position === position) {
+    faute('charge.evenement.imageBadges');
+  }
+}
+
 // Présence de chaque personne qui la porte, exclues comprises, dans l'ordre
 // des personnes : un tour au-delà des tours de l'événement est fautif, le
 // premier dans l'ordre écrit ; une liste qui porte chaque tour, le défaut
@@ -1129,6 +1171,7 @@ export function analyser(texte) {
   oublierDesReglages(charge.reglages);
   examinerIdentifiants(charge, faute);
   examinerNomsTours(charge, faute);
+  examinerImageBadges(charge, faute);
   examinerTours(charge, faute);
   examinerObjectifs(charge, faute);
   examinerPresences(charge, faute);
@@ -1339,6 +1382,19 @@ export function priorites(charge) {
  */
 export function nomsDesTours({ evenement }) {
   return Array.from({ length: evenement.tours }, (_, rang) => evenement.nomsTours?.[rang] ?? null);
+}
+
+/**
+ * L'image des badges de l'événement (§ 8.9, § 11.4) : un objet neuf, {active,
+ * chemin, position}, le champ imageBadges quand l'événement le porte, son
+ * défaut sinon (IMAGE_BADGES_DEFAUT). C'est la seule lecture de ce champ ;
+ * elle ne modifie pas la charge.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @returns {{active: boolean, chemin: string|null, position: 'haut'|'centre'|'bas'}}
+ */
+export function imageBadgesDe({ evenement }) {
+  return { ...(evenement.imageBadges ?? IMAGE_BADGES_DEFAUT) };
 }
 
 /**

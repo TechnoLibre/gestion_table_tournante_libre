@@ -362,23 +362,29 @@ export const TABLE = new Map([
   // --- Ce que la copie, l'import et l'écriture ailleurs annoncent (§ 8.7) ----
   // evenement, le nom de l'événement écrit ; logos, les fichiers de son
   // dossier logo que la recopie n'a pas écrits ; personnes, celles dont le
-  // logo en est un. Un logo qu'aucune personne ne porte se compte aussi : la
-  // phrase le dit, sans plus.
+  // logo en est un ; imageBadges, vrai quand l'image des badges en est un, ce
+  // qu'une phrase ajoute. Un logo qu'aucune personne ne porte se compte
+  // aussi : la phrase le dit, sans plus.
   [
     'LOGOS_NON_COPIES',
-    ({ evenement, logos, personnes }) => {
+    ({ evenement, logos, personnes, imageBadges }) => {
       const un = logos <= 1;
       const recopies = compte(logos, "logo ne s'est pas recopié", 'logos ne se sont pas recopiés');
       const suite =
         personnes === 0
           ? ` ; aucune personne ne ${un ? 'le' : 'les'} porte.`
           : `, et ${compte(personnes, 'personne y a', 'personnes y ont')} un logo introuvable.`;
+      const image =
+        imageBadges === true
+          ? ` ${un ? "C'est l'image des badges" : "L'image des badges en est un"} : ` +
+            "les badges s'impriment sans elle tant qu'elle manque."
+          : '';
       const remede = un
         ? "L'original reste dans le dossier logo de l'événement d'origine : " +
           'le recopier à la main dans celui-ci le rend.'
         : "Les originaux restent dans le dossier logo de l'événement d'origine : " +
           'les recopier à la main dans celui-ci les rend.';
-      return `${cite(evenement)} : ${recopies}${suite} ${remede}`;
+      return `${cite(evenement)} : ${recopies}${suite}${image} ${remede}`;
     },
   ],
 

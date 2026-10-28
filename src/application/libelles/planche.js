@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les textes de la planche de badges (§ 11.3 à § 11.8, contrainte 25) : les
-// refus qui la gardent avant de produire, ce qu'un badge imprime — ses
-// lignes de tour, son pied, le pied TechnoLibre —, les lignes de la feuille
-// de contrôle et les en-têtes de la liste des badges en CSV. Le papier et le
-// CSV les lisent par libelle, jamais décorés par la langue témoin : un texte
-// imprimé est une donnée. Un horodatage et une date se mettent en mots à
-// partir de leur seule forme, sans horloge ni langue du système. Le nom
-// d'un papier arrive dans les détails : cette table n'en écrit aucun.
+// refus qui la gardent avant de produire, l'entrée et le refus de l'image des
+// badges, ce qu'un badge imprime — ses lignes de tour, son pied, le pied
+// TechnoLibre —, les lignes de la feuille de contrôle et les en-têtes de la
+// liste des badges en CSV. Le papier et le CSV les lisent par libelle, jamais
+// décorés par la langue témoin : un texte imprimé est une donnée. Un
+// horodatage et une date se mettent en mots à partir de leur seule forme,
+// sans horloge ni langue du système. Le nom d'un papier arrive dans les
+// détails : cette table n'en écrit aucun.
 import { lireHorodatage } from '../format.js';
 import { cite, compte, enumeration, nomDans, nomDuTour, ouEcrire, phraseDeRaison } from './aides.js';
 
@@ -70,6 +71,19 @@ const LES_FICHIERS = new Map([
   ['planche', 'La planche'],
   ['controle', 'La feuille de contrôle'],
   ['liste', 'La liste des badges'],
+]);
+
+// Ce que changerImageBadges fait de l'image des badges, d'après celle
+// d'avant et celle d'après, et chaque position comme l'entrée la dit.
+const EFFETS_DE_L_IMAGE = new Map([
+  ['pose', 'image posée'],
+  ['remplace', 'image remplacée'],
+  ['retire', 'image retirée'],
+]);
+const LES_POSITIONS = new Map([
+  ['haut', 'en haut'],
+  ['centre', 'au centre'],
+  ['bas', 'en bas'],
 ]);
 
 export const TABLE = new Map([
@@ -137,6 +151,31 @@ export const TABLE = new Map([
         `${lesCartes} « Enregistrer sous… » ${ailleurs}.`
       );
     },
+  ],
+
+  // --- L'image des badges (§ 8.9, § 11.4) -----------------------------------
+  // L'entrée de changerImageBadges : ce qui change, dans l'ordre du champ —
+  // la case (active, null quand elle ne change pas), l'image (effet : pose,
+  // remplace, retire, ou null), la position (null quand elle ne change pas).
+  [
+    'ENTREE_CHANGER_IMAGE_BADGES',
+    ({ active, effet, position }) => {
+      const changes = [
+        ...(active === null ? [] : [active ? 'case cochée' : 'case décochée']),
+        ...(effet === null ? [] : [nomDans(EFFETS_DE_L_IMAGE, effet, "effet de l'image")]),
+        ...(position === null ? [] : [nomDans(LES_POSITIONS, position, 'position')]),
+      ];
+      return `Image des badges : ${changes.join(', ')}`;
+    },
+  ],
+  // L'image refusée par le disque, avant toute entrée : chemin, le fichier
+  // relatif au dossier de l'événement ; dossier, ce dossier ; cause, celle
+  // que le système donne, ou null.
+  [
+    'IMAGE_BADGES_NON_ECRITE',
+    (details, texte) =>
+      `L'image des badges n'a pas pu s'écrire : ${ouEcrire(details, texte)}. ` +
+      "Rien n'est enregistré : les badges gardent leur image d'avant, ou aucune.",
   ],
 
   // --- Les lignes de tour d'un badge (§ 11.4, § 11.5) ------------------------

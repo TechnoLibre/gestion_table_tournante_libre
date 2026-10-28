@@ -27,7 +27,7 @@ export const EXEMPLES = [
   ['COMPTEUR_SATURE', { compteur: 'proposition' }],
   ['NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' }],
   ['TROP_VOLUMINEUX', { chemin: 'affiche-lucioles.png', dossier: 'E:\\images', taille: 31_457_281, max: 26_214_400 }],
-  ['LOGOS_NON_COPIES', { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3 }],
+  ['LOGOS_NON_COPIES', { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3, imageBadges: false }],
   // Raisons d'un état illisible
   ['VIDE', {}],
   ['JSON', {}],
@@ -88,23 +88,39 @@ export const TEXTES = [
   // en portent un, ou, sans personne, l'historique qui seul y renvoie.
   [
     'LOGOS_NON_COPIES',
-    { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3 },
+    { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3, imageBadges: false },
     "« Soirée des Lucioles » : 2 logos ne se sont pas recopiés, et 3 personnes y ont un logo introuvable. " +
       "Les originaux restent dans le dossier logo de l'événement d'origine : les recopier à la main dans " +
       'celui-ci les rend.',
   ],
   [
     'LOGOS_NON_COPIES',
-    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 1 },
+    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 1, imageBadges: false },
     "« Soirée des Lucioles » : 1 logo ne s'est pas recopié, et 1 personne y a un logo introuvable. " +
       "L'original reste dans le dossier logo de l'événement d'origine : le recopier à la main dans " +
       'celui-ci le rend.',
   ],
   [
     'LOGOS_NON_COPIES',
-    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 0 },
+    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 0, imageBadges: false },
     "« Soirée des Lucioles » : 1 logo ne s'est pas recopié ; aucune personne ne le porte. L'original reste " +
       "dans le dossier logo de l'événement d'origine : le recopier à la main dans celui-ci le rend.",
+  ],
+  // L'image des badges restée en arrière : une phrase le dit, accordée au
+  // compte des fichiers.
+  [
+    'LOGOS_NON_COPIES',
+    { evenement: 'Soirée des Lucioles', logos: 1, personnes: 0, imageBadges: true },
+    "« Soirée des Lucioles » : 1 logo ne s'est pas recopié ; aucune personne ne le porte. C'est l'image " +
+      "des badges : les badges s'impriment sans elle tant qu'elle manque. L'original reste dans le " +
+      "dossier logo de l'événement d'origine : le recopier à la main dans celui-ci le rend.",
+  ],
+  [
+    'LOGOS_NON_COPIES',
+    { evenement: 'Soirée des Lucioles', logos: 2, personnes: 3, imageBadges: true },
+    "« Soirée des Lucioles » : 2 logos ne se sont pas recopiés, et 3 personnes y ont un logo introuvable. " +
+      "L'image des badges en est un : les badges s'impriment sans elle tant qu'elle manque. Les originaux " +
+      "restent dans le dossier logo de l'événement d'origine : les recopier à la main dans celui-ci les rend.",
   ],
   // La taille se dit en mégaoctets d'une décimale, arrondie au-dessus : un
   // fichier d'un octet de trop ne se dit jamais du poids du plafond.

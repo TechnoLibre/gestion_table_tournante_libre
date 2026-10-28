@@ -692,6 +692,21 @@
   une organisation trop longue pour le gros texte refuse la planche en nommant
   la personne, et dit de la raccourcir ou de décocher la case. La feuille de
   contrôle et la liste en CSV ne changent pas.
+- Une **image sur tous les badges** : la case « Image sur tous les badges »,
+  décochée par défaut, offre « Choisir l'image », qui accepte les mêmes images
+  que le logo d'une personne, et la position, « En haut », « Au centre » — sous
+  le nom et l'organisation, au-dessus des tours — ou « En bas », au-dessus du
+  pied. L'événement garde la case, l'image et la position : chaque changement
+  est une entrée d'historique, que « Défaire » reprend, et demande le mode
+  écriture. L'image suit l'événement copié ou importé, comme les logos, et
+  l'avertissement d'un logo qui ne se recopie pas dit quand c'est elle. L'image
+  ne prend que la place que le texte laisse, jusqu'à 30 mm de haut sur l'A6 et
+  15 mm sur la carte Avery 5392, avant le logo de la personne et le pied
+  TechnoLibre : sur un badge chargé, elle rapetisse, puis s'en retire, sans
+  jamais réduire un texte ni faire refuser la planche, et l'annonce compte ces
+  badges. Une image introuvable, illisible ou pas encore choisie s'annonce, et
+  les badges s'impriment sans elle. La feuille de contrôle et la liste en CSV ne
+  changent pas.
 - Plus rien ne s'abrège d'un « … » sur les badges : une organisation, un titre
   ou un libellé de table trop long pour sa ligne se replie sur la suivante,
   coupé au dernier espace, comme un paragraphe, et la suite d'une ligne de

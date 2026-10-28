@@ -12,7 +12,8 @@
   // la section vit en lecture comme sur un plan bloqué, et la séance
   // n'écrit que le PDF, le CSV et, pour le papier, le modèle, les cases et
   // les colonnes de la liste, reglages_locaux.json — ni l'état ni le
-  // journal.
+  // journal, sauf l'image des badges, réglage de l'événement, dont chaque
+  // geste est une entrée.
   //
   // Le modèle de badge est un réglage de la machine (EtatSeance.modeleBadge,
   // seance.choisirModeleBadge), Avery 5392 tant que l'opérateur n'en a pas
@@ -69,6 +70,11 @@
   // place de son nom, vide, pour l'écrire à la main, ce que dit la note
   // sous la case. Une case que la machine ne retient pas s'annonce tant
   // qu'elle est celle de la séance, comme celle du pied.
+  //
+  // Sous le groupe des cases, l'image sur tous les badges
+  // (ImageBadges.svelte), un réglage de l'événement et non du poste : sa
+  // case, son image et sa position s'écrivent dans le fichier d'état, en
+  // écriture seulement, et la charge qui change retire l'annonce montrée.
   //
   // Les réglages d'une demande : la source — le retenu s'il existe, sinon la
   // proposition demandée au plan depuis les propositions, choisie quand les
@@ -139,6 +145,7 @@
   import Refus from '../primitives/Refus.svelte';
   import Apercu from '../impression/Apercu.svelte';
   import Papier from '../sorties/Papier.svelte';
+  import ImageBadges from './ImageBadges.svelte';
   import Reedition from './Reedition.svelte';
   import {
     IMPOSITIONS_OFFERTES,
@@ -525,6 +532,7 @@
               >
             </div>
           </div>
+          <ImageBadges {charge} />
           <div role="status">
             {#if modeleNonRetenu !== null && modeleNonRetenu === modeleBadge}
               <Message ton="avis"><p data-avertissement="modeleNonRetenu">{t('badges.modele.nonRetenu')}</p></Message>

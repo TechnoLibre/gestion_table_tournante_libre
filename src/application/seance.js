@@ -165,6 +165,11 @@ import { creerPlanches } from './planche_seance.js';
  *  l'interface lit ici : le stockage lui est fermé. */
 export { COLONNES_LISTE_BADGES, DONNEES_BADGE, normaliserTextePied };
 
+/** Les positions de l'image des badges (§ 11.4), dans l'ordre où la section
+ *  les offre, et la lecture de l'image des badges d'une charge (§ 8.9), que
+ *  l'interface lit ici, comme les cases. */
+export { POSITIONS_IMAGE_BADGES, imageBadgesDe } from '../stockage/document.js';
+
 /** La phrase d'origine du pied TechnoLibre (§ 11.4), celle d'une machine qui
  *  n'en garde pas d'autre. */
 export const TEXTE_PIED_TECHNOLIBRE_DEFAUT = libelle('planche.technolibre');
@@ -1289,6 +1294,38 @@ export function creerSeance({
     return { libelle: texte, chemin };
   }
 
+  // Pose l'image des badges de l'événement, PNG de octets, comme le logo
+  // d'une personne : les refus de l'écriture, puis le PNG, puis le geste
+  // changerImageBadges essayé à blanc sur le chemin logo/<empreinte>.png,
+  // puis l'image, par ecrireLogo, puis le geste. Une image que le disque
+  // refuse lève IMAGE_BADGES_NON_ECRITE {chemin, dossier, cause}, remède
+  // null, sans rien enregistrer ; la même image, disparue du dossier, se
+  // réécrit avant SANS_EFFET. Ni la case ni la position ne changent. Rend
+  // le libellé et le chemin.
+  async function poserImageBadges(demande) {
+    const { octets } = demande ?? {};
+    const ouvert = exigerEcriture();
+    exigerPngDeLogo(octets);
+    const chemin = cheminLogo(empreinteSha256(octets));
+    let sansEffet = null;
+    try {
+      appliquerCommande('changerImageBadges', ouvert.charge, { chemin });
+    } catch (erreur) {
+      if (erreur?.code !== 'SANS_EFFET') throw erreur;
+      sansEffet = erreur;
+    }
+    try {
+      await ecrireLogo(ouvert.fs, ouvert.racine, octets);
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage) || !['ECRITURE', 'LECTURE'].includes(erreur.code)) throw erreur;
+      const { chemin: fichier = chemin, dossier = null, cause = null } = erreur.details ?? {};
+      throw new ErreurSeance('IMAGE_BADGES_NON_ECRITE', { chemin: fichier, dossier, cause, remede: null });
+    }
+    if (sansEffet !== null) throw sansEffet;
+    const { libelle: texte } = await geste('changerImageBadges', { chemin });
+    return { libelle: texte, chemin };
+  }
+
   // Retire le logo de la personne id : le geste changerLogo, chemin null.
   // Aucune image ne s'efface.
   function retirerLogoParticipant(demande) {
@@ -2162,9 +2199,21 @@ export function creerSeance({
     /**
      * Les octets de l'image d'un logo, chemin logo/<empreinte>.png relatif
      * au dossier de l'événement ouvert, null quand le fichier n'y est pas :
-     * une lecture, admise dans tout mode, qui n'écrit rien.
+     * une lecture, admise dans tout mode, qui n'écrit rien. L'image des
+     * badges, rangée dans le même dossier, se lit de même.
      */
     lireLogoParticipant: (chemin) => enFile(() => lireLogoParticipant(chemin)),
+    /**
+     * Pose l'image des badges de l'événement (§ 8.9, § 11.4) : demande
+     * {octets}, ceux d'un PNG d'au plus LOGO_PARTICIPANT_COTE_MAX pixels de
+     * côté, que l'interface compose comme un logo. L'image s'écrit dans
+     * logo/ du dossier de l'événement, sous le SHA-256 de ses octets, avant
+     * l'entrée du geste changerImageBadges : {libelle, chemin,
+     * avertissements}. Refusé comme un geste, sans rien écrire ;
+     * IMAGE_BADGES_NON_ECRITE quand le disque refuse l'image. La case, le
+     * retrait de l'image et la position passent par executer.
+     */
+    poserImageBadges: (demande) => enFile(() => suivi(() => poserImageBadges(demande))),
     /**
      * Défait le dernier geste du fil courant (§ 8.3). options facultatives,
      * {touche} : 'Ctrl+Z', que le libellé figé de l'entrée nomme ; une autre

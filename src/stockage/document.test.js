@@ -27,7 +27,9 @@ import {
   FORMAT,
   GENERATION_PAR_DEFAUT,
   HISTORIQUE_GENERATION_DEFAUT,
+  IMAGE_BADGES_DEFAUT,
   LIBELLE_TABLE_MAX,
+  POSITIONS_IMAGE_BADGES,
   SCHEMA,
   SIEGES_MAX,
   TOURS_MAX,
@@ -38,6 +40,7 @@ import {
   critereCoche,
   estLibelleTable,
   etatDeduit,
+  imageBadgesDe,
   modeObjectifs,
   nomsDesTours,
   premiereFaute,
@@ -1754,6 +1757,71 @@ describe('les noms des tours : un champ facultatif de l’événement, absent qu
   test('la configuration du moteur ne lit pas les noms des tours', () => {
     const sans = analyser(JSON.stringify(documentValide())).charge;
     const avec = analyser(abime((d) => { d.charge.evenement.nomsTours = ['Apéritif', 'Dessert']; })).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
+// --- L'image des badges (§ 8.9, § 11.4) ---------------------------------------
+
+describe('l’image des badges : un champ facultatif de l’événement, absent à son défaut (§ 8.9, § 11.4)', () => {
+  const CHEMIN = `logo/${'c'.repeat(64)}.png`;
+
+  test('il s’écrit en dernière clé de l’événement, après nomsTours, et se relit à l’identique ; absent, il ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.evenement.nomsTours = [null, 'Entremets'];
+    d.charge.evenement.imageBadges = { active: true, chemin: CHEMIN, position: 'centre' };
+    const lu = analyser(JSON.stringify(d));
+    assert.deepEqual(lu.charge.evenement.imageBadges, { active: true, chemin: CHEMIN, position: 'centre' });
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    const attendu = `"nomsTours":[null,"Entremets"],"imageBadges":{"active":true,"chemin":"${CHEMIN}","position":"centre"}}`;
+    assert.ok(texte.includes(attendu), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    const sans = serialiser(documentComplet().charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.equal(sans.includes('imageBadges'), false);
+  });
+
+  test('imageBadgesDe rend le défaut sans le champ, le champ sinon, dans un objet neuf', () => {
+    assert.deepEqual(IMAGE_BADGES_DEFAUT, { active: false, chemin: null, position: 'haut' });
+    assert.deepEqual(POSITIONS_IMAGE_BADGES, ['haut', 'centre', 'bas']);
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    assert.deepEqual(imageBadgesDe(sans), IMAGE_BADGES_DEFAUT);
+    const lue = imageBadgesDe(sans);
+    lue.active = true;
+    assert.deepEqual(imageBadgesDe(sans), IMAGE_BADGES_DEFAUT);
+    const avec = analyser(abime((d) => { d.charge.evenement.imageBadges = { active: false, chemin: CHEMIN, position: 'bas' }; })).charge;
+    const image = imageBadgesDe(avec);
+    assert.deepEqual(image, { active: false, chemin: CHEMIN, position: 'bas' });
+    image.position = 'haut';
+    assert.equal(avec.evenement.imageBadges.position, 'bas');
+  });
+
+  test('chaque clé a sa forme ; le défaut écrit, ou null à la place de l’objet, est une faute nommée par le champ', () => {
+    const champ = 'charge.evenement.imageBadges';
+    const poser = (valeur) => abime((d) => { d.charge.evenement.imageBadges = valeur; });
+    assert.deepEqual(analyser(poser({ active: true, chemin: null, position: 'haut' })).charge.evenement.imageBadges, {
+      active: true,
+      chemin: null,
+      position: 'haut',
+    });
+    assert.deepEqual(ecartsDeRefus([
+      ['le défaut', poser({ active: false, chemin: null, position: 'haut' }), 'FORME', champ],
+      ['nul', poser(null), 'FORME', champ],
+      ['une liste', poser([]), 'FORME', champ],
+      ['sans active', poser({ chemin: null, position: 'haut' }), 'FORME', `${champ}.active`],
+      ['active hors des booléens', poser({ active: 1, chemin: null, position: 'haut' }), 'FORME', `${champ}.active`],
+      ['un chemin hors de logo/', poser({ active: true, chemin: 'etat.json', position: 'haut' }), 'FORME', `${champ}.chemin`],
+      ['un chemin en capitales', poser({ active: true, chemin: CHEMIN.toUpperCase(), position: 'haut' }), 'FORME', `${champ}.chemin`],
+      ['sans chemin', poser({ active: true, position: 'haut' }), 'FORME', `${champ}.chemin`],
+      ['une autre position', poser({ active: true, chemin: null, position: 'gauche' }), 'FORME', `${champ}.position`],
+      ['une clé inconnue', poser({ active: true, chemin: null, position: 'haut', taille: 3 }), 'FORME', `${champ}.taille`],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne lit pas l’image des badges', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    const avec = analyser(abime((d) => { d.charge.evenement.imageBadges = { active: true, chemin: CHEMIN, position: 'bas' }; })).charge;
     assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
   });
 });

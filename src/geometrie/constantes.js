@@ -404,6 +404,38 @@ export const CONSTANTES = Object.freeze(
         'le logiciel ; le plus petit dégagement qui sépare le logo du texte, écrit dans ce registre',
     },
     {
+      nom: 'IMAGE_BADGES_HAUTEUR_MAX_MM',
+      valeur: 30,
+      unite: 'mm',
+      mesure: "hauteur de l'image des badges sur un badge A6, à la plus grande taille que la mise en page lui donne",
+      raison:
+        "l'image se pose sur tous les badges et se reconnaît d'un coup d'œil ; plafonnée, elle garde la même " +
+        "taille d'un badge à l'autre et laisse au logo du participant et au pied TechnoLibre la place qui reste (§ 11.4)",
+      configuration: 'badge A6 imprimé, images de proportions variées, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche, l'image à hauteurs décroissantes, sous un nom d'une ligne et trois " +
+        "tours ; lecture en main par une personne qui n'a pas écrit le logiciel ; la hauteur retenue, écrite " +
+        'dans ce registre',
+    },
+    {
+      nom: 'IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM',
+      valeur: 15,
+      unite: 'mm',
+      mesure: "hauteur de l'image des badges sur une carte Avery 5392, à la plus grande taille que la mise en page lui donne",
+      raison:
+        "sur 66,2 mm de hauteur utile, l'image à cette hauteur laisse, sous un nom d'une ligne, son organisation " +
+        'et trois tours, la place du pied TechnoLibre (§ 11.4)',
+      configuration: 'carte Avery 5392 imprimée, images de proportions variées, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une feuille de cartes, l'image à hauteurs décroissantes, sous un nom d'une ligne et " +
+        "trois tours ; lecture en main par une personne qui n'a pas écrit le logiciel ; la hauteur retenue, " +
+        'écrite dans ce registre',
+    },
+    {
       nom: 'CORPS_MIN_IMPRESSION_MM',
       valeur: 2.5,
       unite: 'mm',
