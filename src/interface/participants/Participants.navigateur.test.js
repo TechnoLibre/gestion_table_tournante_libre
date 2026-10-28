@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // La liste des participants dans un vrai moteur de rendu (§ 4, § 4.2, § 4.4,
-// § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'organisation
-// collante, la grille au clavier, le tri, le filtre et le compte,
+// § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, le message d'ajout et
+// le formulaire vidé, la grille au clavier, le tri, le filtre et le compte,
 // l'exclusion, la présence par tour saisie en cases dans la grille, les
 // conflits d'organisation saisis par un choix multiple, la colonne des
 // inclusions, masquée par défaut, et ses deux choix multiples sous une
@@ -51,6 +51,7 @@ import { cadreDepuisRect, englobantDuTour } from '../plan/vue_plan.js';
 import { comptesEntete } from './entete.js';
 import {
   COLONNES,
+  DUREE_MESSAGE_AJOUT_MS,
   GROUPEMENTS,
   MASQUABLES,
   cheminDe,
@@ -303,6 +304,7 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(ajout().getAttribute('aria-busy')).toBeNull();
     expect(ajout().getAttribute('aria-disabled')).toBeNull();
     await saisir(champ(m, 'nom'), 'Ombrelle');
+    await saisir(champ(m, 'organisation'), CLUB);
     await saisir(champ(m, 'notes'), 'arrive tard');
     champ(m, 'nom').focus();
     await touche('Enter');
@@ -314,9 +316,11 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(getComputedStyle(ajout()).borderTopStyle).not.toBe(styleRepos);
     await touche('Enter');
     await rendu();
-    // La personne suivante se tape pendant l'écriture de la première.
+    // La personne suivante se tape pendant l'écriture de la première, son
+    // organisation comprise.
     await saisir(champ(m, 'prenom'), 'Théo');
     await saisir(champ(m, 'nom'), 'Pervenche');
+    await saisir(champ(m, 'organisation'), 'Atelier Ressac');
     liberer();
     await vi.waitFor(() => expect(participants(m)).toHaveLength(1));
     await attendreSeance(m);
@@ -325,18 +329,19 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(ajout().getAttribute('aria-disabled')).toBeNull();
     expect(getComputedStyle(ajout()).borderTopStyle).toBe(styleRepos);
     expect(participants(m)).toHaveLength(1);
-    expect(participants(m)[0]).toMatchObject({ nom: 'Ombrelle', prenom: null, notes: 'arrive tard' });
+    expect(participants(m)[0]).toMatchObject({ nom: 'Ombrelle', prenom: null, organisation: CLUB, notes: 'arrive tard' });
     expect(entrees(m)).toHaveLength(avant + 1);
     expect(champ(m, 'nom').value).toBe('Pervenche');
     expect(champ(m, 'prenom').value).toBe('Théo');
+    expect(champ(m, 'organisation').value).toBe('Atelier Ressac');
     expect(champ(m, 'notes').value).toBe('');
     // La saisie gardée s'envoie à son tour.
     champ(m, 'nom').focus();
     await touche('Enter');
     await attendreSeance(m);
-    expect(participants(m).map((p) => [p.nom, p.prenom])).toEqual([
-      ['Ombrelle', null],
-      ['Pervenche', 'Théo'],
+    expect(participants(m).map((p) => [p.nom, p.prenom, p.organisation])).toEqual([
+      ['Ombrelle', null, CLUB],
+      ['Pervenche', 'Théo', 'Atelier Ressac'],
     ]);
   });
 
@@ -358,43 +363,126 @@ describe('la saisie (§ 4, § 10.2)', () => {
     expect(participants(m)).toHaveLength(0);
   });
 
-  test('organisation collante : trois personnes portent « Club des Merles » ; le champ vidé, la quatrième n’en porte aucune', async () => {
+  test('après un ajout, tous les champs se vident, organisation comprise, le focus au nom ; un message nomme la personne, puis se retire seul', async () => {
     const m = await evenementOuvert();
-    await ajouter(m, { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB });
-    expect(champ(m, 'organisation').value).toBe(CLUB);
-    expect(champ(m, 'prenom').value).toBe('');
+    const message = () => formulaire(m).querySelector('[data-enonce="participantAjoute"]');
+    expect(message()).toBeNull();
+    // La région d'état est montée avant le message, vide : le texte qui y
+    // paraît s'annonce.
+    const region = formulaire(m).querySelector('h3').parentElement.querySelector('[role="status"]');
+    expect(region).not.toBeNull();
+    expect(region.textContent.trim()).toBe('');
+    const champs = { nom: 'Ombrelle', prenom: ' Iris ', organisation: CLUB, courriel: 'iris@exemple.test', titrePressenti: 'Hôtesse', notes: 'arrive tôt' };
+    // Envoyé par un clic sur « Ajouter », le focus loin du nom.
+    for (const [cle, valeur] of Object.entries(champs)) await saisir(champ(m, cle), valeur);
+    await cliquer(formulaire(m).querySelector('[data-commande="ajouter"]'));
+    await attendreSeance(m);
+    expect(participants(m).at(-1)).toMatchObject({ nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB });
+    for (const cle of Object.keys(champs)) expect(champ(m, cle).value, cle).toBe('');
+    expect(document.activeElement).toBe(champ(m, 'nom'));
+    // Le message, dans une région d'état, nomme la personne comme la
+    // commande l'enregistre ; il se voit avec le nom qui a le focus, sur la
+    // ligne du titre de la bande, au-dessus du nom.
+    expect(message()).not.toBeNull();
+    expect(message().closest('[role="status"]')).toBe(region);
+    expect(message().textContent.trim()).toBe(tEcran('participants.formulaire.ajoutee', { nom: 'Iris Ombrelle' }));
+    expect(visible(message())).toBe(true);
+    expect(visible(champ(m, 'nom'))).toBe(true);
+    expect(message().getBoundingClientRect().bottom).toBeLessThanOrEqual(champ(m, 'nom').getBoundingClientRect().top);
+    expect(ecart(message(), formulaire(m).querySelector('h3'))).toBeLessThanOrEqual(16);
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS - 1);
+    await rendu();
+    expect(message()).not.toBeNull();
+    m.horloge.avancer(1);
+    await rendu();
+    expect(message()).toBeNull();
+    // La personne suivante ne porte rien de la précédente.
     await ajouter(m, { nom: 'Pervenche' });
-    await ajouter(m, { nom: 'Lacasse' });
-    expect(participants(m).map((p) => [p.nom, p.prenom, p.organisation])).toEqual([
-      ['Ombrelle', 'Iris', CLUB],
-      ['Pervenche', null, CLUB],
-      ['Lacasse', null, CLUB],
-    ]);
-    await saisir(champ(m, 'organisation'), '');
-    await ajouter(m, { nom: 'Grisaille' });
-    expect(participants(m).at(-1).organisation).toBeNull();
+    expect(participants(m).at(-1)).toMatchObject({ nom: 'Pervenche', prenom: null, organisation: null, courriel: null, titrePressenti: null, notes: null });
+    expect(message().textContent.trim()).toBe(tEcran('participants.formulaire.ajoutee', { nom: 'Pervenche' }));
   });
 
-  test('l’organisation collante survit à un aller-retour par le plan et par « À propos » ; un autre événement repart d’un champ vide', async () => {
+  test('un second ajout remplace le message et relance son délai ; un envoi refusé le retire', async () => {
+    const m = await evenementOuvert();
+    const message = () => formulaire(m).querySelector('[data-enonce="participantAjoute"]');
+    await ajouter(m, { nom: 'Ombrelle', prenom: 'Iris' });
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS - 1);
+    await ajouter(m, { nom: 'Pervenche', prenom: 'Théo' });
+    expect(formulaire(m).querySelectorAll('[data-enonce="participantAjoute"]')).toHaveLength(1);
+    expect(message().textContent.trim()).toBe(tEcran('participants.formulaire.ajoutee', { nom: 'Théo Pervenche' }));
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS - 1);
+    await rendu();
+    expect(message()).not.toBeNull();
+    await ajouter(m, { nom: '  ' });
+    expect(champ(m, 'nom').getAttribute('aria-invalid')).toBe('true');
+    expect(message()).toBeNull();
+    // Le délai du message retiré ne retire rien d'autre.
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS);
+    await rendu();
+    expect(champ(m, 'nom').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  test('une organisation seule tient le geste, que le formulaire vidé par l’ajout rend ; Défaire retire le message de la personne retirée', async () => {
+    const m = await evenementOuvert();
+    const message = () => formulaire(m).querySelector('[data-enonce="participantAjoute"]');
+    expect(m.seance.gesteEnCours).toBe(false);
+    await saisir(champ(m, 'organisation'), CLUB);
+    expect(m.seance.gesteEnCours).toBe(true);
+    await ajouter(m, { nom: 'Ombrelle' });
+    for (const cle of ['nom', 'organisation']) expect(champ(m, cle).value, cle).toBe('');
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(message()).not.toBeNull();
+    await m.seance.defaire();
+    await attendreSeance(m);
+    await rendu();
+    expect(participants(m)).toHaveLength(0);
+    expect(message()).toBeNull();
+  });
+
+  test('à 1366 × 700, le message paraît à droite du titre de la bande et se retire sans déplacer les champs', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    try {
+      await fixerCadre(1366, 700);
+      const m = await evenementOuvert();
+      const message = () => formulaire(m).querySelector('[data-enonce="participantAjoute"]');
+      // La position du nom dans la bande, que le défilement ne change pas.
+      const placeDuNom = () => champ(m, 'nom').getBoundingClientRect().top - formulaire(m).getBoundingClientRect().top;
+      const sansMessage = placeDuNom();
+      await ajouter(m, { nom: 'Ombrelle', prenom: 'Iris', organisation: CLUB });
+      expect(message()).not.toBeNull();
+      const titre = formulaire(m).querySelector('h3').getBoundingClientRect();
+      const boite = message().getBoundingClientRect();
+      expect(boite.left).toBeGreaterThan(titre.right);
+      expect(boite.top).toBeLessThan(titre.bottom);
+      expect(boite.bottom).toBeGreaterThan(titre.top);
+      expect(placeDuNom()).toBeCloseTo(sansMessage, 1);
+      m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS);
+      await rendu();
+      expect(message()).toBeNull();
+      expect(placeDuNom()).toBeCloseTo(sansMessage, 1);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('le formulaire remonté — retour du plan, fermeture d’« À propos » — repart vide, sans message', async () => {
     const m = await evenementOuvert();
     await ajouter(m, { nom: 'Ombrelle', organisation: CLUB });
     m.ui.allerA('plan');
     await rendu();
     m.ui.allerA('participants');
     await rendu();
-    expect(champ(m, 'organisation').value).toBe(CLUB);
+    expect(champ(m, 'organisation').value).toBe('');
+    expect(formulaire(m).querySelector('[data-enonce="participantAjoute"]')).toBeNull();
+    await saisir(champ(m, 'organisation'), CLUB);
     m.ui.ouvrirApropos();
     await rendu();
     m.ui.fermerApropos();
     await rendu();
-    expect(champ(m, 'organisation').value).toBe(CLUB);
-    await ajouter(m, { nom: 'Pervenche' });
-    expect(participants(m).at(-1).organisation).toBe(CLUB);
-    await m.seance.fermer();
-    await m.seance.creer({ nom: 'Bal des Grisailles', date: null, siegesParDefaut: 8, tours: 2 });
-    m.ui.allerA('participants');
-    await rendu();
     expect(champ(m, 'organisation').value).toBe('');
+    // Le délai d'un message démonté ne lève rien.
+    m.horloge.avancer(DUREE_MESSAGE_AJOUT_MS);
+    await rendu();
   });
 
   test('une organisation qui ne diffère d’une existante que par la casse et les blancs est signalée sur le champ, l’orthographe existante à reprendre ; rien ne fusionne seul', async () => {

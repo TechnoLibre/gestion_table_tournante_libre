@@ -7,13 +7,13 @@
 // plan, la proposition demandée au plan et le numéro de sa demande, le texte
 // d'un import en attente, les listes de noms et les organisations qu'elles
 // portent, le plein écran, la place sélectionnée, la fiche ouverte, le choix
-// en attente du plan, le refus posé sur une place, l'organisation collante du
-// formulaire d'ajout, l'aperçu de la section de l'impression, la page du
-// tableau des propositions, la position du sélecteur du mélange des tables de
-// la page de qualité (§ 12.11, D54) — ce que la grille compte : sièges, assis
-// ou doublons —, le départ d'une génération dérivée et ses tours figés
-// (§ 5.7), le second placement de la vue de comparaison (§ 12.10.6) et la vue
-// de la qualité demandée. Ce qu'il tient survit au démontage des sections.
+// en attente du plan, le refus posé sur une place, l'aperçu de la section
+// de l'impression, la page du tableau des propositions, la position du
+// sélecteur du mélange des tables de la page de qualité (§ 12.11, D54) — ce
+// que la grille compte : sièges, assis ou doublons —, le départ d'une
+// génération dérivée et ses tours figés (§ 5.7), le second placement de la
+// vue de comparaison (§ 12.10.6) et la vue de la qualité demandée. Ce qu'il
+// tient survit au démontage des sections.
 // Le départ et le second placement sont des états de navigation (§ 8.4) :
 // les choisir n'écrit rien, en lecture comme sur un plan bloqué ;
 // oublierAbsents les retire quand ils quittent la liste, et un événement
@@ -65,8 +65,6 @@ import { THEMES } from './theme.js';
  *            avertissements: Object[]}} pose
  *           le refus, ou les avertissements, posés sur une place du plan, que
  *           Plan.svelte montre sur la place (§ 5.9)
- * @property {string} organisation        l'organisation collante du formulaire d'ajout
- *           des participants : celle du dernier ajout (§ 10.2), '' au départ
  * @property {null|{vue: 'plan'|'accueil'|'tables', tour: number|'tous', listes: boolean,
  *            organisations: boolean, decoupe: 'auto'|'unePage'|'decoupe', parColonne: boolean,
  *            parTour: boolean, dessinTable: boolean}} apercu
@@ -114,7 +112,6 @@ const DEPART = Object.freeze({
   fiche: null,
   choix: null,
   pose: null,
-  organisation: '',
   apercu: null,
   visee: 0,
   pagePropositions: null,
@@ -235,7 +232,7 @@ function choixValide(choix) {
  *   prendreImport: () => null|{texte: string, origine: string},
  *   basculerListes: Function, basculerOrganisations: Function, basculerPleinEcran: Function,
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
- *   poserSurPlace: Function, garderOrganisation: Function,
+ *   poserSurPlace: Function,
  *   reglerApercu: Function,
  *   retenirPagePropositions: Function, reglerMelangeTables: Function,
  *   choisirDepart: Function, reglerToursFiges: Function, retirerDepart: Function,
@@ -466,12 +463,6 @@ export function creerEtatUi() {
         throw new RangeError(`pose sans place : ${JSON.stringify(pose)}`);
       }
       changer({ pose: Object.freeze({ place, refus, avertissements }) });
-    },
-    /** Garde l'organisation collante du formulaire d'ajout, une chaîne ;
-     *  RangeError sinon. */
-    garderOrganisation(texte) {
-      if (typeof texte !== 'string') throw new RangeError(`organisation : chaîne attendue, reçu ${String(texte)}`);
-      changer({ organisation: texte });
     },
     /** Change les réglages de l'aperçu de la section de l'impression —
      *  vue, tour, listes, organisations, decoupe, parColonne, parTour,

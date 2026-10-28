@@ -28,7 +28,6 @@ const DEPART = {
   fiche: null,
   choix: null,
   pose: null,
-  organisation: '',
   apercu: null,
   visee: 0,
   pagePropositions: null,
@@ -367,22 +366,6 @@ describe('état de navigation : chaque transition', () => {
       assert.throws(() => ui.ouvrirFiche(faute), RangeError, String(faute));
     }
     assert.equal(ui.etat(), avant);
-  });
-
-  test('garderOrganisation tient l’organisation collante du formulaire d’ajout (§ 10.2) : elle survit au changement de section, et un autre événement repart vide', () => {
-    const ui = creerEtatUi();
-    ui.allerA('participants');
-    ui.garderOrganisation('Club des Merles');
-    assert.equal(ui.etat().organisation, 'Club des Merles');
-    ui.allerA('plan');
-    ui.allerA('participants');
-    ui.ouvrirApropos();
-    ui.fermerApropos();
-    assert.equal(ui.etat().organisation, 'Club des Merles');
-    ui.reinitialiser();
-    assert.equal(ui.etat().organisation, '');
-    for (const faute of [null, undefined, 3, {}]) assert.throws(() => ui.garderOrganisation(faute), RangeError, String(faute));
-    assert.equal(ui.etat().organisation, '');
   });
 
   test('une transition qui ne change rien ne publie pas d’état neuf', () => {

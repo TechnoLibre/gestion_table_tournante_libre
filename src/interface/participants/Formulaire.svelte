@@ -9,21 +9,29 @@
   // NOM_REQUIS, que le formulaire pose contre le champ du nom. Un autre
   // refus — le mode, l'état du plan — se pose contre « Ajouter ».
   //
-  // L'organisation est collante : après un ajout, chaque champ se vide sauf
-  // elle, et l'état de navigation la garde (garderOrganisation) : le
-  // formulaire remonté — retour d'une autre section, fermeture d'« À propos »
-  // — repart d'elle. Une organisation qui ne diffère d'une existante que par la casse,
-  // les accents ou les blancs (orthographeExistante, grille.js) est signalée
+  // Après un ajout, chaque champ se vide, l'organisation comprise : rien
+  // d'une personne ne passe à la suivante, et le formulaire remonté — retour
+  // d'une autre section, fermeture d'« À propos » — repart vide. Un message,
+  // sur la ligne du titre de la bande, juste au-dessus du nom où revient le
+  // focus, nomme la personne ajoutée (nomAjoute, grille.js). Il se retire
+  // seul au terme de DUREE_MESSAGE_AJOUT_MS, par l'horloge du contexte, ou
+  // au prochain envoi ; un ajout suivant pose le sien. Il ne paraît que tant
+  // que la révision de son ajout est la courante : Défaire, ou toute autre
+  // écriture, le retire. Sa région role="status" reste montée, vide sans
+  // message : un lecteur d'écran annonce le texte qui y paraît.
+  //
+  // Une organisation qui ne diffère d'une existante que par la casse, les
+  // accents ou les blancs (orthographeExistante, grille.js) est signalée
   // contre son champ, avec l'orthographe existante à reprendre d'un clic ;
   // rien ne fusionne seul.
   //
-  // Le signal et chaque refus, apparus, se font défiler jusque dans la
-  // fenêtre (montrer) : sous la bande de tête d'une carte, dans une fenêtre
-  // étroite, ils tomberaient sinon sous le bord, loin du champ ou de la
-  // commande qu'ils commentent.
+  // Le signal, chaque refus et le message d'ajout, apparus, se font défiler
+  // jusque dans la fenêtre (montrer) : sous la bande de tête d'une carte,
+  // dans une fenêtre étroite, ils tomberaient sinon sous le bord, loin du
+  // champ ou de la commande qu'ils commentent.
   //
-  // Une saisie non envoyée — un champ rempli, l'organisation exceptée — est
-  // un geste ouvert (geste.js), qui suspend le compte d'inactivité.
+  // Une saisie non envoyée — un champ rempli — est un geste ouvert
+  // (geste.js), qui suspend le compte d'inactivité.
   //
   // L'envoi n'est pas ré-entrant : tant que l'ajout s'écrit, une seconde
   // soumission ne fait rien, et « Ajouter » porte aria-busy et
@@ -40,49 +48,63 @@
   // Les notes sont une zone de texte, qui garde les sauts de ligne :
   // Maj+Entrée y insère un saut de ligne, Entrée seule envoie
   // (entreeValide, grille.js).
-  import { getContext, onDestroy, tick, untrack } from 'svelte';
+  import { getContext, onDestroy, tick } from 'svelte';
   import { cleNormalisee } from '../../application/csv.js';
   import { creerGeste } from '../primitives/geste.js';
   import Icone from '../primitives/Icone.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { effetDe } from '../raccourcis.js';
-  import { cleDeColonne, entreeValide, orthographeExistante } from './grille.js';
+  import { DUREE_MESSAGE_AJOUT_MS, cleDeColonne, entreeValide, nomAjoute, orthographeExistante } from './grille.js';
 
   let { participants } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
-  const ui = getContext('ui');
+  const horloge = getContext('horloge');
   const uid = $props.id();
   const geste = creerGeste(seance);
 
   // Les champs du formulaire, dans l'ordre des colonnes de la grille.
   const CHAMPS = ['nom', 'prenom', 'organisation', 'courriel', 'titrePressenti', 'notes'];
-  // Ceux qu'un ajout vide : tous, l'organisation exceptée.
-  const EPHEMERES = CHAMPS.filter((cle) => cle !== 'organisation');
 
-  let valeurs = $state({
-    nom: '',
-    prenom: '',
-    organisation: untrack(() => ui.etat().organisation),
-    courriel: '',
-    titrePressenti: '',
-    notes: '',
-  });
+  let valeurs = $state(Object.fromEntries(CHAMPS.map((cle) => [cle, ''])));
   let refusNom = $state.raw(null);
   let refusAjout = $state.raw(null);
   let entreeNom = $state(null);
   let formulaire;
   // Vrai pendant l'écriture d'un ajout.
   let envoiEnCours = $state(false);
+  // Le message d'ajout, {nom, revision} — la personne qu'il nomme et la
+  // révision que son ajout a écrite —, null sans message, et la minuterie
+  // qui le retire.
+  let ajoutee = $state.raw(null);
+  let minuterieMessage = null;
 
   const orthographe = $derived(orthographeExistante(valeurs.organisation, participants, cleNormalisee));
   const idRefusNom = `${uid}-refus-nom`;
   const idOrthographe = `${uid}-orthographe`;
+  const revision = $derived($seance.evenement?.revision ?? null);
+  // Le nom que montre le message, null quand une écriture a suivi l'ajout.
+  const nomDuMessage = $derived(ajoutee !== null && ajoutee.revision === revision ? ajoutee.nom : null);
 
   $effect(() => {
-    geste.tenir(EPHEMERES.some((cle) => valeurs[cle] !== ''));
+    geste.tenir(CHAMPS.some((cle) => valeurs[cle] !== ''));
   });
+
+  // Retire le message d'ajout et sa minuterie.
+  function retirerMessage() {
+    if (minuterieMessage !== null) horloge.annuler(minuterieMessage);
+    minuterieMessage = null;
+    ajoutee = null;
+  }
+
+  // Pose le message qui nomme la personne ajoutée, pour
+  // DUREE_MESSAGE_AJOUT_MS, attaché à la révision courante.
+  function poserMessage(nom) {
+    retirerMessage();
+    ajoutee = { nom, revision: seance.etat().evenement?.revision ?? null };
+    minuterieMessage = horloge.planifier(retirerMessage, DUREE_MESSAGE_AJOUT_MS);
+  }
 
   // Une frappe dans le nom retire le refus qu'il portait.
   function surSaisieNom() {
@@ -94,14 +116,8 @@
     if (envoiEnCours) return;
     refusNom = null;
     refusAjout = null;
-    const champs = {
-      nom: valeurs.nom,
-      prenom: valeurs.prenom,
-      organisation: valeurs.organisation,
-      courriel: valeurs.courriel,
-      titrePressenti: valeurs.titrePressenti,
-      notes: valeurs.notes,
-    };
+    retirerMessage();
+    const champs = Object.fromEntries(CHAMPS.map((cle) => [cle, valeurs[cle]]));
     envoiEnCours = true;
     try {
       await seance.executer('ajouterParticipant', { champs });
@@ -114,10 +130,10 @@
     } finally {
       envoiEnCours = false;
     }
-    ui.garderOrganisation(champs.organisation);
-    const intacts = EPHEMERES.filter((cle) => valeurs[cle] === champs[cle]);
+    poserMessage(nomAjoute(champs));
+    const intacts = CHAMPS.filter((cle) => valeurs[cle] === champs[cle]);
     for (const cle of intacts) valeurs[cle] = '';
-    if (intacts.length < EPHEMERES.length) return;
+    if (intacts.length < CHAMPS.length) return;
     await tick();
     entreeNom?.focus();
   }
@@ -139,11 +155,24 @@
     valeurs.organisation = orthographe;
   }
 
-  onDestroy(() => geste.liberer());
+  onDestroy(() => {
+    retirerMessage();
+    geste.liberer();
+  });
 </script>
 
 <form novalidate aria-labelledby={`${uid}-titre`} onsubmit={ajouter} bind:this={formulaire}>
-  <h3 id={`${uid}-titre`}>{t('participants.formulaire.titre')}</h3>
+  <div class="tete">
+    <h3 id={`${uid}-titre`}>{t('participants.formulaire.titre')}</h3>
+    <div class="annonce" role="status">
+      {#if nomDuMessage !== null}
+        <p class="ajoutee" data-enonce="participantAjoute" {@attach montrer}>
+          <span class="signe"><Icone nom="coche" /></span>
+          <span>{t('participants.formulaire.ajoutee', { nom: nomDuMessage })}</span>
+        </p>
+      {/if}
+    </div>
+  </div>
   <div class="champs">
     {#each CHAMPS as cle (cle)}
       <div class="champ" class:large={cle === 'notes'}>
@@ -215,6 +244,18 @@
     padding: var(--espace-4) var(--espace-5);
     border-bottom: 1px solid var(--couleur-carte-filet);
     background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  /* La ligne du titre porte le message d'ajout à sa droite, ou dessous
+     quand la bande est étroite ; elle garde la hauteur du message, qui ne
+     déplace pas les champs sur une bande large en paraissant ni en se
+     retirant. */
+  .tete {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espace-1) var(--espace-3);
+    min-height: calc(var(--taille-texte-petit) * var(--police-interligne) + 2 * var(--espace-1) + 2px);
   }
 
   /* L'intitulé de la bande, en petites capitales. */
@@ -322,6 +363,38 @@
 
   .donnee {
     font-weight: bold;
+  }
+
+  /* La région du message d'ajout, élément de la ligne du titre, ne prend
+     aucune largeur tant qu'elle est vide. */
+  .annonce {
+    min-width: 0;
+  }
+
+  /* Le message d'ajout : une information, son signe, un texte de l'encre de
+     la page. */
+  .ajoutee {
+    display: flex;
+    align-items: center;
+    gap: var(--espace-2);
+    min-width: 0;
+    margin: 0;
+    padding: var(--espace-1) var(--espace-2);
+    border: 1px solid var(--couleur-information-filet);
+    border-left: 3px solid var(--couleur-information-marque);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-information-fond);
+    color: var(--couleur-page-texte);
+    font-size: var(--taille-texte-petit);
+    font-weight: normal;
+    line-height: var(--police-interligne);
+    overflow-wrap: anywhere;
+  }
+
+  .ajoutee .signe {
+    display: inline-flex;
+    flex: none;
+    color: var(--couleur-information-marque);
   }
 
   .issue {

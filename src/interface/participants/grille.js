@@ -7,15 +7,16 @@
 // filtrées, la cellule qu'atteint une touche, la commande qu'exécute une
 // cellule validée, les groupes, imbriqués, de la liste groupée par une
 // colonne ou plusieurs et les lignes que laissent voir les groupes repliés,
-// l'orthographe d'organisation à reprendre, l'itinéraire d'une personne dans
-// le retenu et ses réservations. La présence par tour se lit par
-// presenceSaisie (src/application/places.js) et se range par clePresence
-// (presence.js) ; les conflits d'organisation se rangent par cleTriConflits
-// (liste_conflits.js), les inclusions par cleTriInclusions
-// (liste_inclusions.js). Aucune fonction ne modifie ce qu'elle reçoit ; la
-// clé normalisée vient de l'appelant, qui la tient de
+// l'orthographe d'organisation à reprendre, le nom et la durée du message
+// d'ajout, l'itinéraire d'une personne dans le retenu et ses réservations.
+// La présence par tour se lit par presenceSaisie (src/application/places.js)
+// et se range par clePresence (presence.js) ; les conflits d'organisation se
+// rangent par cleTriConflits (liste_conflits.js), les inclusions par
+// cleTriInclusions (liste_inclusions.js). Aucune fonction ne modifie ce
+// qu'elle reçoit ; la clé normalisée vient de l'appelant, qui la tient de
 // src/application/csv.js.
 
+import { nomAffiche } from '../../application/personnes.js';
 import { presenceSaisie } from '../../application/places.js';
 import { effetDe } from '../raccourcis.js';
 import { cleTriConflits, commandeDeConflits } from './liste_conflits.js';
@@ -681,6 +682,33 @@ export function orthographeExistante(saisie, participants, cleNormalisee) {
   if (portees.includes(texte)) return null;
   const cle = cleNormalisee(texte);
   return portees.find((organisation) => cleNormalisee(organisation) === cle) ?? null;
+}
+
+/** La durée du message d'ajout du formulaire (§ 10.2), en millisecondes :
+ *  il se retire seul à son terme. */
+export const DUREE_MESSAGE_AJOUT_MS = 5_000;
+
+// Une saisie lue comme la commande l'enregistre : en NFC, sans ses blancs
+// de bord, null quand il ne reste rien ; une valeur absente vaut null. Elle
+// reste identique à saisie() de src/application/commandes.js, que
+// ajouterParticipant applique : le message nomme sinon une autre personne
+// que celle qui est écrite.
+function saisieLue(texte) {
+  const valeur = (texte ?? '').normalize('NFC').trim();
+  return valeur === '' ? null : valeur;
+}
+
+/**
+ * Le nom que le message d'ajout donne à la personne ajoutée : celui des
+ * libellés (nomAffiche), composé du nom et du prénom envoyés, lus comme
+ * ajouterParticipant les enregistre.
+ *
+ * @param {{nom: string, prenom?: string}} champs  la saisie envoyée, dont
+ *        la commande a accepté le nom
+ * @returns {string}
+ */
+export function nomAjoute({ nom, prenom }) {
+  return nomAffiche({ nom: saisieLue(nom), prenom: saisieLue(prenom) });
 }
 
 /**

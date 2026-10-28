@@ -63,6 +63,8 @@
 // des tables animées, ou « à désigner ». participants.export.homonymes est
 // l'avis d'un export dont des inclusions visent une personne de même nom
 // qu'une autre (inclusionsVersHomonymes), leur nombre en tête.
+// participants.formulaire.ajoutee est le message du formulaire d'ajout, qui
+// nomme la personne ajoutée (nomAjoute, grille.js).
 
 import { cite, enumeration, toursNommes } from '../../application/libelles/aides.js';
 
@@ -130,6 +132,7 @@ export const TABLE = new Map([
   // --- Le formulaire d'ajout (§ 10.2) ---------------------------------------
   ['participants.formulaire.titre', 'Ajouter une personne'],
   ['participants.formulaire.ajouter', 'Ajouter'],
+  ['participants.formulaire.ajoutee', ({ nom }) => `Personne ajoutée : ${nom}`],
   ['participants.formulaire.orthographe', 'Cette organisation existe déjà sous l\u{2019}orthographe'],
   ['participants.formulaire.reprendre', 'Reprendre cette orthographe'],
 

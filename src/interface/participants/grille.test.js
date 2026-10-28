@@ -3,7 +3,8 @@
 
 // Les modules purs de la liste des participants (§ 4, § 7.4, § 10.2) : les
 // lignes de la grille, triées et filtrées, la navigation au clavier,
-// l'orthographe d'organisation à reprendre, l'itinéraire d'une personne dans
+// l'orthographe d'organisation à reprendre, le nom que le message d'ajout
+// donne et la durée de ce message, l'itinéraire d'une personne dans
 // le retenu, ses réservations, l'ordre des colonnes, celui de l'export, et
 // les groupes de la liste groupée par une colonne ou plusieurs, imbriqués,
 // la présence par tour comprise — sa cellule exportée, son tri, ses groupes,
@@ -18,6 +19,7 @@ import { ecrirePresence } from '../../csv/presence.js';
 import {
   CHAMP_DE_COLONNE,
   COLONNES,
+  DUREE_MESSAGE_AJOUT_MS,
   GROUPEMENTS,
   MASQUABLES,
   MESURES,
@@ -43,6 +45,7 @@ import {
   lignesVisibles,
   ligneVoisine,
   niveauxAffiches,
+  nomAjoute,
   nomExport,
   orthographeExistante,
   rangDeColonne,
@@ -385,6 +388,23 @@ describe('orthographeExistante (§ 10.1, § 10.2)', () => {
     const deux = [...participants, personne(4, 'Grisaille', { organisation: 'club des merles' })];
     assert.equal(orthographeExistante('club des merles', deux, cleNormalisee), null);
     assert.equal(orthographeExistante('Club Des Merles', deux, cleNormalisee), 'Club des Merles');
+  });
+});
+
+describe('le message d’ajout du formulaire (§ 10.2)', () => {
+  test('nomAjoute lit le nom et le prénom comme la commande les enregistre : le prénom, puis le nom, en NFC, sans blancs de bord', () => {
+    assert.equal(nomAjoute({ nom: ' Ombrelle ', prenom: '\tIris ' }), 'Iris Ombrelle');
+    assert.equal(nomAjoute({ nom: 'Ombre\u{0301}lle', prenom: 'Iris' }), 'Iris Ombr\u{00E9}lle');
+  });
+
+  test('un prénom vide, blanc ou absent laisse le nom seul ; les autres champs ne comptent pas', () => {
+    assert.equal(nomAjoute({ nom: 'Pervenche', prenom: '' }), 'Pervenche');
+    assert.equal(nomAjoute({ nom: 'Pervenche', prenom: '   ' }), 'Pervenche');
+    assert.equal(nomAjoute({ nom: 'Pervenche', organisation: 'Club des Merles' }), 'Pervenche');
+  });
+
+  test('le message reste cinq secondes', () => {
+    assert.equal(DUREE_MESSAGE_AJOUT_MS, 5_000);
   });
 });
 

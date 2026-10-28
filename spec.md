@@ -5536,10 +5536,27 @@ Trois mécanismes rendent tenable la saisie de 260 personnes :
 1. **Le collage en bloc**, passé **au même analyseur** que l'import — un second
    analyseur « simplifié » divergerait sur les accents et les guillemets, et les
    tests des deux resteraient verts.
-2. **L'organisation collante** : le champ conserve sa dernière valeur. Saisir
-   les sept personnes d'une organisation, c'est taper sept noms.
+2. **Le formulaire d'ajout repart vide** : un ajout abouti vide tous ses
+   champs, l'organisation comprise, et rend le focus au nom. Une valeur restée
+   d'un ajout passerait inaperçue et s'enregistrerait sur la personne suivante.
 3. **La grille éditable**, au clavier, avec tri et filtre. Corriger est ce que
    l'opérateur fait le plus, la veille et sur place.
+
+**Le formulaire d'ajout confirme chaque ajout.** « Ajouter », ou Entrée dans un
+champ, écrit `ajouterParticipant` ; abouti, un message nomme la personne
+ajoutée — « Personne ajoutée : Iris Ombrelle », son nom lu comme la commande
+l'enregistre —, dans une région `role="status"` qui l'annonce sans prendre le
+focus. Il paraît sur la ligne du titre de la bande, à sa droite, ou dessous
+quand la bande est étroite, au-dessus du nom où revient le focus ; la ligne en
+garde la hauteur, et sur une bande large les champs ne bougent ni quand il
+paraît ni quand il se retire. Il se retire seul au bout de cinq secondes, ou au
+prochain envoi : un ajout suivant le remplace par le sien, un refus le retire.
+Il ne vaut que pour la révision de son ajout : Défaire, ou toute autre
+écriture, le retire, et il ne nomme jamais une personne absente de la liste.
+Le formulaire remonté — retour d'une autre section, fermeture d'« À propos » —
+repart vide et sans message. Pendant l'écriture d'un ajout, une seconde
+soumission ne fait rien ; ce que l'opérateur tape entre-temps reste dans ses
+champs, et seuls ceux qui portent encore la valeur envoyée se vident.
 
 La liste des participants porte une ligne de comptes — personnes, à placer,
 exclues, organisations, et « 2 présences partielles » quand des personnes non

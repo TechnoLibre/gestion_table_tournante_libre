@@ -232,8 +232,11 @@ s’importe pas : rechoisissez le fichier pour refaire l’aperçu.
 
 Dans la section « Participants », la grille se modifie directement. Seul le nom
 est exigé ; le logiciel n’invente aucune valeur manquante. La ligne « Ajouter
-une personne » ajoute quelqu’un ; une plage de cellules copiée d’un tableur et
-collée dans la grille passe par l’aperçu d’import.
+une personne » ajoute quelqu’un : après « Ajouter », un message nomme la
+personne ajoutée pendant quelques secondes, et tous les champs se vident,
+organisation comprise, le curseur dans le nom, prêts pour la suivante. Une
+plage de cellules copiée d’un tableur et collée dans la grille passe par
+l’aperçu d’import.
 
 ![La grille des participants, triée par nom, avec une personne exclue](doc/captures/04-grille-participants.png)
 

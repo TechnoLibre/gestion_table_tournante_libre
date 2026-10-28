@@ -609,6 +609,10 @@
   feuille de contrôle ajoute une ligne qui les compte, « Logos : 12 posés, 2
   sans place, 1 introuvable » par exemple, sans image ; la liste des badges en
   CSV ne porte jamais le logo.
+- Dans « Ajouter une personne », un ajout se confirme par un message à côté
+  du titre, « Personne ajoutée : Iris Ombrelle », qui se retire seul au bout
+  de cinq secondes. Tous les champs se vident, l'organisation comprise, et le
+  curseur revient au nom : rien d'une personne ne passe à la suivante.
 - La fiche d'une personne montre en tête son nom, son prénom, son
   organisation, son courriel, son titre pressenti et ses notes, et
   « Modifier » les change dans un formulaire prérempli : « Enregistrer » écrit
