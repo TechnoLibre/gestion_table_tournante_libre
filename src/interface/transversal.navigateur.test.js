@@ -1432,6 +1432,30 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(noye.marques.fautes[0]).toContain('1.00:1');
   });
 
+  test('marques, sous la fenêtre : un texte au trait plus haut que la surface qui le fait défiler se lit dès que le centre de sa boîte se voit ; une forme rognée, non', () => {
+    const fragment =
+      '<div data-impression data-surface style="background:#ffffff;height:60px;overflow:auto">' +
+      '<svg width="240" height="240" style="display:block"><text data-marque="filigrane" x="10" y="150" ' +
+      'style="fill:none;stroke:var(--couleur-filigrane);stroke-width:1px;font-size:120px">B</text>' +
+      '<circle data-marque="contourTable" cx="200" cy="120" r="50" ' +
+      'style="fill:var(--couleur-papier);stroke:var(--couleur-table-trait);stroke-width:3px" /></svg></div>';
+    avecFragment(fragment, (c) => {
+      const surface = c.querySelector('[data-surface]');
+      const texte = c.querySelector('text');
+      const { y, height } = texte.getBBox();
+      expect(height, 'le texte, plus haut que la surface').toBeGreaterThan(surface.clientHeight);
+      surface.scrollTop = y + height / 2 - surface.clientHeight / 2;
+      const centre = releverMarques(c, { fenetre: true });
+      expect(centre.vues).toEqual(['filigrane']);
+      expect(centre.mesures).toBe(1);
+      expect(centre.fautes).toEqual([]);
+      surface.scrollTop = 0;
+      expect(y + height / 2, 'le centre, sous le bas de la surface').toBeGreaterThan(surface.clientHeight);
+      expect(releverMarques(c, { fenetre: true }).vues).toEqual([]);
+      expect(releverMarques(c).vues).toEqual(['filigrane', 'contourTable']);
+    });
+  });
+
   test('marques : sous le document imprimé, une marque se mesure au jeton du papier — celui du clair, dans les deux thèmes —, non à celui de la page', () => {
     const racine = document.documentElement;
     const theme = racine.getAttribute('data-theme');

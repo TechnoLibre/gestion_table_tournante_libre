@@ -2311,19 +2311,25 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(cheminsEcrits(rang)).toEqual(['reglages_locaux.json']);
     await rienEcrit(avant, 'l’aperçu d’une proposition');
 
-    // Le cadrage : le filigrane et le pied de la première feuille, ensemble
-    // dans la surface de l'événement, qui fait défiler la section.
-    const filigrane = dans('[data-impression] [data-feuille] [data-filigrane] [data-marque="filigrane"]');
-    await cadrerDansLaSurface([filigrane, dans('[data-impression] [data-feuille] [data-pied]')]);
-    memoire.cadrage = surfaceDeLApercu().scrollTop;
+    // Le cadrage : le bas de la première feuille — son cartouche, son
+    // échelle graphique et son pied — au bord bas de la surface de
+    // l'événement, qui fait défiler la section ; au-dessus, le centre du
+    // filigrane couché sur la diagonale de la feuille. Le filigrane entier,
+    // plus haut que la surface, ne tient pas avec le pied : l'image en
+    // montre le centre et le bas, le relevé des marques le mesure sous ce
+    // centre, et la condition de la capture porte sur le bas de la feuille
+    // seul.
+    const feuille = dans('[data-impression] [data-feuille]');
+    await cadrerAuBord(feuille.querySelector('[data-pied]'), 'bas');
+    const surface = surfaceDeLApercu();
+    const haut = Math.max(surface.getBoundingClientRect().top + surface.clientTop, 0);
+    const boite = feuille.querySelector('[data-filigrane] [data-marque="filigrane"]').getBoundingClientRect();
+    const centre = (boite.top + boite.bottom) / 2;
+    expect(centre, 'le centre du filigrane, sous le haut de la surface').toBeGreaterThan(haut);
+    expect(centre, 'le centre du filigrane, au-dessus du pied').toBeLessThan(feuille.querySelector('[data-pied]').getBoundingClientRect().top);
+    memoire.cadrage = surface.scrollTop;
     barreHorsDeLImage();
-    await photographier(m, '22-plan-brouillon', {
-      condition: [
-        '[data-impression] [data-feuille] [data-filigrane] [data-marque="filigrane"]',
-        ...CONDITIONS_FEUILLE,
-      ],
-      graine: GRAINE,
-    });
+    await photographier(m, '22-plan-brouillon', { condition: CONDITIONS_FEUILLE, graine: GRAINE });
   });
 
   test('23 l’aperçu du retenu : le papier gardé, aucun filigrane, le pied du retenu ; rien d’écrit', async () => {
@@ -2349,7 +2355,9 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await rienEcrit(avant, 'l’aperçu du retenu');
 
     // Le cadrage de 22 : la même position de défilement de la surface, le
-    // placement retenu à la place de la proposition.
+    // placement retenu à la place de la proposition. Sans le cadrage de 22,
+    // l'étape échoue ici, en le nommant.
+    expect(memoire.cadrage, 'le cadrage de 22').toBeGreaterThan(0);
     surfaceDeLApercu().scrollTop = memoire.cadrage;
     await images(2);
     expect(surfaceDeLApercu().scrollTop).toBe(memoire.cadrage);

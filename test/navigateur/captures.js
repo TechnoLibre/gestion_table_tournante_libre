@@ -419,10 +419,24 @@ function voisinage(element, jeton) {
  * amener : une marque rognée par le bord de la fenêtre ou d'un ancêtre qui
  * rogne ne montre qu'une partie de ce qui l'entoure — une chaise coupée par
  * le bord du plan ne garde parfois, de son trait, que le point où il touche
- * le trait du plateau.
+ * le trait du plateau. Un texte SVG au trait — le filigrane, couché sur la
+ * diagonale d'une feuille plus haute que la surface qui la fait défiler —
+ * se lit dès que le centre de sa boîte montre son dessin : son voisinage se
+ * lit sous ce seul centre, que l'image montre.
  */
 export function releverMarques(racine, options = {}) {
   return atteignable(document, () => lireMarques(racine, options));
+}
+
+// Une marque que la fenêtre montre assez pour la mesurer : sa boîte entière
+// dans la fenêtre et dans chaque ancêtre qui rogne ; un texte SVG au trait,
+// dont voisinage ne lit que ce qui est peint sous le centre de sa boîte, dès
+// que ce centre montre son dessin.
+function montreeParLaFenetre(element) {
+  if (entiereDansLaFenetre(element)) return true;
+  if (!(element instanceof SVGTextContentElement)) return false;
+  const style = getComputedStyle(element);
+  return style.stroke !== 'none' && Number.parseFloat(style.strokeWidth) > 0 && centreDansLeDessin(element);
 }
 
 // Le corps de releverMarques, sous la feuille ATTEIGNABLE qu'il pose une fois.
@@ -433,7 +447,7 @@ function lireMarques(racine, { fenetre = false } = {}) {
   const fautesAttenuation = [];
   let mesures = 0;
   for (const element of racine.querySelectorAll('[data-marque]')) {
-    if (fenetre && !entiereDansLaFenetre(element)) continue;
+    if (fenetre && !montreeParLaFenetre(element)) continue;
     if (!rendu(element)) continue;
     const nom = element.dataset.marque;
     const entree = MARQUES.find((m) => m.nom === nom);

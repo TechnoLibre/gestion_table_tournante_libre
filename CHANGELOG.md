@@ -405,6 +405,10 @@
 - Sous le placement retenu, glisser hors des tables une personne que sa
   réservation tient à la sienne annonce le refus dès le survol, au lieu de
   « retire du tour ».
+- Pendant le glissement d'une personne, l'anneau qui suit le pointeur se
+  détache d'un liseré clair au thème clair, sombre au thème sombre : posé
+  sur une chaise, il reste lisible à tout zoom, même là où le contour de la
+  chaise croise l'anneau.
 - Chaque personne porte une **présence** : les tours où elle est là, « tous »
   tant qu'on ne la change pas. Un retard, un départ avant la fin, une arrivée
   en cours de soirée se disent dans la grille des participants, par une

@@ -37,8 +37,10 @@ import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import TEXTE_HUIT from '../../../test/fixtures/plan/huit_tables_retenu.gtt.json?raw';
+import { releverMarques } from '../../../test/navigateur/captures.js';
 import { fixerCadre, glisser, molette, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { sousTheme } from '../../../test/navigateur/rendu.js';
 import { cadreDepuisRect, englobantDuTour } from './vue_plan.js';
 
 const BASE = 'soiree';
@@ -729,6 +731,36 @@ describe('les gestes d’une personne (§ 7.1, § 8.2, § 5.8)', () => {
     flushSync();
     expect(retenue.ui.etat().proposition).toBeNull();
     await rienEcrit(retenue, avant);
+  });
+
+  // L'anneau du fantôme garde son rayon en pixels à tout zoom ; la chaise
+  // visée, le sien en cm. Quand le rayon de la chaise à l'écran avoisine
+  // celui de l'anneau, le trait de la chaise passe sous l'anneau ou le
+  // borde : l'anneau se mesure contre ce qui est peint sous son trait
+  // (§ 14.5), dans les deux thèmes, à chaque rayon de chaise de 8 à 12 px.
+  test('le fantôme posé sur une chaise de son rayon à l’écran : son anneau se détache du trait de la chaise, à 3:1, dans les deux thèmes', async () => {
+    const m = await ouvrir(huitRetenue());
+    const rayon = geometrieDe(m, 8).chaises[1].rayon;
+    const cadre = cadreDe(m);
+    const avant = fichiers(m);
+    for (const ecran of [8, 9, 10, 11, 12]) {
+      const k = ecran / rayon;
+      await avecVue(m, { k, tx: cadre.largeur / 2 - 450 * k, ty: cadre.hauteur / 2 - 150 * k });
+      await presserEtBouger(pointChaise(m, 2, 1), pointChaise(m, 8, 2));
+      expect(fantomeMontre(m), `chaise de ${ecran} px`).toBe(true);
+      for (const theme of ['clair', 'sombre']) {
+        const { vues, fautes } = await sousTheme(theme, () => releverMarques(fantomeEl(m), { fenetre: true }));
+        const cause = `chaise de ${ecran} px, thème ${theme}`;
+        expect(vues, cause).toEqual(['fantome']);
+        expect(fautes, cause).toEqual([]);
+      }
+      const vers = pointChaise(m, 8, 2);
+      document.activeElement?.blur();
+      await touche('Escape');
+      await pointer('relacher', vers.x, vers.y);
+      await attendre(() => expect(fantomeMontre(m)).toBe(false));
+      await rienEcrit(m, avant);
+    }
   });
 });
 
