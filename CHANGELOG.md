@@ -70,9 +70,14 @@
   Une liste garde sa largeur : une organisation trop longue pour la ligne
   passe dessous, en retrait, sur autant de lignes qu'il faut, et ne s'abrège
   jamais ; la liste s'allonge d'autant, et le plan imprimé en tient compte
-  dans ses pages. Allongée, une liste peut couvrir celle de la table posée
-  dessous ; écarter les deux tables les sépare. L'aperçu du plan reprend le
-  choix de l'écran et le règle pour le papier seul.
+  dans ses pages. Le plan écarte alors ses rangées de tables, juste assez
+  pour qu'une organisation repliée ne pousse aucune liste sur celle du
+  dessous, à l'écran comme sur le papier, sans rien enregistrer :
+  « Organisation » éteinte, les tables reviennent à leur place. L'écart suit
+  les listes du tour montré. Une table glissée sur ce plan et lâchée sur une
+  rangée la rejoint ; lâchée entre deux rangées, elle se pose entre elles, et
+  le plan s'écarte de nouveau. L'aperçu du plan reprend le choix de l'écran
+  et le règle pour le papier seul.
 - L'aperçu du plan offre « Une colonne par page » : chaque colonne de tables
   s'imprime sur ses propres pages, toutes à la même échelle, sans jamais mêler
   deux colonnes sur une page. Une ligne d'une liste de noms ne déborde plus de

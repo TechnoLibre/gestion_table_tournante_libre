@@ -44,7 +44,9 @@ export const ECART_POIGNEE = 8;
  *  que l'interface pose autour de l'emprise, ou d'une chaise, s'en écarte
  *  de ECART_FOCUS (src/interface/plan/modele.js), plus la moitié de son
  *  trait, en deçà de cette distance : le bloc commence au-delà, et aucune
- *  marque ne couvre la liste. */
+ *  marque ne couvre la liste. C'est aussi le plus grand écart que le plan
+ *  écarté exige entre deux blocs de noms l'un au-dessus de l'autre
+ *  (ecarterRangees). */
 export const ECART_LISTE = 36;
 /** Écart minimal entre les centres de deux rangées de la grille des tables,
  *  en cm. */
@@ -276,6 +278,144 @@ export function englobantImpression(geometries, { listes = null } = {}) {
     maxY = Math.max(maxY, bloc.maxY);
   }
   return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Les rangées du plan écarté (§ 7.4, § 11.7) : chaque ordonnée distincte des
+ * centres des tables, croissante, avec le décalage vers le bas, en cm, que
+ * le dessin donne aux tables qui y sont centrées. Deux blocs de noms
+ * (blocNoms) qui se recouvrent en largeur, de deux tables d'ordonnées
+ * différentes, finissent à l'écart exigé l'un de l'autre en hauteur ; deux
+ * tables de même ordonnée ne se séparent pas. L'écart exigé est ECART_LISTE ;
+ * avec listes.references, la hauteur de chaque bloc avant ce qui l'allonge,
+ * c'est le plus petit d'ECART_LISTE et de l'écart des deux blocs de
+ * référence : l'allongement ne rapproche jamais deux blocs, et des hauteurs
+ * égales à leurs références ne déplacent aucune rangée.
+ *
+ * L'écart s'ajoute entre deux rangées consécutives, et tout ce qui est
+ * dessous descend d'autant : le décalage croît en descendant, la première
+ * rangée reste à sa place, et ni l'ordre des rangées, ni l'alignement d'une
+ * rangée, ni les abscisses ne changent. Pour chaque paire de blocs trop
+ * proches — la table du bas d'abord, de haut en bas, puis celle du haut, de
+ * haut en bas, dans l'ordre reçu à ordonnée égale —, ce qui manque encore à
+ * leur écart s'ajoute au plus grand intervalle entre deux rangées
+ * consécutives qui les séparent, le plus haut à égalité : deux tables à
+ * quelques centimètres de la même ordonnée restent alignées, l'écart passant
+ * dans l'intervalle plus grand qui les sépare des rangées voisines. Un écart
+ * ajouté ne réduit aucun autre : chaque paire tient, et une paire déjà assez
+ * écartée n'ajoute rien. Quand aucune rangée ne descend, il n'y en a aucune :
+ * le plan n'a rien à écarter.
+ *
+ * @param {GeometrieTable[]} geometries   les tables à leur position enregistrée
+ * @param {{largeur: number, hauteurs: Map<number, number>, references?: Map<number, number>}} listes
+ *        largeur et hauteurs : celles de blocNoms ; references : les hauteurs de référence, par table
+ * @returns {Array<{y: number, decalage: number}>}   aucune sans table, ni sans décalage
+ * @throws {RangeError} ce que blocNoms refuse, sur les hauteurs comme sur les références
+ */
+export function ecarterRangees(geometries, listes) {
+  const { largeur, references = null } = listes;
+  const ordonnees = [...new Set(geometries.map(({ centre }) => centre.y))].sort((a, b) => a - b);
+  const rangs = new Map(ordonnees.map((y, rang) => [y, rang]));
+  // ajouts[i] : l'écart ajouté entre les rangées i − 1 et i.
+  const ajouts = ordonnees.map(() => 0);
+  const intervalle = (rang) => ordonnees[rang] - ordonnees[rang - 1];
+  const blocs = geometries
+    .map((geometrie) => ({
+      rang: rangs.get(geometrie.centre.y),
+      bloc: blocNoms(geometrie, listes),
+      reference: references === null ? null : blocNoms(geometrie, { largeur, hauteurs: references }),
+    }))
+    .sort((a, b) => a.rang - b.rang);
+  for (const bas of blocs) {
+    for (const haut of blocs) {
+      if (haut.rang >= bas.rang) break;
+      if (haut.bloc.minX >= bas.bloc.maxX || bas.bloc.minX >= haut.bloc.maxX) continue;
+      const exige = haut.reference === null ? ECART_LISTE : Math.min(ECART_LISTE, bas.reference.minY - haut.reference.maxY);
+      let manque = haut.bloc.maxY + exige - bas.bloc.minY;
+      for (let rang = haut.rang + 1; rang <= bas.rang; rang += 1) manque -= ajouts[rang];
+      if (manque <= 0) continue;
+      let choisi = haut.rang + 1;
+      for (let rang = choisi + 1; rang <= bas.rang; rang += 1) {
+        if (intervalle(rang) > intervalle(choisi)) choisi = rang;
+      }
+      ajouts[choisi] += manque;
+    }
+  }
+  if (ajouts.every((ajout) => ajout === 0)) return [];
+  let decalage = 0;
+  return ordonnees.map((y, rang) => {
+    decalage += ajouts[rang];
+    return { y, decalage };
+  });
+}
+
+// Le rang de la première rangée dont l'ordonnée, lue par ordonnee, dépasse
+// y ; rangees.length quand aucune ne la dépasse.
+function rangSuivant(rangees, y, ordonnee) {
+  const rang = rangees.findIndex((rangee) => ordonnee(rangee) > y);
+  return rang === -1 ? rangees.length : rang;
+}
+
+// L'ordonnée d'une rangée sur le dessin écarté.
+const ordonneeDessinee = ({ y, decalage }) => y + decalage;
+
+/**
+ * Le point du dessin écarté d'une position enregistrée (§ 7.4) : l'abscisse
+ * telle quelle ; l'ordonnée descend du décalage de sa rangée quand une table
+ * y est centrée, entre deux rangées du décalage interpolé linéairement entre
+ * les leurs, au-dessus de la première de son décalage, au-dessous de la
+ * dernière du sien. Sans rangée, le point est la position. L'ordonnée
+ * dessinée croît sans saut, au moins aussi vite que l'enregistrée :
+ * positionDepuisDessin l'inverse en tout point.
+ *
+ * @param {{x: number, y: number}} position   cm
+ * @param {ReturnType<typeof ecarterRangees>} rangees
+ * @returns {{x: number, y: number}}
+ */
+export function dessinDepuisPosition({ x, y }, rangees) {
+  if (rangees.length === 0) return { x, y };
+  const rang = rangSuivant(rangees, y, (rangee) => rangee.y);
+  if (rang === 0) return { x, y: y + rangees[0].decalage };
+  if (rang === rangees.length) return { x, y: y + rangees[rang - 1].decalage };
+  const haut = rangees[rang - 1];
+  const bas = rangees[rang];
+  return { x, y: y + haut.decalage + ((y - haut.y) * (bas.decalage - haut.decalage)) / (bas.y - haut.y) };
+}
+
+/**
+ * La position enregistrée d'un point du dessin écarté (§ 7.4), l'inverse
+ * de dessinDepuisPosition : un point posé sur une rangée du dessin y ramène
+ * à son ordonnée enregistrée exacte, un point entre deux rangées à la même
+ * part de l'intervalle enregistré qui les sépare. Sans rangée, la position
+ * est le point.
+ *
+ * @param {{x: number, y: number}} point   cm de dessin
+ * @param {ReturnType<typeof ecarterRangees>} rangees
+ * @returns {{x: number, y: number}}
+ */
+export function positionDepuisDessin({ x, y }, rangees) {
+  if (rangees.length === 0) return { x, y };
+  const rang = rangSuivant(rangees, y, ordonneeDessinee);
+  if (rang === 0) return { x, y: y - rangees[0].decalage };
+  if (rang === rangees.length) return { x, y: y - rangees[rang - 1].decalage };
+  const haut = rangees[rang - 1];
+  const bas = rangees[rang];
+  return { x, y: haut.y + ((y - ordonneeDessinee(haut)) * (bas.y - haut.y)) / (ordonneeDessinee(bas) - ordonneeDessinee(haut)) };
+}
+
+/**
+ * La géométrie d'une table à places places (geometrieTable), posée au point
+ * du dessin écarté que les rangées donnent à sa position
+ * (dessinDepuisPosition) ; sans rangée, à sa position même. Le modèle de
+ * dessin et la vue du plan la lisent tous deux.
+ *
+ * @param {Parameters<typeof geometrieTable>[0]} table   position enregistrée
+ * @param {number} places
+ * @param {ReturnType<typeof ecarterRangees>} rangees
+ * @returns {GeometrieTable}
+ */
+export function geometrieEcartee(table, places, rangees) {
+  return geometrieTable({ ...table, position: dessinDepuisPosition(table.position, rangees) }, places);
 }
 
 /**

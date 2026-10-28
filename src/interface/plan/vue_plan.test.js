@@ -241,6 +241,17 @@ describe('l’englobant d’un tour, le tour montré, les noms', () => {
     assert.deepEqual(englobantDuTour(etat), attendu);
   });
 
+  test('englobantDuTour : sur le plan écarté, celui des tables posées où les rangées les dessinent', () => {
+    // La table 2, centrée en y = 120, est la seconde rangée ; elle descend
+    // de 90 cm, la première reste.
+    const charge = chargeDEpreuve();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const rangees = [{ y: 0, decalage: 0 }, { y: 120, decalage: 90 }];
+    const descendue = { ...charge.tables[1], position: { x: 300, y: 210 } };
+    assert.deepEqual(englobantDuTour(etat, rangees), englobant([geometrieTable(charge.tables[0], 6), geometrieTable(descendue, 5)]));
+    assert.deepEqual(englobantDuTour(etat, []), englobantDuTour(etat));
+  });
+
   test('englobantDuTour : null sans table', () => {
     const charge = chargeDEpreuve();
     charge.tables = [];
@@ -347,6 +358,14 @@ describe('vuePourVoir : la vue où « Voir sur le plan » montre une personne (�
     assert.ok(proche(centreDe(vue, CADRE), chaise));
     const ecran = ecranDepuisDessin(vue, CADRE, chaise.x, chaise.y);
     assert.ok(Math.abs(ecran.x - (CADRE.gauche + CADRE.largeur / 2)) < 1e-6 && Math.abs(ecran.y - (CADRE.haut + CADRE.hauteur / 2)) < 1e-6);
+  });
+
+  test('sur le plan écarté, la chaise où les rangées dessinent sa table vient au centre du cadre', () => {
+    const { etat, englobantPlan } = montage();
+    const rangees = [{ y: 0, decalage: 0 }, { y: 120, decalage: 250 }];
+    const descendue = geometrieTable({ ...etat.tables[1], position: { x: 6000, y: 370 } }, etat.tables[1].capacite);
+    const vue = vuePourVoir(ajuster(englobantPlan, CADRE), etat, 1, englobantPlan, CADRE, rangees);
+    assert.ok(proche(centreDe(vue, CADRE), descendue.chaises[2]));
   });
 
   test('le seuil est celui de sa table, non celui de la plus serrée', () => {

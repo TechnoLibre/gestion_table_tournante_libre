@@ -570,9 +570,14 @@ de noms » montre ou masque la liste de chaque table, et « Organisation », jus
 ouverture de l’événement. Une liste garde sa largeur : une organisation trop
 longue pour la ligne passe dessous, en retrait, sur autant de lignes qu’il
 faut, sans jamais s’abréger, et la liste s’allonge d’autant, à l’écran comme
-sur le papier. Une liste ainsi allongée peut couvrir celle de la table posée
-dessous : écarter les deux tables, ou éteindre « Organisation », les sépare.
-Listes masquées, le bouton « Organisation » reste à sa place, inactif.
+sur le papier. Pour qu’une liste ainsi allongée ne couvre pas celle de la
+table posée dessous, le plan écarte ses rangées de tables juste assez, sans
+rien enregistrer : éteignez « Organisation », et chaque table revient à sa
+place. L’écart suit les listes du tour montré : d’un tour à l’autre, une
+table peut se dessiner un peu plus haut ou plus bas. Une table glissée sur ce
+plan écarté et lâchée sur une rangée la rejoint ; lâchée entre deux rangées,
+elle se pose entre elles, et le plan s’écarte de nouveau. Listes masquées, le
+bouton « Organisation » reste à sa place, inactif.
 
 ## Étape 5 — Fixer le nombre de tours
 

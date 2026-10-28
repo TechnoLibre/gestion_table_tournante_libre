@@ -20,7 +20,7 @@ import {
   placeNumero,
   placePastille,
 } from '../../geometrie/plateau.js';
-import { geometrieTable } from '../../geometrie/tables.js';
+import { ecarterRangees, geometrieEcartee } from '../../geometrie/tables.js';
 import { TAILLE_TEXTE_LISTE_CM, decalagesLignes, replier, replierEntier, tronquer } from '../../geometrie/texte.js';
 import { CONFLITS } from '../marques.js';
 
@@ -407,6 +407,40 @@ export function rangeesListe(table, t, mesures) {
 }
 
 /**
+ * Les rangées du plan écarté d'un modèle de dessin (§ 7.4, § 11.7) :
+ * ecarterRangees sur les géométries de ses tables, chaque bloc de noms large
+ * de mesures.largeur et haut de ses rangées (rangeesListe) plus une, de
+ * mesures.hauteur chacune — la hauteur que hauteursListes
+ * (impression/plan.js) donne au même bloc sur le papier, la rangée de plus
+ * majorant le jambage de la dernière ligne. La référence de chaque bloc
+ * compte ses seules rangées sans retrait, celles que la liste dessine sans
+ * organisation : une organisation repliée n'approche aucun bloc de celui du
+ * dessous, et une organisation qui tient sur la ligne du nom ne déplace
+ * rien. Aucune rangée quand rien ne s'écarte. Le modèle lu pose ses tables à
+ * leur position enregistrée ; celui qui reçoit les rangées (modeleDessin,
+ * option rangees) les écarte. Le plan à l'écran et le plan imprimé les
+ * calculent ainsi tous deux, quand l'organisation se montre, sur les
+ * listes du tour, ou de la proposition, que le modèle montre.
+ *
+ * @param {{tables: Array<Object>}} modele   un ModeleDessin sans rangées
+ * @param {(cle: string, details?: Object) => string} t
+ * @param {{mesurer: (s: string) => number, mesurerItalique: (s: string) => number,
+ *          largeur: number, hauteur: number}} mesures   cm de dessin
+ * @returns {Array<{y: number, decalage: number}>}
+ */
+export function rangeesEcartees(modele, t, { mesurer, mesurerItalique, largeur, hauteur }) {
+  const reglage = { mesurer, mesurerItalique, largeur };
+  const hauteurs = new Map();
+  const references = new Map();
+  for (const table of modele.tables) {
+    const rangees = rangeesListe(table, t, reglage);
+    hauteurs.set(table.id, (rangees.length + 1) * hauteur);
+    references.set(table.id, (rangees.filter(({ retrait }) => !retrait).length + 1) * hauteur);
+  }
+  return ecarterRangees(modele.tables.map(({ geometrie }) => geometrie), { largeur, hauteurs, references });
+}
+
+/**
  * Les parties présentes d'une ligne ajustée, dans l'ordre de la lecture :
  * chacune son tspan, nommé par data-partie ; le titre seul en italique,
  * l'organisation et son séparateur dans l'encre secondaire.
@@ -503,15 +537,17 @@ function porteurDe(place, id, regime) {
 // est en régime sièges, quel que soit k. Son libellé se dessine à
 // l'impression et dès K_LISTES, comme les listes de noms, sans égard à leur
 // affichage ; le nom accessible le porte à tout zoom. organisationDe, null
-// ou une fonction, et nomsTours sont ceux que reçoit ligneListe.
+// ou une fonction, et nomsTours sont ceux que reçoit ligneListe. La table
+// se dessine au point que les rangées du plan écarté donnent à sa position
+// (geometrieEcartee), à sa position même sans elles.
 function tableDessin(
   etatTable,
-  { k, miseEnEvidence, nomDe, organisationDe = null, nomsTours = undefined, selection = null, actif = null, impression = false },
+  { k, miseEnEvidence, nomDe, organisationDe = null, nomsTours = undefined, selection = null, actif = null, impression = false, rangees = [] },
   places = etatTable.capacite,
 ) {
   const { id, numero, gelee, surchargee, conflits } = etatTable;
   const libelle = etatTable.libelle ?? null;
-  const geometrie = geometrieTable(etatTable, places);
+  const geometrie = geometrieEcartee(etatTable, places, rangees);
   const trames = conflits === null ? [] : conflits.regles.map(({ regle }) => ({ ...SORTE_DE_REGLE.get(regle) }));
   const regime = impression ? 'sieges' : regimeCibles(k, geometrie);
   const pastille = conflits === null ? 0 : conflits.nombre;
@@ -599,6 +635,11 @@ function tableDessin(
  * aucun porteur n'est marqué. Le modèle porte impression, que le dessin lit
  * pour ne poser ni poignée, ni cible, ni identifiant, ni rôle.
  *
+ * L'option rangees, celles du plan écarté (rangeesEcartees), pose chaque
+ * table au point du dessin que donne sa position (dessinDepuisPosition) :
+ * sa géométrie, ses chaises et l'origine de sa liste ; aucune par défaut, et
+ * chaque table est à sa position. Le reste du modèle n'en dépend pas.
+ *
  * @param {Object} etatPlaces   EtatPlaces (A5)
  * @param {{k?: number, listes: boolean, miseEnEvidence?: number|null,
  *          nomDe: (id: number) => string, organisations?: boolean,
@@ -606,7 +647,8 @@ function tableDessin(
  *          poignee?: {table: number, places: number}|null,
  *          selection?: {table: number, siege?: number|null}|null,
  *          actif?: {table: number, siege: number|null}|null,
- *          nomsTours?: Array<string|null>, impression?: boolean}} options
+ *          nomsTours?: Array<string|null>, impression?: boolean,
+ *          rangees?: Array<{y: number, decalage: number}>}} options
  *        diagnostic : celui que rend diagnostiquer, compléments de M1 compris ;
  *        k : exigé hors de l'impression ; miseEnEvidence : null par défaut ;
  *        organisations : faux par défaut ; organisationDe : exigée avec elles
@@ -628,6 +670,7 @@ export function modeleDessin(
     actif = null,
     nomsTours = undefined,
     impression = false,
+    rangees = [],
   },
 ) {
   if (organisations && typeof organisationDe !== 'function') {
@@ -637,7 +680,7 @@ export function modeleDessin(
   const tables = etatPlaces.tables.map((etatTable) =>
     tableDessin(
       etatTable,
-      { k, nomDe, organisationDe: organisations ? organisationDe : null, nomsTours, impression, ...gestes },
+      { k, nomDe, organisationDe: organisations ? organisationDe : null, nomsTours, impression, rangees, ...gestes },
       !impression && poignee !== null && poignee.table === etatTable.id ? poignee.places : etatTable.capacite,
     ),
   );

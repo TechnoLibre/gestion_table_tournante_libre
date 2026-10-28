@@ -6,8 +6,9 @@
 // sur la racine, le modèle confié au relâcher, aucune lecture de mise en page
 // pendant un glissement, un seul écouteur, le déplacement de vue, le dépôt
 // par la géométrie, les annulations, les gestes d'une personne sous les deux
-// états des données, la table glissée, la poignée et ses refus, la lecture,
-// l'inactivité, le dépôt refusé sur une table pleine.
+// états des données, la table glissée, sur le plan écarté aussi, la poignée
+// et ses refus, la lecture, l'inactivité, le dépôt refusé sur une table
+// pleine.
 //
 // Chaque épreuve monte App par monterApp, sur le système de fichiers simulé
 // où un fichier d'état d'épreuve est posé puis ouvert, au cadre de
@@ -28,8 +29,8 @@ import { etatPlaces } from '../../application/places.js';
 import { DELAI_REGLAGES_MS, INACTIVITE_MS } from '../../application/seance.js';
 import { constante } from '../../geometrie/constantes.js';
 import { surLeSol } from '../../geometrie/designation.js';
-import { diametre, geometrieTable } from '../../geometrie/tables.js';
-import { dessinDepuisEcran, ecranDepuisDessin, kAjuste, transformDe, vueDepuisTransform } from '../../geometrie/vue.js';
+import { diametre, englobant, geometrieTable } from '../../geometrie/tables.js';
+import { ajuster, dessinDepuisEcran, ecranDepuisDessin, kAjuste, transformDe, vueDepuisTransform } from '../../geometrie/vue.js';
 import { serialiser, serialiserCharge } from '../../stockage/canonique.js';
 import { analyser, creerCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
@@ -837,6 +838,101 @@ describe('glisser une table (§ 7.1, § 9)', () => {
     await attendre(() => expect(tableEl(m, 1).getAttribute('transform')).toBeNull());
     expect(decrit(tableEl(m, 1))).toBeNull();
     expect(m.racine.querySelector('[data-refus]')).toBeNull();
+  });
+
+  // Trois rondes de 8 : la 1 et la 2 l'une sous l'autre, à 300 cm, la 3 à
+  // droite de la 1. Chaque personne porte sa propre organisation, trop
+  // longue pour sa ligne : sous « Organisation », la liste de la table 1
+  // descend plus bas que le pas de rangée, et la rangée de la table 2
+  // descend sur le dessin (§ 7.4).
+  function planEcarte() {
+    const depart = troisDeHuit();
+    depart.tables = depart.tables.map((table, rang) => ({ ...table, position: [{ x: 0, y: 0 }, { x: 0, y: 300 }, { x: 1000, y: 0 }][rang] }));
+    depart.participants = depart.participants.map((personne) => ({ ...personne, organisation: `Fédération des jardins partagés du quartier ${personne.nom}` }));
+    return depart;
+  }
+  // Le centre de la table sur le dessin : celui de son plateau, signalé ou
+  // non.
+  const centreDessine = (m, id) => {
+    const plateau = dans(m, `[data-table="${id}"] > :is([data-marque="contourTable"], [data-marque="contourConflit"])`);
+    return { x: Number(plateau.getAttribute('cx')), y: Number(plateau.getAttribute('cy')) };
+  };
+  // La vue d'« Ajuster » sur le plan tel qu'il est dessiné.
+  const ajusteeSurLeDessin = (m) =>
+    ajuster(englobant(etatMontre(m).tables.map((table) => geometrieTable({ ...table, position: centreDessine(m, table.id) }, table.capacite))), cadreDe(m));
+
+  // Le cadre, plus haut, montre les deux rangées à k = 0,5.
+  test('plan écarté : une table se saisit où le dessin la pose, glisse de l’écart du pointeur sans changer de rangée, et lâchée sur une rangée du dessin y prend l’ordonnée enregistrée', async () => {
+    await fixerCadre(1366, 1100);
+    const m = await ouvrir(planEcarte());
+    const centre = (id) => centreDessine(m, id);
+    m.ui.basculerOrganisations();
+    await attendre(() => expect(centre(2).y).toBeGreaterThan(300));
+    const cadre = cadreDe(m);
+    await avecVue(m, { k: 0.5, tx: cadre.largeur / 2 - 250, ty: 40 });
+    await attendre(() => expect(centre(2).y).toBeGreaterThan(300));
+    const descente = centre(2).y - 300;
+    expect(centre(1)).toEqual({ x: 0, y: 0 });
+    expect(centre(3)).toEqual({ x: 1000, y: 0 });
+
+    const r = fichiers(m).revision;
+    const ici = ecranDe(m, centre(2));
+    await glisser(ici, decale(ici, 20, 0));
+    await uneEntree(m, r);
+    expect(charge(m).tables[1].position).toEqual({ x: 40, y: 300 });
+    await attendre(() => expect(tableEl(m, 2).getAttribute('transform')).toBeNull());
+    expect(centre(2).x).toBe(40);
+    expect(centre(2).y).toBeCloseTo(300 + descente, 9);
+
+    const r2 = fichiers(m).revision;
+    await glisser(ecranDe(m, centre(3)), ecranDe(m, { x: 1000, y: centre(2).y }));
+    await uneEntree(m, r2);
+    expect(charge(m).tables[2].position).toEqual({ x: 1000, y: 300 });
+    await attendre(() => expect(tableEl(m, 3).getAttribute('transform')).toBeNull());
+    expect(centre(3).y).toBeCloseTo(centre(2).y, 9);
+
+    // « Ajuster » cadre le plan tel qu'il est dessiné, rangées écartées.
+    const attendue = ajusteeSurLeDessin(m);
+    dans(m, '[data-commande="ajuster"]').click();
+    await attendre(() => expect(vueLue(m).ty).toBeCloseTo(attendue.ty, 6));
+    expect(vueLue(m).k).toBeCloseTo(attendue.k, 9);
+    expect(vueLue(m).tx).toBeCloseTo(attendue.tx, 6);
+
+    // « Voir sur le plan », demandé hors du plan, centre la chaise où le
+    // plan écarté la dessine, une fois le plan remonté : celle d'une
+    // personne de la table 2.
+    const assise = etatMontre(m).tables[1].chaises.findIndex(({ occupant }) => occupant !== null);
+    const personne = etatMontre(m).tables[1].chaises[assise].occupant;
+    m.ui.allerA('tables');
+    flushSync();
+    m.ui.mettreEnEvidence(personne, { centrer: true });
+    m.ui.allerA('plan');
+    await attendre(() => expect(m.ui.etat().centrerEvidence).toBe(false));
+    await attendre(() => expect(centre(2).y).toBeGreaterThan(300));
+    const chaise = dans(m, `[data-siege="2:${assise + 1}"] circle`);
+    const boite = chaise.getBoundingClientRect();
+    const plan = racinePlan(m).getBoundingClientRect();
+    expect(boite.left + boite.width / 2).toBeCloseTo(plan.left + plan.width / 2, 3);
+    expect(boite.top + boite.height / 2).toBeCloseTo(plan.top + plan.height / 2, 3);
+  });
+
+  // La vue où le plan s'ouvre se calcule avant les mesures des listes,
+  // donc avant les rangées : leurs premières mesures la recalculent.
+  test('plan écarté remonté sans cadrage mémorisé : il s’ouvre sur la vue d’« Ajuster » du dessin écarté', async () => {
+    const m = await ouvrir(planEcarte());
+    m.ui.basculerOrganisations();
+    await attendre(() => expect(centreDessine(m, 2).y).toBeGreaterThan(300));
+    expect(m.seance.cadrage()).toBeNull();
+    m.ui.allerA('tables');
+    flushSync();
+    m.ui.allerA('plan');
+    flushSync();
+    await attendre(() => expect(centreDessine(m, 2).y).toBeGreaterThan(300));
+    const attendue = ajusteeSurLeDessin(m);
+    await attendre(() => expect(vueLue(m).ty).toBeCloseTo(attendue.ty, 6));
+    expect(vueLue(m).k).toBeCloseTo(attendue.k, 9);
+    expect(vueLue(m).tx).toBeCloseTo(attendue.tx, 6);
+    expect(m.seance.cadrage()).toBeNull();
   });
 });
 

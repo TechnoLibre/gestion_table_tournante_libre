@@ -14,10 +14,10 @@
   // PlanDessin crée sur la police rendue ; une organisation qui n'y tient pas
   // se replie sous elle, ses rangées décalées de RETRAIT_ORGANISATION
   // (rangeesListe), et le bloc s'allonge d'autant, vers le bas, sans borne :
-  // plus haut que le pas de rangée de la grille, il couvre la liste de la
-  // table du dessous (§ 7.4). Les rangées s'espacent de la hauteur d'encre du
-  // gabarit. La liste ne reçoit pas le pointeur : elle ne masque aucune
-  // chaise.
+  // le plan écarté descend les rangées de tables du dessous (rangeesEcartees,
+  // § 7.4), et la liste part de l'origine que la table dessinée lui donne.
+  // Les rangées s'espacent de la hauteur d'encre du gabarit. La liste ne
+  // reçoit pas le pointeur : elle ne masque aucune chaise.
   //
   // Le texte est en white-space: pre, pour que les espaces des parties
   // comptent comme elles ont été mesurées : le gabarit n'a aucun blanc entre

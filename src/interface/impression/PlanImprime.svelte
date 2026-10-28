@@ -30,7 +30,11 @@
   // geometricPrecision : les blocs de noms entrent dans la découpe à la
   // hauteur que donnent la hauteur de ligne et leurs rangées, les rangées
   // d'une organisation repliée sous le nom comprises (rangeesListe), celles
-  // mêmes que la liste dessine. Les pages attendent la mesure.
+  // mêmes que la liste dessine. Les pages attendent la mesure. Listes et
+  // organisations demandées, le plan imprimé est le plan écarté de l'écran
+  // (§ 7.4) : les rangées se calculent sur le modèle des tables à leur
+  // position enregistrée (rangeesEcartees), le modèle dessiné les reçoit, et
+  // la découpe pagine ses géométries.
   // L'orientation de la découpe remonte à l'aperçu par la propriété liée
   // orientation : c'est celle qu'il demande à l'imprimante.
   import { getContext } from 'svelte';
@@ -38,7 +42,7 @@
   import { constante } from '../../geometrie/constantes.js';
   import { TAILLE_TEXTE_LISTE_CM } from '../../geometrie/texte.js';
   import { creerMesureur, hauteurLigne, mesurable } from '../plan/mesure_texte.js';
-  import { libelleLongueur, modeleDessin, rangeesListe } from '../plan/modele.js';
+  import { libelleLongueur, modeleDessin, rangeesEcartees, rangeesListe } from '../plan/modele.js';
   import PlanDessin from '../plan/PlanDessin.svelte';
   import { nomDeCharge, organisationDeCharge } from '../plan/vue_plan.js';
   import Feuille from './Feuille.svelte';
@@ -54,7 +58,10 @@
   // mesureurs droit et italique — ; null avant la mesure.
   let mesures = $state(null);
 
-  const modele = $derived(
+  const largeurBloc = constante('LARGEUR_BLOC_NOMS_CM');
+  // Le modèle du plan imprimé, les tables posées où les rangées les
+  // dessinent.
+  const dessiner = (rangees) =>
     modeleDessin(etat, {
       listes: options.listes,
       nomDe: nomDeCharge($seance.charge),
@@ -62,13 +69,22 @@
       organisationDe: organisationDeCharge($seance.charge),
       nomsTours: nomsDesTours($seance.charge),
       impression: true,
-    }),
+      rangees,
+    });
+  // Le modèle des tables à leur position enregistrée, puis les rangées du
+  // plan écarté, aucune quand rien ne s'écarte, puis le modèle dessiné.
+  const modeleEnregistre = $derived(dessiner([]));
+  const rangees = $derived(
+    !modeleEnregistre.listesRendues || !options.organisations || mesures === null
+      ? []
+      : rangeesEcartees(modeleEnregistre, t, { ...mesures, largeur: largeurBloc }),
   );
+  const modele = $derived(rangees.length === 0 ? modeleEnregistre : dessiner(rangees));
   // Les rangées en retrait de chaque table, quand les listes se montrent ;
   // aucune sans elles.
   const lignesAjoutees = $derived.by(() => {
     if (!modele.listesRendues || mesures === null) return new Map();
-    const reglage = { mesurer: mesures.mesurer, mesurerItalique: mesures.mesurerItalique, largeur: constante('LARGEUR_BLOC_NOMS_CM') };
+    const reglage = { mesurer: mesures.mesurer, mesurerItalique: mesures.mesurerItalique, largeur: largeurBloc };
     return new Map(modele.tables.map((table) => [table.id, rangeesListe(table, t, reglage).filter(({ retrait }) => retrait).length]));
   });
   const pages = $derived(

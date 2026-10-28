@@ -14,7 +14,7 @@
 // lèverait sur null. Chaque fonction fait ce contrôle avant de borner.
 import { nomAffiche } from '../../application/personnes.js';
 import { kSieges } from '../../geometrie/designation.js';
-import { englobant, geometrieTable } from '../../geometrie/tables.js';
+import { englobant, geometrieEcartee } from '../../geometrie/tables.js';
 import { ajuster, borner, bornesZoom, facteurMolette, kAjuste, zoomerSous } from '../../geometrie/vue.js';
 
 /** Facteur de zoom des boutons de zoom, appliqué autour du centre du cadre. */
@@ -94,11 +94,15 @@ export function zoomerBouton(vue, englobantPlan, cadre, sens) {
 /**
  * L'englobant des emprises des tables d'un état des places (EtatPlaces,
  * A5), chacune à sa capacité courante, comme le modèle de dessin les pose
- * (geometrieTable) ; null sans table. Il ne dépend ni du tour ni de k.
+ * (geometrieEcartee), sur le plan écarté que disent les rangées, aucune par
+ * défaut ; null sans table. Il ne dépend jamais de k, et du tour que par
+ * les rangées.
+ * @param {Object} etat
+ * @param {Array<{y: number, decalage: number}>} [rangees]   celles de rangeesEcartees
  * @returns {{minX: number, minY: number, maxX: number, maxY: number}|null}
  */
-export function englobantDuTour(etat) {
-  return englobant(etat.tables.map((table) => geometrieTable(table, table.capacite)));
+export function englobantDuTour(etat, rangees = []) {
+  return englobant(etat.tables.map((table) => geometrieEcartee(table, table.capacite, rangees)));
 }
 
 /**
@@ -154,23 +158,25 @@ export function tourPourVoir(id, tours, montre, etatDuTour) {
  * dans les bornes du cadre. Null quand elle n'a pas de chaise à ce tour —
  * réserve, absence, exclusion, personne que la charge n'a plus —, sans vue,
  * ou dans un cadre où kAjuste vaut null : la vue reste. La chaise se lit
- * sur la géométrie de sa table à sa capacité, celle que le modèle de
- * dessin pose ; aucun argument n'est modifié.
+ * sur la géométrie de sa table à sa capacité, sur le plan écarté que disent
+ * les rangées, celle que le modèle de dessin pose ; aucun argument n'est
+ * modifié.
  *
  * @param {{k: number, tx: number, ty: number}|null} vue
  * @param {{tables: Object[]}} etat   EtatPlaces du tour montré
  * @param {number} id
  * @param {{minX: number, minY: number, maxX: number, maxY: number}|null} englobantPlan
  * @param {{gauche: number, haut: number, largeur: number, hauteur: number}} cadre
+ * @param {Array<{y: number, decalage: number}>} [rangees]   celles de rangeesEcartees, aucune par défaut
  * @returns {{k: number, tx: number, ty: number}|null}
  */
-export function vuePourVoir(vue, etat, id, englobantPlan, cadre) {
+export function vuePourVoir(vue, etat, id, englobantPlan, cadre, rangees = []) {
   const kCadre = vue === null ? null : kAjuste(englobantPlan, cadre);
   if (kCadre === null) return null;
   for (const table of etat.tables) {
     const rang = table.chaises.findIndex(({ occupant }) => occupant === id);
     if (rang === -1) continue;
-    const geometrie = geometrieTable(table, table.capacite);
+    const geometrie = geometrieEcartee(table, table.capacite, rangees);
     const { x, y } = geometrie.chaises[rang];
     const { kMin, kMax } = bornesZoom(kCadre);
     const k = Math.min(kMax, Math.max(kMin, vue.k, kSieges(geometrie)));

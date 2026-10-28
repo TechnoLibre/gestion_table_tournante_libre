@@ -29,7 +29,7 @@ import {
   placePastille,
 } from '../../geometrie/plateau.js';
 import { TAILLE_TEXTE_LISTE_CM, replier } from '../../geometrie/texte.js';
-import { PLANCHER_DIAMETRE, RAYON_POIGNEE, geometrieTable } from '../../geometrie/tables.js';
+import { ECART_LISTE, PLANCHER_DIAMETRE, RAYON_POIGNEE, blocNoms, dessinDepuisPosition, ecarterRangees, geometrieTable } from '../../geometrie/tables.js';
 import { indexerPlan } from '../../moteur/configuration.js';
 import { conflitsParTable } from '../../moteur/conflits.js';
 import { diagnostiquer } from '../../moteur/diagnostic.js';
@@ -66,6 +66,7 @@ import {
   modeleDessin,
   ordonneesLignes,
   partiesLigne,
+  rangeesEcartees,
   rangeesLigne,
   rangeesListe,
   texteLigne,
@@ -1150,6 +1151,96 @@ describe('modeleDessin : l\u{2019}option poignee dessine une table au nombre tir
       const auZoom = modeleDessin(etat, options(charge, { k, poignee: { table: cible.id, places: 30 } })).tables[0];
       assert.equal(auZoom.regime, regimeCibles(k, geometrieTable(cible, 30)), `k = ${k}`);
     }
+  });
+});
+
+// --- Le plan écarté -----------------------------------------------------------
+
+describe('modeleDessin et rangeesEcartees : le plan écarté, quand l\u{2019}organisation allonge les listes (§ 7.4, § 11.7)', () => {
+  // La petite démonstration, ses tables posées en une colonne, à 300 cm
+  // l'une de l'autre ; chaque occupant porte une organisation qui ne tient
+  // pas à côté de son nom dans un bloc étroit, et se replie dessous.
+  function enColonne() {
+    const charge = petite();
+    charge.tables = charge.tables.map((table, rang) => ({ ...table, position: { x: 40, y: 300 * rang } }));
+    charge.participants = charge.participants.map((participant) => ({ ...participant, organisation: 'Fédération des jardins partagés du quartier' }));
+    return charge;
+  }
+  const mesures = { mesurer: droit, mesurerItalique: italique, largeur: 60, hauteur: 35 };
+
+  test('sans rangées, ou des rangées vides, chaque table à sa position ; des rangées ne changent que la géométrie et les chaises', () => {
+    const charge = enColonne();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const base = options(charge, { organisations: true, organisationDe: organisationDeCharge(charge) });
+    const sans = modeleDessin(etat, base);
+    assert.deepEqual(modeleDessin(etat, { ...base, rangees: [] }), sans);
+    for (const table of sans.tables) {
+      const etatTable = etat.tables.find(({ id }) => id === table.id);
+      assert.deepEqual(table.geometrie, geometrieTable(etatTable, etatTable.capacite));
+    }
+    const rangees = [{ y: 0, decalage: 0 }, { y: 300, decalage: 70 }, { y: 600, decalage: 130 }, { y: 900, decalage: 130 }];
+    const ecarte = modeleDessin(etat, { ...base, rangees });
+    assert.equal(ecarte.tables.length, sans.tables.length);
+    for (const [rang, table] of ecarte.tables.entries()) {
+      const etatTable = etat.tables[rang];
+      const geometrie = geometrieTable({ ...etatTable, position: dessinDepuisPosition(etatTable.position, rangees) }, etatTable.capacite);
+      assert.deepEqual(table.geometrie, geometrie, `table ${table.id}`);
+      assert.equal(table.geometrie.centre.y, etatTable.position.y + rangees[rang].decalage);
+      assert.deepEqual(table.chaises.map(({ x, y }) => ({ x, y })), geometrie.chaises.map(({ x, y }) => ({ x, y })));
+      const { geometrie: _g, chaises, ...reste } = table;
+      const { geometrie: _h, chaises: chaisesSans, ...resteSans } = sans.tables[rang];
+      assert.deepEqual(reste, resteSans, `table ${table.id} : le reste inchangé`);
+      assert.deepEqual(
+        chaises.map(({ x: _x, y: _y, ...autres }) => autres),
+        chaisesSans.map(({ x: _x, y: _y, ...autres }) => autres),
+      );
+    }
+    const { tables: _t, ...horsTables } = ecarte;
+    const { tables: _u, ...horsTablesSans } = sans;
+    assert.deepEqual(horsTables, horsTablesSans);
+  });
+
+  test('rangeesEcartees : chaque bloc haut de ses rangées plus une, organisations repliées comprises, sa référence de ses rangées sans retrait ; aucun bloc sur celui du dessous', () => {
+    const charge = avecPropositions(enColonne());
+    const etat = etatPlaces(charge, { tour: 1, proposition: 1 });
+    const modele = modeleDessin(etat, options(charge, { organisations: true, organisationDe: organisationDeCharge(charge) }));
+    const reglage = { mesurer: droit, mesurerItalique: italique, largeur: mesures.largeur };
+    const rangeesDe = new Map(modele.tables.map((table) => [table.id, rangeesListe(table, t, reglage)]));
+    assert.ok(
+      modele.tables.every((table) => rangeesDe.get(table.id).length > table.lignes.length),
+      'chaque table replie des organisations',
+    );
+    const hauteurDe = (n) => (n + 1) * mesures.hauteur;
+    const hauteurs = new Map([...rangeesDe].map(([id, lues]) => [id, hauteurDe(lues.length)]));
+    const references = new Map([...rangeesDe].map(([id, lues]) => [id, hauteurDe(lues.filter(({ retrait }) => !retrait).length)]));
+    const geometries = modele.tables.map(({ geometrie }) => geometrie);
+    const rangees = rangeesEcartees(modele, t, mesures);
+    assert.deepEqual(rangees, ecarterRangees(geometries, { largeur: mesures.largeur, hauteurs, references }));
+    assert.ok(rangees.at(-1).decalage > 0, 'les rangées s\u{2019}écartent');
+    const ecarte = modeleDessin(etat, options(charge, { organisations: true, organisationDe: organisationDeCharge(charge), rangees }));
+    const blocs = ecarte.tables.map(({ geometrie }) => blocNoms(geometrie, { largeur: mesures.largeur, hauteurs }));
+    const blocsSans = geometries.map((geometrie) => blocNoms(geometrie, { largeur: mesures.largeur, hauteurs: references }));
+    for (const [rang, bloc] of blocs.slice(1).entries()) {
+      const exige = Math.min(ECART_LISTE, blocsSans[rang + 1].minY - blocsSans[rang].maxY);
+      assert.ok(exige > 0, `sans organisation, aucun bloc sur celui du dessous, rang ${rang}`);
+      assert.ok(bloc.minY - blocs[rang].maxY >= exige - 1e-9, `sous la table de rang ${rang}`);
+    }
+    // Sans organisation, les mêmes blocs tiennent dans le pas de 300 cm.
+    assert.deepEqual(rangeesEcartees(modeleDessin(etat, options(charge)), t, mesures), []);
+  });
+
+  test('rangeesEcartees : une organisation qui tient sur la ligne du nom ne déplace aucune rangée, même entre des blocs plus proches qu\u{2019}ECART_LISTE', () => {
+    const charge = avecPropositions(enColonne());
+    charge.tables = charge.tables.map((table, rang) => ({ ...table, position: { x: 40, y: 120 * rang } }));
+    charge.participants = charge.participants.map((participant) => ({ ...participant, organisation: 'A' }));
+    const etat = etatPlaces(charge, { tour: 1, proposition: 1 });
+    const large = { ...mesures, largeur: 400 };
+    const modele = modeleDessin(etat, options(charge, { organisations: true, organisationDe: organisationDeCharge(charge) }));
+    const reglage = { mesurer: droit, mesurerItalique: italique, largeur: large.largeur };
+    assert.ok(modele.tables.every((table) => rangeesListe(table, t, reglage).every(({ retrait }) => !retrait)), 'aucune organisation repliée');
+    const hauteurs = new Map(modele.tables.map((table) => [table.id, (rangeesListe(table, t, reglage).length + 1) * large.hauteur]));
+    assert.notDeepEqual(ecarterRangees(modele.tables.map(({ geometrie }) => geometrie), { largeur: large.largeur, hauteurs }), [], 'sans référence, les blocs s\u{2019}écarteraient');
+    assert.deepEqual(rangeesEcartees(modele, t, large), []);
   });
 });
 

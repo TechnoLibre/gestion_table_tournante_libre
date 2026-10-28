@@ -122,7 +122,9 @@ function exigerNomImprimable(pied) {
  *  - pied : le pied reçu, le même sur chaque page.
  *
  * @param {Object} etat   EtatPlaces du tour imprimé
- * @param {import('../../geometrie/tables.js').GeometrieTable[]} geometries   celles des tables de etat
+ * @param {import('../../geometrie/tables.js').GeometrieTable[]} geometries   celles des tables de etat,
+ *        où le modèle de dessin les pose — sur le plan écarté (rangeesEcartees, § 7.4) quand
+ *        l'organisation allonge les listes
  * @param {'auto'|'unePage'|'decoupe'} decoupe
  * @param {{papier: string, bandeMm: number, listes?: boolean, hauteurLigne?: number|null,
  *          lignesAjoutees?: Map<number, number>, parColonne?: boolean,

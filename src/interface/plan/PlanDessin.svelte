@@ -25,7 +25,8 @@
   // donc que sur une sonde rendue, au montage, puis à chaque changement de
   // taille du <svg> qui porte le dessin, qu'un ResizeObserver signale : un
   // plan qui se cache perd ses mesures, et ses listes, et les reprend en se
-  // montrant.
+  // montrant. La propriété liée mesures les rend au parent — null sans
+  // elles —, qui en tire les rangées du plan écarté (rangeesEcartees).
   //
   // Le modèle du plan imprimé (modele.impression, § 11.7) se dessine de
   // même, chaque table sans poignée, ni cible, ni identifiant (TablePlan) ;
@@ -38,14 +39,13 @@
   import Motifs from './Motifs.svelte';
   import TablePlan from './TablePlan.svelte';
 
-  let { modele } = $props();
+  let { modele, mesures = $bindable(null) } = $props();
 
   const prefixe = $props.id();
   const largeur = constante('LARGEUR_BLOC_NOMS_CM');
 
   let sonde = $state(null);
   let sondeItalique = $state(null);
-  let mesures = $state(null);
 
   // Prend les mesures quand la sonde est rendue et qu'il n'y en a pas ; les
   // oublie quand elle ne l'est plus.

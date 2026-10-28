@@ -33,12 +33,18 @@ const SOURCES = {
 
 // Un contexte dont le contrôle accepte tout, dont le dépôt rend la commande
 // donnée, et dont le sol est ce que dit surLeSol au point de dessin.
-function contexte({ controlerPlaces = () => ({ refus: null, avertissements: [] }), depot = null, surLeSol = () => false } = {}) {
+function contexte({
+  controlerPlaces = () => ({ refus: null, avertissements: [] }),
+  depot = null,
+  surLeSol = () => false,
+  positionDe = (point) => point,
+} = {}) {
   const deposes = [];
   return {
     deposes,
     controlerPlaces,
     surLeSol,
+    positionDe,
     deposer(source, point) {
       deposes.push({ source, point });
       return depot ?? { resultat: { commande: 'deplacerDansRetenu', arguments: { tour: 1 } }, place: { table: 4, siege: 1 } };
@@ -109,6 +115,20 @@ describe('geste : le glissement d’une table (§ 7.1, § 7.2, § 7.3)', () => {
     assert.deepEqual(executes[0].place, { table: 3 });
     assert.deepEqual(executes[0].apres, { genre: 'table', table: 3 });
     assert.deepEqual(types(effets[4]), ['ecrireTransform', 'executer', 'finirGeste']);
+  });
+
+  test('le centre lâché sur le dessin passe par positionDe : la commande reçoit la position enregistrée, arrondie', () => {
+    // Un plan écarté dont tout ce qui est sous y = 0 descend de 100 cm : le
+    // centre lâché en y = 60 sur le dessin est la position y = −40.
+    const recus = [];
+    const positionDe = (point) => {
+      recus.push(point);
+      return { x: point.x, y: point.y > 0 ? point.y - 100 : point.y };
+    };
+    const { tous } = jouer([presser(SOURCES.table), bouger(40, 180), relacher(40, 200)], contexte({ positionDe }));
+    assert.deepEqual(recus, [deplacer(SOURCES.table.position, DEPART, { x: DEPART.x + 40, y: DEPART.y + 200 }, VUE.k)]);
+    assert.deepEqual(recus[0], { x: 140, y: 60 });
+    assert.deepEqual(deType(tous, 'executer')[0].arguments, { id: 3, position: { x: 140, y: -40 } });
   });
 
   test('la position s’arrondit au centimètre', () => {

@@ -3015,7 +3015,7 @@ l'opérateur agit directement dessus.
 | glisser une personne sur un siège libre | la déplace |
 | glisser une personne sur une autre | les échange |
 | glisser une personne hors des tables | la retire du tour ; elle attend dans la **réserve** visible, et sa chaise reste vide (§ 5.8) |
-| glisser une table | change sa position |
+| glisser une table | change sa position — sur un plan écarté, celle que le point lâché ramène (§ 7.4) |
 | tirer la poignée d'une table | **change son nombre de places** |
 | survoler une table en conflit | affiche le détail des règles violées |
 | zoomer, déplacer la vue | change le cadrage |
@@ -3240,17 +3240,42 @@ ligne, jamais entre une lettre et son accent. La ligne du nom s'ajuste alors
 comme sans elle : un nom trop long s'y abrège encore, et une organisation dont
 le nom tombe tombe avec lui. Le bloc s'allonge vers le bas de ces lignes, au
 pas des autres, et les sièges suivants descendent d'autant ; aucune ligne ne
-sort de la largeur du bloc. La grille des tables, dont le pas de rangée ne
-compte que les emprises, l'emprise du plan à l'écran et l'ajustement ne
-changent pas. **Un bloc ainsi allongé peut couvrir le bloc du dessous** : plus
-haut que le pas de rangée, ce qu'est déjà sur la grille par défaut une ronde de
-huit places dont chaque ligne se replie une fois, il descend sur la liste de la
-table posée une rangée plus bas dans la même colonne, et leurs lignes se
-superposent, à l'écran comme sur le papier. Rien ne le signale ; écarter les
-deux tables, ou éteindre la bascule, les sépare. Ces lignes s'ajoutent sans
-rien écrire, et l'avertissement d'une liste sur une voisine, qui juge
-l'événement, ne les compte pas. Sur le papier, la découpe en pages compte
-chacune (§ 11.7).
+sort de la largeur du bloc.
+
+**Le plan s'écarte quand l'organisation allonge les listes.** Un bloc allongé
+dépasse vite le pas de rangée de la grille, qui ne compte que les emprises :
+c'est déjà le cas d'une ronde de huit places dont chaque ligne se replie une
+fois. Listes et organisation montrées, les rangées de tables descendent donc sur
+le dessin juste assez pour que l'organisation ne rapproche jamais deux blocs qui
+se recouvrent en largeur, de tables d'ordonnées différentes : ils restent à
+36 cm au moins l'un de l'autre, ou, s'ils étaient plus proches sans
+l'organisation, à l'écart qu'ils avaient sans elle. Aucune liste ne couvre ainsi
+celle du dessous, à l'écran comme sur le papier, quand elle ne la couvrait pas
+déjà sans l'organisation, et une organisation qui tient sur la ligne du nom ne
+déplace aucune table. L'écart se calcule sur les listes du tour montré, ou de la
+proposition montrée : leurs occupants, donc les organisations repliées, changent
+d'un tour à l'autre, et une table peut se dessiner plus haut ou plus bas en
+changeant de tour. L'écart s'ajoute entre deux rangées, dans le plus grand
+intervalle qui sépare les deux tables, le plus haut à égalité, et tout ce qui
+est dessous descend d'autant : une rangée reste alignée, même à quelques
+centimètres près, et ni l'ordre des rangées ni les abscisses ne changent ; deux
+tables de même ordonnée ne se séparent pas. Le plan s'écarte à tout zoom, que
+les listes s'y dessinent ou non, et franchir le seuil des listes ne déplace
+aucune table ; éteindre les listes ou l'organisation le resserre. Regarder
+n'écrit rien : la position enregistrée des tables, la grille et l'avertissement
+d'une liste sur une voisine, qui juge l'événement et ne compte pas ces lignes,
+ne changent pas. Le dessin écarté est celui que la vue regarde : l'emprise du
+plan, la vue où le plan s'ouvre, « Ajuster », « Voir sur le plan », la
+désignation d'une chaise, l'infobulle et le clavier le lisent.
+
+**Un geste passe du dessin à la position enregistrée.** Une table se saisit
+où elle est dessinée et glisse de l'écart du pointeur ; lâchée, son centre
+revient à une position enregistrée par les rangées du moment de l'appui :
+posée sur une rangée du dessin, elle prend l'ordonnée enregistrée de cette
+rangée, et la rejoint ; entre deux rangées, la même part de l'intervalle
+enregistré qui les sépare. Le plan s'écarte ensuite de nouveau, la table
+posée comprise. Sur le papier, le plan imprimé est le plan écarté, et sa
+découpe en pages compte chaque ligne (§ 11.7).
 
 **La largeur d'une ligne est celle que le moteur de rendu pose.** Chaque partie
 d'une ligne — numéro et état, nom, organisation, titre — est son propre
@@ -7207,8 +7232,10 @@ papier comme à l'écran : la hauteur de chaque bloc, qui entre dans l'emprise d
 plan imprimé, dans ses colonnes de tables et dans sa découpe en pages, compte
 ces lignes, mesurées sur la police rendue comme celles de l'écran. Un bloc ne
 déborde ainsi d'aucune page ; découpé, il passe d'une page à sa voisine comme
-le reste du dessin. La découpe ne déplace aucune table : un bloc qui couvre à
-l'écran la liste du dessous la couvre aussi sur le papier (§ 7.4).
+le reste du dessin. Listes et organisation imprimées, la découpe pagine le plan
+écarté (§ 7.4), calculé sur ces mêmes lignes : aucune organisation repliée
+n'y pousse une liste sur celle du dessous, et la position enregistrée des
+tables ne change pas.
 
 **Le plan imprimé est le dessin de l'écran** : chaque table y porte son numéro au
 centre du plateau et sa pastille sur son bord, aux mêmes places et aux mêmes
