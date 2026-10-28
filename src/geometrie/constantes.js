@@ -411,7 +411,7 @@ export const CONSTANTES = Object.freeze(
       mesure: "hauteur de l'image des badges sur un badge A6, à la plus grande taille que la mise en page lui donne",
       raison:
         "l'image se pose sur tous les badges et se reconnaît d'un coup d'œil ; plafonnée, elle garde la même " +
-        "taille d'un badge à l'autre et laisse au logo du participant et au pied TechnoLibre la place qui reste (§ 11.4)",
+        "taille d'un badge à l'autre et laisse au logo du participant la place qu'elle ne prend pas (§ 11.4)",
       configuration: 'badge A6 imprimé, images de proportions variées, lecture en main',
       proprietaire: 'manuel',
       statut: 'defautDeTravail',
@@ -426,8 +426,8 @@ export const CONSTANTES = Object.freeze(
       unite: 'mm',
       mesure: "hauteur de l'image des badges sur une carte Avery 5392, à la plus grande taille que la mise en page lui donne",
       raison:
-        "sur 66,2 mm de hauteur utile, l'image à cette hauteur laisse, sous un nom d'une ligne, son organisation " +
-        'et trois tours, la place du pied TechnoLibre (§ 11.4)',
+        "sur 66,2 mm de hauteur utile, l'image à cette hauteur tient sous un nom d'une ligne, son organisation " +
+        'et deux tours, avec le pied TechnoLibre à son corps de départ (§ 11.4)',
       configuration: 'carte Avery 5392 imprimée, images de proportions variées, lecture en main',
       proprietaire: 'manuel',
       statut: 'defautDeTravail',

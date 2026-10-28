@@ -61,19 +61,30 @@
 // nom, des tours, de l'organisation et du pied sont ceux de la lisibilité,
 // communs aux modèles, comme le plancher du nom au dernier recours.
 //
-// Le pied TechnoLibre, quand il est demandé, vient en dernier : un texte,
-// puis le logo, sous le pied, le logo posé sur le bord du cadre ; un texte
-// vide, ou fait d'espaces, ne pose que le logo. Son texte se replie sans
-// laisser un mot seul sur sa dernière ligne, au même nombre de lignes que le
-// repli glouton (sansMotSeul), sauf quand ses deux derniers mots, le dernier
-// morceau d'un mot coupé compris, ne tiennent pas ensemble sur une ligne : le
-// dernier reste alors seul. Il ne prend que la place que le badge entier
-// laisse entre ses tours et son pied, et ne change rien à ce qui le précède :
-// le badge se compose d'abord sans lui, le pied remonte ensuite de la hauteur
-// du bloc. Il rapetisse de son corps de départ à son plancher, par paliers
-// d'un point ; quand même le plancher ne tient pas, il se retire, et le badge
-// est celui qu'il serait sans lui. Il se retire aussi d'un badge qui a perdu
-// le nom de l'événement : il le suit dans l'ordre de sacrifice.
+// Après tout le texte, l'écart libre entre les tours et le pied se donne
+// dans l'ordre : le logo du participant, puis le pied TechnoLibre, puis
+// l'image des badges. Le pied TechnoLibre cède au logo ce qui dépasse son
+// plancher, puis se retire pour lui, mais ne cède rien à l'image, et le logo
+// ne cède à l'image que ce qui dépasse son plancher : sur un badge chargé,
+// l'image rapetisse, puis se retire, la première. Aucun des trois ne réduit
+// ni ne retire un texte, ni ne cause un refus, et aucun ne se pose sur un
+// badge dépouillé ou serré : ils suivent tous les textes dans l'ordre de
+// sacrifice.
+//
+// Le pied TechnoLibre, quand il est demandé : un texte, puis le logo, sous
+// le pied, le logo posé sur le bord du cadre ; un texte vide, ou fait
+// d'espaces, ne pose que le logo. Son texte se replie sans laisser un mot
+// seul sur sa dernière ligne, au même nombre de lignes que le repli glouton
+// (sansMotSeul), sauf quand ses deux derniers mots, le dernier morceau d'un
+// mot coupé compris, ne tiennent pas ensemble sur une ligne : le dernier
+// reste alors seul. Il ne prend que la place que le badge entier et le logo
+// du participant laissent entre ses tours et son pied, et ne change rien à
+// ce qui le précède : le badge se compose d'abord sans lui, le pied remonte
+// ensuite de la hauteur du bloc. Il rapetisse de son corps de départ à son
+// plancher, par paliers d'un point ; quand même le plancher ne tient pas, il
+// se retire, et le badge est celui qu'il serait sans lui. Il se retire aussi
+// d'un badge qui a perdu le nom de l'événement : il le suit dans l'ordre de
+// sacrifice.
 //
 // Le logo du participant, quand il est demandé, passe avant le pied
 // TechnoLibre et après tout le texte : il ne prend que l'écart entre les
@@ -87,19 +98,18 @@
 // est celle du badge sans logo. Il se retire aussi d'un badge qui a perdu le
 // nom de l'événement, comme le pied TechnoLibre.
 //
-// L'image des badges, quand elle est demandée, passe après tout le texte et
-// avant le logo du participant : elle prend dans l'écart entre les tours et
-// le pied la plus grande taille qui y tient, au rapport reçu, sous la
-// hauteur maximale du modèle (TYPOGRAPHIES), moins ses dégagements
+// L'image des badges, quand elle est demandée, prend la plus grande taille
+// qui tient, au rapport reçu, sous la hauteur maximale du modèle
+// (TYPOGRAPHIES), dans ce que le logo posé et le pied TechnoLibre laissent :
+// le pied TechnoLibre garde le palier du badge sans image, le logo la plus
+// petite zone où il atteint son plancher, avec ses dégagements, et il prend
+// ensuite tout ce qu'elle laisse. Elle a ses propres dégagements
 // (LOGO_PARTICIPANT_ECART_MM). Le texte se compose sans elle et ne change
 // pas : en haut, elle repousse le nom, l'organisation et les tours vers le
-// bas ; au centre, les tours seuls ; en bas, rien, et elle se pose
-// au-dessus du pied. Le logo du participant et le pied TechnoLibre se
-// partagent ensuite l'écart qu'elle laisse, par leurs règles. Elle
-// rapetisse avec l'écart, et ne se pose pas quand sa plus petite cote
-// n'atteint pas le plancher du logo (LOGO_PARTICIPANT_PLANCHER_MM), ni sur un
-// badge qui a perdu le nom de l'événement ou l'organisation : elle ne retire
-// aucun texte, et ne cause aucun refus.
+// bas ; au centre, les tours seuls ; en bas, rien, et elle se pose au-dessus
+// du pied. Elle rapetisse avec l'écart, et ne se pose pas quand sa plus
+// petite cote n'atteint pas le plancher du logo
+// (LOGO_PARTICIPANT_PLANCHER_MM).
 import { constante } from '../geometrie/constantes.js';
 import { MODELES_BADGE, estModeleBadge } from '../geometrie/papiers.js';
 import { cadreUtile } from './imposition.js';
@@ -414,13 +424,15 @@ function rolesLus(textes) {
  * badge composé sans lui ; technolibre rend alors ce corps et la boîte du
  * logo. Sinon, ou quand le badge est dépouillé ou serré, il se retire :
  * technolibre rend {corps: null, logo: null}, et la page est celle du badge
- * sans lui. Non demandé, technolibre rend null.
+ * sans lui. Non demandé, technolibre rend null. Il passe avant l'image des
+ * badges : son palier est celui du badge sans elle.
  *
  * Logo du participant : la boîte la plus grande, au rapport reçu, qui tient
  * dans la largeur du cadre et dans l'écart entre les tours et le pied, moins
- * LOGO_PARTICIPANT_ECART_MM au-dessus et au-dessous, centrée dans cette zone.
- * Le pied TechnoLibre demandé se compte d'abord à son plancher, puis prend le
- * plus grand palier que le logo laisse ; il se retire quand le logo n'atteint
+ * LOGO_PARTICIPANT_ECART_MM au-dessus et au-dessous, centrée dans cette zone,
+ * au-dessus de l'image des badges posée en bas, sous elle ailleurs. Le pied
+ * TechnoLibre demandé se compte d'abord à son plancher, puis prend le plus
+ * grand palier que le logo laisse ; il se retire quand le logo n'atteint
  * qu'ainsi LOGO_PARTICIPANT_PLANCHER_MM sur sa plus petite cote.
  * logoParticipant rend {boite} ; boite null quand même sans pied TechnoLibre
  * le logo n'atteint pas son plancher, ou que le badge est dépouillé ou
@@ -430,17 +442,20 @@ function rolesLus(textes) {
  * Image des badges : la boîte la plus grande, au rapport reçu, au plus de la
  * hauteur maximale du modèle (IMAGE_BADGES_HAUTEUR_MAX_MM,
  * IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM), dans la largeur du cadre et dans
- * l'écart entre les tours et le pied, moins LOGO_PARTICIPANT_ECART_MM sous
- * elle en haut, de part et d'autre au centre et en bas ; centrée en largeur.
- * En haut, au haut du cadre, tout ce qui précède le pied descendant de sa
- * hauteur et d'un dégagement ; au centre, entre le petit texte et les tours,
- * qui descendent de sa hauteur et de deux dégagements ; en bas, un dégagement
- * au-dessus du pied, remonté avec lui sous un pied TechnoLibre. Elle se
- * taille avant le logo du participant et le pied TechnoLibre, qui prennent
- * l'écart qu'elle laisse. imageBadges rend {boite} ; boite null quand sa plus
- * petite cote n'atteint pas LOGO_PARTICIPANT_PLANCHER_MM, ou que le badge est
- * dépouillé ou serré : la page est alors celle du badge sans image. Non
- * demandée, imageBadges rend null, et la page est celle d'avant l'image.
+ * l'écart entre les tours et le pied, moins le bloc TechnoLibre, moins, sous
+ * un logo posé, la plus petite zone où il atteint son plancher et ses deux
+ * dégagements, moins LOGO_PARTICIPANT_ECART_MM sous elle en haut, de part et
+ * d'autre au centre et en bas ; centrée en largeur. En haut, au haut du
+ * cadre, tout ce qui précède le pied descendant de sa hauteur et d'un
+ * dégagement ; au centre, entre le petit texte et les tours, qui descendent
+ * de sa hauteur et de deux dégagements ; en bas, un dégagement au-dessus du
+ * pied, remonté avec lui sous un pied TechnoLibre. Elle se taille après le
+ * logo du participant, qui ne lui cède que ce qui dépasse son plancher, et
+ * après le pied TechnoLibre, qui garde le palier du badge sans elle.
+ * imageBadges rend {boite} ; boite null quand sa plus petite cote n'atteint
+ * pas LOGO_PARTICIPANT_PLANCHER_MM, ou que le badge est dépouillé ou serré :
+ * la page est alors celle du badge sans image. Non demandée, imageBadges rend
+ * null, et la page est celle d'avant l'image.
  *
  * @param {{nom: string, nomEnBlanc?: boolean, organisationEnGros?: boolean, lignes: string[],
  *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
@@ -901,7 +916,7 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
 
   // La page composée, le bloc TechnoLibre du palier donné posé sous le pied,
   // ses lignes repliées par sansMotSeul, le pied remonté de sa hauteur, le
-  // logo posé sur le bas du cadre ; remontee, cette hauteur.
+  // logo posé sur le bas du cadre.
   function poserTechnolibre({ blocs, colonnesTours, nombrePied }, { corps, lignes, hauteurLogo, largeurLogo, hauteurBloc }) {
     const pasTexte = pas(corps);
     const debutPied = blocs.length - nombrePied;
@@ -915,100 +930,36 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
       y: hautDuBloc + rang * pasTexte.hauteur + pasTexte.ascendante,
     }));
     const logo = { x: (L - largeurLogo) / 2, y: H - hauteurLogo, largeur: largeurLogo, hauteur: hauteurLogo };
-    return { blocs: [...blocs.slice(0, debutPied), ...remonte, ...blocsTexte], colonnesTours, technolibre: { corps, logo }, remontee: hauteurBloc };
+    return { blocs: [...blocs.slice(0, debutPied), ...remonte, ...blocsTexte], colonnesTours, technolibre: { corps, logo } };
   }
 
-  // La page finale d'une page composée, sans logo du participant : sans pied
-  // TechnoLibre demandé, telle quelle ; sinon, le bloc TechnoLibre au plus
-  // grand corps qui tient dans l'écart libre, le pied remonté de sa hauteur,
-  // remontee.
-  // La page reste telle quelle, le bloc retiré, quand même le plancher ne
-  // tient pas, ou que la page est dépouillée ou serrée : il suit dans l'ordre
-  // de sacrifice tous les textes, et l'écart que leur retrait ou leur
-  // resserrement libère ne lui revient pas.
-  function avecTechnolibre(page, { depouillee, serree }) {
-    const { blocs, colonnesTours, libre } = page;
-    if (promotion === null) return { blocs, colonnesTours, technolibre: null, remontee: 0 };
-    const retire = { blocs, colonnesTours, technolibre: { corps: null, logo: null }, remontee: 0 };
-    if (depouillee || serree) return retire;
-    const palier = paliersTechnolibre().find(({ hauteurBloc }) => hauteurBloc <= libre + TOLERANCE_MM);
-    return palier === undefined ? retire : poserTechnolibre(page, palier);
-  }
-
-  // La page finale d'une page composée, le logo du participant demandé posé
-  // avant le pied TechnoLibre ; null quand il ne se pose pas : page
-  // dépouillée ou serrée, ou plus petite cote sous le plancher même sans pied
-  // TechnoLibre. Le logo prend la zone entre les tours et le pied — remonté
-  // du bloc TechnoLibre —, moins un dégagement de part et d'autre, centré.
-  function avecLogo(page, { depouillee, serree }) {
-    if (depouillee || serree) return null;
-    const ecart = constante('LOGO_PARTICIPANT_ECART_MM');
-    const plancher = constante('LOGO_PARTICIPANT_PLANCHER_MM');
+  // Le plus grand logo du participant demandé dans une zone de la hauteur
+  // donnée, bornée aussi par la largeur du cadre, {largeur, hauteur} ; null
+  // quand sa plus petite cote passe sous le plancher
+  // (LOGO_PARTICIPANT_PLANCHER_MM).
+  function tailleLogo(hauteurZone) {
     const { rapport } = logoDemande;
-    // Le plus grand logo dans une zone de la hauteur donnée, bornée aussi
-    // par la largeur du cadre ; null quand sa plus petite cote passe sous le
-    // plancher.
-    const tailleDans = (hauteurZone) => {
-      const hauteur = Math.min(hauteurZone, L / rapport);
-      const largeur = hauteur * rapport;
-      return Math.min(largeur, hauteur) >= plancher - TOLERANCE_MM ? { largeur, hauteur } : null;
-    };
-    // Le logo posé sur la page finale, centré entre le bas des tours et le
-    // haut du pied, que le bloc TechnoLibre de la hauteur donnée remonte.
-    const poser = (finale, { largeur, hauteur }, hauteurBloc) => {
-      const haut = page.finDesTours + ecart;
-      const zone = page.libre - hauteurBloc - 2 * ecart;
-      const boite = { x: (L - largeur) / 2, y: haut + (zone - hauteur) / 2, largeur, hauteur };
-      return { ...finale, logoParticipant: { boite } };
-    };
-    const lesPaliers = paliersTechnolibre();
-    const plancherTechnolibre = lesPaliers.at(-1);
-    if (plancherTechnolibre !== undefined) {
-      const taille = tailleDans(page.libre - plancherTechnolibre.hauteurBloc - 2 * ecart);
-      if (taille !== null) {
-        // Le pied TechnoLibre reprend le plus grand palier que le logo
-        // laisse : son plancher y tient au moins.
-        const reste = page.libre - taille.hauteur - 2 * ecart;
-        const palier = lesPaliers.find(({ hauteurBloc }) => hauteurBloc <= reste + TOLERANCE_MM) ?? plancherTechnolibre;
-        return poser(poserTechnolibre(page, palier), taille, palier.hauteurBloc);
-      }
-    }
-    const taille = tailleDans(page.libre - 2 * ecart);
-    if (taille === null) return null;
-    const { blocs, colonnesTours } = page;
-    const technolibreRetire = promotion === null ? null : { corps: null, logo: null };
-    return poser({ blocs, colonnesTours, technolibre: technolibreRetire, remontee: 0 }, taille, 0);
+    const hauteur = Math.min(hauteurZone, L / rapport);
+    const largeur = hauteur * rapport;
+    return Math.min(largeur, hauteur) >= constante('LOGO_PARTICIPANT_PLANCHER_MM') - TOLERANCE_MM ? { largeur, hauteur } : null;
   }
 
-  // La page finale d'une page composée, dépouillée, serrée ou non, sans
-  // l'image des badges : sans logo du participant demandé, celle du pied
-  // TechnoLibre, logoParticipant null ; avec, celle où le logo se pose, ou
-  // celle du badge sans logo, boîte null. remontee dit de combien le bloc
-  // TechnoLibre a remonté le pied.
-  function finirSansImage(page, etat) {
-    if (logoDemande === null) return { ...avecTechnolibre(page, etat), logoParticipant: null };
-    return avecLogo(page, etat) ?? { ...avecTechnolibre(page, etat), logoParticipant: { boite: null } };
-  }
-
-  // L'image des badges demandée sur une page composée, avant le logo du
-  // participant et le pied TechnoLibre : la plus grande boîte, au rapport
-  // reçu, sous la hauteur maximale du modèle, dans la largeur du cadre et
-  // dans l'écart libre moins ses dégagements — un sous elle en haut, un de
-  // part et d'autre au centre et en bas ; null quand sa plus petite cote
-  // n'atteint pas le plancher, ou que la page est dépouillée ou serrée. Rend
-  // la page où elle prend sa place : en haut, tout ce qui précède le pied
-  // descend de sa hauteur et d'un dégagement, l'image au haut du cadre ; au
-  // centre, les tours descendent de sa hauteur et de deux dégagements,
-  // l'image sous le haut des tours d'avant, un dégagement plus bas ; en bas,
-  // rien ne bouge, l'écart libre seul se réduit, l'image posée ensuite
-  // au-dessus du pied. Le logo du participant et le pied TechnoLibre prennent
-  // ensuite ce que l'écart réduit laisse.
-  function avecImage(page, { depouillee, serree }) {
-    if (depouillee || serree) return null;
+  // L'image des badges demandée sur une page composée, dans la place donnée,
+  // une part de l'écart libre : la plus grande boîte, au rapport reçu, sous
+  // la hauteur maximale du modèle, dans la largeur du cadre et dans cette
+  // place moins ses dégagements — un sous elle en haut, un de part et d'autre
+  // au centre et en bas ; null quand sa plus petite cote n'atteint pas le
+  // plancher. Rend la page où elle prend sa place : en haut, tout ce qui
+  // précède le pied descend de sa hauteur et d'un dégagement, l'image au haut
+  // du cadre ; au centre, les tours descendent de sa hauteur et de deux
+  // dégagements, l'image sous le haut des tours d'avant, un dégagement plus
+  // bas ; en bas, rien ne bouge, l'écart libre seul se réduit, l'image posée
+  // ensuite au-dessus du pied.
+  function avecImage(page, place) {
     const ecart = constante('LOGO_PARTICIPANT_ECART_MM');
     const { rapport, position } = imageDemandee;
     const degagements = position === 'haut' ? ecart : 2 * ecart;
-    const hauteur = Math.min(constante(typographie.imageMax), page.libre - degagements, L / rapport);
+    const hauteur = Math.min(constante(typographie.imageMax), place - degagements, L / rapport);
     const largeur = hauteur * rapport;
     if (Math.min(largeur, hauteur) < constante('LOGO_PARTICIPANT_PLANCHER_MM') - TOLERANCE_MM) return null;
     const descente = hauteur + degagements;
@@ -1027,24 +978,81 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     return { page: reduite, boite: { x, y: null, largeur, hauteur } };
   }
 
-  // La page finale d'une page composée, dépouillée, serrée ou non : sans
-  // image des badges demandée, celle de finirSansImage, imageBadges null ;
-  // avec, celle où l'image se pose avant le logo et le pied TechnoLibre — en
-  // bas, sa boîte remontée avec le pied —, ou celle du badge sans image,
-  // boîte null.
-  function finir(page, etat) {
-    const sansImage = () => {
-      const { remontee: _remontee, ...finale } = finirSansImage(page, etat);
-      return finale;
-    };
-    if (imageDemandee === null) return { ...sansImage(), imageBadges: null };
-    const posee = avecImage(page, etat);
-    if (posee === null) return { ...sansImage(), imageBadges: { boite: null } };
-    const { remontee, ...finale } = finirSansImage(posee.page, etat);
-    const { boite } = posee;
+  // Le partage d'un écart libre de la hauteur donnée entre le logo du
+  // participant et le pied TechnoLibre, sans l'image des badges : {palier,
+  // taille}, palier undefined quand le pied TechnoLibre se retire ou n'est
+  // pas demandé, taille, {largeur, hauteur}, null quand le logo ne se pose
+  // pas ou n'est pas demandé. Le logo passe avant : il se taille sous le pied
+  // TechnoLibre à son plancher, puis le pied TechnoLibre reprend le plus
+  // grand palier qu'il laisse ; quand même ainsi le logo n'atteint pas son
+  // plancher, il se taille seul, le pied TechnoLibre retiré ; quand même seul
+  // il ne l'atteint pas, il ne se pose pas, et le pied TechnoLibre prend le
+  // plus grand palier qui tient dans l'écart.
+  function partager(libre) {
     const ecart = constante('LOGO_PARTICIPANT_ECART_MM');
-    const y = boite.y ?? posee.page.finDesTours + posee.page.libre - remontee + ecart;
-    return { ...finale, imageBadges: { boite: { ...boite, y } } };
+    const lesPaliers = paliersTechnolibre();
+    const palierDans = (place) => lesPaliers.find(({ hauteurBloc }) => hauteurBloc <= place + TOLERANCE_MM);
+    if (logoDemande !== null) {
+      const plancherTechnolibre = lesPaliers.at(-1);
+      if (plancherTechnolibre !== undefined) {
+        const taille = tailleLogo(libre - plancherTechnolibre.hauteurBloc - 2 * ecart);
+        if (taille !== null) return { palier: palierDans(libre - taille.hauteur - 2 * ecart) ?? plancherTechnolibre, taille };
+      }
+      const taille = tailleLogo(libre - 2 * ecart);
+      if (taille !== null) return { palier: undefined, taille };
+    }
+    return { palier: palierDans(libre), taille: null };
+  }
+
+  // La page finale d'une page composée, dépouillée, serrée ou non. L'écart
+  // libre entre ses tours et son pied se partage d'abord entre le logo du
+  // participant et le pied TechnoLibre comme sur le badge sans image
+  // (partager) ; l'image des badges prend ensuite ce qu'ils laissent, la
+  // plus petite zone où le logo posé atteint son plancher réservée avec ses
+  // deux dégagements, et le logo prend enfin tout ce que l'image laisse,
+  // centré entre ses deux dégagements. L'image rapetisse donc puis se retire
+  // la première, sans ôter au logo sa place ni rien au pied TechnoLibre. Sur
+  // une page dépouillée ou serrée, aucun des trois ne se pose : ils suivent
+  // dans l'ordre de sacrifice tous les textes, et l'écart que leur retrait
+  // ou leur resserrement libère ne leur revient pas. Le texte ne change pas,
+  // sinon par l'image, qui le fait descendre (avecImage), et par le bloc
+  // TechnoLibre, qui remonte le pied de sa hauteur ; en bas, l'image remonte
+  // avec le pied. Chaque élément demandé qui ne se pose pas rend sa marque de
+  // retrait : technolibre {corps: null, logo: null}, logoParticipant et
+  // imageBadges {boite: null} ; non demandé, il rend null.
+  function finir(page, { depouillee, serree }) {
+    const pose = !depouillee && !serree;
+    const ecart = constante('LOGO_PARTICIPANT_ECART_MM');
+    const { palier, taille } = pose ? partager(page.libre) : { palier: undefined, taille: null };
+    const hauteurBloc = palier?.hauteurBloc ?? 0;
+    // La plus petite zone où le logo atteint son plancher : la hauteur du
+    // plancher, ou, pour un logo plus haut que large, celle qui donne le
+    // plancher à sa largeur.
+    const reserveLogo = taille === null ? 0 : constante('LOGO_PARTICIPANT_PLANCHER_MM') / Math.min(1, logoDemande.rapport) + 2 * ecart;
+    const posee = pose && imageDemandee !== null ? avecImage(page, page.libre - hauteurBloc - reserveLogo) : null;
+    const pageImage = posee?.page ?? page;
+    const avecPied = palier === undefined ? pageImage : poserTechnolibre(pageImage, palier);
+    const finale = {
+      blocs: avecPied.blocs,
+      colonnesTours: avecPied.colonnesTours,
+      technolibre: promotion === null ? null : (avecPied.technolibre ?? { corps: null, logo: null }),
+      logoParticipant: logoDemande === null ? null : { boite: null },
+      imageBadges: imageDemandee === null ? null : { boite: null },
+    };
+    if (taille !== null) {
+      // Sans l'image, la taille du partage ; sous elle, tout ce qu'elle
+      // laisse, la plus petite zone du logo au moins.
+      const zone = pageImage.libre - hauteurBloc - 2 * ecart;
+      const { largeur, hauteur } = posee === null ? taille : tailleLogo(zone);
+      const boite = { x: (L - largeur) / 2, y: pageImage.finDesTours + ecart + (zone - hauteur) / 2, largeur, hauteur };
+      finale.logoParticipant = { boite };
+    }
+    if (posee !== null) {
+      const { boite } = posee;
+      const y = boite.y ?? pageImage.finDesTours + pageImage.libre - hauteurBloc + ecart;
+      finale.imageBadges = { boite: { ...boite, y } };
+    }
+    return finale;
   }
 
   // Les essais, par niveau, du badge complet au plus dépouillé : le badge

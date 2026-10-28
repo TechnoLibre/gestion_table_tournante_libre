@@ -1417,8 +1417,8 @@ feuille de contrôle gardent le nom entier, et les badges restent rangés sur
 lui, sans ligne « Identifiant n° … ». Un nom que vous avez renommé depuis
 l’import s’imprime toujours, chiffres compris.
 
-Sous ces cases, la case « Image sur tous les badges », décochée tant que vous
-ne la cochez pas, pose la même image sur chaque badge : l’emblème de la soirée,
+Sous ces cases, la case « Image sur tous les badges », décochée tant que vous ne
+la cochez pas, pose la même image sur chaque badge : l’emblème de la soirée,
 d’un congrès ou d’une association. Elle n’est pas gardée par le poste mais par
 l’événement, avec l’image et sa position : passez en écriture pour la changer,
 et « Défaire » reprend chaque changement. Cochée, elle montre l’image choisie,
@@ -1426,15 +1426,16 @@ ou « Aucune image choisie. » ; « Choisir l’image » accepte les mêmes imag
 le logo d’une personne (étape 3), « Retirer l’image » l’enlève, et la position
 se choisit parmi « En haut », au-dessus du nom et de l’organisation, « Au
 centre », entre le nom et l’organisation d’une part et les tours de l’autre, et
-« En bas », au-dessus du pied. L’image ne prend que la place que le texte
-laisse, jusqu’à 30 mm de haut sur l’A6 et 15 mm sur une carte Avery 5392, et la
-prend avant le logo de la personne et le pied TechnoLibre : sur un badge chargé,
-elle rapetisse, puis s’en retire, sans jamais réduire un texte ni arrêter la
-planche, et un badge qui se resserre ne la porte pas. Une image très haute et
-étroite peut ainsi ne tenir sur aucune carte. Décochée, la case garde l’image et
-la position pour la prochaine fois. L’image suit l’événement copié ou importé,
-comme les logos des personnes, et l’avertissement d’un logo qui ne se recopie
-pas dit quand c’est elle.
+« En bas », au-dessus du pied. L’image ne prend que la place que le texte, le
+logo de la personne et le pied TechnoLibre laissent, jusqu’à 30 mm de haut sur
+l’A6 et 15 mm sur une carte Avery 5392 : le logo ne lui cède que ce qui dépasse
+sa plus petite taille. Sur un badge chargé, elle rapetisse, puis s’en retire, la
+première, sans jamais réduire un texte ni arrêter la planche, et un badge qui se
+resserre ne la porte pas. Une image très haute et étroite peut ainsi ne tenir
+sur aucune carte. Décochée, la case garde l’image et la position pour la
+prochaine fois. L’image suit l’événement copié ou importé, comme les logos des
+personnes, et l’avertissement d’un logo qui ne se recopie pas dit quand c’est
+elle.
 
 Le badge d’une personne qui porte un logo (étape 3) le pose entre ses tours et
 le pied, dans la place que le texte laisse : le logo ne rapetisse ni ne retire

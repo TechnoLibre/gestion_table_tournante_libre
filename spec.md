@@ -6452,9 +6452,9 @@ cherche à qui il parle.
 | 3 | **organisation**, un corps réduit, sous le nom — le nom de la personne prend cette place sous la même case (ci-dessous) | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
-| 6 | **l'image des badges**, quand sa case est cochée et qu'une image est choisie (ci-dessous), la même sur chaque badge, en haut, au centre ou en bas | l'événement se reconnaît d'un coup d'œil, l'emblème d'un congrès ou d'une association ; elle ne prend que la place que tout le texte laisse |
-| 7 | **le logo du participant**, quand sa fiche en porte un (§ 10.2), entre les tours et le pied, le plus grand que l'écart permette | l'hôte de salle reconnaît l'organisation d'un coup d'œil ; il ne prend que la place que tout le texte laisse |
-| 8 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », ou le texte que la machine garde à sa place (§ 8.5), suivi du logo de TechnoLibre en couleurs d'origine ; un texte vide laisse le logo seul | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que tout le reste laisse |
+| 6 | **le logo du participant**, quand sa fiche en porte un (§ 10.2), entre les tours et le pied, le plus grand que l'écart permette | l'hôte de salle reconnaît l'organisation d'un coup d'œil ; il ne prend que la place que tout le texte laisse |
+| 7 | **le pied TechnoLibre**, sous le pied, quand la case de la machine est cochée (§ 8.5) : « Demander un développement logiciel personnalisé avec https://technolibre.ca pour votre entreprise », ou le texte que la machine garde à sa place (§ 8.5), suivi du logo de TechnoLibre en couleurs d'origine ; un texte vide laisse le logo seul | l'éditeur du logiciel s'y fait connaître ; il ne prend que la place que le texte et le logo du participant laissent |
+| 8 | **l'image des badges**, quand sa case est cochée et qu'une image est choisie (ci-dessous), la même sur chaque badge, en haut, au centre ou en bas | l'événement se reconnaît d'un coup d'œil, l'emblème d'un congrès ou d'une association ; elle ne prend que la place que le texte, le logo du participant à son plancher et le pied TechnoLibre laissent |
 
 Le pied des **pages** imprimées porte cinq éléments, la version comprise
 (§ 11.7). Le badge n'est pas une page : il porte le nom de l'événement, sa date
@@ -6462,24 +6462,24 @@ et l'horodatage, **pas le tour** — il les porte tous — et **pas la version**
 ne sert à aucun diagnostic au cou d'un invité et dont la place est comptée.
 
 **Cinq cases retirent des données du badge.** La section de l'impression porte,
-à côté de la case du pied TechnoLibre, cinq cases, **toutes cochées par
-défaut** et **gardées sur le poste** comme elle (§ 8.5) : « Organisation »
-(rang 3), « Nom de l'événement » et « Date de l'événement » (rang 4), « Date du
+à côté de la case du pied TechnoLibre, cinq cases, **toutes cochées par défaut**
+et **gardées sur le poste** comme elle (§ 8.5) : « Organisation » (rang 3),
+« Nom de l'événement » et « Date de l'événement » (rang 4), « Date du
 placement » — la ligne « Placement du … à … », rang 5 — et « Identifiant » — la
 ligne « Identifiant n° … » d'un homonyme. Le nom de la personne et ses tours
-s'impriment toujours. Une case décochée retire sa donnée de chaque badge du
-PDF, A6 comme Avery 5392, et la place libérée revient au reste comme celle
-d'une ligne absente (§ 11.5) : au nom et aux tours, puis à l'image des badges,
-au logo du participant et au pied TechnoLibre. Le nom et la date de l'événement
-se combinent : la date décochée, le nom reste seul sur sa ligne ; le nom
-décoché, la date seule ; les deux décochés, la ligne disparaît. Un nom de
-l'événement que sa case retire n'est pas un nom perdu au sens de l'ordre de
-sacrifice : l'image des badges, le logo du participant et le pied TechnoLibre
-s'y posent encore quand l'écart le permet. La feuille de contrôle nomme les
-données retirées, d'une ligne (§ 11.3) ; l'annonce nomme toujours les homonymes
-que rien ne sépare, « Identifiant » décoché compris, et l'opérateur décide. La
-liste des badges en CSV (§ 11.6) ne lit aucune case : elle ne change pas.
-Toutes les cases cochées, la planche garde exactement ses octets.
+s'impriment toujours. Une case décochée retire sa donnée de chaque badge du PDF,
+A6 comme Avery 5392, et la place libérée revient au reste comme celle d'une
+ligne absente (§ 11.5) : au nom et aux tours, puis au logo du participant, au
+pied TechnoLibre et à l'image des badges. Le nom et la date de l'événement se
+combinent : la date décochée, le nom reste seul sur sa ligne ; le nom décoché,
+la date seule ; les deux décochés, la ligne disparaît. Un nom de l'événement que
+sa case retire n'est pas un nom perdu au sens de l'ordre de sacrifice : le logo
+du participant, le pied TechnoLibre et l'image des badges s'y posent encore
+quand l'écart le permet. La feuille de contrôle nomme les données retirées,
+d'une ligne (§ 11.3) ; l'annonce nomme toujours les homonymes que rien ne
+sépare, « Identifiant » décoché compris, et l'opérateur décide. La liste des
+badges en CSV (§ 11.6) ne lit aucune case : elle ne change pas. Toutes les cases
+cochées, la planche garde exactement ses octets.
 
 **Une case laisse en blanc le nom des doublons.** Juste avant celle du pied
 TechnoLibre, la case « Laisser le nom des doublons en blanc », **cochée par
@@ -6521,62 +6521,63 @@ case cochée ou non.
 
 **Une case pose une image sur tous les badges.** Sous le groupe des cases, la
 case « Image sur tous les badges », **décochée par défaut**, n'est pas un
-réglage du poste : l'événement la garde, avec l'image et sa position (§ 8.9),
-et chaque geste qui la change est une entrée d'historique, refusée en lecture
-et sur un plan bloqué, à côté du contrôle, avec son remède. Cochée, elle
-montre sous elle la vignette de l'image, ou « Aucune image choisie. », ou,
-quand le fichier manque au dossier de l'événement, « Image introuvable » ;
-« Choisir l'image », qui accepte les mêmes images que le logo d'une personne
-et les réduit de même à 1 200 pixels de côté au plus (§ 10.2) ; « Retirer
-l'image » ; et la position, « En haut », « Au centre » ou « En bas ». En haut,
-l'image se pose au haut du cadre utile, et le nom, l'organisation et les tours
-descendent sous elle ; au centre, entre le bloc du nom — le gros et le petit
-texte — et les lignes de tour ; en bas, entre les tours et le pied, au-dessus
-du pied. Elle se centre en largeur, proportions gardées, à sa hauteur maximale
-quand l'écart le permet : 30 mm sur l'A6, 15 mm sur la carte Avery 5392, sans
-dépasser la largeur du cadre. Elle ne retire ni ne réduit aucun texte : elle
-**rapetisse** avec l'écart que le texte laisse, puis **se retire** de ce
-badge, avant tout refus ; un badge resserré ne la porte pas (§ 11.5). Décochée,
-l'image et la position restent dans l'événement. Une image introuvable ou
-illisible, ou cochée sans image, s'annonce, et les badges s'impriment sans
+réglage du poste : l'événement la garde, avec l'image et sa position (§ 8.9), et
+chaque geste qui la change est une entrée d'historique, refusée en lecture et
+sur un plan bloqué, à côté du contrôle, avec son remède. Cochée, elle montre
+sous elle la vignette de l'image, ou « Aucune image choisie. », ou, quand le
+fichier manque au dossier de l'événement, « Image introuvable » ; « Choisir
+l'image », qui accepte les mêmes images que le logo d'une personne et les réduit
+de même à 1 200 pixels de côté au plus (§ 10.2) ; « Retirer l'image » ; et la
+position, « En haut », « Au centre » ou « En bas ». En haut, l'image se pose au
+haut du cadre utile, et le nom, l'organisation et les tours descendent sous
+elle ; au centre, entre le bloc du nom — le gros et le petit texte — et les
+lignes de tour ; en bas, entre les tours et le pied, au-dessus du pied. Elle se
+centre en largeur, proportions gardées, à sa hauteur maximale quand l'écart le
+permet : 30 mm sur l'A6, 15 mm sur la carte Avery 5392, sans dépasser la largeur
+du cadre. Elle ne retire ni ne réduit aucun texte, ne prend rien au pied
+TechnoLibre et ne prive jamais le logo du participant de sa place : elle
+**rapetisse** avec l'écart qu'ils laissent, puis **se retire** de ce badge, la
+première, avant tout refus ; un badge resserré ne la porte pas (§ 11.5).
+Décochée, l'image et la position restent dans l'événement. Une image introuvable
+ou illisible, ou cochée sans image, s'annonce, et les badges s'impriment sans
 elle ; la planche ne se refuse jamais pour elle. La feuille de contrôle et la
 liste des badges en CSV ne la lisent pas. Sans image posée, la planche garde
 exactement ses octets.
 
-**Le logo du participant passe après tout le texte.** La place du badge se
-donne dans cet ordre : le nom et les tours toujours ; puis l'organisation et
-le pied, dans l'ordre de sacrifice du § 11.5 ; puis l'image des badges ; puis
-le logo du participant ; le pied TechnoLibre en dernier. Le logo ne prend que
-l'écart que le texte et l'image des badges laissent entre les tours et le
-pied, moins un dégagement au-dessus et au-dessous : il ne réduit ni ne retire
-aucun texte. Il s'y pose le plus grand possible, proportions gardées, sans
-plafond, centré, et ne se pose pas sur un badge où sa plus petite cote
-n'atteindrait pas son plancher, ni sur un badge resserré ou qui a perdu le nom
-de l'événement ou l'organisation (§ 11.5). Son image se lit dans le dossier de
-l'événement, au chemin que porte la fiche, à la première préparation qui la
-demande, puis se garde pour cet événement ; un échec ne se garde pas. La planche
-l'embarque une fois par fichier, quel que soit le nombre de badges qui la
-portent.
+**Le logo du participant passe après tout le texte.** La place du badge se donne
+dans cet ordre : le nom et les tours toujours ; puis l'organisation et le pied,
+dans l'ordre de sacrifice du § 11.5 ; puis le logo du participant ; puis le pied
+TechnoLibre ; l'image des badges en dernier. Le logo ne prend que l'écart que le
+texte laisse entre les tours et le pied, moins un dégagement au-dessus et
+au-dessous : il ne réduit ni ne retire aucun texte. Il s'y pose le plus grand
+possible, proportions gardées, sans plafond, centré, et n'en cède à l'image des
+badges que ce qui dépasse son plancher. Il ne se pose pas sur un badge où sa
+plus petite cote n'atteindrait pas son plancher, ni sur un badge resserré ou qui
+a perdu le nom de l'événement ou l'organisation (§ 11.5). Son image se lit dans
+le dossier de l'événement, au chemin que porte la fiche, à la première
+préparation qui la demande, puis se garde pour cet événement ; un échec ne se
+garde pas. La planche l'embarque une fois par fichier, quel que soit le nombre
+de badges qui la portent.
 
-**Le pied TechnoLibre passe après tout le reste.** Il se compose d'un texte,
+**Le pied TechnoLibre passe après tout le texte.** Il se compose d'un texte,
 centré, replié comme le pied, puis du logo, centré, posé sur le bord bas du
 cadre utile, le pied remontant d'autant. Le texte est la phrase d'origine, ou
 celui que la machine garde à sa place (§ 8.5), sans borne de longueur : il se
 replie et rapetisse comme elle. Le repli ne laisse un mot seul sur la dernière
 ligne que si les deux derniers mots, le dernier morceau d'un mot coupé compris,
 ne tiennent pas ensemble sur une ligne. Il garde le nombre de lignes du repli
-mot à mot, et quand celui-ci finit sur un mot seul, les mots se répartissent
-sur autant de lignes, la dernière de deux mots au moins, la plus large ligne la
-plus étroite possible ; à largeur égale, la première ligne la plus longue, les
-lignes suivantes se répartissant de même entre elles (leur plus large ligne la
-plus étroite possible, puis leur première ligne la plus longue) — la phrase
+mot à mot, et quand celui-ci finit sur un mot seul, les mots se répartissent sur
+autant de lignes, la dernière de deux mots au moins, la plus large ligne la plus
+étroite possible ; à largeur égale, la première ligne la plus longue, les lignes
+suivantes se répartissant de même entre elles (leur plus large ligne la plus
+étroite possible, puis leur première ligne la plus longue) — la phrase
 d'origine, sur deux lignes, finit par « avec https://technolibre.ca pour votre
-entreprise ». Un mot plus large qu'une ligne se coupe comme au pied : les
-lignes qui précèdent celle du dernier morceau du dernier mot coupé restent
-celles du repli mot à mot, ce morceau compte pour un mot, et lui et la suite se
+entreprise ». Un mot plus large qu'une ligne se coupe comme au pied : les lignes
+qui précèdent celle du dernier morceau du dernier mot coupé restent celles du
+repli mot à mot, ce morceau compte pour un mot, et lui et la suite se
 répartissent sur les lignes restantes. Un texte vide ne pose que le logo, à la
-même taille. La phrase d'origine donne la même planche, octet pour octet, que
-la machine n'en garde pas d'autre ou qu'elle y soit revenue. Il ne prend que
+même taille. La phrase d'origine donne la même planche, octet pour octet, que la
+machine n'en garde pas d'autre ou qu'elle y soit revenue. Il ne prend que
 l'écart que le badge, composé sans lui, laisse entre ses tours et son pied : il
 ne réduit ni le nom, ni les tours, ni l'organisation, ni le pied, et ne les
 déplace pas, le pied excepté. Il rapetisse jusqu'à un plancher lisible à la
@@ -6586,14 +6587,16 @@ vient après eux dans l'ordre de sacrifice, et la place que leur retrait libère
 ne lui revient pas ; un badge resserré ne le porte pas non plus, pour la même
 raison. Sous un logo de participant, il cède au logo tout ce qui dépasse son
 plancher, puis reprend le plus grand palier que le logo laisse ; quand même
-ainsi le logo n'atteint pas son plancher, il se retire pour lui (§ 11.5). Son
-logo, l'un des deux seuls éléments en couleur du badge (§ 11.2), se dessine en
-vecteurs, chemins et couleurs du fichier de l'éditeur,
-`src/actifs/full_logo_technolibre_2023.svg`, et un logo que l'éditeur changerait
-pour une forme que la planche ne sait pas rendre fidèlement — un dégradé, une
-transparence, un arc, une transformation — se refuse à la production au lieu de
-sortir faux. **La feuille de contrôle ne le porte pas** : elle s'imprime sur
-papier ordinaire et ne se distribue pas, et elle reste une page de mesure.
+ainsi le logo n'atteint pas son plancher, il se retire pour lui (§ 11.5). Il
+passe en revanche avant l'image des badges : son corps est celui du badge sans
+elle, et elle ne prend que l'écart qu'il laisse. Son logo, l'un des deux seuls
+éléments en couleur du badge (§ 11.2), se dessine en vecteurs, chemins et
+couleurs du fichier de l'éditeur, `src/actifs/full_logo_technolibre_2023.svg`,
+et un logo que l'éditeur changerait pour une forme que la planche ne sait pas
+rendre fidèlement — un dégradé, une transparence, un arc, une transformation —
+se refuse à la production au lieu de sortir faux. **La feuille de contrôle ne le
+porte pas** : elle s'imprime sur papier ordinaire et ne se distribue pas, et
+elle reste une page de mesure.
 
 **Un itinéraire constant s'écrit en une ligne.** Quand une personne, présente
 aux R tours, occupe la même table à chacun d'eux, R ≥ 2 — au même siège sous
@@ -6665,7 +6668,7 @@ replie sur la suivante, comme un paragraphe, au dernier espace qui tient ; un
 mot plus large que la ligne s'y coupe entre deux lettres, jamais entre une
 lettre et son accent. Le badge porte son texte entier, ou se refuse.
 
-> nom › lignes de tour › organisation › nom de l'événement › image des badges › logo du participant › pied TechnoLibre
+> nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre › image des badges
 
 Le nom et l'organisation y sont des **rôles** : le gros texte et le petit.
 Sous la case de l'organisation en gros (§ 11.4), l'organisation tient le rôle
@@ -6690,7 +6693,7 @@ resserre de même avant de perdre l'organisation, puis encore sans elle. La
 première étape qui tient l'emporte : un badge qui tient au pas de la police
 n'est jamais serré, et l'écart qu'un badge serré laisse entre ses tours et son
 pied reste sous ce qu'un palier libère. Un badge serré, même complet, ne porte
-ni image des badges, ni logo du participant, ni pied TechnoLibre : ils suivent
+ni logo du participant, ni pied TechnoLibre, ni image des badges : ils suivent
 tous les textes dans l'ordre de sacrifice, et la place que le resserrement
 libère ne leur revient pas. Mesuré sur la police embarquée, sous un nom court et
 son organisation, sur la carte Avery 5392 : un libellé de soixante caractères,
@@ -6814,63 +6817,70 @@ planchers sinon.
   produit et le compte attendu — « 257 badges pour 260 participants, 3 exclus » —
   sur la feuille de contrôle, pour que l'écart soit lu avant la coupe et non à
   l'accueil.
-- **Un badge sans place pour le pied TechnoLibre.** Le pied TechnoLibre
-  (§ 11.4) part de 6 pt, et descend d'un point par palier jusqu'à son
-  plancher, 4 pt, lisible à la loupe ; son logo mesure deux cadratins de ce
-  corps de haut — 4,2 mm au départ, 2,8 mm au plancher —, cinq fois plus en
-  largeur. Ces valeurs sont communes aux deux modèles ; le corps de départ et
-  le plancher sont au registre des constantes (§ 14.1), défauts de travail
-  jusqu'à leur relevé sur une impression réelle. Il prend le plus grand palier
-  dont le texte et le logo tiennent dans l'écart libre ; quand même le
-  plancher ne tient pas, ou que le badge a perdu le nom de l'événement ou
-  l'organisation, qui le précèdent dans l'ordre de sacrifice, il se retire de
-  ce badge, qui sort tel qu'il serait sans lui, et l'annonce compte les badges
-  concernés — « Pied TechnoLibre : retiré de 3 badges, faute de place sous
-  leurs tours. ». Ce n'est jamais un refus : la planche se produit. Mesuré sur
-  la police embarquée, sous un nom d'une ligne et son organisation, avec des
-  lignes de tour sans siège ni titre, il tient au corps de départ jusqu'à cinq
-  tours sur la carte Avery 5392 et treize sur l'A6. Un texte que la machine
-  garde à la place de la phrase d'origine (§ 8.5) suit la même règle : plus
-  long, il rapetisse plus tôt et se retire plus tôt ; vide, le bloc n'est que
-  le logo. Sous un logo de participant, il se compte d'abord à son plancher,
-  puis reprend le plus grand palier que le logo laisse, et se retire quand le
-  logo ne trouve qu'ainsi sa place : le retrait se compte de même.
+- **Un badge sans place pour le pied TechnoLibre.** Le pied TechnoLibre (§ 11.4)
+  part de 6 pt, et descend d'un point par palier jusqu'à son plancher, 4 pt,
+  lisible à la loupe ; son logo mesure deux cadratins de ce corps de haut —
+  4,2 mm au départ, 2,8 mm au plancher —, cinq fois plus en largeur. Ces valeurs
+  sont communes aux deux modèles ; le corps de départ et le plancher sont au
+  registre des constantes (§ 14.1), défauts de travail jusqu'à leur relevé sur
+  une impression réelle. Il prend le plus grand palier dont le texte et le logo
+  tiennent dans l'écart libre ; quand même le plancher ne tient pas, ou que le
+  badge a perdu le nom de l'événement ou l'organisation, qui le précèdent dans
+  l'ordre de sacrifice, il se retire de ce badge, qui sort tel qu'il serait sans
+  lui, et l'annonce compte les badges concernés — « Pied TechnoLibre : retiré de
+  3 badges, faute de place sous leurs tours. ». Ce n'est jamais un refus : la
+  planche se produit. Mesuré sur la police embarquée, sous un nom d'une ligne et
+  son organisation, avec des lignes de tour sans siège ni titre, il tient au
+  corps de départ jusqu'à cinq tours sur la carte Avery 5392 et treize sur l'A6.
+  Un texte que la machine garde à la place de la phrase d'origine (§ 8.5) suit
+  la même règle : plus long, il rapetisse plus tôt et se retire plus tôt ; vide,
+  le bloc n'est que le logo. Sous un logo de participant, il se compte d'abord à
+  son plancher, puis reprend le plus grand palier que le logo laisse, et se
+  retire quand le logo ne trouve qu'ainsi sa place : le retrait se compte de
+  même. L'image des badges ne change rien à son corps ni à son retrait : elle ne
+  prend que l'écart qu'il laisse.
 - **Un badge sans place pour le logo du participant.** Le logo prend l'écart
   entre les tours et le pied, moins 1,5 mm au-dessus et au-dessous ; sa plus
-  petite cote dessinée ne descend pas sous 8 mm. Ces deux valeurs, communes
-  aux deux modèles, sont au registre des constantes
-  (`LOGO_PARTICIPANT_ECART_MM`, `LOGO_PARTICIPANT_PLANCHER_MM`), défauts de
-  travail jusqu'à leur relevé sur une impression réelle. Quand même sans le
-  pied TechnoLibre il n'atteint pas son plancher, ou que le badge a perdu le
-  nom de l'événement ou l'organisation, il ne se pose pas sur ce badge, qui
-  sort tel qu'il serait sans logo, et l'annonce compte les badges concernés —
-  « Logo du participant : retiré de 3 badges, faute de place sous leurs
-  tours. ». Un logo très large bute sur la largeur du cadre, un logo très haut
-  sur la hauteur de l'écart ; l'un et l'autre peuvent ainsi manquer leur
-  plancher sur tous les badges. Ce n'est jamais un refus.
-- **Un badge sans place pour l'image des badges.** L'image se taille avant le
+  petite cote dessinée ne descend pas sous 8 mm. Ces deux valeurs, communes aux
+  deux modèles, sont au registre des constantes (`LOGO_PARTICIPANT_ECART_MM`,
+  `LOGO_PARTICIPANT_PLANCHER_MM`), défauts de travail jusqu'à leur relevé sur
+  une impression réelle. Quand même sans le pied TechnoLibre il n'atteint pas
+  son plancher, ou que le badge a perdu le nom de l'événement ou l'organisation,
+  il ne se pose pas sur ce badge, qui sort tel qu'il serait sans logo, et
+  l'annonce compte les badges concernés — « Logo du participant : retiré de
+  3 badges, faute de place sous leurs tours. ». Un logo très large bute sur la
+  largeur du cadre, un logo très haut sur la hauteur de l'écart ; l'un et
+  l'autre peuvent ainsi manquer leur plancher sur tous les badges. Ce n'est
+  jamais un refus. L'image des badges ne le retire jamais : elle ne lui prend
+  que ce qui dépasse son plancher.
+- **Un badge sans place pour l'image des badges.** L'image se taille après le
   logo du participant et le pied TechnoLibre : la plus grande boîte, au rapport
   de l'image, sous sa hauteur maximale — `IMAGE_BADGES_HAUTEUR_MAX_MM`, 30 mm
   sur l'A6, `IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM`, 15 mm sur la carte —, dans la
   largeur du cadre et dans l'écart que le texte laisse entre les tours et le
-  pied, moins le dégagement du logo, `LOGO_PARTICIPANT_ECART_MM`, sous elle en
-  haut, de part et d'autre au centre et en bas. Le logo du participant et le
-  pied TechnoLibre prennent ensuite, par leurs règles, l'écart qu'elle laisse.
-  Quand sa plus petite cote n'atteint pas le plancher du logo,
-  `LOGO_PARTICIPANT_PLANCHER_MM`, ou que le badge a perdu le nom de l'événement
-  ou l'organisation, elle ne se pose pas sur ce badge, qui sort tel qu'il serait
-  sans elle, et l'annonce compte les badges concernés — « Image des badges :
-  retirée de 3 badges, faute de place. ». Deux colonnes de tours libèrent de la
-  hauteur : l'image peut y reparaître. Mesuré sur la police embarquée, sous un
-  nom d'une ligne, son organisation et trois tours sans siège ni titre, une
-  image carrée ou deux fois plus large que haute tient à sa hauteur maximale sur
-  la carte Avery 5392, à chaque position, et le pied TechnoLibre y garde sa
-  place. Une image très large bute sur la largeur du cadre, une image très haute
-  sur sa hauteur maximale : sur la carte, une image plus étroite que 8 mm de
-  large pour 15 mm de haut — près de deux fois plus haute que large — n'atteint
-  pas son plancher, et ne se pose sur aucun badge. Les deux hauteurs maximales
-  sont au registre des constantes (§ 14.1), défauts de travail jusqu'à leur
-  relevé sur une impression réelle. Ce n'est jamais un refus.
+  pied, moins le bloc TechnoLibre au corps du badge sans image, moins, sous un
+  logo du participant qui se pose, la plus petite zone où il atteint son
+  plancher et ses deux dégagements, et moins son propre dégagement,
+  `LOGO_PARTICIPANT_ECART_MM`, sous elle en haut, de part et d'autre au centre
+  et en bas. Le logo prend ensuite tout l'écart qu'elle laisse : il ne lui cède
+  que ce qui dépasse son plancher, et elle rapetisse, puis se retire, avant
+  qu'il ne se retire. Quand sa plus petite cote n'atteint pas le plancher du
+  logo, `LOGO_PARTICIPANT_PLANCHER_MM`, ou que le badge a perdu le nom de
+  l'événement ou l'organisation, elle ne se pose pas sur ce badge, qui sort tel
+  qu'il serait sans elle, et l'annonce compte les badges concernés — « Image des
+  badges : retirée de 3 badges, faute de place. ». Deux colonnes de tours
+  libèrent de la hauteur : l'image peut y reparaître. Mesuré sur la police
+  embarquée, sous un nom d'une ligne, son organisation et deux tours sans siège
+  ni titre, une image carrée ou deux fois plus large que haute tient à sa
+  hauteur maximale sur la carte Avery 5392, à chaque position, avec le pied
+  TechnoLibre à son corps de départ ; au troisième tour, elle rapetisse, et au
+  quatrième, elle se retire, où, sans le pied TechnoLibre, elle garderait sa
+  hauteur maximale. Une image très large bute sur la largeur du cadre, une image
+  très haute sur sa hauteur maximale : sur la carte, une image plus étroite que
+  8 mm de large pour 15 mm de haut — près de deux fois plus haute que large —
+  n'atteint pas son plancher, et ne se pose sur aucun badge. Les deux hauteurs
+  maximales sont au registre des constantes (§ 14.1), défauts de travail jusqu'à
+  leur relevé sur une impression réelle. Ce n'est jamais un refus.
 - **Une image des badges introuvable ou illisible.** Le fichier que
   l'événement désigne peut manquer au dossier de l'événement ou ne pas se lire
   comme un PNG. L'annonce le dit — « Image des badges introuvable dans le
