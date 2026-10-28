@@ -5290,6 +5290,91 @@ describe('séance : la case qui laisse en blanc le nom des doublons (§ 8.5, § 
   });
 });
 
+describe('séance : les colonnes de la liste des badges en CSV (§ 8.5, § 11.6)', () => {
+  const choixLu = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).colonnes_liste_badges;
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }, { sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Iris', 'Ombrelle'), personneBadge(2, 'Théo', 'Pervenche')],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+
+  test('une colonne par tour au départ ; choisirColonnesListe écrit les seuls réglages, dans tout mode, et l’état les porte ; une séance neuve les relit', async () => {
+    const { fs, seance } = await ouvertSur(chargeBloquee());
+    assert.equal(seance.etat().colonnesListe, 'parTour');
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await seance.choisirColonnesListe('unique'), { retenu: true, avertissements: [] });
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual([choixLu(fs), seance.etat().colonnesListe], ['unique', 'unique']);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().colonnesListe, 'unique');
+    assert.deepEqual(await neuve.seance.choisirColonnesListe('parTour'), { retenu: true, avertissements: [] });
+    assert.deepEqual([choixLu(fs), neuve.seance.etat().colonnesListe], ['parTour', 'parTour']);
+  });
+
+  test('une valeur hors des deux formes est une faute du code : TypeError, rien ne s’écrit et l’état ne change pas', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faute of ['par_tour', 'toString', true, null, undefined]) {
+      await assert.rejects(seance.choisirColonnesListe(faute), TypeError, String(faute));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().colonnesListe, 'parTour');
+  });
+
+  test('des réglages illisibles : le choix vaut pour la séance, non retenu, l’avis rendu, le fichier intact', async () => {
+    const texte = '{"format":1,"papier":"A4","cadr';
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison: 'JSON' } };
+    assert.deepEqual(await seance.choisirColonnesListe('unique'), { retenu: false, avertissements: [avis] });
+    assert.equal(seance.etat().colonnesListe, 'unique');
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('au changement de racine : le choix que les réglages portent, à défaut celui de la séance ; l’écriture garde les autres clés', async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"colonnes_liste_badges":"unique","format":1,"papier":null,"zeta":true}\n');
+    const { seance } = monter({ fs, racine: null });
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().colonnesListe, 'unique');
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().colonnesListe, 'unique', 'une racine sans réglages');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"colonnes_liste_badges":"parTour","format":1,"papier":null}\n');
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().colonnesListe, 'parTour', 'un choix écrit sur la racine l’emporte');
+    await seance.changerRacine(DOC);
+    await seance.choisirCacherNumero(false);
+    assert.equal(
+      fs.contenu('documents', FICHIER_REGLAGES),
+      '{"cacher_numero_doublon":false,"cadrages":[],"colonnes_liste_badges":"unique","format":1,"papier":null,"zeta":true}\n',
+    );
+  });
+
+  test('la liste lit le choix de la séance : une colonne par tour, puis une seule ; la planche ne le lit pas', async () => {
+    const { fs, seance } = await ouvertSur(chargeRetenue(), { polices: async () => lirePolices(), provenance: 'production' });
+    const recues = [];
+    fs.enregistrerSous = async (nom, octets) => {
+      recues.push(new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets));
+      return nom;
+    };
+    await seance.enregistrerListeBadgesSous();
+    await seance.choisirColonnesListe('unique');
+    await seance.enregistrerListeBadgesSous();
+    assert.deepEqual(recues, [
+      '\u{FEFF}Nom;Prénom;Organisation;Tour 1;Tour 2\r\nOmbrelle;Iris;;table 1;table 1\r\nPervenche;Théo;;table 1;table 1\r\n',
+      '\u{FEFF}Nom;Prénom;Organisation;Tours\r\nOmbrelle;Iris;;Toute la soirée — table 1\r\nPervenche;Théo;;Toute la soirée — table 1\r\n',
+    ]);
+  });
+});
+
 describe('séance : les cases de ce que le badge imprime (§ 8.5, § 11.4)', () => {
   const casesLues = (fs, racine = 'documents') => JSON.parse(fs.contenu(racine, FICHIER_REGLAGES)).donnees_badge;
   const TOUTES = { organisation: true, evenement: true, date: true, horodatage: true, identifiant: true };

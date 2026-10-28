@@ -16,8 +16,10 @@ import { ErreurStockage } from './erreurs.js';
 import {
   DONNEES_BADGE,
   FICHIER_REGLAGES,
+  COLONNES_LISTE_BADGES,
   avecCacherNumero,
   avecCadrage,
+  avecColonnesListe,
   avecDonneeBadge,
   avecModeleBadge,
   avecPapier,
@@ -26,6 +28,7 @@ import {
   avecTextePiedTechnolibre,
   cacherNumeroDe,
   cadrageDe,
+  colonnesListeDe,
   creerEcrivainDiffere,
   donneesBadgeDe,
   ecrireReglages,
@@ -663,6 +666,55 @@ describe('réglages locaux : la case qui laisse en blanc le nom des doublons (§
     const { reglages } = await lireReglages(fs, DOC);
     await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
     assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":"Lettre"}\n');
+  });
+});
+
+describe('réglages locaux : les colonnes de la liste des badges en CSV (§ 8.5, § 11.6)', () => {
+  test('deux formes, une colonne par tour d’abord ; colonnes_liste_badges se lit tel quel ; absent, une colonne par tour, sans que la clé s’ajoute', async () => {
+    assert.deepEqual(COLONNES_LISTE_BADGES, ['parTour', 'unique']);
+    assert.ok(Object.isFrozen(COLONNES_LISTE_BADGES));
+    for (const valeur of COLONNES_LISTE_BADGES) {
+      const texte = `{"cadrages":[],"colonnes_liste_badges":"${valeur}","format":1,"papier":null}\n`;
+      const { reglages, avertissement } = await lireReglages(disque(texte), DOC);
+      assert.equal(avertissement, null);
+      assert.deepEqual(reglages, { format: 1, papier: null, cadrages: [], colonnes_liste_badges: valeur });
+      assert.equal(colonnesListeDe(reglages), valeur);
+      assert.equal(serialiserReglages(reglages), texte);
+    }
+    const absent = await lireReglages(disque(), DOC);
+    assert.equal(Object.hasOwn(absent.reglages, 'colonnes_liste_badges'), false);
+    assert.equal(colonnesListeDe(absent.reglages), 'parTour');
+  });
+
+  test('une valeur hors des deux formes rend le fichier fautif : les défauts et REGLAGES_ILLISIBLES, raison FORME', async () => {
+    for (const valeur of ['"par_tour"', '"Unique"', '"toString"', 'true', '1', 'null', '[]', '{}']) {
+      const fs = disque(`{"cadrages":[],"colonnes_liste_badges":${valeur},"format":1,"papier":null}\n`);
+      assert.deepEqual(await lireReglages(fs, DOC), { reglages: DEFAUTS, avertissement: illisibles('FORME') }, valeur);
+      assert.equal(fs.compteurs.ecritures, 0, valeur);
+    }
+  });
+
+  test('avecColonnesListe pose la clé sans toucher au reste ; une autre valeur lève TypeError ; le texte canonique la range à son rang', () => {
+    const reglages = { ...DEFAUTS, papier: 'A4', cacher_numero_doublon: false, theme: 'sombre' };
+    const unique = avecColonnesListe(reglages, 'unique');
+    assert.deepEqual(unique, { ...reglages, colonnes_liste_badges: 'unique' });
+    assert.equal(Object.hasOwn(reglages, 'colonnes_liste_badges'), false);
+    assert.equal(
+      serialiserReglages(unique),
+      '{"cacher_numero_doublon":false,"cadrages":[],"colonnes_liste_badges":"unique","format":1,"papier":"A4","theme":"sombre"}\n',
+    );
+    assert.deepEqual(avecColonnesListe(unique, 'parTour'), { ...reglages, colonnes_liste_badges: 'parTour' });
+    for (const mauvaise of ['par_tour', 'toString', true, null, undefined]) {
+      assert.throws(() => avecColonnesListe(reglages, mauvaise), TypeError, String(mauvaise));
+    }
+    assert.throws(() => serialiserReglages({ ...DEFAUTS, colonnes_liste_badges: 'aucune' }), TypeError);
+  });
+
+  test('un fichier qui porte le choix, relu puis réécrit avec un autre papier, le garde', async () => {
+    const fs = disque('{"cadrages":[],"colonnes_liste_badges":"unique","format":1,"papier":null}\n');
+    const { reglages } = await lireReglages(fs, DOC);
+    await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"colonnes_liste_badges":"unique","format":1,"papier":"Lettre"}\n');
   });
 });
 

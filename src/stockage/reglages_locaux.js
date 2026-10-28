@@ -3,7 +3,7 @@
 
 // Les réglages locaux (§ 8.5) : le fichier reglages_locaux.json, à la racine
 // du dossier de travail, à côté des dossiers d'événement et hors d'eux. Il
-// porte huit choses, et huit seulement : le cadrage de chaque événement,
+// porte neuf choses, et neuf seulement : le cadrage de chaque événement,
 // indexé par son identifiant — le zoom k en pixels par centimètre, la
 // translation tx, ty en pixels —, le format de papier des sorties, global
 // à la machine (§ 11.2), null tant que l'opérateur ne l'a pas choisi, le
@@ -20,8 +20,11 @@
 // qu'il a touchées : une case absente vaut cochée, la case qui laisse en
 // blanc le nom des doublons sur les badges, globale à la machine, sous la
 // clé cacher_numero_doublon, un booléen, absente tant que l'opérateur n'y a
-// pas touché : la case vaut alors cochée, et la taille du texte de l'écran,
-// globale à la machine, sous la clé taille_texte, absente tant que
+// pas touché : la case vaut alors cochée, les colonnes de la liste des
+// badges en CSV, globales à la machine, sous la clé colonnes_liste_badges,
+// l'une de COLONNES_LISTE_BADGES, absente tant que l'opérateur n'a pas
+// choisi : une colonne par tour vaut alors, et la taille du texte de
+// l'écran, globale à la machine, sous la clé taille_texte, absente tant que
 // l'opérateur ne l'a pas choisie : le défaut de l'échelle s'applique alors
 // (src/geometrie/taille_texte.js). Aucun ne voyage avec un événement ni ne
 // revient par un retour arrière.
@@ -53,6 +56,13 @@ export const FICHIER_REGLAGES = 'reglages_locaux.json';
  * personne et ses tours n'en sont pas : ils s'impriment toujours.
  */
 export const DONNEES_BADGE = Object.freeze(['organisation', 'evenement', 'date', 'horodatage', 'identifiant']);
+
+/**
+ * Les formes de la liste des badges en CSV (§ 11.6), la première par
+ * défaut : une colonne par tour, ou les lignes de tour du badge dans une
+ * seule colonne.
+ */
+export const COLONNES_LISTE_BADGES = Object.freeze(['parTour', 'unique']);
 
 // Format d'un fichier que ce code crée.
 const FORMAT_REGLAGES = 1;
@@ -88,6 +98,9 @@ const BLANCS_DU_PIED = /[ \t\n\v\f\r\u{85}\u{2028}\u{2029}]+/gu;
  * @property {boolean} [cacher_numero_doublon]   la case qui laisse en
  *           blanc le nom des doublons sur les badges ; absente tant que
  *           l'opérateur n'y a pas touché
+ * @property {'parTour'|'unique'} [colonnes_liste_badges]   les colonnes de
+ *           la liste des badges en CSV, l'une de COLONNES_LISTE_BADGES ;
+ *           absente tant que l'opérateur n'a pas choisi
  * @property {number} [taille_texte]      l'un de PALIERS_TAILLE_TEXTE ; absente
  *           tant que l'opérateur ne l'a pas choisie. Toute autre clé, à tout
  *           niveau, se garde telle quelle
@@ -136,8 +149,9 @@ function fauteDeDonnees(donnees) {
 // même événement est fautif ; un modèle de badge présent est une clé de
 // MODELES_BADGE, une case du pied TechnoLibre présente un booléen, son texte
 // présent une chaîne, les cases de ce que le badge imprime présentes un objet
-// de booléens, la case du nom des doublons présente un booléen, une
-// taille du texte présente l'un des paliers.
+// de booléens, la case du nom des doublons présente un booléen, les
+// colonnes de la liste présentes l'une de COLONNES_LISTE_BADGES, une taille
+// du texte présente l'un des paliers.
 function fauteDeReglages(reglages) {
   if (!estObjet(reglages)) return '';
   const { format, papier, cadrages } = reglages;
@@ -154,6 +168,9 @@ function fauteDeReglages(reglages) {
   }
   if (Object.hasOwn(reglages, 'cacher_numero_doublon') && typeof reglages.cacher_numero_doublon !== 'boolean') {
     return 'cacher_numero_doublon';
+  }
+  if (Object.hasOwn(reglages, 'colonnes_liste_badges') && !COLONNES_LISTE_BADGES.includes(reglages.colonnes_liste_badges)) {
+    return 'colonnes_liste_badges';
   }
   if (Object.hasOwn(reglages, 'taille_texte') && !estPalierTailleTexte(reglages.taille_texte)) return 'taille_texte';
   if (!Array.isArray(cadrages)) return 'cadrages';
@@ -199,11 +216,12 @@ const illisibles = (raison, cause = null) => {
  * TechnoLibre présente qui n'est pas un booléen, un texte de ce pied présent
  * qui n'est pas une chaîne, des cases de ce que le badge imprime qui ne sont
  * pas un objet, ou dont une donnée connue n'est pas un booléen, une case du
- * nom des doublons présente qui n'est pas un booléen, un cadrage fautif
- * ou en double, une taille du texte présente hors des paliers ; le
- * code d'une lecture que le système de fichiers refuse autrement que par
- * ABSENT, et cause, celle de ses détails quand ils en portent une — EACCES,
- * ou UTF8_INVALIDE pour des octets qui ne sont pas de l'UTF-8. Une marque
+ * nom des doublons présente qui n'est pas un booléen, des colonnes de la
+ * liste présentes hors de COLONNES_LISTE_BADGES, un cadrage fautif ou en
+ * double, une taille du texte présente hors des paliers ; le code d'une
+ * lecture que le système de fichiers refuse autrement que par ABSENT, et
+ * cause, celle de ses détails quand ils en portent une — EACCES, ou
+ * UTF8_INVALIDE pour des octets qui ne sont pas de l'UTF-8. Une marque
  * d'ordre d'octets en tête est ignorée. Les réglages lus gardent leurs clés
  * inconnues et leur format ; leurs cadrages sont triés par identifiant
  * d'événement.
@@ -435,6 +453,33 @@ export function cacherNumeroDe(reglages) {
 export function avecCacherNumero(reglages, coche) {
   if (typeof coche !== 'boolean') throw new TypeError(`avecCacherNumero : un booléen attendu, reçu ${JSON.stringify(coche)}`);
   return { ...reglages, cacher_numero_doublon: coche };
+}
+
+/**
+ * Les colonnes de la liste des badges en CSV (§ 8.5, § 11.6) que les
+ * réglages portent, à défaut une colonne par tour.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @returns {'parTour'|'unique'}
+ */
+export function colonnesListeDe(reglages) {
+  return Object.hasOwn(reglages, 'colonnes_liste_badges') ? reglages.colonnes_liste_badges : COLONNES_LISTE_BADGES[0];
+}
+
+/**
+ * Les réglages reçus, les colonnes de la liste des badges remplacées ; ceux
+ * reçus ne changent pas.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @param {'parTour'|'unique'} colonnes   l'une de COLONNES_LISTE_BADGES
+ * @returns {ReglagesLocaux}
+ * @throws {TypeError} hors de COLONNES_LISTE_BADGES
+ */
+export function avecColonnesListe(reglages, colonnes) {
+  if (!COLONNES_LISTE_BADGES.includes(colonnes)) {
+    throw new TypeError(`avecColonnesListe : ${COLONNES_LISTE_BADGES.join(' ou ')} attendue, reçu ${JSON.stringify(colonnes)}`);
+  }
+  return { ...reglages, colonnes_liste_badges: colonnes };
 }
 
 /**

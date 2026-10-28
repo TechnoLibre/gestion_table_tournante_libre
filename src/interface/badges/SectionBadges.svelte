@@ -10,8 +10,9 @@
   // liste d'accueil et de la feuille par table (Apercu.svelte), le seul
   // endroit d'où l'on imprime. Produire n'est pas modifier (§ 8.4, § 11.6) :
   // la section vit en lecture comme sur un plan bloqué, et la séance
-  // n'écrit que le PDF, le CSV et, pour le papier et le modèle,
-  // reglages_locaux.json — ni l'état ni le journal.
+  // n'écrit que le PDF, le CSV et, pour le papier, le modèle, les cases et
+  // les colonnes de la liste, reglages_locaux.json — ni l'état ni le
+  // journal.
   //
   // Le modèle de badge est un réglage de la machine (EtatSeance.modeleBadge,
   // seance.choisirModeleBadge), Avery 5392 tant que l'opérateur n'en a pas
@@ -90,6 +91,13 @@
   // choisis — pour Avery 5392, celui de la feuille de contrôle aussi —
   // remplacent ceux de la planche.
   //
+  // Les colonnes de la liste des badges en CSV sont un autre réglage de la
+  // machine (EtatSeance.colonnesListe, seance.choisirColonnesListe), choisi
+  // parmi les réglages : une colonne par tour tant que l'opérateur n'a pas
+  // choisi « Une seule colonne ». La planche ne les lit pas : l'annonce
+  // montrée reste. Un choix que la machine ne retient pas s'annonce tant
+  // qu'il est celui de la séance, comme le modèle.
+  //
   // « Produire la liste (CSV) » dépose la liste de la demande courante
   // (produireListeBadges) et nomme son chemin, ou son nom sous web. Elle ne
   // prépare pas l'annonce : seuls les refus du placement la gardent, levés
@@ -112,7 +120,7 @@
   // carte, les fichiers produits sur le fond de l'information. La réédition
   // est une carte à elle.
   import { getContext, onDestroy } from 'svelte';
-  import { DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT, normaliserTextePied } from '../../application/seance.js';
+  import { COLONNES_LISTE_BADGES, DONNEES_BADGE, TEXTE_PIED_TECHNOLIBRE_DEFAUT, normaliserTextePied } from '../../application/seance.js';
   import { PAPIER_BADGES_DEFAUT } from '../../geometrie/papiers.js';
   import Message from '../accueil/Message.svelte';
   import { suivre } from '../activite.js';
@@ -154,6 +162,7 @@
   const textePiedTechnolibre = $derived($seance.textePiedTechnolibre);
   const donneesBadge = $derived($seance.donneesBadge);
   const cacherNumero = $derived($seance.cacherNumero);
+  const colonnesListe = $derived($seance.colonnesListe);
   const cartes = $derived(modeleImposeSonPapier(modeleBadge));
   const offertes = $derived(charge === null ? [] : sourcesOffertes(charge, $ui.proposition));
 
@@ -207,11 +216,12 @@
   let liste = $state(null);
   let derniereListe = null;
   // Le dernier modèle choisi que la machine n'a pas retenu, ou null ; de
-  // même, la dernière valeur de la case du pied TechnoLibre, et celle de la
-  // case du nom des doublons.
+  // même, la dernière valeur de la case du pied TechnoLibre, celle de la
+  // case du nom des doublons, et les dernières colonnes de la liste.
   let modeleNonRetenu = $state(null);
   let piedNonRetenu = $state(null);
   let cacherNonRetenu = $state(null);
+  let colonnesNonRetenues = $state(null);
   // Les cases que la machine n'a pas retenues, chacune avec la valeur de son
   // dernier choix : une donnée y entre quand son choix n'est pas retenu, en
   // sort quand un choix d'elle l'est. Vide tant que tout est retenu.
@@ -338,6 +348,12 @@
     cacherNonRetenu = retenu ? null : coche;
   }
 
+  // Les colonnes de la liste s'écrivent sur la machine, comme le modèle.
+  async function choisirColonnes(colonnes) {
+    const { retenu } = await seance.choisirColonnesListe(colonnes);
+    colonnesNonRetenues = retenu ? null : colonnes;
+  }
+
   // Le texte quitté s'écrit sur la machine, comme la case, quand sa forme
   // normalisée diffère de celui de la séance ; le champ montre ensuite le
   // texte de la séance, normalisé. Quitter le champ sans changement — une
@@ -404,6 +420,14 @@
               <select data-champ="ordre" value={ordre} onchange={(evenement) => (ordre = evenement.currentTarget.value)}>
                 {#each ORDRES_OFFERTS as valeur (valeur)}
                   <option value={valeur}>{t(cleOrdre(valeur))}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="reglage">
+              <span>{t('badges.liste.colonnes.titre')}</span>
+              <select data-champ="colonnesListe" value={colonnesListe} onchange={(evenement) => choisirColonnes(evenement.currentTarget.value)}>
+                {#each COLONNES_LISTE_BADGES as valeur (valeur)}
+                  <option value={valeur}>{t(`badges.liste.colonnes.${valeur}`)}</option>
                 {/each}
               </select>
             </label>
@@ -486,6 +510,9 @@
             {/if}
             {#if annoncerDonnees}
               <Message ton="avis"><p data-avertissement="donneesNonRetenues">{t('badges.donnees.nonRetenues')}</p></Message>
+            {/if}
+            {#if colonnesNonRetenues !== null && colonnesNonRetenues === colonnesListe}
+              <Message ton="avis"><p data-avertissement="colonnesNonRetenues">{t('badges.liste.colonnes.nonRetenu')}</p></Message>
             {/if}
           </div>
 

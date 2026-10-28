@@ -79,7 +79,9 @@
 //
 // La liste en CSV se tire du même modèle que la planche (listeBadges) :
 // elle subit les refus du placement, jamais ceux de la mise en page, et ne
-// charge ni la police ni pdf-lib.
+// charge ni la police ni pdf-lib. Ses colonnes suivent la machine, que la
+// lecture porte : une par tour, ou une seule. Elles ne changent pas son
+// nom, qui ne porte que ce qui change la pile.
 //
 // Le nom du fichier (nomPlanche) porte tout ce qui change la pile : la
 // source, l'imposition, l'ordre, le placement. Une réédition, une base qui
@@ -96,7 +98,7 @@ import { MODELES_BADGE, PAPIERS, estModeleBadge } from '../geometrie/papiers.js'
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurPng, lirePng } from '../pdf/png.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
-import { DONNEES_BADGE, normaliserTextePied } from '../stockage/reglages_locaux.js';
+import { COLONNES_LISTE_BADGES, DONNEES_BADGE, normaliserTextePied } from '../stockage/reglages_locaux.js';
 import { nomControle, nomCsvBadges, nomCsvBadgesExigeListe, nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
 import { cheminAffiche } from '../stockage/systeme_fichiers.js';
 import { ErreurCommande, refus } from './erreurs.js';
@@ -145,6 +147,9 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {boolean} [cacherNumero]   la case qui laisse en blanc le nom
  *           des doublons, des réglages locaux ; faux quand la lecture ne la
  *           porte pas
+ * @property {'parTour'|'unique'} [colonnesListe]   les colonnes de la liste
+ *           en CSV, des réglages locaux ; une par tour quand la lecture ne
+ *           les porte pas
  *
  * @typedef {Object} DemandePlanche
  * @property {'retenu'|'proposition'} [source]   'retenu' par défaut
@@ -250,6 +255,16 @@ function donneesDe({ donneesBadge = null }) {
 function cacherDe({ cacherNumero = false }) {
   if (typeof cacherNumero !== 'boolean') throw new TypeError(`cacherNumero : booléen attendu, reçu ${JSON.stringify(cacherNumero)}`);
   return cacherNumero;
+}
+
+// Les colonnes de la liste en CSV d'une lecture, contrôlées, une par tour
+// quand elle ne les porte pas ; une valeur hors de COLONNES_LISTE_BADGES
+// est une faute du code, levée avant tout refus du placement.
+function colonnesDe({ colonnesListe = COLONNES_LISTE_BADGES[0] }) {
+  if (!COLONNES_LISTE_BADGES.includes(colonnesListe)) {
+    throw new TypeError(`colonnesListe : ${COLONNES_LISTE_BADGES.join(' ou ')} attendue, reçu ${JSON.stringify(colonnesListe)}`);
+  }
+  return colonnesListe;
 }
 
 // Les données que les cases retirent, dans l'ordre de DONNEES_BADGE.
@@ -543,12 +558,14 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
   }
 
   // Les octets de la liste d'une demande et son nom, sous le dossier de la
-  // lecture quand avecDossier est vrai, sans dossier sinon. Le refus du
-  // placement lève, ErreurCommande, avant que rien ne se produise ; une
-  // liste refusée du dossier lève PLANCHE_NON_ECRITE sans rien écrire.
+  // lecture quand avecDossier est vrai, sans dossier sinon ; ses colonnes,
+  // celles de la lecture. Le refus du placement lève, ErreurCommande, avant
+  // que rien ne se produise ; une liste refusée du dossier lève
+  // PLANCHE_NON_ECRITE sans rien écrire.
   async function listeDe(lecture, demande, { avecDossier }) {
     const { charge, base } = lecture;
     const { source, proposition, ordre, selection } = demandeLue(demande);
+    const colonnes = colonnesDe(lecture);
     const rejet = refusPlanche(charge, { source, proposition });
     if (rejet !== null) throw new ErreurCommande(rejet.code, rejet.details);
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
@@ -568,7 +585,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
         throw await nonListe(lecture, erreur, nomCsvBadges(base, options), 'liste');
       }
     }
-    return { octets: listeBadges(modele, charge), nom: nomCsvBadges(base, { ...options, dossier }) };
+    return { octets: listeBadges(modele, charge, { colonnes }), nom: nomCsvBadges(base, { ...options, dossier }) };
   }
 
   // Les octets de la planche d'une demande, et son nom : sous le dossier de
@@ -749,12 +766,15 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * planche : dans le dossier de l'événement, sous le nom de
      * nomCsvBadges, et rend {chemin, nom} ; sous web, téléchargée, chemin
      * null. La demande est celle de la planche — source, ordre, sélection ;
-     * l'imposition n'y change rien. Seuls les refus du placement la gardent
+     * l'imposition n'y change rien. Les colonnes sont celles de la lecture,
+     * une par tour ou une seule. Seuls les refus du placement la gardent
      * (refusPlanche) ; une écriture refusée lève PLANCHE_NON_ECRITE, fichier
      * 'liste', remède « Enregistrer sous… », comme pour la planche.
      *
      * @throws {ErreurCommande} le refus du placement ; PLANCHE_NON_ECRITE ;
      *         PROPOSITION_INCONNUE, PARTICIPANT_INCONNU, PERSONNE_EXCLUE
+     * @throws {TypeError} une demande hors de son domaine ; des colonnes de
+     *         la lecture hors de COLONNES_LISTE_BADGES
      */
     async produireListe(lecture, demande) {
       const { octets, nom } = await listeDe(lecture, demande, { avecDossier: true });

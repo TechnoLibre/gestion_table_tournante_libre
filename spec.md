@@ -3897,7 +3897,7 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **huit choses, et huit seulement** :
+Ce fichier porte **neuf choses, et neuf seulement** :
 
 | réglage | portée |
 |---|---|
@@ -3908,6 +3908,7 @@ Ce fichier porte **huit choses, et huit seulement** :
 | le **texte du pied TechnoLibre** (§ 11.4), clé `texte_pied_technolibre` | global à la machine |
 | les **cases de ce que le badge imprime** (§ 11.4), clé `donnees_badge` | globales à la machine |
 | la **case qui laisse en blanc le nom des doublons** (§ 11.4), clé `cacher_numero_doublon` | globale à la machine |
+| les **colonnes de la liste des badges en CSV** (§ 11.6), clé `colonnes_liste_badges` | globales à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
 Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
@@ -4026,6 +4027,18 @@ comme la case du pied TechnoLibre ; un fichier que la lecture ne prend pas,
 ou un dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut
 pour la séance, et la section dit, sous ses réglages, qu'elle n'est pas
 retenue sur ce poste.
+
+**Les colonnes de la liste des badges en CSV** — « Une colonne par tour » ou
+« Une seule colonne » (§ 11.6) — sont, comme le modèle de badge, un choix de
+la machine : elles décrivent le tableur qui reçoit la liste, pas le plan. Le
+fichier ne les porte que choisies, sous `colonnes_liste_badges`, `parTour` ou
+`unique` ; sans elles, une colonne par tour. Une autre valeur rend le fichier
+illisible, comme un papier inconnu. Elles se choisissent dans la section de
+l'impression, s'écrivent au geste, dans tout mode, par la même file, et se
+relisent comme le modèle de badge ; un fichier que la lecture ne prend pas, ou
+un dossier qui refuse de l'écrire, ne bloque pas le choix : il vaut pour la
+séance, et la section dit, sous ses réglages, qu'il n'est pas retenu sur ce
+poste.
 
 **La taille du texte de l'écran** se choisit dans le panneau « Paramètres »
 (§ 18.6), en paliers : 90, 100, 115, 130 et 150 %, une seule définition dans
@@ -6840,24 +6853,43 @@ propositions : la version précédente du fichier, le remède d'un retenu qui se
 contredit, ne se reprend pas pour elle, puisque le retenu est sain.
 
 **La liste des badges, en CSV.** La section de l'impression offre, à côté de
-« Produire la planche (PDF) », **« Produire la liste (CSV) »**, sans réglage à
-garder : la liste se tire de la même source et dans le même ordre que la
-planche, pour toute la soirée ; la réédition de la section ne produit que la
-planche. La séance accepte aussi une demande de liste qui porte une sélection :
-la liste n'a alors que les badges choisis, et son nom porte leur nombre k, comme
-la planche d'une réédition. Un enregistrement par badge, sous l'en-tête
-`Nom;Prénom;Organisation;Tours` : le nom entier et le prénom de la personne —
-même quand la case des doublons les laisse en blanc sur le badge (§ 11.4), le
-prénom vide quand elle n'en a pas —, l'organisation telle que le badge
-l'imprime, vide sans elle, et, dans une seule cellule, les lignes de tour du
-badge, **texte pour texte**, une par ligne — « Toute la soirée — table 13 —
-animation », « Tour 1 — table 5 (Terrasse) » —, jamais abrégées. Les personnes
-exclues n'y figurent pas.
+« Produire la planche (PDF) », **« Produire la liste (CSV) »** : la liste se
+tire de la même source et dans le même ordre que la planche, pour toute la
+soirée ; la réédition de la section ne produit que la planche. La séance
+accepte aussi une demande de liste qui porte une sélection : la liste n'a alors
+que les badges choisis, et son nom porte leur nombre k, comme la planche d'une
+réédition. Un enregistrement par badge : le nom entier et le prénom de la
+personne — même quand la case des doublons les laisse en blanc sur le badge
+(§ 11.4), le prénom vide quand elle n'en a pas —, l'organisation telle que le
+badge l'imprime, vide sans elle, puis ses tours, sous les en-têtes `Nom`,
+`Prénom`, `Organisation`. Les personnes exclues n'y figurent pas.
+
+**Ses tours prennent l'une de deux formes**, que le réglage « Colonnes de la
+liste (CSV) », parmi ceux de la planche, choisit pour la machine (§ 8.5) :
+
+- **Une colonne par tour**, par défaut. Chaque tour a sa colonne, dont
+  l'en-tête est le nom du tour (§ 4), ou « Tour 3 » sans lui, et dont la
+  cellule porte la place de la personne à ce tour, sans le tour : « table 5
+  (Terrasse), siège 2 — animation », « pas de table », « absente ». Un
+  itinéraire constant remplit chaque colonne de la même place : le tableur
+  trie et filtre tour par tour.
+- **Une seule colonne**, sous l'en-tête `Tours`. La cellule porte les lignes
+  de tour du badge, **texte pour texte**, jointes par « ; » : « Plat
+  principal — table 3 ; Dessert — table 5 », ou « Toute la soirée — table 13
+  — animation » quand rien ne change.
+
+Dans les deux formes, rien n'est abrégé, et la cellule, comme la tête de sa
+colonne, tient sur une ligne : un saut de ligne qu'un nom de tour, un libellé
+de table ou un titre lu d'un fichier porte devient une espace. Les têtes ne
+sont pas garanties uniques : deux tours de même nom, ou un tour nommé `Nom`,
+donnent deux colonnes de même tête. Le choix ne change ni la pile ni le nom du
+fichier : une liste produite de nouveau sous l'autre forme, du même placement,
+remplace la précédente.
 **Elle ne porte jamais le logo** : un logo ne se range pas dans une cellule, ses
 octets sont les mêmes avec et sans logos, et elle ne lit aucun fichier de logo.
 Le fichier est celui de l'export des participants (§ 10.3) : UTF-8 avec marque
-d'ordre d'octets, `;`, CRLF entre les enregistrements, un saut de ligne dans la
-cellule des tours, qui s'écrit alors entre guillemets (RFC 4180). Mêmes entrées,
+d'ordre d'octets, `;`, CRLF entre les enregistrements, et une cellule qui porte
+le séparateur s'écrit entre guillemets (RFC 4180). Mêmes entrées, même choix,
 mêmes octets. Il se dépose dans le dossier de l'événement, comme la planche, et
 « Ouvrir le dossier » le montre ; sous `web`, il se télécharge. Son nom suit le
 gabarit de la planche, sans papier, imposition ni modèle, qui ne changent pas la
@@ -6884,8 +6916,8 @@ disponible en **mode lecture** et sur un plan **bloqué**, où la lecture et
 l'impression restent ouvertes (§ 9). Ses seules écritures sont ses PDF, sa
 liste CSV et, dans les réglages locaux (§ 8.5), les choix de la section,
 chacun au geste qui le fait : le papier, le modèle de badge, la case du pied
-TechnoLibre et son texte, les cases de ce que le badge imprime et celle qui
-laisse en blanc le nom des doublons (§ 11.4).
+TechnoLibre et son texte, les cases de ce que le badge imprime, celle qui
+laisse en blanc le nom des doublons (§ 11.4) et les colonnes de la liste.
 
 ### 11.7 Les autres sorties, et ce que porte toute page imprimée
 

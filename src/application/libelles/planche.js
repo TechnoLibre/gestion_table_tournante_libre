@@ -148,12 +148,17 @@ export const TABLE = new Map([
   ['planche.absente', 'absente'],
   ['planche.siege', ({ siege }) => `, siège ${siege}`],
   ['planche.titre', ({ titre }) => ` — ${titre}`],
+  // La place seule, sous la tête de son tour, dans la liste des badges en
+  // CSV d'une colonne par tour.
+  ['planche.liste.place', (ligne, texte) => (ligne.absente ? texte('planche.absente') : place(ligne, texte))],
 
   // --- Les en-têtes de la liste des badges en CSV (§ 11.6) ----------------
   ['planche.liste.nom', 'Nom'],
   ['planche.liste.prenom', 'Prénom'],
   ['planche.liste.organisation', 'Organisation'],
   ['planche.liste.tours', 'Tours'],
+  // La tête de la colonne d'un tour sans nom ; un tour nommé y pose son nom.
+  ['planche.liste.tour', ({ tour }) => nomDuTour(tour)],
 
   // --- Le pied d'un badge, et la marque du brouillon (§ 11.4, § 11.7) -------
   // L'événement et sa date ; la date seule, quand le nom de l'événement

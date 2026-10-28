@@ -54,6 +54,16 @@ export const TEXTES = [
     'Tour 1 \u{2014} table 5 (Terrasse), siège 3 \u{2014} animation',
   ],
   ['planche.touteLaSoiree', { table: 13, libelleTable: 'Verrière', siege: null, titre: null }, 'Toute la soirée \u{2014} table 13 (Verrière)'],
+  // La liste des badges en CSV d'une colonne par tour : la tête d'un tour
+  // sans nom, et la place seule sous elle.
+  ['planche.liste.tour', { tour: 3 }, 'Tour 3'],
+  [
+    'planche.liste.place',
+    { tour: 1, table: 5, libelleTable: 'Terrasse', siege: 3, titre: 'animation', absente: false },
+    'table 5 (Terrasse), siège 3 \u{2014} animation',
+  ],
+  ['planche.liste.place', { tour: 2, table: null, siege: null, titre: null, absente: false }, 'pas de table'],
+  ['planche.liste.place', { tour: 2, table: null, siege: null, titre: null, absente: true }, 'absente'],
   // Des lignes de tour repliées qui débordent : le refus nomme la personne
   // et ce qui se raccourcit, plutôt que le nombre de tours.
   [

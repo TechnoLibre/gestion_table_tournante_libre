@@ -917,8 +917,10 @@ describe('planche : le nom du tour sur les lignes de tour (§ 11.4)', () => {
     assert.equal(Object.hasOwn(badgeDe(m, 2).lignes[1], 'nomTour'), false);
     assert.deepEqual(badgeDe(m, 1).textes.lignes, ['Toute la soirée — table 7']);
     assert.equal(Object.hasOwn(badgeDe(m, 1).lignes[0], 'nomTour'), false);
-    // La liste CSV reprend les lignes du badge, texte pour texte.
-    assert.ok(texteCsv(listeBadges(m, charge)).includes('Plat principal — table 7\nTour 2 — pas de table'));
+    // La liste CSV d'une seule colonne reprend les lignes du badge, texte
+    // pour texte ; celle d'une colonne par tour nomme le tour en tête.
+    assert.ok(texteCsv(listeBadges(m, charge, { colonnes: 'unique' })).includes('Plat principal — table 7 ; Tour 2 — pas de table'));
+    assert.ok(texteCsv(listeBadges(m, charge)).startsWith('\u{FEFF}Nom;Prénom;Organisation;Plat principal;Tour 2\r\n'));
   });
 
   test('le nom s’insère tel quel : un caractère d’usage privé ou un texte qui ressemble à un gabarit ne se lit jamais comme une place à remplir', () => {
@@ -958,9 +960,15 @@ describe('planche : le libellé de la table sur les lignes de tour (§ 11.4, § 
     const charge = aReserve({ tables: [libellee(1, 7, 2, 'Terrasse\n\tNord\u2028'), table(2, 3, 2)] });
     const m = modele(charge);
     assert.deepEqual(badgeDe(m, 2).textes.lignes, ['Tour 1 — table 7 (Terrasse Nord)', 'Tour 2 — pas de table']);
-    const cellules = texteCsv(listeBadges(m, charge)).split('\r\n').filter((l) => l.includes('Terrasse'));
-    assert.ok(cellules.some((l) => l.includes('Tour 1 — table 7 (Terrasse Nord)')), JSON.stringify(cellules));
-    assert.ok(cellules.every((l) => !/Terrasse[\s\S]*\n[\s\S]*Nord/.test(l)), JSON.stringify(cellules));
+    for (const [colonnes, cellule] of [
+      ['unique', 'Tour 1 — table 7 (Terrasse Nord)'],
+      ['parTour', ';table 7 (Terrasse Nord);'],
+    ]) {
+      const texte = texteCsv(listeBadges(m, charge, { colonnes }));
+      const cellules = texte.split('\r\n').filter((l) => l.includes('Terrasse'));
+      assert.ok(cellules.some((l) => l.includes(cellule)), JSON.stringify(cellules));
+      assert.ok(!/[^\r]\n/.test(texte), JSON.stringify(texte));
+    }
   });
 
   test('avec le siège et le titre : « Tour 1 — table 7 (Terrasse), siège 1 — animateur » ; absente, ni table ni libellé', () => {
@@ -1000,21 +1008,101 @@ describe('planche : le libellé de la table sur les lignes de tour (§ 11.4, § 
 const texteCsv = (octets) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets);
 
 describe('planche : la liste des badges en CSV (§ 11.6)', () => {
-  test('Nom;Prénom;Organisation;Tours, une ligne par badge dans l’ordre de la pile ; Prénom vide quand il manque ; les lignes de tour dans une cellule citée', () => {
+  // La soirée à réserve, la table 7 libellée, deux organisations, dont une
+  // qui porte le séparateur.
+  const organisee = () => {
     const charge = aReserve({ tables: [libellee(1, 7, 2, 'Terrasse'), table(2, 3, 2)] });
     charge.participants[0].organisation = 'Club des Merles';
     charge.participants[1].organisation = 'Atelier « la Sarcelle »; Nord';
+    return charge;
+  };
+
+  test('par défaut, une colonne par tour : Nom;Prénom;Organisation;Tour 1;Tour 2, la place seule dans la cellule du tour, même pour un itinéraire constant', () => {
+    const charge = organisee();
+    const m = modele(charge);
+    const attendu =
+      '\u{FEFF}Nom;Prénom;Organisation;Tour 1;Tour 2\r\n' +
+      'Grisaille;;;pas de table;table 7 (Terrasse)\r\n' +
+      'Lacasse;Ondine;;table 3;table 3\r\n' +
+      'Ombrelle;Émile;;table 3;table 3\r\n' +
+      'Ombrelle;Iris;Club des Merles;table 7 (Terrasse);table 7 (Terrasse)\r\n' +
+      'Pervenche;Théo;"Atelier « la Sarcelle »; Nord";table 7 (Terrasse);pas de table\r\n';
+    assert.equal(texteCsv(listeBadges(m, charge)), attendu);
+    assert.deepEqual(listeBadges(m, charge, { colonnes: 'parTour' }), listeBadges(m, charge));
+    // Mêmes entrées, mêmes octets.
+    assert.deepEqual(listeBadges(modele(charge), charge), listeBadges(m, charge));
+  });
+
+  test('une seule colonne : Nom;Prénom;Organisation;Tours, les lignes du badge texte pour texte, jointes par « ; », « Toute la soirée » quand rien ne change', () => {
+    const charge = organisee();
     const m = modele(charge);
     const attendu =
       '\u{FEFF}Nom;Prénom;Organisation;Tours\r\n' +
-      'Grisaille;;;"Tour 1 — pas de table\nTour 2 — table 7 (Terrasse)"\r\n' +
+      'Grisaille;;;"Tour 1 — pas de table ; Tour 2 — table 7 (Terrasse)"\r\n' +
       'Lacasse;Ondine;;Toute la soirée — table 3\r\n' +
       'Ombrelle;Émile;;Toute la soirée — table 3\r\n' +
       'Ombrelle;Iris;Club des Merles;Toute la soirée — table 7 (Terrasse)\r\n' +
-      'Pervenche;Théo;"Atelier « la Sarcelle »; Nord";"Tour 1 — table 7 (Terrasse)\nTour 2 — pas de table"\r\n';
-    assert.equal(texteCsv(listeBadges(m, charge)), attendu);
-    // Mêmes entrées, mêmes octets.
-    assert.deepEqual(listeBadges(modele(charge), charge), listeBadges(m, charge));
+      'Pervenche;Théo;"Atelier « la Sarcelle »; Nord";"Tour 1 — table 7 (Terrasse) ; Tour 2 — pas de table"\r\n';
+    assert.equal(texteCsv(listeBadges(m, charge, { colonnes: 'unique' })), attendu);
+    // La pile garde son ordre : l'enregistrement de rang n porte les lignes
+    // du badge de rang n.
+    const enregistrements = texteCsv(listeBadges(m, charge, { colonnes: 'unique' })).split('\r\n').slice(1, -1);
+    m.badges.forEach(({ textes }, rang) => assert.ok(enregistrements[rang].includes(textes.lignes.join(' ; ')), enregistrements[rang]));
+  });
+
+  test('les têtes de tour portent le nom du tour, tel quel, cité au besoin ; la cellule garde la place, absente, siège et titre compris', () => {
+    const reservations = [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }];
+    const charge = absenteHors(titree({ reservations, tour2: [null, 1, 3] }), 2, [1]);
+    charge.tables = [libellee(1, 7, 3, 'Terrasse')];
+    charge.evenement.nomsTours = ['Entrée; potage', null];
+    const m = modele(charge);
+    assert.equal(
+      texteCsv(listeBadges(m, charge)),
+      '\u{FEFF}Nom;Prénom;Organisation;"Entrée; potage";Tour 2\r\n' +
+        'Lacasse;Ondine;;table 7 (Terrasse), siège 3;table 7 (Terrasse), siège 3\r\n' +
+        'Ombrelle;Iris;;table 7 (Terrasse), siège 1 — animateur;table 7 (Terrasse), siège 2\r\n' +
+        'Pervenche;Théo;;table 7 (Terrasse), siège 2;absente\r\n',
+    );
+    assert.equal(
+      texteCsv(listeBadges(m, charge, { colonnes: 'unique' })).split('\r\n')[3],
+      'Pervenche;Théo;;"Entrée; potage — table 7 (Terrasse), siège 2 ; Tour 2 — absente"',
+    );
+  });
+
+  test('un nom de tour ou un titre sur deux lignes, lu d’un fichier : la tête, la cellule et la ligne du badge tiennent sur une ligne', () => {
+    const reservations = [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }];
+    const charge = titree({ reservations });
+    charge.titres[0].libelle = 'animateur\nen  chef';
+    charge.evenement.nomsTours = ['Plat\r\nprincipal', null];
+    const m = modele(charge);
+    const parTour = texteCsv(listeBadges(m, charge));
+    const unique = texteCsv(listeBadges(m, charge, { colonnes: 'unique' }));
+    assert.equal(parTour.split('\r\n')[0], '\u{FEFF}Nom;Prénom;Organisation;Plat principal;Tour 2');
+    assert.equal(parTour.split('\r\n')[2], 'Ombrelle;Iris;;table 7, siège 1 — animateur en chef;table 7, siège 2');
+    assert.equal(unique.split('\r\n')[2], 'Ombrelle;Iris;;"Plat principal — table 7, siège 1 — animateur en chef ; Tour 2 — table 7, siège 2"');
+    // Aucun saut hors de la fin des enregistrements, ni dans le PDF.
+    for (const texte of [parTour, unique]) assert.doesNotMatch(texte.replaceAll('\r\n', ''), /[\r\n]/);
+    for (const { textes } of m.badges) for (const ligne of textes.lignes) assert.doesNotMatch(ligne, /[\p{Cc}]/u);
+  });
+
+  test('un seul tour : une colonne « Tour 1 », ou la ligne « Tour 1 — … » dans « Tours » ; une forme inconnue lève TypeError', () => {
+    const charge = deuxATable7(1);
+    const m = modele(charge);
+    assert.equal(texteCsv(listeBadges(m, charge)), '\u{FEFF}Nom;Prénom;Organisation;Tour 1\r\nOmbrelle;Iris;;table 7\r\nPervenche;Théo;;table 7\r\n');
+    assert.equal(
+      texteCsv(listeBadges(m, charge, { colonnes: 'unique' })),
+      '\u{FEFF}Nom;Prénom;Organisation;Tours\r\nOmbrelle;Iris;;Tour 1 — table 7\r\nPervenche;Théo;;Tour 1 — table 7\r\n',
+    );
+    for (const mauvaise of ['par_tour', 'toString', null, true]) {
+      assert.throws(() => listeBadges(m, charge, { colonnes: mauvaise }), TypeError, String(mauvaise));
+    }
+  });
+
+  test('le libellé de la table et le titre s’insèrent tels quels dans la cellule du tour, gabarit et usage privé compris', () => {
+    const charge = titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }] });
+    charge.tables = [libellee(1, 7, 3, 'Coin \u{E001} ${table}')];
+    const ligne = texteCsv(listeBadges(modele(charge), charge)).split('\r\n')[2];
+    assert.equal(ligne, 'Ombrelle;Iris;;table 7 (Coin \u{E001} ${table}), siège 1 — animateur;table 7 (Coin \u{E001} ${table}), siège 2');
   });
 
   test('les cellules suivent la pile : l’ordre par table, une réédition, une proposition ; un exclu n’a pas de ligne', () => {
@@ -1044,7 +1132,7 @@ describe('planche : la liste des badges en CSV (§ 11.6)', () => {
     const m = modele(charge, { source: 'proposition', proposition: 2 });
     assert.equal(
       texteCsv(listeBadges(m, charge)),
-      '\u{FEFF}Nom;Prénom;Organisation;Tours\r\nOmbrelle;Iris;;Tour 1 — table 3\r\nPervenche;Théo;;Tour 1 — table 7 (Terrasse)\r\n',
+      '\u{FEFF}Nom;Prénom;Organisation;Tour 1\r\nOmbrelle;Iris;;table 3\r\nPervenche;Théo;;table 7 (Terrasse)\r\n',
     );
   });
 });
@@ -1125,7 +1213,9 @@ describe('planche : le nom des doublons laissé en blanc (§ 11.4, § 11.6)', ()
     assert.ok(reedite.badges.every(enBlanc));
     const lignes = textesControle(reedite, { papier: 'A4', imposition: 'feuille', planches: 1 });
     assert.deepEqual(lignes.slice(-2), ['Roger Galet 01', 'Roger Galet 02']);
-    assert.deepEqual(listeBadges(cache(charge), charge), listeBadges(modele(charge), charge));
+    for (const colonnes of ['parTour', 'unique']) {
+      assert.deepEqual(listeBadges(cache(charge), charge, { colonnes }), listeBadges(modele(charge), charge, { colonnes }));
+    }
     assert.match(texteCsv(listeBadges(cache(charge), charge)), /\r\nGalet 01;Roger;/);
   });
 

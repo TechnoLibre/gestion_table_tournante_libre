@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Les libellés de la section de l'impression (§ 11.2, § 11.5, § 11.6, § 11.8,
-// Q3) : les titres de ses deux parties, « Badges » et « Plan », l'aperçu de
-// la seconde ayant ses propres libellés (impression.*) ; les réglages de la
-// planche — modèle de badge, case du pied TechnoLibre et son texte, cases de
-// ce que le badge imprime, source, imposition, ordre —, ses commandes, les
-// phrases de l'annonce que rend phrasesAnnonce (badges/modele.js), logos des
-// participants compris, la planche et la liste produites, et la réédition.
-// Chaque clé commence par « badges. ». Les refus de la planche sont des
-// textes de l'application (application/libelles/planche.js), le nom d'un
-// papier un libellé de l'aperçu (impression.papier.nom.*), que l'annonce lit
-// par texte. Le chemin d'un fichier produit est une donnée : l'écran le pose
-// dans son propre nœud, à côté de son intitulé.
+// Q3) : les titres de ses deux parties, « Badges » et « Plan », l'aperçu de la
+// seconde ayant ses propres libellés (impression.*) ; les réglages de la
+// planche — modèle de badge, case du pied TechnoLibre et son texte, cases de ce
+// que le badge imprime, source, imposition, ordre, colonnes de la liste —, ses
+// commandes, les phrases de l'annonce que rend phrasesAnnonce
+// (badges/modele.js), logos des participants compris, la planche et la liste
+// produites, et la réédition. Chaque clé commence par « badges. ». Les refus de
+// la planche sont des textes de l'application
+// (application/libelles/planche.js), le nom d'un papier un libellé de l'aperçu
+// (impression.papier.nom.*), que l'annonce lit par texte. Le chemin d'un
+// fichier produit est une donnée : l'écran le pose dans son propre nœud, à côté
+// de son intitulé.
 import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
@@ -82,6 +83,16 @@ export const TABLE = new Map([
   ['badges.ordre.titre', 'Ordre des badges'],
   ['badges.ordre.alphabetique', 'Alphabétique'],
   ['badges.ordre.table', 'Par table du premier tour'],
+  // Les colonnes de la liste des badges en CSV (§ 8.5, § 11.6), une par
+  // forme de COLONNES_LISTE_BADGES, et l'annonce d'un choix que le poste ne
+  // retient pas.
+  ['badges.liste.colonnes.titre', 'Colonnes de la liste (CSV)'],
+  ['badges.liste.colonnes.parTour', 'Une colonne par tour'],
+  ['badges.liste.colonnes.unique', 'Une seule colonne'],
+  [
+    'badges.liste.colonnes.nonRetenu',
+    'Les colonnes choisies pour la liste valent pour cette séance, sans être retenues sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
 
   // --- Les commandes ----------------------------------------------------------
   ['badges.commande.preparer', 'Préparer'],

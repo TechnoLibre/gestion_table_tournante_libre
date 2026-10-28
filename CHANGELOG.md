@@ -33,8 +33,12 @@
 - Un badge perdu se réédite seul : la réédition produit une planche des seuls
   badges choisis, identiques aux premiers tant que le placement n'a pas bougé.
 - « Produire la liste (CSV) » dépose à côté de la planche la liste des mêmes
-  badges, pour un tableur : nom, prénom, organisation et, dans une seule
-  cellule, les lignes de tour du badge, une par ligne. Elle se tire du
+  badges, pour un tableur : nom, prénom, organisation, puis une colonne par
+  tour, sous le nom du tour, qui porte la place de la personne — « table 5
+  (Terrasse) », « absente ». Le réglage « Colonnes de la liste (CSV) », que
+  le poste retient, offre aussi « Une seule colonne » : les lignes de tour du
+  badge dans la même cellule, « Entrée — table 3 ; Dessert — table 5 », ou
+  « Toute la soirée — table 3 » quand rien ne change. Elle se tire du
   placement retenu ou d'une proposition, dont le nom de fichier porte alors
   « BROUILLON », et se produit même quand un nom trop long empêche la
   planche.

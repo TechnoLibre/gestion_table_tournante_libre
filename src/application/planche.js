@@ -17,7 +17,9 @@
 // produire (§ 11.8).
 //
 // La liste des badges en CSV (listeBadges) se lit du même modèle : mêmes
-// badges, même ordre, mêmes lignes de tour, texte pour texte.
+// badges, même ordre, mêmes places. Elle a une colonne par tour, qui porte
+// la place seule, ou une seule colonne, qui porte les lignes de tour du
+// badge, texte pour texte.
 //
 // Chaque badge porte le chemin du logo de sa personne, relatif au dossier
 // de l'événement, ou null : le modèle ne lit pas l'image, la séance la lit
@@ -37,6 +39,7 @@ import { cleNormalisee } from '../csv/normalisation.js';
 import { MODELES_BADGE, PAPIERS, PAPIER_BADGES_DEFAUT, estModeleBadge } from '../geometrie/papiers.js';
 import { nomsDesTours } from '../stockage/document.js';
 import { derive, fautes } from '../stockage/placements.js';
+import { COLONNES_LISTE_BADGES } from '../stockage/reglages_locaux.js';
 import { raisonsNommees } from './avertissements.js';
 import { formeNommeeDe } from './commandes.js';
 import { ErreurCommande, refus } from './erreurs.js';
@@ -269,11 +272,12 @@ export function refusProduction(code, { repliees = false, ...details }, badge) {
   return { code, details: { ...details, lignesLongues: true, ...personne, remede: { geste: 'ouvrirSection', section: 'tables' } } };
 }
 
-// Un libellé de table imprimé tient sur la ligne de son tour : ses sauts de
-// ligne, tabulations et autres caractères de contrôle deviennent des
-// espaces, et les espaces qui se suivent n'en font qu'une. Une ligne du PDF
-// reste une ligne, et la cellule des tours du CSV garde une ligne par tour.
-// null sans libellé, ou quand il ne reste rien.
+// Un libellé de table, un nom de tour ou un titre imprimé tient sur une
+// ligne : ses sauts de ligne, tabulations et autres caractères de contrôle
+// deviennent des espaces, et les espaces qui se suivent n'en font qu'une.
+// Une ligne du PDF reste une ligne, et une cellule de tour du CSV, comme la
+// tête de sa colonne, tient sur une ligne. null sans texte, ou quand il ne
+// reste rien.
 function surUneLigne(texte) {
   if (texte == null) return null;
   const ligne = texte
@@ -307,13 +311,15 @@ function placesParTour(charge, cible, tours) {
 // titulaire à ce tour (pourvoyeursDesTitres) ET que le placement assied à la
 // table du titre — et à son siège quand il attribue les sièges. Un titre
 // posé sur une chaise que le placement fait seulement occuper ne s'imprime
-// pas : ce serait désigner le titulaire par tirage.
+// pas : ce serait désigner le titulaire par tirage. Le libellé s'imprime sur
+// une ligne (surUneLigne) ; un titre dont il ne reste rien ne s'imprime pas.
 function titresImprimes(charge, places, siegesAttribues) {
   const titres = new Map();
   pourvoyeursDesTitres(charge).forEach(({ tours }, rang) => {
     const titre = charge.titres[rang];
+    const texte = surUneLigne(titre.libelle);
     tours.forEach((reservation, indice) => {
-      if (reservation === null) return;
+      if (reservation === null || texte === null) return;
       // La réservation d'une personne non exclue et présente à ce tour, que
       // le placement cohérent et sans dérive y assied ou y réserve : une
       // place de la réserve n'a pas de table, et ne porte aucun titre.
@@ -321,7 +327,7 @@ function titresImprimes(charge, places, siegesAttribues) {
       if (place.table !== titre.table) return;
       if (siegesAttribues && place.siege !== titre.siege) return;
       const cle = `${reservation.participant}/${indice + 1}`;
-      titres.set(cle, [...(titres.get(cle) ?? []), titre.libelle.normalize('NFC')]);
+      titres.set(cle, [...(titres.get(cle) ?? []), texte]);
     });
   });
   return titres;
@@ -374,12 +380,13 @@ const TENANT_TOUR = '\u{E002}';
 
 // Le texte d'une ligne de tour composé par libelle, le nom du tour, le
 // libellé de la table et le titre insérés tels quels à la place de leurs
-// tenants (§ 11.4).
-function ligneComposee(ligne) {
+// tenants (§ 11.4). cle, quand elle est donnée, remplace le libellé de la
+// ligne : planche.liste.place, la place seule, sous la tête de son tour.
+function ligneComposee(ligne, cle = ligne.tour === null ? 'planche.touteLaSoiree' : 'planche.tour') {
   const tenue = { ...ligne, titre: ligne.titre === null ? null : TENANT_TITRE };
   if (ligne.libelleTable !== undefined) tenue.libelleTable = TENANT_LIBELLE;
   if (ligne.nomTour !== undefined) tenue.nomTour = TENANT_TOUR;
-  const gabarit = libelle(ligne.tour === null ? 'planche.touteLaSoiree' : 'planche.tour', tenue);
+  const gabarit = libelle(cle, tenue);
   const libres = new Map([
     [TENANT_LIBELLE, ligne.libelleTable],
     [TENANT_TITRE, ligne.titre],
@@ -406,7 +413,7 @@ function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodat
   return {
     nom,
     ...(nomEnBlanc ? { nomEnBlanc: true } : {}),
-    lignes: lignes.map(ligneComposee),
+    lignes: lignes.map((ligne) => ligneComposee(ligne)),
     organisation,
     pied: [libelle('planche.pied.evenement', evenement), ligneHorodatage, ...ligneIdentifiant],
     piedReduit: [...ligneDate, ligneHorodatage, ...ligneIdentifiant],
@@ -631,46 +638,63 @@ export function textesControle(modele, { papier, imposition, planches, absents =
   return ecrites;
 }
 
-// La fin de ligne dans la cellule des tours : un saut de ligne, qui force la
-// citation du champ (ecrireCsv) ; les enregistrements, eux, finissent par
-// CRLF.
-const SAUT_DANS_LA_CELLULE = '\n';
+// La jointure des lignes de tour dans la cellule unique : « ; » entre deux
+// espaces. La cellule tient sur une ligne, puisque aucune ligne de tour ne
+// porte de saut — nom du tour, libellé de table et titre passent par
+// surUneLigne ; jointe, elle porte le séparateur du fichier, qui la fait
+// citer (ecrireCsv).
+const JOINTURE_TOURS = ' ; ';
 
-// Les en-têtes de la liste, dans l'ordre de ses colonnes.
-const ENTETES_LISTE = Object.freeze([
-  'planche.liste.nom',
-  'planche.liste.prenom',
-  'planche.liste.organisation',
-  'planche.liste.tours',
-]);
+// Les en-têtes de la personne, dans l'ordre de leurs colonnes, que suivent
+// les colonnes des tours.
+const ENTETES_PERSONNE = Object.freeze(['planche.liste.nom', 'planche.liste.prenom', 'planche.liste.organisation']);
+
+// Les lignes de tour d'un badge, une par tour : la ligne « Toute la
+// soirée » d'un itinéraire constant vaut pour chacun des tours, au nombre
+// de tours, et porte leur place commune.
+const lignesParTour = (lignes, tours) =>
+  lignes.length === 1 && lignes[0].tour === null ? Array.from({ length: tours }, () => lignes[0]) : lignes;
 
 /**
- * La liste des badges d'un modèle, en CSV (§ 11.6) : l'en-tête « Nom;Prénom;
- * Organisation;Tours », puis un enregistrement par badge, dans l'ordre de la
- * pile — celui du modèle, sélection d'une réédition comprise, les exclus
- * absents. Nom et prénom sont ceux de la personne, en NFC, le prénom vide
- * quand il manque ; l'organisation, celle du badge, vide quand le badge n'en
- * porte pas ; Tours, les lignes de tour du badge, texte pour texte, jointes
- * par un saut de ligne dans la cellule. Écrite par ecrireCsv : UTF-8 avec
- * marque d'ordre d'octets, « ; », CRLF, citation RFC 4180. Mêmes entrées,
- * mêmes octets.
+ * La liste des badges d'un modèle, en CSV (§ 11.6) : un enregistrement par
+ * badge, dans l'ordre de la pile — celui du modèle, sélection d'une
+ * réédition comprise, les exclus absents. Nom et prénom sont ceux de la
+ * personne, en NFC, le prénom vide quand il manque ; l'organisation, celle
+ * du badge, vide quand le badge n'en porte pas.
+ *
+ * Les colonnes, l'une de COLONNES_LISTE_BADGES : parTour, par défaut, donne
+ * une colonne à chaque tour, sa tête le nom du tour sur une ligne, ou
+ * « Tour 3 » sans lui, sa cellule la place de la personne à ce tour — la
+ * table, son libellé, le siège et le titre, « pas de table » ou
+ * « absente » —, un itinéraire constant compris ; unique donne la seule
+ * colonne « Tours », les lignes de tour du badge, texte pour texte, jointes
+ * par « ; ». Écrite par ecrireCsv : UTF-8 avec marque d'ordre d'octets,
+ * « ; », CRLF, citation RFC 4180. Mêmes entrées, mêmes octets.
  *
  * @param {ModelePlanche} modele      celui de modelePlanche sur cette charge
  * @param {import('../stockage/types.js').Charge} charge
+ * @param {{colonnes?: 'parTour'|'unique'}} [options]
  * @returns {Uint8Array}
- * @throws {TypeError} un badge dont la personne manque à la charge
+ * @throws {TypeError} un badge dont la personne manque à la charge ; des
+ *         colonnes hors de COLONNES_LISTE_BADGES
  */
-export function listeBadges(modele, charge) {
+export function listeBadges(modele, charge, { colonnes = COLONNES_LISTE_BADGES[0] } = {}) {
+  if (!COLONNES_LISTE_BADGES.includes(colonnes)) {
+    throw new TypeError(`listeBadges : colonnes ${COLONNES_LISTE_BADGES.join(' ou ')} attendues, reçu ${JSON.stringify(colonnes)}`);
+  }
+  const parTour = colonnes === 'parTour';
+  const nomsTours = nomsDesTours(charge).map(surUneLigne);
   const personnes = new Map(charge.participants.map((personne) => [personne.id, personne]));
-  const enregistrements = modele.badges.map(({ participant, organisation, textes }) => {
+  const enregistrements = modele.badges.map(({ participant, organisation, lignes, textes }) => {
     const personne = personnes.get(participant);
     if (personne === undefined) throw new TypeError(`listeBadges : participant ${participant} absent de la charge`);
-    return [
-      personne.nom.normalize('NFC'),
-      (personne.prenom ?? '').normalize('NFC'),
-      organisation ?? '',
-      textes.lignes.join(SAUT_DANS_LA_CELLULE),
-    ];
+    const tours = parTour
+      ? lignesParTour(lignes, nomsTours.length).map((ligne) => ligneComposee(ligne, 'planche.liste.place'))
+      : [textes.lignes.join(JOINTURE_TOURS)];
+    return [personne.nom.normalize('NFC'), (personne.prenom ?? '').normalize('NFC'), organisation ?? '', ...tours];
   });
-  return ecrireCsv([ENTETES_LISTE.map((cle) => libelle(cle)), ...enregistrements], SEPARATEUR);
+  const tetesTours = parTour
+    ? nomsTours.map((nom, indice) => nom ?? libelle('planche.liste.tour', { tour: indice + 1 }))
+    : [libelle('planche.liste.tours')];
+  return ecrireCsv([[...ENTETES_PERSONNE.map((cle) => libelle(cle)), ...tetesTours], ...enregistrements], SEPARATEUR);
 }

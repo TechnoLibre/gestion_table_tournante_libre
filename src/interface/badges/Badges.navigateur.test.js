@@ -817,8 +817,10 @@ describe('la liste des badges en CSV (§ 11.6)', () => {
     expect(ecrites[0]).toMatch(/\.badges_[^.]+\.csv$/);
     expect(ecrites[0]).not.toContain('BROUILLON');
     expect(texte(dans(m, '[data-chemin-liste]'))).toBe(await cheminDocuments(m, ecrites[0]));
+    // Une machine qui n'a rien choisi : une colonne par tour.
     const contenu = texteFichier(m, ecrites[0]);
-    expect(contenu.startsWith('\u{FEFF}Nom;Prénom;Organisation;Tours\r\n')).toBe(true);
+    const tetes = Array.from({ length: charge.evenement.tours }, (_, indice) => `Tour ${indice + 1}`).join(';');
+    expect(contenu.startsWith(`\u{FEFF}Nom;Prénom;Organisation;${tetes}\r\n`)).toBe(true);
     expect(contenu).toContain(`table ${charge.tables[0].numero} (Terrasse)`);
     const presents = charge.participants.filter(({ exclu }) => !exclu).length;
     expect(contenu.split('\r\n').filter((ligne) => /^[^"]*;/.test(ligne)).length).toBeGreaterThanOrEqual(presents);
@@ -1141,6 +1143,61 @@ describe('le nom des doublons laissé en blanc : une case gardée sur le poste (
     const originale = m.seance.choisirCacherNumero;
     m.seance.choisirCacherNumero = async (coche) => ({ ...(await originale(coche)), retenu: true });
     caseCacher(m).click();
+    await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
+  });
+});
+
+describe('les colonnes de la liste (CSV) : un choix gardé sur le poste (§ 8.5, § 11.6)', () => {
+  const choixColonnes = (m) => dans(m, '[data-section="badges"] [data-champ="colonnesListe"]');
+  const avisNonRetenu = (m) => dans(m, '[data-section="badges"] [data-avertissement="colonnesNonRetenues"]');
+  const choixEcrit = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).colonnes_liste_badges;
+
+  test('une machine neuve : « Une colonne par tour » choisie, parmi les réglages de la planche, les deux formes offertes dans l’ordre', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const element = choixColonnes(m);
+    expect(element).not.toBeNull();
+    expect(element.value).toBe('parTour');
+    expect(m.seance.etat().colonnesListe).toBe('parTour');
+    expect(element.closest('.reglages')).not.toBeNull();
+    expect(texte(element.closest('label').querySelector('span'))).toBe(plat(tEcran('badges.liste.colonnes.titre')));
+    expect([...element.options].map(({ value }) => value)).toEqual(['parTour', 'unique']);
+    expect([...element.options].map((option) => texte(option))).toEqual(
+      ['parTour', 'unique'].map((valeur) => plat(tEcran(`badges.liste.colonnes.${valeur}`))),
+    );
+  });
+
+  test('« Une seule colonne » l’écrit sur la machine, laisse l’annonce montrée, et la liste produite porte « Tours » ; revenir à une colonne par tour l’écrit de nouveau', async () => {
+    const charge = structuredClone(chargeBloquee());
+    const m = await ouvrirBadges(charge, { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    choisirReglage(m, 'colonnesListe', 'unique');
+    await attendre('le choix écrit', () => choixEcrit(m) === 'unique', IMAGES);
+    expect(m.seance.etat().colonnesListe).toBe('unique');
+    expect(annonce(m)).not.toBeNull();
+    const depuis = m.trace.length;
+    produireListe(m).click();
+    await attendre('la liste', () => dans(m, '[data-chemin-liste]'), IMAGES);
+    const [ecrite] = planchesEcrites(m, depuis).map(([, , nom]) => nom);
+    expect(texteFichier(m, ecrite).startsWith('\u{FEFF}Nom;Prénom;Organisation;Tours\r\n')).toBe(true);
+    choisirReglage(m, 'colonnesListe', 'parTour');
+    await attendre('le choix écrit', () => choixEcrit(m) === 'parTour', IMAGES);
+    expect(avisNonRetenu(m)).toBeNull();
+  });
+
+  test('l’écriture des réglages refusée : le choix vaut pour la séance, et une annonce le dit sous les réglages, dans un rôle d’état ; un choix retenu ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisNonRetenu(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    choisirReglage(m, 'colonnesListe', 'unique');
+    const avis = await attendre('l’annonce du choix non retenu', () => avisNonRetenu(m), IMAGES);
+    expect(m.seance.etat().colonnesListe).toBe('unique');
+    expect(choixColonnes(m).value).toBe('unique');
+    expect(texte(avis)).toBe(plat(tEcran('badges.liste.colonnes.nonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirColonnesListe;
+    m.seance.choisirColonnesListe = async (colonnes) => ({ ...(await originale(colonnes)), retenu: true });
+    choisirReglage(m, 'colonnesListe', 'parTour');
     await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
   });
 });

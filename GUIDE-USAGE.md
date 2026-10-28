@@ -1415,16 +1415,23 @@ s’imprime sans logo.
 homonymes, les caractères que la police ne dessine pas, les personnes dont le
 logo est introuvable ou illisible, les badges sans place pour leur logo, les
 badges d’où le pied TechnoLibre se retire, le nom des fichiers.
-« Produire la planche (PDF) » écrit le PDF dans le dossier de l’événement et
-en affiche le chemin ; « Ouvrir le dossier » montre ce dossier dans
-l’explorateur ; dans un navigateur, le PDF se télécharge. « Produire la
-liste (CSV) » écrit au même endroit la liste des mêmes badges, pour un tableur :
-une ligne par personne, avec son nom, son prénom, son organisation et, dans une
-seule cellule, ses lignes de tour telles que le badge les compose, jamais
-abrégées, et jamais le logo ; tirée d’une proposition, son nom de fichier porte
-« BROUILLON ». Avec l’A6, la feuille de contrôle est la première page de la
-planche ; avec Avery 5392, elle est un **second PDF**, écrit à côté du premier,
-à imprimer sur papier ordinaire pour ne pas gâcher une feuille de cartes :
+« Produire la planche (PDF) » écrit le PDF dans le dossier de l’événement et en
+affiche le chemin ; « Ouvrir le dossier » montre ce dossier dans l’explorateur ;
+dans un navigateur, le PDF se télécharge. « Produire la liste (CSV) » écrit au
+même endroit la liste des mêmes badges, pour un tableur : une ligne par
+personne, avec son nom, son prénom, son organisation et ses tours, jamais
+abrégés, et jamais le logo ; tirée d’une proposition, son nom de fichier porte
+« BROUILLON ». Le réglage « Colonnes de la liste (CSV) », que le poste garde
+comme le modèle, choisit la forme des tours. « Une colonne par tour », par
+défaut, donne à chaque tour sa colonne, sous le nom du tour, et met dans sa
+cellule la place de la personne, « table 5 (Terrasse) », « pas de table » ou
+« absente », pour trier et filtrer tour par tour. « Une seule colonne » met dans
+la même cellule les lignes de tour telles que le badge les compose, séparées par
+« ; » : « Entrée — table 3 ; Dessert — table 5 », ou « Toute la soirée —
+table 3 » quand rien ne change. Avec l’A6, la feuille de contrôle est la
+première page de la planche ; avec Avery 5392, elle est un **second PDF**, écrit
+à côté du premier, à imprimer sur papier ordinaire pour ne pas gâcher une
+feuille de cartes :
 
 ![La feuille de contrôle de la planche : la règle de 100 mm, puis les comptes de la soirée](doc/captures/24-badges-controle.png)
 

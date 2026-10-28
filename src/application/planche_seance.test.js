@@ -182,8 +182,9 @@ async function deposer(fs, charge, { format = FORMAT, racine = DOC } = {}) {
 // — l'A6 par défaut, le modèle que ces épreuves éprouvent ; null garde
 // Avery 5392, celui d'une machine qui n'a rien choisi ; la case du pied
 // TechnoLibre décochée, sauf pour les épreuves qui le portent ; les données
-// de retirees décochées dans la section, aucune par défaut ; la trace part
-// ensuite, vide.
+// de retirees décochées dans la section, aucune par défaut ; les colonnes
+// de la liste choisies quand elles sont données ; la trace part ensuite,
+// vide.
 async function monter(
   charge = chargeLucioles(),
   {
@@ -191,6 +192,7 @@ async function monter(
     modeleBadge = 'a6',
     piedTechnolibre = false,
     retirees = [],
+    colonnesListe = null,
     fs = creerFichiersSimules({ documents: DOCUMENTS }),
     format,
     cle = cleEvenement(BASE, BASE),
@@ -217,6 +219,7 @@ async function monter(
   if (modeleBadge !== null) await seance.choisirModeleBadge(modeleBadge);
   if (!piedTechnolibre) await seance.choisirPiedTechnolibre(false);
   for (const donnee of retirees) await seance.choisirDonneeBadge(donnee, false);
+  if (colonnesListe !== null) await seance.choisirColonnesListe(colonnesListe);
   if (papier !== null) await seance.choisirPapier(papier);
   await seance.ouvrir(cle);
   const trace = tracer(fs);
@@ -879,7 +882,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
     assert.ok(textes.every((texte) => !texte.includes('\u{2026}')), textes.join(' | '));
     const liste = await seance.produireListeBadges();
     const texte = new TextDecoder().decode(fs.octets('documents', ICI + liste.nom));
-    assert.ok(texte.includes(`Toute la soirée — table 1 (${libelle})`), texte);
+    assert.ok(texte.includes(`;table 1 (${libelle});table 1 (${libelle})\r\n`), texte);
   });
 
   test('sous web, les deux fichiers se téléchargent, les cartes d’abord, rien dans le dossier', async () => {
@@ -904,12 +907,20 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
     return charge;
   };
   const NOM_LISTE = nomCsvBadges(BASE, { horodatage: H_RETENU });
+  // La liste d'une machine qui n'a rien choisi : une colonne par tour.
   const LISTE =
+    '\u{FEFF}Nom;Prénom;Organisation;Tour 1;Tour 2\r\n' +
+    'Grisaille;;;table 2;table 2\r\n' +
+    'Lacasse;Ondine;;table 2;table 1 (Terrasse)\r\n' +
+    'Ombrelle;Iris;Club des Merles;table 1 (Terrasse);table 1 (Terrasse)\r\n' +
+    'Pervenche;Théo;;table 1 (Terrasse);table 2\r\n';
+  // La même, ses tours dans une seule colonne.
+  const LISTE_UNIQUE =
     '\u{FEFF}Nom;Prénom;Organisation;Tours\r\n' +
     'Grisaille;;;Toute la soirée — table 2\r\n' +
-    'Lacasse;Ondine;;"Tour 1 — table 2\nTour 2 — table 1 (Terrasse)"\r\n' +
+    'Lacasse;Ondine;;"Tour 1 — table 2 ; Tour 2 — table 1 (Terrasse)"\r\n' +
     'Ombrelle;Iris;Club des Merles;Toute la soirée — table 1 (Terrasse)\r\n' +
-    'Pervenche;Théo;;"Tour 1 — table 1 (Terrasse)\nTour 2 — table 2"\r\n';
+    'Pervenche;Théo;;"Tour 1 — table 1 (Terrasse) ; Tour 2 — table 2"\r\n';
   const texteDe = (octets) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(octets);
 
   test('en lecture, la liste se dépose dans le dossier de l’événement, seule écriture, et rend son chemin et son nom ; deux productions, mêmes octets', async () => {
@@ -922,6 +933,27 @@ describe('planche dans la séance : la liste des badges en CSV (§ 11.6)', () =>
     assert.equal(texteDe(premiers), LISTE);
     await seance.produireListeBadges();
     assert.deepEqual(fs.octets('documents', ICI + NOM_LISTE), premiers);
+  });
+
+  test('les colonnes de la machine : une seule colonne, sous le même nom, remplace la liste d’une colonne par tour', async () => {
+    const { fs, seance } = await monter(libellee(), { colonnesListe: 'unique' });
+    assert.deepEqual(await seance.produireListeBadges(), { chemin: `${DANS}\\${NOM_LISTE}`, nom: NOM_LISTE });
+    assert.equal(texteDe(fs.octets('documents', ICI + NOM_LISTE)), LISTE_UNIQUE);
+    await seance.choisirColonnesListe('parTour');
+    await seance.produireListeBadges();
+    assert.equal(texteDe(fs.octets('documents', ICI + NOM_LISTE)), LISTE);
+  });
+
+  test('des colonnes de la lecture hors des deux formes sont une faute du code, TypeError avant le refus du placement ; absentes, la liste se demande', async () => {
+    const planches = creerPlanches({ polices: async () => POLICES, logo: async () => LOGO, provenance: 'production', version: V1 });
+    const lecture = { charge: chargeLucioles({ plan: null, etat: 'propose' }), papier: null };
+    await refusee(planches.produireListe(lecture), 'PLANCHE_SANS_PLACEMENT');
+    await refusee(planches.produireListe({ ...lecture, colonnesListe: 'unique' }), 'PLANCHE_SANS_PLACEMENT');
+    for (const faute of ['par_tour', 'toString', null, true]) {
+      const attendue = (erreur) => erreur instanceof TypeError && /colonnesListe/.test(erreur.message);
+      await assert.rejects(planches.produireListe({ ...lecture, colonnesListe: faute }), attendue, JSON.stringify(faute));
+      await assert.rejects(planches.enregistrerListeSous({ ...lecture, colonnesListe: faute }), attendue, JSON.stringify(faute));
+    }
   });
 
   test('l’ordre par table, une réédition et une proposition passent à la liste ; la proposition porte BROUILLON dans le nom', async () => {
