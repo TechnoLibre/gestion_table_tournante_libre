@@ -168,6 +168,25 @@ export const CONSTANTES = Object.freeze(
         "n'a pas écrit le logiciel ; la plus petite lue sans erreur, écrite dans ce registre",
     },
     {
+      nom: 'HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM',
+      valeur: 3,
+      unite: 'mm',
+      mesure:
+        "hauteur de capitale sous laquelle le nom d'un badge, A6 ou carte Avery 5392, ne descend pas, même " +
+        'pour éviter le refus de la planche',
+      raison:
+        "un badge dont les tours ne tiennent pas même dépouillé réduit son nom sous le plancher plutôt que de " +
+        'refuser la planche (§ 11.5) ; à cette capitale, le nom reste le plus grand texte du badge, au-dessus du ' +
+        'plancher des tours',
+      configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture à un mètre',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle à hauteurs décroissantes sous le plancher ; lecture " +
+        "à un mètre par une personne qui n'a pas écrit le logiciel ; la plus petite lue sans erreur, écrite " +
+        'dans ce registre',
+    },
+    {
       nom: 'CORPS_TOURS_PT',
       valeur: 14,
       unite: 'pt',
@@ -233,6 +252,21 @@ export const CONSTANTES = Object.freeze(
       protocole:
         "impression réelle d'une planche ; lecture en main par une personne qui n'a pas écrit le logiciel ; " +
         'le corps retenu, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_PIED_PLANCHER_PT',
+      valeur: 5,
+      unite: 'pt',
+      mesure: "corps sous lequel le pied d'un badge, A6 ou carte Avery 5392, ne descend pas",
+      raison:
+        "un badge dont les tours ne tiennent pas même dépouillé réduit son pied avant son nom plutôt que de " +
+        "refuser la planche (§ 11.5) ; en deçà, la date et l'horodatage ne se lisent plus en main",
+      configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche de chaque modèle à corps décroissants ; lecture en main par une " +
+        "personne qui n'a pas écrit le logiciel ; le plus petit corps lu sans erreur, écrit dans ce registre",
     },
     {
       nom: 'ZONE_SILENCE_CARTE_MM',

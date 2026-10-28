@@ -6421,22 +6421,45 @@ cochée, sortent en deux badges au nom laissé en blanc, sans ligne
 Le badge A6 est un cadre utile de **89 × 132 mm** — 105 et 148 moins deux fois
 la zone de silence ; la carte Avery 5392, de **91,6 × 66,2 mm** — 101,6 et 76,2
 moins deux fois la sienne. Chaque modèle a ses corps de départ, au registre des
-constantes : sur la carte, la capitale du nom part de 7 mm, les tours de
-12 pt, l'organisation de 10 pt, le pied de 7 pt ; les planchers de
-lisibilité — la capitale du nom à 4 mm, les tours à 10 pt, l'organisation à
-8 pt — sont communs aux deux modèles. Mesuré sur la police embarquée, un nom
-qui demande deux lignes, quatre tours titrés sous sièges attribués,
-l'organisation et le pied entier tiennent ensemble sur la carte ; la ligne
-« Toute la soirée — table 13 — animation » mesure 65,3 mm au plancher des
-tours, et tient sur une ligne. Ce qu'on y met est variable. Le logiciel fixe
-donc un **ordre de sacrifice**, écrit une fois, et ne laisse jamais la mise en
-page se résoudre par un débordement. **Aucun texte du badge ne s'abrège** : ce
-qui ne tient pas sur sa ligne se replie sur la suivante, comme un paragraphe,
-au dernier espace qui tient ; un mot plus large que la ligne s'y coupe entre
-deux lettres, jamais entre une lettre et son accent. Le badge porte son texte
-entier, ou se refuse.
+constantes : sur la carte, la capitale du nom part de 7 mm, les tours de 12 pt,
+l'organisation de 10 pt, le pied de 7 pt ; les planchers de lisibilité — la
+capitale du nom à 4 mm, les tours à 10 pt, l'organisation à 8 pt, le pied à 5 pt
+— sont communs aux deux modèles, comme le plancher du nom au dernier recours,
+une capitale de 3 mm. Mesuré sur la police embarquée, un nom qui demande deux
+lignes, quatre tours titrés sous sièges attribués, l'organisation et le pied
+entier tiennent ensemble sur la carte ; la ligne « Toute la soirée — table 13 —
+animation » mesure 65,3 mm au plancher des tours, et tient sur une ligne. Ce
+qu'on y met est variable. Le logiciel fixe donc un **ordre de sacrifice**, écrit
+une fois, et ne laisse jamais la mise en page se résoudre par un débordement.
+**Aucun texte du badge ne s'abrège** : ce qui ne tient pas sur sa ligne se
+replie sur la suivante, comme un paragraphe, au dernier espace qui tient ; un
+mot plus large que la ligne s'y coupe entre deux lettres, jamais entre une
+lettre et son accent. Le badge porte son texte entier, ou se refuse.
 
 > nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre
+
+**Le refus vient après le dernier recours.** Un badge dont les lignes de tour ne
+tiennent pas même dépouillé — le nom à son plancher, sans le nom de l'événement
+ni l'organisation, donc sans logo du participant ni pied TechnoLibre — réduit
+encore tout ce qui n'est pas ses tours, dans cet ordre, avant que le logiciel ne
+refuse la planche. D'abord ses lignes se resserrent : chacune n'occupe plus la
+hauteur que la police réserve à tout glyphe, mais celle de l'encre que posent
+les textes de ce badge, du plus haut accent au plus bas jambage. Deux lignes ne
+mêlent jamais leur encre, mais aucun jeu ne les sépare : un jambage peut toucher
+l'accent de la ligne suivante, à sa verticale. Puis le pied rapetisse d'un point
+par palier jusqu'à son plancher, 5 pt, date et horodatage toujours entiers. Puis
+le nom passe sous son plancher, d'un point par palier, replié chaque fois sur le
+moins de lignes qui tient, jusqu'à une capitale de 3 mm, et jamais sous le corps
+des tours à leur plancher : le nom reste le plus grand texte du badge. Les
+lignes de tour gardent leur plancher de 10 pt ; le papier ne change pas, rien ne
+s'abrège, et la première étape qui tient l'emporte. La gouttière entre deux
+colonnes et le retrait d'une suite gardent leur cadratin : la gouttière seule
+sépare deux colonnes de lignes inégales, le retrait seul dit qu'une ligne
+continue la précédente. Ces deux planchers sont au registre des constantes
+(`CORPS_PIED_PLANCHER_PT`, `HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM`, § 14.1),
+défauts de travail jusqu'à leur relevé sur une impression réelle ; ce relevé dit
+aussi si des lignes serrées dont l'encre se touche se lisent, et relève les
+planchers sinon. Un badge qui tient sans le dernier recours ne change pas.
 
 - **Un nom très long.** Le nom **ne s'abrège jamais**. Un nom que la case des
   doublons laisse en blanc (§ 11.4) se mesure entier, comme imprimé : sa place
@@ -6450,12 +6473,12 @@ entier, ou se refuse.
   l'organisation part. **Au-delà de trois lignes, le nom continue de se
   replier** au corps plancher, sur autant de lignes qu'il lui faut, et le badge
   perd d'emblée le nom de l'événement, puis l'organisation s'il le faut ; si les
-  lignes de tour ne tiennent plus sous lui, le logiciel **refuse de produire la
-  planche** et nomme la personne, dont le nom se corrige dans la liste des
-  participants. L'horodatage ne quitte jamais le pied ; seule sa case le retire
-  (§ 11.4). Le seuil se cale sur le **glyphe le plus large** de l'alphabet visé,
-  jamais sur une moyenne (§ 14.1) : un nom en capitales larges déborde sinon
-  par-dessus la première ligne de tour, en silence.
+  lignes de tour ne tiennent plus sous lui, même au dernier recours, le logiciel
+  **refuse de produire la planche** et nomme la personne, dont le nom se corrige
+  dans la liste des participants. L'horodatage ne quitte jamais le pied ; seule
+  sa case le retire (§ 11.4). Le seuil se cale sur le **glyphe le plus large**
+  de l'alphabet visé, jamais sur une moyenne (§ 14.1) : un nom en capitales
+  larges déborde sinon par-dessus la première ligne de tour, en silence.
 - **Une organisation très longue.** Elle **se replie** sur autant de lignes
   qu'il lui faut, chacune centrée, et ne s'abrège jamais. C'est une étiquette
   de contexte, pas une identité : repliée, elle rapetisse, quand le badge ne
@@ -6465,41 +6488,42 @@ entier, ou se refuse.
   ainsi le badge ne tient pas, le nom au plancher et le nom de l'événement
   parti, elle part entière, dans l'ordre de sacrifice, plutôt que de sortir
   tronquée.
-- **Beaucoup de tours.** Le logiciel passe à deux colonnes au-dessus d'un nombre
-  de tours **mesuré sur le gabarit**, et **n'affiche jamais une liste tronquée** :
-  un badge qui omet le tour 5 envoie son porteur nulle part. Si la liste ne tient
-  pas à deux colonnes au corps plancher, le logiciel **refuse de produire la
-  planche** et nomme le nombre de tours en cause ; les lignes repliées (puce
-  suivante) y comptent chacune. Sans libellé de table ni titre longs, le
-  gabarit tient largement les deux à six tours d'une soirée ordinaire ; ce
-  refus est une garde contre la troncature silencieuse, pas un comportement
-  attendu. Sur la carte Avery 5392, sous un nom court et son organisation,
-  vingt lignes de tour sans titre tiennent sur deux colonnes, et la vingt et
-  unième se refuse. Quand ce sont des lignes repliées par un libellé ou un
-  titre qui débordent, et non leur nombre, le refus le dit autrement (puce
-  suivante).
+- **Beaucoup de tours.** Le logiciel passe à deux colonnes au-dessus d'un
+  nombre de tours **mesuré sur le gabarit**, et **n'affiche jamais une liste
+  tronquée** : un badge qui omet le tour 5 envoie son porteur nulle part. Si la
+  liste ne tient pas à deux colonnes au corps plancher, même au dernier recours,
+  le logiciel **refuse de produire la planche** et nomme le nombre de tours en
+  cause ; les lignes repliées (puce suivante) y comptent chacune. Sans libellé
+  de table ni titre longs, le gabarit tient largement les deux à six tours d'une
+  soirée ordinaire ; ce refus est une garde contre la troncature silencieuse,
+  pas un comportement attendu. Sur la carte Avery 5392, sous un nom court et son
+  organisation, quarante-quatre lignes de tour sans siège ni titre tiennent sur
+  deux colonnes, au dernier recours, et la quarante-cinquième se refuse. Quand
+  ce sont des lignes repliées par un libellé ou un titre qui débordent, et non
+  leur nombre, le refus le dit autrement (puce suivante).
 - **Un titre long, ou un long libellé de table, sur une ligne de tour.** Une
   ligne de tour s'écrit entière ; au corps plancher seulement, une ligne trop
-  large pour sa colonne **se replie**, au dernier espace qui tient, et sa
-  suite descend sous elle **en retrait** d'un cadratin, dans la même colonne :
-  l'œil retrouve le début de chaque tour. Un numéro ne quitte pas le mot qui
-  l'annonce — « Tour 2 », « table 5 », « siège 3 » restent sur une même
-  ligne —, car la table et le siège sont la réponse que le badge porte. Rien
-  ne s'y abrège, ni le libellé de la table, ni le titre, ni le numéro de la
-  table, ni le siège ; un mot plus large que la ligne s'y coupe comme
-  ailleurs. Les lignes repliées comptent dans la hauteur des tours : elles
-  avancent le passage à deux colonnes et le refus. Tout voir a donc un prix,
-  mesuré sur la police embarquée sous un nom court, son organisation et des
-  sièges attribués : sur la carte Avery 5392, un libellé de soixante
-  caractères, le plus long que la saisie admet (§ 4), tient replié jusqu'à
-  cinq tours, titre compris ; un libellé de quarante caractères, jusqu'à six ;
-  un libellé court sous le titre « animateur VIP », jusqu'à neuf. Sur l'A6,
-  le libellé de soixante caractères tient jusqu'à onze ou douze tours, selon
-  le titre. Au-delà, le
-  logiciel **refuse de produire la planche**, et ce refus ne met pas en cause
-  le nombre de tours : il **nomme la personne** dont les lignes débordent,
-  dit qu'un libellé de table ou un titre trop long les replie, et offre
-  d'ouvrir la section des tables, où l'un et l'autre se raccourcissent.
+  large pour sa colonne **se replie**, au dernier espace qui tient, et sa suite
+  descend sous elle **en retrait** d'un cadratin, dans la même colonne : l'œil
+  retrouve le début de chaque tour. Un numéro ne quitte pas le mot qui l'annonce
+  — « Tour 2 », « table 5 », « siège 3 » restent sur une même ligne —, car la
+  table et le siège sont la réponse que le badge porte. Rien ne s'y abrège, ni
+  le libellé de la table, ni le titre, ni le numéro de la table, ni le siège ;
+  un mot plus large que la ligne s'y coupe comme ailleurs. Les lignes repliées
+  comptent dans la hauteur des tours : elles avancent le passage à deux colonnes
+  et le refus. Tout voir a donc un prix, mesuré sur la police embarquée sous un
+  nom court, son organisation et des sièges attribués, le dernier recours
+  compris : sur la carte Avery 5392, un libellé de soixante caractères, le plus
+  long que la saisie admet (§ 4), tient replié jusqu'à huit tours, sous le titre
+  « animation » comme sans titre, et jusqu'à cinq sous un titre de trente-deux
+  caractères, « Animatrice de la table d'honneur » ; un libellé de quarante
+  caractères, jusqu'à dix ; un libellé court sous le titre « animateur VIP »,
+  jusqu'à douze. Sur l'A6, le libellé de soixante caractères tient jusqu'à
+  quatorze ou dix-sept tours, selon le titre. Au-delà, le logiciel **refuse de
+  produire la planche**, et ce refus ne met pas en cause le nombre de tours : il
+  **nomme la personne** dont les lignes débordent, dit qu'un libellé de table ou
+  un titre trop long les replie, et offre d'ouvrir la section des tables, où
+  l'un et l'autre se raccourcissent.
 - **Un caractère que la police n'a pas** — un nom écrit hors de l'alphabet latin,
   par exemple, ou un caractère du texte du pied TechnoLibre saisi sur la
   machine (§ 8.5). La police le dessinerait comme une case vide, et l'opérateur ne le

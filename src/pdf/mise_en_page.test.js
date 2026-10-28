@@ -38,8 +38,10 @@ const NOTO = metriquesDe({ regulier: regulierPdf, gras: grasPdf });
 // large de l'alphabet, sur lequel le corps du nom se cale (§ 11.5) — et les
 // marques combinantes, qui avancent de `marque` fois la chasse (nulle, comme
 // dans la police embarquée, ou non, comme dans une police qui les espace) ;
-// un dixième de plus en gras. La capitale vaut `capitale` cadratin. Les
-// glyphes au-delà de U+024F sont absents.
+// un dixième de plus en gras. La capitale vaut `capitale` cadratin. L'encre
+// d'un texte qui n'est pas fait que d'espaces monte à 0,8 cadratin et
+// descend à 0,2, sous l'ascendante et la descendante. Les glyphes au-delà de
+// U+024F sont absents.
 function metriquesFactices({ capitale = 0.7, chasse = 0.45, marque = 0 } = {}) {
   const avance = (c) => (/\p{M}/u.test(c) ? marque : 'WMÆŒ'.includes(c) ? 2 : 1);
   const avances = (texte) => [...texte].reduce((somme, c) => somme + avance(c), 0);
@@ -50,6 +52,10 @@ function metriquesFactices({ capitale = 0.7, chasse = 0.45, marque = 0 } = {}) {
       descendante: 0.25 * corps * MM_PAR_PT,
       capitale: capitale * corps * MM_PAR_PT,
     }),
+    encre: (texte, corps) => {
+      const vide = texte.trim() === '';
+      return { haut: vide ? 0 : 0.8 * corps * MM_PAR_PT, bas: vide ? 0 : 0.2 * corps * MM_PAR_PT };
+    },
     absents: (texte) => [...new Set([...texte].filter((c) => c.codePointAt(0) > 0x24f && !/\p{M}/u.test(c)))],
   };
 }
@@ -106,21 +112,43 @@ const blocsNom = (page) => page.blocs.filter((b) => b.gras);
 const textesDe = (page) => page.blocs.map((b) => b.texte);
 
 // La boîte d'un bloc : sa largeur mesurée, de l'ascendante au-dessus de la
-// ligne de base à la descendante au-dessous.
-function boite(bloc, metriques) {
+// ligne de base à la descendante au-dessous ; sous `encre`, du haut au bas
+// de l'encre de son texte.
+function boite(bloc, metriques, encre = false) {
   const { ascendante, descendante } = metriques.hauteurs(bloc.corps);
+  const { haut, bas } = encre ? metriques.encre(bloc.texte, bloc.corps, bloc.gras) : { haut: ascendante, bas: descendante };
   return {
     gauche: bloc.x,
     droite: bloc.x + metriques.largeur(bloc.texte, bloc.corps, bloc.gras),
-    haut: bloc.y - ascendante,
-    bas: bloc.y + descendante,
+    haut: bloc.y - haut,
+    bas: bloc.y + bas,
   };
 }
 
+// Vrai quand la page est serrée, au dernier recours : deux lignes de même
+// corps qui se suivent, la seconde plus bas, avancent de moins que la
+// hauteur que la police donne à une ligne.
+function estSerree(page, metriques) {
+  return page.blocs.some((bloc, rang) => {
+    const avant = page.blocs[rang - 1];
+    if (rang === 0 || bloc.corps !== avant.corps || bloc.y <= avant.y) return false;
+    const { ascendante, descendante } = metriques.hauteurs(bloc.corps);
+    return bloc.y - avant.y < ascendante + descendante - TOLERANCE;
+  });
+}
+
+// Les boîtes des blocs de la page, chacune celle de l'encre de son texte
+// sur une page serrée, où les lignes n'avancent que de l'encre du badge.
+const boitesDe = (page, metriques) => {
+  const encre = estSerree(page, metriques);
+  return page.blocs.map((bloc) => boite(bloc, metriques, encre));
+};
+
 /** Les blocs qui sortent du cadre utile, [] quand tout y tient. */
 function horsDuCadre(page, metriques) {
-  return page.blocs.filter((bloc) => {
-    const b = boite(bloc, metriques);
+  const boites = boitesDe(page, metriques);
+  return page.blocs.filter((_, rang) => {
+    const b = boites[rang];
     return (
       b.gauche < -TOLERANCE ||
       b.haut < -TOLERANCE ||
@@ -132,7 +160,7 @@ function horsDuCadre(page, metriques) {
 
 /** Les paires de blocs dont les boîtes se recouvrent. */
 function chevauchements(page, metriques) {
-  const boites = page.blocs.map((bloc) => boite(bloc, metriques));
+  const boites = boitesDe(page, metriques);
   const paires = [];
   for (let i = 0; i < boites.length; i += 1) {
     for (let j = i + 1; j < boites.length; j += 1) {
@@ -215,6 +243,27 @@ describe('mise en page : les métriques de la police embarquée', () => {
     assert.ok(Math.abs(h.descendante - (-fonte.descent / fonte.unitsPerEm) * 10 * MM_PAR_PT) < 1e-12);
     assert.ok(h.descendante > 0 && h.capitale < h.ascendante);
     assert.ok(Math.abs(NOTO.hauteurs(20).capitale - 2 * h.capitale) < 1e-12);
+  });
+
+  test('l’encre se lit dans les boîtes des glyphes posés, par graisse, proportionnelle au corps ; une espace n’en a pas', () => {
+    const cadratin = (pdf, lire) => {
+      const fonte = pdf.embedder.font;
+      return Math.max(...fonte.layout('Égypte').glyphs.map((glyphe) => lire(glyphe.bbox))) / fonte.unitsPerEm;
+    };
+    for (const [pdf, gras] of [[regulierPdf, false], [grasPdf, true]]) {
+      const { haut, bas } = NOTO.encre('Égypte', 10, gras);
+      assert.ok(Math.abs(haut - cadratin(pdf, (b) => b.maxY) * 10 * MM_PAR_PT) < 1e-12);
+      assert.ok(Math.abs(bas - cadratin(pdf, (b) => -b.minY) * 10 * MM_PAR_PT) < 1e-12);
+      assert.ok(Math.abs(NOTO.encre('Égypte', 20, gras).haut - 2 * haut) < 1e-12);
+    }
+    // L'accent monte au-dessus de la capitale, la descendante du « g » sous
+    // la ligne de base ; l'une et l'autre restent dans la hauteur de la police.
+    const h = NOTO.hauteurs(10);
+    const { haut, bas } = NOTO.encre('Égypte', 10, false);
+    assert.ok(h.capitale < haut && haut < h.ascendante && 0 < bas && bas < h.descendante);
+    assert.equal(NOTO.encre('HIT', 10, false).bas, 0);
+    assert.deepEqual(NOTO.encre('   ', 10, false), { haut: 0, bas: 0 });
+    assert.deepEqual(NOTO.encre('', 10, true), { haut: 0, bas: 0 });
   });
 
   test('les absents : chaque caractère sans glyphe, une fois, dans l’ordre de première rencontre', () => {
@@ -385,12 +434,12 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
       // plusieurs.
       const pied = [`${repete('Grand souper annuel du Club des Merles et de la Grisaille ', 160)} ${TIRET} ${DATE}`, HORODATAGE];
       const organisations = ['Club des Merles', 'Association des amis de la Pervenche et des Ondines, section du Grand Nord, chapitre de la vallée'];
-      const vus = { descendu: 0, sansEvenement: 0, sansOrganisation: 0, refus: 0 };
+      const vus = { descendu: 0, sansEvenement: 0, sansOrganisation: 0, sousLePlancher: 0, refus: 0 };
       for (const nom of NOMS_COMPOSES) {
         for (const nomOrganisation of organisations) {
           const depart = blocsNom(mettreEnPage(textes({ nom, organisation: nomOrganisation }), metriques))[0].corps;
           let precedent = { corps: depart, refus: false };
-          for (let n = 12; n <= 30; n += 1) {
+          for (let n = 12; n <= 50; n += 1) {
             const lignes = toursAuxSieges(n);
             const cas = `${nom}, ${nomOrganisation}, ${n} tours`;
             const page = mettreEnPage(textes({ nom, organisation: nomOrganisation, lignes, pied }), metriques);
@@ -407,6 +456,7 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
             const nomBlocs = blocsNom(page);
             const corps = nomBlocs[0].corps;
             const auPlancher = Math.abs(corps - corpsNomPlancher(metriques)) < 1e-9;
+            const sousLePlancher = corps < corpsNomPlancher(metriques) - 1e-9;
             assert.ok(nomBlocs.length <= 3, `${cas} : ${nomBlocs.length} lignes de nom`);
             assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), [], `${cas} : tours`);
             assert.ok(tout.join(' ').includes(DATE) && tout.includes(HORODATAGE), `${cas} : date, horodatage`);
@@ -414,12 +464,18 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
             assert.ok(corps <= precedent.corps + 1e-9, `${cas} : ${corps} après ${precedent.corps}`);
             // Un texte ne part que sous le nom au plancher, l'événement
             // d'abord.
-            assert.ok(evenement || auPlancher, `${cas} : l’événement part sous un nom de ${corps} pt`);
+            assert.ok(evenement || auPlancher || sousLePlancher, `${cas} : l’événement part sous un nom de ${corps} pt`);
             assert.ok(organisation || !evenement, `${cas} : l’organisation part avant l’événement`);
+            // Le nom ne passe sous son plancher qu'au dernier recours, l'un et
+            // l'autre partis.
+            if (sousLePlancher) {
+              assert.ok(!evenement && !organisation, `${cas} : sous le plancher, ${corps} pt`);
+              vus.sousLePlancher += 1;
+            }
             if (evenement && corps < depart - 1e-9 && !auPlancher) vus.descendu += 1;
             // Un nom qui partait au-dessus du plancher y est descendu avant que
             // l'événement ne parte.
-            if (!evenement && depart > corpsNomPlancher(metriques) + 1e-9) {
+            if (!evenement && !sousLePlancher && depart > corpsNomPlancher(metriques) + 1e-9) {
               vus[organisation ? 'sansEvenement' : 'sansOrganisation'] += 1;
             }
             assert.deepEqual(horsDuCadre(page, metriques), [], cas);
@@ -689,8 +745,7 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
       const retrait = plancher * MM_PAR_PT;
       const { largeur: L, hauteur: H } = cadreUtile({ x: 0, y: 0, ...(modele === 'a6' ? BADGE : MODELES_BADGE.avery5392) }, modele);
       const dansLeCadre = (page) =>
-        page.blocs.every((b) => {
-          const { haut, bas, gauche, droite } = boite(b, metriques);
+        boitesDe(page, metriques).every(({ haut, bas, gauche, droite }) => {
           return gauche >= -TOLERANCE && droite <= L + TOLERANCE && haut >= -TOLERANCE && bas <= H + TOLERANCE;
         });
 
@@ -757,12 +812,13 @@ describe('mise en page : les lignes de tour (§ 11.5)', () => {
   test('Noto Sans : le prix du repli, aux seuils que le spec donne — des lignes repliées se refusent, repliees, là où les mêmes tours sans libellé tiennent', () => {
     // [modèle, libellé, titre, le plus grand nombre de tours qui tient].
     const seuils = [
-      ['avery5392', LIBELLE_LONG, null, 5],
-      ['avery5392', LIBELLE_LONG, 'animation', 5],
-      ['avery5392', [...LIBELLE_LONG].slice(0, 40).join(''), null, 6],
-      ['avery5392', 'Terrasse', 'animateur VIP', 9],
-      ['a6', LIBELLE_LONG, null, 12],
-      ['a6', LIBELLE_LONG, 'animateur VIP', 11],
+      ['avery5392', LIBELLE_LONG, null, 8],
+      ['avery5392', LIBELLE_LONG, 'animation', 8],
+      ['avery5392', LIBELLE_LONG, 'Animatrice de la table d’honneur', 5],
+      ['avery5392', [...LIBELLE_LONG].slice(0, 40).join(''), null, 10],
+      ['avery5392', 'Terrasse', 'animateur VIP', 12],
+      ['a6', LIBELLE_LONG, null, 17],
+      ['a6', LIBELLE_LONG, 'animateur VIP', 14],
     ];
     for (const [modele, libelle, titre, seuil] of seuils) {
       const cas = `${modele}, ${libelle}, ${titre}`;
@@ -941,11 +997,13 @@ describe('mise en page : propriétés sur des noms engendrés', () => {
 describe('mise en page : la carte Avery 5392', () => {
   const AVERY = 'avery5392';
   const CARTE = cadreUtile({ x: 0, y: 0, ...MODELES_BADGE[AVERY] }, AVERY);
-  const sortDeLaCarte = (page, metriques) =>
-    page.blocs.filter((bloc) => {
-      const b = boite(bloc, metriques);
+  const sortDeLaCarte = (page, metriques) => {
+    const boites = boitesDe(page, metriques);
+    return page.blocs.filter((_, rang) => {
+      const b = boites[rang];
       return b.gauche < -TOLERANCE || b.haut < -TOLERANCE || b.droite > CARTE.largeur + TOLERANCE || b.bas > CARTE.hauteur + TOLERANCE;
     });
+  };
   const corpsNomMaxCarte = (metriques) => constante('HAUTEUR_CAPITALE_NOM_MAX_CARTE_MM') / capParPt(metriques);
   // Quatre tours titrés sous sièges attribués, le cas le plus large que la
   // spécification promet de tenir.
@@ -1022,15 +1080,15 @@ describe('mise en page : la carte Avery 5392', () => {
     assert.deepEqual(chevauchements(page, NOTO), []);
   });
 
-  test('Noto Sans : le refus des tours tombe à son seuil sur la carte — 20 tours tiennent sur deux colonnes, 21 sont refusés', () => {
-    const page = mettreEnPage(textes({ lignes: tours(20) }), NOTO, AVERY);
-    assert.ok(!('refus' in page), 'vingt tours');
+  test('Noto Sans : le refus des tours tombe à son seuil sur la carte — 44 tours tiennent sur deux colonnes, 45 sont refusés', () => {
+    const page = mettreEnPage(textes({ lignes: tours(44) }), NOTO, AVERY);
+    assert.ok(!('refus' in page), 'quarante-quatre tours');
     assert.equal(page.colonnesTours, 2);
-    assert.ok(tours(20).every((l) => textesDe(page).includes(l)));
+    assert.ok(tours(44).every((l) => textesDe(page).includes(l)));
     assert.deepEqual(sortDeLaCarte(page, NOTO), []);
     assert.deepEqual(chevauchements(page, NOTO), []);
-    assert.deepEqual(mettreEnPage(textes({ lignes: tours(21) }), NOTO, AVERY), {
-      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 21, repliees: false } },
+    assert.deepEqual(mettreEnPage(textes({ lignes: tours(45) }), NOTO, AVERY), {
+      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 45, repliees: false } },
     });
   });
 
@@ -1851,7 +1909,9 @@ describe('mise en page : un badge dont les cases retirent des données (§ 11.4)
             if ('refus' in sans) break;
             const page = mettreEnPage(champs, metriques, modele, TECHNOLIBRE, CARRE);
             const quoi = `${pied.pied.length} lignes de pied, ${n} tours`;
-            assert.ok(blocsNom(page).length > 3, quoi);
+            // Au-delà de trois lignes au plancher ; au dernier recours, le nom
+            // passe sous son plancher et se replie sur moins de lignes.
+            assert.ok(blocsNom(page).length > 3 || blocsNom(page)[0].corps < corpsNomPlancher(metriques) - 1e-9, quoi);
             if (page.blocs.some(({ texte }) => texte === 'Club des Merles')) {
               if (n === 1) assert.ok(page.logoParticipant.boite !== null && page.technolibre.corps !== null, quoi);
               if (page.logoParticipant.boite !== null) vus.poses += 1;
@@ -1919,4 +1979,155 @@ describe('mise en page : le nom laissé en blanc (§ 11.4)', () => {
       });
     }
   }
+});
+
+// Le dernier recours (§ 11.5) : un badge dont les tours ne tiennent pas même
+// dépouillé de l'organisation et du nom de l'événement serre ses lignes à
+// l'encre de ses textes, puis réduit son pied jusqu'à son plancher, puis son
+// nom sous son plancher, jusqu'à celui du dernier recours. Les tours gardent
+// leur plancher, rien ne s'abrège, et le refus ne vient qu'après.
+describe('mise en page : le dernier recours (§ 11.5)', () => {
+  const AVERY = 'avery5392';
+  const TECHNOLIBRE = Object.freeze({ texte: 'Développement logiciel libre sur mesure', rapport: 5 });
+  const CARRE = Object.freeze({ rapport: 1 });
+  const plancherTours = constante('CORPS_TOURS_PLANCHER_PT');
+  const plancherPied = constante('CORPS_PIED_PLANCHER_PT');
+  const cadreDe = (modele) => cadreUtile({ x: 0, y: 0, ...(modele === 'a6' ? BADGE : MODELES_BADGE[modele]) }, modele);
+  const auLibelleLong = (n) => Array.from({ length: n }, (_, i) => auLibelle(i + 1, i + 3, LIBELLE_LONG, i + 1));
+  // Les blocs des lignes de tour de la page, suites comprises.
+  const blocsDesTours = (page, lignes) => lignes.flatMap((ligne) => blocsDeLigne(page, ligne) ?? []);
+  // Les blocs qui sortent du cadre utile du modèle, à l'encre sur une page
+  // serrée.
+  const sortDuCadre = (page, metriques, modele) => {
+    const { largeur, hauteur } = cadreDe(modele);
+    const boites = boitesDe(page, metriques);
+    return page.blocs.filter((_, rang) => {
+      const b = boites[rang];
+      return b.gauche < -TOLERANCE || b.haut < -TOLERANCE || b.droite > largeur + TOLERANCE || b.bas > hauteur + TOLERANCE;
+    });
+  };
+  // L'encre du badge par point : la plus haute et la plus basse des textes
+  // que le badge dépouillé pose, le nom en gras.
+  const encreParPt = (champs, metriques) => {
+    const encres = [metriques.encre(champs.nom, 1, true), ...[...champs.lignes, ...champs.piedReduit].map((t) => metriques.encre(t, 1, false))];
+    return { haut: Math.max(...encres.map((e) => e.haut)), bas: Math.max(...encres.map((e) => e.bas)) };
+  };
+
+  test('Noto Sans, carte : six tours au libellé de soixante caractères, refusés avant le dernier recours, tiennent entiers, dépouillés, les tours à leur plancher', () => {
+    const lignes = auLibelleLong(6);
+    const page = mettreEnPage(textes({ lignes }), NOTO, AVERY, TECHNOLIBRE, CARRE);
+    assert.ok(!('refus' in page), JSON.stringify(page));
+    assert.ok(estSerree(page, NOTO));
+    assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), []);
+    assert.ok(textesDe(page).every((t) => !t.includes(MARQUE)));
+    const blocsTours = blocsDesTours(page, lignes);
+    assert.ok(blocsTours.length > lignes.length && blocsTours.every((b) => Math.abs(b.corps - plancherTours) < 1e-9), JSON.stringify(blocsTours));
+    // Ni organisation, ni nom de l'événement, ni logo, ni pied TechnoLibre ;
+    // la date et l'horodatage restent.
+    assert.ok(!textesDe(page).includes('Club des Merles') && !textesDe(page).some((t) => t.includes(EVENEMENT)));
+    assert.deepEqual(textesDe(page).slice(-2), PIED_REDUIT);
+    assert.deepEqual([page.technolibre, page.logoParticipant], [{ corps: null, logo: null }, { boite: null }]);
+    assert.deepEqual(sortDuCadre(page, NOTO, AVERY), []);
+    assert.deepEqual(chevauchements(page, NOTO), []);
+  });
+
+  for (const [jeu, metriques] of JEUX) {
+    test(`${jeu} : au pas serré, une ligne avance de l’encre du badge ; le nom touche le haut du cadre, le pied son bas, par leur encre`, () => {
+      // Le premier nombre de tours que la carte ne tient qu'au pas serré.
+      let n = 1;
+      while (n < 60 && !estSerree(mettreEnPage(textes({ lignes: auLibelleLong(n) }), metriques, AVERY), metriques)) n += 1;
+      const champs = textes({ lignes: auLibelleLong(n) });
+      const page = mettreEnPage(champs, metriques, AVERY);
+      assert.ok(!('refus' in page) && estSerree(page, metriques), JSON.stringify(page));
+      const { haut, bas } = encreParPt(champs, metriques);
+      const tours = blocsDesTours(page, champs.lignes);
+      assert.ok(tours.length > 1);
+      for (const [rang, bloc] of tours.entries()) {
+        if (rang > 0 && bloc.y > tours[rang - 1].y) assert.ok(Math.abs(bloc.y - tours[rang - 1].y - (haut + bas) * bloc.corps) < 1e-9);
+      }
+      const [nom] = blocsNom(page);
+      assert.ok(Math.abs(nom.y - haut * nom.corps) < 1e-9);
+      const dernier = page.blocs.at(-1);
+      assert.ok(Math.abs(dernier.y + bas * dernier.corps - cadreDe(AVERY).hauteur) < 1e-9);
+    });
+  }
+
+  // Des noms d'une à trois lignes : chaque tour ajouté avance d'une rangée ou
+  // plus, et la place que laisse chacun fait tomber le badge à un étage
+  // différent du dernier recours.
+  const NOMS = ['Iris Ombrelle', 'Ondine Lacasse Théo Pervenche Iris Ombrelle', ...NOMS_COMPOSES];
+  for (const [jeu, metriques] of JEUX) {
+    test(`${jeu} : à mesure que les tours s’ajoutent, le badge se dépouille, puis se serre, puis réduit son pied, puis son nom ; le refus vient en dernier`, () => {
+      const plancherNom = corpsNomPlancher(metriques);
+      const dernierNom = Math.max(constante('HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM') / capParPt(metriques), plancherTours);
+      const vus = { depouilleLache: 0, serre: 0, piedReduit: 0, nomReduit: 0, refus: 0 };
+      for (const modele of ['a6', AVERY]) {
+        const departPied = constante(modele === 'a6' ? 'CORPS_PIED_PT' : 'CORPS_PIED_CARTE_PT');
+        for (const nom of NOMS) {
+          for (const suite of [auLibelleLong, toursAuxSieges]) {
+            let precedent = null;
+            for (let n = 1; n <= 60; n += 1) {
+              const lignes = suite(n);
+              const cas = `${modele}, ${nom}, ${lignes[0]}, ${n} tours`;
+              const page = mettreEnPage(textes({ nom, lignes }), metriques, modele);
+              if ('refus' in page) {
+                assert.deepEqual([page.refus.code, page.refus.details.tours], ['PLANCHE_TROP_DE_TOURS', n], cas);
+                vus.refus += 1;
+                break;
+              }
+              const tout = textesDe(page);
+              const depouille = !tout.includes('Club des Merles') && !tout.some((t) => t.includes(EVENEMENT));
+              const serree = estSerree(page, metriques);
+              const corpsNom = blocsNom(page)[0].corps;
+              const corpsPied = page.blocs.at(-1).corps;
+              assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), [], cas);
+              assert.ok(blocsDesTours(page, lignes).every((b) => b.corps >= plancherTours - 1e-9), cas);
+              // Le pas serré ne vient que sur le badge dépouillé ; le pied ne
+              // descend qu'au pas serré, le nom sous son plancher qu'au pied
+              // à son plancher, jamais sous celui du dernier recours.
+              assert.ok(!serree || depouille, `${cas} : serré sans être dépouillé`);
+              assert.ok(corpsPied >= departPied - 1e-9 || serree, `${cas} : pied réduit sans être serré`);
+              assert.ok(corpsPied >= plancherPied - 1e-9, `${cas} : pied de ${corpsPied} pt`);
+              assert.ok(corpsNom >= plancherNom - 1e-9 || Math.abs(corpsPied - plancherPied) < 1e-9, `${cas} : nom de ${corpsNom} pt, pied de ${corpsPied} pt`);
+              assert.ok(corpsNom >= dernierNom - 1e-9, `${cas} : nom de ${corpsNom} pt`);
+              // Plus de tours, jamais plus grand.
+              if (precedent?.serree && serree) {
+                assert.ok(corpsPied <= precedent.corpsPied + 1e-9 && corpsNom <= precedent.corpsNom + 1e-9, cas);
+              }
+              assert.ok(!precedent?.serree || serree, `${cas} : desserré après un badge serré`);
+              if (depouille && !serree) vus.depouilleLache += 1;
+              if (serree) vus.serre += 1;
+              if (corpsPied < departPied - 1e-9 && corpsNom >= plancherNom - 1e-9) vus.piedReduit += 1;
+              if (corpsNom < plancherNom - 1e-9) vus.nomReduit += 1;
+              assert.deepEqual(sortDuCadre(page, metriques, modele), [], cas);
+              assert.deepEqual(chevauchements(page, metriques), [], cas);
+              precedent = { serree, corpsPied, corpsNom };
+            }
+          }
+        }
+      }
+      for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
+    });
+  }
+
+  test('chasse fixe : sous une police à grande capitale, le nom du dernier recours s’arrête au plancher des tours, que son corps plafonne', () => {
+    // À cette capitale, le plancher du dernier recours tomberait sous celui
+    // des tours ; le nom s'arrête au corps des tours à leur plancher.
+    const metriques = metriquesFactices({ capitale: 0.95 });
+    assert.ok(constante('HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM') / capParPt(metriques) < plancherTours);
+    let plusPetit = Infinity;
+    for (const modele of ['a6', AVERY]) {
+      for (const nom of NOMS) {
+        for (const suite of [auLibelleLong, toursAuxSieges]) {
+          for (let n = 1; n <= 60; n += 1) {
+            const page = mettreEnPage(textes({ nom, lignes: suite(n) }), metriques, modele);
+            if ('refus' in page) break;
+            plusPetit = Math.min(plusPetit, blocsNom(page)[0].corps);
+            assert.ok(blocsDesTours(page, suite(n)).every((b) => b.corps >= plancherTours - 1e-9), `${modele}, ${nom}, ${n} tours`);
+          }
+        }
+      }
+    }
+    assert.ok(plusPetit < corpsNomPlancher(metriques) - 1e-9 && plusPetit >= plancherTours - 1e-9, `${plusPetit}`);
+  });
 });

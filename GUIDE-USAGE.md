@@ -1433,10 +1433,15 @@ espace, et la suite d’une ligne de tour descend en retrait sous son début,
 pour qu’on retrouve chaque tour d’un coup d’œil ; un numéro de table ou de
 siège reste sur la ligne de son mot. Sur un badge chargé, une organisation
 repliée rapetisse d’abord, pour laisser au nom et aux tours leur taille.
-Les lignes repliées prennent de la place : sur une carte Avery 5392, un
-libellé de soixante caractères tient jusqu’à cinq tours. Au-delà, la section
-refuse de produire la planche, nomme la personne dont les tours débordent et
-offre « Ouvrir les tables », où raccourcir le libellé ou le titre.
+Les lignes repliées prennent de la place. Quand un badge ne tient pas même
+sans son organisation ni le nom de l’événement, il se resserre en dernier
+recours, sans changer de papier : ses lignes se rapprochent, puis son pied
+rapetisse, puis son nom passe sous sa taille habituelle, sans jamais devenir
+plus petit que les tours, qui gardent la leur. Sur une carte Avery 5392, un
+libellé de soixante caractères tient ainsi jusqu’à huit tours. Au-delà, la
+section refuse de produire la planche, nomme la personne dont les tours
+débordent et offre « Ouvrir les tables », où raccourcir le libellé ou le
+titre.
 
 Une personne absente à un tour garde la ligne de ce tour sur son badge, qui
 dit « absente » au lieu d’une table :

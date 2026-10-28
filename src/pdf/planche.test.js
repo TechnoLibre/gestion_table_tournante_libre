@@ -707,11 +707,11 @@ describe('produirePlanche et produireControle : le modèle Avery 5392', () => {
     }
   });
 
-  test('analyserPlanche met en page sur la carte : 21 tours refusés sur Avery 5392, tenus sur l’A6', async () => {
-    const m = modele([badge(1, 'Iris Ombrelle', { tours: 21 })]);
+  test('analyserPlanche met en page sur la carte : 60 tours refusés sur Avery 5392, tenus sur l’A6', async () => {
+    const m = modele([badge(1, 'Iris Ombrelle', { tours: 60 })]);
     assert.deepEqual((await analyserPlanche({ modele: m, polices, modeleBadge: AVERY })).refus, {
       code: 'PLANCHE_TROP_DE_TOURS',
-      details: { tours: 21, repliees: false },
+      details: { tours: 60, repliees: false },
       rang: 0,
     });
     assert.equal((await analyserPlanche({ modele: m, polices })).refus, null);

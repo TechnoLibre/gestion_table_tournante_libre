@@ -664,10 +664,14 @@
   séparent jamais de leur numéro. Sur un badge chargé, une organisation
   repliée rapetisse d'abord, pour laisser au nom et aux tours leur taille,
   puis part quand même sa plus petite taille ne tient pas. Les lignes
-  repliées prennent de la place : sur une carte Avery 5392, un libellé de
-  soixante caractères tient jusqu'à cinq tours. Au-delà, la planche se
-  refuse en nommant la personne et le libellé ou le titre à raccourcir, avec
-  « Ouvrir les tables ».
+  repliées prennent de la place. Avant de refuser la planche, un badge qui ne
+  tient pas même sans organisation ni nom de l'événement resserre ses lignes,
+  puis rapetisse son pied, puis son nom sous sa taille habituelle, sur le même
+  papier ; les tours gardent leur taille, et rien n'est tronqué. Sur une
+  carte Avery 5392, un libellé de soixante caractères tient ainsi jusqu'à huit
+  tours, et jusqu'à cinq sous un titre de trente-deux caractères. Au-delà, la
+  planche se refuse en nommant la personne et le libellé ou le titre à
+  raccourcir, avec « Ouvrir les tables ».
 - Quand les places manquent, l'avis qui offre « Ouvrir les tables » offre aussi
   « Créer les tables… », et la section « Tables et tours » offre la même
   commande tant qu'il en manque. Elle déplie un petit formulaire : le nombre de
