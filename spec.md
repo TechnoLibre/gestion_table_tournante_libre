@@ -6536,11 +6536,12 @@ du pied. Elle se centre en largeur, proportions gardées, à sa hauteur maximale
 quand l'écart le permet : 30 mm sur l'A6, 15 mm sur la carte Avery 5392, sans
 dépasser la largeur du cadre. Elle ne retire ni ne réduit aucun texte : elle
 **rapetisse** avec l'écart que le texte laisse, puis **se retire** de ce
-badge, avant tout refus (§ 11.5). Décochée, l'image et la position restent
-dans l'événement. Une image introuvable ou illisible, ou cochée sans image,
-s'annonce, et les badges s'impriment sans elle ; la planche ne se refuse
-jamais pour elle. La feuille de contrôle et la liste des badges en CSV ne la
-lisent pas. Sans image posée, la planche garde exactement ses octets.
+badge, avant tout refus ; un badge resserré ne la porte pas (§ 11.5). Décochée,
+l'image et la position restent dans l'événement. Une image introuvable ou
+illisible, ou cochée sans image, s'annonce, et les badges s'impriment sans
+elle ; la planche ne se refuse jamais pour elle. La feuille de contrôle et la
+liste des badges en CSV ne la lisent pas. Sans image posée, la planche garde
+exactement ses octets.
 
 **Le logo du participant passe après tout le texte.** La place du badge se
 donne dans cet ordre : le nom et les tours toujours ; puis l'organisation et
@@ -6550,12 +6551,12 @@ l'écart que le texte et l'image des badges laissent entre les tours et le
 pied, moins un dégagement au-dessus et au-dessous : il ne réduit ni ne retire
 aucun texte. Il s'y pose le plus grand possible, proportions gardées, sans
 plafond, centré, et ne se pose pas sur un badge où sa plus petite cote
-n'atteindrait pas son plancher, ni sur un badge qui a perdu le nom de
-l'événement ou l'organisation (§ 11.5). Son image se lit dans le dossier de
+n'atteindrait pas son plancher, ni sur un badge resserré ou qui a perdu le nom
+de l'événement ou l'organisation (§ 11.5). Son image se lit dans le dossier de
 l'événement, au chemin que porte la fiche, à la première préparation qui la
-demande, puis se garde pour cet événement ; un échec ne se garde pas. La
-planche l'embarque une fois par fichier, quel que soit le nombre de badges qui
-la portent.
+demande, puis se garde pour cet événement ; un échec ne se garde pas. La planche
+l'embarque une fois par fichier, quel que soit le nombre de badges qui la
+portent.
 
 **Le pied TechnoLibre passe après tout le reste.** Il se compose d'un texte,
 centré, replié comme le pied, puis du logo, centré, posé sur le bord bas du
@@ -6582,11 +6583,12 @@ déplace pas, le pied excepté. Il rapetisse jusqu'à un plancher lisible à la
 loupe, puis se retire, et l'annonce le dit (§ 11.5). Un badge qui a perdu le nom
 de l'événement, et à plus forte raison l'organisation, ne le porte pas : il
 vient après eux dans l'ordre de sacrifice, et la place que leur retrait libère
-ne lui revient pas. Sous un logo de participant, il cède au logo tout ce qui
-dépasse son plancher, puis reprend le plus grand palier que le logo laisse ;
-quand même ainsi le logo n'atteint pas son plancher, il se retire pour lui
-(§ 11.5). Son logo, l'un des deux seuls éléments en couleur du badge
-(§ 11.2), se dessine en vecteurs, chemins et couleurs du fichier de l'éditeur,
+ne lui revient pas ; un badge resserré ne le porte pas non plus, pour la même
+raison. Sous un logo de participant, il cède au logo tout ce qui dépasse son
+plancher, puis reprend le plus grand palier que le logo laisse ; quand même
+ainsi le logo n'atteint pas son plancher, il se retire pour lui (§ 11.5). Son
+logo, l'un des deux seuls éléments en couleur du badge (§ 11.2), se dessine en
+vecteurs, chemins et couleurs du fichier de l'éditeur,
 `src/actifs/full_logo_technolibre_2023.svg`, et un logo que l'éditeur changerait
 pour une forme que la planche ne sait pas rendre fidèlement — un dégradé, une
 transparence, un arc, une transformation — se refuse à la production au lieu de
@@ -6671,29 +6673,47 @@ du nom, et le nom celui de l'organisation ; tout ce que cette section dit du
 nom vaut alors pour elle, corps, repli, plancher et refus compris, et ce
 qu'elle dit de l'organisation vaut pour le nom de la personne.
 
+**Le badge se resserre avant de perdre un texte.** Un badge dont les lignes de
+tour ne tiennent pas, le nom à son plancher, réduit encore ce qui n'est pas ses
+tours, dans cet ordre, avant de perdre le nom de l'événement. D'abord ses lignes
+se resserrent, juste assez : par huit paliers égaux, chacune passe de la hauteur
+que la police réserve à tout glyphe à celle de l'encre que posent les textes de
+ce badge — le nom, l'organisation, les tours et le pied, tels que le badge les
+porte, un texte laissé en blanc compté comme imprimé —, du plus haut accent au
+plus bas jambage. Au dernier palier, deux lignes ne mêlent toujours pas leur
+encre, mais aucun jeu ne les sépare : un jambage peut toucher l'accent de la
+ligne suivante, à sa verticale. Puis, à l'encre, le pied rapetisse d'un point
+par palier jusqu'à son plancher, 5 pt, date et horodatage toujours entiers.
+Alors seulement le nom de l'événement part, et le badge qui l'a perdu reprend le
+pas de la police et son pied à son corps de départ ; s'il ne tient pas, il se
+resserre de même avant de perdre l'organisation, puis encore sans elle. La
+première étape qui tient l'emporte : un badge qui tient au pas de la police
+n'est jamais serré, et l'écart qu'un badge serré laisse entre ses tours et son
+pied reste sous ce qu'un palier libère. Un badge serré, même complet, ne porte
+ni image des badges, ni logo du participant, ni pied TechnoLibre : ils suivent
+tous les textes dans l'ordre de sacrifice, et la place que le resserrement
+libère ne leur revient pas. Mesuré sur la police embarquée, sous un nom court et
+son organisation, sur la carte Avery 5392 : un libellé de soixante caractères,
+sous sièges attribués, garde l'organisation et le nom de l'événement jusqu'à
+sept tours, au lieu de quatre au pas de la police ; des lignes de tour sans
+siège ni titre, jusqu'à trente, au lieu de dix-huit.
+
 **Le refus vient après le dernier recours.** Un badge dont les lignes de tour ne
-tiennent pas même dépouillé — le nom à son plancher, sans le nom de l'événement
-ni l'organisation, donc sans image des badges, ni logo du participant, ni pied
-TechnoLibre — réduit encore tout ce qui n'est pas ses tours, dans cet ordre,
-avant que le logiciel ne refuse la planche. D'abord ses lignes se resserrent :
-chacune n'occupe plus la hauteur que la police réserve à tout glyphe, mais celle
-de l'encre que posent les textes de ce badge, du plus haut accent au plus bas
-jambage. Deux lignes ne mêlent jamais leur encre, mais aucun jeu ne les sépare :
-un jambage peut toucher l'accent de la ligne suivante, à sa verticale. Puis le
-pied rapetisse d'un point par palier jusqu'à son plancher, 5 pt, date et
-horodatage toujours entiers. Puis le nom passe sous son plancher, d'un point par
-palier, replié chaque fois sur le moins de lignes qui tient, jusqu'à une
-capitale de 3 mm, et jamais sous le corps des tours à leur plancher : le nom
-reste le plus grand texte du badge. Les lignes de tour gardent leur plancher de
-10 pt ; le papier ne change pas, rien ne s'abrège, et la première étape qui
-tient l'emporte. La gouttière entre deux colonnes et le retrait d'une suite
-gardent leur cadratin : la gouttière seule sépare deux colonnes de lignes
-inégales, le retrait seul dit qu'une ligne continue la précédente. Ces deux
-planchers sont au registre des constantes (`CORPS_PIED_PLANCHER_PT`,
-`HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM`, § 14.1), défauts de travail jusqu'à
-leur relevé sur une impression réelle ; ce relevé dit aussi si des lignes
-serrées dont l'encre se touche se lisent, et relève les planchers sinon. Un
-badge qui tient sans le dernier recours ne change pas.
+tiennent pas même dépouillé et serré — le nom à son plancher, sans le nom de
+l'événement ni l'organisation, donc sans image des badges, ni logo du
+participant, ni pied TechnoLibre, le pied à son plancher — passe son nom sous
+son plancher avant que le logiciel ne refuse la planche : d'un point par palier,
+replié chaque fois sur le moins de lignes qui tient, jusqu'à une capitale de
+3 mm, et jamais sous le corps des tours à leur plancher, le nom restant le plus
+grand texte du badge. Les lignes de tour gardent leur plancher de 10 pt ; le
+papier ne change pas, rien ne s'abrège. Au pas serré, la gouttière entre deux
+colonnes et le retrait d'une suite gardent leur cadratin : la gouttière seule
+sépare deux colonnes de lignes inégales, le retrait seul dit qu'une ligne
+continue la précédente. Ces deux planchers sont au registre des constantes
+(`CORPS_PIED_PLANCHER_PT`, `HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM`, § 14.1),
+défauts de travail jusqu'à leur relevé sur une impression réelle ; ce relevé dit
+aussi si des lignes serrées dont l'encre se touche se lisent, et relève les
+planchers sinon.
 
 - **Un nom très long.** Le nom **ne s'abrège jamais**. Un nom que la case des
   doublons laisse en blanc (§ 11.4) se mesure entier, comme imprimé : sa place
@@ -6702,29 +6722,30 @@ badge qui tient sans le dernier recours ne change pas.
   métriques de la police embarquée**, puis replie sur une seconde ligne, puis
   sur une troisième — aux espaces, et entre deux lettres seulement quand un mot
   seul ne tient pas, jamais entre une lettre et son accent. Si, le nom au
-  plancher, le badge ne tient toujours pas, il se dépouille dans l'ordre de
-  sacrifice : le nom de l'événement quitte le pied, sa date restant, puis
-  l'organisation part. **Au-delà de trois lignes, le nom continue de se
-  replier** au corps plancher, sur autant de lignes qu'il lui faut, et le badge
-  perd d'emblée le nom de l'événement, puis l'organisation s'il le faut ; si les
-  lignes de tour ne tiennent plus sous lui, même au dernier recours, le logiciel
-  **refuse de produire la planche** et nomme la personne, dont le nom se corrige
-  dans la liste des participants. Une organisation en gros (§ 11.4) qui ne tient
-  pas se refuse de même, et le refus nomme la personne : l'organisation se
-  raccourcit dans la liste des participants, ou sa case se décoche, qui la remet
-  en petit. L'horodatage ne quitte jamais le pied ; seule sa case le retire
-  (§ 11.4). Le seuil se cale sur le **glyphe le plus large** de l'alphabet visé,
-  jamais sur une moyenne (§ 14.1) : un nom en capitales larges déborde sinon
-  par-dessus la première ligne de tour, en silence.
+  plancher, le badge ne tient toujours pas, il se resserre, puis se dépouille
+  dans l'ordre de sacrifice : le nom de l'événement quitte le pied, sa date
+  restant, puis, le badge resserré de nouveau, l'organisation part. **Au-delà de
+  trois lignes, le nom continue de se replier** au corps plancher, sur autant de
+  lignes qu'il lui faut, et le badge perd d'emblée le nom de l'événement, puis,
+  après s'être resserré, l'organisation s'il le faut ; si les lignes de tour ne
+  tiennent plus sous lui, même au dernier recours, le logiciel **refuse de
+  produire la planche** et nomme la personne, dont le nom se corrige dans la
+  liste des participants. Une organisation en gros (§ 11.4) qui ne tient pas se
+  refuse de même, et le refus nomme la personne : l'organisation se raccourcit
+  dans la liste des participants, ou sa case se décoche, qui la remet en petit.
+  L'horodatage ne quitte jamais le pied ; seule sa case le retire (§ 11.4). Le
+  seuil se cale sur le **glyphe le plus large** de l'alphabet visé, jamais sur
+  une moyenne (§ 14.1) : un nom en capitales larges déborde sinon par-dessus la
+  première ligne de tour, en silence.
 - **Une organisation très longue.** Elle **se replie** sur autant de lignes
-  qu'il lui faut, chacune centrée, et ne s'abrège jamais. C'est une étiquette
-  de contexte, pas une identité : repliée, elle rapetisse, quand le badge ne
-  tient pas, avant le nom et les tours, d'un point par palier, de son corps
-  de départ jusqu'à son plancher, 8 pt, au registre des constantes (§ 14.1).
-  Une organisation qui tient sur une ligne garde son corps de départ. Si même
-  ainsi le badge ne tient pas, le nom au plancher et le nom de l'événement
-  parti, elle part entière, dans l'ordre de sacrifice, plutôt que de sortir
-  tronquée.
+  qu'il lui faut, chacune centrée, et ne s'abrège jamais. C'est une étiquette de
+  contexte, pas une identité : repliée, elle rapetisse, quand le badge ne tient
+  pas, avant le nom et les tours, d'un point par palier, de son corps de départ
+  jusqu'à son plancher, 8 pt, au registre des constantes (§ 14.1). Une
+  organisation qui tient sur une ligne garde son corps de départ. Si même ainsi
+  le badge ne tient pas, le nom au plancher, les lignes resserrées, le pied à
+  son plancher et le nom de l'événement parti, elle part entière, dans l'ordre
+  de sacrifice, plutôt que de sortir tronquée.
 - **Beaucoup de tours.** Le logiciel passe à deux colonnes au-dessus d'un
   nombre de tours **mesuré sur le gabarit**, et **n'affiche jamais une liste
   tronquée** : un badge qui omet le tour 5 envoie son porteur nulle part. Si la

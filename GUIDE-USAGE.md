@@ -1376,15 +1376,16 @@ pied de chaque badge le **pied TechnoLibre** : une invitation à demander un
 développement logiciel personnalisé, suivie du logo de TechnoLibre en couleurs ;
 le poste garde ce choix, comme le modèle. Le pied TechnoLibre ne prend que la
 place libre : il rapetisse sur un badge chargé, et s’en retire quand même sa
-plus petite taille ne tient pas, ou que le badge a dû perdre le nom de
-l’événement. Sous la case, un champ porte le **texte du pied TechnoLibre**,
-prérempli de cette invitation : remplacez-le par le vôtre, et le poste le garde,
-comme la case ; « Texte par défaut » remet l’invitation d’origine. Un dossier de
-travail où vous n’avez rien saisi imprime l’invitation d’origine. Le texte
-s’enregistre quand vous quittez le champ. Il se replie seul sur le badge : un
-retour à la ligne saisi y devient une espace. Laissé vide, le pied ne porte que
-le logo. Un texte plus long rapetisse et se retire plus tôt, faute de place, et
-un caractère que la police ne dessine pas s’annonce comme dans un nom.
+plus petite taille ne tient pas, ou que le badge a dû se resserrer ou perdre le
+nom de l’événement. Sous la case, un champ porte le
+**texte du pied TechnoLibre**, prérempli de cette invitation : remplacez-le par
+le vôtre, et le poste le garde, comme la case ; « Texte par défaut » remet
+l’invitation d’origine. Un dossier de travail où vous n’avez rien saisi imprime
+l’invitation d’origine. Le texte s’enregistre quand vous quittez le champ. Il se
+replie seul sur le badge : un retour à la ligne saisi y devient une espace.
+Laissé vide, le pied ne porte que le logo. Un texte plus long rapetisse et se
+retire plus tôt, faute de place, et un caractère que la police ne dessine pas
+s’annonce comme dans un nom.
 À côté, cinq autres cases, cochées elles aussi tant que vous ne les décochez
 pas, disent ce que chaque badge imprime en plus du nom et des tours :
 « Organisation », « Nom de l’événement », « Date de l’événement », « Date du
@@ -1427,12 +1428,13 @@ se choisit parmi « En haut », au-dessus du nom et de l’organisation, « Au
 centre », entre le nom et l’organisation d’une part et les tours de l’autre, et
 « En bas », au-dessus du pied. L’image ne prend que la place que le texte
 laisse, jusqu’à 30 mm de haut sur l’A6 et 15 mm sur une carte Avery 5392, et la
-prend avant le logo de la personne et le pied TechnoLibre : sur un badge
-chargé, elle rapetisse, puis s’en retire, sans jamais réduire un texte ni
-arrêter la planche. Une image très haute et étroite peut ainsi ne tenir sur
-aucune carte. Décochée, la case garde l’image et la position pour la prochaine
-fois. L’image suit l’événement copié ou importé, comme les logos des personnes,
-et l’avertissement d’un logo qui ne se recopie pas dit quand c’est elle.
+prend avant le logo de la personne et le pied TechnoLibre : sur un badge chargé,
+elle rapetisse, puis s’en retire, sans jamais réduire un texte ni arrêter la
+planche, et un badge qui se resserre ne la porte pas. Une image très haute et
+étroite peut ainsi ne tenir sur aucune carte. Décochée, la case garde l’image et
+la position pour la prochaine fois. L’image suit l’événement copié ou importé,
+comme les logos des personnes, et l’avertissement d’un logo qui ne se recopie
+pas dit quand c’est elle.
 
 Le badge d’une personne qui porte un logo (étape 3) le pose entre ses tours et
 le pied, dans la place que le texte laisse : le logo ne rapetisse ni ne retire
@@ -1440,11 +1442,11 @@ jamais un texte. Il s’y pose le plus grand possible, proportions gardées ; le
 pied TechnoLibre lui cède d’abord de la place en rapetissant, puis s’en retire
 quand le logo ne tient qu’ainsi. Un logo dont la plus petite dimension
 n’atteindrait pas 8 mm ne se pose pas, et le badge sort tel qu’il serait sans
-logo ; un badge qui a perdu faute de place le nom de l’événement, ou le texte en
-petit — l’organisation, ou le nom quand l’organisation est en gros —, n’en porte
-pas non plus, mais la case « Nom de l’événement » décochée ne l’en prive pas.
-Une image introuvable ou illisible n’arrête rien : son badge s’imprime sans
-logo.
+logo ; un badge resserré, ou qui a perdu faute de place le nom de l’événement,
+ou le texte en petit — l’organisation, ou le nom quand l’organisation est en
+gros —, n’en porte pas non plus, mais la case « Nom de l’événement » décochée ne
+l’en prive pas. Une image introuvable ou illisible n’arrête rien : son badge
+s’imprime sans logo.
 « Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
 homonymes, les caractères que la police ne dessine pas, l’image des badges pas
 encore choisie, introuvable ou illisible, et les badges sans place pour elle,
@@ -1500,16 +1502,17 @@ table trop long pour sa ligne se replie sur la suivante, coupé au dernier
 espace, et la suite d’une ligne de tour descend en retrait sous son début,
 pour qu’on retrouve chaque tour d’un coup d’œil ; un numéro de table ou de
 siège reste sur la ligne de son mot. Sur un badge chargé, une organisation
-repliée rapetisse d’abord, pour laisser au nom et aux tours leur taille.
-Les lignes repliées prennent de la place. Quand un badge ne tient pas même
-sans son organisation ni le nom de l’événement, il se resserre en dernier
-recours, sans changer de papier : ses lignes se rapprochent, puis son pied
-rapetisse, puis son nom passe sous sa taille habituelle, sans jamais devenir
-plus petit que les tours, qui gardent la leur. Sur une carte Avery 5392, un
-libellé de soixante caractères tient ainsi jusqu’à huit tours. Au-delà, la
-section refuse de produire la planche, nomme la personne dont les tours
-débordent et offre « Ouvrir les tables », où raccourcir le libellé ou le
-titre.
+repliée rapetisse d’abord, pour laisser au nom et aux tours leur taille. Les
+lignes repliées prennent de la place. Avant de perdre le nom de l’événement,
+puis son organisation, un badge chargé se resserre, juste assez, sans changer de
+papier : ses lignes se rapprochent, puis son pied rapetisse. Sur une carte
+Avery 5392, un libellé de soixante caractères garde ainsi l’un et l’autre
+jusqu’à sept tours ; sans son organisation ni le nom de l’événement, resserré,
+il tient jusqu’à huit tours. Quand même ainsi un badge ne tient pas, son nom
+passe en dernier recours sous sa taille habituelle, sans jamais devenir plus
+petit que les tours, qui gardent la leur. Au-delà, la section refuse de produire
+la planche, nomme la personne dont les tours débordent et offre « Ouvrir les
+tables », où raccourcir le libellé ou le titre.
 
 Une personne absente à un tour garde la ligne de ce tour sur son badge, qui
 dit « absente » au lieu d’une table :

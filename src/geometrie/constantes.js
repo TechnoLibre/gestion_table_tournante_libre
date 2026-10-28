@@ -259,8 +259,9 @@ export const CONSTANTES = Object.freeze(
       unite: 'pt',
       mesure: "corps sous lequel le pied d'un badge, A6 ou carte Avery 5392, ne descend pas",
       raison:
-        "un badge dont les tours ne tiennent pas même dépouillé réduit son pied avant son nom plutôt que de " +
-        "refuser la planche (§ 11.5) ; en deçà, la date et l'horodatage ne se lisent plus en main",
+        "un badge dont les tours ne tiennent pas, le nom au plancher, réduit son pied avant de perdre un texte " +
+        "et avant de passer son nom sous son plancher (§ 11.5) ; en deçà, la date et l'horodatage ne se lisent " +
+        'plus en main',
       configuration: 'badge A6 et carte Avery 5392 imprimés, police embarquée, lecture en main',
       proprietaire: 'manuel',
       statut: 'defautDeTravail',

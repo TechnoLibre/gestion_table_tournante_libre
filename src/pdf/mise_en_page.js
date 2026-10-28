@@ -9,13 +9,14 @@
 // coin haut gauche du cadre utile, y sur la ligne de base ; les corps en
 // points.
 //
-// La page est un flux. En haut, le nom en gras, puis l'organisation, puis
-// les lignes de tour ; en bas, le pied, sa dernière ligne posée sur le bord
-// du cadre. Chaque ligne occupe la hauteur que la police lui donne, de
-// l'ascendante à la descendante, ou, au dernier recours, celle de l'encre
-// du badge : deux lignes empilées ne se recouvrent jamais, et une ligne
-// absente laisse sa place à la suivante. Un nom laissé en blanc n'est pas
-// absent : ses lignes gardent leur place, vide.
+// La page est un flux. En haut, le nom en gras, puis l'organisation, puis les
+// lignes de tour ; en bas, le pied, sa dernière ligne posée sur le bord du
+// cadre. Chaque ligne occupe la hauteur que la police lui donne, de
+// l'ascendante à la descendante, ou, sur un badge serré, une hauteur moindre,
+// jamais sous celle de l'encre des textes du badge : deux lignes empilées ne
+// se recouvrent jamais, et une ligne absente laisse sa place à la suivante.
+// Un nom laissé en blanc n'est pas absent : ses lignes gardent leur place,
+// vide.
 //
 // Le haut de la page porte deux rôles : le gros texte, en gras, et le petit
 // texte, en romain, sous lui. Le gros texte est le nom, le petit
@@ -37,16 +38,23 @@
 // tours au plancher, puis deux colonnes ; sous chacune, une organisation
 // qui se replie essaie ses corps, du départ à son plancher ; la première
 // qui tient l'emporte. Une organisation qui tient sur une ligne garde son
-// corps de départ. Le nom au plancher, le badge se dépouille dans l'ordre
-// de sacrifice (décision 8). Hors du dernier recours, retirer un texte ne
-// vient qu'après avoir réduit tout ce qui se réduit.
+// corps de départ.
 //
-// Le refus ne vient qu'après le dernier recours : quand même le badge le
-// plus dépouillé ne tient pas, ses lignes se serrent à l'encre de ses
-// textes, puis son pied rapetisse jusqu'à son plancher, puis son nom passe
-// sous le sien, jusqu'à un plancher de dernier recours qui ne descend
-// jamais sous celui des tours. Les tours gardent leur plancher : tout ce qui
-// n'est pas elles se réduit pour leur laisser la place.
+// Le nom au plancher, le badge se resserre avant de perdre un texte : ses
+// lignes se serrent par paliers, juste assez, jusqu'à l'encre de ses textes,
+// puis son pied rapetisse jusqu'à son plancher. Alors seulement il se
+// dépouille dans l'ordre de sacrifice (décision 8), le nom de l'événement
+// d'abord, puis l'organisation, et chaque badge dépouillé se compose de
+// nouveau au pas de la police, puis se resserre de même. Hors du dernier
+// recours, retirer un texte ne vient donc qu'après avoir réduit tout ce qui
+// se réduit. Un badge serré ne porte ni image des badges, ni logo du
+// participant, ni pied TechnoLibre.
+//
+// Le refus ne vient qu'après le dernier recours : quand même le badge le plus
+// dépouillé, serré, son pied à son plancher, ne tient pas, son nom passe sous
+// le sien, jusqu'à un plancher de dernier recours qui ne descend jamais sous
+// celui des tours. Les tours gardent leur plancher : tout ce qui n'est pas
+// elles se réduit pour leur laisser la place.
 //
 // Chaque modèle de badge a son cadre utile (cadreUtile) et ses corps de
 // départ, lus au registre des constantes (TYPOGRAPHIES) ; les planchers du
@@ -124,6 +132,13 @@ const MM_PAR_PT = 25.4 / 72;
 // lisibilité. Le corps de départ du texte et son plancher, lisible à la
 // loupe, sont au registre (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT).
 const LOGO_EN_CADRATINS = 2;
+
+// Le nombre de paliers par lesquels le pas d'une ligne serrée descend de
+// celui de la police à celui de l'encre, chacun en ôtant la même part : le
+// premier qui tient l'emporte, et le badge ne se serre que de ce qu'il lui
+// faut. Une finesse de composition, non un seuil de lisibilité : l'encre
+// reste le plancher.
+const PALIERS_DU_PAS_SERRE = 8;
 
 /** La tolérance d'une comparaison de cotes, en millimètres : une somme de
  *  hauteurs égale à la hauteur utile tient, malgré l'arrondi flottant. */
@@ -324,16 +339,17 @@ function rolesLus(textes) {
  * capitale vaut le plancher du registre ; les deux se convertissent par la
  * capitale que les métriques donnent. Le nom tient d'abord sur une ligne,
  * puis sur deux, puis sur trois, chaque fois au plus grand corps possible,
- * coupé aux espaces ; à défaut seulement, coupé entre deux grappes, de deux
- * à trois lignes. Quand le reste du badge ne tient pas sous ce nom, il
- * descend d'un palier à la fois jusqu'au plancher, au même nombre de lignes
- * au plus. Au plancher, ou au-delà de trois lignes, où il se replie au
- * plancher sur autant de lignes qu'il lui faut, le badge perd le nom de
- * l'événement (le pied devient le pied réduit), puis, s'il ne tient
- * toujours pas, l'organisation. Le nom ne s'abrège jamais. Un badge qui
+ * coupé aux espaces ; à défaut seulement, coupé entre deux grappes, de deux à
+ * trois lignes. Quand le reste du badge ne tient pas sous ce nom, il descend
+ * d'un palier à la fois jusqu'au plancher, au même nombre de lignes au plus.
+ * Au plancher, le badge se resserre (voir Badge serré), puis perd le nom de
+ * l'événement (le pied devient le pied réduit), puis, s'il ne tient toujours
+ * pas, resserré de nouveau, l'organisation. Au-delà de trois lignes, où il se
+ * replie au plancher sur autant de lignes qu'il lui faut, le badge a perdu
+ * d'emblée le nom de l'événement. Le nom ne s'abrège jamais. Un badge qui
  * perd l'un ou l'autre est dépouillé ; un pied égal au pied réduit, celui
- * dont une case retire déjà le nom de l'événement, ne dépouille pas le
- * badge en passant au pied réduit.
+ * dont une case retire déjà le nom de l'événement, ne dépouille pas le badge
+ * en passant au pied réduit.
  *
  * Nom de la personne laissé en blanc : la page se compose sur le nom tel
  * quel, puis n'en pose aucune ligne, dans l'un ou l'autre rôle. Sa place
@@ -358,15 +374,25 @@ function rolesLus(textes) {
  * lignes repliées. Rien ne s'y abrège, ni le libellé de la table, ni le
  * titre, ni le numéro. Aucun corps ne dépasse celui du nom.
  *
+ * Badge serré, avant chaque retrait d'un texte, le nom au plancher : le pas
+ * de chaque ligne descend, en PALIERS_DU_PAS_SERRE paliers égaux, de celui
+ * de la police à l'encre que posent les textes de la page — le nom,
+ * l'organisation quand elle y est, les tours et le pied, entier ou réduit,
+ * un texte laissé en blanc compté comme imprimé —, du plus haut au plus bas
+ * de leurs glyphes ; puis, à l'encre, le pied descend d'un point par palier
+ * jusqu'à son plancher (CORPS_PIED_PLANCHER_PT). Le premier palier qui tient
+ * l'emporte. Un badge serré qui n'a perdu aucun texte n'est pas dépouillé,
+ * mais ne porte, comme lui, ni pied TechnoLibre, ni logo du participant, ni
+ * image des badges : l'écart que libère son resserrement ne leur revient
+ * pas.
+ *
  * Dernier recours, quand même le badge sans le nom de l'événement ni
- * l'organisation ne tient pas : chaque ligne n'avance plus que de l'encre
- * que posent le nom, les tours et le pied réduit, du plus haut au plus bas
- * de leurs glyphes ; puis le pied descend d'un point par palier jusqu'à son
- * plancher (CORPS_PIED_PLANCHER_PT) ; puis le nom, d'un point par palier,
- * replié chaque fois sur le moins de lignes qui tient, jusqu'à la capitale
- * du dernier recours (HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM), jamais sous
- * le plancher des tours. Le badge reste dépouillé : ni pied TechnoLibre, ni
- * logo du participant, ni image des badges.
+ * l'organisation, serré, le pied à son plancher, ne tient pas : le nom, d'un
+ * point par palier, replié chaque fois sur le moins de lignes qui tient,
+ * jusqu'à la capitale du dernier recours
+ * (HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM), jamais sous le plancher des
+ * tours. Le badge reste dépouillé : ni pied TechnoLibre, ni logo du
+ * participant, ni image des badges.
  *
  * Refus : PLANCHE_NOM_TROP_LONG quand le nom dépasse trois lignes et que
  * rien ne tient, ses détails {organisation: true} quand l'organisation tient
@@ -381,41 +407,40 @@ function rolesLus(textes) {
  *
  * Pied TechnoLibre : son texte, replié comme le pied, centré, puis le logo,
  * centré, de deux cadratins de haut, au rapport reçu, posé sur le bas du
- * cadre ; le pied remonte d'autant. Un texte vide, ou fait d'espaces, ne donne
- * aucune ligne : le bloc est le logo seul. Au plus grand corps, du corps de
- * départ à son plancher (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT au registre), où le
- * bloc tient dans l'écart entre les tours et le pied du badge composé sans
- * lui ; technolibre rend alors ce corps et la boîte du logo. Sinon, ou quand le
- * badge est dépouillé, il se retire : technolibre rend {corps: null, logo:
- * null}, et la page est celle du badge sans lui. Non demandé, technolibre
- * rend null.
+ * cadre ; le pied remonte d'autant. Un texte vide, ou fait d'espaces, ne
+ * donne aucune ligne : le bloc est le logo seul. Au plus grand corps, du
+ * corps de départ à son plancher (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT au
+ * registre), où le bloc tient dans l'écart entre les tours et le pied du
+ * badge composé sans lui ; technolibre rend alors ce corps et la boîte du
+ * logo. Sinon, ou quand le badge est dépouillé ou serré, il se retire :
+ * technolibre rend {corps: null, logo: null}, et la page est celle du badge
+ * sans lui. Non demandé, technolibre rend null.
  *
  * Logo du participant : la boîte la plus grande, au rapport reçu, qui tient
  * dans la largeur du cadre et dans l'écart entre les tours et le pied, moins
- * LOGO_PARTICIPANT_ECART_MM au-dessus et au-dessous, centrée dans cette
- * zone. Le pied TechnoLibre demandé se compte d'abord à son plancher, puis
- * prend le plus grand palier que le logo laisse ; il se retire quand le logo
- * n'atteint qu'ainsi LOGO_PARTICIPANT_PLANCHER_MM sur sa plus petite cote.
+ * LOGO_PARTICIPANT_ECART_MM au-dessus et au-dessous, centrée dans cette zone.
+ * Le pied TechnoLibre demandé se compte d'abord à son plancher, puis prend le
+ * plus grand palier que le logo laisse ; il se retire quand le logo n'atteint
+ * qu'ainsi LOGO_PARTICIPANT_PLANCHER_MM sur sa plus petite cote.
  * logoParticipant rend {boite} ; boite null quand même sans pied TechnoLibre
- * le logo n'atteint pas son plancher, ou que le badge est dépouillé : la
- * page est alors celle du badge sans logo. Non demandé, logoParticipant rend
- * null, et la page est celle d'avant le logo.
+ * le logo n'atteint pas son plancher, ou que le badge est dépouillé ou
+ * serré : la page est alors celle du badge sans logo. Non demandé,
+ * logoParticipant rend null, et la page est celle d'avant le logo.
  *
- * Image des badges : la boîte la plus grande, au rapport reçu, au plus de
- * la hauteur maximale du modèle (IMAGE_BADGES_HAUTEUR_MAX_MM,
+ * Image des badges : la boîte la plus grande, au rapport reçu, au plus de la
+ * hauteur maximale du modèle (IMAGE_BADGES_HAUTEUR_MAX_MM,
  * IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM), dans la largeur du cadre et dans
  * l'écart entre les tours et le pied, moins LOGO_PARTICIPANT_ECART_MM sous
  * elle en haut, de part et d'autre au centre et en bas ; centrée en largeur.
  * En haut, au haut du cadre, tout ce qui précède le pied descendant de sa
- * hauteur et d'un dégagement ; au centre, entre le petit texte et les
- * tours, qui descendent de sa hauteur et de deux dégagements ; en bas, un
- * dégagement au-dessus du pied, remonté avec lui sous un pied TechnoLibre.
- * Elle se taille avant le logo du participant et le pied TechnoLibre, qui
- * prennent l'écart qu'elle laisse. imageBadges rend {boite} ; boite null
- * quand sa plus petite cote n'atteint pas LOGO_PARTICIPANT_PLANCHER_MM, ou
- * que le badge est dépouillé : la page est alors celle du badge sans image.
- * Non demandée, imageBadges rend null, et la page est celle d'avant
- * l'image.
+ * hauteur et d'un dégagement ; au centre, entre le petit texte et les tours,
+ * qui descendent de sa hauteur et de deux dégagements ; en bas, un dégagement
+ * au-dessus du pied, remonté avec lui sous un pied TechnoLibre. Elle se
+ * taille avant le logo du participant et le pied TechnoLibre, qui prennent
+ * l'écart qu'elle laisse. imageBadges rend {boite} ; boite null quand sa plus
+ * petite cote n'atteint pas LOGO_PARTICIPANT_PLANCHER_MM, ou que le badge est
+ * dépouillé ou serré : la page est alors celle du badge sans image. Non
+ * demandée, imageBadges rend null, et la page est celle d'avant l'image.
  *
  * @param {{nom: string, nomEnBlanc?: boolean, organisationEnGros?: boolean, lignes: string[],
  *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
@@ -466,27 +491,36 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     const { ascendante, descendante } = metriques.hauteurs(corps);
     return { ascendante, descendante, hauteur: ascendante + descendante };
   };
-  // Le pas serré du dernier recours : une ligne occupe la hauteur de l'encre
-  // que posent les textes du badge dépouillé — le nom en gras, les tours et
-  // le pied réduit en romain —, du plus haut au plus bas de leurs glyphes,
-  // au lieu de la hauteur que la police réserve à tout glyphe. Deux lignes
-  // empilées ne mêlent donc pas leur encre, et toutes les lignes d'un corps
-  // avancent du même pas. Aucun jeu ne s'y ajoute : le plus bas jambage d'une
-  // ligne et le plus haut accent de la suivante peuvent se toucher, à la
-  // verticale l'un de l'autre. L'encre, proportionnelle au corps, se mesure
-  // une fois, au corps 1, et seulement quand le dernier recours vient.
-  let encreParPt = null;
-  const pasSerre = (corps) => {
-    if (encreParPt === null) {
-      const encres = [
-        metriques.encre(gros.texte, 1, true),
-        ...[...textes.lignes, ...textes.piedReduit].map((texte) => metriques.encre(texte, 1, false)),
-      ];
-      encreParPt = { haut: Math.max(...encres.map(({ haut }) => haut)), bas: Math.max(...encres.map(({ bas }) => bas)) };
-    }
-    const ascendante = encreParPt.haut * corps;
-    const descendante = encreParPt.bas * corps;
-    return { ascendante, descendante, hauteur: ascendante + descendante };
+  // Le pas serré : au plus serré, une ligne occupe la hauteur de l'encre
+  // que posent les textes de la page — le nom en gras, l'organisation, les
+  // tours et le pied en romain, un texte laissé en blanc compté comme
+  // imprimé —, du plus haut au plus bas de leurs glyphes, au lieu de la
+  // hauteur que la police réserve à tout glyphe. Deux lignes empilées ne
+  // mêlent donc pas leur encre, et toutes les lignes d'un corps avancent du
+  // même pas. Aucun jeu ne s'y ajoute : le plus bas jambage d'une ligne et le
+  // plus haut accent de la suivante peuvent se toucher, à la verticale l'un
+  // de l'autre. L'encre, proportionnelle au corps, se mesure une fois par
+  // texte, au corps 1, et seulement quand une page se serre. pasSerre rend
+  // le pas des textes donnés, le nom compris, les autres en romain, à la
+  // part donnée du chemin de la police à l'encre, de 0 exclu à 1 : son
+  // ascendante et sa descendante en sont chacune la moyenne pondérée, celles
+  // de l'encre exactement à 1.
+  const encres = new Map();
+  const encreParPt = (texte, gras) => {
+    const cle = `${gras ? 'g' : 'r'}${texte}`;
+    if (!encres.has(cle)) encres.set(cle, metriques.encre(texte, 1, gras));
+    return encres.get(cle);
+  };
+  const pasSerre = (romains, part) => {
+    const lues = [encreParPt(gros.texte, true), ...romains.map((texte) => encreParPt(texte, false))];
+    const haut = Math.max(...lues.map((encre) => encre.haut));
+    const bas = Math.max(...lues.map((encre) => encre.bas));
+    return (corps) => {
+      const police = pas(corps);
+      const ascendante = (1 - part) * police.ascendante + part * haut * corps;
+      const descendante = (1 - part) * police.descendante + part * bas * corps;
+      return { ascendante, descendante, hauteur: ascendante + descendante };
+    };
   };
 
   // Les lignes du texte repliées, au plus `limite` ; null quand il en faut
@@ -614,20 +648,25 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   const centre = (texte, corps, gras) => (L - largeur(texte, corps, gras)) / 2;
 
   // Le badge sous une forme du nom, avec ou sans le nom de l'événement et
-  // l'organisation ; null quand aucune disposition des tours n'y tient. Sous
-  // `serre`, chaque ligne avance du pas serré (pasSerre) ; `corpsPied`
-  // remplace le corps de départ du pied, plafonné de même par le nom. La
-  // page rend aussi l'écart libre entre ses tours et son pied, en mm, le haut
-  // et le bas de ses tours, le rang de son premier bloc de tour, et le nombre
-  // de ses blocs de pied, les derniers.
-  function composer(forme, { evenement, avecOrganisation, serre = false, corpsPied: piedDemande = null }) {
+  // l'organisation ; null quand aucune disposition des tours n'y tient.
+  // `serre`, de 0, le pas de la police, à 1, celui de l'encre, est la part
+  // du chemin de l'un à l'autre que fait le pas de chaque ligne, serré sur
+  // les textes que la page pose (pasSerre) ; `corpsPied` remplace le corps
+  // de départ du pied, plafonné de même par le nom. La page rend aussi
+  // l'écart libre entre ses tours et son pied, en mm, le haut et le bas de
+  // ses tours, le rang de son premier bloc de tour, et le nombre de ses blocs
+  // de pied, les derniers.
+  function composer(forme, { evenement, avecOrganisation, serre = 0, corpsPied: piedDemande = null }) {
     const auPlusNom = (corps) => Math.min(corps, forme.corps);
-    const pasDe = serre ? pasSerre : pas;
+    const sansOrganisation = !avecOrganisation || petit.texte === null;
+    const lignesPied = evenement ? textes.pied : textes.piedReduit;
+    const romains = [...(sansOrganisation ? [] : [petit.texte]), ...textes.lignes, ...lignesPied];
+    const pasDe = serre > 0 ? pasSerre(romains, serre) : pas;
     const corpsPied = auPlusNom(piedDemande ?? constante(typographie.pied));
     const corpsTours = paliers(auPlusNom(constante(typographie.tours)), auPlusNom(constante('CORPS_TOURS_PLANCHER_PT')));
     const plancherTours = corpsTours.at(-1);
 
-    const pied = piedReplie(evenement ? textes.pied : textes.piedReduit, corpsPied);
+    const pied = piedReplie(lignesPied, corpsPied);
     if (pied === null) return null;
 
     // Les lignes de tour d'une disposition, avec leur abscisse et leur rang
@@ -698,7 +737,6 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     // sans organisation. Aucune quand même son plancher ne se replie pas :
     // une grappe seule déborde. Laissée en blanc, elle avance le curseur de
     // ses lignes sans en poser aucune.
-    const sansOrganisation = !avecOrganisation || petit.texte === null;
     const departOrganisation = auPlusNom(constante(typographie.organisation));
     const corpsOrganisation = sansOrganisation
       ? []
@@ -885,25 +923,25 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   // grand corps qui tient dans l'écart libre, le pied remonté de sa hauteur,
   // remontee.
   // La page reste telle quelle, le bloc retiré, quand même le plancher ne
-  // tient pas, ou que la page est dépouillée : il suit dans l'ordre de
-  // sacrifice le nom de l'événement et l'organisation, et l'écart que leur
-  // retrait libère ne lui revient pas.
-  function avecTechnolibre(page, { depouillee }) {
+  // tient pas, ou que la page est dépouillée ou serrée : il suit dans l'ordre
+  // de sacrifice tous les textes, et l'écart que leur retrait ou leur
+  // resserrement libère ne lui revient pas.
+  function avecTechnolibre(page, { depouillee, serree }) {
     const { blocs, colonnesTours, libre } = page;
     if (promotion === null) return { blocs, colonnesTours, technolibre: null, remontee: 0 };
     const retire = { blocs, colonnesTours, technolibre: { corps: null, logo: null }, remontee: 0 };
-    if (depouillee) return retire;
+    if (depouillee || serree) return retire;
     const palier = paliersTechnolibre().find(({ hauteurBloc }) => hauteurBloc <= libre + TOLERANCE_MM);
     return palier === undefined ? retire : poserTechnolibre(page, palier);
   }
 
   // La page finale d'une page composée, le logo du participant demandé posé
   // avant le pied TechnoLibre ; null quand il ne se pose pas : page
-  // dépouillée, ou plus petite cote sous le plancher même sans pied
+  // dépouillée ou serrée, ou plus petite cote sous le plancher même sans pied
   // TechnoLibre. Le logo prend la zone entre les tours et le pied — remonté
   // du bloc TechnoLibre —, moins un dégagement de part et d'autre, centré.
-  function avecLogo(page, { depouillee }) {
-    if (depouillee) return null;
+  function avecLogo(page, { depouillee, serree }) {
+    if (depouillee || serree) return null;
     const ecart = constante('LOGO_PARTICIPANT_ECART_MM');
     const plancher = constante('LOGO_PARTICIPANT_PLANCHER_MM');
     const { rapport } = logoDemande;
@@ -942,11 +980,11 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     return poser({ blocs, colonnesTours, technolibre: technolibreRetire, remontee: 0 }, taille, 0);
   }
 
-  // La page finale d'une page composée, dépouillée ou non, sans l'image des
-  // badges : sans logo du participant demandé, celle du pied TechnoLibre,
-  // logoParticipant null ; avec, celle où le logo se pose, ou celle du badge
-  // sans logo, boîte null. remontee dit de combien le bloc TechnoLibre a
-  // remonté le pied.
+  // La page finale d'une page composée, dépouillée, serrée ou non, sans
+  // l'image des badges : sans logo du participant demandé, celle du pied
+  // TechnoLibre, logoParticipant null ; avec, celle où le logo se pose, ou
+  // celle du badge sans logo, boîte null. remontee dit de combien le bloc
+  // TechnoLibre a remonté le pied.
   function finirSansImage(page, etat) {
     if (logoDemande === null) return { ...avecTechnolibre(page, etat), logoParticipant: null };
     return avecLogo(page, etat) ?? { ...avecTechnolibre(page, etat), logoParticipant: { boite: null } };
@@ -957,16 +995,16 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   // reçu, sous la hauteur maximale du modèle, dans la largeur du cadre et
   // dans l'écart libre moins ses dégagements — un sous elle en haut, un de
   // part et d'autre au centre et en bas ; null quand sa plus petite cote
-  // n'atteint pas le plancher, ou que la page est dépouillée. Rend la page
-  // où elle prend sa place : en haut, tout ce qui précède le pied descend
-  // de sa hauteur et d'un dégagement, l'image au haut du cadre ; au centre,
-  // les tours descendent de sa hauteur et de deux dégagements, l'image sous
-  // le haut des tours d'avant, un dégagement plus bas ; en bas, rien ne
-  // bouge, l'écart libre seul se réduit, l'image posée ensuite au-dessus du
-  // pied. Le logo du participant et le pied TechnoLibre prennent ensuite ce
-  // que l'écart réduit laisse.
-  function avecImage(page, { depouillee }) {
-    if (depouillee) return null;
+  // n'atteint pas le plancher, ou que la page est dépouillée ou serrée. Rend
+  // la page où elle prend sa place : en haut, tout ce qui précède le pied
+  // descend de sa hauteur et d'un dégagement, l'image au haut du cadre ; au
+  // centre, les tours descendent de sa hauteur et de deux dégagements,
+  // l'image sous le haut des tours d'avant, un dégagement plus bas ; en bas,
+  // rien ne bouge, l'écart libre seul se réduit, l'image posée ensuite
+  // au-dessus du pied. Le logo du participant et le pied TechnoLibre prennent
+  // ensuite ce que l'écart réduit laisse.
+  function avecImage(page, { depouillee, serree }) {
+    if (depouillee || serree) return null;
     const ecart = constante('LOGO_PARTICIPANT_ECART_MM');
     const { rapport, position } = imageDemandee;
     const degagements = position === 'haut' ? ecart : 2 * ecart;
@@ -989,10 +1027,11 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     return { page: reduite, boite: { x, y: null, largeur, hauteur } };
   }
 
-  // La page finale d'une page composée, dépouillée ou non : sans image des
-  // badges demandée, celle de finirSansImage, imageBadges null ; avec, celle
-  // où l'image se pose avant le logo et le pied TechnoLibre — en bas, sa
-  // boîte remontée avec le pied —, ou celle du badge sans image, boîte null.
+  // La page finale d'une page composée, dépouillée, serrée ou non : sans
+  // image des badges demandée, celle de finirSansImage, imageBadges null ;
+  // avec, celle où l'image se pose avant le logo et le pied TechnoLibre — en
+  // bas, sa boîte remontée avec le pied —, ou celle du badge sans image,
+  // boîte null.
   function finir(page, etat) {
     const sansImage = () => {
       const { remontee: _remontee, ...finale } = finirSansImage(page, etat);
@@ -1008,55 +1047,70 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     return { ...finale, imageBadges: { boite: { ...boite, y } } };
   }
 
-  // Les essais, du badge complet au plus dépouillé : chaque forme du nom
-  // avec le badge entier, puis le nom au plancher sans le nom de
-  // l'événement, puis sans l'organisation. Un nom au-delà de trois lignes a
-  // déjà perdu le nom de l'événement.
+  // Les essais, par niveau, du badge complet au plus dépouillé : le badge
+  // entier, puis sans le nom de l'événement, puis sans l'organisation non
+  // plus. Chaque niveau essaie d'abord le pas de la police, sous chaque forme
+  // du nom pour le badge entier, du plus grand corps au plancher, sous le nom
+  // au plancher seul pour les autres ; puis, le nom au plancher, ses lignes
+  // au pas serré (pasSerre), de la police à l'encre en PALIERS_DU_PAS_SERRE
+  // paliers ; puis, à l'encre, le pied d'un point par palier de son corps de
+  // départ à son plancher (CORPS_PIED_PLANCHER_PT), date et horodatage
+  // toujours entiers. Un texte ne part donc qu'une fois réduit tout ce qui se
+  // réduit, hors le nom sous son plancher. Un nom au-delà de trois lignes a
+  // déjà perdu le nom de l'événement : le badge entier ne s'essaie pas.
   const plancherNom = nom.formes.at(-1);
-  const essais = [
-    ...(nom.auDela ? [] : nom.formes.map((forme) => ({ forme, evenement: true, avecOrganisation: true }))),
-    { forme: plancherNom, evenement: false, avecOrganisation: true },
-    { forme: plancherNom, evenement: false, avecOrganisation: false },
+  const partsSerrees = Array.from({ length: PALIERS_DU_PAS_SERRE }, (_, rang) => (rang + 1) / PALIERS_DU_PAS_SERRE);
+  const paliersPied = paliers(constante(typographie.pied), constante('CORPS_PIED_PLANCHER_PT'));
+  const niveaux = [
+    ...(nom.auDela ? [] : [{ formes: nom.formes, evenement: true, avecOrganisation: true }]),
+    { formes: [plancherNom], evenement: false, avecOrganisation: true },
+    { formes: [plancherNom], evenement: false, avecOrganisation: false },
   ];
-  // Un pied égal au pied réduit, celui d'un badge dont une case retire le
-  // nom de l'événement, ne perd rien en passant au pied réduit : le badge
-  // n'est dépouillé que de l'organisation. Sans organisation, l'essai qui la
-  // retire compose la même page que le précédent, et n'est donc jamais
-  // celui qui aboutit.
+  function* essais() {
+    for (const { formes, ...niveau } of niveaux) {
+      for (const forme of formes) yield { forme, ...niveau };
+      for (const serre of partsSerrees) yield { forme: plancherNom, ...niveau, serre };
+      for (const corpsPied of paliersPied.slice(1)) yield { forme: plancherNom, ...niveau, serre: 1, corpsPied };
+    }
+  }
+  // Un pied égal au pied réduit, celui d'un badge dont une case retire le nom
+  // de l'événement, ne perd rien en passant au pied réduit : le badge n'est
+  // dépouillé que de l'organisation. Sans organisation, les essais qui la
+  // retirent composent les mêmes pages que ceux du niveau précédent, et ne
+  // sont donc jamais ceux qui aboutissent.
   const sansNomEvenement =
     textes.pied.length === textes.piedReduit.length && textes.pied.every((ligne, rang) => ligne === textes.piedReduit[rang]);
-  // Le dernier recours, quand même le badge le plus dépouillé ne tient pas :
-  // les lignes au pas serré, puis le pied réduit d'un point par palier
-  // jusqu'à son plancher (CORPS_PIED_PLANCHER_PT), puis le nom sous son
-  // plancher, d'un point par palier, replié chaque fois sur le moins de
-  // lignes qui tient, jusqu'à son plancher de dernier recours
-  // (HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM). Ce plancher ne passe jamais
-  // sous celui des tours : le nom plafonne leur corps, et ils gardent le
-  // leur. Le badge reste dépouillé de l'organisation et du nom de
-  // l'événement, donc du logo et du pied TechnoLibre. La gouttière entre deux
+  // Le dernier recours, quand même le badge le plus dépouillé, serré, le
+  // pied à son plancher, ne tient pas : le nom sous son plancher, d'un point
+  // par palier, replié chaque fois sur le moins de lignes qui tient, jusqu'à
+  // son plancher de dernier recours (HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM).
+  // Ce plancher ne passe jamais sous celui des tours : le nom plafonne leur
+  // corps, et ils gardent le leur. Le badge reste serré, le pied à son
+  // plancher, dépouillé de l'organisation et du nom de l'événement, donc du
+  // logo et du pied TechnoLibre. Au pas serré, la gouttière entre deux
   // colonnes et le retrait d'une suite gardent leur cadratin : la gouttière
   // seule sépare deux colonnes de lignes inégales, le retrait seul dit
   // qu'une ligne continue la précédente.
   function* derniersRecours() {
-    const reglage = { evenement: false, avecOrganisation: false, serre: true };
-    const paliersPied = paliers(constante(typographie.pied), constante('CORPS_PIED_PLANCHER_PT'));
-    for (const corpsPied of paliersPied) yield { forme: plancherNom, ...reglage, corpsPied };
+    const reglage = { evenement: false, avecOrganisation: false, serre: 1, corpsPied: paliersPied.at(-1) };
     const corpsNomDernier = Math.max(
       constante('HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM') / capitaleParPt,
       constante('CORPS_TOURS_PLANCHER_PT'),
     );
     for (const corps of paliers(corpsNomPlancher, corpsNomDernier).slice(1)) {
       const lignes = replier(gros.texte, corps, true, Infinity, true) ?? replier(gros.texte, corps, true, Infinity, false);
-      if (lignes !== null) yield { forme: { corps, lignes }, ...reglage, corpsPied: paliersPied.at(-1) };
+      if (lignes !== null) yield { forme: { corps, lignes }, ...reglage };
     }
   }
   function* tousLesEssais() {
-    yield* essais;
+    yield* essais();
     yield* derniersRecours();
   }
   for (const { forme, ...niveau } of tousLesEssais()) {
     const page = composer(forme, niveau);
-    if (page !== null) return finir(page, { depouillee: !niveau.avecOrganisation || (!niveau.evenement && !sansNomEvenement) });
+    if (page === null) continue;
+    const depouillee = !niveau.avecOrganisation || (!niveau.evenement && !sansNomEvenement);
+    return finir(page, { depouillee, serree: niveau.serre > 0 });
   }
   if (nom.auDela) return refusNom;
   return { refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: textes.lignes.length, repliees: toursEnLignesTiennent } } };

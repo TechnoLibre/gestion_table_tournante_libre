@@ -138,7 +138,8 @@ function estSerree(page, metriques) {
 }
 
 // Les boîtes des blocs de la page, chacune celle de l'encre de son texte
-// sur une page serrée, où les lignes n'avancent que de l'encre du badge.
+// sur une page serrée, où les lignes avancent de moins que la hauteur de la
+// police, jusqu'à l'encre du badge.
 const boitesDe = (page, metriques) => {
   const encre = estSerree(page, metriques);
   return page.blocs.map((bloc) => boite(bloc, metriques, encre));
@@ -398,10 +399,15 @@ describe('mise en page : le nom (§ 11.4, § 11.5)', () => {
 describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
   for (const [jeu, metriques] of JEUX) {
     test(`${jeu} : au-delà de trois lignes, le nom de l’événement part d’abord, puis l’organisation ; date et horodatage restent`, () => {
+      // Sous un nom de plusieurs lignes, le pas serré libère plus qu'une ligne
+      // d'organisation : seule une organisation repliée, sous assez de tours,
+      // part avant que le nom ne se refuse.
+      const nomOrganisation = 'Association des amis de la Pervenche et des Ondines, section du Grand Nord, chapitre de la vallée';
+      const lignes = tours(15);
       const vus = { complet: 0, sansEvenement: 0, sansOrganisation: 0, refus: 0 };
       for (let longueur = 10; longueur <= 600; longueur += 10) {
         const nom = repete('Iris Ombrelle-Pervenche ', longueur);
-        const page = mettreEnPage(textes({ nom, lignes: tours(5) }), metriques);
+        const page = mettreEnPage(textes({ nom, organisation: nomOrganisation, lignes }), metriques);
         if ('refus' in page) {
           assert.equal(page.refus.code, 'PLANCHE_NOM_TROP_LONG', `${longueur}`);
           vus.refus += 1;
@@ -409,10 +415,10 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
         }
         const tout = textesDe(page);
         const evenement = tout.some((t) => t.includes(EVENEMENT));
-        const organisation = tout.includes('Club des Merles');
+        const organisation = page.blocs.some((b) => !b.gras && nomOrganisation.includes(b.texte));
         assert.ok(tout.includes(HORODATAGE), `horodatage, ${longueur}`);
         assert.ok(tout.some((t) => t.includes(DATE)), `date, ${longueur}`);
-        assert.equal(tours(5).filter((t) => tout.includes(t)).length, 5, `tours, ${longueur}`);
+        assert.equal(lignes.filter((t) => tout.includes(t)).length, lignes.length, `tours, ${longueur}`);
         // L'organisation ne part jamais avant le nom de l'événement.
         assert.ok(evenement ? organisation : true, `ordre, ${longueur}`);
         // Rien ne part tant que le nom tient en trois lignes.
@@ -427,14 +433,15 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
       for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
     });
 
-    test(`${jeu} : sous un nom de trois lignes au plus, le nom descend jusqu’au plancher avant que rien ne parte`, () => {
+    test(`${jeu} : sous un nom de trois lignes au plus, le nom descend jusqu’au plancher, puis les lignes se serrent et le pied rapetisse, avant que rien ne parte`, () => {
       // Un nom d'événement long occupe plusieurs lignes du pied : son départ
       // libère de quoi poser une ligne de tour de plus. Une organisation
       // courte, puis une qui se replie : leur départ libère une ligne, ou
       // plusieurs.
       const pied = [`${repete('Grand souper annuel du Club des Merles et de la Grisaille ', 160)} ${TIRET} ${DATE}`, HORODATAGE];
       const organisations = ['Club des Merles', 'Association des amis de la Pervenche et des Ondines, section du Grand Nord, chapitre de la vallée'];
-      const vus = { descendu: 0, sansEvenement: 0, sansOrganisation: 0, sousLePlancher: 0, refus: 0 };
+      const vus = { descendu: 0, serreComplet: 0, sansEvenement: 0, sansOrganisation: 0, sousLePlancher: 0, refus: 0 };
+      const departPied = constante('CORPS_PIED_PT');
       for (const nom of NOMS_COMPOSES) {
         for (const nomOrganisation of organisations) {
           const depart = blocsNom(mettreEnPage(textes({ nom, organisation: nomOrganisation }), metriques))[0].corps;
@@ -466,6 +473,12 @@ describe('mise en page : l’ordre de sacrifice (§ 11.5, décision 8)', () => {
             // d'abord.
             assert.ok(evenement || auPlancher || sousLePlancher, `${cas} : l’événement part sous un nom de ${corps} pt`);
             assert.ok(organisation || !evenement, `${cas} : l’organisation part avant l’événement`);
+            // Les lignes ne se serrent que sous le nom au plancher, et le pied
+            // ne rapetisse qu'au pas serré.
+            const serree = estSerree(page, metriques);
+            assert.ok(!serree || auPlancher || sousLePlancher, `${cas} : serré sous un nom de ${corps} pt`);
+            assert.ok(serree || page.blocs.at(-1).corps === departPied, `${cas} : pied réduit sans être serré`);
+            if (serree && evenement) vus.serreComplet += 1;
             // Le nom ne passe sous son plancher qu'au dernier recours, l'un et
             // l'autre partis.
             if (sousLePlancher) {
@@ -522,7 +535,7 @@ describe('mise en page : l’organisation (§ 11.5)', () => {
       const plancher = constante('CORPS_ORGANISATION_PLANCHER_PT');
       const vus = { depart: 0, reduit: 0, plancher: 0, partie: 0 };
       let partie = false;
-      for (let n = 1; n <= 80; n += 1) {
+      for (let n = 1; n <= 120; n += 1) {
         const page = mettreEnPage(textes({ organisation, lignes: tours(n) }), metriques);
         if ('refus' in page) break;
         const tout = textesDe(page);
@@ -1140,8 +1153,8 @@ describe('mise en page : le pied TechnoLibre', () => {
     const { ascendante, descendante } = metriques.hauteurs(corps);
     return lignes * (ascendante + descendante) + hauteurLogo(corps);
   };
-  // L'écart libre d'un badge sans pied TechnoLibre : du bas des tours au
-  // haut du pied.
+  // L'écart libre d'un badge sans pied TechnoLibre, au pas de la police :
+  // du bas des tours au haut du pied.
   function ecartLibre(page, metriques, pied) {
     const boites = page.blocs.map((bloc) => ({ bloc, ...boite(bloc, metriques) }));
     const hautDuPied = Math.min(...boites.filter(({ bloc }) => pied.includes(bloc.texte)).map(({ haut }) => haut));
@@ -1217,7 +1230,7 @@ describe('mise en page : le pied TechnoLibre', () => {
       });
     }
 
-    test(`${nomModele}, Noto Sans : à mesure que les tours s’ajoutent, le pied TechnoLibre rapetisse jusqu’à son plancher, puis se retire ; chaque fois, la place libre le décide`, () => {
+    test(`${nomModele}, Noto Sans : à mesure que les tours s’ajoutent, le pied TechnoLibre rapetisse jusqu’à son plancher, puis se retire ; la place libre le décide, et un badge serré ne le porte pas`, () => {
       const vus = new Set();
       for (let n = 1; n <= 24; n += 1) {
         const champs = textes({ lignes: toursAuxSieges(n) });
@@ -1227,6 +1240,12 @@ describe('mise en page : le pied TechnoLibre', () => {
           continue;
         }
         const avec = mettreEnPage(champs, NOTO, modele, TECHNOLIBRE);
+        // Un badge serré ne le porte pas, quelle que soit la place.
+        if (estSerree(sans, NOTO)) {
+          vus.add('serre');
+          assert.deepEqual(avec, { ...sans, technolibre: { corps: null, logo: null } }, `${n} tours`);
+          continue;
+        }
         const { corps } = avec.technolibre;
         const pied = sans.blocs.filter((b) => PIED.includes(b.texte) || PIED_REDUIT.includes(b.texte)).map((b) => b.texte);
         const libre = ecartLibre(sans, NOTO, pied);
@@ -1261,7 +1280,7 @@ describe('mise en page : le pied TechnoLibre', () => {
           }
         }
       }
-      assert.deepEqual([...vus].sort(), ['depart', 'reduit', 'retire']);
+      assert.deepEqual([...vus].sort(), ['depart', 'reduit', 'retire', 'serre']);
     });
   }
 
@@ -1278,9 +1297,9 @@ describe('mise en page : le pied TechnoLibre', () => {
   const avecEvenement = (page) => page.blocs.some((b) => b.texte.includes('Souper'));
   const retire = (sans) => ({ ...sans, technolibre: { corps: null, logo: null } });
 
-  test('un badge qui a perdu le nom de l’événement ne porte pas le pied TechnoLibre, même quand la place le tiendrait : nom de trois lignes sous vingt tours, nom au-delà de trois lignes', () => {
+  test('un badge qui a perdu le nom de l’événement ne porte pas le pied TechnoLibre, même quand la place le tiendrait : nom de trois lignes sous trente-deux tours, nom au-delà de trois lignes', () => {
     const cas = [
-      ['a6', textes({ nom: 'Ondine-Théa Lacasse-Pervenche de la Grisaille', pied: PIED_COURT, lignes: auSiege12(20) })],
+      ['a6', textes({ nom: 'Ondine-Théa Lacasse-Pervenche de la Grisaille', pied: PIED_COURT, lignes: auSiege12(32) })],
       ...[1, 2, 3].flatMap((n) => MODELES.map(([, modele]) => [modele, textes({ nom: MOTS_LARGES, organisation: null, lignes: tours(n) })])),
     ];
     for (const [modele, champs] of cas) {
@@ -2249,7 +2268,7 @@ describe('mise en page : l’organisation en gros (§ 11.4)', () => {
         const vus = { complete: 0, sansPetit: 0, refus: 0 };
         for (const organisation of ORGANISATIONS) {
           for (const nom of NOMS) {
-            for (const n of [1, 4, 12, 30, 60, 120]) {
+            for (const n of [1, 4, 12, 30, 60, 80, 120]) {
               for (const [technolibre, logo] of DEMANDES) {
                 const champs = textes({ nom, organisation, lignes: tours(n) });
                 const quoi = `${organisation}, ${nom}, ${n} tours, ${technolibre === null ? 'sans' : 'avec'} pied TechnoLibre, ${logo === null ? 'sans' : 'avec'} logo`;
@@ -2339,12 +2358,14 @@ describe('mise en page : l’organisation en gros (§ 11.4)', () => {
   }
 });
 
-// Le dernier recours (§ 11.5) : un badge dont les tours ne tiennent pas même
-// dépouillé de l'organisation et du nom de l'événement serre ses lignes à
-// l'encre de ses textes, puis réduit son pied jusqu'à son plancher, puis son
-// nom sous son plancher, jusqu'à celui du dernier recours. Les tours gardent
-// leur plancher, rien ne s'abrège, et le refus ne vient qu'après.
-describe('mise en page : le dernier recours (§ 11.5)', () => {
+// Resserrer avant de retirer, puis le dernier recours (§ 11.5) : un badge
+// dont les tours ne tiennent pas, le nom à son plancher, serre ses lignes,
+// par paliers, jusqu'à l'encre de ses textes, puis réduit son pied jusqu'à
+// son plancher, avant de perdre le nom de l'événement ; sans lui, de même
+// avant de perdre l'organisation ; sans elle, de même, puis son nom passe
+// sous son plancher, jusqu'à celui du dernier recours. Les tours gardent leur
+// plancher, rien ne s'abrège, et le refus ne vient qu'après.
+describe('mise en page : resserrer avant de retirer, puis le dernier recours (§ 11.5)', () => {
   const AVERY = 'avery5392';
   const TECHNOLIBRE = Object.freeze({ texte: 'Développement logiciel libre sur mesure', rapport: 5 });
   const CARRE = Object.freeze({ rapport: 1 });
@@ -2364,22 +2385,70 @@ describe('mise en page : le dernier recours (§ 11.5)', () => {
       return b.gauche < -TOLERANCE || b.haut < -TOLERANCE || b.droite > largeur + TOLERANCE || b.bas > hauteur + TOLERANCE;
     });
   };
+  // L'organisation et le nom de l'événement sont sur la page : un bloc en
+  // romain ouvre l'organisation, un autre la première ligne du pied entier.
+  const avecOrganisation = (page, champs) =>
+    champs.organisation !== null && page.blocs.some((b) => !b.gras && champs.organisation.startsWith(b.texte));
+  const avecEvenement = (page, champs) => page.blocs.some((b) => !b.gras && b.texte !== '' && champs.pied[0].startsWith(b.texte));
   // L'encre du badge par point : la plus haute et la plus basse des textes
-  // que le badge dépouillé pose, le nom en gras.
-  const encreParPt = (champs, metriques) => {
-    const encres = [metriques.encre(champs.nom, 1, true), ...[...champs.lignes, ...champs.piedReduit].map((t) => metriques.encre(t, 1, false))];
+  // que la page pose, le nom en gras, l'organisation quand elle y est, les
+  // tours, le pied entier quand le nom de l'événement y est, réduit sinon.
+  const encreParPt = (page, champs, metriques) => {
+    const romains = [
+      ...(avecOrganisation(page, champs) ? [champs.organisation] : []),
+      ...champs.lignes,
+      ...(avecEvenement(page, champs) ? champs.pied : champs.piedReduit),
+    ];
+    const encres = [metriques.encre(champs.nom, 1, true), ...romains.map((t) => metriques.encre(t, 1, false))];
     return { haut: Math.max(...encres.map((e) => e.haut)), bas: Math.max(...encres.map((e) => e.bas)) };
   };
+  // Le nombre de paliers du pas serré, de la police à l'encre
+  // (PALIERS_DU_PAS_SERRE).
+  const PALIERS = 8;
+  // Le pas de la page par point, à la part donnée du chemin de la police à
+  // l'encre des textes qu'elle pose : son ascendante et sa descendante.
+  const pasA = (part, page, champs, metriques) => {
+    const police = metriques.hauteurs(1);
+    const { haut, bas } = encreParPt(page, champs, metriques);
+    return { ascendante: (1 - part) * police.ascendante + part * haut, descendante: (1 - part) * police.descendante + part * bas };
+  };
+  // La part du chemin de la police à l'encre que fait le pas de la page,
+  // lue sur les deux premières lignes successives de même corps : 0 au pas
+  // de la police, 1 à l'encre.
+  const partSerree = (page, champs, metriques) => {
+    const rang = page.blocs.findIndex((b, r) => r > 0 && b.corps === page.blocs[r - 1].corps && b.y > page.blocs[r - 1].y);
+    const police = pasA(0, page, champs, metriques);
+    const encre = pasA(1, page, champs, metriques);
+    const lu = (page.blocs[rang].y - page.blocs[rang - 1].y) / page.blocs[rang].corps;
+    const [p, e] = [police, encre].map(({ ascendante, descendante }) => ascendante + descendante);
+    return (p - lu) / (p - e);
+  };
 
-  test('Noto Sans, carte : six tours au libellé de soixante caractères, refusés avant le dernier recours, tiennent entiers, dépouillés, les tours à leur plancher', () => {
+  test('Noto Sans, carte : six tours au libellé de soixante caractères, refusés sans pas serré, tiennent entiers et complets — organisation et nom de l’événement —, serrés, les tours à leur plancher', () => {
     const lignes = auLibelleLong(6);
-    const page = mettreEnPage(textes({ lignes }), NOTO, AVERY, TECHNOLIBRE, CARRE);
+    const champs = textes({ lignes });
+    const page = mettreEnPage(champs, NOTO, AVERY);
     assert.ok(!('refus' in page), JSON.stringify(page));
     assert.ok(estSerree(page, NOTO));
     assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), []);
     assert.ok(textesDe(page).every((t) => !t.includes(MARQUE)));
     const blocsTours = blocsDesTours(page, lignes);
     assert.ok(blocsTours.length > lignes.length && blocsTours.every((b) => Math.abs(b.corps - plancherTours) < 1e-9), JSON.stringify(blocsTours));
+    // Le nom au plancher, l'organisation et le pied entier.
+    assert.ok(blocsNom(page).every((b) => Math.abs(b.corps - corpsNomPlancher(NOTO)) < 1e-9));
+    assert.ok(textesDe(page).includes('Club des Merles') && avecEvenement(page, champs));
+    assert.deepEqual(textesDe(page).slice(-1), [HORODATAGE]);
+    assert.deepEqual(sortDuCadre(page, NOTO, AVERY), []);
+    assert.deepEqual(chevauchements(page, NOTO), []);
+  });
+
+  test('Noto Sans, carte : huit tours au libellé de soixante caractères tiennent entiers, dépouillés, serrés, sans pied TechnoLibre ni logo', () => {
+    const lignes = auLibelleLong(8);
+    const page = mettreEnPage(textes({ lignes }), NOTO, AVERY, TECHNOLIBRE, CARRE);
+    assert.ok(!('refus' in page), JSON.stringify(page));
+    assert.ok(estSerree(page, NOTO));
+    assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), []);
+    assert.ok(blocsDesTours(page, lignes).every((b) => Math.abs(b.corps - plancherTours) < 1e-9));
     // Ni organisation, ni nom de l'événement, ni logo, ni pied TechnoLibre ;
     // la date et l'horodatage restent.
     assert.ok(!textesDe(page).includes('Club des Merles') && !textesDe(page).some((t) => t.includes(EVENEMENT)));
@@ -2389,77 +2458,220 @@ describe('mise en page : le dernier recours (§ 11.5)', () => {
     assert.deepEqual(chevauchements(page, NOTO), []);
   });
 
-  for (const [jeu, metriques] of JEUX) {
-    test(`${jeu} : au pas serré, une ligne avance de l’encre du badge ; le nom touche le haut du cadre, le pied son bas, par leur encre`, () => {
-      // Le premier nombre de tours que la carte ne tient qu'au pas serré.
-      let n = 1;
-      while (n < 60 && !estSerree(mettreEnPage(textes({ lignes: auLibelleLong(n) }), metriques, AVERY), metriques)) n += 1;
-      const champs = textes({ lignes: auLibelleLong(n) });
-      const page = mettreEnPage(champs, metriques, AVERY);
-      assert.ok(!('refus' in page) && estSerree(page, metriques), JSON.stringify(page));
-      const { haut, bas } = encreParPt(champs, metriques);
-      const tours = blocsDesTours(page, champs.lignes);
-      assert.ok(tours.length > 1);
-      for (const [rang, bloc] of tours.entries()) {
-        if (rang > 0 && bloc.y > tours[rang - 1].y) assert.ok(Math.abs(bloc.y - tours[rang - 1].y - (haut + bas) * bloc.corps) < 1e-9);
-      }
-      const [nom] = blocsNom(page);
-      assert.ok(Math.abs(nom.y - haut * nom.corps) < 1e-9);
-      const dernier = page.blocs.at(-1);
-      assert.ok(Math.abs(dernier.y + bas * dernier.corps - cadreDe(AVERY).hauteur) < 1e-9);
+  // Les seuils que cite la spec (§ 11.5), sous un nom court et son
+  // organisation, sur la carte : l'étage du badge à chaque nombre de tours,
+  // complet ou non, serré ou non.
+  const etagesCarte = (suite, nombres) =>
+    nombres.map((n) => {
+      const champs = textes({ lignes: suite(n) });
+      const page = mettreEnPage(champs, NOTO, AVERY);
+      if ('refus' in page) return [n, 'refus'];
+      return [n, `${avecEvenement(page, champs) ? 'complet' : 'sans événement'}${estSerree(page, NOTO) ? ', serré' : ''}`];
     });
+  test('Noto Sans, carte : un libellé de soixante caractères, sous sièges attribués, garde l’organisation et le nom de l’événement jusqu’à sept tours, au lieu de quatre au pas de la police', () => {
+    assert.deepEqual(etagesCarte(auLibelleLong, [4, 5, 7, 8]), [
+      [4, 'complet'],
+      [5, 'complet, serré'],
+      [7, 'complet, serré'],
+      [8, 'sans événement, serré'],
+    ]);
+  });
+  test('Noto Sans, carte : des lignes de tour sans siège ni titre gardent l’organisation et le nom de l’événement jusqu’à trente, au lieu de dix-huit au pas de la police', () => {
+    assert.deepEqual(etagesCarte(tours, [18, 19, 30, 31]), [
+      [18, 'complet'],
+      [19, 'complet, serré'],
+      [30, 'complet, serré'],
+      [31, 'sans événement, serré'],
+    ]);
+  });
+  test('Noto Sans, carte : ce libellé sous un titre de trente-deux caractères garde l’organisation et le nom de l’événement jusqu’à cinq tours, où la planche se refuse au sixième', () => {
+    const titrees = (n) => Array.from({ length: n }, (_, i) => auLibelle(i + 1, i + 3, LIBELLE_LONG, i + 1, 'Animatrice de la table d’honneur'));
+    assert.deepEqual(etagesCarte(titrees, [5, 6]), [
+      [5, 'complet, serré'],
+      [6, 'refus'],
+    ]);
+  });
+
+  // L'image des badges, le logo du participant et le pied TechnoLibre
+  // suivent tous les textes dans l'ordre de sacrifice : un badge serré, même
+  // complet, n'en porte aucun, et l'écart que son resserrement libère ne leur
+  // revient pas. Sa page est celle du badge sans eux. Sous une police dont
+  // les lignes réservent deux fois la hauteur de Noto Sans pour la même
+  // encre, un palier du pas serré libère de quoi poser chacun : seule la
+  // règle les en prive.
+  const AEREE = Object.freeze({
+    ...NOTO,
+    hauteurs: (corps) => {
+      const hauteurs = NOTO.hauteurs(corps);
+      return { ...hauteurs, ascendante: 2 * hauteurs.ascendante, descendante: 2 * hauteurs.descendante };
+    },
+  });
+  // Les ajouts demandés, puis ce que rend la page qui les retire.
+  const TECHNOLIBRE_RETIRE = { technolibre: { corps: null, logo: null } };
+  const AJOUTS = [
+    [
+      'image, logo et pied TechnoLibre',
+      [TECHNOLIBRE, CARRE, Object.freeze({ rapport: 2, position: 'bas' })],
+      { ...TECHNOLIBRE_RETIRE, logoParticipant: { boite: null }, imageBadges: { boite: null } },
+    ],
+    ['logo du pied TechnoLibre seul', [Object.freeze({ texte: '', rapport: 5 })], TECHNOLIBRE_RETIRE],
+  ];
+  for (const [jeu, metriques] of [['Noto Sans', NOTO], ['interligne double', AEREE]]) {
+    for (const [ajouts, demandes, retires] of AJOUTS) {
+      test(`${jeu}, ${ajouts} : un badge serré, complet ou non, ne porte ni image des badges, ni logo du participant, ni pied TechnoLibre`, () => {
+        const vus = { lache: 0, serreComplet: 0, serreDepouille: 0 };
+        for (const modele of ['a6', AVERY]) {
+          for (const suite of [auLibelleLong, tours]) {
+            for (let n = 1; n <= 40; n += 1) {
+              const champs = textes({ lignes: suite(n) });
+              const sans = mettreEnPage(champs, metriques, modele);
+              if ('refus' in sans) break;
+              const avec = mettreEnPage(champs, metriques, modele, ...demandes);
+              const cas = `${modele}, ${suite(1)[0]}, ${n} tours`;
+              if (!estSerree(sans, metriques)) {
+                if (avec.technolibre.corps !== null) vus.lache += 1;
+                continue;
+              }
+              vus[avecEvenement(sans, champs) ? 'serreComplet' : 'serreDepouille'] += 1;
+              assert.deepEqual(avec, { ...sans, ...retires }, cas);
+            }
+          }
+        }
+        for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
+      });
+    }
   }
+
+  // Une organisation, puis un nom d'événement, dont l'encre monte plus haut
+  // que celle des autres textes : chacune compte dans le pas serré tant
+  // qu'elle est sur la page.
+  const VARIANTES = [
+    ['organisation haute', { organisation: 'Île des Merles' }],
+    ['événement haut', { pied: [`Fête de l’Île ${TIRET} ${DATE}`, HORODATAGE] }],
+  ];
+  for (const [jeu, metriques] of JEUX) {
+    for (const [variante, champsVariante] of VARIANTES) {
+      test(`${jeu}, ${variante} : au pas serré, une ligne avance d’un palier du chemin de la police à l’encre des textes de la page, le premier qui tient ; le nom part du haut du cadre, le pied finit sur son bas`, () => {
+        const vus = { complet: 0, depouille: 0, palier: 0, encre: 0 };
+        const { hauteur } = cadreDe(AVERY);
+        const departPied = constante('CORPS_PIED_CARTE_PT');
+        for (let n = 1; n < 60; n += 1) {
+          const champs = textes({ ...champsVariante, lignes: auLibelleLong(n) });
+          const page = mettreEnPage(champs, metriques, AVERY);
+          if ('refus' in page) break;
+          if (!estSerree(page, metriques)) continue;
+          const paliers = partSerree(page, champs, metriques) * PALIERS;
+          const palier = Math.round(paliers);
+          assert.ok(Math.abs(paliers - palier) < 1e-6 && palier >= 1 && palier <= PALIERS, `${n} tours : ${paliers}`);
+          const part = palier / PALIERS;
+          vus[avecEvenement(page, champs) ? 'complet' : 'depouille'] += 1;
+          vus[part < 1 ? 'palier' : 'encre'] += 1;
+          // Chaque ligne avance de ce pas ; le nom part du haut du cadre, le
+          // pied finit sur son bas.
+          const { ascendante, descendante } = pasA(part, page, champs, metriques);
+          for (const [rang, bloc] of page.blocs.entries()) {
+            const avant = page.blocs[rang - 1];
+            if (rang > 0 && bloc.corps === avant.corps && bloc.y > avant.y) {
+              assert.ok(Math.abs(bloc.y - avant.y - (ascendante + descendante) * bloc.corps) < 1e-9, `${n} tours`);
+            }
+          }
+          const [nom] = blocsNom(page);
+          assert.ok(Math.abs(nom.y - ascendante * nom.corps) < 1e-9, `${n} tours`);
+          const dernier = page.blocs.at(-1);
+          assert.ok(Math.abs(dernier.y + descendante * dernier.corps - hauteur) < 1e-9, `${n} tours`);
+          // Le pied ne rapetisse qu'à l'encre. À son corps de départ, le nom
+          // au plancher, le palier d'avant ne tenait pas : l'écart entre les
+          // tours et le pied reste sous ce qu'un palier ôte à chaque rangée.
+          if (dernier.corps < departPied - 1e-9) {
+            assert.equal(part, 1, `${n} tours`);
+            continue;
+          }
+          const tours = blocsDesTours(page, champs.lignes);
+          const debutPied = Math.max(...tours.map((b) => page.blocs.indexOf(b))) + 1;
+          const finDesTours = Math.max(...tours.map((b) => b.y + descendante * b.corps));
+          const hautDuPied = page.blocs[debutPied].y - ascendante * page.blocs[debutPied].corps;
+          const rangees = new Map(page.blocs.map((b) => [b.y, b.corps]));
+          const police = pasA(0, page, champs, metriques);
+          const ote = police.ascendante + police.descendante - ascendante - descendante;
+          const libere = [...rangees.values()].reduce((somme, corps) => somme + (ote / part / PALIERS) * corps, 0);
+          assert.ok(hautDuPied - finDesTours < libere + 1e-6, `${n} tours : ${hautDuPied - finDesTours} mm libres, ${libere} mm par palier`);
+        }
+        for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
+      });
+    }
+  }
+
+  // L'étage d'une page dans l'ordre des essais, à comparer rang par rang :
+  // le niveau — 0 complet, 1 sans le nom de l'événement, 2 sans
+  // l'organisation non plus —, la part du chemin de la police à l'encre que
+  // fait le pas, les points ôtés au pied, et le corps du nom, en négatif.
+  const etage = (page, champs, metriques, departPied) => [
+    avecEvenement(page, champs) ? 0 : avecOrganisation(page, champs) ? 1 : 2,
+    estSerree(page, metriques) ? partSerree(page, champs, metriques) : 0,
+    departPied - page.blocs.at(-1).corps,
+    -blocsNom(page)[0].corps,
+  ];
+  const avant = (a, b) => {
+    const rang = a.findIndex((valeur, i) => Math.abs(valeur - b[i]) > 1e-9);
+    return rang >= 0 && a[rang] < b[rang];
+  };
 
   // Des noms d'une à trois lignes : chaque tour ajouté avance d'une rangée ou
   // plus, et la place que laisse chacun fait tomber le badge à un étage
-  // différent du dernier recours.
+  // différent.
   const NOMS = ['Iris Ombrelle', 'Ondine Lacasse Théo Pervenche Iris Ombrelle', ...NOMS_COMPOSES];
+  // Sous deux de ces noms, un nom d'événement qui se replie sur plusieurs
+  // lignes du pied : son départ libère plus que le pas serré, et le badge
+  // sans lui se pose.
+  const PIED_LONG = [`${repete('Grand souper annuel du Club des Merles ', 400)} ${TIRET} ${DATE}`, HORODATAGE];
+  const BADGES = [...NOMS.map((nom) => [nom, PIED]), ...NOMS.slice(0, 2).map((nom) => [nom, PIED_LONG])];
   for (const [jeu, metriques] of JEUX) {
-    test(`${jeu} : à mesure que les tours s’ajoutent, le badge se dépouille, puis se serre, puis réduit son pied, puis son nom ; le refus vient en dernier`, () => {
+    test(`${jeu} : à mesure que les tours s’ajoutent, le badge se serre et réduit son pied avant de perdre le nom de l’événement, puis l’organisation ; le nom passe sous son plancher en dernier, puis le refus`, () => {
       const plancherNom = corpsNomPlancher(metriques);
       const dernierNom = Math.max(constante('HAUTEUR_CAPITALE_NOM_DERNIER_RECOURS_MM') / capParPt(metriques), plancherTours);
-      const vus = { depouilleLache: 0, serre: 0, piedReduit: 0, nomReduit: 0, refus: 0 };
+      const vus = { serreComplet: 0, piedReduitComplet: 0, sansEvenement: 0, sansOrganisation: 0, nomReduit: 0, refus: 0 };
       for (const modele of ['a6', AVERY]) {
         const departPied = constante(modele === 'a6' ? 'CORPS_PIED_PT' : 'CORPS_PIED_CARTE_PT');
-        for (const nom of NOMS) {
+        for (const [nom, pied] of BADGES) {
           for (const suite of [auLibelleLong, toursAuxSieges]) {
             let precedent = null;
             for (let n = 1; n <= 60; n += 1) {
               const lignes = suite(n);
-              const cas = `${modele}, ${nom}, ${lignes[0]}, ${n} tours`;
-              const page = mettreEnPage(textes({ nom, lignes }), metriques, modele);
+              const champs = textes({ nom, lignes, pied });
+              const cas = `${modele}, ${nom}, ${pied[0].slice(0, 12)}, ${lignes[0]}, ${n} tours`;
+              const page = mettreEnPage(champs, metriques, modele);
               if ('refus' in page) {
                 assert.deepEqual([page.refus.code, page.refus.details.tours], ['PLANCHE_TROP_DE_TOURS', n], cas);
                 vus.refus += 1;
                 break;
               }
-              const tout = textesDe(page);
-              const depouille = !tout.includes('Club des Merles') && !tout.some((t) => t.includes(EVENEMENT));
-              const serree = estSerree(page, metriques);
+              const [niveau, part, piedOte] = etage(page, champs, metriques, departPied);
+              const serree = part > 1e-9;
               const corpsNom = blocsNom(page)[0].corps;
               const corpsPied = page.blocs.at(-1).corps;
               assert.deepEqual(lignes.filter((l) => blocsDeLigne(page, l) === null), [], cas);
               assert.ok(blocsDesTours(page, lignes).every((b) => b.corps >= plancherTours - 1e-9), cas);
-              // Le pas serré ne vient que sur le badge dépouillé ; le pied ne
-              // descend qu'au pas serré, le nom sous son plancher qu'au pied
-              // à son plancher, jamais sous celui du dernier recours.
-              assert.ok(!serree || depouille, `${cas} : serré sans être dépouillé`);
-              assert.ok(corpsPied >= departPied - 1e-9 || serree, `${cas} : pied réduit sans être serré`);
+              // Le pas serré ne vient que sous le nom au plancher ; le pied ne
+              // descend qu'au pas de l'encre, jamais sous son plancher ; le nom
+              // passe sous son plancher sans organisation, serré, le pied à
+              // son plancher, jamais sous celui du dernier recours.
+              assert.ok(!serree || corpsNom <= plancherNom + 1e-9, `${cas} : serré sous un nom de ${corpsNom} pt`);
+              assert.ok(piedOte < 1e-9 || Math.abs(part - 1) < 1e-9, `${cas} : pied réduit avant l’encre`);
               assert.ok(corpsPied >= plancherPied - 1e-9, `${cas} : pied de ${corpsPied} pt`);
-              assert.ok(corpsNom >= plancherNom - 1e-9 || Math.abs(corpsPied - plancherPied) < 1e-9, `${cas} : nom de ${corpsNom} pt, pied de ${corpsPied} pt`);
-              assert.ok(corpsNom >= dernierNom - 1e-9, `${cas} : nom de ${corpsNom} pt`);
-              // Plus de tours, jamais plus grand.
-              if (precedent?.serree && serree) {
-                assert.ok(corpsPied <= precedent.corpsPied + 1e-9 && corpsNom <= precedent.corpsNom + 1e-9, cas);
+              if (corpsNom < plancherNom - 1e-9) {
+                assert.ok(niveau === 2 && serree && Math.abs(corpsPied - plancherPied) < 1e-9, `${cas} : nom de ${corpsNom} pt, pied de ${corpsPied} pt`);
               }
-              assert.ok(!precedent?.serree || serree, `${cas} : desserré après un badge serré`);
-              if (depouille && !serree) vus.depouilleLache += 1;
-              if (serree) vus.serre += 1;
-              if (corpsPied < departPied - 1e-9 && corpsNom >= plancherNom - 1e-9) vus.piedReduit += 1;
+              assert.ok(corpsNom >= dernierNom - 1e-9, `${cas} : nom de ${corpsNom} pt`);
+              // Plus de tours, jamais un étage plus tôt dans l'ordre des essais.
+              const ici = etage(page, champs, metriques, departPied);
+              assert.ok(precedent === null || !avant(ici, precedent), `${cas} : ${ici} après ${precedent}`);
+              if (niveau === 0 && serree) vus[piedOte > 1e-9 ? 'piedReduitComplet' : 'serreComplet'] += 1;
+              if (niveau === 1) vus.sansEvenement += 1;
+              if (niveau === 2) vus.sansOrganisation += 1;
               if (corpsNom < plancherNom - 1e-9) vus.nomReduit += 1;
               assert.deepEqual(sortDuCadre(page, metriques, modele), [], cas);
               assert.deepEqual(chevauchements(page, metriques), [], cas);
-              precedent = { serree, corpsPied, corpsNom };
+              precedent = ici;
             }
           }
         }
