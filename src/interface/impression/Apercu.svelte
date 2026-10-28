@@ -45,24 +45,26 @@
   // fait montrer au choix le dernier qui reste, celui que la page imprime
   // (sortieApercu) —, les listes de noms, l'organisation de chaque nom —
   // offerte inactive, listes masquées, avec la raison en titre —, les pages du
-  // plan et une colonne de tables par page. Ceux de la feuille par table : une
-  // feuille par tour, et le dessin de la table en tête de chaque page.
+  // plan et une colonne de tables par page. Celui de la liste d'accueil : son
+  // tri, par organisation, par nom ou par prénom. Ceux de la feuille par
+  // table : une feuille par tour, et le dessin de la table en tête de chaque
+  // page.
   //
   // Habillage de l'écran : la barre est une carte, ses commandes en groupes
   // nommés, côte à côte — la vue imprimée, en commandes enfoncées ; les
-  // réglages de la vue, quand elle en a ; le papier et « Imprimer », l'action
+  // réglages de la vue, que chaque vue a ; le papier et « Imprimer », l'action
   // principale. Le document imprimé n'en prend rien.
   import '../impression.css';
   import { getContext } from 'svelte';
   import { estBrouillon, piedDePage, refusImpression } from '../../application/sorties.js';
   import { constante } from '../../geometrie/constantes.js';
-  import { DECOUPES, VUES_IMPRESSION } from '../etat_ui.js';
+  import { DECOUPES, TRIS_ACCUEIL, VUES_IMPRESSION } from '../etat_ui.js';
   import Commande from '../primitives/Commande.svelte';
   import Papier from '../sorties/Papier.svelte';
   import FeuillesTables from './FeuillesTables.svelte';
   import ListeAccueil from './ListeAccueil.svelte';
   import PlanImprime from './PlanImprime.svelte';
-  import { bandeDeFeuille, cleDecoupe, cleVue, feuilleDe, optionsApercu, refusApercu, sortieApercu, toursOfferts } from './modele.js';
+  import { bandeDeFeuille, cleDecoupe, cleTri, cleVue, feuilleDe, optionsApercu, refusApercu, sortieApercu, toursOfferts } from './modele.js';
 
   const t = getContext('t');
   // { provenance, version } : celles du bandeau, que le pied reprend.
@@ -133,57 +135,64 @@
         >
       {/each}
     </div>
-    {#if options.vue === 'plan' || options.vue === 'tables'}
-      <div class="groupe" role="group" aria-label={t('impression.groupe.reglages')}>
-        {#if options.vue === 'plan'}
-          <label class="reglage">
-            <span>{t('impression.tour.titre')}</span>
-            <select data-champ="tour" value={sortie.tour} onchange={(evenement) => ui.reglerApercu({ tour: Number(evenement.currentTarget.value) })}>
-              {#each tours as tour (tour)}
-                <option value={tour}>{t('impression.tour.option', { tour })}</option>
-              {/each}
-            </select>
-          </label>
-          <button type="button" data-commande="listes" aria-pressed={options.listes} onclick={() => ui.reglerApercu({ listes: !options.listes })}
-            >{t('impression.listes')}</button
-          >
-          <button
-            type="button"
-            data-commande="organisations"
-            aria-pressed={options.organisations}
-            aria-disabled={options.listes ? undefined : 'true'}
-            title={options.listes ? undefined : t('impression.organisationsSansListes')}
-            onclick={() => {
-              if (options.listes) ui.reglerApercu({ organisations: !options.organisations });
-            }}>{t('impression.organisations')}</button
-          >
-          <label class="reglage">
-            <span>{t('impression.decoupe.titre')}</span>
-            <select data-champ="decoupe" value={options.decoupe} onchange={(evenement) => ui.reglerApercu({ decoupe: evenement.currentTarget.value })}>
-              {#each DECOUPES as decoupe (decoupe)}
-                <option value={decoupe}>{t(cleDecoupe(decoupe))}</option>
-              {/each}
-            </select>
-          </label>
-          <button
-            type="button"
-            data-commande="parColonne"
-            aria-pressed={options.parColonne}
-            onclick={() => ui.reglerApercu({ parColonne: !options.parColonne })}>{t('impression.parColonne')}</button
-          >
-        {:else}
-          <button type="button" data-commande="parTour" aria-pressed={options.parTour} onclick={() => ui.reglerApercu({ parTour: !options.parTour })}
-            >{t('impression.parTour')}</button
-          >
-          <button
-            type="button"
-            data-commande="dessinTable"
-            aria-pressed={options.dessinTable}
-            onclick={() => ui.reglerApercu({ dessinTable: !options.dessinTable })}>{t('impression.dessinTable')}</button
-          >
-        {/if}
-      </div>
-    {/if}
+    <div class="groupe" role="group" aria-label={t('impression.groupe.reglages')}>
+      {#if options.vue === 'plan'}
+        <label class="reglage">
+          <span>{t('impression.tour.titre')}</span>
+          <select data-champ="tour" value={sortie.tour} onchange={(evenement) => ui.reglerApercu({ tour: Number(evenement.currentTarget.value) })}>
+            {#each tours as tour (tour)}
+              <option value={tour}>{t('impression.tour.option', { tour })}</option>
+            {/each}
+          </select>
+        </label>
+        <button type="button" data-commande="listes" aria-pressed={options.listes} onclick={() => ui.reglerApercu({ listes: !options.listes })}
+          >{t('impression.listes')}</button
+        >
+        <button
+          type="button"
+          data-commande="organisations"
+          aria-pressed={options.organisations}
+          aria-disabled={options.listes ? undefined : 'true'}
+          title={options.listes ? undefined : t('impression.organisationsSansListes')}
+          onclick={() => {
+            if (options.listes) ui.reglerApercu({ organisations: !options.organisations });
+          }}>{t('impression.organisations')}</button
+        >
+        <label class="reglage">
+          <span>{t('impression.decoupe.titre')}</span>
+          <select data-champ="decoupe" value={options.decoupe} onchange={(evenement) => ui.reglerApercu({ decoupe: evenement.currentTarget.value })}>
+            {#each DECOUPES as decoupe (decoupe)}
+              <option value={decoupe}>{t(cleDecoupe(decoupe))}</option>
+            {/each}
+          </select>
+        </label>
+        <button
+          type="button"
+          data-commande="parColonne"
+          aria-pressed={options.parColonne}
+          onclick={() => ui.reglerApercu({ parColonne: !options.parColonne })}>{t('impression.parColonne')}</button
+        >
+      {:else if options.vue === 'accueil'}
+        <label class="reglage">
+          <span>{t('impression.tri.titre')}</span>
+          <select data-champ="tri" value={options.tri} onchange={(evenement) => ui.reglerApercu({ tri: evenement.currentTarget.value })}>
+            {#each TRIS_ACCUEIL as tri (tri)}
+              <option value={tri}>{t(cleTri(tri))}</option>
+            {/each}
+          </select>
+        </label>
+      {:else}
+        <button type="button" data-commande="parTour" aria-pressed={options.parTour} onclick={() => ui.reglerApercu({ parTour: !options.parTour })}
+          >{t('impression.parTour')}</button
+        >
+        <button
+          type="button"
+          data-commande="dessinTable"
+          aria-pressed={options.dessinTable}
+          onclick={() => ui.reglerApercu({ dessinTable: !options.dessinTable })}>{t('impression.dessinTable')}</button
+        >
+      {/if}
+    </div>
     {#if !options.question}
       <div class="groupe" role="group" aria-label={t('impression.groupe.sortie')}>
         <Papier />

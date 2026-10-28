@@ -24,6 +24,7 @@ import {
   bandeDeFeuille,
   clesPapier,
   cleDecoupe,
+  cleTri,
   cleVue,
   dimensionsPage,
   feuilleDe,
@@ -45,6 +46,7 @@ const APERCU = Object.freeze({
   parColonne: true,
   parTour: false,
   dessinTable: false,
+  tri: 'organisation',
 });
 const PIED = Object.freeze({ nom: 'Soirée des Merles', date: '2026-10-09', tour: 2, horodatage: '2026-10-09T19:00:00-04:00', version: 'v' });
 
@@ -79,15 +81,16 @@ describe('optionsApercu : ce que l’aperçu imprime', () => {
   test('le plan : son tour, ses listes et leurs organisations, sa découpe et une colonne par page ; l’orientation, celle que la découpe choisira (null)', () => {
     assert.deepEqual(optionsApercu(APERCU, 'A4'), {
       vue: 'plan', papier: 'A4', orientation: null, tour: 2, listes: true, organisations: true,
-      decoupe: 'auto', parColonne: true, parTour: false, dessinTable: false, question: false,
+      decoupe: 'auto', parColonne: true, parTour: false, dessinTable: false, tri: 'organisation', question: false,
     });
     const sans = optionsApercu({ ...APERCU, organisations: false, parColonne: false }, 'A4');
     assert.deepEqual([sans.organisations, sans.parColonne], [false, false]);
   });
 
-  test('les listes s’impriment en portrait et couvrent la soirée, quel que soit le tour du plan ; la feuille par tour et le dessin de la table rendus tels quels', () => {
+  test('les listes s’impriment en portrait et couvrent la soirée, quel que soit le tour du plan ; la feuille par tour, le dessin de la table et le tri rendus tels quels', () => {
     for (const vue of ['accueil', 'tables']) {
-      const options = optionsApercu({ ...APERCU, vue, parTour: true, dessinTable: true }, 'Lettre');
+      const options = optionsApercu({ ...APERCU, vue, parTour: true, dessinTable: true, tri: 'prenom' }, 'Lettre');
+      assert.equal(options.tri, 'prenom', vue);
       assert.equal(options.orientation, 'portrait', vue);
       assert.equal(options.tour, 'tous', vue);
       assert.equal(options.papier, 'Lettre', vue);
@@ -301,6 +304,7 @@ describe('les libellés de l’aperçu (§ 14.6)', () => {
     const cles = [
       ...['plan', 'accueil', 'tables'].map(cleVue),
       ...['auto', 'unePage', 'decoupe'].map(cleDecoupe),
+      ...['organisation', 'nom', 'prenom'].map(cleTri),
       ...PAPIERS_OFFERTS.flatMap((papier) => Object.values(clesPapier(papier))),
       ...[feuilleDe(PIED, true), feuilleDe({ ...PIED, date: null, horodatage: null, tour: 'tous' }, false)].flatMap(({ elements }) =>
         elements.filter(({ libelle }) => libelle !== null).map(({ libelle }) => libelle.cle),
@@ -313,5 +317,6 @@ describe('les libellés de l’aperçu (§ 14.6)', () => {
     }
     assert.throws(() => cleVue('badges'), RangeError);
     assert.throws(() => cleDecoupe('deux'), RangeError);
+    assert.throws(() => cleTri('table'), RangeError);
   });
 });

@@ -67,14 +67,15 @@ import { THEMES } from './theme.js';
  *           Plan.svelte montre sur la place (§ 5.9)
  * @property {null|{vue: 'plan'|'accueil'|'tables', tour: number|'tous', listes: boolean,
  *            organisations: boolean, decoupe: 'auto'|'unePage'|'decoupe', parColonne: boolean,
- *            parTour: boolean, dessinTable: boolean}} apercu
+ *            parTour: boolean, dessinTable: boolean, tri: 'organisation'|'nom'|'prenom'}} apercu
  *           l'aperçu avant impression (§ 11.7), que la section de l'impression porte sous
  *           son titre « Plan » : présent tant que cette section est ouverte, null hors
  *           d'elle. La vue imprimée ; le tour du plan, 'tous' pour une vue de la soirée,
  *           jamais pour le plan ; les listes de noms du plan, et les organisations
  *           qu'elles portent ; sa découpe en pages, et une colonne de tables par page ; la
  *           feuille par table, une par tour ou la soirée en colonnes, et le dessin de la
- *           table en tête de chaque page
+ *           table en tête de chaque page ; le tri de la liste d'accueil, un de
+ *           TRIS_ACCUEIL
  * @property {number} visee               le numéro de la dernière demande d'une proposition
  *           au plan : chaque montrerProposition d'une proposition l'augmente de 1, même
  *           pour celle déjà demandée ; 0 au départ
@@ -136,6 +137,11 @@ export const VUES_IMPRESSION = Object.freeze(['plan', 'accueil', 'tables']);
 /** Les découpes du plan imprimé, celles de decouperPlan (src/geometrie/pages.js). */
 export const DECOUPES = Object.freeze(['auto', 'unePage', 'decoupe']);
 
+/** Les tris de la liste d'accueil imprimée (§ 11.7), dans l'ordre du choix :
+ *  par organisation, le tri de départ, par nom, par prénom (lignesAccueil,
+ *  src/interface/impression/listes.js). */
+export const TRIS_ACCUEIL = Object.freeze(['organisation', 'nom', 'prenom']);
+
 // Le domaine de chaque réglage de l'aperçu que reglerApercu change.
 const REGLAGES_APERCU = Object.freeze({
   vue: (v) => VUES_IMPRESSION.includes(v),
@@ -146,6 +152,7 @@ const REGLAGES_APERCU = Object.freeze({
   parColonne: (v) => typeof v === 'boolean',
   parTour: (v) => typeof v === 'boolean',
   dessinTable: (v) => typeof v === 'boolean',
+  tri: (v) => TRIS_ACCUEIL.includes(v),
 });
 
 const GENRES_CHOIX = new Set(['personne', 'reservation']);
@@ -185,8 +192,9 @@ function apercuValide(courant, changements) {
 // L'aperçu de la section de l'impression qui s'ouvre sur l'état suivant : le
 // plan au tour montré, les listes du plan et leurs organisations telles que
 // l'écran les montre, la découpe proposée par défaut, sans une colonne par
-// page, la feuille par table couvrant la soirée, sans le dessin de la table.
-// Le départ passe par apercuValide, comme tout réglage.
+// page, la feuille par table couvrant la soirée, sans le dessin de la table,
+// la liste d'accueil triée par organisation. Le départ passe par
+// apercuValide, comme tout réglage.
 const apercuDeDepart = (suivant) => ({
   vue: 'plan',
   tour: suivant.tour,
@@ -196,6 +204,7 @@ const apercuDeDepart = (suivant) => ({
   parColonne: false,
   parTour: false,
   dessinTable: false,
+  tri: 'organisation',
 });
 
 // Le choix du contrat, figé ; RangeError hors du contrat.
@@ -466,8 +475,8 @@ export function creerEtatUi() {
     },
     /** Change les réglages de l'aperçu de la section de l'impression —
      *  vue, tour, listes, organisations, decoupe, parColonne, parTour,
-     *  dessinTable — chacun dans son domaine ; RangeError hors de lui, pour
-     *  un autre nom, ou hors de cette section, sans rien changer. */
+     *  dessinTable, tri — chacun dans son domaine ; RangeError hors de lui,
+     *  pour un autre nom, ou hors de cette section, sans rien changer. */
     reglerApercu(changements) {
       if (etat.apercu === null) throw new RangeError('aperçu : aucun aperçu ouvert');
       changer({ apercu: apercuValide(etat.apercu, changements) });

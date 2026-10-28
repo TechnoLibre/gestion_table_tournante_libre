@@ -19,6 +19,7 @@ import { H_RETENU, personne, soiree, table } from '../../../test/fixtures/badges
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { cleNormalisee } from '../../application/csv.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { TRIS_ACCUEIL } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { feuilleDe } from './modele.js';
 import {
@@ -30,6 +31,7 @@ import {
   etatsDesTours,
   feuilleDuTour,
   feuillesTables,
+  finsOrganisation,
   grouperTours,
   largeursColonnes,
   libellePlace,
@@ -86,8 +88,8 @@ describe('etatsDesTours : l’état des places de chaque tour de la soirée', ()
 });
 
 describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
-  test('triée par la clé normalisée du nom, puis du prénom, par points de code : un accent ne renvoie pas un nom après Z, Œ vient après O', () => {
-    const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee);
+  test('par nom : la clé normalisée du nom, puis du prénom, par points de code ; un accent ne renvoie pas un nom après Z, Œ vient après O', () => {
+    const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee, 'nom');
     assert.deepEqual(ids(lignes), [10, 8, 3, 4, 6, 7, 5, 1, 2]);
     // Par unités brutes, « Ézard » et « Œillet » partiraient en fin de liste.
     assert.ok('\u{00C9}zard' > 'Zinnia' && '\u{0152}illet' > 'Zinnia');
@@ -103,19 +105,19 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
       throw new Error('localeCompare appelé');
     };
     try {
-      assert.deepEqual(ids(lignesAccueil(charge, lus, cleNormalisee)), [10, 8, 3, 4, 6, 7, 5, 1, 2]);
+      assert.deepEqual(ids(lignesAccueil(charge, lus, cleNormalisee, 'nom')), [10, 8, 3, 4, 6, 7, 5, 1, 2]);
     } finally {
       String.prototype.localeCompare = original;
     }
   });
 
   test('la clé est celle qu’on injecte : une clé brute rend l’ordre des unités', () => {
-    const lignes = lignesAccueil(accueil(), etats(accueil()), (texte) => texte);
+    const lignes = lignesAccueil(accueil(), etats(accueil()), (texte) => texte, 'nom');
     assert.deepEqual(ids(lignes), [10, 4, 7, 6, 5, 3, 1, 8, 2]);
   });
 
-  test('des homonymes se départagent par l’organisation — absente d’abord —, puis par l’identifiant', () => {
-    const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee);
+  test('par nom, des homonymes se départagent par l’organisation — absente d’abord —, puis par l’identifiant', () => {
+    const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee, 'nom');
     const ondines = lignes.filter(({ nom, prenom }) => nom === 'Lacasse' && prenom === 'Ondine');
     assert.deepEqual(ids(ondines), [4, 6, 7, 5]);
     assert.deepEqual(
@@ -124,9 +126,52 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
     );
   });
 
+  test('par organisation : chaque organisation par sa clé normalisée, ses personnes par prénom puis par nom ; les personnes sans organisation à la fin, par prénom puis par nom, sans prénom d’abord', () => {
+    const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee, 'organisation');
+    assert.deepEqual(ids(lignes), [1, 6, 7, 5, 8, 10, 3, 4, 2]);
+    // « Club des Merles » et « ␣club␣␣des MERLES␣ » ne font qu'une
+    // organisation, que chaque ligne écrit comme la charge.
+    assert.deepEqual(
+      lignes.slice(0, 3).map(({ organisation }) => organisation),
+      ['Club des Merles', 'Club des Merles', ' club  des MERLES '],
+    );
+  });
+
+  test('par organisation, une organisation faite de blancs compte comme aucune : la personne reste à la fin', () => {
+    const charge = accueil();
+    charge.participants.find(({ id }) => id === 10).organisation = '   ';
+    assert.deepEqual(ids(lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation')), [1, 6, 7, 5, 8, 10, 3, 4, 2]);
+    charge.participants.find(({ id }) => id === 10).organisation = 'Atelier des Saules';
+    assert.deepEqual(ids(lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation')), [10, 1, 6, 7, 5, 8, 3, 4, 2]);
+  });
+
+  test('par prénom : la clé du prénom, puis du nom, puis de l’organisation — absente d’abord —, puis l’identifiant ; une personne sans prénom à la fin', () => {
+    const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee, 'prenom');
+    assert.deepEqual(ids(lignes), [10, 3, 1, 4, 6, 7, 5, 2, 8]);
+  });
+
+  test('chaque tri de TRIS_ACCUEIL donne chaque personne non exclue une fois ; un autre tri lève RangeError', () => {
+    for (const tri of TRIS_ACCUEIL) {
+      const tries = ids(lignesAccueil(accueil(), etats(accueil()), cleNormalisee, tri)).sort((a, b) => a - b);
+      assert.deepEqual(tries, [1, 2, 3, 4, 5, 6, 7, 8, 10], tri);
+    }
+    for (const tri of ['table', undefined, null, 'Nom']) {
+      assert.throws(() => lignesAccueil(accueil(), etats(accueil()), cleNormalisee, tri), RangeError, String(tri));
+    }
+  });
+
+  test('finsOrganisation : les lignes que suit une autre organisation, la dernière de la liste exclue', () => {
+    const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee, 'organisation');
+    // Club des Merles ferme sur 7, Grisaille sur 5 ; les personnes sans
+    // organisation finissent la liste.
+    assert.deepEqual([...finsOrganisation(lignes, cleNormalisee)], [7, 5]);
+    assert.deepEqual([...finsOrganisation([], cleNormalisee)], []);
+    assert.deepEqual([...finsOrganisation(lignes.slice(0, 3), cleNormalisee)], [], 'une seule organisation');
+  });
+
   test('un exclu n’a pas de ligne ; chaque autre personne en a une, avec nom, prénom et organisation tels quels', () => {
     const charge = accueil();
-    const lignes = lignesAccueil(charge, etats(charge), cleNormalisee);
+    const lignes = lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation');
     assert.equal(ligneDe(lignes, 9), undefined);
     assert.equal(lignes.length, 9);
     assert.deepEqual(
@@ -136,12 +181,12 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
     // Exclue, la personne ne revient pas même quand un état la nommerait.
     const exclue = accueil();
     exclue.participants[0].exclu = true;
-    assert.equal(ligneDe(lignesAccueil(exclue, etats(exclue), cleNormalisee), 1), undefined);
+    assert.equal(ligneDe(lignesAccueil(exclue, etats(exclue), cleNormalisee, 'organisation'), 1), undefined);
   });
 
   test('par tour, le numéro de la table ; la réserve, sans table ni siège', () => {
     const charge = accueil();
-    const lignes = lignesAccueil(charge, etats(charge), cleNormalisee);
+    const lignes = lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation');
     assert.deepEqual(ligneDe(lignes, 1).places, [
       { tour: 1, table: 7, siege: null },
       { tour: 2, table: null, siege: null },
@@ -163,7 +208,7 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
       plan: [{ sieges: [[1, null, 2]] }],
       siegesAttribues: true,
     });
-    const lignes = lignesAccueil(attribuee, etats(attribuee), cleNormalisee);
+    const lignes = lignesAccueil(attribuee, etats(attribuee), cleNormalisee, 'organisation');
     assert.deepEqual(ligneDe(lignes, 1).places, [{ tour: 1, table: 7, siege: 1 }]);
     assert.deepEqual(ligneDe(lignes, 2).places, [{ tour: 1, table: 7, siege: 3 }]);
     const libre = soiree({
@@ -171,7 +216,7 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
       tables: [table(1, 7, 3)],
       plan: [{ sieges: [[1, 2]] }],
     });
-    for (const ligne of lignesAccueil(libre, etats(libre), cleNormalisee)) {
+    for (const ligne of lignesAccueil(libre, etats(libre), cleNormalisee, 'organisation')) {
       assert.deepEqual(ligne.places, [{ tour: 1, table: 7, siege: null }], String(ligne.participant));
     }
   });
@@ -190,7 +235,7 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
     // la dit absente au tour 2, où elle attendait.
     charge.participants[0].presence = [1];
     charge.retenu.placement[1] = { sieges: [[2, 3, 4, 10], [5, 6, 7, 8]], reserve: [], absents: [1] };
-    const lignes = lignesAccueil(charge, etats(charge), cleNormalisee);
+    const lignes = lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation');
     assert.deepEqual(ligneDe(lignes, 1).places, [
       { tour: 1, table: 7, siege: null },
       { tour: 2, table: null, siege: null, absente: true },
@@ -203,7 +248,7 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
 
   test('sans aucune présence, aucune place ne porte « absente » : les lignes d\u{2019}aujourd\u{2019}hui', () => {
     const charge = accueil();
-    for (const { places } of lignesAccueil(charge, etats(charge), cleNormalisee)) {
+    for (const { places } of lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation')) {
       for (const place of places) assert.equal(Object.hasOwn(place, 'absente'), false);
     }
   });
@@ -215,7 +260,7 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
 
   test('une soirée sans personne donne une liste vide', () => {
     const vide = soiree({ personnes: [], tables: [table(1, 7, 3)], plan: [{ sieges: [[]] }] });
-    assert.deepEqual(lignesAccueil(vide, etats(vide), cleNormalisee), []);
+    assert.deepEqual(lignesAccueil(vide, etats(vide), cleNormalisee, 'organisation'), []);
   });
 });
 

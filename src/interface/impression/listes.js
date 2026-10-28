@@ -11,10 +11,11 @@
 // blocs (liste d'accueil) de tours consécutifs. Les composants les
 // traduisent et les posent.
 //
-// L'ordre de la liste d'accueil ne dépend pas de l'environnement (§ 15.5) :
-// la clé normalisée injectée, comparée point de code par point de code,
-// jamais la collation de la langue du système ; deux lignes que rien
-// d'autre ne sépare, par identifiant.
+// L'ordre de la liste d'accueil suit le tri choisi — par organisation, par
+// nom ou par prénom — et ne dépend pas de l'environnement (§ 15.5) : la clé
+// normalisée injectée, comparée point de code par point de code, jamais la
+// collation de la langue du système ; deux lignes que rien d'autre ne
+// sépare, par identifiant.
 //
 // La feuille par table règle la taille de son texte pour remplir sa page
 // sans exagérer : une échelle de son corps, de 1 — le plancher, la taille
@@ -54,32 +55,53 @@ function placesDuTour(etat) {
   return places;
 }
 
+// Les champs que compare chaque tri de la liste d'accueil, dans l'ordre :
+// le premier est la clé du tri, les suivants départagent.
+const ORDRES_ACCUEIL = new Map([
+  ['organisation', ['organisation', 'prenom', 'nom']],
+  ['nom', ['nom', 'prenom', 'organisation']],
+  ['prenom', ['prenom', 'nom', 'organisation']],
+]);
+
+// La clé d'un champ texte d'une personne : la clé normalisée, celle du texte
+// vide pour un champ absent ; un champ fait de blancs a la même.
+const cleChamp = (cle, valeur) => cle(valeur ?? '');
+
 /**
- * La liste d'accueil (§ 11.7) : une ligne par personne non exclue, triée par
- * la clé de son nom, puis de son prénom, puis de son organisation — un champ
- * absent pour clé celle du texte vide —, par points de code, puis par
- * identifiant. Chaque ligne porte nom, prénom et organisation tels que la
- * charge les écrit, et, pour chaque tour, la table où la personne s'assied —
- * son numéro affiché —, le siège sous sièges attribués seulement (§ 11.4),
- * table et siège null pour la réserve. Un tour où l'état des places la dit
- * absente (EtatPlaces.absents) porte table et siège null et absente vrai ;
- * le champ absente n'existe qu'à un tour d'absence, si bien qu'une soirée
- * sans présence partielle rend les places sans lui.
+ * La liste d'accueil (§ 11.7) : une ligne par personne non exclue, dans
+ * l'ordre du tri reçu. Par organisation : la clé de l'organisation, puis du
+ * prénom, puis du nom ; par nom : celle du nom, puis du prénom, puis de
+ * l'organisation ; par prénom : celle du prénom, puis du nom, puis de
+ * l'organisation. Les clés se comparent par points de code, puis
+ * l'identifiant départage. La clé du tri vide — pas d'organisation, ou pas
+ * de prénom, ou un champ fait de blancs — range la ligne après toutes celles
+ * qui en ont une ; un champ qui départage compte, vide, comme le texte
+ * vide, avant tout autre. Chaque ligne porte nom, prénom et organisation
+ * tels que la charge les écrit, et, pour chaque tour, la table où la
+ * personne s'assied — son numéro affiché —, le siège sous sièges attribués
+ * seulement (§ 11.4), table et siège null pour la réserve. Un tour où l'état
+ * des places la dit absente (EtatPlaces.absents) porte table et siège null
+ * et absente vrai ; le champ absente n'existe qu'à un tour d'absence, si
+ * bien qu'une soirée sans présence partielle rend les places sans lui.
  *
  * @param {Object} charge
  * @param {Object[]} etatsParTour   etatsDesTours
  * @param {(texte: string) => string} cle   la clé normalisée (cleNormalisee)
+ * @param {'organisation'|'nom'|'prenom'} tri   un de TRIS_ACCUEIL (src/interface/etat_ui.js)
  * @returns {Array<{participant: number, nom: string, prenom: string|null, organisation: string|null,
  *            places: Array<{tour: number, table: number|null, siege: number|null, absente?: true}>}>}
+ * @throws {RangeError} un autre tri
  */
-export function lignesAccueil(charge, etatsParTour, cle) {
+export function lignesAccueil(charge, etatsParTour, cle, tri) {
+  const champs = ORDRES_ACCUEIL.get(tri);
+  if (champs === undefined) throw new RangeError(`lignesAccueil : tri inconnu ${JSON.stringify(tri)}`);
   const parTour = etatsParTour.map((etat) => ({ tour: etat.tour, places: placesDuTour(etat), absents: new Set(etat.absents) }));
   const placeDe = (id, { tour, places, absents }) =>
     absents.has(id) ? { tour, table: null, siege: null, absente: true } : { tour, table: null, siege: null, ...places.get(id) };
   const lignes = charge.participants
     .filter(({ exclu }) => !exclu)
     .map((personne) => ({
-      cles: [cle(personne.nom), cle(personne.prenom ?? ''), cle(personne.organisation ?? '')],
+      cles: champs.map((champ) => cleChamp(cle, personne[champ])),
       ligne: {
         participant: personne.id,
         nom: personne.nom,
@@ -89,11 +111,29 @@ export function lignesAccueil(charge, etatsParTour, cle) {
       },
     }));
   const comparer = (a, b) =>
+    Number(a.cles[0] === '') - Number(b.cles[0] === '') ||
     comparerPointsDeCode(a.cles[0], b.cles[0]) ||
     comparerPointsDeCode(a.cles[1], b.cles[1]) ||
     comparerPointsDeCode(a.cles[2], b.cles[2]) ||
     a.ligne.participant - b.ligne.participant;
   return lignes.sort(comparer).map(({ ligne }) => ligne);
+}
+
+/**
+ * Les lignes qui ferment une organisation dans la liste d'accueil triée par
+ * organisation (lignesAccueil) : celles que suit une ligne d'une autre clé
+ * d'organisation, la dernière des personnes sans organisation comprise
+ * quand elle n'est pas la dernière de la liste. La dernière ligne n'en
+ * ferme aucune : rien ne la suit. La vue y pose un filet plus marqué, qui ne
+ * change pas la hauteur des lignes.
+ *
+ * @param {ReturnType<typeof lignesAccueil>} lignes   dans l'ordre de la liste
+ * @param {(texte: string) => string} cle   la clé normalisée (cleNormalisee)
+ * @returns {Set<number>}   les identifiants de ces lignes
+ */
+export function finsOrganisation(lignes, cle) {
+  const cles = lignes.map(({ organisation }) => cleChamp(cle, organisation));
+  return new Set(lignes.filter((_, rang) => rang + 1 < lignes.length && cles[rang] !== cles[rang + 1]).map(({ participant }) => participant));
 }
 
 /**

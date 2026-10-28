@@ -44,7 +44,17 @@ const departSur = (section) => ({
   section,
   apercu:
     section === SECTION_IMPRESSION
-      ? { vue: 'plan', tour: 1, listes: true, organisations: false, decoupe: 'auto', parColonne: false, parTour: false, dessinTable: false }
+      ? {
+          vue: 'plan',
+          tour: 1,
+          listes: true,
+          organisations: false,
+          decoupe: 'auto',
+          parColonne: false,
+          parTour: false,
+          dessinTable: false,
+          tri: 'organisation',
+        }
       : null,
 });
 
@@ -509,9 +519,9 @@ describe('état de navigation : le choix en attente (§ 5.8, § 7.1)', () => {
 
 describe('état de navigation : l’aperçu de la section de l’impression (§ 11.7)', () => {
   // L'aperçu de départ, hors de la vue et du tour.
-  const reglages = { listes: true, organisations: false, decoupe: 'auto', parColonne: false, parTour: false, dessinTable: false };
+  const reglages = { listes: true, organisations: false, decoupe: 'auto', parColonne: false, parTour: false, dessinTable: false, tri: 'organisation' };
 
-  test('la section de l’impression s’ouvre sur l’aperçu du plan au tour montré, les listes et leurs organisations telles que l’écran les montre, la découpe proposée, sans une colonne par page, la soirée en colonnes, sans dessin ; l’état est figé', () => {
+  test('la section de l’impression s’ouvre sur l’aperçu du plan au tour montré, les listes et leurs organisations telles que l’écran les montre, la découpe proposée, sans une colonne par page, la soirée en colonnes, sans dessin, la liste d’accueil triée par organisation ; l’état est figé', () => {
     const ui = creerEtatUi();
     ui.montrerTour(3);
     ui.basculerListes();
@@ -542,7 +552,7 @@ describe('état de navigation : l’aperçu de la section de l’impression (§ 
     assert.equal(ui.etat().apercu, null, 'la fiche ouvre les participants');
   });
 
-  test('reglerApercu change la vue, le tour, les listes, les organisations, la découpe, une colonne par page, la feuille par tour et le dessin de la table, chacun dans son domaine ; hors de lui, ou hors de la section, RangeError sans rien changer', () => {
+  test('reglerApercu change la vue, le tour, les listes, les organisations, la découpe, une colonne par page, la feuille par tour, le dessin de la table et le tri de la liste d’accueil, chacun dans son domaine ; hors de lui, ou hors de la section, RangeError sans rien changer', () => {
     const ui = creerEtatUi();
     assert.throws(() => ui.reglerApercu({ vue: 'accueil' }), RangeError);
     ui.allerA(SECTION_IMPRESSION);
@@ -550,6 +560,7 @@ describe('état de navigation : l’aperçu de la section de l’impression (§ 
     ui.reglerApercu({ listes: false, decoupe: 'unePage' });
     ui.reglerApercu({ organisations: true, parColonne: true });
     ui.reglerApercu({ vue: 'tables', parTour: true, dessinTable: true });
+    ui.reglerApercu({ tri: 'prenom' });
     assert.deepEqual(ui.etat().apercu, {
       vue: 'tables',
       tour: 3,
@@ -559,6 +570,7 @@ describe('état de navigation : l’aperçu de la section de l’impression (§ 
       parColonne: true,
       parTour: true,
       dessinTable: true,
+      tri: 'prenom',
     });
     assert.equal(ui.etat().organisations, false, 'l’aperçu ne touche pas à l’écran');
     assert.ok(Object.isFrozen(ui.etat().apercu));
@@ -572,6 +584,8 @@ describe('état de navigation : l’aperçu de la section de l’impression (§ 
       { parColonne: 'oui' },
       { parTour: 1 },
       { dessinTable: 'oui' },
+      { tri: 'table' },
+      { tri: null },
       { retour: 'plan' },
       { inconnu: true },
       null,

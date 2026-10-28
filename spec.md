@@ -6894,6 +6894,20 @@ l'appel nominal ne la cherche pas. Des tours trop nombreux pour la page se
 répartissent en blocs de tours consécutifs, chacun sous l'en-tête qui nomme ses
 tours (§ 7.4). **Les listes s'impriment en portrait.**
 
+**La liste d'accueil se trie par organisation, par nom ou par prénom**, au
+choix de « Trier par », dans les réglages de sa vue ; elle s'ouvre triée par
+organisation. Par organisation, les personnes d'une même organisation se
+suivent, par prénom puis par nom, et celles qui n'en ont pas viennent à la fin ;
+la dernière ligne de chaque organisation porte un filet à l'encre du texte, de
+la même épaisseur que les autres, si bien que ni la hauteur des lignes ni la
+pagination n'en dépendent. Par nom : le nom, puis le prénom, puis
+l'organisation. Par prénom : le prénom, puis le nom, puis l'organisation, et les
+personnes sans prénom à la fin. Toutes les clés sont les formes normalisées du
+§ 10.1, comparées par points de code, comme l'ordre des badges (§ 11.6) ; un
+champ absent, ou fait de blancs, compte comme le texte vide là où il départage,
+et l'identifiant départage en dernier. C'est un réglage de l'aperçu, que rien
+n'écrit.
+
 **Chaque page imprimée porte un pied de cinq éléments** : le nom de l'événement,
 sa date, **le tour** — ou la soirée, pour une vue qui les couvre tous —,
 **l'horodatage du placement** et **la version** (§ 18.6).

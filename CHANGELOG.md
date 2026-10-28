@@ -355,6 +355,11 @@
   trentaine de tours, ou quelques-uns sous des libellés longs — s'y répartit en
   blocs de tours consécutifs, chacun sur ses pages, sous un en-tête qui nomme
   ses tours (« Tours 1 à 6 ») ; chaque bloc reprend les noms.
+- La liste d'accueil imprimée se trie au choix de « Trier par », dans la barre
+  de l'aperçu : par organisation, à l'ouverture, les personnes d'une même
+  organisation par prénom puis par nom, un filet foncé sous la dernière, et
+  celles sans organisation à la fin ; par nom ; ou par prénom. Le choix
+  n'écrit rien.
 - **Un dossier par événement.** Le dossier de travail s'appelle `data` dans les
   deux modes : à côté de l'exécutable, ou, sous Windows quand le logiciel n'y
   travaille pas, `Documents\Gestion table tournante Libre\data`. Il porte un

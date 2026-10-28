@@ -1308,6 +1308,11 @@ ordinaire et se poursuit sur la suivante. « Dessiner la table », décochée pa
 défaut, met en tête de chaque page le dessin de la table — sa forme, ses
 chaises, son numéro et son libellé — à la place de son titre.
 
+La liste d’accueil s’ouvre triée par organisation : les personnes d’une même
+organisation se suivent, par prénom puis par nom, un filet foncé sous la
+dernière, et celles qui n’en ont pas viennent à la fin. « Trier par », dans la
+barre de l’aperçu, la range plutôt par nom ou par prénom.
+
 La **planche de badges** est le seul document produit en PDF. Par défaut, elle
 s’imprime sur des **cartes Avery 5392** prédécoupées, six par feuille Lettre,
 sans rien à découper ; le modèle **A6 à découper** reste offert, quatre badges

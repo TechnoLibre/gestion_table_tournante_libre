@@ -130,6 +130,7 @@ const ENTREES = [
   ['data-fil', 'événement : une ligne du panneau d’historique, par son fil — courant, abandonne ou retour', null],
   ['data-filiation', 'propositions : la phrase qui rattache une dérivée à son départ, sous son numéro ; qualité : la même sur la ligne de source', ['']],
   ['data-filigrane', 'aperçu : le filigrane BROUILLON d’une feuille', ['']],
+  ['data-fin-organisation', 'aperçu : la ligne de la liste d’accueil qui ferme une organisation, triée par organisation', null],
   ['data-focus-initial', 'plan : le siège qui reçoit le focus à l’ouverture du panneau', null],
   ['data-fonctionnalite', 'à propos : une fonctionnalité du sommaire, par son numéro', null],
   ['data-fusion', 'import : un groupe d’orthographes fondu', ['']],

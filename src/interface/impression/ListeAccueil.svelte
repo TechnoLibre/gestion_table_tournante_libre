@@ -3,10 +3,15 @@
 
 <script>
   // La liste d'accueil imprimée (§ 11.7) : une ligne par personne non
-  // exclue, par ordre de nom, de prénom, d'organisation, puis d'identifiant
-  // (lignesAccueil), et pour chaque tour de la soirée, en colonnes, la table,
-  // le siège sous sièges attribués, ou la réserve. Les feuilles sont en
-  // portrait et portent le pied de la soirée (« Tous les tours »).
+  // exclue, dans l'ordre du tri que l'aperçu règle — par organisation, par
+  // nom ou par prénom (lignesAccueil) —, et pour chaque tour de la soirée, en
+  // colonnes, la table, le siège sous sièges attribués, ou la réserve. Les
+  // feuilles sont en portrait et portent le pied de la soirée (« Tous les
+  // tours »). Triée par organisation, la dernière ligne de chaque
+  // organisation porte un filet plus marqué (finsOrganisation), de la même
+  // épaisseur que les autres : la hauteur des lignes, donc la pagination,
+  // n'en dépend pas. Une ligne continuée sur plusieurs pages ne le porte
+  // qu'à son dernier morceau.
   //
   // Rien ne se tronque : un nom long replie dans sa colonne (§ 7.4). La
   // hauteur d'une ligne dépend donc de son texte, et la pagination se fait
@@ -51,7 +56,16 @@
   import { getContext, tick } from 'svelte';
   import { cleNormalisee } from '../../application/csv.js';
   import Feuille from './Feuille.svelte';
-  import { blocsAccueil, etatsDesTours, largeursColonnes, libellePlace, lignesAccueil, textesLigneAccueil, toursParBloc } from './listes.js';
+  import {
+    blocsAccueil,
+    etatsDesTours,
+    finsOrganisation,
+    largeursColonnes,
+    libellePlace,
+    lignesAccueil,
+    textesLigneAccueil,
+    toursParBloc,
+  } from './listes.js';
   import { couperLigne, mesurerListes, mesurerPlace, morcelerPages, paginerFeuilles, trancher } from './pagination.js';
 
   let { etat, options, feuille, bandeMm = null, orientation = $bindable(null) } = $props();
@@ -61,7 +75,10 @@
 
   const charge = $derived($seance.charge);
   const etats = $derived(etatsDesTours(charge, etat.proposition));
-  const lignes = $derived(lignesAccueil(charge, etats, cleNormalisee));
+  const lignes = $derived(lignesAccueil(charge, etats, cleNormalisee, options.tri));
+  // Les lignes qui ferment une organisation, aucune hors du tri par
+  // organisation.
+  const fins = $derived(options.tri === 'organisation' ? finsOrganisation(lignes, cleNormalisee) : new Set());
   const tours = $derived(etats.map(({ tour }) => tour));
   // Chaque libellé de place que la liste écrit, une fois : ce que la sonde
   // porte.
@@ -134,7 +151,8 @@
      sous l'en-tête qui nomme ses tours quand la liste a plusieurs blocs ;
      sous un morceau {debut, fin}, chaque cellule de la ligne continuée ne
      pose que la part de ses textes (textesLigneAccueil) qui tombe dans ce
-     morceau. -->
+     morceau, et le filet de fin d'organisation ne vient qu'avec le morceau
+     qui finit ces textes. -->
 {#snippet liste(bloc, rangBloc, debut, fin, morceau = null)}
   <div class="liste" data-liste-imprimee={rangBloc}>
     <p class="titre">{t('feuilles.accueil.titre')}</p>
@@ -161,7 +179,8 @@
         {#each bloc.lignes.slice(debut, fin) as ligne, rang (ligne.participant)}
           {@const textes = textesLigneAccueil(ligne, t)}
           {@const [nom, prenom, organisation, ...places] = morceau === null ? textes : trancher(textes, morceau.debut, morceau.fin)}
-          <tr data-ligne-imprimee={debut + rang} data-participant={ligne.participant}>
+          {@const fermeOrganisation = fins.has(ligne.participant) && (morceau === null || morceau.fin >= textes.join('').length)}
+          <tr data-ligne-imprimee={debut + rang} data-participant={ligne.participant} data-fin-organisation={fermeOrganisation ? '' : undefined}>
             <td>
               {#if nom !== ''}<span class="nom" data-nom-imprime>{nom}</span>{/if}
             </td>
@@ -241,6 +260,12 @@
     text-align: start;
     vertical-align: top;
     overflow-wrap: anywhere;
+  }
+
+  /* La fin d'une organisation : le filet garde son épaisseur, il prend
+     l'encre du texte. */
+  tr[data-fin-organisation] > td {
+    border-bottom-color: var(--couleur-page-texte);
   }
 
   .nom {

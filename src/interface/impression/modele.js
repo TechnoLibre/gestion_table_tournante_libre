@@ -14,7 +14,7 @@
 import { refusNomEvenement } from '../../application/commandes.js';
 import { etatPlaces } from '../../application/places.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
-import { DECOUPES, VUES_IMPRESSION } from '../etat_ui.js';
+import { DECOUPES, TRIS_ACCUEIL, VUES_IMPRESSION } from '../etat_ui.js';
 
 /** Millimètres par pixel CSS : 96 px au pouce, 25,4 mm au pouce. */
 export const MM_PAR_PX = 25.4 / 96;
@@ -53,14 +53,14 @@ const nombreFini = (valeur) => typeof valeur === 'number' && Number.isFinite(val
  * du papier avant de rien mettre en page (§ 8.5, § 11.2). Les organisations
  * des listes et une colonne de tables par page sont des réglages du plan,
  * une feuille par tour et le dessin de la table des réglages de la feuille
- * par table, rendus tels quels.
+ * par table, le tri un réglage de la liste d'accueil, rendus tels quels.
  *
  * @param {{vue: string, tour: number|'tous', listes: boolean, organisations: boolean, decoupe: string,
- *          parColonne: boolean, parTour: boolean, dessinTable: boolean}} apercu
+ *          parColonne: boolean, parTour: boolean, dessinTable: boolean, tri: string}} apercu
  * @param {'A4'|'Lettre'|null} papier
  * @returns {{vue: string, papier: string|null, orientation: 'portrait'|null, tour: number|'tous',
  *            listes: boolean, organisations: boolean, decoupe: string, parColonne: boolean,
- *            parTour: boolean, dessinTable: boolean, question: boolean}}
+ *            parTour: boolean, dessinTable: boolean, tri: string, question: boolean}}
  * @throws {TypeError} sans aperçu ouvert
  * @throws {RangeError} une vue ou un papier hors de leur domaine
  */
@@ -80,6 +80,7 @@ export function optionsApercu(apercu, papier) {
     parColonne: apercu.parColonne,
     parTour: apercu.parTour,
     dessinTable: apercu.dessinTable,
+    tri: apercu.tri,
     question: papier === null,
   };
 }
@@ -116,6 +117,12 @@ export function cleVue(vue) {
 export function cleDecoupe(decoupe) {
   if (!DECOUPES.includes(decoupe)) throw new RangeError(`découpe inconnue : ${JSON.stringify(decoupe)}`);
   return `impression.decoupe.${decoupe}`;
+}
+
+/** La clé du libellé d'un tri de la liste d'accueil. */
+export function cleTri(tri) {
+  if (!TRIS_ACCUEIL.includes(tri)) throw new RangeError(`tri inconnu : ${JSON.stringify(tri)}`);
+  return `impression.tri.${tri}`;
 }
 
 /**

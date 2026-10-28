@@ -33,6 +33,12 @@ export const TABLE = new Map([
   ['impression.parColonne', 'Une colonne par page'],
   ['impression.parTour', 'Une feuille par tour'],
   ['impression.dessinTable', 'Dessiner la table'],
+  // Le tri de la liste d'accueil (cleTri) : par organisation, par nom, par
+  // prénom.
+  ['impression.tri.titre', 'Trier par'],
+  ['impression.tri.organisation', 'Organisation'],
+  ['impression.tri.nom', 'Nom'],
+  ['impression.tri.prenom', 'Prénom'],
 
   // --- La question du papier (§ 8.5, § 11.2) -----------------------------------
   ['impression.papier.question', 'Sur quel papier imprimez-vous ?'],
