@@ -374,6 +374,7 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   realignerTable: { numero: 5, sieges: 8 },
   changerDefaut: { sieges: 10, realignees: 4 },
   changerTours: { tours: 3, retirees: 2 },
+  changerNomTour: { tour: 2, nom: 'Plat principal' },
   modifierReglage: { cle: 'separerOrganisations', valeur: false },
   changerEtiquettes: { personne: 'Iris Ombrelle', ajoutees: ['finance'], retirees: [] },
   ajouterConflit: { personne: 'Iris Ombrelle', organisation: 'Atelier Ressac' },

@@ -49,7 +49,7 @@ import { presenceCanonique } from '../moteur/presence.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { difference } from '../stockage/correctifs.js';
 import { entreeDeCourse } from '../stockage/courses.js';
-import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
+import { SCHEMA, clesRangees, creerCharge, etatDeduit, nomsDesTours, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { copieDeTravail } from '../stockage/gel.js';
@@ -1120,6 +1120,7 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
             dernier,
             depart: derivation.depart,
             toursFiges: derivation.toursFiges,
+            nomsTours: nomsDesTours(charge),
           }),
     avertissements: [],
     courses,

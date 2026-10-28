@@ -15,6 +15,7 @@ import {
   nomEtat,
   ouEcrire,
   phraseDeRaison,
+  tourDansPhrase,
 } from './aides.js';
 
 // Le placement qu'une dérive touche : le retenu, ou une proposition par son
@@ -137,15 +138,15 @@ export const TABLE = new Map([
   // porte : la personne est assise à la même table, à un autre siège.
   [
     'RESERVATION_NON_HONOREE',
-    ({ participant, table, tour, personne = null, numero = null, siege, occupant = null }) => {
+    ({ participant, table, tour, personne = null, numero = null, siege, occupant = null, nomsTours }) => {
       const qui = personne ?? `la personne n° ${participant}`;
       const ou = numero === null ? `table d'identifiant ${table}` : `table ${numero}`;
       if (siege === undefined) {
-        return `Le placement retenu n'honore pas la réservation de ${qui} à la ${ou} au tour ${tour} : il la place ailleurs.`;
+        return `Le placement retenu n'honore pas la réservation de ${qui} à la ${ou} au ${tourDansPhrase(tour, nomsTours)} : il la place ailleurs.`;
       }
       const chaise = occupant === null ? `laisse le siège ${siege} vide` : `donne le siège ${siege} à une autre personne`;
       return (
-        `Le placement retenu n'honore pas la réservation de ${qui} au siège ${siege} de la ${ou} au tour ${tour} : ` +
+        `Le placement retenu n'honore pas la réservation de ${qui} au siège ${siege} de la ${ou} au ${tourDansPhrase(tour, nomsTours)} : ` +
         `il l'assied à un autre siège de cette table, et ${chaise}.`
       );
     },

@@ -167,6 +167,7 @@
   import { effetDe } from '../raccourcis.js';
   import { organisationsDe } from '../../application/conflits_organisation.js';
   import { cleNormalisee } from '../../application/csv.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import CasesPresence from './CasesPresence.svelte';
   import ChoixMultiple from './ChoixMultiple.svelte';
   import { cleDeRaison, lignesDePersonne } from './conflits.js';
@@ -251,6 +252,9 @@
   // tenu par une machine de champ.js propre à la personne et au nombre de
   // tours ; le refus posé sous les cases, et l'envoi en cours.
   const tours = $derived(charge.evenement.tours);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js), et
+  // que l'itinéraire et les réservations posent tels quels.
+  const nomsTours = $derived(nomsDesTours(charge));
   const presenceEnregistree = $derived(saisieEnregistree(participant, tours));
   const vuePresence = $derived(affichagePresence(presenceSaisie(participant)));
   let machinePresence = untrack(() => creerMachineChamp({ stockee: presenceEnregistree, lire: lecturePresence(tours) }));
@@ -539,7 +543,7 @@
           <span class="signe"><Icone nom="triangle" /></span>
           <div>
             {#each signaux as signal, rang (rang)}
-              <p>{t(signal.code, signal.details)}</p>
+              <p>{t(signal.code, { nomsTours, ...signal.details })}</p>
             {/each}
           </div>
         </div>
@@ -605,12 +609,13 @@
     {#if vuePresence.sorte === 'tous'}
       <p class="resume" data-presence="tous">{t(vuePresence.cle)}</p>
     {:else}
-      <p class="resume" data-presence="partielle">{t(vuePresence.cle, vuePresence.details)}</p>
+      <p class="resume" data-presence="partielle">{t(vuePresence.cle, { nomsTours, ...vuePresence.details })}</p>
     {/if}
     <form novalidate onsubmit={appliquer}>
       <CasesPresence
         cases={casesDeSaisie(saisiePresence, tours)}
         nom={nomAffiche(participant)}
+        {nomsTours}
         invalide={refusPresence !== null}
         decrit={refusPresence === null ? undefined : idRefusPresence}
         basculer={basculerPresence}
@@ -654,6 +659,8 @@
           <td>
             {#if reservation.portee === 'tous'}
               {t('participants.fiche.tousLesTours')}
+            {:else if nomsTours[reservation.tour - 1] !== null}
+              <span>{nomsTours[reservation.tour - 1]}</span>
             {:else}
               <span>{t('participants.fiche.auTour')}</span> <span>{reservation.tour}</span>
             {/if}
@@ -683,7 +690,7 @@
       <tbody>
         {#each etapes as etape (etape.tour)}
           <tr data-itineraire-tour={etape.tour}>
-            <td>{etape.tour}</td>
+            <td>{nomsTours[etape.tour - 1] ?? etape.tour}</td>
             {#if etape.reserve}
               <td colspan="2">{t('participants.fiche.enReserve')}</td>
             {:else if etape.absente}
@@ -719,7 +726,7 @@
         <ul class="conflits-placement">
           {#each conflitsPlacement as conflit (conflit.cle)}
             <li>
-              <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero })}</span>
+              <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero, nomsTours })}</span>
               {#if conflit.avec.length === 0}
                 <span class="valeur">{nomAffiche(participant)}</span>
               {:else}
@@ -728,7 +735,7 @@
                         >{t('participants.conflit.et')}</span
                       >{' '}{/if}{/if}<span class="valeur">{nom}</span>{/each}
               {/if}
-              <span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja })}</span>
+              <span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja, nomsTours })}</span>
             </li>
           {/each}
         </ul>
@@ -802,7 +809,7 @@
                   {/if}
                 </th>
                 <td class="fois">{rencontre.fois}</td>
-                <td>{t('participants.fiche.rencontres.toursListe', { tours: rencontre.tours })}</td>
+                <td>{t('participants.fiche.rencontres.toursListe', { tours: rencontre.tours, nomsTours })}</td>
               </tr>
             {/each}
           </tbody>

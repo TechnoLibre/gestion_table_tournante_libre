@@ -15,7 +15,7 @@
 // charge. Un libellé figé reçoit le numéro de table que la commande lit dans
 // la charge.
 import { POIDS_MAX } from '../../moteur/criteres.js';
-import { auxToursNommes, cite, compte, enumeration, nomDans } from './aides.js';
+import { auxToursNommes, cite, compte, enumeration, nomDans, tourDansPhrase, tourOuNom } from './aides.js';
 
 // Le nom de chaque réglage que modifierReglage change, tel que le journal le
 // fige (§ 5.3, § 5.10).
@@ -86,22 +86,22 @@ const NOMS_DES_REGLES = new Map([
 const nomRegle = (regle) => nomDans(NOMS_DES_REGLES, regle, 'règle');
 
 // Le lieu d'un objectif dans un libellé figé : sa table, et son tour quand
-// il n'est pas de la soirée.
-const lieuObjectif = (numero, tour) => (tour === null ? `Table ${numero}` : `Table ${numero}, tour ${tour}`);
+// il n'est pas de la soirée, nommé sous nomsTours (aides.js).
+const lieuObjectif = (numero, tour, nomsTours) => (tour === null ? `Table ${numero}` : `Table ${numero}, ${tourOuNom(tour, nomsTours)}`);
 
 // Ce qu'un avis ou un refus dit du tour de l'objectif qu'il désigne.
-const aCeTour = (tour) => (tour === null ? 'pour la soirée' : `au tour ${tour}`);
+const aCeTour = (tour, nomsTours) => (tour === null ? 'pour la soirée' : `au ${tourDansPhrase(tour, nomsTours)}`);
 
 // La cause qui laisse une personne à désigner à la création des tables
 // (repartitionALaCreation) : son absence et ses tours, une réservation
 // qu'elle tient déjà, ou des tables créées qui ont toutes leur compte
 // d'animateurs. Une cause inconnue lève.
 const CAUSES_NON_DESIGNEE = new Map([
-  ['absente', (tours) => `absente ${auxToursNommes(tours)}`],
+  ['absente', (tours, nomsTours) => `absente ${auxToursNommes(tours, nomsTours)}`],
   ['reservee', () => 'une place lui est déjà réservée'],
   ['tablesPleines', () => "plus de place d'animateur aux tables créées"],
 ]);
-const causeNonDesignee = (cause, tours) => nomDans(CAUSES_NON_DESIGNEE, cause, 'cause')(tours);
+const causeNonDesignee = (cause, tours, nomsTours) => nomDans(CAUSES_NON_DESIGNEE, cause, 'cause')(tours, nomsTours);
 
 // Ce qui précède la désignation à la rangée « Animateurs », par cause : une
 // absente à un tour y est refusée tant que sa présence ne couvre pas tous
@@ -150,6 +150,10 @@ export const TABLE = new Map([
     ({ longueur, maximum }) => `Le libellé compte ${longueur} caractères : celui d'une table en compte au plus ${maximum}.`,
   ],
   [
+    'NOM_TOUR_TROP_LONG',
+    ({ longueur, maximum }) => `Le nom compte ${longueur} caractères : celui d'un tour en compte au plus ${maximum}.`,
+  ],
+  [
     'PRESENCE_VIDEE_PAR_TOURS',
     ({ participants, tours }) => {
       const seule = participants.length <= 1;
@@ -175,14 +179,14 @@ export const TABLE = new Map([
   // --- Les refus d'une capacité (§ 6.2, § 7.1) -------------------------------
   [
     'SOUS_RESERVATIONS',
-    ({ n, tour }) =>
-      `La table porte ${compte(n, 'réservation', 'réservations')} au tour ${tour} : ` +
+    ({ n, tour, nomsTours }) =>
+      `La table porte ${compte(n, 'réservation', 'réservations')} au ${tourDansPhrase(tour, nomsTours)} : ` +
       `elle ne descend pas sous ${compte(n, 'place', 'places')}.`,
   ],
   [
     'SOUS_OCCUPES',
-    ({ n, tour }) =>
-      `Au tour ${tour}, la table occupe ${compte(n, 'place', 'places')} : la poignée ne descend pas en deçà.`,
+    ({ n, tour, nomsTours }) =>
+      `Au ${tourDansPhrase(tour, nomsTours)}, la table occupe ${compte(n, 'place', 'places')} : la poignée ne descend pas en deçà.`,
   ],
   [
     'SIEGES_RETIRES',
@@ -204,8 +208,8 @@ export const TABLE = new Map([
   // --- Les avertissements d'une capacité (§ 6.2) -----------------------------
   [
     'SURNUMERAIRES',
-    ({ tour, personnes }) =>
-      `Au tour ${tour}, ${compte(personnes.length, 'personne passe', 'personnes passent')} dans la réserve : ` +
+    ({ tour, personnes, nomsTours }) =>
+      `Au ${tourDansPhrase(tour, nomsTours)}, ${compte(personnes.length, 'personne passe', 'personnes passent')} dans la réserve : ` +
       `la table n'a plus de chaise pour ${personnes.length <= 1 ? 'elle' : 'elles'}.`,
   ],
   [
@@ -227,9 +231,9 @@ export const TABLE = new Map([
   // (PREALABLES_NON_DESIGNEE), dans l'ordre de cette table.
   [
     'ANIMATEURS_A_DESIGNER',
-    ({ personnes }) => {
+    ({ personnes, nomsTours }) => {
       const une = personnes.length === 1;
-      const termes = personnes.map(({ personne, cause, tours }) => `${personne} (${causeNonDesignee(cause, tours)})`);
+      const termes = personnes.map(({ personne, cause, tours }) => `${personne} (${causeNonDesignee(cause, tours, nomsTours)})`);
       const causes = new Set(personnes.map(({ cause }) => cause));
       const prealables = [...PREALABLES_NON_DESIGNEE].filter(([cause]) => causes.has(cause)).map(([, texte]) => ` ${texte}`);
       return (
@@ -247,8 +251,8 @@ export const TABLE = new Map([
   // sans objectif n'a rien à retirer, et le refus nomme sa cause seule (§ 5.9).
   [
     'OBJECTIF_SANS_ETIQUETTE',
-    ({ tour, remede }) =>
-      `Un objectif ${aCeTour(tour)} vise au moins une étiquette.` +
+    ({ tour, remede, nomsTours }) =>
+      `Un objectif ${aCeTour(tour, nomsTours)} vise au moins une étiquette.` +
       (remede === null || remede === undefined
         ? ''
         : " Pour que la table n'attende plus personne, « Retirer l'objectif »."),
@@ -256,8 +260,8 @@ export const TABLE = new Map([
   ['TABLE_DISPARUE', ({ table }) => `La table d'identifiant ${table} n'est plus dans cet événement.`],
   [
     'OBJECTIF_SANS_CORRESPONDANT',
-    ({ tour }) =>
-      `Aucune personne présente ne correspond à l'objectif ${aCeTour(tour)} : la table ne servira personne à ce titre.`,
+    ({ tour, nomsTours }) =>
+      `Aucune personne présente ne correspond à l'objectif ${aCeTour(tour, nomsTours)} : la table ne servira personne à ce titre.`,
   ],
   [
     'ETIQUETTE_ORPHELINE',
@@ -330,6 +334,10 @@ export const TABLE = new Map([
     'ENTREE_CHANGER_LIBELLE_TABLE',
     ({ numero, libelle }) => `Table ${numero} : ${libelle === null ? 'libellé retiré' : `libellé ${cite(libelle)}`}`,
   ],
+  [
+    'ENTREE_CHANGER_NOM_TOUR',
+    ({ tour, nom }) => `Tour ${tour} : ${nom === null ? 'nom retiré' : `nom ${cite(nom)}`}`,
+  ],
   ['ENTREE_CHANGER_PLACES_TABLE', ({ numero, sieges }) => `Table ${numero} : ${compte(sieges, 'place', 'places')}`],
   ['ENTREE_REALIGNER_TABLE', ({ numero, sieges }) => `Table ${numero} : suit le défaut (${compte(sieges, 'place', 'places')})`],
   [
@@ -339,11 +347,12 @@ export const TABLE = new Map([
   ],
   [
     'ENTREE_CHANGER_TOURS',
-    ({ tours, retirees, objectifsRetires = 0, presencesRognees = 0 }) => {
+    ({ tours, retirees, objectifsRetires = 0, presencesRognees = 0, nomsRetires = 0 }) => {
       const retires = [];
       if (retirees > 0) retires.push(compte(retirees, 'réservation retirée', 'réservations retirées'));
       if (objectifsRetires > 0) retires.push(compte(objectifsRetires, 'objectif retiré', 'objectifs retirés'));
       if (presencesRognees > 0) retires.push(compte(presencesRognees, 'présence rognée', 'présences rognées'));
+      if (nomsRetires > 0) retires.push(compte(nomsRetires, 'nom de tour retiré', 'noms de tour retirés'));
       return `Nombre de tours : ${tours}${retires.length > 0 ? ` ; ${retires.join(', ')}` : ''}`;
     },
   ],
@@ -354,13 +363,13 @@ export const TABLE = new Map([
   ],
   [
     'ENTREE_POSER_OBJECTIF',
-    ({ numero, tour, regle, etiquettes }) =>
-      `${lieuObjectif(numero, tour)} : objectif${tour === null ? ' de la soirée' : ''} ` +
+    ({ numero, tour, regle, etiquettes, nomsTours }) =>
+      `${lieuObjectif(numero, tour, nomsTours)} : objectif${tour === null ? ' de la soirée' : ''} ` +
       `${enumeration(etiquettes.map(cite))}, ${regle === null ? 'règle par défaut' : nomRegle(regle)}`,
   ],
   [
     'ENTREE_RETIRER_OBJECTIF',
-    ({ numero, tour }) => `${lieuObjectif(numero, tour)} : objectif${tour === null ? ' de la soirée' : ''} retiré`,
+    ({ numero, tour, nomsTours }) => `${lieuObjectif(numero, tour, nomsTours)} : objectif${tour === null ? ' de la soirée' : ''} retiré`,
   ],
   ['ENTREE_CHANGER_REGLE_OBJECTIFS', ({ regle }) => `Règle par défaut des objectifs : ${nomRegle(regle)}`],
   // Le critère déplacé, ou les critères d'un palier déplacé entier, et le

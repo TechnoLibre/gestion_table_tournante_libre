@@ -85,18 +85,18 @@ function ajoutsEtRetraits(ajoutees, retirees, nommer) {
 
 // Des tours nommés après « au lieu » : « de tous les tours », « du tour 2 »,
 // « des tours 1 et 3 ».
-const auLieuDe = (tours) => {
+const auLieuDe = (tours, nomsTours) => {
   if (tours === null) return 'de tous les tours';
-  return `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours)}`;
+  return `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours, nomsTours)}`;
 };
 
 // Ce que le retenu fait d'une personne dont la présence change : retirée
 // des tours qu'elle perd, mise en réserve à ceux qu'elle gagne ; rien
-// quand il ne bouge pas.
-function dansLeRetenu(retiree, enReserve) {
+// quand il ne bouge pas. Les tours se nomment sous nomsTours (aides.js).
+function dansLeRetenu(retiree, enReserve, nomsTours) {
   const parties = [];
-  if (retiree.length > 0) parties.push(`retirée du placement retenu ${auxToursNommes(retiree)}`);
-  if (enReserve.length > 0) parties.push(`mise en réserve ${auxToursNommes(enReserve)}`);
+  if (retiree.length > 0) parties.push(`retirée du placement retenu ${auxToursNommes(retiree, nomsTours)}`);
+  if (enReserve.length > 0) parties.push(`mise en réserve ${auxToursNommes(enReserve, nomsTours)}`);
   return parties.length > 0 ? ` ; ${parties.join(', ')}` : '';
 }
 
@@ -207,31 +207,31 @@ export const TABLE = new Map([
   // --- La présence par tour (§ 4, § 5.8, § 9) -------------------------------
   [
     'RESERVATIONS_SUSPENDUES_AUX_TOURS',
-    ({ personne, reservations, tours, titres }) =>
-      `Absence de ${personne} ${auxToursNommes(tours)} : ` +
+    ({ personne, reservations, tours, titres, nomsTours }) =>
+      `Absence de ${personne} ${auxToursNommes(tours, nomsTours)} : ` +
       `${compte(reservations, 'réservation suspendue', 'réservations suspendues')}, ` +
       `${reservations <= 1 ? 'sa place y revient' : 'ses places y reviennent'} aux autres` +
       `${titresDe(titres, "n'y est plus pourvu", "n'y sont plus pourvus")}.`,
   ],
   [
     'RESERVATIONS_RETABLIES_AUX_TOURS',
-    ({ personne, reservations, tours, titres }) =>
-      `Présence de ${personne} ${auxToursNommes(tours)} : ` +
+    ({ personne, reservations, tours, titres, nomsTours }) =>
+      `Présence de ${personne} ${auxToursNommes(tours, nomsTours)} : ` +
       `${compte(reservations, 'réservation rétablie', 'réservations rétablies')}` +
       `${titresDe(titres, 'de nouveau pourvu', 'de nouveau pourvus')}.`,
   ],
   [
     'A_PLACER_DANS_LE_RETENU',
-    ({ personne, tours, tousLesTours }) =>
-      `${personne} attend en réserve du placement retenu ${auxToursNommes(tours)} : ` +
+    ({ personne, tours, tousLesTours, nomsTours }) =>
+      `${personne} attend en réserve du placement retenu ${auxToursNommes(tours, nomsTours)} : ` +
       'à placer à la main, ou par une proposition dérivée.' +
       (tousLesTours === true ? ' Si elle arrive en cours de soirée, dire à quels tours elle est présente.' : ''),
   ],
   [
     'RENCONTRES_RETIREES_DU_RETENU',
-    ({ personne, tours }) =>
-      `${personne} était assise ${auxToursNommes(tours)} du placement retenu : ses rencontres de ces tours ` +
-      `n'y comptent plus. Pour les garder, défaire, puis la dire présente ${auxToursNommes(tours)} seulement.`,
+    ({ personne, tours, nomsTours }) =>
+      `${personne} était assise ${auxToursNommes(tours, nomsTours)} du placement retenu : ses rencontres de ces tours ` +
+      `n'y comptent plus. Pour les garder, défaire, puis la dire présente ${auxToursNommes(tours, nomsTours)} seulement.`,
   ],
 
   // --- Les libellés figés du journal (§ 8.2, § 8.3) --------------------------
@@ -307,7 +307,8 @@ export const TABLE = new Map([
   ],
   [
     'ENTREE_CHANGER_PRESENCE',
-    ({ personne, tours, avant, retiree, enReserve }) =>
-      `Présence de ${personne} : ${toursNommes(tours)}, au lieu ${auLieuDe(avant)}${dansLeRetenu(retiree, enReserve)}`,
+    ({ personne, tours, avant, retiree, enReserve, nomsTours }) =>
+      `Présence de ${personne} : ${toursNommes(tours, nomsTours)}, au lieu ${auLieuDe(avant, nomsTours)}` +
+      dansLeRetenu(retiree, enReserve, nomsTours),
   ],
 ]);

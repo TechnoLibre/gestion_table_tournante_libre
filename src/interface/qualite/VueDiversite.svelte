@@ -24,7 +24,11 @@
   // la carte ne transmet pas ; data-equite sur les trois nombres d'une
   // colonne, par sa grandeur ; data-phrase-qualite sur chaque phrase, par son
   // cas.
+  //
+  // Les tours se nomment par les noms que leur donne la charge de la séance
+  // (nomsDesTours), sinon par « Tour 3 ».
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Carte from '../primitives/Carte.svelte';
   import { modeleDiversite } from './animateurs.js';
   import Barres from './graphiques/Barres.svelte';
@@ -33,8 +37,10 @@
   let { detail = null, ligne = null, table = null } = $props();
 
   const t = getContext('t');
+  const seance = getContext('seance');
   const format = getContext('format');
-  const modele = $derived(modeleDiversite(detail, t));
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
+  const modele = $derived(modeleDiversite(detail, t, nomsTours));
 </script>
 
 <!-- Les trois nombres d'une colonne, sous son titre. -->

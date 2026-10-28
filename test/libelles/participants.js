@@ -71,6 +71,11 @@ export const EXEMPLES = [
 
 export const TEXTES = [
   [
+    'ENTREE_CHANGER_PRESENCE',
+    { personne: 'Iris Ombrelle', tours: [1, 2], avant: null, retiree: [3], enReserve: [], nomsTours: ['Apéritif', null, 'Dessert'] },
+    'Présence de Iris Ombrelle : tours 1 (Apéritif) et 2, au lieu de tous les tours ; retirée du placement retenu au tour 3 (Dessert)',
+  ],
+  [
     'RESERVATIONS_SUSPENDUES_AUX_TOURS',
     { participant: 1, personne: 'Iris Ombrelle', reservations: 2, tours: [3, 4], titres: 1 },
     "Absence de Iris Ombrelle aux tours 3 et 4 : 2 réservations suspendues, ses places y reviennent aux autres, et 1 titre de place n'y est plus pourvu.",

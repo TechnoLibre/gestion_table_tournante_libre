@@ -36,6 +36,7 @@
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { comptesTitres } from '../../application/listes_travail.js';
   import { libellePropose } from '../../application/places.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Commande from '../primitives/Commande.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import { effetDe } from '../raccourcis.js';
@@ -51,6 +52,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(charge === null ? [] : nomsDesTours(charge));
   const selection = $derived($ui.selection);
   const table = $derived(charge !== null && selection !== null && (selection.siege ?? null) === null ? selection.table : null);
   const etat = $derived(table === null ? null : etatTour);
@@ -67,7 +70,7 @@
   });
   const nommee = $derived(etatTable === undefined ? null : libellePlace({ numero: etatTable.numero, siege: null }));
   const lignes = $derived(
-    etatTable === undefined ? [] : etatTable.chaises.map((chaise) => partiesLigne(textesLigne(ligneListe(chaise, nomDe), t))),
+    etatTable === undefined ? [] : etatTable.chaises.map((chaise) => partiesLigne(textesLigne(ligneListe(chaise, nomDe, null, nomsTours), t))),
   );
   const choix = $derived($ui.choix);
   const personne = $derived(choix !== null && choix.genre === 'personne' ? choix : null);

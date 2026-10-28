@@ -85,6 +85,11 @@ export const EXEMPLES = [
 ];
 
 export const TEXTES = [
+  [
+    'DEPART_ECART_AU_RETENU',
+    { depart: 4, tours: [2], nomsTours: [null, 'Plat principal'] },
+    "Le tour figé 2 (Plat principal) vient de la proposition n° 4 : les retouches du placement retenu à ce tour n'y sont pas.",
+  ],
   ['ENTREE_RETENIR_PROPOSITION', { id: 3, ajuste: false }, 'Retenu la proposition n° 3'],
   ['ENTREE_RETENIR_PROPOSITION', { id: 3, ajuste: true }, 'Retenu la proposition n° 3 ; ajusté à la présence'],
   [

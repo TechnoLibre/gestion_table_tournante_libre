@@ -61,6 +61,7 @@
   //
   // Sans bandeMm, la vue rend sa feuille gabarit, que l'aperçu mesure.
   import { getContext, tick } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import { englobant } from '../../geometrie/tables.js';
   import { modeleDessin } from '../plan/modele.js';
   import PlanDessin from '../plan/PlanDessin.svelte';
@@ -93,6 +94,10 @@
   const HAUTEUR_DESSIN_MM = 40;
 
   const charge = $derived($seance.charge);
+  // La tête d'un tour : son nom, une donnée posée telle quelle, ou son
+  // libellé, « Tour 3 », pour un tour sans nom.
+  const nomsTours = $derived(nomsDesTours(charge));
+  const teteDuTour = (tour) => nomsTours[tour - 1] ?? t('feuilles.tour', { tour });
   const etats = $derived(etatsDesTours(charge, etat.proposition));
   const listes = $derived(feuillesTables(charge, etats, { parTour: options.parTour }));
   // Le modèle du plan imprimé de chaque tour, sans listes, quand la feuille
@@ -237,7 +242,7 @@
   <table class="sonde" bind:this={sondes[rangListe]}>
     <tbody>
       {#each liste.tours as tour (tour)}
-        <tr><th>{t('feuilles.tour', { tour })}</th></tr>
+        <tr><th>{teteDuTour(tour)}</th></tr>
       {/each}
       {#each liste.lignes as ligne (ligne.place)}
         {#each ligne.cellules as cellule (cellule.tour)}
@@ -296,7 +301,7 @@
         <tr>
           <th scope="col">{t('feuilles.tables.place')}</th>
           {#each liste.tours as tour (tour)}
-            <th scope="col">{t('feuilles.tour', { tour })}</th>
+            <th scope="col">{teteDuTour(tour)}</th>
           {/each}
         </tr>
       </thead>

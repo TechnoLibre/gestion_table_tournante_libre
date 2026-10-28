@@ -1800,6 +1800,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['realignerTable', { id: 1 }],
       ['changerDefaut', { sieges: 3, realigner: false }],
       ['changerTours', { tours: 3 }],
+      ['changerNomTour', { tour: 1, nom: 'Apéritif' }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['changerEtiquettes', { id: 3, ajouter: 'finance' }],
       ['ajouterConflit', { id: 4, organisation: 'Club des Merles' }],

@@ -35,6 +35,7 @@ import { SEPARATEUR, ecrireCsv } from '../csv/export.js';
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { cleNormalisee } from '../csv/normalisation.js';
 import { MODELES_BADGE, PAPIERS, PAPIER_BADGES_DEFAUT, estModeleBadge } from '../geometrie/papiers.js';
+import { nomsDesTours } from '../stockage/document.js';
 import { derive, fautes } from '../stockage/placements.js';
 import { raisonsNommees } from './avertissements.js';
 import { formeNommeeDe } from './commandes.js';
@@ -50,6 +51,9 @@ import { versionVisible } from './version.js';
  * @typedef {Object} LigneTour
  * @property {number|null} tour     null : « Toute la soirée », un itinéraire
  *                                  constant sur R ≥ 2 tours
+ * @property {string} [nomTour]     le nom du tour, en NFC, sur une ligne ;
+ *                                  absent quand le tour n'en porte pas, et
+ *                                  sur « Toute la soirée »
  * @property {number|null} table    le numéro affiché ; null : « pas de table »
  * @property {string} [libelleTable]   le libellé de la table, en NFC ;
  *                                  absent quand la table n'en porte pas, ou
@@ -238,9 +242,9 @@ export function refusPlanche(charge, { source = 'retenu', proposition = null } =
  *   participants, où le nom se corrige ;
  * - PLANCHE_TROP_DE_TOURS {tours, lignesLongues} : lignesLongues est vrai
  *   quand les lignes de tour débordent parce qu'elles se replient (repliees
- *   de la mise en page) et que l'une porte un libellé de table ou un
- *   titre, qui l'allonge. Le refus nomme alors la personne
- *   {participant, personne}, vers la section des tables, où libellé et
+ *   de la mise en page) et que l'une porte un nom de tour, un libellé de
+ *   table ou un titre, qui l'allonge. Le refus nomme alors la personne
+ *   {participant, personne}, vers la section des tables, où nom, libellé et
  *   titre se raccourcissent ; sinon, il ne dit que le nombre de tours,
  *   sans remède.
  *
@@ -260,7 +264,7 @@ export function refusProduction(code, { repliees = false, ...details }, badge) {
   if (code === NOM_TROP_LONG) {
     return { code, details: { ...details, ...personne, remede: { geste: 'ouvrirSection', section: 'participants' } } };
   }
-  const allongee = ({ libelleTable, titre }) => libelleTable !== undefined || titre !== null;
+  const allongee = ({ nomTour, libelleTable, titre }) => nomTour !== undefined || libelleTable !== undefined || titre !== null;
   if (!(repliees && badge.lignes.some(allongee))) return { code, details: { ...details, lignesLongues: false, remede: null } };
   return { code, details: { ...details, lignesLongues: true, ...personne, remede: { geste: 'ouvrirSection', section: 'tables' } } };
 }
@@ -329,10 +333,13 @@ function titresImprimes(charge, places, siegesAttribues) {
 // réserve ou d'absence garde son tour : « pas de table » et « absente » ont
 // la même table null, la réserve n'est pas une table, et la réserve d'un
 // tour ne se fond ni avec celle d'un autre ni avec l'absence d'un autre.
-// Une ligne ne porte libelleTable que quand sa table a un libellé.
-function lignesDe(id, places, titres) {
+// Une ligne ne porte libelleTable que quand sa table a un libellé, et
+// nomTour que quand son tour a un nom (nomsTours, un élément par tour, null
+// sans nom).
+function lignesDe(id, places, titres, nomsTours) {
   const lignes = places.get(id).map((place, indice) => ({
     tour: indice + 1,
+    ...((nomsTours[indice] ?? null) === null ? {} : { nomTour: nomsTours[indice] }),
     table: place.numero,
     ...(place.libelle === null ? {} : { libelleTable: place.libelle }),
     siege: place.siege,
@@ -349,27 +356,34 @@ function lignesDe(id, places, titres) {
       siege === premiere.siege &&
       titre === premiere.titre,
   );
-  if (lignes.length >= 2 && constante) return [{ ...premiere, tour: null }];
-  return lignes;
+  if (!(lignes.length >= 2 && constante)) return lignes;
+  const soiree = { ...premiere, tour: null };
+  delete soiree.nomTour;
+  return [soiree];
 }
 
 // Les caractères qui tiennent la place des textes libres d'une ligne de
-// tour pendant qu'elle se compose : deux points de code d'usage privé, que
-// les libellés de la planche n'écrivent jamais. Les textes libres — le
-// libellé de la table, le titre — ne s'insèrent qu'ensuite : leur contenu,
-// quel qu'il soit, ne se lit jamais comme une place à remplir.
+// tour pendant qu'elle se compose : trois points de code d'usage privé, que
+// les libellés de la planche n'écrivent jamais. Les textes libres — le nom
+// du tour, le libellé de la table, le titre — ne s'insèrent qu'ensuite :
+// leur contenu, quel qu'il soit, ne se lit jamais comme une place à
+// remplir.
 const TENANT_LIBELLE = '\u{E000}';
 const TENANT_TITRE = '\u{E001}';
+const TENANT_TOUR = '\u{E002}';
 
-// Le texte d'une ligne de tour composé par libelle, le libellé de la table
-// et le titre insérés tels quels à la place de leurs tenants (§ 11.4).
+// Le texte d'une ligne de tour composé par libelle, le nom du tour, le
+// libellé de la table et le titre insérés tels quels à la place de leurs
+// tenants (§ 11.4).
 function ligneComposee(ligne) {
   const tenue = { ...ligne, titre: ligne.titre === null ? null : TENANT_TITRE };
   if (ligne.libelleTable !== undefined) tenue.libelleTable = TENANT_LIBELLE;
+  if (ligne.nomTour !== undefined) tenue.nomTour = TENANT_TOUR;
   const gabarit = libelle(ligne.tour === null ? 'planche.touteLaSoiree' : 'planche.tour', tenue);
   const libres = new Map([
     [TENANT_LIBELLE, ligne.libelleTable],
     [TENANT_TITRE, ligne.titre],
+    [TENANT_TOUR, ligne.nomTour],
   ]);
   let texte = '';
   for (const caractere of gabarit) {
@@ -489,6 +503,7 @@ export function modelePlanche(
   const cible = source === 'retenu' ? { retenu: true } : { proposition };
   const places = placesParTour(charge, cible, placement.tours);
   const titres = titresImprimes(charge, places, placement.siegesAttribues);
+  const nomsTours = nomsDesTours(charge).map(surUneLigne);
   const homonymes = homonymesDe(charge);
   const identifiants = new Set(homonymes.flatMap(({ ids }) => ids));
   const evenement = { nom: charge.evenement.nom.normalize('NFC'), date: charge.evenement.date };
@@ -504,7 +519,7 @@ export function modelePlanche(
       participant: personne.id,
       nom: nomAffiche(personne).normalize('NFC'),
       organisation,
-      lignes: lignesDe(personne.id, places, titres),
+      lignes: lignesDe(personne.id, places, titres, nomsTours),
       identifiant: identifiants.has(personne.id) ? personne.id : null,
     };
     const textes = textesDe(badge, evenement, horodatage, cacherNumero && personne.nomNumerote === true);

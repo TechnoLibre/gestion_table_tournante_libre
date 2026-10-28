@@ -22,6 +22,7 @@
 // RESERVATION_NON_HONOREE après le geste, sans le refuser.
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { estPresentAuTour, presenceCanonique } from '../moteur/presence.js';
+import { nomsDesTours } from '../stockage/document.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { ajusterALaPresence, fautes } from '../stockage/placements.js';
 import { refus } from './erreurs.js';
@@ -294,6 +295,7 @@ function changerPresence(charge, { id, tours } = {}) {
       avant: presenceSaisie(personne),
       retiree: toursDe(ajustement.partis),
       enReserve: toursDe(ajustement.arrives),
+      nomsTours: nomsDesTours(charge),
     }),
     avertissements: [
       ...reservationsAuxTours(charge, suivante, renduePersonne),

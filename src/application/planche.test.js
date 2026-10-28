@@ -863,7 +863,7 @@ describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8
       details: { tours: 15, lignesLongues: false, remede: null },
     });
     // Un libellé ou un titre sur une ligne : la personne, vers les tables.
-    for (const longue of [ligne({ libelleTable: 'Terrasse côté jardin nord' }), ligne({ titre: 'animateur VIP' })]) {
+    for (const longue of [ligne({ libelleTable: 'Terrasse côté jardin nord' }), ligne({ titre: 'animateur VIP' }), ligne({ nomTour: 'Plat principal' })]) {
       assert.deepEqual(refusProduction('PLANCHE_TROP_DE_TOURS', { tours: 8, repliees: true }, badge([ligne({ tour: 2 }), longue])), {
         code: 'PLANCHE_TROP_DE_TOURS',
         details: {
@@ -890,7 +890,7 @@ describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8
     assert.match(libelle('PLANCHE_TROP_DE_TOURS', { tours: 40, lignesLongues: false, remede: null }), /\b40 tours\b/);
     const longues = libelle('PLANCHE_TROP_DE_TOURS', { tours: 8, lignesLongues: true, participant: 3, personne: 'Ondine Lacasse' });
     assert.match(longues, /Ondine Lacasse/);
-    assert.match(longues, /libellé de table ou un titre/);
+    assert.match(longues, /nom de tour, un libellé de table ou un titre/);
     assert.doesNotMatch(longues, /\b8 tours\b/);
     assert.match(libelle('PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse' }), /Ondine Lacasse/);
     assert.match(libelle('PLANCHE_NOM_TROP_LONG', { participant: 3 }), /n° 3\b/);
@@ -904,6 +904,27 @@ describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8
     assert.match(derive, /Ondine Grisaille/);
     assert.match(derive, /de 3 à 4/);
     assert.ok(libelle('PLANCHE_SANS_PLACEMENT', { remede: VERS_PROPOSITIONS }).length > 0);
+  });
+});
+
+describe('planche : le nom du tour sur les lignes de tour (§ 11.4)', () => {
+  test('« <nom du tour> — table 7 » pour un tour nommé, « Tour 2 » pour les autres ; « Toute la soirée » ne porte aucun nom', () => {
+    const charge = aReserve();
+    charge.evenement.nomsTours = ['Plat principal', null];
+    const m = modele(charge);
+    assert.deepEqual(badgeDe(m, 2).textes.lignes, ['Plat principal — table 7', 'Tour 2 — pas de table']);
+    assert.equal(badgeDe(m, 2).lignes[0].nomTour, 'Plat principal');
+    assert.equal(Object.hasOwn(badgeDe(m, 2).lignes[1], 'nomTour'), false);
+    assert.deepEqual(badgeDe(m, 1).textes.lignes, ['Toute la soirée — table 7']);
+    assert.equal(Object.hasOwn(badgeDe(m, 1).lignes[0], 'nomTour'), false);
+    // La liste CSV reprend les lignes du badge, texte pour texte.
+    assert.ok(texteCsv(listeBadges(m, charge)).includes('Plat principal — table 7\nTour 2 — pas de table'));
+  });
+
+  test('le nom s’insère tel quel : un caractère d’usage privé ou un texte qui ressemble à un gabarit ne se lit jamais comme une place à remplir', () => {
+    const charge = aReserve();
+    charge.evenement.nomsTours = [null, 'Mets \u{E000}\u{E001} ${tour}'];
+    assert.deepEqual(badgeDe(modele(charge), 5).textes.lignes, ['Tour 1 — pas de table', 'Mets \u{E000}\u{E001} ${tour} — table 7']);
   });
 });
 

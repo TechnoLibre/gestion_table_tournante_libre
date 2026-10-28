@@ -10,8 +10,10 @@
   //
   // Un groupe nommé « Présence de <nom>, une case par tour » : dans la
   // grille, un groupe compact, data-editeur-presence, dont chaque case
-  // affiche son numéro et se nomme « Tour r » ; dans la fiche, un fieldset
-  // titré « Présente aux tours », chaque case sous son nom entier. Chaque
+  // affiche son numéro et se nomme par le nom de son tour, « Tour r » sans
+  // lui ; dans la fiche, un fieldset titré « Présente aux tours », chaque
+  // case sous ce nom entier. nomsTours porte les noms des tours de
+  // l'événement (nomsDesTours) ; absent, aucun tour n'a de nom. Chaque
   // case porte data-presence-tour. Les cases passent à la ligne quand la
   // place manque : R peut aller jusqu'à TOURS_MAX.
   //
@@ -31,6 +33,7 @@
   let {
     cases,
     nom,
+    nomsTours = undefined,
     compact = false,
     invalide = false,
     decrit = undefined,
@@ -66,14 +69,14 @@
         data-presence-tour={tour}
         checked={coche}
         tabindex={tour === tourActif ? 0 : -1}
-        aria-label={compact ? t('participants.presence.case', { tour }) : undefined}
+        aria-label={compact ? t('participants.presence.case', { tour, nomsTours }) : undefined}
         aria-invalid={invalide ? 'true' : undefined}
         aria-describedby={decrit}
         onfocus={() => (active = tour)}
         onchange={(evenement) => basculer(tour, evenement.currentTarget.checked)}
         onkeydown={(evenement) => surTouche(evenement, tour)}
       />
-      <span>{t(compact ? 'participants.presence.caseCourte' : 'participants.presence.case', { tour })}</span>
+      <span>{t(compact ? 'participants.presence.caseCourte' : 'participants.presence.case', { tour, nomsTours })}</span>
     </label>
   {/each}
 {/snippet}

@@ -31,6 +31,7 @@
   // passe au menu.
   import { getContext, onDestroy, untrack } from 'svelte';
   import { libellePropose } from '../../application/places.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Commande from '../primitives/Commande.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import { effetDe } from '../raccourcis.js';
@@ -48,6 +49,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(charge === null ? [] : nomsDesTours(charge));
   const selection = $derived($ui.selection);
   const place = $derived(charge !== null && selection !== null && (selection.siege ?? null) !== null ? selection : null);
   const etat = $derived(place === null ? null : etatTour);
@@ -58,7 +61,7 @@
   const choix = $derived($ui.choix);
   const personne = $derived(choix !== null && choix.genre === 'personne' ? choix : null);
   const actions = $derived(chaise === null ? [] : actionsPlace(chaise, choix));
-  const parties = $derived(chaise === null ? [] : partiesLigne(textesLigne(ligneListe(chaise, nomDe), t)));
+  const parties = $derived(chaise === null ? [] : partiesLigne(textesLigne(ligneListe(chaise, nomDe, null, nomsTours), t)));
   const nommee = $derived(etatTable === undefined ? null : libellePlace({ numero: etatTable.numero, siege: place.siege }));
 
   // Le libellé proposé : le titre pressenti de la personne choisie, sinon
@@ -200,7 +203,7 @@
         <label class="champ">
           <span>{t('plan.portee.etiquette')}</span>
           <select data-champ="portee" value={portee} onchange={(evenement) => (portee = evenement.currentTarget.value)}>
-            <option value="tour">{t('plan.portee.tour', { tour })}</option>
+            <option value="tour">{t('plan.portee.tour', { tour, nomsTours })}</option>
             <option value="tous">{t('plan.portee.tous')}</option>
           </select>
         </label>

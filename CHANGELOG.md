@@ -488,6 +488,16 @@
   les listes de noms paraissent et sur le plan imprimé. Le panneau de la
   table, son infobulle, son nom pour les lecteurs d'écran et le titre de sa
   feuille imprimée le portent aussi. Il ne change aucun placement.
+- Chaque tour peut porter un **nom** — « Apéritif », « Plat principal » —,
+  soixante caractères au plus, saisi sous « Noms des tours » dans « Tables et
+  tours », un champ par tour, et retiré en vidant le champ. Le nom remplace
+  « Tour 2 » partout où l'application nomme ce tour : la ligne du badge,
+  « Plat principal — table 3 », et la liste des badges en CSV, les têtes de
+  colonnes et le pied des pages imprimées, le choix du tour du plan, de
+  l'aperçu et du départ d'une dérivée, la page de qualité, et les phrases des
+  écrans et de l'historique, où il suit le numéro : « absente au tour 2 (Plat
+  principal) ». Les CSV des participants et des objectifs gardent les
+  numéros, que l'import relit. Le nom ne change aucun placement.
 - L'**ordre des priorités par défaut** commence par l'excédent de collisions,
   puis les rencontres répétées et retours, les collisions cumulées et l'écart
   au plafond a priori : ne pas réunir des collègues ni faire revoir une

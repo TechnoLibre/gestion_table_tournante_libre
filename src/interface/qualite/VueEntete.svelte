@@ -29,6 +29,7 @@
   // de sa colonne ; data-terme sur son libellé ; data-plancher-non-prouve
   // sur la phrase d'un plancher retiré.
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Carte from '../primitives/Carte.svelte';
   import Infobulle from '../primitives/Infobulle.svelte';
   import Pourcentage from './graphiques/Pourcentage.svelte';
@@ -43,7 +44,8 @@
   const idExplication = `${uid}-explication`;
 
   const presenceDe = $derived(presenceDeCharge($seance?.charge ?? null));
-  const entete = $derived(enteteDe({ detail, ligne, table }, { t, format, presenceDe }));
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
+  const entete = $derived(enteteDe({ detail, ligne, table }, { t, format, presenceDe, nomsTours }));
 
   // Le terme expliqué : {ancre, terme, cle, details}, null sans infobulle.
   // Ouvrir sur un terme remplace l'explication d'un autre ; quitter un terme

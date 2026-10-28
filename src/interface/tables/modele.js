@@ -13,6 +13,7 @@ import { appliquerCommande } from '../../application/commandes.js';
 import { cleNormalisee } from '../../application/csv.js';
 import { nomAffiche } from '../../application/personnes.js';
 import { reservationsParTour } from '../../application/pose.js';
+import { estNomParDefaut, nomsDesTours } from '../../application/tours.js';
 
 const parNumero = (a, b) => a.numero - b.numero || a.id - b.id;
 
@@ -163,8 +164,8 @@ export function surchargesPerdues(charge) {
 /**
  * Vrai quand le changement de avant à apres tours s'annonce avant d'être
  * appliqué (§ 2.1 étape 5, § 4.3) : il détruit une réservation « tour
- * désigné » ou un objectif de table d'un tour au-delà, il rogne une
- * présence, exclues comprises, ou, pour une baisse, il laisse en dérive un
+ * désigné », un objectif de table ou le nom d'un tour au-delà, il rogne
+ * une présence, exclues comprises, ou, pour une baisse, il laisse en dérive un
  * placement engendré, entier mais qui porte des tours que l'événement n'a
  * plus. Une hausse ne détruit ni ne rogne rien : les
  * placements qu'elle laisse en dérive restent entiers, et la séance en
@@ -179,6 +180,7 @@ export const annonceTours = (bilan, avant, apres) =>
   bilan.reservationsDetruites.length > 0 ||
   bilan.objectifsDetruits.length > 0 ||
   bilan.presencesRognees.length > 0 ||
+  bilan.nomsRetires.length > 0 ||
   (apres < avant && (bilan.propositionsTouchees.length > 0 || bilan.retenuTouche));
 
 // Les placements qu'un changement laisse en dérive : chaque proposition,
@@ -203,8 +205,10 @@ function etiquettesDe(charge, id, tour) {
  * chaque objectif de table détruit, le numéro de sa table, son tour et ses
  * étiquettes, puis chaque présence rognée, exclues comprises, sa personne,
  * ses tours d'avant et ceux d'après — null quand elle couvre désormais tous
- * les tours —, chacun dans l'ordre du bilan ; puis les placements touchés.
- * Les objectifs de la soirée restent et ne se nomment pas.
+ * les tours —, puis chaque nom de tour retiré, son tour et son nom, chacun
+ * dans l'ordre du bilan ; puis les placements touchés. Les objectifs de la
+ * soirée restent et ne se nomment pas. Chaque détail porte nomsTours, les
+ * noms des tours de la charge, que les libellés lisent (aides.js).
  *
  * @param {Object} charge
  * @param {ReturnType<import('../../application/bilans.js').bilanTours>} bilan
@@ -212,19 +216,21 @@ function etiquettesDe(charge, id, tour) {
  * @throws {TypeError} un objectif du bilan que la charge ne porte pas
  */
 export function elementsTours(charge, bilan) {
+  const nomsTours = nomsDesTours(charge);
   return [
     ...bilan.reservationsDetruites.map(({ participant, table, tour }) => ({
       cle: 'tables.tours.reservation',
-      details: { nom: nomDe(charge, participant), numero: numeroDe(charge.tables, table), tour },
+      details: { nom: nomDe(charge, participant), numero: numeroDe(charge.tables, table), tour, nomsTours },
     })),
     ...bilan.objectifsDetruits.map(({ table, tour }) => ({
       cle: 'tables.tours.objectif',
-      details: { numero: numeroDe(charge.tables, table), tour, etiquettes: etiquettesDe(charge, table, tour) },
+      details: { numero: numeroDe(charge.tables, table), tour, etiquettes: etiquettesDe(charge, table, tour), nomsTours },
     })),
     ...bilan.presencesRognees.map(({ participant, avant, apres }) => ({
       cle: 'tables.tours.presence',
-      details: { nom: nomDe(charge, participant), avant, apres },
+      details: { nom: nomDe(charge, participant), avant, apres, nomsTours },
     })),
+    ...bilan.nomsRetires.map(({ tour, nom }) => ({ cle: 'tables.tours.nomRetire', details: { tour, nom } })),
     ...touches(bilan),
   ];
 }
@@ -245,13 +251,14 @@ export const annonceSuppression = (bilan) => bilan.reservations.length > 0 || bi
  */
 export function elementsSuppression(charge, bilan) {
   if (!annonceSuppression(bilan)) return [];
+  const nomsTours = nomsDesTours(charge);
   return [
     ...bilan.reservations.map(({ participant, portee, tour, siege }) => ({
       cle: 'tables.suppression.reservation',
-      details: { nom: nomDe(charge, participant), portee, tour, siege },
+      details: { nom: nomDe(charge, participant), portee, tour, siege, nomsTours },
     })),
     ...bilan.titres.map(({ siege, libelle }) => ({ cle: 'tables.suppression.titre', details: { siege, libelle } })),
-    ...bilan.objectifs.map(({ tour, etiquettes }) => ({ cle: 'tables.suppression.objectif', details: { tour, etiquettes } })),
+    ...bilan.objectifs.map(({ tour, etiquettes }) => ({ cle: 'tables.suppression.objectif', details: { tour, etiquettes, nomsTours } })),
     ...touches(bilan),
   ];
 }
@@ -305,6 +312,23 @@ export function avertissementsNommes(charge, avertissements) {
 }
 
 /**
+ * La lecture de la saisie du nom du tour tour, comme changerNomTour la
+ * reçoit : en NFC, ses blancs de bord retirés. Le nom par défaut du tour,
+ * « Tour 3 » (estNomParDefaut), se lit comme le texte vide : un champ vide
+ * et un champ qui le porte valent tous deux un tour sans nom, et passer de
+ * l'un à l'autre ne relance rien.
+ *
+ * @param {number} tour
+ * @returns {(texte: string) => {valeur: string}}
+ */
+export function lireNomTour(tour) {
+  return (texte) => {
+    const lu = texte.normalize('NFC').trim();
+    return { valeur: estNomParDefaut(tour, lu) ? '' : lu };
+  };
+}
+
+/**
  * Le refus que la commande nom lèverait sur la charge, essayée sans rien
  * écrire, ou null quand elle passe. Les fenêtres l'appellent avant de
  * s'ouvrir : une saisie que la commande refuse reçoit son refus sur le
@@ -344,8 +368,9 @@ export function animateursNommes(charge, idTable) {
 }
 
 // Le statut d'une personne (statutsPourAnimation) en clé de libellé et
-// détails : chaque genre a sa clé ; les détails gardent ce que le texte lit.
-function statutAffiche(entree) {
+// détails : chaque genre a sa clé ; les détails gardent ce que le texte lit,
+// et les noms des tours, nomsTours, quand il nomme des tours.
+function statutAffiche(entree, nomsTours) {
   const cle = `tables.animateurs.statut.${entree.statut}`;
   switch (entree.statut) {
     case 'animeCetteTable':
@@ -353,11 +378,11 @@ function statutAffiche(entree) {
     case 'animeAutreTable':
       return { cle, details: { table: entree.table, numero: entree.numero } };
     case 'absente':
-      return { cle, details: { tours: entree.tours } };
+      return { cle, details: { tours: entree.tours, nomsTours } };
     case 'reservee':
-      return { cle, details: { reservations: entree.reservations } };
+      return { cle, details: { reservations: entree.reservations, nomsTours } };
     case 'placeeAuRetenu':
-      return { cle, details: { placements: entree.placements } };
+      return { cle, details: { placements: entree.placements, nomsTours } };
     case 'exclue':
     case 'libre':
       return { cle, details: {} };
@@ -386,6 +411,7 @@ function statutAffiche(entree) {
  */
 export function personnesPourAnimation(charge, idTable, recherche) {
   const statuts = new Map(statutsPourAnimation(charge, idTable).map((entree) => [entree.participant, entree]));
+  const nomsTours = nomsDesTours(charge);
   const cherche = cleNormalisee(recherche);
   const retient = (personne) =>
     cherche === '' ||
@@ -403,7 +429,7 @@ export function personnesPourAnimation(charge, idTable, recherche) {
         organisation: personne.organisation,
         choisissable: entree.choisissable,
         anime: entree.statut === 'animeCetteTable',
-        statut: statutAffiche(entree),
+        statut: statutAffiche(entree, nomsTours),
         titre: entree.titrePressenti === null ? null : { cle: 'tables.animateurs.titrePressenti', details: { libelle: entree.titrePressenti } },
       };
     });

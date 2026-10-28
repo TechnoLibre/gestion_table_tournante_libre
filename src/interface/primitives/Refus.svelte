@@ -37,6 +37,7 @@
   // filet et d'un trait de gauche de la teinte du refus, une icône devant son
   // texte : il se lit de même sur la page, une carte ou une fenêtre.
   import { getContext, tick } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import { actionRemede } from './commande.js';
   import Commande from './Commande.svelte';
   import Icone from './Icone.svelte';
@@ -48,7 +49,12 @@
   const seance = getContext('seance');
   const ui = getContext('ui') ?? null;
 
-  const message = $derived(t(refus.code, refus.details));
+  // Les noms des tours de la charge de la séance, que le texte du refus et
+  // celui de son remède lisent (aides.js) : les détails d'un refus portent
+  // les tours par leur numéro, jamais leur nom. Sans séance ni charge, les
+  // tours restent sans nom.
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
+  const message = $derived(t(refus.code, { nomsTours, ...refus.details }));
   const action = $derived(actionRemede(refus.details?.remede ?? null, { seance, ui, gestes }));
   const autres = $derived(refus.details?.autres ?? []);
 
@@ -61,7 +67,7 @@
 
   // Le nom du remède : son texte puis objet, ou null, son texte seul.
   const nomRemede = $derived(
-    action === null || objet === null ? null : t('communs.nom.remede', { cle: action.cle, details: action.details, objet }),
+    action === null || objet === null ? null : t('communs.nom.remede', { cle: action.cle, details: { nomsTours, ...action.details }, objet }),
   );
 
   // Le contrôle décrit : l'élément dont aria-describedby nomme idDecrit,
@@ -98,7 +104,7 @@
     {#key action}
       <Commande
         cle={action.cle}
-        details={action.details}
+        details={{ nomsTours, ...action.details }}
         nom={action.nom}
         nomAccessible={nomRemede}
         confirmer={action.confirmer}

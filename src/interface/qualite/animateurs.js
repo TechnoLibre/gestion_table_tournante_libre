@@ -114,8 +114,10 @@ export function modeleAnimateurs(detail, t) {
  *
  * @param {Object|null} detail   le détail du placement (detaillerQualite)
  * @param {(cle: string, details?: Object) => string} t
+ * @param {Array<string|null>} [nomsTours]   les noms des tours de
+ *        l'événement (nomsDesTours), qui nomment la portée d'un tour
  */
-export function modeleDiversite(detail, t) {
+export function modeleDiversite(detail, t, nomsTours = undefined) {
   if (detail === null) return null;
   const { animateurs, personnes, idsTables, numerosTables } = detail;
   if (animateurs === null || animateurs.profil === null || animateurs.diversite.lignes.length === 0) return { cas: 'aucun' };
@@ -152,7 +154,7 @@ export function modeleDiversite(detail, t) {
     soirees.push(soiree);
     rangees.push(soiree);
     for (const tour of ligne.parTour) {
-      const portee = t('qualite.diversite.tour', { tour: tour.tour + 1, table: numeroDe.get(tour.table) });
+      const portee = t('qualite.diversite.tour', { tour: tour.tour + 1, table: numeroDe.get(tour.table), nomsTours });
       rangees.push(rangee(nom, portee, null, tour));
     }
   }

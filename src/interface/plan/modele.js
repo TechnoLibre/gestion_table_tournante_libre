@@ -188,6 +188,9 @@ const PARTIES = ['tete', 'titulaire', 'suite', 'nom', 'avantOrganisation', 'orga
  * mêmes portée et tour, et titulaire porte le nom de la personne réservée,
  * que la ligne énonce dans sa propre partie.
  *
+ * Une réservation au tour désigné se nomme sous nomsTours, les noms des
+ * tours de l'événement (nomsDesTours) : son nom, sinon « tour 3 ».
+ *
  * Avec organisationDe, la ligne porte aussi l'organisation de l'occupant,
  * que la liste écrit à droite de son nom ; null sans occupant, sans
  * organisationDe, et pour une organisation absente ou vide. La titulaire
@@ -197,22 +200,23 @@ const PARTIES = ['tete', 'titulaire', 'suite', 'nom', 'avantOrganisation', 'orga
  * @param {Object} chaise   EtatChaise
  * @param {(id: number) => string} nomDe   le nom affiché d'un participant
  * @param {null|((id: number) => string|null)} [organisationDe]   l'organisation d'un participant
+ * @param {Array<string|null>} [nomsTours]
  * @returns {{numero: number, etat: {cle: string, details: Object}|null, titulaire: string|null,
  *            nom: string|null, organisation: string|null,
  *            titre: {libelle: string, pourvu: boolean}|null}}
  */
-export function ligneListe(chaise, nomDe, organisationDe = null) {
+export function ligneListe(chaise, nomDe, organisationDe = null, nomsTours = undefined) {
   const { siege, occupant, reservation, titre } = chaise;
   let etat = null;
   let titulaire = null;
   if (reservation !== null && reservation.participant !== occupant) {
-    etat = { cle: 'plan.ligne.reserveeA', details: { portee: reservation.portee, tour: reservation.tour } };
+    etat = { cle: 'plan.ligne.reserveeA', details: { portee: reservation.portee, tour: reservation.tour, nomsTours } };
     titulaire = nomDe(reservation.participant);
   } else if (reservation !== null) {
     etat =
       reservation.portee === 'tous'
         ? { cle: 'plan.ligne.reserveeTous', details: {} }
-        : { cle: 'plan.ligne.reserveeTour', details: { tour: reservation.tour } };
+        : { cle: 'plan.ligne.reserveeTour', details: { tour: reservation.tour, nomsTours } };
   } else if (occupant === null) {
     etat = { cle: 'plan.ligne.libre', details: {} };
   }
@@ -499,10 +503,10 @@ function porteurDe(place, id, regime) {
 // est en régime sièges, quel que soit k. Son libellé se dessine à
 // l'impression et dès K_LISTES, comme les listes de noms, sans égard à leur
 // affichage ; le nom accessible le porte à tout zoom. organisationDe, null
-// ou une fonction, est celle que reçoit ligneListe.
+// ou une fonction, et nomsTours sont ceux que reçoit ligneListe.
 function tableDessin(
   etatTable,
-  { k, miseEnEvidence, nomDe, organisationDe = null, selection = null, actif = null, impression = false },
+  { k, miseEnEvidence, nomDe, organisationDe = null, nomsTours = undefined, selection = null, actif = null, impression = false },
   places = etatTable.capacite,
 ) {
   const { id, numero, gelee, surchargee, conflits } = etatTable;
@@ -550,7 +554,7 @@ function tableDessin(
     },
     chaises,
     enTete: gelee ? { cle: 'plan.liste.gelee', details: {} } : null,
-    lignes: etatChaises.map((chaise) => ligneListe(chaise, nomDe, organisationDe)),
+    lignes: etatChaises.map((chaise) => ligneListe(chaise, nomDe, organisationDe, nomsTours)),
   };
 }
 
@@ -574,7 +578,8 @@ function tableDessin(
  * bloc de noms n'est pas dans le modèle : c'est LARGEUR_BLOC_NOMS_CM du
  * registre, que le dessin lit. Avec l'option organisations, chaque ligne
  * porte l'organisation de son occupant, que lit organisationDe ; sans elle,
- * aucune.
+ * aucune. nomsTours, les noms des tours de l'événement, nomme le tour d'une
+ * réservation dans les lignes (ligneListe).
  *
  * La place sélectionnée (option selection) et l'élément actif du clavier
  * (option actif), {table, siege|null} ou null, marquent leur chaise —
@@ -601,7 +606,7 @@ function tableDessin(
  *          poignee?: {table: number, places: number}|null,
  *          selection?: {table: number, siege?: number|null}|null,
  *          actif?: {table: number, siege: number|null}|null,
- *          impression?: boolean}} options
+ *          nomsTours?: Array<string|null>, impression?: boolean}} options
  *        diagnostic : celui que rend diagnostiquer, compléments de M1 compris ;
  *        k : exigé hors de l'impression ; miseEnEvidence : null par défaut ;
  *        organisations : faux par défaut ; organisationDe : exigée avec elles
@@ -621,6 +626,7 @@ export function modeleDessin(
     poignee = null,
     selection = null,
     actif = null,
+    nomsTours = undefined,
     impression = false,
   },
 ) {
@@ -631,7 +637,7 @@ export function modeleDessin(
   const tables = etatPlaces.tables.map((etatTable) =>
     tableDessin(
       etatTable,
-      { k, nomDe, organisationDe: organisations ? organisationDe : null, impression, ...gestes },
+      { k, nomDe, organisationDe: organisations ? organisationDe : null, nomsTours, impression, ...gestes },
       !impression && poignee !== null && poignee.table === etatTable.id ? poignee.places : etatTable.capacite,
     ),
   );

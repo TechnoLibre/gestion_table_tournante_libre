@@ -34,8 +34,9 @@ const plancherExact = ({ plancher, tours, parTour }) =>
   "tant qu'aucun conflit ne se produit, les tables imposent au moins " +
   `${compte(plancher, 'collision cumulée', 'collisions cumulées')} ${surLesTours(tours)}${parTourEntreParentheses(parTour)}`;
 
-// « au tour 3 » ou « aux tours 2 et 3 » ; rien pour une liste vide.
-const auxToursListes = (tours) => (tours.length === 0 ? '' : ` ${auxToursNommes(tours)}`);
+// « au tour 3 » ou « aux tours 2 et 3 » ; rien pour une liste vide. Les
+// tours se nomment sous nomsTours (aides.js).
+const auxToursListes = (tours, nomsTours) => (tours.length === 0 ? '' : ` ${auxToursNommes(tours, nomsTours)}`);
 
 // « au tour » ou « aux R tours ».
 const auxTours = (tours) => (tours === 1 ? 'au tour' : `aux ${tours} tours`);
@@ -70,11 +71,11 @@ const placesQuiManquent = (n) => (n === 1 ? '1 place manque' : `${n} places manq
 // Le manque de chaque tour où il est positif, [{tour, manque}] croissants :
 // les tours d'un même manque se nomment ensemble, les manques dans l'ordre
 // de leur premier tour. La Map ne sert qu'à retrouver un manque déjà
-// rencontré.
-function manquesParTour(tours) {
+// rencontré. Les tours se nomment sous nomsTours (aides.js).
+function manquesParTour(tours, nomsTours) {
   const toursDe = new Map();
   for (const { tour, manque } of tours) toursDe.set(manque, [...(toursDe.get(manque) ?? []), tour]);
-  return enumeration([...toursDe].map(([manque, siens]) => `${placesQuiManquent(manque)} ${auxToursNommes(siens)}`));
+  return enumeration([...toursDe].map(([manque, siens]) => `${placesQuiManquent(manque)} ${auxToursNommes(siens, nomsTours)}`));
 }
 
 export const TABLE = new Map([
@@ -148,7 +149,7 @@ export const TABLE = new Map([
   // ceux que la limite de temps a arrêtés.
   [
     'diagnostic.conflitsInevitables',
-    ({ toursSansIssue }) => `aucun plan ne peut éviter tout conflit d'organisation ${auxToursNommes(toursSansIssue)}`,
+    ({ toursSansIssue, nomsTours }) => `aucun plan ne peut éviter tout conflit d'organisation ${auxToursNommes(toursSansIssue, nomsTours)}`,
   ],
   ['diagnostic.collisionsExactes', (details) => `${plancherExact(details)} : c'est le minimum exact, qu'au moins un plan sans conflit atteint`],
   ['diagnostic.collisionsAuMoins', (details) => plancherExact(details)],
@@ -186,8 +187,8 @@ export const TABLE = new Map([
   // chaque tour où il est positif, quand il varie d'un tour à l'autre.
   [
     'diagnostic.placesManquantes',
-    ({ placesManquantes, tours }) =>
-      tours === undefined ? `${placesQuiManquent(placesManquantes)} à chaque tour` : manquesParTour(tours),
+    ({ placesManquantes, tours, nomsTours }) =>
+      tours === undefined ? `${placesQuiManquent(placesManquantes)} à chaque tour` : manquesParTour(tours, nomsTours),
   ],
   // Une personne au moins manque un tour : le plancher de l'écart
   // d'itinéraire ne se prouve plus, et chaque mesure ne compte que les
@@ -314,9 +315,9 @@ export const TABLE = new Map([
   ],
   [
     'diagnostic.concretement.conflitsInevitables',
-    ({ toursSansIssue }) =>
+    ({ toursSansIssue, nomsTours }) =>
       'les places des tables, une fois les réservations assises, ne suffisent pas à séparer les organisations en conflit ' +
-      `${auxToursNommes(toursSansIssue)}.`,
+      `${auxToursNommes(toursSansIssue, nomsTours)}.`,
   ],
   [
     'diagnostic.concretement.collisionsExactes',
@@ -325,8 +326,8 @@ export const TABLE = new Map([
   ],
   [
     'diagnostic.concretement.collisionsAuMoins',
-    ({ toursALimite }) =>
-      `le calcul exact a atteint sa limite de temps${auxToursListes(toursALimite)} : ce nombre est prouvé, mais peut-être pas atteignable.`,
+    ({ toursALimite, nomsTours }) =>
+      `le calcul exact a atteint sa limite de temps${auxToursListes(toursALimite, nomsTours)} : ce nombre est prouvé, mais peut-être pas atteignable.`,
   ],
   // moins et plus : le plus petit et le plus grand nombre de présents d'un
   // tour.

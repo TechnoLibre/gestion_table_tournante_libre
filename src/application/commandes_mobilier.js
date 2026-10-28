@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1
 
 // Le registre des commandes du mobilier — tables et leur libellé, sièges,
-// tours, réglages, objectifs des tables et leur règle par défaut, ordre des
-// priorités et mode des objectifs (§ 4, § 4.5, § 5.3, § 5.7, § 6, § 7.1,
-// § 8.2, § 8.9, § 9), que commandes.js réunit aux autres. Ses imports
-// n'atteignent jamais commandes.js : le registre réuni dépend de lui, non
-// l'inverse.
+// tours et leurs noms, réglages, objectifs des tables et leur règle par
+// défaut, ordre des priorités et mode des objectifs (§ 4, § 4.5, § 5.3,
+// § 5.7, § 6, § 7.1, § 8.2, § 8.9, § 9), que commandes.js réunit aux autres.
+// Ses imports n'atteignent jamais commandes.js : le registre réuni dépend de
+// lui, non l'inverse.
 //
 // Chaque commande suit le contrat de commandes.js : une fonction pure
 // (charge, arguments) → { charge, libelle, avertissements }, la charge reçue
@@ -42,6 +42,7 @@ import {
   capacite,
   critereCoche,
   modeObjectifs,
+  nomsDesTours,
   priorites,
   regleObjectifs,
 } from '../stockage/document.js';
@@ -58,6 +59,7 @@ import { libelle } from './libelles.js';
 import { avisDeLObjectif, avisObjectifs, etiquettesDeLEvenement, ordreDesObjectifs, recevoirEtiquettes } from './objectifs.js';
 import { nomAffiche } from './personnes.js';
 import { leverRefus } from './pose.js';
+import { estNomParDefaut } from './tours.js';
 
 const FORMES = new Set(['ronde', 'carree']);
 // La constante du seuil au-delà duquel le dessin d'une table cesse d'être
@@ -397,6 +399,41 @@ function changerLibelleTable(charge, { id, libelle: saisie } = {}) {
 }
 
 /**
+ * changerNomTour {tour, nom} (§ 4, § 8.9) : le nom saisi pour le tour, de 1
+ * à R, entre en NFC, ses blancs de bord retirés, chaque moitié de paire de
+ * substitution isolée remplacée par le caractère de remplacement ; vide, ou
+ * égal au nom par défaut du tour, « Tour 3 » (estNomParDefaut), il retire
+ * le nom, et le champ nomsTours quand plus aucun tour n'en porte. Au-delà
+ * de LIBELLE_TABLE_MAX points de code, comptés sur le texte entré :
+ * NOM_TOUR_TROP_LONG {longueur, maximum}, remède nul — la saisie se corrige
+ * dans son champ. Le moteur ne lit pas les noms : propositions et retenu
+ * restent tels quels, sans dérive. Le même nom, ou un retrait sans nom, ne
+ * change rien : l'exécution le refuse, SANS_EFFET. Un tour hors de la
+ * soirée, ou un nom qui n'est pas un texte, est une faute du code.
+ */
+function changerNomTour(charge, { tour, nom: saisie } = {}) {
+  exigerModifiable(charge);
+  if (!Number.isInteger(tour) || tour < 1 || tour > charge.evenement.tours) {
+    throw new TypeError(`tour : entier de 1 à ${charge.evenement.tours} attendu, reçu ${JSON.stringify(tour)}`);
+  }
+  if (typeof saisie !== 'string') throw new TypeError(`nom : chaîne attendue, reçu ${JSON.stringify(saisie)}`);
+  const entre = saisie.toWellFormed().normalize('NFC').trim();
+  const texte = estNomParDefaut(tour, entre) ? '' : entre;
+  const longueur = [...texte].length;
+  if (longueur > LIBELLE_TABLE_MAX) throw refus('NOM_TOUR_TROP_LONG', { longueur, maximum: LIBELLE_TABLE_MAX });
+  const noms = nomsDesTours(charge);
+  noms[tour - 1] = texte === '' ? null : texte;
+  const suivante = copieDeTravail(charge);
+  if (noms.every((nom) => nom === null)) delete suivante.evenement.nomsTours;
+  else suivante.evenement.nomsTours = noms;
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CHANGER_NOM_TOUR', { tour, nom: noms[tour - 1] }),
+    avertissements: [],
+  };
+}
+
+/**
  * changerPlacesTable {id, sieges, origine: 'champ'|'poignee'} (§ 6.2, § 7.1) :
  * la table est surchargée à sieges places, lues par lireEntier, contrôlées
  * par controlerCapacite selon leur origine ; le retenu suit. Un
@@ -480,11 +517,13 @@ function presencesNonEtendues(charge, nommees) {
  * lu par lireEntier ; MOINS_D_UN_TOUR {tours} sous 1, TROP_DE_TOURS {max}
  * au-delà de TOURS_MAX, la borne que l'analyse pose aussi, remède null.
  * Retirer des tours détruit, dans la même entrée, les réservations « tour
- * désigné » et les objectifs de table de ces tours, que le libellé compte ;
- * une table qui n'en garde aucun perd son champ objectifs. La portée
- * « tous » reste, symbolique, et l'objectif de la soirée aussi. Remettre le
- * tour ne rend rien de ce qui est détruit. Propositions et retenu restent,
- * en dérive TOURS_CHANGES, jamais tronqués.
+ * désigné », les objectifs de table et les noms de ces tours, que le
+ * libellé compte ; une table qui n'en garde aucun perd son champ objectifs,
+ * et l'événement perd son champ nomsTours quand aucun tour restant n'a de
+ * nom. Un tour ajouté vient sans nom. La portée « tous » reste, symbolique,
+ * et l'objectif de la soirée aussi. Remettre le tour ne rend rien de ce qui
+ * est détruit. Propositions et retenu restent, en dérive TOURS_CHANGES,
+ * jamais tronqués.
  *
  * La présence de chacun suit (presencesSousTours) : à la baisse, chaque
  * présence se rogne aux tours qui restent, canonique, exclues comprises, et
@@ -511,6 +550,10 @@ function changerTours(charge, { tours: saisie } = {}) {
   }
   const suivante = copieDeTravail(charge);
   suivante.evenement.tours = tours;
+  const noms = nomsDesTours(suivante);
+  const nomsRetires = nomsDesTours(charge).slice(tours).filter((nom) => nom !== null).length;
+  if (noms.every((nom) => nom === null)) delete suivante.evenement.nomsTours;
+  else suivante.evenement.nomsTours = noms;
   suivante.participants = structuredClone(participants);
   suivante.reservations = suivante.reservations.filter(({ portee, tour }) => portee === 'tous' || tour <= tours);
   let objectifsRetires = 0;
@@ -528,6 +571,7 @@ function changerTours(charge, { tours: saisie } = {}) {
       retirees: charge.reservations.length - suivante.reservations.length,
       objectifsRetires,
       presencesRognees: rognees.length,
+      nomsRetires,
     }),
     avertissements: tours > charge.evenement.tours ? presencesNonEtendues(charge, nommees) : [],
   };
@@ -636,7 +680,7 @@ function poserObjectif(charge, { table: id, tour: saisi, etiquettes: texte, regl
   const suivante = avecObjectifs(sansLui, id, (objectifs) => [...objectifs, objectif]);
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_POSER_OBJECTIF', { numero: table.numero, tour, regle, etiquettes: recues.etiquettes }),
+    libelle: libelle('ENTREE_POSER_OBJECTIF', { numero: table.numero, tour, regle, etiquettes: recues.etiquettes, nomsTours: nomsDesTours(charge) }),
     avertissements: [...recues.avertissements, ...avisDeLObjectif(suivante, id, tour)],
   };
 }
@@ -655,7 +699,7 @@ function retirerObjectif(charge, { table: id, tour } = {}) {
   if (!(table.objectifs ?? []).some((objectif) => objectif.tour === tour)) throw refus('SANS_EFFET', { commande: 'retirerObjectif' });
   return {
     charge: avecObjectifs(charge, id, (objectifs) => objectifs.filter((objectif) => objectif.tour !== tour)),
-    libelle: libelle('ENTREE_RETIRER_OBJECTIF', { numero: table.numero, tour }),
+    libelle: libelle('ENTREE_RETIRER_OBJECTIF', { numero: table.numero, tour, nomsTours: nomsDesTours(charge) }),
     avertissements: [],
   };
 }
@@ -883,6 +927,7 @@ export const COMMANDES_MOBILIER = new Map([
   ['realignerTable', realignerTable],
   ['changerDefaut', changerDefaut],
   ['changerTours', changerTours],
+  ['changerNomTour', changerNomTour],
   ['modifierReglage', modifierReglage],
   ['poserObjectif', poserObjectif],
   ['retirerObjectif', retirerObjectif],

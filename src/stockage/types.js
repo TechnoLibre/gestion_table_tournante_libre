@@ -88,6 +88,11 @@
  * @property {'cm'} unite              (§ 7.2)
  * @property {'brouillon'|'propose'|'retenu'|'bloque'} etat   (§ 9)
  * @property {Filiation|null} filiation  (§ 8.7)
+ * @property {Array<string|null>} [nomsTours]  facultatif : un élément par
+ *                                     tour, son nom, de la forme du
+ *                                     libellé d'une table, ou null pour un
+ *                                     tour sans nom ; au moins un nom ;
+ *                                     absent, aucun tour n'a de nom (§ 8.9)
  *
  * @typedef {Object} Filiation
  * @property {{id: string, nom: string}} source             chaînes non vides

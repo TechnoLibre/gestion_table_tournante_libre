@@ -7,7 +7,7 @@
 // table ne porte que des codes. Un nombre et une durée se mettent en forme
 // par creerFormat, sur la composition que la traduction passe à l'entrée.
 import { creerFormat } from '../format.js';
-import { cite, compte, enumeration, phraseDeRaison } from './aides.js';
+import { cite, compte, enumeration, numeroNomme, phraseDeRaison, tourDansPhrase } from './aides.js';
 
 // Le nom de chaque réglage de génération, celui que la saisie affiche.
 const NOMS_DES_REGLAGES = new Map([
@@ -64,12 +64,12 @@ export const TABLE = new Map([
   // figé, qui tait alors la fin.
   [
     'ENTREE_ENREGISTRER_GENERATION_DERIVEE',
-    ({ n, premier, dernier, depart, toursFiges }) =>
+    ({ n, premier, dernier, depart, toursFiges, nomsTours }) =>
       `Généré ${compte(n, 'proposition dérivée', 'propositions dérivées')} de n° ${depart} ` +
       `(n° ${premier === dernier ? premier : `${premier} à ${dernier}`})` +
       (toursFiges.length === 0
         ? ''
-        : `, ${toursFiges.length === 1 ? 'tour' : 'tours'} ${enumeration(toursFiges.map(String))} ` +
+        : `, ${toursFiges.length === 1 ? 'tour' : 'tours'} ${enumeration(toursFiges.map((tour) => numeroNomme(tour, nomsTours)))} ` +
           `${toursFiges.length === 1 ? 'figé' : 'figés'}`),
   ],
   // ajuste : la copie retenue a suivi la présence de chacun.
@@ -138,16 +138,16 @@ export const TABLE = new Map([
   // portent ; sinon leurs identifiants.
   [
     'DEPART_RESERVATION_NON_TENUE',
-    ({ depart, participant, table, tour, personne = null, numero = null }) =>
+    ({ depart, participant, table, tour, personne = null, numero = null, nomsTours }) =>
       `La proposition n° ${depart} n'assied pas ${personne ?? `la personne n° ${participant}`} ` +
-      `à la ${laTable(table, numero)} au tour ${tour}, où une réservation la fixe : elle ne peut plus servir de départ.`,
+      `à la ${laTable(table, numero)} au ${tourDansPhrase(tour, nomsTours)}, où une réservation la fixe : elle ne peut plus servir de départ.`,
   ],
   // Le remède offert décoche le tour ; le texte nomme aussi l'autre issue.
   [
     'DEPART_SIEGE_NON_TENU',
-    ({ depart, participant, table, siege, tour, personne = null, numero = null }) =>
+    ({ depart, participant, table, siege, tour, personne = null, numero = null, nomsTours }) =>
       `La proposition n° ${depart} n'assied pas ${personne ?? `la personne n° ${participant}`} ` +
-      `au siège ${siege} de la ${laTable(table, numero)} au tour ${tour}, où une réservation la fixe : ` +
+      `au siège ${siege} de la ${laTable(table, numero)} au ${tourDansPhrase(tour, nomsTours)}, où une réservation la fixe : ` +
       `un tour figé garde les sièges du départ. Ne plus figer ce tour, ou ${cite('Repartir de zéro')}.`,
   ],
 
@@ -167,10 +167,11 @@ export const TABLE = new Map([
   // sans les retouches faites depuis au retenu. tours, croissants.
   [
     'DEPART_ECART_AU_RETENU',
-    ({ depart, tours }) =>
+    ({ depart, tours, nomsTours }) =>
       tours.length === 1
-        ? `Le tour figé ${tours[0]} vient de la proposition n° ${depart} : les retouches du placement retenu à ce tour n'y sont pas.`
-        : `Les tours figés ${enumeration(tours.map(String))} viennent de la proposition n° ${depart} : ` +
+        ? `Le tour figé ${numeroNomme(tours[0], nomsTours)} vient de la proposition n° ${depart} : ` +
+          "les retouches du placement retenu à ce tour n'y sont pas."
+        : `Les tours figés ${enumeration(tours.map((tour) => numeroNomme(tour, nomsTours)))} viennent de la proposition n° ${depart} : ` +
           "les retouches du placement retenu à ces tours n'y sont pas.",
   ],
 

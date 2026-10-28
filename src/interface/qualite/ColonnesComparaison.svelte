@@ -35,6 +35,7 @@
   // de sa colonne au tableau ('rang' pour la place) ; data-tous-les-indicateurs
   // sur la commande du repli.
   import { getContext, tick } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import { nomDe } from '../propositions/modele.js';
   import Pourcentage from './graphiques/Pourcentage.svelte';
   import { colonnesComparaison } from './colonnes.js';
@@ -50,7 +51,12 @@
   const colonnes = $derived(
     comparaison === null || table === null
       ? null
-      : colonnesComparaison(comparaison, table, { t, format, nomDe: (id) => nomDe($seance.charge, id) }),
+      : colonnesComparaison(comparaison, table, {
+          t,
+          format,
+          nomDe: (id) => nomDe($seance.charge, id),
+          nomsTours: nomsDesTours($seance.charge),
+        }),
   );
 
   let ouvert = $state(false);

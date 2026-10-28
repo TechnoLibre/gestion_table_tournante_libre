@@ -39,6 +39,7 @@ import {
   estLibelleTable,
   etatDeduit,
   modeObjectifs,
+  nomsDesTours,
   premiereFaute,
   premiereFauteEnPlace,
   priorites,
@@ -1701,6 +1702,58 @@ describe('le libellé d’une table : un champ facultatif, absent quand la table
   test('la configuration du moteur ne lit pas le libellé : une table libellée donne la même configuration', () => {
     const sans = analyser(JSON.stringify(documentValide())).charge;
     const avec = analyser(abime((d) => { d.charge.tables[0].libelle = 'Honneur'; })).charge;
+    assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
+  });
+});
+
+// --- Les noms des tours (§ 4, § 8.9) ------------------------------------------
+
+describe('les noms des tours : un champ facultatif de l’événement, absent quand aucun tour n’a de nom (§ 4, § 8.9)', () => {
+  test('il s’écrit en dernière clé de l’événement, et se relit à l’identique ; absent, il ne s’écrit pas', () => {
+    const d = documentComplet();
+    d.charge.evenement.nomsTours = [null, 'Entremets'];
+    const lu = analyser(JSON.stringify(d));
+    assert.deepEqual(lu.charge.evenement.nomsTours, [null, 'Entremets']);
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(texte.includes('"libelle":"Tables posées"}},"nomsTours":[null,"Entremets"]}'), texte);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, lu.charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    const sans = serialiser(documentComplet().charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.equal(sans.includes('nomsTours'), false);
+  });
+
+  test('nomsDesTours rend un élément par tour, null pour un tour sans nom, et une liste neuve', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    assert.deepEqual(nomsDesTours(sans), [null, null]);
+    const avec = analyser(abime((d) => { d.charge.evenement.nomsTours = ['Apéritif', null]; })).charge;
+    const noms = nomsDesTours(avec);
+    assert.deepEqual(noms, ['Apéritif', null]);
+    noms[1] = 'autre';
+    assert.deepEqual(avec.evenement.nomsTours, ['Apéritif', null]);
+  });
+
+  test('un nom a la forme d’un libellé de table ; une autre longueur que le nombre de tours, ou aucun nom, est une faute nommée par la liste', () => {
+    const SOIXANTE = 'é'.repeat(LIBELLE_TABLE_MAX);
+    assert.deepEqual(analyser(abime((d) => { d.charge.evenement.nomsTours = [SOIXANTE, 'Dessert']; })).charge.evenement.nomsTours, [SOIXANTE, 'Dessert']);
+    const liste = 'charge.evenement.nomsTours';
+    assert.deepEqual(ecartsDeRefus([
+      ['vide', abime((d) => { d.charge.evenement.nomsTours = []; }), 'FORME', liste],
+      ['aucun nom', abime((d) => { d.charge.evenement.nomsTours = [null, null]; }), 'FORME', liste],
+      ['trop court', abime((d) => { d.charge.evenement.nomsTours = ['Apéritif']; }), 'FORME', liste],
+      ['trop long', abime((d) => { d.charge.evenement.nomsTours = ['Apéritif', null, null]; }), 'FORME', liste],
+      ['nul', abime((d) => { d.charge.evenement.nomsTours = null; }), 'FORME', liste],
+      ['un nom vide', abime((d) => { d.charge.evenement.nomsTours = ['', 'Dessert']; }), 'FORME', `${liste}[0]`],
+      ['un blanc en bord', abime((d) => { d.charge.evenement.nomsTours = ['Dessert ', null]; }), 'FORME', `${liste}[0]`],
+      ['hors de NFC', abime((d) => { d.charge.evenement.nomsTours = [null, 'Entre\u{0301}e']; }), 'FORME', `${liste}[1]`],
+      ['trop de points de code', abime((d) => { d.charge.evenement.nomsTours = [`${SOIXANTE}x`, null]; }), 'FORME', `${liste}[0]`],
+      ['un nombre', abime((d) => { d.charge.evenement.nomsTours = [2, null]; }), 'FORME', `${liste}[0]`],
+    ]), []);
+  });
+
+  test('la configuration du moteur ne lit pas les noms des tours', () => {
+    const sans = analyser(JSON.stringify(documentValide())).charge;
+    const avec = analyser(abime((d) => { d.charge.evenement.nomsTours = ['Apéritif', 'Dessert']; })).charge;
     assert.deepEqual(configurationDepuisCharge(avec), configurationDepuisCharge(sans));
   });
 });

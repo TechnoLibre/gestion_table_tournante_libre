@@ -12,13 +12,14 @@
 // table viennent des détails : une fenêtre à confirmer nomme chaque élément
 // détruit dans son propre libellé.
 import { JOINTURE_ETIQUETTES } from '../../application/csv.js';
-import { auxToursNommes, cite, compte, toursNommes } from '../../application/libelles/aides.js';
+import { auxToursNommes, celluleDuTour, cite, compte, nomDuTour, tourDansPhrase, toursNommes } from '../../application/libelles/aides.js';
 
 // Un accord au nombre : le singulier jusqu'à un, comme compte.
 const accord = (n, singulier, pluriel) => (n <= 1 ? singulier : pluriel);
 
-// La portée d'une réservation en mots : tous les tours, ou le tour désigné.
-const portee = ({ portee: genre, tour }) => (genre === 'tous' ? 'pour tous les tours' : `au tour ${tour}`);
+// La portée d'une réservation en mots : tous les tours, ou le tour désigné,
+// nommé sous nomsTours (aides.js).
+const portee = ({ portee: genre, tour }, nomsTours) => (genre === 'tous' ? 'pour tous les tours' : `au ${tourDansPhrase(tour, nomsTours)}`);
 
 // Les étiquettes d'un objectif, citées et jointes comme l'export les
 // joint : aucun « et » ni « ou » entre elles, qui dirait une règle que
@@ -28,11 +29,12 @@ const etiquettesCitees = (etiquettes) => etiquettes.map(cite).join(JOINTURE_ETIQ
 // Ce qu'une règle exige des étiquettes, en mots (§ 4.5).
 const exigence = (regle) => (regle === 'et' ? 'toutes' : 'au moins une');
 
-// La portée d'un objectif en mots : la soirée, ou le tour désigné.
-const porteeObjectif = (tour) => (tour === null ? 'de la soirée' : `du tour ${tour}`);
+// La portée d'un objectif en mots : la soirée, ou le tour désigné, nommé
+// sous nomsTours (aides.js).
+const porteeObjectif = (tour, nomsTours) => (tour === null ? 'de la soirée' : `du ${tourDansPhrase(tour, nomsTours)}`);
 
 // Des tours nommés après « au lieu » : « du tour 4 », « des tours 1 et 5 ».
-const desToursNommes = (tours) => `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours)}`;
+const desToursNommes = (tours, nomsTours) => `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours, nomsTours)}`;
 
 export const TABLE = new Map([
   // --- Le défaut (§ 6.1) ------------------------------------------------------
@@ -187,13 +189,13 @@ export const TABLE = new Map([
   [
     'tables.suppression.reservation',
     (reservation) =>
-      `${reservation.nom} : réservation ${portee(reservation)}` +
+      `${reservation.nom} : réservation ${portee(reservation, reservation.nomsTours)}` +
       `${reservation.siege === null ? '' : `, siège ${reservation.siege}`}`,
   ],
   ['tables.suppression.titre', ({ siege, libelle }) => `Titre ${cite(libelle)}, siège ${siege}`],
   [
     'tables.suppression.objectif',
-    ({ tour, etiquettes }) => `Objectif ${porteeObjectif(tour)} : ${etiquettesCitees(etiquettes)}`,
+    ({ tour, etiquettes, nomsTours }) => `Objectif ${porteeObjectif(tour, nomsTours)} : ${etiquettesCitees(etiquettes)}`,
   ],
 
   // --- Les tours (§ 2.1 étape 5, § 4.3) ----------------------------------------
@@ -204,22 +206,32 @@ export const TABLE = new Map([
   ],
   [
     'tables.tours.reservation',
-    ({ nom, numero, tour }) => `${nom} : réservation à la table ${numero} au tour ${tour}, détruite`,
+    ({ nom, numero, tour, nomsTours }) => `${nom} : réservation à la table ${numero} au ${tourDansPhrase(tour, nomsTours)}, détruite`,
   ],
   [
     'tables.tours.objectif',
-    ({ numero, tour, etiquettes }) => `Table ${numero} : objectif du tour ${tour} (${etiquettesCitees(etiquettes)}), détruit`,
+    ({ numero, tour, etiquettes, nomsTours }) =>
+      `Table ${numero} : objectif du ${tourDansPhrase(tour, nomsTours)} (${etiquettesCitees(etiquettes)}), détruit`,
   ],
   // Une présence que la baisse rogne : apres null quand elle couvre
   // désormais tous les tours.
   [
     'tables.tours.presence',
-    ({ nom, avant, apres }) => `Présence de ${nom} : ${toursNommes(apres)} au lieu ${desToursNommes(avant)}`,
+    ({ nom, avant, apres, nomsTours }) =>
+      `Présence de ${nom} : ${toursNommes(apres, nomsTours)} au lieu ${desToursNommes(avant, nomsTours)}`,
   ],
+  // Le nom d'un tour retiré, qui part avec lui.
+  ['tables.tours.nomRetire', ({ tour, nom }) => `Tour ${tour} : nom ${cite(nom)}, retiré`],
+  // Le nom de chaque tour : un champ par tour, vide pour un tour sans nom,
+  // dont le texte indicatif est le nom par défaut.
+  ['tables.tours.noms', 'Noms des tours'],
+  ['tables.tours.nom', ({ tour }) => `Nom du tour ${tour}`],
+  ['tables.tours.nomParDefaut', ({ tour }) => nomDuTour(tour)],
 
   // --- Les personnes présentes par tour (§ 6.1) --------------------------------
   ['tables.presences.titre', 'Personnes présentes par tour'],
   ['tables.presences.colonne.tour', 'Tour'],
+  ['tables.presences.ligne', ({ tour, nomsTours }) => celluleDuTour(tour, nomsTours)],
   ['tables.presences.colonne.presentes', 'Présentes'],
   ['tables.presences.colonne.places', 'Places'],
   ['tables.presences.colonne.manque', 'Places manquantes'],
@@ -251,17 +263,20 @@ export const TABLE = new Map([
   // Une réservation à la main : sa table, puis son tour ou la soirée.
   [
     'tables.animateurs.statut.reservee',
-    ({ reservations }) =>
+    ({ reservations, nomsTours }) =>
       `${reservations.length === 1 ? 'Place réservée' : 'Places réservées'} : ` +
-      reservations.map(({ numero, portee: genre, tour }) => `table ${numero}, ${genre === 'tous' ? 'toute la soirée' : toursNommes([tour])}`).join(' ; '),
+      reservations
+        .map(({ numero, portee: genre, tour }) => `table ${numero}, ${genre === 'tous' ? 'toute la soirée' : toursNommes([tour], nomsTours)}`)
+        .join(' ; '),
   ],
   ['tables.animateurs.statut.exclue', 'Personne exclue'],
   // Ses tours d'absence, croissants : « Absence au tour 3 », « Absence aux
   // tours 1 et 3 ».
-  ['tables.animateurs.statut.absente', ({ tours }) => `Absence ${auxToursNommes(tours)}`],
+  ['tables.animateurs.statut.absente', ({ tours, nomsTours }) => `Absence ${auxToursNommes(tours, nomsTours)}`],
   [
     'tables.animateurs.statut.placeeAuRetenu',
-    ({ placements }) => `Au plan retenu : ${placements.map(({ numero, tours }) => `table ${numero} ${auxToursNommes(tours)}`).join(' ; ')}`,
+    ({ placements, nomsTours }) =>
+      `Au plan retenu : ${placements.map(({ numero, tours }) => `table ${numero} ${auxToursNommes(tours, nomsTours)}`).join(' ; ')}`,
   ],
   ['tables.animateurs.statut.libre', 'Disponible'],
   ['tables.animateurs.titrePressenti', ({ libelle }) => `Titre pressenti : ${cite(libelle)}`],
@@ -275,7 +290,7 @@ export const TABLE = new Map([
   // le réglage général, nommé par ce qu'il exige, ou une règle propre —, et
   // son état en mots.
   ['tables.objectif.soiree', 'Objectif de la soirée'],
-  ['tables.objectif.tour', ({ tour }) => `Objectif du tour ${tour}`],
+  ['tables.objectif.tour', ({ tour, nomsTours }) => `Objectif du ${tourDansPhrase(tour, nomsTours)}`],
   ['tables.objectif.regle', "Règle de l'objectif"],
   ['tables.objectif.regleDefaut', ({ regle }) => `selon le réglage général (${exigence(regle)})`],
   ['tables.objectif.suitDefaut', 'Suit la règle par défaut'],
@@ -296,7 +311,7 @@ export const TABLE = new Map([
   ['tables.nom.table', ({ cle, details = {}, numero }, texte) => `${texte(cle, details)}, table ${numero}`],
   [
     'tables.nom.objectif',
-    ({ cle, tour, numero }, texte) => `${texte(cle)} ${porteeObjectif(tour)}, table ${numero}`,
+    ({ cle, tour, numero, nomsTours }, texte) => `${texte(cle)} ${porteeObjectif(tour, nomsTours)}, table ${numero}`,
   ],
 
   // Un placement qu'un changement laisse en dérive (§ 9) : il reste, et ne

@@ -10,13 +10,13 @@
   // nomme, avant toute écriture, les réservations « tour désigné » qu'elle
   // détruit — personne et table —, les objectifs de table des tours retirés
   // — table, tour et étiquettes (§ 4.3, A3) —, les présences qu'elle rogne,
-  // exclues comprises — personne, tours d'avant et d'après —, et les
-  // placements qui perdent des tours (bilanTours, annonceTours,
-  // elementsTours). Une présence non exclue qui se viderait est un refus de
-  // la commande, PRESENCE_VIDEE_PAR_TOURS, posé sur le champ comme tout
-  // autre, avec son remède, sans fenêtre. Annuler la ferme et
-  // remonte le champ, qui rend la valeur enregistrée ; Confirmer exécute le
-  // changement, une entrée.
+  // exclues comprises — personne, tours d'avant et d'après —, les noms des
+  // tours retirés — tour et nom (§ 8.9) —, et les placements qui perdent des
+  // tours (bilanTours, annonceTours, elementsTours). Une présence non exclue
+  // qui se viderait est un refus de la commande, PRESENCE_VIDEE_PAR_TOURS,
+  // posé sur le champ comme tout autre, avec son remède, sans fenêtre.
+  // Annuler la ferme et remonte le champ, qui rend la valeur enregistrée ;
+  // Confirmer exécute le changement, une entrée.
   import { getContext } from 'svelte';
   import { bilanTours } from '../../application/bilans.js';
   import { lireEntier } from '../../application/capacite.js';

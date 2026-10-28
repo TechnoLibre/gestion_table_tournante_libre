@@ -151,6 +151,7 @@
   import { cleNormalisee } from '../../application/csv.js';
   import { nomAffiche } from '../../application/personnes.js';
   import { etatPlaces } from '../../application/places.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import { tourAffiche, tourPourVoir } from '../plan/vue_plan.js';
   import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
@@ -297,6 +298,8 @@
 
   // L'affichage au repos de la présence de chaque personne, par identifiant.
   const affichages = $derived(affichagesPresence(lignes));
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived($seance.charge === null ? [] : nomsDesTours($seance.charge));
 
   const idRefus = (id, colonne) => `${uid}-refus-${id}-${colonne}`;
   const enEdition = (id, colonne) => edition !== null && edition.id === id && edition.colonne === colonne;
@@ -666,6 +669,7 @@
             compact
             cases={casesDeSaisie(saisie, tours)}
             nom={nomAffiche(personne)}
+            {nomsTours}
             invalide={refus !== null}
             decrit={refus === null ? undefined : idRefus(personne.id, colonne)}
             bind:conteneur={editeur}
@@ -732,7 +736,7 @@
             <span class="presence-tous" data-presence="tous">{t(vue.cle)}</span>
           {:else}
             <span class="donnee-pastille" data-presence="partielle">
-              <Pastille sorte="statut" valeur="information" icone="calendrier" libelle={t(vue.cle, vue.details)} />
+              <Pastille sorte="statut" valeur="information" icone="calendrier" libelle={t(vue.cle, { nomsTours, ...vue.details })} />
             </span>
           {/if}
         {:else if colonne === 'exclu'}
@@ -770,7 +774,7 @@
             <ul class="conflits-placement">
               {#each conflitsDesPersonnes.get(personne.id) as { tour, regles } (tour)}
                 <li>
-                  <span class="tour">{t('participants.conflit.tour', { tour })}</span>
+                  <span class="tour">{t('participants.conflit.tour', { tour, nomsTours })}</span>
                   <span>{texteDuTour(regles, t)}</span>
                 </li>
               {/each}
@@ -867,7 +871,7 @@
       >
         <span class="etat" data-groupe-etat>{t(replie ? 'participants.groupe.deplier' : 'participants.groupe.replier')}</span>
         {#if groupe.libelle === null}
-          <span class="libelle" data-groupe-libelle>{t(groupe.cleLibelle, groupe.detailsLibelle ?? {})}</span>
+          <span class="libelle" data-groupe-libelle>{t(groupe.cleLibelle, { nomsTours, ...groupe.detailsLibelle })}</span>
         {:else}
           <span class="libelle valeur" data-groupe-libelle>{groupe.libelle}</span>
         {/if}
@@ -885,10 +889,10 @@
           <ul>
             {#each conflits.get(groupe.cle) as conflit (conflit.cle)}
               <li data-conflit>
-                <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero })}</span>
+                <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero, nomsTours })}</span>
                 {#each conflit.noms as nom, rang (rang)}{' '}{#if rang > 0}<span>{t('participants.conflit.et')}</span>{' '}{/if}<span
                     class="valeur">{nom}</span
-                  >{/each}{' '}<span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja })}</span>
+                  >{/each}{' '}<span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja, nomsTours })}</span>
               </li>
             {/each}
           </ul>

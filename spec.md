@@ -146,7 +146,9 @@ nomme les personnes qu'il laisse absentes de ce tour. Les placements déjà
 engendrés, eux, ne sont pas tronqués : ils ne portent plus le nombre de tours de
 la soirée, restent entiers **en dérive** (§ 9), et le logiciel nomme ceux que le
 changement touche. Les annoncer après coup ferait découvrir la perte à
-l'impression.
+l'impression. Chaque tour peut aussi porter un nom, saisi au même endroit
+(§ 4) : retirer un tour retire son nom, que l'annonce nomme, et un tour ajouté
+vient sans nom.
 
 **6. Désigner les animateurs, table par table.** *Facultative — une soirée sans
 aucun animateur est une configuration valide, et la petite démonstration en est
@@ -527,6 +529,41 @@ chaque participant non exclu présent à ce tour est assis à exactement une
 table, sauf l'arrivée qu'un tour figé laisse en réserve (§ 5.7) ; un placement
 ajusté peut tenir des présents en réserve (§ 7.1). Une personne absente à un
 tour n'y occupe aucune place.
+
+Un tour porte un **nom**, facultatif — « Apéritif », « Plat principal » —, de 60
+caractères au plus ; sans nom, il se dit « Tour 3 ». Le nom est **purement
+informatif**, comme le libellé d'une table : le moteur ne le lit pas, et le
+poser, le changer ou le retirer ne met aucun placement en dérive (§ 9). Deux
+tours peuvent porter le même nom. Il se saisit dans « Tables et tours », un
+champ par tour, vide pour un tour sans nom, dont le texte indicatif est
+« Tour 3 » ; saisir le nom par défaut d'un tour revient à vider son champ.
+Retirer un tour retire son nom, que la fenêtre de la baisse nomme ; un tour
+ajouté vient sans nom.
+
+**Le nom se lit partout où un tour se désigne** à l'opérateur ou à l'invité,
+sous trois formes. **Seul**, à la place de « Tour 3 », dans un titre, une tête
+de colonne, un choix et une ligne de badge — « Plat principal — table 3 ». Dans
+une colonne « Tour » qui ne porte que le numéro — le tableau des personnes
+présentes par tour, l'itinéraire de la fiche, le choix du tour du plan —, à la
+place du numéro. **Après son numéro, entre parenthèses**, dans une phrase, où le
+numéro garde la grammaire — « absente au tour 2 (Plat principal) », « tours 1
+(Apéritif) et 2 » ; une suite de tours consécutifs ne se resserre en
+« tours 2 à 4 » que sur des tours sans nom. **À la place de « tour 3 »** dans
+une mention brève, sans article — « (réservée, Plat principal) », « Plat
+principal, table 5 ». Un libellé figé du journal prend le nom qu'a le tour au
+moment du geste (§ 8.2). Une sortie imprimée pose le nom comme une donnée,
+telle quelle, dans son propre nœud (§ 11.7).
+
+**Le numéro reste là où une machine relit, ou où le fichier se décrit** : la
+colonne `presence` du CSV des participants, à l'import comme à l'export
+(« 1-3 », § 10.1), la colonne `tour` du CSV des objectifs (§ 10.4), les refus de
+l'import qui citent une valeur du fichier, les fautes de forme du fichier et les
+défauts du calcul, qui désignent une position, un tour qui n'existe pas, et
+l'avancement du calcul exact (« tour 3 sur 5 »). La case compacte de la
+présence, dans la grille, garde son numéro faute de place, et se nomme par le
+nom du tour pour les technologies d'assistance. L'en-tête d'un bloc de tours de
+la liste d'accueil, « Tours 1 à 34 », garde ses numéros : les colonnes du bloc
+nomment chaque tour.
 
 **Placement** — pour chaque tour, qui est à quelle table, et à quel siège si
 les sièges sont attribués.
@@ -4684,6 +4721,33 @@ et le retire comme tout champ. Le moteur ne le lit pas : la configuration
 qu'il reçoit, les empreintes et les raisons de dérive restent les mêmes. Le
 champ fait partie du format 3.
 
+#### Un champ facultatif : les noms des tours
+
+Les noms des tours (§ 4) s'écrivent dans un champ facultatif de l'événement,
+absent quand aucun tour n'a de nom :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `nomsTours` | l'événement, en dernière clé, après `filiation` | aucun tour n'a de nom | liste d'un élément par tour, R éléments, chacun le nom du tour, de la forme du libellé d'une table — texte bien formé, en NFC, sans blanc en bord, de 1 à 60 points de code —, ou `null` pour un tour sans nom ; au moins un nom |
+
+Une liste d'une autre longueur que le nombre de tours, une liste sans aucun nom
+— le défaut écrit —, `null` à la place de la liste et un élément d'une autre
+forme sont des fautes de forme, nommées par leur chemin (§ 8.8). Un événement
+sans nom de tour s'écrit octet pour octet comme sans ce champ, démonstrations
+comprises. Un nom se pose par une commande, `changerNomTour` — une entrée
+d'historique, refusée en lecture et sur un plan bloqué —, qui reçoit la saisie
+du champ de son tour dans « Tables et tours », la met en NFC, retire ses blancs
+de bord et remplace une moitié de paire isolée par le caractère de
+remplacement : vide, ou égale au nom par défaut du tour, « Tour 3 », elle retire
+le nom, et le champ avec le dernier nom ; au-delà de 60 caractères, elle refuse,
+contre le champ, en disant la longueur saisie et la longueur admise ; le même
+nom n'écrit rien. Changer le nombre de tours rogne la liste aux tours qui
+restent, et l'allonge de `null` pour un tour ajouté ; le champ part quand aucun
+tour restant n'a de nom, et le libellé de l'entrée compte les noms retirés. Un
+correctif du journal le pose et le retire comme tout champ. Le moteur ne le lit
+pas : la configuration qu'il reçoit, les empreintes et les raisons de dérive
+restent les mêmes. Le champ fait partie du format 3.
+
 #### Un champ facultatif : les conflits d'organisation
 
 Les conflits d'organisation d'une personne (§ 4) s'écrivent dans un champ
@@ -5642,22 +5706,22 @@ la vignette ; la vue se lit dans tout mode, et un autre chemin la referme.
 « Présence » de la grille, après celle de l'exclusion, écrit « tous », en encre
 secondaire, ou les tours de présence en pastille d'information à calendrier —
 « tour 2 », « tours 1 et 2 », « tours 1 à 3 et 5 ». Entrée ou F2 l'ouvre en
-cases, une par tour, nommées « Tour 2 » pour les technologies d'assistance,
-dans un groupe nommé « Présence de Prénom Nom, une case par tour » ; ← et →
-passent d'une case à l'autre, Début et Fin à la première et à la dernière, sans
-boucler, et l'espace coche ou décoche **sans rien écrire**. **Entrée, Tab ou la
-sortie du groupe valident**, en une seule entrée d'historique, qui ajuste le
-retenu (§ 5.8) ; Tab puis la sortie qui le suit ne valident pas deux fois, et
-une saisie revenue à la présence enregistrée n'écrit rien. Échap rend la
-présence enregistrée. La fiche porte une rubrique « Présence », entre les
-étiquettes et les réservations : un résumé, les mêmes cases, « Tous les
-tours », qui coche chaque case sans rien écrire, et « Appliquer », qui écrit en
-une entrée ; l'itinéraire du placement retenu y dit « absente » à un tour
-d'absence. Une saisie sans aucun tour est refusée contre les cases, sans
-remède : son texte nomme l'exclusion. Un changement est refusé en lecture et
-sur un plan bloqué, le refus posé dans la cellule ou sous les cases, avec son
-remède. La grille trie la colonne « tous » en tête, puis par la liste des
-tours, et se groupe par présence.
+cases, une par tour, nommées « Tour 2 » — ou du nom du tour (§ 4) — pour les
+technologies d'assistance, dans un groupe nommé « Présence de Prénom Nom, une
+case par tour » ; ← et → passent d'une case à l'autre, Début et Fin à la
+première et à la dernière, sans boucler, et l'espace coche ou décoche **sans
+rien écrire**. **Entrée, Tab ou la sortie du groupe valident**, en une seule
+entrée d'historique, qui ajuste le retenu (§ 5.8) ; Tab puis la sortie qui le
+suit ne valident pas deux fois, et une saisie revenue à la présence enregistrée
+n'écrit rien. Échap rend la présence enregistrée. La fiche porte une rubrique
+« Présence », entre les étiquettes et les réservations : un résumé, les mêmes
+cases, « Tous les tours », qui coche chaque case sans rien écrire, et
+« Appliquer », qui écrit en une entrée ; l'itinéraire du placement retenu y dit
+« absente » à un tour d'absence. Une saisie sans aucun tour est refusée contre
+les cases, sans remède : son texte nomme l'exclusion. Un changement est refusé
+en lecture et sur un plan bloqué, le refus posé dans la cellule ou sous les
+cases, avec son remède. La grille trie la colonne « tous » en tête, puis par la
+liste des tours, et se groupe par présence.
 
 **Les conflits d'organisation se saisissent dans la grille et dans la fiche.**
 La colonne « Conflit d'organisation » de la grille suit celle de
@@ -6296,7 +6360,7 @@ cherche à qui il parle.
 | rang | contenu | pourquoi |
 |---|---|---|
 | 1 | **prénom et nom**, le plus grand corps de la planche | c'est l'identité, et c'est ce que lit l'hôte à un mètre |
-| 2 | **une ligne par tour** : « Tour 1 — table 12 », le libellé de la table entre parenthèses après son numéro quand elle en porte un (§ 4) — « Tour 1 — table 5 (Terrasse), siège 3 — animation » —, et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
+| 2 | **une ligne par tour** : « Tour 1 — table 12 », le tour par son nom quand il en porte un (§ 4) — « Plat principal — table 12 » —, le libellé de la table entre parenthèses après son numéro quand elle en porte un (§ 4) — « Tour 1 — table 5 (Terrasse), siège 3 — animation » —, et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
 | 3 | **organisation**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
@@ -6909,18 +6973,18 @@ et l'identifiant départage en dernier. C'est un réglage de l'aperçu, que rien
 n'écrit.
 
 **Chaque page imprimée porte un pied de cinq éléments** : le nom de l'événement,
-sa date, **le tour** — ou la soirée, pour une vue qui les couvre tous —,
-**l'horodatage du placement** et **la version** (§ 18.6).
-Une feuille sans horodatage circule après avoir été invalidée et personne ne peut
-dire laquelle des deux versions posées sur la table est la bonne. La règle vise
-la **page** ; un carton découpé et porté au cou n'est pas une page (§ 11.4).
-Le pied porte le nom entier, jamais tronqué. Un nom qui passe la borne du § 8.1
-ne s'imprime pas : l'aperçu le refuse avant de mettre une page en forme, dans
-aucune vue, et pose sur « Imprimer » le refus `NOM_EVENEMENT_TROP_LONG` avec le
-remède « Renommer ». Ce remède ferme l'événement et rend la liste des
-événements, où il se renomme : la liste lue, le focus va à la commande
-« Renommer » de sa ligne, un filtre qui la cachait levé. « Imprimer » rend ce
-refus sans appeler l'imprimante.
+sa date, **le tour** — par son nom quand il en porte un (§ 4), ou la soirée,
+pour une vue qui les couvre tous —, **l'horodatage du placement** et **la
+version** (§ 18.6). Une feuille sans horodatage circule après avoir été
+invalidée et personne ne peut dire laquelle des deux versions posées sur la
+table est la bonne. La règle vise la **page** ; un carton découpé et porté au
+cou n'est pas une page (§ 11.4). Le pied porte le nom entier, jamais tronqué. Un
+nom qui passe la borne du § 8.1 ne s'imprime pas : l'aperçu le refuse avant de
+mettre une page en forme, dans aucune vue, et pose sur « Imprimer » le refus
+`NOM_EVENEMENT_TROP_LONG` avec le remède « Renommer ». Ce remède ferme
+l'événement et rend la liste des événements, où il se renomme : la liste lue, le
+focus va à la commande « Renommer » de sa ligne, un filtre qui la cachait levé.
+« Imprimer » rend ce refus sans appeler l'imprimante.
 
 **Toute page imprimée porte la mention BROUILLON en filigrane, sauf dans un seul
 cas** : celle qui imprime le placement retenu, quand le plan est retenu ou

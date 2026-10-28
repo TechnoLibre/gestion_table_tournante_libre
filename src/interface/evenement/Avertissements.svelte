@@ -22,6 +22,7 @@
   // annonces qui les porte prend la hauteur d'un avertissement ordinaire,
   // action comprise, et défile au-delà (SurfaceEvenement.svelte).
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
   import { actionRemede } from '../primitives/commande.js';
@@ -33,6 +34,9 @@
   const ui = getContext('ui');
 
   const liste = $derived(avertissementsOrdonnes($seance));
+  // Les noms des tours, que le texte d'un avertissement et celui de son
+  // remède lisent (aides.js) : les détails portent les tours par leur numéro.
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
 
   // La création des tables qui manquent, offerte à côté du remède de
   // PLACES_MANQUANTES quand l'état de navigation sait ouvrir les tables :
@@ -49,12 +53,12 @@
       {@const action = actionRemede(avertissement.remede, { seance, ui })}
       <div class="avertissement" role="status" data-avertissement={avertissement.code}>
         <span class="signe"><Icone nom="triangle" taille={18} /></span>
-        <p class:seul={action === null}>{t(avertissement.code, avertissement.details)}</p>
+        <p class:seul={action === null}>{t(avertissement.code, { nomsTours, ...avertissement.details })}</p>
         {#if action !== null}
           <div class="action">
             <Commande
               cle={action.cle}
-              details={action.details}
+              details={{ nomsTours, ...action.details }}
               nom={action.nom}
               confirmer={action.confirmer}
               executer={action.executer}

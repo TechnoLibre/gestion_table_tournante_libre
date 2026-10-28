@@ -60,6 +60,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { derivationDe } from '../../application/depart.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import { texteFiliation } from '../propositions/filiation.js';
   import { evaluation, nomDe } from '../propositions/modele.js';
   import { detailDe } from './modele.js';
@@ -107,7 +108,7 @@
   const ligne = $derived(source?.ligne ?? null);
   // La phrase de filiation de la source, null pour le retenu, sans source
   // et hors d'une dérivée.
-  const filiation = $derived(typeof source?.id === 'number' ? texteFiliation(derivationDe(charge, source.id), { t, format }) : null);
+  const filiation = $derived(typeof source?.id === 'number' ? texteFiliation(derivationDe(charge, source.id), { t, format, nomsTours: nomsDesTours(charge) }) : null);
   const detail = $derived(
     source?.cas === 'mesurable'
       ? detailDe(charge, source.id, { courseDe: (id) => seance.courseDe(id), generationDe: (id) => generation.generationDe(id) })

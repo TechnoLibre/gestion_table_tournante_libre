@@ -101,8 +101,10 @@ function placementDe(cote, table, outils) {
  *        comparerPlacements(charge, table, a, b)
  * @param {import('../../application/evaluation.js').TableEvaluation} table
  *        la table d'évaluation d'où la comparaison se lit
- * @param {{t: Function, format: {nombre: Function}, nomDe: (id: number) => string}} outils
- *        nomDe(id) : le nom affiché de la personne id
+ * @param {{t: Function, format: {nombre: Function}, nomDe: (id: number) => string,
+ *          nomsTours?: Array<string|null>}} outils
+ *        nomDe(id) : le nom affiché de la personne id ; nomsTours : les noms
+ *        des tours de l'événement, que la filiation lit (texteFiliation)
  * @returns {{placements: {a: {nom: string, origine: string|null, filiation: string|null},
  *   b: {nom: string, origine: string|null, filiation: string|null}},
  *   tete: Ligne[], groupes: Array<{cle: string, libelle: string, lignes: Ligne[]}>}}

@@ -39,6 +39,7 @@
   // contrôles, oublie le choix en attente. Le panneau lit 'seance' et 'ui'
   // au contexte, sans propriété.
   import { getContext, tick } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import {
     conversionsPossibles,
     enReserveDansLeRetenu,
@@ -57,6 +58,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(charge === null ? [] : nomsDesTours(charge));
   const nomDe = $derived(charge === null ? null : nomDeCharge(charge));
   const titres = $derived(charge === null ? [] : titresNonPourvus(charge));
   const pressentis = $derived(charge === null ? [] : pressentisNonReserves(charge));
@@ -125,7 +128,7 @@
               ><span>{t('plan.listesTravail.titreNonPourvu', { numero: titre.numero })}</span><span class="donnee"
                 >{titre.libelle}</span
               ><span>{t('plan.listesTravail.nonPourvu')}</span
-              >{#if titre.pourvuAuxTours.length > 0}<span>{t('plan.listesTravail.pourvuAuxTours', { tours: titre.pourvuAuxTours })}</span
+              >{#if titre.pourvuAuxTours.length > 0}<span>{t('plan.listesTravail.pourvuAuxTours', { tours: titre.pourvuAuxTours, nomsTours })}</span
                 >{/if}</button
             >
           </li>
@@ -161,7 +164,7 @@
                 data-participant={participant}
                 aria-pressed={choisie(participant)}
                 onclick={() => placerDepuisLaReserve(participant, tours)}
-                ><span class="donnee">{nomDe(participant)}</span><span>{t('plan.listesTravail.enReserve', { tours })}</span></button
+                ><span class="donnee">{nomDe(participant)}</span><span>{t('plan.listesTravail.enReserve', { tours, nomsTours })}</span></button
               >
             </li>
           {/each}

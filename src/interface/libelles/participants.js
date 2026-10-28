@@ -66,27 +66,32 @@
 // participants.formulaire.ajoutee est le message du formulaire d'ajout, qui
 // nomme la personne ajoutée (nomAjoute, grille.js).
 
-import { cite, enumeration, toursNommes } from '../../application/libelles/aides.js';
+import { cite, enumeration, nomDuTour, numeroNomme, tourDansPhrase, tourOuNom, toursNommes } from '../../application/libelles/aides.js';
 
 // Un nombre suivi de son nom, au singulier pour 0 et 1.
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
 
-// La portée d'une réservation : tous les tours, ou le tour désigné.
-const portee = ({ portee: genre, tour }) => (genre === 'tous' ? 'tous les tours' : `tour ${tour}`);
+// La portée d'une réservation : tous les tours, ou le tour désigné. Un
+// tour se nomme sous nomsTours, les noms des tours de l'événement
+// (aides.js).
+const portee = ({ portee: genre, tour, nomsTours }) => (genre === 'tous' ? 'tous les tours' : tourOuNom(tour, nomsTours));
 
 // Les tours antérieurs d'une personne revenue, entre parenthèses : « (déjà
 // au tour 1) », « (déjà aux tours 1 et 2) », « (déjà aux tours 1, 2 et
 // 3) » ; rien sans tour.
-function dejaAux(tours) {
+function dejaAux(tours, nomsTours) {
   if (tours.length === 0) return '';
-  if (tours.length === 1) return ` (déjà au tour ${tours[0]})`;
-  return ` (déjà aux tours ${tours.slice(0, -1).join(', ')} et ${tours.at(-1)})`;
+  const termes = tours.map((tour) => numeroNomme(tour, nomsTours));
+  if (tours.length === 1) return ` (déjà au tour ${termes[0]})`;
+  return ` (déjà aux tours ${termes.slice(0, -1).join(', ')} et ${termes.at(-1)})`;
 }
 
 // Les rencontres antérieures d'une paire revue, entre parenthèses : « (déjà
 // à la table 1 au tour 1, à la table 2 au tour 3) » ; rien sans rencontre.
-const dejaReunis = (deja) =>
-  deja.length === 0 ? '' : ` (déjà ${deja.map(({ tour, numero }) => `à la table ${numero} au tour ${tour}`).join(', ')})`;
+const dejaReunis = (deja, nomsTours) =>
+  deja.length === 0
+    ? ''
+    : ` (déjà ${deja.map(({ tour, numero }) => `à la table ${numero} au ${tourDansPhrase(tour, nomsTours)}`).join(', ')})`;
 
 // Le texte court de chaque règle dans la marque d'une personne en conflit
 // et dans la colonne « Conflits du placement ».
@@ -162,9 +167,9 @@ export const TABLE = new Map([
 
   // --- La présence par tour : cellule, groupe, cases d'une saisie ----------
   ['participants.presence.tous', 'tous'],
-  ['participants.presence.tours', ({ tours }) => toursNommes(tours)],
+  ['participants.presence.tours', ({ tours, nomsTours }) => toursNommes(tours, nomsTours)],
   ['participants.presence.editeur', ({ nom }) => `Présence de ${nom}, une case par tour`],
-  ['participants.presence.case', ({ tour }) => `Tour ${tour}`],
+  ['participants.presence.case', ({ tour, nomsTours }) => nomDuTour(tour, nomsTours)],
   ['participants.presence.caseCourte', ({ tour }) => String(tour)],
   ['participants.presence.tousLesTours', 'Tous les tours'],
   ['participants.presence.appliquer', 'Appliquer'],
@@ -213,10 +218,10 @@ export const TABLE = new Map([
   // --- Les conflits du placement montré, dans la liste groupée (§ 7.5) -----
   ['participants.conflit.groupe', ({ nombre }) => `en conflit : ${compte(nombre, 'conflit', 'conflits')}`],
   ['participants.conflit.personne', ({ regles }) => `en conflit : ${regles.map((regle) => REGLES_COURTES.get(regle)).join(', ')}`],
-  ['participants.conflit.lieu', ({ tour, numero }) => `Tour ${tour}, table ${numero} :`],
+  ['participants.conflit.lieu', ({ tour, numero, nomsTours }) => `${nomDuTour(tour, nomsTours)}, table ${numero} :`],
   ['participants.conflit.et', 'et'],
   ['participants.conflit.avec', 'avec'],
-  ['participants.conflit.tour', ({ tour }) => `tour ${tour} :`],
+  ['participants.conflit.tour', ({ tour, nomsTours }) => `${tourOuNom(tour, nomsTours)} :`],
   ...[...REGLES_COURTES].map(([regle, texte]) => [`participants.conflit.regle.${regle}`, texte]),
   // Dans la colonne, « se revoient » nomme qui, « revient à une table » dit
   // laquelle ; sans nom ni table, le texte court reste.
@@ -241,11 +246,11 @@ export const TABLE = new Map([
   ['participants.conflit.raison.separerOrganisations', '\u{2014} même organisation'],
   [
     'participants.conflit.raison.nouveauxVoisins',
-    ({ deja }) => `\u{2014} se revoient${dejaReunis(deja)}`,
+    ({ deja, nomsTours }) => `\u{2014} se revoient${dejaReunis(deja, nomsTours)}`,
   ],
   [
     'participants.conflit.raison.nouvelleTable',
-    ({ numero, deja }) => `\u{2014} revient à la table ${numero}${dejaAux(deja.map(({ tour }) => tour))}`,
+    ({ numero, deja, nomsTours }) => `\u{2014} revient à la table ${numero}${dejaAux(deja.map(({ tour }) => tour), nomsTours)}`,
   ],
 
   // --- Les commandes de la section ------------------------------------------
@@ -365,12 +370,12 @@ export const TABLE = new Map([
   ['participants.fiche.rencontres.personne', 'Personne rencontrée'],
   ['participants.fiche.rencontres.fois', 'Fois'],
   ['participants.fiche.rencontres.tours', 'Tours'],
-  ['participants.fiche.rencontres.tour', ({ tour, table }) => `tour ${tour}, table ${table}`],
+  ['participants.fiche.rencontres.tour', ({ tour, table, nomsTours }) => `${tourOuNom(tour, nomsTours)}, table ${table}`],
   // Les tours d'une rencontre, [{tour, table}] dans l'ordre reçu, chacun
   // par participants.fiche.rencontres.tour, séparés par « ; ».
   [
     'participants.fiche.rencontres.toursListe',
-    ({ tours }, texte) => tours.map((etape) => texte('participants.fiche.rencontres.tour', etape)).join(' ; '),
+    ({ tours, nomsTours }, texte) => tours.map((etape) => texte('participants.fiche.rencontres.tour', { ...etape, nomsTours })).join(' ; '),
   ],
   ['participants.fiche.rencontres.aucune', 'Elle ne rencontre personne dans ce placement.'],
   [

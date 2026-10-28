@@ -26,7 +26,9 @@
 // sur les feuilles suivantes : rien d'elle hors des zones de contenu, ses
 // parts mises bout à bout redonnent la ligne entière, chaque texte une fois,
 // et sur la liste d'accueil seule sa dernière part porte le filet de fin
-// d'organisation.
+// d'organisation. Un tour que l'événement nomme porte son nom, tel quel,
+// dans les têtes de colonnes des deux listes et dans le choix du tour de
+// l'aperçu ; un tour sans nom y reste « Tour 1 ».
 //
 // App est montée par test/navigateur/ecrans.js sur le système de fichiers
 // simulé, au cadre de 1 366 × 700 ; le texte attendu vient de la même
@@ -534,6 +536,24 @@ describe('la feuille par table (§ 11.7, Q6 c)', () => {
     expect(long.scrollWidth).toBeLessThanOrEqual(long.clientWidth);
     const autre = charge.tables.find(({ id }) => id !== premiere.id && id !== seconde.id);
     expect(texte(titreDe(autre.id))).toBe(t('feuilles.tables.titre', { table: autre.numero }));
+  });
+
+  test('un tour nommé : sa tête de colonne porte son nom, tel quel, sur la feuille par table comme sur la liste d’accueil, et le choix du tour de l’aperçu de même ; un tour sans nom reste « Tour 1 »', async () => {
+    const charge = appliquerCommande('changerNomTour', chargePrincipale(), { tour: 2, nom: 'Plat principal' }).charge;
+    expect(charge.evenement.nomsTours.slice(0, 2)).toEqual([null, 'Plat principal']);
+    const m = await ouvrirApercu(contexte, charge);
+    const options = tous(dans(m, '[data-apercu-impression] [data-champ="tour"]'), 'option').map(texte);
+    expect(options[0]).toBe(t('impression.tour.option', { tour: 1 }));
+    expect(options[1]).toBe('Plat principal');
+    // La liste d'accueil peut répartir les tours en blocs, chacun sur ses
+    // feuilles : les têtes se lisent sur le document entier.
+    for (const vue of ['tables', 'accueil']) {
+      await choisirVue(m, vue);
+      const tetes = feuilles(m).flatMap((feuille) => tous(feuille.querySelector('[data-entete-liste]'), 'th').map(texte));
+      expect(tetes, vue).toContain('Plat principal');
+      expect(tetes, vue).toContain(t('feuilles.tour', { tour: 1 }));
+      expect(tetes, vue).not.toContain(t('feuilles.tour', { tour: 2 }));
+    }
   });
 
   for (const [cas, chargeDuCas] of [

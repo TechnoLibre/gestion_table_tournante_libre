@@ -26,7 +26,11 @@
   // la carte ne transmet pas ; data-jamais-servies sur la liste des
   // personnes jamais servies, data-soiree-objectifs sur la ligne de la
   // soirée, data-phrase-qualite sur chaque phrase, par son cas.
+  //
+  // Les tours se nomment par les noms que leur donne la charge de la séance
+  // (nomsDesTours), sinon par « Tour 3 ».
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import Carte from '../primitives/Carte.svelte';
   import Barres from './graphiques/Barres.svelte';
   import Jumeau from './graphiques/Jumeau.svelte';
@@ -36,9 +40,11 @@
   let { detail = null, ligne = null, table = null } = $props();
 
   const t = getContext('t');
+  const seance = getContext('seance');
   const uid = $props.id();
   const idJamais = `${uid}-jamais`;
-  const modele = $derived(modeleObjectifs(detail, t));
+  const nomsTours = $derived($seance?.charge ? nomsDesTours($seance.charge) : undefined);
+  const modele = $derived(modeleObjectifs(detail, t, nomsTours));
 </script>
 
 <div data-vue-qualite="objectifs">

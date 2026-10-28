@@ -34,6 +34,7 @@
   // L'orientation de la découpe remonte à l'aperçu par la propriété liée
   // orientation : c'est celle qu'il demande à l'imprimante.
   import { getContext } from 'svelte';
+  import { nomsDesTours } from '../../application/tours.js';
   import { constante } from '../../geometrie/constantes.js';
   import { TAILLE_TEXTE_LISTE_CM } from '../../geometrie/texte.js';
   import { creerMesureur, hauteurLigne, mesurable } from '../plan/mesure_texte.js';
@@ -59,6 +60,7 @@
       nomDe: nomDeCharge($seance.charge),
       organisations: options.organisations,
       organisationDe: organisationDeCharge($seance.charge),
+      nomsTours: nomsDesTours($seance.charge),
       impression: true,
     }),
   );

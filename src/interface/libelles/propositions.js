@@ -409,6 +409,9 @@ export const TABLE = new Map([
       `Dérivée de n° ${depart}, ${tours.length === 1 ? 'tour' : 'tours'} ${enumeration(tours)} ${tours.length === 1 ? 'figé' : 'figés'}.`,
   ],
   ['propositions.filiation.departAbsent', ({ depart }) => `Dérivée de n° ${depart}, qui n'est plus dans la liste.`],
+  // Un tour figé de la filiation : son numéro mis en forme, suivi de son nom
+  // entre parenthèses quand il en a un.
+  ['propositions.filiation.tourFige', ({ numero, nom }) => (nom === null ? numero : `${numero} (${nom})`)],
 
   // --- Les commandes (§ 2.1 étape 10, § 5.7) ------------------------------------
   ['propositions.commande.voir', 'Voir sur le plan'],

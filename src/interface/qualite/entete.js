@@ -106,12 +106,12 @@ function plancherNonProuveDe(nom, retires, t) {
 
 // L'infobulle du libellé de la tuile nom : l'explication de sa colonne ;
 // pour le minimum brut, la présence de la personne au rang 1 s'y ajoute
-// quand presenceDe la rend partielle.
-function infobulleDe(nom, explication, { rang1, nomDe, presenceDe }) {
+// quand presenceDe la rend partielle, ses tours nommés sous nomsTours.
+function infobulleDe(nom, explication, { rang1, nomDe, presenceDe, nomsTours }) {
   if (nom !== 'rencontresTous' || rang1 === null) return { cle: explication, details: {} };
   const tours = presenceDe(rang1.id);
   if (tours === null) return { cle: explication, details: {} };
-  return { cle: 'qualite.entete.explicationRang1', details: { explication, nom: nomDe(rang1.id), tours } };
+  return { cle: 'qualite.entete.explicationRang1', details: { explication, nom: nomDe(rang1.id), tours, nomsTours } };
 }
 
 /**
@@ -309,9 +309,10 @@ export function enTeteDeTuile(nom, classe, t) {
  *        le détail du placement (detaillerQualite), sa ligne d'évaluation
  *        et la table d'évaluation de la charge
  * @param {{t: Function, format: {nombre: Function},
- *          presenceDe?: (id: number) => number[]|null}} outils
+ *          presenceDe?: (id: number) => number[]|null, nomsTours?: Array<string|null>}} outils
  *        presenceDe : la présence saisie d'une personne (presenceDeCharge),
- *        null pour tous les tours ; par défaut, chacune vient à chaque tour
+ *        null pour tous les tours ; par défaut, chacune vient à chaque tour ;
+ *        nomsTours : les noms des tours de l'événement (nomsDesTours)
  * @returns {null|{population: string, groupes: Array<{cle: string,
  *   libelle: string, tuiles: Tuile[]}>, certificat: string}}
  *   population : la mention de la population mesurée ; groupes : ceux de
@@ -319,13 +320,13 @@ export function enTeteDeTuile(nom, classe, t) {
  *   certificat : « minimum atteint » ou « atteignabilité inconnue », qui
  *   suit les tuiles
  */
-export function enteteDe({ detail, ligne, table }, { t, format, presenceDe = () => null }) {
+export function enteteDe({ detail, ligne, table }, { t, format, presenceDe = () => null, nomsTours = undefined }) {
   if (detail === null || detail.statut !== 'comparable' || ligne === null || table === null) return null;
   const noms = new Map(detail.personnes.map(({ id, nom }) => [id, nom]));
   const nomDe = (id) => noms.get(id);
   const contexte = { bornes: detail.bornes, ligne, table, t, format, nomDe };
   const retires = detail.planchersRetires ?? [];
-  const lecture = { rang1: detail.bornes.rang1, nomDe, presenceDe };
+  const lecture = { rang1: detail.bornes.rang1, nomDe, presenceDe, nomsTours };
   const groupes = groupesDeTuiles(table, [ligne], t).map(({ cle, libelle, tuiles }) => ({
     cle,
     libelle,

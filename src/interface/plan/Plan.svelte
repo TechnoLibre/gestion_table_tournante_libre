@@ -100,6 +100,7 @@
   // suivant.
   import { getContext, tick, untrack } from 'svelte';
   import { controlerCapacite } from '../../application/capacite.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import { constante } from '../../geometrie/constantes.js';
   import { ajuster as vueAjustee, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
   import { evaluation } from '../propositions/modele.js';
@@ -172,6 +173,8 @@
   let legendeOuverte = $state(false);
 
   const charge = $derived($seance.charge);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(nomsDesTours(charge));
   const tours = $derived(charge.evenement.tours);
   const etat = $derived(etatTour);
   const tour = $derived(etat.tour);
@@ -207,6 +210,7 @@
           poignee,
           selection,
           actif: actifMontre,
+          nomsTours,
         }),
   );
   // La pose à sa position dans la surface, sous la vue courante ; rien pour
@@ -763,6 +767,7 @@
   <BarreVue
     {tour}
     {tours}
+    {nomsTours}
     {zoomer}
     {ajuster}
     {evidence}

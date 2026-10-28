@@ -57,6 +57,7 @@
   import '../impression.css';
   import { getContext } from 'svelte';
   import { estBrouillon, piedDePage, refusImpression } from '../../application/sorties.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import { constante } from '../../geometrie/constantes.js';
   import { DECOUPES, TRIS_ACCUEIL, VUES_IMPRESSION } from '../etat_ui.js';
   import Commande from '../primitives/Commande.svelte';
@@ -88,7 +89,8 @@
   const pied = $derived(
     piedDePage(charge, { source: sortie.source, proposition: sortie.proposition, tour: sortie.tour, provenance, version, texte: t }),
   );
-  const feuille = $derived(feuilleDe(pied, estBrouillon(charge, { source: sortie.source, tour: sortie.tour })));
+  const nomsTours = $derived(nomsDesTours(charge));
+  const feuille = $derived(feuilleDe(pied, estBrouillon(charge, { source: sortie.source, tour: sortie.tour }), nomsTours));
   const refusNom = $derived(refusApercu(pied));
   const Vue = $derived(VUES.get(options.vue));
   const tours = $derived(toursOfferts(charge.evenement.tours));
@@ -141,7 +143,7 @@
           <span>{t('impression.tour.titre')}</span>
           <select data-champ="tour" value={sortie.tour} onchange={(evenement) => ui.reglerApercu({ tour: Number(evenement.currentTarget.value) })}>
             {#each tours as tour (tour)}
-              <option value={tour}>{t('impression.tour.option', { tour })}</option>
+              <option value={tour}>{nomsTours[tour - 1] ?? t('impression.tour.option', { tour })}</option>
             {/each}
           </select>
         </label>

@@ -33,7 +33,7 @@
 // lieux d'une personne dans le retenu se lisent et se changent par
 // retenu_lieux.js.
 import { ordreDesReservations, pourvoyeursDesTitres } from '../csv/import.js';
-import { capacite } from '../stockage/document.js';
+import { capacite, nomsDesTours } from '../stockage/document.js';
 import { estPresentAuTour, toursDePresence } from '../moteur/presence.js';
 import { copieDeTravail } from '../stockage/gel.js';
 import { fautes } from '../stockage/placements.js';
@@ -164,7 +164,14 @@ function reserver(charge, { participant, table: idTable, siege = null, portee, t
   suivante.reservations.push(nouvelle);
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_RESERVER', { personne: nomAffiche(personne), numero: table.numero, siege: siegeEcrit, portee, tour }),
+    libelle: libelle('ENTREE_RESERVER', {
+      personne: nomAffiche(personne),
+      numero: table.numero,
+      siege: siegeEcrit,
+      portee,
+      tour,
+      nomsTours: nomsDesTours(charge),
+    }),
     avertissements: avertissementsDe(signaux),
   };
 }
@@ -192,7 +199,7 @@ function retirerReservation(charge, { participant, table: idTable, portee, tour 
   suivante.reservations = suivante.reservations.filter((r) => !designee(r, participant, designation));
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_RETIRER_RESERVATION', { personne: nomAffiche(personne), numero: table.numero, portee, tour }),
+    libelle: libelle('ENTREE_RETIRER_RESERVATION', { personne: nomAffiche(personne), numero: table.numero, portee, tour, nomsTours: nomsDesTours(charge) }),
     avertissements: [],
   };
 }
@@ -233,6 +240,7 @@ function deplacerReservation(charge, { participant, de, vers } = {}) {
       siege: siegeEcrit,
       portee: premiere.portee,
       tour: premiere.tour,
+      nomsTours: nomsDesTours(charge),
     }),
     avertissements: avertissementsDe(signaux),
   };
@@ -802,6 +810,7 @@ function deplacerDansRetenu(charge, { tour, participant, table: idTable, siege =
       vers: table.numero,
       siege: siegeLibelle,
       tour,
+      nomsTours: nomsDesTours(charge),
     }),
     avertissements: [],
   };
@@ -933,7 +942,14 @@ function echangerDansRetenu(charge, { tour, a, b } = {}) {
 
   return {
     charge: retouche(charge, suivante),
-    libelle: libelle('ENTREE_ECHANGER_DANS_RETENU', { a: nomAffiche(personneA), deA, b: nomAffiche(personneB), deB, tour }),
+    libelle: libelle('ENTREE_ECHANGER_DANS_RETENU', {
+      a: nomAffiche(personneA),
+      deA,
+      b: nomAffiche(personneB),
+      deB,
+      tour,
+      nomsTours: nomsDesTours(charge),
+    }),
     avertissements: [],
   };
 }
@@ -965,7 +981,7 @@ function retirerDuTour(charge, { tour, participant } = {}) {
   enReserve(suivante.retenu, tour, participant);
   return {
     charge: retouche(charge, suivante, (violations) => remedeDuRetrait(charge, participant, tour, violations)),
-    libelle: libelle('ENTREE_RETIRER_DU_TOUR', { personne: nomAffiche(personne), numero, tour }),
+    libelle: libelle('ENTREE_RETIRER_DU_TOUR', { personne: nomAffiche(personne), numero, tour, nomsTours: nomsDesTours(charge) }),
     avertissements: [],
   };
 }

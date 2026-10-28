@@ -234,7 +234,7 @@ async function seanceSur(charge) {
 // --- Les épreuves -----------------------------------------------------------
 
 describe('mobilier : le registre (§ 8.2)', () => {
-  test('COMMANDES_MOBILIER porte les quatorze commandes du mobilier, réunies dans COMMANDES', () => {
+  test('COMMANDES_MOBILIER porte les quinze commandes du mobilier, réunies dans COMMANDES', () => {
     const noms = [
       'creerTable',
       'supprimerTable',
@@ -244,6 +244,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       'realignerTable',
       'changerDefaut',
       'changerTours',
+      'changerNomTour',
       'modifierReglage',
       'poserObjectif',
       'retirerObjectif',
@@ -267,6 +268,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       ['realignerTable', { id: 1 }],
       ['changerDefaut', { sieges: 6, realigner: false }],
       ['changerTours', { tours: 3 }],
+      ['changerNomTour', { tour: 1, nom: 'Apéritif' }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['poserObjectif', { table: 1, tour: null, etiquettes: 'finance', regle: null }],
       ['retirerObjectif', { table: 1, tour: null }],
@@ -297,6 +299,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       ['realignerTable', { id: 1 }],
       ['changerDefaut', { sieges: 6, realigner: false }],
       ['changerTours', { tours: 4 }],
+      ['changerNomTour', { tour: 2, nom: 'Apéritif' }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['poserObjectif', { table: 1, tour: null, etiquettes: 'finance', regle: null }],
       ['retirerObjectif', { table: 2, tour: null }],
@@ -942,6 +945,87 @@ describe('mobilier : le libellé d’une table (§ 4, § 8.9)', () => {
     await seance.executer('changerLibelleTable', { id: 1, libelle: 'Coin' });
     assert.equal(entrees(), avant + 1);
     assert.equal(seance.charge.tables[0].libelle, 'Coin');
+  });
+});
+
+describe('mobilier : le nom d’un tour (§ 4, § 8.9)', () => {
+  // Soixante points de code, dont des lettres hors du plan de base.
+  const SOIXANTE = `Mets ${'\u{1D49C}'.repeat(30)} ${'é'.repeat(24)}`;
+
+  test('le nom saisi entre en NFC, ses blancs de bord retirés, au seul tour nommé ; une entrée au libellé figé', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    const pose = accepter('changerNomTour', charge, { tour: 2, nom: '  Plat principal\u{0009} ' });
+    assert.equal(pose.libelle, 'Tour 2 : nom « Plat principal »');
+    assert.deepEqual(pose.avertissements, []);
+    assert.deepEqual(pose.charge.evenement.nomsTours, [null, 'Plat principal', null]);
+    const nfc = accepter('changerNomTour', pose.charge, { tour: 1, nom: 'Entre\u{0301}e' });
+    assert.deepEqual(nfc.charge.evenement.nomsTours, ['Entr\u{00E9}e', 'Plat principal', null]);
+    const change = accepter('changerNomTour', nfc.charge, { tour: 2, nom: 'Fromages' });
+    assert.deepEqual(change.charge.evenement.nomsTours, ['Entr\u{00E9}e', 'Fromages', null]);
+  });
+
+  test('un nom vide, fait de blancs ou égal au nom par défaut retire le nom, et le champ avec le dernier ; retirer un nom absent, ou reposer le même, est sans effet', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    const deux = accepter('changerNomTour', accepter('changerNomTour', charge, { tour: 1, nom: 'Apéritif' }).charge, { tour: 3, nom: 'Dessert' }).charge;
+    const parDefaut = accepter('changerNomTour', deux, { tour: 3, nom: ' Tour 3 ' });
+    assert.equal(parDefaut.libelle, 'Tour 3 : nom retiré');
+    assert.deepEqual(parDefaut.charge.evenement.nomsTours, ['Apéritif', null, null]);
+    const vide = accepter('changerNomTour', parDefaut.charge, { tour: 1, nom: ' \u{0009} ' });
+    assert.equal(Object.hasOwn(vide.charge.evenement, 'nomsTours'), false);
+    assert.equal(serialiser(vide.charge, { revision: 1, produitVersion: 'essai' }), serialiser(charge, { revision: 1, produitVersion: 'essai' }));
+    refuse(() => appliquerCommande('changerNomTour', charge, { tour: 2, nom: '' }), 'SANS_EFFET');
+    refuse(() => appliquerCommande('changerNomTour', charge, { tour: 2, nom: 'Tour 2' }), 'SANS_EFFET');
+    refuse(() => appliquerCommande('changerNomTour', deux, { tour: 1, nom: ' Apéritif ' }), 'SANS_EFFET');
+    // « Tour 2 » n'est le nom par défaut que du tour 2.
+    assert.deepEqual(accepter('changerNomTour', charge, { tour: 1, nom: 'Tour 2' }).charge.evenement.nomsTours, ['Tour 2', null, null]);
+  });
+
+  test('au-delà de LIBELLE_TABLE_MAX points de code : NOM_TOUR_TROP_LONG, remède nul', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2 });
+    assert.equal([...SOIXANTE].length, 60);
+    assert.deepEqual(accepter('changerNomTour', charge, { tour: 1, nom: ` ${SOIXANTE} ` }).charge.evenement.nomsTours, [SOIXANTE, null]);
+    const leve = refuse(() => COMMANDES.get('changerNomTour')(charge, { tour: 1, nom: `${SOIXANTE}x` }), 'NOM_TOUR_TROP_LONG', {
+      longueur: 61,
+      maximum: 60,
+    });
+    assert.equal(leve.details.remede, null);
+    assert.equal(libelle('NOM_TOUR_TROP_LONG', leve.details), "Le nom compte 61 caractères : celui d'un tour en compte au plus 60.");
+  });
+
+  test('un tour hors de la soirée, ou un nom qui n’est pas un texte, sont des fautes du code', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], tours: 2 });
+    for (const tour of [0, 3, 1.5, '1', null]) {
+      assert.throws(() => COMMANDES.get('changerNomTour')(charge, { tour, nom: 'Apéritif' }), { name: 'TypeError', message: /^tour : / }, JSON.stringify(tour));
+    }
+    assert.throws(() => COMMANDES.get('changerNomTour')(charge, { tour: 1, nom: null }), { name: 'TypeError', message: /^nom : / });
+  });
+
+  test('ni dérive ni changement de la configuration du moteur ; une entrée au journal, que Défaire reprend', async () => {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 4, tours: 2 });
+    placer(charge, [[[1, 2], [3, 4]], [[1, 3], [2, 4]]], { id: 1, retenu: true });
+    const rendu = accepter('changerNomTour', charge, { tour: 2, nom: 'Dessert' });
+    assert.deepEqual(configurationDepuisCharge(rendu.charge), configurationDepuisCharge(charge));
+    for (const placement of [...rendu.charge.propositions, rendu.charge.retenu]) assert.deepEqual(derive(placement, rendu.charge), [], String(placement.id ?? 'retenu'));
+    const { seance, entrees } = await seanceSur(charge);
+    const avant = entrees();
+    await seance.executer('changerNomTour', { tour: 1, nom: 'Apéritif' });
+    assert.equal(entrees(), avant + 1);
+    assert.deepEqual(seance.charge.evenement.nomsTours, ['Apéritif', null]);
+    await seance.defaire();
+    assert.equal(Object.hasOwn(seance.charge.evenement, 'nomsTours'), false);
+  });
+
+  test('changer les tours : les noms des tours retirés partent, comptés au libellé ; un tour ajouté vient sans nom', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    charge.evenement.nomsTours = ['Apéritif', null, 'Dessert'];
+    const deux = accepter('changerTours', charge, { tours: 2 });
+    assert.deepEqual(deux.charge.evenement.nomsTours, ['Apéritif', null]);
+    assert.equal(deux.libelle, 'Nombre de tours : 2 ; 1 nom de tour retiré');
+    const quatre = accepter('changerTours', charge, { tours: 4 });
+    assert.deepEqual(quatre.charge.evenement.nomsTours, ['Apéritif', null, 'Dessert', null]);
+    assert.equal(quatre.libelle, 'Nombre de tours : 4');
+    charge.evenement.nomsTours = [null, null, 'Dessert'];
+    assert.equal(Object.hasOwn(accepter('changerTours', charge, { tours: 2 }).charge.evenement, 'nomsTours'), false);
   });
 });
 

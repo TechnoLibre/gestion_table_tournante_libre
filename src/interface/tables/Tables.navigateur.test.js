@@ -32,7 +32,7 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
 import { pointer, touche } from '../../../test/navigateur/entrees.js';
-import { composantes, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, sousTheme, traductionEcran, visible } from '../../../test/navigateur/rendu.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { demanderCreationTables } from './CreerTables.svelte';
@@ -486,6 +486,93 @@ describe('le libellé d’une table, saisi au champ (§ 4, § 8.9)', () => {
     expect(revision(m)).toBe(r + 1);
     expect(Object.hasOwn(charge(m).tables[1], 'libelle')).toBe(false);
     expect(charge(m).tables[0].libelle).toBe('Honneur');
+  });
+});
+
+describe('le nom de chaque tour, saisi au champ (§ 4, § 8.9)', () => {
+  const groupe = (m) => section(m).querySelector('[data-noms-tours]');
+  const champNom = (m, tour) => section(m).querySelector(`input[data-champ="nom-tour-${tour}"]`);
+  const champs = (m) => [...groupe(m).querySelectorAll('input')];
+
+  // La couleur que porte le jeton nom, lue sur une sonde.
+  function jeton(nom) {
+    const sonde = document.createElement('span');
+    sonde.style.color = `var(${nom})`;
+    document.body.append(sonde);
+    const couleur = composantes(getComputedStyle(sonde).color);
+    sonde.remove();
+    return couleur;
+  }
+
+  test('un champ par tour, vide, son étiquette et son texte indicatif, le nom par défaut ; saisi, le nom s’écrit en une entrée ; le nom par défaut ou le même ne relancent rien ; 61 caractères refusés ; vidé, il part', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 }));
+    expect(groupe(m).querySelector('legend').textContent).toBe(t('tables.tours.noms'));
+    expect(champs(m).map((entree) => entree.value)).toEqual(['', '', '']);
+    expect(champs(m).map((entree) => entree.placeholder)).toEqual([1, 2, 3].map((tour) => t('tables.tours.nomParDefaut', { tour })));
+    expect(champNom(m, 2).labels[0].textContent).toBe(t('tables.tours.nom', { tour: 2 }));
+
+    let r = revision(m);
+    await saisir(m, champNom(m, 2), '  Plat principal ');
+    expect(revision(m)).toBe(r + 1);
+    expect(charge(m).evenement.nomsTours).toEqual([null, 'Plat principal', null]);
+    expect(champNom(m, 2).value).toBe('Plat principal');
+
+    r = revision(m);
+    const avant = ecritures(m);
+    await saisir(m, champNom(m, 2), 'Plat principal ');
+    await saisir(m, champNom(m, 1), 'Tour 1');
+    expect(revision(m)).toBe(r);
+    expect(ecritures(m)).toBe(avant);
+    expect(groupe(m).querySelector('[data-refus]')).toBeNull();
+    expect(champNom(m, 1).value).toBe('');
+
+    await saisir(m, champNom(m, 3), 'x'.repeat(61));
+    const refus = groupe(m).querySelector('[data-refus="NOM_TOUR_TROP_LONG"]');
+    expect(refus).not.toBeNull();
+    expect(refus.querySelector('p').textContent).toBe(t('NOM_TOUR_TROP_LONG', { longueur: 61, maximum: 60 }));
+    expect(ecritures(m)).toBe(avant);
+    await touche('Escape');
+    await attendre(m);
+    expect(groupe(m).querySelector('[data-refus]')).toBeNull();
+
+    r = revision(m);
+    await saisir(m, champNom(m, 2), '');
+    expect(revision(m)).toBe(r + 1);
+    expect(Object.hasOwn(charge(m).evenement, 'nomsTours')).toBe(false);
+    expect(champNom(m, 2).value).toBe('');
+  });
+
+  test('changer le nombre de tours ajoute ou retire des champs ; la baisse nomme dans sa fenêtre le nom qu’elle retire, Défaire le rend', async () => {
+    const depart = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    depart.evenement.nomsTours = [null, null, 'Dessert'];
+    const m = await preparer(depart);
+    expect(champNom(m, 3).value).toBe('Dessert');
+    await saisir(m, champ(m, 'tours'), '4');
+    expect(champs(m)).toHaveLength(4);
+    expect(champNom(m, 4).value).toBe('');
+    await saisir(m, champ(m, 'tours'), '2');
+    expect(fenetre()).not.toBeNull();
+    expect(elementsFenetre()).toContain(t('tables.tours.nomRetire', { tour: 3, nom: 'Dessert' }));
+    await cliquer(m, fenetre().querySelector('[data-commande="confirmer"]'));
+    expect(champs(m)).toHaveLength(2);
+    expect(Object.hasOwn(charge(m).evenement, 'nomsTours')).toBe(false);
+    await m.seance.defaire();
+    await attendre(m);
+    expect(champs(m)).toHaveLength(4);
+    expect(champNom(m, 3).value).toBe('Dessert');
+  });
+
+  test('le texte indicatif prend l’encre secondaire de la page et tient 4,5:1 sur le fond du champ, dans les deux thèmes', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 2, tours: 2 }));
+    const entree = champNom(m, 1);
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        const indicatif = composantes(getComputedStyle(entree, '::placeholder').color);
+        const fond = composantes(getComputedStyle(entree).backgroundColor);
+        expect(indicatif, theme).toEqual(jeton('--couleur-page-texte-secondaire'));
+        expect(contraste(indicatif, fond), theme).toBeGreaterThanOrEqual(4.5);
+      });
+    }
   });
 });
 
@@ -1314,6 +1401,9 @@ describe('la présence par tour (§ 6.1, § 2.1 étape 5)', () => {
     });
     const m = await preparer(donnees);
     expect(tableau(m)).not.toBeNull();
+    // Les noms des tours le précèdent dans la carte : il se lit une fois
+    // amené dans la fenêtre.
+    tableau(m).scrollIntoView({ block: 'center' });
     expect(visible(tableau(m))).toBe(true);
     expect(tableau(m).querySelector('caption').textContent.trim()).toBe(t('tables.presences.titre'));
     expect(cellules(tableau(m).querySelector('thead tr'))).toEqual(
@@ -1327,10 +1417,14 @@ describe('la présence par tour (§ 6.1, § 2.1 étape 5)', () => {
     ]);
     for (const tour of [1, 2]) expect(fondDe(teinte(ligneTour(m, tour))), `tour ${tour}`).toEqual(jeton('--couleur-avis-fond'));
     expect(teinte(ligneTour(m, 3))).toBeNull();
+    // Un tour qui a un nom se nomme par lui dans sa ligne.
+    await saisir(m, section(m).querySelector('input[data-champ="nom-tour-2"]'), 'Plat principal');
+    expect(cellules(ligneTour(m, 2))[0]).toBe('Plat principal');
+    expect(cellules(ligneTour(m, 1))[0]).toBe('1');
 
     // Une table de plus : les places suivent, sans soustraction ailleurs.
     await cliquer(m, commande(section(m), 'creerTableRonde'));
-    expect(cellules(ligneTour(m, 2))).toEqual(['2', '6', '12', '0']);
+    expect(cellules(ligneTour(m, 2))).toEqual(['Plat principal', '6', '12', '0']);
     expect(teinte(ligneTour(m, 2))).toBeNull();
 
     for (const id of [1, 2, 3]) await m.seance.executer('changerPresence', { id, tours: null });

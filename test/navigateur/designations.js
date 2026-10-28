@@ -208,6 +208,7 @@ const ENTREES = [
   ['data-niveau', 'participants : le niveau d’un groupe ou d’un sélecteur', null],
   ['data-nom-imprime', 'aperçu : le nom entier d’une personne sur une liste imprimée', ['']],
   ['data-nombre', 'import : un nombre affiché', ['']],
+  ['data-noms-tours', 'tables : les champs des noms des tours', ['']],
   ['data-numero-table', 'plan : le numéro inscrit sur le plateau d’une table, par son identifiant', null],
   ['data-objectif', 'tables : l’objectif d’une table, par sa table, et son tour pour un tour désigné', null],
   ['data-ordre', 'propositions : la phrase de l’ordre', ['']],

@@ -80,6 +80,7 @@
   import Grille from './Grille.svelte';
   import { statuts } from '../../application/places.js';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import { conflitsDesGroupes, lignesDeConflit, reglesParPersonne } from './conflits.js';
   import { comptesEntete, legendeOrganisations, legendeEtiquettes } from './entete.js';
   import {
@@ -285,7 +286,9 @@
     <Confirmation
       titre="participants.suppression.titre"
       details={{ personne: nomAffiche(aSupprimer.participant) }}
-      elements={aSupprimer.reservations.map((reservation) => t('participants.suppression.reservation', reservation))}
+      elements={aSupprimer.reservations.map((reservation) =>
+        t('participants.suppression.reservation', { ...reservation, nomsTours: nomsDesTours(charge) }),
+      )}
       surConfirmer={confirmerSuppression}
       surAnnuler={() => (aSupprimer = null)}
     />

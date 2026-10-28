@@ -2,12 +2,12 @@
      SPDX-License-Identifier: AGPL-3.0-or-later OR LiLiQ-Rplus-1.1 -->
 
 <script>
-  // Le pied d'une feuille imprimée (§ 11.7, § 18.6) : ses cinq éléments —
-  // nom de l'événement, date, tour, horodatage du placement, version —, dans
+  // Le pied d'une feuille imprimée (§ 11.7, § 18.6) : ses cinq éléments — nom
+  // de l'événement, date, tour, horodatage du placement, version —, dans
   // l'ordre que rend feuilleDe (modele.js). Chaque élément pose son libellé
-  // traduit, puis sa donnée dans son propre nœud : le nom et la version
-  // tels quels, la date et l'horodatage mis en forme par format. Les
-  // éléments se suivent sur une ligne et passent à la suivante quand la
+  // traduit, puis sa donnée dans son propre nœud : le nom, le nom du tour et
+  // la version tels quels, la date et l'horodatage mis en forme par format.
+  // Les éléments se suivent sur une ligne et passent à la suivante quand la
   // largeur manque : un nom d'événement long replie, il ne se tronque pas.
   import { getContext } from 'svelte';
 

@@ -16,6 +16,7 @@ export const EXEMPLES = [
   ['TROP_DE_PLACES', { max: 1000, remede: null }],
   ['TROP_DE_TOURS', { max: 100, remede: null }],
   ['LIBELLE_TABLE_TROP_LONG', { longueur: 61, maximum: 60, remede: null }],
+  ['NOM_TOUR_TROP_LONG', { longueur: 61, maximum: 60, remede: null }],
   ['SOUS_RESERVATIONS', { table: 2, n: 7, tour: 1, remede: { geste: 'afficherTour', tour: 1, proposition: null } }],
   ['SOUS_OCCUPES', { table: 2, n: 7, tour: 3, remede: { geste: 'afficherTour', tour: 3, proposition: null } }],
   [
@@ -41,6 +42,7 @@ export const EXEMPLES = [
   ['ENTREE_SUPPRIMER_TABLE', { numero: 2, reservations: 2, titres: 1 }],
   ['ENTREE_DEPLACER_TABLE', { numero: 3 }],
   ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: 'Coin des invités' }],
+  ['ENTREE_CHANGER_NOM_TOUR', { tour: 2, nom: 'Plat principal' }],
   ['ENTREE_CHANGER_PLACES_TABLE', { numero: 5, sieges: 10 }],
   ['ENTREE_REALIGNER_TABLE', { numero: 5, sieges: 8 }],
   ['ENTREE_CHANGER_DEFAUT', { sieges: 10, realignees: 4 }],
@@ -69,6 +71,16 @@ export const EXEMPLES = [
 ];
 
 export const TEXTES = [
+  [
+    'SURNUMERAIRES',
+    { table: 2, tour: 3, personnes: [5], nomsTours: [null, null, 'Dessert'] },
+    "Au tour 3 (Dessert), 1 personne passe dans la réserve : la table n'a plus de chaise pour elle.",
+  ],
+  [
+    'ENTREE_RETIRER_OBJECTIF',
+    { numero: 3, tour: 2, nomsTours: [null, 'Plat principal'] },
+    'Table 3, Plat principal : objectif retiré',
+  ],
   [
     'PRESENCE_VIDEE_PAR_TOURS',
     { participants: [{ participant: 4, personne: 'Iris Ombrelle' }], tours: 3, remede: { geste: 'ouvrirSection', section: 'participants' } },
@@ -106,6 +118,13 @@ export const TEXTES = [
   ],
   ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: 'Coin des invités' }, 'Table 3 : libellé « Coin des invités »'],
   ['ENTREE_CHANGER_LIBELLE_TABLE', { numero: 3, libelle: null }, 'Table 3 : libellé retiré'],
+  ['ENTREE_CHANGER_NOM_TOUR', { tour: 2, nom: 'Plat principal' }, 'Tour 2 : nom « Plat principal »'],
+  ['ENTREE_CHANGER_NOM_TOUR', { tour: 2, nom: null }, 'Tour 2 : nom retiré'],
+  [
+    'ENTREE_CHANGER_TOURS',
+    { tours: 2, retirees: 0, nomsRetires: 1 },
+    'Nombre de tours : 2 ; 1 nom de tour retiré',
+  ],
   ['ENTREE_CREER_TABLES', { premier: 3, dernier: 24, sieges: 8 }, 'Ajouté les tables 3 à 24, de 8 places'],
   ['ENTREE_CREER_TABLES', { premier: 7, dernier: 7, sieges: 10 }, 'Ajouté la table 7, de 10 places'],
   ['ENTREE_CREER_TABLES', { premier: 2, dernier: 3, sieges: 8 }, 'Ajouté les tables 2 et 3, de 8 places'],

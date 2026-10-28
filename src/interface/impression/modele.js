@@ -179,21 +179,32 @@ export function bandeDeFeuille({ feuillePx, contenuPx, margeMm }) {
 const element = (nom, libelle, donnee = null, forme = 'texte') => ({ element: nom, libelle, donnee, forme });
 const libelle = (cle, details = {}) => ({ cle, details });
 
+// L'élément du tour d'un pied : « Tous les tours », le nom du tour, posé
+// comme donnée, ou son libellé sans lui.
+function piedDuTour(tour, nom) {
+  if (tour === 'tous') return element('tour', libelle('impression.pied.tousLesTours'));
+  return nom === null ? element('tour', libelle('impression.pied.tour', { tour })) : element('tour', null, nom);
+}
+
 /**
  * La feuille d'un pied (piedDePage, src/application/sorties.js) : ses cinq
  * éléments dans l'ordre du § 11.7 — nom de l'événement, date, tour,
  * horodatage du placement, version —, chacun un libellé à traduire et une
  * donnée à poser telle quelle (forme 'texte') ou à mettre en forme ('date',
  * 'horodatage'), et le filigrane, qui suit brouillon (estBrouillon). Une
- * date ou un horodatage absents s'écrivent par un libellé qui le dit.
+ * date ou un horodatage absents s'écrivent par un libellé qui le dit. Le
+ * tour imprimé qui a un nom dans nomsTours, les noms des tours de
+ * l'événement (nomsDesTours), s'écrit par ce nom, une donnée posée telle
+ * quelle ; sans nom, par son libellé, « Tour 3 ».
  *
  * @param {{nom: string, date: string|null, tour: number|'tous', horodatage: string|null, version: string}} pied
  * @param {boolean} brouillon
+ * @param {Array<string|null>} [nomsTours]
  * @returns {{elements: Array<{element: string, libelle: {cle: string, details: Object}|null,
  *            donnee: string|null, forme: 'texte'|'date'|'horodatage'}>, filigrane: boolean}}
  * @throws {TypeError} un pied hors du contrat, un brouillon non booléen
  */
-export function feuilleDe(pied, brouillon) {
+export function feuilleDe(pied, brouillon, nomsTours = undefined) {
   const { nom, date, tour, horodatage, version } = pied;
   const texteOuNull = (v) => v === null || typeof v === 'string';
   const valide =
@@ -208,7 +219,7 @@ export function feuilleDe(pied, brouillon) {
     elements: [
       element('nom', null, nom),
       date === null ? element('date', libelle('impression.pied.sansDate')) : element('date', null, date, 'date'),
-      element('tour', tour === 'tous' ? libelle('impression.pied.tousLesTours') : libelle('impression.pied.tour', { tour })),
+      piedDuTour(tour, nomsTours?.[tour - 1] ?? null),
       horodatage === null
         ? element('horodatage', libelle('impression.pied.placementInconnu'))
         : element('horodatage', libelle('impression.pied.placement'), horodatage, 'horodatage'),

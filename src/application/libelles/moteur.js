@@ -21,7 +21,10 @@
 // son rang sinon ; l'organisation d'un reste négatif, de même, par son
 // libellé ou par son rang. INCONNU, aux mêmes détails que la faute de
 // placement du stockage, a son texte dans libelles/stockage.js.
-import { auxToursNommes, capitale, compte, enumeration, nomDans } from './aides.js';
+// PLACES_MANQUANTES et SURRESERVATION, qu'un refus montre aussi à
+// l'opérateur, nomment leurs tours sous nomsTours (aides.js) quand l'écran
+// les leur donne ; un défaut du moteur, sans eux, garde le numéro seul.
+import { auxToursNommes, capitale, compte, enumeration, nomDans, tourDansPhrase } from './aides.js';
 
 // Les cas d'une table que le plan ne rattache pas à l'instance, par detail.
 const CAS_DE_TABLE = new Map([
@@ -45,11 +48,12 @@ const organisationDe = ({ groupe, organisation }) =>
 
 // Les manques d'une salle trop petite, tour par tour : les tours d'un même
 // manque se nomment ensemble, les manques dans l'ordre de leur premier tour.
-// La Map ne sert qu'à retrouver un manque déjà rencontré.
-function manquesParTour(tours) {
+// La Map ne sert qu'à retrouver un manque déjà rencontré. Les tours se
+// nomment sous nomsTours (aides.js).
+function manquesParTour(tours, nomsTours) {
   const toursDe = new Map();
   for (const { tour, manque } of tours) toursDe.set(manque, [...(toursDe.get(manque) ?? []), tour]);
-  return enumeration([...toursDe].map(([manque, siens]) => `${compte(manque, 'place', 'places')} ${auxToursNommes(siens)}`));
+  return enumeration([...toursDe].map(([manque, siens]) => `${compte(manque, 'place', 'places')} ${auxToursNommes(siens, nomsTours)}`));
 }
 
 // Un rang de réservation, compté à partir de 0 par le moteur.
@@ -74,18 +78,18 @@ export const TABLE = new Map([
   // chaque tour à manque positif, que le texte nomme.
   [
     'PLACES_MANQUANTES',
-    ({ placesManquantes, tours }) =>
+    ({ placesManquantes, tours, nomsTours }) =>
       tours === undefined
         ? `Il manque ${compte(placesManquantes, 'place', 'places')} à chaque tour pour asseoir toutes les personnes : ` +
           'ajouter des tables ou des sièges, ou exclure des personnes, rend la génération possible.'
-        : `Il manque ${manquesParTour(tours)} pour asseoir les personnes présentes : ` +
+        : `Il manque ${manquesParTour(tours, nomsTours)} pour asseoir les personnes présentes : ` +
           'ajouter des tables ou des sièges, ou changer des présences, rend la génération possible.',
   ],
   [
     'SURRESERVATION',
-    ({ table, tour, reservees, capacite }) =>
+    ({ table, tour, reservees, capacite, nomsTours }) =>
       `La table d'identifiant ${table} reçoit ${compte(reservees, 'personne réservée', 'personnes réservées')} ` +
-      `au tour ${tour}, pour ${compte(capacite, 'place', 'places')}.`,
+      `au ${tourDansPhrase(tour, nomsTours)}, pour ${compte(capacite, 'place', 'places')}.`,
   ],
 
   // --- La configuration (normaliser, § 4, § 5.2) ------------------------------

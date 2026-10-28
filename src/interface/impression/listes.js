@@ -26,6 +26,7 @@ import { comparerPointsDeCode } from '../../application/planche.js';
 import { nomAffiche } from '../../application/personnes.js';
 import { etatPlaces } from '../../application/places.js';
 import { estBrouillon, horodatagePlacement } from '../../application/sorties.js';
+import { nomsDesTours } from '../../application/tours.js';
 import { feuilleDe } from './modele.js';
 import { trancher } from './pagination.js';
 
@@ -306,7 +307,7 @@ export function feuilleDuTour(charge, feuille, etat) {
     horodatage: horodatagePlacement(charge, { source, proposition }),
     version: donnee('version'),
   };
-  return feuilleDe(pied, estBrouillon(charge, { source, tour }));
+  return feuilleDe(pied, estBrouillon(charge, { source, tour }), nomsDesTours(charge));
 }
 
 // La part de la largeur que prennent les colonnes de texte de chaque vue —

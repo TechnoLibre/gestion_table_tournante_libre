@@ -130,6 +130,7 @@ const REMEDE_NUL_ADMIS = new Map([
   ['ETIQUETTE_INVALIDE', 'la saisie se corrige dans le champ même, dont le texte dit la forme attendue'],
   ['ETIQUETTES_EN_TROP', 'la saisie se corrige dans le champ même, dont le texte dit le nombre admis'],
   ['LIBELLE_TABLE_TROP_LONG', 'la saisie se corrige dans le champ même, dont le texte dit la longueur admise'],
+  ['NOM_TOUR_TROP_LONG', 'la saisie se corrige dans le champ même, dont le texte dit la longueur admise'],
   ['OBJECTIF_HORS_SOIREE', 'le tour se choisit dans le champ même, parmi ceux de la soirée'],
   ['OBJECTIF_SANS_ETIQUETTE', "sur un couple sans objectif, rien à retirer : la saisie se corrige dans le champ même"],
   ['TABLE_DISPARUE', 'une table supprimée entre-temps : aucun geste ne la rend'],
@@ -455,6 +456,14 @@ const EXEMPLES = new Map([
       accepte: { args: { tours: '3' } },
       refuse: { args: { tours: '0' }, code: 'MOINS_D_UN_TOUR' },
       sansEffet: { args: { tours: '4' } },
+    },
+  ],
+  [
+    'changerNomTour',
+    {
+      accepte: { args: { tour: 2, nom: 'Plat principal' } },
+      refuse: { args: { tour: 2, nom: 'x'.repeat(61) }, code: 'NOM_TOUR_TROP_LONG', remede: null },
+      sansEffet: { args: { tour: 2, nom: 'Tour 2' } },
     },
   ],
   [

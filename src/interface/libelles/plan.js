@@ -11,7 +11,7 @@
 // par une espace quand un nom la suit (avecNom). Le libellé d'une table est
 // une donnée de même : l'écran le pose dans son propre nœud, et seul le nom
 // accessible de la table, un attribut, le cite.
-import { auxToursNommes, cite, compte, enumeration } from '../../application/libelles/aides.js';
+import { auxToursNommes, cite, compte, enumeration, nomDuTour, numeroNomme, tourDansPhrase, tourOuNom } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
   // --- Le dessin d'une table (§ 7.5, § 7.6) ----------------------------------
@@ -43,13 +43,13 @@ export const TABLE = new Map([
       `${numero}.${etat === null ? '' : ` ${texte(etat.cle, etat.details)}`}${avecNom ? ' ' : ''}`,
   ],
   ['plan.ligne.reserveeTous', '(réservée, tous les tours)'],
-  ['plan.ligne.reserveeTour', ({ tour }) => `(réservée, tour ${tour})`],
+  ['plan.ligne.reserveeTour', ({ tour, nomsTours }) => `(réservée, ${tourOuNom(tour, nomsTours)})`],
   ['plan.ligne.libre', '(libre)'],
   // Une place réservée à une autre personne que l'occupant : l'état
   // s'écrit autour du nom de la titulaire, qui occupe son propre nœud,
   // entre teteReserveeA et reserveeA.
   ['plan.ligne.teteReserveeA', ({ numero }) => `${numero}. (réservée à `],
-  ['plan.ligne.reserveeA', ({ portee, tour }) => (portee === 'tous' ? ', tous les tours)' : `, tour ${tour})`)],
+  ['plan.ligne.reserveeA', ({ portee, tour, nomsTours }) => (portee === 'tous' ? ', tous les tours)' : `, ${tourOuNom(tour, nomsTours)})`)],
   // L'organisation de l'occupant, quand la barre de vue la montre, suit son
   // nom après ce séparateur fin.
   ['plan.ligne.avantOrganisation', ' \u{00B7} '],
@@ -207,7 +207,7 @@ export const TABLE = new Map([
   ['plan.action.retirerTitre', 'Retirer le titre'],
   ['plan.action.deplacerReservationIci', 'Déplacer la réservation ici'],
   ['plan.portee.etiquette', 'Portée'],
-  ['plan.portee.tour', ({ tour }) => `Tour ${tour}`],
+  ['plan.portee.tour', ({ tour, nomsTours }) => nomDuTour(tour, nomsTours)],
   ['plan.portee.tous', 'Tous les tours'],
   ['plan.titre.etiquette', 'Libellé du titre'],
 
@@ -239,10 +239,10 @@ export const TABLE = new Map([
   ['plan.evidence.personne', 'Mise en évidence : '],
   ['plan.evidence.absente', 'une personne qui n\u{2019}est plus dans la liste'],
   // La personne mise en évidence, absente au tour montré : la suite de son nom.
-  ['plan.evidence.absenteAuTour', ({ tour }) => ` \u{2014} absente au tour ${tour}`],
+  ['plan.evidence.absenteAuTour', ({ tour, nomsTours }) => ` \u{2014} absente au ${tourDansPhrase(tour, nomsTours)}`],
   // La personne mise en évidence, dans la réserve au tour montré : sans
   // chaise à marquer, la suite de son nom le dit.
-  ['plan.evidence.reserveAuTour', ({ tour }) => ` \u{2014} dans la réserve au tour ${tour}`],
+  ['plan.evidence.reserveAuTour', ({ tour, nomsTours }) => ` \u{2014} dans la réserve au ${tourDansPhrase(tour, nomsTours)}`],
   ['plan.evidence.oter', 'Ôter la mise en évidence'],
   ['plan.evidence.voir', 'Voir sur le plan'],
 
@@ -257,7 +257,8 @@ export const TABLE = new Map([
   ['plan.listesTravail.nonPourvu', ' non pourvu'],
   [
     'plan.listesTravail.pourvuAuxTours',
-    ({ tours }) => ` (pourvu ${tours.length === 1 ? 'au tour' : 'aux tours'} ${enumeration(tours.map(String))})`,
+    ({ tours, nomsTours }) =>
+      ` (pourvu ${tours.length === 1 ? 'au tour' : 'aux tours'} ${enumeration(tours.map((tour) => numeroNomme(tour, nomsTours)))})`,
   ],
   ['plan.listesTravail.pressenti', ' \u{2014} titre pressenti '],
   ['plan.listesTravail.conversion', ({ numero }) => ` : une réservation à chaque tour, table ${numero}`],
@@ -265,7 +266,7 @@ export const TABLE = new Map([
   // Les personnes que le placement retenu laisse en réserve, chacune suivie
   // des tours où il la réserve.
   ['plan.listesTravail.reserves', 'En réserve dans le placement retenu'],
-  ['plan.listesTravail.enReserve', ({ tours }) => ` \u{2014} en réserve ${auxToursNommes(tours)}`],
+  ['plan.listesTravail.enReserve', ({ tours, nomsTours }) => ` \u{2014} en réserve ${auxToursNommes(tours, nomsTours)}`],
   // Les inclusions que le placement montré laisse non satisfaites, chacune
   // par sa phrase (qualite.inclusions.*).
   ['plan.listesTravail.inclusions', 'Inclusions non satisfaites'],
@@ -273,7 +274,7 @@ export const TABLE = new Map([
   ['plan.listesTravail.ignorer', 'Ignorer'],
 
   // --- La réserve (§ 7.1, § 5.8) ---------------------------------------------
-  ['plan.reserve.tour', ({ tour }) => `Personnes en attente au tour ${tour}`],
+  ['plan.reserve.tour', ({ tour, nomsTours }) => `Personnes en attente au ${tourDansPhrase(tour, nomsTours)}`],
   ['plan.reserve.vide', 'Personne en attente à ce tour.'],
 
   // --- Les absentes (§ 7.1) --------------------------------------------------
@@ -281,6 +282,6 @@ export const TABLE = new Map([
   // Le nom est une donnée, dans son nœud ; sa présence le suit, vide pour
   // une présence à tous les tours.
   ['plan.absentes.titre', 'Absentes'],
-  ['plan.absentes.tour', ({ tour }) => `Personnes absentes au tour ${tour}, sans chaise ni place en réserve`],
-  ['plan.absentes.presente', ({ tours }) => (tours === null ? '' : ` \u{2014} présente ${auxToursNommes(tours)}`)],
+  ['plan.absentes.tour', ({ tour, nomsTours }) => `Personnes absentes au ${tourDansPhrase(tour, nomsTours)}, sans chaise ni place en réserve`],
+  ['plan.absentes.presente', ({ tours, nomsTours }) => (tours === null ? '' : ` \u{2014} présente ${auxToursNommes(tours, nomsTours)}`)],
 ]);

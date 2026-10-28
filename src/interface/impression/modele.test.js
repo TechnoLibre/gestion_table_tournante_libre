@@ -216,6 +216,15 @@ describe('feuilleDe : le pied de cinq éléments et le filigrane (§ 11.7, § 18
     assert.deepEqual(elements[3], { element: 'horodatage', libelle: { cle: 'impression.pied.placementInconnu', details: {} }, donnee: null, forme: 'texte' });
   });
 
+  test('un tour qui a un nom s’écrit par ce nom, une donnée sans libellé ; un tour sans nom garde son libellé', () => {
+    const nomsTours = [null, 'Plat principal'];
+    assert.deepEqual(feuilleDe(PIED, false, nomsTours).elements[2], { element: 'tour', libelle: null, donnee: 'Plat principal', forme: 'texte' });
+    assert.deepEqual(feuilleDe({ ...PIED, tour: 1 }, false, nomsTours).elements[2], {
+      element: 'tour', libelle: { cle: 'impression.pied.tour', details: { tour: 1 } }, donnee: null, forme: 'texte',
+    });
+    assert.equal(feuilleDe({ ...PIED, tour: 'tous' }, false, nomsTours).elements[2].libelle.cle, 'impression.pied.tousLesTours');
+  });
+
   test('un pied hors du contrat, un brouillon qui n’est pas un booléen, lèvent', () => {
     assert.throws(() => feuilleDe({ ...PIED, tour: 0 }, false), TypeError);
     assert.throws(() => feuilleDe({ ...PIED, nom: 3 }, false), TypeError);

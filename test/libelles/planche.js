@@ -65,8 +65,8 @@ export const TEXTES = [
       personne: 'Iris Ombrelle',
       remede: { geste: 'ouvrirSection', section: 'tables' },
     },
-    'Les lignes de tour de Iris Ombrelle, repliées par un libellé de table ou un titre long, ne tiennent pas ' +
-      'sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce libellé ou ce titre. ' +
+    'Les lignes de tour de Iris Ombrelle, repliées par un nom de tour, un libellé de table ou un titre long, ne tiennent pas ' +
+      'sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce nom, ce libellé ou ce titre. ' +
       "La planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
   ],
   // L'écriture refusée nomme le fichier qui manque ; la feuille de contrôle,

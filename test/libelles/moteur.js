@@ -71,6 +71,17 @@ const SUITE_DU_MANQUE = 'ajouter des tables ou des sièges, ou changer des prés
 
 export const TEXTES = [
   [
+    'SURRESERVATION',
+    { table: 2, tour: 2, reservees: 9, capacite: 8, nomsTours: [null, 'Plat principal'], remede: null },
+    "La table d'identifiant 2 reçoit 9 personnes réservées au tour 2 (Plat principal), pour 8 places.",
+  ],
+  [
+    'PLACES_MANQUANTES',
+    { placesManquantes: 2, tours: [{ tour: 1, manque: 2 }], nomsTours: ['Apéritif', null] },
+    'Il manque 2 places au tour 1 (Apéritif) pour asseoir les personnes présentes : '
+      + 'ajouter des tables ou des sièges, ou changer des présences, rend la génération possible.',
+  ],
+  [
     'PLACES_MANQUANTES',
     { placesManquantes: 3 },
     'Il manque 3 places à chaque tour pour asseoir toutes les personnes : '

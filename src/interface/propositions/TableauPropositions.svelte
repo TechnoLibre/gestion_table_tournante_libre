@@ -100,6 +100,7 @@
   import { getContext } from 'svelte';
   import { derivationDe } from '../../application/depart.js';
   import { comparaisonOfferte } from '../../application/evaluation.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Icone from '../primitives/Icone.svelte';
   import MenuActions from '../primitives/MenuActions.svelte';
   import Pastille from '../primitives/Pastille.svelte';
@@ -118,9 +119,10 @@
   const format = getContext('format');
   const ui = getContext('ui');
   const seance = getContext('seance');
-  const outils = { t, format };
-
   const charge = $derived($seance.charge);
+  // Les outils des textes du tableau : la traduction, la mise en forme, et
+  // les noms des tours de la charge, que la filiation lit.
+  const outils = $derived({ t, format, nomsTours: charge === null ? undefined : nomsDesTours(charge) });
   const table = $derived(charge === null ? null : evaluation(charge).table);
   const offerte = $derived(table !== null && comparaisonOfferte(charge, table));
 

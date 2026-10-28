@@ -376,7 +376,7 @@ const SIX_FORMES = [
   ],
   [
     chaise(2, { occupant: 2, reservation: { participant: 2, portee: 'tour', tour: 2 } }),
-    { numero: 2, etat: { cle: 'plan.ligne.reserveeTour', details: { tour: 2 } }, titulaire: null, nom: 'Théo Pervenche', organisation: null, titre: null },
+    { numero: 2, etat: { cle: 'plan.ligne.reserveeTour', details: { tour: 2, nomsTours: undefined } }, titulaire: null, nom: 'Théo Pervenche', organisation: null, titre: null },
     '2. (réservée, tour 2) Théo Pervenche',
   ],
   [chaise(3, { occupant: 3 }), { numero: 3, etat: null, titulaire: null, nom: 'Ondine Lacasse', organisation: null, titre: null }, '3. Ondine Lacasse'],
@@ -450,7 +450,7 @@ describe('ligneListe : la réservation d\u{2019}une autre personne que l\u{2019}
     const ligne = ligneListe(chaise2, nomDe);
     assert.deepEqual(ligne, {
       numero: 2,
-      etat: { cle: 'plan.ligne.reserveeA', details: { portee: 'tous', tour: null } },
+      etat: { cle: 'plan.ligne.reserveeA', details: { portee: 'tous', tour: null, nomsTours: undefined } },
       titulaire,
       nom: occupant,
       organisation: null,
@@ -470,11 +470,19 @@ describe('ligneListe : la réservation d\u{2019}une autre personne que l\u{2019}
     );
   });
 
+  test('un tour que l’événement nomme remplace « tour 3 » dans la ligne : « (réservée, Dessert) », « (réservée à …, Dessert) »', () => {
+    const nomsTours = [null, null, 'Dessert'];
+    const propre = ligneListe(chaise(2, { occupant: 1, reservation: { participant: 1, portee: 'tour', tour: 3 } }), nomDeLigne, null, nomsTours);
+    assert.equal(t(propre.etat.cle, propre.etat.details), '(réservée, Dessert)');
+    const autre = ligneListe(chaise(2, { reservation: { participant: 1, portee: 'tour', tour: 3 } }), nomDeLigne, null, nomsTours);
+    assert.equal(joindre(textesLigne(autre, t)), '2. (réservée à Iris Ombrelle, Dessert)');
+  });
+
   test('réservée au seul tour 3 pour une autre personne, la place vide : « 2. (réservée à …, tour 3) »', () => {
     const ligne = ligneListe(chaise(2, { reservation: { participant: 1, portee: 'tour', tour: 3 } }), nomDeLigne);
     assert.deepEqual(ligne, {
       numero: 2,
-      etat: { cle: 'plan.ligne.reserveeA', details: { portee: 'tour', tour: 3 } },
+      etat: { cle: 'plan.ligne.reserveeA', details: { portee: 'tour', tour: 3, nomsTours: undefined } },
       titulaire: 'Iris Ombrelle',
       nom: null,
       organisation: null,

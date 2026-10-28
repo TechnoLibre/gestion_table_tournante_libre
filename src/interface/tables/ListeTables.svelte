@@ -83,6 +83,7 @@
   import { lireEntier } from '../../application/capacite.js';
   import { exporterObjectifs } from '../../application/csv.js';
   import { ErreurCommande } from '../../application/erreurs.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Carte from '../primitives/Carte.svelte';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -153,6 +154,8 @@
   let ajout = $state.raw(null);
   let listeTables = $state(null);
   const gestesAnimateurs = $derived($seance.refus === null);
+  // Les noms des tours, que les libellés d'un tour lisent (aides.js).
+  const nomsTours = $derived(nomsDesTours(charge));
   // Les tours d'absence de l'animatrice id, croissants ; [] pour une
   // personne présente à chaque tour.
   const absencesDe = (id) =>
@@ -309,7 +312,7 @@
   // détails, puis la table ; et pour un objectif, son texte, la portée de
   // vue, puis la table.
   const nomDeTable = (numero, cle, details = {}) => t('tables.nom.table', { cle, details, numero });
-  const nomDObjectif = (numero, cle, vue) => t('tables.nom.objectif', { cle, tour: vue.tour, numero });
+  const nomDObjectif = (numero, cle, vue) => t('tables.nom.objectif', { cle, tour: vue.tour, numero, nomsTours });
 
   // Une frappe ou Échap dans le champ de la table id retire le complément
   // de son refus : le champ retire le refus au même instant.
@@ -350,8 +353,8 @@
       <Champ
         cle={`objectif-${vue.cle}`}
         etiquette={vue.tour === null ? 'tables.objectif.soiree' : 'tables.objectif.tour'}
-        details={{ tour: vue.tour }}
-        nom={nomDeTable(table.numero, vue.tour === null ? 'tables.objectif.soiree' : 'tables.objectif.tour', { tour: vue.tour })}
+        details={{ tour: vue.tour, nomsTours }}
+        nom={nomDeTable(table.numero, vue.tour === null ? 'tables.objectif.soiree' : 'tables.objectif.tour', { tour: vue.tour, nomsTours })}
         valeur={vue.texte}
         lire={lireTexte}
         executer={(texte) => poser(table, vue, texte)}
@@ -390,7 +393,7 @@
   {#each [...retenuesDe(vue.cle), ...vue.avis] as avis, rang (rang)}
     <div class="message avis" data-avertissement={avis.code} role="status">
       <span class="signe"><Icone nom="triangle" /></span>
-      <div class="texte"><p>{t(avis.code, avis.details)}</p></div>
+      <div class="texte"><p>{t(avis.code, { nomsTours, ...avis.details })}</p></div>
     </div>
   {/each}
 {/snippet}
@@ -473,7 +476,7 @@
                   <li data-participant={animateur.participant}>
                     <Pastille sorte="statut" valeur="neutre" libelle={animateur.nom} />
                     {#if absences.length > 0}
-                      <span class="absence" data-absence>{t('tables.animateurs.statut.absente', { tours: absences })}</span>
+                      <span class="absence" data-absence>{t('tables.animateurs.statut.absente', { tours: absences, nomsTours })}</span>
                     {/if}
                     {#if gestesAnimateurs}
                       <Commande
@@ -512,7 +515,7 @@
               <div class="message avis" data-avertissement={avertissement.code} role="status">
                 <span class="signe"><Icone nom="triangle" /></span>
                 <div class="texte">
-                  <p>{t(avertissement.code, avertissement.details)}</p>
+                  <p>{t(avertissement.code, { nomsTours, ...avertissement.details })}</p>
                   {#if avertissement.noms.length > 0}
                     <ul>
                       {#each avertissement.noms as nom, rangNom (rangNom)}

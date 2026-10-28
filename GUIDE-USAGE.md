@@ -589,6 +589,20 @@ son tour. « Annuler » ne change rien.*
 Les placements déjà générés ne sont pas tronqués : ils restent entiers, mais ne
 décrivent plus la soirée, et le logiciel nomme ceux que le changement touche.
 
+Chaque tour peut aussi porter un **nom** — « Apéritif », « Plat principal ».
+Sous le nombre de tours, « Noms des tours » offre un champ par tour, vide tant
+que le tour n’a pas de nom, qui montre en gris « Tour 1 », « Tour 2 »… Saisissez
+le nom puis Entrée, ou quittez le champ ; videz-le, ou écrivez « Tour 2 » dans
+celui du tour 2, pour revenir au nom par défaut. Un nom compte soixante
+caractères au plus, et « Défaire » le reprend. Le nom remplace « Tour 2 »
+partout où le logiciel nomme ce tour : sur les badges, « Plat principal —
+table 3 », et dans leur liste en CSV, dans les têtes de colonnes et le pied des
+pages imprimées, dans le choix du tour du plan et de l’aperçu, et dans les
+phrases des écrans et de l’historique, où il suit le numéro : « absente au
+tour 2 (Plat principal) ». Les fichiers CSV des participants et des objectifs
+gardent les numéros, « 1-3 » par exemple : c’est ce que l’import relit. Retirer
+un tour retire son nom, et l’annonce le nomme ; un tour ajouté vient sans nom.
+
 ## Étape 6 — Désigner les animateurs, table par table
 
 Cette étape est facultative : une soirée sans animateur est valide. Hors de
@@ -1776,6 +1790,7 @@ l’historique ; les noms des exemples sont inventés.
 | `realignerTable` | Table 5 : suit le défaut (8 places) |
 | `changerDefaut` | Sièges par défaut : 10 ; 4 tables réalignées |
 | `changerTours` | Nombre de tours : 3 ; 2 réservations retirées |
+| `changerNomTour` | Tour 2 : nom « Plat principal » |
 | `modifierReglage` | Séparer les organisations : désactivé |
 | `poserObjectif` | Table 3 : objectif de la soirée « finance », règle par défaut |
 | `retirerObjectif` | Table 3, tour 2 : objectif retiré |

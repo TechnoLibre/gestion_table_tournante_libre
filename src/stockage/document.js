@@ -19,20 +19,20 @@
 // FORMAT_INCONNU s'il n'est pas un entier ≥ 1, FORMAT_TROP_ANCIEN s'il est
 // plus petit que FORMAT) ; la forme de chaque champ, dans l'ordre du schéma
 // puis des rangs (FORME) ; les identifiants des participants et des tables,
-// le tour des réservations, la portée et le tour des objectifs de table, la
-// présence de chaque personne, sa propre organisation nommée dans ses
-// conflits, sa propre organisation puis elle-même nommées dans ses
-// inclusions, le numéro final de son nom quand elle porte la marque du nom
-// numéroté, l'ordre des priorités sous le mode des objectifs et les titres
-// répétés à l'identique (FORME) ; les comptes de la saisie dans l'en-tête —
-// participants, tables, réservations, titres — (COMPTES) ; les références,
-// dont chaque organisation que nomment les conflits d'une personne, puis
-// chaque organisation et chaque participant que nomment ses inclusions
-// (REFERENCE). Les comptes des propositions et du retenu ne refusent jamais
-// le fichier (§ 8.9, point 3) : ce que l'en-tête annonce sans que la charge
-// le porte se rend à côté d'elle, et le dépôt l'annonce. Un fichier d'un
-// format plus récent que FORMAT se lit réduit aux clés que le schéma connaît,
-// et ce qui serait FORME au format courant y porte la raison
+// les noms des tours, le tour des réservations, la portée et le tour des
+// objectifs de table, la présence de chaque personne, sa propre organisation
+// nommée dans ses conflits, sa propre organisation puis elle-même nommées
+// dans ses inclusions, le numéro final de son nom quand elle porte la marque
+// du nom numéroté, l'ordre des priorités sous le mode des objectifs et les
+// titres répétés à l'identique (FORME) ; les comptes de la saisie dans
+// l'en-tête — participants, tables, réservations, titres — (COMPTES) ; les
+// références, dont chaque organisation que nomment les conflits d'une
+// personne, puis chaque organisation et chaque participant que nomment ses
+// inclusions (REFERENCE). Les comptes des propositions et du retenu ne
+// refusent jamais le fichier (§ 8.9, point 3) : ce que l'en-tête annonce sans
+// que la charge le porte se rend à côté d'elle, et le dépôt l'annonce. Un
+// fichier d'un format plus récent que FORMAT se lit réduit aux clés que le
+// schéma connaît, et ce qui serait FORME au format courant y porte la raison
 // FORMAT_PLUS_RECENT : la lecture ne le distingue pas d'une évolution du
 // format. Ses comptes et ses références gardent leur raison, une corruption
 // quel que soit le format ; tout refus d'un tel fichier porte le format lu
@@ -287,6 +287,12 @@ const EVENEMENT = objet([
   ['unite', parmi('cm')],
   ['etat', parmi('brouillon', 'propose', 'retenu', 'bloque')],
   ['filiation', FILIATION],
+  // Facultatif, en dernier. nomsTours absent : aucun tour n'a de nom, et
+  // chacun se dit « Tour N » ; présent, une liste d'un élément par tour, le
+  // nom du tour, un libellé de table (estLibelleTable), ou null pour un tour
+  // sans nom ; examinerNomsTours la compare au nombre de tours et refuse une
+  // liste sans aucun nom.
+  ['nomsTours', liste(regle('libelleTable', { nul: true }), { min: 1, max: TOURS_MAX, optionnel: true })],
 ]);
 
 // Les étiquettes d'une personne ou d'un objectif (§ 4.5, § 8.9) : une liste
@@ -907,6 +913,16 @@ function examinerObjectifs({ evenement, tables }, faute) {
   });
 }
 
+// Les noms des tours, quand l'événement les porte : une liste d'une autre
+// longueur que le nombre de tours est fautive, et une liste sans aucun nom,
+// le défaut écrit, l'est aussi, nommées par la liste. faute(chemin) lève
+// l'écart.
+function examinerNomsTours({ evenement }, faute) {
+  const { nomsTours, tours } = evenement;
+  if (nomsTours === undefined) return;
+  if (nomsTours.length !== tours || nomsTours.every((nom) => nom === null)) faute('charge.evenement.nomsTours');
+}
+
 // Présence de chaque personne qui la porte, exclues comprises, dans l'ordre
 // des personnes : un tour au-delà des tours de l'événement est fautif, le
 // premier dans l'ordre écrit ; une liste qui porte chaque tour, le défaut
@@ -1112,6 +1128,7 @@ export function analyser(texte) {
   const { entete, charge } = fichier;
   oublierDesReglages(charge.reglages);
   examinerIdentifiants(charge, faute);
+  examinerNomsTours(charge, faute);
   examinerTours(charge, faute);
   examinerObjectifs(charge, faute);
   examinerPresences(charge, faute);
@@ -1309,6 +1326,19 @@ export function modeObjectifs(charge) {
 export function priorites(charge) {
   const { priorites: portee } = charge.reglages;
   return portee === undefined ? rangerPriorites(PRIORITES_PAR_DEFAUT) : completerPriorites(rangerPriorites(portee));
+}
+
+/**
+ * Les noms des tours de l'événement (§ 4, § 8.9) : une liste neuve d'un
+ * élément par tour, le nom que l'événement donne au tour, ou null pour un
+ * tour sans nom, que les écrans et les sorties disent « Tour N ». C'est la
+ * seule lecture de ce champ ; elle ne modifie pas la charge.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @returns {Array<string|null>}
+ */
+export function nomsDesTours({ evenement }) {
+  return Array.from({ length: evenement.tours }, (_, rang) => evenement.nomsTours?.[rang] ?? null);
 }
 
 /**

@@ -55,6 +55,7 @@
   // Sans bandeMm, la vue rend sa feuille gabarit, que l'aperçu mesure.
   import { getContext, tick } from 'svelte';
   import { cleNormalisee } from '../../application/csv.js';
+  import { nomsDesTours } from '../../application/tours.js';
   import Feuille from './Feuille.svelte';
   import {
     blocsAccueil,
@@ -74,6 +75,10 @@
   const seance = getContext('seance');
 
   const charge = $derived($seance.charge);
+  // La tête d'un tour : son nom, une donnée posée telle quelle, ou son
+  // libellé, « Tour 3 », pour un tour sans nom.
+  const nomsTours = $derived(nomsDesTours(charge));
+  const teteDuTour = (tour) => nomsTours[tour - 1] ?? t('feuilles.tour', { tour });
   const etats = $derived(etatsDesTours(charge, etat.proposition));
   const lignes = $derived(lignesAccueil(charge, etats, cleNormalisee, options.tri));
   // Les lignes qui ferment une organisation, aucune hors du tri par
@@ -171,7 +176,7 @@
           <th scope="col">{t('feuilles.accueil.prenom')}</th>
           <th scope="col">{t('feuilles.accueil.organisation')}</th>
           {#each bloc.tours as tour (tour)}
-            <th scope="col">{t('feuilles.tour', { tour })}</th>
+            <th scope="col">{teteDuTour(tour)}</th>
           {/each}
         </tr>
       </thead>
@@ -208,7 +213,7 @@
         <table class="sonde" bind:this={sonde}>
           <tbody>
             {#each tours as tour (tour)}
-              <tr><th scope="row">{t('feuilles.tour', { tour })}</th></tr>
+              <tr><th scope="row">{teteDuTour(tour)}</th></tr>
             {/each}
             {#each libelles as libelle (libelle)}
               <tr><td>{libelle}</td></tr>

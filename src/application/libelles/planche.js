@@ -10,7 +10,7 @@
 // partir de leur seule forme, sans horloge ni langue du système. Le nom
 // d'un papier arrive dans les détails : cette table n'en écrit aucun.
 import { lireHorodatage } from '../format.js';
-import { cite, compte, enumeration, nomDans, ouEcrire, phraseDeRaison } from './aides.js';
+import { cite, compte, enumeration, nomDans, nomDuTour, ouEcrire, phraseDeRaison } from './aides.js';
 
 // Les impositions de la planche (§ 11.6), comme la feuille de contrôle les
 // nomme.
@@ -90,15 +90,15 @@ export const TABLE = new Map([
       'Le placement ne décrit plus la soirée, la planche ne se produit pas : ' +
       raisons.map((raison) => phraseDeRaison(raison.code, raison, texte)).join(' '),
   ],
-  // lignesLongues : des lignes de tour repliées sous un libellé de table ou
-  // un titre débordent ; le texte nomme alors la personne et ce qui se
-  // raccourcit, et non le nombre de tours.
+  // lignesLongues : des lignes de tour repliées sous un nom de tour, un
+  // libellé de table ou un titre débordent ; le texte nomme alors la
+  // personne et ce qui se raccourcit, et non le nombre de tours.
   [
     'PLANCHE_TROP_DE_TOURS',
     (details) =>
       details.lignesLongues
-        ? `Les lignes de tour de ${laPersonne(details)}, repliées par un libellé de table ou un titre long, ` +
-          'ne tiennent pas sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce libellé ' +
+        ? `Les lignes de tour de ${laPersonne(details)}, repliées par un nom de tour, un libellé de table ou un titre long, ` +
+          'ne tiennent pas sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce nom, ce libellé ' +
           "ou ce titre. La planche n'est pas produite, plutôt qu'une liste de tours tronquée."
         : `Les ${details.tours} tours ne tiennent pas sur un badge, même sur deux colonnes au plus petit corps : ` +
           "la planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
@@ -133,13 +133,14 @@ export const TABLE = new Map([
   ],
 
   // --- Les lignes de tour d'un badge (§ 11.4, § 11.5) ------------------------
-  // Une ligne : le tour, ou « Toute la soirée » pour un itinéraire constant,
-  // puis la place de la personne ; « absente » à un tour où elle est
-  // absente (ligne.absente vrai), qu'une ligne « Toute la soirée » ne porte
-  // jamais.
+  // Une ligne : le tour, son nom (ligne.nomTour) ou « Tour 3 » sans lui, ou
+  // « Toute la soirée » pour un itinéraire constant, puis la place de la
+  // personne ; « absente » à un tour où elle est absente (ligne.absente
+  // vrai), qu'une ligne « Toute la soirée » ne porte jamais.
   [
     'planche.tour',
-    (ligne, texte) => `Tour ${ligne.tour} — ${ligne.absente ? texte('planche.absente') : place(ligne, texte)}`,
+    (ligne, texte) =>
+      `${ligne.nomTour ?? nomDuTour(ligne.tour)} — ${ligne.absente ? texte('planche.absente') : place(ligne, texte)}`,
   ],
   ['planche.touteLaSoiree', (ligne, texte) => `Toute la soirée — ${place(ligne, texte)}`],
   ['planche.libelleTable', ({ libelleTable }) => ` (${libelleTable})`],
