@@ -1733,6 +1733,69 @@ describe('recherche : le mouvement dirigé des inclusions (en-tête de recherche
     assert.equal(etat.inclusionsNonSatisfaites, 0);
   });
 
+  test("au second tour, le siège sauté est celui du partenaire, deuxième siège mobile de sa table", () => {
+    // 1 inclut 3 ; deux tables de 4, deux tours, huit sièges par tour. Aux
+    // deux tours, 1 est au premier siège de la table 10, et 3 au deuxième de
+    // la table 20, le siège 5, après 2. La troisième option déplace 1 vers la
+    // table 20 au tour 2 : le rang 0 désigne le siège 4, celui de 2 ; les
+    // rangs 1 et 2 sautent le siège de 3 et désignent les sièges 6 et 7.
+    const configuration = configurationDe({
+      organisations: Array.from({ length: 8 }, () => null),
+      tables: [{ id: 10, capacite: 4 }, { id: 20, capacite: 4 }],
+      tours: 2,
+    });
+    configuration.participants[0].inclusionsParticipant = [3];
+    const instance = normaliser(configuration);
+    const tour = [[1, 4, 5, 8], [2, 3, 6, 7]];
+    const etat = creerEtatDuDepart(instance, { plan: { tables: [10, 20], tours: [tour, tour], reserves: [[], []] }, toursFiges: [] });
+    for (const [rang, b] of [[0, 4], [1, 6], [2, 7]]) {
+      const rng = tiragesImposes([0, 0, 2, rang]);
+      const mouvement = rapprocher(etat, rng);
+      assert.deepEqual(rng.bornes, [1, 1, 4, 3], `rang ${rang}`);
+      assert.deepEqual(mouvement, { tour: 1, a: 0, b }, `rang ${rang}`);
+      assert.equal(etat.inclusionsNonSatisfaites, 0, `rang ${rang}`);
+      defaire(etat, mouvement);
+    }
+  });
+
+  test("une organisation que deux membres satisfont, dont celui d'index 0, les tire tous deux", () => {
+    // 1 et 2 de B, 3 et 4 sans organisation, deux tables de 2, un tour ; 3
+    // inclut B et s'assied avec 4, 1 et 2 à l'autre table.
+    const configuration = configurationDe({
+      organisations: ['B', 'B', null, null],
+      tables: [{ id: 10, capacite: 2 }, { id: 20, capacite: 2 }],
+      tours: 1,
+    });
+    configuration.participants[2].inclusionsOrganisation = ['B'];
+    const instance = normaliser(configuration);
+    const etat = creerEtatDuDepart(instance, { plan: { tables: [10, 20], tours: [[[3, 4], [1, 2]]], reserves: [[]] }, toursFiges: [] });
+    assert.equal(etat.inclusionsNonSatisfaites, 1);
+    // Le premier des deux partenaires, 1 ; la première option, 3 déplacé ;
+    // le seul siège de la table 20 hors de celui de 1, celui de 2.
+    const rng = tiragesImposes([0, 0, 0, 0]);
+    assert.deepEqual(rapprocher(etat, rng), { tour: 0, a: 0, b: 3 });
+    assert.deepEqual(rng.bornes, [1, 2, 2, 1]);
+    assert.equal(etat.inclusionsNonSatisfaites, 0);
+  });
+
+  test("la source déplacée vers la table fixée de son partenaire, qui ne garde qu'un siège mobile : une option", () => {
+    // 1 inclut 2, ancré à la table 20 ; deux tables de 2, un tour. 1 est
+    // avec 3, 2 avec 4 : 1 rejoint 2 au siège de 4, le seul mobile de la 20.
+    const configuration = configurationDe({
+      organisations: [null, null, null, null],
+      tables: [{ id: 10, capacite: 2 }, { id: 20, capacite: 2 }],
+      tours: 1,
+      reservations: [tous(2, 20)],
+    });
+    configuration.participants[0].inclusionsParticipant = [2];
+    const instance = normaliser(configuration);
+    const etat = creerEtatDuDepart(instance, { plan: { tables: [10, 20], tours: [[[1, 3], [2, 4]]], reserves: [[]] }, toursFiges: [] });
+    const rng = tiragesImposes([0, 0, 0, 0]);
+    assert.deepEqual(rapprocher(etat, rng), { tour: 0, a: 0, b: 3 });
+    assert.deepEqual(rng.bornes, [1, 1, 1, 1]);
+    assert.equal(etat.inclusionsNonSatisfaites, 0);
+  });
+
   test("sous un départ à tours figés et réserves imposées, coup par coup : aucun tour figé ni siège fixé touché, l'ensemble des manques égal au recompte, puis tout défait", () => {
     const configuration = soireeAReservesImposees();
     const instance = normaliser(configuration);
@@ -3856,6 +3919,36 @@ describe('repartir : le départ ajusté, case par case et siège par siège (§ 
     // 1 et 2 visitent deux fois la table 2, où elles sont fixées deux fois :
     // aucun retour choisi. 7, jamais fixée, revient à la table 1 ; 4 et 5,
     // fixées une fois à la table 3, y reviennent : un retour choisi chacune.
+    assert.equal(etat.totalRetoursChoisis, 3);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
+  });
+
+  test("sous une réserve imposée, le seuil des retours d'une personne ne compte que ses propres tours fixés", () => {
+    // Deux tables de 2, quatre personnes, trois tours. 1 et 2 sont réservées
+    // à la table 1 au tour 1 ; 3, réservée à la table 2 au tour 2, y est en
+    // réserve imposée. 1 revient à la table 1 au tour 2, où elle n'est pas
+    // fixée : un retour choisi, que la fixation de 2 au tour 1, à la même
+    // table, n'efface pas. 2 revient à la table 1 au tour 3, 4 à la table 2.
+    const configuration = configurationDe({
+      organisations: [null, null, null, null],
+      tables: [{ id: 1, capacite: 2 }, { id: 2, capacite: 2 }],
+      tours: 3,
+      reservations: [auTour(1, 1, 1), auTour(2, 1, 1), auTour(3, 2, 2)],
+      contraintes: TOUTES_CONTRAINTES,
+    });
+    const instance = normaliser(configuration);
+    assert.ok(compose(instance, 'rencontresRepetees'));
+    const plan = {
+      tables: [1, 2],
+      tours: [
+        [[1, 2], [3, 4]],
+        [[1, 4], [2]],
+        [[2, 3], [1, 4]],
+      ],
+      reserves: [[], [3], []],
+    };
+    const etat = creerEtatDuDepart(instance, { plan, toursFiges: [2], reservesImposees: [{ participant: 3, tour: 2 }] });
+    assert.deepEqual(planDepuisIndex(instance, etat.tableDe), plan);
     assert.equal(etat.totalRetoursChoisis, 3);
     assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
   });

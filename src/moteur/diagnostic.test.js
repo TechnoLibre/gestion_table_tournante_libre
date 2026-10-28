@@ -1964,8 +1964,9 @@ describe('diagnostic : les inclusions (§ 5.6)', () => {
   test('les inclusions hors d’atteinte et les personnes au-delà du plafond, désignées par identifiant', () => {
     // Un tour, trois tables de 2 : chacun rencontre une personne au plus. 1
     // est exclue : les index décalent les identifiants d'un. 2 inclut 3, 4
-    // et 5, trois personnes, au-delà du plafond ; 3 inclut 1, exclue, et la
-    // Vigie, que personne ne porte ; 5 inclut 2, dans le plafond.
+    // et 5, trois personnes, au-delà du plafond ; 3, d'index impair, inclut
+    // 1, exclue, la Vigie, que personne ne porte, puis 4 et 6, au-delà du
+    // plafond ; 5 inclut 2, dans le plafond.
     const configuration = salle({
       tables: [[10, 2], [20, 2], [30, 2]],
       organisations: [null, null, null, null, null, null],
@@ -1973,7 +1974,7 @@ describe('diagnostic : les inclusions (§ 5.6)', () => {
       exclus: [1],
     });
     configuration.participants[1].inclusionsParticipant = [3, 4, 5];
-    configuration.participants[2].inclusionsParticipant = [1];
+    configuration.participants[2].inclusionsParticipant = [1, 4, 6];
     configuration.participants[2].inclusionsOrganisation = ['Vigie'];
     configuration.participants[4].inclusionsParticipant = [2];
     assert.deepEqual(diagnostiquer(configuration).inclusions, {
@@ -1981,7 +1982,10 @@ describe('diagnostic : les inclusions (§ 5.6)', () => {
         { participant: 3, cible: { organisation: 'Vigie' }, raison: 'sansPresent' },
         { participant: 3, cible: { participant: 1 }, raison: 'exclue' },
       ],
-      auDelaDuPlafond: [{ participant: 2, actives: 3, besoin: 3, plafond: 1, atteignables: 1 }],
+      auDelaDuPlafond: [
+        { participant: 2, actives: 3, besoin: 3, plafond: 1, atteignables: 1 },
+        { participant: 3, actives: 2, besoin: 2, plafond: 1, atteignables: 1 },
+      ],
     });
   });
 

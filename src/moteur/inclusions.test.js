@@ -126,7 +126,10 @@ describe('inclusions atteignables I(p) (§ 5.4)', () => {
     const cibles = ciblesDesInclusions(instance);
     assert.deepEqual(Array.from(cibles.plafond), [0, 0]);
     assert.deepEqual(Array.from(cibles.atteignables), [0, 0]);
-    assert.equal(cibles.uniteLigne.length, 0);
+    assert.deepEqual(
+      [cibles.uniteLigne, cibles.uniteSource, cibles.unitePartenaire, cibles.uniteReciproque].map((unites) => unites.length),
+      [0, 0, 0, 0],
+    );
     assert.notDeepEqual(plafondsAPriori(instance), [0, 0]);
   });
 
@@ -168,6 +171,15 @@ describe('les unités des avis (§ 5.4)', () => {
       membre(3, null),
     ]);
     assert.deepEqual(unites(ciblesDesInclusions(instance)), [[0, 1, 1, 0]]);
+    // Précédée d'une personne sans liste : la réservation de chaque source
+    // s'en tient à ses propres lignes, et la ligne de personne porte encore
+    // l'unité. Lignes : 2 → Fanal (rang 0), 2 → 3 (rang 1).
+    const precedee = salle([
+      membre(1, null),
+      membre(2, null, { inclusionsOrganisation: ['Fanal'], inclusionsParticipant: [3] }),
+      membre(3, 'Fanal'),
+    ]);
+    assert.deepEqual(unites(ciblesDesInclusions(precedee)), [[1, 1, 2, 0]]);
   });
 
   test('l’organisation d’un seul membre rencontrable et la réciproque de ce membre font une unité, dans les deux sens', () => {

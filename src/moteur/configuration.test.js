@@ -2234,6 +2234,40 @@ describe('normaliser : les inclusions, lignes actives et hors d’atteinte (§ 4
     assert.equal(inclusionPossible(ample, 0, 1), true, 'une table garde deux sièges');
   });
 
+  test('inclusionPossible : le tour qui décide est le second, la table qui décide la seconde, les deux index au-delà de 0', () => {
+    // Deux tours, tables 11 (index 0) et 12 (index 1) de 2 places. Index =
+    // identifiant − 1 ; 1 et 2 ne servent qu'à remplir.
+    const tables = tablesDe([11, 12], 2);
+    // 3 et 4, libres, ne sont là qu'au tour 2, où 1 occupe un siège de la
+    // 11 : seule la 12 en garde deux.
+    const seconde = salle([
+      membre(1, null),
+      membre(2, null),
+      membre(3, null, { presence: [2] }),
+      membre(4, null, { presence: [2] }),
+    ], { tables, tours: 2, reservations: [auTour(1, 11, 2)] });
+    assert.equal(inclusionPossible(seconde, 2, 3), true, 'la 12 garde deux sièges au tour 2');
+    // 3 est assis d'office à la 12 au tour 2, où 1 et 2 remplissent la 11 ;
+    // 4 est libre : la 12 garde le siège qui l'accueille.
+    const fixee = salle([
+      membre(1, null),
+      membre(2, null),
+      membre(3, null, { presence: [2] }),
+      membre(4, null, { presence: [2] }),
+    ], { tables, tours: 2, reservations: [auTour(1, 11, 2), auTour(2, 11, 2), auTour(3, 12, 2)] });
+    assert.equal(inclusionPossible(fixee, 2, 3), true, 'la 12, où 3 est assis d’office, garde un siège au tour 2');
+    assert.equal(inclusionPossible(fixee, 3, 2), true, 'dans l’autre sens');
+    // 2 n'est là qu'au tour 2, 3 qu'au tour 1 : aucun tour commun, quelle
+    // que soit la place.
+    const disjoints = salle([
+      membre(1, null),
+      membre(2, null, { presence: [2] }),
+      membre(3, null, { presence: [1] }),
+    ], { tables, tours: 2 });
+    assert.equal(inclusionPossible(disjoints, 1, 2), false, 'jamais présents au même tour');
+    assert.equal(inclusionPossible(disjoints, 2, 1), false, 'dans l’autre sens');
+  });
+
   test('des inclusions hors de leur forme lèvent TypeError', () => {
     const avec = (champs) => () => salle([membre(1, null, champs), membre(2, null)]);
     exigerTypeError(avec({ inclusionsOrganisation: 'Rameau' }), "participant 1, inclusions d'organisation : liste de chaînes attendue", 'organisations en texte');

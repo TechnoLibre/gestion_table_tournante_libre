@@ -1343,11 +1343,22 @@ describe('verifierIndicateurs : les inclusions (§ 5.4, § 12.3)', () => {
 
   test('des inclusions qui tiennent, null ou absentes : aucune violation', () => {
     assert.deepEqual(verifierIndicateurs(avec(() => {}), plafonds(), plafonds()), []);
+    // Zéro ligne satisfaite, chez une personne puis au total, tient : la
+    // borne basse est 0, pas 1.
+    const aucune = avec((i) => {
+      i.satisfaites = 0;
+      i.avis = 3;
+      i.nonSatisfaites = [0, 1, 2].map((cible) => ({ p: 0, cible, reciproque: false }));
+      for (const personne of i.parPersonne) personne.satisfaites = 0;
+    });
+    assert.deepEqual(verifierIndicateurs(aucune, plafonds(), plafonds()), []);
     assert.deepEqual(verifierIndicateurs({ rencontres: [1, 1, 1, 1], inclusions: null }, plafonds(), plafonds()), []);
     assert.deepEqual(verifierIndicateurs({ rencontres: [1, 1, 1, 1] }, plafonds(), plafonds()), []);
   });
 
   test('chaque écart a son code ; la borne de chacun ne se lit pas quand le plafond a priori est inconnu', () => {
+    // Des unités nommées en nombre n, pour qu'un cas n'écarte qu'une égalité.
+    const nommees = (n) => Array.from({ length: n }, (_, cible) => ({ p: 0, cible, reciproque: false }));
     const cas = [
       ['satisfaites 2 > atteignables 1', (i) => { i.parPersonne[1].satisfaites = 2; }, [{ code: 'INCLUSIONS_SATISFAITES', index: 2 }]],
       ['satisfaites négatives', (i) => { i.parPersonne[0].satisfaites = -1; }, [{ code: 'INCLUSIONS_SATISFAITES', index: 0 }]],
@@ -1355,6 +1366,14 @@ describe('verifierIndicateurs : les inclusions (§ 5.4, § 12.3)', () => {
       ['un avis sans unité nommée', (i) => { i.nonSatisfaites = []; }, [{ code: 'INCLUSIONS_AVIS' }]],
       ['satisfaites > cible', (i) => { i.satisfaites = 4; i.avis = -1; }, [{ code: 'INCLUSIONS_AVIS' }]],
       ['satisfaites négatives au total', (i) => { i.satisfaites = -1; i.avis = 4; }, [{ code: 'INCLUSIONS_AVIS' }]],
+      // Chacun des cas suivants ne fait tomber qu'une des quatre conditions
+      // d'INCLUSIONS_AVIS : satisfaites ≥ 0, cible ≥ satisfaites, avis =
+      // cible − satisfaites, autant d'unités nommées que d'avis.
+      ['satisfaites négatives au total, avis et unités d’accord',
+        (i) => { i.satisfaites = -1; i.avis = 4; i.nonSatisfaites = nommees(4); }, [{ code: 'INCLUSIONS_AVIS' }]],
+      ['une cible qui n’est pas un nombre', (i) => { i.cible = '3'; }, [{ code: 'INCLUSIONS_AVIS' }]],
+      ['avis ≠ cible − satisfaites, autant d’unités nommées',
+        (i) => { i.avis = 2; i.nonSatisfaites = nommees(2); }, [{ code: 'INCLUSIONS_AVIS' }]],
       ['les deux, la personne d’abord', (i) => { i.parPersonne[0].satisfaites = 3; i.avis = 0; },
         [{ code: 'INCLUSIONS_SATISFAITES', index: 0 }, { code: 'INCLUSIONS_AVIS' }]],
     ];
