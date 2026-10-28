@@ -137,6 +137,16 @@ function estSerree(page, metriques) {
   });
 }
 
+// Le pas d'une page sans image ni pied TechnoLibre, par point, lu sur elle :
+// son ascendante et sa descendante. Le nom part du haut du cadre, le dernier
+// bloc du pied finit sur son bas, et toutes les lignes avancent de ce pas,
+// celui de la police comme le pas serré, proportionnel au corps.
+function pasLu(page, hauteur) {
+  const [nom] = page.blocs;
+  const dernier = page.blocs.at(-1);
+  return { ascendante: nom.y / nom.corps, descendante: (hauteur - dernier.y) / dernier.corps };
+}
+
 // Les boîtes des blocs de la page, chacune celle de l'encre de son texte
 // sur une page serrée, où les lignes avancent de moins que la hauteur de la
 // police, jusqu'à l'encre du badge.
@@ -1153,12 +1163,12 @@ describe('mise en page : le pied TechnoLibre', () => {
     const { ascendante, descendante } = metriques.hauteurs(corps);
     return lignes * (ascendante + descendante) + hauteurLogo(corps);
   };
-  // L'écart libre d'un badge sans pied TechnoLibre, au pas de la police :
-  // du bas des tours au haut du pied.
-  function ecartLibre(page, metriques, pied) {
-    const boites = page.blocs.map((bloc) => ({ bloc, ...boite(bloc, metriques) }));
-    const hautDuPied = Math.min(...boites.filter(({ bloc }) => pied.includes(bloc.texte)).map(({ haut }) => haut));
-    const basDuReste = Math.max(...boites.filter(({ bloc }) => !pied.includes(bloc.texte)).map(({ bas }) => bas));
+  // L'écart libre d'un badge sans pied TechnoLibre, du bas des tours au haut
+  // du pied, au pas de sa page (pasLu) : celui de la police, ou le pas serré.
+  function ecartLibre(page, pied, hauteur) {
+    const { ascendante, descendante } = pasLu(page, hauteur);
+    const hautDuPied = Math.min(...page.blocs.filter((b) => pied.includes(b.texte)).map((b) => b.y - ascendante * b.corps));
+    const basDuReste = Math.max(...page.blocs.filter((b) => !pied.includes(b.texte)).map((b) => b.y + descendante * b.corps));
     return hautDuPied - basDuReste;
   }
 
@@ -1230,9 +1240,9 @@ describe('mise en page : le pied TechnoLibre', () => {
       });
     }
 
-    test(`${nomModele}, Noto Sans : à mesure que les tours s’ajoutent, le pied TechnoLibre rapetisse jusqu’à son plancher, puis se retire ; la place libre le décide, et un badge serré ne le porte pas`, () => {
+    test(`${nomModele}, Noto Sans : à mesure que les tours s’ajoutent, le pied TechnoLibre rapetisse jusqu’à son plancher, puis se retire ; la place libre le décide, au pas serré comme au pas de la police, et un badge dépouillé ne le porte pas`, () => {
       const vus = new Set();
-      for (let n = 1; n <= 24; n += 1) {
+      for (let n = 1; n <= 40; n += 1) {
         const champs = textes({ lignes: toursAuxSieges(n) });
         const sans = mettreEnPage(champs, NOTO, modele);
         if ('refus' in sans) {
@@ -1240,15 +1250,17 @@ describe('mise en page : le pied TechnoLibre', () => {
           continue;
         }
         const avec = mettreEnPage(champs, NOTO, modele, TECHNOLIBRE);
-        // Un badge serré ne le porte pas, quelle que soit la place.
-        if (estSerree(sans, NOTO)) {
-          vus.add('serre');
-          assert.deepEqual(avec, { ...sans, technolibre: { corps: null, logo: null } }, `${n} tours`);
+        // Un badge dépouillé ne le porte pas, quelle que soit la place ; un
+        // badge serré qui garde ses textes suit la règle de la place libre.
+        if (!avecEvenement(sans)) {
+          vus.add('depouille');
+          assert.deepEqual(avec, retire(sans), `${n} tours`);
           continue;
         }
+        if (estSerree(sans, NOTO)) vus.add('serre');
         const { corps } = avec.technolibre;
         const pied = sans.blocs.filter((b) => PIED.includes(b.texte) || PIED_REDUIT.includes(b.texte)).map((b) => b.texte);
-        const libre = ecartLibre(sans, NOTO, pied);
+        const libre = ecartLibre(sans, pied, cadre.hauteur);
         // Le nombre de lignes du texte TechnoLibre à un corps : ses mots
         // remplis ligne après ligne dans la largeur du cadre.
         const lignesA = (c) => {
@@ -1280,7 +1292,7 @@ describe('mise en page : le pied TechnoLibre', () => {
           }
         }
       }
-      assert.deepEqual([...vus].sort(), ['depart', 'reduit', 'retire', 'serre']);
+      assert.deepEqual([...vus].sort(), ['depart', 'depouille', 'reduit', 'retire', 'serre']);
     });
   }
 
@@ -2519,55 +2531,172 @@ describe('mise en page : resserrer avant de retirer, puis le dernier recours (§
     ]);
   });
 
-  // L'image des badges, le logo du participant et le pied TechnoLibre
-  // suivent tous les textes dans l'ordre de sacrifice : un badge serré, même
-  // complet, n'en porte aucun, et l'écart que son resserrement libère ne leur
-  // revient pas. Sa page est celle du badge sans eux. Sous une police dont
-  // les lignes réservent deux fois la hauteur de Noto Sans pour la même
-  // encre, un palier du pas serré libère de quoi poser chacun : seule la
-  // règle les en prive.
+  // Le logo du participant, le pied TechnoLibre et l'image des badges
+  // suivent tous les textes dans l'ordre de sacrifice : un badge dépouillé
+  // n'en porte aucun, et sa page est celle du badge sans eux. Un badge serré
+  // qui garde ses textes les porte comme un badge au pas de la police, dans
+  // le même ordre, chacun seulement s'il tient à sa taille minimale dans
+  // l'écart que son pas serré laisse entre ses tours et son pied. Sous Noto
+  // Sans, cet écart reste sous ce qu'un palier libère ; sous une police dont
+  // les lignes réservent trois fois la hauteur de Noto Sans pour la même
+  // encre, chacun d'eux y tient, et les trois ensemble.
   const AEREE = Object.freeze({
     ...NOTO,
     hauteurs: (corps) => {
       const hauteurs = NOTO.hauteurs(corps);
-      return { ...hauteurs, ascendante: 2 * hauteurs.ascendante, descendante: 2 * hauteurs.descendante };
+      return { ...hauteurs, ascendante: 3 * hauteurs.ascendante, descendante: 3 * hauteurs.descendante };
     },
   });
-  // Les ajouts demandés, puis ce que rend la page qui les retire.
-  const TECHNOLIBRE_RETIRE = { technolibre: { corps: null, logo: null } };
+  const ECART = constante('LOGO_PARTICIPANT_ECART_MM');
+  const PLANCHER_LOGO = constante('LOGO_PARTICIPANT_PLANCHER_MM');
+  const DEPART_TL = constante('CORPS_TECHNOLIBRE_PT');
+  const PLANCHER_TL = constante('CORPS_TECHNOLIBRE_PLANCHER_PT');
+  const LOGO_TL = Object.freeze({ texte: '', rapport: 5 });
+  const IMAGE_BAS = Object.freeze({ rapport: 2, position: 'bas' });
+  // Le logo TechnoLibre de deux cadratins du corps donné.
+  const hauteurLogoTl = (corps) => 2 * corps * MM_PAR_PT;
+  // Une page sans ajout, à son pas (pasLu) : le haut de son pied, le bas de
+  // ses tours, l'écart libre entre les deux et le rang de son premier bloc
+  // de pied.
+  const mesurer = (page, champs, hauteur) => {
+    const { ascendante, descendante } = pasLu(page, hauteur);
+    const auPied = (b) => champs.pied.includes(b.texte) || champs.piedReduit.includes(b.texte);
+    const debutPied = page.blocs.findIndex(auPied);
+    const hautDuPied = Math.min(...page.blocs.slice(debutPied).map((b) => b.y - ascendante * b.corps));
+    const finDesTours = Math.max(...page.blocs.slice(0, debutPied).map((b) => b.y + descendante * b.corps));
+    return { hautDuPied, finDesTours, libre: hautDuPied - finDesTours, debutPied };
+  };
   const AJOUTS = [
-    [
-      'image, logo et pied TechnoLibre',
-      [TECHNOLIBRE, CARRE, Object.freeze({ rapport: 2, position: 'bas' })],
-      { ...TECHNOLIBRE_RETIRE, logoParticipant: { boite: null }, imageBadges: { boite: null } },
-    ],
-    ['logo du pied TechnoLibre seul', [Object.freeze({ texte: '', rapport: 5 })], TECHNOLIBRE_RETIRE],
+    ['image, logo et logo du pied TechnoLibre', [LOGO_TL, CARRE, IMAGE_BAS]],
+    ['logo et pied TechnoLibre', [TECHNOLIBRE, CARRE]],
+    ['logo du pied TechnoLibre seul', [LOGO_TL]],
+    ['logo du participant seul', [null, CARRE]],
+    ['image seule', [null, null, IMAGE_BAS]],
   ];
-  for (const [jeu, metriques] of [['Noto Sans', NOTO], ['interligne double', AEREE]]) {
-    for (const [ajouts, demandes, retires] of AJOUTS) {
-      test(`${jeu}, ${ajouts} : un badge serré, complet ou non, ne porte ni image des badges, ni logo du participant, ni pied TechnoLibre`, () => {
-        const vus = { lache: 0, serreComplet: 0, serreDepouille: 0 };
+  for (const [ajouts, demandes] of AJOUTS) {
+    const [technolibre = null, logo = null, image = null] = demandes;
+    test(`${ajouts} : un badge dépouillé n’en porte aucun ; un badge serré complet porte chacun s’il tient à sa taille minimale dans l’écart que laisse son pas serré, sans toucher au texte`, () => {
+      const noms = ['pied TechnoLibre', 'logo', 'image'].filter((_, rang) => [technolibre, logo, image][rang] !== null);
+      const vus = { lache: 0, depouille: 0, serreComplet: 0, retire: 0, ...Object.fromEntries(noms.map((nom) => [`${nom} posé`, 0])) };
+      for (const [jeu, metriques] of [['Noto Sans', NOTO], ['interligne triple', AEREE]]) {
         for (const modele of ['a6', AVERY]) {
+          const { largeur, hauteur } = cadreDe(modele);
+          const maximum = constante(modele === 'a6' ? 'IMAGE_BADGES_HAUTEUR_MAX_MM' : 'IMAGE_BADGES_HAUTEUR_MAX_CARTE_MM');
           for (const suite of [auLibelleLong, tours]) {
             for (let n = 1; n <= 40; n += 1) {
               const champs = textes({ lignes: suite(n) });
               const sans = mettreEnPage(champs, metriques, modele);
               if ('refus' in sans) break;
               const avec = mettreEnPage(champs, metriques, modele, ...demandes);
-              const cas = `${modele}, ${suite(1)[0]}, ${n} tours`;
-              if (!estSerree(sans, metriques)) {
-                if (avec.technolibre.corps !== null) vus.lache += 1;
+              const cas = `${jeu}, ${modele}, ${suite(1)[0]}, ${n} tours`;
+              if (!avecEvenement(sans, champs)) {
+                vus.depouille += 1;
+                assert.deepEqual(
+                  avec,
+                  {
+                    ...sans,
+                    technolibre: technolibre && { corps: null, logo: null },
+                    logoParticipant: logo && { boite: null },
+                    imageBadges: image && { boite: null },
+                  },
+                  cas,
+                );
                 continue;
               }
-              vus[avecEvenement(sans, champs) ? 'serreComplet' : 'serreDepouille'] += 1;
-              assert.deepEqual(avec, { ...sans, ...retires }, cas);
+              if (!estSerree(sans, metriques)) {
+                vus.lache += 1;
+                continue;
+              }
+              vus.serreComplet += 1;
+              const { hautDuPied, finDesTours, libre, debutPied } = mesurer(sans, champs, hauteur);
+              const posePied = technolibre !== null && avec.technolibre.corps !== null;
+              const poseLogo = avec.logoParticipant?.boite ?? null;
+              const poseImage = avec.imageBadges?.boite ?? null;
+              for (const [nom, demande, pose] of [['pied TechnoLibre', technolibre, posePied], ['logo', logo, poseLogo], ['image', image, poseImage]]) {
+                if (demande !== null) vus[pose ? `${nom} posé` : 'retire'] += 1;
+              }
+              // Le texte ne change pas : tout ce qui précède le pied reste en
+              // place, le pied remonte de la hauteur du bloc TechnoLibre.
+              assert.deepEqual(avec.blocs.slice(0, debutPied), sans.blocs.slice(0, debutPied), cas);
+              const blocTl = posePied ? sans.blocs[debutPied].y - avec.blocs[debutPied].y : 0;
+              assert.deepEqual(
+                avec.blocs.slice(debutPied, sans.blocs.length),
+                sans.blocs.slice(debutPied).map((b, rang) => ({ ...b, y: avec.blocs[debutPied + rang].y })),
+                cas,
+              );
+              for (const [rang, b] of sans.blocs.slice(debutPied).entries()) {
+                assert.ok(Math.abs(b.y - blocTl - avec.blocs[debutPied + rang].y) < 1e-9, cas);
+              }
+              // Le pied TechnoLibre : son bloc tient dans l'écart ; le logo
+              // seul, de deux cadratins, au plus grand corps qui y tient.
+              if (posePied) {
+                const { corps } = avec.technolibre;
+                assert.ok(corps >= PLANCHER_TL && corps <= DEPART_TL, cas);
+                assert.ok(blocTl <= libre + 1e-9, `${cas} : ${blocTl} mm dans ${libre} mm`);
+                if (technolibre === LOGO_TL) assert.ok(Math.abs(blocTl - hauteurLogoTl(corps)) < 1e-9, cas);
+                if (technolibre === LOGO_TL && logo === null) {
+                  assert.ok(corps === DEPART_TL || hauteurLogoTl(corps + 1) > libre + 1e-9, `${cas} : ${corps} pt dans ${libre} mm`);
+                }
+              } else if (technolibre !== null) {
+                // Retiré pour le logo, ou faute de place : même au plancher,
+                // son logo et sa première ligne dépassent l'écart.
+                const { ascendante, descendante } = metriques.hauteurs(PLANCHER_TL);
+                const ligne = technolibre.texte === '' ? 0 : ascendante + descendante;
+                assert.ok(poseLogo !== null || libre < ligne + hauteurLogoTl(PLANCHER_TL) + 1e-9, `${cas} : ${libre} mm`);
+              }
+              // Le logo du participant : à sa cote plancher au moins ; seul,
+              // tout l'écart moins ses dégagements. Il ne se retire que quand
+              // même seul il n'atteindrait pas son plancher.
+              if (poseLogo !== null) {
+                assert.ok(Math.min(poseLogo.largeur, poseLogo.hauteur) >= PLANCHER_LOGO - 1e-9, cas);
+                if (technolibre === null && image === null) assert.ok(Math.abs(poseLogo.hauteur - Math.min(libre - 2 * ECART, largeur)) < 1e-9, cas);
+                assert.ok(poseLogo.y >= finDesTours + ECART - 1e-9, cas);
+                assert.ok(poseLogo.y + poseLogo.hauteur + ECART <= (poseImage?.y ?? hautDuPied - blocTl) + 1e-9, cas);
+              } else if (logo !== null) {
+                assert.ok(libre - 2 * ECART < PLANCHER_LOGO, `${cas} : ${libre} mm`);
+              }
+              // L'image : l'écart, moins le bloc TechnoLibre, la plus petite
+              // zone du logo posé et ses dégagements, et les siens.
+              if (image !== null) {
+                const reserveLogo = poseLogo === null ? 0 : PLANCHER_LOGO + 2 * ECART;
+                const attendue = Math.min(maximum, libre - blocTl - reserveLogo - 2 * ECART, largeur / image.rapport);
+                if (poseImage === null) {
+                  assert.ok(attendue < PLANCHER_LOGO, `${cas} : ${attendue} mm`);
+                } else {
+                  assert.ok(Math.abs(poseImage.hauteur - attendue) < 1e-9, `${cas} : ${poseImage.hauteur} contre ${attendue}`);
+                  assert.ok(Math.abs(poseImage.y + poseImage.hauteur + ECART - (hautDuPied - blocTl)) < 1e-9, cas);
+                  assert.ok(poseImage.y >= finDesTours + ECART - 1e-9, cas);
+                }
+              }
+              assert.deepEqual(sortDuCadre(avec, metriques, modele), [], cas);
+              assert.deepEqual(chevauchements(avec, metriques), [], cas);
             }
           }
         }
-        for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
-      });
-    }
+      }
+      for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
+    });
   }
+
+  // La mesure que cite la spécification (§ 11.5), sous un nom court, son
+  // organisation et le libellé de soixante caractères sous sièges attribués.
+  test('Noto Sans : sur l’A6, le badge serré complet de quinze et seize tours au libellé de soixante caractères garde le logo du pied TechnoLibre sans texte, à son corps de départ puis à son plancher ; le pied TechnoLibre et son texte, le logo du participant et l’image des badges n’y tiennent pas, ni rien sur la carte, de cinq à sept tours', () => {
+    const page = (modele, n, ...demandes) => mettreEnPage(textes({ lignes: auLibelleLong(n) }), NOTO, modele, ...demandes);
+    for (const [modele, nombres] of [['a6', [15, 16]], [AVERY, [5, 6, 7]]]) {
+      for (const n of nombres) {
+        const cas = `${modele}, ${n} tours`;
+        const sans = page(modele, n);
+        assert.ok(estSerree(sans, NOTO) && avecEvenement(sans, textes({ lignes: auLibelleLong(n) })), cas);
+        const tous = page(modele, n, TECHNOLIBRE, CARRE, IMAGE_BAS);
+        assert.deepEqual([tous.technolibre.corps, tous.logoParticipant.boite, tous.imageBadges.boite], [null, null, null], cas);
+        assert.equal(page(modele, n, TECHNOLIBRE).technolibre.corps, null, cas);
+        assert.equal(page(modele, n, null, CARRE).logoParticipant.boite, null, cas);
+        assert.equal(page(modele, n, null, null, IMAGE_BAS).imageBadges.boite, null, cas);
+      }
+    }
+    assert.deepEqual([15, 16].map((n) => page('a6', n, LOGO_TL).technolibre.corps), [DEPART_TL, PLANCHER_TL]);
+    assert.deepEqual([5, 6, 7].map((n) => page(AVERY, n, LOGO_TL).technolibre.corps), [null, null, null]);
+  });
 
   // Une organisation, puis un nom d'événement, dont l'encre monte plus haut
   // que celle des autres textes : chacune compte dans le pas serré tant

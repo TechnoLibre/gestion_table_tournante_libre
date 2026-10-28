@@ -6540,12 +6540,13 @@ permet : 30 mm sur l'A6, 15 mm sur la carte Avery 5392, sans dépasser la largeu
 du cadre. Elle ne retire ni ne réduit aucun texte, ne prend rien au pied
 TechnoLibre et ne prive jamais le logo du participant de sa place : elle
 **rapetisse** avec l'écart qu'ils laissent, puis **se retire** de ce badge, la
-première, avant tout refus ; un badge resserré ne la porte pas (§ 11.5).
-Décochée, l'image et la position restent dans l'événement. Une image introuvable
-ou illisible, ou cochée sans image, s'annonce, et les badges s'impriment sans
-elle ; la planche ne se refuse jamais pour elle. La feuille de contrôle et la
-liste des badges en CSV ne la lisent pas. Sans image posée, la planche garde
-exactement ses octets.
+première, avant tout refus. Un badge qui a perdu le nom de l'événement ou
+l'organisation ne la porte pas ; sur un badge resserré, elle ne prend que
+l'écart que le resserrement laisse (§ 11.5). Décochée, l'image et la position
+restent dans l'événement. Une image introuvable ou illisible, ou cochée sans
+image, s'annonce, et les badges s'impriment sans elle ; la planche ne se refuse
+jamais pour elle. La feuille de contrôle et la liste des badges en CSV ne la
+lisent pas. Sans image posée, la planche garde exactement ses octets.
 
 **Le logo du participant passe après tout le texte.** La place du badge se donne
 dans cet ordre : le nom et les tours toujours ; puis l'organisation et le pied,
@@ -6555,12 +6556,13 @@ texte laisse entre les tours et le pied, moins un dégagement au-dessus et
 au-dessous : il ne réduit ni ne retire aucun texte. Il s'y pose le plus grand
 possible, proportions gardées, sans plafond, centré, et n'en cède à l'image des
 badges que ce qui dépasse son plancher. Il ne se pose pas sur un badge où sa
-plus petite cote n'atteindrait pas son plancher, ni sur un badge resserré ou qui
-a perdu le nom de l'événement ou l'organisation (§ 11.5). Son image se lit dans
-le dossier de l'événement, au chemin que porte la fiche, à la première
-préparation qui la demande, puis se garde pour cet événement ; un échec ne se
-garde pas. La planche l'embarque une fois par fichier, quel que soit le nombre
-de badges qui la portent.
+plus petite cote n'atteindrait pas son plancher, ni sur un badge qui a perdu le
+nom de l'événement ou l'organisation ; sur un badge resserré, il ne prend que
+l'écart que le resserrement laisse (§ 11.5). Son image se lit dans le dossier de
+l'événement, au chemin que porte la fiche, à la première préparation qui la
+demande, puis se garde pour cet événement ; un échec ne se garde pas. La planche
+l'embarque une fois par fichier, quel que soit le nombre de badges qui la
+portent.
 
 **Le pied TechnoLibre passe après tout le texte.** Il se compose d'un texte,
 centré, replié comme le pied, puis du logo, centré, posé sur le bord bas du
@@ -6587,19 +6589,19 @@ déplace pas, le pied excepté. Il rapetisse jusqu'à un plancher lisible à la
 loupe, puis se retire, et l'annonce le dit (§ 11.5). Un badge qui a perdu le nom
 de l'événement, et à plus forte raison l'organisation, ne le porte pas : il
 vient après eux dans l'ordre de sacrifice, et la place que leur retrait libère
-ne lui revient pas ; un badge resserré ne le porte pas non plus, pour la même
-raison. Sous un logo de participant, il cède au logo tout ce qui dépasse son
-plancher, puis reprend le plus grand palier que le logo laisse ; quand même
-ainsi le logo n'atteint pas son plancher, il se retire pour lui (§ 11.5). Il
-passe en revanche avant l'image des badges : son corps est celui du badge sans
-elle, et elle ne prend que l'écart qu'il laisse. Son logo, l'un des deux seuls
-éléments en couleur du badge (§ 11.2), se dessine en vecteurs, chemins et
-couleurs du fichier de l'éditeur, `src/actifs/full_logo_technolibre_2023.svg`,
-et un logo que l'éditeur changerait pour une forme que la planche ne sait pas
-rendre fidèlement — un dégradé, une transparence, un arc, une transformation —
-se refuse à la production au lieu de sortir faux. **La feuille de contrôle ne le
-porte pas** : elle s'imprime sur papier ordinaire et ne se distribue pas, et
-elle reste une page de mesure.
+ne lui revient pas ; un badge resserré qui les garde le porte, quand il tient
+dans l'écart que le resserrement laisse. Sous un logo de participant, il cède au
+logo tout ce qui dépasse son plancher, puis reprend le plus grand palier que le
+logo laisse ; quand même ainsi le logo n'atteint pas son plancher, il se retire
+pour lui (§ 11.5). Il passe en revanche avant l'image des badges : son corps est
+celui du badge sans elle, et elle ne prend que l'écart qu'il laisse. Son logo,
+l'un des deux seuls éléments en couleur du badge (§ 11.2), se dessine en
+vecteurs, chemins et couleurs du fichier de l'éditeur,
+`src/actifs/full_logo_technolibre_2023.svg`, et un logo que l'éditeur changerait
+pour une forme que la planche ne sait pas rendre fidèlement — un dégradé, une
+transparence, un arc, une transformation — se refuse à la production au lieu de
+sortir faux. **La feuille de contrôle ne le porte pas** : elle s'imprime sur
+papier ordinaire et ne se distribue pas, et elle reste une page de mesure.
 
 **Un itinéraire constant s'écrit en une ligne.** Quand une personne, présente
 aux R tours, occupe la même table à chacun d'eux, R ≥ 2 — au même siège sous
@@ -6695,14 +6697,21 @@ pas de la police et son pied à son corps de départ ; s'il ne tient pas, il se
 resserre de même avant de perdre l'organisation, puis encore sans elle. La
 première étape qui tient l'emporte : un badge qui tient au pas de la police
 n'est jamais serré, et l'écart qu'un badge serré laisse entre ses tours et son
-pied reste sous ce qu'un palier libère. Un badge serré, même complet, ne porte
-ni logo du participant, ni pied TechnoLibre, ni image des badges : ils suivent
-tous les textes dans l'ordre de sacrifice, et la place que le resserrement
-libère ne leur revient pas. Mesuré sur la police embarquée, sous un nom court et
-son organisation, sur la carte Avery 5392 : un libellé de soixante caractères,
-sous sièges attribués, garde l'organisation et le nom de l'événement jusqu'à
-sept tours, au lieu de quatre au pas de la police ; des lignes de tour sans
-siège ni titre, jusqu'à trente, au lieu de dix-huit.
+pied reste sous ce qu'un palier libère. Un badge serré qui garde ses textes
+porte encore le logo du participant, le pied TechnoLibre et l'image des badges,
+dans le même ordre et par les mêmes règles qu'un autre badge, chacun seulement
+s'il tient à sa plus petite taille dans cet écart ; le badge ne se serre jamais
+pour eux. Un badge dépouillé n'en porte aucun : ils suivent tous les textes dans
+l'ordre de sacrifice, et la place que le retrait d'un texte libère ne leur
+revient pas. Mesuré sur la police embarquée, sous un nom court et son
+organisation, sur la carte Avery 5392 : un libellé de soixante caractères, sous
+sièges attribués, garde l'organisation et le nom de l'événement jusqu'à sept
+tours, au lieu de quatre au pas de la police ; des lignes de tour sans siège ni
+titre, jusqu'à trente, au lieu de dix-huit. L'écart d'un badge serré reste
+petit : de cinq à sept tours de ce libellé, aucun des trois n'y tient sur la
+carte ; sur l'A6, à quinze et seize tours, seul le logo d'un pied TechnoLibre
+sans texte y tient, et ni le pied TechnoLibre avec son texte, ni le logo du
+participant, ni l'image des badges n'y tiennent.
 
 **Le refus vient après le dernier recours.** Un badge dont les lignes de tour ne
 tiennent pas même dépouillé et serré — le nom à son plancher, sans le nom de

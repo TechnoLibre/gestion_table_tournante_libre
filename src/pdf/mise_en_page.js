@@ -47,8 +47,9 @@
 // d'abord, puis l'organisation, et chaque badge dépouillé se compose de
 // nouveau au pas de la police, puis se resserre de même. Hors du dernier
 // recours, retirer un texte ne vient donc qu'après avoir réduit tout ce qui
-// se réduit. Un badge serré ne porte ni image des badges, ni logo du
-// participant, ni pied TechnoLibre.
+// se réduit. Un badge serré qui garde ses textes porte encore le logo du
+// participant, le pied TechnoLibre et l'image des badges, chacun s'il tient
+// dans l'écart que son pas serré laisse ; il ne se serre jamais pour eux.
 //
 // Le refus ne vient qu'après le dernier recours : quand même le badge le plus
 // dépouillé, serré, son pied à son plancher, ne tient pas, son nom passe sous
@@ -68,8 +69,9 @@
 // ne cède à l'image que ce qui dépasse son plancher : sur un badge chargé,
 // l'image rapetisse, puis se retire, la première. Aucun des trois ne réduit
 // ni ne retire un texte, ni ne cause un refus, et aucun ne se pose sur un
-// badge dépouillé ou serré : ils suivent tous les textes dans l'ordre de
-// sacrifice.
+// badge dépouillé : ils suivent tous les textes dans l'ordre de sacrifice.
+// Sur un badge serré qui garde ses textes, l'écart libre est celui que
+// laisse son pas serré, et chacun s'y pose par la même règle, s'il y tient.
 //
 // Le pied TechnoLibre, quand il est demandé : un texte, puis le logo, sous
 // le pied, le logo posé sur le bord du cadre ; un texte vide, ou fait
@@ -391,10 +393,10 @@ function rolesLus(textes) {
  * un texte laissé en blanc compté comme imprimé —, du plus haut au plus bas
  * de leurs glyphes ; puis, à l'encre, le pied descend d'un point par palier
  * jusqu'à son plancher (CORPS_PIED_PLANCHER_PT). Le premier palier qui tient
- * l'emporte. Un badge serré qui n'a perdu aucun texte n'est pas dépouillé,
- * mais ne porte, comme lui, ni pied TechnoLibre, ni logo du participant, ni
- * image des badges : l'écart que libère son resserrement ne leur revient
- * pas.
+ * l'emporte. Un badge serré qui n'a perdu aucun texte n'est pas dépouillé :
+ * il porte le logo du participant, le pied TechnoLibre et l'image des badges
+ * par leurs règles, chacun s'il tient dans l'écart que son pas serré laisse
+ * entre ses tours et son pied. Le pas ne se resserre jamais pour eux.
  *
  * Dernier recours, quand même le badge sans le nom de l'événement ni
  * l'organisation, serré, le pied à son plancher, ne tient pas : le nom, d'un
@@ -422,10 +424,10 @@ function rolesLus(textes) {
  * corps de départ à son plancher (CORPS_TECHNOLIBRE_PT, _PLANCHER_PT au
  * registre), où le bloc tient dans l'écart entre les tours et le pied du
  * badge composé sans lui ; technolibre rend alors ce corps et la boîte du
- * logo. Sinon, ou quand le badge est dépouillé ou serré, il se retire :
- * technolibre rend {corps: null, logo: null}, et la page est celle du badge
- * sans lui. Non demandé, technolibre rend null. Il passe avant l'image des
- * badges : son palier est celui du badge sans elle.
+ * logo. Sinon, ou quand le badge est dépouillé, il se retire : technolibre
+ * rend {corps: null, logo: null}, et la page est celle du badge sans lui. Non
+ * demandé, technolibre rend null. Il passe avant l'image des badges : son
+ * palier est celui du badge sans elle.
  *
  * Logo du participant : la boîte la plus grande, au rapport reçu, qui tient
  * dans la largeur du cadre et dans l'écart entre les tours et le pied, moins
@@ -435,9 +437,9 @@ function rolesLus(textes) {
  * grand palier que le logo laisse ; il se retire quand le logo n'atteint
  * qu'ainsi LOGO_PARTICIPANT_PLANCHER_MM sur sa plus petite cote.
  * logoParticipant rend {boite} ; boite null quand même sans pied TechnoLibre
- * le logo n'atteint pas son plancher, ou que le badge est dépouillé ou
- * serré : la page est alors celle du badge sans logo. Non demandé,
- * logoParticipant rend null, et la page est celle d'avant le logo.
+ * le logo n'atteint pas son plancher, ou que le badge est dépouillé : la
+ * page est alors celle du badge sans logo. Non demandé, logoParticipant rend
+ * null, et la page est celle d'avant le logo.
  *
  * Image des badges : la boîte la plus grande, au rapport reçu, au plus de la
  * hauteur maximale du modèle (IMAGE_BADGES_HAUTEUR_MAX_MM,
@@ -453,9 +455,9 @@ function rolesLus(textes) {
  * logo du participant, qui ne lui cède que ce qui dépasse son plancher, et
  * après le pied TechnoLibre, qui garde le palier du badge sans elle.
  * imageBadges rend {boite} ; boite null quand sa plus petite cote n'atteint
- * pas LOGO_PARTICIPANT_PLANCHER_MM, ou que le badge est dépouillé ou serré :
- * la page est alors celle du badge sans image. Non demandée, imageBadges rend
- * null, et la page est celle d'avant l'image.
+ * pas LOGO_PARTICIPANT_PLANCHER_MM, ou que le badge est dépouillé : la page
+ * est alors celle du badge sans image. Non demandée, imageBadges rend null,
+ * et la page est celle d'avant l'image.
  *
  * @param {{nom: string, nomEnBlanc?: boolean, organisationEnGros?: boolean, lignes: string[],
  *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
@@ -1004,24 +1006,25 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     return { palier: palierDans(libre), taille: null };
   }
 
-  // La page finale d'une page composée, dépouillée, serrée ou non. L'écart
-  // libre entre ses tours et son pied se partage d'abord entre le logo du
+  // La page finale d'une page composée, dépouillée ou non. L'écart libre
+  // entre ses tours et son pied se partage d'abord entre le logo du
   // participant et le pied TechnoLibre comme sur le badge sans image
-  // (partager) ; l'image des badges prend ensuite ce qu'ils laissent, la
-  // plus petite zone où le logo posé atteint son plancher réservée avec ses
-  // deux dégagements, et le logo prend enfin tout ce que l'image laisse,
-  // centré entre ses deux dégagements. L'image rapetisse donc puis se retire
-  // la première, sans ôter au logo sa place ni rien au pied TechnoLibre. Sur
-  // une page dépouillée ou serrée, aucun des trois ne se pose : ils suivent
-  // dans l'ordre de sacrifice tous les textes, et l'écart que leur retrait
-  // ou leur resserrement libère ne leur revient pas. Le texte ne change pas,
+  // (partager) ; l'image des badges prend ensuite ce qu'ils laissent, la plus
+  // petite zone où le logo posé atteint son plancher réservée avec ses deux
+  // dégagements, et le logo prend enfin tout ce que l'image laisse, centré
+  // entre ses deux dégagements. L'image rapetisse donc puis se retire la
+  // première, sans ôter au logo sa place ni rien au pied TechnoLibre. Sur une
+  // page dépouillée, aucun des trois ne se pose : ils suivent dans l'ordre de
+  // sacrifice tous les textes, et l'écart que leur retrait libère ne leur
+  // revient pas. Une page serrée qui garde ses textes les reçoit comme une
+  // autre, dans l'écart que laisse son pas serré. Le texte ne change pas,
   // sinon par l'image, qui le fait descendre (avecImage), et par le bloc
   // TechnoLibre, qui remonte le pied de sa hauteur ; en bas, l'image remonte
   // avec le pied. Chaque élément demandé qui ne se pose pas rend sa marque de
   // retrait : technolibre {corps: null, logo: null}, logoParticipant et
   // imageBadges {boite: null} ; non demandé, il rend null.
-  function finir(page, { depouillee, serree }) {
-    const pose = !depouillee && !serree;
+  function finir(page, { depouillee }) {
+    const pose = !depouillee;
     const ecart = constante('LOGO_PARTICIPANT_ECART_MM');
     const { palier, taille } = pose ? partager(page.libre) : { palier: undefined, taille: null };
     const hauteurBloc = palier?.hauteurBloc ?? 0;
@@ -1118,7 +1121,7 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     const page = composer(forme, niveau);
     if (page === null) continue;
     const depouillee = !niveau.avecOrganisation || (!niveau.evenement && !sansNomEvenement);
-    return finir(page, { depouillee, serree: niveau.serre > 0 });
+    return finir(page, { depouillee });
   }
   if (nom.auDela) return refusNom;
   return { refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: textes.lignes.length, repliees: toursEnLignesTiennent } } };

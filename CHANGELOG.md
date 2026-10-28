@@ -722,15 +722,16 @@
   repliée rapetisse d'abord, pour laisser au nom et aux tours leur taille. Les
   lignes repliées prennent de la place. Avant de perdre le nom de l'événement,
   puis l'organisation, un badge chargé resserre ses lignes, juste assez, puis
-  rapetisse son pied ; resserré, il ne porte ni l'image des badges, ni le logo
-  de la personne, ni le pied TechnoLibre. Une carte Avery 5392 garde ainsi
-  l'organisation et le nom de l'événement jusqu'à sept tours au libellé de
-  soixante caractères, sous sièges attribués, et jusqu'à cinq sous un titre de
-  trente-deux caractères ; sans eux, le même libellé tient jusqu'à huit tours.
-  Avant de refuser la planche, un badge qui ne tient pas même ainsi rapetisse
-  son nom sous sa taille habituelle, sur le même papier ; les tours gardent leur
-  taille, et rien n'est tronqué. Au-delà, la planche se refuse en nommant la
-  personne et le libellé ou le titre à raccourcir, avec « Ouvrir les tables ».
+  rapetisse son pied. Une carte Avery 5392 garde ainsi l'organisation et le nom
+  de l'événement jusqu'à sept tours au libellé de soixante caractères, sous
+  sièges attribués, et jusqu'à cinq sous un titre de trente-deux caractères ;
+  sans eux, le même libellé tient jusqu'à huit tours. Resserré, un badge qui les
+  garde porte encore le logo de la personne, le pied TechnoLibre et l'image des
+  badges quand ils tiennent, rarement, dans la place qui reste. Avant de refuser
+  la planche, un badge qui ne tient pas même ainsi rapetisse son nom sous sa
+  taille habituelle, sur le même papier ; les tours gardent leur taille, et rien
+  n'est tronqué. Au-delà, la planche se refuse en nommant la personne et le
+  libellé ou le titre à raccourcir, avec « Ouvrir les tables ».
 - Quand les places manquent, l'avis qui offre « Ouvrir les tables » offre aussi
   « Créer les tables… », et la section « Tables et tours » offre la même
   commande tant qu'il en manque. Elle déplie un petit formulaire : le nombre de
