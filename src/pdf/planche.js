@@ -89,11 +89,12 @@ import { ErreurPng, lirePng } from './png.js';
  * src/application/planche.js, que src/pdf n'importe pas.
  *
  * @typedef {Object} ModelePlanche
- * @property {Array<{textes: {nom: string, nomEnBlanc?: boolean, lignes: string[],
+ * @property {Array<{textes: {nom: string, nomEnBlanc?: boolean, organisationEnGros?: boolean, lignes: string[],
  *            organisation: string|null, pied: string[], piedReduit: string[]}, logo?: string|null}>} badges
  *           dans l'ordre de la pile ; nomEnBlanc, vrai pour un nom que la
- *           mise en page mesure sans le poser ; logo, le chemin du logo de
- *           la personne, absent ou null sans logo
+ *           mise en page mesure sans le poser ; organisationEnGros, vrai pour
+ *           une organisation que la mise en page pose à la place du nom ;
+ *           logo, le chemin du logo de la personne, absent ou null sans logo
  * @property {string|null} horodatage   l'horodatage du placement ; null : inconnu
  * @property {boolean} brouillon
  */

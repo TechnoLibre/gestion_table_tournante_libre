@@ -103,11 +103,18 @@ export const TABLE = new Map([
         : `Les ${details.tours} tours ne tiennent pas sur un badge, même sur deux colonnes au plus petit corps : ` +
           "la planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
   ],
+  // organisation : c'est l'organisation, mise en gros à la place du nom,
+  // qui ne tient pas ; le texte la nomme et dit qu'une case la remet en
+  // petit.
   [
     'PLANCHE_NOM_TROP_LONG',
     (details) =>
-      `Le nom de ${laPersonne(details)} ne tient pas sur son badge, même replié sur trois lignes au plus petit corps : ` +
-      'la planche ne se produit pas, plutôt que de tronquer ses tours.',
+      details.organisation === true
+        ? `L'organisation de ${laPersonne(details)}, en gros au-dessus du nom, ne tient pas sur son badge, même repliée ` +
+          "sur trois lignes au plus petit corps : raccourcissez-la, ou décochez la case qui met l'organisation en gros. " +
+          'La planche ne se produit pas, plutôt que de tronquer ses tours.'
+        : `Le nom de ${laPersonne(details)} ne tient pas sur son badge, même replié sur trois lignes au plus petit corps : ` +
+          'la planche ne se produit pas, plutôt que de tronquer ses tours.',
   ],
 
   // --- Les refus de la production (§ 8.5, § 11.6, décision 13) -------------

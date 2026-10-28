@@ -3897,7 +3897,7 @@ d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
 écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
 n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
-Ce fichier porte **neuf choses, et neuf seulement** :
+Ce fichier porte **dix choses, et dix seulement** :
 
 | réglage | portée |
 |---|---|
@@ -3908,6 +3908,7 @@ Ce fichier porte **neuf choses, et neuf seulement** :
 | le **texte du pied TechnoLibre** (§ 11.4), clé `texte_pied_technolibre` | global à la machine |
 | les **cases de ce que le badge imprime** (§ 11.4), clé `donnees_badge` | globales à la machine |
 | la **case qui laisse en blanc le nom des doublons** (§ 11.4), clé `cacher_numero_doublon` | globale à la machine |
+| la **case qui met l'organisation en gros au-dessus du nom** (§ 11.4), clé `organisation_en_gros` | globale à la machine |
 | les **colonnes de la liste des badges en CSV** (§ 11.6), clé `colonnes_liste_badges` | globales à la machine |
 | la **taille du texte de l'écran** (§ 18.6), clé `taille_texte` | globale à la machine |
 
@@ -3928,10 +3929,11 @@ mode portable (§ 8.6), ce fichier suit la clé avec les événements.
 geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Le
 cadrage, le papier, le modèle de badge, la case du pied TechnoLibre et son
-texte, les cases de ce que le badge imprime, celle du nom des doublons et
-la taille du texte passent par une même file, qui relit le fichier avant
-chaque écriture : deux écrivains qui le liraient chacun avant que l'autre
-l'ait écrit perdraient le réglage de l'un.
+texte, les cases de ce que le badge imprime, celle du nom des doublons,
+celle de l'organisation en gros, les colonnes de la liste et la taille du
+texte passent par une même file, qui relit le fichier avant chaque
+écriture : deux écrivains qui le liraient chacun avant que l'autre l'ait
+écrit perdraient le réglage de l'un.
 Un fichier que la lecture ne prend pas ne s'écrase pas ; son avertissement
 dit pourquoi en clair — un texte qui n'est pas du JSON, une valeur hors de sa
 règle, des octets qui ne sont pas de l'UTF-8, un lien qui mène hors du dossier
@@ -4020,6 +4022,20 @@ choix de la machine qui imprime, et non une sixième donnée de
 `donnees_badge` : cochée, elle vide la place d'un nom au lieu d'y garder
 une donnée. Le fichier ne la porte que touchée, un booléen sous
 `cacher_numero_doublon` ; sans elle, la case est cochée. Une valeur présente
+qui n'est pas un booléen rend le fichier illisible, comme un papier inconnu.
+Elle se coche et se décoche dans la section de l'impression, sous les deux
+modèles, s'écrit au geste, dans tout mode, par la même file, et se relit
+comme la case du pied TechnoLibre ; un fichier que la lecture ne prend pas,
+ou un dossier qui refuse de l'écrire, ne bloque pas le choix : la case vaut
+pour la séance, et la section dit, sous ses réglages, qu'elle n'est pas
+retenue sur ce poste.
+
+**La case qui met l'organisation en gros au-dessus du nom** — « Organisation
+en gros, au-dessus du nom » (§ 11.4) — est, comme celle du pied TechnoLibre,
+un choix de la machine qui imprime, et non une sixième donnée de
+`donnees_badge` : cochée, elle échange la place de deux données au lieu d'en
+retirer une. Le fichier ne la porte que touchée, un booléen sous
+`organisation_en_gros` ; sans elle, la case est cochée. Une valeur présente
 qui n'est pas un booléen rend le fichier illisible, comme un papier inconnu.
 Elle se coche et se décoche dans la section de l'impression, sous les deux
 modèles, s'écrit au geste, dans tout mode, par la même file, et se relit
@@ -6372,9 +6388,9 @@ cherche à qui il parle.
 
 | rang | contenu | pourquoi |
 |---|---|---|
-| 1 | **prénom et nom**, le plus grand corps de la planche | c'est l'identité, et c'est ce que lit l'hôte à un mètre |
+| 1 | **prénom et nom**, le plus grand corps de la planche — l'organisation prend cette place sous la case de l'organisation en gros, cochée par défaut (ci-dessous) | c'est l'identité, et c'est ce que lit l'hôte à un mètre |
 | 2 | **une ligne par tour** : « Tour 1 — table 12 », le tour par son nom quand il en porte un (§ 4) — « Plat principal — table 12 » —, le libellé de la table entre parenthèses après son numéro quand elle en porte un (§ 4) — « Tour 1 — table 5 (Terrasse), siège 3 — animation » —, et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
-| 3 | **organisation**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
+| 3 | **organisation**, un corps réduit, sous le nom — le nom de la personne prend cette place sous la même case (ci-dessous) | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
 | 6 | **le logo du participant**, quand sa fiche en porte un (§ 10.2), entre les tours et le pied, le plus grand que l'écart permette | l'hôte de salle reconnaît l'organisation d'un coup d'œil ; il ne prend que la place que tout le texte laisse |
@@ -6422,6 +6438,25 @@ quels. Seul le nom du badge change : le plan, les listes, la liste des
 badges en CSV et la feuille de contrôle gardent le nom entier, comme l'ordre
 de la pile (§ 11.6) et le refus d'un nom trop long, qui nomme la personne
 (§ 11.5). Sans personne marquée, la planche garde exactement ses octets, la
+case cochée ou non.
+
+**Une case met l'organisation en gros, au-dessus du nom.** Sous les cinq cases,
+la case « Organisation en gros, au-dessus du nom », **cochée par défaut** et
+**gardée sur le poste** comme elles (§ 8.5), échange les rangs 1 et 3 sur le
+badge d'une personne qui a une organisation. L'organisation prend la place et la
+règle du nom : le plus grand corps de la carte, en gras, réduite jusqu'à son
+plancher puis repliée sur trois lignes au plus, jamais abrégée. Le nom de la
+personne prend la place et la règle de l'organisation, en petit sous elle.
+Décochée, le nom est en gros, au-dessus de l'organisation en petit. Une personne
+sans organisation, ou dont la case « Organisation » retire l'organisation — la
+case de l'organisation en gros est alors désactivée —, garde son nom en gros.
+L'ordre de sacrifice suit les rôles, non les données (§ 11.5) : le gros texte ne
+se retire jamais, et c'est le nom, en petit, qui part après le nom de
+l'événement quand la carte ne tient pas. Un nom que la case des doublons laisse
+en blanc garde sa place de petit texte, vide. Une organisation trop longue pour
+le gros texte refuse la planche comme un nom trop long, en nommant la personne
+(§ 11.5). La feuille de contrôle et la liste des badges en CSV ne lisent pas la
+case. Sans organisation imprimée, la planche garde exactement ses octets, la
 case cochée ou non.
 
 **Le logo du participant passe après tout le texte.** La place du badge se
@@ -6546,6 +6581,12 @@ lettre et son accent. Le badge porte son texte entier, ou se refuse.
 
 > nom › lignes de tour › organisation › nom de l'événement › logo du participant › pied TechnoLibre
 
+Le nom et l'organisation y sont des **rôles** : le gros texte et le petit.
+Sous la case de l'organisation en gros (§ 11.4), l'organisation tient le rôle
+du nom, et le nom celui de l'organisation ; tout ce que cette section dit du
+nom vaut alors pour elle, corps, repli, plancher et refus compris, et ce
+qu'elle dit de l'organisation vaut pour le nom de la personne.
+
 **Le refus vient après le dernier recours.** Un badge dont les lignes de tour ne
 tiennent pas même dépouillé — le nom à son plancher, sans le nom de l'événement
 ni l'organisation, donc sans logo du participant ni pied TechnoLibre — réduit
@@ -6583,10 +6624,13 @@ planchers sinon. Un badge qui tient sans le dernier recours ne change pas.
   perd d'emblée le nom de l'événement, puis l'organisation s'il le faut ; si les
   lignes de tour ne tiennent plus sous lui, même au dernier recours, le logiciel
   **refuse de produire la planche** et nomme la personne, dont le nom se corrige
-  dans la liste des participants. L'horodatage ne quitte jamais le pied ; seule
-  sa case le retire (§ 11.4). Le seuil se cale sur le **glyphe le plus large**
-  de l'alphabet visé, jamais sur une moyenne (§ 14.1) : un nom en capitales
-  larges déborde sinon par-dessus la première ligne de tour, en silence.
+  dans la liste des participants. Une organisation en gros (§ 11.4) qui ne tient
+  pas se refuse de même, et le refus nomme la personne : l'organisation se
+  raccourcit dans la liste des participants, ou sa case se décoche, qui la remet
+  en petit. L'horodatage ne quitte jamais le pied ; seule sa case le retire
+  (§ 11.4). Le seuil se cale sur le **glyphe le plus large** de l'alphabet visé,
+  jamais sur une moyenne (§ 14.1) : un nom en capitales larges déborde sinon
+  par-dessus la première ligne de tour, en silence.
 - **Une organisation très longue.** Elle **se replie** sur autant de lignes
   qu'il lui faut, chacune centrée, et ne s'abrège jamais. C'est une étiquette
   de contexte, pas une identité : repliée, elle rapetisse, quand le badge ne
@@ -6917,7 +6961,8 @@ l'impression restent ouvertes (§ 9). Ses seules écritures sont ses PDF, sa
 liste CSV et, dans les réglages locaux (§ 8.5), les choix de la section,
 chacun au geste qui le fait : le papier, le modèle de badge, la case du pied
 TechnoLibre et son texte, les cases de ce que le badge imprime, celle qui
-laisse en blanc le nom des doublons (§ 11.4) et les colonnes de la liste.
+laisse en blanc le nom des doublons et celle qui met l'organisation en gros
+(§ 11.4), et les colonnes de la liste.
 
 ### 11.7 Les autres sorties, et ce que porte toute page imprimée
 

@@ -881,6 +881,17 @@ describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8
       code: 'PLANCHE_NOM_TROP_LONG',
       details: { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } },
     });
+    // L'organisation en gros, trop longue : la marque de la mise en page
+    // reste, et le remède est le même, la fiche portant l'organisation.
+    assert.deepEqual(refusProduction('PLANCHE_NOM_TROP_LONG', { organisation: true }, nue), {
+      code: 'PLANCHE_NOM_TROP_LONG',
+      details: {
+        organisation: true,
+        participant: 3,
+        personne: 'Ondine Lacasse',
+        remede: { geste: 'ouvrirSection', section: 'participants' },
+      },
+    });
     for (const code of ['PLANCHE_DERIVE', 'RETENU_FAUTIF', 'toString', null]) {
       assert.throws(() => refusProduction(code, {}, nue), TypeError, String(code));
     }
@@ -894,6 +905,8 @@ describe('planche : les refus de la production et leurs textes (§ 11.5, § 11.8
     assert.doesNotMatch(longues, /\b8 tours\b/);
     assert.match(libelle('PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse' }), /Ondine Lacasse/);
     assert.match(libelle('PLANCHE_NOM_TROP_LONG', { participant: 3 }), /n° 3\b/);
+    const organisation = libelle('PLANCHE_NOM_TROP_LONG', { organisation: true, participant: 3, personne: 'Ondine Lacasse' });
+    assert.match(organisation, /^L'organisation de Ondine Lacasse\b/);
     const derive = libelle('PLANCHE_DERIVE', {
       raisons: [
         { code: 'PARTICIPANT_NON_PLACE', participant: 6, personne: 'Ondine Grisaille' },
@@ -1225,6 +1238,72 @@ describe('planche : le nom des doublons laissé en blanc (§ 11.4, § 11.6)', ()
     const m = cache(charge);
     assert.deepEqual([badgeDe(m, 5).textes.nom, badgeDe(m, 5).textes.nomEnBlanc], [' 01', true]);
     for (const mauvais of ['oui', 1, null]) assert.throws(() => cache(charge, { cacherNumero: mauvais }), TypeError, String(mauvais));
+  });
+});
+
+// L'organisation en gros (§ 11.4) : sous organisationEnGros, le badge d'une
+// personne qui a une organisation porte la marque organisationEnGros, que la
+// mise en page lit pour échanger le nom et l'organisation ; un badge sans
+// organisation ne la porte pas. Rien d'autre ne change, ni les textes, ni
+// l'ordre de la pile, ni la feuille de contrôle, ni la liste en CSV.
+describe('planche : l’organisation en gros (§ 11.4)', () => {
+  const enGros = (charge, autres = {}) => modele(charge, { organisationEnGros: true, ...autres });
+  const marque = ({ textes }) => Object.hasOwn(textes, 'organisationEnGros');
+
+  test('le badge d’une personne qui a une organisation porte la marque, sans organisation non ; hors de la marque, les textes sont ceux d’avant', () => {
+    const charge = homonymes();
+    const m = enGros(charge);
+    assert.deepEqual(
+      m.badges.filter(marque).map(({ participant }) => participant).sort(),
+      [3, 4, 5, 6],
+    );
+    for (const badge of m.badges) {
+      if (marque(badge)) assert.equal(badge.textes.organisationEnGros, true, badge.nom);
+      else assert.equal(badge.organisation, null, badge.nom);
+    }
+    const avant = modele(charge);
+    m.badges.forEach(({ textes: { organisationEnGros: _marque, ...reste }, ...badge }, rang) => {
+      const { textes, ...badgeAvant } = avant.badges[rang];
+      assert.deepEqual(reste, textes);
+      assert.deepEqual(badge, badgeAvant);
+    });
+    assert.deepEqual({ ...m, badges: [] }, { ...avant, badges: [] });
+  });
+
+  test('par défaut, et sans organisation, le modèle est celui d’avant ; une option qui n’est pas un booléen lève TypeError', () => {
+    const charge = homonymes();
+    assert.deepEqual(modele(charge, { organisationEnGros: false }), modele(charge));
+    assert.ok(!modele(charge).badges.some(marque));
+    assert.deepEqual(enGros(aReserve()), modele(aReserve()));
+    // Une organisation faite de blancs n'en est pas une : pas de marque.
+    const blancs = aReserve();
+    blancs.participants[0].organisation = '   ';
+    assert.deepEqual(enGros(blancs), modele(blancs));
+    for (const mauvais of ['oui', 1, null]) assert.throws(() => enGros(charge, { organisationEnGros: mauvais }), TypeError, String(mauvais));
+  });
+
+  test('avec le nom laissé en blanc, le badge porte les deux marques ; la feuille de contrôle et la liste en CSV ne changent pas', () => {
+    const charge = soiree({
+      personnes: [
+        personne(1, 'Roger', 'Galet 01', { nomNumerote: true, organisation: 'Club des Merles' }),
+        personne(2, 'Roger', 'Galet 02', { nomNumerote: true }),
+      ],
+      tables: [table(1, 1, 2)],
+      plan: [{ sieges: [[1, 2]] }],
+    });
+    const m = enGros(charge, { cacherNumero: true });
+    assert.deepEqual(
+      m.badges.map(({ participant, textes }) => [participant, textes.nomEnBlanc, textes.organisationEnGros]),
+      [
+        [1, true, true],
+        [2, true, undefined],
+      ],
+    );
+    const controle = { papier: 'A4', imposition: 'feuille', planches: 1 };
+    assert.deepEqual(textesControle(m, controle), textesControle(modele(charge, { cacherNumero: true }), controle));
+    for (const colonnes of ['parTour', 'unique']) {
+      assert.deepEqual(listeBadges(m, charge, { colonnes }), listeBadges(modele(charge), charge, { colonnes }));
+    }
   });
 });
 

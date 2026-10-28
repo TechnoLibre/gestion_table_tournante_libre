@@ -22,6 +22,7 @@ import {
   avecColonnesListe,
   avecDonneeBadge,
   avecModeleBadge,
+  avecOrganisationEnGros,
   avecPapier,
   avecPiedTechnolibre,
   avecTailleTexte,
@@ -35,6 +36,7 @@ import {
   lireReglages,
   modeleBadgeDe,
   normaliserTextePied,
+  organisationEnGrosDe,
   piedTechnolibreDe,
   serialiserReglages,
   tailleTexteDe,
@@ -666,6 +668,59 @@ describe('réglages locaux : la case qui laisse en blanc le nom des doublons (§
     const { reglages } = await lireReglages(fs, DOC);
     await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
     assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"papier":"Lettre"}\n');
+  });
+});
+
+describe('réglages locaux : la case qui met l’organisation en gros sur les badges (§ 8.5, § 11.4)', () => {
+  test('organisation_en_gros se lit tel quel ; absent, il vaut vrai sans que la clé s’ajoute aux réglages lus', async () => {
+    for (const valeur of [true, false]) {
+      const texte = `{"cadrages":[],"format":1,"organisation_en_gros":${valeur},"papier":null}\n`;
+      const { reglages, avertissement } = await lireReglages(disque(texte), DOC);
+      assert.equal(avertissement, null);
+      assert.deepEqual(reglages, { format: 1, papier: null, cadrages: [], organisation_en_gros: valeur });
+      assert.equal(organisationEnGrosDe(reglages), valeur);
+      assert.equal(serialiserReglages(reglages), texte);
+    }
+    const absent = await lireReglages(disque(), DOC);
+    assert.equal(Object.hasOwn(absent.reglages, 'organisation_en_gros'), false);
+    assert.equal(organisationEnGrosDe(absent.reglages), true);
+    // Une autre case touchée ne la touche pas, celle de l'organisation comprise.
+    const autre = await lireReglages(
+      disque('{"cacher_numero_doublon":false,"cadrages":[],"donnees_badge":{"organisation":false},"format":1,"papier":null}\n'),
+      DOC,
+    );
+    assert.equal(organisationEnGrosDe(autre.reglages), true);
+  });
+
+  test('une valeur qui n’est pas un booléen rend le fichier fautif : les défauts et REGLAGES_ILLISIBLES, raison FORME', async () => {
+    for (const valeur of ['"true"', '1', '0', 'null', '[]', '{}']) {
+      const fs = disque(`{"cadrages":[],"format":1,"organisation_en_gros":${valeur},"papier":null}\n`);
+      assert.deepEqual(await lireReglages(fs, DOC), { reglages: DEFAUTS, avertissement: illisibles('FORME') }, valeur);
+      assert.equal(fs.compteurs.ecritures, 0, valeur);
+    }
+  });
+
+  test('avecOrganisationEnGros pose la clé sans toucher au reste ; un non-booléen lève TypeError ; le texte canonique la range à son rang', () => {
+    const reglages = { ...DEFAUTS, papier: 'A4', cacher_numero_doublon: false, theme: 'sombre' };
+    const sans = avecOrganisationEnGros(reglages, false);
+    assert.deepEqual(sans, { ...reglages, organisation_en_gros: false });
+    assert.equal(Object.hasOwn(reglages, 'organisation_en_gros'), false);
+    assert.equal(
+      serialiserReglages(sans),
+      '{"cacher_numero_doublon":false,"cadrages":[],"format":1,"organisation_en_gros":false,"papier":"A4","theme":"sombre"}\n',
+    );
+    assert.deepEqual(avecOrganisationEnGros(sans, true), { ...reglages, organisation_en_gros: true });
+    for (const mauvais of ['true', 1, 0, null, undefined]) {
+      assert.throws(() => avecOrganisationEnGros(reglages, mauvais), TypeError, String(mauvais));
+    }
+    assert.throws(() => serialiserReglages({ ...DEFAUTS, organisation_en_gros: 'non' }), TypeError);
+  });
+
+  test('un fichier qui porte la case, relu puis réécrit avec un autre papier, la garde', async () => {
+    const fs = disque('{"cadrages":[],"format":1,"organisation_en_gros":false,"papier":null}\n');
+    const { reglages } = await lireReglages(fs, DOC);
+    await ecrireReglages(fs, DOC, avecPapier(reglages, 'Lettre'));
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), '{"cadrages":[],"format":1,"organisation_en_gros":false,"papier":"Lettre"}\n');
   });
 });
 

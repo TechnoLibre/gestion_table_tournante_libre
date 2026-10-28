@@ -1981,6 +1981,125 @@ describe('mise en page : le nom laissé en blanc (§ 11.4)', () => {
   }
 });
 
+// L'organisation en gros (§ 11.4) : sous la marque organisationEnGros, le
+// gros texte est l'organisation et le petit, le nom ; la page est celle du
+// badge dont les deux textes auraient échangé leur place, corps, repli et
+// ordre de sacrifice compris. Sans organisation, la marque ne change rien.
+// Un nom laissé en blanc garde sa place de petit texte, vide, ou part avec
+// lui dans l'ordre de sacrifice.
+describe('mise en page : l’organisation en gros (§ 11.4)', () => {
+  const TECHNOLIBRE = Object.freeze({ texte: 'Développement logiciel libre sur mesure', rapport: 5 });
+  const CARRE = Object.freeze({ rapport: 1 });
+  const ORGANISATIONS = [
+    'Club des Merles',
+    'Association des amis de la Pervenche et des Ondines, section du Grand Nord',
+    'WWWWWWWWWW MMMMMMMMMM WWWWWWWWWW MMMMMMMMM WWWWWWW',
+  ];
+  const NOMS = ['Iris Ombrelle', 'Ondelie-Mauve Lacasse-Pervenche de la Grisaille 02'];
+  const DEMANDES = [
+    [null, null],
+    [TECHNOLIBRE, null],
+    [TECHNOLIBRE, CARRE],
+  ];
+  // Les textes dont l'organisation et le nom ont échangé leur place.
+  const echanges = (champs) => ({ ...champs, nom: champs.organisation, organisation: champs.nom });
+
+  for (const modele of Object.keys(MODELES_BADGE)) {
+    for (const [jeu, metriques] of JEUX) {
+      test(`${modele}, ${jeu} : la page est celle des deux textes échangés, du badge complet au dernier recours, avec ou sans pied TechnoLibre et logo`, () => {
+        const vus = { complete: 0, sansPetit: 0, refus: 0 };
+        for (const organisation of ORGANISATIONS) {
+          for (const nom of NOMS) {
+            for (const n of [1, 4, 12, 30, 60, 120]) {
+              for (const [technolibre, logo] of DEMANDES) {
+                const champs = textes({ nom, organisation, lignes: tours(n) });
+                const quoi = `${organisation}, ${nom}, ${n} tours, ${technolibre === null ? 'sans' : 'avec'} pied TechnoLibre, ${logo === null ? 'sans' : 'avec'} logo`;
+                const enGros = mettreEnPage({ ...champs, organisationEnGros: true }, metriques, modele, technolibre, logo);
+                const attendue = mettreEnPage(echanges(champs), metriques, modele, technolibre, logo);
+                if ('refus' in attendue) {
+                  vus.refus += 1;
+                  const details = attendue.refus.code === 'PLANCHE_NOM_TROP_LONG' ? { organisation: true } : attendue.refus.details;
+                  assert.deepEqual(enGros, { refus: { code: attendue.refus.code, details } }, quoi);
+                  continue;
+                }
+                assert.deepEqual(enGros, attendue, quoi);
+                assert.ok(rejoint(blocsNom(enGros).map((b) => b.texte), organisation), quoi);
+                // La première ligne du nom, en petit, en est le début ; ni une
+                // ligne de tour ni une ligne de pied ne l'est.
+                vus[enGros.blocs.some((b) => !b.gras && nom.startsWith(b.texte)) ? 'complete' : 'sansPetit'] += 1;
+                const sansMarque = mettreEnPage({ ...champs, organisationEnGros: false }, metriques, modele, technolibre, logo);
+                assert.deepEqual(sansMarque, mettreEnPage(champs, metriques, modele, technolibre, logo), quoi);
+              }
+            }
+          }
+        }
+        for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
+      });
+
+      test(`${modele}, ${jeu} : sans organisation, absente, vide ou faite d’espaces, la marque ne change rien et le nom reste en gros`, () => {
+        for (const organisation of [null, '', '   ']) {
+          for (const nomEnBlanc of [false, true]) {
+            const champs = textes({ organisation, nomEnBlanc });
+            assert.deepEqual(
+              mettreEnPage({ ...champs, organisationEnGros: true }, metriques, modele, TECHNOLIBRE, CARRE),
+              mettreEnPage(champs, metriques, modele, TECHNOLIBRE, CARRE),
+              JSON.stringify(organisation),
+            );
+          }
+        }
+      });
+
+      test(`${modele}, ${jeu} : un nom laissé en blanc garde sa place de petit texte, vide, ou part avec lui ; l’organisation reste en gros`, () => {
+        const vus = { vide: 0, parti: 0 };
+        for (const organisation of ORGANISATIONS) {
+          for (const nom of ['Iris Ombrelle 01', 'Ondelie-Mauve Lacasse-Pervenche de la Grisaille 02']) {
+            for (const n of [1, 6, 30, 60, 90]) {
+              const champs = textes({ nom, organisation, lignes: tours(n), organisationEnGros: true });
+              const imprime = mettreEnPage(champs, metriques, modele, TECHNOLIBRE, CARRE);
+              const blanc = mettreEnPage({ ...champs, nomEnBlanc: true }, metriques, modele, TECHNOLIBRE, CARRE);
+              const quoi = `${organisation}, ${nom}, ${n} tours`;
+              if ('refus' in imprime) {
+                assert.deepEqual(blanc, imprime, quoi);
+                continue;
+              }
+              // Les lignes du nom suivent celles de l'organisation, en gras :
+              // la page en blanc est l'imprimée privée de ces seules lignes.
+              const gros = blocsNom(imprime).length;
+              const retirees = imprime.blocs.length - blanc.blocs.length;
+              const lignesDuNom = imprime.blocs.slice(gros, gros + retirees);
+              assert.deepEqual(blanc, { ...imprime, blocs: [...imprime.blocs.slice(0, gros), ...imprime.blocs.slice(gros + retirees)] }, quoi);
+              assert.deepEqual(blocsNom(blanc), blocsNom(imprime), quoi);
+              if (retirees === 0) {
+                vus.parti += 1;
+                assert.ok(!imprime.blocs.some((b) => b.texte === nom), quoi);
+              } else {
+                vus.vide += 1;
+                assert.ok(rejoint(lignesDuNom.map((b) => b.texte), nom), quoi);
+              }
+            }
+          }
+        }
+        for (const [cas, nombre] of Object.entries(vus)) assert.ok(nombre > 0, `${cas} : ${JSON.stringify(vus)}`);
+      });
+
+      test(`${modele}, ${jeu} : une organisation trop longue en gros se refuse, le refus dit que c’est elle ; organisationEnGros qui n’est pas un booléen lève TypeError`, () => {
+        const longue = `Merles${'W'.repeat(400)}`;
+        const champs = textes({ organisation: longue, lignes: tours(6) });
+        assert.deepEqual(mettreEnPage({ ...champs, organisationEnGros: true }, metriques, modele), {
+          refus: { code: 'PLANCHE_NOM_TROP_LONG', details: { organisation: true } },
+        });
+        assert.equal('refus' in mettreEnPage(champs, metriques, modele), false);
+        assert.deepEqual(mettreEnPage(textes({ nom: longue, lignes: tours(6) }), metriques, modele), {
+          refus: { code: 'PLANCHE_NOM_TROP_LONG', details: {} },
+        });
+        for (const faute of ['oui', 1, null]) {
+          assert.throws(() => mettreEnPage({ ...textes(), organisationEnGros: faute }, metriques, modele), TypeError, String(faute));
+        }
+      });
+    }
+  }
+});
+
 // Le dernier recours (§ 11.5) : un badge dont les tours ne tiennent pas même
 // dépouillé de l'organisation et du nom de l'événement serre ses lignes à
 // l'encre de ses textes, puis réduit son pied jusqu'à son plancher, puis son

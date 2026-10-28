@@ -33,6 +33,12 @@
 // nomEnBlanc, et la mise en page lui garde sa place sans le poser. Tout le
 // reste lit le nom entier : l'ordre de la pile, les homonymes, la liste de
 // réédition de la feuille de contrôle et la liste en CSV.
+//
+// Sous l'option organisationEnGros, le badge d'une personne qui a une
+// organisation porte la marque organisationEnGros : la mise en page pose
+// l'organisation en gros, à la place du nom, et le nom en petit sous elle.
+// Ni ses autres textes, ni la feuille de contrôle, ni la liste en CSV ne
+// changent.
 import { SEPARATEUR, ecrireCsv } from '../csv/export.js';
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { cleNormalisee } from '../csv/normalisation.js';
@@ -77,11 +83,13 @@ import { versionVisible } from './version.js';
  * @property {string|null} logo           le chemin du logo de la personne,
  *                                        relatif au dossier de l'événement ;
  *                                        null sans logo
- * @property {{nom: string, nomEnBlanc?: true, lignes: string[],
+ * @property {{nom: string, nomEnBlanc?: true, organisationEnGros?: true, lignes: string[],
  *             organisation: string|null, pied: string[], piedReduit: string[]}} textes
  *           nom : le nom affiché, en NFC, que la mise en page mesure ;
  *           nomEnBlanc : présent sur le seul badge dont le nom se laisse en
- *           blanc (cacherNumero), la place gardée vide
+ *           blanc (cacherNumero), la place gardée vide ; organisationEnGros :
+ *           présent sur le seul badge dont l'organisation, non null, se pose
+ *           en gros au-dessus du nom (organisationEnGros)
  * @typedef {Object} ModelePlanche
  * @property {Badge[]} badges             dans l'ordre de la pile
  * @property {'retenu'|'proposition'} source   le placement imprimé
@@ -242,7 +250,8 @@ export function refusPlanche(charge, { source = 'retenu', proposition = null } =
  * badge refusé, que src/pdf ne connaît pas, par son nom entier :
  *
  * - PLANCHE_NOM_TROP_LONG {participant, personne}, vers la liste des
- *   participants, où le nom se corrige ;
+ *   participants, où le nom se corrige ; organisation, vrai quand c'est
+ *   l'organisation en gros qui ne tient pas, reste parmi les détails ;
  * - PLANCHE_TROP_DE_TOURS {tours, lignesLongues} : lignesLongues est vrai
  *   quand les lignes de tour débordent parce qu'elles se replient (repliees
  *   de la mise en page) et que l'une porte un nom de tour, un libellé de
@@ -404,8 +413,9 @@ function ligneComposee(ligne, cle = ligne.tour === null ? 'planche.touteLaSoiree
 // porte l'événement et sa date, l'horodatage, puis l'identifiant d'un
 // homonyme ; piedReduit, le même sans le nom de l'événement, date gardée.
 // Aucun ne porte la version, ni le tour. nomEnBlanc ajoute la marque du nom
-// laissé en blanc ; sans elle, les textes n'ont pas la clé.
-function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodatage, nomEnBlanc) {
+// laissé en blanc, enGros celle de l'organisation en gros, qu'un badge sans
+// organisation ne porte pas ; sans elles, les textes n'ont pas les clés.
+function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodatage, { nomEnBlanc, enGros }) {
   const ligneHorodatage =
     horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
   const ligneIdentifiant = identifiant === null ? [] : [libelle('planche.pied.identifiant', { identifiant })];
@@ -413,6 +423,7 @@ function textesDe({ nom, organisation, lignes, identifiant }, evenement, horodat
   return {
     nom,
     ...(nomEnBlanc ? { nomEnBlanc: true } : {}),
+    ...(enGros && organisation !== null ? { organisationEnGros: true } : {}),
     lignes: lignes.map((ligne) => ligneComposee(ligne)),
     organisation,
     pied: [libelle('planche.pied.evenement', evenement), ligneHorodatage, ...ligneIdentifiant],
@@ -473,7 +484,9 @@ function selectionLue(charge, selection) {
  * imprime et le badge jamais. cacherNumero, faux par défaut, laisse en
  * blanc le nom de chaque badge d'une personne marquée nomNumerote, prénom
  * compris : ses textes gardent le nom entier et portent nomEnBlanc. L'ordre
- * de la pile et les homonymes se lisent sur le nom entier. Les comptes sont
+ * de la pile et les homonymes se lisent sur le nom entier.
+ * organisationEnGros, faux par défaut, marque organisationEnGros les textes
+ * de chaque badge qui a une organisation, rien d'autre. Les comptes sont
  * ceux de la soirée, produits celui des badges du modèle. La charge n'est
  * pas modifiée.
  *
@@ -485,6 +498,8 @@ function selectionLue(charge, selection) {
  * @param {number[]|null} [options.selection]   les personnes à rééditer
  * @param {boolean} [options.cacherNumero]      le nom des doublons laissé
  *                                              en blanc
+ * @param {boolean} [options.organisationEnGros]   l'organisation en gros
+ *                                              au-dessus du nom
  * @param {string} options.provenance           le mode de construction
  * @param {string} options.version              la version affichée
  * @returns {ModelePlanche}
@@ -495,10 +510,22 @@ function selectionLue(charge, selection) {
  */
 export function modelePlanche(
   charge,
-  { source = 'retenu', proposition = null, ordre = 'alphabetique', selection = null, cacherNumero = false, provenance, version },
+  {
+    source = 'retenu',
+    proposition = null,
+    ordre = 'alphabetique',
+    selection = null,
+    cacherNumero = false,
+    organisationEnGros = false,
+    provenance,
+    version,
+  },
 ) {
   if (!ORDRES.includes(ordre)) throw new TypeError(`ordre : ${ORDRES.join(' ou ')} attendu, reçu ${JSON.stringify(ordre)}`);
   if (typeof cacherNumero !== 'boolean') throw new TypeError(`cacherNumero : booléen attendu, reçu ${JSON.stringify(cacherNumero)}`);
+  if (typeof organisationEnGros !== 'boolean') {
+    throw new TypeError(`organisationEnGros : booléen attendu, reçu ${JSON.stringify(organisationEnGros)}`);
+  }
   if (typeof provenance !== 'string' || typeof version !== 'string') {
     throw new TypeError('modelePlanche : provenance et version, deux chaînes, attendues');
   }
@@ -529,7 +556,8 @@ export function modelePlanche(
       lignes: lignesDe(personne.id, places, titres, nomsTours),
       identifiant: identifiants.has(personne.id) ? personne.id : null,
     };
-    const textes = textesDe(badge, evenement, horodatage, cacherNumero && personne.nomNumerote === true);
+    const marques = { nomEnBlanc: cacherNumero && personne.nomNumerote === true, enGros: organisationEnGros };
+    const textes = textesDe(badge, evenement, horodatage, marques);
     return { ...badge, logo: personne.logo ?? null, textes };
   });
 

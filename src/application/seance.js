@@ -70,16 +70,17 @@
 // regarder n'écrit jamais l'événement. Le papier des planches, de la machine et
 // non du plan, s'y range aussi, dans tout mode, avec ou sans événement (§ 8.5,
 // § 11.2), et de même le modèle des badges, ses cases — celle du pied
-// TechnoLibre, celle qui laisse en blanc le nom des doublons —, les colonnes de
-// la liste des badges en CSV et la taille du texte de l'écran (§ 18.6) ; une
-// seule file y écrit, que le cadrage, le papier, le modèle, les cases, les
-// colonnes et la taille partagent. Des réglages que la lecture ne prend pas ne
-// s'écrasent jamais : le cadrage attend, et le papier choisi vaut pour la
-// séance, en mémoire, sans être retenu sur la machine. Il en va de même du
-// papier d'une écriture que le dossier refuse : ni des réglages illisibles ni
-// un dossier en lecture seule ne bloquent le choix du papier, et les sorties
-// écrivent là où le dossier l'accepte — un dossier qui refuse l'écriture refuse
-// aussi le PDF des planches.
+// TechnoLibre, celle qui laisse en blanc le nom des doublons, celle qui met
+// l'organisation en gros —, les colonnes de la liste des badges en CSV et la
+// taille du texte de l'écran (§ 18.6) ; une seule file y écrit, que le cadrage,
+// le papier, le modèle, les cases, les colonnes et la taille partagent. Des
+// réglages que la lecture ne prend pas ne s'écrasent jamais : le cadrage
+// attend, et le papier choisi vaut pour la séance, en mémoire, sans être retenu
+// sur la machine. Il en va de même du papier d'une écriture que le dossier
+// refuse : ni des réglages illisibles ni un dossier en lecture seule ne
+// bloquent le choix du papier, et les sorties écrivent là où le dossier
+// l'accepte — un dossier qui refuse l'écriture refuse aussi le PDF des
+// planches.
 //
 // Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
 // date aussi le placement qu'il change (§ 8.9, § 11.8).
@@ -132,6 +133,7 @@ import {
   avecColonnesListe,
   avecDonneeBadge,
   avecModeleBadge,
+  avecOrganisationEnGros,
   avecPapier,
   avecPiedTechnolibre,
   avecTailleTexte,
@@ -145,6 +147,7 @@ import {
   lireReglages,
   modeleBadgeDe,
   normaliserTextePied,
+  organisationEnGrosDe,
   piedTechnolibreDe,
   tailleTexteDe,
   textePiedTechnolibreDe,
@@ -398,11 +401,13 @@ export function creerSeance({
   // texte, normalisé, de même, TEXTE_PIED_TECHNOLIBRE_DEFAUT tant que ni l'un
   // ni l'autre n'est venu et pour des réglages relus sans la clé ;
   // donneesBadge : les cases de ce que le badge imprime, une par donnée de
-  // DONNEES_BADGE, de même, chacune lue ou choisie pour elle-même, cochées
-  // tant que rien n'est venu ; cacherNumero : la case qui laisse en blanc
-  // le nom des doublons sur les badges, comme celle du pied TechnoLibre ;
-  // colonnesListe : les colonnes de la liste des badges en CSV, de même,
-  // une par tour tant que ni l'un ni l'autre n'est venu.
+  // DONNEES_BADGE, de même, chacune lue ou choisie pour elle-même, cochées tant
+  // que rien n'est venu ; cacherNumero : la case qui laisse en blanc le nom des
+  // doublons sur les badges, comme celle du pied TechnoLibre ;
+  // organisationEnGros : la case qui met l'organisation en gros au-dessus du
+  // nom sur les badges, de même ; colonnesListe : les colonnes de la liste des
+  // badges en CSV, de même, une par tour tant que ni l'un ni l'autre n'est
+  // venu.
   const etat = {
     racine,
     ouvert: null,
@@ -427,6 +432,7 @@ export function creerSeance({
     textePiedTechnolibre: TEXTE_PIED_TECHNOLIBRE_DEFAUT,
     donneesBadge: donneesBadgeDe({}),
     cacherNumero: true,
+    organisationEnGros: true,
     colonnesListe: COLONNES_LISTE_BADGES[0],
   };
 
@@ -522,6 +528,7 @@ export function creerSeance({
       textePiedTechnolibre: etat.textePiedTechnolibre,
       donneesBadge: etat.donneesBadge,
       cacherNumero: etat.cacherNumero,
+      organisationEnGros: etat.organisationEnGros,
       colonnesListe: etat.colonnesListe,
     });
     return figer({
@@ -544,6 +551,7 @@ export function creerSeance({
       textePiedTechnolibre: petit.textePiedTechnolibre,
       donneesBadge: petit.donneesBadge,
       cacherNumero: petit.cacherNumero,
+      organisationEnGros: petit.organisationEnGros,
       colonnesListe: petit.colonnesListe,
     });
   }
@@ -691,14 +699,16 @@ export function creerSeance({
   // Le rang du dernier choix de la taille du texte, celui du modèle de badge,
   // celui de la case du pied TechnoLibre, celui de son texte, celui des
   // cases de ce que le badge imprime, celui de la case du numéro des
-  // doublons et celui des colonnes de la liste : une relecture des réglages
-  // partie avant un choix ne pose pas sa valeur, plus ancienne.
+  // doublons, celui de la case de l'organisation en gros et celui des
+  // colonnes de la liste : une relecture des réglages partie avant un choix
+  // ne pose pas sa valeur, plus ancienne.
   let choixTaille = 0;
   let choixModele = 0;
   let choixPied = 0;
   let choixTexte = 0;
   let choixDonnees = 0;
   let choixCacher = 0;
+  let choixEnGros = 0;
   let choixColonnes = 0;
 
   // À son tour dans la file des réglages, lit une fois les réglages de dossier
@@ -709,16 +719,17 @@ export function creerSeance({
   // dossier. La taille du texte : celle que les réglages portent, à défaut
   // celle de la séance — sans taille, pour des réglages que la lecture ne prend
   // pas, sans dossier, et quand un choix a suivi le départ de la relecture. Le
-  // modèle de badge, la case du pied TechnoLibre, celle du numéro des doublons
-  // et les colonnes de la liste, de même ; les cases de ce que le badge imprime
-  // aussi, chacune pour elle-même : une case que les réglages ne portent pas
-  // garde celle de la séance. Le texte du pied, celui que les réglages portent,
-  // à défaut la phrase d'origine (TEXTE_PIED_TECHNOLIBRE_DEFAUT) — la clé
-  // absente la désigne ; celui de la séance seulement pour des réglages que la
-  // lecture ne prend pas, sans dossier, et quand un choix a suivi le départ de
-  // la relecture. Le papier posé, dossier devient la racine du papier
-  // (racineDuPapier), et publier reprend. Ne lève jamais ; ne publie pas :
-  // l'appelant est un travail de la file des appels, qui publie en finissant.
+  // modèle de badge, la case du pied TechnoLibre, celle du numéro des doublons,
+  // celle de l'organisation en gros et les colonnes de la liste, de même ; les
+  // cases de ce que le badge imprime aussi, chacune pour elle-même : une case
+  // que les réglages ne portent pas garde celle de la séance. Le texte du pied,
+  // celui que les réglages portent, à défaut la phrase d'origine
+  // (TEXTE_PIED_TECHNOLIBRE_DEFAUT) — la clé absente la désigne ; celui de la
+  // séance seulement pour des réglages que la lecture ne prend pas, sans
+  // dossier, et quand un choix a suivi le départ de la relecture. Le papier
+  // posé, dossier devient la racine du papier (racineDuPapier), et publier
+  // reprend. Ne lève jamais ; ne publie pas : l'appelant est un travail de la
+  // file des appels, qui publie en finissant.
   function relireReglagesMachine(dossier) {
     const rang = choixTaille;
     const rangModele = choixModele;
@@ -726,6 +737,7 @@ export function creerSeance({
     const rangTexte = choixTexte;
     const rangDonnees = choixDonnees;
     const rangCacher = choixCacher;
+    const rangEnGros = choixEnGros;
     const rangColonnes = choixColonnes;
     return enFileReglages(async () => {
       let lus = null;
@@ -745,6 +757,9 @@ export function creerSeance({
       if (lus !== null && Object.hasOwn(lus, 'modele_badge') && rangModele === choixModele) etat.modeleBadge = modeleBadgeDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'pied_technolibre') && rangPied === choixPied) etat.piedTechnolibre = piedTechnolibreDe(lus);
       if (lus !== null && Object.hasOwn(lus, 'cacher_numero_doublon') && rangCacher === choixCacher) etat.cacherNumero = cacherNumeroDe(lus);
+      if (lus !== null && Object.hasOwn(lus, 'organisation_en_gros') && rangEnGros === choixEnGros) {
+        etat.organisationEnGros = organisationEnGrosDe(lus);
+      }
       if (lus !== null && Object.hasOwn(lus, 'colonnes_liste_badges') && rangColonnes === choixColonnes) {
         etat.colonnesListe = colonnesListeDe(lus);
       }
@@ -1724,6 +1739,7 @@ export function creerSeance({
       textePiedTechnolibre: etat.textePiedTechnolibre,
       donneesBadge: etat.donneesBadge,
       cacherNumero: etat.cacherNumero,
+      organisationEnGros: etat.organisationEnGros,
       colonnesListe: etat.colonnesListe,
     };
   }
@@ -2002,6 +2018,31 @@ export function creerSeance({
       etat.cacherNumero = coche;
       publier();
       const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecCacherNumero(reglages, coche));
+      return { retenu: ecrit, avertissements };
+    },
+    /**
+     * Coche ou décoche la case qui met l'organisation en gros au-dessus du
+     * nom sur les badges (§ 8.5, § 11.4) : EtatSeance.organisationEnGros la
+     * porte aussitôt, et le choix s'écrit dans reglages_locaux.json de la
+     * racine sous organisation_en_gros, comme la case du pied TechnoLibre,
+     * dans tout mode, avec ou sans événement.
+     *
+     * Rend {retenu, avertissements}, aux règles de choisirPiedTechnolibre :
+     * sans dossier, des réglages que la lecture ne prend pas, ou une
+     * écriture que le dossier refuse, la case vaut pour la séance, en
+     * mémoire.
+     *
+     * @param {boolean} coche
+     * @returns {Promise<{retenu: boolean, avertissements: Array<{code: string, details: Object}>}>}
+     * @throws {TypeError} une valeur qui n'est pas un booléen, sans rien lire
+     *         ni écrire
+     */
+    async choisirOrganisationEnGros(coche) {
+      avecOrganisationEnGros({ format: 1, papier: null, cadrages: [] }, coche);
+      choixEnGros += 1;
+      etat.organisationEnGros = coche;
+      publier();
+      const { ecrit, avertissements } = await retenirSurLaMachine((reglages) => avecOrganisationEnGros(reglages, coche));
       return { retenu: ecrit, avertissements };
     },
     /**

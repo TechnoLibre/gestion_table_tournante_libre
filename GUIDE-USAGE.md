@@ -1390,6 +1390,16 @@ libérée revient au reste ; le nom et la date de l’événement partagent une
 ligne, qui disparaît quand les deux sont décochés. La feuille de contrôle
 ajoute alors une ligne « Données retirées des badges : … » qui les nomme ; la
 liste en CSV, elle, ne change pas.
+Sous elles, la case « Organisation en gros, au-dessus du nom », cochée tant
+que vous ne la décochez pas, et gardée par le poste, met l’organisation en
+gros, à la place du nom, et le nom de la personne en petit, dessous.
+Décochée, le nom revient en gros, au-dessus de l’organisation en petit. Un
+badge sans organisation garde son nom en gros ; la case « Organisation »
+décochée, plus aucune organisation ne s’imprime, et cette case se grise. Sur
+un badge chargé, le nom en petit part après le nom de l’événement, comme
+l’organisation quand la case est décochée. Une organisation trop longue pour
+le gros texte arrête la planche en nommant la personne : raccourcissez-la, ou
+décochez la case.
 Juste avant la case du pied TechnoLibre, la case « Laisser le nom des
 doublons en blanc », cochée elle aussi tant que vous ne la décochez pas, et
 gardée par le poste, vise les personnes que « Rendre les noms uniques » a
@@ -1407,10 +1417,11 @@ jamais un texte. Il s’y pose le plus grand possible, proportions gardées ; le
 pied TechnoLibre lui cède d’abord de la place en rapetissant, puis s’en retire
 quand le logo ne tient qu’ainsi. Un logo dont la plus petite dimension
 n’atteindrait pas 8 mm ne se pose pas, et le badge sort tel qu’il serait sans
-logo ; un badge qui a perdu le nom de l’événement ou l’organisation faute de
-place n’en porte pas non plus, mais la case « Nom de l’événement » décochée ne
-l’en prive pas. Une image introuvable ou illisible n’arrête rien : son badge
-s’imprime sans logo.
+logo ; un badge qui a perdu faute de place le nom de l’événement, ou le texte en
+petit — l’organisation, ou le nom quand l’organisation est en gros —, n’en porte
+pas non plus, mais la case « Nom de l’événement » décochée ne l’en prive pas.
+Une image introuvable ou illisible n’arrête rien : son badge s’imprime sans
+logo.
 « Préparer » annonce ce qui sortira : le nombre de badges et de feuilles, les
 homonymes, les caractères que la police ne dessine pas, les personnes dont le
 logo est introuvable ou illisible, les badges sans place pour leur logo, les

@@ -683,6 +683,15 @@
   la feuille de contrôle gardent le nom entier, et l'ordre de la pile ne change
   pas ; aucune ligne « Identifiant » ne s'ajoute. Sans personne numérotée, la
   planche ne change pas.
+- Sur le badge, l'**organisation passe en gros, au-dessus du nom** de la
+  personne, écrit en petit dessous : la case « Organisation en gros, au-dessus
+  du nom », cochée par défaut et gardée sur le poste, en décide ; décochée, le
+  nom revient en gros au-dessus de l'organisation. Un badge sans organisation,
+  ou dont la case « Organisation » la retire, garde son nom en gros. Sur une
+  carte chargée, c'est le nom en petit qui part, après le nom de l'événement, et
+  une organisation trop longue pour le gros texte refuse la planche en nommant
+  la personne, et dit de la raccourcir ou de décocher la case. La feuille de
+  contrôle et la liste en CSV ne changent pas.
 - Plus rien ne s'abrège d'un « … » sur les badges : une organisation, un titre
   ou un libellé de table trop long pour sa ligne se replie sur la suivante,
   coupé au dernier espace, comme un paragraphe, et la suite d'une ligne de

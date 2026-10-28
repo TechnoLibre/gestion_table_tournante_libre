@@ -52,6 +52,15 @@
 // liste de réédition ; la liste en CSV ne la lit pas. Sans personne
 // marquée, les octets ne changent pas.
 //
+// La case qui met l'organisation en gros au-dessus du nom suit aussi la
+// machine, que la lecture porte : cochée, le badge d'une personne qui a une
+// organisation la pose en gros, à la place et à la règle du nom, et le nom
+// en petit sous elle (modelePlanche). Une organisation que sa case retire
+// laisse le nom en gros. Le refus PLANCHE_NOM_TROP_LONG d'une organisation
+// en gros le dit (organisation vrai) ; la feuille de contrôle et la liste
+// en CSV ne la lisent pas. Sans organisation imprimée, les octets ne
+// changent pas.
+//
 // Le logo d'un participant arrive en octets, lus du dossier de l'événement
 // par lireOctets au chemin que porte son badge : chaque chemin distinct se
 // lit une fois par étude, dans l'ordre de la pile, et ses octets se
@@ -150,6 +159,9 @@ const chargerProduction = () => import('../pdf/planche.js');
  * @property {'parTour'|'unique'} [colonnesListe]   les colonnes de la liste
  *           en CSV, des réglages locaux ; une par tour quand la lecture ne
  *           les porte pas
+ * @property {boolean} [organisationEnGros]   la case qui met l'organisation
+ *           en gros au-dessus du nom, des réglages locaux ; faux quand la
+ *           lecture ne la porte pas
  *
  * @typedef {Object} DemandePlanche
  * @property {'retenu'|'proposition'} [source]   'retenu' par défaut
@@ -180,6 +192,8 @@ const chargerProduction = () => import('../pdf/planche.js');
  *           une par donnée de DONNEES_BADGE, dans leur ordre
  * @property {boolean} cacherNumero   la case du nom des doublons de la
  *           lecture
+ * @property {boolean} organisationEnGros   la case de l'organisation en
+ *           gros de la lecture
  * @property {number|null} sansTechnolibre   le nombre de badges d'où le pied
  *           TechnoLibre se retire, faute de place ; null sans la case, et
  *           sans modèle
@@ -257,6 +271,16 @@ function cacherDe({ cacherNumero = false }) {
   return cacherNumero;
 }
 
+// La case qui met l'organisation en gros d'une lecture, contrôlée, fausse
+// quand elle ne la porte pas ; une valeur qui n'est pas un booléen est une
+// faute du code.
+function enGrosDe({ organisationEnGros = false }) {
+  if (typeof organisationEnGros !== 'boolean') {
+    throw new TypeError(`organisationEnGros : booléen attendu, reçu ${JSON.stringify(organisationEnGros)}`);
+  }
+  return organisationEnGros;
+}
+
 // Les colonnes de la liste en CSV d'une lecture, contrôlées, une par tour
 // quand elle ne les porte pas ; une valeur hors de COLONNES_LISTE_BADGES
 // est une faute du code, levée avant tout refus du placement.
@@ -272,12 +296,13 @@ const retireesDe = (donnees) => DONNEES_BADGE.filter((donnee) => !donnees[donnee
 
 // Le modèle tel que le badge l'imprime sous les cases : toutes cochées, le
 // modèle reçu ; sinon un modèle neuf dont chaque badge perd, de ses textes,
-// l'organisation décochée, et dont le pied se recompose sans les données
-// décochées. Le pied porte le nom de l'événement suivi de sa date, l'un ou
-// l'autre seul, ou aucun ; puis l'horodatage, puis l'identifiant d'un
-// homonyme. Le pied réduit, celui d'un badge qui perd le nom de l'événement
-// faute de place, garde la date quand sa case la garde. Les données du
-// badge, et tout le reste du modèle, ne changent pas.
+// l'organisation décochée et sa marque organisationEnGros, le nom restant alors
+// en gros, et dont le pied se recompose sans les données décochées. Le pied
+// porte le nom de l'événement suivi de sa date, l'un ou l'autre seul, ou
+// aucun ; puis l'horodatage, puis l'identifiant d'un homonyme. Le pied réduit,
+// celui d'un badge qui perd le nom de l'événement faute de place, garde la date
+// quand sa case la garde. Les données du badge, et tout le reste du modèle, ne
+// changent pas.
 function modeleImprime(modele, donnees) {
   if (retireesDe(donnees).length === 0) return modele;
   const { evenement, horodatage } = modele;
@@ -290,8 +315,9 @@ function modeleImprime(modele, donnees) {
     const { identifiant, textes } = badge;
     const lignesIdentifiant = donnees.identifiant && identifiant !== null ? [libelle('planche.pied.identifiant', { identifiant })] : [];
     const fin = [...lignesHorodatage, ...lignesIdentifiant];
-    const organisation = donnees.organisation ? textes.organisation : null;
-    return { ...badge, textes: { ...textes, organisation, pied: [...lignesEvenement, ...fin], piedReduit: [...lignesDate, ...fin] } };
+    const { organisationEnGros: _marque, ...sansMarque } = textes;
+    const gardes = donnees.organisation ? textes : { ...sansMarque, organisation: null };
+    return { ...badge, textes: { ...gardes, pied: [...lignesEvenement, ...fin], piedReduit: [...lignesDate, ...fin] } };
   });
   return { ...modele, badges };
 }
@@ -414,17 +440,16 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
     const texte = texteDe(lecture);
     const donnees = donneesDe(lecture);
     const cacher = cacherDe(lecture);
+    const enGros = enGrosDe(lecture);
     const papier = papierDesBadges(modeleBadge, lecture.papier);
     const imposition = aCartes(modeleBadge) ? 'feuille' : lue.imposition;
     const rejet = refusPlanche(charge, { source, proposition });
     if (rejet !== null) {
-      return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, texte, donnees, cacher };
+      return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source, modeleBadge, pied, texte, donnees, cacher, enGros };
     }
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
-    const modele = modeleImprime(
-      modelePlanche(charge, { source, proposition, ordre, selection, cacherNumero: cacher, provenance, version }),
-      donnees,
-    );
+    const options = { source, proposition, ordre, selection, cacherNumero: cacher, organisationEnGros: enGros, provenance, version };
+    const modele = modeleImprime(modelePlanche(charge, options), donnees);
     const octets = await lesPolices();
     const technolibre = await technolibreDe(pied, texte);
     const { octets: logosParticipants, echecs } = await logosDe(lecture, modele);
@@ -452,6 +477,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
       texte,
       donnees,
       cacher,
+      enGros,
       technolibre,
       sansTechnolibre: pied ? analyse.sansTechnolibre : null,
       logosParticipants,
@@ -640,12 +666,12 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
      * annonce ne demande le papier. La case du pied TechnoLibre de la lecture
      * s'y lit, avec son texte, et, quand elle est cochée et le modèle
      * présent, le nombre de badges d'où il se retire ; les cases de ce que
-     * le badge imprime et celle du nom des doublons s'y lisent de même ;
-     * les homonymes restent ceux du nom entier. Les logos des participants
-     * s'y comptent quand un badge en désigne un, les introuvables nommés ;
-     * aucun ne refuse la planche. Le nom est celui que la production
-     * donnerait, rang compris ; sans dossier, donc sans rang, quand le
-     * dossier ne se liste pas. Rien ne s'écrit.
+     * le badge imprime, celle du nom des doublons et celle de l'organisation
+     * en gros s'y lisent de même ; les homonymes restent ceux du nom entier.
+     * Les logos des participants s'y comptent quand un badge en désigne un,
+     * les introuvables nommés ; aucun ne refuse la planche. Le nom est celui
+     * que la production donnerait, rang compris ; sans dossier, donc sans
+     * rang, quand le dossier ne se liste pas. Rien ne s'écrit.
      *
      * @throws {TypeError} une demande hors de son domaine, une séance sans
      *         polices ou sans provenance, une case cochée sans le chargement
@@ -673,6 +699,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
           textePiedTechnolibre: etude.texte,
           donneesBadge: etude.donnees,
           cacherNumero: etude.cacher,
+          organisationEnGros: etude.enGros,
           sansTechnolibre: null,
           logos: null,
         };
@@ -699,6 +726,7 @@ export function creerPlanches({ polices, logo = null, provenance, version }) {
         textePiedTechnolibre: etude.texte,
         donneesBadge: etude.donnees,
         cacherNumero: etude.cacher,
+        organisationEnGros: etude.enGros,
         sansTechnolibre: etude.sansTechnolibre,
         logos: etude.logos,
       };

@@ -53,6 +53,15 @@
   // des autres, et l'annonce le dit tant qu'une case non retenue garde dans
   // la séance la valeur choisie.
   //
+  // Sous elles, la case « Organisation en gros, au-dessus du nom », autre
+  // réglage de la machine (EtatSeance.organisationEnGros,
+  // seance.choisirOrganisationEnGros), cochée tant que l'opérateur ne l'a
+  // pas décochée : le badge d'une personne qui a une organisation la pose en
+  // gros, et le nom en petit sous elle. Elle est désactivée tant que la case
+  // « Organisation » est décochée, aucune organisation ne s'imprimant. Une
+  // case que la machine ne retient pas s'annonce tant qu'elle est celle de
+  // la séance, comme celle du pied.
+  //
   // Juste avant la case du pied TechnoLibre, la case « Laisser le nom des
   // doublons en blanc », autre réglage de la machine (EtatSeance.cacherNumero,
   // seance.choisirCacherNumero), cochée tant que l'opérateur ne l'a pas
@@ -162,6 +171,7 @@
   const textePiedTechnolibre = $derived($seance.textePiedTechnolibre);
   const donneesBadge = $derived($seance.donneesBadge);
   const cacherNumero = $derived($seance.cacherNumero);
+  const organisationEnGros = $derived($seance.organisationEnGros);
   const colonnesListe = $derived($seance.colonnesListe);
   const cartes = $derived(modeleImposeSonPapier(modeleBadge));
   const offertes = $derived(charge === null ? [] : sourcesOffertes(charge, $ui.proposition));
@@ -217,10 +227,12 @@
   let derniereListe = null;
   // Le dernier modèle choisi que la machine n'a pas retenu, ou null ; de
   // même, la dernière valeur de la case du pied TechnoLibre, celle de la
-  // case du nom des doublons, et les dernières colonnes de la liste.
+  // case du nom des doublons, celle de l'organisation en gros, et les
+  // dernières colonnes de la liste.
   let modeleNonRetenu = $state(null);
   let piedNonRetenu = $state(null);
   let cacherNonRetenu = $state(null);
+  let enGrosNonRetenu = $state(null);
   let colonnesNonRetenues = $state(null);
   // Les cases que la machine n'a pas retenues, chacune avec la valeur de son
   // dernier choix : une donnée y entre quand son choix n'est pas retenu, en
@@ -348,6 +360,13 @@
     cacherNonRetenu = retenu ? null : coche;
   }
 
+  // La case de l'organisation en gros s'écrit sur la machine, comme celle
+  // du pied TechnoLibre.
+  async function choisirEnGros(coche) {
+    const { retenu } = await seance.choisirOrganisationEnGros(coche);
+    enGrosNonRetenu = retenu ? null : coche;
+  }
+
   // Les colonnes de la liste s'écrivent sur la machine, comme le modèle.
   async function choisirColonnes(colonnes) {
     const { retenu } = await seance.choisirColonnesListe(colonnes);
@@ -448,6 +467,17 @@
                 </div>
               {/each}
             </div>
+            <div class="case">
+              <input
+                id={`${uid}-en-gros`}
+                type="checkbox"
+                data-champ="organisationEnGros"
+                checked={organisationEnGros}
+                disabled={!donneesBadge.organisation}
+                onchange={(evenement) => choisirEnGros(evenement.currentTarget.checked)}
+              />
+              <label for={`${uid}-en-gros`}>{t('badges.organisationEnGros.case')}</label>
+            </div>
             <div class="case-notee">
               <div class="case">
                 <input
@@ -501,6 +531,9 @@
             {/if}
             {#if piedNonRetenu !== null && piedNonRetenu === piedTechnolibre}
               <Message ton="avis"><p data-avertissement="piedNonRetenu">{t('badges.technolibre.nonRetenu')}</p></Message>
+            {/if}
+            {#if enGrosNonRetenu !== null && enGrosNonRetenu === organisationEnGros}
+              <Message ton="avis"><p data-avertissement="enGrosNonRetenu">{t('badges.organisationEnGros.nonRetenu')}</p></Message>
             {/if}
             {#if cacherNonRetenu !== null && cacherNonRetenu === cacherNumero}
               <Message ton="avis"><p data-avertissement="cacherNonRetenu">{t('badges.doublons.nonRetenu')}</p></Message>
@@ -712,6 +745,13 @@
 
   .case input {
     margin: 0;
+  }
+
+  /* Une case désactivée, celle de l'organisation en gros sans organisation
+     imprimée : son libellé passe à l'encre secondaire, comme le champ du
+     texte du pied TechnoLibre. */
+  .case input:disabled + label {
+    color: var(--couleur-page-texte-secondaire);
   }
 
   /* Une case suivie de sa note, en encre secondaire, serrée sous elle et

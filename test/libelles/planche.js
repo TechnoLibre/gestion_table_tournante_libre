@@ -79,6 +79,20 @@ export const TEXTES = [
       'sur son badge, même sur deux colonnes au plus petit corps : raccourcissez ce nom, ce libellé ou ce titre. ' +
       "La planche n'est pas produite, plutôt qu'une liste de tours tronquée.",
   ],
+  // L'organisation en gros qui ne tient pas : le refus la nomme, et dit
+  // les deux remèdes, la raccourcir ou ne plus la mettre en gros.
+  [
+    'PLANCHE_NOM_TROP_LONG',
+    {
+      organisation: true,
+      participant: 4,
+      personne: 'Iris Ombrelle',
+      remede: { geste: 'ouvrirSection', section: 'participants' },
+    },
+    "L'organisation de Iris Ombrelle, en gros au-dessus du nom, ne tient pas sur son badge, même repliée sur trois " +
+      "lignes au plus petit corps : raccourcissez-la, ou décochez la case qui met l'organisation en gros. " +
+      'La planche ne se produit pas, plutôt que de tronquer ses tours.',
+  ],
   // L'écriture refusée nomme le fichier qui manque ; la feuille de contrôle,
   // aussi les cartes déjà déposées.
   [

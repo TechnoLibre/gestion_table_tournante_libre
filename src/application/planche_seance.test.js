@@ -181,16 +181,18 @@ async function deposer(fs, charge, { format = FORMAT, racine = DOC } = {}) {
 // par défaut, le modèle de badge et le papier choisis quand ils sont donnés
 // — l'A6 par défaut, le modèle que ces épreuves éprouvent ; null garde
 // Avery 5392, celui d'une machine qui n'a rien choisi ; la case du pied
-// TechnoLibre décochée, sauf pour les épreuves qui le portent ; les données
-// de retirees décochées dans la section, aucune par défaut ; les colonnes
-// de la liste choisies quand elles sont données ; la trace part ensuite,
-// vide.
+// TechnoLibre décochée, sauf pour les épreuves qui le portent ; la case de
+// l'organisation en gros décochée de même, la planche gardant ainsi les
+// octets d'avant cette case ; les données de retirees décochées dans la
+// section, aucune par défaut ; les colonnes de la liste choisies quand elles
+// sont données ; la trace part ensuite, vide.
 async function monter(
   charge = chargeLucioles(),
   {
     papier = 'A4',
     modeleBadge = 'a6',
     piedTechnolibre = false,
+    organisationEnGros = false,
     retirees = [],
     colonnesListe = null,
     fs = creerFichiersSimules({ documents: DOCUMENTS }),
@@ -218,6 +220,7 @@ async function monter(
   });
   if (modeleBadge !== null) await seance.choisirModeleBadge(modeleBadge);
   if (!piedTechnolibre) await seance.choisirPiedTechnolibre(false);
+  if (!organisationEnGros) await seance.choisirOrganisationEnGros(false);
   for (const donnee of retirees) await seance.choisirDonneeBadge(donnee, false);
   if (colonnesListe !== null) await seance.choisirColonnesListe(colonnesListe);
   if (papier !== null) await seance.choisirPapier(papier);
@@ -295,6 +298,7 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
           textePiedTechnolibre: PROMOTION,
           donneesBadge: TOUTES_COCHEES,
           cacherNumero: true,
+          organisationEnGros: false,
           sansTechnolibre: null,
           logos: null,
         },
@@ -418,6 +422,7 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
       textePiedTechnolibre: PROMOTION,
       donneesBadge: TOUTES_COCHEES,
       cacherNumero: true,
+      organisationEnGros: false,
       sansTechnolibre: null,
       logos: null,
     });
@@ -733,6 +738,7 @@ describe('planche dans la séance : Avery 5392, le modèle par défaut (§ 11.2,
       textePiedTechnolibre: PROMOTION,
       donneesBadge: TOUTES_COCHEES,
       cacherNumero: true,
+      organisationEnGros: false,
       sansTechnolibre: null,
       logos: null,
     });
@@ -1693,6 +1699,99 @@ describe('planche dans la séance : les cases de ce que le badge imprime (§ 11.
     const decoche = await monter(charge, { piedTechnolibre: true, retirees: ['evenement'] });
     const annonce = await decoche.seance.preparerPlanche();
     assert.deepEqual([annonce.refus, annonce.sansTechnolibre], [null, 0]);
+  });
+});
+
+// L'organisation en gros (§ 8.5, § 11.4) : la case de la machine, que la
+// lecture porte, pose l'organisation d'un badge en gros, au-dessus du nom en
+// petit ; un badge sans organisation garde son nom en gros. La feuille de
+// contrôle et la liste en CSV ne la lisent pas.
+describe('planche dans la séance : l’organisation en gros (§ 8.5, § 11.4)', () => {
+  const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
+  // Le premier fragment de texte posé d'une page de badges, par son texte.
+  const fragment = (page, texte) => page.textes.find((t) => t.texte === texte);
+  const badgesDe = async (options) => {
+    const { fs, seance } = await monter(chargeLucioles(), options);
+    const annonce = await seance.preparerPlanche();
+    const { nom } = await seance.produirePlanche();
+    const octets = fs.octets('documents', ICI + nom);
+    return { annonce, octets, pdf: await lirePdf(octets), fs, seance };
+  };
+
+  test('cochée, l’organisation se pose en gros au-dessus du nom en petit ; décochée, l’inverse ; un badge sans organisation ne change pas', async () => {
+    const coche = await badgesDe({ organisationEnGros: true });
+    const decoche = await badgesDe({});
+    assert.deepEqual([coche.annonce.refus, coche.annonce.organisationEnGros], [null, true]);
+    assert.deepEqual([decoche.annonce.refus, decoche.annonce.organisationEnGros], [null, false]);
+    const [club, iris] = ['Club des Merles', 'Iris Ombrelle'].map((texte) => fragment(coche.pdf.pages[1], texte));
+    assert.ok(club.h > iris.h && club.y + club.h <= iris.y, JSON.stringify([club, iris]));
+    const [clubAvant, irisAvant] = ['Club des Merles', 'Iris Ombrelle'].map((texte) => fragment(decoche.pdf.pages[1], texte));
+    assert.ok(irisAvant.h > clubAvant.h && irisAvant.y + irisAvant.h <= clubAvant.y, JSON.stringify([clubAvant, irisAvant]));
+    for (const sans of ['Théo Pervenche', 'Ondine Lacasse', 'Grisaille']) {
+      assert.deepEqual(fragment(coche.pdf.pages[1], sans), fragment(decoche.pdf.pages[1], sans), sans);
+    }
+    // La feuille de contrôle, page 1 de l'A6, ne change pas.
+    assert.deepEqual(coche.pdf.pages[0].textes, decoche.pdf.pages[0].textes);
+  });
+
+  test('l’organisation décochée laisse le nom en gros : les octets sont ceux de la case décochée ; la feuille de contrôle d’Avery 5392 et la liste en CSV gardent leurs octets', async () => {
+    const sansOrganisation = await badgesDe({ organisationEnGros: true, retirees: ['organisation'] });
+    const reference = await badgesDe({ retirees: ['organisation'] });
+    assert.equal(sha256(sansOrganisation.octets), sha256(reference.octets));
+
+    const cartes = await monter(chargeLucioles(), { papier: null, modeleBadge: null, organisationEnGros: true });
+    const avant = await monter(chargeLucioles(), { papier: null, modeleBadge: null });
+    const [produite, attendue] = [await cartes.seance.produirePlanche(), await avant.seance.produirePlanche()];
+    assert.notEqual(sha256(cartes.fs.octets('documents', ICI + produite.nom)), sha256(avant.fs.octets('documents', ICI + attendue.nom)));
+    assert.deepEqual(cartes.fs.octets('documents', ICI + produite.controle.nom), avant.fs.octets('documents', ICI + attendue.controle.nom));
+    const [liste, listeAvant] = [await cartes.seance.produireListeBadges(), await avant.seance.produireListeBadges()];
+    assert.deepEqual(cartes.fs.octets('documents', ICI + liste.nom), avant.fs.octets('documents', ICI + listeAvant.nom));
+  });
+
+  test('une organisation trop longue pour le gros texte se refuse PLANCHE_NOM_TROP_LONG, organisation vrai, la personne nommée ; décochée, elle se replie en petit', async () => {
+    const charge = chargeLucioles();
+    charge.participants[0].organisation = `Merles${'w'.repeat(1990)}`;
+    const annonce = await (await monter(charge, { organisationEnGros: true })).seance.preparerPlanche();
+    assert.deepEqual(annonce.refus, {
+      code: 'PLANCHE_NOM_TROP_LONG',
+      details: { organisation: true, participant: 1, personne: 'Iris Ombrelle', remede: { geste: 'ouvrirSection', section: 'participants' } },
+    });
+    assert.equal((await (await monter(charge)).seance.preparerPlanche()).refus, null);
+  });
+
+  test('avec le nom des doublons laissé en blanc, l’organisation reste en gros et le nom ne se pose pas', async () => {
+    const charge = chargeLucioles({
+      personnes: [
+        personne(1, 'Roger', 'Galet 01', { nomNumerote: true, organisation: 'Club des Merles' }),
+        personne(2, 'Roger', 'Galet 02', { nomNumerote: true }),
+        personne(3, 'Zoé', 'Galet', { organisation: 'Club des Merles' }),
+        personne(4, 'Louis', 'Arc 14'),
+      ],
+    });
+    const { fs, seance } = await monter(charge, { organisationEnGros: true });
+    const pdf = await lirePdf(fs.octets('documents', ICI + (await seance.produirePlanche()).nom));
+    const textes = pdf.pages[1].textes.map(({ texte }) => texte);
+    assert.ok(!textes.some((texte) => texte.includes('Roger')), textes.join(' | '));
+    const clubs = pdf.pages[1].textes.filter(({ texte }) => texte === 'Club des Merles');
+    const zoe = fragment(pdf.pages[1], 'Zoé Galet');
+    assert.equal(clubs.length, 2);
+    for (const club of clubs) assert.ok(club.h > zoe.h, JSON.stringify([club, zoe]));
+  });
+
+  test('la lecture porte la case : absente, décochée ; un booléen tel quel ; une valeur qui n’est pas un booléen est une faute du code, TypeError', async () => {
+    const planches = creerPlanches({ polices: async () => POLICES, logo: async () => LOGO, provenance: 'production', version: V1 });
+    const lecture = { charge: chargeLucioles({ plan: null, etat: 'propose' }), papier: null, piedTechnolibre: true };
+    const enGrosLu = async (champs) => (await planches.preparer({ ...lecture, ...champs })).organisationEnGros;
+    assert.equal(await enGrosLu({}), false);
+    assert.equal(await enGrosLu({ organisationEnGros: true }), true);
+    assert.equal(await enGrosLu({ organisationEnGros: false }), false);
+    for (const faute of ['oui', 1, null, {}]) {
+      await assert.rejects(
+        enGrosLu({ organisationEnGros: faute }),
+        (erreur) => erreur instanceof TypeError && /organisationEnGros/.test(erreur.message),
+        JSON.stringify(faute),
+      );
+    }
   });
 });
 

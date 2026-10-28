@@ -861,8 +861,11 @@ describe('la liste des badges en CSV (§ 11.6)', () => {
     const explication = dans(enDerive, `#${produireListe(enDerive).getAttribute('aria-describedby')}`);
     expect(texte(explication)).toBe(plat(t('badges.liste.bloquee')));
 
+    // Sans organisation, le nom reste en gros, case cochée ou non : c'est
+    // lui qui ne tient pas.
     const charge = structuredClone(chargeBloquee());
     charge.participants[0].nom = `Ombrelle${'w'.repeat(1990)}`;
+    charge.participants[0].organisation = null;
     const m = await ouvrirBadges(charge);
     await cliquerProduire(m, 'le refus du nom', () => dans(m, '[data-annonce-planche] [data-refus="PLANCHE_NOM_TROP_LONG"]'));
     expect(produire(m).getAttribute('aria-disabled')).toBe('true');
@@ -1079,6 +1082,77 @@ describe('les cases de ce que le badge imprime : gardées sur le poste (§ 8.5, 
     await attendre('la case retenue', () => retenues.length === 3, IMAGES);
     expect(m.seance.etat().donneesBadge.organisation).toBe(false);
     expect(avisNonRetenues(m)).toBeNull();
+  });
+});
+
+describe('l’organisation en gros : une case gardée sur le poste (§ 8.5, § 11.4)', () => {
+  const caseEnGros = (m) => dans(m, '[data-section="badges"] [data-champ="organisationEnGros"]');
+  const caseOrganisation = (m) => dans(m, '[data-section="badges"] [data-champ="donneeBadge.organisation"]');
+  const avisNonRetenu = (m) => dans(m, '[data-section="badges"] [data-avertissement="enGrosNonRetenu"]');
+  const caseEcrite = (m) => JSON.parse(m.fs.contenu('documents', FICHIER_REGLAGES)).organisation_en_gros;
+
+  test('une machine neuve : la case cochée, dans le groupe des cases, sous les cinq cases et avant celle des doublons, son libellé lié', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: null, modeleBadge: null });
+    const element = caseEnGros(m);
+    expect(element).not.toBeNull();
+    expect(element.type).toBe('checkbox');
+    expect(element.checked).toBe(true);
+    expect(element.disabled).toBe(false);
+    expect(m.seance.etat().organisationEnGros).toBe(true);
+    expect(texte(dans(m, `label[for="${element.id}"]`))).toBe(plat(tEcran('badges.organisationEnGros.case')));
+    const bloc = element.closest('.case');
+    expect(bloc.previousElementSibling.contains(caseOrganisation(m))).toBe(true);
+    expect(bloc.nextElementSibling.contains(dans(m, '[data-section="badges"] [data-champ="cacherNumero"]'))).toBe(true);
+  });
+
+  test('décocher l’écrit sur la machine et retire l’annonce montrée ; l’annonce suivante se prépare sur la case ; recocher l’écrit de nouveau', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    const lues = [];
+    const originale = m.seance.preparerPlanche;
+    m.seance.preparerPlanche = async (demande) => {
+      const rendue = await originale(demande);
+      lues.push(rendue.organisationEnGros);
+      return rendue;
+    };
+    caseEnGros(m).click();
+    await attendre('la case écrite', () => caseEcrite(m) === false, IMAGES);
+    expect(m.seance.etat().organisationEnGros).toBe(false);
+    expect(caseEnGros(m).checked).toBe(false);
+    await attendre('l’annonce retirée', () => annonce(m) === null, IMAGES);
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce sur la case', () => annonce(m), IMAGES);
+    expect(lues).toEqual([false]);
+    caseEnGros(m).click();
+    await attendre('la case écrite', () => caseEcrite(m) === true, IMAGES);
+    expect(avisNonRetenu(m)).toBeNull();
+  });
+
+  test('l’écriture des réglages refusée : la case vaut pour la séance, et une annonce le dit sous les réglages, dans un rôle d’état ; une case retenue ensuite la retire', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    expect(avisNonRetenu(m)).toBeNull();
+    m.fs.pannes.ecriture('documents');
+    caseEnGros(m).click();
+    const avis = await attendre('l’annonce de la case non retenue', () => avisNonRetenu(m), IMAGES);
+    expect(m.seance.etat().organisationEnGros).toBe(false);
+    expect(caseEnGros(m).checked).toBe(false);
+    expect(texte(avis)).toBe(plat(tEcran('badges.organisationEnGros.nonRetenu')));
+    expect(avis.closest('[role="status"]')).not.toBeNull();
+    const originale = m.seance.choisirOrganisationEnGros;
+    m.seance.choisirOrganisationEnGros = async (coche) => ({ ...(await originale(coche)), retenu: true });
+    caseEnGros(m).click();
+    await attendre('l’annonce retirée', () => avisNonRetenu(m) === null, IMAGES);
+  });
+
+  test('la case « Organisation » décochée désactive la case, qui garde sa valeur ; recochée, elle la réactive', async () => {
+    const m = await ouvrirBadges(chargeBloquee(), { papier: 'A4', modeleBadge: null });
+    caseOrganisation(m).click();
+    await attendre('la case désactivée', () => caseEnGros(m).disabled, IMAGES);
+    expect(caseEnGros(m).checked).toBe(true);
+    expect(m.seance.etat().organisationEnGros).toBe(true);
+    caseOrganisation(m).click();
+    await attendre('la case réactivée', () => !caseEnGros(m).disabled, IMAGES);
   });
 });
 

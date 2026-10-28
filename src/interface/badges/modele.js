@@ -16,7 +16,8 @@
 // n'offre ni imposition ni papier. La case du pied TechnoLibre en est un
 // autre (EtatSeance.piedTechnolibre), et l'annonce nomme les badges d'où il
 // se retire ; la case qui laisse en blanc le nom des doublons aussi
-// (EtatSeance.cacherNumero).
+// (EtatSeance.cacherNumero), comme celle qui met l'organisation en gros
+// (EtatSeance.organisationEnGros).
 //
 // La liste des badges en CSV se tire du même placement que la planche : un
 // refus du placement la bloque comme la planche, un refus de la mise en
@@ -62,23 +63,28 @@ export function modeleImposeSonPapier(modele) {
 
 /**
  * Vrai quand l'annonce reçue est celle du modèle, du papier, de la case du
- * pied TechnoLibre et de celle du nom des doublons de la machine : son
- * modèle est celui de la séance, son papier celui que ce modèle prend
- * (papierDesBadges), chaque case celle de la séance. Une annonce sans
- * modèle est celle de l'A6 ; une case que l'annonce ou la machine ne porte
- * pas vaut décochée.
+ * pied TechnoLibre, de celle du nom des doublons et de celle de
+ * l'organisation en gros de la machine : son modèle est celui de la séance,
+ * son papier celui que ce modèle prend (papierDesBadges), chaque case celle
+ * de la séance. Une annonce sans modèle est celle de l'A6 ; une case que
+ * l'annonce ou la machine ne porte pas vaut décochée.
  *
  * @param {import('../../application/planche_seance.js').Annonce} annonce
- * @param {{modeleBadge: string, papier: string|null, piedTechnolibre?: boolean, cacherNumero?: boolean}} machine
+ * @param {{modeleBadge: string, papier: string|null, piedTechnolibre?: boolean, cacherNumero?: boolean,
+ *          organisationEnGros?: boolean}} machine
  *        EtatSeance
  */
-export function annonceDeLaMachine(annonce, { modeleBadge, papier, piedTechnolibre = false, cacherNumero = false }) {
+export function annonceDeLaMachine(
+  annonce,
+  { modeleBadge, papier, piedTechnolibre = false, cacherNumero = false, organisationEnGros = false },
+) {
   const modele = annonce.modeleBadge ?? 'a6';
   return (
     modele === modeleBadge &&
     annonce.papier === papierDesBadges(modeleBadge, papier) &&
     (annonce.piedTechnolibre ?? false) === piedTechnolibre &&
-    (annonce.cacherNumero ?? false) === cacherNumero
+    (annonce.cacherNumero ?? false) === cacherNumero &&
+    (annonce.organisationEnGros ?? false) === organisationEnGros
   );
 }
 /** La source que désigne une demande sans source offerte : le retenu, que

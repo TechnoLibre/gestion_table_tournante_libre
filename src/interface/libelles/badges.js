@@ -65,6 +65,13 @@ export const TABLE = new Map([
     'badges.donnees.nonRetenues',
     'Les cases valent pour cette séance, sans être retenues sur ce poste : les réglages locaux ne se sont pas écrits.',
   ],
+  // La case qui met l'organisation en gros au-dessus du nom (§ 8.5, § 11.4),
+  // dans le même groupe, et l'annonce d'une case que le poste ne retient pas.
+  ['badges.organisationEnGros.case', 'Organisation en gros, au-dessus du nom'],
+  [
+    'badges.organisationEnGros.nonRetenu',
+    'La case « Organisation en gros, au-dessus du nom » vaut pour cette séance, sans être retenue sur ce poste : les réglages locaux ne se sont pas écrits.',
+  ],
   // La case qui laisse en blanc le nom des doublons (§ 8.5, § 11.4), dans le
   // même groupe, la note qui dit à quoi sert la place vide, et l'annonce
   // d'une case que le poste ne retient pas.

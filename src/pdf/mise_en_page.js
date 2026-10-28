@@ -17,6 +17,15 @@
 // absente laisse sa place à la suivante. Un nom laissé en blanc n'est pas
 // absent : ses lignes gardent leur place, vide.
 //
+// Le haut de la page porte deux rôles : le gros texte, en gras, et le petit
+// texte, en romain, sous lui. Le gros texte est le nom, le petit
+// l'organisation ; sous la marque organisationEnGros, quand l'organisation
+// n'est pas vide, ils s'échangent, et l'organisation prend le rôle du nom.
+// Chaque règle qui suit — corps, repli, ordre de sacrifice, refus — suit
+// le rôle, non la donnée : « le nom » y désigne le gros texte,
+// « l'organisation » le petit. Un nom laissé en blanc garde sa place dans
+// son rôle.
+//
 // Aucun texte du badge ne s'abrège : un texte trop large pour sa ligne se
 // replie comme un paragraphe, au dernier espace qui tient, et un mot plus
 // large que la ligne se coupe entre deux grappes (replier). Le texte entier
@@ -249,8 +258,35 @@ function nomEnBlancLu({ nomEnBlanc = false }) {
   return nomEnBlanc;
 }
 
+// Les deux rôles du haut de la page, lus des textes : gros, le texte en
+// gras et sa marque en blanc ; petit, le texte en romain sous lui, null
+// quand il n'existe pas, et sa marque. textes.organisationEnGros, un booléen
+// faux quand il manque, échange le nom et l'organisation, sauf quand
+// celle-ci est null, vide ou faite d'espaces : le nom reste alors en gros.
+// enGros dit lequel des deux tient le rôle du gros texte. TypeError pour
+// une marque qui n'est pas un booléen.
+function rolesLus(textes) {
+  const nomEnBlanc = nomEnBlancLu(textes);
+  const { organisationEnGros = false } = textes;
+  if (typeof organisationEnGros !== 'boolean') {
+    throw new TypeError(`mettreEnPage : organisationEnGros, un booléen, attendu, reçu ${JSON.stringify(organisationEnGros)}`);
+  }
+  const organisation = textes.organisation === null || textes.organisation.trim() === '' ? null : textes.organisation;
+  if (organisationEnGros && organisation !== null) {
+    return { enGros: 'organisation', gros: { texte: organisation, enBlanc: false }, petit: { texte: textes.nom, enBlanc: nomEnBlanc } };
+  }
+  return { enGros: 'nom', gros: { texte: textes.nom, enBlanc: nomEnBlanc }, petit: { texte: organisation, enBlanc: false } };
+}
+
 /**
  * La mise en page d'un badge, ou le refus qui dit pourquoi il ne tient pas.
+ *
+ * Rôles : le nom est le gros texte, l'organisation le petit. Sous
+ * organisationEnGros, une organisation qui n'est pas vide prend le rôle du
+ * nom, et le nom celui de l'organisation : tout ce qui suit dit « nom »
+ * pour le gros texte et « organisation » pour le petit. La page est alors
+ * celle des deux textes échangés, refus compris, à la marque du nom laissé
+ * en blanc près, qui suit le nom dans son rôle.
  *
  * Nom : le corps de départ donne au nom la hauteur de capitale maximale du
  * registre, et descend d'un point par palier jusqu'au plancher, dont la
@@ -268,11 +304,12 @@ function nomEnBlancLu({ nomEnBlanc = false }) {
  * dont une case retire déjà le nom de l'événement, ne dépouille pas le
  * badge en passant au pied réduit.
  *
- * Nom laissé en blanc : la page se compose sur le nom tel quel, puis n'en
- * pose aucune ligne. Sa place reste vide, à la hauteur exacte des lignes
- * qu'il aurait prises, et tout le reste de la page — corps, positions,
- * dépouillement, pied TechnoLibre, logo du participant, refus — est celui du
- * nom imprimé.
+ * Nom de la personne laissé en blanc : la page se compose sur le nom tel
+ * quel, puis n'en pose aucune ligne, dans l'un ou l'autre rôle. Sa place
+ * reste vide, à la hauteur exacte des lignes qu'il aurait prises, et tout le
+ * reste de la page — corps, positions, dépouillement, pied TechnoLibre, logo
+ * du participant, refus — est celui du nom imprimé. Dans le rôle de
+ * l'organisation, il part comme elle dans l'ordre de sacrifice.
  *
  * Organisation : entière sur une ligne, à son corps de départ, quand elle
  * y tient ; sinon repliée en paragraphe sur autant de lignes qu'il lui
@@ -301,11 +338,12 @@ function nomEnBlancLu({ nomEnBlanc = false }) {
  * logo du participant.
  *
  * Refus : PLANCHE_NOM_TROP_LONG quand le nom dépasse trois lignes et que
- * rien ne tient, PLANCHE_TROP_DE_TOURS {tours, repliees} sinon, tours étant
- * le nombre de lignes de tour reçues ; repliees, vrai quand ces lignes,
- * une rangée chacune, tiendraient : ce sont alors des lignes trop larges,
- * repliées, qui débordent. src/pdf ne connaît pas la personne : l'appelant
- * complète les détails.
+ * rien ne tient, ses détails {organisation: true} quand l'organisation tient
+ * ce rôle, {} sinon ; PLANCHE_TROP_DE_TOURS {tours, repliees} dans les
+ * autres cas, tours étant le nombre de lignes de tour reçues ; repliees,
+ * vrai quand ces lignes, une rangée chacune, tiendraient : ce sont alors des
+ * lignes trop larges, repliées, qui débordent. src/pdf ne connaît pas la
+ * personne : l'appelant complète les détails.
  *
  * Le modèle de badge donne le cadre utile et les corps de départ : l'A6,
  * 89 × 132 mm ; la carte Avery 5392, 91,6 × 66,2 mm.
@@ -332,9 +370,11 @@ function nomEnBlancLu({ nomEnBlanc = false }) {
  * page est alors celle du badge sans logo. Non demandé, logoParticipant rend
  * null, et la page est celle d'avant le logo.
  *
- * @param {{nom: string, nomEnBlanc?: boolean, lignes: string[],
+ * @param {{nom: string, nomEnBlanc?: boolean, organisationEnGros?: boolean, lignes: string[],
  *          organisation: string|null, pied: string[], piedReduit: string[]}} textes
- *        nomEnBlanc : vrai, le nom se mesure sans se poser ; absent, faux
+ *        nomEnBlanc : vrai, le nom se mesure sans se poser ; absent, faux.
+ *        organisationEnGros : vrai, l'organisation prend le rôle du nom ;
+ *        absent, faux
  * @param {Metriques} metriques
  * @param {import('../geometrie/papiers.js').ModeleBadge} [modeleBadge]   'a6' par défaut
  * @param {{texte: string, rapport: number}|null} [technolibre]   le pied
@@ -350,13 +390,13 @@ function nomEnBlancLu({ nomEnBlanc = false }) {
  *            logoParticipant: null | {boite: null|{x: number, y: number, largeur: number, hauteur: number}}}
  *          | {refus: {code: string, details: object}}}
  *          les boîtes des logos en millimètres du cadre utile, y à leur haut
- * @throws {TypeError} un modèle de badge inconnu, un nomEnBlanc qui n'est
- *         pas un booléen, un pied TechnoLibre ou un logo du participant mal
- *         formés
+ * @throws {TypeError} un modèle de badge inconnu, un nomEnBlanc ou un
+ *         organisationEnGros qui n'est pas un booléen, un pied TechnoLibre ou
+ *         un logo du participant mal formés
  */
 export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre = null, logoParticipant = null) {
   if (!estModeleBadge(modeleBadge)) throw new TypeError(`mettreEnPage : modèle de badge inconnu ${JSON.stringify(modeleBadge)}`);
-  const nomEnBlanc = nomEnBlancLu(textes);
+  const { enGros, gros, petit } = rolesLus(textes);
   const promotion = technolibreLu(technolibre);
   const logoDemande = logoParticipantLu(logoParticipant);
   const badge = MODELES_BADGE[modeleBadge];
@@ -386,7 +426,7 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   const pasSerre = (corps) => {
     if (encreParPt === null) {
       const encres = [
-        metriques.encre(textes.nom, 1, true),
+        metriques.encre(gros.texte, 1, true),
         ...[...textes.lignes, ...textes.piedReduit].map((texte) => metriques.encre(texte, 1, false)),
       ];
       encreParPt = { haut: Math.max(...encres.map(({ haut }) => haut)), bas: Math.max(...encres.map(({ bas }) => bas)) };
@@ -484,11 +524,11 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
   function choisirNom() {
     for (const motsEntiers of [true, false]) {
       for (let nombre = 1; nombre <= 3; nombre += 1) {
-        const premier = paliersNom.findIndex((corps) => replier(textes.nom, corps, true, nombre, motsEntiers) !== null);
+        const premier = paliersNom.findIndex((corps) => replier(gros.texte, corps, true, nombre, motsEntiers) !== null);
         if (premier < 0) continue;
         const formes = [];
         for (const corps of paliersNom.slice(premier)) {
-          const lignes = replier(textes.nom, corps, true, nombre, motsEntiers);
+          const lignes = replier(gros.texte, corps, true, nombre, motsEntiers);
           if (lignes !== null) formes.push({ corps, lignes });
         }
         return { formes, auDela: false };
@@ -496,11 +536,11 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     }
     const empilables = Math.floor((H + TOLERANCE_MM) / pas(corpsNomPlancher).hauteur);
     const lignes =
-      replier(textes.nom, corpsNomPlancher, true, empilables, true) ??
-      replier(textes.nom, corpsNomPlancher, true, empilables, false);
+      replier(gros.texte, corpsNomPlancher, true, empilables, true) ??
+      replier(gros.texte, corpsNomPlancher, true, empilables, false);
     return lignes === null ? null : { formes: [{ corps: corpsNomPlancher, lignes }], auDela: true };
   }
-  const refusNom = { refus: { code: 'PLANCHE_NOM_TROP_LONG', details: {} } };
+  const refusNom = { refus: { code: 'PLANCHE_NOM_TROP_LONG', details: enGros === 'organisation' ? { organisation: true } : {} } };
   const nom = choisirNom();
   if (nom === null) return refusNom;
 
@@ -595,31 +635,32 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
     const pasNom = pasDe(forme.corps);
     for (const texte of forme.lignes) {
       const y = curseurNom + pasNom.ascendante;
-      if (!nomEnBlanc) blocs.push({ texte, corps: forme.corps, gras: true, x: centre(texte, forme.corps, true), y });
+      if (!gros.enBlanc) blocs.push({ texte, corps: forme.corps, gras: true, x: centre(texte, forme.corps, true), y });
       curseurNom = y + pasNom.descendante;
     }
     // Les formes de l'organisation, chacune ses blocs et le curseur sous
     // elle : son corps de départ seul quand elle y tient sur une ligne,
     // sinon de son corps de départ à son plancher ; une forme seule, vide,
     // sans organisation. Aucune quand même son plancher ne se replie pas :
-    // une grappe seule déborde.
-    const sansOrganisation = !avecOrganisation || textes.organisation === null || textes.organisation.trim() === '';
+    // une grappe seule déborde. Laissée en blanc, elle avance le curseur de
+    // ses lignes sans en poser aucune.
+    const sansOrganisation = !avecOrganisation || petit.texte === null;
     const departOrganisation = auPlusNom(constante(typographie.organisation));
     const corpsOrganisation = sansOrganisation
       ? []
-      : tient(textes.organisation, departOrganisation, false)
+      : tient(petit.texte, departOrganisation, false)
         ? [departOrganisation]
         : paliers(departOrganisation, auPlusNom(constante('CORPS_ORGANISATION_PLANCHER_PT')));
     const formesOrganisation = sansOrganisation ? [{ blocs: [], curseur: curseurNom }] : [];
     for (const corps of corpsOrganisation) {
-      const lignes = paragraphe(textes.organisation, corps, L);
+      const lignes = paragraphe(petit.texte, corps, L);
       if (lignes === null) continue;
       const pasOrganisation = pasDe(corps);
       const blocsOrganisation = [];
       let curseur = curseurNom;
       for (const texte of lignes) {
         const y = curseur + pasOrganisation.ascendante;
-        blocsOrganisation.push({ texte, corps, gras: false, x: centre(texte, corps, false), y });
+        if (!petit.enBlanc) blocsOrganisation.push({ texte, corps, gras: false, x: centre(texte, corps, false), y });
         curseur = y + pasOrganisation.descendante;
       }
       formesOrganisation.push({ blocs: blocsOrganisation, curseur });
@@ -890,7 +931,7 @@ export function mettreEnPage(textes, metriques, modeleBadge = 'a6', technolibre 
       constante('CORPS_TOURS_PLANCHER_PT'),
     );
     for (const corps of paliers(corpsNomPlancher, corpsNomDernier).slice(1)) {
-      const lignes = replier(textes.nom, corps, true, Infinity, true) ?? replier(textes.nom, corps, true, Infinity, false);
+      const lignes = replier(gros.texte, corps, true, Infinity, true) ?? replier(gros.texte, corps, true, Infinity, false);
       if (lignes !== null) yield { forme: { corps, lignes }, ...reglage, corpsPied: paliersPied.at(-1) };
     }
   }

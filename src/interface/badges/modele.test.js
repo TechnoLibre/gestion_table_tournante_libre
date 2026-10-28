@@ -459,6 +459,51 @@ describe('le nom des doublons laissé en blanc (§ 8.5, § 11.4)', () => {
   });
 });
 
+describe('l’organisation en gros (§ 8.5, § 11.4)', () => {
+  // L'annonce de la séance sur la soirée retenue, la case donnée.
+  const annoncerAvecCase = (charge, organisationEnGros) =>
+    planches.preparer({
+      charge,
+      base: 'lucioles',
+      fs: fsVide,
+      racine: { id: 'documents', chemin: '/d' },
+      papier: 'A4',
+      modeleBadge: 'a6',
+      organisationEnGros,
+    });
+
+  test('une annonce est celle de la machine quand sa case est celle de la machine ; une annonce ou une machine qui ne la porte pas vaut décochée', async () => {
+    const cochee = await annoncerAvecCase(retenue(), true);
+    const decochee = await annoncerAvecCase(retenue(), false);
+    assert.deepEqual([cochee.organisationEnGros, decochee.organisationEnGros], [true, false]);
+    const machine = { modeleBadge: 'a6', papier: 'A4' };
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, organisationEnGros: true }), true);
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, organisationEnGros: false }), false);
+    assert.equal(annonceDeLaMachine(cochee, machine), false);
+    assert.equal(annonceDeLaMachine(decochee, { ...machine, organisationEnGros: true }), false);
+    assert.equal(annonceDeLaMachine(decochee, machine), true);
+    const { organisationEnGros: _case, ...sansCase } = cochee;
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, organisationEnGros: false }), true);
+    assert.equal(annonceDeLaMachine(sansCase, { ...machine, organisationEnGros: true }), false);
+    // La case du nom des doublons se compare à part.
+    assert.equal(annonceDeLaMachine(cochee, { ...machine, organisationEnGros: true, cacherNumero: true }), false);
+  });
+
+  test('l’annonce ne dit rien de plus : mêmes phrases, cochée ou décochée', async () => {
+    assert.deepEqual(phrasesAnnonce(await annoncerAvecCase(retenue(), true)), phrasesAnnonce(await annoncerAvecCase(retenue(), false)));
+  });
+
+  test('la case et son avertissement ont leur libellé ; l’avis nomme la case', () => {
+    const textes = composer([
+      { cle: 'badges.organisationEnGros.case', details: {} },
+      { cle: 'badges.organisationEnGros.nonRetenu', details: {} },
+    ]);
+    assert.equal(textes[0], 'Organisation en gros, au-dessus du nom');
+    assert.match(textes[1], /retenue sur ce poste/);
+    assert.ok(textes[1].includes(textes[0]));
+  });
+});
+
 describe('les logos des participants (§ 11.4, § 11.5, § 5.9)', () => {
   const avecLogos = async (logos) => ({ ...(await annoncer(retenue(), 'A4')), logos });
 

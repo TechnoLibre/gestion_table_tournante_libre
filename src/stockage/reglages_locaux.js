@@ -3,7 +3,7 @@
 
 // Les réglages locaux (§ 8.5) : le fichier reglages_locaux.json, à la racine
 // du dossier de travail, à côté des dossiers d'événement et hors d'eux. Il
-// porte neuf choses, et neuf seulement : le cadrage de chaque événement,
+// porte dix choses, et dix seulement : le cadrage de chaque événement,
 // indexé par son identifiant — le zoom k en pixels par centimètre, la
 // translation tx, ty en pixels —, le format de papier des sorties, global
 // à la machine (§ 11.2), null tant que l'opérateur ne l'a pas choisi, le
@@ -20,7 +20,10 @@
 // qu'il a touchées : une case absente vaut cochée, la case qui laisse en
 // blanc le nom des doublons sur les badges, globale à la machine, sous la
 // clé cacher_numero_doublon, un booléen, absente tant que l'opérateur n'y a
-// pas touché : la case vaut alors cochée, les colonnes de la liste des
+// pas touché : la case vaut alors cochée, la case qui met l'organisation en
+// gros au-dessus du nom sur les badges, globale à la machine, sous la clé
+// organisation_en_gros, un booléen, absente tant que l'opérateur n'y a pas
+// touché : la case vaut alors cochée, les colonnes de la liste des
 // badges en CSV, globales à la machine, sous la clé colonnes_liste_badges,
 // l'une de COLONNES_LISTE_BADGES, absente tant que l'opérateur n'a pas
 // choisi : une colonne par tour vaut alors, et la taille du texte de
@@ -98,6 +101,9 @@ const BLANCS_DU_PIED = /[ \t\n\v\f\r\u{85}\u{2028}\u{2029}]+/gu;
  * @property {boolean} [cacher_numero_doublon]   la case qui laisse en
  *           blanc le nom des doublons sur les badges ; absente tant que
  *           l'opérateur n'y a pas touché
+ * @property {boolean} [organisation_en_gros]   la case qui met
+ *           l'organisation en gros au-dessus du nom sur les badges ; absente
+ *           tant que l'opérateur n'y a pas touché
  * @property {'parTour'|'unique'} [colonnes_liste_badges]   les colonnes de
  *           la liste des badges en CSV, l'une de COLONNES_LISTE_BADGES ;
  *           absente tant que l'opérateur n'a pas choisi
@@ -149,9 +155,10 @@ function fauteDeDonnees(donnees) {
 // même événement est fautif ; un modèle de badge présent est une clé de
 // MODELES_BADGE, une case du pied TechnoLibre présente un booléen, son texte
 // présent une chaîne, les cases de ce que le badge imprime présentes un objet
-// de booléens, la case du nom des doublons présente un booléen, les
-// colonnes de la liste présentes l'une de COLONNES_LISTE_BADGES, une taille
-// du texte présente l'un des paliers.
+// de booléens, la case du nom des doublons présente un booléen, celle de
+// l'organisation en gros présente un booléen, les colonnes de la liste
+// présentes l'une de COLONNES_LISTE_BADGES, une taille du texte présente
+// l'un des paliers.
 function fauteDeReglages(reglages) {
   if (!estObjet(reglages)) return '';
   const { format, papier, cadrages } = reglages;
@@ -168,6 +175,9 @@ function fauteDeReglages(reglages) {
   }
   if (Object.hasOwn(reglages, 'cacher_numero_doublon') && typeof reglages.cacher_numero_doublon !== 'boolean') {
     return 'cacher_numero_doublon';
+  }
+  if (Object.hasOwn(reglages, 'organisation_en_gros') && typeof reglages.organisation_en_gros !== 'boolean') {
+    return 'organisation_en_gros';
   }
   if (Object.hasOwn(reglages, 'colonnes_liste_badges') && !COLONNES_LISTE_BADGES.includes(reglages.colonnes_liste_badges)) {
     return 'colonnes_liste_badges';
@@ -453,6 +463,31 @@ export function cacherNumeroDe(reglages) {
 export function avecCacherNumero(reglages, coche) {
   if (typeof coche !== 'boolean') throw new TypeError(`avecCacherNumero : un booléen attendu, reçu ${JSON.stringify(coche)}`);
   return { ...reglages, cacher_numero_doublon: coche };
+}
+
+/**
+ * La case qui met l'organisation en gros au-dessus du nom sur les badges
+ * (§ 8.5, § 11.4) que les réglages portent, à défaut cochée.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @returns {boolean}
+ */
+export function organisationEnGrosDe(reglages) {
+  return Object.hasOwn(reglages, 'organisation_en_gros') ? reglages.organisation_en_gros : true;
+}
+
+/**
+ * Les réglages reçus, la case qui met l'organisation en gros remplacée ;
+ * ceux reçus ne changent pas.
+ *
+ * @param {ReglagesLocaux} reglages
+ * @param {boolean} coche
+ * @returns {ReglagesLocaux}
+ * @throws {TypeError} une valeur qui n'est pas un booléen
+ */
+export function avecOrganisationEnGros(reglages, coche) {
+  if (typeof coche !== 'boolean') throw new TypeError(`avecOrganisationEnGros : un booléen attendu, reçu ${JSON.stringify(coche)}`);
+  return { ...reglages, organisation_en_gros: coche };
 }
 
 /**
