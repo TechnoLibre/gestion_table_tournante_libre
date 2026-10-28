@@ -1088,10 +1088,6 @@
     "raison": "diagnostic.js, objectifsInevitables, r <= R dans le cumul des sièges libres par tour : au tour de trop, l'écriture vise libresAuTour[R], hors de l'Int32Array de longueur R, et un tableau typé l'ignore sans lever ; les lectures de objectifDe et siegesLibres à t × R + R ne lèvent pas, et la suite ne lit libresAuTour qu'aux r < R."
   },
   {
-    "cle": "src/moteur/indicateurs.js:frontiere:6f32f41253f60a4b:8",
-    "raison": "indicateurs.js, assisAChaqueTourPresent, p <= N : toursAssis (mesures.toursAssis) et toursPresents (l'Int32Array de l'instance) ont N cases ; à p = N, les deux lectures valent undefined, donc égales, et la boucle finit et rend vrai comme sans le tour de trop."
-  },
-  {
     "cle": "src/moteur/configuration.js:frontiere:6f32f41253f60a4b:7",
     "raison": "configuration.js, coPresences, p <= N au calcul des mobiles co-présents : le tour de trop lit coPresents[N] et statut[N], undefined hors des tableaux typés, et écrit mobilesCoPresents[N], au-delà de la longueur N du tableau typé, qui n'écrit rien."
   },
@@ -1286,10 +1282,6 @@
   {
     "cle": "src/moteur/indicateurs.js:frontiere:a9860e6c786869dd:0",
     "raison": "indicateurs.js, inclusionSatisfaite, p <= cible : une ligne de personne ne vise jamais sa source — l'inclusion de soi est refusée à la normalisation —, donc p ≠ cible, et les deux rangs coïncident."
-  },
-  {
-    "cle": "src/moteur/recherche.js:nombre-plus-un:e5491f1eb5dc7232:0",
-    "raison": "recherche.js, INCLUSIONS = 14 au lieu de 13 : le code n'est comparé qu'à lui-même — CODE_DE le pose pour inclusionsNonSatisfaites, lire le reconnaît par case INCLUSIONS, suitInclusions par code === INCLUSIONS — ; 14, distinct des treize autres codes (0 à 12), garde sa branche."
   },
   {
     "cle": "src/moteur/recherche.js:nombre-plus-un:21a49ccd67a05ffa:0",

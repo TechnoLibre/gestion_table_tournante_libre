@@ -1147,6 +1147,19 @@ describe('score : composition du n-uplet (en-tête de recherche.js)', () => {
       assert.deepEqual(nonNulles, Array(GRANDEURS_DE_REFERENCE.length).fill(true), `${nom} : grandeurs brutes non nulles`);
     }
   });
+
+  test('composition.codes porte INCLUSIONS = 13 quand inclusionsNonSatisfaites est compté', () => {
+    // creerEtat rend la composition sur l'état (typedef EtatRecherche) : ses
+    // codes sortent du module, et leur numérotation fait partie de la forme
+    // rendue. Les inclusions suivent les treize autres grandeurs, de 0 à 12 ;
+    // toute renumérotation se voit ici.
+    const instance = normaliser(grandeAvecInclusions());
+    const noms = compilationDe(instance).paliers.flatMap(({ criteres }) => criteres.map(({ nom }) => nom));
+    assert.ok(noms.includes('inclusionsNonSatisfaites'));
+    const etat = creerEtat(instance, creerPcg32(1, FLUX.RECHERCHE));
+    assert.equal(etat.composition.suitInclusions, true);
+    assert.ok(Array.from(etat.composition.codes).includes(13), `codes : ${Array.from(etat.composition.codes)}`);
+  });
 });
 
 describe("rechercher : la descente par acceptation tardive, à la lettre (§ 5.10)", () => {

@@ -1529,6 +1529,14 @@ describe('mesurer et assisAChaqueTourPresent : les tours de présence (§ 5.4, �
     assert.equal(assisAChaqueTourPresent(instance, [2, 1, 1]), false);
     assert.equal(assisAChaqueTourPresent(instance, [2, 2, 0]), false);
   });
+
+  test('ne lit que les N premières cases de toursAssis : une case de trop ne change rien', () => {
+    // toursPresents vaut [2, 2, 1] ; la quatrième case ne correspond à
+    // personne. toursAssis est un ArrayLike dont la longueur n'est pas
+    // contrôlée : la boucle s'arrête à N, et non à sa longueur.
+    const { instance } = avecPresences(UNE_ABSENTE);
+    assert.equal(assisAChaqueTourPresent(instance, [2, 2, 1, 0]), true);
+  });
 });
 
 describe('mesurer : les inclusions (§ 5.4, § 13.2)', () => {
