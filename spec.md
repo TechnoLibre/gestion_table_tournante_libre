@@ -3303,7 +3303,10 @@ ligne encore plus haute qu'une page — un nom de plusieurs milliers de caractè
 — ne se coupe pas au bord de la feuille : son texte se poursuit sur la page
 suivante, sous l'en-tête répété, coupé au début d'un mot, ou entre deux
 caractères quand un mot seul dépasse la page — jamais entre une lettre et son
-accent. Rien d'une ligne ne tombe hors de la page, et aucun nom n'est tronqué.
+accent. Sur la liste d'accueil, une ligne qui ouvre son organisation se poursuit
+de même, sous l'en-tête et l'intertitre répétés, dès qu'elle passe ce qu'ils
+laissent d'une page (§ 11.7). Rien d'une ligne ne tombe hors de la page, et
+aucun nom n'est tronqué.
 
 ### 7.5 Les tables en conflit
 
@@ -7183,15 +7186,22 @@ l'appel nominal ne la cherche pas. Des tours trop nombreux pour la page se
 répartissent en blocs de tours consécutifs, chacun sous l'en-tête qui nomme ses
 tours (§ 7.4). **Les listes s'impriment en portrait.**
 
-**La liste d'accueil se trie par organisation, par nom ou par prénom**, au
-choix de « Trier par », dans les réglages de sa vue ; elle s'ouvre triée par
+**La liste d'accueil se trie par organisation, par nom ou par prénom**, au choix
+de « Trier par », dans les réglages de sa vue ; elle s'ouvre triée par
 organisation. Par organisation, les personnes d'une même organisation se
-suivent, par prénom puis par nom, et celles qui n'en ont pas viennent à la fin ;
-la dernière ligne de chaque organisation porte un filet à l'encre du texte, de
-la même épaisseur que les autres, si bien que ni la hauteur des lignes ni la
-pagination n'en dépendent. Par nom : le nom, puis le prénom, puis
-l'organisation. Par prénom : le prénom, puis le nom, puis l'organisation, et les
-personnes sans prénom à la fin. Toutes les clés sont les formes normalisées du
+suivent, par prénom puis par nom — une personne sans prénom en tête de la
+sienne —, et celles qui n'en ont pas viennent à la fin. **Un intertitre ouvre
+chaque organisation**, en gras, sur toute la largeur de la liste : son nom,
+écrit comme sa première personne l'écrit, ou « Sans organisation » pour les
+personnes de la fin ; chaque bloc de tours reprend les siens, et une liste où
+personne n'a d'organisation n'en porte aucun. **Un intertitre ne finit jamais
+une page** : quand la première personne de son organisation passe sur la page
+suivante, il l'y accompagne. Une ligne qui ouvre son organisation et passe ce
+que l'en-tête et l'intertitre laissent d'une page — même si elle tiendrait sous
+l'en-tête seul — se poursuit sous lui, répété sur chacune de ses pages (§ 7.4).
+Par nom : le nom, puis le prénom, puis l'organisation. Par prénom : le prénom,
+puis le nom, puis l'organisation, et les personnes sans prénom à la fin. Ces
+deux tris n'ont pas d'intertitre. Toutes les clés sont les formes normalisées du
 § 10.1, comparées par points de code, comme l'ordre des badges (§ 11.6) ; un
 champ absent, ou fait de blancs, compte comme le texte vide là où il départage,
 et l'identifiant départage en dernier. C'est un réglage de l'aperçu, que rien

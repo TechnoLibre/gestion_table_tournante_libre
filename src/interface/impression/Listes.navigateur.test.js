@@ -12,9 +12,9 @@
 // l'en-tête qui nomme ses tours, les noms répétés ; un tour d'absence s'y dit
 // « absente » ; « Trier par » la range par organisation — par défaut —, par
 // nom ou par prénom, sans rien écrire ni changer la hauteur d'une ligne, et
-// la dernière ligne de chaque organisation y porte un filet à l'encre du
-// texte ; chaque place d'une table listée, une place vide écrite comme telle,
-// les titres nommés, « non pourvu » quand rien ne les pourvoit ; « Une
+// par organisation un intertitre ouvre chaque organisation, jamais au bas
+// d'une page ; chaque place d'une table listée, une place vide écrite comme
+// telle, les titres nommés, « non pourvu » quand rien ne les pourvoit ; « Une
 // feuille par tour » donne une feuille par table et par tour, chacune au pied
 // et au filigrane de son tour, sans rien écrire, en lecture comme sur un plan
 // bloqué (§ 8.4). Sur la feuille par table, une colonne de tour garde la
@@ -25,10 +25,10 @@
 // page, sur la feuille par table comme sur la liste d'accueil, se continue
 // sur les feuilles suivantes : rien d'elle hors des zones de contenu, ses
 // parts mises bout à bout redonnent la ligne entière, chaque texte une fois,
-// et sur la liste d'accueil seule sa dernière part porte le filet de fin
-// d'organisation. Un tour que l'événement nomme porte son nom, tel quel,
-// dans les têtes de colonnes des deux listes et dans le choix du tour de
-// l'aperçu ; un tour sans nom y reste « Tour 1 ».
+// et sur la liste d'accueil l'intertitre de son organisation précède chacune.
+// Un tour que l'événement nomme porte son nom, tel quel, dans les têtes de
+// colonnes des deux listes et dans le choix du tour de l'aperçu ; un tour
+// sans nom y reste « Tour 1 ».
 //
 // App est montée par test/navigateur/ecrans.js sur le système de fichiers
 // simulé, au cadre de 1 366 × 700 ; le texte attendu vient de la même
@@ -51,7 +51,7 @@ import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { composantes } from '../../../test/navigateur/rendu.js';
 import { attendre, chargeBloquee, chargePrincipale, cliquer, creerContexte, ouvrirApercu } from '../../../test/navigateur/ecrans.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { ECHELLE_TEXTE_MAX, etatsDesTours, feuillesTables, finsOrganisation, lignesAccueil, textesCellule, textesLigneAccueil } from './listes.js';
+import { ECHELLE_TEXTE_MAX, etatsDesTours, feuillesTables, lignesAccueil, rangeesAccueil, textesCellule, textesLigneAccueil } from './listes.js';
 import { paginer } from './pagination.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -156,8 +156,9 @@ function motsCoupes(element) {
 const cellulesDeTour = (m) =>
   tous(m.racine, '[data-impression] [data-liste-imprimee] tr').flatMap((rangee) => [...rangee.cells].slice(3));
 
-// Ce qu'une feuille imprime : sa liste, ses lignes et leur rang dans la
-// liste entière, son en-tête — du haut de la liste au haut du corps —, la
+// Ce qu'une feuille imprime : sa liste, ses rangées — lignes et
+// intertitres — et leur rang dans la liste entière, celles qui sont des
+// intertitres, son en-tête — du haut de la liste au haut du corps —, la
 // hauteur de sa zone de contenu.
 function lireFeuille(feuille) {
   const liste = feuille.querySelector('[data-liste-imprimee]');
@@ -167,6 +168,7 @@ function lireFeuille(feuille) {
     liste: Number(liste.dataset.listeImprimee),
     rangs: lignes.map((ligne) => Number(ligne.dataset.ligneImprimee)),
     hauteurs: lignes.map((ligne) => boite(ligne).height),
+    intertitres: lignes.map((ligne) => ligne.hasAttribute('data-intertitre')),
     entete: boite(corps).top - boite(liste).top,
     contenu: feuille.querySelector('[data-contenu]'),
     lignes,
@@ -174,10 +176,10 @@ function lireFeuille(feuille) {
 }
 
 // Vérifie que les feuilles du document sont les pages de paginer sur les
-// hauteurs rendues : liste par liste, chaque ligne une fois, dans l'ordre,
-// sur les pages que paginer en fait ; chaque feuille sous son en-tête et son
-// pied, aucune ligne au-delà de sa zone de contenu. Rend le nombre de
-// listes.
+// hauteurs rendues, les intertitres liés à leur suivante : liste par liste,
+// chaque rangée une fois, dans l'ordre, sur les pages que paginer en fait ;
+// chaque feuille sous son en-tête et son pied, aucune ligne au-delà de sa
+// zone de contenu. Rend le nombre de listes.
 function verifierPagination(m) {
   const lues = feuilles(m).map(lireFeuille);
   expect(lues.length).toBeGreaterThan(0);
@@ -191,7 +193,8 @@ function verifierPagination(m) {
     const rangs = pages.flatMap(({ rangs: r }) => r);
     expect(rangs, `liste ${liste} : chaque ligne une fois, dans l'ordre`).toEqual(rangs.map((_, rang) => rang));
     const hauteurUtile = boite(pages[0].contenu).height;
-    const attendues = paginer(pages.flatMap(({ hauteurs }) => hauteurs), { hauteurUtile, hauteurEntete: pages[0].entete });
+    const liees = pages.flatMap(({ intertitres }) => intertitres).flatMap((intertitre, rang) => (intertitre ? [rang] : []));
+    const attendues = paginer(pages.flatMap(({ hauteurs }) => hauteurs), { hauteurUtile, hauteurEntete: pages[0].entete, liees });
     expect(pages.map(({ rangs: r }) => [r[0] ?? 0, (r.at(-1) ?? -1) + 1]), `liste ${liste}`).toEqual(attendues.map(({ debut, fin }) => [debut, fin]));
     for (const page of pages) {
       expect(Math.abs(page.entete - pages[0].entete), `liste ${liste} : en-tête répété`).toBeLessThanOrEqual(JEU_PX);
@@ -245,7 +248,8 @@ describe('la liste d’accueil (§ 11.7)', () => {
     expect(feuilles(m).length).toBeGreaterThan(1);
     expect(verifierPagination(m)).toBe(1);
     const presents = charge.participants.filter(({ exclu }) => !exclu).length;
-    expect(tous(m.racine, '[data-impression] [data-ligne-imprimee]')).toHaveLength(presents);
+    const lignes = lignesAccueil(charge, etatsDesTours(charge, m.ui.etat().proposition), cleNormalisee, 'organisation');
+    expect(tous(m.racine, '[data-impression] [data-ligne-imprimee]')).toHaveLength(rangeesAccueil(lignes, cleNormalisee, 'organisation').length);
     expect(tous(m.racine, '[data-impression] [data-participant]')).toHaveLength(presents);
     for (const feuille of feuilles(m)) {
       const entete = texte(feuille.querySelector('[data-entete-liste]'));
@@ -264,9 +268,10 @@ describe('la liste d’accueil : le tri (§ 11.7)', () => {
     return charge;
   }
 
-  // Les lignes des feuilles imprimées, dans l'ordre du document : la feuille
-  // de mesure, qui ne porte pas data-feuille, n'en est pas.
-  const lignesRendues = (m) => tous(m.racine, '[data-impression] [data-feuille] [data-ligne-imprimee]');
+  // Les lignes des feuilles imprimées, intertitres exclus, dans l'ordre du
+  // document : la feuille de mesure, qui ne porte pas data-feuille, n'en est
+  // pas.
+  const lignesRendues = (m) => tous(m.racine, '[data-impression] [data-feuille] [data-ligne-imprimee][data-participant]');
   const ordreRendu = (m) => lignesRendues(m).map((ligne) => Number(ligne.dataset.participant));
   // La hauteur rendue de chaque ligne, par participant.
   const hauteurs = (m) => new Map(lignesRendues(m).map((ligne) => [Number(ligne.dataset.participant), boite(ligne).height]));
@@ -316,28 +321,48 @@ describe('la liste d’accueil : le tri (§ 11.7)', () => {
     }
   });
 
-  test('par organisation, la dernière ligne de chaque organisation porte le filet à l’encre du texte, de même épaisseur ; par nom, aucune', async () => {
+  test('par organisation, un intertitre en gras sur toute la largeur ouvre chaque organisation, « Sans organisation » pour la fin, juste avant sa première ligne ; par nom, aucun', async () => {
     const charge = chargeSansOrganisations();
     const m = await ouvrirApercu(contexte, charge);
     await choisirVue(m, 'accueil');
     const lignes = lignesAccueil(charge, etatsDesTours(charge, m.ui.etat().proposition), cleNormalisee, 'organisation');
-    const fins = [...finsOrganisation(lignes, cleNormalisee)];
-    expect(fins.length).toBeGreaterThan(1);
-    const marquees = () => tous(m.racine, '[data-impression] [data-feuille] [data-fin-organisation]').map((ligne) => Number(ligne.dataset.participant));
-    expect(marquees()).toEqual(fins);
-    const texteEncre = couleurDeJeton('--couleur-page-texte', dans(m, '[data-impression]')).join();
-    const filet = couleurDeJeton('--couleur-page-filet', dans(m, '[data-impression]')).join();
-    expect(texteEncre).not.toBe(filet);
-    for (const ligne of lignesRendues(m)) {
-      const fin = fins.includes(Number(ligne.dataset.participant));
-      for (const cellule of ligne.cells) {
-        const style = getComputedStyle(cellule);
-        expect(composantes(style.borderBottomColor).join(), `ligne ${ligne.dataset.participant}`).toBe(fin ? texteEncre : filet);
-        expect(style.borderBottomWidth).toBe('1px');
-      }
-    }
+    const attendus = rangeesAccueil(lignes, cleNormalisee, 'organisation').filter((rangee) => 'intertitre' in rangee);
+    expect(attendus.length).toBeGreaterThan(2);
+    expect(attendus.at(-1).intertitre, 'les personnes sans organisation à la fin').toBeNull();
+    const intertitres = () => tous(m.racine, '[data-impression] [data-feuille] [data-intertitre]');
+    expect(intertitres().map(texte)).toEqual(attendus.map(({ intertitre }) => plat(intertitre ?? t('feuilles.accueil.sansOrganisation'))));
+    intertitres().forEach((rangee, rang) => {
+      const suivante = rangee.nextElementSibling;
+      expect(suivante, `intertitre ${rang} : suivi d’une ligne sur sa feuille`).not.toBeNull();
+      expect(Number(suivante.dataset.participant), `intertitre ${rang}`).toBe(attendus[rang].premier);
+      expect(rangee.cells).toHaveLength(1);
+      expect(rangee.cells[0].colSpan).toBe(3 + charge.evenement.tours);
+      expect(Math.abs(boite(rangee.cells[0]).width - boite(rangee.closest('table')).width), `intertitre ${rang} : toute la largeur`).toBeLessThanOrEqual(JEU_PX);
+      expect(Number(getComputedStyle(rangee.cells[0]).fontWeight), `intertitre ${rang} : en gras`).toBeGreaterThanOrEqual(700);
+    });
     await trier(m, charge, 'nom');
-    expect(marquees()).toEqual([]);
+    expect(intertitres()).toEqual([]);
+    expect(tous(m.racine, '[data-impression] [data-feuille] [data-ligne-imprimee]')).toHaveLength(lignes.length);
+  });
+
+  test('la grande démonstration, par organisation : aucune feuille ne finit sur un intertitre, que la pagination sans lui y aurait laissé', async () => {
+    const charge = analyser(texteLivre('grande')).charge;
+    const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
+    await choisirVue(m, 'accueil');
+    expect(m.ui.etat().apercu.tri).toBe('organisation');
+    expect(verifierPagination(m)).toBe(1);
+    const lues = feuilles(m).map(lireFeuille);
+    for (const { lignes } of lues.slice(0, -1)) {
+      expect(lignes.at(-1).hasAttribute('data-intertitre'), `feuille finie par ${texte(lignes.at(-1))}`).toBe(false);
+    }
+    // Sans lignes liées, une page au moins finirait sur un intertitre :
+    // l'épreuve porte sur un cas qui se présente.
+    const intertitres = lues.flatMap(({ intertitres: lus }) => lus);
+    const libres = paginer(
+      lues.flatMap(({ hauteurs }) => hauteurs),
+      { hauteurUtile: boite(lues[0].contenu).height, hauteurEntete: lues[0].entete },
+    );
+    expect(libres.slice(0, -1).some(({ fin }) => intertitres[fin - 1])).toBe(true);
   });
 });
 
@@ -765,9 +790,9 @@ describe('la feuille par table : une ligne plus haute qu’une page sous un seul
 });
 
 describe('la liste d’accueil : une ligne plus haute qu’une page (§ 7.4)', () => {
-  test('deux tours, A4 : continuée sous l’en-tête répété, dans les zones ; chaque texte une fois, dans l’ordre ; le filet de fin d’organisation à son dernier morceau seulement', async () => {
-    // La personne 1, seule de son organisation, ferme celle-ci sous le tri
-    // par organisation, celui de départ.
+  test('deux tours, A4 : continuée sous l’en-tête répété, dans les zones ; chaque texte une fois, dans l’ordre ; l’intertitre de son organisation juste avant chaque morceau', async () => {
+    // La personne 1, seule de son organisation, l'ouvre sous le tri par
+    // organisation, celui de départ.
     const charge = appliquerCommande('modifierParticipant', chargeNomDePages(2), { id: 1, champs: { organisation: 'Atelier Ombrelle' } }).charge;
     const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
     await choisirVue(m, 'accueil');
@@ -786,14 +811,19 @@ describe('la liste d’accueil : une ligne plus haute qu’une page (§ 7.4)', (
       ({ participant }) => participant === 1,
     );
     expect(lignes.map(texteDesDonnees).join(''), 'la ligne entière').toBe(textesLigneAccueil(ligne, t).join(''));
-    expect(
-      finsOrganisation(lignesAccueil(charge, etatsDesTours(charge, m.ui.etat().proposition), cleNormalisee, 'organisation'), cleNormalisee).has(1),
-      'la personne 1 ferme son organisation',
-    ).toBe(true);
-    expect(
-      lignes.map((rangee) => rangee.hasAttribute('data-fin-organisation')),
-      'le filet au dernier morceau seulement',
-    ).toEqual(lignes.map((_, rang) => rang === lignes.length - 1));
+    // Chaque morceau suit l'intertitre de l'organisation, répété sur sa
+    // feuille ; aucune autre feuille ne porte cet intertitre, et aucune ne
+    // finit sur un intertitre.
+    for (const rangee of lignes) {
+      const avant = rangee.previousElementSibling;
+      expect(avant?.hasAttribute('data-intertitre'), 'l’intertitre avant le morceau').toBe(true);
+      expect(texte(avant)).toBe('Atelier Ombrelle');
+    }
+    const siens = tous(m.racine, '[data-impression] [data-feuille] [data-intertitre]').filter((rangee) => texte(rangee) === 'Atelier Ombrelle');
+    expect(siens).toHaveLength(lignes.length);
+    for (const feuille of feuilles(m).slice(0, -1)) {
+      expect(tous(feuille, '[data-ligne-imprimee]').at(-1).hasAttribute('data-intertitre'), `feuille ${feuille.dataset.feuille}`).toBe(false);
+    }
     // Chaque autre personne garde sa ligne entière, sur une feuille.
     const autres = tous(m.racine, '[data-impression] [data-participant]').filter((autre) => autre.dataset.participant !== '1');
     expect(autres).toHaveLength(charge.participants.filter(({ id, exclu }) => id !== 1 && !exclu).length);

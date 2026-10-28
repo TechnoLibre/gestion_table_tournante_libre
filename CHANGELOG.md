@@ -365,10 +365,11 @@
   blocs de tours consécutifs, chacun sur ses pages, sous un en-tête qui nomme
   ses tours (« Tours 1 à 6 ») ; chaque bloc reprend les noms.
 - La liste d'accueil imprimée se trie au choix de « Trier par », dans la barre
-  de l'aperçu : par organisation, à l'ouverture, les personnes d'une même
-  organisation par prénom puis par nom, un filet foncé sous la dernière, et
-  celles sans organisation à la fin ; par nom ; ou par prénom. Le choix
-  n'écrit rien.
+  de l'aperçu : par organisation, à l'ouverture, chaque organisation sous son
+  nom en intertitre, ses personnes par prénom puis par nom, et celles sans
+  organisation à la fin, sous « Sans organisation » ; par nom ; ou par prénom.
+  Un intertitre ne finit jamais une page : il passe sur la suivante avec la
+  première personne de son organisation. Le choix n'écrit rien.
 - **Un dossier par événement.** Le dossier de travail s'appelle `data` dans les
   deux modes : à côté de l'exécutable, ou, sous Windows quand le logiciel n'y
   travaille pas, `Documents\Gestion table tournante Libre\data`. Il porte un

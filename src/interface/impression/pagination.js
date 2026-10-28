@@ -6,18 +6,23 @@
 // d'une ligne dépend donc de son texte, et se mesure au rendu. Ce module
 // range des hauteurs mesurées en pages, sans DOM, dans une seule unité au
 // choix de l'appelant — px CSS pour les vues. Chaque page répète l'en-tête
-// de sa liste. mesurerListes lit, sur une feuille rendue hors de la vue, ce
-// que la pagination reçoit.
+// de sa liste ; une ligne liée — l'intertitre d'une organisation, sur la
+// liste d'accueil — ne finit pas une page, elle va avec sa suivante.
+// mesurerListes lit, sur une feuille rendue hors de la vue, ce que la
+// pagination reçoit.
 //
 // tientEnCopie essaie, sur une copie d'une liste rendue, la taille du texte
 // d'une feuille par table (echelleAjustee, listes.js).
 //
-// Une ligne plus haute qu'une page ne se coupe pas au bord de la page : son
-// texte se partage en morceaux qui tiennent chacun sur une page sous
-// l'en-tête (couperTexte), coupés au début d'un mot, et chaque morceau
-// prend une page à la suite (morcelerPages). couperLigne essaie les
-// morceaux sur une copie de la ligne rendue, hors de la vue ; trancher dit
-// ce que chaque texte de la ligne garde dans un morceau.
+// Une ligne plus haute que ce que l'en-tête et les lignes liées qui la
+// précèdent laissent d'une page — plus haute qu'une page, ou qu'une page sous
+// un intertitre — ne se coupe pas au bord de la page : son texte se partage
+// en morceaux qui tiennent chacun sur une page sous l'en-tête et ces lignes
+// liées (couperTexte, hauteurDuMorceau), coupés au début d'un mot, et chaque
+// morceau prend une page à la suite, sous les mêmes lignes liées
+// (morcelerPages). couperLigne essaie les morceaux sur une copie de la ligne
+// rendue, hors de la vue ; trancher dit ce que chaque texte de la ligne garde
+// dans un morceau.
 
 // L'écart qu'une somme de hauteurs peut avoir avec la hauteur utile et y
 // tenir encore : le bruit de l'arithmétique flottante (0,1 + 0,2 dépasse 0,3
@@ -30,40 +35,82 @@ const hauteurValide = (valeur) => typeof valeur === 'number' && Number.isFinite(
  * Les pages d'une liste : chacune porte l'en-tête, puis les lignes de debut
  * (compris) à fin (exclu), autant qu'il en tient — en-tête et lignes de
  * somme au plus hauteurUtile. Les lignes se suivent dans l'ordre reçu,
- * chacune sur une page et une seule. Une ligne plus haute que ce que
- * l'en-tête laisse d'une page est seule sur la sienne, et seule à porter
- * seule vrai. Une liste vide donne une page, son en-tête seul.
+ * chacune sur une page et une seule. Une liste vide donne une page, son
+ * en-tête seul.
+ *
+ * Une ligne liée — un intertitre — ne finit pas une page quand une ligne la
+ * suit : elle va avec la suivante, et des lignes liées de suite vont
+ * ensemble avec celle qui les suit. Ce groupe passe sur la page suivante
+ * quand il ne tient pas dans ce qui reste.
+ *
+ * Une ligne plus haute que ce que l'en-tête et les lignes liées qui la
+ * précèdent laissent d'une page est seule sur la sienne, avec ces lignes
+ * liées : celles-ci tiennent sur la page, elle la finit et passe la hauteur
+ * utile, et seule vaut vrai. Elle se coupe sous elles (morcelerPages), même
+ * quand elle tiendrait sous l'en-tête seul : une ligne liée ne finit pas une
+ * page. Une ligne liée plus haute que ce que l'en-tête laisse est seule de
+ * même, et sa suivante commence la page d'après.
  *
  * @param {number[]} hauteurs   une par ligne, finies, ≥ 0
- * @param {{hauteurUtile: number, hauteurEntete: number}} page
+ * @param {{hauteurUtile: number, hauteurEntete: number, liees?: number[]}} page
+ *        liees, les rangs des lignes liées à leur suivante ; aucune par défaut
  * @returns {Array<{debut: number, fin: number, seule: boolean}>}
- * @throws {TypeError} des hauteurs qui ne sont pas une liste
- * @throws {RangeError} une hauteur hors du domaine ; une hauteur utile ≤ 0 ;
- *         un en-tête négatif, ou qui ne laisse aucune place
+ * @throws {TypeError} des hauteurs, ou des lignes liées, qui ne sont pas une
+ *         liste
+ * @throws {RangeError} une hauteur hors du domaine ; un rang lié hors de la
+ *         liste ; une hauteur utile ≤ 0 ; un en-tête négatif, ou qui ne
+ *         laisse aucune place
  */
-export function paginer(hauteurs, { hauteurUtile, hauteurEntete }) {
+export function paginer(hauteurs, { hauteurUtile, hauteurEntete, liees = [] }) {
   if (!Array.isArray(hauteurs)) throw new TypeError('paginer : une liste de hauteurs attendue');
   hauteurs.forEach((hauteur, rang) => {
     if (!hauteurValide(hauteur)) throw new RangeError(`paginer : hauteur ${rang} hors du domaine, reçu ${String(hauteur)}`);
   });
+  if (!Array.isArray(liees)) throw new TypeError('paginer : une liste de lignes liées attendue');
+  for (const rang of liees) {
+    if (!Number.isSafeInteger(rang) || rang < 0 || rang >= hauteurs.length) {
+      throw new RangeError(`paginer : ligne liée ${String(rang)} hors de [0, ${hauteurs.length})`);
+    }
+  }
   if (!hauteurValide(hauteurUtile) || hauteurUtile === 0) {
     throw new RangeError(`paginer : hauteur utile > 0 attendue, reçu ${String(hauteurUtile)}`);
   }
   if (!hauteurValide(hauteurEntete) || hauteurEntete >= hauteurUtile) {
     throw new RangeError(`paginer : en-tête de ${String(hauteurEntete)} sur une hauteur utile de ${hauteurUtile}`);
   }
+  const liee = new Set(liees);
+  // La fin (exclue) du groupe qui commence au rang debut : ses lignes
+  // liées, puis la ligne qui les suit, ou la fin de la liste.
+  const finDuGroupe = (debut) => {
+    let fin = debut;
+    while (liee.has(fin) && fin + 1 < hauteurs.length) fin += 1;
+    return fin + 1;
+  };
   const plafond = hauteurUtile + BRUIT;
   const pages = [];
   let debut = 0;
   do {
     let fin = debut;
     let somme = hauteurEntete;
-    while (fin < hauteurs.length && somme + hauteurs[fin] <= plafond) {
-      somme += hauteurs[fin];
-      fin += 1;
+    while (fin < hauteurs.length) {
+      const finGroupe = finDuGroupe(fin);
+      const groupe = hauteurs.slice(fin, finGroupe).reduce((a, b) => a + b, 0);
+      if (somme + groupe > plafond) break;
+      somme += groupe;
+      fin = finGroupe;
     }
     const seule = fin === debut && fin < hauteurs.length;
-    if (seule) fin += 1;
+    if (seule) {
+      // Le groupe ne tient sur aucune page : ses lignes liées y prennent ce
+      // qui tient, et la première qui ne tient pas — au plus tard la ligne
+      // qui les suit — finit la page.
+      const finGroupe = finDuGroupe(fin);
+      while (fin + 1 < finGroupe && somme + hauteurs[fin] <= plafond) {
+        somme += hauteurs[fin];
+        fin += 1;
+      }
+      fin += 1;
+    }
     pages.push({ debut, fin, seule });
     debut = fin;
   } while (debut < hauteurs.length);
@@ -72,18 +119,19 @@ export function paginer(hauteurs, { hauteurUtile, hauteurEntete }) {
 
 /**
  * Les pages de plusieurs listes bout à bout — une feuille par table, ou par
- * table et par tour — : chaque liste commence une page et se pagine sous
- * son propre en-tête (paginer). rang numérote les pages du document, de 0 ;
- * feuille est l'indice de la liste.
+ * table et par tour, ou un bloc de tours de la liste d'accueil — : chaque
+ * liste commence une page et se pagine sous son propre en-tête, avec ses
+ * propres lignes liées (paginer). rang numérote les pages du document, de
+ * 0 ; feuille est l'indice de la liste.
  *
- * @param {Array<{entete: number, lignes: number[]}>} feuilles
+ * @param {Array<{entete: number, lignes: number[], liees?: number[]}>} feuilles
  * @param {number} hauteurUtile
  * @returns {Array<{rang: number, feuille: number, debut: number, fin: number, seule: boolean}>}
  */
 export function paginerFeuilles(feuilles, hauteurUtile) {
   const pages = [];
-  feuilles.forEach(({ entete, lignes }, feuille) => {
-    for (const page of paginer(lignes, { hauteurUtile, hauteurEntete: entete })) {
+  feuilles.forEach(({ entete, lignes, liees = [] }, feuille) => {
+    for (const page of paginer(lignes, { hauteurUtile, hauteurEntete: entete, liees })) {
       pages.push({ rang: pages.length, feuille, ...page });
     }
   });
@@ -94,19 +142,22 @@ export function paginerFeuilles(feuilles, hauteurUtile) {
  * Ce que la pagination reçoit, lu sur une zone de contenu rendue : sa
  * hauteur, la hauteur utile ; et pour chaque liste [data-liste-imprimee],
  * dans l'ordre du document, son en-tête — du haut de la liste au haut de
- * son corps de tableau : titre et têtes de colonnes — et la hauteur de
- * chaque ligne de ce corps. Les mesures sont en px CSS, celles de la boîte
- * rendue.
+ * son corps de tableau : titre et têtes de colonnes —, la hauteur de chaque
+ * ligne de ce corps, et les rangs des lignes liées à leur suivante, les
+ * intertitres [data-intertitre]. Les mesures sont en px CSS, celles de la
+ * boîte rendue.
  *
  * @param {Element} contenu   la zone [data-contenu] d'une feuille
- * @returns {{utile: number, feuilles: Array<{entete: number, lignes: number[]}>}}
+ * @returns {{utile: number, feuilles: Array<{entete: number, lignes: number[], liees: number[]}>}}
  */
 export function mesurerListes(contenu) {
   const feuilles = [...contenu.querySelectorAll('[data-liste-imprimee]')].map((liste) => {
     const corps = liste.querySelector('tbody');
+    const rangees = [...corps.rows];
     return {
       entete: corps.getBoundingClientRect().top - liste.getBoundingClientRect().top,
-      lignes: [...corps.rows].map((ligne) => ligne.getBoundingClientRect().height),
+      lignes: rangees.map((ligne) => ligne.getBoundingClientRect().height),
+      liees: rangees.flatMap((ligne, rang) => (ligne.hasAttribute('data-intertitre') ? [rang] : [])),
     };
   });
   return { utile: contenu.getBoundingClientRect().height, feuilles };
@@ -258,14 +309,29 @@ export function couperTexte(textes, tient) {
 }
 
 /**
+ * La hauteur que chaque morceau de la ligne coupée d'une page seule
+ * (paginer) peut prendre : la hauteur utile, moins l'en-tête de sa liste et
+ * les lignes liées qui la précèdent sur la page, de debut à fin − 1.
+ *
+ * @param {{entete: number, lignes: number[]}} feuille   mesurerListes
+ * @param {{debut: number, fin: number}} page   une page seule de cette liste
+ * @param {number} hauteurUtile
+ * @returns {number}
+ */
+export function hauteurDuMorceau({ entete, lignes }, { debut, fin }, hauteurUtile) {
+  return lignes.slice(debut, fin - 1).reduce((reste, hauteur) => reste - hauteur, hauteurUtile - entete);
+}
+
+/**
  * Les pages d'un document dont les lignes seules sont continuées : chaque
- * page seule (paginerFeuilles) dont la ligne a des bornes à plus d'un
- * morceau (couperTexte) devient une page par morceau, sous la même ligne,
- * morceau {debut, fin} ; toute autre page reste telle, morceau null. rang
- * renumérote les pages du document, de 0.
+ * page seule (paginerFeuilles) dont la dernière ligne — celle qui passe la
+ * page — a des bornes à plus d'un morceau (couperTexte) devient une page par
+ * morceau, sous les mêmes lignes, de debut à fin, morceau {debut, fin} : les
+ * lignes liées qui la précèdent se répètent sur chacune. Toute autre page
+ * reste telle, morceau null. rang renumérote les pages du document, de 0.
  *
  * @param {Array<{rang: number, feuille: number, debut: number, fin: number, seule: boolean}>} pages
- * @param {Array<{feuille: number, ligne: number, bornes: number[]}>} coupures
+ * @param {Array<{feuille: number, ligne: number, bornes: number[]}>} coupures   ligne, le rang de la ligne coupée
  * @returns {Array<{rang: number, feuille: number, debut: number, fin: number, seule: boolean,
  *            morceau: {debut: number, fin: number}|null}>}
  * @throws {RangeError} des bornes qui ne partent pas de 0 ou ne croissent pas strictement
@@ -273,7 +339,7 @@ export function couperTexte(textes, tient) {
 export function morcelerPages(pages, coupures) {
   const resultat = [];
   for (const page of pages) {
-    const coupure = page.seule ? coupures.find(({ feuille, ligne }) => feuille === page.feuille && ligne === page.debut) : undefined;
+    const coupure = page.seule ? coupures.find(({ feuille, ligne }) => feuille === page.feuille && ligne === page.fin - 1) : undefined;
     const bornes = coupure?.bornes;
     if (bornes !== undefined) {
       const croissantes = bornes.every((borne, rang) => Number.isSafeInteger(borne) && (rang === 0 ? borne === 0 : borne > bornes[rang - 1]));
@@ -302,7 +368,8 @@ export function morcelerPages(pages, coupures) {
  * mesure au plus hauteur ; la copie se retire avant le retour.
  *
  * @param {HTMLTableRowElement} ligne
- * @param {number} hauteur   en px CSS, ce que l'en-tête laisse d'une page
+ * @param {number} hauteur   en px CSS, ce que l'en-tête, et les lignes liées
+ *        qui la précèdent, laissent d'une page
  * @returns {number[]}
  */
 export function couperLigne(ligne, hauteur) {

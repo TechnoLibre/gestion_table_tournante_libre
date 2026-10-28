@@ -4,14 +4,15 @@
 // Les modèles de la liste d'accueil et de la feuille par table (§ 11.7,
 // § 11.4, § 7.4, § 15.5), sans DOM : l'ordre de la liste d'accueil par la clé
 // normalisée injectée, jamais localeCompare ; ce que chaque ligne dit de
-// chaque tour ; les feuilles par table, les tours en colonnes ou une feuille
-// par tour (Q6 c) ; le pied et le filigrane d'une feuille d'un seul tour ;
-// les groupes de tours de la feuille par table, leur taille tirée de la
-// part mesurée d'un tour, et leur resserrement sous une page seule ; les
-// blocs de tours de la liste d'accueil, chaque tour à sa part, les noms à
-// leur plancher, chaque ligne répétée dans chaque bloc ; les
-// textes d'une cellule de la feuille par table et d'une ligne de la liste
-// d'accueil, dans l'ordre où elles les posent.
+// chaque tour ; l'intertitre de chaque organisation ; les feuilles par
+// table, les tours en colonnes ou une feuille par tour (Q6 c) ; le pied et
+// le filigrane d'une feuille d'un seul tour ; les groupes de tours de la
+// feuille par table, leur taille tirée de la part mesurée d'un tour, et leur
+// resserrement sous une page seule ; les blocs de tours de la liste
+// d'accueil, chaque tour à sa part, les noms à leur plancher, chaque ligne
+// répétée dans chaque bloc ; les textes d'une cellule de la feuille par
+// table et d'une ligne de la liste d'accueil, dans l'ordre où elles les
+// posent.
 // Les noms d'épreuve sont inventés, hors du réservoir des démonstrations.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
@@ -31,13 +32,13 @@ import {
   etatsDesTours,
   feuilleDuTour,
   feuillesTables,
-  finsOrganisation,
   grouperTours,
   largeursColonnes,
   libellePlace,
   lignesAccueil,
   partsDesCellules,
   plafondEchelle,
+  rangeesAccueil,
   resserrerGroupes,
   textesCellule,
   textesLigneAccueil,
@@ -160,13 +161,67 @@ describe('lignesAccueil : la liste d’accueil (§ 11.7)', () => {
     }
   });
 
-  test('finsOrganisation : les lignes que suit une autre organisation, la dernière de la liste exclue', () => {
+  test('rangeesAccueil, par organisation : un intertitre avant la première personne de chaque organisation, null pour celles qui n’en ont pas ; les lignes telles quelles', () => {
     const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee, 'organisation');
-    // Club des Merles ferme sur 7, Grisaille sur 5 ; les personnes sans
-    // organisation finissent la liste.
-    assert.deepEqual([...finsOrganisation(lignes, cleNormalisee)], [7, 5]);
-    assert.deepEqual([...finsOrganisation([], cleNormalisee)], []);
-    assert.deepEqual([...finsOrganisation(lignes.slice(0, 3), cleNormalisee)], [], 'une seule organisation');
+    const avant = structuredClone(lignes);
+    const rangees = rangeesAccueil(lignes, cleNormalisee, 'organisation');
+    const lues = rangees.map((rangee) => ('ligne' in rangee ? rangee.ligne.participant : `[${rangee.intertitre}]`));
+    // Les personnes sans organisation finissent la liste sous leur
+    // intertitre, Ézard, sans prénom, en tête.
+    assert.deepEqual(lues, ['[Club des Merles]', 1, 6, 7, '[Grisaille]', 5, '[null]', 8, 10, 3, 4, 2]);
+    assert.deepEqual(
+      rangees.filter((rangee) => 'intertitre' in rangee),
+      [
+        { intertitre: 'Club des Merles', premier: 1 },
+        { intertitre: 'Grisaille', premier: 5 },
+        { intertitre: null, premier: 8 },
+      ],
+    );
+    assert.ok(rangees.filter((rangee) => 'ligne' in rangee).every(({ ligne }, rang) => ligne === lignes[rang]));
+    assert.deepEqual(lignes, avant, 'les lignes reçues ne changent pas');
+  });
+
+  test('rangeesAccueil : l’intertitre écrit l’organisation comme sa première ligne ; une organisation faite de blancs compte comme aucune', () => {
+    const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee, 'organisation');
+    // Les deux lignes qui l'écrivent « Club des Merles » ôtées, la première
+    // du club l'écrit « ␣club␣␣des MERLES␣ ».
+    const sansMajuscules = lignes.filter(({ participant }) => participant !== 6 && participant !== 1);
+    assert.deepEqual(rangeesAccueil(sansMajuscules, cleNormalisee, 'organisation')[0], { intertitre: ' club  des MERLES ', premier: 7 });
+    const charge = accueil();
+    charge.participants.find(({ id }) => id === 5).organisation = '   ';
+    const blancs = rangeesAccueil(lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation'), cleNormalisee, 'organisation');
+    assert.deepEqual(
+      blancs.filter((rangee) => 'intertitre' in rangee),
+      [
+        { intertitre: 'Club des Merles', premier: 1 },
+        { intertitre: null, premier: 8 },
+      ],
+    );
+  });
+
+  test('rangeesAccueil : aucune organisation, aucun intertitre ; une seule, un intertitre ; une liste vide, aucune rangée', () => {
+    const charge = accueil();
+    for (const personne of charge.participants) personne.organisation = null;
+    const sansOrganisation = lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation');
+    assert.deepEqual(rangeesAccueil(sansOrganisation, cleNormalisee, 'organisation'), sansOrganisation.map((ligne) => ({ ligne })));
+    for (const personne of charge.participants) personne.organisation = 'Atelier des Saules';
+    const une = rangeesAccueil(lignesAccueil(charge, etats(charge), cleNormalisee, 'organisation'), cleNormalisee, 'organisation');
+    assert.deepEqual(
+      une.filter((rangee) => 'intertitre' in rangee),
+      [{ intertitre: 'Atelier des Saules', premier: une[1].ligne.participant }],
+    );
+    assert.equal(une.length, 10);
+    assert.deepEqual(rangeesAccueil([], cleNormalisee, 'organisation'), []);
+  });
+
+  test('rangeesAccueil, par nom ou par prénom : les lignes seules ; un autre tri lève RangeError', () => {
+    for (const tri of ['nom', 'prenom']) {
+      const lignes = lignesAccueil(accueil(), etats(accueil()), cleNormalisee, tri);
+      assert.deepEqual(rangeesAccueil(lignes, cleNormalisee, tri), lignes.map((ligne) => ({ ligne })), tri);
+    }
+    for (const tri of ['table', undefined, null, 'Organisation']) {
+      assert.throws(() => rangeesAccueil([], cleNormalisee, tri), RangeError, String(tri));
+    }
   });
 
   test('un exclu n’a pas de ligne ; chaque autre personne en a une, avec nom, prénom et organisation tels quels', () => {

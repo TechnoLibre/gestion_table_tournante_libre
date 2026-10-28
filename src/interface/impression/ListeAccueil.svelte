@@ -7,11 +7,12 @@
   // nom ou par prénom (lignesAccueil) —, et pour chaque tour de la soirée, en
   // colonnes, la table, le siège sous sièges attribués, ou la réserve. Les
   // feuilles sont en portrait et portent le pied de la soirée (« Tous les
-  // tours »). Triée par organisation, la dernière ligne de chaque
-  // organisation porte un filet plus marqué (finsOrganisation), de la même
-  // épaisseur que les autres : la hauteur des lignes, donc la pagination,
-  // n'en dépend pas. Une ligne continuée sur plusieurs pages ne le porte
-  // qu'à son dernier morceau.
+  // tours »). Triée par organisation, un intertitre, une rangée du corps du
+  // tableau sur toute sa largeur, ouvre chaque organisation : son nom, ou
+  // « Sans organisation » pour les personnes de la fin (rangeesAccueil).
+  // Chaque bloc de tours porte les siens. Un intertitre est une ligne liée
+  // (paginer) : il ne finit pas une page, il passe sur la suivante avec la
+  // première ligne de son organisation.
   //
   // Rien ne se tronque : un nom long replie dans sa colonne (§ 7.4). La
   // hauteur d'une ligne dépend donc de son texte, et la pagination se fait
@@ -25,13 +26,17 @@
   // lignes changent. Les colonnes ont des largeurs fixées
   // (largeursColonnes) : la mesure et les pages replient de même.
   //
-  // Une ligne plus haute qu'une page — un nom de milliers de caractères —
-  // ne se coupe pas au bord de la page : la même passe en essaie les
-  // morceaux sur la ligne rendue (couperLigne), et la ligne se continue, un
-  // morceau par page, sous l'en-tête répété. Ses textes se suivent dans
-  // l'ordre de ses cellules — nom, prénom, organisation, places
+  // Une ligne plus haute qu'une page — un nom de milliers de caractères —, ou
+  // qui ouvre son organisation et passe ce que l'en-tête et l'intertitre
+  // laissent d'une page, ne se coupe pas au bord de la page : la même passe en
+  // essaie les morceaux sur la ligne rendue (couperLigne), et la ligne se
+  // continue, un morceau par page, sous l'en-tête répété et, quand elle ouvre
+  // son organisation, sous son intertitre, répété lui aussi : chaque morceau
+  // tient dans ce que l'en-tête et l'intertitre laissent. Ses textes se suivent
+  // dans l'ordre de ses cellules — nom, prénom, organisation, places
   // (textesLigneAccueil) — et chaque page pose de chaque cellule la part qui
-  // tombe dans son morceau (morcelerPages, trancher).
+  // tombe dans son morceau (morcelerPages, trancher). Un intertitre plus haut
+  // qu'une page se continue de même, seul, son texte coupé.
   //
   // Les colonnes de tour se règlent sur leur texte. La feuille de mesure
   // porte une sonde : un tableau d'une colonne, sans repli, qui réunit chaque
@@ -60,14 +65,14 @@
   import {
     blocsAccueil,
     etatsDesTours,
-    finsOrganisation,
     largeursColonnes,
     libellePlace,
     lignesAccueil,
+    rangeesAccueil,
     textesLigneAccueil,
     toursParBloc,
   } from './listes.js';
-  import { couperLigne, mesurerListes, mesurerPlace, morcelerPages, paginerFeuilles, trancher } from './pagination.js';
+  import { couperLigne, hauteurDuMorceau, mesurerListes, mesurerPlace, morcelerPages, paginerFeuilles, trancher } from './pagination.js';
 
   let { etat, options, feuille, bandeMm = null, orientation = $bindable(null) } = $props();
 
@@ -81,9 +86,6 @@
   const teteDuTour = (tour) => nomsTours[tour - 1] ?? t('feuilles.tour', { tour });
   const etats = $derived(etatsDesTours(charge, etat.proposition));
   const lignes = $derived(lignesAccueil(charge, etats, cleNormalisee, options.tri));
-  // Les lignes qui ferment une organisation, aucune hors du tri par
-  // organisation.
-  const fins = $derived(options.tri === 'organisation' ? finsOrganisation(lignes, cleNormalisee) : new Set());
   const tours = $derived(etats.map(({ tour }) => tour));
   // Chaque libellé de place que la liste écrit, une fois : ce que la sonde
   // porte.
@@ -102,10 +104,13 @@
   // part d'un tour, null tant qu'elle n'est pas celle des lignes courantes ;
   // les blocs qui en suivent, un seul sans elle ; puis les hauteurs ; les
   // pages, null tant qu'elles ne sont pas celles des blocs courants.
-  const cle = $derived(JSON.stringify([options.papier, bandeMm, lignes]));
+  const cle = $derived(JSON.stringify([options.papier, bandeMm, options.tri, lignes]));
   let part = $state(null);
   const partTour = $derived(part !== null && part.cle === cle ? part.valeur : null);
   const blocs = $derived(blocsAccueil(lignes, tours, partTour === null ? tours.length : toursParBloc(partTour, tours.length)));
+  // Les rangées du corps de chaque bloc, intertitres compris : ce que la
+  // pagination compte.
+  const rangees = $derived(blocs.map((bloc) => rangeesAccueil(bloc.lignes, cleNormalisee, options.tri)));
   const cleBlocs = $derived(JSON.stringify([cle, partTour]));
   let mesures = $state(null);
   let sonde = $state(null);
@@ -118,8 +123,10 @@
   // clé lue alors est celle des valeurs que le DOM porte. Sans part à jour,
   // lit la part d'un tour ; avec elle, les hauteurs de chaque bloc rendu à
   // ses largeurs, et les morceaux de chaque ligne seule sur sa page, dans
-  // son bloc. La lecture de cleBlocs, qui porte la clé et la part, relance
-  // la mesure quand l'une change avant que les pages viennent.
+  // son bloc, sous la hauteur que l'en-tête et les intertitres qui la
+  // précèdent sur cette page laissent (hauteurDuMorceau). La lecture de
+  // cleBlocs, qui porte la clé et la part, relance la mesure quand l'une
+  // change avant que les pages viennent.
   function mesurer(conteneur) {
     const voulue = cleBlocs;
     const partLue = partTour;
@@ -134,10 +141,13 @@
         const listesRendues = contenu.querySelectorAll('[data-liste-imprimee]');
         const coupures = paginerFeuilles(lues.feuilles, lues.utile)
           .filter(({ seule }) => seule)
-          .map(({ feuille, debut }) => ({
-            feuille,
-            ligne: debut,
-            bornes: couperLigne(listesRendues[feuille].querySelector('tbody').rows[debut], lues.utile - lues.feuilles[feuille].entete),
+          .map((page) => ({
+            feuille: page.feuille,
+            ligne: page.fin - 1,
+            bornes: couperLigne(
+              listesRendues[page.feuille].querySelector('tbody').rows[page.fin - 1],
+              hauteurDuMorceau(lues.feuilles[page.feuille], page, lues.utile),
+            ),
           }));
         mesures = { cle: voulue, ...lues, coupures };
       }
@@ -152,12 +162,11 @@
   });
 </script>
 
-<!-- Le bloc de rang rangBloc, de la ligne debut (comprise) à fin (exclue),
-     sous l'en-tête qui nomme ses tours quand la liste a plusieurs blocs ;
-     sous un morceau {debut, fin}, chaque cellule de la ligne continuée ne
-     pose que la part de ses textes (textesLigneAccueil) qui tombe dans ce
-     morceau, et le filet de fin d'organisation ne vient qu'avec le morceau
-     qui finit ces textes. -->
+<!-- Le bloc de rang rangBloc, de la rangée debut (comprise) à fin (exclue),
+     intertitres compris, sous l'en-tête qui nomme ses tours quand la liste a
+     plusieurs blocs ; sous un morceau {debut, fin}, la dernière rangée, la
+     ligne ou l'intertitre continué, ne pose de chaque cellule que la part de
+     ses textes (textesLigneAccueil) qui tombe dans ce morceau. -->
 {#snippet liste(bloc, rangBloc, debut, fin, morceau = null)}
   <div class="liste" data-liste-imprimee={rangBloc}>
     <p class="titre">{t('feuilles.accueil.titre')}</p>
@@ -181,20 +190,27 @@
         </tr>
       </thead>
       <tbody>
-        {#each bloc.lignes.slice(debut, fin) as ligne, rang (ligne.participant)}
-          {@const textes = textesLigneAccueil(ligne, t)}
-          {@const [nom, prenom, organisation, ...places] = morceau === null ? textes : trancher(textes, morceau.debut, morceau.fin)}
-          {@const fermeOrganisation = fins.has(ligne.participant) && (morceau === null || morceau.fin >= textes.join('').length)}
-          <tr data-ligne-imprimee={debut + rang} data-participant={ligne.participant} data-fin-organisation={fermeOrganisation ? '' : undefined}>
-            <td>
-              {#if nom !== ''}<span class="nom" data-nom-imprime>{nom}</span>{/if}
-            </td>
-            <td>{prenom}</td>
-            <td>{organisation}</td>
-            {#each places as place, rangPlace (rangPlace)}
-              <td>{place}</td>
-            {/each}
-          </tr>
+        {#each rangees[rangBloc].slice(debut, fin) as rangee, rang ('ligne' in rangee ? rangee.ligne.participant : `intertitre ${rangee.premier}`)}
+          {@const coupee = morceau !== null && debut + rang === fin - 1}
+          {@const dansLeMorceau = (textes) => (coupee ? trancher(textes, morceau.debut, morceau.fin) : textes)}
+          {#if 'ligne' in rangee}
+            {@const [nom, prenom, organisation, ...places] = dansLeMorceau(textesLigneAccueil(rangee.ligne, t))}
+            <tr data-ligne-imprimee={debut + rang} data-participant={rangee.ligne.participant}>
+              <td>
+                {#if nom !== ''}<span class="nom" data-nom-imprime>{nom}</span>{/if}
+              </td>
+              <td>{prenom}</td>
+              <td>{organisation}</td>
+              {#each places as place, rangPlace (rangPlace)}
+                <td>{place}</td>
+              {/each}
+            </tr>
+          {:else}
+            {@const [titre] = dansLeMorceau([rangee.intertitre ?? t('feuilles.accueil.sansOrganisation')])}
+            <tr data-ligne-imprimee={debut + rang} data-intertitre>
+              <td class="titre-organisation" colspan={3 + bloc.tours.length}>{titre}</td>
+            </tr>
+          {/if}
         {/each}
       </tbody>
     </table>
@@ -208,7 +224,7 @@
     <Feuille papier={options.papier} orientation="portrait" feuille={feuilleMesure} {bandeMm}>
       {#snippet contenu()}
         {#each blocs as bloc, rangBloc (rangBloc)}
-          {@render liste(bloc, rangBloc, 0, bloc.lignes.length)}
+          {@render liste(bloc, rangBloc, 0, rangees[rangBloc].length)}
         {/each}
         <table class="sonde" bind:this={sonde}>
           <tbody>
@@ -267,10 +283,12 @@
     overflow-wrap: anywhere;
   }
 
-  /* La fin d'une organisation : le filet garde son épaisseur, il prend
-     l'encre du texte. */
-  tr[data-fin-organisation] > td {
-    border-bottom-color: var(--couleur-page-texte);
+  /* L'intertitre d'une organisation : en gras, un cran au-dessus du texte,
+     détaché de la ligne qui le précède. */
+  .titre-organisation {
+    padding-top: var(--espace-3);
+    font-size: var(--taille-titre-carte);
+    font-weight: bold;
   }
 
   .nom {

@@ -15,7 +15,8 @@
 // nom ou par prénom — et ne dépend pas de l'environnement (§ 15.5) : la clé
 // normalisée injectée, comparée point de code par point de code, jamais la
 // collation de la langue du système ; deux lignes que rien d'autre ne
-// sépare, par identifiant.
+// sépare, par identifiant. Triée par organisation, un intertitre ouvre
+// chaque organisation (rangeesAccueil).
 //
 // La feuille par table règle la taille de son texte pour remplir sa page
 // sans exagérer : une échelle de son corps, de 1 — le plancher, la taille
@@ -121,20 +122,30 @@ export function lignesAccueil(charge, etatsParTour, cle, tri) {
 }
 
 /**
- * Les lignes qui ferment une organisation dans la liste d'accueil triée par
- * organisation (lignesAccueil) : celles que suit une ligne d'une autre clé
- * d'organisation, la dernière des personnes sans organisation comprise
- * quand elle n'est pas la dernière de la liste. La dernière ligne n'en
- * ferme aucune : rien ne la suit. La vue y pose un filet plus marqué, qui ne
- * change pas la hauteur des lignes.
+ * Les rangées de la liste d'accueil (§ 11.7), dans l'ordre où elle les
+ * pose : sous le tri par organisation, un intertitre avant la première ligne
+ * de chaque organisation — chaque changement de sa clé normalisée, la liste
+ * reçue triée par lignesAccueil —, puis ses lignes. L'intertitre écrit
+ * l'organisation comme sa première ligne l'écrit, null pour les personnes
+ * sans organisation, ou dont l'organisation est faite de blancs ; premier
+ * est l'identifiant de cette ligne. Une liste où personne n'a d'organisation
+ * n'a pas d'intertitre : il ne séparerait rien. Sous un autre tri, les
+ * lignes seules. Les lignes reçues ne changent pas.
  *
  * @param {ReturnType<typeof lignesAccueil>} lignes   dans l'ordre de la liste
  * @param {(texte: string) => string} cle   la clé normalisée (cleNormalisee)
- * @returns {Set<number>}   les identifiants de ces lignes
+ * @param {'organisation'|'nom'|'prenom'} tri   celui des lignes
+ * @returns {Array<{intertitre: string|null, premier: number}|{ligne: ReturnType<typeof lignesAccueil>[number]}>}
+ * @throws {RangeError} un autre tri
  */
-export function finsOrganisation(lignes, cle) {
+export function rangeesAccueil(lignes, cle, tri) {
+  if (!ORDRES_ACCUEIL.has(tri)) throw new RangeError(`rangeesAccueil : tri inconnu ${JSON.stringify(tri)}`);
   const cles = lignes.map(({ organisation }) => cleChamp(cle, organisation));
-  return new Set(lignes.filter((_, rang) => rang + 1 < lignes.length && cles[rang] !== cles[rang + 1]).map(({ participant }) => participant));
+  if (tri !== 'organisation' || cles.every((cleLue) => cleLue === '')) return lignes.map((ligne) => ({ ligne }));
+  return lignes.flatMap((ligne, rang) => {
+    if (rang > 0 && cles[rang] === cles[rang - 1]) return [{ ligne }];
+    return [{ intertitre: cles[rang] === '' ? null : ligne.organisation, premier: ligne.participant }, { ligne }];
+  });
 }
 
 /**

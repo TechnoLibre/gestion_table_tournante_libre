@@ -1327,10 +1327,12 @@ ordinaire et se poursuit sur la suivante. « Dessiner la table », décochée pa
 défaut, met en tête de chaque page le dessin de la table — sa forme, ses
 chaises, son numéro et son libellé — à la place de son titre.
 
-La liste d’accueil s’ouvre triée par organisation : les personnes d’une même
-organisation se suivent, par prénom puis par nom, un filet foncé sous la
-dernière, et celles qui n’en ont pas viennent à la fin. « Trier par », dans la
-barre de l’aperçu, la range plutôt par nom ou par prénom.
+La liste d’accueil s’ouvre triée par organisation : chaque organisation
+commence par son nom en intertitre, en gras, puis ses personnes, par prénom puis
+par nom ; celles qui n’en ont pas viennent à la fin, sous « Sans organisation ».
+Un intertitre ne reste jamais seul au bas d’une page : il passe sur la suivante
+avec la première personne de son organisation. « Trier par », dans la barre de
+l’aperçu, la range plutôt par nom ou par prénom, sans intertitre.
 
 La **planche de badges** est le seul document produit en PDF. Par défaut, elle
 s’imprime sur des **cartes Avery 5392** prédécoupées, six par feuille Lettre,
