@@ -520,10 +520,6 @@
     "raison": "plafond.js, borneDiversite, groupe[p] === SANS_GROUPE au compte des effectifs : seules les personnes sans appartenance entrent, à effectifs[−1], qu'un tableau typé n'écrit pas ; les effectifs restent à 0, et le troisième terme, N_aff + 1, ne mord pas (voir if (false))."
   },
   {
-    "cle": "src/moteur/plafond.js:corps-si:3bcf9ce94a530fd1:0",
-    "raison": "plafond.js, borneDiversite, corps du compte des effectifs vidé : les effectifs restent à 0 ; même raison que if (false)."
-  },
-  {
     "cle": "src/moteur/plafond.js:mise-a-jour:3cfed13ad8960f9b:0",
     "raison": "plafond.js, borneDiversite, effectifs[g] −= 1 : chaque effectif devient −g_p, et le troisième terme N_aff + g_p + 1 dépasse N_aff − g_p + 1 ≥ G ; même raison que le compte à partir de p = 1."
   },
@@ -1202,10 +1198,6 @@
   {
     "cle": "src/moteur/inclusions.js:nombre-plus-un:27aa1c0e24d24d3b:0",
     "raison": "inclusions.js, calculer, inclusionCible[i] < 1 au marquage des organisations incluses : la seule ligne de plus, la personne d'index 0, écrit incluse[−1], hors des éléments du tableau typé, qui n'écrit rien."
-  },
-  {
-    "cle": "src/moteur/inclusions.js:si-faux:030c66ecf1d50099:0",
-    "raison": "inclusions.js, calculer, if (false) au lieu de q < 0 au compte des organisations couvertes : une ligne d'organisation, q < 0, lit groupe[q], undefined hors du tableau typé, qui n'égale pas SANS_GROUPE, puis incluse[undefined], undefined, différent de p : continue, comme sans le mutant."
   },
   {
     "cle": "src/moteur/inclusions.js:corps-si:0bf37874b7af9907:1",
