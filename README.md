@@ -89,7 +89,7 @@ sur les captures.
 | `--couleur-chaise-pleine` | marque | 3 | 15,09 | 07a-cibles-sieges | 14,94 | 07a-cibles-sieges |
 | `--couleur-chaise-trait` | marque | 3 | 7,44 | 07-plan-tables | 8,13 | 22-plan-brouillon |
 | `--couleur-echelle` | marque | 3 | 14,82 | 07-plan-tables | 14,62 | 07-plan-tables |
-| `--couleur-fantome` | marque | 3 | 4,34 | 19-ajustement | 4,10 | 19-ajustement |
+| `--couleur-fantome` | marque | 3 | 3,73 | 19-ajustement | 3,90 | 19-ajustement |
 | `--couleur-filigrane` | marque | 3 | 5,10 | 22-plan-brouillon | 5,10 | 22-plan-brouillon |
 | `--couleur-graphique-axe` | marque | 3 | 5,64 | 12-qualite-profil | 5,38 | 12-qualite-profil |
 | `--couleur-graphique-bordure-case` | marque | 3 | 4,78 | 12c-qualite-un-tour | 5,38 | 12c-qualite-un-tour |
@@ -106,7 +106,7 @@ sur les captures.
 | `--couleur-liste-texte` | texte | 4,5 | 14,82 | 07-plan-tables | — | — |
 | `--couleur-marque` | marque | 3 | 3,63 | 07a-cibles-sieges | 3,50 | 07a-cibles-sieges |
 | `--couleur-page-texte` | texte | 4,5 | 13,78 | 01b-passer-en-ecriture | 11,02 | 02c-import-presence |
-| `--couleur-page-texte-secondaire` | texte | 4,5 | 5,57 | 01-premier-ecran | 6,72 | 01b-passer-en-ecriture |
+| `--couleur-page-texte-secondaire` | texte | 4,5 | 5,28 | 11-propositions | 6,01 | 11-propositions |
 | `--couleur-papier` | texte | 4,5 | — | — | 5,00 | 12c-qualite-un-tour |
 | `--couleur-pastille-fond` | marque | 3 | 12,30 | 19-ajustement | 11,62 | 19-ajustement |
 | `--couleur-pastille-texte` | texte | 4,5 | — | — | 14,51 | 19-ajustement |
