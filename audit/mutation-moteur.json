@@ -6,15 +6,15 @@
       "src/moteur"
     ],
     "empreinte": "12633abb44b9c6c7ec93def7a0a2b760ff2633bec3946f108743b47daa378229",
-    "node": "v26.10.0"
+    "node": "v26.11.1"
   },
   "bilan": {
     "total": 7091,
-    "tues": 6077,
-    "tuesSerieLongue": 12,
-    "survivants": 0,
+    "tues": 6088,
+    "tuesSerieLongue": 10,
+    "survivants": 2,
     "equivalents": 330,
-    "delais": 672,
+    "delais": 661,
     "erreurs": 0
   },
   "parFichier": [
@@ -92,8 +92,8 @@
       "fichier": "src/moteur/inclusions.js",
       "total": 230,
       "tues": 179,
-      "tuesSerieLongue": 1,
-      "survivants": 0,
+      "tuesSerieLongue": 0,
+      "survivants": 1,
       "equivalents": 25,
       "delais": 25,
       "erreurs": 0
@@ -101,11 +101,11 @@
     {
       "fichier": "src/moteur/indicateurs.js",
       "total": 596,
-      "tues": 519,
+      "tues": 518,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 23,
-      "delais": 54,
+      "delais": 55,
       "erreurs": 0
     },
     {
@@ -121,19 +121,19 @@
     {
       "fichier": "src/moteur/paires.js",
       "total": 123,
-      "tues": 98,
+      "tues": 108,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 2,
-      "delais": 23,
+      "delais": 13,
       "erreurs": 0
     },
     {
       "fichier": "src/moteur/plafond.js",
       "total": 541,
       "tues": 416,
-      "tuesSerieLongue": 5,
-      "survivants": 0,
+      "tuesSerieLongue": 4,
+      "survivants": 1,
       "equivalents": 48,
       "delais": 72,
       "erreurs": 0
@@ -161,11 +161,11 @@
     {
       "fichier": "src/moteur/recherche.js",
       "total": 1889,
-      "tues": 1503,
+      "tues": 1505,
       "tuesSerieLongue": 5,
       "survivants": 0,
       "equivalents": 90,
-      "delais": 291,
+      "delais": 289,
       "erreurs": 0
     },
     {
@@ -193,31 +193,31 @@
     {
       "operateur": "frontiere",
       "total": 420,
-      "tues": 299,
+      "tues": 300,
       "tuesSerieLongue": 2,
       "survivants": 0,
       "equivalents": 116,
-      "delais": 3,
+      "delais": 2,
       "erreurs": 0
     },
     {
       "operateur": "negation",
       "total": 1001,
-      "tues": 903,
+      "tues": 905,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 2,
-      "delais": 96,
+      "delais": 94,
       "erreurs": 0
     },
     {
       "operateur": "logique",
       "total": 256,
-      "tues": 244,
+      "tues": 245,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 3,
-      "delais": 9,
+      "delais": 8,
       "erreurs": 0
     },
     {
@@ -243,21 +243,21 @@
     {
       "operateur": "nombre-plus-un",
       "total": 1389,
-      "tues": 1245,
+      "tues": 1248,
       "tuesSerieLongue": 2,
       "survivants": 0,
       "equivalents": 102,
-      "delais": 40,
+      "delais": 37,
       "erreurs": 0
     },
     {
       "operateur": "nombre-zero",
       "total": 752,
-      "tues": 489,
+      "tues": 488,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 19,
-      "delais": 244,
+      "delais": 245,
       "erreurs": 0
     },
     {
@@ -273,21 +273,21 @@
     {
       "operateur": "si-vrai",
       "total": 550,
-      "tues": 509,
+      "tues": 511,
       "tuesSerieLongue": 3,
       "survivants": 0,
       "equivalents": 25,
-      "delais": 13,
+      "delais": 11,
       "erreurs": 0
     },
     {
       "operateur": "si-faux",
       "total": 550,
-      "tues": 524,
-      "tuesSerieLongue": 1,
-      "survivants": 0,
+      "tues": 525,
+      "tuesSerieLongue": 0,
+      "survivants": 1,
       "equivalents": 13,
-      "delais": 12,
+      "delais": 11,
       "erreurs": 0
     },
     {
@@ -323,27 +323,15 @@
     {
       "operateur": "corps-si",
       "total": 550,
-      "tues": 520,
-      "tuesSerieLongue": 1,
-      "survivants": 0,
+      "tues": 522,
+      "tuesSerieLongue": 0,
+      "survivants": 1,
       "equivalents": 14,
-      "delais": 15,
+      "delais": 13,
       "erreurs": 0
     }
   ],
-  "survivants": [],
-  "tuesSerieLongue": [
-    {
-      "cle": "src/moteur/diagnostic.js:si-vrai:bb6edd982e2e0488:0",
-      "fichier": "src/moteur/diagnostic.js",
-      "ligne": 436,
-      "colonne": 9,
-      "operateur": "si-vrai",
-      "original": "passant === undefined",
-      "remplacement": "true",
-      "couverte": true,
-      "longue": "tue"
-    },
+  "survivants": [
     {
       "cle": "src/moteur/inclusions.js:si-faux:030c66ecf1d50099:0",
       "fichier": "src/moteur/inclusions.js",
@@ -353,7 +341,7 @@
       "original": "q < 0",
       "remplacement": "false",
       "couverte": true,
-      "longue": "tue"
+      "longue": "survivant"
     },
     {
       "cle": "src/moteur/plafond.js:corps-si:3bcf9ce94a530fd1:0",
@@ -363,6 +351,19 @@
       "operateur": "corps-si",
       "original": "effectifs[groupe[p]] += 1;",
       "remplacement": "{}",
+      "couverte": true,
+      "longue": "survivant"
+    }
+  ],
+  "tuesSerieLongue": [
+    {
+      "cle": "src/moteur/diagnostic.js:si-vrai:bb6edd982e2e0488:0",
+      "fichier": "src/moteur/diagnostic.js",
+      "ligne": 436,
+      "colonne": 9,
+      "operateur": "si-vrai",
+      "original": "passant === undefined",
+      "remplacement": "true",
       "couverte": true,
       "longue": "tue"
     },
@@ -6080,6 +6081,36 @@
       "issue": "delai"
     },
     {
+      "cle": "src/moteur/indicateurs.js:negation:0f8a72e486139338:0",
+      "fichier": "src/moteur/indicateurs.js",
+      "ligne": 424,
+      "colonne": 23,
+      "operateur": "negation",
+      "original": "===",
+      "remplacement": "!==",
+      "issue": "delai"
+    },
+    {
+      "cle": "src/moteur/indicateurs.js:nombre-plus-un:0f8a72e486139338:0",
+      "fichier": "src/moteur/indicateurs.js",
+      "ligne": 424,
+      "colonne": 27,
+      "operateur": "nombre-plus-un",
+      "original": "1",
+      "remplacement": "2",
+      "issue": "delai"
+    },
+    {
+      "cle": "src/moteur/indicateurs.js:nombre-zero:0f8a72e486139338:0",
+      "fichier": "src/moteur/indicateurs.js",
+      "ligne": 424,
+      "colonne": 27,
+      "operateur": "nombre-zero",
+      "original": "1",
+      "remplacement": "0",
+      "issue": "delai"
+    },
+    {
       "cle": "src/moteur/indicateurs.js:corps-si:0bf37874b7af9907:5",
       "fichier": "src/moteur/indicateurs.js",
       "ligne": 424,
@@ -6147,26 +6178,6 @@
       "operateur": "nombre-plus-un",
       "original": "1",
       "remplacement": "2",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/indicateurs.js:nombre-plus-un:9befd8786dbb9e8f:1",
-      "fichier": "src/moteur/indicateurs.js",
-      "ligne": 443,
-      "colonne": 40,
-      "operateur": "nombre-plus-un",
-      "original": "2",
-      "remplacement": "3",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/indicateurs.js:nombre-plus-un:f167e95d61e4f13b:0",
-      "fichier": "src/moteur/indicateurs.js",
-      "ligne": 444,
-      "colonne": 53,
-      "operateur": "nombre-plus-un",
-      "original": "0",
-      "remplacement": "1",
       "issue": "delai"
     },
     {
@@ -6450,46 +6461,6 @@
       "issue": "delai"
     },
     {
-      "cle": "src/moteur/paires.js:corps-si:67a4e36e6d345086:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 119,
-      "colonne": 31,
-      "operateur": "corps-si",
-      "original": "throw new RangeError(`personne ${p} hors des index 0..${instance.N - 1}`);",
-      "remplacement": "{}",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/paires.js:nombre-plus-un:e8d8851fd2f93f1a:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 122,
-      "colonne": 16,
-      "operateur": "nombre-plus-un",
-      "original": "0",
-      "remplacement": "1",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/paires.js:frontiere:1c9db99eb78980d1:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 122,
-      "colonne": 21,
-      "operateur": "frontiere",
-      "original": "<",
-      "remplacement": "<=",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/paires.js:negation:1c9db99eb78980d1:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 122,
-      "colonne": 21,
-      "operateur": "negation",
-      "original": "<",
-      "remplacement": ">=",
-      "issue": "delai"
-    },
-    {
       "cle": "src/moteur/paires.js:mise-a-jour:d2145c6a456ebee5:0",
       "fichier": "src/moteur/paires.js",
       "ligne": 122,
@@ -6500,16 +6471,6 @@
       "issue": "delai"
     },
     {
-      "cle": "src/moteur/paires.js:nombre-plus-un:d2145c6a456ebee5:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 122,
-      "colonne": 31,
-      "operateur": "nombre-plus-un",
-      "original": "1",
-      "remplacement": "2",
-      "issue": "delai"
-    },
-    {
       "cle": "src/moteur/paires.js:nombre-zero:d2145c6a456ebee5:0",
       "fichier": "src/moteur/paires.js",
       "ligne": 122,
@@ -6517,56 +6478,6 @@
       "operateur": "nombre-zero",
       "original": "1",
       "remplacement": "0",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/paires.js:si-vrai:b50c2c2a77581bc2:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 123,
-      "colonne": 9,
-      "operateur": "si-vrai",
-      "original": "q === p",
-      "remplacement": "true",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/paires.js:si-faux:b50c2c2a77581bc2:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 123,
-      "colonne": 9,
-      "operateur": "si-faux",
-      "original": "q === p",
-      "remplacement": "false",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/paires.js:negation:b50c2c2a77581bc2:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 123,
-      "colonne": 11,
-      "operateur": "negation",
-      "original": "===",
-      "remplacement": "!==",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/paires.js:corps-si:0bf37874b7af9907:1",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 123,
-      "colonne": 18,
-      "operateur": "corps-si",
-      "original": "continue;",
-      "remplacement": "{}",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/paires.js:si-vrai:3278d2ab9eb4ab97:0",
-      "fichier": "src/moteur/paires.js",
-      "ligne": 125,
-      "colonne": 9,
-      "operateur": "si-vrai",
-      "original": "fois > 0",
-      "remplacement": "true",
       "issue": "delai"
     },
     {
@@ -8820,16 +8731,6 @@
       "issue": "delai"
     },
     {
-      "cle": "src/moteur/recherche.js:logique:898bce52e15594e7:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 1166,
-      "colonne": 30,
-      "operateur": "logique",
-      "original": "immobile >= patience && ordre === ordreContraintes",
-      "remplacement": "((immobile >= patience )||( ordre === ordreContraintes))",
-      "issue": "delai"
-    },
-    {
       "cle": "src/moteur/recherche.js:si-vrai:1180a004daadf1d0:0",
       "fichier": "src/moteur/recherche.js",
       "ligne": 1192,
@@ -9127,16 +9028,6 @@
       "operateur": "si-vrai",
       "original": "enTrop <= 0",
       "remplacement": "true",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/recherche.js:negation:4debed18a3c57f26:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 1368,
-      "colonne": 18,
-      "operateur": "negation",
-      "original": "<=",
-      "remplacement": ">",
       "issue": "delai"
     },
     {

@@ -7,7 +7,7 @@
 | version | 2026.10.05.01 |
 | périmètre | `src/moteur` |
 | sources et épreuves du périmètre (SHA-256) | `12633abb44b9c6c7ec93def7a0a2b760ff2633bec3946f108743b47daa378229` |
-| Node | v26.10.0 |
+| Node | v26.11.1 |
 
 Chaque mutant se joue contre les épreuves de la série node qui atteignent son module, sous `node --test`.
 Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans autre mutant à côté, avant d’être compté.
@@ -18,7 +18,7 @@ Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affi
 
 | mutants | tués | tués par la série longue | survivants | équivalents | délais | erreurs |
 |---:|---:|---:|---:|---:|---:|---:|
-| 7091 | 6077 | 12 | 0 | 330 | 672 | 0 |
+| 7091 | 6088 | 10 | 2 | 330 | 661 | 0 |
 
 ## Par fichier
 
@@ -31,14 +31,14 @@ Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affi
 | `src/moteur/criteres.js` | 211 | 203 | 0 | 0 | 8 | 0 | 0 |
 | `src/moteur/diagnostic.js` | 597 | 509 | 1 | 0 | 36 | 51 | 0 |
 | `src/moteur/diversite.js` | 220 | 183 | 0 | 0 | 19 | 18 | 0 |
-| `src/moteur/inclusions.js` | 230 | 179 | 1 | 0 | 25 | 25 | 0 |
-| `src/moteur/indicateurs.js` | 596 | 519 | 0 | 0 | 23 | 54 | 0 |
+| `src/moteur/inclusions.js` | 230 | 179 | 0 | 1 | 25 | 25 | 0 |
+| `src/moteur/indicateurs.js` | 596 | 518 | 0 | 0 | 23 | 55 | 0 |
 | `src/moteur/manque.js` | 218 | 198 | 0 | 0 | 12 | 8 | 0 |
-| `src/moteur/paires.js` | 123 | 98 | 0 | 0 | 2 | 23 | 0 |
-| `src/moteur/plafond.js` | 541 | 416 | 5 | 0 | 48 | 72 | 0 |
+| `src/moteur/paires.js` | 123 | 108 | 0 | 0 | 2 | 13 | 0 |
+| `src/moteur/plafond.js` | 541 | 416 | 4 | 1 | 48 | 72 | 0 |
 | `src/moteur/presence.js` | 30 | 29 | 0 | 0 | 0 | 1 | 0 |
 | `src/moteur/qualite.js` | 428 | 410 | 0 | 0 | 5 | 13 | 0 |
-| `src/moteur/recherche.js` | 1889 | 1503 | 5 | 0 | 90 | 291 | 0 |
+| `src/moteur/recherche.js` | 1889 | 1505 | 5 | 0 | 90 | 289 | 0 |
 | `src/moteur/verification.js` | 435 | 417 | 0 | 0 | 9 | 9 | 0 |
 
 ## Par opérateur
@@ -46,34 +46,35 @@ Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affi
 | opérateur | total | tués | tués par la série longue | survivants | équivalents | délais | erreurs |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | arithmetique | 795 | 720 | 0 | 0 | 15 | 60 | 0 |
-| frontiere | 420 | 299 | 2 | 0 | 116 | 3 | 0 |
-| negation | 1001 | 903 | 0 | 0 | 2 | 96 | 0 |
-| logique | 256 | 244 | 0 | 0 | 3 | 9 | 0 |
+| frontiere | 420 | 300 | 2 | 0 | 116 | 2 | 0 |
+| negation | 1001 | 905 | 0 | 0 | 2 | 94 | 0 |
+| logique | 256 | 245 | 0 | 0 | 3 | 8 | 0 |
 | retrait-non | 104 | 104 | 0 | 0 | 0 | 0 | 0 |
 | mise-a-jour | 390 | 206 | 2 | 0 | 3 | 179 | 0 |
-| nombre-plus-un | 1389 | 1245 | 2 | 0 | 102 | 40 | 0 |
-| nombre-zero | 752 | 489 | 0 | 0 | 19 | 244 | 0 |
+| nombre-plus-un | 1389 | 1248 | 2 | 0 | 102 | 37 | 0 |
+| nombre-zero | 752 | 488 | 0 | 0 | 19 | 245 | 0 |
 | booleen | 48 | 46 | 0 | 0 | 2 | 0 | 0 |
-| si-vrai | 550 | 509 | 3 | 0 | 25 | 13 | 0 |
-| si-faux | 550 | 524 | 1 | 0 | 13 | 12 | 0 |
+| si-vrai | 550 | 511 | 3 | 0 | 25 | 11 | 0 |
+| si-faux | 550 | 525 | 0 | 1 | 13 | 11 | 0 |
 | ternaire-vrai | 121 | 113 | 0 | 0 | 8 | 0 | 0 |
 | ternaire-faux | 121 | 113 | 0 | 0 | 7 | 1 | 0 |
 | min-max | 44 | 42 | 1 | 0 | 1 | 0 | 0 |
-| corps-si | 550 | 520 | 1 | 0 | 14 | 15 | 0 |
+| corps-si | 550 | 522 | 0 | 1 | 14 | 13 | 0 |
 
-## Survivants (0), lignes couvertes d’abord
+## Survivants (2), lignes couvertes d’abord
 
-Aucun.
+| lieu | opérateur | avant | après | ligne couverte | série longue |
+|---|---|---|---|---|---|
+| `src/moteur/inclusions.js:120:11` | si-faux | `q < 0` | `false` | oui | survit |
+| `src/moteur/plafond.js:295:65` | corps-si | `effectifs[groupe[p]] += 1;` | `{}` | oui | survit |
 
-## Tués par la série longue (12)
+## Tués par la série longue (10)
 
 Survivants de la série node que les épreuves longues tuent : la série node exécute leur ligne sans l’affirmer.
 
 | lieu | opérateur | avant | après | ligne couverte |
 |---|---|---|---|---|
 | `src/moteur/diagnostic.js:436:9` | si-vrai | `passant === undefined` | `true` | oui |
-| `src/moteur/inclusions.js:120:11` | si-faux | `q < 0` | `false` | oui |
-| `src/moteur/plafond.js:295:65` | corps-si | `effectifs[groupe[p]] += 1;` | `{}` | oui |
 | `src/moteur/plafond.js:371:18` | min-max | `min` | `max` | oui |
 | `src/moteur/plafond.js:426:9` | si-vrai | `connu === undefined \|\| nP > connu` | `true` | oui |
 | `src/moteur/plafond.js:434:9` | si-vrai | `programme === undefined` | `true` | oui |
@@ -421,7 +422,7 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/verification.js:224:50` | nombre-plus-un | `1` | `2` | verification.js, verifierInvariants, aSaTable[p] = 2 au lieu de 1 : la marque ne se lit que par !aSaTable[p], et fill(0) la remet à zéro à chaque tour. |
 | `src/moteur/verification.js:229:44` | frontiere | `<` | `<=` | verification.js, verifierInvariants, boucle des capacités jusqu'à i <= tableDeListe.length : le tour de trop n'a lieu que pour une liste au-delà de plan.tables ; t = tableDeListe[i] vaut undefined, et listes[i].length > capacite[undefined] compare à undefined (propriété absente de l'Int32Array), toujours faux : aucun CAPACITE n'est ajouté. |
 
-## Délais et erreurs (672)
+## Délais et erreurs (661)
 
 | lieu | opérateur | avant | après | issue |
 |---|---|---|---|---|
@@ -656,6 +657,9 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/indicateurs.js:422:21` | negation | `<` | `>=` | délai |
 | `src/moteur/indicateurs.js:422:44` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/indicateurs.js:422:47` | nombre-zero | `1` | `0` | délai |
+| `src/moteur/indicateurs.js:424:23` | negation | `===` | `!==` | délai |
+| `src/moteur/indicateurs.js:424:27` | nombre-plus-un | `1` | `2` | délai |
+| `src/moteur/indicateurs.js:424:27` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/indicateurs.js:424:30` | corps-si | `continue;` | `{}` | délai |
 | `src/moteur/indicateurs.js:425:103` | negation | `===` | `!==` | délai |
 | `src/moteur/indicateurs.js:425:107` | nombre-plus-un | `1` | `2` | délai |
@@ -663,8 +667,6 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/indicateurs.js:429:36` | arithmetique | `-` | `+` | délai |
 | `src/moteur/indicateurs.js:443:27` | arithmetique | `*` | `/` | délai |
 | `src/moteur/indicateurs.js:443:34` | nombre-plus-un | `1` | `2` | délai |
-| `src/moteur/indicateurs.js:443:40` | nombre-plus-un | `2` | `3` | délai |
-| `src/moteur/indicateurs.js:444:53` | nombre-plus-un | `0` | `1` | délai |
 | `src/moteur/indicateurs.js:518:21` | negation | `<` | `>=` | délai |
 | `src/moteur/indicateurs.js:518:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/indicateurs.js:518:31` | nombre-zero | `1` | `0` | délai |
@@ -693,18 +695,8 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/paires.js:95:21` | negation | `<` | `>=` | délai |
 | `src/moteur/paires.js:95:41` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/paires.js:95:44` | nombre-zero | `2` | `0` | délai |
-| `src/moteur/paires.js:119:31` | corps-si | `` throw new RangeError(`personne ${p} hors des index 0..${ins… `` | `{}` | délai |
-| `src/moteur/paires.js:122:16` | nombre-plus-un | `0` | `1` | délai |
-| `src/moteur/paires.js:122:21` | frontiere | `<` | `<=` | délai |
-| `src/moteur/paires.js:122:21` | negation | `<` | `>=` | délai |
 | `src/moteur/paires.js:122:28` | mise-a-jour | `+=` | `-=` | délai |
-| `src/moteur/paires.js:122:31` | nombre-plus-un | `1` | `2` | délai |
 | `src/moteur/paires.js:122:31` | nombre-zero | `1` | `0` | délai |
-| `src/moteur/paires.js:123:9` | si-vrai | `q === p` | `true` | délai |
-| `src/moteur/paires.js:123:9` | si-faux | `q === p` | `false` | délai |
-| `src/moteur/paires.js:123:11` | negation | `===` | `!==` | délai |
-| `src/moteur/paires.js:123:18` | corps-si | `continue;` | `{}` | délai |
-| `src/moteur/paires.js:125:9` | si-vrai | `fois > 0` | `true` | délai |
 | `src/moteur/paires.js:154:21` | negation | `<` | `>=` | délai |
 | `src/moteur/paires.js:154:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/paires.js:154:31` | nombre-zero | `1` | `0` | délai |
@@ -930,7 +922,6 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/recherche.js:1165:46` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/recherche.js:1166:9` | si-vrai | `immobile >= patience && ordre === ordreContraintes` | `true` | délai |
 | `src/moteur/recherche.js:1166:18` | negation | `>=` | `<` | délai |
-| `src/moteur/recherche.js:1166:30` | logique | `immobile >= patience && ordre === ordreContraintes` | `((immobile >= patience )\|\|( ordre === ordreContraintes))` | délai |
 | `src/moteur/recherche.js:1192:9` | si-vrai | `i + 1 === releve` | `true` | délai |
 | `src/moteur/recherche.js:1192:15` | negation | `===` | `!==` | délai |
 | `src/moteur/recherche.js:1326:16` | nombre-plus-un | `0` | `1` | délai |
@@ -961,7 +952,6 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/recherche.js:1366:30` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/recherche.js:1366:33` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/recherche.js:1368:11` | si-vrai | `enTrop <= 0` | `true` | délai |
-| `src/moteur/recherche.js:1368:18` | negation | `<=` | `>` | délai |
 | `src/moteur/recherche.js:1368:21` | nombre-plus-un | `0` | `1` | délai |
 | `src/moteur/recherche.js:1370:29` | negation | `>=` | `<` | délai |
 | `src/moteur/recherche.js:1370:44` | negation | `>` | `<=` | délai |
