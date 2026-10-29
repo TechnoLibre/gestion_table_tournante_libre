@@ -534,27 +534,33 @@ async function choisirAuClavier(choix, valeur) {
   expect(choix.value, `le choix ${valeur}`).toBe(valeur);
 }
 
-// Fait défiler le premier ancêtre défilant des éléments jusqu'à centrer la
-// réunion de leurs boîtes, qui doit tenir dans sa hauteur visible : l'image
+// Fait défiler chaque ancêtre défilant des éléments, du plus proche au plus
+// lointain, jusqu'à centrer la réunion de leurs boîtes, qui doit tenir dans
+// la hauteur de chacun : un cadre imbriqué, comme le tableau des lignes de
+// l'aperçu d'import, peut se tenir hors de la fenêtre, et seul le plus
+// lointain, la surface, se mesure à sa part visible dans la fenêtre. L'image
 // les montre ensemble. Sans ancêtre défilant, la fenêtre défile.
 async function cadrerDansLaSurface(elements) {
-  const boites = elements.map((element) => element.getBoundingClientRect());
-  const haut = Math.min(...boites.map((b) => b.top));
-  const bas = Math.max(...boites.map((b) => b.bottom));
-  let porteur = elements[0].parentElement;
-  while (porteur !== null && !(porteur.scrollHeight > porteur.clientHeight && /auto|scroll/.test(getComputedStyle(porteur).overflowY))) {
-    porteur = porteur.parentElement;
+  const porteurs = [];
+  for (let porteur = elements[0].parentElement; porteur !== null; porteur = porteur.parentElement) {
+    if (porteur.scrollHeight > porteur.clientHeight && /auto|scroll/.test(getComputedStyle(porteur).overflowY)) porteurs.push(porteur);
   }
-  if (porteur === null) {
+  if (porteurs.length === 0) {
     await cadrerSur(elements);
     return;
   }
-  const cadre = porteur.getBoundingClientRect();
-  const visibleHaut = Math.max(cadre.top + porteur.clientTop, 0);
-  const visibleBas = Math.min(cadre.top + porteur.clientTop + porteur.clientHeight, innerHeight);
-  expect(bas - haut, 'les éléments à montrer tiennent dans la hauteur visible de leur surface').toBeLessThanOrEqual(visibleBas - visibleHaut);
-  porteur.scrollTop += Math.round((haut + bas - visibleHaut - visibleBas) / 2);
-  await images(2);
+  for (const [rang, porteur] of porteurs.entries()) {
+    const boites = elements.map((element) => element.getBoundingClientRect());
+    const haut = Math.min(...boites.map((b) => b.top));
+    const bas = Math.max(...boites.map((b) => b.bottom));
+    const debut = porteur.getBoundingClientRect().top + porteur.clientTop;
+    const surface = rang === porteurs.length - 1;
+    const visibleHaut = surface ? Math.max(debut, 0) : debut;
+    const visibleBas = surface ? Math.min(debut + porteur.clientHeight, innerHeight) : debut + porteur.clientHeight;
+    expect(bas - haut, 'les éléments à montrer tiennent dans la hauteur visible de leur surface').toBeLessThanOrEqual(visibleBas - visibleHaut);
+    porteur.scrollTop += Math.round((haut + bas - visibleHaut - visibleBas) / 2);
+    await images(2);
+  }
 }
 
 // Fait défiler le premier ancêtre défilant de l'élément jusqu'à poser son
