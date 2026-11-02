@@ -2317,25 +2317,27 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(cheminsEcrits(rang)).toEqual(['reglages_locaux.json']);
     await rienEcrit(avant, 'l’aperçu d’une proposition');
 
-    // Le cadrage : le bas de la première feuille — son cartouche, son
-    // échelle graphique et son pied — au bord bas de la surface de
-    // l'événement, qui fait défiler la section ; au-dessus, le centre du
-    // filigrane couché sur la diagonale de la feuille. Le filigrane entier,
-    // plus haut que la surface, ne tient pas avec le pied : l'image en
-    // montre le centre et le bas, le relevé des marques le mesure sous ce
-    // centre, et la condition de la capture porte sur le bas de la feuille
-    // seul.
+    // Le cadrage : le haut du dessin de la première feuille au bord haut de
+    // la surface de l'événement, qui fait défiler la section : les tables
+    // entières, et, en dessous, le centre du filigrane couché sur la
+    // diagonale de la feuille, que le relevé des marques mesure. Le bas de
+    // la feuille — cartouche, échelle graphique, pied — suit tant que la
+    // surface le laisse voir : seul ce qui tient entier dans sa hauteur
+    // visible devient condition de la capture, et 23 reprend les mêmes.
     const feuille = dans('[data-impression] [data-feuille]');
-    await cadrerAuBord(feuille.querySelector('[data-pied]'), 'bas');
+    await cadrerAuBord(feuille.querySelector('svg:not([data-filigrane])'), 'haut');
     const surface = surfaceDeLApercu();
-    const haut = Math.max(surface.getBoundingClientRect().top + surface.clientTop, 0);
+    const cadre = surface.getBoundingClientRect();
+    const haut = Math.max(cadre.top + surface.clientTop, 0);
+    const bas = Math.min(cadre.top + surface.clientTop + surface.clientHeight, innerHeight);
     const boite = feuille.querySelector('[data-filigrane] [data-marque="filigrane"]').getBoundingClientRect();
     const centre = (boite.top + boite.bottom) / 2;
     expect(centre, 'le centre du filigrane, sous le haut de la surface').toBeGreaterThan(haut);
-    expect(centre, 'le centre du filigrane, au-dessus du pied').toBeLessThan(feuille.querySelector('[data-pied]').getBoundingClientRect().top);
+    expect(centre, 'le centre du filigrane, au-dessus du bas de la surface').toBeLessThan(bas);
+    memoire.conditionsFeuille = CONDITIONS_FEUILLE.filter((selecteur) => dans(selecteur).getBoundingClientRect().bottom <= bas);
     memoire.cadrage = surface.scrollTop;
     barreHorsDeLImage();
-    await photographier(m, '22-plan-brouillon', { condition: CONDITIONS_FEUILLE, graine: GRAINE });
+    await photographier(m, '22-plan-brouillon', { condition: memoire.conditionsFeuille, graine: GRAINE });
   });
 
   test('23 l’aperçu du retenu : le papier gardé, aucun filigrane, le pied du retenu ; rien d’écrit', async () => {
@@ -2368,7 +2370,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await images(2);
     expect(surfaceDeLApercu().scrollTop).toBe(memoire.cadrage);
     barreHorsDeLImage();
-    await photographier(m, '23-plan-retenu', { condition: CONDITIONS_FEUILLE, graine: GRAINE });
+    await photographier(m, '23-plan-retenu', { condition: memoire.conditionsFeuille, graine: GRAINE });
   });
 
   // La planche du retenu, produite par la section Impression sous Avery
