@@ -12,6 +12,7 @@
 Chaque mutant se joue contre les épreuves de la série node qui atteignent son module, sous `node --test`.
 Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans autre mutant à côté, avant d’être compté.
 Un survivant se rejoue contre les épreuves longues qui atteignent son module avant d’être compté : tué par elles, il se compte à part.
+Un mutant déclaré équivalent que les épreuves longues tuent s’y rejoue seul, sans autre mutant à côté, avant d’être compté.
 Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affirmer.
 
 ## Bilan

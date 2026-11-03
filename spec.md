@@ -10097,7 +10097,10 @@ couverture :
    Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans
    autre mutant à côté, avant d'être compté : l'audit joue ses mutants
    plusieurs à la fois, et cette charge ne fait pas passer un équivalent lent
-   pour une boucle sans fin.
+   pour une boucle sans fin. De même, un mutant déclaré équivalent que les
+   épreuves longues tuent s'y rejoue seul avant d'être compté : leurs
+   épreuves de durée tiennent leur seuil seules, pas sous la charge des
+   rejeux parallèles.
    Le résultat s'écrit sous **`audit/`**, versionné : `mutation-moteur.md`, le
    rapport à lire, et `mutation-moteur.json`, le même à comparer d'un audit à
    l'autre ; `mutants-equivalents.json` y déclare, un par un et avec sa raison,

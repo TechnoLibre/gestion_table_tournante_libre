@@ -26,6 +26,9 @@
 //      délai non déclaré ne se rejoue pas ;
 //   7. les survivants rejoués contre les .long.test.js du périmètre qui
 //      atteignent leur module, après une ligne de base de ces épreuves ;
+//      chaque mutant qu'elles tuent et dont audit/mutants-equivalents.json
+//      déclare la clé s'y rejoue seul, sous le même délai, et son issue
+//      rejouée remplace la sienne ;
 //   8. l'empreinte des sources se reprend : différente de celle de l'étape 0,
 //      les mutants ont été lus ou joués sur d'autres sources que celles que
 //      l'en-tête désigne, et rien ne s'écrit ;
@@ -47,7 +50,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { executerMutant, executerSerie } from './executer.js';
 import { grapheDuProjet, testsConcernes } from './graphe.js';
 import { mutants } from './mutants.js';
-import { delaisARejouerSeuls, equivalentsDe, issuesApresRejeu, rediger, verifierEntete } from './rapport.js';
+import { delaisARejouerSeuls, equivalentsDe, issuesApresRejeu, rediger, tuesLongsARejouerSeuls, verifierEntete } from './rapport.js';
 
 // Les dossiers mutés, et dont les épreuves jugent les mutants : le moteur
 // seul (§ 14.13). audit.test.js le lit dans ce source.
@@ -305,6 +308,26 @@ export async function auditer({ racine = RACINE, journal = (texte) => process.st
     );
     aRejouer.forEach(({ rang }, i) => {
       longues[rang] = rejeux[i];
+    });
+
+    // Un équivalent déclaré que la série longue tue se rejoue seul contre
+    // ses épreuves longues, sous le même délai : son issue rejouée remplace
+    // la sienne, quelle qu'elle soit. Les épreuves de durée de la série
+    // longue tiennent leur seuil seules, pas sous la charge des rejeux
+    // parallèles.
+    const longsSeuls = tuesLongsARejouerSeuls(longues, taches, equivalents);
+    if (longsSeuls.length > 0) journal(`équivalents déclarés tués par la série longue, rejoués seuls : ${longsSeuls.length}`);
+    const longsRejoues = await enParallele(
+      longsSeuls,
+      1,
+      async (rang) => {
+        const { mutant, longues: tests } = taches[rang];
+        return (await executerMutant({ mutant, tests, delaiMs: delaiLong, racine })).issue;
+      },
+      { arreter, signaler: avancement('tués par la série longue rejoués seuls', journal) },
+    );
+    longsSeuls.forEach((rang, i) => {
+      longues[rang] = longsRejoues[i];
     });
   }
 

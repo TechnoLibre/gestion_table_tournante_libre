@@ -280,6 +280,7 @@ function composer(donnees) {
     'Chaque mutant se joue contre les épreuves de la série node qui atteignent son module, sous `node --test`.',
     'Un mutant déclaré équivalent que le délai arrête se rejoue seul, sans autre mutant à côté, avant d’être compté.',
     'Un survivant se rejoue contre les épreuves longues qui atteignent son module avant d’être compté : tué par elles, il se compte à part.',
+    'Un mutant déclaré équivalent que les épreuves longues tuent s’y rejoue seul, sans autre mutant à côté, avant d’être compté.',
     'Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affirmer.',
     '',
     '## Bilan',
@@ -485,6 +486,27 @@ export function equivalentsDe(texte) {
 export function delaisARejouerSeuls(issues, taches, equivalents) {
   if (issues.length !== taches.length) throw new RangeError(`issues : ${issues.length}, tâches : ${taches.length}`);
   return issues.flatMap((issue, rang) => (issue === 'delai' && equivalents.has(taches[rang].mutant.cle) ? [rang] : []));
+}
+
+/**
+ * Les rangs des mutants qu'audit.js rejoue seuls contre la série longue
+ * avant de les compter : ceux que le rejeu parallèle de la série longue a
+ * tués et dont la clé est déclarée équivalente, en rangs croissants. Joués
+ * parmi d'autres processus, les épreuves de durée de la série longue
+ * dépassent un seuil qu'elles tiennent seules ; une déclaration
+ * d'équivalence dit que le mutant ne change rien, et le rejeu seul le
+ * vérifie. Un mutant tué non déclaré ne se rejoue pas. Un rang que la série
+ * longue n'a pas rejoué porte null. La clé d'un rang se lit dans le mutant
+ * de la tâche du même rang. Lève une RangeError quand longues et taches
+ * n'ont pas la même longueur.
+ * @param {(Issue|null)[]} longues  l'issue de chaque mutant contre la série longue, par rang
+ * @param {{mutant: {cle: string}}[]} taches  la tâche de chaque mutant, au même rang
+ * @param {Map<string, string>} equivalents  les équivalences, par equivalentsDe
+ * @returns {number[]}
+ */
+export function tuesLongsARejouerSeuls(longues, taches, equivalents) {
+  if (longues.length !== taches.length) throw new RangeError(`issues longues : ${longues.length}, tâches : ${taches.length}`);
+  return longues.flatMap((issue, rang) => (issue === 'tue' && equivalents.has(taches[rang].mutant.cle) ? [rang] : []));
 }
 
 /**
