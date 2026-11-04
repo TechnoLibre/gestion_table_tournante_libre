@@ -115,7 +115,6 @@ sur les captures.
 | `--couleur-retrait` | marque | 3 | 5,62 | 04a-etiquettes | 5,96 | 04a-etiquettes |
 | `--couleur-selection` | marque | 3 | 4,57 | 08-animateurs-designes | 4,18 | 08-animateurs-designes |
 | `--couleur-table-trait` | marque | 3 | 7,44 | 07-plan-tables | 5,59 | 07-plan-tables |
-| `rgb(24, 33, 47)` | texte | 4,5 | — | — | 16,19 | 22-plan-brouillon |
 | `rgb(28, 33, 40)` | texte | 4,5 | — | — | 16,18 | 22-plan-brouillon |
 
 <!-- engendre:fin contrastes -->
